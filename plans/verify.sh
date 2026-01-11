@@ -22,7 +22,20 @@
 
 set -euo pipefail
 
-MODE="${1:-quick}"                 # quick | full
+VERIFY_SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/verify.sh"
+if command -v sha256sum >/dev/null 2>&1; then
+  VERIFY_SH_SHA="$(sha256sum "$VERIFY_SCRIPT_PATH" | awk '{print $1}')"
+else
+  VERIFY_SH_SHA="$(shasum -a 256 "$VERIFY_SCRIPT_PATH" | awk '{print $1}')"
+fi
+echo "VERIFY_SH_SHA=$VERIFY_SH_SHA"
+
+MODE="${1:-quick}"                 # quick | full | promotion
+# Allow "promotion" as a mode alias (full + VERIFY_MODE=promotion)
+if [[ "$MODE" == "promotion" ]]; then
+  MODE="full"
+  export VERIFY_MODE="promotion"
+fi
 VERIFY_MODE="${VERIFY_MODE:-}"     # set to "promotion" for release-grade gates
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
