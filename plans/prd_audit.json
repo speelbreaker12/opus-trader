@@ -1,14 +1,15 @@
 {
   "project": "StoicTrader",
+  "prd_sha256": "cf81ad6292c1ca884baa13f2c2909773130faaab5d448fa52eba76aef2141897",
   "inputs": {
     "prd": "plans/prd.json",
     "contract": "CONTRACT.md",
     "plan": "IMPLEMENTATION_PLAN.md",
-    "workflow_contract": "WORKFLOW_CONTRACT.md"
+    "workflow_contract": "specs/WORKFLOW_CONTRACT.md"
   },
   "summary": {
-    "items_total": 12,
-    "items_pass": 12,
+    "items_total": 14,
+    "items_pass": 14,
     "items_fail": 0,
     "items_blocked": 0,
     "must_fix_count": 0
@@ -16,13 +17,7 @@
   "global_findings": {
     "must_fix": [],
     "risk": [],
-    "improvements": [
-      "Add explicit evidence items for structured logs or metric increments (e.g., log key or counter name) when acceptance requires observability.",
-      "When acceptance includes enum or struct shape, add a targeted check (rg or unit test) so evidence is explicit.",
-      "Prefer narrower scope.touch globs when possible to keep story scope bite-sized.",
-      "Avoid listing OS artifacts like .DS_Store in scope.touch; treat as ignored files instead.",
-      "Add brief verify steps for requirements validated by code inspection (rg) when tests are not feasible."
-    ]
+    "improvements": []
   },
   "items": [
     {
@@ -37,6 +32,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -72,6 +68,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -107,6 +104,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -142,6 +140,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -177,6 +176,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -212,6 +212,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -247,6 +248,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -282,6 +284,79 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": []
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": []
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": []
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": []
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-008",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": []
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": []
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": []
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": []
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": []
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-009",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": []
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -317,6 +392,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -352,6 +428,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -387,6 +464,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
@@ -422,6 +500,7 @@
       "contract_check": {
         "refs_present": true,
         "refs_specific": true,
+        "contract_refs_resolved": true,
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": []
