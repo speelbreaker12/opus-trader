@@ -524,7 +524,7 @@
       "est_size": "XS",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true
+      "passes": false
     },
     {
       "id": "S1-009",
