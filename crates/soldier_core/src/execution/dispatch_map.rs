@@ -12,6 +12,7 @@ static ORDER_INTENT_REJECT_UNIT_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DeribitOrderAmount {
     pub amount: f64,
+    pub contracts: Option<i64>,
     pub derived_qty_coin: Option<f64>,
 }
 
@@ -56,10 +57,21 @@ pub fn map_order_size_to_deribit_amount(
         None => return reject_unit_mismatch("missing_canonical"),
     };
 
+    // Derive or Validate contracts
+    let derived_contracts = if let Some(multiplier) = contract_multiplier {
+        if multiplier > 0.0 {
+            Some((canonical_amount / multiplier).round() as i64)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     if let Some(contracts) = order_size.contracts {
         let multiplier = match contract_multiplier {
             Some(value) => value,
-            None => return reject_unit_mismatch("missing_multiplier"),
+            None => return reject_unit_mismatch("missing_multiplier_for_validation"),
         };
         let expected = contracts as f64 * multiplier;
         if !approx_eq(canonical_amount, expected, UNIT_MISMATCH_EPSILON) {
@@ -69,6 +81,7 @@ pub fn map_order_size_to_deribit_amount(
 
     Ok(DeribitOrderAmount {
         amount: canonical_amount,
+        contracts: derived_contracts,
         derived_qty_coin,
     })
 }
