@@ -358,7 +358,7 @@ revert_to_last_good() {
   fi
   echo "Self-heal: resetting to last good commit $last_good" | tee -a "$LOG_FILE"
   git reset --hard "$last_good"
-  git clean -fd
+  git clean -fdx -e .ralph
 }
 
 select_next_item() {
@@ -800,7 +800,7 @@ progress_gate() {
 is_test_path() {
   local path="$1"
   case "$path" in
-    */tests/*|*/__tests__/*|*/*_test.*|*_test.*|*.spec.*|*.test.*|test_*.*)
+    tests/*|*/tests/*|__tests__/*|*/__tests__/*|*/*_test.*|*_test.*|*.spec.*|*.test.*|test_*.*)
       return 0
       ;;
   esac
