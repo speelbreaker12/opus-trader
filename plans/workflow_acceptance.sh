@@ -430,7 +430,6 @@ if ! run_in_worktree jq -e ".skipped_checks[]? | select(.name==\"final_verify\" 
   echo "FAIL: expected final_verify preflight_blocked in skipped_checks" >&2
   exit 1
 fi
-
 run_in_worktree ./plans/prd_schema_check.sh "plans/prd.json" >/dev/null 2>&1
 run_in_worktree ./plans/prd_lint.sh "plans/prd.json" >/dev/null 2>&1
 if run_in_worktree test -x "./plans/prd_ref_check.sh"; then
