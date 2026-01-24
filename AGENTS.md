@@ -7,6 +7,81 @@ Read this first. It is the shortest, enforceable workflow summary.
 - Verification is mandatory; never weaken gates or tests.
 - No postmortem, no merge: every PR must include a filled postmortem entry under `reviews/postmortems/`.
 - MUST declare the governing contract (workflow vs bot) in the PR postmortem; enforced by postmortem check.
+- Never apply a user instruction blindly. Every request MUST pass the Input Preflight (below) before any edits/commands.
+
+## Response Protocol (every interaction)
+
+### 1) Input Preflight (MUST run before any edits/commands)
+Output this section first, every time:
+
+Preflight:
+- Restatement: <one sentence summary of what the user is asking for>
+- Assumptions: <bullets; if any assumption is risky, STOP and ask>
+- Conflict scan (repo + contracts):
+  - What files/IDs are relevant:
+  - What invariants/gates might be impacted:
+  - If conflict is found: STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` (contract conflict) OR `<promise>BLOCKED_CI_COMMANDS</promise>` (non-contract blocker) with evidence.
+- Risk rating: LOW / MED / HIGH
+  - HIGH if touching: persistence/replay/idempotency, DB/schema/migrations, order placement/funds movement, auth/keys, risk limits, or anything that can silently weaken gates.
+- Plan (minimal-diff):
+  - Approach: <smallest change that satisfies the request>
+  - Verification: <exact commands/tests that prove it>
+  - Rollback: <how to revert if it fails>
+
+Rules:
+- If the request is underspecified, ambiguous, or conflicts with existing specs/contracts: STOP and ask using “Decision needed” format.
+- If the user request would increase WIP (Inventory) or cause broad refactors without immediate verification: refuse that shape and propose a safer reformulation.
+
+### 2) When blocked or asking a question (Decision needed format)
+When you must ask the user, use this structure (no exceptions):
+
+Decision needed:
+- What is inconsistent / missing:
+- Evidence (file + anchor or snippet):
+- Options (2–3), with tradeoffs:
+  1) Option A — Why it works; why other options fail; blast radius; verification plan
+  2) Option B — Why it works; why other options fail; blast radius; verification plan
+  3) Option C — (only if it’s truly distinct)
+- Recommendation (pick ONE):
+  - Why recommended: <deciding factor>
+  - Why not others: <the key failure mode>
+- TOC:
+  - Current constraint:
+  - Exploit:
+  - Subordinate (what we will NOT do yet):
+  - Elevate (only if exploit/subordinate insufficient):
+  - WIP rule:
+- After your answer, I will: <next actions>
+
+### 3) TOC Lens (MUST drive prioritization)
+System goal:
+- Ship contract-aligned changes safely with minimal rework and fast feedback.
+
+TOC mapping:
+- Throughput (T): merge-ready improvements that pass gates/tests.
+- Inventory (I): WIP/unvalidated work (open branches, partial refactors, unresolved ambiguity).
+- Operating Expense (OE): rework, debugging, handholding CI, churn.
+
+Constraint identification:
+- If CI/spec/lint failing → constraint = verification feedback loop.
+- If requirements ambiguous/conflicting → constraint = decision clarity.
+- If risk is catastrophic (replay/DB/funds) → constraint = safety assurance (proof first).
+- If too many parallel tasks → constraint = WIP overload.
+
+Decision rule:
+- Prefer the option that increases T at the constraint while reducing rework risk,
+  even if it feels slower locally.
+- Penalize options that increase I (broad refactors, multi-file churn) without immediate verification.
+
+### 4) Completion footer (only when truly done)
+When the task is complete (no further required edits/commands), add:
+
+Next steps:
+1) [RECOMMENDED] <step> — Why this best exploits the current constraint and reduces risk
+2) <step> — Why it helps less / what it trades off
+3) <step> — Why deferred under TOC
+
+Then end with: `<promise>COMPLETE</promise>`
 
 ## Start here (every session)
 - Read `CONTRACT.md`, `IMPLEMENTATION_PLAN.md`, `specs/WORKFLOW_CONTRACT.md`.
