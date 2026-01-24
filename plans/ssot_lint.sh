@@ -18,7 +18,7 @@ list_repo_files() {
   (cd "$repo_root" && find . -type f \
     -not -path "./.git/*" \
     -not -path "./.ralph/*" \
-    -print | sed 's|^\\./||')
+    -print | sed 's|^\./||')
 }
 
 # 1) canonical files must exist in /specs

@@ -513,6 +513,9 @@ add_optional_overlays() {
 
 # Ensure tests run against the working tree versions while keeping the worktree clean.
 OVERLAY_FILES=(
+  "CONTRACT.md"
+  "IMPLEMENTATION_PLAN.md"
+  "POLICY.md"
   "verify.sh"
   "AGENTS.md"
   ".github/pull_request_template.md"
@@ -536,6 +539,7 @@ OVERLAY_FILES=(
   "plans/contract_check.sh"
   "plans/contract_coverage_matrix.py"
   "plans/contract_coverage_promote.sh"
+  "plans/ssot_lint.sh"
   "plans/artifacts_validate.sh"
   "plans/contract_review_validate.sh"
   "plans/postmortem_check.sh"
@@ -563,6 +567,31 @@ OVERLAY_FILES=(
   "plans/fixtures/prd/reason_code_missing_values.json"
   "plans/fixtures/prd/missing_failure_mode.json"
   "plans/fixtures/prd/placeholder_todo.json"
+  "specs/CONTRACT.md"
+  "specs/IMPLEMENTATION_PLAN.md"
+  "specs/POLICY.md"
+  "specs/SOURCE_OF_TRUTH.md"
+  "specs/invariants/GLOBAL_INVARIANTS.md"
+  "specs/flows/ARCH_FLOWS.yaml"
+  "specs/flows/TIME_FRESHNESS.yaml"
+  "specs/flows/CRASH_MATRIX.md"
+  "specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml"
+  "specs/flows/RECONCILIATION_MATRIX.md"
+  "specs/flows/VQ_EVIDENCE.md"
+  "specs/state_machines/group_state.yaml"
+  "specs/state_machines/open_permission_latch.yaml"
+  "specs/state_machines/risk_state.yaml"
+  "specs/state_machines/trading_mode.yaml"
+  "scripts/check_contract_crossrefs.py"
+  "scripts/check_arch_flows.py"
+  "scripts/check_state_machines.py"
+  "scripts/check_global_invariants.py"
+  "scripts/check_time_freshness.py"
+  "scripts/check_crash_matrix.py"
+  "scripts/check_crash_replay_idempotency.py"
+  "scripts/check_reconciliation_matrix.py"
+  "scripts/check_vq_evidence.py"
+  "scripts/extract_contract_excerpts.py"
   "specs/WORKFLOW_CONTRACT.md"
   "docs/schemas/artifacts.schema.json"
 )
@@ -608,6 +637,7 @@ scripts_to_chmod=(
   "contract_check.sh"
   "contract_coverage_matrix.py"
   "contract_coverage_promote.sh"
+  "ssot_lint.sh"
   "artifacts_validate.sh"
   "contract_review_validate.sh"
   "postmortem_check.sh"
@@ -627,6 +657,16 @@ if [[ -f "$WORKTREE/verify.sh" ]]; then
   chmod +x "$WORKTREE/verify.sh" >/dev/null 2>&1 || true
 fi
 run_in_worktree git update-index --skip-worktree "${OVERLAY_FILES[@]}" >/dev/null 2>&1 || true
+
+if test_start "0f.1" "ssot lint"; then
+  run_in_worktree bash -c 'set -euo pipefail; bash plans/ssot_lint.sh'
+  test_pass "0f.1"
+fi
+
+if test_start "0f.2" "verify includes spec integrity gates"; then
+  run_in_worktree bash -c 'set -euo pipefail; rg -n "Spec integrity gates" plans/verify.sh >/dev/null'
+  test_pass "0f.2"
+fi
 
 if test_start "0f" "prd_pipeline logs skipped ref check"; then
   run_in_worktree bash -c '

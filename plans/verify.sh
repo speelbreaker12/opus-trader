@@ -253,9 +253,9 @@ run_logged() {
 
 is_workflow_file() {
   case "$1" in
-    AGENTS.md|specs/WORKFLOW_CONTRACT.md|CONTRACT.md|IMPLEMENTATION_PLAN.md) return 0 ;;
+    AGENTS.md|specs/WORKFLOW_CONTRACT.md|specs/CONTRACT.md|specs/IMPLEMENTATION_PLAN.md|specs/POLICY.md|specs/SOURCE_OF_TRUTH.md|CONTRACT.md|IMPLEMENTATION_PLAN.md|POLICY.md) return 0 ;;
     verify.sh) return 0 ;;
-    plans/verify.sh|plans/workflow_acceptance.sh|plans/workflow_contract_gate.sh|plans/workflow_contract_map.json|plans/prd_gate.sh|plans/prd_audit_check.sh|plans/tests/test_workflow_acceptance_fallback.sh) return 0 ;;
+    plans/verify.sh|plans/workflow_acceptance.sh|plans/workflow_contract_gate.sh|plans/workflow_contract_map.json|plans/ssot_lint.sh|plans/prd_gate.sh|plans/prd_audit_check.sh|plans/tests/test_workflow_acceptance_fallback.sh) return 0 ;;
     plans/workflow_verify.sh) return 0 ;;
     plans/contract_coverage_matrix.py|plans/contract_coverage_promote.sh) return 0 ;;
     plans/contract_check.sh|plans/contract_review_validate.sh|plans/init.sh|plans/ralph.sh) return 0 ;;
@@ -263,6 +263,9 @@ is_workflow_file() {
     specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml) return 0 ;;
     tools/vendor_docs_lint_rust.py) return 0 ;;
     scripts/build_contract_kernel.py|scripts/check_contract_kernel.py|scripts/contract_kernel_lib.py|scripts/test_contract_kernel.py) return 0 ;;
+    scripts/check_contract_crossrefs.py|scripts/check_arch_flows.py|scripts/check_state_machines.py|scripts/check_global_invariants.py) return 0 ;;
+    scripts/check_time_freshness.py|scripts/check_crash_matrix.py|scripts/check_crash_replay_idempotency.py|scripts/check_reconciliation_matrix.py) return 0 ;;
+    scripts/check_vq_evidence.py|scripts/extract_contract_excerpts.py) return 0 ;;
     docs/contract_kernel.json|docs/contract_anchors.md|docs/validation_rules.md) return 0 ;;
     *) return 1 ;;
   esac
@@ -467,6 +470,7 @@ PYTEST_TIMEOUT="${PYTEST_TIMEOUT:-10m}"
 RUFF_TIMEOUT="${RUFF_TIMEOUT:-5m}"
 MYPY_TIMEOUT="${MYPY_TIMEOUT:-10m}"
 CONTRACT_COVERAGE_TIMEOUT="${CONTRACT_COVERAGE_TIMEOUT:-2m}"
+SPEC_LINT_TIMEOUT="${SPEC_LINT_TIMEOUT:-2m}"
 POSTMORTEM_CHECK_TIMEOUT="${POSTMORTEM_CHECK_TIMEOUT:-1m}"
 WORKFLOW_ACCEPTANCE_TIMEOUT="${WORKFLOW_ACCEPTANCE_TIMEOUT:-20m}"
 VENDOR_DOCS_LINT_TIMEOUT="${VENDOR_DOCS_LINT_TIMEOUT:-1m}"
@@ -599,6 +603,82 @@ if should_run_contract_coverage; then
   fi
 else
   echo "info: contract coverage skipped (no relevant changes detected)"
+fi
+
+# -----------------------------------------------------------------------------
+# 0c) Spec integrity gates
+# -----------------------------------------------------------------------------
+log "0c) Spec integrity gates"
+ensure_python
+
+[[ -f "specs/CONTRACT.md" ]] || fail "Missing specs/CONTRACT.md"
+[[ -f "specs/flows/ARCH_FLOWS.yaml" ]] || fail "Missing specs/flows/ARCH_FLOWS.yaml"
+[[ -f "specs/invariants/GLOBAL_INVARIANTS.md" ]] || fail "Missing specs/invariants/GLOBAL_INVARIANTS.md"
+[[ -d "specs/state_machines" ]] || fail "Missing specs/state_machines"
+
+[[ -f "scripts/check_contract_crossrefs.py" ]] || fail "Missing scripts/check_contract_crossrefs.py"
+run_logged "contract_crossrefs" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_contract_crossrefs.py" \
+  --contract specs/CONTRACT.md \
+  --strict \
+  --check-at \
+  --include-bare-section-refs
+
+[[ -f "scripts/check_arch_flows.py" ]] || fail "Missing scripts/check_arch_flows.py"
+run_logged "arch_flows" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_arch_flows.py" \
+  --contract specs/CONTRACT.md \
+  --flows specs/flows/ARCH_FLOWS.yaml \
+  --strict
+
+[[ -f "scripts/check_state_machines.py" ]] || fail "Missing scripts/check_state_machines.py"
+run_logged "state_machines" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_state_machines.py" \
+  --dir specs/state_machines \
+  --strict \
+  --contract specs/CONTRACT.md \
+  --flows specs/flows/ARCH_FLOWS.yaml \
+  --invariants specs/invariants/GLOBAL_INVARIANTS.md
+
+[[ -f "scripts/check_global_invariants.py" ]] || fail "Missing scripts/check_global_invariants.py"
+run_logged "global_invariants" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_global_invariants.py" \
+  --file specs/invariants/GLOBAL_INVARIANTS.md \
+  --contract specs/CONTRACT.md
+
+if [[ -f "scripts/check_time_freshness.py" ]]; then
+  [[ -f "specs/flows/TIME_FRESHNESS.yaml" ]] || fail "Missing specs/flows/TIME_FRESHNESS.yaml"
+  run_logged "time_freshness" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_time_freshness.py" \
+    --contract specs/CONTRACT.md \
+    --spec specs/flows/TIME_FRESHNESS.yaml \
+    --strict
+else
+  fail "Missing scripts/check_time_freshness.py"
+fi
+
+if [[ -f "scripts/check_crash_matrix.py" ]]; then
+  [[ -f "specs/flows/CRASH_MATRIX.md" ]] || fail "Missing specs/flows/CRASH_MATRIX.md"
+  run_logged "crash_matrix" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_crash_matrix.py" \
+    --contract specs/CONTRACT.md \
+    --matrix specs/flows/CRASH_MATRIX.md
+else
+  fail "Missing scripts/check_crash_matrix.py"
+fi
+
+if [[ -f "scripts/check_crash_replay_idempotency.py" ]]; then
+  [[ -f "specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml" ]] || fail "Missing specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml"
+  run_logged "crash_replay_idempotency" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_crash_replay_idempotency.py" \
+    --contract specs/CONTRACT.md \
+    --spec specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml \
+    --strict
+else
+  fail "Missing scripts/check_crash_replay_idempotency.py"
+fi
+
+if [[ -f "scripts/check_reconciliation_matrix.py" ]]; then
+  [[ -f "specs/flows/RECONCILIATION_MATRIX.md" ]] || fail "Missing specs/flows/RECONCILIATION_MATRIX.md"
+  run_logged "reconciliation_matrix" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_reconciliation_matrix.py" \
+    --matrix specs/flows/RECONCILIATION_MATRIX.md \
+    --contract specs/CONTRACT.md \
+    --strict
+else
+  fail "Missing scripts/check_reconciliation_matrix.py"
 fi
 
 # -----------------------------------------------------------------------------

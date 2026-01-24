@@ -1,0 +1,475 @@
+arch_flow_index_version: 0.1
+source_of_truth: specs/CONTRACT.md
+
+flows:
+  - id: ACF-001
+    name: "PolicyGuard tick -> TradingMode + mode_reasons"
+    objective: "Single authoritative TradingMode computed each tick from current inputs."
+    trigger: "Each PolicyGuard hot-loop tick."
+    steps:
+      - id: S1
+        name: "Read critical inputs and freshness rules"
+        section: "§2.2.1.1"
+      - id: S2
+        name: "Apply F1 certification gate"
+        section: "§2.2.1"
+      - id: S3
+        name: "Compute TradingMode precedence and mode_reasons"
+        section: "§2.2.3"
+    where:
+      - soldier/core/policy/guard.rs
+      - soldier/core/reflex/cortex.rs
+      - soldier/core/risk/exchange_health.rs
+    refs:
+      sections:
+        - §2.2.1
+        - §2.2.1.1
+        - §2.2.2
+        - §2.2.3
+        - §2.3
+        - §2.3.1
+        - §2.3.2
+      acceptance_tests:
+        - AT-020
+        - AT-021
+        - AT-012
+        - AT-410
+        - AT-423
+        - AT-113
+        - AT-001
+        - AT-112
+        - AT-348
+        - AT-349
+        - AT-350
+        - AT-413
+        - AT-005
+        - AT-105
+        - AT-107
+        - AT-414
+        - AT-334
+        - AT-335
+        - AT-422
+        - AT-404
+        - AT-214
+        - AT-215
+        - AT-415
+        - AT-923
+        - AT-336
+        - AT-337
+        - AT-918
+        - AT-416
+        - AT-417
+        - AT-931
+        - AT-132
+        - AT-231
+        - AT-045
+        - AT-418
+        - AT-420
+        - AT-119
+        - AT-232
+        - AT-204
+        - AT-267
+        - AT-268
+        - AT-209
+        - AT-401
+        - AT-345
+        - AT-115
+        - AT-205
+      global_invariants:
+        - GI-001
+        - GI-007
+        - GI-008
+        - GI-009
+        - GI-018
+        - GI-019
+      state_transitions:
+        - TradingMode:TM-001
+        - TradingMode:TM-002
+        - TradingMode:TM-003
+        - TradingMode:TM-004
+    invariants:
+      - "TradingMode is recomputed each tick; no cached authoritative state."
+      - "Missing or stale critical inputs never allow Active."
+      - "mode_reasons is tier-pure and ordered; Active uses an empty list."
+
+  - id: ACF-002
+    name: "Intent construction -> quantize -> label -> WAL -> gates -> dispatch"
+    objective: "No dispatch without canonical quantization, label safety, and RecordedBeforeDispatch."
+    trigger: "Strategy proposes an intent (OPEN/CLOSE/HEDGE/CANCEL)."
+    steps:
+      - id: S1
+        name: "Classify intent fail-closed"
+        section: "Definitions"
+      - id: S2
+        name: "Quantize before hash and dispatch"
+        section: "§1.1.1"
+      - id: S3
+        name: "Label parse and disambiguation"
+        section: "§1.1.2"
+      - id: S4
+        name: "RecordedBeforeDispatch WAL enqueue"
+        section: "§2.4"
+      - id: S5
+        name: "WAL writer isolation and fail-closed on enqueue failure"
+        section: "§2.4.1"
+      - id: S6
+        name: "EvidenceGuard blocks OPEN when evidence is not GREEN"
+        section: "§2.2.2"
+      - id: S7
+        name: "Liquidity and execution gates before dispatch"
+        section: "§1.3"
+      - id: S8
+        name: "Net Edge, inventory, exposure, and margin gates"
+        section: "§1.4.1"
+      - id: S9
+        name: "Decision snapshot and truth capsule requirements"
+        section: "§4.3.2"
+    where:
+      - soldier/core/execution/quantize.rs
+      - soldier/core/recovery/label_match.rs
+      - soldier/infra/store/ledger.rs
+      - soldier/core/execution/gate.rs
+      - soldier/core/execution/gates.rs
+      - soldier/core/execution/pricer.rs
+      - soldier/core/risk/pending_exposure.rs
+      - soldier/core/risk/exposure_budget.rs
+      - soldier/core/risk/margin_gate.rs
+      - soldier/infra/deribit/account_summary.rs
+      - soldier/core/execution/sequencer.rs
+      - soldier/core/execution/state.rs
+    refs:
+      sections:
+        - Definitions
+        - §1.1.1
+        - §1.1.2
+        - §1.3
+        - §1.4
+        - §1.4.1
+        - §1.4.2
+        - §1.4.2.1
+        - §1.4.2.2
+        - §1.4.3
+        - §2.2.2
+        - §2.4
+        - §2.4.1
+        - §4.3
+        - §4.3.2
+      acceptance_tests:
+        - AT-216
+        - AT-217
+        - AT-041
+        - AT-921
+        - AT-218
+        - AT-219
+        - AT-908
+        - AT-343
+        - AT-015
+        - AT-327
+        - AT-227
+        - AT-005
+        - AT-107
+        - AT-906
+        - AT-046
+        - AT-044
+        - AT-249
+        - AT-250
+        - AT-251
+        - AT-252
+        - AT-253
+        - AT-222
+        - AT-344
+        - AT-909
+        - AT-421
+        - AT-932
+      global_invariants:
+        - GI-002
+        - GI-003
+        - GI-004
+        - GI-005
+        - GI-006
+        - GI-020
+      state_transitions:
+        - TradingMode:TM-003
+        - TradingMode:TM-004
+    invariants:
+      - "Quantization occurs before intent_hash and before dispatch."
+      - "Label overflow rejects the intent and degrades RiskState."
+      - "RecordedBeforeDispatch is mandatory; enqueue failure blocks OPEN."
+
+  - id: ACF-003
+    name: "AtomicGroup execute -> MixedFailed -> containment -> emergency close"
+    objective: "Detect atomicity breaks and flatten deterministically with bounded rescue."
+    trigger: "AtomicGroup created and dispatched."
+    depends_on: [ACF-002]
+    steps:
+      - id: S1
+        name: "Persist group intent before network dispatch"
+        section: "§1.2"
+      - id: S2
+        name: "MixedFailed seeding and serialization rules"
+        section: "§1.2.1"
+      - id: S3
+        name: "Churn breaker bounds rescue loops"
+        section: "§1.2.2"
+      - id: S4
+        name: "Emergency close canonical algorithm"
+        section: "§3.1"
+    where:
+      - soldier/core/execution/atomic_group_executor.rs
+      - soldier/core/risk/churn_breaker.rs
+      - soldier/core/execution/emergency_close.rs
+    refs:
+      sections:
+        - §1.2
+        - §1.2.1
+        - §1.2.2
+        - §1.3
+        - §1.4.1
+        - §3.1
+        - Appendix A
+      acceptance_tests:
+        - AT-220
+        - AT-924
+        - AT-116
+        - AT-117
+        - AT-118
+        - AT-935
+        - AT-936
+        - AT-213
+        - AT-235
+        - AT-236
+        - AT-937
+        - AT-938
+        - AT-341
+        - AT-040
+        - AT-424
+        - AT-278
+        - AT-283
+        - AT-221
+        - AT-211
+      global_invariants:
+        - GI-015
+        - GI-016
+        - GI-017
+      state_transitions:
+        - GroupState:GS-001
+        - GroupState:GS-002
+        - GroupState:GS-003
+        - GroupState:GS-004
+        - GroupState:GS-005
+    invariants:
+      - "First observed failure seeds MixedFailed and is not overwritten."
+      - "Rescue attempts are bounded and then flatten."
+      - "Emergency close uses the canonical implementation."
+
+  - id: ACF-004
+    name: "Kill semantics -> containment eligibility vs hard-stop"
+    objective: "Kill means stop; containment only when explicitly eligible."
+    trigger: "PolicyGuard computes TradingMode::Kill."
+    depends_on: [ACF-001, ACF-003]
+    steps:
+      - id: S1
+        name: "Hard-stop on forbidden Kill causes"
+        section: "Kill Mode Semantics"
+      - id: S2
+        name: "Containment eligibility predicates"
+        section: "Kill Mode Semantics"
+      - id: S3
+        name: "Emergency close execution when eligible"
+        section: "§3.1"
+      - id: S4
+        name: "Rate limit circuit breaker informs Kill causes"
+        section: "§3.3"
+    where:
+      - soldier/infra/api/rate_limit.rs
+      - soldier/core/execution/emergency_close.rs
+    refs:
+      sections:
+        - §2.2.3
+        - Kill Mode Semantics
+        - §3.1
+        - §3.3
+      acceptance_tests:
+        - AT-338
+        - AT-339
+        - AT-340
+        - AT-346
+        - AT-347
+        - AT-013
+        - AT-106
+        - AT-133
+        - AT-238
+        - AT-239
+        - AT-919
+        - AT-240
+      global_invariants:
+        - GI-013
+        - GI-014
+        - GI-017
+      state_transitions:
+        - TradingMode:TM-001
+        - TradingMode:TM-002
+    invariants:
+      - "disk_used_pct >= disk_kill_pct forbids containment and all dispatch."
+      - "Session termination Kill forbids any dispatch."
+      - "Containment runs only when eligibility predicates are all true."
+
+  - id: ACF-005
+    name: "Open Permission Latch -> reconciliation -> latch clear"
+    objective: "No OPENs after restart or WS gaps until reconciliation proves truth."
+    trigger: "Restart, WS gaps, or session termination."
+    steps:
+      - id: S1
+        name: "Set latch with reason codes on triggers"
+        section: "§2.2.4"
+      - id: S2
+        name: "Run reconciliation against exchange state"
+        section: "§3.4"
+      - id: S3
+        name: "Clear latch only after reconciliation success"
+        section: "§2.2.4"
+    where:
+      - soldier/core/recovery/label_match.rs
+      - soldier/core/execution/sequencer.rs
+    refs:
+      sections:
+        - §1.1.2
+        - §2.2.4
+        - §3.4
+        - §7.0
+        - Appendix A
+      acceptance_tests:
+        - AT-010
+        - AT-011
+        - AT-027
+        - AT-342
+        - AT-430
+        - AT-341
+        - AT-040
+        - AT-424
+        - AT-202
+        - AT-271
+        - AT-272
+        - AT-408
+        - AT-409
+      global_invariants:
+        - GI-010
+        - GI-011
+      state_transitions:
+        - OpenPermissionLatch:OPL-001
+        - OpenPermissionLatch:OPL-002
+    invariants:
+      - "Latch true blocks OPEN; reasons non-empty."
+      - "Latch clears only after reconciliation success criteria are met."
+
+  - id: ACF-006
+    name: "Policy lifecycle -> replay gate -> canary rollout -> reviews -> F1_CERT"
+    objective: "Policy changes are gated by replay, canary, review, and certification."
+    trigger: "Commander proposes a policy patch."
+    depends_on: [ACF-002]
+    steps:
+      - id: S1
+        name: "Replay Gatekeeper enforces coverage and dd_limit"
+        section: "§5.2"
+      - id: S2
+        name: "Canary rollout stages and abort rules"
+        section: "§5.3"
+      - id: S3
+        name: "Reviewer loop for daily and incident reviews"
+        section: "§7.1"
+      - id: S4
+        name: "F1_CERT artifact gate and binding"
+        section: "§8.4"
+      - id: S5
+        name: "SVI arb guards and calibration realism"
+        section: "§4.1.1"
+      - id: S6
+        name: "Slippage calibration penalty feeding replay"
+        section: "§4.5"
+      - id: S7
+        name: "Trade attribution and shadow fill simulator"
+        section: "§4.3"
+    where:
+      - python/governor/replay_gatekeeper.py
+      - python/reviewer/daily_ops_review.py
+      - python/reviewer/incident_review.py
+      - python/tools/f1_certify.py
+      - soldier/core/quant/svi_arb.rs
+      - commander/analytics/slippage_calibration.py
+      - soldier/core/analytics/slippage_calibration.rs
+      - soldier/core/analytics/attribution.rs
+      - soldier/core/sim/exchange.rs
+    refs:
+      sections:
+        - §4.1.1
+        - §4.3
+        - §4.3.2
+        - §4.4
+        - §4.5
+        - §5.2
+        - §5.3
+        - §7.1
+        - §2.2.1
+        - §2.2.3
+        - §8.4
+        - Appendix A
+      acceptance_tests:
+        - AT-241
+        - AT-273
+        - AT-254
+        - AT-255
+        - AT-046
+        - AT-256
+        - AT-257
+        - AT-002
+        - AT-258
+        - AT-259
+        - AT-431
+        - AT-432
+        - AT-108
+        - AT-034
+        - AT-035
+        - AT-036
+        - AT-433
+        - AT-434
+        - AT-435
+        - AT-436
+        - AT-274
+        - AT-275
+        - AT-276
+        - AT-902
+        - AT-903
+        - AT-904
+        - AT-266
+        - AT-341
+        - AT-040
+        - AT-424
+        - AT-020
+        - AT-021
+        - AT-012
+        - AT-113
+        - AT-410
+        - AT-423
+      global_invariants:
+        - GI-006
+        - GI-008
+      state_transitions:
+        - TradingMode:TM-003
+    invariants:
+      - "Replay coverage below threshold hard-fails the policy."
+      - "Canary aborts trigger rollback and ReduceOnly cooldown."
+      - "Invalid or stale F1_CERT forces ReduceOnly."
+
+  - id: PHASE-1
+    name: "Phase 1 Contract Surface"
+    refs:
+      sections:
+        - "Definitions"
+        - "1.1.1"
+        - "1.1.2"
+        - "1.3"
+        - "1.4.1"
+        - "1.4.4"
+        - "2.4"
+        - "2.4.1"
+        - "4.2"

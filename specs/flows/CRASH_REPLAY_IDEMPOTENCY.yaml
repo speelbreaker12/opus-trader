@@ -1,0 +1,148 @@
+spec_version: 1
+source_of_truth: specs/CONTRACT.md
+description: >
+  Crash consistency + replay + idempotency closure matrix. This file is normative for spec-lint only; the contract remains canonical.
+crash_points:
+  - id: CR-233
+    scenario: crash_after_send_before_ack
+    contract_refs:
+      sections: ["2.4.1"]
+      notes: "AT-233 defines required post-restart behavior."
+    required_post_restart:
+      - "MUST NOT resend the intent."
+      - "MUST reconcile with exchange (orders/trades) and proceed."
+    acceptance_tests: ["AT-233"]
+    where: ["soldier/infra/store/ledger.rs", "soldier/core/recovery/label_match.rs"]
+
+  - id: CR-234
+    scenario: crash_after_fill_before_local_update
+    contract_refs:
+      sections: ["2.4.1"]
+      notes: "AT-234 defines required post-restart behavior."
+    required_post_restart:
+      - "MUST detect fill via exchange trades."
+      - "MUST update TLSM and trigger sequencer."
+    acceptance_tests: ["AT-234"]
+    where: ["soldier/core/execution/state.rs"]
+
+  - id: CR-935
+    scenario: crash_after_recordedbeforedispatch_before_send
+    contract_refs:
+      sections: ["2.4.1", "3.4"]
+      notes: "AT-935 defines unsent WAL restart behavior."
+    required_post_restart:
+      - "MUST reconcile (labels + open orders + trades) before dispatch."
+      - "MUST dispatch exactly once if WAL indicates unsent and OPEN is permitted."
+      - "MUST set sent_ts on first restart; no resend on subsequent restart."
+    acceptance_tests: ["AT-935"]
+    where: ["soldier/infra/store/ledger.rs", "soldier/core/recovery/label_match.rs"]
+
+  - id: CR-940
+    scenario: crash_after_ack_before_local_update
+    contract_refs:
+      sections: ["2.4.1", "3.4"]
+      notes: "AT-940 defines ACK recovery and no-resend behavior."
+    required_post_restart:
+      - "MUST reconcile open orders/trades and update TLSM to Acked (or Filled if trades indicate)."
+      - "MUST record ack_ts and never resend after ACK."
+    acceptance_tests: ["AT-940"]
+    where: ["soldier/core/execution/state.rs", "soldier/core/recovery/label_match.rs"]
+
+  - id: CR-941
+    scenario: crash_during_reconciliation
+    contract_refs:
+      sections: ["3.4", "2.2.4"]
+      notes: "AT-941 defines idempotent reconcile after crash."
+    required_post_restart:
+      - "MUST re-run reconciliation idempotently."
+      - "MUST keep opens blocked until reconciliation completes."
+    acceptance_tests: ["AT-941"]
+    where: ["soldier/core/recovery/label_match.rs"]
+
+  - id: CR-942
+    scenario: crash_during_retention_reclaim
+    contract_refs:
+      sections: ["7.2", "5.2"]
+      notes: "AT-942 defines reclaim crash safety."
+    required_post_restart:
+      - "MUST NOT delete WAL or hot writer partitions."
+      - "MUST preserve replay-window Decision Snapshots."
+      - "MUST resume or complete reclaim safely."
+    acceptance_tests: ["AT-942"]
+    where: ["soldier/infra/store/retention.rs"]
+
+idempotency:
+  - id: ID-LOCAL-DEDUPE
+    rule_tag: local_dedupe
+    description: "Before dispatch, check intent_hash in WAL; if exists -> NOOP."
+    contract_refs:
+      sections: ["1.1.1"]
+      notes: "AT-928 + Idempotency Rules (Non-Negotiable)."
+    acceptance_tests: ["AT-928"]
+    where: ["soldier/infra/store/ledger.rs", "soldier/core/execution/quantize.rs"]
+
+  - id: ID-REMOTE-DEDUPE
+    rule_tag: remote_dedupe
+    description: "On WS reconnect, re-fetch open orders and match by group_id to avoid duplicate dispatch."
+    contract_refs:
+      sections: ["1.1", "1.1.2"]
+      notes: "AT-933 + label matching algorithm."
+    acceptance_tests: ["AT-933", "AT-216", "AT-217"]
+    where: ["soldier/core/recovery/label_match.rs"]
+
+  - id: ID-REPLAY-SAFE
+    rule_tag: replay_safe
+    description: "On restart, rebuild in-flight intents from WAL, reconcile with exchange orders/trades; never resend unless WAL state says it is unsent."
+    contract_refs:
+      sections: ["1.1", "2.4.1"]
+      notes: "Idempotency Rules + crash ATs."
+    acceptance_tests: ["AT-233", "AT-234"]
+    where: ["soldier/infra/store/ledger.rs", "soldier/core/recovery/label_match.rs"]
+
+  - id: ID-TRADEID-REGISTRY
+    rule_tag: trade_id_dedupe
+    description: "processed_trade_ids registry: trade_id already processed => NOOP; else append trade_id first then apply updates."
+    contract_refs:
+      sections: ["2.4.1"]
+      notes: "Trade-ID Idempotency Registry (Ghost-Race Hardening)."
+    acceptance_tests: ["AT-269", "AT-270"]
+    where: ["soldier/infra/store/ledger.rs"]
+
+  - id: ID-TLSM-OUTOFORDER
+    rule_tag: ws_out_of_order
+    description: "TLSM must accept fill-before-ack and append every transition to WAL immediately."
+    contract_refs:
+      sections: ["1.5"]
+      notes: "AT-230 ensures no crash and WAL contains both events."
+    acceptance_tests: ["AT-230"]
+    where: ["soldier/core/execution/state.rs"]
+
+durability_backpressure:
+  - id: DB-RECORDED-BEFORE-DISPATCH
+    description: "RecordedBeforeDispatch is mandatory via bounded WAL queue; enqueue failure blocks OPEN and increments wal_write_errors."
+    contract_refs:
+      sections: ["2.4.1"]
+      notes: "AT-906 proves fail-closed behavior."
+    acceptance_tests: ["AT-906"]
+    where: ["soldier/infra/store/ledger.rs"]
+
+  - id: DB-HOTLOOP-OUTPUT-QUEUES
+    description: "Hot-loop output queues must be bounded; on full, hot loop must not block and must force ReduceOnly."
+    contract_refs:
+      sections: ["2.4.1"]
+      notes: "AT-925 proves ReduceOnly under backpressure."
+    acceptance_tests: ["AT-925"]
+    where: ["soldier/core/policy/guard.rs"]
+
+replay_inputs_retention:
+  - id: RP-DECISION-SNAPSHOT-RETENTION
+    description: "Retention must not delete Decision Snapshots intersecting replay window; reclaim must not touch WAL."
+    contract_refs:
+      sections: ["7.2", "4.3.2", "5.2"]
+      notes: "AT-263 proves reclaim behavior."
+    acceptance_tests: ["AT-263"]
+    where: ["soldier/infra/store/retention.rs"]
+
+coverage:
+  required_rule_tags: ["local_dedupe","remote_dedupe","replay_safe","trade_id_dedupe","ws_out_of_order"]
+  ignore_crash_at_ids: []

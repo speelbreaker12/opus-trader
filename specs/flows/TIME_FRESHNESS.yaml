@@ -1,0 +1,855 @@
+time_freshness_spec_version: v9
+source_of_truth: specs/CONTRACT.md
+notes:
+- Each entry must define unit semantics, freshness threshold source, and fail-closed
+  behavior.
+- Critical entries must cite a ModeReasonCode and have at least one Acceptance Test.
+- 'v9: adds TF-005 for evidenceguard_counters_max_age_ms + explicit runtime_acceptance_tests
+  per entry; strict linter ignores appendix_time_mode disable.'
+entries:
+- id: TF-001
+  signal: Policy staleness
+  value_field: policy_age_sec
+  timestamp_field: python_policy_generated_ts_ms
+  units:
+    value: sec
+    timestamp: ms
+  freshness_param: max_policy_age_sec
+  default:
+    value: 300
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: Force TradingMode=ReduceOnly; include REDUCEONLY_POLICY_STALE
+    or REDUCEONLY_INPUT_MISSING_OR_STALE per §2.2.1.1.
+  stale_behavior: If policy_age_sec > max_policy_age_sec => Force ReduceOnly (OPEN
+    blocked).
+  mode_reason_code: REDUCEONLY_POLICY_STALE
+  risk_state_effect: null
+  status_fields:
+  - policy_age_sec
+  - last_policy_update_ts
+  - mode_reasons
+  - trading_mode
+  refs:
+    sections:
+    - 2.2.3
+    - '7.0'
+    acceptance_tests:
+    - AT-315
+    - AT-417
+    runtime_acceptance_tests:
+    - AT-315
+    - AT-417
+- id: TF-002
+  signal: Watchdog heartbeat freshness
+  value_field: watchdog_last_heartbeat_ts_ms
+  timestamp_field: watchdog_last_heartbeat_ts_ms
+  units:
+    value: ms_epoch
+    timestamp: ms_epoch
+  freshness_param: watchdog_kill_s
+  default:
+    value: 10
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: Kill (watchdog missing/unparseable is fatal); force TradingMode=Kill.
+  stale_behavior: If now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s*1000
+    => TradingMode=Kill.
+  mode_reason_code: KILL_WATCHDOG_HEARTBEAT_STALE
+  risk_state_effect: null
+  status_fields:
+  - watchdog_last_heartbeat_ts_ms
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.3
+    acceptance_tests:
+    - AT-297
+    runtime_acceptance_tests:
+    - AT-297
+- id: TF-003
+  signal: Margin utilization freshness
+  value_field: mm_util
+  timestamp_field: mm_util_last_update_ts_ms
+  units:
+    value: ratio_0_1
+    timestamp: ms_epoch
+  freshness_param: mm_util_max_age_ms
+  default:
+    value: 30000
+    unit: ms
+    source: §2.2.1.1/Appendix A
+  critical: true
+  missing_behavior: Treat missing/unparseable as missing/stale; force ReduceOnly and
+    include REDUCEONLY_INPUT_MISSING_OR_STALE.
+  stale_behavior: If now_ms - mm_util_last_update_ts_ms > mm_util_max_age_ms => ReduceOnly
+    + reason.
+  mode_reason_code: REDUCEONLY_INPUT_MISSING_OR_STALE
+  risk_state_effect: null
+  status_fields:
+  - mm_util
+  - mm_util_last_update_ts_ms
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.1.1
+    - '7.0'
+    acceptance_tests:
+    - AT-001
+    runtime_acceptance_tests:
+    - AT-001
+- id: TF-004
+  signal: Disk utilization freshness
+  value_field: disk_used_pct
+  timestamp_field: disk_used_last_update_ts_ms
+  units:
+    value: ratio_0_1
+    timestamp: ms_epoch
+  freshness_param: disk_used_max_age_ms
+  default:
+    value: 30000
+    unit: ms
+    source: §2.2.1.1/Appendix A
+  critical: true
+  missing_behavior: Treat missing/unparseable as missing/stale; force ReduceOnly and
+    include REDUCEONLY_INPUT_MISSING_OR_STALE.
+  stale_behavior: If now_ms - disk_used_last_update_ts_ms > disk_used_max_age_ms =>
+    ReduceOnly + reason.
+  mode_reason_code: REDUCEONLY_INPUT_MISSING_OR_STALE
+  risk_state_effect: null
+  status_fields:
+  - disk_used_pct
+  - disk_used_last_update_ts_ms
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.1.1
+    - '7.0'
+    acceptance_tests:
+    - AT-001
+    runtime_acceptance_tests:
+    - AT-001
+- id: TF-005
+  signal: EvidenceGuard counters freshness
+  timestamp_field: evidenceguard_counters_last_update_ts_ms
+  value_field: evidenceguard_counters_last_update_ts_ms
+  units:
+    value: ms_epoch
+    timestamp: ms_epoch
+  freshness_param: evidenceguard_counters_max_age_ms
+  default:
+    value: 60000
+    unit: ms
+    source: Appendix A
+  critical: true
+  missing_behavior: EvidenceChainState != GREEN (fail-closed); OPEN blocked
+  stale_behavior: EvidenceChainState != GREEN (fail-closed); OPEN blocked
+  mode_reason_code: REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN
+  risk_state_effect: Degraded
+  status_fields:
+  - evidence_chain_state
+  refs:
+    sections:
+    - 2.2.2
+    - 2.2.3
+    - Appendix A
+    acceptance_tests:
+    - AT-923
+    runtime_acceptance_tests:
+    - AT-923
+- id: TF-006
+  signal: L2 book snapshot freshness (LiquidityGate)
+  value_field: L2BookSnapshot.ts_ms
+  timestamp_field: L2BookSnapshot.ts_ms
+  units:
+    value: ms_epoch
+    timestamp: ms_epoch
+  freshness_param: l2_book_snapshot_max_age_ms
+  default:
+    value: 1000
+    unit: ms
+    source: Appendix A
+  critical: true
+  missing_behavior: LiquidityGate MUST reject OPEN intents; CANCEL-only allowed; EmergencyClose
+    must use §3.1 fallback price source and block only if no fallback valid.
+  stale_behavior: If now_ms - ts_ms > l2_book_snapshot_max_age_ms => treat as missing
+    (same behavior).
+  mode_reason_code: REDUCEONLY_INPUT_MISSING_OR_STALE
+  risk_state_effect: null
+  status_fields:
+  - ws_event_lag_ms
+  refs:
+    sections:
+    - '1.3'
+    - '3.1'
+    acceptance_tests:
+    - AT-344
+    - AT-421
+    runtime_acceptance_tests:
+    - AT-344
+    - AT-421
+- id: TF-007
+  signal: Instrument metadata freshness
+  value_field: instrument_cache_age_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: instrument_cache_ttl_s
+  default:
+    value: 3600
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If metadata missing/unparseable => fail-closed for opens (reject/ReduceOnly
+    per §1.0.X).
+  stale_behavior: If instrument_cache_age_s > instrument_cache_ttl_s => OPEN rejected
+    / ReduceOnly as specified.
+  mode_reason_code: REDUCEONLY_INPUT_MISSING_OR_STALE
+  risk_state_effect: null
+  status_fields:
+  - instrument_cache_age_s
+  refs:
+    sections:
+    - 1.0.X
+    acceptance_tests:
+    - AT-279
+    runtime_acceptance_tests:
+    - AT-279
+- id: TF-008
+  signal: Fee model cache staleness
+  value_field: fee_model_cache_age_s
+  timestamp_field: fee_model_cached_at_ts
+  units:
+    value: sec
+    timestamp: ms_epoch
+  freshness_param: fee_cache_hard_s
+  default:
+    value: 900
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If fee cache timestamp missing/unparseable => treat as hard-stale;
+    set RiskState=Degraded and force ReduceOnly until refresh succeeds.
+  stale_behavior: If fee_model_cache_age_s > fee_cache_hard_s => RiskState=Degraded
+    + TradingMode=ReduceOnly.
+  mode_reason_code: REDUCEONLY_FEE_MODEL_HARD_STALE
+  risk_state_effect: Degraded
+  status_fields:
+  - fee_model_cache_age_s
+  - risk_state
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - '4.2'
+    - 2.2.3
+    acceptance_tests:
+    - AT-319
+    runtime_acceptance_tests:
+    - AT-319
+- id: TF-009
+  signal: F1_CERT freshness window
+  value_field: f1_cert_state
+  timestamp_field: generated_ts_ms
+  units:
+    value: enum
+    timestamp: ms_epoch
+  freshness_param: f1_cert_freshness_window_s
+  default:
+    value: 86400
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If F1_CERT missing/stale/invalid => ReduceOnly (blocks opens).
+  stale_behavior: If now_ms - generated_ts_ms > f1_cert_freshness_window_s*1000 =>
+    ReduceOnly.
+  mode_reason_code: REDUCEONLY_F1_CERT_INVALID
+  risk_state_effect: null
+  status_fields:
+  - f1_cert_state
+  - f1_cert_expires_at
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.1
+    - '8.4'
+    acceptance_tests:
+    - AT-294
+    runtime_acceptance_tests:
+    - AT-294
+- id: TF-010
+  signal: Time drift / attribution drift
+  value_field: drift_ms
+  timestamp_field: null
+  units:
+    value: ms
+    timestamp: null
+  freshness_param: time_drift_threshold_ms
+  default:
+    value: 50
+    unit: ms
+    source: Appendix A
+  critical: true
+  missing_behavior: If drift cannot be computed due to missing timestamps => Degraded
+    + ReduceOnly (fail-closed).
+  stale_behavior: If drift_ms > time_drift_threshold_ms => RiskState=Degraded and
+    TradingMode=ReduceOnly via risk_state trigger.
+  mode_reason_code: REDUCEONLY_RISKSTATE_DEGRADED
+  risk_state_effect: Degraded
+  status_fields:
+  - risk_state
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - '4.3'
+    - 2.2.3
+    acceptance_tests:
+    - AT-314
+    runtime_acceptance_tests:
+    - AT-314
+- id: TF-011
+  signal: Exchange announcements health staleness
+  value_field: /public/get_announcements reachability
+  timestamp_field: null
+  units:
+    value: bool/derived
+    timestamp: null
+  freshness_param: exchange_health_stale_s
+  default:
+    value: 180
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If endpoint unreachable/invalid => force cortex_override=ForceReduceOnly;
+    OPEN blocked.
+  stale_behavior: If announcements unreachable for >= exchange_health_stale_s => ForceReduceOnly.
+  mode_reason_code: REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY
+  risk_state_effect: null
+  status_fields:
+  - cortex_override
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.3.1
+    acceptance_tests:
+    - AT-204
+    runtime_acceptance_tests:
+    - AT-204
+- id: TF-012
+  signal: EvidenceGuard rolling window duration
+  value_field: evidenceguard_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: evidenceguard_window_s
+  default:
+    value: 60
+    unit: sec
+    source: Appendix A/§2.2.2
+  critical: true
+  missing_behavior: If window config missing/unparseable => use Appendix A default
+    (fail-closed defaults).
+  stale_behavior: Defines rolling window for EvidenceChainState criteria; boundary
+    must be deterministic.
+  mode_reason_code: REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN
+  risk_state_effect: Degraded while EvidenceChainState != GREEN.
+  status_fields:
+  - evidence_chain_state
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.2
+    acceptance_tests:
+    - AT-105
+    runtime_acceptance_tests:
+    - AT-105
+- id: TF-013
+  signal: Parquet queue trip window duration
+  value_field: parquet_queue_trip_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: parquet_queue_trip_window_s
+  default:
+    value: 5
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If config missing/unparseable => fail-closed (EvidenceChainState
+    != GREEN when metrics unavailable) or use defaults per Appendix A.
+  stale_behavior: If parquet_queue_depth_pct > parquet_queue_trip_pct for >= parquet_queue_trip_window_s
+    => EvidenceChainState != GREEN; OPEN blocked.
+  mode_reason_code: REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN
+  risk_state_effect: Degraded while EvidenceChainState != GREEN.
+  status_fields:
+  - wal_queue_depth
+  - wal_queue_capacity
+  refs:
+    sections:
+    - 2.2.2
+    acceptance_tests:
+    - AT-308
+    runtime_acceptance_tests:
+    - AT-308
+- id: TF-014
+  signal: Parquet queue clear (hysteresis) window duration
+  value_field: queue_clear_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: queue_clear_window_s
+  default:
+    value: 120
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If config missing/unparseable => use Appendix A defaults; do not
+    allow immediate GREEN (fail-open).
+  stale_behavior: Require parquet_queue_depth_pct < parquet_queue_clear_pct for >=
+    queue_clear_window_s before GREEN.
+  mode_reason_code: REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN
+  risk_state_effect: Degraded while EvidenceChainState != GREEN.
+  status_fields:
+  - evidence_chain_state
+  refs:
+    sections:
+    - 2.2.2
+    acceptance_tests:
+    - AT-310
+    runtime_acceptance_tests:
+    - AT-310
+- id: TF-015
+  signal: Limits fetch failure window
+  value_field: limits_fetch_failure_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: limits_fetch_failure_window_s
+  default:
+    value: 300
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If failure window config missing/unparseable => use Appendix A
+    defaults; fail-closed (RiskState Degraded on repeated failures).
+  stale_behavior: If limits fetch fails trip_count times within window => RiskState
+    Degraded; opens paused.
+  mode_reason_code: REDUCEONLY_RISKSTATE_DEGRADED
+  risk_state_effect: Degraded
+  status_fields:
+  - risk_state
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - '4.2'
+    acceptance_tests:
+    - AT-106
+    runtime_acceptance_tests:
+    - AT-106
+- id: TF-016
+  signal: Replay window length for snapshot coverage computation
+  value_field: replay_window_hours
+  timestamp_field: null
+  units:
+    value: hours
+    timestamp: null
+  freshness_param: replay_window_hours
+  default:
+    value: 48
+    unit: hours
+    source: Appendix A
+  critical: true
+  missing_behavior: If replay window config missing/unparseable => use Appendix A
+    default; do not compute coverage over an implicit window.
+  stale_behavior: snapshot_coverage_pct MUST be computed over replay_window_hours;
+    mismatch is a release gate failure.
+  mode_reason_code: REDUCEONLY_POLICY_STALE
+  risk_state_effect: null
+  status_fields:
+  - snapshot_coverage_pct
+  refs:
+    sections:
+    - '7.0'
+    - '5.2'
+    acceptance_tests:
+    - AT-029
+    runtime_acceptance_tests:
+    - AT-029
+- id: TF-017
+  signal: Stale open order age threshold
+  value_field: stale_order_sec
+  timestamp_field: order_age_cancel_ms
+  units:
+    value: sec
+    timestamp: ms
+  freshness_param: stale_order_sec
+  default:
+    value: 60
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If stale_order_sec missing/unparseable => fail-closed by using
+    Appendix A default; do not allow unbounded open orders.
+  stale_behavior: If open order age > stale_order_sec and reduce_only==false => cancel;
+    may force Degraded/ReduceOnly per §4.x stale order rules.
+  mode_reason_code: REDUCEONLY_RISKSTATE_DEGRADED
+  risk_state_effect: Degraded (when specified by stale order policy).
+  status_fields:
+  - risk_state
+  - trading_mode
+  refs:
+    sections:
+    - 4.1.1
+    acceptance_tests:
+    - AT-303
+    runtime_acceptance_tests:
+    - AT-303
+- id: TF-018
+  signal: Cortex kill condition window
+  value_field: cortex_kill_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: cortex_kill_window_s
+  default:
+    value: 30
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If window missing/unparseable => use Appendix A defaults; avoid
+    immediate kill on transient spikes unless specified.
+  stale_behavior: If spread_bps >= spread_kill_bps for >= cortex_kill_window_s OR
+    depth_topN <= depth_kill_min for >= cortex_kill_window_s => cortex_override ForceKill.
+  mode_reason_code: KILL_CORTEX_FORCE_KILL
+  risk_state_effect: null
+  status_fields:
+  - cortex_override
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - '2.3'
+    acceptance_tests:
+    - AT-045
+    runtime_acceptance_tests:
+    - AT-045
+- id: TF-019
+  signal: DVOL jump detection window
+  value_field: dvol_jump_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: dvol_jump_window_s
+  default:
+    value: 60
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If window missing/unparseable => use Appendix A defaults; fail-closed
+    (do not ignore DVOL jump).
+  stale_behavior: If DVOL jumps >= dvol_jump_pct within <= dvol_jump_window_s => cortex_override
+    ForceReduceOnly{cooldown_s=dvol_cooldown_s}.
+  mode_reason_code: REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY
+  risk_state_effect: null
+  status_fields:
+  - cortex_override
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - '2.3'
+    acceptance_tests:
+    - AT-291
+    runtime_acceptance_tests:
+    - AT-291
+- id: TF-020
+  signal: SVI guard trip counting window
+  value_field: svi_guard_trip_window_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: svi_guard_trip_window_s
+  default:
+    value: 300
+    unit: sec
+    source: Appendix A
+  critical: true
+  missing_behavior: If window missing/unparseable => use Appendix A defaults; fail-closed
+    (pause opens on repeated guard trips).
+  stale_behavior: If trips exceed svi_guard_trip_count within window => RiskState
+    Degraded; opens paused.
+  mode_reason_code: REDUCEONLY_RISKSTATE_DEGRADED
+  risk_state_effect: Degraded
+  status_fields:
+  - risk_state
+  - trading_mode
+  refs:
+    sections:
+    - '4.1'
+    acceptance_tests:
+    - AT-322
+    runtime_acceptance_tests:
+    - AT-322
+- id: TF-021
+  kind: status_metric
+  signal: Rate-limit counters (5m rolling window, observability)
+  status_fields:
+  - 429_count_5m
+  - 10028_count_5m
+  units:
+    value: count
+  critical: false
+  missing_behavior: report_unknown
+  stale_behavior: report_unknown
+  refs:
+    sections:
+    - '7.0'
+    acceptance_tests: []
+    runtime_acceptance_tests: []
+  notes: Canonical field names. If later used for gating, add explicit threshold/window
+    params + AT.
+- id: TF-900
+  kind: status_metric
+  signal: Deribit HTTP p95 latency (observability)
+  status_fields:
+  - deribit_http_p95_ms
+  units:
+    value: ms
+  critical: false
+  missing_behavior: report_unknown
+  stale_behavior: report_unknown
+  refs:
+    sections:
+    - '7.0'
+    acceptance_tests: []
+    runtime_acceptance_tests: []
+  notes: Observability-only metric in /status. If later used for gating, add explicit
+    threshold param + AT.
+- id: TF-901
+  signal: Emergency reduce-only cooldown duration
+  value_field: emergency_reduceonly_active
+  units:
+    value: bool
+  freshness_param: emergency_reduceonly_cooldown_s
+  critical: true
+  missing_behavior: If cooldown missing/unparseable, treat emergency_reduceonly_active
+    as true (fail-closed) and keep ReduceOnly.
+  stale_behavior: ReduceOnly persists through full cooldown; OPEN must not dispatch
+    while emergency_reduceonly_active==true.
+  mode_reason_code: REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE
+  risk_state_effect: null
+  status_fields:
+  - emergency_reduceonly_active
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.3
+    - '3.2'
+    - Appendix A
+    acceptance_tests:
+    - AT-132
+    runtime_acceptance_tests:
+    - AT-132
+- id: TF-902
+  signal: EvidenceGuard global cooldown/hysteresis
+  value_field: evidence_chain_state
+  units:
+    value: enum
+  freshness_param: evidenceguard_global_cooldown
+  critical: false
+  missing_behavior: If cooldown missing/unparseable, treat as fail-closed (do not
+    declare GREEN early).
+  stale_behavior: GREEN clears only after max(queue_clear_window_s, evidenceguard_global_cooldown)
+    with all criteria satisfied.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields:
+  - evidence_chain_state
+  refs:
+    sections:
+    - 2.2.2
+    - Appendix A
+    acceptance_tests:
+    - AT-422
+    - AT-341
+    runtime_acceptance_tests:
+    - AT-422
+    - AT-341
+- id: TF-903
+  signal: DVOL shock cooldown duration
+  value_field: cortex_override
+  units:
+    value: enum
+  freshness_param: dvol_cooldown_s
+  critical: false
+  missing_behavior: If dvol_cooldown_s missing/unparseable, treat as infinite cooldown
+    (fail-closed).
+  stale_behavior: After DVOL trip, opens blocked until cooldown expiry; closes/hedges/cancels
+    allowed.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields:
+  - cortex_override
+  - trading_mode
+  refs:
+    sections:
+    - '2.3'
+    - Appendix A
+    acceptance_tests:
+    - AT-292
+    runtime_acceptance_tests:
+    - AT-292
+- id: TF-904
+  signal: Decision snapshot retention window
+  value_field: snapshot_coverage_pct
+  units:
+    value: pct
+  freshness_param: decision_snapshot_retention_days
+  critical: false
+  missing_behavior: If decision_snapshot_retention_days missing/unparseable, fail-closed
+    by blocking decision snapshot retention deletes.
+  stale_behavior: Retention MUST NOT delete Decision Snapshots needed for snapshot_coverage_pct
+    over replay_window_hours.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields:
+  - snapshot_coverage_pct
+  refs:
+    sections:
+    - '7.2'
+    - 4.3.2
+    - '5.2'
+    - Appendix A
+    acceptance_tests:
+    - AT-323
+    runtime_acceptance_tests:
+    - AT-323
+- id: TF-905
+  signal: Parquet analytics retention window
+  value_field: parquet_analytics_retention_days
+  units:
+    value: days
+  freshness_param: parquet_analytics_retention_days
+  critical: false
+  missing_behavior: If parquet_analytics_retention_days missing/unparseable, fail-closed
+    by blocking deletion of parquet analytics partitions.
+  stale_behavior: Retention deletes only cold partitions after the configured retention
+    window.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields: []
+  refs:
+    sections:
+    - '7.2'
+    - Appendix A
+    acceptance_tests:
+    - AT-326
+    runtime_acceptance_tests:
+    - AT-326
+- id: TF-906
+  signal: Tick/L2 archive retention window
+  value_field: tick_l2_retention_hours
+  units:
+    value: hours
+  freshness_param: tick_l2_retention_hours
+  critical: false
+  missing_behavior: If tick_l2_retention_hours missing/unparseable, fail-closed by
+    blocking deletion of tick/L2 archives.
+  stale_behavior: Retention deletes archives only after configured retention window.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields: []
+  refs:
+    sections:
+    - '7.2'
+    - Appendix A
+    acceptance_tests:
+    - AT-325
+    runtime_acceptance_tests:
+    - AT-325
+- id: TF-907
+  signal: Spread/Depth cooldown duration
+  value_field: cortex_override
+  units:
+    value: enum
+  freshness_param: spread_depth_cooldown_s
+  critical: false
+  missing_behavior: If spread_depth_cooldown_s missing/unparseable, treat as infinite
+    cooldown (fail-closed).
+  stale_behavior: After spread/depth trip, opens blocked until cooldown expires.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields:
+  - cortex_override
+  - trading_mode
+  refs:
+    sections:
+    - '2.3'
+    - Appendix A
+    acceptance_tests:
+    - AT-293
+    runtime_acceptance_tests:
+    - AT-293
+- id: TF-908
+  signal: Reconciliation trade lookback window
+  value_field: open_permission_blocked_latch
+  units:
+    value: bool
+  freshness_param: reconcile_trade_lookback_sec
+  critical: false
+  missing_behavior: If reconcile_trade_lookback_sec missing/unparseable, fail-closed
+    by requiring manual reconcile approval (do not clear latch automatically).
+  stale_behavior: Reconciliation must prove no missing trades over last reconcile_trade_lookback_sec
+    seconds before latch clears.
+  mode_reason_code: null
+  risk_state_effect: null
+  status_fields:
+  - open_permission_blocked_latch
+  - open_permission_reason_codes
+  refs:
+    sections:
+    - 2.2.4
+    - Appendix A
+    acceptance_tests:
+    - AT-306
+    runtime_acceptance_tests:
+    - AT-306
+coverage:
+  require_appendix_keys_matching:
+  - max_age
+  - stale
+  - freshness_window
+  - ttl_s
+  - window_s
+  - replay_window_hours
+  ignore_appendix_keys:
+  - fee_stale_buffer
+  ignore_status_ts_fields: []
+  ignore_status_age_fields: []
+  ignore_status_expires_fields: []
+  ignore_status_lag_fields: []
+  ignore_status_pxx_fields: []
+  ignore_status_count_window_fields: []
+  ignore_status_ms_fields: []
+  appendix_time_mode: auto
+  ignore_appendix_time_params: []
+  ignore_appendix_time_params_without_at: []
+  ignore_appendix_time_params_without_runtime_at: []

@@ -4,7 +4,7 @@
 Eliminate spec drift by making authority resolution mechanical, not interpretive.
 
 ## Authority Tiers
-### Tier 0 — Normative (MUST FOLLOW)
+### Tier 0 - Normative (MUST FOLLOW)
 Only files under `/specs/` are normative.
 
 Canonical entry points:
@@ -13,7 +13,7 @@ Canonical entry points:
 - specs/POLICY.md
 - specs/WORKFLOW_CONTRACT.md
 
-### Tier 1 — Derived / Explanatory (NON-NORMATIVE)
+### Tier 1 - Derived / Explanatory (NON-NORMATIVE)
 The following are derived, explanatory, or workflow aids and MUST NOT be treated as requirements:
 - /docs/**
 - /reviews/**
