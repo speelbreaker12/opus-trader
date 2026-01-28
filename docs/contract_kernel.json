@@ -1,255 +1,1027 @@
 {
   "anchors": [
     {
-      "contract_ref": "\u00a70.X",
+      "contract_ref": "\u00a72.2",
       "id": "Anchor-001",
       "proof": {
-        "line": 32,
-        "section": "\u00a70.X"
+        "line": 15,
+        "section": "\u00a72.2"
       },
-      "title": "Repository Layout & Module Mapping"
+      "title": "PolicyGuard Mode Precedence"
     },
     {
-      "contract_ref": "\u00a70.Y",
+      "contract_ref": "\u00a72.2.1",
       "id": "Anchor-002",
       "proof": {
-        "line": 50,
-        "section": "\u00a70.Y"
+        "line": 31,
+        "section": "\u00a72.2.1"
       },
-      "title": "Verification Harness"
+      "title": "Runtime F1 Certification Gate"
     },
     {
-      "contract_ref": "\u00a71.0",
+      "contract_ref": "\u00a72.2.2",
+      "id": "Anchor-003",
+      "proof": {
+        "line": 19,
+        "section": "\u00a72.2.2"
+      },
+      "title": "EvidenceGuard Blocks Opens on Evidence Chain Failure"
+    },
+    {
+      "contract_ref": "\u00a74.3.2",
+      "id": "Anchor-004",
+      "proof": {
+        "line": 3636,
+        "section": "\u00a74.3.2"
+      },
+      "title": "TruthCapsule Timing (RecordedBeforeDispatch)"
+    },
+    {
+      "contract_ref": "\u00a75.2",
+      "id": "Anchor-005",
+      "proof": {
+        "line": 3,
+        "section": "\u00a75.2"
+      },
+      "title": "Decision Snapshots Required for Replay"
+    },
+    {
+      "contract_ref": "\u00a72.4",
+      "id": "Anchor-006",
+      "proof": {
+        "line": 17,
+        "section": "\u00a72.4"
+      },
+      "title": "WAL Durability (Record Before Dispatch)"
+    },
+    {
+      "contract_ref": "\u00a72.4",
+      "id": "Anchor-007",
+      "proof": {
+        "line": 17,
+        "section": "\u00a72.4"
+      },
+      "title": "Trade-ID Registry Deduplication"
+    },
+    {
+      "contract_ref": "\u00a77.2",
+      "id": "Anchor-008",
+      "proof": {
+        "line": 21,
+        "section": "\u00a77.2"
+      },
+      "title": "Disk Watermark Actions"
+    },
+    {
+      "contract_ref": "\u00a77.1.3",
+      "id": "Anchor-009",
+      "proof": {
+        "line": 4438,
+        "section": "\u00a77.1.3"
+      },
+      "title": "AGGRESSIVE Patches Require Human Approval"
+    },
+    {
+      "contract_ref": "\u00a72.3.2",
       "id": "Anchor-010",
       "proof": {
-        "line": 110,
-        "section": "\u00a71.0"
+        "line": 553,
+        "section": "\u00a72.3.2"
       },
-      "title": "Instrument Units & Notional Invariants"
-    },
-    {
-      "contract_ref": "\u00a71.0.X",
-      "id": "Anchor-011",
-      "proof": {
-        "line": 128,
-        "section": "\u00a71.0.X"
-      },
-      "title": "Instrument Metadata Freshness (Instrument Cache TTL)"
-    },
-    {
-      "contract_ref": "\u00a71.0",
-      "id": "Anchor-012",
-      "proof": {
-        "line": 110,
-        "section": "\u00a71.0"
-      },
-      "title": "OrderSize Struct & Canonical Units"
-    },
-    {
-      "contract_ref": "\u00a71.1",
-      "id": "Anchor-020",
-      "proof": {
-        "line": 87,
-        "section": "\u00a71.1"
-      },
-      "title": "Labeling & Idempotency Contract"
-    },
-    {
-      "contract_ref": "\u00a71.1.1",
-      "id": "Anchor-021",
-      "proof": {
-        "line": 87,
-        "section": "\u00a71.1.1"
-      },
-      "title": "Canonical Quantization (Pre-Hash & Pre-Dispatch)"
-    },
-    {
-      "contract_ref": "\u00a71.1.2",
-      "id": "Anchor-022",
-      "proof": {
-        "line": 200,
-        "section": "\u00a71.1.2"
-      },
-      "title": "Label Parse + Disambiguation (Collision-Safe)"
-    },
-    {
-      "contract_ref": "\u00a71.4.4",
-      "id": "Anchor-030",
-      "proof": {
-        "line": 85,
-        "section": "\u00a71.4.4"
-      },
-      "title": "Order-Type Preflight Guard"
-    },
-    {
-      "contract_ref": "\u00a71.4.4",
-      "id": "Anchor-031",
-      "proof": {
-        "line": 85,
-        "section": "\u00a71.4.4"
-      },
-      "title": "Linked Orders Gate"
+      "title": "Bunker Mode on Network Jitter"
     },
     {
       "contract_ref": "\u00a72.1",
-      "id": "Anchor-040",
+      "id": "Anchor-011",
       "proof": {
-        "line": 267,
+        "line": 31,
         "section": "\u00a72.1"
       },
-      "title": "Trade Lifecycle State Machine (TLSM)"
+      "title": "TLSM Never Panics on Out-of-Order Events"
     },
     {
-      "contract_ref": "\u00a72.4",
-      "id": "Anchor-041",
+      "contract_ref": "\u00a75.3",
+      "id": "Anchor-012",
       "proof": {
-        "line": 783,
-        "section": "\u00a72.4"
+        "line": 3910,
+        "section": "\u00a75.3"
       },
-      "title": "Durable Intent Ledger (WAL Truth Source)"
+      "title": "Canary Rollout Abort Triggers Rollback"
     },
     {
-      "contract_ref": "\u00a72.4",
-      "id": "Anchor-042",
+      "contract_ref": "\u00a71.4.4",
+      "id": "Anchor-013",
       "proof": {
-        "line": 783,
-        "section": "\u00a72.4"
+        "line": 545,
+        "section": "\u00a71.4.4"
       },
-      "title": "RecordedBeforeDispatch"
+      "title": "No Market Orders Policy"
     },
     {
-      "contract_ref": "\u00a72.4",
-      "id": "Anchor-043",
+      "contract_ref": "\u00a73.1",
+      "id": "Anchor-014",
       "proof": {
-        "line": 783,
-        "section": "\u00a72.4"
+        "line": 307,
+        "section": "\u00a73.1"
       },
-      "title": "Trade-ID Idempotency Registry (Ghost-Race Hardening)"
+      "title": "Emergency Close Has Hedge Fallback"
+    },
+    {
+      "contract_ref": "\u00a73.2",
+      "id": "Anchor-015",
+      "proof": {
+        "line": 327,
+        "section": "\u00a73.2"
+      },
+      "title": "Watchdog Triggers ReduceOnly via POST Endpoint"
+    },
+    {
+      "contract_ref": "\u00a72.3.1",
+      "id": "Anchor-016",
+      "proof": {
+        "line": 1716,
+        "section": "\u00a72.3.1"
+      },
+      "title": "Exchange Health Monitor Blocks Opens Before Maintenance"
+    },
+    {
+      "contract_ref": "\u00a71.2.2",
+      "id": "Anchor-017",
+      "proof": {
+        "line": 1102,
+        "section": "\u00a71.2.2"
+      },
+      "title": "Atomic Churn Circuit Breaker Prevents Fee Death-Spiral"
+    },
+    {
+      "contract_ref": "\u00a71.4.2.1",
+      "id": "Anchor-018",
+      "proof": {
+        "line": 1354,
+        "section": "\u00a71.4.2.1"
+      },
+      "title": "Pending Exposure Reservation Prevents Double-Spend"
+    },
+    {
+      "contract_ref": "\u00a73.4",
+      "id": "Anchor-019",
+      "proof": {
+        "line": 306,
+        "section": "\u00a73.4"
+      },
+      "title": "WS Continuity Breaks Trigger Degraded + Snapshot Rebuild"
+    },
+    {
+      "contract_ref": "\u00a73.3",
+      "id": "Anchor-020",
+      "proof": {
+        "line": 22,
+        "section": "\u00a73.3"
+      },
+      "title": "Rate Limit Session Kill Triggers Immediate Kill Mode"
+    },
+    {
+      "contract_ref": "\u00a77.0",
+      "id": "Anchor-021",
+      "proof": {
+        "line": 20,
+        "section": "\u00a77.0"
+      },
+      "title": "Status Endpoint Required Fields"
+    },
+    {
+      "contract_ref": "\u00a72.3",
+      "id": "Anchor-022",
+      "proof": {
+        "line": 15,
+        "section": "\u00a72.3"
+      },
+      "title": "Cortex WS Gap Blocks Risk-Increasing Actions"
+    },
+    {
+      "contract_ref": "\u00a71.4.4",
+      "id": "Anchor-023",
+      "proof": {
+        "line": 545,
+        "section": "\u00a71.4.4"
+      },
+      "title": "Order-Type Preflight Guards (Artifact-Backed)"
     }
   ],
-  "contract_version": "4.9",
-  "generated_at_utc": "2026-01-15T20:50:40Z",
+  "contract_version": "5.2",
+  "generated_at_utc": "2026-01-27T00:23:15Z",
   "kernel_version": 3,
   "sources": {
-    "anchors_path": "docs/contract_anchors.md",
-    "anchors_sha256": "db6461f35d2bb54161826cecd5722f898d5bdb1e480cf65c4bed598b209ab7e4",
-    "contract_path": "CONTRACT.md",
-    "contract_sha256": "2db6f085e62211f3e091b512c5bab05ded715f8868a77da98419d4bb3f8f9af2",
-    "plan_path": "IMPLEMENTATION_PLAN.md",
-    "plan_sha256": "c92f2359c2673048a50e7d89b136f39049c4f50c5dac31f4f11fc8180ed91fdf",
-    "rules_path": "docs/validation_rules.md",
-    "rules_sha256": "5651b45fca2a2ae98b41605d433a24a1425f61d04131deb0f12439c4af38a584"
+    "anchors_path": "docs/architecture/contract_anchors.md",
+    "anchors_sha256": "6e09b14a5e2a090020019517765caf3154bfb2ada5937910c82b04d07136749c",
+    "contract_path": "specs/CONTRACT.md",
+    "contract_sha256": "a5bf9869dec7b04cdc6aba11fd6cfb48a5060f49e45e94f5c4e16b166b4862f4",
+    "plan_path": "specs/IMPLEMENTATION_PLAN.md",
+    "plan_sha256": "175e47e8d9b697ee890142fc0766a634b45d814bdcbcb7a7f3ce4baa3334a8bf",
+    "rules_path": "docs/architecture/validation_rules.md",
+    "rules_sha256": "b9a73134377b38a44a7eec4b9f2f308efa7dce5393f31168da793065d30c7672"
   },
   "validation_rules": [
     {
-      "contract_ref": "CONTRACT.md \u00a70.Y Verification Harness (Non-Negotiable)",
+      "contract_ref": "\u00a72.2.1",
       "enforcement": {
-        "rule": "plans/verify.sh runs `cargo test --workspace`."
+        "rule": "`artifacts/F1_CERT.json` missing OR `status != PASS` OR `now - generated_ts_ms > f1_cert_max_age_s` (default 24h)"
       },
-      "fields": {},
-      "gate_ids": [],
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`PolicyGuard.get_effective_mode()` (soldier/core/policy/guard.rs)"
+        ],
+        "failure_mode": [
+          "ReduceOnly until F1_CERT is valid"
+        ],
+        "forbidden_actions": [
+          "Open"
+        ]
+      },
+      "gate_ids": [
+        "VR-001"
+      ],
       "id": "VR-001",
-      "rule": "plans/verify.sh runs `cargo test --workspace`.",
-      "title": "Verification Harness Runs Workspace Tests"
+      "rule": "`artifacts/F1_CERT.json` missing OR `status != PASS` OR `now - generated_ts_ms > f1_cert_max_age_s` (default 24h)",
+      "title": "F1 Certification Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a71.0 Instrument Units & Notional Invariants",
+      "contract_ref": "\u00a72.2.2",
       "enforcement": {
-        "rule": "Canonical sizing rules are enforced and mismatches reject."
+        "rule": "EvidenceChainState != GREEN (any of: `truth_capsule_write_errors > 0`, `decision_snapshot_write_errors > 0`, `parquet_queue_overflow_count` increasing, `wal_write_errors > 0` in rolling 60s window)"
       },
-      "fields": {},
-      "gate_ids": [],
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`PolicyGuard.get_effective_mode()` + hot-path execution gate before dispatching OPEN orders"
+        ],
+        "failure_mode": [
+          "ReduceOnly; remain until GREEN for cooldown window (e.g., 120s)"
+        ],
+        "forbidden_actions": [
+          "Open (any new risk)"
+        ]
+      },
+      "gate_ids": [
+        "VR-002"
+      ],
+      "id": "VR-002",
+      "rule": "EvidenceChainState != GREEN (any of: `truth_capsule_write_errors > 0`, `decision_snapshot_write_errors > 0`, `parquet_queue_overflow_count` increasing, `wal_write_errors > 0` in rolling 60s window)",
+      "title": "EvidenceGuard Gate"
+    },
+    {
+      "contract_ref": "\u00a72.2",
+      "enforcement": {
+        "rule": "`now - python_policy_generated_ts_ms > max_policy_age_s`"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`PolicyGuard.get_effective_mode()`"
+        ],
+        "failure_mode": [
+          "ReduceOnly (even if late update arrives)"
+        ],
+        "forbidden_actions": [
+          "Open"
+        ]
+      },
+      "gate_ids": [
+        "VR-003"
+      ],
+      "id": "VR-003",
+      "rule": "`now - python_policy_generated_ts_ms > max_policy_age_s`",
+      "title": "Policy Staleness Gate"
+    },
+    {
+      "contract_ref": "\u00a72.2",
+      "enforcement": {
+        "rule": "`now - watchdog_last_heartbeat_ts_ms > watchdog_kill_s`"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None (Kill mode)"
+        ],
+        "enforcement_point": [
+          "`PolicyGuard.get_effective_mode()`"
+        ],
+        "failure_mode": [
+          "Kill immediately"
+        ],
+        "forbidden_actions": [
+          "All trading"
+        ]
+      },
+      "gate_ids": [
+        "VR-004a"
+      ],
+      "id": "VR-004a",
+      "rule": "`now - watchdog_last_heartbeat_ts_ms > watchdog_kill_s`",
+      "title": "Watchdog Heartbeat Kill Gate"
+    },
+    {
+      "contract_ref": "\u00a73.2",
+      "enforcement": {
+        "rule": "Watchdog detects silence > 5s"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel (reduce-only orders stay alive)"
+        ],
+        "enforcement_point": [
+          "Watchdog \u2192 `POST /api/v1/emergency/reduce_only`"
+        ],
+        "failure_mode": [
+          "Force `TradingMode = ReduceOnly`; persists until cooldown + reconciliation"
+        ],
+        "forbidden_actions": [
+          "Orders where `reduce_only == false`"
+        ]
+      },
+      "gate_ids": [
+        "VR-004b"
+      ],
+      "id": "VR-004b",
+      "rule": "Watchdog detects silence > 5s",
+      "title": "Watchdog Silence ReduceOnly Trigger"
+    },
+    {
+      "contract_ref": "\u00a72.3.2",
+      "enforcement": {
+        "rule": "`deribit_http_p95_ms > 750ms` for 3 consecutive 30s windows OR `ws_event_lag_ms > 2000ms` OR `request_timeout_rate > 2%`"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`PolicyGuard.get_effective_mode()` via `bunker_mode_active`"
+        ],
+        "failure_mode": [
+          "ReduceOnly; exit only after all metrics below threshold for 120s"
+        ],
+        "forbidden_actions": [
+          "Open"
+        ]
+      },
+      "gate_ids": [
+        "VR-005"
+      ],
+      "id": "VR-005",
+      "rule": "`deribit_http_p95_ms > 750ms` for 3 consecutive 30s windows OR `ws_event_lag_ms > 2000ms` OR `request_timeout_rate > 2%`",
+      "title": "Bunker Mode (Network Jitter) Gate"
+    },
+    {
+      "contract_ref": "\u00a77.2",
+      "enforcement": {
+        "rule": "`disk_used_pct >= 80%`"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Continue Decision Snapshots, WAL, TruthCapsule, Attribution",
+          "Close, Hedge, Cancel",
+          "None"
+        ],
+        "enforcement_point": [
+          "Ops monitor \u2192 Archive writers",
+          "Ops monitor \u2192 PolicyGuard via RiskState",
+          "Ops monitor \u2192 PolicyGuard"
+        ],
+        "failure_mode": [
+          "Pause heavy archives only",
+          "`RiskState::Degraded` \u2192 ReduceOnly until back under 80%",
+          "Kill switch"
+        ],
+        "forbidden_actions": [
+          "Writing heavy tick/L2 archives",
+          "Open",
+          "All trading"
+        ],
+        "trigger": [
+          "`disk_used_pct >= 85%`",
+          "`disk_used_pct >= 92%`"
+        ]
+      },
+      "gate_ids": [
+        "VR-006a",
+        "VR-006b",
+        "VR-006c"
+      ],
+      "id": "VR-006",
+      "rule": "`disk_used_pct >= 80%`",
+      "title": "Disk Watermark Gates"
+    },
+    {
+      "contract_ref": "\u00a74.2",
+      "enforcement": {
+        "rule": "`fee_model_cache_age_s > fee_cache_soft_s` (default 300s)"
+      },
+      "fields": {
+        "allowed_actions": [
+          "All (with buffered fees)",
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`soldier/core/strategy/fees.rs` \u2192 NetEdge gate",
+          "PolicyGuard via `fee_model_cache_age_s`"
+        ],
+        "failure_mode": [
+          "Apply conservative buffer: `fee_rate_effective = fee_rate * 1.20`",
+          "`RiskState::Degraded` \u2192 ReduceOnly until refreshed"
+        ],
+        "forbidden_actions": [
+          "None (but higher rejection rate)",
+          "Open"
+        ],
+        "trigger": [
+          "`fee_model_cache_age_s > fee_cache_hard_s` (default 900s)"
+        ]
+      },
+      "gate_ids": [
+        "VR-007a",
+        "VR-007b"
+      ],
+      "id": "VR-007",
+      "rule": "`fee_model_cache_age_s > fee_cache_soft_s` (default 300s)",
+      "title": "Fee Model Staleness Gate"
+    },
+    {
+      "contract_ref": "\u00a72.3",
+      "enforcement": {
+        "rule": "DVOL jumps \u2265 +10% within \u2264 60s"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`soldier/core/reflex/cortex.rs`"
+        ],
+        "failure_mode": [
+          "`ForceReduceOnly{cooldown_s=300}`",
+          "`ForceReduceOnly{cooldown_s=120}`"
+        ],
+        "forbidden_actions": [
+          "Open"
+        ],
+        "trigger": [
+          "`spread_bps > spread_max_bps` OR `depth_topN < depth_min`"
+        ]
+      },
+      "gate_ids": [
+        "VR-008a",
+        "VR-008b"
+      ],
+      "id": "VR-008",
+      "rule": "DVOL jumps \u2265 +10% within \u2264 60s",
+      "title": "Cortex Override Gate"
+    },
+    {
+      "contract_ref": "\u00a71.4.3",
+      "enforcement": {
+        "rule": "`mm_util >= 0.70` (where `mm_util = maintenance_margin / max(equity, epsilon)`)"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel",
+          "Emergency flatten only"
+        ],
+        "enforcement_point": [
+          "`soldier/core/risk/margin_gate.rs`",
+          "`soldier/core/risk/margin_gate.rs` \u2192 PolicyGuard"
+        ],
+        "failure_mode": [
+          "Reject open intents",
+          "Force `TradingMode = ReduceOnly`",
+          "Force `TradingMode = Kill` + trigger deterministic emergency flatten"
+        ],
+        "forbidden_actions": [
+          "Open (new opens rejected)",
+          "Open",
+          "All other trading"
+        ],
+        "trigger": [
+          "`mm_util >= 0.85`",
+          "`mm_util >= 0.95`"
+        ]
+      },
+      "gate_ids": [
+        "VR-009a",
+        "VR-009b",
+        "VR-009c"
+      ],
+      "id": "VR-009",
+      "rule": "`mm_util >= 0.70` (where `mm_util = maintenance_margin / max(equity, epsilon)`)",
+      "title": "Margin Headroom Gate"
+    },
+    {
+      "contract_ref": "\u00a75.2",
+      "enforcement": {
+        "rule": "`snapshot_coverage_pct < 95%` over replay window (48h)"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None (gate blocks policy application)"
+        ],
+        "enforcement_point": [
+          "`python/governor/replay_gatekeeper.py`"
+        ],
+        "failure_mode": [
+          "HARD FAIL \u2014 reject patch, keep current policy"
+        ],
+        "forbidden_actions": [
+          "Applying any policy patch"
+        ]
+      },
+      "gate_ids": [
+        "VR-010"
+      ],
       "id": "VR-010",
-      "rule": "Canonical sizing rules are enforced and mismatches reject.",
-      "title": "Instrument Units & Notional Invariants Enforced"
+      "rule": "`snapshot_coverage_pct < 95%` over replay window (48h)",
+      "title": "Replay Gatekeeper Coverage Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a71.0.X Instrument Metadata Freshness",
+      "contract_ref": "\u00a71.3",
       "enforcement": {
-        "rule": "Stale instrument metadata forces degrade/reduce-only behavior."
+        "rule": "Expected `slippage_bps > MaxSlippageBps` when walking L2 book for OrderQty"
       },
-      "fields": {},
-      "gate_ids": [],
+      "fields": {
+        "allowed_actions": [
+          "None for this intent"
+        ],
+        "enforcement_point": [
+          "`soldier/core/execution/gate.rs`"
+        ],
+        "failure_mode": [
+          "`Rejected(ExpectedSlippageTooHigh)` \u2014 log `LiquidityGateReject` with WAP + slippage"
+        ],
+        "forbidden_actions": [
+          "Dispatching the order"
+        ]
+      },
+      "gate_ids": [
+        "VR-011"
+      ],
       "id": "VR-011",
-      "rule": "Stale instrument metadata forces degrade/reduce-only behavior.",
-      "title": "Instrument Metadata TTL Fail-Closed"
+      "rule": "Expected `slippage_bps > MaxSlippageBps` when walking L2 book for OrderQty",
+      "title": "Liquidity Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a71.1.1 Canonical Quantization",
+      "contract_ref": "\u00a71.4.1",
       "enforcement": {
-        "rule": "Quantization occurs before intent hashing and dispatch."
+        "rule": "`net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd < min_edge_usd`"
       },
-      "fields": {},
-      "gate_ids": [],
+      "fields": {
+        "allowed_actions": [
+          "None for this intent"
+        ],
+        "enforcement_point": [
+          "`soldier/core/execution/gates.rs`"
+        ],
+        "failure_mode": [
+          "`Rejected(NetEdgeTooLow)` \u2014 gate runs BEFORE AtomicGroup creation"
+        ],
+        "forbidden_actions": [
+          "Creating OrderIntent"
+        ]
+      },
+      "gate_ids": [
+        "VR-012"
+      ],
+      "id": "VR-012",
+      "rule": "`net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd < min_edge_usd`",
+      "title": "Net Edge Gate"
+    },
+    {
+      "contract_ref": "\u00a71.0.X",
+      "enforcement": {
+        "rule": "Instrument metadata age > `instrument_cache_ttl_s`"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "Instrument cache (sizing/quantization path)"
+        ],
+        "failure_mode": [
+          "`RiskState::Degraded` \u2192 ReduceOnly within one tick"
+        ],
+        "forbidden_actions": [
+          "Open"
+        ]
+      },
+      "gate_ids": [
+        "VR-013"
+      ],
+      "id": "VR-013",
+      "rule": "Instrument metadata age > `instrument_cache_ttl_s`",
+      "title": "Instrument Cache Staleness Gate"
+    },
+    {
+      "contract_ref": "\u00a72.4",
+      "enforcement": {
+        "rule": "Intent not recorded in WAL before network dispatch"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None (invariant violation)"
+        ],
+        "enforcement_point": [
+          "`soldier/infra/store/ledger.rs` + dispatch path"
+        ],
+        "failure_mode": [
+          "System invariant \u2014 dispatch MUST NOT proceed without WAL record"
+        ],
+        "forbidden_actions": [
+          "Dispatching unrecorded intent"
+        ]
+      },
+      "gate_ids": [
+        "VR-014"
+      ],
+      "id": "VR-014",
+      "rule": "Intent not recorded in WAL before network dispatch",
+      "title": "WAL Record-Before-Dispatch Gate"
+    },
+    {
+      "contract_ref": "\u00a77.1.3",
+      "enforcement": {
+        "rule": "Patch classified as AGGRESSIVE and `artifacts/HUMAN_APPROVAL.json` missing"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None (patch blocked)"
+        ],
+        "enforcement_point": [
+          "`python/reviewer/daily_ops_review.py`"
+        ],
+        "failure_mode": [
+          "Patch rejected; log reason; keep current policy"
+        ],
+        "forbidden_actions": [
+          "Applying patch"
+        ]
+      },
+      "gate_ids": [
+        "VR-015"
+      ],
+      "id": "VR-015",
+      "rule": "Patch classified as AGGRESSIVE and `artifacts/HUMAN_APPROVAL.json` missing",
+      "title": "AGGRESSIVE Patch Human Approval Gate"
+    },
+    {
+      "contract_ref": "\u00a72.3.1",
+      "enforcement": {
+        "rule": "Exchange maintenance window start \u2264 60 minutes away (from `/public/get_announcements`)"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge, Cancel"
+        ],
+        "enforcement_point": [
+          "`soldier/core/risk/exchange_health.rs` \u2192 PolicyGuard via `exchange_health_state`"
+        ],
+        "failure_mode": [
+          "`RiskState::Maintenance` \u2192 ReduceOnly until maintenance window passes"
+        ],
+        "forbidden_actions": [
+          "Open (new opens blocked even if NetEdge positive)"
+        ]
+      },
+      "gate_ids": [
+        "VR-016"
+      ],
+      "id": "VR-016",
+      "rule": "Exchange maintenance window start \u2264 60 minutes away (from `/public/get_announcements`)",
+      "title": "Exchange Health Monitor Gate"
+    },
+    {
+      "contract_ref": "\u00a71.2.2",
+      "enforcement": {
+        "rule": "`EmergencyFlattenGroup` triggered > 2 times in 5 minutes for same `{strategy_id, structure_fingerprint}`"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Close, Hedge (reduce-only)"
+        ],
+        "enforcement_point": [
+          "`soldier/core/risk/churn_breaker.rs`"
+        ],
+        "failure_mode": [
+          "Blacklist key for 15 minutes; return `Rejected(ChurnBreakerActive)`"
+        ],
+        "forbidden_actions": [
+          "Open for blacklisted key"
+        ]
+      },
+      "gate_ids": [
+        "VR-017"
+      ],
+      "id": "VR-017",
+      "rule": "`EmergencyFlattenGroup` triggered > 2 times in 5 minutes for same `{strategy_id, structure_fingerprint}`",
+      "title": "Atomic Churn Circuit Breaker"
+    },
+    {
+      "contract_ref": "\u00a71.4.2.1",
+      "enforcement": {
+        "rule": "Proposed group's `delta_impact_est` would breach limits when added to pending + current exposure"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None for this group"
+        ],
+        "enforcement_point": [
+          "`soldier/core/risk/pending_exposure.rs`"
+        ],
+        "failure_mode": [
+          "Reject intent; must reserve before dispatch, release on terminal outcome"
+        ],
+        "forbidden_actions": [
+          "Dispatching group"
+        ]
+      },
+      "gate_ids": [
+        "VR-018"
+      ],
+      "id": "VR-018",
+      "rule": "Proposed group's `delta_impact_est` would breach limits when added to pending + current exposure",
+      "title": "Pending Exposure Reservation Gate"
+    },
+    {
+      "contract_ref": "\u00a71.4.2.2",
+      "enforcement": {
+        "rule": "Portfolio-level exposure (delta/vega/gamma) breaches limits after correlation adjustment"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None for this trade"
+        ],
+        "enforcement_point": [
+          "`soldier/core/risk/exposure_budget.rs`"
+        ],
+        "failure_mode": [
+          "Reject new opens even if single-instrument gates pass"
+        ],
+        "forbidden_actions": [
+          "Opening trade"
+        ]
+      },
+      "gate_ids": [
+        "VR-019"
+      ],
+      "id": "VR-019",
+      "rule": "Portfolio-level exposure (delta/vega/gamma) breaches limits after correlation adjustment",
+      "title": "Global Exposure Budget Gate"
+    },
+    {
+      "contract_ref": "\u00a71.4.2",
+      "enforcement": {
+        "rule": "Inventory bias (`current_delta / delta_limit`) requires min_edge or limit_price adjustment"
+      },
+      "fields": {
+        "allowed_actions": [
+          "Adjusted trade (if still passes)"
+        ],
+        "enforcement_point": [
+          "`soldier/core/execution/gates.rs` (after Net Edge Gate, before pricer)"
+        ],
+        "failure_mode": [
+          "Risk-increasing trades: require higher edge + less aggressive limit; risk-reducing: allow looser"
+        ],
+        "forbidden_actions": [
+          "Trade without bias adjustment when near inventory limits"
+        ]
+      },
+      "gate_ids": [
+        "VR-020"
+      ],
       "id": "VR-020",
-      "rule": "Quantization occurs before intent hashing and dispatch.",
-      "title": "Quantization Before Hash/Dispatch"
+      "rule": "Inventory bias (`current_delta / delta_limit`) requires min_edge or limit_price adjustment",
+      "title": "Inventory Skew Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a71.1 Labeling & Idempotency Contract",
+      "contract_ref": "\u00a73.4",
       "enforcement": {
-        "rule": "Order labels follow the compact schema and enforce length limits."
+        "rule": "`prevChangeId != last_change_id[instrument]` for book incremental event"
       },
-      "fields": {},
-      "gate_ids": [],
+      "fields": {
+        "allowed_actions": [
+          "Close/Hedge/Cancel (during Degraded)"
+        ],
+        "enforcement_point": [
+          "WS book handler in Soldier"
+        ],
+        "failure_mode": [
+          "`RiskState::Degraded`; resubscribe + full REST snapshot; reconcile before resuming"
+        ],
+        "forbidden_actions": [
+          "Open until snapshot rebuild completes"
+        ]
+      },
+      "gate_ids": [
+        "VR-021"
+      ],
       "id": "VR-021",
-      "rule": "Order labels follow the compact schema and enforce length limits.",
-      "title": "Compact Label Schema \u226464"
+      "rule": "`prevChangeId != last_change_id[instrument]` for book incremental event",
+      "title": "Orderbook Continuity Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a71.1.2 Label Parse + Disambiguation",
+      "contract_ref": "\u00a73.4",
       "enforcement": {
-        "rule": "Tie-breaker ordering is deterministic; ambiguity degrades."
+        "rule": "Trade sequence gap (`trade_seq != last_trade_seq + 1`) detected for instrument"
       },
-      "fields": {},
-      "gate_ids": [],
+      "fields": {
+        "allowed_actions": [
+          "Close/Hedge/Cancel"
+        ],
+        "enforcement_point": [
+          "WS trades handler in Soldier"
+        ],
+        "failure_mode": [
+          "`RiskState::Degraded`; pull REST trades + reconcile; resume only when confirmed no missing fills"
+        ],
+        "forbidden_actions": [
+          "Open until reconciliation completes"
+        ]
+      },
+      "gate_ids": [
+        "VR-022"
+      ],
       "id": "VR-022",
-      "rule": "Tie-breaker ordering is deterministic; ambiguity degrades.",
-      "title": "Label Disambiguation is Collision-Safe"
+      "rule": "Trade sequence gap (`trade_seq != last_trade_seq + 1`) detected for instrument",
+      "title": "Trades Continuity Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a71.4.4 Deribit Order-Type Preflight Guard",
+      "contract_ref": "\u00a73.3",
       "enforcement": {
-        "rule": "Market/stop/linked orders are rejected per contract rules."
+        "rule": "Token bucket exhausted or 429 burst detected"
       },
-      "fields": {},
-      "gate_ids": [],
-      "id": "VR-030",
-      "rule": "Market/stop/linked orders are rejected per contract rules.",
-      "title": "Order-Type Preflight Rejects Illegal Orders"
+      "fields": {
+        "allowed_actions": [
+          "CANCEL, HEDGE, EMERGENCY_CLOSE (highest priority)",
+          "None until reconnect + reconcile"
+        ],
+        "enforcement_point": [
+          "`soldier/infra/api/rate_limit.rs`",
+          "`soldier/infra/api/rate_limit.rs` \u2192 PolicyGuard"
+        ],
+        "failure_mode": [
+          "Priority queue preemption; ReduceOnly behavior for opens",
+          "`RiskState::Degraded` + `TradingMode::Kill` immediately; backoff \u2192 reconnect \u2192 3-way reconcile \u2192 resume only when stable"
+        ],
+        "forbidden_actions": [
+          "OPEN blocked; DATA shed first",
+          "All trading"
+        ],
+        "trigger": [
+          "`too_many_requests` (code 10028) or session terminated"
+        ]
+      },
+      "gate_ids": [
+        "VR-023a",
+        "VR-023b"
+      ],
+      "id": "VR-023",
+      "rule": "Token bucket exhausted or 429 burst detected",
+      "title": "Rate Limit Brownout Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a72.4 Durable Intent Ledger (WAL Truth Source)",
+      "contract_ref": "\u00a77.0",
       "enforcement": {
-        "rule": "Intent record exists before any dispatch."
+        "rule": "(Testing gate) Endpoint `/api/v1/status` must return required fields"
       },
-      "fields": {},
-      "gate_ids": [],
-      "id": "VR-040",
-      "rule": "Intent record exists before any dispatch.",
-      "title": "RecordedBeforeDispatch Required"
+      "fields": {
+        "allowed_actions": [
+          "N/A (test gate)"
+        ],
+        "enforcement_point": [
+          "`test_status_endpoint_returns_required_fields()` (\u00a77.0 line 1412)"
+        ],
+        "failure_mode": [
+          "CI blocks deployment"
+        ],
+        "forbidden_actions": [
+          "Deploying without passing endpoint test"
+        ]
+      },
+      "gate_ids": [
+        "VR-024"
+      ],
+      "id": "VR-024",
+      "rule": "(Testing gate) Endpoint `/api/v1/status` must return required fields",
+      "title": "Status Endpoint Response Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a72.4 Durable Intent Ledger (WAL Truth Source)",
+      "contract_ref": "\u00a71.4.4",
       "enforcement": {
-        "rule": "Replay reconstructs state without duplicate sends."
+        "rule": "`type == market` (any instrument kind)"
       },
-      "fields": {},
-      "gate_ids": [],
-      "id": "VR-041",
-      "rule": "Replay reconstructs state without duplicate sends.",
-      "title": "Replay Does Not Resend"
+      "fields": {
+        "allowed_actions": [
+          "None for this order"
+        ],
+        "enforcement_point": [
+          "Preflight guard in trade dispatch path (before API call)"
+        ],
+        "failure_mode": [
+          "**REJECT** (no rewrite/normalization); hard reject"
+        ],
+        "forbidden_actions": [
+          "Dispatching market order"
+        ]
+      },
+      "gate_ids": [
+        "VR-025"
+      ],
+      "id": "VR-025",
+      "rule": "`type == market` (any instrument kind)",
+      "title": "No Market Orders Gate"
     },
     {
-      "contract_ref": "CONTRACT.md \u00a72.4 Trade-ID Idempotency Registry",
+      "contract_ref": "\u00a71.4.4",
       "enforcement": {
-        "rule": "Duplicate trade IDs are ignored deterministically."
+        "rule": "`instrument_kind == option` AND (`type in {stop_market, stop_limit}` OR `trigger` present)"
       },
-      "fields": {},
-      "gate_ids": [],
-      "id": "VR-042",
-      "rule": "Duplicate trade IDs are ignored deterministically.",
-      "title": "Trade-ID Registry Prevents Duplicate Applies"
+      "fields": {
+        "allowed_actions": [
+          "None for this order"
+        ],
+        "enforcement_point": [
+          "Preflight guard in trade dispatch path"
+        ],
+        "failure_mode": [
+          "**REJECT**; hard preflight rejection"
+        ],
+        "forbidden_actions": [
+          "Dispatching stop order on options"
+        ]
+      },
+      "gate_ids": [
+        "VR-026"
+      ],
+      "id": "VR-026",
+      "rule": "`instrument_kind == option` AND (`type in {stop_market, stop_limit}` OR `trigger` present)",
+      "title": "Options Stop Orders Forbidden Gate"
+    },
+    {
+      "contract_ref": "\u00a71.4.4",
+      "enforcement": {
+        "rule": "`instrument_kind in {linear_future, inverse_future, perpetual}` AND `type in {stop_market, stop_limit}` AND `trigger` missing/invalid"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None without valid trigger"
+        ],
+        "enforcement_point": [
+          "Preflight guard in trade dispatch path"
+        ],
+        "failure_mode": [
+          "**REJECT**; trigger must be one of Deribit-allowed triggers (index/mark/last)"
+        ],
+        "forbidden_actions": [
+          "Dispatching stop order without mandatory trigger"
+        ]
+      },
+      "gate_ids": [
+        "VR-027"
+      ],
+      "id": "VR-027",
+      "rule": "`instrument_kind in {linear_future, inverse_future, perpetual}` AND `type in {stop_market, stop_limit}` AND `trigger` missing/invalid",
+      "title": "Stop Orders Require Trigger Gate"
+    },
+    {
+      "contract_ref": "\u00a71.4.4",
+      "enforcement": {
+        "rule": "`linked_order_type != null` AND (feature flag `ENABLE_LINKED_ORDERS_FOR_BOT != true` OR `linked_orders_supported != true`)"
+      },
+      "fields": {
+        "allowed_actions": [
+          "None for linked orders (currently NOT SUPPORTED)"
+        ],
+        "enforcement_point": [
+          "Preflight guard in trade dispatch path"
+        ],
+        "failure_mode": [
+          "**REJECT**; linked orders gated off unless explicitly certified"
+        ],
+        "forbidden_actions": [
+          "Dispatching linked/OCO order"
+        ]
+      },
+      "gate_ids": [
+        "VR-028"
+      ],
+      "id": "VR-028",
+      "rule": "`linked_order_type != null` AND (feature flag `ENABLE_LINKED_ORDERS_FOR_BOT != true` OR `linked_orders_supported != true`)",
+      "title": "Linked/OCO Orders Gate"
     }
   ]
 }

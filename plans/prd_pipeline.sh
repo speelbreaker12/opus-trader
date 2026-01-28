@@ -2,6 +2,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Fix: Add timeout for pipeline commands
+PIPELINE_CMD_TIMEOUT="${PIPELINE_CMD_TIMEOUT:-300}"
+
 PRD_FILE="${PRD_FILE:-plans/prd.json}"
 MAX_REPAIR_PASSES="${MAX_REPAIR_PASSES:-5}"
 MAX_AUDIT_PASSES="${MAX_AUDIT_PASSES:-2}"
@@ -139,14 +142,26 @@ run_cmd() {
   fi
   cmd_arr+=("$cmd")
   if [[ -n "$args" ]]; then
-    read -r -a arg_arr <<<"$args"
+    # Fix: Use eval for proper quoted argument handling
+    eval "arg_arr=($args)"
     if (( ${#arg_arr[@]} > 0 )); then
       cmd_arr+=("${arg_arr[@]}")
     fi
   fi
   echo "==> $label" >&2
-  "${cmd_arr[@]}"
-  return $?
+  # Fix: Add timeout wrapper
+  local cmd_rc=0
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$PIPELINE_CMD_TIMEOUT" "${cmd_arr[@]}" || cmd_rc=$?
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$PIPELINE_CMD_TIMEOUT" "${cmd_arr[@]}" || cmd_rc=$?
+  else
+    "${cmd_arr[@]}" || cmd_rc=$?
+  fi
+  if [[ "$cmd_rc" -eq 124 || "$cmd_rc" -eq 137 ]]; then
+    echo "ERROR: $label timed out after ${PIPELINE_CMD_TIMEOUT}s" >&2
+  fi
+  return $cmd_rc
 }
 
 run_gate() {
@@ -163,6 +178,12 @@ run_gate() {
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq required" >&2
+  exit 2
+fi
+
+# Fix: Check prd_schema_check.sh exists before pipeline starts
+if [[ ! -x "./plans/prd_schema_check.sh" ]]; then
+  echo "ERROR: missing ./plans/prd_schema_check.sh" >&2
   exit 2
 fi
 
@@ -281,6 +302,12 @@ if [[ -n "$PRD_PATCHER_CMD" ]]; then
 fi
 
 # Stage C: Gate
-run_gate
+# Fix: Write blocked on final gate failure
+if ! run_gate; then
+  write_blocked "FINAL_GATE_FAIL" "Final gate check failed after pipeline completion."
+  echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+  echo "ERROR: Final gate check failed after pipeline completion." >&2
+  exit 8
+fi
 
 echo "PRD pipeline complete"

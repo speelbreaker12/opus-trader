@@ -28,7 +28,7 @@ list_repo_files() {
 [[ -f specs/WORKFLOW_CONTRACT.md ]] || fail "Missing specs/WORKFLOW_CONTRACT.md"
 [[ -f specs/SOURCE_OF_TRUTH.md ]] || fail "Missing specs/SOURCE_OF_TRUTH.md"
 
-# 2) root stubs must be redirect stubs
+# 2) root stubs must be redirect stubs (CONTRACT.md is forbidden)
 check_stub() {
   local f="$1" target="$2"
   [[ -f "$f" ]] || fail "Missing root stub $f"
@@ -39,9 +39,9 @@ check_stub() {
   lines=$(wc -l < "$f" | tr -d ' ')
   [[ "$lines" -le 25 ]] || fail "$f too large to be a stub ($lines lines)"
 }
-check_stub "CONTRACT.md" "specs/CONTRACT.md"
 check_stub "IMPLEMENTATION_PLAN.md" "specs/IMPLEMENTATION_PLAN.md"
 check_stub "POLICY.md" "specs/POLICY.md"
+[[ -f "CONTRACT.md" ]] && fail "Root CONTRACT.md is forbidden; use specs/CONTRACT.md"
 
 # 3) forbid extra copies outside /specs (except the root stubs we just validated)
 check_duplicates() {
@@ -59,9 +59,17 @@ check_duplicates() {
     fi
   done <<< "$hits"
 }
-for name in CONTRACT.md IMPLEMENTATION_PLAN.md POLICY.md; do
+for name in IMPLEMENTATION_PLAN.md POLICY.md; do
   check_duplicates "$name"
 done
+check_contract_single() {
+  local hits count
+  hits=$(list_repo_files | grep -E "(^|/)CONTRACT\\.md$" || true)
+  count=$(printf "%s\n" "$hits" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')
+  [[ "$count" -eq 1 ]] || fail "CONTRACT.md must exist only at specs/CONTRACT.md (found: $hits)"
+  [[ "$hits" == "specs/CONTRACT.md" ]] || fail "CONTRACT.md must exist only at specs/CONTRACT.md (found: $hits)"
+}
+check_contract_single
 
 # 4) /specs must contain exactly one canonical file per namespace
 check_single_spec() {

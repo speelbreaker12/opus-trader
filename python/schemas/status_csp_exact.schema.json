@@ -1,0 +1,389 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ralph.internal/schemas/status_csp_exact.schema.json",
+  "title": "CSP /status schema — EXACT fixture set",
+  "description": "Strict schema for golden fixtures. No extra keys allowed (additionalProperties: false). Use status_csp_min.schema.json for runtime validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status_schema_version",
+    "contract_version",
+    "build_id",
+    "runtime_config_hash",
+    "supported_profiles",
+    "enforced_profile",
+    "trading_mode",
+    "risk_state",
+    "bunker_mode_active",
+    "connectivity_degraded",
+    "mode_reasons",
+    "open_permission_blocked_latch",
+    "open_permission_reason_codes",
+    "open_permission_requires_reconcile",
+    "policy_age_sec",
+    "last_policy_update_ts",
+    "f1_cert_state",
+    "f1_cert_expires_at",
+    "disk_used_pct",
+    "disk_used_last_update_ts_ms",
+    "disk_used_pct_secondary",
+    "disk_used_secondary_last_update_ts_ms",
+    "mm_util",
+    "mm_util_last_update_ts_ms",
+    "loop_tick_last_ts_ms",
+    "wal_queue_depth",
+    "wal_queue_capacity",
+    "wal_queue_enqueue_failures",
+    "atomic_naked_events_24h",
+    "429_count_5m",
+    "10028_count_5m",
+    "deribit_http_p95_ms",
+    "ws_event_lag_ms"
+  ],
+  "properties": {
+    "status_schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version for forward compatibility. Must be 1 for CSP."
+    },
+    "contract_version": {
+      "type": "string",
+      "const": "5.2",
+      "description": "Contract version this status conforms to. Must match manifest."
+    },
+    "build_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this build (git SHA or release tag)."
+    },
+    "runtime_config_hash": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Hash of runtime configuration. Changes indicate config drift."
+    },
+    "supported_profiles": {
+      "type": "array",
+      "description": "Profiles this build supports. Must include CSP.",
+      "items": {
+        "enum": ["CSP", "GOP", "FULL"]
+      },
+      "uniqueItems": true,
+      "contains": { "const": "CSP" },
+      "minContains": 1
+    },
+    "enforced_profile": {
+      "type": "string",
+      "const": "CSP",
+      "description": "Currently enforced profile. CSP = Contract-Specified Profile (minimum)."
+    },
+    "trading_mode": {
+      "enum": ["Active", "ReduceOnly", "Kill"],
+      "description": "Current trading mode. Active=normal, ReduceOnly=can only reduce exposure, Kill=no trading."
+    },
+    "risk_state": {
+      "enum": ["Healthy", "Degraded", "Maintenance"],
+      "description": "System health state. Degraded triggers containment; Maintenance blocks new risk."
+    },
+    "bunker_mode_active": {
+      "type": "boolean",
+      "description": "True if connectivity/jitter risk detected. Restricts trading."
+    },
+    "connectivity_degraded": {
+      "type": "boolean",
+      "description": "True if WS gaps, staleness, or session issues detected."
+    },
+    "mode_reasons": {
+      "type": "array",
+      "description": "Why trading_mode is ReduceOnly/Kill. Empty when Active. Tier-pure and ordered."
+    },
+    "open_permission_blocked_latch": {
+      "type": "boolean",
+      "description": "True if OPEN risk creation is blocked pending reconciliation."
+    },
+    "open_permission_reason_codes": {
+      "type": "array",
+      "description": "Why OPEN is blocked. Non-empty iff latch is true."
+    },
+    "open_permission_requires_reconcile": {
+      "type": "boolean",
+      "description": "True iff reconciliation required before OPEN. Matches latch state."
+    },
+    "policy_age_sec": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Seconds since last policy refresh. High values trigger REDUCEONLY_POLICY_STALE."
+    },
+    "last_policy_update_ts": {
+      "type": "integer",
+      "description": "Timestamp (ms) of last policy update."
+    },
+    "f1_cert_state": {
+      "enum": ["PASS", "FAIL", "STALE", "MISSING", "INVALID"],
+      "description": "F1 certification status. Only PASS allows Active in production."
+    },
+    "f1_cert_expires_at": {
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "null" }
+      ],
+      "description": "Timestamp (ms) when F1 cert expires. Null if MISSING."
+    },
+    "disk_used_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Primary disk usage as fraction (0-1). >0.90 triggers Kill."
+    },
+    "disk_used_last_update_ts_ms": {
+      "type": "integer",
+      "description": "Timestamp (ms) of last disk usage check."
+    },
+    "disk_used_pct_secondary": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Secondary disk usage as fraction (0-1)."
+    },
+    "disk_used_secondary_last_update_ts_ms": {
+      "type": "integer",
+      "description": "Timestamp (ms) of last secondary disk usage check."
+    },
+    "mm_util": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Margin/maintenance utilization (0-1). >0.80 triggers ReduceOnly, >0.90 triggers Kill."
+    },
+    "mm_util_last_update_ts_ms": {
+      "type": "integer",
+      "description": "Timestamp (ms) of last margin utilization update."
+    },
+    "loop_tick_last_ts_ms": {
+      "type": "integer",
+      "description": "Timestamp (ms) of last main loop tick. Stale = watchdog failure."
+    },
+    "wal_queue_depth": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Current WAL queue depth. Near capacity = backpressure risk."
+    },
+    "wal_queue_capacity": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum WAL queue capacity."
+    },
+    "wal_queue_enqueue_failures": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of WAL enqueue failures. Non-zero = OPEN must fail closed."
+    },
+    "atomic_naked_events_24h": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Atomic group naked events (leg fills without pair) in last 24h."
+    },
+    "429_count_5m": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "HTTP 429 rate-limit responses in last 5 minutes."
+    },
+    "10028_count_5m": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Exchange 10028 session terminations in last 5 minutes."
+    },
+    "deribit_http_p95_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Deribit HTTP API p95 latency in milliseconds."
+    },
+    "ws_event_lag_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "WebSocket event lag in milliseconds. >threshold triggers latch."
+    },
+    "owner_view": {
+      "$ref": "#/$defs/owner_view",
+      "description": "Owner-friendly view. Display-only, cannot introduce authority."
+    }
+  },
+  "$defs": {
+    "owner_view": {
+      "type": "object",
+      "description": "Owner-friendly derived view. Schema-locked to prevent authority creep.",
+      "additionalProperties": false,
+      "required": ["primary_owner_reason_code", "owner_message", "unblock"],
+      "properties": {
+        "primary_owner_reason_code": {
+          "type": "string",
+          "description": "Primary reason code for owner display. Derived from contract fields."
+        },
+        "owner_message": {
+          "type": "string",
+          "description": "Human-readable explanation. Display-only, not authoritative."
+        },
+        "unblock": {
+          "type": "array",
+          "description": "Steps required to unblock. Each step is AUTO or MANUAL.",
+          "items": { "$ref": "#/$defs/unblock_step" }
+        }
+      }
+    },
+    "unblock_step": {
+      "type": "object",
+      "description": "A single unblock condition with current and target values.",
+      "additionalProperties": false,
+      "required": ["type", "condition", "current", "target"],
+      "properties": {
+        "type": {
+          "enum": ["AUTO", "MANUAL"],
+          "description": "AUTO = metric-based, MANUAL = requires operator action."
+        },
+        "condition": {
+          "type": "string",
+          "description": "Machine-readable condition for unblock."
+        },
+        "current": {
+          "type": "string",
+          "description": "Current value of the relevant metric/state."
+        },
+        "target": {
+          "type": "string",
+          "description": "Target value required for unblock."
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "trading_mode": { "const": "Active" } } },
+      "then": {
+        "properties": {
+          "mode_reasons": {
+            "type": "array",
+            "maxItems": 0,
+            "description": "Active mode requires empty mode_reasons."
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "trading_mode": { "const": "ReduceOnly" } } },
+      "then": {
+        "properties": {
+          "mode_reasons": {
+            "type": "array",
+            "minItems": 1,
+            "description": "ReduceOnly mode requires at least one ReduceOnly-tier reason.",
+            "items": {
+              "enum": [
+                "REDUCEONLY_RISKSTATE_MAINTENANCE",
+                "REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE",
+                "REDUCEONLY_OPEN_PERMISSION_LATCHED",
+                "REDUCEONLY_BUNKER_MODE_ACTIVE",
+                "REDUCEONLY_F1_CERT_INVALID",
+                "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN",
+                "REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY",
+                "REDUCEONLY_FEE_MODEL_HARD_STALE",
+                "REDUCEONLY_RISKSTATE_DEGRADED",
+                "REDUCEONLY_POLICY_STALE",
+                "REDUCEONLY_MARGIN_MM_UTIL_HIGH",
+                "REDUCEONLY_INPUT_MISSING_OR_STALE",
+                "REDUCEONLY_WATCHDOG_UNCONFIRMED",
+                "REDUCEONLY_DISK_KILL_UNCONFIRMED",
+                "REDUCEONLY_SESSION_KILL_UNCONFIRMED"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "trading_mode": { "const": "Kill" } } },
+      "then": {
+        "properties": {
+          "mode_reasons": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Kill mode requires at least one Kill-tier reason.",
+            "items": {
+              "enum": [
+                "KILL_WATCHDOG_HEARTBEAT_STALE",
+                "KILL_RISKSTATE_KILL",
+                "KILL_MARGIN_MM_UTIL_CRITICAL",
+                "KILL_RATE_LIMIT_SESSION_TERMINATION",
+                "KILL_DISK_WATERMARK_KILL",
+                "KILL_CORTEX_FORCE_KILL"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "open_permission_blocked_latch": { "const": false } } },
+      "then": {
+        "properties": {
+          "open_permission_reason_codes": {
+            "type": "array",
+            "maxItems": 0,
+            "description": "Latch=false requires empty reason codes."
+          },
+          "open_permission_requires_reconcile": {
+            "const": false,
+            "description": "Latch=false requires requires_reconcile=false."
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "open_permission_blocked_latch": { "const": true } } },
+      "then": {
+        "properties": {
+          "open_permission_reason_codes": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Latch=true requires at least one latch reason.",
+            "items": {
+              "enum": [
+                "RESTART_RECONCILE_REQUIRED",
+                "WS_BOOK_GAP_RECONCILE_REQUIRED",
+                "WS_TRADES_GAP_RECONCILE_REQUIRED",
+                "WS_DATA_STALE_RECONCILE_REQUIRED",
+                "INVENTORY_MISMATCH_RECONCILE_REQUIRED",
+                "SESSION_TERMINATION_RECONCILE_REQUIRED"
+              ]
+            }
+          },
+          "open_permission_requires_reconcile": {
+            "const": true,
+            "description": "Latch=true requires requires_reconcile=true."
+          },
+          "trading_mode": {
+            "enum": ["ReduceOnly", "Kill"],
+            "description": "Latch=true prohibits Active mode (Decision A)."
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "f1_cert_state": { "const": "MISSING" } } },
+      "then": {
+        "properties": {
+          "f1_cert_expires_at": {
+            "type": "null",
+            "description": "MISSING cert has no expiration."
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "f1_cert_expires_at": {
+            "type": "integer",
+            "description": "Non-MISSING cert must have expiration timestamp."
+          }
+        }
+      }
+    }
+  ]
+}

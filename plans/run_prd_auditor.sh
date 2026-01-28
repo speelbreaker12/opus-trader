@@ -308,8 +308,18 @@ if [[ -n "$AUDITOR_AGENT_ARGS" ]]; then
 fi
 
 run_auditor() {
-  local prompt
+  local prompt meta_json
   prompt="$(cat "$AUDITOR_PROMPT")"
+
+  # Embed meta file content directly in prompt to avoid parallel execution race conditions
+  if [[ -f "$AUDIT_META_FILE" ]]; then
+    meta_json="$(cat "$AUDIT_META_FILE")"
+    prompt="${prompt//__AUDIT_META_PLACEHOLDER__/$meta_json}"
+  else
+    echo "[prd_auditor] ERROR: missing audit meta file: $AUDIT_META_FILE" >&2
+    return 1
+  fi
+
   if [[ -n "$AUDITOR_AGENT_ARGS" ]]; then
     if [[ -n "${AUDITOR_PROMPT_FLAG:-}" ]]; then
       "$AUDITOR_AGENT_CMD" "${AUDITOR_AGENT_ARGS_ARR[@]}" "$AUDITOR_PROMPT_FLAG" "$prompt"

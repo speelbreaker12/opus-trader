@@ -1,0 +1,19 @@
+{
+  "generated": "2026-01-27T19:21:53Z",
+  "test": "test_missing_config_fails_closed",
+  "results": {
+    "INSTRUMENT_CACHE_TTL_MS": {
+      "status": "PASS",
+      "reason": "CONFIG_MISSING"
+    },
+    "MAX_ORDER_SIZE": {
+      "status": "PASS",
+      "reason": "CONFIG_MISSING"
+    }
+  },
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0
+  }
+}

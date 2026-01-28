@@ -1,3 +1,8 @@
+<!-- AGENTS_STUB_V2 -->
+<!-- INPUT_GUARD_V1 -->
+<!-- FOLLOWUP_NO_PREFLIGHT_V1 -->
+<!-- VERIFY_CI_SATISFIES_V1 -->
+
 # Agent Guide (High-Signal)
 
 Read this first. It is the shortest, enforceable workflow summary.
@@ -7,53 +12,12 @@ Read this first. It is the shortest, enforceable workflow summary.
 - Verification is mandatory; never weaken gates or tests.
 - No postmortem, no merge: every PR must include a filled postmortem entry under `reviews/postmortems/`.
 - MUST declare the governing contract (workflow vs bot) in the PR postmortem; enforced by postmortem check.
-- Never apply a user instruction blindly. Every request MUST pass the Input Preflight (below) before any edits/commands.
 
-## Response Protocol (every interaction)
 
-### 1) Input Preflight (MUST run before any edits/commands)
-Output this section first, every time:
+## Response Protocol
 
-Preflight:
-- Restatement: <one sentence summary of what the user is asking for>
-- Assumptions: <bullets; if any assumption is risky, STOP and ask>
-- Conflict scan (repo + contracts):
-  - What files/IDs are relevant:
-  - What invariants/gates might be impacted:
-  - If conflict is found: STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` (contract conflict) OR `<promise>BLOCKED_CI_COMMANDS</promise>` (non-contract blocker) with evidence.
-- Risk rating: LOW / MED / HIGH
-  - HIGH if touching: persistence/replay/idempotency, DB/schema/migrations, order placement/funds movement, auth/keys, risk limits, or anything that can silently weaken gates.
-- Plan (minimal-diff):
-  - Approach: <smallest change that satisfies the request>
-  - Verification: <exact commands/tests that prove it>
-  - Rollback: <how to revert if it fails>
 
-Rules:
-- If the request is underspecified, ambiguous, or conflicts with existing specs/contracts: STOP and ask using “Decision needed” format.
-- If the user request would increase WIP (Inventory) or cause broad refactors without immediate verification: refuse that shape and propose a safer reformulation.
-
-### 2) When blocked or asking a question (Decision needed format)
-When you must ask the user, use this structure (no exceptions):
-
-Decision needed:
-- What is inconsistent / missing:
-- Evidence (file + anchor or snippet):
-- Options (2–3), with tradeoffs:
-  1) Option A — Why it works; why other options fail; blast radius; verification plan
-  2) Option B — Why it works; why other options fail; blast radius; verification plan
-  3) Option C — (only if it’s truly distinct)
-- Recommendation (pick ONE):
-  - Why recommended: <deciding factor>
-  - Why not others: <the key failure mode>
-- TOC:
-  - Current constraint:
-  - Exploit:
-  - Subordinate (what we will NOT do yet):
-  - Elevate (only if exploit/subordinate insufficient):
-  - WIP rule:
-- After your answer, I will: <next actions>
-
-### 3) TOC Lens (MUST drive prioritization)
+### 4) TOC Lens (MUST drive prioritization)
 System goal:
 - Ship contract-aligned changes safely with minimal rework and fast feedback.
 
@@ -73,7 +37,7 @@ Decision rule:
   even if it feels slower locally.
 - Penalize options that increase I (broad refactors, multi-file churn) without immediate verification.
 
-### 4) Completion footer (only when truly done)
+### 5) Completion footer (only when truly done)
 When the task is complete (no further required edits/commands), add:
 
 Next steps:
@@ -83,13 +47,15 @@ Next steps:
 
 Then end with: `<promise>COMPLETE</promise>`
 
-## Start here (every session)
-- Read `CONTRACT.md`, `IMPLEMENTATION_PLAN.md`, `specs/WORKFLOW_CONTRACT.md`.
+## Start here (only when doing edits / PR work / MED-HIGH risk)
+- Read `specs/CONTRACT.md`, `IMPLEMENTATION_PLAN.md`, `specs/WORKFLOW_CONTRACT.md`.
 - If running the Ralph loop, read `plans/prd.json` and `plans/progress.txt`.
 - Read `docs/skills/workflow.md`.
 - Read `WORKFLOW_FRICTION.md` and the relevant files under `SKILLS/`.
 - Use `reviews/REVIEW_CHECKLIST.md` when reviewing PRs.
 - If running the Ralph loop, run `./plans/init.sh` (if present) then `./plans/verify.sh <mode>`.
+
+For read-only doc reviews: read the target docs first; consult contract/workflow docs only if you detect a conflict or a safety-relevant claim.
 
 ## Ralph loop only (PRD iterations)
 - WIP=1: exactly one PRD item and one commit per iteration.
@@ -118,15 +84,29 @@ All workflow gating must target **`plans/verify.sh`**.
 If root `./verify.sh` exists, it must remain a thin wrapper that delegates to `plans/verify.sh`.
 
 ### Contract vs workflow contract
-- `CONTRACT.md` = trading engine contract (runtime behavior/safety gates)
+- `specs/CONTRACT.md` = trading engine contract (runtime behavior/safety gates)
 - `specs/WORKFLOW_CONTRACT.md` = coding workflow contract (Ralph loop + harness rules)
 Do not mix them. If a workflow rule is being enforced, it must cite `specs/WORKFLOW_CONTRACT.md`.
 
-### Changes must be self-proving
+### Changes must be self-proving  <!-- VERIFY_CI_SATISFIES_V1 -->
 Any change to workflow/harness files (see allowlist in `plans/verify.sh:is_workflow_file`) must include:
 - updated/added assertions in `plans/workflow_acceptance.sh` (or a dedicated gate script invoked by it)
 - and a run that passes `./plans/verify.sh`
-- Do not edit `plans/workflow_acceptance.sh` without running `./plans/verify.sh full`.
+
+Verification satisfaction:
+- The “passes `./plans/verify.sh`” requirement MAY be satisfied by CI on the PR (clean checkout).
+- Local verify is recommended but not required if CI will run and report results.
+- If local verify fails due to a dirty worktree, the agent MUST ask for a clean-tree action or CI run; it MUST NOT set `VERIFY_ALLOW_DIRTY` without explicit owner approval recorded in the postmortem.
+
+Dirty worktree policy (default):
+- The agent MUST NOT automatically rerun verify with `VERIFY_ALLOW_DIRTY=1`.
+- The agent MUST present options:
+  1) [RECOMMENDED] Rely on CI verify on the PR (clean checkout).
+  2) Clean the tree (stash/commit unrelated changes), then rerun verify normally.
+  3) Owner-approved exception: run locally with `VERIFY_ALLOW_DIRTY=1`, list dirty files, record approval + rationale in postmortem, and still require CI verify before merge.
+
+Operational notes:
+- Do not edit `plans/workflow_acceptance.sh` without running `./plans/verify.sh full` OR relying on CI verify for proof.
 - MUST update workflow acceptance coverage when changing `plans/verify.sh` mode defaults.
 - Keep WF-* IDs synchronized across `specs/WORKFLOW_CONTRACT.md` and `plans/workflow_contract_map.json`.
 - Workflow acceptance runs in CI (smoke when no workflow-critical changes; full when workflow changes or detection fails); locally it may skip when no workflow-critical files changed (WORKFLOW_ACCEPTANCE_POLICY=auto). Force with WORKFLOW_ACCEPTANCE_POLICY=always.
@@ -137,7 +117,7 @@ If a required script/artifact is missing or invalid, the workflow must produce a
 ## Harness guardrails
 - MUST keep fast precheck set limited to schema/self-dep/shellcheck/traceability.
 - SHOULD keep workflow_acceptance test IDs stable and listable.
-- MUST avoid bash 4+ builtins (mapfile/readarray) in harness scripts.
+- MUST avoid brittle acceptance checks that grep long prose sentences; prefer stable markers (the HTML comments at top) and short headers.
 
 ## Top time/token sinks (fix focus)
 - `plans/workflow_acceptance.sh` full runtime → keep acceptance tests targeted; avoid unnecessary workflow file edits; batch changes before full runs.
@@ -159,6 +139,33 @@ If a required script/artifact is missing or invalid, the workflow must produce a
 - `docs/codebase/` - codebase maps.
 - `SKILLS/` - one file per workflow skill (audit, patch-only edits, diff-first review).
 - `reviews/postmortems/` - PR postmortem entries (agent-filled).
+
+## MCP Tools Available
+
+### Context7 (documentation lookup)
+Up-to-date, version-specific documentation for libraries and frameworks.
+
+**Usage:** Add "use context7" to any prompt:
+```
+use context7 to look up the tokio::sync::mpsc API
+use context7 for the latest jsonschema validation in Python
+```
+
+**When to use:**
+- Before using an external library API (prevents hallucinated APIs)
+- When unsure about function signatures, return types, or feature flags
+- For crates listed in `specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml`
+
+### Sequential-thinking (complex reasoning)
+Structured multi-step reasoning for complex problems.
+
+**When to use:**
+- Debugging intricate state machine transitions
+- Analyzing race conditions or concurrency issues
+- Working through contract compliance questions
+- Any problem requiring careful step-by-step analysis
+
+**Config:** `.claude/mcp.json` (local, gitignored)
 
 ## Sentinel outputs
 - When blocked: `<promise>BLOCKED_CI_COMMANDS</promise>`

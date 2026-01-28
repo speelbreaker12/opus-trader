@@ -17,3 +17,4 @@
 - 2026-01-12 | DEPENDENCY_SLICE | rule: Dependencies must not point to higher slices. | check: plans/prd_lint.sh flags DEPENDENCY_SLICE when dep slice > item slice.
 - 2026-01-12 | WORKFLOW_TOUCHES_CRATES | rule: category=workflow MUST NOT touch crates/. | check: plans/prd_lint.sh flags WORKFLOW_TOUCHES_CRATES for crates/ in scope.touch.
 - 2026-01-12 | EXECUTION_TOUCHES_PLANS | rule: category=execution or risk MUST NOT touch plans/. | check: plans/prd_lint.sh flags EXECUTION_TOUCHES_PLANS for plans/ in scope.touch.
+- 2026-01-27 | SCHEMA_FAIL | rule: observability.metrics.unit must be one of count|ms|pct|s. | check: ./plans/prd_lint.sh and ./plans/prd_schema_check.sh

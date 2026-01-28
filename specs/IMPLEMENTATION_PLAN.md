@@ -1,8 +1,10 @@
 1\) Phase → Slice Mapping Table (contract-aligned)  
-| Phase | Goal | Slices Included | Exit Criteria (objective/measurable) | Key Risks | |---|---|---|---|---| | Phase 1 — Foundation (Panic‑Free Deterministic Intents) | Deterministic intent construction: sizing invariants, quantization+idempotency, venue preflight, durable WAL/TLSM, and hard execution gates behind one chokepoint. | Slices 1–5 | (1) build\_order\_intent() gate ordering proven by test; (2) OPEN dispatch blocked when RiskState::Degraded (0 dispatches); (3) WAL replay proves “no resend after crash”; (4) Market/stop/linked/post-only-crossing are rejected preflight (tests); (5) Liquidity+NetEdge+Fee staleness fail-closed (tests). | Gate bypass via alternate codepaths; float/rounding drift; WAL durability miswired before dispatch. | | Phase 2 — Guardrails (Runtime Safety \+ Recovery) | Atomic containment \+ emergency close, risk budgets (inventory/pending/global/margin), PolicyGuard precedence incl F1 runtime gate, EvidenceGuard, Bunker Mode, plus rate-limit brownout, WS-gap recovery, reconcile, zombie sweep, and required owner endpoints. | Slices 6–9 | (1) Mixed-leg state always contains/neutralizes (tests); (2) PolicyGuard precedence enforces ReduceOnly/Kill correctly incl F1/Evidence/Bunker (tests); (3) 10028/429 behavior preserves emergency actions and blocks opens (tests); (4) New endpoints pass endpoint-level tests. | Recon races causing duplicates; rate limiter starving emergency close; “fail-open” gaps in PolicyGuard. | | Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. | | Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), and F1 cert (runtime \+ CI). | Slice 13 | (1) Replay hard-fails if snapshot\_coverage\_pct \< 95%; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for opens (runtime). | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
+| Phase | Goal | Slices Included | Exit Criteria (objective/measurable) | Key Risks | |---|---|---|---|---| | Phase 1 — Foundation (Panic‑Free Deterministic Intents) | Deterministic intent construction: sizing invariants, quantization+idempotency, venue preflight, durable WAL/TLSM, and hard execution gates behind one chokepoint. | Slices 1–5 | (1) build\_order\_intent() gate ordering proven by test; (2) OPEN dispatch blocked when RiskState::Degraded (0 dispatches); (3) WAL replay proves “no resend after crash”; (4) Market/stop/linked/post-only-crossing are rejected preflight (tests); (5) Liquidity+NetEdge+Fee staleness fail-closed (tests). | Gate bypass via alternate codepaths; float/rounding drift; WAL durability miswired before dispatch. | | Phase 2 — Guardrails (Runtime Safety \+ Recovery) | Atomic containment \+ emergency close, risk budgets (inventory/pending/global/margin), PolicyGuard precedence incl F1 runtime gate, EvidenceGuard, Bunker Mode, plus rate-limit brownout, WS-gap recovery, reconcile, zombie sweep, and required owner endpoints. | Slices 6–9 | (1) Mixed-leg state always contains/neutralizes (tests); (2) PolicyGuard precedence enforces ReduceOnly/Kill correctly incl F1/Evidence/Bunker (tests); (3) 10028/429 behavior preserves emergency actions and blocks opens (tests); (4) New endpoints pass endpoint-level tests. | Recon races causing duplicates; rate limiter starving emergency close; “fail-open” gaps in PolicyGuard. | | Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. | | Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), and F1 cert (runtime \+ CI). | Slice 13 | (1) Replay gatekeeper ladder enforced: GOOD (coverage >=95) apply, DEGRADED (80-95) apply-with-haircut + tighten-only, BROKEN (<80 or unreadable) shadow-only; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for opens (runtime). | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
 
 Global Non‑Negotiables (apply to ALL stories)  
-Minimum Alert Set (contract): configure/emit alerts for: atomic_naked_events>0; 429_count>0; policy_age_sec>300; decision_snapshot_write_errors>0; truth_capsule_write_errors>0; parquet_queue_overflow_count>0; evidence_guard_blocked_opens_count>0.  
+Minimum Alert Set (contract): configure/emit alerts for: atomic_naked_events>0; 429_count_5m>0; 10028_count_5m>0; policy_age_sec>300; decision_snapshot_write_errors>0; truth_capsule_write_errors>0; parquet_queue_overflow_count>0; evidence_guard_blocked_opens_count>0.  
+
+Acceptance Test Isolation (contract): For any new guard (rule/latch/monitor/gate) that can block OPEN, change TradingMode, or emit SafetyOverride, add paired TRIP/NON-TRIP acceptance tests. Each test MUST force all other gates pass and prove causality via dispatch count or specific reason code; downstream-only tests do not count.
 
 **Metric name parity (contract-required):**
 
@@ -10,7 +12,8 @@ Where the plan uses Prometheus-style *_total counters, we MUST ALSO expose exact
 
 Required exact names (contract):
   atomic_naked_events
-  429_count
+  429_count_5m
+  10028_count_5m
   truth_capsule_write_errors
   decision_snapshot_write_errors
   wal_write_errors
@@ -18,6 +21,8 @@ Required exact names (contract):
   parquet_queue_overflow_count
   evidence_guard_blocked_opens_count
   policy_age_sec
+
+429_count and 10028_count MUST NOT be used (use 5m windows).
 
 EvidenceGuard logic MUST consume the contract names (or their documented 1:1 aliases), not ad-hoc *_total names.
 
@@ -32,13 +37,16 @@ Deribit Venue Facts Addendum: all VERIFIED facts are enforced with artifacts und
 
 **Plan Parity (Contract Coverage):**
 - PolicyGuard precedence, staleness, watchdog kill, critical inputs -> S8.1 + PL-3
+- Axis Resolver 27-state mapping table (contract §2.2.3.3) -> PL-3 (AT-1048, AT-1053)
 - EvidenceGuard GREEN criteria, Degraded, hot-path block -> S8.3
-- Rate-limit circuit breaker (local limiter, 429, 10028) -> S9.1 + S9.2
+- Rate-limit circuit breaker (local limiter, 429_count_5m, 10028_count_5m) -> S9.1 + S9.2
 - Kill mode containment rules -> PL-3b
 - OpenPermission latch + emergency reduce-only + watchdog trigger -> S9.4 + S8.7
 - Execution gate ordering + inventory skew ordering/delta_limit fail-closed -> S5.x + S6.1
 - Fee cache staleness + time drift + SVI trip counts -> S5.2 + S10.5 + S11.1
 - WAL + trade-id registry -> S4.1 + S4.3
+- CSP Profile Isolation from Replay/Snapshot failures (contract §5.2, §0.Z.7) -> S13.1 (AT-1070)
+- CSP_ONLY CI gate + build isolation (contract §0.Z.9) -> S13.5 (AT-1056, AT-1057, AT-990)
 
 
 
@@ -218,6 +226,25 @@ crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_reduce\_only\_flag\_set
 Evidence artifacts: none  
 Rollout \+ rollback: core; rollback via revert only (hot-path invariant).  
 Observability hooks: counter order\_intent\_reject\_unit\_mismatch\_total.  
+
+S1.4 — Instrument lifecycle \+ expiry safety (Expiry Cliff Guard)  
+Allowed paths: crates/soldier\_core/risk/**, crates/soldier\_core/venue/**  
+New/changed endpoints: none  
+Acceptance criteria (contract §1.0.Y):  
+- If `expiration_timestamp_ms` is present and now\_ms is within `expiry_delist_buffer_s`, reject NEW OPEN with `Rejected(InstrumentExpiredOrDelisted)`; CLOSE/HEDGE/CANCEL remain allowed subject to TradingMode.  
+- Terminal lifecycle errors for expired/delisted instruments MUST be classified as `Terminal(InstrumentExpiredOrDelisted)`; MUST NOT panic; MUST NOT restart process; reconcile that instrument only and mark `instrument_state=ExpiredOrDelisted`.  
+- CANCEL on expired/delisted instrument returning terminal error MUST be treated as idempotently successful.  
+- Portfolio-wide reconcile/flatten MUST continue other instruments; MUST NOT retry in a loop for expired instruments once venue truth shows no position.  
+Tests (contract-required):  
+crates/soldier\_core/tests/test\_expiry\_guard.rs::test\_expiry\_delist\_buffer\_rejects\_open (AT-950)  
+crates/soldier\_core/tests/test\_expiry\_guard.rs::test\_expiry\_outside\_buffer\_allows\_open (AT-965)  
+crates/soldier\_core/tests/test\_expiry\_guard.rs::test\_expiry\_cancel\_idempotent\_success (AT-949, AT-960)  
+crates/soldier\_core/tests/test\_expiry\_guard.rs::test\_expiry\_non\_terminal\_cancel\_does\_not\_mark\_expired (AT-966)  
+crates/soldier\_core/tests/test\_expiry\_guard.rs::test\_expiry\_reconcile\_does\_not\_halt\_other\_instruments (AT-961)  
+crates/soldier\_core/tests/test\_expiry\_guard.rs::test\_expiry\_no\_retry\_loop\_after\_positions\_clear (AT-962)  
+Evidence artifacts: none  
+Rollout \+ rollback: core safety; rollback via revert only.  
+Observability hooks: counter instrument\_expired\_reject\_total.  
 Slice 2 — Quantization \+ Labeling \+ Idempotency  
 Slice intent: Deterministic quantization and idempotency across restarts/reconnects.
 
@@ -252,6 +279,7 @@ Rollout \+ rollback: core.
 Observability hooks: none beyond existing logs.  
 Hard rule (contract Definitions): If an intent cannot be classified, it MUST be treated as OPEN (fail-closed).  
 Add test: crates/soldier\_core/tests/test\_build\_order\_intent.rs::test\_unclassifiable\_intent\_defaults\_to\_open\_and\_is\_blocked\_when\_opens\_blocked  
+Add/alias AT-201 to the above test name.  
 Phase 1 blocks OPEN when RiskState != Healthy per Phase 1 Dispatch Authorization Rule.  
 S2.3 — Compact label schema encode/decode (≤64 chars)  
 Allowed paths: crates/soldier\_core/execution/label.rs  
@@ -281,6 +309,20 @@ crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_ambiguity\
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
 Observability hooks: counter label\_match\_ambiguity\_total.  
+
+S2.5 — RejectReasonCode registry (intent‑level rejections)  
+Allowed paths: crates/soldier\_core/execution/**, crates/soldier\_core/risk/**  
+New/changed endpoints: none  
+Acceptance criteria (contract §2.2.6):  
+- Any intent rejected before dispatch MUST include reject\_reason\_code and it MUST be in the contract registry.  
+- Registry must be updated in the same patch when a new rejection token is added.  
+Tests:  
+crates/soldier\_core/tests/test\_reject\_reason.rs::test\_reject\_reason\_present\_on\_pre\_dispatch\_reject  
+crates/soldier\_core/tests/test\_reject\_reason.rs::test\_reject\_reason\_in\_registry  
+crates/soldier\_core/tests/test\_reject\_reason.rs::test\_registry\_contains\_contract\_minimum\_set  
+Evidence artifacts: none  
+Rollout \+ rollback: core; rollback via revert only.  
+Observability hooks: counter reject\_reason\_missing\_total.  
 Slice 3 — Order‑Type Preflight \+ Venue Capabilities (artifact‑backed)  
 Slice intent: Hard-reject illegal orders before any API call.
 
@@ -407,6 +449,7 @@ Allowed paths: crates/soldier\_core/execution/gate.rs
 New/changed endpoints: none  
 Acceptance criteria: compute WAP & slippage\_bps; reject if exceeds `max_slippage_bps`; log WAP+slippage.  
 If L2 snapshot is missing/unparseable/stale: reject OPEN with `Rejected(LiquidityGateNoL2)`; CANCEL-only allowed; CLOSE/HEDGE order placement rejected.  
+Deterministic Emergency Close is exempt from profitability gates but still requires a valid price source; if L2 is missing/stale it MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.  
 Contract path mapping: `soldier/core/execution/gate` ⇒ `crates/soldier\_core/execution/gate.rs`.  
 Tests:  
 crates/soldier\_core/tests/test\_liquidity\_gate.rs::test\_liquidity\_gate\_rejects\_sweep  
@@ -425,7 +468,7 @@ S5.2 — Fee cache staleness (soft buffer / hard ReduceOnly latch)
 Allowed paths: crates/soldier\_infra/deribit/account\_summary.rs, crates/soldier\_core/strategy/fees.rs  
 New/changed endpoints: none (uses Deribit private account summary)  
 Acceptance criteria: soft stale \=\> fee buffer applied; hard stale \=\> RiskState::Degraded and OPENs blocked by Phase 1 dispatch authorization rule (PolicyGuard consumes later in Phase 2).  
-Explicit identifiers: `fee_model_cache_age_s` (derived from epoch ms) and `fee_model_cached_at_ts_ms` (epoch ms).  
+Explicit identifiers: `fee_model_cache_age_s` (derived from monotonic‑epoch ms per contract §0.Z.2.2.H) and `fee_model_cached_at_ts_ms` (monotonic‑epoch ms).  
 Default buffer (contract): `fee_stale_buffer = 0.20` in the soft-stale window.  
 Tests:  
 crates/soldier\_core/tests/test\_fee\_staleness.rs::test\_fee\_cache\_soft\_buffer\_tightens  
@@ -454,9 +497,9 @@ Rationale: staleness thresholds (fee_cache_soft_s / fee_cache_hard_s) are indepe
 
 Poll /private/get_account_summary for fee model inputs every 60s (contract §4.2) and store fee_model_cached_at_ts_ms.
 
-Staleness arithmetic uses now_ms - fee_model_cached_at_ts_ms with soft/hard thresholds already listed.
+Staleness arithmetic uses now_ms - fee_model_cached_at_ts_ms (monotonic‑epoch) with soft/hard thresholds already listed.
 
-**AT-031 (contract-required):** fee_model_cached_at_ts_ms MUST be epoch milliseconds (wall-clock), and staleness MUST compute correctly across process restart.
+**AT-031 (contract-required):** fee_model_cached_at_ts_ms MUST be epoch milliseconds (monotonic‑epoch per contract §0.Z.2.2.H), and staleness MUST compute correctly across process restart.
 
 Add test: crates/soldier_core/tests/test_fee_cache.rs::test_fee_cache_epoch_ms_survives_restart (or alias implementing AT-031).
 
@@ -505,8 +548,8 @@ Evidence artifacts: none
 Rollout \+ rollback: make dispatch helpers pub(crate) so other modules cannot bypass; rollback requires code revert.  
 Observability hooks: log GateSequence{steps,result}.  
 F) Dependencies DAG (Phase 1\)  
-S1.1 → S1.2 → S1.3  
-S2.1 → S2.2 → S2.3 → S2.4  
+S1.1 → S1.2 → S1.3 → S1.4  
+S2.1 → S2.2 → S2.3 → S2.4 → S2.5  
 S3.1 → S3.2 → S3.3  
 S4.1 → S4.2 → S4.3 → S4.4  
 S5.1 → S5.2 → S5.3 → S5.4 → S5.5  
@@ -612,33 +655,36 @@ Observability: histogram time\_to\_delta\_neutral\_ms, counter atomic\_naked\_ev
 
 **Reason**: C-3.1-EMERGENCY_CLOSE-001, C-8.2-TEST_SUITE-001  
 
-**PL-3b — Kill Mode Semantics + containment eligibility micro-loop (contract §2.2.3):**
+**PL-3b — Kill Mode Semantics + containment micro-loop (contract §2.2.3):**
 
 Implement contract §2.2.3 Kill Mode Semantics:
 
-KILL_DISK_FULL: NO containment allowed; NO dispatch at all.
+KILL_DISK_FULL: TradingMode Kill; OPEN blocked; containment attempts still permitted while exposure ≠ 0.
 
-KILL_MARGIN_UTIL: MUST attempt emergency containment only if ALL eligibility predicates are satisfied; otherwise hard-stop.
+KILL_MARGIN_UTIL: MUST attempt emergency containment whenever exposure exists (no eligibility gating).
 
-**Containment Eligibility Predicates (authoritative):**
-1. `disk_used_pct < 92%` (not in disk Kill)
-2. `EvidenceChainState == GREEN` AND WAL writes are succeeding
-3. Session is healthy (`rate_limit_session_kill_active == false`)
-4. `bunker_mode_active == false` (Network Jitter Monitor not active)
+**Containment MUST proceed even if (non-exhaustive):**
+1. `disk_used_pct >= 92%` (disk Kill)
+2. `EvidenceChainState != GREEN` OR WAL degraded
+3. `rate_limit_session_kill_active == true`
+4. `bunker_mode_active == true` (Network Jitter Monitor active)
+5. Watchdog heartbeat is stale (Kill trigger)
 
 Containment actions are limited to:
 - Cancel only reduce_only == false orders.
 - Place only risk-reducing orders (EmergencyClose IOC or reduce-only hedges); no opens.
 
-Micro-loop must be bounded (max 3 attempts; max 2s total) and must exit to Kill hard-stop.
+Micro-loop must be bounded (max 3 attempts; max 2s total) and then return to the main loop in Kill. If exposure remains, containment attempts repeat on subsequent ticks; no hard-stop while exposed.
 
-Add tests for eligibility (eligible vs ineligible) and for the disk kill hard-stop overriding containment.
+Add tests proving containment is still permitted under Kill-tier causes while exposed (contract AT-338/339/340/346/347/013).
 
 **Required explicit tests:**
-- `test_kill_margin_util_runs_containment_only_when_eligible()` — All 4 predicates satisfied → containment allowed
-- `test_kill_margin_util_hard_stops_when_ineligible_due_to_evidence_or_wal()` — Any predicate false → hard-stop
-- `test_kill_disk_full_forbids_all_dispatch_including_close_hedge_cancel()` — Disk ≥92% → NO dispatch at all
-- `test_kill_margin_util_hard_stops_when_bunker_mode_active()` — bunker_mode_active==true → hard-stop (AT-013)
+- `test_kill_margin_util_attempts_containment_when_exposed()` — aligns to AT-338 / AT-1049
+- `test_kill_disk_full_still_permits_containment_attempts()` — aligns to AT-339
+- `test_kill_allows_containment_when_evidence_or_wal_degraded()` — aligns to AT-340
+- `test_kill_allows_containment_when_session_terminated()` — aligns to AT-346
+- `test_kill_allows_containment_when_watchdog_stale()` — aligns to AT-347
+- `test_kill_allows_containment_when_bunker_mode_active()` — aligns to AT-013
 
 
 
@@ -657,6 +703,18 @@ Allowed paths: crates/soldier\_core/risk/churn\_breaker.rs
 Acceptance criteria: \>2 flattens/5m \=\> 15m blacklist blocks opens for that key.  
 Tests: crates/soldier\_core/tests/test\_churn\_breaker.rs::test\_churn\_breaker\_blacklists\_after\_three  
 Observability: counter churn\_breaker\_trip\_total.  
+
+S7.6 — Self‑Impact Feedback Loop Guard (Echo Chamber Breaker)  
+Allowed paths: crates/soldier\_core/risk/self\_impact\_guard.rs  
+Acceptance criteria (contract §1.2.3):  
+- If public trade feed is stale/missing: MUST NOT compute self\_fraction; set RiskState::Degraded; set Open Permission Latch `WS_TRADES_GAP_RECONCILE_REQUIRED`; block OPENs until reconcile clears.  
+- When feed is fresh: if self\_fraction/self\_notional trip conditions met for an OPEN in same direction as recent self trades, reject with `Rejected(FeedbackLoopGuardActive)` and apply cooldown.  
+Tests (contract-required):  
+crates/soldier\_core/tests/test\_self\_impact.rs::test\_self\_impact\_stale\_feed\_sets\_latch (AT-953)  
+crates/soldier\_core/tests/test\_self\_impact.rs::test\_self\_impact\_fraction\_trip\_rejects (AT-955)  
+crates/soldier\_core/tests/test\_self\_impact.rs::test\_self\_impact\_notional\_trip\_rejects (AT-956)  
+crates/soldier\_core/tests/test\_self\_impact.rs::test\_self\_impact\_below\_threshold\_allows (AT-957)  
+Observability: counter self\_impact\_trip\_total.  
 Slice 8 — PolicyGuard \+ Cortex \+ Exchange Health \+ Bunker/Evidence/F1 \+ Owner Endpoints (Patch D)  
 Slice intent: one authoritative mode resolver \+ required read-only status endpoint.
 
@@ -666,13 +724,27 @@ Add test: test_policyguard_reduceonly_when_mm_util_stale_over_max_age.
 Allowed paths: crates/soldier\_core/policy/guard.rs  
 Acceptance criteria: recompute each tick; stale policy \=\> ReduceOnly.  
 Critical inputs (contract): `mm_util` with `mm_util_last_update_ts_ms`, `disk_used_pct` with `disk_used_last_update_ts_ms`, `rate_limit_session_kill_active`, `watchdog_last_heartbeat_ts_ms`. Missing/unparseable ⇒ ReduceOnly with `REDUCEONLY_INPUT_MISSING_OR_STALE`.  
+Profile isolation (contract §0.Z.7.2): when enforced\_profile == CSP, GOP-only inputs (EvidenceChainState, TruthCapsule/Decision Snapshot writer health/lag, Replay Gatekeeper, Canary, Optimization) MUST be treated as nonexistent and MUST NOT affect TradingMode, OpenPermissionLatch, or risk‑reducing action legality.  
+Add tests: crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_ignores\_gop\_health (AT-991), crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_gop\_blocks\_opens\_when\_evidence\_not\_green (AT-992).  
+Corroboration inputs (contract §2.2.3.1.2): `loop_tick_last_ts_ms`, `disk_used_pct_secondary` with `disk_used_secondary_last_update_ts_ms`, `10028_count_5m`. Missing/unparseable when a kill predicate is true ⇒ ReduceOnly with `REDUCEONLY_*_UNCONFIRMED`.  
 Freshness defaults (contract): `mm_util_max_age_ms = 30_000`, `disk_used_max_age_ms = 30_000`.  
+Timebase: now_ms and all *_ts_ms used for staleness/Kill decisions are monotonic‑epoch per contract §0.Z.2.2.H; do not use raw wall‑clock for interval comparisons.  
 PolicyGuard MUST compute TradingMode via `get_effective_mode()` each loop tick (no stored authoritative mode).  
-Policy staleness MUST use Commander time: policy\_age\_sec = (now\_ms - python\_policy\_generated\_ts\_ms) / 1000; do not use local receive timestamp.  
+PolicyGuard input snapshot coherency (contract §2.2.0): acquire exactly one immutable snapshot per call; prevent torn reads (X with newer X\_last\_update\_ts\_ms); use Release/Acquire for safety‑critical inputs; if snapshot cannot be acquired, fail‑closed to ReduceOnly with REDUCEONLY\_INPUT\_MISSING\_OR\_STALE.  
+Add test: crates/soldier\_core/tests/test\_policy\_guard.rs::test\_policyguard\_snapshot\_coherency\_never\_active (AT-1054; loom-style interleaving).  
+ExecutionStyle MUST NOT affect TradingMode computation or dispatch authorization (contract Definitions).  
+Add test: crates/soldier\_core/tests/test\_policy\_guard.rs::test\_execution\_style\_does\_not\_change\_trading\_mode (AT-1055).  
+Policy staleness MUST use Commander time in the monotonic‑epoch timebase: policy\_age\_sec = (now\_ms - python\_policy\_generated\_ts\_ms) / 1000; do not use local receive timestamp.  
 Hard rule (contract §2.2.3): policy\_age\_sec MUST be computed as floor((now\_ms - python\_policy\_generated\_ts\_ms)/1000).  
 Gate: if policy\_age\_sec > max\_policy\_age\_sec (default 300) => PolicyGuard MUST force ReduceOnly.  
 Boundary: policy\_age\_sec == 300 MUST NOT trip; policy\_age\_sec == 301 MUST trip.  
 Session termination / rate-limit kill flag must be explicit (no "unknown treated as false"); if missing, treat as critical input missing and force ReduceOnly with REDUCEONLY\_INPUT\_MISSING\_OR\_STALE.  
+Corroboration rules (contract §2.2.3.1.2):  
+- Watchdog Kill confirmed only if `loop_tick_last_ts_ms` is stale beyond `watchdog_kill_s`; otherwise ReduceOnly with `REDUCEONLY_WATCHDOG_UNCONFIRMED`.  
+- Disk Kill confirmed only if `disk_used_pct_secondary >= disk_kill_pct` and fresh; otherwise ReduceOnly with `REDUCEONLY_DISK_KILL_UNCONFIRMED`.  
+- Session Termination Kill confirmed only if `10028_count_5m >= rate_limit_kill_min_10028`; otherwise ReduceOnly with `REDUCEONLY_SESSION_KILL_UNCONFIRMED`.  
+Non‑Active OPEN cancellation (contract §2.2.3.4.1): when `TradingMode != Active`, cancel all outstanding OPEN orders with `reduce_only != true` within `cancel_open_batch_max` / `cancel_open_budget_ms`; retry on subsequent ticks until cleared.  
+Config defaults (contract Appendix A): `rate_limit_kill_min_10028 = 3`, `cancel_open_batch_max = 50`, `cancel_open_budget_ms = 200`.  
 Tests:  
 crates/soldier\_core/tests/test\_policy\_guard.rs::test\_policy\_guard\_late\_policy\_update\_stays\_reduceonly  
 crates/soldier\_core/tests/test\_policy\_guard.rs::test\_policy\_guard\_override\_priority  
@@ -681,26 +753,41 @@ crates/soldier\_core/tests/test\_policy\_freshness.rs::test\_policy\_age\_sec\_3
 crates/soldier\_core/tests/test\_policy\_freshness.rs::test\_max\_policy\_age\_sec\_forces\_reduceonly\_after\_300s  
 crates/soldier\_core/tests/test\_policy\_guard.rs::test\_mm\_util\_stale\_forces\_reduceonly\_input\_missing\_or\_stale (AT-001)  
 crates/soldier\_core/tests/test\_policy\_guard.rs::test\_missing\_watchdog\_heartbeat\_forces\_reduceonly\_input\_missing\_or\_stale (AT-112)  
+crates/soldier\_core/tests/test\_policy\_guard.rs::test\_watchdog\_unconfirmed\_forces\_reduceonly (AT-1066)  
+crates/soldier\_core/tests/test\_policy\_guard.rs::test\_disk\_kill\_unconfirmed\_forces\_reduceonly (AT-1067)  
+crates/soldier\_core/tests/test\_policy\_guard.rs::test\_session\_kill\_unconfirmed\_forces\_reduceonly (AT-1068)  
+crates/soldier\_core/tests/test\_policy\_guard.rs::test\_kill\_confirmed\_requires\_corroboration (AT-1069)  
+crates/soldier\_core/tests/test\_order\_cancel.rs::test\_reduceonly\_cancels\_risk\_increasing\_opens (AT-1065)  
 Observability: gauge policy\_age\_sec, counter policy\_stale\_reduceonly\_total.  
 
 **PL-3 — PolicyGuard full precedence ladder + ModeReasonCode determinism:**
 
 Implement full canonical precedence ladder per contract §2.2.3 (all Kill triggers and all ReduceOnly triggers) and ensure deterministically ordered mode_reasons (no mixing tiers).
 
+**Axis Resolver 27-State Mapping (contract §2.2.3.3):**
+The contract now includes a canonical 27-state mapping table. Implementations MUST produce identical TradingMode outputs for all 27 axis combinations. The resolver MUST be a pure function with no hidden state.
+
+Add tests:
+- `test_axis_resolver_27_state_enumerability()` (AT-1048) — verify all 27 combinations map deterministically.
+- `test_axis_resolver_monotonicity()` (AT-1053) — verify no less-restrictive mode under worse axes.
+- `test_axis_isolation_market_integrity()` (AT-1050) — verify bunker mode alone produces ReduceOnly.
+- `test_axis_isolation_capital_risk()` (AT-1051) — verify mm_util alone produces ReduceOnly.
+- `test_axis_isolation_system_integrity()` (AT-1052) — verify open_permission_latch alone produces ReduceOnly.
+
 Add tests covering precedence across: disk_kill, mm_util_kill, session_kill(10028), evidence_chain_state != GREEN, open_permission_blocked_latch, bunker mode, F1 missing/stale/fail, fee model hard-stale.
 Margin thresholds (contract): `mm_util_reject = 0.70`, `mm_util_reduceonly = 0.85`, `mm_util_kill = 0.95` must map to Reject/ReduceOnly/Kill respectively (CLOSE/HEDGE/CANCEL allowed in ReduceOnly).  
 Explicit Kill reasons (contract):  
-- `KILL_DISK_WATERMARK_KILL` when `disk_used_pct >= 0.92` ⇒ containment forbidden; no dispatch including CLOSE/HEDGE/CANCEL.  
-- `KILL_RATE_LIMIT_SESSION_TERMINATION` on 10028/session termination ⇒ containment forbidden.  
+- `KILL_DISK_WATERMARK_KILL` when `disk_used_pct >= 0.92` ⇒ TradingMode Kill; OPEN blocked; containment still permitted while exposed.  
+- `KILL_RATE_LIMIT_SESSION_TERMINATION` on 10028/session termination ⇒ TradingMode Kill; containment still permitted while exposed.  
 
 **Watchdog heartbeat kill semantics (contract §2.2.3):**
-- Add PolicyGuard input: watchdog_last_heartbeat_ts_ms (epoch ms).
-- Trigger: if now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s*1000 ⇒ TradingMode::Kill with mode_reasons = [KILL_WATCHDOG_HEARTBEAT_STALE].
-- Containment is forbidden under KILL_WATCHDOG_HEARTBEAT_STALE (hard-stop cause).
+- Add PolicyGuard inputs: watchdog_last_heartbeat_ts_ms and loop_tick_last_ts_ms (monotonic‑epoch ms).
+- Trigger: Kill only if **both** watchdog and loop tick are stale beyond watchdog_kill_s; otherwise ReduceOnly with REDUCEONLY_WATCHDOG_UNCONFIRMED.
+- Containment remains permitted under KILL_WATCHDOG_HEARTBEAT_STALE; only OPEN is blocked.
 - Add test: test_watchdog_kill_s_triggers_kill_after_10s_no_health_report().
 
 S8.2 — Runtime F1 gate (HARD): artifacts/F1\_CERT.json  
-Binding enforcement (contract v5.1): Runtime MUST treat F1_CERT as INVALID and force ReduceOnly if contract_version in F1_CERT != runtime contract_version (and include as ModeReasonCode).  
+Binding enforcement (contract v5.2): Runtime MUST treat F1_CERT as INVALID and force ReduceOnly if contract_version in F1_CERT != runtime contract_version (and include as ModeReasonCode).  
 Add tests (exact names): test_f1_cert_binding_mismatch_forces_reduceonly, test_f1_cert_no_cache_last_known_good.  
 Allowed paths: crates/soldier\_core/policy/guard.rs  
 Acceptance criteria: missing/stale/FAIL \=\> ReduceOnly; no grace; no caching last-known-good.  
@@ -728,13 +815,14 @@ Add: test_f1_cert_policy_hash_at_cert_time_is_ignored_for_validity().
 
 **AT-012 (contract-required):**
 
-Define runtime contract_version literal as numeric-only (e.g., "5.1"; no "v" prefix, no codename).
+Define runtime contract_version literal as numeric-only (e.g., "5.2"; no "v" prefix, no codename).
 
 Add test: crates/soldier_core/tests/test_f1_gate.rs::test_contract_version_format_numeric_only_rejects_v_prefix (AT-012).
 
 
 
 S8.3 — EvidenceGuard (Patch B) enforcement + cooldown  
+EvidenceGuard is enforced ONLY when enforced\_profile != CSP. When enforced\_profile == CSP, EvidenceGuard is NOT\_ENFORCED and MUST NOT affect TradingMode/OpenPermission or block opens.  
 Encode contract thresholds/hysteresis (strict comparators per contract §2.2.2): trip when parquet_queue_depth_pct > 0.90 for ≥5s; clear only when <0.70 for ≥120s AND after evidenceguard_global_cooldown.  
 Explicit windows: `evidenceguard_window_s = 60` (default), `queue_clear_window_s = 120` (default).  
 
@@ -857,19 +945,28 @@ New endpoint: GET /api/v1/status
 Required endpoint-level tests: yes  
 Acceptance criteria: HTTP 200 JSON includes keys (contract §7.0):  
 - status\_schema\_version (int; current=1)  
-- trading\_mode, risk\_state, evidence\_chain\_state, bunker\_mode\_active  
+- supported\_profiles (string[]; MUST include CSP)  
+- enforced\_profile (string enum: CSP|GOP|FULL)  
+- trading\_mode, risk\_state, bunker\_mode\_active  
 - connectivity\_degraded (true iff bunker_mode_active or any reconcile-required open-permission code present)  
-- policy\_age\_sec, last\_policy\_update\_ts (epoch ms; MUST equal python\_policy\_generated\_ts\_ms)  
+- policy\_age\_sec, last\_policy\_update\_ts (monotonic‑epoch ms; MUST equal python\_policy\_generated\_ts\_ms)  
 - f1\_cert\_state, f1\_cert\_expires\_at  
 - disk\_used\_pct, disk\_used\_last\_update\_ts\_ms  
+- disk\_used\_pct\_secondary, disk\_used\_secondary\_last\_update\_ts\_ms  
 - mm\_util, mm\_util\_last\_update\_ts\_ms  
-- snapshot\_coverage\_pct (MUST be computed over replay\_window\_hours)  
-- atomic\_naked\_events\_24h, 429\_count\_5m  
+- loop\_tick\_last\_ts\_ms  
+- wal\_queue\_depth, wal\_queue\_capacity, wal\_queue\_enqueue\_failures  
+- atomic\_naked\_events\_24h, 429\_count\_5m, 10028\_count\_5m  
 - deribit\_http\_p95\_ms, ws\_event\_lag\_ms  
 - mode\_reasons (ModeReasonCode[]; MUST be [] iff trading\_mode==Active)  
 - open\_permission\_blocked\_latch (bool)  
 - open\_permission\_reason\_codes (OpenPermissionReasonCode[]; MUST be [] iff latch==false)  
 - open\_permission\_requires\_reconcile (bool; MUST equal open\_permission\_blocked\_latch for v5.1)  
+When enforced\_profile != CSP (GOP/FULL), include GOP extension keys:  
+- evidence\_chain\_state  
+- snapshot\_coverage\_pct (MUST be computed over replay\_window\_hours)  
+- replay\_quality, replay\_apply\_mode, open\_haircut\_mult  
+When enforced\_profile == CSP: GOP extension keys MUST be omitted or labeled NOT\_ENFORCED.  
 Tests (endpoint-level \+ semantic invariants):  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_endpoint\_returns\_required\_fields  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_mode\_reasons\_empty\_iff\_active  
@@ -884,6 +981,11 @@ crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_mode\_reasons\_
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_open\_permission\_latch\_invariants (AT-027)  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_policy\_timestamp\_consistency (AT-028)  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_snapshot\_coverage\_pct\_uses\_replay\_window\_hours (AT-029)  
+crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_rate\_limit\_counters\_present (AT-419)  
+crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_atomic\_naked\_events\_non\_negative (AT-927)  
+crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_wal\_queue\_invariants (AT-907)  
+crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_gop\_keys\_present\_when\_gop (AT-967)  
+crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_rejects\_non\_get (AT-407)  
 Observability: counter http\_status\_calls\_total.  
 
 **PL-5 — /status f1_cert_expires_at semantics + endpoint-level test:**
@@ -916,6 +1018,18 @@ Observability: counter http\_health\_calls\_total.
 
 **Watchdog heartbeat side-effect (contract §2.2.3/§3.2):**
 Each successful /api/v1/health response MUST update watchdog_last_heartbeat_ts_ms = now_ms in memory for PolicyGuard evaluation (no persistence; does not alter trading state).
+
+S8.10 — Basis monitor (Mark/Index/Last liquidation reality guard)  
+Allowed paths: crates/soldier\_core/risk/basis\_monitor.rs  
+Acceptance criteria (contract §2.3.3):  
+- If any required price is missing/unparseable OR stale beyond basis\_price\_max\_age\_ms, emit ForceReduceOnly{cooldown\_s=basis\_reduceonly\_cooldown\_s}.  
+- If max(basis\_mark\_last\_bps, basis\_mark\_index\_bps) >= basis\_kill\_bps for basis\_kill\_window\_s ⇒ ForceKill.  
+- Else if >= basis\_reduceonly\_bps for basis\_reduceonly\_window\_s ⇒ ForceReduceOnly{cooldown\_s=basis\_reduceonly\_cooldown\_s}.  
+Tests (contract-required):  
+crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_reduceonly\_trip (AT-951)  
+crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_kill\_trip (AT-952)  
+crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_missing\_stale\_fails\_closed (AT-954)  
+Observability: counter basis\_trip\_total.  
 Slice 9 — Rate Limit Circuit Breaker \+ WS Gaps \+ Reconcile \+ Zombie Sweeper  
 Slice intent: survive throttling and data gaps; block opens until safe.
 
@@ -995,6 +1109,15 @@ crates/soldier\_core/tests/test\_open\_permission.rs::test\_open\_permission\_cl
 crates/soldier\_core/tests/test\_open\_permission.rs::test\_reduce\_only\_missing\_treated\_as\_open (AT-110)  
 crates/soldier\_core/tests/test\_open\_permission.rs::test\_risk\_increasing\_cancel\_blocked\_when\_degraded (AT-120)  
 
+**Cancel/Replace permission rules (contract §2.2.5):**  
+- Risk‑increasing cancel/replace is forbidden when TradingMode ∈ {ReduceOnly, Kill}.  
+- Risk‑increasing cancel/replace is forbidden when open\_permission\_blocked\_latch == true.  
+- Risk‑increasing cancel/replace is forbidden when EvidenceChainState != GREEN and enforced\_profile != CSP.  
+- Risk‑increasing cancel/replace is forbidden when RiskState == Degraded.  
+- Must not cancel protective reduce‑only closing/hedging orders.  
+Rejections MUST use `Rejected(RiskIncreasingCancelReplaceForbidden)`.  
+Add test: crates/soldier\_core/tests/test\_cancel\_replace.rs::test\_risk\_increasing\_cancel\_replace\_rejected\_when\_evidence\_not\_green (AT-917).  
+
 **OpenPermission exclusion test:**
 
 Add test: test_open_permission_reason_codes_excludes_f1_and_evidence
@@ -1020,6 +1143,19 @@ Observability: counter ghost\_order\_canceled\_total, orphan\_fill\_reconciled\_
 **Required test alias**: Add `test_stale_order_sec_cancels_non_reduce_only_orders()`.  
 
 **Reason**: C-3.5-ZOMBIE_SWEEPER-001, C-8.2-TEST_SUITE-001  
+
+S9.6 — WS data liveness (Zombie Socket Detection)  
+Allowed paths: crates/soldier\_core/recovery/ws\_liveness.rs  
+Acceptance criteria (contract §3.4.D):  
+- Track last\_marketdata\_event\_ts\_ms from application marketdata payloads only.  
+- Trip `WS_DATA_STALE_RECONCILE_REQUIRED` only when `ws_marketdata_event_lag_ms > ws_zombie_silence_ms` AND (has\_open\_exposure OR had\_recent\_marketdata\_activity).  
+- On trip: set RiskState::Degraded, set open\_permission\_blocked\_latch with WS_DATA_STALE_RECONCILE_REQUIRED, force reconnect/resubscribe, REST snapshots + reconcile; opens blocked until reconcile clears.  
+- MUST NOT trip solely due to per‑instrument book change\_id stagnation when other marketdata events are still arriving.  
+Tests (contract-required):  
+crates/soldier\_core/tests/test\_ws\_liveness.rs::test\_zombie\_socket\_no\_trip\_if\_other\_marketdata\_alive (AT-946)  
+crates/soldier\_core/tests/test\_ws\_liveness.rs::test\_zombie\_socket\_trip\_when\_lag\_and\_exposure (AT-947)  
+crates/soldier\_core/tests/test\_ws\_liveness.rs::test\_zombie\_socket\_no\_trip\_quiet\_market (AT-948)  
+Observability: gauge ws\_marketdata\_event\_lag\_ms, counter ws\_data\_stale\_trips\_total.  
 
 F) Dependencies DAG (Phase 2\)  
 Slice 6 → Slice 7 (budgets inform execution)  
@@ -1047,7 +1183,7 @@ E) Slices Breakdown (Phase 3\)
 Slice 10 — Truth Capsules \+ Attribution \+ Time Drift \+ Decision Snapshots (required)  
 S10.1 — TruthCapsule write-before-dispatch (bounded queue)  
 Allowed paths: crates/soldier\_core/analytics/truth\_capsule.rs, crates/soldier\_core/execution/\*\*  
-Acceptance criteria: capsule enqueued before first leg dispatch; enqueue/write failure flips EvidenceChainState RED.  
+Acceptance criteria: Evidence commit barrier (when `enforced_profile != CSP`) is satisfied before any risk-increasing dispatch; enqueue/write failure flips EvidenceChainState RED.  
 Hot loop MUST enqueue to a bounded queue; dedicated writer thread/process drains writes (no hot-loop stall).  
 Any dispatched order MUST already have a truth\_capsule\_id linked by `(group_id, leg_idx, intent_hash)` and a joinable `decision_snapshot_id`; no dispatch without linkage.  
 On queue overflow or writer error: increment `truth_capsule_write_errors` (and `parquet_write_errors` if applicable) and enter ReduceOnly.  
@@ -1055,6 +1191,8 @@ Tests:
 crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_truth\_capsule\_written\_before\_dispatch\_and\_fk\_linked  
 crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_truth\_capsule\_write\_failure\_forces\_reduceonly  
 crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_no\_dispatch\_without\_truth\_capsule\_id (AT-046)  
+crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_evidence_commit_barrier_blocks_dispatch (AT-1046)  
+crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_evidence_commit_barrier_fail_closed (AT-1047)  
 Rollout/rollback: hot-path; rollback \= disable trading opens (ReduceOnly) if writer unstable (must remain fail-closed).  
 Observability: gauge parquet\_queue\_depth, counter truth\_capsule\_write\_errors\_total.  
 S10.2 — Decision Snapshot capture/persist/link (Patch A requirement)  
@@ -1145,7 +1283,7 @@ Implement governance and release gates: replay gatekeeper using Decision Snapsho
 
 B) Constraint (TOC)  
 Bottleneck: avoiding “false pass” governance.  
-Relief: hard fail on snapshot\_coverage\_pct \< 95%; penalized replay profitability gate; F1 cert PASS required for opens.
+Relief: ReplayQuality ladder (GOOD apply; DEGRADED tighten-only + haircut; BROKEN shadow-only); penalized replay profitability gate; F1 cert PASS required for opens.
 
 C) Entry Criteria  
 Phase 3 evidence \+ snapshots \+ calibration working.  
@@ -1155,23 +1293,30 @@ Replay gatekeeper \+ canary \+ reviewer \+ watermarks \+ F1 cert tests all green
 artifacts/F1\_CERT.json PASS produced and required for opens.  
 E) Slice Breakdown (Phase 4\)  
 Slice 13 — Replay Gatekeeper \+ Canary \+ Reviews \+ Retention \+ F1 Cert  
-S13.1 — Replay Gatekeeper (Decision Snapshots required; coverage hard gate)  
-Define snapshot_coverage_pct per contract and include boundary test at 94.9% fail / 95.0% pass.  
-Add missing hard gates: replay_atomic_naked_events==0; max_drawdown <= dd_limit; profitability > 0; apply realism penalty.  
-Allowed paths: python/governor/replay\_gatekeeper.py  
-Acceptance criteria: uses Decision Snapshots (required); hard fail if coverage \<95%; apply realism\_penalty\_factor; require penalized PnL \> 0\.  
-`dd_limit` MUST be explicitly configured; missing/unparseable ⇒ hard fail (fail-closed).  
+S13.1 — Replay Gatekeeper (Decision Snapshots required; quality ladder + ungameable apply)  
+Define snapshot_coverage_pct per contract and ReplayQuality ladder: GOOD (>=95), DEGRADED (80–95), BROKEN (<80 or unreadable).  
+ReplayApplyMode: APPLY (GOOD), APPLY_WITH_HAIRCUT (DEGRADED), SHADOW_ONLY (BROKEN).  
+DEGRADED: allow **tightening-only** patches per contract table; enforce `open_haircut_mult` at the order‑intent chokepoint (`build_order_intent()`) for all OPENs.  
+BROKEN: shadow-only; no patch apply.  
+`open_haircut_mult` MUST be explicitly configured and in (0,1]; invalid/missing ⇒ treat as BROKEN (shadow-only).  
+Add hard gates: replay_atomic_naked_events==0; max_drawdown <= dd_limit; profitability > 0; apply realism penalty.  
+Allowed paths: python/governor/replay\_gatekeeper.py, crates/soldier\_core/execution/build\_order\_intent.rs  
+Acceptance criteria: Decision Snapshots required; ReplayQuality/ReplayApplyMode computed; tighten-only classifier enforced; haircut enforced by dispatch size; `dd_limit` explicit (missing ⇒ fail-closed).  
 Bad policy must fail due to realism penalty (profit flips ≤ 0).  
 Tests:  
 python/tests/test\_replay\_gatekeeper.py::test\_replay\_gatekeeper\_penalized\_pnl\_gate  
-python/tests/test\_replay\_gatekeeper.py::test\_replay\_fails\_when\_snapshot\_coverage\_below\_95  
-python/tests/test\_replay\_gatekeeper.py::test\_replay\_passes\_at\_snapshot\_coverage\_95 (AT-002)  
+python/tests/test\_replay\_gatekeeper.py::test\_replay\_quality\_good\_at\_95 (AT-002)  
+python/tests/test\_replay\_gatekeeper.py::test\_replay\_quality\_degraded\_applies\_haircut\_and\_tighten\_only (AT-257)  
+python/tests/test\_replay\_gatekeeper.py::test\_replay\_quality\_broken\_shadow\_only (AT-1062)  
+python/tests/test\_replay\_gatekeeper.py::test\_replay\_rejects\_loosen\_or\_unknown\_params\_in\_degraded (AT-1064)  
 python/tests/test\_replay\_gatekeeper.py::test\_replay\_hard\_fails\_when\_dd\_limit\_missing (AT-034, AT-040)  
-Evidence artifacts: artifacts/policy\_patches/\<ts\>\_result.json  
-Observability: log ReplayGatekeeperResult{coverage\_pct, net\_pnl\_penalized, pass}.  
+crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_open\_haircut\_mult\_applies\_to\_open\_only (AT-257)
+crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_isolation\_from\_replay\_snapshot\_failures (AT-1070)
+Evidence artifacts: artifacts/policy\_patches/\<ts\>\_result.json
+Observability: log ReplayGatekeeperResult{coverage\_pct, replay\_quality, apply\_mode, net\_pnl\_penalized, pass}.  
 S13.2 — Disk retention \+ watermarks (Patch A semantics)  
-Clarify: when disk_used_pct >= 92%, trading loop MUST hard-stop (no dispatch occurs, including close/hedge/cancel) to protect evidence integrity.  
-Add test: test_disk_kill_pct_hard_stops_at_92_pct (exact contract name).  
+Clarify: when disk_used_pct >= 92%, TradingMode Kill; OPEN blocked; containment attempts still permitted while exposed (evidence integrity MUST NOT block containment).  
+Add test: test_disk_kill_pct_hard_stops_at_92_pct (exact contract name; ensure it asserts containment still permitted while exposed).  
 Implement retention_reclaim() background task with: trigger at 80% best-effort, at 85% mandatory repeat; only deletes cold partitions beyond retention windows; MUST NOT delete WAL; MUST NOT delete Decision Snapshots intersecting replay window.  
 Reclaim MUST run as a background/low-priority task and MUST NOT stall the hot loop.  
 Evidence: each reclaim run writes artifacts/disk_reclaim/<ts>_reclaim.json with reclaimed_bytes, cutoff_ts per dataset, disk_used_pct_before, disk_used_pct_after.  
@@ -1190,7 +1335,7 @@ Decision Snapshots retention window is REQUIRED for replay validity; `decision_s
 **IMPLEMENTATION GUARDRAIL:** Decision Snapshot retention is `decision_snapshot_retention_days = 30` with minimum bound `≥ ceil(replay_window_hours / 24)` (default ≥2d). This is NOT "retain only replay window" (48h). The replay window must be preserved within the larger 30d retention.
 
 
-**Test naming**: Ensure the contract-required test name `test_disk_kill_pct_hard_stops_at_92_pct()` exists (may wrap any more specific test).  
+**Test naming**: Ensure the contract-required test name `test_disk_kill_pct_hard_stops_at_92_pct()` exists (may wrap any more specific test; must assert containment allowed while exposed).  
 
 **Reason**: C-7.2-DISK_RETENTION-001, C-8.2-TEST_SUITE-001  
 
@@ -1202,18 +1347,20 @@ Add deletion test: test_decision_snapshot_retention_days_deletes_after_30_days()
 
 
 S13.3 — Canary rollout (Shadow→Canary→Full) \+ abort/rollback  
-Abort conditions must include (contract §5.3): atomic_naked_events>0; p95_slippage_bps breach; fill_rate below floor with min attempts; net_pnl_usd below floor; EvidenceChainState != GREEN for > canary_evidence_abort_s.  
-EvidenceChain abort calibration: `canary_evidence_abort_s := max(evidenceguard_window_s, evidenceguard_global_cooldown, queue_clear_window_s)` and boundary is strictly `>` (no rollback when duration == threshold).  
+Abort conditions must include (contract §5.3): atomic_naked_events>0; p95_slippage_bps breach; fill_rate below floor with min attempts; net_pnl_usd below floor; EvidenceChainState != GREEN continuously for `canary_evidence_abort_s` seconds.  
+EvidenceChain abort calibration: `canary_evidence_abort_s >= (evidenceguard_window_s + evidenceguard_global_cooldown)` and canary MUST NOT abort when the incident stays within the recovery horizon.  
 On abort: rollback + enforce ReduceOnly cooldown duration per contract.  
 Add tests for each abort reason.  
 Allowed paths: python/governor/canary\_rollout.py  
 Tests: python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_aborts\_on\_slippage  
-Abort threshold parameters (contract): `slippage_limit`, `fill_rate_floor`, `canary_min_attempts`, `pnl_floor`.  
-All four MUST be provided by configuration; if any missing/unparseable ⇒ immediate rollback + ReduceOnly cooldown (AT-035).  
+Abort threshold parameters (contract): `slippage_limit`, `fill_rate_floor`, `canary_min_attempts`, `pnl_floor`, `canary_evidence_abort_s`.  
+All five MUST be provided by configuration; if any missing/unparseable or violates the calibration constraint ⇒ preflight fail-closed; canary MUST NOT start; log `CanaryEvidenceAbortMisconfigured` (AT-035, AT-972).  
 Add tests: python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_missing\_thresholds\_aborts (AT-035)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_aborts\_when\_slippage\_exceeds\_limit (AT-036)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_aborts\_when\_evidence\_chain\_exceeds\_abort\_window (AT-435)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_does\_not\_abort\_on\_evidence\_chain\_threshold (AT-437)  
+python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_fails_preflight_on_miscalibrated_evidence_abort (AT-972)  
+python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_does\_not\_abort_within_recovery_horizon (AT-973)  
 
 **Stage schedule (contract §5.3)**: Shadow 6-24h → Canary 2-6h → Full.  
 
@@ -1270,7 +1417,7 @@ Add tests verifying:
 S13.5 — F1 cert generation \+ CI gate  
 Implement Contract §8.1 Release Gate Metrics: compute and enforce all listed metrics/thresholds per stage (shadow/testnet/live). F1_CERT PASS requires all thresholds satisfied.  
 Explicit metrics (contract §8.1):  
-- Rate Limits: `429_count == 0` AND `10028_count == 0`.  
+- Rate Limits: `429_count_5m == 0` AND `10028_count_5m == 0`.  
 - Time Drift: `p99_clock_drift <= 50ms`.  
 - Fee Drag Ratio: `fee_drag_usd / gross_edge_usd (rolling 7d) < 0.35`.  
 - Net Edge After Fees: rolling 7d avg(`net_edge_usd`) > 0.  
@@ -1279,6 +1426,16 @@ Allowed paths: python/tools/f1\_certify.py
 Tests: python/tests/test\_f1\_certify.py::test\_f1\_cert\_fail\_on\_atomic\_naked\_event  
 Add test: python/tests/test\_f1\_certify.py::test\_runtime\_config\_hash\_canonicalization (AT-113).  
 Evidence artifacts: artifacts/F1\_CERT.json, artifacts/F1\_CERT.md  
+
+**CSP_ONLY CI gate (contract §0.Z.9):**  
+- Provide CI jobs: build:csp_only, test:csp_only, test:gop.  
+- build:csp_only MUST run `cargo build --no-default-features --features csp_only` and succeed (AT-1056).  
+- test:csp_only MUST run `cargo test --no-default-features --features csp_only --test acceptance`, execute ONLY CSP tests, and pass (AT-1057).  
+- test:gop runs GOP tests with GOP features enabled; failure disables GOP features but MUST NOT block CSP deployments.  
+- Codebase MUST support CSP_ONLY build (GOP-only modules not linked; GOP-only deps feature-gated).  
+Add/alias tests:  
+crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_only\_build\_starts\_and\_reports\_csp (AT-990)  
+CI job assertions for AT-1056/AT-1057 are validated via build:csp_only/test:csp_only job logs (no repo test path required).  
 
 **PL-9 — Add missing REQUIRED named tests (exact names):**
 

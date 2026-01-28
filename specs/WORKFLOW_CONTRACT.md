@@ -6,11 +6,11 @@ If it’s not provably aligned to the contract and provably green, it doesn’t 
 This contract governs **how we change the repo** (planning → execution → verification → review).
 It is separate from the trading behavior contract:
 
-- **Trading Behavior Contract (source of truth):** `CONTRACT.md` (or `specs/CONTRACT.md` if that is canonical)
+- **Trading Behavior Contract (source of truth):** `specs/CONTRACT.md`
 - **Workflow Contract (source of truth):** this file
 
 Precedence (fail-closed):
-- [WF-0.1] Trading behavior rules: `CONTRACT.md` is canonical. If this workflow contract conflicts with `CONTRACT.md` on behavior, STOP and set needs_human_decision=true.
+- [WF-0.1] Trading behavior rules: `specs/CONTRACT.md` is canonical. If this workflow contract conflicts with `specs/CONTRACT.md` on behavior, STOP and set needs_human_decision=true.
 - [WF-0.2] Workflow/process rules: this file is canonical. If other workflow docs conflict with this file, this file wins.
 
 ---
@@ -31,9 +31,9 @@ Changes to the workflow/harness itself (e.g., `specs/WORKFLOW_CONTRACT.md`, `pla
 
 ### Contract Kernel (Derived, Optional)
 An optional JSON index (`docs/contract_kernel.json`) compiled from `docs/contract_anchors.md` and
-`docs/validation_rules.md` (and hash-tracked to `CONTRACT.md` and `IMPLEMENTATION_PLAN.md`).
+`docs/validation_rules.md` (and hash-tracked to `specs/CONTRACT.md` and `specs/IMPLEMENTATION_PLAN.md`).
 The kernel is derived-only; it cannot introduce new behavior. Any ambiguity or conflict requires
-reading full `CONTRACT.md` (fail-closed).
+reading full `specs/CONTRACT.md` (fail-closed).
 
 ### “Contract-first”
 The trading behavior contract is the source of truth. If a plan/story conflicts with the contract, we **fail closed** and block.
@@ -43,8 +43,8 @@ The trading behavior contract is the source of truth. If a plan/story conflicts 
 ## 1) Canonical Files (Required)
 
 ### 1.1 Required inputs
-- [WF-1.1] `CONTRACT.md` (canonical trading contract)
-- [WF-1.2] `IMPLEMENTATION_PLAN.md` (slice map; may be `specs/IMPLEMENTATION_PLAN.md`)
+- [WF-1.1] `specs/CONTRACT.md` (canonical trading contract)
+- [WF-1.2] `specs/IMPLEMENTATION_PLAN.md` (slice map; root stub allowed)
 
 ### 1.2 Required workflow artifacts
 - [WF-1.3] `plans/prd.json` — story backlog (machine-readable)
@@ -77,7 +77,7 @@ The trading behavior contract is the source of truth. If a plan/story conflicts 
 ## 2) Non-Negotiables (Fail-Closed)
 
 1) [WF-2.1] **Contract alignment is mandatory.**
-   - Any change must be 100% aligned with `CONTRACT.md`.
+   - Any change must be 100% aligned with `specs/CONTRACT.md`.
    - Uncertainty → `needs_human_decision=true` → stop.
 
 2) [WF-2.2] **Verification is mandatory.**
@@ -117,8 +117,8 @@ Observable gate requirement:
 - [WF-2.8] Ralph MUST write `.ralph/artifacts.json` for every run (pass, fail, or blocked), and the manifest MUST be overwritten per run (no stale manifests). The schema is defined in `docs/schemas/artifacts.schema.json`.
 - [WF-2.9] **Contract kernel use is fail-closed.**
   - If the kernel is used, `scripts/check_contract_kernel.py` MUST pass (source hashes match current files).
-  - If validation fails or kernel is missing, agents MUST read full `CONTRACT.md` or stop.
-  - Contract review always compares diffs to `CONTRACT.md`, not the kernel.
+  - If validation fails or kernel is missing, agents MUST read full `specs/CONTRACT.md` or stop.
+  - Contract review always compares diffs to `specs/CONTRACT.md`, not the kernel.
 
 ---
 
@@ -133,7 +133,7 @@ Observable gate requirement:
   "project": "StoicTrader",
   "source": {
     "implementation_plan_path": "IMPLEMENTATION_PLAN.md",
-    "contract_path": "CONTRACT.md"
+    "contract_path": "specs/CONTRACT.md"
   },
   "rules": {
     "one_story_per_iteration": true,
@@ -254,7 +254,7 @@ Creates/extends plans/prd.json from the implementation plan and the contract.
 
 Rules:
 
-MUST read CONTRACT.md first.
+MUST read specs/CONTRACT.md first.
 
 MUST populate contract_refs for every story.
 
@@ -284,11 +284,11 @@ Never rewrites/reorders the file. Never changes IDs. Never flips passes=true.
 ### 4.4 Implementer (Ralph execution agent) [WF-4.4]
 
 Runs inside the Ralph harness. Implements exactly one story, verifies green, appends progress, commits.
-May use a validated kernel for slice-scoped context; ambiguity/conflict requires full `CONTRACT.md`.
+May use a validated kernel for slice-scoped context; ambiguity/conflict requires full `specs/CONTRACT.md`.
 
 ### 4.5 Contract Arbiter (post-commit contract check) [WF-4.5]
 
-A review step (human or LLM) that compares the code diff to CONTRACT.md.
+A review step (human or LLM) that compares the code diff to specs/CONTRACT.md.
 If conflict is detected → FAIL CLOSED → revert or block.
 
 ### 4.6 Handoff hygiene (who does what and when) [WF-4.6]
@@ -327,7 +327,7 @@ Ralph lock is held (.ralph/lock exists) to prevent concurrent runs
 
 required harness scripts are missing or not executable: ./plans/verify.sh, ./plans/update_task.sh
 
-CONTRACT.md or IMPLEMENTATION_PLAN.md is missing (fallbacks to specs/* allowed if present)
+specs/CONTRACT.md or specs/IMPLEMENTATION_PLAN.md is missing
 
 RPH_AGENT_CMD is empty or not executable when RPH_DRY_RUN!=1
 

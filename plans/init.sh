@@ -84,11 +84,11 @@ fi
 resolve_contract_path() {
   local prd_path="$1"
   if [[ -n "$prd_path" ]]; then
+    [[ "$prd_path" == "specs/CONTRACT.md" ]] || return 1
     [[ -f "$prd_path" ]] || return 1
     echo "$prd_path"
     return 0
   fi
-  if [[ -f "CONTRACT.md" ]]; then echo "CONTRACT.md"; return 0; fi
   if [[ -f "specs/CONTRACT.md" ]]; then echo "specs/CONTRACT.md"; return 0; fi
   return 1
 }
@@ -108,7 +108,7 @@ resolve_plan_path() {
 PRD_CONTRACT_PATH="$(jq -r '.source.contract_path // empty' "$PRD_FILE")"
 PRD_PLAN_PATH="$(jq -r '.source.implementation_plan_path // empty' "$PRD_FILE")"
 
-resolve_contract_path "$PRD_CONTRACT_PATH" >/dev/null 2>&1 || { echo "[init] ERROR: missing CONTRACT.md (required input)"; exit 17; }
+resolve_contract_path "$PRD_CONTRACT_PATH" >/dev/null 2>&1 || { echo "[init] ERROR: missing specs/CONTRACT.md (required input)"; exit 17; }
 resolve_plan_path "$PRD_PLAN_PATH" >/dev/null 2>&1 || { echo "[init] ERROR: missing IMPLEMENTATION_PLAN.md (required input)"; exit 18; }
 
 # --- PRD schema validation (fail closed)

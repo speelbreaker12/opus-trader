@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Fix: prevent concurrent state mutation with file locking
+LOCK_FILE="${RPH_STATE_FILE:-.ralph/state.json}.lock"
+mkdir -p "$(dirname "$LOCK_FILE")"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+  echo "ERROR: state locked by another process" >&2
+  exit 7
+fi
+
 ID="${1:-}"
 STATUS="${2:-}"
 PRD_FILE="${PRD_FILE:-plans/prd.json}"

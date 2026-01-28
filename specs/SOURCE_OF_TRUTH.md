@@ -26,7 +26,8 @@ The following are derived, explanatory, or workflow aids and MUST NOT be treated
 If a Tier 1 document conflicts with Tier 0, Tier 1 is wrong.
 
 ## Redirect Stubs
-Root-level files named CONTRACT.md / IMPLEMENTATION_PLAN.md / POLICY.md are allowed ONLY as redirect stubs.
+Root-level files named IMPLEMENTATION_PLAN.md / POLICY.md are allowed ONLY as redirect stubs.
+Root-level CONTRACT.md is forbidden (no stub; canonical is specs/CONTRACT.md).
 A redirect stub MUST:
 - contain the line "CANONICAL SOURCE OF TRUTH:"
 - point to the matching `/specs/...` file
@@ -36,7 +37,7 @@ A redirect stub MUST:
 Duplicate normative filenames are forbidden outside `/specs/`, except redirect stubs as defined above.
 
 Examples of forbidden duplicates outside `/specs/`:
-- CONTRACT.md (non-stub)
+- CONTRACT.md (any root-level or duplicate copy)
 - IMPLEMENTATION_PLAN.md (non-stub)
 - POLICY.md (non-stub)
 - GLOBAL_INVARIANTS.md

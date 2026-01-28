@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "contract_version": "5.2",
+  "precedence": {
+    "severity_order": [
+      "KILL",
+      "REDUCE_ONLY",
+      "ACTIVE"
+    ],
+    "category_order": [
+      "EXEC",
+      "GOV",
+      "RISK",
+      "DATA",
+      "OPS",
+      "EXT",
+      "STATE",
+      "OWNER"
+    ],
+    "tie_breaker": "code_alpha"
+  },
+  "codes": [
+    {
+      "code": "EXEC_DUPLICATE_INTENT_DETECTED",
+      "category": "EXEC",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Duplicate order attempt detected",
+      "unblock": "Incident record + clean restart + WAL replay proves no duplicate dispatch",
+      "owner_message": "Duplicate order attempt detected"
+    },
+    {
+      "code": "EXEC_ORDER_INVARIANT_VIOLATION",
+      "category": "EXEC",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Mechanical invariant failed (size/units/determinism)",
+      "unblock": "Fix merged + new build certified + invariant test passes",
+      "owner_message": "Mechanical invariant failed (size/units/determinism)"
+    },
+    {
+      "code": "EXEC_WAL_WRITE_FAILED",
+      "category": "EXEC",
+      "severity": "REDUCE_ONLY",
+      "latched": true,
+      "meaning": "Intent ledger could not persist safely",
+      "unblock": "WAL health=OK AND last N writes succeeded",
+      "owner_message": "Intent ledger could not persist safely"
+    },
+    {
+      "code": "EXEC_UNCLASSIFIED_ORDER",
+      "category": "EXEC",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Order could not be classified safely",
+      "unblock": "Classification fix + tests pass",
+      "owner_message": "Order could not be classified safely"
+    },
+    {
+      "code": "EXEC_ILLEGAL_ORDER_BLOCKED",
+      "category": "EXEC",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Forbidden order type attempted",
+      "unblock": "Config/strategy corrected + preflight tests pass",
+      "owner_message": "Forbidden order type attempted"
+    },
+    {
+      "code": "EXEC_UNMAPPED_REASON_CODE",
+      "category": "EXEC",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "A reason code was emitted but not in manifest",
+      "unblock": "Manifest + code aligned + redeploy",
+      "owner_message": "A reason code was emitted but not in manifest"
+    },
+    {
+      "code": "RISK_PARTIAL_FILL_CONTAINMENT",
+      "category": "RISK",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "One leg filled, others didn\u2019t",
+      "unblock": "Exposure flattened/hedged and verified by reconciliation",
+      "owner_message": "One leg filled, others didn\u2019t"
+    },
+    {
+      "code": "RISK_MAX_LOSS_REACHED",
+      "category": "RISK",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Daily loss limit hit",
+      "unblock": "Manual reset after recorded review (artifact)",
+      "owner_message": "Daily loss limit hit"
+    },
+    {
+      "code": "RISK_POSITION_LIMIT_REACHED",
+      "category": "RISK",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Hard position limit exceeded",
+      "unblock": "Exposure reduced below limit and reconciled",
+      "owner_message": "Hard position limit exceeded"
+    },
+    {
+      "code": "RISK_MARGIN_PRESSURE",
+      "category": "RISK",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Margin utilization too high",
+      "unblock": "Margin returns to safe band for T minutes",
+      "owner_message": "Margin utilization too high"
+    },
+    {
+      "code": "RISK_EMERGENCY_CLOSE_ACTIVE",
+      "category": "RISK",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Emergency close algorithm running",
+      "unblock": "Close completes successfully + reconciled",
+      "owner_message": "Emergency close algorithm running"
+    },
+    {
+      "code": "DATA_MARKET_FEED_STALE",
+      "category": "DATA",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Required market data is stale",
+      "unblock": "Data age <= threshold for T seconds",
+      "owner_message": "Required market data is stale"
+    },
+    {
+      "code": "DATA_PRICE_SNAPSHOT_MISSING",
+      "category": "DATA",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Decision snapshot could not be recorded",
+      "unblock": "Snapshot pipeline healthy + write succeeds",
+      "owner_message": "Decision snapshot could not be recorded"
+    },
+    {
+      "code": "DATA_TRUTH_CAPSULE_FAILED",
+      "category": "DATA",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Evidence write failed",
+      "unblock": "Evidence writer healthy + write succeeds",
+      "owner_message": "Evidence write failed"
+    },
+    {
+      "code": "DATA_SNAPSHOT_COVERAGE_LOW",
+      "category": "DATA",
+      "severity": "REDUCE_ONLY",
+      "latched": true,
+      "meaning": "Replay snapshot coverage below threshold",
+      "unblock": "Coverage >= threshold on defined scenarios",
+      "owner_message": "Replay snapshot coverage below threshold"
+    },
+    {
+      "code": "DATA_TIME_DRIFT_EXCEEDED",
+      "category": "DATA",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Clock drift outside tolerance",
+      "unblock": "Time sync restored + drift within tolerance for T minutes",
+      "owner_message": "Clock drift outside tolerance"
+    },
+    {
+      "code": "EXT_RATE_LIMITED",
+      "category": "EXT",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Exchange rate-limited requests",
+      "unblock": "Backoff window elapsed + success rate recovers",
+      "owner_message": "Exchange rate-limited requests"
+    },
+    {
+      "code": "EXT_SESSION_TERMINATED",
+      "category": "EXT",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Exchange killed session",
+      "unblock": "Re-auth + full reconciliation succeeds",
+      "owner_message": "Exchange killed session"
+    },
+    {
+      "code": "EXT_WEBSOCKET_GAP",
+      "category": "EXT",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Missed exchange events",
+      "unblock": "Full reconcile succeeds + gap cleared",
+      "owner_message": "Missed exchange events"
+    },
+    {
+      "code": "EXT_EXCHANGE_MAINTENANCE",
+      "category": "EXT",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Exchange in maintenance",
+      "unblock": "Maintenance ends + connectivity healthy",
+      "owner_message": "Exchange in maintenance"
+    },
+    {
+      "code": "EXT_CONNECTIVITY_LOSS",
+      "category": "EXT",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Network connectivity lost",
+      "unblock": "Connectivity restored + reconciliation succeeds",
+      "owner_message": "Network connectivity lost"
+    },
+    {
+      "code": "OPS_DISK_WATERMARK_HIGH",
+      "category": "OPS",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Disk watermark exceeded (risk of evidence loss)",
+      "unblock": "Disk usage below safe watermark and retention verified",
+      "owner_message": "Disk watermark exceeded (risk of evidence loss)"
+    },
+    {
+      "code": "OPS_EVIDENCE_QUEUE_SATURATED",
+      "category": "OPS",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Evidence queue/backpressure (risk of blind trading)",
+      "unblock": "Queue depth below threshold for T minutes",
+      "owner_message": "Evidence queue/backpressure (risk of blind trading)"
+    },
+    {
+      "code": "SEC_API_KEY_SCOPE_INVALID",
+      "category": "SEC",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "API key permissions exceed policy",
+      "unblock": "Keys rotated/scoped + probe proves least privilege",
+      "owner_message": "API key permissions exceed policy"
+    },
+    {
+      "code": "SEC_API_KEY_REVOKED",
+      "category": "SEC",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Key revoked/invalid",
+      "unblock": "Keys rotated + auth succeeds + reconciliation passes",
+      "owner_message": "Key revoked/invalid"
+    },
+    {
+      "code": "GOV_REPLAY_NOT_CERTIFIED",
+      "category": "GOV",
+      "severity": "REDUCE_ONLY",
+      "latched": true,
+      "meaning": "Replay gate failed",
+      "unblock": "Replay passes (defined scenarios)",
+      "owner_message": "Replay gate failed"
+    },
+    {
+      "code": "GOV_CANARY_FAILED",
+      "category": "GOV",
+      "severity": "REDUCE_ONLY",
+      "latched": true,
+      "meaning": "Canary deployment failed",
+      "unblock": "Rollback + review artifact produced",
+      "owner_message": "Canary deployment failed"
+    },
+    {
+      "code": "GOV_APPROVAL_REQUIRED",
+      "category": "GOV",
+      "severity": "REDUCE_ONLY",
+      "latched": true,
+      "meaning": "Human approval missing",
+      "unblock": "Approval recorded (artifact)",
+      "owner_message": "Human approval missing"
+    },
+    {
+      "code": "GOV_CONFIG_MISMATCH",
+      "category": "GOV",
+      "severity": "KILL",
+      "latched": true,
+      "meaning": "Runtime config differs from certified config",
+      "unblock": "Config aligned + certified build deployed",
+      "owner_message": "Runtime config differs from certified config"
+    },
+    {
+      "code": "GOV_CERT_EXPIRED",
+      "category": "GOV",
+      "severity": "REDUCE_ONLY",
+      "latched": true,
+      "meaning": "Certification expired",
+      "unblock": "Re-certify + deploy certified build",
+      "owner_message": "Certification expired"
+    },
+    {
+      "code": "STATE_STARTUP_RECONCILING",
+      "category": "STATE",
+      "severity": "REDUCE_ONLY",
+      "latched": false,
+      "meaning": "Startup reconciliation in progress",
+      "unblock": "Reconciliation completes",
+      "owner_message": "Startup reconciliation in progress"
+    },
+    {
+      "code": "STATE_PAPER_MODE",
+      "category": "STATE",
+      "severity": "ACTIVE",
+      "latched": false,
+      "meaning": "Paper trading only",
+      "unblock": "Switch to live",
+      "owner_message": "Paper trading only",
+      "deployment_environment": "PAPER"
+    },
+    {
+      "code": "STATE_MICRO_LIVE",
+      "category": "STATE",
+      "severity": "ACTIVE",
+      "latched": false,
+      "meaning": "Micro-live caps enforced",
+      "unblock": "n/a",
+      "owner_message": "Micro-live caps enforced",
+      "deployment_environment": "LIVE"
+    },
+    {
+      "code": "STATE_IDLE",
+      "category": "STATE",
+      "severity": "ACTIVE",
+      "latched": false,
+      "meaning": "No signals, but healthy",
+      "unblock": "n/a",
+      "owner_message": "No signals, but healthy"
+    }
+  ]
+}

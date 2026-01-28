@@ -3,6 +3,7 @@ target/
 plans/logs/
 plans/progress_archive.txt
 artifacts/verify/
+patches/
 .DS_Store
 __pycache__/
 
@@ -12,3 +13,8 @@ __pycache__/
 # Local IDE/Agent state
 .claude/
 .obsidian/
+
+# Local temp files
+proxy.log
+proxy_bridge.py
+plans/prd.json.bak

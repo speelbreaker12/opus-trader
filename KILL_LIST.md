@@ -1,0 +1,345 @@
+# KILL_LIST.md — Top 10 Delete/Merge Candidates
+
+Generated: 2026-01-27
+
+---
+
+## Scoring Rubric Applied
+
+Each candidate scored 0-5 on:
+- **Operational criticality** (breaks CI/runtime if wrong)
+- **Spec criticality** (normative truth source)
+- **Wiring centrality** (how many callers)
+- **Drift risk** (duplicate truth? likely to diverge?)
+- **Maintenance cost** (complexity, churn)
+
+**Decision rule:** DELETE if no wiring + no unique purpose + safe-delete proof exists
+
+---
+
+## Top 10 Kill Candidates
+
+### 1. `to-do/CONTRACT_patched_*.md` + `to-do/*.diff`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 (superseded) |
+| Wiring | 0 |
+| Drift risk | 5 (stale copy of CONTRACT) |
+| Maintenance | 3 (confusing) |
+
+**Evidence:** These are WIP patches that have been incorporated into `specs/CONTRACT.md`
+```
+to-do/CONTRACT_patched_with_CSP_appendix_CSP_ONLY_metaATs_with_CSP_mapping_preflight_fixes.md:1:
+"This is the canonical contract path. Do not edit other copies."
+# Contradicts being in to-do/
+```
+
+**Safe delete proof:**
+```bash
+rm -rf to-do/*.md to-do/*.diff
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE**
+
+---
+
+### 2. `patches/*.patch` (12 files)
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 (applied) |
+| Wiring | 0 (no script refs) |
+| Drift risk | 4 (may be applied twice) |
+| Maintenance | 2 |
+
+**Evidence:**
+```bash
+grep -r "patches/" --include="*.sh" . | wc -l
+# 0 references from scripts
+```
+
+**Safe delete proof:**
+```bash
+mkdir -p attic/2026-01-patches
+mv patches/* attic/2026-01-patches/
+echo "Patches applied to specs/ on 2026-01-27" > attic/2026-01-patches/README.md
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE** (archive to attic/)
+
+---
+
+### 3. `docs/bundle_CONTRACT_PHASE1.md`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 (excerpt only) |
+| Wiring | 0 |
+| Drift risk | 5 (will diverge from CONTRACT.md) |
+| Maintenance | 2 |
+
+**Evidence:**
+```bash
+wc -l docs/bundle_CONTRACT_PHASE1.md specs/CONTRACT.md
+#  688 docs/bundle_CONTRACT_PHASE1.md
+# 5895 specs/CONTRACT.md
+# It's a subset that will drift
+```
+
+**Safe delete proof:**
+```bash
+rm docs/bundle_CONTRACT_PHASE1.md
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE**
+
+---
+
+### 4. `docs/PLAN_PHASE1_EXCERPT.md`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 (excerpt only) |
+| Wiring | 0 |
+| Drift risk | 5 (will diverge) |
+| Maintenance | 2 |
+
+**Evidence:** Excerpt of IMPLEMENTATION_PLAN.md
+
+**Safe delete proof:**
+```bash
+rm docs/PLAN_PHASE1_EXCERPT.md
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE**
+
+---
+
+### 5. `docs/flows.md`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 (superseded by specs/flows/) |
+| Wiring | 0 |
+| Drift risk | 4 |
+| Maintenance | 1 |
+
+**Evidence:** Superseded by `specs/flows/ARCH_FLOWS.yaml` and related files
+
+**Safe delete proof:**
+```bash
+rm docs/flows.md
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE**
+
+---
+
+### 6. `plans/cut_prd.sh` + `plans/cutter_rules.md` + `plans/story_cutter_report.md`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 |
+| Wiring | 0 (never called) |
+| Drift risk | 2 |
+| Maintenance | 2 |
+
+**Evidence:**
+```bash
+grep -r "cut_prd.sh" --include="*.sh" --include="*.yml" . | wc -l
+# 0 references (only self-reference)
+```
+
+**Safe delete proof:**
+```bash
+rm plans/cut_prd.sh plans/cutter_rules.md plans/story_cutter_report.md plans/prompts/cutter.md
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **QUARANTINE** (move to attic/)
+
+---
+
+### 7. `prompts/architect_advisor.md`, `prompts/contact_arbiter.md`, `prompts/workflow_121.md`, `prompts/Workflow_Auditor.md`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 |
+| Wiring | 0 |
+| Drift risk | 1 |
+| Maintenance | 1 |
+
+**Evidence:**
+```bash
+grep -r "architect_advisor\|contact_arbiter\|workflow_121\|Workflow_Auditor" --include="*.sh" . | wc -l
+# 0 references
+# Only prompts/auditor.md is actually used
+```
+
+**Safe delete proof:**
+```bash
+rm prompts/architect_advisor.md prompts/contact_arbiter.md prompts/workflow_121.md prompts/Workflow_Auditor.md
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE**
+
+---
+
+### 8. `scripts/suggest_downstream_patches.py`
+| Score | Value |
+|-------|-------|
+| Operational | 0 |
+| Spec | 0 |
+| Wiring | 0 |
+| Drift risk | 1 |
+| Maintenance | 1 |
+
+**Evidence:**
+```bash
+grep -r "suggest_downstream_patches" --include="*.sh" --include="*.yml" . | wc -l
+# 0 references
+```
+
+**Safe delete proof:**
+```bash
+rm scripts/suggest_downstream_patches.py
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **QUARANTINE**
+
+---
+
+### 9. `plans/prd_audit.json` + `plans/prd_audit.md`
+| Score | Value |
+|-------|-------|
+| Operational | 0 (generated artifact) |
+| Spec | 0 |
+| Wiring | 0 (output only) |
+| Drift risk | 3 (stale snapshots) |
+| Maintenance | 1 |
+
+**Evidence:** Generated by `run_prd_auditor.sh`, should be gitignored
+
+**Safe delete proof:**
+```bash
+rm plans/prd_audit.json plans/prd_audit.md
+echo "plans/prd_audit.json" >> .gitignore
+echo "plans/prd_audit.md" >> .gitignore
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE** + add to .gitignore
+
+---
+
+### 10. `plans/logs/*.log`
+| Score | Value |
+|-------|-------|
+| Operational | 0 (historical) |
+| Spec | 0 |
+| Wiring | 0 |
+| Drift risk | 0 |
+| Maintenance | 2 (disk bloat) |
+
+**Evidence:** 26 log files tracked in git
+
+**Safe delete proof:**
+```bash
+rm plans/logs/*.log
+echo "plans/logs/*.log" >> .gitignore
+./plans/verify.sh full  # Must pass
+```
+
+**Verdict:** **DELETE** + add to .gitignore
+
+---
+
+## Summary Table
+
+| Rank | Path | Verdict | Action |
+|------|------|---------|--------|
+| 1 | `to-do/*.md`, `to-do/*.diff` | DELETE | `rm -rf to-do/` |
+| 2 | `patches/*.patch` | DELETE | Archive to `attic/` |
+| 3 | `docs/bundle_CONTRACT_PHASE1.md` | DELETE | `rm` |
+| 4 | `docs/PLAN_PHASE1_EXCERPT.md` | DELETE | `rm` |
+| 5 | `docs/flows.md` | DELETE | `rm` |
+| 6 | `plans/cut_prd.sh` + related | QUARANTINE | Move to `attic/` |
+| 7 | `prompts/*.md` (unused) | DELETE | Keep only `auditor.md` |
+| 8 | `scripts/suggest_downstream_patches.py` | QUARANTINE | Move to `attic/` |
+| 9 | `plans/prd_audit.*` | DELETE | Add to `.gitignore` |
+| 10 | `plans/logs/*.log` | DELETE | Add to `.gitignore` |
+
+---
+
+## Execution Script
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Create attic for quarantine
+mkdir -p attic/2026-01-audit/{patches,cutter,scripts}
+
+# 1. Archive to-do/
+rm -rf to-do/
+
+# 2. Archive patches/
+mv patches/* attic/2026-01-audit/patches/ 2>/dev/null || true
+rmdir patches 2>/dev/null || true
+
+# 3-5. Delete drift-risk docs
+rm -f docs/bundle_CONTRACT_PHASE1.md
+rm -f docs/PLAN_PHASE1_EXCERPT.md
+rm -f docs/flows.md
+
+# 6. Quarantine cutter
+mv plans/cut_prd.sh attic/2026-01-audit/cutter/ 2>/dev/null || true
+mv plans/cutter_rules.md attic/2026-01-audit/cutter/ 2>/dev/null || true
+mv plans/story_cutter_report.md attic/2026-01-audit/cutter/ 2>/dev/null || true
+mv plans/prompts/cutter.md attic/2026-01-audit/cutter/ 2>/dev/null || true
+
+# 7. Delete unused prompts
+rm -f prompts/architect_advisor.md
+rm -f prompts/contact_arbiter.md
+rm -f prompts/workflow_121.md
+rm -f prompts/Workflow_Auditor.md
+
+# 8. Quarantine unused scripts
+mv scripts/suggest_downstream_patches.py attic/2026-01-audit/scripts/ 2>/dev/null || true
+
+# 9-10. Delete generated artifacts + update gitignore
+rm -f plans/prd_audit.json plans/prd_audit.md
+rm -f plans/logs/*.log
+cat >> .gitignore << 'EOF'
+plans/prd_audit.json
+plans/prd_audit.md
+plans/logs/*.log
+EOF
+
+# Add attic README
+cat > attic/2026-01-audit/README.md << 'EOF'
+# Audit Archive — 2026-01-27
+
+Files moved here during repo survival audit.
+Safe to delete after 30 days if no issues arise.
+
+## Contents
+- patches/ — Applied CSP patches
+- cutter/ — Unused PRD cutter scripts
+- scripts/ — Unused utility scripts
+EOF
+
+# Verify
+echo "Running verify..."
+./plans/verify.sh full
+
+echo "Done. Review changes with: git status"
+```

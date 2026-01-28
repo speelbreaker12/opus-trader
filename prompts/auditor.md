@@ -12,9 +12,12 @@ HARD RULE
 Any story with category=workflow MUST NOT touch crates/; any story with category=execution/risk MUST NOT touch plans/.
 
 INPUTS (READ IN THIS ORDER)
-0) Audit meta (source of truth for scope + hashes):
-   - .context/prd_audit_meta.json
-   - Use prd_sha256 from this file. Do NOT recompute hashes.
+0) Audit meta (embedded below - source of truth for scope + hashes):
+```json
+__AUDIT_META_PLACEHOLDER__
+```
+   - Use prd_sha256 from this embedded JSON. Do NOT recompute hashes.
+   - Use output_file from this JSON for where to write audit results.
 1) Contract digest (do NOT read full contract markdown):
    - If audit_scope == "slice": .context/contract_digest_slice.json
    - Else: .context/contract_digest.json
@@ -38,8 +41,8 @@ INPUTS (READ IN THIS ORDER)
 
 OUTPUTS (WRITE)
 A) Audit JSON (REQUIRED; valid JSON; exact schema below)
-   - Read output path from .context/prd_audit_meta.json field "output_file"
-   - If output_file not present, default to: plans/prd_audit.json
+   - Use output_file from the embedded audit meta above (step 0) for where to write results.
+   - If output_file not present in embedded meta, default to: plans/prd_audit.json
 B) Optional: plans/prd_audit.md (human-readable summary)
 
 SCOPE / NON-GOALS
@@ -269,9 +272,10 @@ If you write it, use this exact structure:
 ========================
 PROCEDURE (DO THIS EXACTLY)
 ========================
-1) Read .context/prd_audit_meta.json and determine audit_scope and output_file.
-   - If output_file field exists, write audit JSON to that path
-   - If output_file field missing, default to plans/prd_audit.json
+1) Use the embedded audit meta (step 0 above) to determine audit_scope and output_file.
+   - CRITICAL: Use values from the embedded JSON, not from any file on disk.
+   - If output_file field exists, write audit JSON to that path.
+   - If output_file field missing, default to plans/prd_audit.json.
 2) Parse the PRD input file for the given scope and validate schema strictly.
 3) Validate slice grouping and ID formatting (per audit_scope).
 4) For each item in scope:
@@ -279,7 +283,7 @@ PROCEDURE (DO THIS EXACTLY)
    - Verify acceptance reflects contract invariants.
    - Evaluate verify[] and evidence[] sufficiency.
    - Evaluate bite-sized scope and est_size.
-5) Populate plans/prd_audit.json exactly to schema.
+5) Write audit JSON to the output_file path from embedded meta, using exact schema.
 6) Output exactly:
 <promise>AUDIT_COMPLETE</promise>
 and nothing else.

@@ -250,6 +250,17 @@ The `github` MCP server provides authenticated GitHub access. **Use automaticall
 
 Prefer MCP tools over `gh` CLI when available for richer context.
 
+## Contract Traceability
+
+Principles for mapping CONTRACT.md clauses to implementation:
+
+- **Stable IDs + anchors**: Contract clauses need CSP-### IDs with 2-5 search anchors (grep-able terms)
+- **Chain, not star**: Map Contract → Plan → PRD → code/tests (TRACE.yaml tracks links)
+- **AT-ID joins**: Referencing ATs in plans is the highest-leverage traceability signal
+- **CI enforcement**: Changed CSP clause requires TRACE entry (prevents unmapped drift)
+- **LLMs for candidates, not truth**: Use AI to suggest mappings, human confirms
+- **One good link per clause**: Don't block progress on full mapping; iterate over time
+
 ## Commit Messages
 
 Format: `<area>: <what changed>`
@@ -261,3 +272,11 @@ verify: add --strict flag to status validation
 ```
 
 Keep the first line under 72 characters. Reference CONTRACT.md sections when implementing contract requirements.
+
+## PRD Audit Patterns
+
+- Clear `.context/prd_slice.json` and `.context/prd_audit_cache.json` before re-running slice audits after modifying prd.json
+- Valid `enforcement_point` values: `PolicyGuard|EvidenceGuard|DispatcherChokepoint|WAL|AtomicGroupExecutor|StatusEndpoint`
+- Valid `failure_mode` values: `stall|hang|backpressure|missing|stale|parse_error`
+- `enforcing_contract_ats` must reference existing AT-XXX anchors in CONTRACT.md (not placeholder AT-000)
+- PRD `scope.touch` should stay within a single subsystem (crate) to keep stories bite-sized

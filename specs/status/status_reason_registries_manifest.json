@@ -1,0 +1,272 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ralph.internal/schemas/status_reason_registries_manifest.json",
+  "schema_version": 3,
+  "contract_version": "5.2",
+  "description": "Single source of truth for /status reason codes, display strings, and unblock conditions.",
+
+  "registries": {
+    "TradingMode": {
+      "values": ["Active", "ReduceOnly", "Kill"],
+      "description": "Contract-defined trading modes. Active=normal, ReduceOnly=can only reduce exposure, Kill=no trading."
+    },
+
+    "DeploymentEnvironment": {
+      "values": ["DEV", "STAGING", "PAPER", "LIVE"],
+      "description": "Deployment environment (NOT a TradingMode). Paper uses real data but simulated fills."
+    },
+
+    "RiskState": {
+      "values": ["Healthy", "Degraded", "Maintenance"],
+      "description": "System health state. Degraded triggers containment; Maintenance blocks new risk."
+    },
+
+    "F1CertState": {
+      "values": ["PASS", "FAIL", "STALE", "MISSING", "INVALID"],
+      "description": "F1 certification status. Only PASS allows Active trading in production."
+    },
+
+    "ModeReasonCode": {
+      "description": "Why trading_mode is ReduceOnly or Kill. Tier-pure: Kill reasons start with KILL_, ReduceOnly with REDUCEONLY_.",
+      "Kill": [
+        {
+          "code": "KILL_WATCHDOG_HEARTBEAT_STALE",
+          "display": "Hot loop appears dead (watchdog stale).",
+          "latched": true,
+          "unblock": { "type": "MANUAL", "condition": "Incident record + system restart + heartbeat confirmed" }
+        },
+        {
+          "code": "KILL_RISKSTATE_KILL",
+          "display": "RiskState is Kill (explicit emergency condition).",
+          "latched": true,
+          "unblock": { "type": "MANUAL", "condition": "Incident record + explicit operator reset" }
+        },
+        {
+          "code": "KILL_MARGIN_MM_UTIL_CRITICAL",
+          "display": "Margin utilization is critical (near liquidation).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "mm_util < 0.90 for >= 300s" }
+        },
+        {
+          "code": "KILL_RATE_LIMIT_SESSION_TERMINATION",
+          "display": "Exchange session terminated (10028 / rate-limit kill).",
+          "latched": true,
+          "unblock": { "type": "MANUAL", "condition": "Re-auth + full reconciliation + incident record" }
+        },
+        {
+          "code": "KILL_DISK_WATERMARK_KILL",
+          "display": "Disk watermark kill (integrity risk).",
+          "latched": true,
+          "unblock": { "type": "MANUAL", "condition": "Disk cleanup + verification + restart" }
+        },
+        {
+          "code": "KILL_CORTEX_FORCE_KILL",
+          "display": "Market microstructure collapse or contract violation (Cortex Kill).",
+          "latched": true,
+          "unblock": { "type": "MANUAL", "condition": "Fix deployed + incident record + explicit approval" }
+        }
+      ],
+      "ReduceOnly": [
+        {
+          "code": "REDUCEONLY_RISKSTATE_MAINTENANCE",
+          "display": "Exchange maintenance window (no new opens).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Exchange maintenance ends + connectivity confirmed" }
+        },
+        {
+          "code": "REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE",
+          "display": "Emergency ReduceOnly latch is active (cooldown).",
+          "latched": true,
+          "unblock": { "type": "AUTO", "condition": "Cooldown expires (configurable, default 300s)" }
+        },
+        {
+          "code": "REDUCEONLY_OPEN_PERMISSION_LATCHED",
+          "display": "Open-permission latch is set (reconcile required).",
+          "latched": true,
+          "unblock": { "type": "AUTO", "condition": "Reconciliation succeeds + latch clears" }
+        },
+        {
+          "code": "REDUCEONLY_BUNKER_MODE_ACTIVE",
+          "display": "Connectivity/jitter risk (Bunker mode).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Connectivity stable for >= 60s" }
+        },
+        {
+          "code": "REDUCEONLY_F1_CERT_INVALID",
+          "display": "F1 certification missing/stale/invalid (fail-closed).",
+          "latched": true,
+          "unblock": { "type": "MANUAL", "condition": "Re-certify + deploy certified build" }
+        },
+        {
+          "code": "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN",
+          "display": "Evidence chain not GREEN (GOP/FULL profiles only).",
+          "latched": true,
+          "unblock": { "type": "AUTO", "condition": "Evidence chain returns to GREEN" }
+        },
+        {
+          "code": "REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY",
+          "display": "Market stress detected (Cortex ReduceOnly).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Cortex stress signal clears" }
+        },
+        {
+          "code": "REDUCEONLY_FEE_MODEL_HARD_STALE",
+          "display": "Fee model hard-stale (cannot trust edge calculations).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Fee model refreshed within staleness threshold" }
+        },
+        {
+          "code": "REDUCEONLY_RISKSTATE_DEGRADED",
+          "display": "RiskState is Degraded (system protecting capital).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "RiskState returns to Healthy" }
+        },
+        {
+          "code": "REDUCEONLY_POLICY_STALE",
+          "display": "Policy is stale (no trading on old policy).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Policy refreshed within staleness threshold" }
+        },
+        {
+          "code": "REDUCEONLY_MARGIN_MM_UTIL_HIGH",
+          "display": "Margin utilization high (reduce only).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "mm_util < 0.80 for >= 60s" }
+        },
+        {
+          "code": "REDUCEONLY_INPUT_MISSING_OR_STALE",
+          "display": "Critical input missing/stale (fail-closed).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "All required inputs fresh" }
+        },
+        {
+          "code": "REDUCEONLY_WATCHDOG_UNCONFIRMED",
+          "display": "One watchdog corroboration signal missing (fail-closed).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "All watchdog signals confirmed" }
+        },
+        {
+          "code": "REDUCEONLY_DISK_KILL_UNCONFIRMED",
+          "display": "Disk kill predicate unconfirmed (fail-closed).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Disk predicate confirmed safe" }
+        },
+        {
+          "code": "REDUCEONLY_SESSION_KILL_UNCONFIRMED",
+          "display": "Session kill predicate unconfirmed (fail-closed).",
+          "latched": false,
+          "unblock": { "type": "AUTO", "condition": "Session predicate confirmed safe" }
+        }
+      ]
+    },
+
+    "OpenPermissionReasonCode": {
+      "description": "Why OPEN is specifically blocked (requires reconciliation). Separate from ModeReasonCode.",
+      "values": [
+        {
+          "code": "RESTART_RECONCILE_REQUIRED",
+          "display": "Restarted — must reconcile before opening risk.",
+          "unblock": { "type": "AUTO", "condition": "Reconciliation completes successfully" }
+        },
+        {
+          "code": "WS_BOOK_GAP_RECONCILE_REQUIRED",
+          "display": "Order book feed gap — must reconcile.",
+          "unblock": { "type": "AUTO", "condition": "Book snapshot refreshed + no gaps for >= 10s" }
+        },
+        {
+          "code": "WS_TRADES_GAP_RECONCILE_REQUIRED",
+          "display": "Trades feed gap — must reconcile.",
+          "unblock": { "type": "AUTO", "condition": "Trades stream continuous + reconciled" }
+        },
+        {
+          "code": "WS_DATA_STALE_RECONCILE_REQUIRED",
+          "display": "Market-data silence — must reconcile.",
+          "unblock": { "type": "AUTO", "condition": "ws_event_lag_ms <= 500 for >= 60s + reconciliation" }
+        },
+        {
+          "code": "INVENTORY_MISMATCH_RECONCILE_REQUIRED",
+          "display": "Position mismatch — must reconcile.",
+          "unblock": { "type": "AUTO", "condition": "Local inventory matches venue truth" }
+        },
+        {
+          "code": "SESSION_TERMINATION_RECONCILE_REQUIRED",
+          "display": "Session terminated — must reconcile.",
+          "unblock": { "type": "MANUAL", "condition": "Re-authenticate + full reconciliation" }
+        }
+      ]
+    },
+
+    "RejectReasonCode": {
+      "description": "Intent-level rejection reasons. Displayed when a specific order intent is rejected before dispatch.",
+      "values": [
+        "TooSmallAfterQuantization",
+        "InstrumentMetadataMissing",
+        "ChurnBreakerActive",
+        "LiquidityGateNoL2",
+        "EmergencyCloseNoPrice",
+        "ExpectedSlippageTooHigh",
+        "NetEdgeTooLow",
+        "NetEdgeInputMissing",
+        "InventorySkew",
+        "InventorySkewDeltaLimitMissing",
+        "PendingExposureBudgetExceeded",
+        "GlobalExposureBudgetExceeded",
+        "ContractsAmountMismatch",
+        "MarginHeadroomRejectOpens",
+        "OrderTypeMarketForbidden",
+        "OrderTypeStopForbidden",
+        "LinkedOrderTypeForbidden",
+        "PostOnlyWouldCross",
+        "RiskIncreasingCancelReplaceForbidden",
+        "RateLimitBrownout",
+        "InstrumentExpiredOrDelisted",
+        "FeedbackLoopGuardActive",
+        "LabelTooLong"
+      ]
+    },
+
+    "OwnerStateCode": {
+      "description": "Dashboard-only states that do NOT affect TradingMode. Prevent owner panic.",
+      "values": [
+        {
+          "code": "STATE_STARTUP_RECONCILING",
+          "display": "Starting up and reconciling venue truth."
+        },
+        {
+          "code": "STATE_IDLE_HEALTHY",
+          "display": "Healthy and idle (no signals or no orders to send)."
+        },
+        {
+          "code": "STATE_PAPER_MODE",
+          "display": "Paper trading (no real orders)."
+        },
+        {
+          "code": "STATE_MICRO_LIVE",
+          "display": "Live trading with micro-caps enforced."
+        },
+        {
+          "code": "STATE_UNHEALTHY_STATUS_SCHEMA",
+          "display": "Status schema invalid (fail-closed). Contact engineering."
+        }
+      ]
+    }
+  },
+
+  "ordering": {
+    "description": "Deterministic precedence for selecting primary owner reason.",
+    "owner_primary_precedence": [
+      "TradingMode:Kill",
+      "TradingMode:ReduceOnly",
+      "OpenPermissionLatch",
+      "OwnerState"
+    ],
+    "mode_reasons_precedence": "First element of mode_reasons array (contract guarantees ordering)."
+  },
+
+  "codegen": {
+    "description": "Instructions for code generation from this manifest.",
+    "rust_enum_crate": "soldier_core::policy::reason_codes",
+    "typescript_enum_path": "src/types/reason_codes.ts",
+    "python_enum_path": "python/types/reason_codes.py"
+  }
+}

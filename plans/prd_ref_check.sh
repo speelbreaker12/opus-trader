@@ -9,11 +9,7 @@ if [[ -z "$PRD_FILE" || ! -f "$PRD_FILE" ]]; then
   exit 2
 fi
 
-if [[ -f "specs/CONTRACT.md" ]]; then
-  CONTRACT_FILE="specs/CONTRACT.md"
-else
-  CONTRACT_FILE="CONTRACT.md"
-fi
+CONTRACT_FILE="specs/CONTRACT.md"
 
 if [[ -f "specs/IMPLEMENTATION_PLAN.md" ]]; then
   PLAN_FILE="specs/IMPLEMENTATION_PLAN.md"
@@ -22,7 +18,7 @@ else
 fi
 
 if [[ ! -f "$CONTRACT_FILE" ]]; then
-  echo "[prd_ref_check] ERROR: contract file missing: $CONTRACT_FILE" >&2
+  echo "[prd_ref_check] ERROR: contract file missing: specs/CONTRACT.md" >&2
   exit 2
 fi
 

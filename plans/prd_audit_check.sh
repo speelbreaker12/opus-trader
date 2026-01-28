@@ -8,6 +8,7 @@ AUDIT_STDOUT="${AUDIT_STDOUT:-.context/prd_auditor_stdout.log}"
 AUDIT_PROMISE="${AUDIT_PROMISE:-<promise>AUDIT_COMPLETE</promise>}"
 AUDIT_PROMISE_REQUIRED="${AUDIT_PROMISE_REQUIRED:-1}"
 AUDIT_META_FILE="${AUDIT_META_FILE:-.context/prd_audit_meta.json}"
+AUDIT_FAIL_FAST="${AUDIT_FAIL_FAST:-0}"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -57,8 +58,18 @@ hash_file() {
 
 prd_sha="$(hash_file "$PRD_FILE")"
 audit_sha="$(jq -r '.prd_sha256 // empty' "$AUDIT_FILE")"
-if [[ -z "$audit_sha" || "$audit_sha" != "$prd_sha" ]]; then
-  fail "prd_sha256 mismatch in audit file (expected $prd_sha, got $audit_sha)"
+if [[ -z "$audit_sha" ]]; then
+  fail "prd_sha256 missing in audit file"
+fi
+# In slice mode, auditor may use full PRD SHA - check both
+if [[ "$audit_sha" != "$prd_sha" ]]; then
+  full_prd_sha=""
+  if [[ "$audit_scope" == "slice" && -f "plans/prd.json" ]]; then
+    full_prd_sha="$(hash_file "plans/prd.json")"
+  fi
+  if [[ -z "$full_prd_sha" || "$audit_sha" != "$full_prd_sha" ]]; then
+    fail "prd_sha256 mismatch in audit file (expected $prd_sha, got $audit_sha)"
+  fi
 fi
 
 prd_ids="$(jq -r '.items[]?.id // empty' "$PRD_FILE" | sort -u)"
@@ -90,6 +101,16 @@ if ! jq -e '
   )
 ' "$AUDIT_FILE" >/dev/null 2>&1; then
   fail "audit items contain invalid status (allowed: PASS|FAIL|BLOCKED)"
+fi
+
+# Fail-fast mode: stop at first FAIL item for faster iteration
+if [[ "$AUDIT_FAIL_FAST" == "1" ]]; then
+  first_fail=$(jq -r '.items[] | select(.status == "FAIL") | .id' "$AUDIT_FILE" | head -1)
+  if [[ -n "$first_fail" ]]; then
+    echo "[prd_audit_check] FAIL_FAST: First failure at $first_fail" >&2
+    jq -r --arg id "$first_fail" '.items[] | select(.id == $id) | .reasons[]' "$AUDIT_FILE" >&2
+    exit 1
+  fi
 fi
 
 if ! jq -e '

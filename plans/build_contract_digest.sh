@@ -16,5 +16,7 @@ if [[ ! -f "$SOURCE_FILE" ]]; then
 fi
 
 OUTPUT_FILE="${CONTRACT_DIGEST_FILE:-.context/contract_digest.json}"
+# DIGEST_MODE: 'slim' for metadata only (fast), 'full' for complete text (default)
+DIGEST_MODE="${DIGEST_MODE:-slim}"
 
-SOURCE_FILE="$SOURCE_FILE" OUTPUT_FILE="$OUTPUT_FILE" ./plans/build_markdown_digest.sh "$SOURCE_FILE" "$OUTPUT_FILE"
+SOURCE_FILE="$SOURCE_FILE" OUTPUT_FILE="$OUTPUT_FILE" DIGEST_MODE="$DIGEST_MODE" ./plans/build_markdown_digest.sh "$SOURCE_FILE" "$OUTPUT_FILE"

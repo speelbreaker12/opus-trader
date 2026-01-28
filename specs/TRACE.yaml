@@ -1,0 +1,143 @@
+# CSP Clause Traceability Matrix
+# Tracks mapping from CSP clauses to implementation artifacts
+#
+# status:
+#   MAPPED   - All artifact types (plan, code, tests, prd) have entries
+#   PARTIAL  - At least one artifact type has entries
+#   UNMAPPED - No mappings yet (needs work)
+#
+# Each clause needs at least ONE of: plan, code, tests, or prd to be considered PARTIAL
+# All populated = MAPPED
+
+version: "1.1"
+contract_version: "5.2"
+
+clauses:
+  CSP-001:
+    status: PARTIAL
+    name: "Definition"
+    anchors: [csp, safety, profile, minimal]
+    contract_ref: "§0.Z.2.1"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Phase-1"
+    code: []
+    tests: []
+    prd: []
+    notes: "Definition clause - establishes what CSP means; no direct code mapping required"
+
+  CSP-002:
+    status: PARTIAL
+    name: "Idempotency & Deduplication"
+    anchors: [idempotency, dedup, label, hash]
+    contract_ref: "§0.Z.2.2.A"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-1"  # Instrument Units + Dispatcher Invariants
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-2"  # Quantization + Labeling + Idempotency
+    code:
+      - "crates/soldier_core/src/idempotency/hash.rs"
+      - "crates/soldier_core/src/idempotency/mod.rs"
+      - "crates/soldier_core/src/execution/label.rs"
+    tests:
+      - "AT-104"  # stale metadata handling
+      - "AT-926"  # label consistency
+    prd:
+      - "plans/prd.json#S2-001"  # Intent hash from quantized fields
+      - "plans/prd.json#S2-002"  # Compact label schema
+
+  CSP-003:
+    status: PARTIAL
+    name: "RecordedBeforeDispatch"
+    anchors: [wal, recorded, dispatch, intent]
+    contract_ref: "§0.Z.2.2.B"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-4"  # WAL / intent ledger
+    code: []
+    tests:
+      - "AT-046"  # truth capsule written before dispatch
+      - "AT-249"  # WAL semantics
+    prd:
+      - "plans/prd.json#S4-000"  # WAL append + replay no-resend
+      - "plans/prd.json#S4-003"  # Dispatch requires durable WAL barrier
+
+  CSP-004:
+    status: PARTIAL
+    name: "Restart & Reconciliation Correctness"
+    anchors: [restart, reconcile, latch, recovery]
+    contract_ref: "§0.Z.2.2.C"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-9"  # WS-gap recovery, reconcile
+    code: []
+    tests:
+      - "AT-338"  # reconcile latch
+      - "AT-339"  # restart safety
+    prd: []
+
+  CSP-005:
+    status: PARTIAL
+    name: "TradingMode Correctness"
+    anchors: [tradingmode, policyguard, mode, active]
+    contract_ref: "§0.Z.2.2.D"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-8"  # PolicyGuard precedence
+    code: []
+    tests:
+      - "AT-1050"  # axis isolation
+      - "AT-1051"  # axis isolation
+      - "AT-1052"  # axis isolation
+      - "AT-1053"  # resolver monotonicity
+    prd: []
+
+  CSP-006:
+    status: PARTIAL
+    name: "Open Permission Latch Semantics"
+    anchors: [latch, open_permission, CP-001, blocked]
+    contract_ref: "§0.Z.2.2.E"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-9"  # OpenPermission latch + recovery
+    code: []
+    tests:
+      - "AT-338"  # latch semantics
+      - "AT-340"  # latch clear conditions
+    prd: []
+
+  CSP-007:
+    status: PARTIAL
+    name: "Capital Supremacy Invariant"
+    anchors: [capital, supremacy, containment, kill]
+    contract_ref: "§0.Z.2.2.F"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-7"  # Atomic containment + emergency close
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-8"  # PolicyGuard
+    code: []
+    tests:
+      - "AT-235"  # emergency close algorithm
+      - "AT-118"  # containment with hedge fallback
+      - "AT-1049"  # capital preservation
+    prd: []
+
+  CSP-008:
+    status: PARTIAL
+    name: "Deterministic Emergency Containment"
+    anchors: [emergency, close, flatten, bounded]
+    contract_ref: "§0.Z.2.2.G"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-6"  # Atomic containment
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-7"  # Emergency close
+    code: []
+    tests:
+      - "AT-235"  # emergency close algorithm
+      - "AT-118"  # hedge fallback
+      - "AT-283"  # rescue cross spread ticks
+    prd: []
+
+  CSP-009:
+    status: PARTIAL
+    name: "Timebase Authority"
+    anchors: [monotonic, time, epoch, milliseconds]
+    contract_ref: "§0.Z.2.2.H"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-10"  # Time drift gate
+    code: []
+    tests:
+      - "AT-297"  # watchdog kill timing
+    prd: []

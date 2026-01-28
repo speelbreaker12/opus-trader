@@ -10,7 +10,7 @@ if [[ ! -x "$ROOT/plans/workflow_acceptance.sh" ]]; then
 fi
 
 set +e
-output=$(VERIFY_ALLOW_DIRTY=1 WORKFLOW_ACCEPTANCE_MODE=clone WORKFLOW_ACCEPTANCE_SETUP_ONLY=1 \
+output=$(VERIFY_ALLOW_DIRTY=1 WORKFLOW_ACCEPTANCE_SETUP_MODE=clone WORKFLOW_ACCEPTANCE_SETUP_ONLY=1 \
   "$ROOT/plans/workflow_acceptance.sh" 2>&1)
 rc=$?
 set -e

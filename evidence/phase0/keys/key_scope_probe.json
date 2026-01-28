@@ -1,0 +1,62 @@
+{
+  "probe_metadata": {
+    "probe_version": "1.0",
+    "executed_by": "phase0_drill",
+    "timestamp_utc": "2026-01-27T13:00:00Z"
+  },
+  "probes": [
+    {
+      "env": "STAGING",
+      "exchange": "Deribit",
+      "key_id": "key_staging_trade_***",
+      "account": "testnet_acct_001",
+      "scopes": ["read", "trade"],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "read_account": {"attempted": true, "result": "success"},
+        "place_order": {"attempted": true, "result": "success"},
+        "cancel_order": {"attempted": true, "result": "success"},
+        "withdraw": {"attempted": true, "result": "permission_denied", "error": "withdrawal not permitted for this key"}
+      }
+    },
+    {
+      "env": "PAPER",
+      "exchange": "Deribit",
+      "key_id": "key_paper_trade_***",
+      "account": "paper_acct_001",
+      "scopes": ["read", "trade"],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "read_account": {"attempted": true, "result": "success"},
+        "place_order": {"attempted": true, "result": "success"},
+        "cancel_order": {"attempted": true, "result": "success"},
+        "withdraw": {"attempted": true, "result": "permission_denied", "error": "withdrawal not permitted for this key"}
+      }
+    },
+    {
+      "env": "LIVE",
+      "exchange": "Deribit",
+      "key_id": "key_live_trade_***",
+      "account": "prod_acct_001",
+      "scopes": ["read", "trade"],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "read_account": {"attempted": true, "result": "success"},
+        "place_order": {"attempted": false, "result": "skipped", "reason": "LIVE probe limited to read-only verification"},
+        "cancel_order": {"attempted": false, "result": "skipped", "reason": "LIVE probe limited to read-only verification"},
+        "withdraw": {"attempted": true, "result": "permission_denied", "error": "withdrawal not permitted for this key"}
+      }
+    }
+  ],
+  "summary": {
+    "total_keys_probed": 3,
+    "all_withdrawals_disabled": true,
+    "all_transfers_disabled": true,
+    "least_privilege_verified": true
+  },
+  "operator": "drill_operator",
+  "witness": "witness_name"
+}

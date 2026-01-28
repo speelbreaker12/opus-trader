@@ -108,9 +108,17 @@ RPH_REQUIRE_STORY_VERIFY_GATE="${RPH_REQUIRE_STORY_VERIFY_GATE:-${RPH_PROFILE_RE
 RPH_REQUIRE_FULL_VERIFY="${RPH_REQUIRE_FULL_VERIFY:-${RPH_PROFILE_REQUIRE_FULL_VERIFY:-0}}"  # 0|1
 RPH_REQUIRE_PROMOTION_VERIFY="${RPH_REQUIRE_PROMOTION_VERIFY:-${RPH_PROFILE_REQUIRE_PROMOTION_VERIFY:-0}}"  # 0|1
 RPH_AGENT_CMD="${RPH_AGENT_CMD:-codex}"        # codex|claude|opencode|etc
-RPH_AGENT_MODEL="${RPH_AGENT_MODEL:-${RPH_PROFILE_AGENT_MODEL:-gpt-5.2-codex}}"
+# Default model depends on agent
+_RPH_DEFAULT_MODEL="gpt-5.2-codex"
+if [[ "$RPH_AGENT_CMD" == "claude" ]]; then
+  _RPH_DEFAULT_MODEL="sonnet"
+fi
+RPH_AGENT_MODEL="${RPH_AGENT_MODEL:-${RPH_PROFILE_AGENT_MODEL:-$_RPH_DEFAULT_MODEL}}"
 RPH_VERIFY_ONLY="${RPH_VERIFY_ONLY:-${RPH_PROFILE_VERIFY_ONLY:-0}}"       # 0|1 (use cheaper model for verification-only iterations)
 RPH_VERIFY_ONLY_MODEL="${RPH_VERIFY_ONLY_MODEL:-gpt-5-mini}"
+if [[ "$RPH_AGENT_CMD" == "claude" && "$RPH_VERIFY_ONLY_MODEL" == "gpt-5-mini" ]]; then
+  RPH_VERIFY_ONLY_MODEL="haiku"
+fi
 if [[ "$RPH_VERIFY_ONLY" == "1" ]]; then
   RPH_AGENT_MODEL="$RPH_VERIFY_ONLY_MODEL"
 fi
@@ -118,6 +126,8 @@ RPH_ITER_TIMEOUT_SECS="${RPH_ITER_TIMEOUT_SECS:-${RPH_PROFILE_ITER_TIMEOUT_SECS:
 if [[ -z "${RPH_AGENT_ARGS+x}" ]]; then
   if [[ "$RPH_AGENT_CMD" == "codex" ]]; then
     RPH_AGENT_ARGS="exec --model ${RPH_AGENT_MODEL} --cd ${REPO_ROOT} --sandbox danger-full-access"
+  elif [[ "$RPH_AGENT_CMD" == "claude" ]]; then
+    RPH_AGENT_ARGS="--model ${RPH_AGENT_MODEL} --permission-mode acceptEdits"
   else
     RPH_AGENT_ARGS="--permission-mode acceptEdits"
   fi
@@ -751,6 +761,12 @@ if ! jq -e . "$STATE_FILE" >/dev/null 2>&1; then
   echo '{}' > "$STATE_FILE"
 fi
 
+# Initialize metrics if missing
+if ! jq -e '.metrics' "$STATE_FILE" >/dev/null 2>&1; then
+  tmp="$(mktemp)"
+  jq '. + {metrics: {total_iterations: 0, pass_count: 0, fail_count: 0, verify_pre_fail_count: 0, verify_post_fail_count: 0, failure_modes: []}}' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+fi
+
 # Fail if dirty at start (keeps history clean). Override only if you KNOW what you're doing.
 if [[ -n "$(git status --porcelain)" ]]; then
   block_preflight "dirty_worktree" "working tree dirty. Commit/stash first." 2
@@ -1043,11 +1059,212 @@ hash_ralph_json_files() {
   rm -f "$tmp"
 }
 
+# Fix 7: Diff size limit - prevent massive changes
+RPH_MAX_DIFF_LINES="${RPH_MAX_DIFF_LINES:-2000}"
+
+check_diff_size() {
+  local head_before="$1"
+  local head_after="$2"
+  local iter_dir="$3"
+
+  if [[ "$head_before" == "$head_after" ]]; then
+    echo "0"
+    return 0
+  fi
+
+  local stat_line
+  stat_line="$(git diff --stat "$head_before" "$head_after" 2>/dev/null | tail -1)"
+
+  # Extract insertions and deletions
+  local insertions=0 deletions=0
+  if [[ "$stat_line" =~ ([0-9]+)\ insertion ]]; then
+    insertions="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$stat_line" =~ ([0-9]+)\ deletion ]]; then
+    deletions="${BASH_REMATCH[1]}"
+  fi
+
+  local total=$((insertions + deletions))
+  echo "$total"
+
+  # Save diff stats for metrics
+  if [[ -n "$iter_dir" ]]; then
+    printf 'insertions=%d\ndeletions=%d\ntotal=%d\n' "$insertions" "$deletions" "$total" > "$iter_dir/diff_stats.txt" 2>/dev/null || true
+  fi
+}
+
+# Fix 8: Artifact retention - prevent disk exhaustion
+RPH_MAX_ITER_DIRS="${RPH_MAX_ITER_DIRS:-20}"
+RPH_ARCHIVE_OLD_ITERS="${RPH_ARCHIVE_OLD_ITERS:-1}"
+
+prune_old_iterations() {
+  local state_dir="${1:-.ralph}"
+  local max_keep="${2:-$RPH_MAX_ITER_DIRS}"
+  local archive_dir="$state_dir/archive"
+
+  # Count existing iter directories
+  local iter_count
+  iter_count="$(find "$state_dir" -maxdepth 1 -type d -name 'iter_*' 2>/dev/null | wc -l | tr -d ' ')"
+
+  if (( iter_count <= max_keep )); then
+    return 0
+  fi
+
+  local to_prune=$((iter_count - max_keep))
+
+  if [[ "$RPH_ARCHIVE_OLD_ITERS" == "1" ]]; then
+    mkdir -p "$archive_dir"
+    find "$state_dir" -maxdepth 1 -type d -name 'iter_*' 2>/dev/null | sort -V | head -n "$to_prune" | while read -r dir; do
+      local base
+      base="$(basename "$dir")"
+      # Compress and move to archive
+      tar -czf "$archive_dir/${base}.tar.gz" -C "$state_dir" "$base" 2>/dev/null && rm -rf "$dir" || true
+    done
+  else
+    # Just delete old iterations
+    find "$state_dir" -maxdepth 1 -type d -name 'iter_*' 2>/dev/null | sort -V | head -n "$to_prune" | xargs rm -rf 2>/dev/null || true
+  fi
+}
+
+# Fix 9: Metrics file - structured JSONL for monitoring
+METRICS_FILE="${RPH_METRICS_FILE:-.ralph/metrics.jsonl}"
+
+append_metrics() {
+  local iter="$1"
+  local story_id="$2"
+  local status="$3"
+  local verify_rc="$4"
+  local duration_s="$5"
+  local diff_lines="$6"
+  local cheats="$7"
+  local block_reason="${8:-}"
+
+  local ts
+  ts="$(date +%s)"
+
+  mkdir -p "$(dirname "$METRICS_FILE")"
+
+  jq -nc \
+    --argjson ts "$ts" \
+    --argjson iter "$iter" \
+    --arg story_id "$story_id" \
+    --arg status "$status" \
+    --argjson verify_rc "$verify_rc" \
+    --argjson duration_s "$duration_s" \
+    --argjson diff_lines "$diff_lines" \
+    --arg cheats "$cheats" \
+    --arg block_reason "$block_reason" \
+    '{
+      ts: $ts,
+      iter: $iter,
+      story_id: $story_id,
+      status: $status,
+      verify_rc: $verify_rc,
+      duration_s: $duration_s,
+      diff_lines: $diff_lines,
+      cheats: $cheats,
+      block_reason: $block_reason
+    }' >> "$METRICS_FILE" 2>/dev/null || true
+}
+
+# Fix 10: Test co-change gate - require test changes with source changes
+RPH_TEST_COCHANGE_ENABLED="${RPH_TEST_COCHANGE_ENABLED:-1}"
+RPH_TEST_COCHANGE_SRC_PATTERNS="${RPH_TEST_COCHANGE_SRC_PATTERNS:-^src/|^lib/|^app/|^pkg/|^internal/|^cmd/|\.rs$|\.py$|\.ts$|\.js$}"
+RPH_TEST_COCHANGE_TEST_PATTERNS="${RPH_TEST_COCHANGE_TEST_PATTERNS:-^tests?/|_test\.|\.test\.|\.spec\.|^__tests__/}"
+RPH_TEST_COCHANGE_EXEMPT_PATTERNS="${RPH_TEST_COCHANGE_EXEMPT_PATTERNS:-\.md$|\.txt$|\.json$|\.yaml$|\.yml$|\.toml$|^docs/|^specs/|^plans/}"
+
+check_test_cochange() {
+  local head_before="$1"
+  local head_after="$2"
+
+  if [[ "$RPH_TEST_COCHANGE_ENABLED" != "1" ]]; then
+    return 0
+  fi
+
+  if [[ "$head_before" == "$head_after" ]]; then
+    return 0
+  fi
+
+  local changed_files
+  changed_files="$(git diff --name-only "$head_before" "$head_after" 2>/dev/null)"
+
+  if [[ -z "$changed_files" ]]; then
+    return 0
+  fi
+
+  # Filter out exempt files
+  local src_files test_files
+  src_files="$(echo "$changed_files" | grep -E "$RPH_TEST_COCHANGE_SRC_PATTERNS" | grep -vE "$RPH_TEST_COCHANGE_EXEMPT_PATTERNS" | grep -vE "$RPH_TEST_COCHANGE_TEST_PATTERNS" || true)"
+  test_files="$(echo "$changed_files" | grep -E "$RPH_TEST_COCHANGE_TEST_PATTERNS" || true)"
+
+  local src_count test_count
+  src_count="$(echo "$src_files" | grep -c . || echo 0)"
+  test_count="$(echo "$test_files" | grep -c . || echo 0)"
+
+  if (( src_count > 0 && test_count == 0 )); then
+    echo "src_changed=$src_count test_changed=$test_count"
+    echo "Source files changed:"
+    echo "$src_files" | head -10
+    return 1
+  fi
+
+  return 0
+}
+
+# Fix 6: Protect critical files during agent execution
+lock_state_files() {
+  # Make state.json and PRD read-only during agent execution
+  # This prevents the agent from directly manipulating harness state
+  if [[ -f "$STATE_FILE" ]]; then
+    chmod a-w "$STATE_FILE" 2>/dev/null || true
+  fi
+  if [[ "${RPH_LOCK_PRD_DURING_AGENT:-1}" == "1" && -f "$PRD_FILE" ]]; then
+    chmod a-w "$PRD_FILE" 2>/dev/null || true
+  fi
+}
+
+unlock_state_files() {
+  # Restore write access after agent execution
+  if [[ -f "$STATE_FILE" ]]; then
+    chmod u+w "$STATE_FILE" 2>/dev/null || true
+  fi
+  if [[ -f "$PRD_FILE" ]]; then
+    chmod u+w "$PRD_FILE" 2>/dev/null || true
+  fi
+}
+
+hash_workflow_scripts() {
+  # Hash all workflow scripts to detect transitive tampering
+  local tmp
+  tmp="$(mktemp)"
+  local scripts=(
+    "plans/ralph.sh"
+    "plans/update_task.sh"
+    "plans/init.sh"
+    "plans/verify.sh"
+    "plans/contract_check.sh"
+    "plans/contract_review_validate.sh"
+    "plans/workflow_acceptance.sh"
+    "plans/ssot_lint.sh"
+    "plans/prd_gate.sh"
+    "plans/prd_schema_check.sh"
+  )
+  for script in "${scripts[@]}"; do
+    if [[ -f "$script" ]]; then
+      printf '%s %s\n' "$(sha256_file "$script")" "$script"
+    fi
+  done | LC_ALL=C sort > "$tmp"
+  sha256_file "$tmp"
+  rm -f "$tmp"
+}
+
 capture_agent_guard_hashes() {
   HARNESS_SHA_BEFORE=""
   RALPH_JSON_SHA_BEFORE=""
+  WORKFLOW_SCRIPTS_SHA_BEFORE=""
   if [[ "$RPH_ALLOW_HARNESS_EDIT" != "1" ]]; then
     HARNESS_SHA_BEFORE="$(sha256_file "plans/ralph.sh")"
+    WORKFLOW_SCRIPTS_SHA_BEFORE="$(hash_workflow_scripts)"
   fi
   RALPH_JSON_SHA_BEFORE="$(hash_ralph_json_files)"
 }
@@ -1537,17 +1754,50 @@ progress_gate() {
     if ! grep -Eq "20[0-9]{2}-[01][0-9]-[0-3][0-9]" "$appended_file"; then
       issues+=("missing_timestamp")
     fi
-    if ! grep -qi "summary" "$appended_file"; then
-      issues+=("missing_summary")
+
+    # Fix 5: Structured progress validation - require meaningful content, not just keywords
+    # Extract field values and validate they have real content
+    local summary_content commands_content evidence_content next_content
+
+    # Extract content after "Summary:" label (case-insensitive, multiline until next label or EOF)
+    summary_content="$(sed -n '/^[Ss]ummary[[:space:]]*:/,/^[A-Za-z]*[[:space:]]*:/{/^[Ss]ummary[[:space:]]*:/d;/^[A-Za-z]*[[:space:]]*:/d;p}' "$appended_file" | tr -d '[:space:]')"
+    if [[ -z "$summary_content" ]]; then
+      # Fallback: check single-line format "Summary: content"
+      summary_content="$(grep -i '^[Ss]ummary[[:space:]]*:' "$appended_file" | sed 's/^[Ss]ummary[[:space:]]*:[[:space:]]*//' | tr -d '[:space:]')"
     fi
-    if ! grep -qi "commands" "$appended_file"; then
-      issues+=("missing_commands")
+    if [[ -z "$summary_content" || ${#summary_content} -lt 20 ]]; then
+      issues+=("summary_too_short")
     fi
-    if ! grep -qi "evidence" "$appended_file"; then
-      issues+=("missing_evidence")
+
+    commands_content="$(sed -n '/^[Cc]ommands[[:space:]]*:/,/^[A-Za-z]*[[:space:]]*:/{/^[Cc]ommands[[:space:]]*:/d;/^[A-Za-z]*[[:space:]]*:/d;p}' "$appended_file" | tr -d '[:space:]')"
+    if [[ -z "$commands_content" ]]; then
+      commands_content="$(grep -i '^[Cc]ommands[[:space:]]*:' "$appended_file" | sed 's/^[Cc]ommands[[:space:]]*:[[:space:]]*//' | tr -d '[:space:]')"
     fi
-    if ! grep -qiE "(next|gotcha)" "$appended_file"; then
-      issues+=("missing_next")
+    if [[ -z "$commands_content" || ${#commands_content} -lt 10 ]]; then
+      issues+=("commands_too_short")
+    fi
+
+    evidence_content="$(sed -n '/^[Ee]vidence[[:space:]]*:/,/^[A-Za-z]*[[:space:]]*:/{/^[Ee]vidence[[:space:]]*:/d;/^[A-Za-z]*[[:space:]]*:/d;p}' "$appended_file" | tr -d '[:space:]')"
+    if [[ -z "$evidence_content" ]]; then
+      evidence_content="$(grep -i '^[Ee]vidence[[:space:]]*:' "$appended_file" | sed 's/^[Ee]vidence[[:space:]]*:[[:space:]]*//' | tr -d '[:space:]')"
+    fi
+    if [[ -z "$evidence_content" || ${#evidence_content} -lt 10 ]]; then
+      issues+=("evidence_too_short")
+    fi
+
+    next_content="$(sed -n '/^[Nn]ext[[:space:]]*:/,/^[A-Za-z]*[[:space:]]*:/{/^[Nn]ext[[:space:]]*:/d;/^[A-Za-z]*[[:space:]]*:/d;p}' "$appended_file" | tr -d '[:space:]')"
+    if [[ -z "$next_content" ]]; then
+      next_content="$(grep -iE '^([Nn]ext|[Gg]otcha)[[:space:]]*:' "$appended_file" | sed 's/^[NnGg][oOeE][txTX][ctCT][hHaA]*[[:space:]]*:[[:space:]]*//' | tr -d '[:space:]')"
+    fi
+    if [[ -z "$next_content" || ${#next_content} -lt 5 ]]; then
+      issues+=("next_too_short")
+    fi
+
+    # Overall content length check
+    local content_len
+    content_len="$(wc -c < "$appended_file" | tr -d ' ')"
+    if (( content_len < 200 )); then
+      issues+=("content_too_short")
     fi
   else
     : > "$appended_file" 2>/dev/null || true
@@ -1616,7 +1866,7 @@ detect_cheating() {
   if grep -qE '^\-.*\b(assert|expect|should|must)\b' "$filtered"; then
     cheats+=("removed_assertion")
   fi
-  if grep -qE '^\+.*(#\[ignore\]|@pytest\.mark\.skip|\.skip\(|it\.skip|xtest|xit)' "$filtered"; then
+  if grep -qE '^\+.*(#\[ignore\]|@pytest\.mark\.(skip|skipif)|\.skip\(|it\.skip|xtest|xit|pending\(|\.pending\()' "$filtered"; then
     cheats+=("added_skip_marker")
   fi
   if grep -qE '^[-+]{3} [ab]/plans/verify\.sh' "$filtered"; then
@@ -1625,7 +1875,7 @@ detect_cheating() {
   if grep -qE '^[-+]{3} [ab]/\.github/workflows/|^[-+]{3} [ab]/\.gitlab-ci\.yml' "$filtered"; then
     cheats+=("modified_ci")
   fi
-  if grep -qE '^\+.*(# noqa|// @ts-ignore|#!\[allow|eslint-disable|rubocop:disable)' "$filtered"; then
+  if grep -qE '^\+.*(# noqa|// @ts-(ignore|expect-error)|#!\[allow|eslint-disable|rubocop:disable|# type: ignore)' "$filtered"; then
     cheats+=("added_suppression")
   fi
 
@@ -1650,6 +1900,49 @@ state_merge() {
   local tmp
   tmp="$(mktemp)"
   jq "$@" "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+}
+
+update_iteration_metrics() {
+  local outcome="$1"  # pass|fail|verify_pre_fail|verify_post_fail
+  local failure_mode="${2:-}"
+  local tmp
+  tmp="$(mktemp)"
+
+  # Update counters based on outcome
+  case "$outcome" in
+    pass)
+      jq '.metrics.total_iterations += 1 | .metrics.pass_count += 1' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+      ;;
+    fail)
+      jq --arg mode "$failure_mode" '
+        .metrics.total_iterations += 1 |
+        .metrics.fail_count += 1 |
+        if $mode != "" then
+          .metrics.failure_modes = ((.metrics.failure_modes // []) + [$mode] | unique)
+        else . end
+      ' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+      ;;
+    verify_pre_fail)
+      jq --arg mode "$failure_mode" '
+        .metrics.total_iterations += 1 |
+        .metrics.fail_count += 1 |
+        .metrics.verify_pre_fail_count += 1 |
+        if $mode != "" then
+          .metrics.failure_modes = ((.metrics.failure_modes // []) + [$mode] | unique)
+        else . end
+      ' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+      ;;
+    verify_post_fail)
+      jq --arg mode "$failure_mode" '
+        .metrics.total_iterations += 1 |
+        .metrics.fail_count += 1 |
+        .metrics.verify_post_fail_count += 1 |
+        if $mode != "" then
+          .metrics.failure_modes = ((.metrics.failure_modes // []) + [$mode] | unique)
+        else . end
+      ' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+      ;;
+  esac
 }
 
 write_blocked_with_state() {
@@ -1774,6 +2067,10 @@ rate_limit_restart_if_slept() {
 for ((i=1; i<=MAX_ITERS; i++)); do
   rotate_progress
 
+  # Fix 8: Prune old iterations to prevent disk exhaustion
+  prune_old_iterations ".ralph" "$RPH_MAX_ITER_DIRS"
+
+  ITER_START_TS="$(date +%s)"
   ITER_DIR=".ralph/iter_${i}_$(date +%Y%m%d-%H%M%S)"
   echo "" | tee -a "$LOG_FILE"
   echo "=== Iteration $i/$MAX_ITERS ===" | tee -a "$LOG_FILE"
@@ -2081,6 +2378,7 @@ PROMPT
         add_skipped_check "story_verify" "verify_pre_failed"
         add_skipped_check "final_verify" "verify_pre_failed"
         write_artifact_manifest "$ITER_DIR" "" "BLOCKED" "$BLOCK_DIR" "verify_pre_failed" "verify_pre failed after self-heal"
+        update_iteration_metrics "verify_pre_fail" "verify_pre_failed_after_self_heal"
         echo "Blocked: verify_pre failed after self-heal in $BLOCK_DIR" | tee -a "$LOG_FILE"
         exit 1
       fi
@@ -2091,6 +2389,7 @@ PROMPT
       add_skipped_check "story_verify" "verify_pre_failed"
       add_skipped_check "final_verify" "verify_pre_failed"
       write_artifact_manifest "$ITER_DIR" "" "BLOCKED" "$BLOCK_DIR" "verify_pre_failed" "verify_pre failed"
+      update_iteration_metrics "verify_pre_fail" "verify_pre_failed"
       echo "Blocked: verify_pre failed in $BLOCK_DIR" | tee -a "$LOG_FILE"
       exit 1
     fi
@@ -2162,9 +2461,16 @@ PROMPT
 
   set +e
   ensure_agent_args_array
+
+  # Fix 6: Lock state files before agent runs
+  lock_state_files
+  # Ensure we unlock even on unexpected exit
+  trap 'unlock_state_files' EXIT
+
   if [[ -n "$RPH_PROMPT_FLAG" ]]; then
     rate_limit_before_call
     if rate_limit_restart_if_slept; then
+      unlock_state_files
       set -e
       i=$((i-1))
       continue
@@ -2178,6 +2484,7 @@ PROMPT
   else
     rate_limit_before_call
     if rate_limit_restart_if_slept; then
+      unlock_state_files
       set -e
       i=$((i-1))
       continue
@@ -2190,6 +2497,11 @@ PROMPT
     fi
   fi
   AGENT_RC=${PIPESTATUS[0]}
+
+  # Fix 6: Unlock state files after agent exits
+  unlock_state_files
+  trap - EXIT
+
   set -e
   echo "Agent exit code: $AGENT_RC" | tee -a "$LOG_FILE"
   if [[ "$RPH_ALLOW_HARNESS_EDIT" != "1" ]]; then
@@ -2198,6 +2510,14 @@ PROMPT
       BLOCK_DIR="$(write_blocked_with_state "harness_sha_mismatch" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
       echo "Blocked: plans/ralph.sh changed during agent run in $BLOCK_DIR" | tee -a "$LOG_FILE"
       printf 'before=%s\nafter=%s\n' "$HARNESS_SHA_BEFORE" "$HARNESS_SHA_AFTER" > "$BLOCK_DIR/harness_sha_mismatch.txt" || true
+      exit 1
+    fi
+    # Fix 4: Check all workflow scripts for transitive tampering
+    WORKFLOW_SCRIPTS_SHA_AFTER="$(hash_workflow_scripts)"
+    if [[ -n "${WORKFLOW_SCRIPTS_SHA_BEFORE:-}" && "$WORKFLOW_SCRIPTS_SHA_AFTER" != "$WORKFLOW_SCRIPTS_SHA_BEFORE" ]]; then
+      BLOCK_DIR="$(write_blocked_with_state "workflow_scripts_modified" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
+      echo "Blocked: workflow scripts changed during agent run in $BLOCK_DIR" | tee -a "$LOG_FILE"
+      printf 'before=%s\nafter=%s\n' "$WORKFLOW_SCRIPTS_SHA_BEFORE" "$WORKFLOW_SCRIPTS_SHA_AFTER" > "$BLOCK_DIR/workflow_scripts_modified.txt" || true
       exit 1
     fi
   fi
@@ -2219,6 +2539,18 @@ PROMPT
   HEAD_AFTER="$(git rev-parse HEAD)"
   PRD_HASH_AFTER="$(sha256_file "$PRD_FILE")"
   PRD_PASSES_AFTER="$(jq -c '.items | map({id, passes})' "$PRD_FILE")"
+
+  # Fix 7: Check diff size - block massive changes
+  DIFF_LINES="$(check_diff_size "$HEAD_BEFORE" "$HEAD_AFTER" "$ITER_DIR")"
+  if ! [[ "$DIFF_LINES" =~ ^[0-9]+$ ]]; then DIFF_LINES=0; fi
+  if (( DIFF_LINES > RPH_MAX_DIFF_LINES )); then
+    save_iter_after "$ITER_DIR" "$HEAD_BEFORE" "$HEAD_AFTER"
+    BLOCK_DIR="$(write_blocked_with_state "diff_too_large" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
+    echo "<promise>BLOCKED_DIFF_TOO_LARGE</promise>" | tee -a "$LOG_FILE"
+    echo "ERROR: Diff too large (${DIFF_LINES} lines > ${RPH_MAX_DIFF_LINES} max)" | tee -a "$LOG_FILE"
+    echo "Blocked: diff too large in $BLOCK_DIR" | tee -a "$LOG_FILE"
+    exit 1
+  fi
   MARK_PASS_ID=""
   if [[ -f "${ITER_DIR}/agent.out" ]]; then
     MARK_PASS_ID="$(extract_mark_pass_id "${ITER_DIR}/agent.out" || true)"
@@ -2317,6 +2649,20 @@ PROMPT
         fi
         exit 9
       fi
+    fi
+  fi
+
+  # Fix 10: Test co-change gate - require test changes with source changes
+  TEST_COCHANGE_RESULT=""
+  if ! TEST_COCHANGE_RESULT="$(check_test_cochange "$HEAD_BEFORE" "$HEAD_AFTER")"; then
+    echo "WARNING: Source files changed without corresponding test changes" | tee -a "$LOG_FILE"
+    echo "$TEST_COCHANGE_RESULT" | tee -a "$LOG_FILE"
+    if [[ "$RPH_TEST_COCHANGE_ENABLED" == "1" && "$RPH_TEST_COCHANGE_STRICT" == "1" ]]; then
+      save_iter_after "$ITER_DIR" "$HEAD_BEFORE" "$HEAD_AFTER"
+      BLOCK_DIR="$(write_blocked_with_state "no_test_changes" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
+      echo "<promise>BLOCKED_NO_TEST_CHANGES</promise>" | tee -a "$LOG_FILE"
+      echo "Blocked: source changed without tests in $BLOCK_DIR" | tee -a "$LOG_FILE"
+      exit 1
     fi
   fi
 
@@ -2437,6 +2783,7 @@ PROMPT
         BLOCK_DIR="$(write_blocked_with_state "circuit_breaker" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
         echo "<promise>BLOCKED_CIRCUIT_BREAKER</promise>" | tee -a "$LOG_FILE"
         echo "Blocked: circuit breaker in $BLOCK_DIR" | tee -a "$LOG_FILE"
+        update_iteration_metrics "verify_post_fail" "circuit_breaker"
         exit 1
       fi
     fi
@@ -2446,6 +2793,7 @@ PROMPT
       if ! revert_to_last_good; then
         BLOCK_DIR="$(write_blocked_with_state "self_heal_failed" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
         echo "Blocked: self-heal failed in $BLOCK_DIR" | tee -a "$LOG_FILE"
+        update_iteration_metrics "verify_post_fail" "self_heal_failed"
         exit 1
       fi
       echo "Rolled back to last good; continuing." | tee -a "$LOG_FILE"
@@ -2454,6 +2802,7 @@ PROMPT
       echo "Fail-closed: stop. Fix the failure then rerun." | tee -a "$LOG_FILE"
       BLOCK_DIR="$(write_blocked_with_state "verify_post_failed" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
       echo "Blocked: verify_post failed in $BLOCK_DIR" | tee -a "$LOG_FILE"
+      update_iteration_metrics "verify_post_fail" "verify_post_failed"
       POST_VERIFY_EXIT=1
     fi
   else
@@ -2600,6 +2949,14 @@ PROMPT
   state_merge \
     --arg last_good_ref "$HEAD_AFTER" \
     '.last_good_ref=$last_good_ref'
+
+  # Track successful iteration
+  update_iteration_metrics "pass"
+
+  # Fix 9: Record structured metrics for monitoring
+  ITER_END_TS="$(date +%s)"
+  ITER_DURATION=$((ITER_END_TS - ITER_START_TS))
+  append_metrics "$i" "$NEXT_ID" "pass" "$verify_post_rc" "$ITER_DURATION" "$DIFF_LINES" "${CHEAT_RESULT:-}" ""
 
   save_iter_after "$ITER_DIR" "$HEAD_BEFORE" "$HEAD_AFTER"
 

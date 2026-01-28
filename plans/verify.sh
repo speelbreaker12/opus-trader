@@ -65,6 +65,12 @@ WORKFLOW_ACCEPTANCE_POLICY="${WORKFLOW_ACCEPTANCE_POLICY:-auto}"
 BASE_REF="${BASE_REF:-origin/main}"
 export BASE_REF
 
+# Contract/spec paths (align with ralph.sh)
+CONTRACT_FILE="${CONTRACT_FILE:-specs/CONTRACT.md}"
+IMPL_PLAN_FILE="${IMPL_PLAN_FILE:-specs/IMPLEMENTATION_PLAN.md}"
+ARCH_FLOWS_FILE="${ARCH_FLOWS_FILE:-specs/flows/ARCH_FLOWS.yaml}"
+GLOBAL_INVARIANTS_FILE="${GLOBAL_INVARIANTS_FILE:-specs/invariants/GLOBAL_INVARIANTS.md}"
+
 mkdir -p "$VERIFY_ARTIFACTS_DIR"
 if [[ "$CI_GATES_SOURCE" == "auto" ]]; then
   if [[ -d "$ROOT/.github/workflows" ]]; then
@@ -253,7 +259,7 @@ run_logged() {
 
 is_workflow_file() {
   case "$1" in
-    AGENTS.md|specs/WORKFLOW_CONTRACT.md|specs/CONTRACT.md|specs/IMPLEMENTATION_PLAN.md|specs/POLICY.md|specs/SOURCE_OF_TRUTH.md|CONTRACT.md|IMPLEMENTATION_PLAN.md|POLICY.md) return 0 ;;
+    AGENTS.md|specs/WORKFLOW_CONTRACT.md|specs/CONTRACT.md|specs/IMPLEMENTATION_PLAN.md|specs/POLICY.md|specs/SOURCE_OF_TRUTH.md|IMPLEMENTATION_PLAN.md|POLICY.md) return 0 ;;
     verify.sh) return 0 ;;
     plans/verify.sh|plans/workflow_acceptance.sh|plans/workflow_contract_gate.sh|plans/workflow_contract_map.json|plans/ssot_lint.sh|plans/prd_gate.sh|plans/prd_audit_check.sh|plans/tests/test_workflow_acceptance_fallback.sh) return 0 ;;
     plans/workflow_verify.sh) return 0 ;;
@@ -265,7 +271,8 @@ is_workflow_file() {
     scripts/build_contract_kernel.py|scripts/check_contract_kernel.py|scripts/contract_kernel_lib.py|scripts/test_contract_kernel.py) return 0 ;;
     scripts/check_contract_crossrefs.py|scripts/check_arch_flows.py|scripts/check_state_machines.py|scripts/check_global_invariants.py) return 0 ;;
     scripts/check_time_freshness.py|scripts/check_crash_matrix.py|scripts/check_crash_replay_idempotency.py|scripts/check_reconciliation_matrix.py) return 0 ;;
-    scripts/check_vq_evidence.py|scripts/extract_contract_excerpts.py) return 0 ;;
+    scripts/check_csp_trace.py|scripts/generate_impact_report.py|scripts/check_vq_evidence.py|scripts/extract_contract_excerpts.py) return 0 ;;
+    specs/TRACE.yaml) return 0 ;;
     docs/contract_kernel.json|docs/contract_anchors.md|docs/validation_rules.md) return 0 ;;
     *) return 1 ;;
   esac
@@ -611,41 +618,41 @@ fi
 log "0c) Spec integrity gates"
 ensure_python
 
-[[ -f "specs/CONTRACT.md" ]] || fail "Missing specs/CONTRACT.md"
-[[ -f "specs/flows/ARCH_FLOWS.yaml" ]] || fail "Missing specs/flows/ARCH_FLOWS.yaml"
-[[ -f "specs/invariants/GLOBAL_INVARIANTS.md" ]] || fail "Missing specs/invariants/GLOBAL_INVARIANTS.md"
+[[ -f "$CONTRACT_FILE" ]] || fail "Missing $CONTRACT_FILE"
+[[ -f "$ARCH_FLOWS_FILE" ]] || fail "Missing $ARCH_FLOWS_FILE"
+[[ -f "$GLOBAL_INVARIANTS_FILE" ]] || fail "Missing $GLOBAL_INVARIANTS_FILE"
 [[ -d "specs/state_machines" ]] || fail "Missing specs/state_machines"
 
 [[ -f "scripts/check_contract_crossrefs.py" ]] || fail "Missing scripts/check_contract_crossrefs.py"
 run_logged "contract_crossrefs" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_contract_crossrefs.py" \
-  --contract specs/CONTRACT.md \
+  --contract "$CONTRACT_FILE" \
   --strict \
   --check-at \
   --include-bare-section-refs
 
 [[ -f "scripts/check_arch_flows.py" ]] || fail "Missing scripts/check_arch_flows.py"
 run_logged "arch_flows" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_arch_flows.py" \
-  --contract specs/CONTRACT.md \
-  --flows specs/flows/ARCH_FLOWS.yaml \
+  --contract "$CONTRACT_FILE" \
+  --flows "$ARCH_FLOWS_FILE" \
   --strict
 
 [[ -f "scripts/check_state_machines.py" ]] || fail "Missing scripts/check_state_machines.py"
 run_logged "state_machines" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_state_machines.py" \
   --dir specs/state_machines \
   --strict \
-  --contract specs/CONTRACT.md \
-  --flows specs/flows/ARCH_FLOWS.yaml \
-  --invariants specs/invariants/GLOBAL_INVARIANTS.md
+  --contract "$CONTRACT_FILE" \
+  --flows "$ARCH_FLOWS_FILE" \
+  --invariants "$GLOBAL_INVARIANTS_FILE"
 
 [[ -f "scripts/check_global_invariants.py" ]] || fail "Missing scripts/check_global_invariants.py"
 run_logged "global_invariants" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_global_invariants.py" \
-  --file specs/invariants/GLOBAL_INVARIANTS.md \
-  --contract specs/CONTRACT.md
+  --file "$GLOBAL_INVARIANTS_FILE" \
+  --contract "$CONTRACT_FILE"
 
 if [[ -f "scripts/check_time_freshness.py" ]]; then
   [[ -f "specs/flows/TIME_FRESHNESS.yaml" ]] || fail "Missing specs/flows/TIME_FRESHNESS.yaml"
   run_logged "time_freshness" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_time_freshness.py" \
-    --contract specs/CONTRACT.md \
+    --contract "$CONTRACT_FILE" \
     --spec specs/flows/TIME_FRESHNESS.yaml \
     --strict
 else
@@ -655,7 +662,7 @@ fi
 if [[ -f "scripts/check_crash_matrix.py" ]]; then
   [[ -f "specs/flows/CRASH_MATRIX.md" ]] || fail "Missing specs/flows/CRASH_MATRIX.md"
   run_logged "crash_matrix" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_crash_matrix.py" \
-    --contract specs/CONTRACT.md \
+    --contract "$CONTRACT_FILE" \
     --matrix specs/flows/CRASH_MATRIX.md
 else
   fail "Missing scripts/check_crash_matrix.py"
@@ -664,7 +671,7 @@ fi
 if [[ -f "scripts/check_crash_replay_idempotency.py" ]]; then
   [[ -f "specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml" ]] || fail "Missing specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml"
   run_logged "crash_replay_idempotency" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_crash_replay_idempotency.py" \
-    --contract specs/CONTRACT.md \
+    --contract "$CONTRACT_FILE" \
     --spec specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml \
     --strict
 else
@@ -675,10 +682,64 @@ if [[ -f "scripts/check_reconciliation_matrix.py" ]]; then
   [[ -f "specs/flows/RECONCILIATION_MATRIX.md" ]] || fail "Missing specs/flows/RECONCILIATION_MATRIX.md"
   run_logged "reconciliation_matrix" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_reconciliation_matrix.py" \
     --matrix specs/flows/RECONCILIATION_MATRIX.md \
-    --contract specs/CONTRACT.md \
+    --contract "$CONTRACT_FILE" \
     --strict
 else
   fail "Missing scripts/check_reconciliation_matrix.py"
+fi
+
+if [[ -f "scripts/check_csp_trace.py" ]]; then
+  [[ -f "specs/TRACE.yaml" ]] || fail "Missing specs/TRACE.yaml"
+  run_logged "csp_trace" "$SPEC_LINT_TIMEOUT" "$PYTHON_BIN" "scripts/check_csp_trace.py" \
+    --contract "$CONTRACT_FILE" \
+    --trace specs/TRACE.yaml
+else
+  fail "Missing scripts/check_csp_trace.py"
+fi
+
+# -----------------------------------------------------------------------------
+# 0d) Status contract validation (CSP)
+# -----------------------------------------------------------------------------
+log "0d) Status contract validation (CSP)"
+
+STATUS_SCHEMA="python/schemas/status_csp_min.schema.json"
+STATUS_EXACT_SCHEMA="python/schemas/status_csp_exact.schema.json"
+STATUS_MANIFEST="specs/status/status_reason_registries_manifest.json"
+STATUS_FIXTURES_DIR="tests/fixtures/status"
+STATUS_VALIDATION_TIMEOUT="${STATUS_VALIDATION_TIMEOUT:-2m}"
+
+# Drift guard: ensure canonical files exist
+test -f "tools/validate_status.py" || fail "Missing tools/validate_status.py"
+test -f "$STATUS_SCHEMA" || fail "Missing $STATUS_SCHEMA"
+test -f "$STATUS_EXACT_SCHEMA" || fail "Missing $STATUS_EXACT_SCHEMA"
+test -f "$STATUS_MANIFEST" || fail "Missing $STATUS_MANIFEST"
+
+# Validate fixtures against exact schema (no extra keys allowed)
+if [[ -d "$STATUS_FIXTURES_DIR" ]]; then
+  fixture_count=0
+  for f in "$STATUS_FIXTURES_DIR"/*.json; do
+    [[ -f "$f" ]] || continue
+    fixture_name="$(basename "$f" .json)"
+    VALIDATE_STATUS_ARGS=(
+      --file "$f"
+      --schema "$STATUS_EXACT_SCHEMA"
+      --manifest "$STATUS_MANIFEST"
+      --strict
+    )
+    if [[ "$VERIFY_CONSOLE" == "quiet" ]]; then
+      VALIDATE_STATUS_ARGS+=(--quiet)
+    fi
+    run_logged "status_fixture_${fixture_name}" "$STATUS_VALIDATION_TIMEOUT" \
+      "$PYTHON_BIN" tools/validate_status.py "${VALIDATE_STATUS_ARGS[@]}"
+    fixture_count=$((fixture_count + 1))
+  done
+  if [[ "$fixture_count" -eq 0 ]]; then
+    warn "No status fixtures found in $STATUS_FIXTURES_DIR"
+  else
+    echo "✓ validated $fixture_count status fixture(s)"
+  fi
+else
+  warn "Status fixtures directory not found: $STATUS_FIXTURES_DIR"
 fi
 
 # -----------------------------------------------------------------------------
@@ -894,6 +955,8 @@ if [[ -f "$ROOT/scripts/check_vq_evidence.py" ]]; then
 else
   if [[ "$REQUIRE_VQ_EVIDENCE" == "1" ]]; then
     fail "REQUIRE_VQ_EVIDENCE=1 but scripts/check_vq_evidence.py is missing"
+  else
+    echo "info: venue evidence check skipped (scripts/check_vq_evidence.py not found)"
   fi
 fi
 

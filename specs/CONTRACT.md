@@ -12,10 +12,10 @@ This Patch Summary is non-normative; see §0.0 for normative scope.
 **Applied:** 2026-01-15  
 **Objective:** Eliminate TradingMode split-brain; canonicalize under PolicyGuard ownership.
 
-- **§2.2.3 Canonical Precedence** — Relocated ladder from EvidenceGuard; expanded to 6 KILL + 11 REDUCEONLY triggers including margin, disk, session termination, and open permission latch.
+- **§2.2.3 Axis Resolver v2** — Replaces the legacy ladder with a 3-axis resolver; deterministic TradingMode + tier-pure reason codes; Kill semantics are capital-supremacy-safe (containment permitted while exposed).
 - **§2.2.3 ModeReasonCode Registry** — Added authoritative reason codes exposed via `/api/v1/status` (prevents "operator lies").
 - **§2.2.4 Open Permission Latch (CP-001)** — Blocks opens after restart/WS gaps/session kill until reconciliation clears (5 reconcile-class codes).
-- **§2.2 PolicyGuard Inputs** — Extended input list to explicitly include all fields referenced by the precedence ladder (see §2.2).
+- **§2.2 PolicyGuard Inputs** — Extended input list to explicitly include all fields referenced by the axis resolver (see §2.2).
 - **§2.2.2 EvidenceGuard Queue Depth Gate** — Added `parquet_queue_depth_pct <= 0.90` fail-closed gate with hysteresis.
 - **§7.0 /status Observability** — Added 4 required fields: `mode_reasons`, `open_permission_blocked_latch`, `open_permission_reason_codes`, `open_permission_requires_reconcile`.
 - **§7.2 Decision Snapshot Retention** — Explicit defaults (30d, ≥2d bound) aligned with Replay Gatekeeper 48h window.
@@ -30,7 +30,29 @@ This Patch Summary is non-normative; see §0.0 for normative scope.
 > [!WARNING]
 > **v5.2 F1_CERT Binding Requirement:** This version introduces F1_CERT binding validation (§2.2.1). ALL components that produce or consume `contract_version` MUST be updated to `5.2` in lockstep (F1 cert generator, runtime binary, PolicyGuard). Mismatched versions will force `TradingMode::ReduceOnly` until aligned.
 
+---
+
+## Patch Summary (P1 — Two-Layer Profile Isolation + CSP Kernel)
+
+This Patch Summary is non-normative; see §0.0 for normative scope.
+
+**Applied:** 2026-01-25  
+**Objective:** Make CSP isolation mechanically enforceable and reduce the spec → code gap.
+
+- **§0.Z.2.5 CSP Minimal Implementation Checklist** — Defines the smallest contract surface required to claim CSP.
+- **§0.Z.7 Profile Isolation** — Defines `supported_profiles`/`enforced_profile`, mandates runtime + compile-time separation (CSP_ONLY build), and prohibits GOP inputs from affecting CSP safety decisions.
+- **§0.Z.9 CSP-Only CI Gate** — Requires CI to prove CSP isolation via CSP_ONLY build/test gates.
+- **§2.2.1.1 Critical Input Freshness** — Clarifies “critical inputs” are profile-scoped (GOP-only inputs are not critical in CSP).
+- **§2.2.3 Axis Resolver** — Gates EvidenceChainState predicates on `enforced_profile != CSP`.
+- **§7.0 /status Observability** — Adds required fields `supported_profiles` and `enforced_profile`; clarifies GOP extension key behavior under CSP.
+
+**Acceptance Test References (informational):**
+- CSP_ONLY build isolation: AT-990
+- CSP runtime isolation: AT-991
+- GOP enforcement check: AT-992
+
 ## Definitions
+Profile: CSP
 
 ### Acceptance Test Isolation Requirements (Normative)
 
@@ -67,6 +89,10 @@ For any **new guard** (a rule, latch, monitor, or gate) that can block an OPEN, 
 - **TradingMode** (enforcement layer): `Active | ReduceOnly | Kill`  
   Resolved by PolicyGuard each tick from RiskState, policy staleness, watchdog, exchange health, fee cache staleness, and Cortex overrides.
   **Runtime F1 Gate in PolicyGuard (HARD, runtime enforcement):** See §2.2.1 for canonical specification. Summary: F1_CERT missing/stale/invalid → ReduceOnly (blocks opens; allows closes/hedges/cancels).
+- **TradingMode (term usage):** The term `TradingMode` refers exclusively to the PolicyGuard enum `Active | ReduceOnly | Kill`.
+- **ExecutionStyle** (execution tactics layer): `Sniper` (IOC limit-only execution policy).
+  - ExecutionStyle governs order construction and execution tactics only.
+  - ExecutionStyle MUST NOT affect TradingMode computation or dispatch authorization.
 - **reduce_only** (venue order flag): boolean on outbound order placement requests.
   - `reduce_only == true` -> classified as CLOSE/HEDGE (risk-reducing) for all "OPEN vs CLOSE/HEDGE/CANCEL" gates in this contract.
   - `reduce_only != true` (false or missing) -> classified as OPEN.
@@ -76,15 +102,24 @@ For any **new guard** (a rule, latch, monitor, or gate) that can block an OPEN, 
 AT-201
 - Given: an OrderIntent with an unknown `action` value (not Place/Cancel/Close/Hedge) OR missing required classification fields.
 - When: intent classification is computed.
-- Then: classification MUST be OPEN, and OPEN gates (PolicyGuard mode + CP-001 latch + EvidenceGuard) MUST apply.
+- Then: classification MUST be OPEN, and OPEN gates (PolicyGuard mode + CP-001 latch (+ EvidenceGuard when `enforced_profile != CSP`)) MUST apply.
 - Pass criteria: intent is treated as OPEN and blocked when any OPEN gate blocks.
 - Fail criteria: intent is treated as CLOSE/HEDGE/CANCEL or bypasses OPEN gates.
 
-## **0.0 Normative Scope (Non-Negotiable)**
+AT-1055
+- Given: `ExecutionStyle == Sniper`, and all PolicyGuard inputs and CSP gates are forced pass such that TradingMode would be Active.
+- When: TradingMode is computed and an OPEN intent is evaluated for dispatch.
+- Then: TradingMode remains Active and the OPEN is permitted; ExecutionStyle does not change TradingMode or dispatch authorization.
+- Pass criteria: TradingMode Active and OPEN proceeds when CSP gates pass.
+- Fail criteria: TradingMode ReduceOnly/Kill or OPEN blocked due solely to ExecutionStyle.
 
-The numbered sections, Definitions, and Appendix A are normative. Non-numbered narrative elsewhere is informative and non-binding unless explicitly marked as an acceptance test.
+## **0.0 Normative Scope (Non-Negotiable)**
+Profile: CSP
+
+The numbered sections, Definitions, Appendix A, and Appendix CSP are normative. Non-numbered narrative elsewhere is informative and non-binding unless explicitly marked as an acceptance test.
 
 ## **0.X Repository Layout & Canonical Module Mapping (Non-Negotiable)**
+Profile: CSP
 
 This repo is a Rust workspace with two required crates:
 
@@ -111,6 +146,7 @@ AT-905
 - Fail criteria: missing crate path or missing workspace member entry.
 
 ## **0.Y Verification Harness (Non-Negotiable)**
+Profile: CSP
 
 `plans/verify.sh` is the canonical verification entrypoint for this repo.
 It MUST be runnable from repo root and MUST invoke `cargo test --workspace`
@@ -129,6 +165,375 @@ AT-901
 - Fail criteria: exits `0` when tests fail OR does not run workspace tests.
 
 
+
+## **0.Z Compliance Profiles (Normative)**
+
+### **0.Z.0 Purpose and Scope**
+
+This section defines Compliance Profiles for this contract.
+
+Compliance Profiles exist to:
+- Prevent divergence between specification and implementability.
+- Provide a deterministic definition of “safe to trade.”
+- Separate capital-safety correctness from governance, analytics, and optimization concerns.
+- Allow partial implementations that remain capital-safe by construction.
+
+Compliance Profiles are normative.
+Any implementation claiming compliance with this contract MUST declare:
+- the highest profile it satisfies (“supported”), and
+- the highest profile it enforces at runtime (“enforced”).
+
+### **0.Z.1 Compliance Profile Definitions**
+
+The contract defines the following profiles:
+
+- **CSP — Core Safety Profile**
+- **GOP — Governance & Optimization Profile**
+- **FULL — Full Contract Profile (CSP + GOP)**
+
+GOP extends CSP.
+FULL compliance is satisfied iff both CSP and GOP are satisfied.
+
+### **0.Z.2 Core Safety Profile (CSP) — Minimum Safe to Trade**
+
+#### **0.Z.2.1 Definition** <!-- CSP-001 -->
+<!-- Anchors: csp, safety, profile, minimal -->
+
+The Core Safety Profile (CSP) defines the minimum set of guarantees required for live trading such that:
+- Exposure cannot increase without an explicit OPEN permission.
+- Duplicate or unintended orders cannot be emitted across restarts or retries.
+- Safety-critical state transitions are panic-free and idempotent.
+- If exposure exists, the system always has a deterministic, legal, risk-reducing action path.
+
+An implementation that satisfies CSP is considered safe to trade even if governance, replay, optimization, or analytics features are absent or degraded.
+
+#### **0.Z.2.2 CSP Mandatory Invariants (Non-Negotiable)**
+
+An implementation claiming CSP compliance MUST enforce all of the following invariants:
+
+**A) Idempotency & Deduplication** <!-- CSP-002 -->
+<!-- Anchors: idempotency, dedup, label, hash -->
+- Every outbound intent that may result in dispatch MUST be uniquely identifiable and deduplicable across:
+  - retries
+  - reconnects
+  - process restarts
+- Idempotency keys MUST be derived solely from deterministic intent identity fields (e.g., `group_id`, `leg_idx`, `intent_hash`, strategy/policy identifiers where applicable).
+- Idempotency keys MUST NOT depend on wall-clock time, RNG, or process-local counters.
+
+**B) RecordedBeforeDispatch for Risk-Increasing Actions** <!-- CSP-003 -->
+<!-- Anchors: wal, recorded, dispatch, intent -->
+- Every OPEN intent MUST satisfy RecordedBeforeDispatch before any network dispatch attempt.
+- Failure to satisfy RecordedBeforeDispatch MUST fail-closed (OPEN blocked).
+- “RecordedBeforeDispatch” MUST use the contract’s WAL semantics (Append-only, crash-safe intent log), as defined elsewhere in this contract.
+
+**C) Restart & Reconciliation Correctness** <!-- CSP-004 -->
+<!-- Anchors: restart, reconcile, latch, recovery -->
+- On restart, the system MUST reconcile:
+  - ledger intents
+  - exchange open orders
+  - exchange trades
+  - exchange positions
+- No intent MAY be re-sent unless reconciliation proves it unsent or safe to re-issue by idempotency identity.
+
+**D) TradingMode Correctness** <!-- CSP-005 -->
+<!-- Anchors: tradingmode, policyguard, mode, active -->
+- The system MUST compute and enforce TradingMode:
+  - Active
+  - ReduceOnly
+  - Kill
+- OPEN intents MUST NOT dispatch unless TradingMode is Active.
+
+**E) Open Permission Latch Semantics** <!-- CSP-006 -->
+<!-- Anchors: latch, open_permission, CP-001, blocked -->
+- After restart, WS gap, or session termination:
+  - OPEN intents MUST be blocked
+  - CLOSE / HEDGE / CANCEL intents MUST remain permitted (subject to Kill semantics)
+- The latch MUST clear only after reconciliation succeeds.
+
+**F) Capital Supremacy Invariant** <!-- CSP-007 -->
+<!-- Anchors: capital, supremacy, containment, kill -->
+- If exchange-reported exposure is non-zero (or exposure is unknown), the system MUST have at least one legal, deterministic risk-reducing action path.
+- No system state MAY exist where:
+  - exposure is non-zero/unknown, and
+  - all CLOSE / HEDGE / CANCEL / emergency flatten actions are forbidden.
+- If any subsystem would otherwise forbid all containment actions while exposure is non-zero/unknown, that subsystem MUST degrade in a way that preserves a risk-reducing action path.
+
+**G) Deterministic Emergency Containment** <!-- CSP-008 -->
+<!-- Anchors: emergency, close, flatten, bounded -->
+- A bounded, deterministic emergency containment mechanism MUST exist.
+- Emergency containment MUST be callable in:
+  - ReduceOnly
+  - Kill
+  - degraded infrastructure states
+- Emergency containment MUST be monotonic with respect to exposure (never increases risk).
+
+**H) Timebase Authority (Safety-Critical)** <!-- CSP-009 -->
+<!-- Anchors: monotonic, time, epoch, milliseconds -->
+- All interval-based freshness / staleness checks that affect TradingMode MUST use a monotonic timebase for interval measurement.
+- Wall-clock time MAY be recorded for observability, but MUST NOT be used as the authoritative basis for interval comparisons that trigger Kill.
+- Clock uncertainty MAY force ReduceOnly, but MUST NOT force Kill.
+
+#### **0.Z.2.3 CSP Explicit Non-Requirements**
+
+The following are NOT REQUIRED for CSP compliance:
+- TruthCapsule persistence
+- Decision Snapshot persistence
+- Replay simulation
+- Canary rollout logic
+- Optimization loops
+- Attribution completeness beyond correctness needs
+
+Failure or absence of the above MUST NOT, by itself, violate CSP invariants.
+If any such subsystem is implemented, it MUST NOT be used to negate CSP guarantees (e.g., MUST NOT strand exposure or remove containment legality).
+
+#### **0.Z.2.4 CSP Acceptance Tests**
+
+All acceptance tests tagged:
+`Profile: CSP`
+are mandatory for any implementation that trades live.
+
+Failure of any CSP-tagged test MUST block deployment.
+
+#### **0.Z.2.5 CSP Minimal Implementation Checklist (Normative)**
+
+To claim CSP compliance, an implementation MUST implement the following contract surfaces:
+
+- §1.1 — Identity / Label Schema / Intent Hash stability
+- §2.4 — WAL / intent ledger (RecordedBeforeDispatch)
+- §2.2.1 — Runtime F1 Certification Gate (binding enforcement of build_id, runtime_config_hash, and contract_version; fail-closed to ReduceOnly)
+- §2.2.3 — TradingMode computation + enforcement
+- §2.2.4 — OpenPermissionLatch semantics (CP-001)
+- §3.4 — Continuous 3-way reconciliation (restart + WS gap + session termination recovery)
+- §3.1 — Deterministic Emergency Close / containment (bounded + deterministic)
+- §7.0 — `/api/v1/status` minimum safety fields (including `supported_profiles` and `enforced_profile`)
+
+All other sections are OPTIONAL for CSP.
+If implemented, they MUST NOT negate CSP guarantees.
+
+### **0.Z.3 Governance & Optimization Profile (GOP)**
+
+#### **0.Z.3.1 Definition**
+
+The Governance & Optimization Profile (GOP) defines requirements for:
+- explainability
+- analytics completeness
+- replay-based validation
+- automated policy rollout
+- self-improvement loops
+
+GOP extends CSP.
+No implementation may claim GOP compliance unless it fully satisfies CSP.
+
+#### **0.Z.3.2 GOP Mandatory Capabilities**
+
+An implementation claiming GOP compliance MUST additionally provide:
+
+**A) Truth Capsule & Decision Snapshot**
+- Decision-time market context MUST be recorded for dispatched OPEN intents.
+- TruthCapsule records MUST be joinable to executions and attribution.
+
+**B) Evidence Chain Integrity**
+- Attribution, snapshots, and truth records MUST be internally consistent.
+- EvidenceChainState MUST be observable and surfaced.
+
+**C) Replay Gatekeeper**
+- Policy changes MUST be validated via replay over a bounded historical window.
+- Replay failure MUST prevent unsafe policy rollout.
+
+**D) Canary Rollout Governance**
+- Policy changes MUST pass staged rollout with abort conditions.
+- Abort logic MUST be deterministic and auditable.
+
+**E) Optimization Loop**
+- The system MAY auto-tune parameters subject to replay + canary approval.
+- Unsafe or aggressive changes MUST require explicit approval.
+
+#### **0.Z.3.3 GOP Failure Semantics**
+
+GOP failures MUST NOT invalidate CSP guarantees.
+
+GOP degradation MAY:
+- freeze optimization
+- force shadow-only operation
+- prevent policy rollout
+
+GOP degradation MUST NOT:
+- strand exposure
+- block emergency containment
+- violate CSP invariants
+
+#### **0.Z.3.4 GOP Acceptance Tests**
+
+All acceptance tests tagged:
+`Profile: GOP`
+are REQUIRED to enable GOP features.
+
+Failure of GOP-tagged tests MUST NOT block CSP-compliant trading, but MUST disable GOP features.
+
+### **0.Z.4 Full Compliance Profile (FULL)**
+
+An implementation is FULL-compliant iff:
+- all CSP requirements are satisfied, and
+- all GOP requirements are satisfied.
+
+FULL compliance is REQUIRED for:
+- unattended optimization
+- automated policy promotion
+- certification at the highest trust tier
+
+### **0.Z.5 Acceptance Test Profile Tagging (Normative)**
+
+Every acceptance test defined by this contract MUST be assigned to exactly one profile:
+- `Profile: CSP` or
+- `Profile: GOP`
+
+ATs inherit the most recent `Profile:` tag above them.
+Each AT definition MUST resolve to exactly one profile.
+
+Assignment MUST be unambiguous and MAY be established by either:
+- an explicit `Profile:` line on the acceptance test, OR
+- profile inheritance from the nearest enclosing numbered section header that declares a profile.
+
+If both exist, the explicit `Profile:` line wins.
+
+CI systems MUST enforce profile-specific behavior:
+- CSP test failure → deployment blocked
+- GOP test failure → governance features disabled (trading may continue under CSP)
+
+### **0.Z.6 Declaration of Compliance**
+
+Any deployment MUST declare:
+- its supported Compliance Profile(s), and
+- the highest profile enforced at runtime.
+
+Claiming a profile without enforcing all of its invariants is a contract violation.
+
+### **0.Z.7 Profile Isolation (Normative)**
+Profile: CSP
+
+#### **0.Z.7.1 Definitions**
+
+- `supported_profiles`: the set of profiles this build can enforce at runtime.
+- `enforced_profile`: the profile currently enforced by this running deployment.
+
+A deployment MUST expose both fields via `/api/v1/status` (see §7.0).
+
+#### **0.Z.7.2 Runtime Isolation Rule (Hard)**
+
+When `enforced_profile == CSP`, the system MUST treat all GOP-only subsystems as **nonexistent inputs**.
+
+In particular, the following MUST NOT influence any CSP safety-critical decision:
+- EvidenceChainState / EvidenceGuard
+- TruthCapsule and Decision Snapshot writers (presence, health, lag, queue depth)
+- Replay Gatekeeper results
+- Canary rollout governor state
+- Optimization loop state
+
+A GOP subsystem failure under `enforced_profile == CSP`:
+- MAY be logged / surfaced,
+- MAY disable GOP features,
+- but MUST NOT change:
+  - `TradingMode`,
+  - `OpenPermissionLatch`,
+  - order legality of risk-reducing actions,
+  - idempotency or reconciliation behavior.
+
+#### **0.Z.7.3 Compile-Time Isolation Requirement (Hard)**
+
+The codebase MUST support a build configuration in which GOP-only code is physically absent.
+
+This configuration is called:
+
+`CSP_ONLY build`
+
+In a CSP_ONLY build:
+- GOP-only modules MUST NOT be linked.
+- GOP-only dependencies MUST be optional / feature-gated.
+- The resulting binary MUST be capable of live trading under CSP.
+
+#### **0.Z.7.4 Observability Requirement**
+
+When `enforced_profile == CSP`, `/api/v1/status` MUST NOT claim GOP enforcement.
+Any GOP-related health fields, if reported, MUST be clearly labeled as:
+- `NOT_ENFORCED`, or
+- omitted entirely.
+
+#### **0.Z.7.5 Acceptance Tests (New)**
+
+Profile: CSP
+AT-990  
+- Given: the repo is built in CSP_ONLY build mode (GOP feature set disabled).  
+- When: the binary is started with a CSP config.  
+- Then: it MUST start, and `/status.enforced_profile == CSP` and GOP subsystems are `NOT_ENFORCED` or absent.  
+- Pass criteria: binary runs; CSP safety loop functions; no GOP dependency required.  
+- Fail criteria: build fails, runtime requires GOP modules, or `/status` misreports enforcement.
+
+Profile: CSP
+AT-991  
+- Given: `enforced_profile == CSP` and GOP subsystems are present but unhealthy (e.g., EvidenceChainState != GREEN, snapshot writer down).  
+- When: a CSP-permitted OPEN decision is made (all CSP gates pass).  
+- Then: the OPEN decision MUST NOT be blocked solely by GOP health.  
+- Pass criteria: OPEN is permitted (or denied only by CSP gates).  
+- Fail criteria: OPEN blocked by GOP health while `enforced_profile == CSP`.
+
+Profile: GOP
+AT-992  
+- Given: `enforced_profile != CSP` and EvidenceChainState != GREEN.  
+- When: a new OPEN intent is evaluated.  
+- Then: the OPEN MUST be blocked and the system enters the contract-defined degraded mode.  
+- Pass criteria: OPEN blocked exactly as specified.  
+- Fail criteria: OPEN allowed despite EvidenceChain not GREEN.
+
+### **0.Z.9 CSP-Only CI Gate (Normative)**
+Profile: CSP
+
+CI MUST provide a `CSP_ONLY` pipeline that proves CSP isolation mechanically.
+
+Minimum required CI jobs:
+
+1) `build:csp_only`
+- Build the Rust workspace in CSP_ONLY mode (no GOP feature set).
+- MUST succeed.
+
+2) `test:csp_only`
+- Run all `Profile: CSP` acceptance tests in CSP_ONLY mode.
+- MUST pass. Failure MUST block deployment.
+
+3) `test:gop`
+- Run all `Profile: GOP` acceptance tests with GOP features enabled.
+- Failure MUST disable GOP features, but MUST NOT block CSP deployments.
+
+Recommended (non-normative) Rust commands:
+
+- CSP_ONLY build:
+  `cargo build --no-default-features --features csp_only`
+
+- CSP_ONLY tests:
+  `cargo test --no-default-features --features csp_only --test acceptance`
+
+- GOP tests:
+  `cargo test --features gop --test acceptance`
+
+
+
+
+#### **0.Z.9.1 Meta-Acceptance Tests for CSP_ONLY CI Gate (REQUIRED)**
+
+Profile: CSP
+AT-1056  
+- Given: the repository is at a clean commit.  
+- When: the CI job `build:csp_only` builds the workspace in CSP_ONLY mode (GOP feature set disabled; reference invocation: `cargo build --no-default-features --features csp_only`).  
+- Then: the build MUST succeed.  
+- Pass criteria: job exits 0 and produces a runnable binary artifact.  
+- Fail criteria: build fails or requires GOP-only features to compile.
+
+Profile: CSP
+AT-1057  
+- Given: the workspace is built in CSP_ONLY mode (no GOP feature set).  
+- When: the CI job `test:csp_only` runs the CSP acceptance suite in CSP_ONLY mode (GOP feature set disabled; reference invocation: `cargo test --no-default-features --features csp_only --test acceptance`).  
+- Then: (a) all `Profile: CSP` acceptance tests MUST pass, and (b) no `Profile: GOP` acceptance test may execute in this pipeline.  
+- Pass criteria: all CSP tests pass; runner reports 0 GOP tests executed; job exits 0.  
+- Fail criteria: any CSP test fails, or any GOP test is executed in `test:csp_only`.
 
 ## Deribit Venue Facts Addendum (Artifact-Backed)
 
@@ -159,6 +564,7 @@ Even if **testnet** accepts market orders on options, this bot treats them as **
 This policy is enforced in §1.4 (**No Market Orders**) and §1.4.4 (**Options Order-Type Guard**).
 
 ## **1\. Execution Architecture: The "Atomic Group" (Real-Time Repair)**
+Profile: CSP
 
 **Constraint**: We do not rely on API atomicity. We rely on **Runtime Atomicity**. If Leg A fills and Leg B dies, the system detects the "Mixed State" and neutralizes it immediately, without waiting for a restart.
 
@@ -214,7 +620,7 @@ This policy is enforced in §1.4 (**No Market Orders**) and §1.4.4 (**Options O
 AT-104
 - Given: `instrument_cache_age_s > instrument_cache_ttl_s` and an OPEN intent is proposed.
 - When: the system evaluates eligibility for dispatch.
-- Then: `RiskState==Degraded`, `TradingMode==ReduceOnly`, and the OPEN is rejected before dispatch; CLOSE/HEDGE/CANCEL remain dispatchable (subject to Kill hard-stop rules).
+- Then: `RiskState==Degraded`, `TradingMode==ReduceOnly`, and the OPEN is rejected before dispatch; CLOSE/HEDGE/CANCEL remain dispatchable (subject to Kill semantics in §2.2.3).
 - Pass criteria: OPEN dispatch count remains 0; CLOSE/HEDGE/CANCEL are not blocked solely by stale metadata.
 - Fail criteria: any OPEN is dispatched while metadata is stale.
 
@@ -239,7 +645,7 @@ the rest of the portfolio from a single instrument disappearing.
 **Delist buffer rule (fail-closed for opens):**
 - If `expiration_timestamp_ms` is present and `now_ms >= expiration_timestamp_ms - (expiry_delist_buffer_s * 1000)`:
   - NEW OPEN intents for that instrument MUST be rejected before dispatch with `Rejected(InstrumentExpiredOrDelisted)`.
-  - CLOSE/HEDGE/CANCEL intents remain allowed (subject to Kill hard-stop and other gates).
+  - CLOSE/HEDGE/CANCEL intents remain allowed (subject to TradingMode semantics in §2.2.3 and other gates).
 
 **Terminal error classification (panic-free):**
 - Any venue response that semantically maps to {`invalid_instrument`, `not_found`, `orderbook_closed`, `instrument_not_open`}
@@ -1258,6 +1664,7 @@ AT-229
 
 
 ## **2\. State Management: The Panic-Free Soldier**
+Profile: CSP
 
 ### **2.1 Trade Lifecycle State Machine (TLSM)**
 
@@ -1287,31 +1694,72 @@ AT-230
 **Where:** `soldier/core/policy/guard.rs`
 
 **Inputs:**
-- **Timebase convention:** all `*_ts_ms` values are epoch milliseconds; `now_ms` is current epoch milliseconds (and `now` refers to `now_ms` in this contract); seconds are derived as `(now_ms - *_ts_ms)/1000`.
+- **Timebase convention:** all `*_ts_ms` values used for staleness/freshness are **monotonic‑epoch milliseconds** (epoch‑aligned, monotonic); `now_ms` is current monotonic‑epoch milliseconds (and `now` refers to `now_ms` in this contract); seconds are derived as `(now_ms - *_ts_ms)/1000`.
 - `python_policy` (latest policy payload)
-- `python_policy_generated_ts_ms` (timestamp from Commander when policy was computed)
-- `watchdog_last_heartbeat_ts_ms`
-- `now_ms` (local epoch milliseconds used for staleness calculations)
+- `python_policy_generated_ts_ms` (monotonic‑epoch ms; timestamp from Commander when policy was computed)
+- `watchdog_last_heartbeat_ts_ms` (monotonic‑epoch ms)
+- `loop_tick_last_ts_ms` (monotonic‑epoch ms; last completed hot‑loop tick)
+- `now_ms` (local monotonic‑epoch milliseconds used for staleness calculations)
 - `cortex_override` (effective max-severity across §2.3 producers; see §2.3)
 
 - `f1_cert` (from `artifacts/F1_CERT.json`: `{status, generated_ts_ms, build_id, runtime_config_hash, contract_version}`)
 - `fee_model_cache_age_s` (from §4.2)
 - `risk_state` (Healthy | Degraded | Maintenance | Kill)
+- `enforced_profile` (enum: CSP | GOP | FULL; from runtime config; GOP-only gates apply when `enforced_profile != CSP`)
 - `bunker_mode_active` (bool; from §2.3.2 Network Jitter Monitor)
-- `evidence_chain_state` (EvidenceChainState; from §2.2.2 EvidenceGuard)
+- `evidence_chain_state` (EvidenceChainState; from §2.2.2 EvidenceGuard; required only when `enforced_profile != CSP`)
 - `policy_age_sec` (derived: `(now_ms - python_policy_generated_ts_ms) / 1000`)
 - `mm_util` (float; maintenance margin utilization; from §1.4.3 Margin Headroom Gate)
-- `mm_util_last_update_ts_ms` (epoch ms; freshness timestamp for `mm_util`; see §2.2.1.1 and §7.0)
+- `mm_util_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `mm_util`; see §2.2.1.1 and §7.0)
 - `disk_used_pct` (float; ratio in [0,1], where 0.80 means 80% used; from §7.2 Disk Watermarks)
-- `disk_used_last_update_ts_ms` (epoch ms; freshness timestamp for `disk_used_pct`; see §2.2.1.1 and §7.0)
+- `disk_used_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `disk_used_pct`; see §2.2.1.1 and §7.0)
+- `disk_used_pct_secondary` (float; independent source for corroboration; see §2.2.3.1.2)
+- `disk_used_secondary_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `disk_used_pct_secondary`)
 - `emergency_reduceonly_active` (bool; true if `POST /api/v1/emergency/reduce_only` is latched/cooldown active)
   - Cooldown semantics: Once set to true via endpoint call, remains true for `emergency_reduceonly_cooldown_s` (default: 300s; see Appendix A) after the endpoint call timestamp.
   - State transition: automatically clears to false after cooldown duration expires AND reconciliation confirms exposure is safe (if reconciliation is required by trigger source).
-  - Invariant: While true, PolicyGuard MUST compute `TradingMode::ReduceOnly` (see §2.2.3 precedence).
+  - Invariant: While true, PolicyGuard MUST compute `TradingMode::ReduceOnly` (see §2.2.3 Axis Resolver).
 - `open_permission_blocked_latch` (bool; from §2.2.4 CP-001)
 - `open_permission_reason_codes` (OpenPermissionReasonCode[]; from §2.2.4 CP-001)
 - `rate_limit_session_kill_active` (bool; true if 10028/session termination occurred and reconciliation has not cleared)
+- `10028_count_5m` (int; rolling 5m count used for session termination corroboration; see §7.0)
 
+#### **2.2.0 PolicyGuard Input Snapshot Coherency (Atomic Snapshot + Memory Order)**
+Profile: CSP
+
+**Why this exists (safety-critical):** PolicyGuard consumes inputs produced by multiple concurrent components. A “torn” read (e.g., a fresh timestamp paired with a stale value) can incorrectly compute `TradingMode::Active` and allow an OPEN that should have been blocked.
+
+**Rules (Non-Negotiable):**
+1) **Single-snapshot rule:** Each call to `PolicyGuard.get_effective_mode()` MUST acquire exactly one immutable *input snapshot* and MUST compute:
+   - axes (§2.2.3.2),
+   - TradingMode (§2.2.3.3),
+   - `mode_reasons` (§2.2.3.5),
+   using only that snapshot. PolicyGuard MUST NOT read mutable live inputs multiple times within the same call.
+
+2) **Atomicity rule:** The snapshot MUST be coherent. It MUST be impossible for a snapshot to contain a mix of “before” and “after” values from any single producer update.
+   - At minimum, for every paired field `(X, X_last_update_ts_ms)` the snapshot MUST NOT contain `X_last_update_ts_ms` from an update that is newer than the `X` value in that same snapshot.
+
+3) **Memory order rule:** Publication and consumption of any safety-critical input that can influence TradingMode MUST establish a happens-before relationship:
+   - Writers MUST publish with **Release** semantics.
+   - PolicyGuard MUST read with **Acquire** semantics.
+   - Using **Relaxed** loads/stores for safety-critical publication/consumption is non-compliant.
+
+4) **Fail-closed acquisition:** If a coherent snapshot cannot be acquired (contention, corruption, or any other reason), PolicyGuard MUST fail-closed for that tick:
+   - return `TradingMode::ReduceOnly`, and
+   - include `REDUCEONLY_INPUT_MISSING_OR_STALE` in `mode_reasons`.
+
+**Acceptance Test (REQUIRED):**
+AT-1054
+- Given: a loom-style scheduler (or equivalent systematic interleaving harness) that can interleave a producer update and a `get_effective_mode()` read.
+- And: initial state has `mm_util = 0.10` and `mm_util_last_update_ts_ms = now_ms - (mm_util_max_age_ms + 1_000)` (stale).
+- And: a producer publishes an update that sets `mm_util = mm_util_reduceonly + 0.001` AND `mm_util_last_update_ts_ms = now_ms` (fresh).
+- And: all other gates are forced pass such that:
+  - old pair → ReduceOnly via `REDUCEONLY_INPUT_MISSING_OR_STALE`,
+  - new pair → ReduceOnly via `REDUCEONLY_MARGIN_MM_UTIL_HIGH`.
+- When: TradingMode is computed concurrently with the producer update across all interleavings.
+- Then: PolicyGuard MUST NEVER return `TradingMode::Active`.
+- Pass criteria: no interleaving yields Active.
+- Fail criteria: any interleaving yields Active (indicating a torn snapshot and/or missing Acquire/Release ordering).
 
 #### **2.2.1 Runtime F1 Certification Gate (HARD, runtime enforcement)**
 - PolicyGuard MUST read `artifacts/F1_CERT.json`.
@@ -1389,7 +1837,7 @@ AT-113
 PolicyGuard MUST NOT return `TradingMode::Active` if any critical safety input required for Kill/ReduceOnly decisions is missing or stale.
 
 **Critical inputs (minimum):**
-**Critical inputs (definition):** any PolicyGuard input referenced by §2.2.3 precedence predicates. Missing/unparseable inputs MUST be treated as missing/stale and force ReduceOnly with `REDUCEONLY_INPUT_MISSING_OR_STALE`.
+**Critical inputs (definition):** any PolicyGuard input referenced by §2.2.3 axis predicates that is required under the current `enforced_profile`. GOP-only inputs (e.g., `evidence_chain_state`) are critical only when `enforced_profile != CSP`. Missing/unparseable required inputs MUST be treated as missing/stale and force ReduceOnly with `REDUCEONLY_INPUT_MISSING_OR_STALE`.
 - `mm_util` (from account summary) must have `mm_util_last_update_ts_ms`
 - `disk_used_pct` must have `disk_used_last_update_ts_ms`
 - session termination / rate-limit kill flag must be explicit (no "unknown treated as false")
@@ -1418,7 +1866,7 @@ AT-112
 - When: PolicyGuard computes `TradingMode`.
 - Then: `TradingMode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`.
 - Pass criteria: OPEN does not dispatch.
-- Fail criteria: TradingMode Active (or OPEN dispatch) when a precedence input is missing/unparseable.
+- Fail criteria: TradingMode Active (or OPEN dispatch) when an axis-resolver input is missing/unparseable.
 
 AT-348
 - Given: `rate_limit_session_kill_active` is missing or unparseable.
@@ -1451,6 +1899,15 @@ AT-413
 
 
 #### **2.2.2 EvidenceGuard (No Evidence → No Opens) — HARD RUNTIME INVARIANT**
+Profile: GOP
+
+**Profile gating (Normative):**
+- EvidenceGuard is a **HARD RUNTIME INVARIANT** only when `enforced_profile != CSP` (i.e., GOP or FULL is enforced).
+- When `enforced_profile == CSP`, EvidenceGuard MUST be treated as **NOT_ENFORCED** and MUST NOT:
+  - change `TradingMode`,
+  - change `OpenPermissionLatch`,
+  - or block any CSP-permitted dispatch decision.
+
 
 **Purpose (TOC constraint relief):** Close the missing enforcement link: if the evidence chain is not green, the system MUST NOT open new risk. “Nice architecture” is meaningless unless it is unbreakable in production.
 
@@ -1464,9 +1921,9 @@ The following MUST be writable + joinable for every dispatched open-intent:
 
 **Invariant (Non-Negotiable):**
 - If Evidence Chain is not GREEN → **block ALL new OPEN intents**.
-- CLOSE / HEDGE / CANCEL intents are allowed only if the cancel/replace is NOT risk-increasing per §2.2.5, and only when not superseded by §2.2.3 Kill hard-stop semantics.
+- CLOSE / HEDGE / CANCEL intents are allowed only if the cancel/replace is NOT risk-increasing per §2.2.5, and only when not constrained by §2.2.3 Kill semantics (risk-reducing only).
 - Risk-increasing CANCEL/REPLACE MUST be rejected while `EvidenceChainState != GREEN` (see §2.2.5 definition).
-- EvidenceGuard triggers `RiskState::Degraded`; PolicyGuard computes `TradingMode::ReduceOnly` via the canonical precedence ladder while `EvidenceChainState != GREEN`, and until GREEN recovers and remains stable for the cooldown window.
+- When `enforced_profile != CSP`: EvidenceGuard triggers `RiskState::Degraded`; PolicyGuard computes `TradingMode::ReduceOnly` via the canonical axis resolver while `EvidenceChainState != GREEN`, and until GREEN recovers and remains stable for the cooldown window.
 
 **GREEN/RED criteria (minimum):**
 EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidenceguard_window_s = 60` seconds, safety-critical; configurable in Appendix A):
@@ -1487,8 +1944,8 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
 
 **Where enforced (must be explicit):**
-- PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in precedence.
-- Hot-path execution gate MUST check EvidenceChainState before dispatching OPEN orders.
+- When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
+- When `enforced_profile != CSP`, the hot-path execution gate MUST check EvidenceChainState before dispatching OPEN orders.
 
 **Acceptance Tests (REQUIRED):**
 
@@ -1523,14 +1980,14 @@ AT-414
 AT-334
 - Given: `decision_snapshot_write_errors` increments within the `evidenceguard_window_s`.
 - When: EvidenceGuard evaluates EvidenceChainState.
-- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked; CLOSE/HEDGE/CANCEL allowed unless Kill hard-stop applies.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked; CLOSE/HEDGE/CANCEL allowed subject to §2.2.3 TradingMode dispatch authorization.
 - Pass criteria: OPEN does not dispatch while `decision_snapshot_write_errors` increases.
 - Fail criteria: EvidenceChainState remains GREEN or OPEN dispatch occurs while `decision_snapshot_write_errors` increases.
 
 AT-335
 - Given: `parquet_queue_depth` or `parquet_queue_capacity` is missing or unparseable.
 - When: EvidenceGuard evaluates `parquet_queue_depth_pct`.
-- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked; CLOSE/HEDGE/CANCEL allowed unless Kill hard-stop applies.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked; CLOSE/HEDGE/CANCEL allowed subject to §2.2.3 TradingMode dispatch authorization.
 - Pass criteria: OPEN does not dispatch while required parquet queue metrics are missing/unparseable.
 - Fail criteria: EvidenceChainState remains GREEN or OPEN dispatch occurs while required parquet queue metrics are missing/unparseable.
 
@@ -1542,7 +1999,7 @@ AT-422
 - Fail criteria: no trip, no clear, or behavior matches hard-coded defaults instead of config.
 
 AT-404
-- Given: `EvidenceChainState != GREEN`, a cancel/replace that increases exposure, and no Kill hard-stop is active.
+- Given: `EvidenceChainState != GREEN`, a cancel/replace that increases exposure, and no Kill-tier triggers are active.
 - When: EvidenceGuard evaluates permissions.
 - Then: the cancel/replace is rejected; non-risk-increasing cancels may proceed; OPEN remains blocked.
 - Pass criteria: risk-increasing cancel/replace rejected while EvidenceChainState is not GREEN.
@@ -1577,226 +2034,473 @@ AT-923
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while counters are stale.
 
 
-**Canonical TradingMode computation (precedence + staleness + watchdog semantics + reason codes) is defined in §2.2.3 (PolicyGuard-owned).**
+**Canonical TradingMode computation (axis resolver + staleness + watchdog semantics + reason codes) is defined in §2.2.3 (PolicyGuard-owned).**
 
-#### **2.2.3 TradingMode Computation (Canonical Precedence + Reason Codes)**
+#### **2.2.3 TradingMode Computation (Axis Resolver v2 + Reason Codes)**
+Profile: CSP
 
-**Hard Rule:** The Soldier never "stores" TradingMode as authoritative state. It recomputes it every loop tick via `PolicyGuard.get_effective_mode()`.
+**Hard Rule:** The Soldier never "stores" TradingMode as authoritative state. It recomputes it every loop tick via `PolicyGuard.get_effective_mode()` (the **Axis Resolver**) immediately before any dispatch (§2.2.3.4).
 
+---
 
-**Config defaults (fail-closed):**
-- `watchdog_kill_s = 10` (seconds; see Appendix A for default)
-- `max_policy_age_sec = 300` (5min default; aligned with ops alert threshold §7.1)
-**Precedence (Highest → Lowest):**
-1. `TradingMode::Kill` if any:
-   - watchdog heartbeat stale (`now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000`)
-   - `risk_state == Kill`
-   - `mm_util` >= `mm_util_kill` (Margin Headroom Gate; see §1.4.3; default `mm_util_kill` in Appendix A)
-   - `rate_limit_session_kill_active == true` (session termination / `too_many_requests` code 10028; see §3.3)
-   - `disk_used_pct` >= `disk_kill_pct` (Kill switch; see §7.2; default `disk_kill_pct` in Appendix A)
-   - `cortex_override == ForceKill` (see §2.3)
+##### **2.2.3.0 Axis Model (Normative)**
 
-2. `TradingMode::ReduceOnly` if any:
-   - `risk_state == Maintenance` (maintenance window)
-   - `emergency_reduceonly_active == true` (`POST /api/v1/emergency/reduce_only` active)
-   - `open_permission_blocked_latch == true` (block OPEN; allow CLOSE/HEDGE/CANCEL; see §2.2.4)
-   - `bunker_mode_active == true` (Network Jitter Monitor; see §2.3.2)
-   - `F1_CERT` missing OR stale OR FAIL (runtime gate; see §2.2.1)
-   - `evidence_chain_state != GREEN` (EvidenceGuard; see §2.2.2)
-   - `cortex_override == ForceReduceOnly`
-   - fee model stale beyond hard limit (`fee_model_cache_age_s > fee_cache_hard_s`; see §4.2)
-   - `risk_state == Degraded` (mandatory ReduceOnly)
-   - `policy_age_sec > max_policy_age_sec` (Policy staleness rule)
-   - `mm_util` >= `mm_util_reduceonly` (Margin Headroom Gate; see §1.4.3; default `mm_util_reduceonly` in Appendix A)
+PolicyGuard SHALL compute TradingMode from three independent health axes:
 
-3. `TradingMode::Active` only if:
-   - `risk_state == Healthy`, and
-   - policy staleness is within limits, and
-   - `evidence_chain_state == GREEN`, and
-   - `open_permission_blocked_latch == false`, and
-   - no override is active.
+- `CapitalRiskAxis     ∈ { SAFE, WARNING, CRITICAL }`
+- `MarketIntegrityAxis ∈ { STABLE, STRESSED, BROKEN }`
+- `SystemIntegrityAxis ∈ { HEALTHY, DEGRADED, FAILING }`
 
-**Dispatch Authorization (Hot-Path Chokepoint):**
-- Every network dispatch attempt MUST consult `PolicyGuard.get_effective_mode()` immediately before dispatch.
-- If `TradingMode != Active`, OPEN intents MUST NOT dispatch.
-- If `TradingMode == ReduceOnly`, CLOSE/HEDGE/CANCEL MAY dispatch only as permitted by §2.2.5 and subject to Kill hard-stop rules in §2.2.3.
-- If `TradingMode == Kill`, dispatch is forbidden except containment micro-loop actions when eligibility predicates are satisfied per §2.2.3.
+**Axis Computation Rules (Non-Negotiable):**
+- **Independence rule:** Each axis MUST depend only on signals assigned to that axis. Axis computation MUST NOT depend on TradingMode, other axes, or derived outcomes.
+- **Primary assignment rule:** Every PolicyGuard input signal MUST have exactly one primary axis.
+- **Dual-impact rule:** A signal MAY influence a secondary axis only if listed in §2.2.3.1.
+- **Authoritative attribution rule:** The axis input lists in §2.2.3.2 are authoritative. A signal MUST NOT influence an axis unless it appears in that axis’s input list, except for secondary-axis influence explicitly allowlisted in §2.2.3.1.
 
-**Policy Staleness Rule (Anti "late update" bug):**
-- Compute staleness using Commander time, not local receive time:
-  - `policy_age_sec = (now_ms - python_policy_generated_ts_ms) / 1000`
-- If `policy_age_sec > max_policy_age_sec` → force ReduceOnly (even if an old update arrives late).
+##### **2.2.3.1 Dual-Impact Allowlist (Explicit)**
 
-**Acceptance Tests (REQUIRED):**
+| Signal | Primary Axis | Secondary Axis | Justification |
+|---|---|---|---|
+| WAL write failure | SystemIntegrityAxis | CapitalRiskAxis | Restart/idempotency correctness compromised |
+| Ledger corruption | SystemIntegrityAxis | CapitalRiskAxis | Reconciliation correctness compromised |
+| Exchange session termination (`rate_limit_session_kill_active`) | SystemIntegrityAxis | CapitalRiskAxis | Containment reliability uncertain |
+
+---
+
+##### **2.2.3.1.2 Kill Trigger Corroboration (Non‑Capital)**
+
+To reduce single‑signal corruption risk, the following **non‑capital** Kill triggers require corroboration.  
+If the primary predicate is true but corroboration is missing/false, the trigger MUST NOT contribute to `SystemIntegrityAxis == FAILING`; instead PolicyGuard MUST force **ReduceOnly** with the specified reason code(s).
+
+**Confirmed predicates (Normative):**
+- **Watchdog Kill (confirmed):**  
+  `(now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000)` **AND**  
+  `(now_ms - loop_tick_last_ts_ms > watchdog_kill_s * 1000)`
+- **Disk Kill (confirmed):**  
+  `disk_used_pct >= disk_kill_pct` **AND** `disk_used_pct_secondary >= disk_kill_pct`,  
+  with both timestamps fresh per `disk_used_max_age_ms`.
+- **Session Termination Kill (confirmed):**  
+  `rate_limit_session_kill_active == true` **AND** `10028_count_5m >= rate_limit_kill_min_10028`.
+
+**Unconfirmed behavior (Non‑Negotiable):**
+- If the primary predicate is true but confirmation fails, PolicyGuard MUST compute `TradingMode = ReduceOnly`
+  and include the appropriate `REDUCEONLY_*_UNCONFIRMED` reason code.
+
+**Scope guard:** These corroboration rules do **NOT** apply to capital‑critical Kill triggers (`mm_util >= mm_util_kill`, `risk_state == Kill`).
+
+---
+
+##### **2.2.3.2 Axis Computation (Deterministic)**
+
+PolicyGuard MUST compute the axes as follows, using only the coherent input snapshot acquired per §2.2.0.
+
+**CapitalRiskAxis** (capital exposure / margin headroom)
+- Inputs: `mm_util`, `risk_state`, `cortex_override`
+- `CRITICAL` if ANY are true:
+  - `mm_util >= mm_util_kill` (margin headroom exhausted; §1.4.3)
+  - `risk_state == Kill`
+  - `cortex_override == ForceKill`
+- `WARNING` if:
+  - `mm_util >= mm_util_reduceonly` AND `mm_util < mm_util_kill`
+- `SAFE` otherwise.
+
+**MarketIntegrityAxis** (market data integrity / comms reliability)
+- Input: `bunker_mode_active` (from §2.3.2 Network Jitter Monitor)
+- `STRESSED` if `bunker_mode_active == true`
+- `STABLE` otherwise.
+- `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
+
+**SystemIntegrityAxis** (correctness / containment reliability)
+- Inputs: `watchdog_last_heartbeat_ts_ms`, `loop_tick_last_ts_ms`, `disk_used_pct`, `disk_used_pct_secondary`, `rate_limit_session_kill_active`, `10028_count_5m`, plus all reduce-only gates below.
+- `FAILING` if ANY are true:
+  - Watchdog Kill confirmed (per §2.2.3.1.2)
+  - Disk Kill confirmed (per §2.2.3.1.2)
+  - Session Termination Kill confirmed (per §2.2.3.1.2)
+- `DEGRADED` if ANY are true AND `SystemIntegrityAxis != FAILING`:
+  - `risk_state in {Degraded, Maintenance}`
+  - `emergency_reduceonly_active == true`
+  - `open_permission_blocked_latch == true`
+  - `EvidenceChainState != GREEN` (§2.2.2) when `enforced_profile != CSP`
+  - F1_CERT invalid/missing/stale/FAIL (§2.2.1)
+  - `cortex_override == ForceReduceOnly`
+  - `fee_model_cache_age_s > fee_model_hard_stale_s` (§4.2)
+  - `policy_age_sec > max_policy_age_sec` (Appendix A: `max_policy_age_sec`)
+  - Any critical PolicyGuard input missing/unparseable/stale per §2.2.1.1
+  - Watchdog Kill unconfirmed (per §2.2.3.1.2)
+  - Disk Kill unconfirmed (per §2.2.3.1.2)
+  - Session Termination Kill unconfirmed (per §2.2.3.1.2)
+- `HEALTHY` otherwise.
+
+---
+
+##### **2.2.3.3 TradingMode Resolution (Deterministic, Pure Function of Axes)**
+
+TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):
+
+1) If `SystemIntegrityAxis == FAILING` OR `CapitalRiskAxis == CRITICAL` → `TradingMode = Kill`
+2) Else if `SystemIntegrityAxis == DEGRADED` OR `MarketIntegrityAxis != STABLE` OR `CapitalRiskAxis == WARNING` → `TradingMode = ReduceOnly`
+3) Else → `TradingMode = Active`
+
+All 27 axis combinations MUST map deterministically to exactly one TradingMode via these rules.
+
+**Canonical 27-State Mapping Table (Normative):**
+
+This table is the authoritative reference for AT-1048 (enumerability test). Implementations MUST produce identical outputs.
+
+| # | CapitalRiskAxis | MarketIntegrityAxis | SystemIntegrityAxis | TradingMode | Rule |
+|---|-----------------|---------------------|---------------------|-------------|------|
+| 1 | SAFE | STABLE | HEALTHY | Active | R3 |
+| 2 | SAFE | STABLE | DEGRADED | ReduceOnly | R2 |
+| 3 | SAFE | STABLE | FAILING | Kill | R1 |
+| 4 | SAFE | STRESSED | HEALTHY | ReduceOnly | R2 |
+| 5 | SAFE | STRESSED | DEGRADED | ReduceOnly | R2 |
+| 6 | SAFE | STRESSED | FAILING | Kill | R1 |
+| 7 | SAFE | BROKEN | HEALTHY | ReduceOnly | R2 |
+| 8 | SAFE | BROKEN | DEGRADED | ReduceOnly | R2 |
+| 9 | SAFE | BROKEN | FAILING | Kill | R1 |
+| 10 | WARNING | STABLE | HEALTHY | ReduceOnly | R2 |
+| 11 | WARNING | STABLE | DEGRADED | ReduceOnly | R2 |
+| 12 | WARNING | STABLE | FAILING | Kill | R1 |
+| 13 | WARNING | STRESSED | HEALTHY | ReduceOnly | R2 |
+| 14 | WARNING | STRESSED | DEGRADED | ReduceOnly | R2 |
+| 15 | WARNING | STRESSED | FAILING | Kill | R1 |
+| 16 | WARNING | BROKEN | HEALTHY | ReduceOnly | R2 |
+| 17 | WARNING | BROKEN | DEGRADED | ReduceOnly | R2 |
+| 18 | WARNING | BROKEN | FAILING | Kill | R1 |
+| 19 | CRITICAL | STABLE | HEALTHY | Kill | R1 |
+| 20 | CRITICAL | STABLE | DEGRADED | Kill | R1 |
+| 21 | CRITICAL | STABLE | FAILING | Kill | R1 |
+| 22 | CRITICAL | STRESSED | HEALTHY | Kill | R1 |
+| 23 | CRITICAL | STRESSED | DEGRADED | Kill | R1 |
+| 24 | CRITICAL | STRESSED | FAILING | Kill | R1 |
+| 25 | CRITICAL | BROKEN | HEALTHY | Kill | R1 |
+| 26 | CRITICAL | BROKEN | DEGRADED | Kill | R1 |
+| 27 | CRITICAL | BROKEN | FAILING | Kill | R1 |
+
+**State Count Summary:**
+- Active: 1 state (row 1 only)
+- ReduceOnly: 17 states (rows 2, 4-5, 7-8, 10-11, 13-14, 16-17)
+- Kill: 9 states (rows 3, 6, 9, 12, 15, 18-27)
+
+**Implementation Note:** The resolver function MUST be a pure function with no hidden state. Given the same axis triple, it MUST always produce the same TradingMode.
+
+**Monotonicity Rule (CSP):**
+- If any axis worsens between ticks, TradingMode MUST NOT become less restrictive on that tick.
+
+**Recovery Rule (CSP):**
+- Axis recovery MUST be slower than axis degradation. Recovery MUST respect the hysteresis/cooldown rules of each producer:
+  - EvidenceGuard (§2.2.2) windowing + cooldown (only when `enforced_profile != CSP`)
+  - Bunker Mode (§2.3.2) stable-exit window
+  - Emergency ReduceOnly (§2.2 inputs) cooldown + reconcile-clear
+  - Open Permission Latch (§2.2.4) reconcile-clear
+
+---
+
+##### **2.2.3.4 Dispatch Authorization (Non-Negotiable)**
+
+- Every network dispatch attempt MUST consult PolicyGuard immediately before dispatch (hot path check; §2.2.3.4).
+- OPEN intents MUST dispatch only if `TradingMode == Active` AND all other gates allow.
+- If `TradingMode == ReduceOnly`: OPEN intents MUST NOT dispatch; CLOSE/HEDGE/CANCEL intents MAY dispatch only if not risk-increasing per §2.2.5.
+- If `TradingMode == Kill`: OPEN intents MUST NOT dispatch; ONLY risk-reducing intents MAY dispatch per §2.2.3.6.
+
+---
+
+##### **2.2.3.4.1 Non‑Active OPEN Cancellation (CSP, Non‑Negotiable)**
+
+Whenever `TradingMode != Active`, the engine MUST attempt to cancel all outstanding OPEN orders with `reduce_only != true`.
+- This cancel loop MUST be **bounded and non‑blocking** per tick (see `cancel_open_batch_max`, `cancel_open_budget_ms` in Appendix A).
+- If any risk‑increasing OPENs remain, the system MUST retry on subsequent ticks until cleared.
+- CLOSE/HEDGE/CANCEL intents remain permitted subject to §2.2.5.
+
+---
+
+##### **2.2.3.5 ModeReasonCode Registry (`/status.mode_reasons`)**
+
+PolicyGuard MUST expose the reasons that produced the current TradingMode via `/api/v1/status.mode_reasons`.
+
+**Hard rules:**
+- PolicyGuard MUST compute `mode_reasons` every tick.
+- If `TradingMode == Active`: `mode_reasons MUST == []`.
+- If `TradingMode == ReduceOnly`: `mode_reasons` MUST be non-empty and MUST contain only `REDUCEONLY_*` reasons.
+- If `TradingMode == Kill`: `mode_reasons` MUST be non-empty and MUST contain only `KILL_*` reasons.
+- Reasons MUST be deterministically ordered.
+- Reasons MUST be tier-pure: `KILL_*` and `REDUCEONLY_*` MUST NOT mix.
+
+**Allowed values (deterministic order):**
+Kill-tier:
+1. `KILL_WATCHDOG_HEARTBEAT_STALE`
+2. `KILL_RISKSTATE_KILL`
+3. `KILL_MARGIN_MM_UTIL_CRITICAL`
+4. `KILL_RATE_LIMIT_SESSION_TERMINATION`
+5. `KILL_DISK_WATERMARK_KILL`
+6. `KILL_CORTEX_FORCE_KILL`
+
+ReduceOnly-tier:
+1. `REDUCEONLY_RISKSTATE_MAINTENANCE`
+2. `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`
+3. `REDUCEONLY_OPEN_PERMISSION_LATCHED`
+4. `REDUCEONLY_BUNKER_MODE_ACTIVE`
+5. `REDUCEONLY_F1_CERT_INVALID`
+6. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`
+7. `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`
+8. `REDUCEONLY_FEE_MODEL_HARD_STALE`
+9. `REDUCEONLY_RISKSTATE_DEGRADED`
+10. `REDUCEONLY_POLICY_STALE`
+11. `REDUCEONLY_MARGIN_MM_UTIL_HIGH`
+12. `REDUCEONLY_INPUT_MISSING_OR_STALE`
+13. `REDUCEONLY_WATCHDOG_UNCONFIRMED`
+14. `REDUCEONLY_DISK_KILL_UNCONFIRMED`
+15. `REDUCEONLY_SESSION_KILL_UNCONFIRMED`
+
+**Reason Derivation Rules (Non-Negotiable):**
+- PolicyGuard MUST evaluate all relevant predicates every tick.
+- `mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick.
+- Reasons from non-winning tiers MUST NOT be included (tier purity).
+
+---
+
+##### **2.2.3.6 Kill Semantics (Capital Supremacy Safe, CSP)**
+
+**Kill SHALL mean:**
+- No creation of new exposure.
+- Only risk-reducing actions are permitted until exposure is neutral.
+
+**Kill MUST NOT mean:**
+- “No dispatch of any kind” while exposure exists.
+
+**Capital Supremacy Invariant (Non-Negotiable):**
+If net exposure ≠ 0, the system MUST define at least one legal risk-reducing action, regardless of TradingMode.
+No state is permitted where:
+- exposure ≠ 0, AND
+- no CLOSE / HEDGE / emergency flatten action is permitted.
+
+**Kill containment requirement:**
+When `TradingMode == Kill` AND net exposure ≠ 0, the system MUST permit and attempt a bounded, deterministic containment sequence:
+
+1) Cancel any risk-increasing OPEN orders (including any non-reduce-only orders).
+2) Execute §3.1 Deterministic Emergency Close (reduce-only; bounded attempts).
+3) If residual exposure remains above limits after bounded close attempts, place a reduce-only hedge fallback.
+
+Containment actions MUST be:
+- **Bounded** (no infinite retries),
+- **Deterministic** (same inputs → same actions),
+- **Monotonic with respect to exposure** (never increase net exposure; use `reduce_only` / close-only primitives where supported).
+
+Containment MUST be attempted even if:
+- `EvidenceChainState != GREEN`,
+- WAL is degraded,
+- `rate_limit_session_kill_active == true`,
+- `disk_used_pct >= disk_kill_pct`,
+- `bunker_mode_active == true`,
+- or watchdog staleness is the trigger cause.
+
+(If dispatch fails due to transport or venue rejection, that is a runtime outcome; the authorization MUST still allow the attempt.)
+
+**Post-containment hard stop (allowed):**
+If `TradingMode == Kill` AND net exposure == 0, the system MAY cease further dispatch and remain halted until the underlying kill trigger clears (or manual intervention), but it MUST continue to publish `/status`.
+
+---
+
+##### **2.2.3.7 Acceptance Tests (REQUIRED)**
+
+**Policy Staleness Rule**
 AT-336
-- Given: `max_policy_age_sec = 300` and `python_policy_generated_ts_ms = T0`.
-- When: PolicyGuard computes `policy_age_sec` at `now_ms = T0 + 300_000` and again at `now_ms = T0 + 301_000` with no other gates active.
-- Then: at `T0+300_000`, `policy_age_sec == 300` and ReduceOnly does not trigger; at `T0+301_000`, `policy_age_sec == 301` and ReduceOnly triggers.
-- Pass criteria: boundary behavior matches `>` semantics and TradingMode transitions only after threshold is exceeded.
-- Fail criteria: ReduceOnly triggers at `policy_age_sec == 300` or fails to trigger at `policy_age_sec == 301`.
+- Given: `policy_age_sec > max_policy_age_sec`.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_POLICY_STALE`.
+- Pass criteria: mode is ReduceOnly exactly when `policy_age_sec > max_policy_age_sec`.
+- Fail criteria: mode remains Active when policy is stale, or ReduceOnly occurs below threshold.
 
+**Watchdog Kill Rule**
 AT-337
-- Given: `watchdog_kill_s = 10` and `watchdog_last_heartbeat_ts_ms = T0`.
-- When: PolicyGuard computes TradingMode at `now_ms = T0 + 10_000` and again at `now_ms = T0 + 10_001` with no other gates active.
-- Then: at `T0+10_000`, Kill does not trigger; at `T0+10_001`, TradingMode enters Kill.
-- Pass criteria: Kill triggers only when `now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000`.
-- Fail criteria: Kill triggers at the threshold or fails to trigger above the threshold.
+- Given: `now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000` **AND** `now_ms - loop_tick_last_ts_ms > watchdog_kill_s * 1000`.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_WATCHDOG_HEARTBEAT_STALE`.
+- Pass criteria: Kill occurs exactly above the thresholds when both corroboration signals are stale.
+- Fail criteria: Kill fails to trigger when both are stale or triggers with only one stale.
 
+**RiskState Kill Is Authoritative**
 AT-918
-- Given: `risk_state == Kill` and no other Kill reasons are active.
-- When: PolicyGuard computes TradingMode.
-- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_RISKSTATE_KILL`.
-- Pass criteria: Kill entered; reason code present.
-- Fail criteria: non-Kill mode or missing reason code.
+- Given: `risk_state == Kill`.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == Kill`.
+- Pass criteria: Kill is computed regardless of other non-kill gates.
+- Fail criteria: ReduceOnly/Active is computed while `risk_state == Kill`.
 
+**EvidenceGuard Forces ReduceOnly**
 AT-416
-- Given: `evidence_chain_state != GREEN` at `T0` with all other gates allowing `TradingMode::Active`, then `evidence_chain_state == GREEN` at `T0+1` tick.
-- When: PolicyGuard computes TradingMode at `T0` and `T0+1`.
-- Then: `TradingMode==ReduceOnly` at `T0`, then `TradingMode==Active` at `T0+1`.
-- Pass criteria: TradingMode follows current inputs each tick.
-- Fail criteria: TradingMode remains stale after inputs change.
+- Given: `EvidenceChainState != GREEN` for >60s (window + cooldown per §2.2.2), `enforced_profile != CSP`, and no Kill-tier triggers are active.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly`.
+- Pass criteria: ReduceOnly holds while evidence is not GREEN and clears only after EvidenceGuard recovery rules are satisfied.
+- Fail criteria: Active is computed while evidence is not GREEN.
 
+**Mode Reasons Are Tier-Pure and Deterministically Ordered**
 AT-417
-- Given: TradingMode Active at `T0` with no active reasons, then `policy_age_sec > max_policy_age_sec` at `T0+1` with no Kill reasons.
-- When: PolicyGuard computes `mode_reasons` and `/status` is fetched at `T0` and `T0+1`.
-- Then: `mode_reasons==[]` at `T0` and includes `REDUCEONLY_POLICY_STALE` at `T0+1`.
-- Pass criteria: `mode_reasons` update each tick with current inputs.
-- Fail criteria: stale or missing `mode_reasons` after inputs change.
+- Given: a sequence of ticks where multiple Axis Resolver predicates toggle (including both kill-tier and reduceonly-tier predicates).
+- When: `mode_reasons` are emitted on each tick.
+- Then:
+  - `mode_reasons` are tier-pure (no mixing kill + reduceonly),
+  - deterministically ordered,
+  - and update immediately as the computed TradingMode changes.
+- Pass criteria: ordering and tier purity invariants hold across the tick sequence.
+- Fail criteria: mixed tiers, nondeterministic ordering, or stale reasons after mode change.
 
+**Hot Path Must Consult PolicyGuard Immediately Before Dispatch**
 AT-931
-- Given: an OPEN intent is created when PolicyGuard computes `TradingMode::Active` at `T0`.
-- When: immediately before dispatch at `T0+1`, PolicyGuard computes `TradingMode::ReduceOnly`.
-- Then: the OPEN intent is blocked (no dispatch).
-- Pass criteria: OPEN dispatch count remains 0 for that attempt.
-- Fail criteria: any OPEN dispatch occurs despite ReduceOnly at dispatch time.
+- Given: the strategy loop computes an intent while `TradingMode == Active`, but before dispatch the Axis Resolver input flips to ReduceOnly/Kill (e.g., evidence trip).
+- When: the dispatch path runs.
+- Then: the order MUST NOT dispatch if the current TradingMode forbids it.
+- Pass criteria: dispatch count remains 0 and reject reason indicates TradingMode gate.
+- Fail criteria: dispatch occurs based on stale TradingMode.
 
-**Watchdog Semantics (Single Source):**
-- Watchdog triggers reduce-only via `POST /api/v1/emergency/reduce_only`.
-- PolicyGuard enforces that reduce-only persists until cooldown expiry and reconciliation confirms exposure is safe.
+**Non‑Active OPEN Cancellation**
+AT-1065
+- Given: `TradingMode == ReduceOnly` and there exist outstanding OPEN orders with `reduce_only != true`.
+- When: the loop ticks.
+- Then: cancel requests for those OPEN orders are issued within the bounded cancel budget, and OPEN dispatch remains blocked.
+- Pass criteria: cancels are attempted (bounded by `cancel_open_batch_max` / `cancel_open_budget_ms`), outstanding risk‑increasing OPENs trend to zero over subsequent ticks.
+- Fail criteria: no cancel attempts, or risk‑increasing OPENs remain indefinitely while ReduceOnly.
 
+**Emergency ReduceOnly Cooldown Is Enforced**
 AT-132
-- Given: `POST /api/v1/emergency/reduce_only` is called at `T0`, `emergency_reduceonly_cooldown_s=300`, and reconciliation is not required by trigger source OR reconciliation has succeeded.
-- When: PolicyGuard computes TradingMode at `now_ms = T0 + 299_000` and again at `now_ms = T0 + 301_000` with all other gates allowing `TradingMode::Active`.
-- Then: at `T0+299s`, `emergency_reduceonly_active==true` and `TradingMode==ReduceOnly` (OPEN blocked); at `T0+301s`, `emergency_reduceonly_active==false` and `TradingMode` may return to Active if no other ReduceOnly/Kill causes apply.
-- Pass criteria: ReduceOnly persists through the full cooldown window; OPEN does not dispatch while `emergency_reduceonly_active==true`.
-- Fail criteria: ReduceOnly clears before cooldown expiry, or OPEN dispatch occurs while `emergency_reduceonly_active==true`.
+- Given: `emergency_reduceonly_active == true` and the cooldown timer has not expired.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`.
+- Pass criteria: ReduceOnly holds for the full cooldown window and clears only after cooldown expiry AND reconciliation confirms exposure is safe (if required).
+- Fail criteria: Active occurs before cooldown expiry.
 
-##### **ModeReasonCode (Authoritative TradingMode Reasons — MUST be complete)**
+**Axis Resolver Enumerability (27-State Mapping)**
+AT-1048
+- Given: a unit-test harness that can inject axis values into the pure resolver function.
+- When: all 27 combinations of `(CapitalRiskAxis, MarketIntegrityAxis, SystemIntegrityAxis)` are evaluated.
+- Then: every combination maps deterministically to exactly one TradingMode per §2.2.3.3.
+- Pass criteria: no undefined combination; outputs match the resolver rules.
+- Fail criteria: any undefined/fallthrough behavior or mismatched mapping.
 
-PolicyGuard MUST compute `mode_reasons: ModeReasonCode[]` every loop tick and MUST expose it via `/api/v1/status`.
 
-**Rules (non-negotiable):**
-- `mode_reasons` MUST include all active reasons within the winning precedence tier for this tick:
-  - if `trading_mode == Kill`: include all active `KILL_*` reasons (and no `REDUCEONLY_*`)
-  - if `trading_mode == ReduceOnly`: include all active `REDUCEONLY_*` reasons (and no `KILL_*`)
-  - if `trading_mode == Active`: `mode_reasons` MUST be `[]`
-- `mode_reasons` MUST be deterministically ordered: in the same order as the "Allowed values" list below (no per-tick reordering).
+**Axis Resolver Monotonicity (No Less-Restrictive on Worse Axes)**
+AT-1053
+- Given: a pure resolver function `resolve_trading_mode(capital, market, system)` and a restrictiveness ordering `Active < ReduceOnly < Kill`.
+- When: all ordered pairs of axis tuples `(A, B)` are evaluated where:
+  - for each axis, `B` is equal or worse than `A`, and
+  - at least one axis in `B` is strictly worse than `A`.
+- Then: `resolve_trading_mode(B)` MUST NOT be less restrictive than `resolve_trading_mode(A)`.
+- Pass criteria: the monotonicity property holds for all such pairs.
+- Fail criteria: any pair produces a less restrictive TradingMode under worse axes.
 
-**Acceptance Tests (References):**
-- AT-023, AT-024, AT-025, AT-026 in §7.0 validate `/status` exposure of `mode_reasons` and ordering/tier rules.
+**Axis Isolation — MarketIntegrityAxis (Bunker Mode Only)**
+AT-1050
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active`.
+- When: `bunker_mode_active == true` and TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_BUNKER_MODE_ACTIVE]`.
+- Pass criteria: exact reason set and ReduceOnly computed.
+- Fail criteria: any additional reason appears, or mode is Active/Kill.
 
-**Allowed values (minimal complete set):**
+**Axis Isolation — CapitalRiskAxis (Margin Util Only)**
+AT-1051
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `mm_util >= mm_util_reduceonly`.
+- When: `mm_util >= mm_util_reduceonly` AND `mm_util < mm_util_kill` and TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_MARGIN_MM_UTIL_HIGH]`.
+- Pass criteria: exact reason set and ReduceOnly computed.
+- Fail criteria: any additional reason appears, or mode is Active/Kill.
 
-**Kill reasons**
-- `KILL_WATCHDOG_HEARTBEAT_STALE`
-- `KILL_RISKSTATE_KILL`
-- `KILL_MARGIN_MM_UTIL_HIGH`
-- `KILL_RATE_LIMIT_SESSION_TERMINATION`
-- `KILL_DISK_WATERMARK_KILL`
-- `KILL_CORTEX_FORCE_KILL`
+**Axis Isolation — SystemIntegrityAxis (Open Permission Latch Only)**
+AT-1052
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `open_permission_blocked_latch == true`.
+- When: `open_permission_blocked_latch == true` and TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_OPEN_PERMISSION_LATCHED]`.
+- Pass criteria: exact reason set and ReduceOnly computed.
+- Fail criteria: any additional reason appears, or mode is Active/Kill.
 
-**ReduceOnly reasons**
-- `REDUCEONLY_RISKSTATE_MAINTENANCE`
-- `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`  # emergency_reduceonly_active == true (POST /api/v1/emergency/reduce_only is active)
-- `REDUCEONLY_OPEN_PERMISSION_LATCHED`
-- `REDUCEONLY_BUNKER_MODE_ACTIVE`
-- `REDUCEONLY_F1_CERT_INVALID`
-- `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`
-- `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`
-- `REDUCEONLY_FEE_MODEL_HARD_STALE`
-- `REDUCEONLY_RISKSTATE_DEGRADED`
-- `REDUCEONLY_POLICY_STALE`
-- `REDUCEONLY_MARGIN_MM_UTIL_HIGH`
-- `REDUCEONLY_INPUT_MISSING_OR_STALE`  # critical safety input missing or stale (fail-closed)
 
-#### **Kill Mode Semantics (Hard-Stop vs Containment Micro-Loop) — MUST be explicit**
+**No-Deadlock-Under-Exposure (Capital Supremacy)**
+AT-1049
+- Given: `TradingMode in {ReduceOnly, Kill}` and net exposure ≠ 0.
+- When: the system proposes a risk-reducing intent (`CLOSE`, reduce-only hedge, or emergency flatten).
+- Then: at least one such intent is permitted to dispatch (subject to venue reachability), and OPEN remains blocked.
+- Pass criteria: a risk-reducing dispatch attempt is authorized and OPEN dispatch count remains 0.
+- Fail criteria: exposure ≠ 0 but all risk-reducing dispatch is forbidden.
 
-**Definition:**
-- `TradingMode::Kill` stops the strategy/policy loop immediately (no new strategy-generated OrderIntents).
-- A limited **Containment Micro-Loop** MAY run in Kill **only** if it is safe to dispatch risk-reducing orders.
-
-**Containment Micro-Loop (allowed actions in Kill when enabled):**
-- Cancel only `reduce_only == false` orders.
-- Place only risk-reducing orders:
-  - EmergencyClose (bounded IOC close attempts per §3.1)
-  - Reduce-only hedges (bounded) if still exposed per §3.1
-
-**Containment eligibility (fail-closed):**
-Containment is allowed ONLY when ALL are true:
-- `disk_used_pct` < `disk_kill_pct` (not in disk Kill switch condition; default `disk_kill_pct` in Appendix A)
-- `EvidenceChainState == GREEN` AND WAL writes are succeeding (no unlogged actions)
-- Session is healthy (`rate_limit_session_kill_active == false` / no 10028 termination class event)
-- `bunker_mode_active == false` (Network Jitter Monitor not active; see §2.3.2 thresholds)
-
-**Containment optionality clarification:**
-Containment is optional in Kill unless a cause is listed below as "MUST enable containment" (still subject to eligibility predicates).
-
-**Kill causes that MUST enable containment:**
-- `KILL_MARGIN_MM_UTIL_HIGH` (`mm_util >= mm_util_kill`): containment is mandatory ("Kill + emergency flatten").
-Containment is mandatory only when the eligibility predicates above are all true; if any predicate is false, containment is forbidden and the system MUST hard-stop.
-
-**Kill causes that MUST hard-stop (containment forbidden):**
-- `KILL_DISK_WATERMARK_KILL` (`disk_used_pct >= disk_kill_pct`): containment forbidden (integrity-first).
-- `KILL_RATE_LIMIT_SESSION_TERMINATION` (10028 / session termination): containment forbidden (cannot trust connectivity / state).
-- `KILL_WATCHDOG_HEARTBEAT_STALE`: containment forbidden (process health unknown).
-
-**Precedence rule (non-negotiable):**
-When `disk_used_pct >= disk_kill_pct`, containment is forbidden (hard-stop). No dispatch occurs, including CLOSE/HEDGE/CANCEL, regardless of Open Permission Latch state or other permissions.
-
-**Acceptance Tests (REQUIRED):**
+**Kill Containment Is Mandatory When Exposed**
 AT-338
-- Given: `mm_util >= mm_util_kill`, `disk_used_pct < disk_kill_pct`, `EvidenceChainState == GREEN`, WAL writes succeed, `rate_limit_session_kill_active == false`, `bunker_mode_active == false`, and open exposure exists.
-- When: Kill Mode evaluates containment eligibility.
-- Then: containment actions run (cancel non-reduce-only orders, emergency close, and reduce-only hedge fallback if still exposed) and no OPEN intents dispatch.
-- Pass criteria: only containment actions occur; no OPEN dispatch while Kill is active.
-- Fail criteria: OPEN dispatch occurs or containment does not execute while eligible.
+- Given: `TradingMode == Kill` (e.g., `mm_util >= mm_util_kill`) and open exposure exists.
+- When: the execution loop ticks under Kill.
+- Then: containment actions (cancel risk-increasing orders; §3.1 emergency close; hedge fallback) are attempted and no OPENs are dispatched.
+- Pass criteria: at least one risk-reducing dispatch attempt occurs while exposed; OPEN dispatch count remains 0.
+- Fail criteria: no containment dispatch attempt while exposed or any OPEN dispatch.
 
+**Disk Kill Still Permits Containment (No Stranded Exposure)**
 AT-339
-- Given: `disk_used_pct >= disk_kill_pct` with open exposure (other eligibility predicates may be true).
-- When: Kill Mode evaluates containment eligibility.
-- Then: containment is forbidden and **no dispatch occurs**, including CLOSE/HEDGE/CANCEL.
-- Pass criteria: trading loop hard-stops and emits no dispatches.
-- Fail criteria: any cancel/close/hedge or containment dispatch occurs.
+- Given: `disk_used_pct >= disk_kill_pct` **and** `disk_used_pct_secondary >= disk_kill_pct`, and open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: at least one risk-reducing dispatch attempt occurs while exposed; OPEN dispatch count remains 0.
+- Fail criteria: the system “hard-stops” with exposure by forbidding all dispatch.
 
+**Evidence/WAL Degradation Does Not Forbid Containment**
 AT-340
-- Given: `mm_util >= mm_util_kill` but `EvidenceChainState != GREEN` or WAL writes are failing.
-- When: Kill Mode evaluates containment eligibility.
-- Then: containment is forbidden and the system hard-stops (no dispatch).
-- Pass criteria: no containment actions occur while eligibility predicates fail.
-- Fail criteria: any containment dispatch occurs despite failed eligibility.
+- Given: `TradingMode == Kill` due to a kill-tier trigger AND (`EvidenceChainState != GREEN` OR WAL is degraded), with open exposure.
+- When: Kill containment runs.
+- Then: containment actions are still permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is blocked solely due to evidence/WAL degradation.
 
+**Session Termination Does Not Forbid Containment**
 AT-346
-- Given: `TradingMode::Kill` triggered by `rate_limit_session_kill_active == true` (session termination) and `disk_used_pct < disk_kill_pct`.
-- When: Kill Mode evaluates containment eligibility.
-- Then: containment is forbidden and the system hard-stops (no dispatch).
-- Pass criteria: no cancel/close/hedge or containment dispatch occurs.
-- Fail criteria: any dispatch occurs while session termination Kill is active.
+- Given: `rate_limit_session_kill_active == true`, `10028_count_5m >= rate_limit_kill_min_10028`, and open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is forbidden solely due to session termination.
 
+**Watchdog Kill Does Not Forbid Containment**
 AT-347
-- Given: `TradingMode::Kill` triggered by `now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000` and `disk_used_pct < disk_kill_pct`.
-- When: Kill Mode evaluates containment eligibility.
-- Then: containment is forbidden and the system hard-stops (no dispatch).
-- Pass criteria: no cancel/close/hedge or containment dispatch occurs.
-- Fail criteria: any dispatch occurs while watchdog Kill is active.
+- Given: watchdog heartbeat **and** loop tick are stale beyond `watchdog_kill_s` AND open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is forbidden solely due to watchdog kill.
 
+**Bunker Mode Does Not Forbid Containment Under Kill**
 AT-013
-- Given: `TradingMode::Kill` triggered by `mm_util >= mm_util_kill` and `bunker_mode_active == true`.
-- When: Kill Mode evaluates containment eligibility.
-- Then: containment is forbidden and the system hard-stops (no dispatch).
-- Pass criteria: no cancel/close/hedge orders are dispatched while `bunker_mode_active == true`.
-- Fail criteria: any containment dispatch occurs while `bunker_mode_active == true`.
+- Given: `bunker_mode_active == true`, a Kill-tier trigger is active (e.g., `mm_util >= mm_util_kill`), and open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is forbidden solely due to `bunker_mode_active == true`.
+
+**Unconfirmed Kill Signals Force ReduceOnly**
+AT-1066
+- Given: watchdog heartbeat is stale beyond `watchdog_kill_s`, but `loop_tick_last_ts_ms` is fresh.
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_WATCHDOG_UNCONFIRMED`.
+- Pass criteria: ReduceOnly enforced; no Kill.
+- Fail criteria: Kill computed with only one corroboration signal.
+
+AT-1067
+- Given: `disk_used_pct >= disk_kill_pct` but `disk_used_pct_secondary < disk_kill_pct` (or missing/stale).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_DISK_KILL_UNCONFIRMED`.
+- Pass criteria: ReduceOnly enforced; no Kill.
+- Fail criteria: Kill computed without corroboration.
+
+AT-1068
+- Given: `rate_limit_session_kill_active == true` but `10028_count_5m < rate_limit_kill_min_10028` (or missing).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_SESSION_KILL_UNCONFIRMED`.
+- Pass criteria: ReduceOnly enforced; no Kill.
+- Fail criteria: Kill computed without corroboration.
+
+AT-1069
+- Given: confirmed kill predicates per §2.2.3.1.2 (watchdog, disk, or session termination).
+- When: TradingMode is computed.
+- Then: `TradingMode == Kill` with the appropriate `KILL_*` reason codes.
+- Pass criteria: Kill computed only when corroboration holds.
+- Fail criteria: Kill not computed despite confirmed predicates.
 
 #### **2.2.4 Open Permission Latch (Reconcile-Required, Sticky Until Cleared) — CP-001**
+Profile: CSP
 
 **Goal:** Prevent "false-safe opens" after restart, WS gaps, or session termination until reconciliation proves state truth.
 
@@ -1837,7 +2541,7 @@ AT-013
 AT-010
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED`.
 - When: the system evaluates an OPEN intent for dispatch.
-- Then: no OPEN order is dispatched; CLOSE/HEDGE/CANCEL intents remain dispatchable, except risk-increasing cancels/replaces are rejected (per §2.2.5), subject to Kill hard-stop rules in §2.2.3.
+- Then: no OPEN order is dispatched; CLOSE/HEDGE/CANCEL intents remain dispatchable, except risk-increasing cancels/replaces are rejected (per §2.2.5), subject to Kill semantics in §2.2.3 in §2.2.3.
 - Pass criteria: OPEN dispatch count remains 0; CLOSE/HEDGE/CANCEL dispatch is permitted; risk-increasing cancel/replace is rejected.
 - Fail criteria: any OPEN is dispatched while the latch is true.
 
@@ -1870,7 +2574,7 @@ AT-110
 - Fail criteria: any order placement dispatch occurs while `reduce_only` is missing and latch is true.
 
 AT-411
-- Given: F1_CERT is missing/stale/FAIL OR `EvidenceChainState != GREEN`, and no reconcile-class triggers are active.
+- Given: F1_CERT is missing/stale/FAIL OR (`EvidenceChainState != GREEN` and `enforced_profile != CSP`), and no reconcile-class triggers are active.
 - When: `open_permission_reason_codes` are computed.
 - Then: `open_permission_reason_codes` does not include F1_CERT or EvidenceChain failures, and `open_permission_blocked_latch` is unchanged.
 - Pass criteria: no F1/Evidence codes in reason list; latch not set without a reconcile trigger.
@@ -1880,9 +2584,9 @@ AT-411
 #### **2.2.5 Cancel/Replace Permission Rules (Canonical)**
 
 Cancel/Replace intents are allowed only if ALL are true:
-1. Kill hard-stop does not forbid dispatch (§2.2.3).
+1. TradingMode dispatch authorization permits the cancel/replace (§2.2.3); risk-increasing cancel/replace is forbidden when `TradingMode ∈ {ReduceOnly, Kill}`.
 2. NOT risk-increasing while `open_permission_blocked_latch == true` (§2.2.4).
-3. NOT risk-increasing while `EvidenceChainState != GREEN` (§2.2.2).
+3. NOT risk-increasing while `EvidenceChainState != GREEN` when `enforced_profile != CSP` (§2.2.2).
 4. NOT risk-increasing while `RiskState == Degraded` (§3.4).
 5. Does NOT cancel protective reduce-only closing/hedging orders (§3.2).
 
@@ -1892,13 +2596,15 @@ Cancel/Replace intents are allowed only if ALL are true:
 Rejections for risk-increasing cancel/replace MUST use `Rejected(RiskIncreasingCancelReplaceForbidden)`.
 
 **Acceptance Test (REQUIRED):**
+Profile: GOP
 AT-917
-- Given: `EvidenceChainState != GREEN` and a risk-increasing cancel/replace.
+- Given: `EvidenceChainState != GREEN`, `enforced_profile != CSP`, and a risk-increasing cancel/replace.
 - When: cancel/replace permission is evaluated.
 - Then: the request is rejected with `Rejected(RiskIncreasingCancelReplaceForbidden)`.
 - Pass criteria: rejection reason matches; no risk-increasing cancel/replace dispatch occurs.
 - Fail criteria: dispatch occurs or reason missing/mismatched.
 
+Profile: CSP
 
 #### **2.2.6 RejectReasonCode Registry (Intent-Level Rejections)**
 
@@ -1971,8 +2677,8 @@ AT-930
 - ForceKill supersedes ForceReduceOnly if both are triggered in the same tick.
 
 **Behavior when override is active:**
-- If `cortex_override == ForceKill`: PolicyGuard computes `TradingMode = Kill` per §2.2.3 precedence.
-- If `cortex_override == ForceReduceOnly`: PolicyGuard computes `TradingMode = ReduceOnly` per §2.2.3 precedence.
+- If `cortex_override == ForceKill`: PolicyGuard computes `TradingMode = Kill` per §2.2.3 Axis Resolver.
+- If `cortex_override == ForceReduceOnly`: PolicyGuard computes `TradingMode = ReduceOnly` per §2.2.3 Axis Resolver.
 - Cancel **only** non-reduce-only opens; keep closes/hedges alive.
 
 **Definition (Risk-Increasing Cancel/Replace):** see §2.2.5.
@@ -2186,6 +2892,7 @@ AT-963
 
 
 ### **2.4 Durable Intent Ledger (WAL Truth Source)**
+Profile: CSP
 
 **Council Weakness Covered:** TLSM duplication \+ messy middle \+ restart correctness. **Requirement:** Redis is not a source of truth. All intents \+ state transitions must be persisted to a crash-safe local WAL (Sled or SQLite). **Where:** `soldier/infra/store/ledger.rs` **Rules:**
 
@@ -2252,9 +2959,19 @@ AT-940
 AT-906
 - Given: WAL appends use a bounded queue of capacity N, and the WAL writer is stalled so the queue reaches N items.
 - When: an OPEN intent is evaluated and the system attempts RecordedBeforeDispatch enqueue.
-- Then: the OPEN intent is rejected before dispatch, `wal_write_errors` increments, EvidenceChainState is not GREEN, and the hot loop continues ticking.
-- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; EvidenceChainState != GREEN within the EvidenceGuard window; opens remain blocked until enqueue succeeds.
-- Fail criteria: hot loop blocks, an OPEN dispatch occurs without a successful enqueue, EvidenceChainState remains GREEN, or opens remain allowed while enqueue fails.
+- Then: the OPEN intent is rejected before dispatch, `wal_write_errors` increments, and the hot loop continues ticking.
+- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked until enqueue succeeds.
+- Fail criteria: hot loop blocks, an OPEN dispatch occurs without a successful enqueue, `wal_write_errors` does not increment, or opens remain allowed while enqueue fails.
+
+Profile: GOP
+AT-969
+- Given: WAL appends use a bounded queue of capacity N, the WAL writer is stalled so the queue reaches N items, and `enforced_profile != CSP`.
+- When: EvidenceGuard evaluates EvidenceChainState for that tick/window.
+- Then: EvidenceChainState is not GREEN while enqueue fails and OPEN intents remain blocked.
+- Pass criteria: EvidenceChainState != GREEN within the EvidenceGuard window; opens remain blocked until enqueue succeeds.
+- Fail criteria: EvidenceChainState remains GREEN or opens remain allowed while enqueue fails.
+
+Profile: CSP
 
 AT-925
 - Given: a hot-loop output queue (status writer, telemetry, or order events) reaches capacity N.
@@ -2290,6 +3007,7 @@ AT-270
 ---
 
 ## **3\. Safety & Recovery**
+Profile: CSP
 
 ### **3.1 Deterministic Emergency Close**
 
@@ -2320,22 +3038,24 @@ AT-270
 - `hedge_used` (bool)
 - `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
-- `evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`)
+- `evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
 AT-211
 - Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs.
 - When: emergency close completes (including optional hedge fallback).
-- Then: exactly one AtomicNakedEvent is emitted with all schema fields present and `time_to_delta_neutral_ms` computed.
-- Pass criteria: event exists with required fields and is joinable to `group_id`.
+- Then: exactly one AtomicNakedEvent is emitted with required schema fields present and `time_to_delta_neutral_ms` computed.
+- Pass criteria: event exists with required fields, is joinable to `group_id`, and if `enforced_profile != CSP`, `evidence_chain_state_at_event` is present.
 - Fail criteria: missing event or missing required fields.
 
+Profile: GOP
 AT-213
-- Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs.
+- Given: an atomic group enters mixed state (one leg filled, another rejected or none), `enforced_profile != CSP`, and emergency close runs.
 - When: AtomicNakedEvent is recorded.
 - Then: the event includes `strategy_id`, `cause`, `trading_mode_at_event`, and `evidence_chain_state_at_event` with valid values.
 - Pass criteria: each field is present; `cause` is non-empty; `trading_mode_at_event` is one of `Active|ReduceOnly|Kill`; `evidence_chain_state_at_event` matches EvidenceChainState enum values.
 - Fail criteria: any required field missing or invalid.
 
+Profile: CSP
 **Acceptance Tests (REQUIRED):**
 AT-235
 - Given: one leg filled and the book thins.
@@ -2875,7 +3595,7 @@ AT-246
 
 * If `drift_ms` exceeds `time_drift_threshold_ms` (default: **50ms**, configurable), the system MUST set `RiskState::Degraded` and PolicyGuard MUST compute `TradingMode::ReduceOnly` via the canonical `risk_state == Degraded` trigger (see §2.2.3).
 * Require **chrony/NTP** running as an operational prerequisite.
-* Time drift monitoring is a RiskState input; PolicyGuard enforces the mode consequence via its canonical precedence ladder.
+* Time drift monitoring is a RiskState input; PolicyGuard enforces the mode consequence via its canonical axis resolver.
 * **Alignment**: Default aligns with §8.1 Time Drift gate (p99_clock_drift ≤ 50ms).
 
 **Acceptance Test (REQUIRED):**
@@ -2904,6 +3624,7 @@ AT-108
 
 
 ### **4.3.1 PnL Decomposition Fields (Theta/Delta/Vega/Fee Drag)**
+Profile: GOP
 
 **Why this exists:** Execution friction tells you *how* you traded (slippage/fees/time drift). Decomposition tells you *why* you made or lost money (edge vs luck vs costs).
 
@@ -2954,21 +3675,53 @@ AT-248
 
 
 ### **4.3.2 Truth Capsule (Decision Context Logger) — MUST implement**
+Profile: GOP
 
 **Goal:** Make every *realized* outcome explainable by the *inputs + gates + model state* that produced the order.
 Without this, optimization is open-loop and you will “improve” the wrong knobs.
 
 **Write timing (hard rule):**
 - TruthCapsule MUST be recorded **before first dispatch** of any leg in an AtomicGroup (RecordedBeforeDispatch).
-- TruthCapsule durability may be asynchronous by default; require a durability barrier only when explicitly configured.
+- TruthCapsule durability to long-term storage (e.g., Parquet / remote object store) MAY be asynchronous by default.
+- When `enforced_profile != CSP`, the Evidence Commit Barrier below is REQUIRED before any risk-increasing dispatch.
 - If TruthCapsule recording fails → block opens and enter `RiskState::Degraded` (ReduceOnly).
 
+#### Evidence Commit Barrier (Normative)
+
+When `enforced_profile != CSP`, TruthCapsule and Decision Snapshot writes MUST satisfy a commit barrier before any network dispatch occurs.
+
+Definitions:
+- `EvidenceCommitted(truth_capsule_id, decision_snapshot_id)`: Evidence is COMMITTED iff both artifacts are retrievable by ID from the local evidence store immediately after the write returns success.
+- COMMITTED MUST NOT mean: ID allocated; enqueued in an in-memory-only queue; best-effort write scheduled.
+- `EvidenceCommitBarrier`: the dispatch path MUST NOT issue any outbound network request that can create or increase exposure (OPEN / replace-as-open) until `EvidenceCommitted(...) == true`.
+
+Failure semantics:
+- If EvidenceCommitBarrier cannot be satisfied for a decision that would dispatch:
+  - dispatch MUST be blocked (fail-closed).
+  - the system MUST enter `RiskState::Degraded`.
+  - OPEN intents MUST be blocked until EvidenceCommitted can be satisfied.
+  - CLOSE/HEDGE/CANCEL intents remain governed by TradingMode/Kill semantics.
+
 AT-046
-- Given: an AtomicGroup has at least one leg eligible for dispatch, and no TruthCapsule exists for the `(group_id, leg_idx, intent_hash)` about to dispatch.
+- Given: `enforced_profile != CSP`, an AtomicGroup has at least one leg eligible for dispatch, `truth_capsule_id` and `decision_snapshot_id` are allocated, and `EvidenceCommitted(truth_capsule_id, decision_snapshot_id) == false`.
 - When: the system attempts the first dispatch of any leg in that AtomicGroup.
 - Then: dispatch MUST be blocked (no outbound order sent) and the system MUST enter a fail-closed state (`RiskState::Degraded` and `TradingMode::ReduceOnly` via canonical triggers).
-- Pass criteria: no first-dispatch occurs without an existing TruthCapsule; opens remain blocked until logging is healthy.
-- Fail criteria: any order is dispatched before a TruthCapsule exists for that leg/group.
+- Pass criteria: no first-dispatch occurs without EvidenceCommitted; opens remain blocked until logging is healthy.
+- Fail criteria: any order is dispatched before EvidenceCommitted == true.
+
+AT-1046
+- Given: `enforced_profile != CSP`, Evidence writer is healthy, and evidence commit returns success only after a simulated delay `D`.
+- When: the system evaluates an OPEN decision that would dispatch.
+- Then: Evidence commit MUST be invoked first, no outbound dispatch occurs before EvidenceCommitted == true, and exactly one outbound dispatch occurs after EvidenceCommitted == true.
+- Pass criteria: ordering is proven by timestamps or event ordering in the decision log.
+- Fail criteria: dispatch occurs before commit, or commit never happens and dispatch still occurs.
+
+AT-1047
+- Given: `enforced_profile != CSP`, evidence writer fails after ID allocation (commit returns error).
+- When: an OPEN decision would dispatch.
+- Then: dispatch MUST NOT occur, `RiskState::Degraded` MUST be entered, and OPENs MUST remain blocked until evidence commits succeed again.
+- Pass criteria: dispatch_count == 0; Degraded asserted; OPEN blocked.
+- Fail criteria: dispatch occurs or system remains Active for OPENs.
 
 **Parquet Writer Isolation (Hot Loop Protection) + Fail‑Closed on Writer Errors:**
 - Hot loop MUST enqueue TruthCapsule writes to a **bounded queue**; a dedicated writer thread/process drains and batches writes.
@@ -3061,6 +3814,7 @@ AT-044
 - Fail criteria: alias field appears or canonical field missing.
 
 ### **4.4 Fill Simulator (Shadow Mode Book-Walk)**
+Profile: GOP
 
 **Council Weakness Covered:** Constraint relief — execution reality feedback loop. **Where:** `soldier/core/sim/exchange.rs` **Requirement:** Before live fire, run Shadow Mode that simulates fills by walking L2 depth and applying maker/taker fees. **Algorithm:**
 
@@ -3083,6 +3837,7 @@ AT-254
 ---
 
 ### **4.5 Slippage Calibration (Reality Sync)**
+Profile: GOP
 
 **Why this exists:** Replay + Shadow fills are useless if they assume “fantasy liquidity.” We must continuously measure **Sim vs Live** and penalize simulation optimism.
 
@@ -3114,6 +3869,7 @@ AT-255
 - Fail criteria: factor diverges or missing factor does not default.
 
 ## **5\. Self-Improvement: The Closed-Loop Control**
+Profile: GOP
 
 ### **5.1 The Optimization Cycle (Python)**
 
@@ -3122,7 +3878,7 @@ A daily cron job ingests Parquet data to calculate realized friction and generat
 **Closed-Loop Rules (Example):**
 1. If `avg_slippage_bps > target_bps` → increase `min_edge_usd` by 10%.
 2. If `fill_rate < 5%` → decrease `limit_distance_bps` slightly.
-3. If `atomic_naked_events > 0` → tighten max size + force ReduceOnly for cooldown window.
+3. If `atomic_naked_events > 0` → decrease `max_order_usd` + force ReduceOnly for cooldown window.
 
 **Governor (Safety):**
 - Clamp changes within bounds (implementation-defined safe ranges for each parameter).
@@ -3136,14 +3892,30 @@ A daily cron job ingests Parquet data to calculate realized friction and generat
 
 ### **5.2 Replay Gatekeeper (48h Policy Regression Test)**
 
-**Requirement:** No policy patch may be applied unless it passes replay simulation over the last 48h.
+**Requirement:** No policy patch may be applied unless ReplayQuality is GOOD or DEGRADED and the tightening-only rules are satisfied.
+
+**Replay Quality Ladder (Normative):**
+ReplayQuality ∈ { `GOOD`, `DEGRADED`, `BROKEN` }  
+ReplayApplyMode ∈ { `APPLY`, `APPLY_WITH_HAIRCUT`, `SHADOW_ONLY` }
+
+ReplayQuality is derived from snapshot coverage and snapshot readability for the replay window:
+- **GOOD:** `snapshot_coverage_pct >= 95` AND Decision Snapshots are readable for the full window.
+- **DEGRADED:** `80 <= snapshot_coverage_pct < 95` AND Decision Snapshots are readable (writer healthy).
+- **BROKEN:** `snapshot_coverage_pct < 80` OR Decision Snapshots cannot be written/read OR coverage cannot be computed.
+
+ReplayApplyMode mapping:
+- **GOOD → APPLY**
+- **DEGRADED → APPLY_WITH_HAIRCUT** (tightening-only patches only)
+- **BROKEN → SHADOW_ONLY** (no policy apply)
+
+CSP trading is unaffected; this ladder gates GOP policy evolution only.
 
 **Prereq (must implement):**
 - **Decision Snapshots (required):** Every dispatched intent MUST reference a decision-time snapshot via `decision_snapshot_id` (see §4.3.2).
 - Track `snapshot_coverage_pct` over the replay window (48h): `% of dispatched intents with a valid `decision_snapshot_id` AND snapshot payload available`.
 - **Replay Required Inputs (Non-Negotiable):**
   - **Decision Snapshots are REQUIRED** for replay validity (see §4.3.2).
-  - Replay Gatekeeper MUST HARD FAIL if `snapshot_coverage_pct < 95%` (fail-closed; no patch may apply).
+  - ReplayQuality MUST be computed using the ladder above; coverage degradation alone MUST NOT force `RiskState::Degraded`.
 
 **Parameter definition (REQUIRED to make the gate enforceable):**
 - `dd_limit` is the maximum allowable `replay_max_drawdown_usd` for the 48h replay window, in USD.
@@ -3151,7 +3923,8 @@ A daily cron job ingests Parquet data to calculate realized friction and generat
 - **Full tick/L2 archives are OPTIONAL (diagnostics/research), not required for the gate:**
   - If full tick/L2 archives are paused due to disk watermarks (§7.2), Replay Gatekeeper continues using Decision Snapshots.
   - Archive pause MUST NOT, by itself, force `RiskState::Degraded`.
-  - If Decision Snapshots cannot be written/read OR coverage drops below threshold, THEN fail-closed and enter Degraded (ReduceOnly).
+  - If Decision Snapshots cannot be written/read: EvidenceGuard MUST treat EvidenceChainState as not GREEN when `enforced_profile != CSP` (ReduceOnly), and ReplayQuality MUST be BROKEN.
+  - Coverage degradation alone MUST NOT force ReduceOnly; it only affects ReplayQuality and replay apply mode.
 - Maintain `realism_penalty_factor` from §4.5 (fail-safe default if missing).
 
 **Where:** `python/governor/replay_gatekeeper.py`
@@ -3175,7 +3948,32 @@ Replay uses FillSimulator impact costs; **penalize** them using the calibrated f
 
 **Decision:**
 - If **fail** → reject patch, log reason; keep current policy.
-- If **pass** → approve patch for rollout (still subject to canary staging §5.3).
+- If **pass** AND `ReplayQuality == GOOD` → approve patch for rollout (still subject to canary staging §5.3).
+- If **pass** AND `ReplayQuality == DEGRADED` → approve ONLY if tightening-only rules are satisfied; set `ReplayApplyMode = APPLY_WITH_HAIRCUT`.
+- If `ReplayQuality == BROKEN` → `ReplayApplyMode = SHADOW_ONLY` (no patch apply; shadow evaluation allowed).
+
+**Policy Patch Tightening Classifier (Normative):**
+A patch is **tightening-only** iff for every parameter it changes, the delta moves in the parameter’s tightening direction or is unchanged.
+Any parameter not listed in the table below is treated as **LOOSEN**.
+All parameters MUST remain within explicit bounds; missing bounds are a fail-closed error.
+
+**Tightening Table (Authoritative):**
+| Parameter | Tighten direction | Bounds (config keys; MUST be explicit) |
+|---|---|---|
+| `min_edge_usd` | **increase** | `min_edge_usd_min` / `min_edge_usd_max` |
+| `limit_distance_bps` | **decrease** | `limit_distance_bps_min` / `limit_distance_bps_max` |
+| `max_order_usd` | **decrease** | `max_order_usd_min` / `max_order_usd_max` |
+| `inventory_skew_k` | **increase** | `inventory_skew_k_min` / `inventory_skew_k_max` |
+| `inventory_skew_tick_penalty_max` | **increase** | `inventory_skew_tick_penalty_max_min` / `inventory_skew_tick_penalty_max_max` |
+
+**Parameter semantics (binding):**
+- `max_order_usd` is the **per‑OPEN intent** notional cap enforced at the order‑intent chokepoint before quantization.
+
+**Haircut Enforcement (Hard Runtime Gate):**
+When `ReplayApplyMode == APPLY_WITH_HAIRCUT`, the order‑intent chokepoint (`build_order_intent()`) MUST apply `open_haircut_mult` to **all OPEN intents** before quantization.
+- `open_haircut_mult` MUST be in `(0, 1]` and MUST be explicitly configured.
+- Missing/unparseable/out‑of‑range `open_haircut_mult` ⇒ treat as BROKEN and force `ReplayApplyMode = SHADOW_ONLY` (fail‑closed).
+- This is a **hard runtime gate**; logs alone do not satisfy this requirement.
 
 **Acceptance Tests (REQUIRED):**
 AT-256
@@ -3186,18 +3984,47 @@ AT-256
 - Fail criteria: any dispatch without a valid `decision_snapshot_id`.
 
 AT-257
-- Given: `snapshot_coverage_pct < 95%`.
-- When: Replay Gatekeeper runs.
-- Then: it MUST FAIL.
-- Pass criteria: gate fails below 95%.
-- Fail criteria: gate passes below 95%.
+- Given: `snapshot_coverage_pct = 90` (DEGRADED), Decision Snapshots are readable, `open_haircut_mult = 0.50`, and the patch deltas are tightening-only per the table.
+- When: Replay Gatekeeper runs and the patch is applied.
+- Then: `ReplayQuality == DEGRADED`, `ReplayApplyMode == APPLY_WITH_HAIRCUT`, and OPEN dispatch sizes reflect the haircut.
+- Pass criteria: apply mode is `APPLY_WITH_HAIRCUT`; OPEN dispatch size is <= quantized(original * `open_haircut_mult`); CLOSE/HEDGE/CANCEL sizes are unchanged.
+- Fail criteria: apply occurs without haircut, apply mode is incorrect, or loosening deltas are accepted.
 
 AT-002
-- Given: `snapshot_coverage_pct == 95%`.
+- Given: `snapshot_coverage_pct == 95%` and Decision Snapshots are readable.
 - When: Replay Gatekeeper runs.
-- Then: gate MUST PASS.
-- Pass criteria: PASS at exactly 95%.
-- Fail criteria: FAIL at 95% OR PASS when < 95%.
+- Then: `ReplayQuality == GOOD` and `ReplayApplyMode == APPLY`.
+- Pass criteria: apply mode is APPLY at exactly 95%.
+- Fail criteria: any non-APPLY mode at 95% OR APPLY when < 95%.
+
+AT-1062
+- Given: `snapshot_coverage_pct < 80%` OR Decision Snapshots are unreadable/unwritable.
+- When: Replay Gatekeeper runs.
+- Then: `ReplayQuality == BROKEN` and `ReplayApplyMode == SHADOW_ONLY`.
+- Pass criteria: patch is not applied; shadow evaluation only.
+- Fail criteria: any patch apply occurs while BROKEN.
+
+Profile: CSP
+AT-1070 (CSP Isolation from Replay/Snapshot Failures)
+- Given: `enforced_profile == CSP` AND any of the following conditions:
+  - `snapshot_coverage_pct == 0%` (complete coverage loss)
+  - Decision Snapshots are unreadable/unwritable
+  - `ReplayQuality == BROKEN`
+  - Replay Gatekeeper is unavailable or erroring
+- When: the system evaluates TradingMode and OPEN eligibility.
+- Then:
+  - `TradingMode` MUST NOT be forced to ReduceOnly/Kill solely due to replay/snapshot subsystem state.
+  - `RiskState` MUST NOT become Degraded solely due to replay/snapshot subsystem state.
+  - OPEN intents MUST remain eligible (subject to other CSP gates).
+- Pass criteria: OPEN dispatch occurs while replay subsystem is BROKEN; TradingMode remains Active (assuming no other triggers).
+- Fail criteria: OPEN blocked, TradingMode degraded, or RiskState degraded solely due to replay/snapshot failure when `enforced_profile == CSP`.
+
+AT-1064
+- Given: `ReplayQuality == DEGRADED` and a patch includes a loosening delta OR any parameter not in the tightening table.
+- When: Replay Gatekeeper evaluates the patch.
+- Then: the patch MUST NOT be applied (shadow-only or explicit reject).
+- Pass criteria: no apply; current policy remains active.
+- Fail criteria: patch is applied despite loosening/unknown parameters.
 
 AT-258
 - Given: disk watermark pauses full tick/L2 archives.
@@ -3207,11 +4034,11 @@ AT-258
 - Fail criteria: Degraded triggered by archive pause alone.
 
 AT-259
-- Given: a policy passes replay pre-penalty checks.
+- Given: a policy passes replay pre-penalty checks and `ReplayQuality == GOOD`.
 - When: Replay Gatekeeper completes.
 - Then: it approves the patch for rollout (still subject to canary staging §5.3).
-- Pass criteria: PASS leads to approval.
-- Fail criteria: PASS does not approve or FAIL approves.
+- Pass criteria: PASS + GOOD leads to approval.
+- Fail criteria: PASS + GOOD does not approve or FAIL approves.
 
 AT-431
 - Given: `replay_atomic_naked_events > 0`.
@@ -3239,6 +4066,7 @@ AT-034
 **Why this exists:** This closes the TOC constraint of “open-loop” policy pushes and prevents the system from training on fantasy liquidity.
 
 ### **5.3 Policy Canary Rollout (Staged Activation)**
+Profile: GOP
 
 **Requirement:** Any new policy that passes Replay Gatekeeper must roll out in stages.
 
@@ -3252,7 +4080,7 @@ AT-034
 - `p95_slippage_bps > slippage_limit`
 - `fill_rate < fill_rate_floor` AND strategy attempts > canary_min_attempts
 - `net_pnl_usd < pnl_floor`
-- EvidenceChainState != GREEN for > 60s
+- EvidenceChainState != GREEN continuously for at least `canary_evidence_abort_s` seconds
 - Any abort condition triggers immediate rollback to last stable policy + sets ReduceOnly cooldown per §7.1.4.
 
 **Abort threshold parameters (fail-closed):**
@@ -3260,14 +4088,16 @@ AT-034
 - `fill_rate_floor` is a minimum fill-rate threshold in [0,1] for the canary window.
 - `canary_min_attempts` is the minimum number of strategy attempts before the fill-rate abort condition can trigger.
 - `pnl_floor` is a minimum allowable net PnL threshold in USD for the canary window.
-- All four MUST be provided by configuration; if any is missing/unparseable, the rollout MUST abort + rollback (fail-closed).
+- `canary_evidence_abort_s` is the minimum continuous EvidenceChainState != GREEN duration before abort.
+- `canary_evidence_abort_s` MUST be >= (`evidenceguard_window_s` + `evidenceguard_global_cooldown`).
+- All five MUST be provided by configuration; if any is missing/unparseable or violates the constraint above, canary preflight MUST FAIL (fail-closed) and the patch MUST NOT be promoted. The failure MUST be logged with reason code `CanaryEvidenceAbortMisconfigured`.
 
 AT-035
-- Given: canary rollout runs and at least one of `slippage_limit`, `fill_rate_floor`, `canary_min_attempts`, `pnl_floor` is missing/unparseable.
-- When: the abort evaluator runs.
-- Then: immediate rollback occurs and ReduceOnly cooldown is enforced.
-- Pass criteria: rollback + cooldown occur; policy does not progress stages.
-- Fail criteria: rollout proceeds without valid abort thresholds.
+- Given: canary preflight runs and at least one of `slippage_limit`, `fill_rate_floor`, `canary_min_attempts`, `pnl_floor`, `canary_evidence_abort_s` is missing/unparseable.
+- When: the abort parameter set is evaluated.
+- Then: preflight MUST FAIL (fail-closed), the patch MUST NOT start canary, and `CanaryEvidenceAbortMisconfigured` is logged.
+- Pass criteria: preflight fails; canary does not start; reason code logged.
+- Fail criteria: canary starts or preflight passes without valid abort thresholds.
 
 AT-036
 - Given: canary rollout runs with `slippage_limit` configured and observed `p95_slippage_bps > slippage_limit`.
@@ -3291,7 +4121,7 @@ AT-434
 - Fail criteria: policy remains active despite pnl abort condition.
 
 AT-435
-- Given: EvidenceChainState != GREEN for > 60s during canary.
+- Given: canary rollout runs and EvidenceChainState != GREEN continuously for `canary_evidence_abort_s + 1` seconds.
 - When: the abort evaluator runs.
 - Then: immediate rollback occurs and ReduceOnly cooldown is enforced.
 - Pass criteria: policy is rolled back and cooldown prevents opens.
@@ -3304,7 +4134,22 @@ AT-436
 - Pass criteria: policy is rolled back and cooldown prevents opens.
 - Fail criteria: policy remains active despite atomic naked event.
 
+AT-972
+- Given: `canary_evidence_abort_s < (evidenceguard_window_s + evidenceguard_global_cooldown)`.
+- When: canary preflight evaluates the patch for promotion.
+- Then: preflight MUST FAIL (fail-closed) and the patch MUST NOT start canary; log `CanaryEvidenceAbortMisconfigured`.
+- Pass criteria: preflight fails and canary does not start.
+- Fail criteria: canary starts or preflight passes.
+
+AT-973
+- Given: `canary_evidence_abort_s = (evidenceguard_window_s + evidenceguard_global_cooldown) + 30`, and EvidenceChainState becomes != GREEN for exactly (`evidenceguard_window_s + evidenceguard_global_cooldown`) seconds, then returns to GREEN and remains GREEN.
+- When: the abort evaluator runs across the event.
+- Then: canary MUST NOT abort solely due to this transient evidence incident.
+- Pass criteria: canary remains running; no rollback triggered by EvidenceNotGreen.
+- Fail criteria: canary aborts despite the incident staying within the recovery horizon.
+
 ## **6\. Implementation Roadmap v4.0**
+Profile: GOP
 
 ### **Phase 1: The Foundation (Panic-Free)**
 
@@ -3326,7 +4171,8 @@ AT-436
 
 ### **Phase 4: Live Fire**
 
-* Mode: `TradingMode::Sniper` (IOC Limits).  
+* ExecutionStyle: Sniper (IOC limit-only execution policy).  
+* TradingMode remains governed exclusively by PolicyGuard.  
 * Monitoring: Watch `Atomic Naked Events` (Grafana).
 
 ---
@@ -3352,6 +4198,7 @@ AT-436
 
 
 ### **7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)**
+Profile: CSP
 
 **Requirement:** The system MUST provide a read-only status endpoint for human oversight and for external watchdog tooling.
 
@@ -3373,15 +4220,18 @@ AT-022
 - Pass criteria: response matches required keys/values.
 - Fail criteria: non-200 OR missing keys OR `ok != true`.
 
-**/status response MUST include (minimum):**
+**/status response MUST include (CSP minimum):**
 - `status_schema_version` (integer; current version = 1)
-- `trading_mode`, `risk_state`, `evidence_chain_state`, `bunker_mode_active`
+- `supported_profiles` (string[]; set of profiles this build can enforce at runtime; MUST include `CSP`)
+- `enforced_profile` (string enum: `CSP|GOP|FULL`; current runtime enforced profile)
+- `trading_mode`, `risk_state`, `bunker_mode_active`
 - `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, or `SESSION_TERMINATION_RECONCILE_REQUIRED`)
-- `policy_age_sec`, `last_policy_update_ts` (epoch ms; MUST equal `python_policy_generated_ts_ms` from PolicyGuard inputs)
+- `policy_age_sec`, `last_policy_update_ts` (monotonic‑epoch ms; MUST equal `python_policy_generated_ts_ms` from PolicyGuard inputs)
 - `f1_cert_state` + `f1_cert_expires_at`
-- `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (epoch ms; see §2.2.1.1)
-- `mm_util`, `mm_util_last_update_ts_ms` (epoch ms; see §2.2.1.1)
-- `snapshot_coverage_pct` (MUST be computed over `replay_window_hours`; current computed metric / last window)
+- `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.1)
+- `disk_used_pct_secondary`, `disk_used_secondary_last_update_ts_ms` (monotonic‑epoch ms; corroboration source)
+- `mm_util`, `mm_util_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.1)
+- `loop_tick_last_ts_ms` (monotonic‑epoch ms; corroboration source)
 - `atomic_naked_events_24h`, `429_count_5m`, `10028_count_5m`
 - `wal_queue_depth`, `wal_queue_capacity`, `wal_queue_enqueue_failures` (see §2.4.1)
 - `deribit_http_p95_ms`, `ws_event_lag_ms`
@@ -3389,6 +4239,16 @@ AT-022
 - `open_permission_blocked_latch` (bool; true means OPEN blocked; CLOSE/HEDGE/CANCEL allowed only as permitted by §2.2.5)
 - `open_permission_reason_codes` (OpenPermissionReasonCode[]; MUST be [] iff `open_permission_blocked_latch == false`)
 - `open_permission_requires_reconcile` (bool; MUST equal `open_permission_blocked_latch` for v5.1 - all reason codes are reconcile-class)
+
+**/status response MUST include (GOP extension keys; required when GOP/FULL is enforced):**
+- `evidence_chain_state`
+- `snapshot_coverage_pct` (MUST be computed over `replay_window_hours`; current computed metric / last window)
+- `replay_quality` (`GOOD|DEGRADED|BROKEN`)
+- `replay_apply_mode` (`APPLY|APPLY_WITH_HAIRCUT|SHADOW_ONLY`)
+- `open_haircut_mult` (current applied multiplier; `1.0` when no haircut)
+
+**When `enforced_profile == CSP`:**
+- GOP extension keys MUST be omitted OR clearly marked `NOT_ENFORCED`.
 
 **WAL queue invariants:**
 - `wal_queue_depth` MUST be integer >= 0.
@@ -3438,10 +4298,19 @@ Any new endpoint introduced by this contract MUST include at least one endpoint-
 AT-023
 - Given: service is running.
 - When: `GET /api/v1/status`.
-- Then: response MUST include every key listed under "/status response MUST include (minimum)".
+- Then: response MUST include every key listed under "/status response MUST include (CSP minimum)".
 - Pass criteria: all required keys exist.
 - Fail criteria: any required key missing.
 
+Profile: GOP
+AT-967
+- Given: service is running and `enforced_profile` is GOP or FULL.
+- When: `GET /api/v1/status`.
+- Then: response MUST include every key listed under "/status response MUST include (GOP extension keys; required when GOP/FULL is enforced)".
+- Pass criteria: all GOP extension keys exist when GOP/FULL is enforced.
+- Fail criteria: any GOP extension key missing when GOP/FULL is enforced.
+
+Profile: CSP
 AT-407
 - Given: service is running with `TradingMode` and `RiskState` at baseline values.
 - When: a non-GET request (e.g., `POST /api/v1/status`) is attempted.
@@ -3516,17 +4385,27 @@ AT-024
 
 AT-025
 - Given: `/status.mode_reasons` contains ≥1 reason.
-- When: reasons are evaluated against precedence tiers.
+- When: reasons are evaluated against TradingMode tiers.
 - Then: `mode_reasons` MUST be "tier-pure" (all reasons from the highest triggered tier only).
 - Pass criteria: no mixed-tier reasons appear in one response.
 - Fail criteria: any response contains mixed-tier reasons.
 
 AT-351
-- Given: `policy_age_sec > max_policy_age_sec`, `evidence_chain_state != GREEN`, and no Kill reasons are active.
+- Given: `policy_age_sec > max_policy_age_sec`, `evidence_chain_state == GREEN`, and no Kill reasons are active.
 - When: PolicyGuard computes TradingMode and `/status` is fetched.
-- Then: `mode_reasons` includes both `REDUCEONLY_POLICY_STALE` and `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` in the allowed order.
-- Pass criteria: all active ReduceOnly reasons are present and ordered correctly.
-- Fail criteria: any active reason missing, extra reason added, or order incorrect.
+- Then: `mode_reasons` includes `REDUCEONLY_POLICY_STALE` in the allowed order.
+- Pass criteria: `REDUCEONLY_POLICY_STALE` is present and ordered correctly.
+- Fail criteria: `REDUCEONLY_POLICY_STALE` missing, extra reason added, or order incorrect.
+
+Profile: GOP
+AT-968
+- Given: `evidence_chain_state != GREEN`, `policy_age_sec <= max_policy_age_sec`, `enforced_profile != CSP`, and no Kill reasons are active.
+- When: PolicyGuard computes TradingMode and `/status` is fetched.
+- Then: `mode_reasons` includes `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` in the allowed order.
+- Pass criteria: `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` is present and ordered correctly.
+- Fail criteria: `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` missing, extra reason added, or order incorrect.
+
+Profile: CSP
 
 AT-026
 - Given: `/status.mode_reasons` contains reasons.
@@ -3563,6 +4442,7 @@ AT-406
 - Pass criteria: `policy_age_sec` matches the computed value.
 - Fail criteria: missing or mismatch.
 
+Profile: GOP
 AT-029
 - Given: replay window is `replay_window_hours` (default 48h).
 - When: `/status.snapshot_coverage_pct` is computed.
@@ -3571,6 +4451,7 @@ AT-029
 - Fail criteria: snapshot coverage computed over a different window.
 
 ### **7.1 Review Loop (Autopilot Reviewer + Minimal Human Touch)**
+Profile: GOP
 
 **Purpose (TOC constraint relief):** Close the “open-loop” trap by turning logs into **deterministic review outcomes**.
 If nobody (human or machine) is accountable for reading the logs, you still have a lawnmower engine—just with nicer gauges.
@@ -3622,6 +4503,7 @@ Patch classification MUST be embedded in the patch:
 AGGRESSIVE always requires `HUMAN_APPROVAL.json`.
 
 #### **7.1.4 Incident-triggered review (automatic “post-mortem”)**
+Profile: GOP
 If any of the following occur, the system MUST generate an incident report and enforce containment:
 - `atomic_naked_events > 0`
 - `429_count_5m > 0` OR `10028_count_5m > 0`
@@ -3680,6 +4562,7 @@ AT-904
 
 
 ### **7.2 Data Retention & Disk Watermarks — MUST implement**
+Profile: GOP
 
 **Goal:** Prevent “disk full → corrupted logs → blind trading decisions.”
 
@@ -3697,7 +4580,7 @@ AT-904
 - `disk_used_pct` is a ratio in [0.0, 1.0] (e.g., 0.80 == 80%).
 - `disk_used_pct >= disk_pause_archives_pct` → stop full tick + L2 archives; keep Kline + trades.
 - `disk_used_pct >= disk_degraded_pct` → enter RiskState::Degraded and force ReduceOnly.
-- `disk_used_pct >= disk_kill_pct` → enter Kill (block all dispatch; containment forbidden per §2.2.3); run retention reclaim immediately.
+- `disk_used_pct >= disk_kill_pct` → enter Kill (block OPEN; allow containment dispatch while exposed per §2.2.3.6); run retention reclaim immediately.
 
 **Automatic retention reclaim (non-blocking):**
 - The system MUST implement `retention_reclaim()` to prevent the `disk_degraded_pct`→`disk_kill_pct` death spiral.
@@ -3732,11 +4615,11 @@ AT-261
 - Fail criteria: remains Active or exits early.
 
 AT-262
-- Given: simulated `disk_used_pct >= disk_kill_pct`.
+- Given: simulated `disk_used_pct >= disk_kill_pct` AND net exposure ≠ 0.
 - When: disk watermark logic runs.
-- Then: trading loop enters Kill.
-- Pass criteria: Kill entered; no dispatch.
-- Fail criteria: dispatch occurs or mode not Kill.
+- Then: `TradingMode == Kill`; OPEN intents are blocked; risk-reducing containment dispatch attempts are permitted/attempted per §2.2.3.6.
+- Pass criteria: mode is Kill; OPEN dispatch count remains 0; at least one risk-reducing dispatch attempt occurs while exposure ≠ 0.
+- Fail criteria: any OPEN dispatch occurs, OR the system forbids all dispatch while exposure ≠ 0, OR mode not Kill.
 
 AT-263
 - Given: simulated `disk_used_pct >= disk_degraded_pct`.
@@ -3762,6 +4645,7 @@ AT-942
 ---
 
 ## **8. Release Gates (F1 Certification Checklist — HARD PASS/FAIL)**
+Profile: GOP
 
 This checklist is a **hard release gate**. No version may be promoted
 (Shadow → Testnet → Live) unless an automated cert run produces:
@@ -3867,6 +4751,7 @@ All must pass in CI before any deployment:
 - `test_tick_l2_retention_hours_deletes_after_72h()` → AT-325.
 - `test_parquet_analytics_retention_days_deletes_after_30_days()` → AT-326.
 
+Profile: CSP
 **B) Chaos/Integration Scenarios**
 AT-328
 - Given: Leg A Filled, Leg B Rejected.
@@ -3889,6 +4774,7 @@ AT-330
 - Pass criteria: Kill entered; reconcile completed before resume.
 - Fail criteria: resume without reconcile or Kill not entered.
 
+Profile: GOP
 **C) Replay Simulation**
 AT-331
 - Given: replay window includes a vol shock day.
@@ -3938,14 +4824,28 @@ This appendix defines default values for safety-critical configuration parameter
 
 **Enforcement (Non-Negotiable):** If a safety-critical config value is missing at runtime, the Soldier MUST apply the default from this appendix **if it is defined here**; otherwise it MUST fail-closed by blocking the associated capability (no silent defaults).
 
+### **A.CSP Core Safety Defaults**
+Profile: CSP
+
 **Acceptance Tests (REQUIRED):**
 AT-341
-- Given: config missing `instrument_cache_ttl_s`, `evidenceguard_global_cooldown`, and `mm_util_kill` at runtime.
-- When: safety-critical defaults are applied from Appendix A for `instrument_cache_ttl_s`, `evidenceguard_global_cooldown`, and `mm_util_kill`.
-- Then: defaults are used (`instrument_cache_ttl_s = 3600`, `evidenceguard_global_cooldown = 120`, `mm_util_kill = 0.95`) and enforcement uses those defaults (no implicit zero/none).
+- Given: config missing `instrument_cache_ttl_s` and `mm_util_kill` at runtime.
+- When: safety-critical defaults are applied from Appendix A for `instrument_cache_ttl_s` and `mm_util_kill`.
+- Then: defaults are used (`instrument_cache_ttl_s = 3600`, `mm_util_kill = 0.95`) and enforcement uses those defaults (no implicit zero/none).
 - Pass criteria: defaults apply and gating behavior matches the documented defaults.
 - Fail criteria: parameters fall back to zero/none or remain unset while still allowing behavior.
 
+AT-424
+- Given: each CSP safety-critical config value listed in Appendix A.CSP is omitted at runtime (one-at-a-time), with other gates satisfied.
+- When: the associated gate computes its decision.
+- Then: the Appendix A default is used for that parameter.
+- Pass criteria: gate behavior matches the documented default for each parameter under test.
+- Fail criteria: any parameter uses implicit/zero/none or gate behavior does not match Appendix A default.
+
+### **A.GOP Governance & Optimization Defaults**
+Profile: GOP
+
+**Acceptance Tests (REQUIRED):**
 AT-040
 - Given: a safety-critical gate references a required parameter that has no Appendix A default (e.g., `dd_limit` in §5.2).
 - When: that parameter is missing or unparseable at runtime.
@@ -3953,13 +4853,26 @@ AT-040
 - Pass criteria: the system blocks the associated capability until the parameter is provided.
 - Fail criteria: the system proceeds using an implicit/zero/none default.
 
-AT-424
-- Given: each safety-critical config value listed in Appendix A is omitted at runtime (one-at-a-time), with other gates satisfied.
+AT-970
+- Given: config missing `evidenceguard_global_cooldown` and `replay_window_hours` at runtime.
+- When: GOP defaults are applied from Appendix A for `evidenceguard_global_cooldown` and `replay_window_hours`.
+- Then: defaults are used (`evidenceguard_global_cooldown = 120`, `replay_window_hours = 48`) and enforcement uses those defaults (no implicit zero/none).
+- Pass criteria: defaults apply and gating behavior matches the documented defaults.
+- Fail criteria: parameters fall back to zero/none or remain unset while still allowing behavior.
+
+AT-971
+- Given: each GOP safety-critical config value listed in Appendix A.GOP is omitted at runtime (one-at-a-time), with other gates satisfied.
 - When: the associated gate computes its decision.
 - Then: the Appendix A default is used for that parameter.
 - Pass criteria: gate behavior matches the documented default for each parameter under test.
 - Fail criteria: any parameter uses implicit/zero/none or gate behavior does not match Appendix A default.
 
+**`canary_evidence_abort_s`** (§5.3 Policy Canary Rollout)
+- **Default**: `180` seconds (must be >= `evidenceguard_window_s + evidenceguard_global_cooldown`).
+- **Purpose**: Minimum continuous EvidenceChainState != GREEN duration before canary abort.
+- **Rationale**: Calibrated to EvidenceGuard window + cooldown to avoid aborting on expected recovery.
+
+Profile: CSP
 ### **A.1 Atomic Group Execution**
 
 **`atomic_qty_epsilon`** (§1.2 Atomic Group Executor)
@@ -4333,6 +5246,7 @@ AT-303
 - Pass criteria: only non-reduce-only orders canceled.
 - Fail criteria: reduce-only orders canceled or non-reduce-only remain.
 
+Profile: GOP
 **`evidenceguard_window_s`** (§2.2.2 EvidenceGuard)
 - **Default**: `60` seconds
 - **Purpose**: Rolling window used to evaluate EvidenceChainState GREEN criteria.
@@ -4349,6 +5263,7 @@ AT-304
 - Pass criteria: cooldown enforced.
 - Fail criteria: GREEN returns early.
 
+Profile: CSP
 **`position_reconcile_epsilon`** (§2.2.4 Open Permission Latch)
 - **Default**: `1e-6` (or instrument `min_amount` if larger)
 - **Purpose**: Tolerance for position matching during reconciliation; allows for floating-point precision limits.
@@ -4370,6 +5285,7 @@ AT-306
 - Pass criteria: correct lookback query and matching.
 - Fail criteria: missing query or mismatch handling.
 
+Profile: GOP
 **`parquet_queue_trip_pct`** (§2.2.2 EvidenceGuard)
 - **Default**: `0.90` (90%)
 - **Purpose**: Queue depth threshold that trips EvidenceChainState to not GREEN.
@@ -4428,7 +5344,7 @@ AT-311
 **`disk_degraded_pct`** (§7.2 Disk Watermarks)
 - **Default**: `0.85` (85%)
 - **Purpose**: Disk usage threshold triggering `RiskState::Degraded` + `TradingMode::ReduceOnly`.
-- **Rationale**: 85% triggers retention reclaim and blocks opens; 7% buffer before Kill hard-stop.
+- **Rationale**: 85% triggers retention reclaim and blocks opens; 7% buffer before Kill (containment-only) mode.
 AT-312
 - Given: `disk_used_pct >= 0.85`.
 - When: disk watermark logic runs.
@@ -4438,15 +5354,16 @@ AT-312
 
 **`disk_kill_pct`** (§7.2 Disk Watermarks)
 - **Default**: `0.92`
-- **Purpose**: Disk usage threshold triggering `TradingMode::Kill` + trading loop hard-stop.
-- **Rationale**: 0.92 is integrity-first hard-stop; no dispatch (including CLOSE/HEDGE/CANCEL) to prevent corruption.
-AT-313
-- Given: `disk_used_pct >= 0.92`.
-- When: disk watermark logic runs.
-- Then: trading loop hard-stops; no dispatch occurs (containment forbidden).
-- Pass criteria: hard-stop with no dispatch.
-- Fail criteria: any dispatch occurs.
+- **Purpose**: Disk usage threshold triggering `TradingMode::Kill` and forcing **containment-only** operation (no new exposure) until net exposure is neutral.
+- **Rationale**: At ≥92% disk usage, the system treats persistence/audit subsystems as unsafe. The contract is **integrity-first for new risk creation** (OPENs blocked), but **capital-supremacy-first for existing exposure** (risk-reducing containment dispatch remains permitted while exposed). After exposure is neutral, the system MAY hard-stop dispatch until disk usage returns below `disk_degraded_pct` (or until manual intervention).
 
+AT-313
+- Given: `disk_used_pct >= 0.92` AND net exposure ≠ 0.
+- When: disk watermark logic runs and TradingMode is resolved.
+- Then: `TradingMode == Kill`; OPEN intents are blocked; containment dispatch attempts are permitted/attempted (§2.2.3.6).
+- Pass criteria: OPEN dispatch count remains 0; at least one risk-reducing dispatch attempt occurs while exposure ≠ 0.
+- Fail criteria: any OPEN dispatch occurs, or the system hard-stops with exposure by forbidding all dispatch.
+Profile: CSP
 **`time_drift_threshold_ms`** (§4.3 Trade Attribution Schema)
 - **Default**: `50` milliseconds
 - **Purpose**: Maximum tolerable clock drift before forcing ReduceOnly; prevents attribution corruption and execution timing errors.
@@ -4579,6 +5496,7 @@ AT-322
 ---
 
 ### **A.6 Retention & Replay Windows**
+Profile: GOP
 
 **`decision_snapshot_retention_days`** (§7.2 Retention Policy)
 - **Default**: `30` days
@@ -4598,10 +5516,10 @@ AT-323
 - **Rationale**: 48h provides weekend coverage and captures recent regime while limiting computational cost.
 AT-324
 - Given: Replay Gatekeeper evaluates the last 48h window.
-- When: `snapshot_coverage_pct < 95%`.
-- Then: the gate is BLOCKED.
-- Pass criteria: gate blocks below 95%.
-- Fail criteria: gate passes below 95%.
+- When: `snapshot_coverage_pct == 90%`.
+- Then: `ReplayQuality == DEGRADED` and `ReplayApplyMode == APPLY_WITH_HAIRCUT`.
+- Pass criteria: DEGRADED classification over the 48h window with apply‑with‑haircut mode.
+- Fail criteria: hard block below 95% or incorrect apply mode.
 
 **`tick_l2_retention_hours`** (§7.2 Retention Policy)
 - **Default**: `72` hours
@@ -4644,6 +5562,9 @@ AT-326
 | `disk_used_max_age_ms` | `30000` | ms | §2.2.1.1 |
 | `evidenceguard_counters_max_age_ms` | `60000` | ms | §2.2.2 |
 | `watchdog_kill_s` | `10` | sec | §2.2.3 |
+| `rate_limit_kill_min_10028` | `3` | count | §2.2.3.1.2 |
+| `cancel_open_batch_max` | `50` | count | §2.2.3.4.1 |
+| `cancel_open_budget_ms` | `200` | ms | §2.2.3.4.1 |
 | `emergency_reduceonly_cooldown_s` | `300` | sec | §2.2, §3.2 |
 | `mm_util_reject_opens` | `0.70` | pct | §1.4.3 |
 | `mm_util_reduceonly` | `0.85` | pct | §1.4.3 |
@@ -4697,3 +5618,278 @@ AT-326
 | `replay_window_hours` | `48` | hours | §5.2 |
 | `tick_l2_retention_hours` | `72` | hours | §7.2 |
 | `parquet_analytics_retention_days` | `30` | days | §7.2 |
+
+---
+
+## **Appendix CSP: Core Safety Contract (CSP) — Extracted, Self-Contained**
+
+Profile: CSP
+
+This appendix is an extracted restatement of the **Core Safety Profile (CSP)** runtime safety requirements.
+
+**Normative intent:** A system that satisfies every requirement in this appendix, **and** satisfies the CSP enforcement mechanics in §0.Z.5–§0.Z.9 (profile tagging, declaration of compliance, profile isolation, and CSP_ONLY CI gate), **and** passes all `Profile: CSP` acceptance tests, is **SAFE TO TRADE** — even if governance/analytics/optimization subsystems are absent, degraded, or disabled.
+
+### **CSP.0 Scope**
+
+This appendix applies when either:
+- the implementation claims `supported_profiles` includes CSP, or
+- the running deployment reports `/api/v1/status.enforced_profile == CSP`.
+
+When `enforced_profile == CSP`, all GOP-only subsystems are out of scope and MUST NOT be required for correctness or liveness.
+
+### **CSP.1 Definitions (Self-Contained)**
+
+The following definitions are authoritative within this appendix:
+
+- **Intent**: an internal request that may result in one or more exchange API calls (place order, cancel order, amend order, close/hedge action).
+
+- **Risk-Increasing Intent (OPEN)**: any intent that can increase net exposure (including any order placement where `reduce_only != true`, or any unclassifiable intent).  
+  **Fail-closed classification rule:** if an intent cannot be proven risk-reducing, it MUST be treated as OPEN.
+
+- **Risk-Reducing Intent (CLOSE/HEDGE)**: any intent that is provably monotonic-reducing with respect to exposure, including:
+  - orders with `reduce_only == true`, and/or
+  - cancel requests, and/or
+  - emergency containment actions whose objective is to reduce net exposure.
+
+- **Dispatch**: an outbound network attempt to the venue (REST, WS-RPC, or other venue API) that may place/amend/cancel an order.
+
+- **RecordedBeforeDispatch**: the property that a risk-increasing intent has been recorded before dispatch according to §2.4:
+  - the intent has been accepted by the WAL append path (bounded in-memory WAL queue enqueue succeeds) before any dispatch attempt, and
+  - the hot loop does not block on WAL disk I/O.
+
+- **DurableBeforeDispatch**: the property that a configured durability barrier (fsync marker or equivalent) has been reached before dispatch when a subsystem requires it (§2.4).
+
+- **WAL (Write-Ahead Log)**: the append-only intent ledger that is persisted to a crash-safe store. `RecordedBeforeDispatch` corresponds to successful enqueue into the WAL writer queue (§2.4.1); `DurableBeforeDispatch` corresponds to reaching the configured durability barrier before dispatch (§2.4).
+
+- **Reconciliation**: the post-restart (or post-gap) procedure that joins:
+  - WAL intents,
+  - venue open orders,
+  - venue trades/fills,
+  - venue positions,
+  and proves which intents were sent/filled vs not.
+
+- **OpenPermissionLatch**: a fail-closed latch that blocks OPEN dispatch after:
+  - process restart,
+  - WS gap / sequencing gap,
+  - session termination / auth reset,
+  until reconciliation completes.
+
+- **TradingMode**: the enforcement layer with states:
+  - `Active` (OPEN permitted if all gates pass),
+  - `ReduceOnly` (OPEN forbidden; risk-reducing actions permitted),
+  - `Kill` (risk-increasing actions forbidden; only risk-reducing actions permitted).
+
+- **staleness_clock_ms**: the authoritative monotonic time source used for interval comparisons in safety-critical freshness checks.
+
+### **CSP.2 Idempotency & Deduplication**
+
+#### **CSP.2.1 Stable Intent Identity**
+
+Every outbound intent that may result in dispatch MUST be uniquely identifiable and deduplicable across:
+- retries,
+- reconnects,
+- process restarts.
+
+Idempotency keys MUST:
+- be derived solely from deterministic intent identity fields (e.g., `group_id`, `leg_idx`, `intent_hash`, strategy/policy identifiers where applicable),
+- NOT depend on wall-clock time, RNG, or process-local counters.
+
+#### **CSP.2.2 Deduplication Rule**
+
+Duplicate dispatch attempts MUST NOT result in additional exposure.
+
+The system MUST deduplicate at minimum across:
+- client retry loops,
+- WS reconnect replay,
+- restart replay/reconciliation.
+
+### **CSP.3 RecordedBeforeDispatch (WAL)**
+
+#### **CSP.3.1 Mandatory Recording for OPEN**
+
+Every OPEN intent MUST satisfy RecordedBeforeDispatch before any dispatch attempt.
+
+Failure to satisfy RecordedBeforeDispatch MUST fail-closed:
+- the OPEN must be blocked, and
+- a deterministic reason MUST be surfaced.
+
+#### **CSP.3.2 WAL Degradation Semantics**
+
+WAL failure MAY block OPEN.
+
+WAL failure MUST NOT block:
+- CANCEL intents,
+- CLOSE/HEDGE intents,
+- emergency containment.
+
+### **CSP.4 Restart, Gaps, and Reconciliation**
+
+#### **CSP.4.1 Restart Safety**
+
+On restart, the system MUST reconcile:
+- WAL intents,
+- venue open orders,
+- venue trades,
+- venue positions.
+
+#### **CSP.4.2 No Duplicate Sends**
+
+No intent MAY be re-sent unless reconciliation proves it unsent or safe to re-issue by idempotency identity.
+
+#### **CSP.4.3 WS Gap / Session Termination**
+
+On WS sequencing gap, WS disconnect with unknown replay continuity, or session termination:
+- the OpenPermissionLatch MUST engage and block OPEN,
+- risk-reducing intents (CANCEL/CLOSE/HEDGE) MUST remain permitted (subject to venue reachability),
+- the latch MUST clear only after reconciliation succeeds.
+
+### **CSP.5 TradingMode Semantics & Enforcement**
+
+#### **CSP.5.1 Modes**
+
+TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` }.
+
+TradingMode MUST be computed deterministically (panic-free) at a bounded cadence (each loop tick or equivalent).
+
+#### **CSP.5.2 Enforcement Rules**
+
+- OPEN intents MAY dispatch only when TradingMode is `Active` AND OpenPermissionLatch is clear AND RecordedBeforeDispatch is satisfied.
+- In `ReduceOnly`:
+  - OPEN is forbidden,
+  - risk-reducing actions (CANCEL/CLOSE/HEDGE) are permitted.
+- In `Kill`:
+  - OPEN and any risk-increasing action are forbidden,
+  - only risk-reducing actions are permitted.
+
+#### **CSP.5.3 Safety-Critical Prerequisite: Runtime F1 Certification Gate**
+
+A runtime F1 certification state (F1_CERT) MUST be enforced such that:
+- missing/stale/invalid/mismatched F1_CERT → TradingMode MUST be at most `ReduceOnly` (OPEN blocked; risk-reducing actions permitted).
+- F1_CERT failures MUST be treated as CSP safety inputs (not governance inputs).
+
+(Implementation details are venue- and repo-specific; the observable enforcement semantics above are the CSP requirement.)
+
+### **CSP.6 Capital Supremacy (No Stranded Exposure)**
+
+If net exposure is non-zero **or unknown**, the system MUST define at least one legal risk-reducing action path.
+
+The following state is forbidden:
+
+- exposure ≠ 0 (or exposure unknown), AND
+- all CLOSE/HEDGE/emergency containment actions are blocked by internal policy.
+
+This invariant applies even under `Kill` or degraded infrastructure conditions. If competing rules would forbid all risk-reduction, the implementation MUST prefer a deterministic risk-reducing action path (fail-safe).
+
+### **CSP.7 Deterministic Emergency Containment**
+
+A deterministic emergency containment mechanism MUST exist.
+
+Emergency containment MUST be callable in:
+- `ReduceOnly`,
+- `Kill`,
+- degraded infrastructure states.
+
+Emergency containment MUST be:
+- bounded (finite retries / bounded time),
+- deterministic (no unbounded oscillation),
+- monotonic with respect to exposure (never increases risk).
+
+### **CSP.8 Timebase Authority (Safety-Critical)**
+
+All interval-based freshness / staleness checks that affect TradingMode, OpenPermissionLatch, or OPEN legality MUST use a monotonic timebase for interval measurement.
+
+Wall-clock time MAY be recorded for observability, but MUST NOT be used as the authoritative basis for interval comparisons that trigger `Kill`.
+
+Clock uncertainty MAY force `ReduceOnly`, but MUST NOT force `Kill`.
+
+### **CSP.9 Profile Isolation**
+
+When `/api/v1/status.enforced_profile == CSP`, the system MUST treat all GOP-only subsystems as nonexistent inputs.
+
+In particular, the following MUST NOT influence any CSP safety-critical decision:
+- EvidenceChainState / EvidenceGuard,
+- TruthCapsule and Decision Snapshot writers (presence, health, lag, queue depth),
+- Replay Gatekeeper results,
+- Canary rollout governor state,
+- Optimization loop state.
+
+GOP failures under CSP enforcement MAY be surfaced, but MUST NOT change:
+- TradingMode,
+- OpenPermissionLatch,
+- legality of risk-reducing actions,
+- idempotency or reconciliation behavior.
+
+### **CSP.10 CSP_ONLY Build/Test Mode (Mechanically Enforced)**
+
+The repo MUST support a build configuration in which GOP-only code is physically absent (`CSP_ONLY build`).
+
+In a CSP_ONLY build:
+- GOP-only modules MUST NOT be linked,
+- GOP-only dependencies MUST be feature-gated,
+- the resulting binary MUST be capable of live trading under CSP.
+
+CI MUST prove CSP isolation by running, at minimum:
+- `build:csp_only` (CSP_ONLY build must succeed),
+- `test:csp_only` (all `Profile: CSP` acceptance tests must pass in CSP_ONLY mode),
+- `test:gop` (runs `Profile: GOP` tests with GOP enabled; failures disable GOP but do not block CSP deployments).
+
+### **CSP.11 Explicit Non-Requirements**
+
+The following are NOT REQUIRED for CSP compliance:
+- TruthCapsule persistence,
+- Decision Snapshot persistence,
+- EvidenceChainState / EvidenceGuard,
+- Replay simulation and replay gatekeeping,
+- Canary rollout governance,
+- optimization loops,
+- attribution completeness beyond correctness needs.
+
+Failure or absence of the above MUST NOT, by itself, violate CSP invariants.
+
+### **CSP.12 Acceptance Tests**
+
+All acceptance tests tagged `Profile: CSP` are mandatory for any implementation that trades live.
+
+Failure of any CSP-tagged test MUST block deployment (and/or force trading halt, per implementation policy).
+
+
+
+---
+
+## **Appendix CSP-MAP: Traceability Matrix (Appendix CSP → Canonical Sections/ATs)**
+Profile: CSP
+
+**Status:** Informative (non-normative)
+
+This appendix is a **navigation / traceability aid**. It maps each clause in **Appendix CSP** to the primary
+definition points in the main contract and to the most directly relevant acceptance tests.
+
+- The mappings below are **non-exhaustive** by design (they point you at the “load-bearing” ATs/sections first).
+- In case of any conflict, the **numbered sections** and **Appendix CSP** remain controlling; this appendix does not
+  create new requirements.
+
+| Appendix CSP clause | Primary canonical section(s) | Primary acceptance tests (non-exhaustive) |
+|---|---|---|
+| **CSP.0 Scope and guarantees** | §0.Z.2 (CSP definition & invariants)<br>§0.Z.6 (declaration of compliance)<br>§0.Z.7 (profile isolation)<br>§7.0 (`/status` `supported_profiles` / `enforced_profile`) | AT-023 (CSP `/status` keys incl. enforced_profile)<br>AT-990 (CSP_ONLY build boots; GOP not enforced)<br>AT-991 (GOP unhealthy must not block CSP decisions) |
+| **CSP.1 Definitions (CSP-local)** | **Definitions** (core terms: intent, OPEN/CLOSE/HEDGE, reduce_only, idempotency, etc.)<br>§2.2.5 (risk-increasing vs risk-reducing cancel/replace)<br>§7.0 (`/status` semantic invariants) | AT-201 (intent classifier fail-closed)<br>AT-1055 (classify reduce_only=true intents as non-OPEN)<br>AT-110 (missing reduce_only treated as OPEN under latch)<br>AT-024 / AT-025 / AT-026 (mode_reason invariants: empty in Active, tier-pure, deterministic order) |
+| **CSP.2 Idempotency & Deduplication (group)** | §1.1.1 (canonical quantization + intent_hash inputs)<br>§1.1.2 (label parse/disambiguation)<br>§2.4 (WAL truth source + “Trade-ID Idempotency Registry”)<br>§3.4 (reconciliation ordering; WS gaps; zombies) | AT-343 (intent_hash stable across wall clock)<br>AT-218 (hash equality across codepaths)<br>AT-216 / AT-217 (label parse + collision-safe matching)<br>AT-933 (no duplicate dispatch after WS reconnect)<br>AT-269 / AT-270 (trade-id idempotency; duplicate fill handling) |
+| **CSP.2.1 Stable Intent Identity** | §1.1.1 (quantize → hash; “no wall-clock in hash”)<br>§1.1.2 (s4 label fields include ih16)<br>Definitions (`intent_hash`, `group_id`, `leg_idx`) | AT-343 (hash not time-dependent)<br>AT-218 (deterministic hash across codepaths)<br>AT-219 (safe rounding direction prior to hash)<br>AT-216 (s4 label length/parse correctness) |
+| **CSP.2.2 Deduplication Rule** | §2.4 (Trade-ID Idempotency Registry block; “append trade_id to WAL first”)<br>§3.4 (REST sweeper before WS replay; reconcile ordering)<br>§1.1.2 (label collision-safe matching) | AT-269 (REST sweeper then WS duplicate ignored)<br>AT-270 (duplicate WS trade is NOOP)<br>AT-933 (WS reconnect does not duplicate dispatch)<br>AT-941 (crash during reconciliation → idempotent rerun; no dupes) |
+| **CSP.3 RecordedBeforeDispatch (WAL) (group)** | §0.Z.2.2, item B (RecordedBeforeDispatch invariant)<br>§2.4 (Durable Intent Ledger rules)<br>§2.4.1 (WAL writer isolation; queue semantics) | AT-935 (RecordedBeforeDispatch + restart → dispatch exactly once)<br>AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)<br>AT-233 / AT-234 (crash + restart reconcile; no resend; detect fill)<br>AT-925 (hot-loop output queue backpressure → ReduceOnly) |
+| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (RecordedBeforeDispatch = enqueue succeeds) | AT-935 (recorded unsent survives crash; sent once after reconcile)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
+| **CSP.3.2 WAL Degradation Semantics** | §2.4.1 (enqueue fail → fail-closed for OPEN; continue ticking)<br>§2.2.3.4 (dispatch authorization: OPEN blocked in ReduceOnly/Kill) | AT-906 (OPEN blocked on WAL queue full)<br>AT-925 (no hot-loop stall; ReduceOnly under backpressure)<br>AT-1049 (exposed ⇒ at least one risk-reducing dispatch permitted) |
+| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 (restart dispatch exactly once)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 (session termination → latch + kill + reconcile)<br>AT-941 (crash during reconciliation → safe restart) |
+| **CSP.4.1 Restart Safety** | §2.4 (startup replay + reconcile before dispatch)<br>§2.2.4 (startup latch set) | AT-233 / AT-234 (restart reconcile; no dupes; fill recovery)<br>AT-430 (startup latch defaults to RESTART_RECONCILE_REQUIRED) |
+| **CSP.4.2 No Duplicate Sends** | §2.4 (no resend unless reconcile proves unsent)<br>§1.1.2 (label matching to detect in-flight orders)<br>§3.4 (reconcile ordering; REST snapshots) | AT-935 (no duplicate send across restarts)<br>AT-940 (ACK lost locally → recover via reconcile; no resend)<br>AT-933 (WS reconnect: treat existing orders as in-flight; no dupes) |
+| **CSP.4.3 WS Gap / Session Termination** | §3.4 (channel continuity + corrective actions; zombie socket rule)<br>§2.2.4 (latch reasons WS_* and SESSION_TERMINATION_*)<br>§3.3 (10028/session termination handling) | AT-271 / AT-408 (book gap → latch WS_BOOK_GAP_*)<br>AT-272 / AT-202 (trade gap → latch WS_TRADES_GAP_*)<br>AT-947 (zombie socket → latch WS_DATA_STALE_*)<br>AT-409 / AT-240 (session termination → latch + Kill + reconcile) |
+| **CSP.5 TradingMode Semantics & Enforcement (group)** | Definitions (`TradingMode`, `ModeReasonCode`, etc.)<br>§2.2.3 (TradingMode computation + dispatch authorization + reason-code registry)<br>§2.2.4/§2.2.5 (latch + cancel/replace legality) | AT-1050 / AT-1051 / AT-1052 (axis isolation tests)<br>AT-1053 (resolver monotonicity property)<br>AT-010 / AT-402 (OPEN blocked under latch; risk-increasing cancel/replace blocked)<br>AT-024 / AT-025 / AT-026 (mode_reason invariants) |
+| **CSP.5.1 TradingMode states** | Definitions (TradingMode enum)<br>§2.2.3 (resolver output + reason tiers) | AT-1050–AT-1053 (resolver correctness / monotonicity)<br>AT-024 (Active ⇒ mode_reasons empty) |
+| **CSP.5.2 Enforcement rules (OPEN gating, ReduceOnly, Kill)** | §2.2.3.4 (dispatch authorization rules)<br>§2.2.4 (OPEN blocked under reconcile latch)<br>§2.2.5 (cancel/replace permission rules) | AT-010 (OPEN blocked; CLOSE/HEDGE allowed under latch)<br>AT-1055 (reduce_only=true is not an OPEN intent)<br>AT-338 (Kill containment is mandatory when exposed) |
+| **CSP.5.3 Runtime F1 Certification Gate** | §2.2.1 (F1_CERT semantics, binding, freshness)<br>§7.0 (`/status` F1 fields) | AT-003 / AT-412 (`/status` f1_cert_state/expires invariants)<br>AT-423 (F1 file changes reflected next tick)<br>AT-012 (contract_version string binding)<br>AT-113 (runtime_config_hash canonicalization) |
+| **CSP.6 Capital Supremacy Invariant** | §0.Z.2.2, item F (capital supremacy invariant)<br>§2.2.3.6 (Kill semantics: containment must remain legal under exposure)<br>§3.1 (emergency close) | AT-1049 (no-deadlock-under-exposure)<br>AT-338 / AT-339 / AT-340 (Kill containment required; not blocked by disk/evidence/WAL)<br>AT-346 / AT-347 / AT-013 (containment allowed under session/watchdog/bunker) |
+| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 (price source fallback; fail-closed on no price)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
+| **CSP.8 Timebase Authority** | §0.Z.2.2, item H (monotonic interval requirement; clock uncertainty semantics)<br>§2.2.1.1 (freshness checks for critical inputs)<br>§7.0 (policy_age_sec calculation + status invariants) | AT-001 / AT-112 / AT-349 / AT-350 / AT-413 (missing/stale inputs force ReduceOnly)<br>AT-406 (policy_age_sec arithmetic correctness)<br>*(No dedicated AT yet for “wall-clock MUST NOT trigger Kill”; add if desired.)* |
+| **CSP.9 Profile Isolation** | §0.Z.7 (runtime + compile-time isolation)<br>§2.2.2 (EvidenceGuard "NOT_ENFORCED" when CSP)<br>§2.2.1.1 (critical inputs are profile-scoped)<br>§5.2 (Replay Gatekeeper CSP isolation)<br>§7.0 (status: omit/NOT_ENFORCED GOP keys when CSP) | AT-990 (CSP_ONLY build boots; GOP absent/NOT_ENFORCED)<br>AT-991 (GOP unhealthy must not affect CSP decisions)<br>AT-992 (GOP enforcement when enforced_profile != CSP)<br>AT-1070 (CSP isolation from replay/snapshot failures) |
+| **CSP.10 CSP_ONLY Build/Test Mode** | §0.Z.7.3 (CSP_ONLY build requirement)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.9.1 (meta-ATs) | AT-1056 (CI build:csp_only succeeds)<br>AT-1057 (CI test:csp_only runs only CSP tests; all pass)<br>AT-990 (runtime sanity: CSP_ONLY build starts; GOP not enforced) |
+| **CSP.11 Explicit Non-Requirements** | §0.Z.2.3 (CSP explicit non-requirements)<br>§0.Z.3.3 (GOP failures must not violate CSP guarantees)<br>§0.Z.7.2 (GOP failures MUST NOT alter CSP decisions when CSP enforced) | AT-991 (CSP decisions unaffected by GOP health when CSP enforced) |
+| **CSP.12 Acceptance Tests (CSP gating)** | §0.Z.5 (profile tagging rules)<br>§0.Z.9 (CSP-only CI gate)<br>§8 (release gates reference CSP/GOP status) | AT-1057 (ensures CSP-only pipeline executes only CSP tests)<br>AT-023 (status completeness for operators/CI) |

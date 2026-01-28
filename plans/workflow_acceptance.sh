@@ -7,6 +7,7 @@ DEFAULT_STATE_FILE="/tmp/workflow_acceptance.state"
 DEFAULT_STATUS_FILE="/tmp/workflow_acceptance.status"
 
 WORKFLOW_ACCEPTANCE_MODE="full"
+WORKFLOW_ACCEPTANCE_SETUP_MODE="${WORKFLOW_ACCEPTANCE_SETUP_MODE:-auto}"
 ONLY_ID=""
 FROM_ID=""
 UNTIL_ID=""
@@ -326,7 +327,6 @@ require_tools() {
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 require_tools git jq mktemp find wc tr sed awk stat sort head tail date grep
 mkdir -p "$ROOT/.ralph"
-WORKFLOW_ACCEPTANCE_MODE="${WORKFLOW_ACCEPTANCE_MODE:-auto}"
 WORKFLOW_ACCEPTANCE_SETUP_ONLY="${WORKFLOW_ACCEPTANCE_SETUP_ONLY:-0}"
 WORKTREE_MODE=""
 WORKTREE_ERR=""
@@ -420,10 +420,10 @@ setup_worktree() {
 }
 
 select_worktree_mode() {
-  case "$WORKFLOW_ACCEPTANCE_MODE" in
+  case "$WORKFLOW_ACCEPTANCE_SETUP_MODE" in
     worktree|clone|archive)
-      if ! setup_worktree "$WORKFLOW_ACCEPTANCE_MODE"; then
-        echo "FAIL: workflow acceptance setup failed (mode=$WORKFLOW_ACCEPTANCE_MODE): $WORKTREE_ERR" >&2
+      if ! setup_worktree "$WORKFLOW_ACCEPTANCE_SETUP_MODE"; then
+        echo "FAIL: workflow acceptance setup failed (mode=$WORKFLOW_ACCEPTANCE_SETUP_MODE): $WORKTREE_ERR" >&2
         exit 1
       fi
       ;;
@@ -440,7 +440,7 @@ select_worktree_mode() {
       fi
       ;;
     *)
-      echo "FAIL: invalid WORKFLOW_ACCEPTANCE_MODE=$WORKFLOW_ACCEPTANCE_MODE (expected auto|worktree|clone|archive)" >&2
+      echo "FAIL: invalid WORKFLOW_ACCEPTANCE_SETUP_MODE=$WORKFLOW_ACCEPTANCE_SETUP_MODE (expected auto|worktree|clone|archive)" >&2
       exit 1
       ;;
   esac
@@ -513,9 +513,9 @@ add_optional_overlays() {
 
 # Ensure tests run against the working tree versions while keeping the worktree clean.
 OVERLAY_FILES=(
-  "CONTRACT.md"
-  "IMPLEMENTATION_PLAN.md"
-  "POLICY.md"
+  "specs/CONTRACT.md"
+  "specs/IMPLEMENTATION_PLAN.md"
+  "specs/POLICY.md"
   "verify.sh"
   "AGENTS.md"
   ".github/pull_request_template.md"
@@ -1107,12 +1107,40 @@ if ! run_in_worktree grep -Fq "MUST keep fast precheck set limited to schema/sel
   echo "FAIL: AGENTS.md missing fast precheck constraint" >&2
   exit 1
 fi
-if ! run_in_worktree grep -Fq "SHOULD keep workflow_acceptance test IDs stable and listable" "AGENTS.md"; then
-  echo "FAIL: AGENTS.md missing workflow_acceptance test ID stability guidance" >&2
+if ! run_in_worktree grep -Fq "<!-- AGENTS_STUB_V2 -->" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing stub marker" >&2
   exit 1
 fi
-if ! run_in_worktree grep -Fq "MUST avoid bash 4+ builtins (mapfile/readarray) in harness scripts" "AGENTS.md"; then
-  echo "FAIL: AGENTS.md missing bash 4+ builtin restriction" >&2
+if ! run_in_worktree grep -Fq "<!-- INPUT_GUARD_V1 -->" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing input guard marker" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "<!-- FOLLOWUP_NO_PREFLIGHT_V1 -->" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing follow-up marker" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "<!-- VERIFY_CI_SATISFIES_V1 -->" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing verify CI marker" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "### 1) Input Guard (conditional)" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing input guard section header" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "QuickCheck:" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing QuickCheck token" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "NO_PREFLIGHT" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing NO_PREFLIGHT token" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "## Start here (only when doing edits / PR work / MED-HIGH risk)" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing conditional start-here heading" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "SHOULD keep workflow_acceptance test IDs stable and listable" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing workflow_acceptance test ID stability guidance" >&2
   exit 1
 fi
 if ! run_in_worktree grep -Fq "Top time/token sinks (fix focus)" "AGENTS.md"; then
@@ -1288,7 +1316,7 @@ if test_start "0k.3" "contract coverage matrix fixtures"; then
 fi
 
 if test_start "0k.4" "workflow acceptance clone fallback"; then
-  run_in_worktree ./plans/tests/test_workflow_acceptance_fallback.sh >/dev/null 2>&1
+  "$ROOT/plans/tests/test_workflow_acceptance_fallback.sh" >/dev/null 2>&1
   test_pass "0k.4"
 fi
 
@@ -3058,7 +3086,7 @@ if [[ -z "$latest_block" ]]; then
   echo "FAIL: expected missing_timeout_or_python3 blocked artifact" >&2
   exit 1
 fi
-  test_pass "5c"
+test_pass "5c"
 fi
 
 if test_start "5d" "contract review sees iteration artifacts"; then
@@ -3101,7 +3129,7 @@ if [[ "$decision" != "PASS" ]]; then
   exit 1
 fi
 write_contract_check_stub "PASS"
-  test_pass "5d"
+test_pass "5d"
 fi
 
 if test_start "6" "missing contract_check.sh writes FAIL contract review"; then
