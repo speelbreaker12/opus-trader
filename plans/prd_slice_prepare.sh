@@ -11,6 +11,7 @@ OUT_PRD_SLICE="${OUT_PRD_SLICE:-.context/prd_slice.json}"
 OUT_CONTRACT_DIGEST="${OUT_CONTRACT_DIGEST:-.context/contract_digest_slice.json}"
 OUT_PLAN_DIGEST="${OUT_PLAN_DIGEST:-.context/plan_digest_slice.json}"
 OUT_ROADMAP_DIGEST="${OUT_ROADMAP_DIGEST:-.context/roadmap_digest_slice.json}"
+OUT_AUDIT_FILE="${OUT_AUDIT_FILE:-plans/prd_audit.json}"
 OUT_META="${OUT_META:-.context/prd_audit_meta.json}"
 
 if [[ -z "$PRD_SLICE" ]]; then
@@ -34,7 +35,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
-python3 - "$PRD_FILE" "$PRD_SLICE" "$CONTRACT_DIGEST" "$PLAN_DIGEST" "$ROADMAP_DIGEST" "$OUT_PRD_SLICE" "$OUT_CONTRACT_DIGEST" "$OUT_PLAN_DIGEST" "$OUT_ROADMAP_DIGEST" "$OUT_META" <<'PY'
+python3 - "$PRD_FILE" "$PRD_SLICE" "$CONTRACT_DIGEST" "$PLAN_DIGEST" "$ROADMAP_DIGEST" "$OUT_PRD_SLICE" "$OUT_CONTRACT_DIGEST" "$OUT_PLAN_DIGEST" "$OUT_ROADMAP_DIGEST" "$OUT_AUDIT_FILE" "$OUT_META" <<'PY'
 import hashlib
 import json
 import os
@@ -43,7 +44,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-prd_path, slice_str, contract_digest_path, plan_digest_path, roadmap_digest_path, out_prd_slice, out_contract_slice, out_plan_slice, out_roadmap_slice, out_meta = sys.argv[1:]
+prd_path, slice_str, contract_digest_path, plan_digest_path, roadmap_digest_path, out_prd_slice, out_contract_slice, out_plan_slice, out_roadmap_slice, out_audit_file, out_meta = sys.argv[1:]
 
 try:
     slice_num = int(slice_str)
@@ -486,6 +487,7 @@ meta = {
     'plan_digest': plan_digest_path,
     'contract_digest_slice': out_contract_slice,
     'plan_digest_slice': out_plan_slice,
+    'output_file': out_audit_file,
     'generated_at': now
 }
 if roadmap_digest_path and Path(roadmap_digest_path).exists():

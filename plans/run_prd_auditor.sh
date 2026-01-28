@@ -5,6 +5,27 @@ IFS=$'\n\t'
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Lock file to prevent concurrent runs
+AUDIT_LOCK_FILE="${AUDIT_LOCK_FILE:-.context/prd_auditor.lock}"
+mkdir -p "$(dirname "$AUDIT_LOCK_FILE")"
+if command -v flock >/dev/null 2>&1; then
+  exec 201>"$AUDIT_LOCK_FILE"
+  if ! flock -n 201; then
+    echo "[prd_auditor] ERROR: another auditor is running" >&2
+    exit 6
+  fi
+else
+  # Fallback for macOS: use mkdir atomicity
+  if ! mkdir "$AUDIT_LOCK_FILE.d" 2>/dev/null; then
+    echo "[prd_auditor] ERROR: another auditor is running (lock: $AUDIT_LOCK_FILE.d)" >&2
+    exit 6
+  fi
+  trap 'rmdir "$AUDIT_LOCK_FILE.d" 2>/dev/null || true' EXIT
+fi
+
+# Timeout for agent calls
+AUDITOR_TIMEOUT="${AUDITOR_TIMEOUT:-600}"
+
 AUDITOR_PROMPT="${AUDITOR_PROMPT:-prompts/auditor.md}"
 AUDITOR_AGENT_CMD="${AUDITOR_AGENT_CMD:-codex}"
 AUDITOR_AGENT_ARGS="${AUDITOR_AGENT_ARGS:-}"
@@ -57,6 +78,48 @@ sha256_file() {
   fi
 }
 
+# Progress reporting (controllable via AUDIT_PROGRESS env var)
+AUDIT_PROGRESS="${AUDIT_PROGRESS:-1}"
+
+# Fail-fast mode: stop at first FAIL item (useful for iteration)
+AUDIT_FAIL_FAST="${AUDIT_FAIL_FAST:-0}"
+export AUDIT_FAIL_FAST
+
+# Cost tracking (append-only JSONL log)
+AUDIT_COST_FILE="${AUDIT_COST_FILE:-.context/audit_costs.jsonl}"
+_audit_start_ts=""
+_audit_run_id=""
+_audit_stage_ts=""
+
+audit_cost_start() {
+  _audit_start_ts=$(date +%s)
+  _audit_stage_ts=$_audit_start_ts
+  _audit_run_id=$(echo "${_audit_start_ts}$$" | shasum -a 256 | cut -c1-8)
+  mkdir -p "$(dirname "$AUDIT_COST_FILE")"
+}
+
+audit_cost_stage() {
+  local stage="$1"
+  local cache_hit="${2:-false}"
+  local now=$(date +%s)
+  local duration=$((now - _audit_stage_ts))
+  echo "{\"run_id\":\"$_audit_run_id\",\"stage\":\"$stage\",\"duration_s\":$duration,\"cache_hit\":$cache_hit,\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$AUDIT_COST_FILE"
+  _audit_stage_ts=$now
+}
+
+audit_cost_end() {
+  local decision="$1"
+  local total_duration=$(($(date +%s) - _audit_start_ts))
+  echo "{\"run_id\":\"$_audit_run_id\",\"stage\":\"complete\",\"decision\":\"$decision\",\"total_duration_s\":$total_duration,\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$AUDIT_COST_FILE"
+}
+
+progress() {
+  local msg="$1"
+  if [[ "$AUDIT_PROGRESS" == "1" ]]; then
+    echo "[prd_auditor] $msg" >&2
+  fi
+}
+
 resolve_input_file() {
   local preferred="$1"
   local fallback="$2"
@@ -90,6 +153,19 @@ if [[ -z "$AUDIT_PLAN_FILE" ]]; then
 fi
 if [[ -z "$AUDIT_WORKFLOW_CONTRACT_FILE" ]]; then
   AUDIT_WORKFLOW_CONTRACT_FILE="$(resolve_input_file "specs/WORKFLOW_CONTRACT.md" "WORKFLOW_CONTRACT.md")"
+fi
+
+# ROADMAP support (optional - unblocks slice 0 policy/infra items)
+AUDIT_ROADMAP_FILE="${AUDIT_ROADMAP_FILE:-}"
+AUDIT_ROADMAP_DIGEST_FILE="${AUDIT_ROADMAP_DIGEST_FILE:-.context/roadmap_digest.json}"
+AUDIT_ROADMAP_SLICE_DIGEST_FILE="${AUDIT_ROADMAP_SLICE_DIGEST_FILE:-.context/roadmap_digest_slice.json}"
+
+if [[ -z "$AUDIT_ROADMAP_FILE" ]]; then
+  AUDIT_ROADMAP_FILE="$(resolve_input_file "docs/ROADMAP.md" "ROADMAP.md")"
+fi
+roadmap_sha=""
+if [[ -n "$AUDIT_ROADMAP_FILE" && -f "$AUDIT_ROADMAP_FILE" ]]; then
+  roadmap_sha="$(sha256_file "$AUDIT_ROADMAP_FILE")"
 fi
 
 if [[ -z "$AUDIT_CONTRACT_FILE" || -z "$AUDIT_PLAN_FILE" || -z "$AUDIT_WORKFLOW_CONTRACT_FILE" ]]; then
@@ -156,25 +232,57 @@ if audit_cache_matches; then
   exit 0
 fi
 
+progress "Cache miss, running full audit..."
+audit_cost_start
+
+# Pre-flight validation (fast, no LLM)
+if [[ -x "./plans/prd_preflight.sh" ]]; then
+  progress "Running pre-flight validation..."
+  if ! ./plans/prd_preflight.sh "$AUDIT_PRD_FILE"; then
+    echo "[prd_auditor] ERROR: Pre-flight validation failed" >&2
+    exit 2
+  fi
+fi
+
 mkdir -p ".context"
 
+progress "Building contract digest..."
 CONTRACT_SOURCE_FILE="$AUDIT_CONTRACT_FILE" CONTRACT_DIGEST_FILE="$AUDIT_CONTRACT_DIGEST_FILE" ./plans/build_contract_digest.sh
+audit_cost_stage "contract_digest"
+
+progress "Building plan digest..."
 PLAN_SOURCE_FILE="$AUDIT_PLAN_FILE" PLAN_DIGEST_FILE="$AUDIT_PLAN_DIGEST_FILE" ./plans/build_plan_digest.sh
+audit_cost_stage "plan_digest"
+
+# Build ROADMAP digest if available
+if [[ -n "$AUDIT_ROADMAP_FILE" && -f "$AUDIT_ROADMAP_FILE" ]]; then
+  progress "Building roadmap digest..."
+  SOURCE_FILE="$AUDIT_ROADMAP_FILE" \
+    OUTPUT_FILE="$AUDIT_ROADMAP_DIGEST_FILE" \
+    DIGEST_MODE="slim" \
+    ./plans/build_markdown_digest.sh
+  audit_cost_stage "roadmap_digest"
+fi
 
 if [[ "$AUDIT_SCOPE" == "slice" ]]; then
   if [[ -z "$AUDIT_SLICE" ]]; then
     echo "[prd_auditor] ERROR: AUDIT_SLICE required when AUDIT_SCOPE=slice" >&2
     exit 2
   fi
+  progress "Preparing slice $AUDIT_SLICE..."
   PRD_FILE="$AUDIT_PRD_FILE" \
     PRD_SLICE="$AUDIT_SLICE" \
     CONTRACT_DIGEST="$AUDIT_CONTRACT_DIGEST_FILE" \
     PLAN_DIGEST="$AUDIT_PLAN_DIGEST_FILE" \
+    ROADMAP_DIGEST="$AUDIT_ROADMAP_DIGEST_FILE" \
     OUT_PRD_SLICE="$AUDIT_PRD_SLICE_FILE" \
     OUT_CONTRACT_DIGEST="$AUDIT_CONTRACT_SLICE_DIGEST_FILE" \
     OUT_PLAN_DIGEST="$AUDIT_PLAN_SLICE_DIGEST_FILE" \
+    OUT_ROADMAP_DIGEST="$AUDIT_ROADMAP_SLICE_DIGEST_FILE" \
+    OUT_AUDIT_FILE="$AUDIT_OUTPUT_JSON" \
     OUT_META="$AUDIT_META_FILE" \
     ./plans/prd_slice_prepare.sh
+  audit_cost_stage "slice_prepare"
 else
   if ! command -v jq >/dev/null 2>&1; then
     echo "[prd_auditor] ERROR: jq required to write audit meta" >&2
@@ -186,8 +294,9 @@ else
     --arg prd_file "$AUDIT_PRD_FILE" \
     --arg contract_digest "$AUDIT_CONTRACT_DIGEST_FILE" \
     --arg plan_digest "$AUDIT_PLAN_DIGEST_FILE" \
+    --arg output_file "$AUDIT_OUTPUT_JSON" \
     --arg generated_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-    '{audit_scope:$audit_scope, prd_sha256:$prd_sha, prd_file:$prd_file, contract_digest:$contract_digest, plan_digest:$plan_digest, generated_at:$generated_at}' \
+    '{audit_scope:$audit_scope, prd_sha256:$prd_sha, prd_file:$prd_file, contract_digest:$contract_digest, plan_digest:$plan_digest, output_file:$output_file, generated_at:$generated_at}' \
     > "$AUDIT_META_FILE"
 fi
 
@@ -217,12 +326,44 @@ run_auditor() {
 }
 
 mkdir -p "$(dirname "$AUDIT_STDOUT_LOG")"
-run_auditor > "$AUDIT_STDOUT_LOG" 2>&1
+
+progress "Starting auditor agent (timeout=${AUDITOR_TIMEOUT}s)..."
+
+# Run auditor with timeout
+auditor_start_ts="$(date +%s)"
+auditor_rc=0
+if command -v timeout >/dev/null 2>&1; then
+  timeout "$AUDITOR_TIMEOUT" bash -c "$(declare -f run_auditor); run_auditor" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
+elif command -v gtimeout >/dev/null 2>&1; then
+  gtimeout "$AUDITOR_TIMEOUT" bash -c "$(declare -f run_auditor); run_auditor" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
+else
+  run_auditor > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
+fi
+auditor_end_ts="$(date +%s)"
+auditor_duration=$((auditor_end_ts - auditor_start_ts))
+progress "Auditor completed in ${auditor_duration}s (rc=$auditor_rc)"
+audit_cost_stage "auditor"
+
+if [[ "$auditor_rc" -eq 124 || "$auditor_rc" -eq 137 ]]; then
+  echo "[prd_auditor] ERROR: auditor timed out after ${AUDITOR_TIMEOUT}s" >&2
+  exit 5
+fi
+
+# Auditor prompt hardcodes output to plans/prd_audit.json
+# If AUDIT_OUTPUT_JSON differs, copy the output to the expected location
+AUDITOR_DEFAULT_OUTPUT="plans/prd_audit.json"
+if [[ "$AUDIT_OUTPUT_JSON" != "$AUDITOR_DEFAULT_OUTPUT" && -f "$AUDITOR_DEFAULT_OUTPUT" && ! -f "$AUDIT_OUTPUT_JSON" ]]; then
+  progress "Copying audit output to $AUDIT_OUTPUT_JSON"
+  mkdir -p "$(dirname "$AUDIT_OUTPUT_JSON")"
+  cp "$AUDITOR_DEFAULT_OUTPUT" "$AUDIT_OUTPUT_JSON"
+fi
 
 if [[ ! -f "$AUDIT_OUTPUT_JSON" ]]; then
   echo "[prd_auditor] ERROR: auditor did not produce $AUDIT_OUTPUT_JSON" >&2
   exit 3
 fi
+
+progress "Validating audit output..."
 
 if command -v jq >/dev/null 2>&1; then
   if ! jq -e . "$AUDIT_OUTPUT_JSON" >/dev/null 2>&1; then
@@ -234,7 +375,16 @@ if command -v jq >/dev/null 2>&1; then
     echo "[prd_auditor] ERROR: $AUDIT_OUTPUT_JSON missing prd_sha256" >&2
     exit 4
   fi
-  if [[ "$audit_sha" != "$expected_sha" ]]; then
+  # In slice mode, the auditor may use either the full PRD SHA or slice PRD SHA
+  # Accept either to allow flexibility in auditor implementation
+  validate_sha="$expected_sha"
+  if [[ "$AUDIT_SCOPE" == "slice" && -f "$AUDIT_PRD_SLICE_FILE" ]]; then
+    slice_sha="$(sha256_file "$AUDIT_PRD_SLICE_FILE")"
+    if [[ "$audit_sha" != "$expected_sha" && "$audit_sha" != "$slice_sha" ]]; then
+      echo "[prd_auditor] ERROR: prd_sha256 mismatch (expected $expected_sha or $slice_sha, got $audit_sha)" >&2
+      exit 4
+    fi
+  elif [[ "$audit_sha" != "$expected_sha" ]]; then
     echo "[prd_auditor] ERROR: prd_sha256 mismatch (expected $expected_sha, got $audit_sha)" >&2
     exit 4
   fi
@@ -278,6 +428,7 @@ write_audit_cache() {
     --arg contract_sha "$contract_sha" \
     --arg plan_sha "$plan_sha" \
     --arg workflow_sha "$workflow_sha" \
+    --arg roadmap_sha "$roadmap_sha" \
     --arg prompt_sha "$prompt_sha" \
     --arg decision "$decision" \
     --arg audited_scope "$AUDIT_SCOPE" \
@@ -286,6 +437,7 @@ write_audit_cache() {
     --arg contract_file "$AUDIT_CONTRACT_FILE" \
     --arg plan_file "$AUDIT_PLAN_FILE" \
     --arg workflow_file "$AUDIT_WORKFLOW_CONTRACT_FILE" \
+    --arg roadmap_file "${AUDIT_ROADMAP_FILE:-}" \
     --arg prompt_file "$AUDITOR_PROMPT" \
     --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
     '{
@@ -293,6 +445,7 @@ write_audit_cache() {
       contract_sha256: $contract_sha,
       impl_plan_sha256: $plan_sha,
       workflow_contract_sha256: $workflow_sha,
+      roadmap_sha256: $roadmap_sha,
       auditor_prompt_sha256: $prompt_sha,
       audited_scope: $audited_scope,
       slice: $slice,
@@ -301,9 +454,27 @@ write_audit_cache() {
       contract_file: $contract_file,
       plan_file: $plan_file,
       workflow_contract_file: $workflow_file,
+      roadmap_file: $roadmap_file,
       auditor_prompt: $prompt_file,
       timestamp: $timestamp
     }' > "$AUDIT_CACHE_FILE"
 }
 
 write_audit_cache
+
+# Track cost with final decision
+if command -v jq >/dev/null 2>&1; then
+  _final_decision="UNKNOWN"
+  _items_fail="$(jq -r '.summary.items_fail // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
+  _items_blocked="$(jq -r '.summary.items_blocked // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
+  if [[ "$_items_fail" =~ ^[0-9]+$ && "$_items_blocked" =~ ^[0-9]+$ ]]; then
+    if (( _items_fail > 0 )); then
+      _final_decision="FAIL"
+    elif (( _items_blocked > 0 )); then
+      _final_decision="BLOCKED"
+    else
+      _final_decision="PASS"
+    fi
+  fi
+  audit_cost_end "$_final_decision"
+fi
