@@ -113,6 +113,20 @@ AT-1055
 - Pass criteria: TradingMode Active and OPEN proceeds when CSP gates pass.
 - Fail criteria: TradingMode ReduceOnly/Kill or OPEN blocked due solely to ExecutionStyle.
 
+## **Phase 0: Operational Prerequisites (Non-Negotiable)**
+
+Before any code implementation begins, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
+
+| ID | Item | Purpose | Evidence Required |
+|----|------|---------|-------------------|
+| **P0-A** | Launch Policy Baseline | Define explicit constraints on what the system is allowed to do | `docs/launch_policy.md` |
+| **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
+| **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
+| **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
+| **P0-E** | Health Endpoint Scaffolding | Implement `/status` returning `ok`, `build_id`, `contract_version` | `docs/health_endpoint.md`, passing tests |
+
+**Rationale:** These items are operational controls, not system behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented.
+
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
 
