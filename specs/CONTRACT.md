@@ -125,6 +125,13 @@ Before any code implementation begins, these operational baseline items MUST be 
 | **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
 | **P0-E** | Health Endpoint Scaffolding | Implement `/status` returning `ok`, `build_id`, `contract_version` | `docs/health_endpoint.md`, passing tests |
 
+**Anchors (for PRD traceability):**
+- P0-A Launch Policy Baseline
+- P0-B Environment Isolation
+- P0-C Keys & Secrets Baseline
+- P0-D Break-Glass Runbook
+- P0-E Health Endpoint Scaffolding
+
 **Rationale:** These items are operational controls, not system behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
