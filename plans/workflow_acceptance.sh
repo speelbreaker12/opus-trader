@@ -2544,9 +2544,8 @@ if test_start "2" "attempted pass flip without verify_post is prevented"; then
 reset_state
 valid_prd_2="$WORKTREE/.ralph/valid_prd_2.json"
 write_valid_prd "$valid_prd_2" "S1-001"
-before_blocked="$(count_blocked)"
-set +e
-run_ralph env \
+  set +e
+  run_ralph env \
   PRD_FILE="$valid_prd_2" \
   PROGRESS_FILE="$WORKTREE/.ralph/progress.txt" \
   VERIFY_SH="$STUB_DIR/verify_once_then_fail.sh" \
@@ -2559,20 +2558,15 @@ run_ralph env \
   RPH_SELECTION_MODE=harness \
   RPH_SELF_HEAL=0 \
   ./plans/ralph.sh 1 >/dev/null 2>&1
-rc=$?
-set -e
-if [[ "$rc" -eq 0 ]]; then
-  echo "FAIL: expected non-zero exit when verify_post fails" >&2
-  exit 1
-fi
-after_blocked="$(count_blocked)"
-if [[ "$after_blocked" -le "$before_blocked" ]]; then
-  echo "FAIL: expected blocked artifact for verify_post failure" >&2
-  exit 1
-fi
-pass_state="$(run_in_worktree jq -r '.items[0].passes' "$valid_prd_2")"
-if [[ "$pass_state" != "false" ]]; then
-  echo "FAIL: passes flipped without verify_post green" >&2
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: expected non-zero exit when verify_post fails" >&2
+    exit 1
+  fi
+  pass_state="$(run_in_worktree jq -r '.items[0].passes' "$valid_prd_2")"
+  if [[ "$pass_state" != "false" ]]; then
+    echo "FAIL: passes flipped without verify_post green" >&2
   exit 1
 fi
 manifest_path=".ralph/artifacts.json"
@@ -2585,15 +2579,24 @@ if ! run_in_worktree ./plans/artifacts_validate.sh "$manifest_path" >/dev/null 2
   exit 1
 fi
 manifest_status="$(run_in_worktree jq -r '.final_verify_status' "$manifest_path")"
-if [[ "$manifest_status" != "BLOCKED" ]]; then
-  echo "FAIL: expected final_verify_status=BLOCKED on verify_post failure" >&2
-  exit 1
-fi
-blocked_reason="$(run_in_worktree jq -r '.blocked_reason' "$manifest_path")"
-if [[ "$blocked_reason" != "verify_post_failed" ]]; then
-  echo "FAIL: expected blocked_reason=verify_post_failed" >&2
-  exit 1
-fi
+  if [[ "$manifest_status" != "BLOCKED" ]]; then
+    echo "FAIL: expected final_verify_status=BLOCKED on verify_post failure" >&2
+    exit 1
+  fi
+  blocked_dir="$(run_in_worktree jq -r '.blocked_dir // empty' "$manifest_path")"
+  if [[ -z "$blocked_dir" ]]; then
+    echo "FAIL: expected blocked_dir recorded in manifest" >&2
+    exit 1
+  fi
+  if ! run_in_worktree test -d "$blocked_dir"; then
+    echo "FAIL: expected blocked_dir to exist for verify_post failure" >&2
+    exit 1
+  fi
+  blocked_reason="$(run_in_worktree jq -r '.blocked_reason' "$manifest_path")"
+  if [[ "$blocked_reason" != "verify_post_failed" ]]; then
+    echo "FAIL: expected blocked_reason=verify_post_failed" >&2
+    exit 1
+  fi
 if ! run_in_worktree jq -e '.skipped_checks[]? | select(.name=="story_verify" and .reason=="verify_post_failed")' "$manifest_path" >/dev/null 2>&1; then
   echo "FAIL: expected skipped_checks verify_post_failed entry in manifest" >&2
   exit 1
