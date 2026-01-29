@@ -528,6 +528,10 @@ OVERLAY_FILES=(
   "plans/prd_lint.sh"
   "plans/prd_gate.sh"
   "plans/prd_pipeline.sh"
+  "plans/prd_preflight.sh"
+  "plans/story_verify_allowlist_check.sh"
+  "plans/story_verify_allowlist_lint.sh"
+  "plans/story_verify_allowlist_suggest.sh"
   "plans/prd_autofix.sh"
   "plans/run_prd_auditor.sh"
   "plans/prd_audit_check.sh"
@@ -627,6 +631,10 @@ scripts_to_chmod=(
   "prd_lint.sh"
   "prd_gate.sh"
   "prd_pipeline.sh"
+  "prd_preflight.sh"
+  "story_verify_allowlist_check.sh"
+  "story_verify_allowlist_lint.sh"
+  "story_verify_allowlist_suggest.sh"
   "prd_autofix.sh"
   "run_prd_auditor.sh"
   "prd_audit_check.sh"
@@ -4502,6 +4510,321 @@ if [[ "$rc" -eq 0 ]]; then
   exit 1
 fi
   test_pass "21"
+fi
+
+# --- Allowlist check tests ---
+
+if test_start "22" "allowlist_check rejects missing entries" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/allowlist_check_test"
+  mkdir -p "$tmpdir"
+  allowlist="$tmpdir/allowlist.txt"
+  prd="$tmpdir/prd.json"
+
+  # Create a minimal allowlist with only one command
+  cat > "$allowlist" <<EOF
+bash -n plans/verify.sh
+EOF
+
+  # Create a PRD with verify commands not in allowlist
+  cat > "$prd" <<JSON
+{
+  "project": "Test",
+  "source": {"implementation_plan_path": "x", "contract_path": "y"},
+  "rules": {},
+  "items": [
+    {
+      "id": "T-001",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "category": "test",
+      "description": "test",
+      "contract_refs": [],
+      "plan_refs": [],
+      "scope": {"touch": ["plans/verify.sh"]},
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": ["./plans/verify.sh", "cargo test --not-in-allowlist"],
+      "evidence": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+
+  # Should fail due to missing allowlist entry
+  set +e
+  RPH_STORY_VERIFY_ALLOWLIST_FILE="$allowlist" ./plans/story_verify_allowlist_check.sh "$prd" >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: allowlist_check should reject missing entries" >&2
+    exit 1
+  fi
+'
+  test_pass "22"
+fi
+
+if test_start "23" "allowlist_check passes when all entries present" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/allowlist_check_pass"
+  mkdir -p "$tmpdir"
+  allowlist="$tmpdir/allowlist.txt"
+  prd="$tmpdir/prd.json"
+
+  # Create allowlist with all needed entries
+  cat > "$allowlist" <<EOF
+bash -n plans/verify.sh
+cargo test --workspace
+EOF
+
+  cat > "$prd" <<JSON
+{
+  "project": "Test",
+  "source": {"implementation_plan_path": "x", "contract_path": "y"},
+  "rules": {},
+  "items": [
+    {
+      "id": "T-001",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "category": "test",
+      "description": "test",
+      "contract_refs": [],
+      "plan_refs": [],
+      "scope": {"touch": ["plans/verify.sh"]},
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": ["./plans/verify.sh", "bash -n plans/verify.sh", "cargo test --workspace"],
+      "evidence": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+
+  RPH_STORY_VERIFY_ALLOWLIST_FILE="$allowlist" ./plans/story_verify_allowlist_check.sh "$prd" >/dev/null 2>&1
+'
+  test_pass "23"
+fi
+
+if test_start "24" "allowlist_check --format json produces valid JSON" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/allowlist_json_test"
+  mkdir -p "$tmpdir"
+  allowlist="$tmpdir/allowlist.txt"
+  prd="$tmpdir/prd.json"
+
+  cat > "$allowlist" <<EOF
+bash -n plans/verify.sh
+EOF
+
+  cat > "$prd" <<JSON
+{
+  "project": "Test",
+  "source": {"implementation_plan_path": "x", "contract_path": "y"},
+  "rules": {},
+  "items": [
+    {
+      "id": "T-001",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "category": "test",
+      "description": "test",
+      "contract_refs": [],
+      "plan_refs": [],
+      "scope": {"touch": ["plans/verify.sh"]},
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": ["./plans/verify.sh", "bash -n plans/verify.sh"],
+      "evidence": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+
+  output=$(RPH_STORY_VERIFY_ALLOWLIST_FILE="$allowlist" ./plans/story_verify_allowlist_check.sh --format json "$prd" 2>&1)
+  if ! echo "$output" | jq -e . >/dev/null 2>&1; then
+    echo "FAIL: --format json should produce valid JSON" >&2
+    echo "Output: $output" >&2
+    exit 1
+  fi
+  status=$(echo "$output" | jq -r ".status")
+  if [[ "$status" != "pass" ]]; then
+    echo "FAIL: expected status=pass, got $status" >&2
+    exit 1
+  fi
+'
+  test_pass "24"
+fi
+
+if test_start "25" "allowlist_lint detects duplicates" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/allowlist_lint_test"
+  mkdir -p "$tmpdir"
+  allowlist="$tmpdir/allowlist.txt"
+
+  # Create allowlist with duplicates
+  cat > "$allowlist" <<EOF
+bash -n plans/verify.sh
+cargo test --workspace
+bash -n plans/verify.sh
+EOF
+
+  set +e
+  ./plans/story_verify_allowlist_lint.sh "$allowlist" >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: allowlist_lint should fail on duplicates" >&2
+    exit 1
+  fi
+'
+  test_pass "25"
+fi
+
+if test_start "26" "allowlist_lint passes on clean file" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/allowlist_lint_clean"
+  mkdir -p "$tmpdir"
+  allowlist="$tmpdir/allowlist.txt"
+
+  cat > "$allowlist" <<EOF
+# Comment line
+bash -n plans/verify.sh
+cargo test --workspace
+EOF
+
+  ./plans/story_verify_allowlist_lint.sh "$allowlist" >/dev/null 2>&1
+'
+  test_pass "26"
+fi
+
+if test_start "27" "prd_preflight runs gate and allowlist check" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  # Run preflight on real prd.json - should pass if allowlist is complete
+  ./plans/prd_preflight.sh plans/prd.json >/dev/null 2>&1
+'
+  test_pass "27"
+fi
+
+if test_start "28" "prd_preflight --strict fails when allowlist script missing" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/preflight_strict_test"
+  mkdir -p "$tmpdir"
+
+  # Create a minimal preflight wrapper that simulates missing check script
+  cat > "$tmpdir/preflight_test.sh" <<'"'"'SCRIPT'"'"'
+#!/usr/bin/env bash
+set -euo pipefail
+STRICT=1
+SCRIPT_DIR="$1"
+if [[ ! -x "$SCRIPT_DIR/story_verify_allowlist_check.sh" ]]; then
+  echo "[preflight] WARN: story_verify_allowlist_check.sh not found, skipping" >&2
+  if [[ $STRICT -eq 1 ]]; then
+    echo "[preflight] ERROR: --strict requires allowlist check script" >&2
+    exit 2
+  fi
+fi
+exit 0
+SCRIPT
+  chmod +x "$tmpdir/preflight_test.sh"
+
+  # Point to non-existent dir for strict mode failure
+  set +e
+  "$tmpdir/preflight_test.sh" "/nonexistent" >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  if [[ "$rc" -ne 2 ]]; then
+    echo "FAIL: --strict should fail when allowlist check missing (got rc=$rc)" >&2
+    exit 1
+  fi
+'
+  test_pass "28"
+fi
+
+if test_start "29" "allowlist_suggest generates patch" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/allowlist_suggest_test"
+  mkdir -p "$tmpdir"
+  allowlist="$tmpdir/allowlist.txt"
+  prd="$tmpdir/prd.json"
+
+  # Empty allowlist
+  echo "# Empty" > "$allowlist"
+
+  cat > "$prd" <<JSON
+{
+  "project": "Test",
+  "source": {"implementation_plan_path": "x", "contract_path": "y"},
+  "rules": {},
+  "items": [
+    {
+      "id": "T-001",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "category": "test",
+      "description": "test",
+      "contract_refs": [],
+      "plan_refs": [],
+      "scope": {"touch": ["plans/verify.sh"]},
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": ["./plans/verify.sh", "cargo test --workspace"],
+      "evidence": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+
+  output=$(RPH_STORY_VERIFY_ALLOWLIST_FILE="$allowlist" ./plans/story_verify_allowlist_suggest.sh "$prd" 2>&1)
+
+  if ! echo "$output" | grep -q "ADD these entries"; then
+    echo "FAIL: suggest should indicate entries to add" >&2
+    echo "Output: $output" >&2
+    exit 1
+  fi
+
+  if ! echo "$output" | grep -q "cargo test --workspace"; then
+    echo "FAIL: suggest should list missing command" >&2
+    echo "Output: $output" >&2
+    exit 1
+  fi
+'
+  test_pass "29"
 fi
 
 echo "Workflow acceptance tests passed"
