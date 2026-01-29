@@ -2184,7 +2184,7 @@ JSON
   test_pass "0a"
 fi
 
-if test_start "0b" "slice preflight blocks unresolved refs"; then
+if test_start "0b" "slice preflight warns but continues on unresolved refs"; then
   run_in_worktree bash -c '
   set -euo pipefail
   tmpdir=".ralph/audit_slice_preflight"
@@ -2245,8 +2245,12 @@ JSON
   PRD_FILE="$prd" PRD_SLICE=1 CONTRACT_DIGEST="$tmpdir/contract_digest.json" PLAN_DIGEST="$tmpdir/plan_digest.json" OUT_PRD_SLICE="$tmpdir/prd_slice.json" OUT_CONTRACT_DIGEST="$tmpdir/contract_slice.json" OUT_PLAN_DIGEST="$tmpdir/plan_slice.json" OUT_META="$tmpdir/meta.json" ./plans/prd_slice_prepare.sh >/dev/null 2>&1
   rc=$?
   set -e
-  if [[ "$rc" -eq 0 ]]; then
-    echo "FAIL: expected prd_slice_prepare to fail on unresolved refs" >&2
+  if [[ "$rc" -ne 0 ]]; then
+    echo "FAIL: expected prd_slice_prepare to succeed (unresolved refs are warnings)" >&2
+    exit 1
+  fi
+  if [[ ! -s "$tmpdir/prd_slice.json" ]]; then
+    echo "FAIL: expected prd_slice.json output from prd_slice_prepare" >&2
     exit 1
   fi
 '

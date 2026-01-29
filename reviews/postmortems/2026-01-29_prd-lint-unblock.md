@@ -1,8 +1,8 @@
 # PR Postmortem (Agent-Filled)
 
 ## 0) What shipped
-- Feature/behavior: PRD metadata fixes to unblock Ralph (scope.create/touch alignment, resolvable plan_refs/contract_refs, required observability.metrics) plus story verify allowlist updates, workflow acceptance hardening (duplicate allowlist detection + ralph state tamper stub fixes), and the required AGENTS.md Input Guard section.
-- What value it has (what problem it solves, upgrade provides): PRD gate and workflow acceptance now pass so Ralph/verify can reach the agent step; avoids false-negative lint/ref failures, allowlist drift, missing AGENTS.md compliance markers, and false negatives in ralph tamper detection tests.
+- Feature/behavior: PRD metadata fixes to unblock Ralph (scope.create/touch alignment, resolvable plan_refs/contract_refs, required observability.metrics) plus story verify allowlist updates, workflow acceptance hardening (duplicate allowlist detection, ralph state tamper stub fix, and slice-preflight expectation aligned to warn-not-fail behavior), and the required AGENTS.md Input Guard section.
+- What value it has (what problem it solves, upgrade provides): PRD gate and workflow acceptance now pass so Ralph/verify can reach the agent step; avoids false-negative lint/ref failures, allowlist drift, missing AGENTS.md compliance markers, false negatives in ralph tamper detection tests, and mismatched slice-preflight expectations.
 - Governing contract: Workflow contract (specs/WORKFLOW_CONTRACT.md).
 
 ## 1) Constraint (ONE)
