@@ -1898,6 +1898,7 @@ cat > "$STUB_DIR/agent_modify_ralph_state.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p .ralph
+rm -f .ralph/state.json
 cat > .ralph/state.json <<'JSON'
 {"last_verify_post_rc":0,"tampered":true}
 JSON
