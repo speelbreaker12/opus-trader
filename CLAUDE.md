@@ -200,6 +200,33 @@ except ValidationError as e:
 
 ## Recommended Workflows
 
+### PRD Story Implementation (MANDATORY: Ralph Loop Only)
+
+**CRITICAL: Pending PRD stories (`passes=false`) in `plans/prd.json` MUST be implemented via the Ralph harness.**
+
+Do NOT manually implement pending PRD stories. Ralph enforces:
+- WIP=1 (one story, one commit per iteration)
+- Contract alignment review (mandatory)
+- Scope gating (prevents out-of-scope edits)
+- Verification gates (tests must pass)
+- Audit trail (state + artifacts)
+
+**How to run Ralph:**
+```bash
+# Thorough mode (recommended)
+RPH_PROFILE=thorough ./plans/ralph.sh 10
+
+# Fast iteration
+RPH_PROFILE=fast ./plans/ralph.sh 5
+
+# See SKILLS/ralph-loop.md for full guide
+```
+
+**Exceptions allowed without Ralph:**
+- Post-implementation fixes: Stories with `passes=true` can be manually corrected/improved
+- Read-only operations: Review, status checks, scope analysis
+- Non-PRD work: Workflow maintenance, bug fixes, documentation
+
 ### Interview-Driven Specs (for new features)
 Before implementing complex features, build detailed specs through Q&A:
 

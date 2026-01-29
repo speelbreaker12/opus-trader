@@ -12,6 +12,7 @@ Read this first. It is the shortest, enforceable workflow summary.
 - Verification is mandatory; never weaken gates or tests.
 - No postmortem, no merge: every PR must include a filled postmortem entry under `reviews/postmortems/`.
 - MUST declare the governing contract (workflow vs bot) in the PR postmortem; enforced by postmortem check.
+- **Pending PRD stories MUST be implemented via Ralph loop ONLY**: If a user asks to implement a PRD story with `passes=false` from `plans/prd.json`, you MUST check the status first, then refuse manual implementation and guide them to run `./plans/ralph.sh`. Output `<promise>BLOCKED_PRD_REQUIRES_RALPH</promise>` if asked to manually implement pending stories. Post-implementation fixes to stories with `passes=true` are allowed. Read-only operations (reviewing PRD, checking status) are allowed.
 
 
 ## Response Protocol
@@ -57,10 +58,54 @@ Then end with: `<promise>COMPLETE</promise>`
 
 For read-only doc reviews: read the target docs first; consult contract/workflow docs only if you detect a conflict or a safety-relevant claim.
 
-## Ralph loop only (PRD iterations)
+## Ralph loop discipline (MANDATORY for PRD stories)
+
+**CRITICAL: Pending PRD stories (`passes=false`) from `plans/prd.json` are ONLY implemented via the Ralph harness.**
+
+### When you are INSIDE a Ralph iteration
+You will see context like `.ralph/iter_N_*/selected_item.json` or explicit instructions that Ralph selected a story.
 - WIP=1: exactly one PRD item and one commit per iteration.
 - Work only the selected PRD item.
 - Fail closed on PRD ambiguity; set needs_human_decision=true and stop.
+- Follow the PRD scope (scope.touch, scope.create) strictly.
+
+### When asked to implement PENDING PRD stories OUTSIDE Ralph
+**FORBIDDEN**: Do NOT manually implement stories with `passes=false`.
+- If user says "implement S2-001" and S2-001 has `passes=false` → BLOCK
+- Output: `<promise>BLOCKED_PRD_REQUIRES_RALPH</promise>`
+- Guide user: "Pending PRD stories must be implemented via Ralph harness. Run: ./plans/ralph.sh"
+- How to check: `jq '.items[] | select(.id=="S2-001") | .passes' plans/prd.json`
+
+### ALLOWED: Fixes to already-implemented stories
+**Post-implementation corrections are allowed manually:**
+- If a story has `passes=true` (already implemented by Ralph)
+- User asks to fix/correct/improve the implementation
+- Bug fixes or adjustments to previously-completed work
+- Still requires: `./plans/verify.sh` must pass before commit
+
+**Example allowed:**
+```
+User: "S2-001 was implemented but the quantization logic has a bug, please fix it"
+Agent: [Checks S2-001 passes=true] → Manual fix is allowed
+```
+
+**Example blocked:**
+```
+User: "implement S2-001"
+Agent: [Checks S2-001 passes=false] → BLOCKED, must use Ralph
+```
+
+### ALLOWED: Non-PRD work
+- Workflow maintenance (`plans/ralph.sh`, `plans/verify.sh`, etc.)
+- Bug fixes not tracked in PRD
+- Documentation updates
+- Ad-hoc tasks outside PRD workflow
+
+### Why this matters
+- Ralph enforces WIP=1, contract review, scope gating, verification gates
+- Manual implementation of pending stories bypasses critical safety guardrails
+- Ralph maintains state, artifacts, and audit trail
+- Post-implementation fixes preserve developer agility while maintaining gates
 
 ## Repo Path Guardrails (Non-Negotiable)
 

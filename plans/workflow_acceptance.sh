@@ -1123,6 +1123,10 @@ if ! run_in_worktree grep -Fq "<!-- VERIFY_CI_SATISFIES_V1 -->" "AGENTS.md"; the
   echo "FAIL: AGENTS.md missing verify CI marker" >&2
   exit 1
 fi
+if ! run_in_worktree grep -Fq "<promise>BLOCKED_PRD_REQUIRES_RALPH</promise>" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing Ralph-only PRD sentinel" >&2
+  exit 1
+fi
 if ! run_in_worktree grep -Fq "### 1) Input Guard (conditional)" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing input guard section header" >&2
   exit 1
