@@ -342,7 +342,9 @@
       "category": "infra",
       "description": "Implement health endpoint returning ok/build_id/contract_version.",
       "contract_refs": [
-        "P0-E Health Endpoint Scaffolding"
+        "P0-E Health Endpoint Scaffolding",
+        "Anchor-021",
+        "VR-024"
       ],
       "plan_refs": [
         "P0-E"
@@ -420,7 +422,30 @@
       "contract_refs": [
         "CONTRACT.md Appendix A: Configuration Defaults (Safety-Critical Thresholds)",
         "CONTRACT.md AT-341",
-        "CONTRACT.md AT-040"
+        "CONTRACT.md AT-040",
+        "Anchor-001",
+        "Anchor-002",
+        "Anchor-003",
+        "Anchor-008",
+        "Anchor-009",
+        "Anchor-010",
+        "Anchor-012",
+        "Anchor-015",
+        "Anchor-016",
+        "Anchor-020",
+        "Anchor-022",
+        "VR-001",
+        "VR-002",
+        "VR-003",
+        "VR-004a",
+        "VR-004b",
+        "VR-005",
+        "VR-006",
+        "VR-008",
+        "VR-009",
+        "VR-015",
+        "VR-016",
+        "VR-023"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.0 — Repo verification harness (plans/verify.sh) + safety-critical config defaults (Appendix A)"
@@ -465,7 +490,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -722,7 +747,8 @@
       "description": "Enforce InstrumentCache TTL and degrade RiskState on stale metadata.",
       "contract_refs": [
         "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-        "CONTRACT.md AT-104"
+        "CONTRACT.md AT-104",
+        "VR-013"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
@@ -822,7 +848,8 @@
       "category": "risk",
       "description": "Add required TTL observability hooks for instrument cache freshness.",
       "contract_refs": [
-        "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement"
+        "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+        "VR-013"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
@@ -1201,7 +1228,9 @@
       "description": "Discover current OrderSize logic and document gaps vs contract before implementation.",
       "contract_refs": [
         "CONTRACT.md 1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract)",
-        "CONTRACT.md OrderSize struct (MUST implement):"
+        "CONTRACT.md OrderSize struct (MUST implement):",
+        "Anchor-021",
+        "VR-024"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.2 — OrderSize canonical sizing + notional invariant"
@@ -1262,7 +1291,9 @@
       "category": "qa",
       "description": "Discover current dispatcher mapping logic and document gaps vs contract before implementation.",
       "contract_refs": [
-        "CONTRACT.md Dispatcher Rules (Deribit request mapping):"
+        "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
+        "Anchor-021",
+        "VR-024"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher amount mapping + mismatch reject→Degraded"
@@ -1370,7 +1401,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)",
@@ -1418,7 +1449,9 @@
       "contract_refs": [
         "CONTRACT.md 1.1 Labeling & Idempotency Contract",
         "CONTRACT.md 1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)",
-        "AT-020"
+        "AT-020",
+        "Anchor-017",
+        "VR-017"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 2 — Quantization \\+ Labeling \\+ Idempotency / S2.2 — Intent hash from quantized fields only"
@@ -1460,7 +1493,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1 Labeling & Idempotency Contract",
@@ -1541,7 +1574,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md §1.1 Labeling & Idempotency Contract",
@@ -1586,7 +1619,11 @@
       "description": "Disambiguate label matches deterministically and degrade on ambiguity.",
       "contract_refs": [
         "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
-        "AT-022"
+        "AT-022",
+        "Anchor-001",
+        "Anchor-019",
+        "VR-021",
+        "VR-022"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 2 — Quantization \\+ Labeling \\+ Idempotency / S2.4 — Label match disambiguation; ambiguity→Degraded"
@@ -1693,7 +1730,13 @@
         "AT-019",
         "AT-913",
         "AT-914",
-        "AT-915"
+        "AT-915",
+        "Anchor-013",
+        "Anchor-014",
+        "Anchor-023",
+        "VR-025",
+        "VR-026",
+        "VR-027"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 3 — Order‑Type Preflight \\+ Venue Capabilities (artifact‑backed) / S3.1 — Preflight guard (market/stop/linked rules)"
@@ -1889,7 +1932,11 @@
         "CONTRACT.md 1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
         "AT-028",
         "AT-004",
-        "AT-915"
+        "AT-915",
+        "Anchor-023",
+        "VR-026",
+        "VR-027",
+        "VR-028"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 3 — Order‑Type Preflight \\+ Venue Capabilities (artifact‑backed) / S3.3 — Capabilities matrix \\+ feature flags"
@@ -1981,7 +2028,12 @@
         "AT-935",
         "AT-906",
         "AT-233",
-        "AT-234"
+        "AT-234",
+        "Anchor-004",
+        "Anchor-005",
+        "Anchor-006",
+        "VR-010",
+        "VR-014"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.1 — WAL append \\+ replay no-resend"
@@ -2077,7 +2129,8 @@
         "CONTRACT.md 2.1 Trade Lifecycle State Machine (TLSM)",
         "CONTRACT.md 2.4 Durable Intent Ledger (WAL Truth Source)",
         "AT-230",
-        "AT-210"
+        "AT-210",
+        "Anchor-011"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.2 — TLSM out‑of‑order events (fill-before-ack)"
@@ -2168,7 +2221,9 @@
       "contract_refs": [
         "CONTRACT.md Trade-ID Idempotency Registry (Ghost-Race Hardening)",
         "AT-269",
-        "AT-270"
+        "AT-270",
+        "Anchor-007",
+        "VR-022"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.3 — Trade‑ID registry dedupe"
@@ -2261,7 +2316,9 @@
         "AT-935",
         "AT-906",
         "AT-233",
-        "AT-234"
+        "AT-234",
+        "Anchor-006",
+        "VR-014"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.4 — Dispatch requires durable WAL barrier (when configured)"
@@ -2365,7 +2422,8 @@
         "CONTRACT.md AT-222",
         "CONTRACT.md AT-344",
         "CONTRACT.md AT-909",
-        "CONTRACT.md AT-421"
+        "CONTRACT.md AT-421",
+        "VR-011"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer / S5.1 — Liquidity Gate (book-walk WAP, reject sweep)"
@@ -2474,7 +2532,8 @@
         "CONTRACT.md AT-033",
         "CONTRACT.md AT-042",
         "CONTRACT.md AT-244",
-        "CONTRACT.md AT-246"
+        "CONTRACT.md AT-246",
+        "VR-007"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer / S5.2 — Fee cache staleness (soft buffer / hard ReduceOnly latch)"
@@ -2586,7 +2645,12 @@
         "CONTRACT.md §1.4.1 Net Edge Gate (Fees + Expected Slippage)",
         "CONTRACT.md net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd",
         "CONTRACT.md AT-015",
-        "CONTRACT.md AT-932"
+        "CONTRACT.md AT-932",
+        "Anchor-018",
+        "VR-012",
+        "VR-018",
+        "VR-019",
+        "VR-020"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer / S5.3 — NetEdge gate"
