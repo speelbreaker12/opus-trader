@@ -2936,6 +2936,8 @@ PROMPT
 
   if (( POST_VERIFY_FAILED == 1 )); then
     if (( POST_VERIFY_EXIT == 1 )); then
+      add_skipped_check "final_verify" "verify_post_failed"
+      write_artifact_manifest "$ITER_DIR" "" "BLOCKED" "$BLOCK_DIR" "verify_post_failed" "verify_post failed"
       exit 8
     fi
     if (( POST_VERIFY_CONTINUE == 1 )); then
