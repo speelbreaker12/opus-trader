@@ -177,7 +177,21 @@ def main() -> int:
         lines.append("")
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    OUT_FILE.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    new_content = "\n".join(lines).rstrip() + "\n"
+
+    # Only write if content changed (excluding timestamp line to avoid spurious diffs)
+    if OUT_FILE.exists():
+        old_content = OUT_FILE.read_text(encoding="utf-8")
+        # Compare content after removing the "Generated:" line from both
+        old_lines = [l for l in old_content.splitlines() if not l.startswith("Generated:")]
+        new_lines = [l for l in new_content.splitlines() if not l.startswith("Generated:")]
+        if old_lines == new_lines:
+            # Content unchanged, skip write to avoid dirty worktree
+            pass
+        else:
+            OUT_FILE.write_text(new_content, encoding="utf-8")
+    else:
+        OUT_FILE.write_text(new_content, encoding="utf-8")
 
     if STRICT and (anchors or rules):
         missing = [

@@ -21,18 +21,17 @@
       "category": "policy",
       "description": "Create launch policy doc with explicit constraints (instruments, position limits, order rate, environments).",
       "contract_refs": [
-        "P0-A"
+        "P0-A Launch Policy Baseline"
       ],
       "plan_refs": [
-        "P0-A"
+        "Global Non‑Negotiables (apply to ALL stories)"
       ],
       "scope": {
         "touch": [
-          "docs/launch_policy.md"
-        ],
-        "create": [
+          "docs/launch_policy.md",
           "evidence/phase0/policy/launch_policy_snapshot.md"
         ],
+        "create": [],
         "avoid": []
       },
       "acceptance": [
@@ -63,7 +62,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -91,18 +90,17 @@
       "category": "policy",
       "description": "Document environment isolation (separate keys/configs per env, no cross-env leakage).",
       "contract_refs": [
-        "P0-B"
+        "P0-B Environment Isolation"
       ],
       "plan_refs": [
-        "P0-B"
+        "Global Non‑Negotiables (apply to ALL stories)"
       ],
       "scope": {
         "touch": [
-          "docs/env_matrix.md"
-        ],
-        "create": [
+          "docs/env_matrix.md",
           "evidence/phase0/env/env_matrix_snapshot.md"
         ],
+        "create": [],
         "avoid": []
       },
       "acceptance": [
@@ -132,7 +130,7 @@
       "est_size": "XS",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -158,18 +156,17 @@
       "category": "policy",
       "description": "Document key creation rules, rotation plan, and prove least-privilege with JSON scope probe.",
       "contract_refs": [
-        "P0-C"
+        "P0-C Keys & Secrets Baseline"
       ],
       "plan_refs": [
-        "P0-C"
+        "Global Non‑Negotiables (apply to ALL stories)"
       ],
       "scope": {
         "touch": [
-          "docs/keys_and_secrets.md"
-        ],
-        "create": [
+          "docs/keys_and_secrets.md",
           "evidence/phase0/keys/key_scope_probe.json"
         ],
+        "create": [],
         "avoid": []
       },
       "acceptance": [
@@ -199,8 +196,8 @@
       "dependencies": [],
       "est_size": "XS",
       "risk": "low",
-      "needs_human_decision": true,
-      "passes": false,
+      "needs_human_decision": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -240,20 +237,19 @@
       "category": "policy",
       "description": "Create break-glass runbook and execute a recorded drill proving halt capability.",
       "contract_refs": [
-        "P0-D"
+        "P0-D Break-Glass Runbook"
       ],
       "plan_refs": [
-        "P0-D"
+        "Global Non‑Negotiables (apply to ALL stories)"
       ],
       "scope": {
         "touch": [
-          "docs/break_glass_runbook.md"
-        ],
-        "create": [
+          "docs/break_glass_runbook.md",
           "evidence/phase0/break_glass/runbook_snapshot.md",
           "evidence/phase0/break_glass/drill.md",
           "evidence/phase0/break_glass/log_excerpt.txt"
         ],
+        "create": [],
         "avoid": []
       },
       "acceptance": [
@@ -292,8 +288,8 @@
       "dependencies": [],
       "est_size": "S",
       "risk": "low",
-      "needs_human_decision": true,
-      "passes": false,
+      "needs_human_decision": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -303,7 +299,15 @@
       "enforcement_point": "",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "break_glass_drill_completed",
+            "type": "gauge",
+            "unit": "count",
+            "labels": [],
+            "note": "Evidence artifact: log_excerpt.txt proves drill occurred (1 when drill completed)"
+          }
+        ],
         "status_fields": [],
         "status_contract_ats": []
       },
@@ -334,19 +338,21 @@
       "category": "infra",
       "description": "Implement health endpoint returning ok/build_id/contract_version.",
       "contract_refs": [
-        "P0-E"
+        "P0-E Health Endpoint Scaffolding",
+        "Anchor-021",
+        "VR-024"
       ],
       "plan_refs": [
-        "P0-E"
+        "Global Non‑Negotiables (apply to ALL stories)"
       ],
       "scope": {
         "touch": [
-          "docs/health_endpoint.md"
-        ],
-        "create": [
+          "docs/health_endpoint.md",
+          "crates/soldier_infra/src/lib.rs",
           "crates/soldier_infra/src/health.rs",
           "crates/soldier_infra/tests/test_health.rs"
         ],
+        "create": [],
         "avoid": []
       },
       "acceptance": [
@@ -375,7 +381,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -386,8 +392,14 @@
       "failure_mode": [],
       "observability": {
         "metrics": [],
-        "status_fields": [],
-        "status_contract_ats": []
+        "status_fields": [
+          "ok",
+          "build_id",
+          "contract_version"
+        ],
+        "status_contract_ats": [
+          "AT-012"
+        ]
       },
       "implementation_tests": [
         "crates/soldier_infra/tests/test_health.rs"
@@ -405,18 +417,41 @@
       "contract_refs": [
         "CONTRACT.md Appendix A: Configuration Defaults (Safety-Critical Thresholds)",
         "CONTRACT.md AT-341",
-        "CONTRACT.md AT-040"
+        "CONTRACT.md AT-040",
+        "Anchor-001",
+        "Anchor-002",
+        "Anchor-003",
+        "Anchor-008",
+        "Anchor-009",
+        "Anchor-010",
+        "Anchor-012",
+        "Anchor-015",
+        "Anchor-016",
+        "Anchor-020",
+        "Anchor-022",
+        "VR-001",
+        "VR-002",
+        "VR-003",
+        "VR-004a",
+        "VR-004b",
+        "VR-005",
+        "VR-006",
+        "VR-008",
+        "VR-009",
+        "VR-015",
+        "VR-016",
+        "VR-023"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.0 — Repo verification harness (plans/verify.sh) + safety-critical config defaults (Appendix A)"
       ],
       "scope": {
         "touch": [
-          "crates/soldier_infra/src/lib.rs"
+          "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/config",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/config"
         ],
         "avoid": [
           "plans/**",
@@ -450,7 +485,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -707,7 +742,8 @@
       "description": "Enforce InstrumentCache TTL and degrade RiskState on stale metadata.",
       "contract_refs": [
         "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-        "CONTRACT.md AT-104"
+        "CONTRACT.md AT-104",
+        "VR-013"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
@@ -807,7 +843,8 @@
       "category": "risk",
       "description": "Add required TTL observability hooks for instrument cache freshness.",
       "contract_refs": [
-        "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement"
+        "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+        "VR-013"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
@@ -1186,7 +1223,9 @@
       "description": "Discover current OrderSize logic and document gaps vs contract before implementation.",
       "contract_refs": [
         "CONTRACT.md 1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract)",
-        "CONTRACT.md OrderSize struct (MUST implement):"
+        "CONTRACT.md OrderSize struct (MUST implement):",
+        "Anchor-021",
+        "VR-024"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.2 — OrderSize canonical sizing + notional invariant"
@@ -1247,7 +1286,9 @@
       "category": "qa",
       "description": "Discover current dispatcher mapping logic and document gaps vs contract before implementation.",
       "contract_refs": [
-        "CONTRACT.md Dispatcher Rules (Deribit request mapping):"
+        "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
+        "Anchor-021",
+        "VR-024"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher amount mapping + mismatch reject→Degraded"
@@ -1355,7 +1396,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)",
@@ -1403,7 +1444,9 @@
       "contract_refs": [
         "CONTRACT.md 1.1 Labeling & Idempotency Contract",
         "CONTRACT.md 1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)",
-        "AT-020"
+        "AT-020",
+        "Anchor-017",
+        "VR-017"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 2 — Quantization \\+ Labeling \\+ Idempotency / S2.2 — Intent hash from quantized fields only"
@@ -1445,7 +1488,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1 Labeling & Idempotency Contract",
@@ -1526,7 +1569,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md §1.1 Labeling & Idempotency Contract",
@@ -1571,7 +1614,11 @@
       "description": "Disambiguate label matches deterministically and degrade on ambiguity.",
       "contract_refs": [
         "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
-        "AT-022"
+        "AT-022",
+        "Anchor-001",
+        "Anchor-019",
+        "VR-021",
+        "VR-022"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 2 — Quantization \\+ Labeling \\+ Idempotency / S2.4 — Label match disambiguation; ambiguity→Degraded"
@@ -1678,7 +1725,13 @@
         "AT-019",
         "AT-913",
         "AT-914",
-        "AT-915"
+        "AT-915",
+        "Anchor-013",
+        "Anchor-014",
+        "Anchor-023",
+        "VR-025",
+        "VR-026",
+        "VR-027"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 3 — Order‑Type Preflight \\+ Venue Capabilities (artifact‑backed) / S3.1 — Preflight guard (market/stop/linked rules)"
@@ -1874,7 +1927,11 @@
         "CONTRACT.md 1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
         "AT-028",
         "AT-004",
-        "AT-915"
+        "AT-915",
+        "Anchor-023",
+        "VR-026",
+        "VR-027",
+        "VR-028"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 3 — Order‑Type Preflight \\+ Venue Capabilities (artifact‑backed) / S3.3 — Capabilities matrix \\+ feature flags"
@@ -1966,18 +2023,23 @@
         "AT-935",
         "AT-906",
         "AT-233",
-        "AT-234"
+        "AT-234",
+        "Anchor-004",
+        "Anchor-005",
+        "Anchor-006",
+        "VR-010",
+        "VR-014"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.1 — WAL append \\+ replay no-resend"
       ],
       "scope": {
         "touch": [
-          "crates/soldier_infra/src/lib.rs"
+          "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/src/store",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/src/store"
         ],
         "avoid": [
           "crates/soldier_infra/src/deribit/**"
@@ -2062,7 +2124,8 @@
         "CONTRACT.md 2.1 Trade Lifecycle State Machine (TLSM)",
         "CONTRACT.md 2.4 Durable Intent Ledger (WAL Truth Source)",
         "AT-230",
-        "AT-210"
+        "AT-210",
+        "Anchor-011"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.2 — TLSM out‑of‑order events (fill-before-ack)"
@@ -2153,18 +2216,20 @@
       "contract_refs": [
         "CONTRACT.md Trade-ID Idempotency Registry (Ghost-Race Hardening)",
         "AT-269",
-        "AT-270"
+        "AT-270",
+        "Anchor-007",
+        "VR-022"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.3 — Trade‑ID registry dedupe"
       ],
       "scope": {
         "touch": [
-          "crates/soldier_infra/src/lib.rs"
+          "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/src/store",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/src/store"
         ],
         "avoid": [
           "crates/soldier_infra/src/deribit/**"
@@ -2246,7 +2311,9 @@
         "AT-935",
         "AT-906",
         "AT-233",
-        "AT-234"
+        "AT-234",
+        "Anchor-006",
+        "VR-014"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md §Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry / S4.4 — Dispatch requires durable WAL barrier (when configured)"
@@ -2254,10 +2321,10 @@
       "scope": {
         "touch": [
           "crates/soldier_infra/src/lib.rs",
-          "crates/soldier_infra/src/wal.rs"
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/src/wal.rs"
         ],
         "avoid": [
           "crates/soldier_infra/src/deribit/**",
@@ -2350,7 +2417,8 @@
         "CONTRACT.md AT-222",
         "CONTRACT.md AT-344",
         "CONTRACT.md AT-909",
-        "CONTRACT.md AT-421"
+        "CONTRACT.md AT-421",
+        "VR-011"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer / S5.1 — Liquidity Gate (book-walk WAP, reject sweep)"
@@ -2459,7 +2527,8 @@
         "CONTRACT.md AT-033",
         "CONTRACT.md AT-042",
         "CONTRACT.md AT-244",
-        "CONTRACT.md AT-246"
+        "CONTRACT.md AT-246",
+        "VR-007"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer / S5.2 — Fee cache staleness (soft buffer / hard ReduceOnly latch)"
@@ -2571,7 +2640,12 @@
         "CONTRACT.md §1.4.1 Net Edge Gate (Fees + Expected Slippage)",
         "CONTRACT.md net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd",
         "CONTRACT.md AT-015",
-        "CONTRACT.md AT-932"
+        "CONTRACT.md AT-932",
+        "Anchor-018",
+        "VR-012",
+        "VR-018",
+        "VR-019",
+        "VR-020"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer / S5.3 — NetEdge gate"
@@ -2856,14 +2930,15 @@
       "category": "hardening",
       "description": "Implement CI tests proving exactly one module/function may dispatch exchange orders with no bypass paths.",
       "contract_refs": [
-        "CONTRACT.md §1 Execution Core Invariants",
-        "P1-A"
+        "RecordedBeforeDispatch",
+        "AT-935"
       ],
       "plan_refs": [
-        "P1-A"
+        "make build_order_intent() the only constructor"
       ],
       "scope": {
-        "touch": [
+        "touch": [],
+        "create": [
           "crates/soldier_core/tests/test_dispatch_chokepoint.rs",
           "docs/dispatch_chokepoint.md"
         ],
@@ -2926,18 +3001,17 @@
       "category": "hardening",
       "description": "Implement CI test proving identical inputs produce identical intent bytes/hashes across runs and restarts.",
       "contract_refs": [
-        "CONTRACT.md §1.1 Intent Determinism",
-        "P1-B"
+        "CSP.2.1 Stable Intent Identity"
       ],
       "plan_refs": [
-        "P1-B"
+        "quantize before hash"
       ],
       "scope": {
         "touch": [
-          "crates/soldier_core/tests/test_intent_determinism.rs"
+          "evidence/phase1/determinism/intent_hashes.txt"
         ],
         "create": [
-          "evidence/phase1/determinism/intent_hashes.txt"
+          "crates/soldier_core/tests/test_intent_determinism.rs"
         ],
         "avoid": [
           "plans/**"
@@ -2997,16 +3071,17 @@
       "category": "hardening",
       "description": "Implement CI test proving rejected intents leave no persistent state changes except counters/logs.",
       "contract_refs": [
-        "CONTRACT.md §1 Execution Core Invariants",
-        "P1-C"
+        "RecordedBeforeDispatch",
+        "AT-201"
       ],
       "plan_refs": [
-        "P1-C"
+        "append intent to WAL before any network"
       ],
       "scope": {
-        "touch": [
+        "touch": [],
+        "create": [
           "crates/soldier_core/tests/test_rejection_side_effects.rs",
-          "evidence/phase1/no_side_effects/rejection_cases.md"
+          "evidence/phase1/no_side_effects"
         ],
         "avoid": [
           "plans/**"
@@ -3067,18 +3142,16 @@
       "category": "hardening",
       "description": "Implement CI test proving every intent-handling log/metric includes the same intent_id and run_id.",
       "contract_refs": [
-        "CONTRACT.md Observability requirements",
-        "P1-D"
+        "0.Z.7.4 Observability Requirement"
       ],
       "plan_refs": [
-        "P1-D"
+        "Minimum Alert Set (contract)"
       ],
       "scope": {
-        "touch": [
-          "crates/soldier_core/tests/test_intent_id_propagation.rs"
-        ],
+        "touch": [],
         "create": [
-          "evidence/phase1/traceability/sample_rejection_log.txt"
+          "crates/soldier_core/tests/test_intent_id_propagation.rs",
+          "evidence/phase1/traceability"
         ],
         "avoid": [
           "plans/**"
@@ -3118,7 +3191,16 @@
       "enforcement_point": "",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "intent_id_propagation_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "result"
+            ]
+          }
+        ],
         "status_fields": [],
         "status_contract_ats": []
       },
@@ -3137,14 +3219,14 @@
       "description": "Implement CI test and doc proving gate ordering invariants: reject before persist, WAL before dispatch.",
       "contract_refs": [
         "CONTRACT.md RecordedBeforeDispatch",
-        "CONTRACT.md CSP.5.2 Enforcement Rules",
-        "P1-E"
+        "CONTRACT.md CSP.5.2 Enforcement Rules"
       ],
       "plan_refs": [
-        "P1-E"
+        "tests assert gate ordering + replay safety"
       ],
       "scope": {
-        "touch": [
+        "touch": [],
+        "create": [
           "crates/soldier_core/tests/test_gate_ordering.rs",
           "docs/intent_gate_invariants.md"
         ],
@@ -3206,19 +3288,18 @@
       "category": "hardening",
       "description": "Implement CI test proving missing critical config causes fail-closed rejection with enumerated reason code.",
       "contract_refs": [
-        "CONTRACT.md Appendix A Safety-Critical Defaults",
-        "P1-F"
+        "Appendix A"
       ],
       "plan_refs": [
-        "P1-F"
+        "Appendix A Default Tests mapping"
       ],
       "scope": {
         "touch": [
-          "crates/soldier_core/tests/test_missing_config.rs",
-          "docs/critical_config_keys.md"
+          "evidence/phase1/config_fail_closed/missing_keys_matrix.json"
         ],
         "create": [
-          "evidence/phase1/config_fail_closed/missing_keys_matrix.json"
+          "crates/soldier_core/tests/test_missing_config.rs",
+          "docs/critical_config_keys.md"
         ],
         "avoid": [
           "plans/**"
@@ -3280,18 +3361,17 @@
       "category": "hardening",
       "description": "Implement CI test or drill proving crash mid-intent before dispatch causes no duplicate dispatch on restart.",
       "contract_refs": [
-        "CONTRACT.md §1.2 Idempotency / WAL",
-        "P1-G"
+        "AT-935",
+        "AT-233"
       ],
       "plan_refs": [
-        "P1-G"
+        "no resend after crash"
       ],
       "scope": {
-        "touch": [
-          "crates/soldier_infra/tests/test_crash_mid_intent.rs"
-        ],
+        "touch": [],
         "create": [
-          "evidence/phase1/crash_mid_intent/drill.md"
+          "crates/soldier_infra/tests/test_crash_mid_intent.rs",
+          "evidence/phase1/crash_mid_intent"
         ],
         "avoid": [
           "plans/**"
