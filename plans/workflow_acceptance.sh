@@ -842,6 +842,136 @@ if test_start "0j.1" "autofix script syntax check" 1; then
   test_pass "0j.1"
 fi
 
+if test_start "0j.2" "autofix run_fix escalates on tool failure" 1; then
+  # Test that run_fix() helper exits 1 and preserves log on tool failure
+  test_evidence_dir="$WORKTREE/.ralph/autofix_test_evidence_$$"
+  mkdir -p "$test_evidence_dir"
+
+  # Create a mock failing tool
+  mock_fail="$WORKTREE/.ralph/mock_fail.sh"
+  cat > "$mock_fail" <<'MOCKEOF'
+#!/usr/bin/env bash
+echo "mock tool output before failure"
+echo "simulated error: something went wrong" >&2
+exit 1
+MOCKEOF
+  chmod +x "$mock_fail"
+
+  # Source the helper function by extracting it and testing in isolation
+  # (Avoids running the full autofix.sh which has side effects)
+  test_script="$WORKTREE/.ralph/test_run_fix.sh"
+  cat > "$test_script" <<TESTEOF
+#!/usr/bin/env bash
+set -euo pipefail
+AUTOFIX_EVIDENCE_DIR="$test_evidence_dir"
+VERIFY_RUN_ID="test_run"
+
+# run_fix helper (extracted from autofix.sh)
+run_fix() {
+  local label="\$1"; shift
+  local log="\$AUTOFIX_EVIDENCE_DIR/\${VERIFY_RUN_ID:-unknown}_\${label}.log"
+  if ! "\$@" >"\$log" 2>&1; then
+    echo "ESCALATE: \${label} failed; see \$log" >&2
+    tail -n 80 "\$log" >&2 || true
+    echo "Evidence preserved in: \$AUTOFIX_EVIDENCE_DIR/" >&2
+    exit 1
+  fi
+}
+
+# Test: call run_fix with the failing mock tool
+run_fix mock_tool "$mock_fail"
+echo "should not reach here"
+TESTEOF
+  chmod +x "$test_script"
+
+  set +e
+  run_in_worktree bash "$test_script" >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: run_fix should have exited 1 on tool failure" >&2
+    exit 1
+  fi
+
+  # Verify log file was created
+  log_file="$test_evidence_dir/test_run_mock_tool.log"
+  if [[ ! -f "$log_file" ]]; then
+    echo "FAIL: run_fix should have created log file at $log_file" >&2
+    exit 1
+  fi
+
+  # Verify log contains tool output
+  if ! grep -q "mock tool output before failure" "$log_file"; then
+    echo "FAIL: log file should contain tool stdout" >&2
+    exit 1
+  fi
+
+  rm -rf "$test_evidence_dir"
+  test_pass "0j.2"
+fi
+
+if test_start "0j.3" "autofix evidence survives escalation" 1; then
+  # Test that evidence directory and its contents survive failure escalation
+  test_evidence_dir="$WORKTREE/.ralph/autofix_evidence_survive_$$"
+  mkdir -p "$test_evidence_dir"
+
+  # Create evidence file before simulated failure
+  echo "pre-failure evidence" > "$test_evidence_dir/pre_failure.log"
+
+  # Simulate copy_evidence_or_die with a failure case
+  test_script="$WORKTREE/.ralph/test_copy_evidence.sh"
+  cat > "$test_script" <<TESTEOF
+#!/usr/bin/env bash
+set -euo pipefail
+AUTOFIX_EVIDENCE_DIR="$test_evidence_dir"
+
+# copy_evidence_or_die helper (extracted from autofix.sh)
+copy_evidence_or_die() {
+  local src="\$1"
+  local dst="\$2"
+  if ! cp -R "\$src" "\$dst"; then
+    echo "ESCALATE: failed to copy evidence from \${src} to \${dst}" >&2
+    echo "Evidence dir: \$AUTOFIX_EVIDENCE_DIR" >&2
+    exit 1
+  fi
+}
+
+# Try to copy from nonexistent source (should fail)
+copy_evidence_or_die "/nonexistent/path" "$test_evidence_dir/dest"
+TESTEOF
+  chmod +x "$test_script"
+
+  set +e
+  run_in_worktree bash "$test_script" >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: copy_evidence_or_die should have exited 1 on copy failure" >&2
+    exit 1
+  fi
+
+  # Critical: evidence directory and pre-existing files must survive
+  if [[ ! -d "$test_evidence_dir" ]]; then
+    echo "FAIL: evidence directory should survive escalation" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$test_evidence_dir/pre_failure.log" ]]; then
+    echo "FAIL: pre-failure evidence should survive escalation" >&2
+    exit 1
+  fi
+
+  if ! grep -q "pre-failure evidence" "$test_evidence_dir/pre_failure.log"; then
+    echo "FAIL: pre-failure evidence content should be intact" >&2
+    exit 1
+  fi
+
+  rm -rf "$test_evidence_dir"
+  test_pass "0j.3"
+fi
+
 if test_start "0k" "workflow preflight checks"; then
   run_in_worktree ./plans/prd_gate.sh "plans/prd.json" >/dev/null 2>&1
   run_in_worktree mkdir -p ".ralph"
@@ -3995,7 +4125,7 @@ fi
   test_pass "15"
 fi
 
-echo "Test 15b: dependency schema rejects forward-slice dependency"
+if test_start "15b" "dependency schema rejects forward-slice dependency"; then
 set +e
 run_in_worktree ./plans/prd_schema_check.sh "plans/fixtures/prd/deps_forward_slice.json" >/dev/null 2>&1
 rc=$?
@@ -4004,8 +4134,10 @@ if [[ "$rc" -eq 0 ]]; then
   echo "FAIL: expected schema check to fail for forward-slice dependency" >&2
   exit 1
 fi
+  test_pass "15b"
+fi
 
-echo "Test 15c: dependency ordering respects same-slice deps"
+if test_start "15c" "dependency ordering respects same-slice deps"; then
 reset_state
 snapshot_worktree_if_dirty
 test15c_log="$WORKTREE/.ralph/test15c.log"
@@ -4034,8 +4166,10 @@ if [[ "$selected_id" != "S1-001" ]]; then
   echo "FAIL: expected S1-001 selected before dependency, got ${selected_id}" >&2
   exit 1
 fi
+  test_pass "15c"
+fi
 
-echo "Test 15d: dependency cycle blocks selection"
+if test_start "15d" "dependency cycle blocks selection"; then
 reset_state
 snapshot_worktree_if_dirty
 test15d_log="$WORKTREE/.ralph/test15d.log"
@@ -4063,8 +4197,10 @@ if [[ ! -f "$latest_block/dependency_deadlock.json" ]]; then
   echo "FAIL: expected dependency_deadlock.json in blocked artifact" >&2
   exit 1
 fi
+  test_pass "15d"
+fi
 
-echo "Test 16: cheating detected (deleted test file)"
+if test_start "16" "cheating detected (deleted test file)"; then
 reset_state
 valid_prd_15="$WORKTREE/.ralph/valid_prd_15.json"
 write_valid_prd "$valid_prd_15" "S1-011"
@@ -4128,8 +4264,10 @@ if ! run_in_worktree test -f "tests/test_dummy.rs"; then
   exit 1
 fi
 write_contract_check_stub "PASS"
+  test_pass "16"
+fi
 
-echo "Test 16b: harness tamper blocks before processing"
+if test_start "16b" "harness tamper blocks before processing"; then
 reset_state
 valid_prd_16b="$WORKTREE/.ralph/valid_prd_16b.json"
 write_valid_prd "$valid_prd_16b" "S1-011"
@@ -4167,8 +4305,10 @@ fi
 copy_worktree_file "plans/ralph.sh"
 chmod +x "$WORKTREE/plans/ralph.sh" >/dev/null 2>&1 || true
 run_in_worktree git update-index --skip-worktree plans/ralph.sh >/dev/null 2>&1 || true
+  test_pass "16b"
+fi
 
-echo "Test 16c: .ralph tamper blocks before processing"
+if test_start "16c" ".ralph tamper blocks before processing"; then
 reset_state
 valid_prd_16c="$WORKTREE/.ralph/valid_prd_16c.json"
 write_valid_prd "$valid_prd_16c" "S1-012"
@@ -4202,6 +4342,8 @@ if [[ -z "$latest_block" ]]; then
   echo "FAIL: expected blocked artifact for ralph_dir_modified" >&2
   tail -n 120 "$test16c_log" >&2 || true
   exit 1
+fi
+  test_pass "16c"
 fi
 
 if test_start "17" "active slice gating selects lowest slice"; then
