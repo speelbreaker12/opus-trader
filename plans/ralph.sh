@@ -1187,6 +1187,7 @@ append_metrics() {
 
 # Fix 10: Test co-change gate - require test changes with source changes
 RPH_TEST_COCHANGE_ENABLED="${RPH_TEST_COCHANGE_ENABLED:-1}"
+RPH_TEST_COCHANGE_STRICT="${RPH_TEST_COCHANGE_STRICT:-0}"
 RPH_TEST_COCHANGE_SRC_PATTERNS="${RPH_TEST_COCHANGE_SRC_PATTERNS:-^src/|^lib/|^app/|^pkg/|^internal/|^cmd/|\.rs$|\.py$|\.ts$|\.js$}"
 RPH_TEST_COCHANGE_TEST_PATTERNS="${RPH_TEST_COCHANGE_TEST_PATTERNS:-^tests?/|_test\.|\.test\.|\.spec\.|^__tests__/}"
 RPH_TEST_COCHANGE_EXEMPT_PATTERNS="${RPH_TEST_COCHANGE_EXEMPT_PATTERNS:-\.md$|\.txt$|\.json$|\.yaml$|\.yml$|\.toml$|^docs/|^specs/|^plans/}"
