@@ -834,6 +834,14 @@ if test_start "0j" "shell safety checks (bash -n, shellcheck optional)" 1; then
   test_pass "0j"
 fi
 
+if test_start "0j.1" "autofix script syntax check" 1; then
+  bash -n "$ROOT/plans/autofix.sh" || {
+    echo "FAIL: autofix.sh has syntax errors" >&2
+    exit 1
+  }
+  test_pass "0j.1"
+fi
+
 if test_start "0k" "workflow preflight checks"; then
   run_in_worktree ./plans/prd_gate.sh "plans/prd.json" >/dev/null 2>&1
   run_in_worktree mkdir -p ".ralph"
