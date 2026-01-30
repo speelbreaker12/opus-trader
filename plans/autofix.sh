@@ -58,6 +58,29 @@ else
 fi
 mkdir -p "$AUTOFIX_EVIDENCE_DIR"
 
+# Helper: Run a fix tool with captured output and fail-closed escalation
+run_fix() {
+  local label="$1"; shift
+  local log="$AUTOFIX_EVIDENCE_DIR/${VERIFY_RUN_ID:-unknown}_${label}.log"
+  if ! "$@" >"$log" 2>&1; then
+    echo "ESCALATE: ${label} failed; see $log" >&2
+    tail -n 80 "$log" >&2 || true
+    echo "Evidence preserved in: $AUTOFIX_EVIDENCE_DIR/" >&2
+    exit 1
+  fi
+}
+
+# Helper: Fail-closed evidence copy with context
+copy_evidence_or_die() {
+  local src="$1"
+  local dst="$2"
+  if ! cp -R "$src" "$dst"; then
+    echo "ESCALATE: failed to copy evidence from ${src} to ${dst}" >&2
+    echo "Evidence dir: $AUTOFIX_EVIDENCE_DIR" >&2
+    exit 1
+  fi
+}
+
 # 5. Verify loop
 passed=0
 
@@ -75,7 +98,7 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
 
     # Preserve evidence of success
     if [[ -d "artifacts/verify/$VERIFY_RUN_ID" ]]; then
-      cp -R "artifacts/verify/$VERIFY_RUN_ID" "$AUTOFIX_EVIDENCE_DIR/"
+      copy_evidence_or_die "artifacts/verify/$VERIFY_RUN_ID" "$AUTOFIX_EVIDENCE_DIR/"
     fi
     break
   fi
@@ -85,7 +108,7 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
   # CRITICAL: Preserve evidence before worktree cleanup
   # (Otherwise escalation has no debug trail)
   if [[ -d "$VERIFY_ARTIFACTS" ]]; then
-    cp -R "$VERIFY_ARTIFACTS" "$AUTOFIX_EVIDENCE_DIR/"
+    copy_evidence_or_die "$VERIFY_ARTIFACTS" "$AUTOFIX_EVIDENCE_DIR/"
   fi
 
   # Check for FAILED_GATE (handles pre-run_logged failures)
@@ -103,12 +126,12 @@ for attempt in $(seq 1 $MAX_ATTEMPTS); do
   case "$FAILED_GATE" in
     rust_fmt)
       echo "Applying fix: cargo fmt --all"
-      cargo fmt --all
+      run_fix cargo_fmt cargo fmt --all
       fixes_applied+=("rust_fmt")
       ;;
     python_ruff_format)
       echo "Applying fix: ruff format ."
-      ruff format .
+      run_fix ruff_format ruff format .
       fixes_applied+=("python_ruff_format")
       ;;
     *)
@@ -162,7 +185,7 @@ if [[ ! -s "$PATCH_FILE" ]]; then
 fi
 
 # Preserve final patch in evidence dir
-cp "$PATCH_FILE" "$AUTOFIX_EVIDENCE_DIR/final.patch"
+copy_evidence_or_die "$PATCH_FILE" "$AUTOFIX_EVIDENCE_DIR/final.patch"
 
 # Fail-closed: Main tree must still be clean before applying patch
 # (User could have made changes mid-run even if HEAD didn't drift)
