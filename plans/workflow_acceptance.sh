@@ -1430,6 +1430,10 @@ if ! grep -q "RPH_PROFILE_MODE" "$WORKTREE/plans/ralph.sh"; then
   echo "FAIL: ralph must expose RPH_PROFILE_MODE for profile behavior checks" >&2
   exit 1
 fi
+if ! grep -q "RPH_TEST_COCHANGE_STRICT" "$WORKTREE/plans/ralph.sh"; then
+  echo "FAIL: ralph must define RPH_TEST_COCHANGE_STRICT default" >&2
+  exit 1
+fi
 if ! grep -q "verify)" "$WORKTREE/plans/ralph.sh"; then
   echo "FAIL: ralph must include verify profile case" >&2
   exit 1
@@ -4424,6 +4428,8 @@ cat > "$valid_prd_16" <<'JSON'
   ]
 }
 JSON
+run_in_worktree touch "acceptance_tick.txt"
+snapshot_worktree_if_dirty
 run_ralph env \
   PRD_FILE="$valid_prd_16" \
   PROGRESS_FILE="$WORKTREE/.ralph/progress.txt" \
