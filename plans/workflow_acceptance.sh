@@ -4897,22 +4897,13 @@ EOF
   test_pass "26"
 fi
 
-if test_start "27" "prd_preflight runs gate and allowlist check"; then
-  run_in_worktree bash -c '
-  set -euo pipefail
-  # Run preflight on real prd.json (full gate + allowlist)
-  ./plans/prd_preflight.sh plans/prd.json >/dev/null 2>&1
-'
-  test_pass "27"
-fi
-
-if test_start "27b" "prd_preflight runs allowlist check in smoke mode" 1; then
+if test_start "27" "prd_preflight runs gate and allowlist check (smoke mode)" 1; then
   run_in_worktree bash -c '
   set -euo pipefail
   # Run preflight on real prd.json in smoke mode (schema + allowlist only)
   ./plans/prd_preflight.sh --smoke plans/prd.json >/dev/null 2>&1
 '
-  test_pass "27b"
+  test_pass "27"
 fi
 
 if test_start "28" "prd_preflight --strict fails when allowlist script missing" 1; then
