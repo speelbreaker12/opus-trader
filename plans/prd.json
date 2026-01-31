@@ -452,11 +452,11 @@
       ],
       "scope": {
         "touch": [
-          "crates/soldier_infra/src/lib.rs"
+          "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/config",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/config"
         ],
         "avoid": [
           "plans/**",
@@ -2040,11 +2040,11 @@
       ],
       "scope": {
         "touch": [
-          "crates/soldier_infra/src/lib.rs"
+          "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/src/store",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/src/store"
         ],
         "avoid": [
           "crates/soldier_infra/src/deribit/**"
@@ -2230,11 +2230,11 @@
       ],
       "scope": {
         "touch": [
-          "crates/soldier_infra/src/lib.rs"
+          "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/src/store",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/src/store"
         ],
         "avoid": [
           "crates/soldier_infra/src/deribit/**"
@@ -2326,10 +2326,10 @@
       "scope": {
         "touch": [
           "crates/soldier_infra/src/lib.rs",
-          "crates/soldier_infra/src/wal.rs"
+          "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/src/wal.rs"
         ],
         "avoid": [
           "crates/soldier_infra/src/deribit/**",
@@ -2936,6 +2936,10 @@
       "description": "Implement CI tests proving exactly one module/function may dispatch exchange orders with no bypass paths.",
       "contract_refs": [
         "CONTRACT.md §1 Execution Core Invariants",
+        "RecordedBeforeDispatch",
+        "AT-935",
+        "Anchor-006",
+        "VR-014",
         "P1-A"
       ],
       "plan_refs": [
@@ -3006,6 +3010,7 @@
       "description": "Implement CI test proving identical inputs produce identical intent bytes/hashes across runs and restarts.",
       "contract_refs": [
         "CONTRACT.md §1.1 Intent Determinism",
+        "CSP.2.1 Stable Intent Identity",
         "P1-B"
       ],
       "plan_refs": [
@@ -3077,6 +3082,9 @@
       "description": "Implement CI test proving rejected intents leave no persistent state changes except counters/logs.",
       "contract_refs": [
         "CONTRACT.md §1 Execution Core Invariants",
+        "RecordedBeforeDispatch",
+        "AT-201",
+        "Anchor-006",
         "P1-C"
       ],
       "plan_refs": [
@@ -3147,6 +3155,7 @@
       "description": "Implement CI test proving every intent-handling log/metric includes the same intent_id and run_id.",
       "contract_refs": [
         "CONTRACT.md Observability requirements",
+        "0.Z.7.4 Observability Requirement",
         "P1-D"
       ],
       "plan_refs": [
@@ -3217,6 +3226,8 @@
       "contract_refs": [
         "CONTRACT.md RecordedBeforeDispatch",
         "CONTRACT.md CSP.5.2 Enforcement Rules",
+        "Anchor-006",
+        "VR-014",
         "P1-E"
       ],
       "plan_refs": [
@@ -3286,6 +3297,7 @@
       "description": "Implement CI test proving missing critical config causes fail-closed rejection with enumerated reason code.",
       "contract_refs": [
         "CONTRACT.md Appendix A Safety-Critical Defaults",
+        "Appendix A",
         "P1-F"
       ],
       "plan_refs": [
@@ -3360,6 +3372,8 @@
       "description": "Implement CI test or drill proving crash mid-intent before dispatch causes no duplicate dispatch on restart.",
       "contract_refs": [
         "CONTRACT.md §1.2 Idempotency / WAL",
+        "AT-935",
+        "AT-233",
         "P1-G"
       ],
       "plan_refs": [
