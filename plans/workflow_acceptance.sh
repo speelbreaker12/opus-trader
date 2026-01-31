@@ -989,15 +989,22 @@ if test_start "0k" "workflow preflight checks"; then
     printf "%s\n" "$dup" >&2
     exit 1
   fi
-  missing=0
-  while IFS= read -r cmd; do
-    [[ -z "$cmd" ]] && continue
-    if ! grep -Fxq "$cmd" "$allowlist"; then
-      echo "FAIL: story verify command not allowlisted: $cmd" >&2
-      missing=1
-    fi
-  done < <(jq -r ".items[].verify[] | select(. != \"./plans/verify.sh\")" plans/prd.json)
-  if [[ "$missing" -ne 0 ]]; then
+  # Optimized allowlist completeness check (set comparison)
+  tmpdir="$(mktemp -d)"
+  trap "rm -rf \"$tmpdir\"" EXIT
+  required_file="$tmpdir/required.txt"
+  allowed_file="$tmpdir/allowed.txt"
+  # Required = PRD verify commands (exclude self-reference)
+  jq -r ".items[].verify[] | select(. != \"./plans/verify.sh\")" plans/prd.json \
+    | LC_ALL=C sort -u > "$required_file"
+  # Allowed = allowlist entries (ignore comments/blank lines)
+  grep -v "^[[:space:]]*#" "$allowlist" | sed "/^[[:space:]]*$/d" \
+    | LC_ALL=C sort -u > "$allowed_file"
+  # Set difference: commands in PRD but not in allowlist
+  missing="$(LC_ALL=C comm -23 "$required_file" "$allowed_file" || true)"
+  if [[ -n "$missing" ]]; then
+    echo "FAIL: story verify commands not allowlisted:" >&2
+    printf "%s\n" "$missing" >&2
     exit 1
   fi
 '; then
@@ -1133,6 +1140,14 @@ fi
 
   if ! run_in_worktree grep -q "PATH_CONVENTION" "plans/prd_lint.sh"; then
     echo "FAIL: prd_lint must flag path convention drift" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "MISSING_ANCHOR_REF" "plans/prd_lint.sh"; then
+    echo "FAIL: prd_lint must flag missing Anchor IDs for referenced anchor titles" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "MISSING_VR_REF" "plans/prd_lint.sh"; then
+    echo "FAIL: prd_lint must flag missing VR IDs for referenced validation rule titles" >&2
     exit 1
   fi
 
