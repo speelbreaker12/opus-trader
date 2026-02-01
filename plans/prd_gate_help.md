@@ -4,10 +4,10 @@
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `PRD_REF_CHECK_ENABLED` | `1` | Set to `0` to skip ref check (blocked in CI unless `PRD_GATE_ALLOW_REF_SKIP=1`) |
+| `PRD_REF_CHECK_ENABLED` | `1` | Set to `0` to skip ref check locally (CI always blocks; `PRD_GATE_ALLOW_REF_SKIP=1` only applies outside CI) |
 | `PRD_GATE_ALLOW_REF_SKIP` | `0` | Allow `PRD_REF_CHECK_ENABLED=0` outside CI |
 | `PRD_LINT_STRICT_HEURISTICS` | `0` | Fail on heuristic warnings |
-| `PRD_LINT_ALLOW_SCHEMA_BYPASS` | `0` | Skip schema validation (warns only) |
+| `PRD_LINT_ALLOW_SCHEMA_BYPASS` | `0` | Skip schema validation inside `prd_lint.sh` (warns only); `prd_gate.sh` still runs `prd_schema_check.sh` |
 
 ## Common Lint Failure Codes
 

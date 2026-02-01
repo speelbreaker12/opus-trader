@@ -9,11 +9,11 @@
 
 ### workflow_verify.sh
 
-Focused maintenance runner for workflow-only changes. Runs:
-- Bash syntax check on key workflow scripts (`verify.sh`, `ralph.sh`, `update_task.sh`, `workflow_acceptance.sh`)
+Focused maintenance runner for workflow-only changes (`./plans/workflow_verify.sh`). Runs:
+- Bash syntax check on key workflow scripts (`plans/verify.sh`, `plans/ralph.sh`, `plans/update_task.sh`, `plans/workflow_acceptance.sh`)
 - Workflow acceptance (full mode)
 
-Use when editing `plans/*.sh` or `specs/WORKFLOW_CONTRACT.md`. Does not run full `verify.sh` by default; set `RUN_REPO_VERIFY=1` to also run `./plans/verify.sh quick`.
+Use when editing `plans/*.sh` or `specs/WORKFLOW_CONTRACT.md`. Does not run full `./plans/verify.sh` by default; set `RUN_REPO_VERIFY=1` to also run `./plans/verify.sh quick`.
 
 ## Notes
 

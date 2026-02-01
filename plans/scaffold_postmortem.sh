@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Scaffold a new postmortem entry.
 # Usage: ./plans/scaffold_postmortem.sh <description>
-# Creates: reviews/postmortems/YYYY-MM-DD-<slug>.md
+# Creates: reviews/postmortems/YYYY-MM-DD_<slug>.md
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMPLATE="$ROOT/reviews/postmortems/PR_POSTMORTEM_TEMPLATE.md"
@@ -11,7 +11,7 @@ OUT_DIR="$ROOT/reviews/postmortems"
 
 usage() {
   echo "Usage: $0 <description>" >&2
-  echo "Creates: reviews/postmortems/YYYY-MM-DD-<slug>.md" >&2
+  echo "Creates: reviews/postmortems/YYYY-MM-DD_<slug>.md" >&2
   exit 1
 }
 
@@ -33,7 +33,7 @@ fi
 # Date in UTC
 date_prefix=$(date -u +%Y-%m-%d)
 
-target="$OUT_DIR/${date_prefix}-${slug}.md"
+target="$OUT_DIR/${date_prefix}_${slug}.md"
 
 if [[ -f "$target" ]]; then
   echo "ERROR: already exists: $target" >&2
