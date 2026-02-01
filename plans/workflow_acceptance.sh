@@ -1394,6 +1394,14 @@ if ! run_in_worktree grep -Fq "reviews/REVIEW_CHECKLIST.md" "SKILLS/pr-review.md
   echo "FAIL: pr-review skill missing review checklist reference" >&2
   exit 1
 fi
+if ! run_in_worktree grep -Fq "## Review Coverage (Required)" "reviews/REVIEW_CHECKLIST.md"; then
+  echo "FAIL: review checklist missing Review Coverage section" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "## Workflow / Harness Changes (If plans/* or specs/* touched)" "reviews/REVIEW_CHECKLIST.md"; then
+  echo "FAIL: review checklist missing workflow harness review section" >&2
+  exit 1
+fi
 
 if ! run_in_worktree awk '
   /is_workflow_file/ {in_block=1}
