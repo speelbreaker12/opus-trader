@@ -2933,10 +2933,11 @@
         "RecordedBeforeDispatch",
         "AT-935",
         "Anchor-006",
-        "VR-014"
+        "VR-014",
+        "1. Execution Architecture: The \"Atomic Group\" (Real-Time Repair)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [],
@@ -3003,10 +3004,11 @@
       "category": "hardening",
       "description": "Implement CI test proving identical inputs produce identical intent bytes/hashes across runs and restarts.",
       "contract_refs": [
-        "CSP.2.1 Stable Intent Identity"
+        "CSP.2.1 Stable Intent Identity",
+        "1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [
@@ -3075,10 +3077,11 @@
       "contract_refs": [
         "RecordedBeforeDispatch",
         "AT-201",
-        "Anchor-006"
+        "Anchor-006",
+        "1.2 Atomic Group Executor"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [],
@@ -3148,13 +3151,13 @@
         "0.Z.7.4 Observability Requirement"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [],
         "create": [
-          "crates/soldier_core/tests/test_intent_id_propagation.rs",
-          "evidence/phase1/traceability/sample_rejection_log.txt"
+          "evidence/phase1/traceability/sample_rejection_log.txt",
+          "crates/soldier_core/tests/test_intent_id_propagation.rs"
         ],
         "avoid": [
           "plans/**"
@@ -3227,7 +3230,7 @@
         "VR-014"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [],
@@ -3293,10 +3296,11 @@
       "category": "hardening",
       "description": "Implement CI test proving missing critical config causes fail-closed rejection with enumerated reason code.",
       "contract_refs": [
-        "Appendix A"
+        "Appendix A",
+        "Appendix A: Configuration Defaults (Safety-Critical Thresholds)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [
@@ -3366,18 +3370,18 @@
       "category": "hardening",
       "description": "Implement CI test or drill proving crash mid-intent before dispatch causes no duplicate dispatch on restart.",
       "contract_refs": [
-        "CONTRACT.md §1.2 Idempotency / WAL",
         "AT-935",
-        "AT-233"
+        "AT-233",
+        "2.4 — WAL / intent ledger (RecordedBeforeDispatch)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
       ],
       "scope": {
         "touch": [],
         "create": [
-          "crates/soldier_infra/tests/test_crash_mid_intent.rs",
-          "evidence/phase1/crash_mid_intent/drill.md"
+          "evidence/phase1/crash_mid_intent/drill.md",
+          "crates/soldier_infra/tests/test_crash_mid_intent.rs"
         ],
         "avoid": [
           "plans/**"
