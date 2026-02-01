@@ -111,12 +111,12 @@ done | sort -t: -k2 -nr
 
 ### Modified Files
 1. **plans/verify.sh** (main changes)
-   - Lines 221-266: Updated `run_logged()` with timing and flags
-   - After line 266: Added `run_parallel_group()` function (~60 lines)
-   - Lines 640-711 region: Converted spec validators to parallel array
-   - Lines 731-756 region: Converted status fixtures to parallel array
-   - Lines 1088-1099: Integrated parallel workflow acceptance
-   - Before line 1102: Added timing summary output
+   - Updated `run_logged()` with timing instrumentation and parallel-safe flags
+   - Added `run_parallel_group()` helper function (wave-based parallel runner) after `run_logged()`
+   - Converted spec validators to use a parallel array-based execution model
+   - Converted status fixtures to use a parallel array-based execution model
+   - Integrated parallel workflow acceptance into the main verification flow
+   - Added a timing summary output section near the end of the script
 
 ### New Files
 1. **plans/test_parallel_smoke.sh** - Smoke test for parallelization changes

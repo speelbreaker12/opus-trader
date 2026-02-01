@@ -27,7 +27,8 @@ gh pr diff <number>
 ```
 
 ### 2. Review Checklist
-Read `reviews/REVIEW_CHECKLIST.md` and follow it. Your response MUST include a "Review Coverage" section that lists every modified/added file with a 1-line review note each.
+- [ ] Read `reviews/REVIEW_CHECKLIST.md` and follow it.
+- [ ] Ensure your response includes a "Review Coverage" section that lists every modified/added file with a 1-line review note each.
 
 #### Correctness
 - [ ] Logic is sound and handles edge cases

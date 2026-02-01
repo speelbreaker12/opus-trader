@@ -103,7 +103,7 @@ SELECTED_IDS=("0f.1" "0g")
 ## Security
 
 **Comprehensive Mitigation**:
-- Character validation: `[\;\`\$\(\)\&\|\>\<$'\n']` blocks dangerous shell metacharacters
+- Character validation: bash/grep character-class pattern `[\;\`\$\(\)\&\|\>\<$'\n']` blocks dangerous shell metacharacters (escaping is for shell context, not a generic regex literal)
 - Unquoted $cmd in eval (safe due to validation, required for functionality)
 - Fail-closed: Rejects suspicious inputs before eval, writes failure .rc file
 
