@@ -13,6 +13,7 @@
 - Permanent fix proposal (elevate): Add acceptance checks that enforce the checklist structure and coverage language.
 - Smallest increment: Validate required checklist section headers in workflow acceptance.
 - Validation (proof it got better): workflow_acceptance now fails if the checklist sections are missing.
+- Owner-approved exception: VERIFY_ALLOW_DIRTY=1 used for push because `.worktrees/chore-postmortem-scaffold` is dirty; CI verify required.
 
 ## 2) Given what I built, what's the single best follow-up PR, and what 1-3 upgrades are worth considering next? Include smallest increment + how we validate.
 - Response: Add a PR template snippet that scaffolds Review Coverage and evidence blocks; validate by ensuring new PRs include the sections and review notes are filled.
