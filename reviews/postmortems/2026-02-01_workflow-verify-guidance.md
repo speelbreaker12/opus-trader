@@ -1,7 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
 ## 0) What shipped
-- Feature/behavior: Added workflow-verify guidance in AGENTS.md, evidence requirement in the review checklist, and acceptance checks for both markers.
+- Feature/behavior: Added workflow-verify guidance in AGENTS.md, review checklist evidence requirement, Review Coverage guidance in SKILLS/pr-review, and acceptance checks for the markers.
 - What value it has (what problem it solves, upgrade provides): Reduces unnecessary full verify churn during workflow-only iteration while keeping a full gate before PR.
 - Governing contract: specs/WORKFLOW_CONTRACT.md
 

@@ -64,6 +64,9 @@ gh pr diff <number>
 - [ ] README/docs updated if needed
 - [ ] Breaking changes documented
 
+### Review Coverage (Required)
+- Use `reviews/REVIEW_CHECKLIST.md` to confirm evidence/compounding gates and required workflow checks are covered.
+
 ### 3. Scope Check
 - [ ] Changes match PR title/description
 - [ ] No unrelated changes bundled in

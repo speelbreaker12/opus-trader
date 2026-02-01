@@ -51,6 +51,10 @@ Next steps:
 
 Then end with: `<promise>COMPLETE</promise>`
 
+## Review Coverage
+
+- Use `reviews/REVIEW_CHECKLIST.md` to ensure PR reviews cover evidence, compounding, and workflow-specific gates.
+
 ## Start here (only when doing edits / PR work / MED-HIGH risk)
 - Read `specs/CONTRACT.md`, `IMPLEMENTATION_PLAN.md`, `specs/WORKFLOW_CONTRACT.md`.
 - If running the Ralph loop, read `plans/prd.json` and `plans/progress.txt`.
