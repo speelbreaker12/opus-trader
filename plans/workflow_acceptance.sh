@@ -121,6 +121,7 @@ test_start() {
     fi
   elif [[ -n "$ONLY_SET" ]]; then
     # Normalize: remove whitespace, check membership
+    local normalized
     normalized=$(echo "$ONLY_SET" | tr -d '[:space:]')
     case ",$normalized," in
       *,$id,*) ;;  # ID found in set - continue to run
@@ -264,6 +265,14 @@ collect_test_ids
 if [[ -n "$ONLY_ID" && -n "$ONLY_SET" ]]; then
   echo "FAIL: --only and --only-set are mutually exclusive" >&2
   exit 1
+fi
+
+# Mutual exclusion: --only/--only-set cannot combine with range/resume/fast
+if [[ -n "$ONLY_ID" || -n "$ONLY_SET" ]]; then
+  if [[ -n "$FROM_ID" || -n "$UNTIL_ID" || $RESUME -ne 0 || $FAST -ne 0 ]]; then
+    echo "FAIL: --only/--only-set cannot be combined with --from/--until/--resume/--fast" >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "$ONLY_ID" ]]; then
@@ -1357,6 +1366,14 @@ if ! run_in_worktree grep -Fq "NO_PREFLIGHT" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing NO_PREFLIGHT token" >&2
   exit 1
 fi
+if ! run_in_worktree grep -Fq "Review Coverage" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing Review Coverage requirement" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "reviews/REVIEW_CHECKLIST.md" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing review checklist reference" >&2
+  exit 1
+fi
 if ! run_in_worktree grep -Fq "## Start here (only when doing edits / PR work / MED-HIGH risk)" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing conditional start-here heading" >&2
   exit 1
@@ -1367,6 +1384,14 @@ if ! run_in_worktree grep -Fq "SHOULD keep workflow_acceptance test IDs stable a
 fi
 if ! run_in_worktree grep -Fq "Top time/token sinks (fix focus)" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing top time/token sinks section" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "Review Coverage" "SKILLS/pr-review.md"; then
+  echo "FAIL: pr-review skill missing Review Coverage section" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "reviews/REVIEW_CHECKLIST.md" "SKILLS/pr-review.md"; then
+  echo "FAIL: pr-review skill missing review checklist reference" >&2
   exit 1
 fi
 
@@ -1618,6 +1643,21 @@ if test_start "0k.8" "verify.sh parallel primitives structure" 1; then
     fi
   '
   test_pass "0k.8"
+fi
+
+if test_start "0k.9" "verify.sh parallel acceptance integration marker" 1; then
+  run_in_worktree bash -c '
+    set -euo pipefail
+    if ! grep -q "VERIFY_WA_PARALLEL_INTEGRATION" "plans/verify.sh"; then
+      echo "FAIL: parallel acceptance integration marker not found" >&2
+      exit 1
+    fi
+    if ! grep -q "workflow_acceptance_jobs()" "plans/verify.sh"; then
+      echo "FAIL: workflow_acceptance_jobs() helper not found" >&2
+      exit 1
+    fi
+  '
+  test_pass "0k.9"
 fi
 
 if test_start "0l" "--list prints test ids"; then

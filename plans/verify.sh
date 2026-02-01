@@ -112,6 +112,27 @@ detect_cpus() {
   echo "$cpus"
 }
 
+workflow_acceptance_jobs() {
+  local jobs
+
+  case "${WORKFLOW_ACCEPTANCE_JOBS:-auto}" in
+    auto)
+      jobs=$(detect_cpus)
+      ;;
+    *)
+      jobs="$WORKFLOW_ACCEPTANCE_JOBS"
+      if ! [[ "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+        fail "Invalid WORKFLOW_ACCEPTANCE_JOBS: $jobs (must be positive integer or auto)"
+      fi
+      ;;
+  esac
+
+  # Cap at 8 to avoid OOM in CI runners with limited memory per worker
+  [[ "$jobs" -gt 8 ]] && jobs=8
+  [[ "$jobs" -lt 1 ]] && jobs=1
+  echo "$jobs"
+}
+
 VERIFY_CONSOLE="${VERIFY_CONSOLE:-auto}"
 case "$VERIFY_CONSOLE" in
   auto)
@@ -299,7 +320,7 @@ run_parallel_group() {
   # Get array contents (Bash 3.2 compatible - no nameref)
   eval "local -a specs=(\"\${$specs_array_name[@]}\")"
 
-  local spec name timeout cmd
+  local spec name timeout cmd rc
   local job_count=0
   local -a wave_pids
 
@@ -593,6 +614,7 @@ CONTRACT_COVERAGE_TIMEOUT="${CONTRACT_COVERAGE_TIMEOUT:-2m}"
 SPEC_LINT_TIMEOUT="${SPEC_LINT_TIMEOUT:-2m}"
 POSTMORTEM_CHECK_TIMEOUT="${POSTMORTEM_CHECK_TIMEOUT:-1m}"
 WORKFLOW_ACCEPTANCE_TIMEOUT="${WORKFLOW_ACCEPTANCE_TIMEOUT:-20m}"
+WORKFLOW_ACCEPTANCE_JOBS="${WORKFLOW_ACCEPTANCE_JOBS:-auto}"
 VENDOR_DOCS_LINT_TIMEOUT="${VENDOR_DOCS_LINT_TIMEOUT:-1m}"
 CONTRACT_COVERAGE_CI_SENTINEL="${CONTRACT_COVERAGE_CI_SENTINEL:-plans/contract_coverage_ci_strict}"
 
@@ -1167,7 +1189,16 @@ fi
 if should_run_workflow_acceptance; then
   WORKFLOW_ACCEPTANCE_MODE="$(workflow_acceptance_mode)"
   log "6) Workflow acceptance (${WORKFLOW_ACCEPTANCE_MODE})"
-  run_logged "workflow_acceptance" "$WORKFLOW_ACCEPTANCE_TIMEOUT" ./plans/workflow_acceptance.sh --mode "$WORKFLOW_ACCEPTANCE_MODE"
+  # VERIFY_WA_PARALLEL_INTEGRATION: full mode uses parallel acceptance runner when available
+  if [[ "$WORKFLOW_ACCEPTANCE_MODE" == "full" && -x ./plans/workflow_acceptance_parallel.sh ]]; then
+    WA_JOBS="$(workflow_acceptance_jobs)"
+    log "    using parallel runner with $WA_JOBS workers"
+    run_logged "workflow_acceptance" "$WORKFLOW_ACCEPTANCE_TIMEOUT" \
+      ./plans/workflow_acceptance_parallel.sh --jobs "$WA_JOBS" --mode "$WORKFLOW_ACCEPTANCE_MODE"
+  else
+    run_logged "workflow_acceptance" "$WORKFLOW_ACCEPTANCE_TIMEOUT" \
+      ./plans/workflow_acceptance.sh --mode "$WORKFLOW_ACCEPTANCE_MODE"
+  fi
   echo "✓ workflow acceptance passed (${WORKFLOW_ACCEPTANCE_MODE})"
 else
   if [[ "${CI:-}" == "" && "${WORKFLOW_ACCEPTANCE_POLICY}" == "never" ]]; then
