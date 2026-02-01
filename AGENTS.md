@@ -65,7 +65,7 @@ Then end with: `<promise>COMPLETE</promise>`
 - If running the Ralph loop, read `plans/prd.json` and `plans/progress.txt`.
 - Read `docs/skills/workflow.md`.
 - Read `WORKFLOW_FRICTION.md` and the relevant files under `SKILLS/`.
-- Use `reviews/REVIEW_CHECKLIST.md` when reviewing PRs.
+- When reviewing, MUST read `reviews/REVIEW_CHECKLIST.md` and include a "Review Coverage" section enumerating all modified/added files with a 1-line review note each.
 - If running the Ralph loop, run `./plans/init.sh` (if present) then `./plans/verify.sh <mode>`.
 
 For read-only doc reviews: read the target docs first; consult contract/workflow docs only if you detect a conflict or a safety-relevant claim.
