@@ -300,6 +300,45 @@ verify: add --strict flag to status validation
 
 Keep the first line under 72 characters. Reference CONTRACT.md sections when implementing contract requirements.
 
+## PR Review Checklist
+
+Before approving implementation PRs, verify each claimed change:
+
+**1. Assertions validate what they claim (not just existence)**
+```bash
+# BAD: Checks if string exists anywhere (could be in comment/allowlist)
+grep -q "my_function" file.sh
+
+# GOOD: Checks actual invocation pattern
+grep -Eq 'call_site[[:space:]]+"my_function"' file.sh
+```
+Ask: "Does this check prove integration, or just existence?"
+
+**2. Ordering and sequencing**
+```bash
+# Extract IDs and verify monotonic order
+grep -n "test_start.*0k\." file.sh | cut -d'"' -f2 | sort -V | diff - <(grep -o '0k\.[0-9]*' file.sh | head -20)
+```
+Ask: "Are numbered items in logical order? Any gaps or out-of-sequence?"
+
+**3. Trace callsites, not just definitions**
+- Function defined? Check if it's actually *called*
+- File in allowlist? Check if it's actually *invoked*
+- For each new function: find at least one callsite
+
+**4. Question why tests pass**
+- "This passes, but *why* does it pass?"
+- A check that passes for the wrong reason is worse than no check
+- Run the test, then break the thing it claims to test — does it fail?
+
+**5. Implementation plan checklist**
+For each claimed change in the PR:
+- [ ] Code exists (definition)
+- [ ] Code is invoked (callsite)
+- [ ] Test validates invocation (not just existence)
+- [ ] Ordering/sequencing is correct
+- [ ] Error paths handled
+
 ## PRD Audit Patterns
 
 - Clear `.context/prd_slice.json` and `.context/prd_audit_cache.json` before re-running slice audits after modifying prd.json
