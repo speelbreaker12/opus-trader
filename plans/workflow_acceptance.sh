@@ -2,6 +2,12 @@
 # shellcheck disable=SC2016,SC2026
 set -euo pipefail
 
+# Git hooks export GIT_DIR/GIT_WORK_TREE; clear to avoid leaking into clones/worktrees.
+if [[ -n "${GIT_DIR:-}" || -n "${GIT_WORK_TREE:-}" || -n "${GIT_INDEX_FILE:-}" ]]; then
+  echo "WARN: clearing git hook env (GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE) for workflow acceptance isolation" >&2
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+fi
+
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 DEFAULT_STATE_FILE="/tmp/workflow_acceptance.state"
 DEFAULT_STATUS_FILE="/tmp/workflow_acceptance.status"
@@ -665,6 +671,14 @@ OPTIONAL_OVERLAY_FILES=(
 )
 MISSING_OVERLAY_FILES=()
 add_optional_overlays "${OPTIONAL_OVERLAY_FILES[@]}"
+
+if test_start "0d.1" "git hook env vars are cleared for workflow acceptance"; then
+  if [[ -n "${GIT_DIR:-}" || -n "${GIT_WORK_TREE:-}" || -n "${GIT_INDEX_FILE:-}" ]]; then
+    echo "FAIL: expected GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE to be unset" >&2
+    exit 1
+  fi
+  test_pass "0d.1"
+fi
 
 if test_start "0e" "optional overlay files are skipped when missing"; then
   if (( ${#MISSING_OVERLAY_FILES[@]} > 0 )); then
