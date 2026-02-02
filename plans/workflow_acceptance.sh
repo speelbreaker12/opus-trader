@@ -121,6 +121,7 @@ test_start() {
     fi
   elif [[ -n "$ONLY_SET" ]]; then
     # Normalize: remove whitespace, check membership
+    local normalized
     normalized=$(echo "$ONLY_SET" | tr -d '[:space:]')
     case ",$normalized," in
       *,$id,*) ;;  # ID found in set - continue to run
@@ -266,6 +267,14 @@ if [[ -n "$ONLY_ID" && -n "$ONLY_SET" ]]; then
   exit 1
 fi
 
+# Mutual exclusion: --only/--only-set cannot combine with range/resume/fast
+if [[ -n "$ONLY_ID" || -n "$ONLY_SET" ]]; then
+  if [[ -n "$FROM_ID" || -n "$UNTIL_ID" || $RESUME -ne 0 || $FAST -ne 0 ]]; then
+    echo "FAIL: --only/--only-set cannot be combined with --from/--until/--resume/--fast" >&2
+    exit 1
+  fi
+fi
+
 if [[ -n "$ONLY_ID" ]]; then
   if ! index_first_of "$ONLY_ID" >/dev/null; then
     echo "FAIL: --only id not found: $ONLY_ID" >&2
@@ -277,6 +286,7 @@ if [[ -n "$ONLY_SET" ]]; then
   # Validate all IDs in the set exist
   normalized=$(echo "$ONLY_SET" | tr -d '[:space:]')
   IFS=',' read -ra ids <<<"$normalized"
+  valid_count=0
   for id in "${ids[@]}"; do
     # Skip empty tokens
     [[ -z "$id" ]] && continue
@@ -284,7 +294,13 @@ if [[ -n "$ONLY_SET" ]]; then
       echo "FAIL: --only-set id not found: $id" >&2
       exit 1
     fi
+    valid_count=$((valid_count + 1))
   done
+  # Fail-fast on empty/whitespace-only input
+  if (( valid_count == 0 )); then
+    echo "FAIL: --only-set requires at least one valid id" >&2
+    exit 1
+  fi
 fi
 
 if [[ -n "$FROM_ID" ]]; then
@@ -327,12 +343,16 @@ fi
 mode_parts=()
 if [[ -n "$ONLY_ID" ]]; then
   mode_parts+=("only:${ONLY_ID}")
-fi
-if [[ -n "$ONLY_SET" ]]; then
+elif [[ -n "$ONLY_SET" ]]; then
   mode_parts+=("only-set:$(echo "$ONLY_SET" | tr -d '[:space:]')")
-fi
-if (( FAST == 1 )); then
-  mode_parts+=("fast")
+else
+  # FAST only applies when not using --only or --only-set
+  # Distinguish between --mode smoke (explicit) and --fast (flag)
+  if [[ "$WORKFLOW_ACCEPTANCE_MODE" == "smoke" ]]; then
+    mode_parts+=("smoke")
+  elif (( FAST == 1 )); then
+    mode_parts+=("fast")
+  fi
 fi
 if (( RESUME == 1 )); then
   mode_parts+=("resume")
@@ -1097,9 +1117,25 @@ if test_start "0k" "workflow preflight checks"; then
     echo "FAIL: plans/prd_gate.sh not executable" >&2
     exit 1
   fi
+  if ! run_in_worktree test -f "plans/prd_gate_help.md"; then
+    echo "FAIL: plans/prd_gate_help.md missing" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "prd_gate_help.md" "plans/prd_gate.sh"; then
+    echo "FAIL: prd_gate.sh must reference prd_gate_help.md" >&2
+    exit 1
+  fi
 
   if ! run_in_worktree test -x "plans/prd_audit_check.sh"; then
     echo "FAIL: plans/prd_audit_check.sh not executable" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "WF-VERIFY-RULE" "AGENTS.md"; then
+    echo "FAIL: AGENTS.md missing workflow verify guidance marker (WF-VERIFY-RULE)" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "WF-VERIFY-EVIDENCE" "reviews/REVIEW_CHECKLIST.md"; then
+    echo "FAIL: review checklist missing workflow verify evidence marker (WF-VERIFY-EVIDENCE)" >&2
     exit 1
   fi
 
@@ -1346,6 +1382,14 @@ if ! run_in_worktree grep -Fq "NO_PREFLIGHT" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing NO_PREFLIGHT token" >&2
   exit 1
 fi
+if ! run_in_worktree grep -Fq "Review Coverage" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing Review Coverage requirement" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "reviews/REVIEW_CHECKLIST.md" "AGENTS.md"; then
+  echo "FAIL: AGENTS.md missing review checklist reference" >&2
+  exit 1
+fi
 if ! run_in_worktree grep -Fq "## Start here (only when doing edits / PR work / MED-HIGH risk)" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing conditional start-here heading" >&2
   exit 1
@@ -1356,6 +1400,22 @@ if ! run_in_worktree grep -Fq "SHOULD keep workflow_acceptance test IDs stable a
 fi
 if ! run_in_worktree grep -Fq "Top time/token sinks (fix focus)" "AGENTS.md"; then
   echo "FAIL: AGENTS.md missing top time/token sinks section" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "Review Coverage" "SKILLS/pr-review.md"; then
+  echo "FAIL: pr-review skill missing Review Coverage section" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "reviews/REVIEW_CHECKLIST.md" "SKILLS/pr-review.md"; then
+  echo "FAIL: pr-review skill missing review checklist reference" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "## Review Coverage (Required)" "reviews/REVIEW_CHECKLIST.md"; then
+  echo "FAIL: review checklist missing Review Coverage section" >&2
+  exit 1
+fi
+if ! run_in_worktree grep -Fq "## Workflow / Harness Changes (If plans/* or specs/* touched)" "reviews/REVIEW_CHECKLIST.md"; then
+  echo "FAIL: review checklist missing workflow harness review section" >&2
   exit 1
 fi
 
@@ -1530,6 +1590,11 @@ if test_start "0k.3" "contract coverage matrix fixtures"; then
   test_pass "0k.3"
 fi
 
+if test_start "0k.4" "workflow acceptance clone fallback"; then
+  "$ROOT/plans/tests/test_workflow_acceptance_fallback.sh" >/dev/null 2>&1
+  test_pass "0k.4"
+fi
+
 if test_start "0k.5" "contract kernel check"; then
   run_in_worktree python3 scripts/check_contract_kernel.py >/dev/null 2>&1
   test_pass "0k.5"
@@ -1545,9 +1610,104 @@ if test_start "0k.7" "contract kernel file present"; then
   test_pass "0k.7"
 fi
 
-if test_start "0k.4" "workflow acceptance clone fallback"; then
-  "$ROOT/plans/tests/test_workflow_acceptance_fallback.sh" >/dev/null 2>&1
-  test_pass "0k.4"
+if test_start "0k.8" "verify.sh parallel primitives structure" 1; then
+  run_in_worktree bash -c '
+    set -euo pipefail
+
+    verify="plans/verify.sh"
+
+    # 1. Core functions exist
+    if ! grep -q "^run_parallel_group()" "$verify"; then
+      echo "FAIL: run_parallel_group() not found" >&2
+      exit 1
+    fi
+
+    if ! grep -q "^detect_cpus()" "$verify"; then
+      echo "FAIL: detect_cpus() not found" >&2
+      exit 1
+    fi
+
+    # 2. Arrays are defined and used (whitespace tolerant for runner call)
+    for array in SPEC_VALIDATOR_SPECS STATUS_FIXTURE_SPECS; do
+      if ! grep -q "${array}=(" "$verify"; then
+        echo "FAIL: ${array} array not found" >&2
+        exit 1
+      fi
+
+      if ! grep -Eq "run_parallel_group[[:space:]]+${array}" "$verify"; then
+        echo "FAIL: ${array} not passed to runner" >&2
+        exit 1
+      fi
+    done
+
+    # 3. Timing artifacts (E-RE, ordering tolerant)
+    if ! grep -Eq '\''\.time.*VERIFY_ARTIFACTS_DIR|VERIFY_ARTIFACTS_DIR.*\.time'\'' "$verify"; then
+      echo "FAIL: Timing artifact pattern not found" >&2
+      exit 1
+    fi
+
+    # 4. Safety guards
+    for var in RUN_LOGGED_SUPPRESS_EXCERPT RUN_LOGGED_SKIP_FAILED_GATE RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL; do
+      if ! grep -q "\${${var}:-}" "$verify"; then
+        echo "FAIL: Unbound guard for ${var} not found" >&2
+        exit 1
+      fi
+    done
+
+    # 5. Precedence fix (marker-based, robust to formatting)
+    if ! grep -q "VERIFY_TIMEOUT_PAREN_FIX" "$verify"; then
+      echo "FAIL: Timeout precedence fix marker not found" >&2
+      exit 1
+    fi
+
+    # 6. Smoke test integration (whitespace tolerant)
+    if ! grep -Eq '\''run_logged[[:space:]]+"parallel_smoke"'\'' "$verify"; then
+      echo "FAIL: parallel_smoke not invoked via run_logged" >&2
+      exit 1
+    fi
+  '
+  test_pass "0k.8"
+fi
+
+if test_start "0k.9" "verify.sh parallel acceptance integration marker" 1; then
+  run_in_worktree bash -c '
+    set -euo pipefail
+    if ! grep -q "VERIFY_WA_PARALLEL_INTEGRATION" "plans/verify.sh"; then
+      echo "FAIL: parallel acceptance integration marker not found" >&2
+      exit 1
+    fi
+    if ! grep -q "workflow_acceptance_jobs()" "plans/verify.sh"; then
+      echo "FAIL: workflow_acceptance_jobs() helper not found" >&2
+      exit 1
+    fi
+  '
+  test_pass "0k.9"
+fi
+
+if test_start "0k.10" "verify.sh run_parallel_group uses array expansion not eval" 1; then
+  run_in_worktree bash -c '
+    set -euo pipefail
+    verify="plans/verify.sh"
+
+    # 1. Marker must exist (proves intentional change)
+    if ! grep -q "RUN_PARALLEL_NO_EVAL" "$verify"; then
+      echo "FAIL: RUN_PARALLEL_NO_EVAL marker not found" >&2
+      exit 1
+    fi
+
+    # 2. Array parsing must exist
+    if ! grep -q "read -ra cmd_array" "$verify"; then
+      echo "FAIL: read -ra cmd_array not found" >&2
+      exit 1
+    fi
+
+    # 3. eval run_logged must be absent
+    if grep -q "eval.*run_logged" "$verify"; then
+      echo "FAIL: eval command execution still present" >&2
+      exit 1
+    fi
+  '
+  test_pass "0k.10"
 fi
 
 if test_start "0l" "--list prints test ids"; then

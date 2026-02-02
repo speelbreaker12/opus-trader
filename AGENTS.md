@@ -51,12 +51,21 @@ Next steps:
 
 Then end with: `<promise>COMPLETE</promise>`
 
+## Review Coverage
+
+- Use `reviews/REVIEW_CHECKLIST.md` to ensure PR reviews cover evidence, compounding, and workflow-specific gates.
+## PRD Authoring Rules
+
+- MUST run `./plans/prd_gate.sh` (not `prd_lint.sh`) when validating PRDs — lint alone misses schema/ref checks.
+- MUST validate audit output with `plans/prd_audit_check.sh` before accepting cached results.
+- Require `Anchor-###` / `VR-###` IDs when `contract_refs` mention anchor or validation rule titles (enforced by `plans/prd_lint.sh` via `MISSING_ANCHOR_REF`/`MISSING_VR_REF`).
+
 ## Start here (only when doing edits / PR work / MED-HIGH risk)
 - Read `specs/CONTRACT.md`, `IMPLEMENTATION_PLAN.md`, `specs/WORKFLOW_CONTRACT.md`.
 - If running the Ralph loop, read `plans/prd.json` and `plans/progress.txt`.
 - Read `docs/skills/workflow.md`.
 - Read `WORKFLOW_FRICTION.md` and the relevant files under `SKILLS/`.
-- Use `reviews/REVIEW_CHECKLIST.md` when reviewing PRs.
+- When reviewing, MUST read `reviews/REVIEW_CHECKLIST.md` and include a "Review Coverage" section enumerating all modified/added files with a 1-line review note each.
 - If running the Ralph loop, run `./plans/init.sh` (if present) then `./plans/verify.sh <mode>`.
 
 For read-only doc reviews: read the target docs first; consult contract/workflow docs only if you detect a conflict or a safety-relevant claim.
@@ -158,6 +167,7 @@ Operational notes:
 - MUST update workflow acceptance coverage when changing `plans/verify.sh` mode defaults.
 - Keep WF-* IDs synchronized across `specs/WORKFLOW_CONTRACT.md` and `plans/workflow_contract_map.json`.
 - Workflow acceptance runs in CI (smoke when no workflow-critical changes; full when workflow changes or detection fails); locally it may skip when no workflow-critical files changed (WORKFLOW_ACCEPTANCE_POLICY=auto). Force with WORKFLOW_ACCEPTANCE_POLICY=always.
+- SHOULD run `./plans/workflow_verify.sh` during iteration when changes are limited to workflow/harness files (see `plans/verify.sh:is_workflow_file`), then run `./plans/verify.sh full` before PR. [WF-VERIFY-RULE]
 
 ### Fail-closed default
 If a required script/artifact is missing or invalid, the workflow must produce a deterministic BLOCKED outcome (not a silent pass).

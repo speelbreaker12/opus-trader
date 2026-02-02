@@ -27,6 +27,8 @@ gh pr diff <number>
 ```
 
 ### 2. Review Checklist
+- [ ] Read `reviews/REVIEW_CHECKLIST.md` and follow it.
+- [ ] Ensure your response includes a "Review Coverage" section that lists every modified/added file with a 1-line review note each.
 
 #### Correctness
 - [ ] Logic is sound and handles edge cases
@@ -64,6 +66,9 @@ gh pr diff <number>
 - [ ] README/docs updated if needed
 - [ ] Breaking changes documented
 
+### Review Coverage (Required)
+- Use `reviews/REVIEW_CHECKLIST.md` to confirm evidence/compounding gates and required workflow checks are covered.
+
 ### 3. Scope Check
 - [ ] Changes match PR title/description
 - [ ] No unrelated changes bundled in
@@ -73,6 +78,9 @@ gh pr diff <number>
 
 ```markdown
 ## PR Review: #<number> - <title>
+
+### Review Coverage
+- <path> — <what changed + risk>
 
 ### Summary
 Brief description of what this PR does.
