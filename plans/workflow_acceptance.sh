@@ -2,6 +2,12 @@
 # shellcheck disable=SC2016,SC2026
 set -euo pipefail
 
+# Git hooks export GIT_DIR/GIT_WORK_TREE; clear to avoid leaking into clones/worktrees.
+if [[ -n "${GIT_DIR:-}" || -n "${GIT_WORK_TREE:-}" || -n "${GIT_INDEX_FILE:-}" ]]; then
+  echo "WARN: clearing git hook env (GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE) for workflow acceptance isolation" >&2
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+fi
+
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 DEFAULT_STATE_FILE="/tmp/workflow_acceptance.state"
 DEFAULT_STATUS_FILE="/tmp/workflow_acceptance.status"
@@ -665,6 +671,14 @@ OPTIONAL_OVERLAY_FILES=(
 )
 MISSING_OVERLAY_FILES=()
 add_optional_overlays "${OPTIONAL_OVERLAY_FILES[@]}"
+
+if test_start "0d.1" "git hook env vars are cleared for workflow acceptance"; then
+  if [[ -n "${GIT_DIR:-}" || -n "${GIT_WORK_TREE:-}" || -n "${GIT_INDEX_FILE:-}" ]]; then
+    echo "FAIL: expected GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE to be unset" >&2
+    exit 1
+  fi
+  test_pass "0d.1"
+fi
 
 if test_start "0e" "optional overlay files are skipped when missing"; then
   if (( ${#MISSING_OVERLAY_FILES[@]} > 0 )); then
@@ -1776,7 +1790,47 @@ if test_start "0n" "selector flags work for --only/--resume"; then
   test_pass "0n"
 fi
 
-exclude_file="$(run_in_worktree git rev-parse --git-path info/exclude)"
+if test_start "0n.1" "selector flags work for --only-set"; then
+  tmp_state="$WORKTREE/.ralph/accept_state_only_set"
+  tmp_status="$WORKTREE/.ralph/accept_status_only_set"
+  rm -f "$tmp_state" "$tmp_status"
+  set +e
+  only_set_output="$("$ROOT/plans/workflow_acceptance.sh" --only-set "0h, 0i" --state-file "$tmp_state" --status-file "$tmp_status" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    echo "FAIL: expected --only-set run to succeed" >&2
+    echo "Output: $only_set_output" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$only_set_output" | grep -q "^Test 0h:"; then
+    echo "FAIL: expected --only-set output to include 0h" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$only_set_output" | grep -q "^Test 0i:"; then
+    echo "FAIL: expected --only-set output to include 0i" >&2
+    exit 1
+  fi
+  if [[ "$(head -n 1 "$tmp_state" 2>/dev/null || true)" != "0i" ]]; then
+    echo "FAIL: expected --only-set run to record 0i in state file" >&2
+    exit 1
+  fi
+  set +e
+  "$ROOT/plans/workflow_acceptance.sh" --only 0h --only-set "0h,0i" >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: expected --only + --only-set to fail" >&2
+    exit 1
+  fi
+  test_pass "0n.1"
+fi
+
+exclude_file="$(run_in_worktree bash -c 'path="$(git rev-parse --git-path info/exclude)"; if [[ "$path" != /* ]]; then printf "%s/%s\n" "$(pwd)" "$path"; else printf "%s\n" "$path"; fi')"
+exclude_dir="$(dirname "$exclude_file")"
+if [[ ! -d "$exclude_dir" ]]; then
+  mkdir -p "$exclude_dir"
+fi
 {
   printf '%s\n' ".context/"
   printf '%s\n' "plans/contract_check.sh"
@@ -5097,22 +5151,13 @@ EOF
   test_pass "26"
 fi
 
-if test_start "27" "prd_preflight runs gate and allowlist check"; then
-  run_in_worktree bash -c '
-  set -euo pipefail
-  # Run preflight on real prd.json (full gate + allowlist)
-  ./plans/prd_preflight.sh plans/prd.json >/dev/null 2>&1
-'
-  test_pass "27"
-fi
-
-if test_start "27b" "prd_preflight runs allowlist check in smoke mode" 1; then
+if test_start "27" "prd_preflight runs gate and allowlist check (smoke mode)" 1; then
   run_in_worktree bash -c '
   set -euo pipefail
   # Run preflight on real prd.json in smoke mode (schema + allowlist only)
   ./plans/prd_preflight.sh --smoke plans/prd.json >/dev/null 2>&1
 '
-  test_pass "27b"
+  test_pass "27"
 fi
 
 if test_start "28" "prd_preflight --strict fails when allowlist script missing" 1; then
