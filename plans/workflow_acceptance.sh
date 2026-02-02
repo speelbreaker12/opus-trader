@@ -1826,7 +1826,11 @@ if test_start "0n.1" "selector flags work for --only-set"; then
   test_pass "0n.1"
 fi
 
-exclude_file="$(run_in_worktree git rev-parse --git-path info/exclude)"
+exclude_file="$(run_in_worktree bash -c 'path="$(git rev-parse --git-path info/exclude)"; if [[ "$path" != /* ]]; then printf "%s/%s\n" "$(pwd)" "$path"; else printf "%s\n" "$path"; fi')"
+exclude_dir="$(dirname "$exclude_file")"
+if [[ ! -d "$exclude_dir" ]]; then
+  mkdir -p "$exclude_dir"
+fi
 {
   printf '%s\n' ".context/"
   printf '%s\n' "plans/contract_check.sh"
