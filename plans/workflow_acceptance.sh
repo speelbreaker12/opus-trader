@@ -1063,7 +1063,6 @@ TESTEOF
 fi
 
 if test_start "0k" "workflow preflight checks"; then
-  run_in_worktree ./plans/prd_gate.sh "plans/prd.json" >/dev/null 2>&1
   run_in_worktree mkdir -p ".ralph"
   cp "$ROOT/plans/story_verify_allowlist.txt" "$WORKTREE/.ralph/story_verify_allowlist.txt"
   export RPH_STORY_VERIFY_ALLOWLIST_FILE="$WORKTREE/.ralph/story_verify_allowlist.txt"
@@ -1602,6 +1601,10 @@ fi
 
 if test_start "0k.1" "prd gate fixtures"; then
   run_in_worktree ./plans/tests/test_prd_gate.sh >/dev/null 2>&1
+  if ! run_in_worktree grep -q "plans/prd_gate.sh" "plans/tests/test_prd_gate.sh"; then
+    echo "FAIL: prd gate fixtures must invoke plans/prd_gate.sh" >&2
+    exit 1
+  fi
   test_pass "0k.1"
 fi
 
