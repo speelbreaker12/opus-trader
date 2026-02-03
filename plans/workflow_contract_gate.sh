@@ -78,4 +78,20 @@ if [[ -n "$dup_ids" ]]; then
   exit 1
 fi
 
+# Validate enforcement paths (if token looks like a repo path, it must exist).
+while IFS= read -r enforcement; do
+  [[ -z "$enforcement" ]] && continue
+  path="${enforcement%% *}"
+  case "$path" in
+    */*|*.sh|*.py|*.json)
+      if [[ ! -e "$path" ]]; then
+        echo "ERROR: enforcement path missing: $path" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      ;;
+  esac
+done < <(jq -r '.rules[].enforcement[]' "$map_file")
+
 echo "workflow contract gate: OK"
