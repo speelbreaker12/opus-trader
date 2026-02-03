@@ -60,6 +60,7 @@ The trading behavior contract is the source of truth. If a plan/story conflicts 
 - [WF-1.14] `plans/workflow_contract_map.json` — workflow rule enforcement map
 - [WF-1.15] `plans/prd_gate.sh` — deterministic PRD gate (schema + lint + ref check)
 - [WF-1.16] `plans/prd_audit_check.sh` — PRD audit output validator
+- [WF-1.17] `plans/preflight.sh` — fast sanity gate (shell syntax, PRD schema, postmortem)
 
 ### 1.3 Optional but recommended
 - `plans/bootstrap.sh` — one-time harness scaffolding

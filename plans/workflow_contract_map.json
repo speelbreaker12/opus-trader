@@ -253,6 +253,21 @@
       ]
     },
     {
+      "id": "WF-1.17",
+      "title": "plans/preflight.sh  fast sanity gate (shell syntax, PRD schema, postmortem)",
+      "enforcement": [
+        "plans/preflight.sh",
+        "plans/verify.sh"
+      ],
+      "artifacts": [
+        "plans/preflight.sh"
+      ],
+      "tests": [
+        "plans/workflow_acceptance.sh (Test 12)",
+        "plans/workflow_acceptance.sh (Test 28.1-28.5)"
+      ]
+    },
+    {
       "id": "WF-2.1",
       "title": "1) Contract alignment is mandatory.",
       "enforcement": [
