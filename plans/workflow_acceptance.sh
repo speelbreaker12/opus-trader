@@ -625,6 +625,7 @@ OVERLAY_FILES=(
   "plans/prd_gate.sh"
   "plans/prd_pipeline.sh"
   "plans/prd_preflight.sh"
+  "plans/preflight.sh"
   "plans/story_verify_allowlist_check.sh"
   "plans/story_verify_allowlist_lint.sh"
   "plans/story_verify_allowlist_suggest.sh"
@@ -741,6 +742,7 @@ scripts_to_chmod=(
   "prd_gate.sh"
   "prd_pipeline.sh"
   "prd_preflight.sh"
+  "preflight.sh"
   "story_verify_allowlist_check.sh"
   "story_verify_allowlist_lint.sh"
   "story_verify_allowlist_suggest.sh"
@@ -1229,8 +1231,28 @@ fi
     exit 1
   fi
 
-  if ! run_in_worktree grep -q "bash -n plans/workflow_acceptance.sh" "plans/verify.sh"; then
-    echo "FAIL: verify must syntax-check workflow_acceptance.sh" >&2
+  if ! run_in_worktree grep -q "plans/\\*\\.sh" "plans/preflight.sh"; then
+    echo "FAIL: preflight must target plans/*.sh for syntax checks" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "bash -n" "plans/preflight.sh"; then
+    echo "FAIL: preflight must run bash -n for shell syntax checks" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "run_logged \"preflight\"" "plans/verify.sh"; then
+    echo "FAIL: verify must run plans/preflight.sh under run_logged" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "preflight_args+=(--strict)" "plans/verify.sh"; then
+    echo "FAIL: verify must pass --strict to preflight in CI or when requested" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "VERIFY_PREFLIGHT_STRICT" "plans/verify.sh"; then
+    echo "FAIL: verify must support VERIFY_PREFLIGHT_STRICT for preflight" >&2
     exit 1
   fi
 
@@ -4106,7 +4128,7 @@ write_contract_check_stub "PASS"
   test_pass "10c"
 fi
 
-if test_start "10c" "update_task blocks non-promotion verify"; then
+if test_start "10c.1" "update_task blocks non-promotion verify"; then
 reset_state
 valid_prd_10c="$WORKTREE/plans/prd_acceptance_non_promo.json"
 write_valid_prd "$valid_prd_10c" "S1-010"
@@ -4162,7 +4184,7 @@ if [[ -z "$latest_block" ]]; then
 fi
 
 write_contract_check_stub "PASS"
-  test_pass "10c"
+  test_pass "10c.1"
 fi
 
 if test_start "10d" "final verify failure writes FAIL manifest"; then
@@ -4275,6 +4297,10 @@ if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-12.8") | .tests[] | selec
   echo "FAIL: WF-12.8 tests must point to workflow acceptance Test 12" >&2
   exit 1
 fi
+if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-1.17") | .artifacts[] | select(.=="plans/preflight.sh")' plans/workflow_contract_map.json >/dev/null; then
+  echo "FAIL: WF-1.17 must reference plans/preflight.sh artifact" >&2
+  exit 1
+fi
 bad_map="$WORKTREE/.ralph/workflow_contract_map.bad.json"
 run_in_worktree jq 'del(.rules[0])' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_map"
 set +e
@@ -4283,6 +4309,26 @@ rc=$?
 set -e
 if [[ "$rc" -eq 0 ]]; then
   echo "FAIL: expected workflow_contract_gate to fail with missing rule id" >&2
+  exit 1
+fi
+bad_enforcement="$WORKTREE/.ralph/workflow_contract_map.bad_enforcement.json"
+run_in_worktree jq '(.rules[] | select(.id=="WF-1.5").enforcement[0])="scripts/__missing__.sh"' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_enforcement"
+set +e
+run_in_worktree env WORKFLOW_CONTRACT_MAP="$bad_enforcement" ./plans/workflow_contract_gate.sh >/dev/null 2>&1
+rc=$?
+set -e
+if [[ "$rc" -eq 0 ]]; then
+  echo "FAIL: expected workflow_contract_gate to fail on missing enforcement path" >&2
+  exit 1
+fi
+bad_tests="$WORKTREE/.ralph/workflow_contract_map.bad_tests.json"
+run_in_worktree jq '(.rules[] | select(.id=="WF-1.5").tests[0])="plans/workflow_acceptance.sh (Test 9999)"' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_tests"
+set +e
+run_in_worktree env WORKFLOW_CONTRACT_MAP="$bad_tests" ./plans/workflow_contract_gate.sh >/dev/null 2>&1
+rc=$?
+set -e
+if [[ "$rc" -eq 0 ]]; then
+  echo "FAIL: expected workflow_contract_gate to fail on unknown test id" >&2
   exit 1
 fi
   test_pass "12"
@@ -4303,6 +4349,7 @@ check_required_workflow_artifacts() {
     "plans/workflow_contract_gate.sh"
     "plans/workflow_acceptance.sh"
     "plans/workflow_contract_map.json"
+    "plans/preflight.sh"
   )
   for f in "${required[@]}"; do
     if [[ ! -f "$WORKTREE/$f" ]]; then
@@ -4330,6 +4377,93 @@ if test_start "12c" "missing required workflow artifact fails fast"; then
     exit 1
   fi
   test_pass "12c"
+fi
+
+if test_start "12d" "workflow contract gate validates enforcement existence" 1; then
+  tmp_map=$(mktemp)
+  # NOTE: Do NOT use trap here - workflow_acceptance.sh has a global EXIT trap
+  # that would be overwritten, risking leaked worktrees
+
+  # Test 1: missing enforcement script - must fail (non-zero) with specific message
+  jq '.rules[0].enforcement = ["plans/ghost_script.sh"]' \
+    plans/workflow_contract_map.json > "$tmp_map"
+
+  rc=0
+  output="$(WORKFLOW_CONTRACT_MAP="$tmp_map" plans/workflow_contract_gate.sh 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    echo "FAIL: gate should have returned non-zero for missing enforcement"
+    rm -f "$tmp_map"; exit 1
+  fi
+  if ! echo "$output" | grep -q "missing enforcement"; then
+    echo "FAIL: gate should have rejected missing enforcement with specific error"
+    echo "Got: $output"
+    rm -f "$tmp_map"; exit 1
+  fi
+
+  # Test 2: invalid test ID - must fail (non-zero) with specific message
+  jq '.rules[0].tests = ["plans/workflow_acceptance.sh (Test 999)"]' \
+    plans/workflow_contract_map.json > "$tmp_map"
+
+  rc=0
+  output="$(WORKFLOW_CONTRACT_MAP="$tmp_map" plans/workflow_contract_gate.sh 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    echo "FAIL: gate should have returned non-zero for unknown test id"
+    rm -f "$tmp_map"; exit 1
+  fi
+  if ! echo "$output" | grep -q "unknown test id"; then
+    echo "FAIL: gate should have rejected unknown test id with specific error"
+    echo "Got: $output"
+    rm -f "$tmp_map"; exit 1
+  fi
+
+  # Test 3: descriptive text should not cause false positive
+  # "postmortem gate check, Test 0g, Test 10d" should only validate 0g and 10d
+  jq '.rules[0].tests = ["plans/workflow_acceptance.sh (postmortem gate check, Test 0g, Test 10d)"]' \
+    plans/workflow_contract_map.json > "$tmp_map"
+
+  if ! WORKFLOW_CONTRACT_MAP="$tmp_map" plans/workflow_contract_gate.sh 2>&1; then
+    echo "FAIL: gate should accept valid test IDs with descriptive text"
+    rm -f "$tmp_map"; exit 1
+  fi
+
+  # Test 4: non-numeric range should be rejected with "invalid test range" error
+  jq '.rules[0].tests = ["plans/workflow_acceptance.sh (Test 0k.1-0k.3)"]' \
+    plans/workflow_contract_map.json > "$tmp_map"
+
+  rc=0
+  output="$(WORKFLOW_CONTRACT_MAP="$tmp_map" plans/workflow_contract_gate.sh 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    echo "FAIL: gate should have returned non-zero for invalid test range"
+    rm -f "$tmp_map"; exit 1
+  fi
+  if ! echo "$output" | grep -q "invalid test range"; then
+    echo "FAIL: gate should reject non-numeric range with 'invalid test range' error"
+    echo "Got: $output"
+    rm -f "$tmp_map"; exit 1
+  fi
+
+  # Test 5: numeric range should expand fully and validate all IDs
+  # Use 5-6 (small stable range, both IDs exist)
+  jq '.rules[0].tests = ["plans/workflow_acceptance.sh (Test 5-6)"]' \
+    plans/workflow_contract_map.json > "$tmp_map"
+
+  if ! WORKFLOW_CONTRACT_MAP="$tmp_map" plans/workflow_contract_gate.sh 2>&1; then
+    echo "FAIL: gate should accept valid numeric range (full expansion)"
+    rm -f "$tmp_map"; exit 1
+  fi
+
+  # Test 6: slash-separated IDs should validate (existing map pattern)
+  jq '.rules[0].tests = ["plans/workflow_acceptance.sh (Test 0h/0i/0j/12)"]' \
+    plans/workflow_contract_map.json > "$tmp_map"
+
+  if ! WORKFLOW_CONTRACT_MAP="$tmp_map" plans/workflow_contract_gate.sh 2>&1; then
+    echo "FAIL: gate should accept slash-separated test ids"
+    rm -f "$tmp_map"; exit 1
+  fi
+
+  # Explicit cleanup (no trap)
+  rm -f "$tmp_map"
+  test_pass "12d"
 fi
 
 if test_start "13" "missing PRD file stops preflight"; then
@@ -5322,6 +5456,101 @@ SCRIPT
   fi
 '
   test_pass "28"
+fi
+
+if test_start "28.1" "preflight --strict succeeds with resolvable BASE_REF" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  BASE_REF=HEAD ./plans/preflight.sh --strict >/dev/null 2>&1
+'
+  test_pass "28.1"
+fi
+
+if test_start "28.2" "preflight --strict fails on missing BASE_REF" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  set +e
+  BASE_REF="__missing_ref__" ./plans/preflight.sh --strict >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: expected preflight --strict to fail with missing BASE_REF" >&2
+    exit 1
+  fi
+'
+  test_pass "28.2"
+fi
+
+if test_start "28.3" "preflight exits 2 on missing required file" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/preflight_missing_file"
+  mkdir -p "$tmpdir"
+  mv plans/prd.json "$tmpdir/prd.json"
+  set +e
+  ./plans/preflight.sh >/dev/null 2>&1
+  rc=$?
+  set -e
+  mv "$tmpdir/prd.json" plans/prd.json
+  if [[ "$rc" -ne 2 ]]; then
+    echo "FAIL: expected preflight to exit 2 on missing required file (got rc=$rc)" >&2
+    exit 1
+  fi
+  '
+  test_pass "28.3"
+fi
+
+if test_start "28.4" "preflight honors CONTRACT_FILE override" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/preflight_contract_override"
+  mkdir -p "$tmpdir"
+  backup="$tmpdir/CONTRACT.md.bak"
+  alt="$tmpdir/ALT_CONTRACT.md"
+
+  if [[ ! -f "specs/CONTRACT.md" ]]; then
+    echo "FAIL: expected specs/CONTRACT.md to exist" >&2
+    exit 1
+  fi
+
+  cp "specs/CONTRACT.md" "$alt"
+  mv "specs/CONTRACT.md" "$backup"
+
+  restore() {
+    if [[ -f "$backup" ]]; then
+      mv "$backup" "specs/CONTRACT.md"
+    fi
+  }
+  trap restore EXIT
+
+  set +e
+  CONTRACT_FILE="$alt" ./plans/preflight.sh >/dev/null 2>&1
+  rc=$?
+  set -e
+
+  if [[ "$rc" -ne 0 ]]; then
+    echo "FAIL: expected preflight to succeed with CONTRACT_FILE override (rc=$rc)" >&2
+    exit 1
+  fi
+  '
+  test_pass "28.4"
+fi
+
+if test_start "28.5" "preflight honors POSTMORTEM_GATE=0" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  missing_dir=".ralph/missing_postmortem_dir"
+  rm -rf "$missing_dir"
+  set +e
+  CI= POSTMORTEM_GATE=0 POSTMORTEM_DIR="$missing_dir" BASE_REF=HEAD ./plans/preflight.sh >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    echo "FAIL: expected preflight to skip postmortem gate when POSTMORTEM_GATE=0 (rc=$rc)" >&2
+    exit 1
+  fi
+  '
+  test_pass "28.5"
 fi
 
 if test_start "29" "allowlist_suggest generates patch" 1; then
