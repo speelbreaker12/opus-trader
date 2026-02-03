@@ -176,6 +176,7 @@ If a required script/artifact is missing or invalid, the workflow must produce a
 - MUST keep fast precheck set limited to schema/self-dep/shellcheck/traceability.
 - SHOULD keep workflow_acceptance test IDs stable and listable.
 - MUST avoid brittle acceptance checks that grep long prose sentences; prefer stable markers (the HTML comments at top) and short headers.
+- MUST run `./plans/workflow_contract_gate.sh` and update workflow acceptance mapping assertions when editing `specs/WORKFLOW_CONTRACT.md` or `plans/workflow_contract_map.json`.
 
 ## Top time/token sinks (fix focus)
 - `plans/workflow_acceptance.sh` full runtime → keep acceptance tests targeted; avoid unnecessary workflow file edits; batch changes before full runs.
