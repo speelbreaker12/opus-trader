@@ -1809,6 +1809,27 @@ if test_start "0k.13" "PRD cache integration tests" 1; then
   test_pass "0k.13"
 fi
 
+if test_start "0k.14" "Global invariants Appendix A referenced" 1; then
+  run_in_worktree bash -c '
+    set -euo pipefail
+    invariants="specs/invariants/GLOBAL_INVARIANTS.md"
+    contract="specs/CONTRACT.md"
+    if ! grep -q "Appendix A (Normative)" "$invariants"; then
+      echo "FAIL: Appendix A marker missing in GLOBAL_INVARIANTS.md" >&2
+      exit 1
+    fi
+    if ! grep -q "GLOBAL_INVARIANTS.md" "$contract"; then
+      echo "FAIL: CONTRACT.md missing GLOBAL_INVARIANTS.md reference" >&2
+      exit 1
+    fi
+    if ! grep -q "Appendix A" "$contract"; then
+      echo "FAIL: CONTRACT.md missing Appendix A reference" >&2
+      exit 1
+    fi
+  '
+  test_pass "0k.14"
+fi
+
 if test_start "0l" "--list prints test ids"; then
   list_output="$("$ROOT/plans/workflow_acceptance.sh" --list)"
   if [[ -z "$list_output" ]]; then
