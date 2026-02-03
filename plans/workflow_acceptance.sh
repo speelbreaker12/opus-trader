@@ -843,7 +843,7 @@ if test_start "0f" "prd_pipeline logs skipped ref check"; then
 }
 JSON
   progress="$tmpdir/progress.txt"
-  PRD_FILE="$prd" PROGRESS_FILE="$progress" PRD_CUTTER_CMD="/bin/true" PRD_AUDITOR_ENABLED=0 PRD_REF_CHECK_ENABLED=0 PRD_GATE_ALLOW_REF_SKIP=1 ./plans/prd_pipeline.sh >/dev/null 2>&1
+  CI= PRD_FILE="$prd" PROGRESS_FILE="$progress" PRD_CUTTER_CMD="true" PRD_AUDITOR_ENABLED=0 PRD_REF_CHECK_ENABLED=0 PRD_GATE_ALLOW_REF_SKIP=1 ./plans/prd_pipeline.sh >/dev/null 2>&1
   if ! grep -q "PRD ref check skipped" "$progress"; then
     echo "FAIL: expected progress log to note skipped prd_ref_check" >&2
     exit 1
