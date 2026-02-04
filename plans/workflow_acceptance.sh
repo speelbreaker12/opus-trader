@@ -14,6 +14,9 @@ DEFAULT_STATUS_FILE="/tmp/workflow_acceptance.status"
 
 WORKFLOW_ACCEPTANCE_MODE="full"
 WORKFLOW_ACCEPTANCE_SETUP_MODE="${WORKFLOW_ACCEPTANCE_SETUP_MODE:-auto}"
+WORKFLOW_ACCEPTANCE_CACHE_DIR="${WORKFLOW_ACCEPTANCE_CACHE_DIR:-}"
+WORKFLOW_ACCEPTANCE_CACHE_READY="${WORKFLOW_ACCEPTANCE_CACHE_READY:-0}"
+WORKFLOW_ACCEPTANCE_CACHE_ERR=""
 ONLY_ID=""
 ONLY_SET=""
 FROM_ID=""
@@ -457,6 +460,53 @@ if [[ -n "$dirty_status" ]]; then
   echo "$dirty_status" >&2
 fi
 
+normalize_cache_dir() {
+  local path="$1"
+  if [[ -z "$path" ]]; then
+    echo ""
+    return 0
+  fi
+  if [[ "$path" != /* ]]; then
+    echo "$ROOT/$path"
+  else
+    echo "$path"
+  fi
+}
+
+prepare_cache_repo() {
+  local cache_dir="$1"
+  local err_file
+  if [[ -z "$cache_dir" ]]; then
+    return 0
+  fi
+  if [[ "$WORKFLOW_ACCEPTANCE_CACHE_READY" == "1" ]]; then
+    return 0
+  fi
+  err_file="$(mktemp)"
+  mkdir -p "$(dirname "$cache_dir")"
+  if [[ -d "$cache_dir" ]]; then
+    if [[ ! -d "$cache_dir/objects" ]]; then
+      WORKFLOW_ACCEPTANCE_CACHE_ERR="cache dir exists but is not a git repo: $cache_dir"
+      rm -f "$err_file"
+      return 1
+    fi
+    git -C "$cache_dir" remote set-url origin "$ROOT" >/dev/null 2>&1 || true
+    if ! git -C "$cache_dir" fetch --prune origin >/dev/null 2>"$err_file"; then
+      WORKFLOW_ACCEPTANCE_CACHE_ERR="cache fetch failed: $(cat "$err_file" 2>/dev/null || true)"
+      rm -f "$err_file"
+      return 1
+    fi
+  else
+    if ! git clone --mirror "$ROOT" "$cache_dir" >/dev/null 2>"$err_file"; then
+      WORKFLOW_ACCEPTANCE_CACHE_ERR="cache clone failed: $(cat "$err_file" 2>/dev/null || true)"
+      rm -f "$err_file"
+      return 1
+    fi
+  fi
+  rm -f "$err_file"
+  return 0
+}
+
 setup_worktree() {
   local mode="$1"
   local err_file
@@ -475,6 +525,25 @@ setup_worktree() {
       ;;
     clone)
       rm -rf "$WORKTREE"
+      if [[ -n "$WORKFLOW_ACCEPTANCE_CACHE_DIR" ]]; then
+        local cache_dir
+        cache_dir="$(normalize_cache_dir "$WORKFLOW_ACCEPTANCE_CACHE_DIR")"
+        if ! prepare_cache_repo "$cache_dir"; then
+          WORKTREE_ERR="$WORKFLOW_ACCEPTANCE_CACHE_ERR"
+          rm -f "$err_file"
+          rm -rf "$WORKTREE"
+          return 1
+        fi
+        if git clone --shared "$cache_dir" "$WORKTREE" >/dev/null 2>"$err_file"; then
+          WORKTREE_MODE="clone"
+          rm -f "$err_file"
+          return 0
+        fi
+        WORKTREE_ERR="$(cat "$err_file" 2>/dev/null || true)"
+        rm -f "$err_file"
+        rm -rf "$WORKTREE"
+        return 1
+      fi
       if git clone --no-hardlinks "$ROOT" "$WORKTREE" >/dev/null 2>"$err_file"; then
         WORKTREE_MODE="clone"
         rm -f "$err_file"
@@ -649,6 +718,7 @@ OVERLAY_FILES=(
   "plans/contract_review_validate.sh"
   "plans/postmortem_check.sh"
   "plans/workflow_contract_gate.sh"
+  "plans/workflow_acceptance_parallel.sh"
   "plans/workflow_contract_map.json"
   "specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml"
   "tools/vendor_docs_lint_rust.py"
@@ -673,6 +743,7 @@ OVERLAY_FILES=(
   "plans/fixtures/prd/reason_code_missing_values.json"
   "plans/fixtures/prd/missing_failure_mode.json"
   "plans/fixtures/prd/placeholder_todo.json"
+  "plans/fixtures/acceptance_touch.txt"
   "specs/CONTRACT.md"
   "specs/IMPLEMENTATION_PLAN.md"
   "specs/POLICY.md"
@@ -736,6 +807,7 @@ scripts_to_chmod=(
   "ralph.sh"
   "verify.sh"
   "workflow_verify.sh"
+  "workflow_acceptance_parallel.sh"
   "update_task.sh"
   "prd_schema_check.sh"
   "prd_lint.sh"
@@ -778,6 +850,7 @@ if [[ -f "$WORKTREE/verify.sh" ]]; then
   chmod +x "$WORKTREE/verify.sh" >/dev/null 2>&1 || true
 fi
 run_in_worktree git update-index --skip-worktree "${OVERLAY_FILES[@]}" >/dev/null 2>&1 || true
+run_in_worktree git update-index --no-skip-worktree "plans/fixtures/acceptance_touch.txt" >/dev/null 2>&1 || true
 
 if test_start "0f.1" "ssot lint"; then
   run_in_worktree bash -c 'set -euo pipefail; bash plans/ssot_lint.sh'
@@ -1238,6 +1311,16 @@ fi
 
   if ! run_in_worktree grep -q "bash -n" "plans/preflight.sh"; then
     echo "FAIL: preflight must run bash -n for shell syntax checks" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "CONTRACT_FILE" "plans/preflight.sh"; then
+    echo "FAIL: preflight must honor CONTRACT_FILE override" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "POSTMORTEM_GATE" "plans/preflight.sh"; then
+    echo "FAIL: preflight must honor POSTMORTEM_GATE override" >&2
     exit 1
   fi
 
@@ -1869,6 +1952,26 @@ if test_start "0k.14" "Global invariants Appendix A referenced" 1; then
   test_pass "0k.14"
 fi
 
+if test_start "0k.15" "workflow acceptance cache wiring"; then
+  if ! run_in_worktree grep -q "WORKFLOW_ACCEPTANCE_CACHE_DIR" "plans/workflow_acceptance.sh"; then
+    echo "FAIL: workflow_acceptance.sh must support WORKFLOW_ACCEPTANCE_CACHE_DIR" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "git clone --shared" "plans/workflow_acceptance.sh"; then
+    echo "FAIL: workflow_acceptance.sh must use shared clone when cache enabled" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "WORKFLOW_ACCEPTANCE_CACHE_DIR" "plans/workflow_acceptance_parallel.sh"; then
+    echo "FAIL: workflow_acceptance_parallel.sh must wire WORKFLOW_ACCEPTANCE_CACHE_DIR" >&2
+    exit 1
+  fi
+  if ! run_in_worktree grep -q "WORKFLOW_ACCEPTANCE_CACHE_READY" "plans/workflow_acceptance_parallel.sh"; then
+    echo "FAIL: workflow_acceptance_parallel.sh must set WORKFLOW_ACCEPTANCE_CACHE_READY" >&2
+    exit 1
+  fi
+  test_pass "0k.15"
+fi
+
 if test_start "0l" "--list prints test ids"; then
   list_output="$("$ROOT/plans/workflow_acceptance.sh" --list)"
   if [[ -z "$list_output" ]]; then
@@ -2080,7 +2183,7 @@ write_valid_prd() {
       "contract_refs": ["CONTRACT.md §1"],
       "plan_refs": ["IMPLEMENTATION_PLAN.md §1"],
       "scope": {
-        "touch": ["crates/soldier_core/src/lib.rs"],
+        "touch": ["plans/fixtures/acceptance_touch.txt"],
         "avoid": []
       },
       "acceptance": ["a", "b", "c"],
@@ -2103,6 +2206,7 @@ write_valid_prd() {
   ]
 }
 JSON
+
 }
 
 write_invalid_prd() {
@@ -2332,7 +2436,7 @@ cat > "$STUB_DIR/agent_mark_pass_with_commit.sh" <<'EOF'
 set -euo pipefail
 id="${SELECTED_ID:-S1-001}"
 progress="${PROGRESS_FILE:-plans/progress.txt}"
-touch_file="${ACCEPTANCE_TOUCH_FILE:-crates/soldier_core/src/lib.rs}"
+touch_file="${ACCEPTANCE_TOUCH_FILE:-plans/fixtures/acceptance_touch.txt}"
 ts="$(date +%Y-%m-%d)"
 cat >> "$progress" <<EOT
 ${ts} - ${id}
@@ -2377,7 +2481,7 @@ cat > "$STUB_DIR/agent_commit_with_progress.sh" <<'EOF'
 set -euo pipefail
 id="${SELECTED_ID:-S1-001}"
 progress="${PROGRESS_FILE:-plans/progress.txt}"
-touch_file="${ACCEPTANCE_TOUCH_FILE:-acceptance_tick.txt}"
+touch_file="${ACCEPTANCE_TOUCH_FILE:-plans/fixtures/acceptance_touch.txt}"
 ts="$(date +%Y-%m-%d)"
 cat >> "$progress" <<EOT
 ${ts} - ${id}
@@ -2417,7 +2521,7 @@ cat > "$STUB_DIR/agent_mentions_complete.sh" <<'EOF'
 set -euo pipefail
 id="${SELECTED_ID:-S1-001}"
 progress="${PROGRESS_FILE:-plans/progress.txt}"
-touch_file="${ACCEPTANCE_TOUCH_FILE:-acceptance_tick.txt}"
+touch_file="${ACCEPTANCE_TOUCH_FILE:-plans/fixtures/acceptance_touch.txt}"
 ts="$(date +%Y-%m-%d)"
 cat >> "$progress" <<EOT
 ${ts} - ${id}
@@ -3442,7 +3546,7 @@ run_ralph env \
   VERIFY_SH="$STUB_DIR/verify_pass.sh" \
   RPH_AGENT_CMD="$STUB_DIR/agent_mentions_complete.sh" \
   SELECTED_ID="S1-002" \
-  ACCEPTANCE_TOUCH_FILE="crates/soldier_core/src/lib.rs" \
+  ACCEPTANCE_TOUCH_FILE="plans/fixtures/acceptance_touch.txt" \
   RPH_PROMPT_FLAG="" \
   RPH_AGENT_ARGS="" \
   RPH_RATE_LIMIT_ENABLED=0 \
