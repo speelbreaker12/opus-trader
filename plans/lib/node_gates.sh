@@ -11,7 +11,6 @@ source "$ROOT/plans/lib/verify_utils.sh"
 RUN_LOGGED_SUPPRESS_EXCERPT="${RUN_LOGGED_SUPPRESS_EXCERPT:-}"
 RUN_LOGGED_SKIP_FAILED_GATE="${RUN_LOGGED_SKIP_FAILED_GATE:-}"
 RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL="${RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL:-}"
-
 if [[ -z "${NODE_PM:-}" ]]; then
   warn "No recognized lockfile; skipping node gates"
   exit 0

@@ -1471,14 +1471,14 @@ fi
   fi
 
 if ! run_in_worktree awk '
-  NR<=120 {
-    if (!mode && index($0, "MODE=\"${1:-}\"")) mode=NR
-    if (mode && !empty && index($0, "-z \"$MODE\"")) empty=NR
+  NR<=160 {
+    if (!mode_init && index($0, "MODE=\"\"")) mode_init=NR
+    if (mode_init && !empty && index($0, "-z \"$MODE\"")) empty=NR
     if (empty && !ci && index($0, "CI:-")) ci=NR
     if (ci && !full && index($0, "MODE=\"full\"")) full=NR
     if (full && !quick && index($0, "MODE=\"quick\"")) quick=NR
   }
-  END {exit (mode && empty && ci && full && quick) ? 0 : 1}
+  END {exit (mode_init && empty && ci && full && quick) ? 0 : 1}
 ' "plans/verify.sh"; then
   echo "FAIL: verify must infer default mode from CI when no arg provided" >&2
   exit 1
@@ -2018,6 +2018,18 @@ if test_start "0k.17" "change detection routing" 1; then
   test_pass "0k.17"
 fi
 
+if test_start "0k.18" "verify.sh census flags" 1; then
+  run_in_worktree bash -c '
+    set -euo pipefail
+    out="$(./plans/verify.sh --census)"
+    echo "$out" | grep -q "VERIFY CENSUS REPORT"
+
+    out_json="$(./plans/verify.sh --census-json)"
+    printf "%s" "$out_json" | head -c1 | grep -q "{"
+    echo "$out_json" | grep -q "\"census\":true"
+  '
+  test_pass "0k.18"
+fi
 if test_start "0l" "--list prints test ids"; then
   list_output="$("$ROOT/plans/workflow_acceptance.sh" --list)"
   if [[ -z "$list_output" ]]; then
