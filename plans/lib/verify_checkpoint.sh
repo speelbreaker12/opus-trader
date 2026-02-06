@@ -73,7 +73,7 @@ checkpoint_schema_is_available() {
     return 1
   fi
 
-  "$pybin" - "$schema" <<'PY' >/dev/null 2>&1
+  if ! "$pybin" - "$schema" <<'PY' >/dev/null 2>&1; then
 import json
 import sys
 
@@ -86,7 +86,6 @@ required = schema.get("required")
 if not isinstance(required, list):
     raise SystemExit(1)
 PY
-  if [[ "$?" != "0" ]]; then
     CHECKPOINT_INELIGIBLE_REASON="checkpoint_schema_unavailable"
     return 1
   fi
@@ -109,7 +108,7 @@ checkpoint_validate_current_file() {
     return 1
   fi
 
-  "$pybin" - "$schema" "$file" <<'PY' >/dev/null 2>&1
+  if ! "$pybin" - "$schema" "$file" <<'PY' >/dev/null 2>&1; then
 import json
 import sys
 
@@ -136,7 +135,6 @@ if not isinstance(data.get("skip_cache"), dict):
 if int(data.get("schema_version", 0)) < 2:
     raise SystemExit(1)
 PY
-  if [[ "$?" != "0" ]]; then
     CHECKPOINT_INELIGIBLE_REASON="checkpoint_schema_invalid"
     return 1
   fi

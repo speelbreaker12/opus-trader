@@ -47,6 +47,9 @@ Options:
   --census        Output a non-mutating census (human-readable). No gates run.
   --census-json   Output a non-mutating census (JSON). No gates run.
   -h, --help      Show this help.
+
+Environment:
+  VERIFY_ALLOW_LOCAL_FULL=1  Allow full/promotion verify locally (default: blocked).
 EOF
 }
 
@@ -111,6 +114,10 @@ fi
 VERIFY_MODE="${VERIFY_MODE:-}"     # set to "promotion" for release-grade gates
 if [[ -n "$CENSUS_FORMAT" ]]; then
   CENSUS=1
+fi
+if [[ "$MODE" == "full" && -z "${CI:-}" && "${VERIFY_ALLOW_LOCAL_FULL:-0}" != "1" ]]; then
+  echo "FAIL: local full verify disabled; run in CI or set VERIFY_ALLOW_LOCAL_FULL=1 with approval" >&2
+  exit 2
 fi
 if [[ "$CENSUS" != "1" ]]; then
   echo "VERIFY_SH_SHA=$VERIFY_SH_SHA"
@@ -186,6 +193,23 @@ sha256_string() {
 # Single checkpoint skip-decision entrypoint.
 decide_skip_gate() {
   checkpoint_decide_skip_gate "$@"
+}
+
+emit_skip_artifacts() {
+  local gate="$1"
+  local reason="${2:-checkpoint}"
+  local logf="${VERIFY_ARTIFACTS_DIR}/${gate}.log"
+  local statusf="${VERIFY_ARTIFACTS_DIR}/${gate}.status"
+  local timef="${VERIFY_ARTIFACTS_DIR}/${gate}.time"
+  local rcf="${VERIFY_ARTIFACTS_DIR}/${gate}.rc"
+
+  printf 'skipped:%s\n' "$reason" > "$statusf"
+  printf '0\n' > "$timef"
+  printf '0\n' > "$rcf"
+  {
+    printf '[SKIP_DECISION] gate=%s action=skipped reason=%s\n' "$gate" "$reason"
+    printf 'mode=%s verify_mode=%s rollout=%s\n' "$MODE" "${VERIFY_MODE:-none}" "${CHECKPOINT_ROLLOUT:-off}"
+  } > "$logf"
 }
 
 checkpoint_counter_enabled() {
@@ -418,6 +442,8 @@ if eligible == 1:
 skip_cache = data.get("skip_cache")
 if not isinstance(skip_cache, dict):
     skip_cache = {}
+# Top-level schema_version tracks checkpoint envelope compatibility.
+# skip_cache.schema_version tracks nested skip-cache payload compatibility.
 skip_cache["schema_version"] = 1
 skip_cache["ts"] = int(time.time())
 skip_cache["rollout"] = os.environ.get("CHECKPOINT_ROLLOUT", "off")

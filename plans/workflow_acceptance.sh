@@ -686,7 +686,9 @@ OVERLAY_FILES=(
   ".github/pull_request_template.md"
   ".github/workflows/ci.yml"
   "plans/ralph.sh"
+  "plans/ralph_day.sh"
   "plans/verify.sh"
+  "plans/verify_day.sh"
   "plans/test_parallel_smoke.sh"
   "plans/workflow_files_allowlist.txt"
   "plans/lib/verify_utils.sh"
@@ -817,7 +819,9 @@ for overlay in "${OVERLAY_FILES[@]}"; do
 done
 scripts_to_chmod=(
   "ralph.sh"
+  "ralph_day.sh"
   "verify.sh"
+  "verify_day.sh"
   "test_parallel_smoke.sh"
   "lib/rust_gates.sh"
   "lib/python_gates.sh"
@@ -6359,6 +6363,54 @@ JSON
   }
 '
   test_pass "30.3"
+fi
+
+if test_start "30.4" "enforce mode currently returns not-implemented reason" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  ROOT="$(pwd)"
+  source plans/lib/verify_utils.sh
+  source plans/lib/verify_checkpoint.sh
+
+  checkpoint_capture_snapshot 0 1 quick none 0
+  VERIFY_CHECKPOINT_ROLLOUT="enforce"
+  VERIFY_CHECKPOINT_KILL_SWITCH="ks-test"
+  checkpoint_resolve_rollout
+
+  set +e
+  checkpoint_decide_skip_gate "contract_coverage"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: enforce scaffold should not allow skip yet" >&2
+    exit 1
+  fi
+  [[ "${CHECKPOINT_DECISION_REASON:-}" == "enforce_skip_not_implemented" ]] || {
+    echo "FAIL: expected enforce_skip_not_implemented reason, got ${CHECKPOINT_DECISION_REASON:-<unset>}" >&2
+    exit 1
+  }
+'
+  test_pass "30.4"
+fi
+
+if test_start "30.5" "local full verify requires approval" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  set +e
+  out="$(./plans/verify.sh full 2>&1)"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: expected local full verify to fail without approval" >&2
+    exit 1
+  fi
+  if ! echo "$out" | grep -q "local full verify disabled"; then
+    echo "FAIL: expected local full verify guard message" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+'
+  test_pass "30.5"
 fi
 
 echo "Workflow acceptance tests passed"

@@ -29,23 +29,21 @@ if ! rg -q '^[[:space:]]*checkpoint_decide_skip_gate\(\)' "$CHECKPOINT_LIB"; the
   fail "verify_checkpoint.sh must define checkpoint_decide_skip_gate()"
 fi
 
-# Allow exactly one call site for is_cache_eligible outside its own definition:
-# checkpoint_decide_skip_gate() is the only permitted caller.
-total_refs="$(rg -n '\bis_cache_eligible\b' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
-if [[ "$total_refs" -ne 3 ]]; then
-  fail "expected exactly three is_cache_eligible references (definition + wrapper + entrypoint call), found $total_refs"
-fi
+# Structural guard (line-based, no function-body parsing):
+# 1) exactly one definition
+# 2) exactly one wrapper call
+# 3) exactly one entrypoint call pattern
+# 4) exactly three total references
+def_refs="$(rg -n '^[[:space:]]*is_cache_eligible\(\)[[:space:]]*\{' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
+[[ "$def_refs" == "1" ]] || fail "expected exactly one is_cache_eligible() definition (found $def_refs)"
 
-decide_body="$(awk '
-  /^[[:space:]]*checkpoint_decide_skip_gate\(\)/ { in_fn=1 }
-  in_fn { print }
-  in_fn && /^[[:space:]]*}/ { exit }
-' "$CHECKPOINT_LIB")"
-if [[ -z "$decide_body" ]]; then
-  fail "unable to locate checkpoint_decide_skip_gate() body"
-fi
-if ! printf '%s\n' "$decide_body" | rg -q '\bis_cache_eligible\b'; then
-  fail "is_cache_eligible must be called inside checkpoint_decide_skip_gate()"
-fi
+wrapper_refs="$(rg -n '^[[:space:]]*is_cache_eligible[[:space:]]*$' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
+[[ "$wrapper_refs" == "1" ]] || fail "expected exactly one wrapper call to is_cache_eligible (found $wrapper_refs)"
+
+entry_refs="$(rg -n '^[[:space:]]*if ! is_cache_eligible; then$' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
+[[ "$entry_refs" == "1" ]] || fail "expected checkpoint_decide_skip_gate to call is_cache_eligible exactly once (found $entry_refs)"
+
+total_refs="$(rg -n '\bis_cache_eligible\b' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
+[[ "$total_refs" == "3" ]] || fail "expected exactly three is_cache_eligible references total (found $total_refs)"
 
 echo "PASS: skip entrypoint guard"

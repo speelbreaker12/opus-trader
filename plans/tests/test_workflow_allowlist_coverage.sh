@@ -51,6 +51,7 @@ required=(
   plans/prd_preflight.sh
   plans/preflight.sh
   plans/ralph.sh
+  plans/ralph_day.sh
   plans/ssot_lint.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
@@ -60,6 +61,7 @@ required=(
   plans/tests/test_prd_cache.sh
   plans/tests/test_workflow_acceptance_fallback.sh
   plans/verify.sh
+  plans/verify_day.sh
   plans/workflow_acceptance.sh
   plans/workflow_acceptance_parallel.sh
   plans/workflow_contract_gate.sh
