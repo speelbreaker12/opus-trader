@@ -49,8 +49,10 @@ Without this grounding, architectural analysis becomes theoretical and misses th
 | Tooling/harness integration | §8 Tooling Integration, §16 Harness Interaction |
 | Any plan with acceptance tests/commands | §17 Acceptance Quality |
 | Multi-ticket implementation | §18 Ticket Dependencies |
+| Any plan with multiple design sections | §21 Internal Contradictions |
+| Changes to safety-critical systems | §22 Safety Invariant Enumeration |
 
-**Always apply**: §2 (Complexity-to-Benefit), §12 (Mental Model Mismatches), and §20 (Simpler Alternative) — these are the most commonly missed and highest-signal.
+**Always apply**: §2 (Complexity-to-Benefit), §12 (Mental Model Mismatches), §20 (Simpler Alternative), and §22 (Safety Invariants) — these are the most commonly missed and highest-signal.
 
 ### Verify acceptance commands against reality
 
@@ -398,6 +400,69 @@ Before accepting complexity, explicitly ask:
 - [ ] **"Make it fast" alternative**: Instead of skipping gates, could the gates themselves be made faster? (e.g., caching within the gate, parallel execution, faster tools)
 - [ ] **"Do nothing" baseline**: What happens if we don't implement this at all? Is the current pain level actually high enough to justify the machinery?
 
+### 21. Internal Contradiction Detection
+
+Plans grow iteratively and sections can contradict each other. For each key design decision, check that ALL references agree:
+
+Method:
+1. **Extract key assertions**: Read each section and list concrete claims (e.g., "skip disabled in CI", "kill switch uses token matching", "fail-closed on parse error").
+2. **Cross-reference assertions**: For each claim, search the rest of the plan for related statements. Do they agree?
+3. **Check constraint consistency**: If section A adds a constraint and section B adds a feature, does the feature violate the constraint?
+
+Common contradiction patterns:
+
+| Section A says... | Section B says... | Contradiction |
+|-------------------|-------------------|---------------|
+| "Skip disabled for `MODE=full`" | Acceptance test checks skip behavior in full mode | Test is dead code or tests wrong thing |
+| "Fail-closed on any error" | "Shadow mode writes comparison telemetry" | What if telemetry write fails — does it block the gate? |
+| "Single entrypoint for skip decisions" | Ticket adds ad-hoc eligibility check in a different function | Entrypoint invariant violated |
+| "Additive schema only" | New field replaces meaning of existing field | Breaking change disguised as additive |
+| Risk register lists "false skip" | Non-goals say "no CI skip" | Risk register should exclude CI scenarios — or explicitly note they're out of scope |
+
+Checklist:
+- [ ] **Non-goals vs features**: Does any proposed feature contradict a stated non-goal?
+- [ ] **Constraints vs tickets**: Does any ticket's scope violate a constraint from the design section?
+- [ ] **Risk register vs design**: Does the risk register cover risks the design actually introduces? Are any mitigations absent from the implementation plan?
+- [ ] **Scoping statements vs acceptance tests**: Do acceptance tests cover scenarios the plan says are out of scope (wasted effort) or miss scenarios that ARE in scope?
+- [ ] **"Never" claims vs code paths**: If the plan says "never skip in promotion mode," trace the code path — is there a way promotion mode could reach skip logic?
+
+### 22. Safety Invariant Enumeration
+
+Before reviewing individual sections, explicitly list the safety invariants the system must maintain. Then verify each is preserved by the change.
+
+Method:
+1. **List invariants from the existing system** (read the source code):
+   - What must ALWAYS happen? (e.g., "promotion verify always runs from fresh gate output")
+   - What must NEVER happen? (e.g., "gate skipped in CI", "false pass on promotion")
+   - What guarantees does the system provide to its callers? (e.g., "exit code 0 means all gates passed")
+2. **For each invariant, trace through the change**:
+   - Does the change add a code path that could violate this invariant?
+   - Is the invariant explicitly checked/enforced, or does it rely on convention?
+   - If the invariant is enforced by an assertion, is the assertion still correct after the change?
+3. **Check for NEW invariants** the change introduces:
+   - Are they documented?
+   - Are they mechanically enforced (test, lint, assertion) or just stated in prose?
+   - Who is responsible for maintaining them?
+
+Example:
+```
+Existing invariant: "exit 0 from verify.sh means every gate ran and passed"
+Change: adds checkpoint skip for some gates
+Question: does exit 0 still mean every gate RAN? Or does it now mean
+          "every gate ran or was correctly skipped"?
+Impact: callers (ralph.sh, CI) that assume exit 0 = full coverage
+        may have a false sense of verification completeness
+Fix: either preserve the invariant (exit 0 = all ran) or update all
+     callers to understand the new semantics + document the change
+```
+
+Checklist:
+- [ ] **List >=5 invariants** from the existing system before reviewing the change
+- [ ] **Trace each invariant** through the change — is it preserved, weakened, or broken?
+- [ ] **New invariants documented?** Does the change introduce invariants that only exist in the author's head?
+- [ ] **New invariants enforced?** Prose invariants ("this should never happen") are worth zero. Only tested/asserted invariants count.
+- [ ] **Caller impact**: If an invariant's meaning changes (e.g., "passed" now includes "skipped"), are all callers updated?
+
 ---
 
 ## Reviewer Anti-Patterns (Mistakes to Avoid)
@@ -467,6 +532,14 @@ Before accepting complexity, explicitly ask:
 ### Simpler Alternative
 - [ ] 80/20 alternative considered: <description or "none viable">
 
+### Internal Contradictions
+- [ ] Contradictions found: <section A vs section B>
+
+### Safety Invariants
+- [ ] Invariants listed: <count>
+- [ ] Invariants preserved: <count> / broken: <count> / weakened: <count>
+- [ ] New invariants enforced: <mechanically/prose-only>
+
 ### Open Questions
 - <question needing clarification>
 ```
@@ -504,6 +577,11 @@ Before accepting complexity, explicitly ask:
 | Stale state after rollback | Cache/telemetry persists after disable | Check if rollback cleans or ignores old state |
 | Unnecessary complexity | 10x machinery for 2x benefit | Always check simpler 80/20 alternative |
 | Env var typo acceptance | Invalid value silently treated as default | Validate values and warn on unknown input |
+| Internal contradiction | Section A constraint violated by section B feature | Cross-reference all assertions pairwise |
+| Non-goal violated by feature | Feature contradicts stated non-goal | Check each feature against non-goals list |
+| Weakened invariant | "exit 0 = all ran" becomes "exit 0 = all ran or skipped" | List invariants first, trace each through change |
+| Prose-only invariant | Safety guarantee exists in docs but not in code | Check if assertion/test/lint enforces it |
+| Caller-unaware semantic change | Callers assume old meaning of return value/exit code | Trace all callers when semantics change |
 
 ## Integration with Other Skills
 
