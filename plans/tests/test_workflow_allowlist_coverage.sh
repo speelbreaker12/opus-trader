@@ -27,6 +27,9 @@ dupes="$(sort "$allowlist" | uniq -d || true)"
 [[ -z "$dupes" ]] || fail "duplicate entries: $dupes"
 
 required=(
+  .githooks/pre-push
+  .github/pull_request_template.md
+  .github/workflows/ci.yml
   AGENTS.md
   IMPLEMENTATION_PLAN.md
   POLICY.md
@@ -34,6 +37,7 @@ required=(
   docs/contract_kernel.json
   docs/validation_rules.md
   plans/autofix.sh
+  plans/check_skip_entrypoint.sh
   plans/contract_check.sh
   plans/contract_coverage_matrix.py
   plans/contract_coverage_promote.sh
@@ -48,6 +52,7 @@ required=(
   plans/prd_preflight.sh
   plans/preflight.sh
   plans/ralph.sh
+  plans/ralph_day.sh
   plans/ssot_lint.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
@@ -57,6 +62,7 @@ required=(
   plans/tests/test_prd_cache.sh
   plans/tests/test_workflow_acceptance_fallback.sh
   plans/verify.sh
+  plans/verify_day.sh
   plans/workflow_acceptance.sh
   plans/workflow_acceptance_parallel.sh
   plans/workflow_contract_gate.sh
@@ -85,6 +91,7 @@ required=(
   specs/TRACE.yaml
   specs/WORKFLOW_CONTRACT.md
   specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
+  tools/ci/lint_pr_template_sections.py
   tools/vendor_docs_lint_rust.py
   verify.sh
   plans/workflow_files_allowlist.txt
@@ -94,7 +101,9 @@ required=(
   plans/lib/node_gates.sh
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
+  plans/lib/verify_checkpoint.sh
   plans/lib/verify_utils.sh
+  plans/schemas/verify_checkpoint.schema.json
 )
 
 for path in "${required[@]}"; do

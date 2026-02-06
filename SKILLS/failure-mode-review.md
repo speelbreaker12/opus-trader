@@ -2,8 +2,9 @@
 
 Purpose
 - Find how code will fail, not just whether it looks correct
-- Adversarial analysis for caching, state, integrations, error paths
-- Complements `/pr-review` for risky code patterns
+- Adversarial analysis for caching, state, integrations, error paths (implementation-level)
+- Complements `/pr-review` for risky code patterns and `/plan-review` for design-level risks
+- For architectural/systemic/operational analysis, use `/strategic-failure-review` after this skill
 
 When to use
 - New caching/persistence logic
@@ -18,6 +19,46 @@ When NOT to use
 - Simple single-file changes with no external dependencies
 - Documentation-only changes
 - Use `/pr-review` for general correctness checks first
+
+---
+
+## Before You Start (MANDATORY)
+
+### Read the source code, not just the plan/PR description
+
+**Do not reason abstractly.** For each file the plan/PR touches:
+1. **Read the actual source file** — at least the functions/sections being modified
+2. **Read the callers** — who calls this code? What do they expect?
+3. **Read the consumers** — who reads the files/state this code writes?
+
+Minimum: read the top 3 most-modified files before starting any checklist item.
+
+### Triage: which sections apply?
+
+Scan the change and check which sections to apply:
+
+| If the change involves... | Apply sections... |
+|--------------------------|-------------------|
+| Env vars, JSON fields, cross-file calls | §1 Interface Crossings |
+| Caching, state files, checkpoints | §2 State Transitions, §6 Concrete Walkthrough |
+| External inputs (files, env, CLI args) | §3 "What If" Analysis |
+| Error handling, fallbacks, `|| true` | §4 Error Path Tracing, §9 Downstream Propagation |
+| Counters, aggregations, summaries | §5 Summary/Count Verification |
+| Shared state, parallel execution | §7 Concurrent Execution |
+| Merging multiple sources | §8 Completeness Validation |
+| File paths in config/cache | §10 Trusted Files |
+| Long-running scripts, growth over time | §11 Operational Concerns |
+
+**Always apply**: §6 Concrete Value Walkthrough — this catches the most bugs. Pick at least one happy path and one failure path and trace them with specific values.
+
+### Verify claims against code
+
+For any quantitative claim in the plan/PR ("saves 14 seconds", "21 jq-based checks", "covers all validators"):
+- [ ] Count the actual items in the source code
+- [ ] Verify the number matches the claim
+- [ ] If an acceptance test/command exists: can it pass WITHOUT the change? If yes, the test is vacuous.
+
+---
 
 ## Review Process
 
@@ -161,9 +202,9 @@ valid_slices starts at [0, 1, 2]
 - Bug: slice 1 counted twice
 ```
 
-### 6. Concrete Value Walkthrough
+### 6. Concrete Value Walkthrough (HIGHEST SIGNAL — always do this)
 
-Pick specific concrete values and trace execution:
+Pick specific concrete values and trace execution step by step. This catches more bugs than any other technique.
 
 ```
 Scenario: slice 2, items A and B, roadmap exists then deleted
@@ -282,6 +323,30 @@ Issues that don't break correctness but cause problems over time:
 - [ ] Does file size grow unbounded?
 - [ ] Are there O(n²) patterns that will slow down?
 
+### 12. Bash/Shell-Specific Traps
+
+For shell scripts, check these common silent failures:
+
+- [ ] **Exit code masking**: `result=$(failing_command)` — `$?` reflects the assignment, not the command. Use `set -o pipefail` or check explicitly.
+- [ ] **Unquoted variables**: `[ $var = "value" ]` breaks when `$var` is empty or contains spaces. Use `[[ "$var" == "value" ]]`.
+- [ ] **Subshell variable scope**: Variables set inside `( ... )`, `|` pipes, or `while read` loops don't propagate to the parent. Use `< <(command)` or temp files.
+- [ ] **Regex/glob over-matching**: `startswith("S1-")` matches `S10-`, `S11-`, `S100-`. Use anchored regex: `^S1-[0-9]+$`.
+- [ ] **`jq -r` returns literal "null"**: `jq -r '.missing_field'` outputs the string `"null"`, not empty. Use `// empty` or check with `-e`.
+- [ ] **Heredoc quoting**: `<<EOF` expands variables, `<<'EOF'` does not. Mixing them up injects unexpected values.
+
+---
+
+## Reviewer Anti-Patterns (Mistakes to Avoid)
+
+1. **Abstract reasoning without reading code**: "This should work because..." — STOP. Open the file, read the function, trace the value. The #1 source of missed bugs is reviewing from description alone.
+2. **Happy-path bias**: Checking "does this work?" instead of "how does this fail?" Force yourself to trace at least one failure path per section.
+3. **Trusting acceptance tests**: Check if the test can pass WITHOUT the change (vacuous test). If `rg -n "pattern" file` is the acceptance command and the pattern already exists, the test proves nothing.
+4. **Reviewing sections in isolation**: A bug in §1 (interface crossing) may compound with a gap in §7 (concurrency). After individual sections, ask "do any findings interact?"
+5. **Stopping at the first bug**: Finding one issue creates satisfaction bias. The second and third bugs are often worse. Complete all applicable sections.
+6. **Checking presence, not behavior**: "Does the code mention X?" is not "Does X actually work?" Trace the execution path, not just grep for keywords.
+
+---
+
 ## Output Format
 
 ```markdown
@@ -321,9 +386,15 @@ Issues that don't break correctness but cause problems over time:
 
 ### Open Questions
 - <question needing clarification>
+
+### Next Step
+> If findings include architectural, systemic, or operational concerns,
+> follow up with `/strategic-failure-review`.
 ```
 
-## Common Failure Patterns to Check
+---
+
+## Common Failure Patterns (Implementation)
 
 | Pattern | Failure Mode | Check |
 |---------|--------------|-------|
@@ -343,9 +414,15 @@ Issues that don't break correctness but cause problems over time:
 | Cross-platform | bash 3.2, GNU vs BSD, Python version | Test on target platforms |
 | Incomplete type handling | Float `1.0` treated as invalid | Check all JSON types: int, float, str, bool, None |
 | Persistent error sentinel | Stable "ERROR" key → false cache hits | Ask "what if error persists across runs?" |
+| Exit code masking | `$()` hides command failure | Check `$?` source; use `set -o pipefail` |
+| Subshell variable scope | Var set in pipe/subshell lost | Use `< <(cmd)` not `cmd | while` |
+| Regex over-matching | `startswith("S1-")` matches `S10-` | Use anchored regex with `$` |
+| `jq -r` null string | `.missing` returns literal `"null"` | Use `// empty` or `-e` flag |
+| Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
 
 ## Integration with Other Skills
 
 - Run `/pr-review` first for general correctness
-- Use `/failure-mode-review` for risky sections identified
+- Use `/failure-mode-review` (this skill) for implementation-level failure analysis
+- Use `/strategic-failure-review` for architectural, systemic, and operational analysis
 - For safety-critical Rust code, also use `/contract-review`

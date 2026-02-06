@@ -7,7 +7,7 @@ Generated: 2026-01-27
 ## 1. CI Entrypoints
 
 ### `.github/workflows/ci.yml`
-**Triggers:** `pull_request`, `push: [main]`
+**Triggers:** `pull_request`, `push: [main]`, `schedule (daily 01:00 UTC = 19:00 America/Managua)`
 
 **Call Chain:**
 ```
@@ -58,11 +58,30 @@ ralph (root)
 ### `./verify.sh [quick|full|promotion]`
 **Purpose:** Run verification gates
 **Canonical:** `plans/verify.sh`
+**Note:** Local `full`/`promotion` runs are blocked unless `VERIFY_ALLOW_LOCAL_FULL=1`.
 
 ```
 verify.sh (root)
 └── exec "$ROOT/plans/verify.sh" "$@"
     └── (full verification logic)
+```
+
+### `./plans/verify_day.sh [args]`
+**Purpose:** Daytime quick verify wrapper
+**Canonical:** `plans/verify_day.sh`
+
+```
+verify_day.sh
+└── exec ./plans/verify.sh quick "$@"
+```
+
+### `./plans/ralph_day.sh [max_iters]`
+**Purpose:** Daytime Ralph loop (quick verify, no pass flips)
+**Canonical:** `plans/ralph_day.sh`
+
+```
+ralph_day.sh
+└── exec ./plans/ralph.sh with RPH_VERIFY_MODE=quick, RPH_FINAL_VERIFY_MODE=quick, RPH_FORBID_MARK_PASS=1
 ```
 
 ### `./sync`

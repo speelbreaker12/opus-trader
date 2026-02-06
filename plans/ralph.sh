@@ -199,6 +199,7 @@ RPH_MAX_NO_PROGRESS="${RPH_MAX_NO_PROGRESS:-2}"
 RPH_STATE_FILE="${RPH_STATE_FILE:-.ralph/state.json}"
 RPH_LOCK_DIR="${RPH_LOCK_DIR:-.ralph/lock}"
 RPH_LOCK_TTL_SECS="${RPH_LOCK_TTL_SECS:-14400}"
+RPH_LOG_LEVEL="${RPH_LOG_LEVEL:-info}"
 
 mkdir -p .ralph
 mkdir -p plans/logs
@@ -213,8 +214,54 @@ LOCK_DIR="$RPH_LOCK_DIR"
 LOCK_INFO_FILE="${LOCK_DIR}/lock.json"
 LOCK_ACQUIRED=0
 
+log_level_num() {
+  case "$1" in
+    debug) echo 10 ;;
+    info) echo 20 ;;
+    warn|warning) echo 30 ;;
+    error) echo 40 ;;
+    *) echo 20 ;;
+  esac
+}
+
+LOG_LEVEL_NUM="$(log_level_num "$RPH_LOG_LEVEL")"
+
+log_emit() {
+  local level="$1"
+  shift
+  local msg="$*"
+  local level_num
+  level_num="$(log_level_num "$level")"
+  if ! [[ "$level_num" =~ ^[0-9]+$ ]]; then
+    level_num=20
+  fi
+  if (( level_num < LOG_LEVEL_NUM )); then
+    return 0
+  fi
+  local ts label
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  label="$(printf '%s' "$level" | tr '[:lower:]' '[:upper:]')"
+  printf '[%s] %-5s %s\n' "$ts" "$label" "$msg" | tee -a "$LOG_FILE"
+}
+
+log_debug() { log_emit debug "$*"; }
+log_info() { log_emit info "$*"; }
+log_warn() { log_emit warn "$*"; }
+log_error() { log_emit error "$*"; }
+
+now_ms() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+    return 0
+  fi
+  echo $(( $(date +%s) * 1000 ))
+}
+
 if [[ -n "$RPH_PROFILE_WARNING" ]]; then
-  echo "WARN: unknown RPH_PROFILE=$RPH_PROFILE (ignoring profile presets)" | tee -a "$LOG_FILE"
+  log_warn "unknown RPH_PROFILE=$RPH_PROFILE (ignoring profile presets)"
 fi
 
 if [[ "$RPH_BOOTSTRAP_MODE" == "1" ]]; then
@@ -222,7 +269,7 @@ if [[ "$RPH_BOOTSTRAP_MODE" == "1" ]]; then
 fi
 
 if [[ "$RPH_CHEAT_DETECTION" != "block" ]]; then
-  echo "WARN: RPH_CHEAT_DETECTION=$RPH_CHEAT_DETECTION; cheat detection will not block changes." | tee -a "$LOG_FILE"
+  log_warn "RPH_CHEAT_DETECTION=$RPH_CHEAT_DETECTION; cheat detection will not block changes."
 fi
 
 json_escape() {
@@ -1227,6 +1274,7 @@ append_metrics() {
   local diff_lines="$6"
   local cheats="$7"
   local block_reason="${8:-}"
+  local phase_timings_json="${9:-}"
 
   local ts
   ts="$(date +%s)"
@@ -1244,6 +1292,7 @@ append_metrics() {
     --argjson diff_lines "$diff_lines" \
     --arg cheats "$cheats" \
     --arg block_reason "$block_reason" \
+    --argjson phase_timings "$phase_timings_json" \
     '{
       ts: $ts,
       iter: $iter,
@@ -1253,7 +1302,8 @@ append_metrics() {
       duration_s: $duration_s,
       diff_lines: $diff_lines,
       cheats: $cheats,
-      block_reason: $block_reason
+      block_reason: $block_reason,
+      phase_timings_ms: $phase_timings
     }' >> "$METRICS_FILE" 2>/dev/null || true
 }
 
@@ -2242,6 +2292,14 @@ for ((i=1; i<=MAX_ITERS; i++)); do
   prune_old_iterations ".ralph" "$RPH_MAX_ITER_DIRS"
 
   ITER_START_TS="$(date +%s)"
+  ITER_START_MS="$(now_ms)"
+  PHASE_PREFLIGHT_MS="null"
+  PHASE_VERIFY_PRE_MS="null"
+  PHASE_AGENT_MS="null"
+  PHASE_VERIFY_POST_MS="null"
+  PHASE_CONTRACT_REVIEW_MS="null"
+  PHASE_PASS_FLIP_MS="null"
+  PHASE_START_MS="$ITER_START_MS"
   ITER_DIR=".ralph/iter_${i}_$(date +%Y%m%d-%H%M%S)"
   echo "" | tee -a "$LOG_FILE"
   echo "=== Iteration $i/$MAX_ITERS ===" | tee -a "$LOG_FILE"
@@ -2263,6 +2321,8 @@ for ((i=1; i<=MAX_ITERS; i++)); do
       (.items // []);
     [items[] | select(.passes==false) | .slice] | min // empty
   ' "$PRD_FILE")"
+  PHASE_PREFLIGHT_MS=$(( $(now_ms) - PHASE_START_MS ))
+  PHASE_START_MS="$(now_ms)"
   if [[ -z "$ACTIVE_SLICE" ]]; then
     if completion_requirements_met "" ""; then
       if ! run_final_verify "$ITER_DIR"; then
@@ -2522,6 +2582,9 @@ PROMPT
     --arg verify_pre_log "${ITER_DIR}/verify_pre.log" \
     '.last_verify_pre_rc=$last_verify_pre_rc | .last_verify_pre_log=$verify_pre_log'
 
+  PHASE_VERIFY_PRE_MS=$(( $(now_ms) - PHASE_START_MS ))
+  PHASE_START_MS="$(now_ms)"
+
   if ! verify_log_has_sha "${ITER_DIR}/verify_pre.log"; then
     BLOCK_DIR="$(write_blocked_with_state "verify_sha_missing_pre" "$NEXT_ID" "$NEXT_PRIORITY" "$NEXT_DESC" "$NEEDS_HUMAN_JSON" "$ITER_DIR")"
     echo "ERROR: VERIFY_SH_SHA missing from verify_pre.log" | tee -a "$LOG_FILE"
@@ -2686,6 +2749,8 @@ PROMPT
   unlock_state_files
 
   set -e
+  PHASE_AGENT_MS=$(( $(now_ms) - PHASE_START_MS ))
+  PHASE_START_MS="$(now_ms)"
   echo "Agent exit code: $AGENT_RC" | tee -a "$LOG_FILE"
   if [[ "$RPH_ALLOW_HARNESS_EDIT" != "1" ]]; then
     HARNESS_SHA_AFTER="$(sha256_file "plans/ralph.sh")"
@@ -2879,6 +2944,8 @@ PROMPT
   else
     verify_post_rc=$?
   fi
+  PHASE_VERIFY_POST_MS=$(( $(now_ms) - PHASE_START_MS ))
+  PHASE_START_MS="$(now_ms)"
   VERIFY_POST_HEAD_VERIFIED="$(git rev-parse HEAD 2>/dev/null || true)"
 
   if ! verify_log_has_sha "${ITER_DIR}/verify_post.log"; then
@@ -3032,6 +3099,10 @@ PROMPT
       exit 1
     fi
   fi
+  if (( POST_VERIFY_FAILED == 0 )); then
+    PHASE_CONTRACT_REVIEW_MS=$(( $(now_ms) - PHASE_START_MS ))
+    PHASE_START_MS="$(now_ms)"
+  fi
 
   if [[ "$RPH_REQUIRE_STORY_VERIFY_GATE" == "1" ]]; then
     if (( STORY_VERIFY_RAN == 0 )); then
@@ -3087,6 +3158,8 @@ PROMPT
       fi
     fi
   fi
+  PHASE_PASS_FLIP_MS=$(( $(now_ms) - PHASE_START_MS ))
+  PHASE_START_MS="$(now_ms)"
 
   PROGRESS_MADE=0
   if [[ "$HEAD_AFTER" != "$HEAD_BEFORE" || "$PRD_HASH_AFTER" != "$PRD_HASH_BEFORE" ]]; then
@@ -3159,13 +3232,25 @@ PROMPT
     --arg last_good_ref "$HEAD_AFTER" \
     '.last_good_ref=$last_good_ref'
 
+  phase_timings_json="$(jq -nc \
+    --argjson preflight_ms "$PHASE_PREFLIGHT_MS" \
+    --argjson verify_pre_ms "$PHASE_VERIFY_PRE_MS" \
+    --argjson agent_ms "$PHASE_AGENT_MS" \
+    --argjson verify_post_ms "$PHASE_VERIFY_POST_MS" \
+    --argjson contract_review_ms "$PHASE_CONTRACT_REVIEW_MS" \
+    --argjson pass_flip_ms "$PHASE_PASS_FLIP_MS" \
+    '{preflight_ms:$preflight_ms, verify_pre_ms:$verify_pre_ms, agent_ms:$agent_ms, verify_post_ms:$verify_post_ms, contract_review_ms:$contract_review_ms, pass_flip_ms:$pass_flip_ms}')"
+  state_merge \
+    --argjson last_phase_timings_ms "$phase_timings_json" \
+    '.last_phase_timings_ms=$last_phase_timings_ms'
+
   # Track successful iteration
   update_iteration_metrics "pass"
 
   # Fix 9: Record structured metrics for monitoring
   ITER_END_TS="$(date +%s)"
   ITER_DURATION=$((ITER_END_TS - ITER_START_TS))
-  append_metrics "$i" "$NEXT_ID" "pass" "$verify_post_rc" "$ITER_DURATION" "$DIFF_LINES" "${CHEAT_RESULT:-}" ""
+  append_metrics "$i" "$NEXT_ID" "pass" "$verify_post_rc" "$ITER_DURATION" "$DIFF_LINES" "${CHEAT_RESULT:-}" "" "$phase_timings_json"
 
   save_iter_after "$ITER_DIR" "$HEAD_BEFORE" "$HEAD_AFTER"
 

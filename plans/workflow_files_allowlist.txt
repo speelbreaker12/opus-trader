@@ -1,3 +1,6 @@
+.githooks/pre-push
+.github/pull_request_template.md
+.github/workflows/ci.yml
 AGENTS.md
 IMPLEMENTATION_PLAN.md
 POLICY.md
@@ -5,6 +8,10 @@ docs/contract_anchors.md
 docs/contract_kernel.json
 docs/validation_rules.md
 plans/autofix.sh
+plans/check_checkpoint_fingerprint_manifest.sh
+plans/check_skip_entrypoint.sh
+plans/checkpoint_dependency_manifest.json
+plans/checkpoint_fingerprint_env_manifest.txt
 plans/contract_check.sh
 plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
@@ -14,6 +21,7 @@ plans/lib/change_detection.sh
 plans/lib/node_gates.sh
 plans/lib/python_gates.sh
 plans/lib/rust_gates.sh
+plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
 plans/prd_audit_check.sh
 plans/prd_audit_merge.py
@@ -24,6 +32,8 @@ plans/prd_gate.sh
 plans/prd_preflight.sh
 plans/preflight.sh
 plans/ralph.sh
+plans/ralph_day.sh
+plans/schemas/verify_checkpoint.schema.json
 plans/ssot_lint.sh
 plans/story_verify_allowlist.txt
 plans/story_verify_allowlist_check.sh
@@ -35,6 +45,7 @@ plans/tests/test_prd_cache.sh
 plans/tests/test_workflow_acceptance_fallback.sh
 plans/tests/test_workflow_allowlist_coverage.sh
 plans/verify.sh
+plans/verify_day.sh
 plans/workflow_acceptance.sh
 plans/workflow_acceptance_parallel.sh
 plans/workflow_contract_gate.sh
@@ -64,5 +75,6 @@ specs/SOURCE_OF_TRUTH.md
 specs/TRACE.yaml
 specs/WORKFLOW_CONTRACT.md
 specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
+tools/ci/lint_pr_template_sections.py
 tools/vendor_docs_lint_rust.py
 verify.sh
