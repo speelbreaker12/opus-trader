@@ -1715,6 +1715,14 @@ if ! grep -q "RPH_PROFILE_MODE" "$WORKTREE/plans/ralph.sh"; then
   echo "FAIL: ralph must expose RPH_PROFILE_MODE for profile behavior checks" >&2
   exit 1
 fi
+if ! grep -q "RPH_LOG_LEVEL" "$WORKTREE/plans/ralph.sh"; then
+  echo "FAIL: ralph must define RPH_LOG_LEVEL" >&2
+  exit 1
+fi
+if ! grep -q "log_warn" "$WORKTREE/plans/ralph.sh"; then
+  echo "FAIL: ralph must define log_warn helper" >&2
+  exit 1
+fi
 if ! grep -q "trap cleanup EXIT INT TERM" "$WORKTREE/plans/ralph.sh"; then
   echo "FAIL: ralph must trap cleanup for lock + state-file release" >&2
   exit 1
@@ -1733,6 +1741,14 @@ if ! grep -q "rotate_metrics_if_needed" "$WORKTREE/plans/ralph.sh"; then
 fi
 if ! grep -q "WARN: Failed to archive" "$WORKTREE/plans/ralph.sh"; then
   echo "FAIL: ralph must warn when iteration archive fails" >&2
+  exit 1
+fi
+if ! grep -q "last_phase_timings_ms" "$WORKTREE/plans/ralph.sh"; then
+  echo "FAIL: ralph must record last_phase_timings_ms in state" >&2
+  exit 1
+fi
+if ! grep -q "phase_timings_ms" "$WORKTREE/plans/ralph.sh"; then
+  echo "FAIL: ralph must record phase_timings_ms in metrics" >&2
   exit 1
 fi
 if ! grep -q "RPH_TEST_COCHANGE_STRICT" "$WORKTREE/plans/ralph.sh"; then
