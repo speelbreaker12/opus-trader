@@ -27,6 +27,7 @@ dupes="$(sort "$allowlist" | uniq -d || true)"
 [[ -z "$dupes" ]] || fail "duplicate entries: $dupes"
 
 required=(
+  .githooks/pre-push
   .github/pull_request_template.md
   .github/workflows/ci.yml
   AGENTS.md

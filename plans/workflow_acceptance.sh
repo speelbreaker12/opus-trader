@@ -683,6 +683,7 @@ OVERLAY_FILES=(
   "specs/POLICY.md"
   "verify.sh"
   "AGENTS.md"
+  ".githooks/pre-push"
   ".github/pull_request_template.md"
   ".github/workflows/ci.yml"
   "plans/ralph.sh"
@@ -870,6 +871,9 @@ for script in "${scripts_to_chmod[@]}"; do
 done
 if [[ -f "$WORKTREE/verify.sh" ]]; then
   chmod +x "$WORKTREE/verify.sh" >/dev/null 2>&1 || true
+fi
+if [[ -f "$WORKTREE/.githooks/pre-push" ]]; then
+  chmod +x "$WORKTREE/.githooks/pre-push" >/dev/null 2>&1 || true
 fi
 run_in_worktree git update-index --skip-worktree "${OVERLAY_FILES[@]}" >/dev/null 2>&1 || true
 run_in_worktree git update-index --no-skip-worktree "plans/fixtures/acceptance_touch.txt" >/dev/null 2>&1 || true
@@ -6306,7 +6310,7 @@ if test_start "30.1" "rollout invalid value fails closed to off" 1; then
   test_pass "30.1"
 fi
 
-if test_start "30.2" "schema fail-closed for missing/malformed schema artifact" 1; then
+if test_start "30.2" "schema fail-closed for missing/malformed schema artifact and malformed skip_cache" 1; then
   run_in_worktree bash -c '
   set -euo pipefail
   ROOT="$(pwd)"
@@ -6336,6 +6340,20 @@ if test_start "30.2" "schema fail-closed for missing/malformed schema artifact" 
   fi
   [[ "$CHECKPOINT_INELIGIBLE_REASON" == "checkpoint_schema_unavailable" ]] || {
     echo "FAIL: expected checkpoint_schema_unavailable for malformed schema" >&2
+    exit 1
+  }
+
+  unset CHECKPOINT_SCHEMA_FILE
+  VERIFY_CHECKPOINT_FILE=".ralph/bad_verify_checkpoint.json"
+  cat > "$VERIFY_CHECKPOINT_FILE" <<'"'"'JSON'"'"'
+{"schema_version":2,"success_runs":1,"eligible_success_runs":1,"would_hit_success_runs":0,"would_miss_success_runs":1,"ineligible_success_runs":0,"last_success":{},"skip_cache":{"schema_version":1,"ts":12345,"rollout":"off","kill_switch_token":"","gates":{}}}
+JSON
+  if is_cache_eligible; then
+    echo "FAIL: malformed skip_cache should fail closed" >&2
+    exit 1
+  fi
+  [[ "$CHECKPOINT_INELIGIBLE_REASON" == "checkpoint_schema_invalid" ]] || {
+    echo "FAIL: expected checkpoint_schema_invalid for malformed skip_cache" >&2
     exit 1
   }
 '
@@ -6411,6 +6429,42 @@ if test_start "30.5" "local full verify requires approval" 1; then
   fi
 '
   test_pass "30.5"
+fi
+
+if test_start "30.6" "pre-push uses quick unless local full approved" 1; then
+  run_in_worktree bash -c '
+  set -euo pipefail
+  tmpdir=".ralph/prepush_guard"
+  mkdir -p "$tmpdir"
+  stub="$tmpdir/verify_stub.sh"
+  calls="$tmpdir/verify_calls"
+  cat > "$stub" <<'"'"'SH'"'"'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "$*" >> "$CALLS"
+exit 0
+SH
+  chmod +x "$stub"
+
+  main_line="refs/heads/local $(git rev-parse HEAD) refs/heads/main 0000000000000000000000000000000000000000"
+
+  : > "$calls"
+  printf "%s\n" "$main_line" | CALLS="$calls" RPH_ALLOW_WIP_PUSH=1 VERIFY_SH_PATH="$stub" ./.githooks/pre-push
+  if ! grep -Fxq "quick" "$calls"; then
+    echo "FAIL: expected pre-push to run quick without local full approval" >&2
+    echo "Calls: $(cat "$calls" 2>/dev/null || true)" >&2
+    exit 1
+  fi
+
+  : > "$calls"
+  printf "%s\n" "$main_line" | CALLS="$calls" RPH_ALLOW_WIP_PUSH=1 VERIFY_ALLOW_LOCAL_FULL=1 VERIFY_SH_PATH="$stub" ./.githooks/pre-push
+  if ! grep -Fxq "full" "$calls"; then
+    echo "FAIL: expected pre-push to run full when local full approval set" >&2
+    echo "Calls: $(cat "$calls" 2>/dev/null || true)" >&2
+    exit 1
+  fi
+'
+  test_pass "30.6"
 fi
 
 echo "Workflow acceptance tests passed"

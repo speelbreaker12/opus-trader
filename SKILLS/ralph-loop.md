@@ -171,6 +171,60 @@ rm .ralph/state.json
 ./plans/ralph.sh 10
 ```
 
+## Rerun/Recovery (Focused)
+
+Use this when a run is stuck, timed out, or blocked by stale state.
+
+### 1) Quick Diagnosis
+```bash
+ps -ef | rg -i "plans/ralph.sh|workflow_acceptance|verify.sh"
+ls -la .ralph/lock && cat .ralph/lock/lock.json
+ls -1t plans/logs | head -3
+ls -1dt .ralph/iter_* | head -3
+```
+
+### 2) Clean Up Stale Runs
+```bash
+# Kill orphaned workflow_acceptance workers (only in this repo)
+pgrep -f "workflow_acceptance" | xargs -I{} sh -c 'cwd=$(lsof -p {} 2>/dev/null | awk '/ cwd /{print $NF; exit}'); case "$cwd" in "'$PWD'"* ) kill {} ;; esac'
+
+# Remove stale lock
+rm -rf .ralph/lock
+
+# Optional: remove corrupted acceptance dirs
+rm -rf .ralph/workflow_acceptance_*
+```
+
+### 3) Timeout-Safe Rerun (Recommended)
+Use a detached run so long verify steps aren’t killed by CLI/tool timeouts.
+```bash
+nohup env RPH_ITER_TIMEOUT_SECS=0 WORKFLOW_ACCEPTANCE_TIMEOUT=90m ./plans/ralph.sh 1 \
+  > plans/logs/ralph.nohup.$(date +%Y%m%d-%H%M%S).log 2>&1 &
+```
+
+### 4) Quick-Verify Iterations (Speed)
+Use quick verify during iteration; pass-flip still uses promotion verify.
+```bash
+RPH_VERIFY_MODE=quick ./plans/ralph.sh 1
+```
+
+### 5) Pass-Touch Gate Reminder
+If only meta files changed (e.g., `plans/progress.txt`), pass-flip is blocked.
+Ensure at least one scope-touch change before printing `<mark_pass>`.
+
+### 6) Post-Failure Where-To-Look
+```bash
+ls -1dt .ralph/blocked_* | head -1
+cat .ralph/blocked_*/verify_summary.txt
+tail -n 80 .ralph/blocked_*/verify_pre.log
+ls -la .ralph/iter_*/verify_post.log
+```
+
+### 7) Do-Not-Do
+- Do not edit `plans/prd.json` manually during a Ralph run.
+- Do not run multiple Ralph loops concurrently.
+- Do not use `VERIFY_ALLOW_DIRTY=1` without explicit owner approval.
+
 ## Safety Guardrails
 
 **Ralph enforces:**

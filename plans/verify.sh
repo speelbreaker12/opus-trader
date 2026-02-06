@@ -130,12 +130,22 @@ VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
 VERIFY_CHECKPOINT_COUNTER="${VERIFY_CHECKPOINT_COUNTER:-auto}" # auto|1|0
 VERIFY_CHECKPOINT_FILE="${VERIFY_CHECKPOINT_FILE:-$ROOT/.ralph/verify_checkpoint.json}"
-VERIFY_CHECKPOINT_ROLLOUT="${VERIFY_CHECKPOINT_ROLLOUT:-off}" # off|dry_run|enforce
+VERIFY_CHECKPOINT_ROLLOUT_RAW="${VERIFY_CHECKPOINT_ROLLOUT:-}"
+VERIFY_CHECKPOINT_ROLLOUT="${VERIFY_CHECKPOINT_ROLLOUT_RAW:-off}" # off|dry_run|enforce
 VERIFY_CHECKPOINT_KILL_SWITCH="${VERIFY_CHECKPOINT_KILL_SWITCH:-}"
+VERIFY_CHECKPOINT_LOCK_TIMEOUT_SECS="${VERIFY_CHECKPOINT_LOCK_TIMEOUT_SECS:-5}"
+VERIFY_CHECKPOINT_LOCK_STALE_SECS="${VERIFY_CHECKPOINT_LOCK_STALE_SECS:-600}"
+VERIFY_CHECKPOINT_LOCK_FILE="${VERIFY_CHECKPOINT_LOCK_FILE:-$(dirname "$VERIFY_CHECKPOINT_FILE")/verify_checkpoint.lock}"
 VERIFY_LOG_CAPTURE="${VERIFY_LOG_CAPTURE:-1}" # 0 disables per-step log capture in verbose mode
 WORKFLOW_ACCEPTANCE_POLICY="${WORKFLOW_ACCEPTANCE_POLICY:-auto}"
 BASE_REF="${BASE_REF:-origin/main}"
 export BASE_REF
+
+CHECKPOINT_NON_TTY_DEFAULT_OFF=0
+if [[ ! -t 1 && -z "$VERIFY_CHECKPOINT_ROLLOUT_RAW" ]]; then
+  VERIFY_CHECKPOINT_ROLLOUT="off"
+  CHECKPOINT_NON_TTY_DEFAULT_OFF=1
+fi
 
 # Contract/spec paths (align with ralph.sh)
 CONTRACT_FILE="${CONTRACT_FILE:-specs/CONTRACT.md}"
@@ -168,6 +178,10 @@ fi
 source "$ROOT/plans/lib/verify_utils.sh"
 source "$ROOT/plans/lib/verify_checkpoint.sh"
 
+if [[ "$CHECKPOINT_NON_TTY_DEFAULT_OFF" == "1" ]]; then
+  warn "non_tty_default_off: VERIFY_CHECKPOINT_ROLLOUT unset in non-TTY context; forcing rollout=off"
+fi
+
 CHECKPOINT_COUNTER_ENABLED=0
 CHECKPOINT_ELIGIBLE=0
 CHECKPOINT_WOULD_HIT=0
@@ -177,9 +191,14 @@ CHECKPOINT_HEAD_SHA=""
 CHECKPOINT_HEAD_TREE=""
 CHECKPOINT_CHANGED_FILES_HASH=""
 CHECKPOINT_INELIGIBLE_REASON=""
+CHECKPOINT_COUNTER_INELIGIBLE_REASON=""
 CHECKPOINT_DIRTY="0"
 CHECKPOINT_ROLLOUT="off"
 CHECKPOINT_ROLLOUT_REASON=""
+CHECKPOINT_LOCK_HELD=0
+CHECKPOINT_LOCK_FILE=""
+CHECKPOINT_LOCK_PROBE_DONE=0
+CHECKPOINT_LOCK_PROBE_OK=0
 
 sha256_string() {
   local payload="$1"
@@ -268,6 +287,7 @@ checkpoint_counter_init() {
   CHECKPOINT_HEAD_TREE=""
   CHECKPOINT_CHANGED_FILES_HASH=""
   CHECKPOINT_INELIGIBLE_REASON=""
+  CHECKPOINT_COUNTER_INELIGIBLE_REASON=""
   CHECKPOINT_DIRTY="0"
 
   if [[ "${CENSUS:-0}" == "1" ]]; then
@@ -289,6 +309,7 @@ checkpoint_counter_init() {
   else
     CHECKPOINT_ELIGIBLE=1
   fi
+  CHECKPOINT_COUNTER_INELIGIBLE_REASON="$CHECKPOINT_INELIGIBLE_REASON"
 
   if [[ "$CHECKPOINT_ELIGIBLE" != "1" ]]; then
     return 0
@@ -334,10 +355,15 @@ checkpoint_counter_record_success() {
   local verify_mode="${VERIFY_MODE:-none}"
   local would_hit="$CHECKPOINT_WOULD_HIT"
   local eligible="$CHECKPOINT_ELIGIBLE"
-  local ineligible_reason="$CHECKPOINT_INELIGIBLE_REASON"
+  local ineligible_reason="$CHECKPOINT_COUNTER_INELIGIBLE_REASON"
 
   if ! checkpoint_no_downgrade_ok 2 "$VERIFY_CHECKPOINT_FILE"; then
     warn "checkpoint write skipped: $CHECKPOINT_INELIGIBLE_REASON"
+    return 0
+  fi
+
+  if ! checkpoint_lock_acquire; then
+    warn "checkpoint write skipped: ${CHECKPOINT_INELIGIBLE_REASON:-checkpoint_lock_unavailable}"
     return 0
   fi
 
@@ -357,6 +383,8 @@ checkpoint_counter_record_success() {
     CHECKPOINT_VERIFY_SH_SHA="$VERIFY_SH_SHA" \
     CHECKPOINT_ROLLOUT="${CHECKPOINT_ROLLOUT:-off}" \
     CHECKPOINT_KILL_SWITCH="${VERIFY_CHECKPOINT_KILL_SWITCH:-}" \
+    CHECKPOINT_WRITER_CI="$([[ -n "${CI:-}" ]] && echo 1 || echo 0)" \
+    CHECKPOINT_WRITER_MODE="$MODE" \
     "$pybin" - <<'PY'
 import json
 import os
@@ -388,6 +416,8 @@ data = {
         "ts": 0,
         "rollout": "off",
         "kill_switch_token": "",
+        "writer_ci": False,
+        "writer_mode": "",
         "written_by_verify_sh_sha": "",
         "gates": {},
     },
@@ -448,6 +478,8 @@ skip_cache["schema_version"] = 1
 skip_cache["ts"] = int(time.time())
 skip_cache["rollout"] = os.environ.get("CHECKPOINT_ROLLOUT", "off")
 skip_cache["kill_switch_token"] = os.environ.get("CHECKPOINT_KILL_SWITCH", "")
+skip_cache["writer_ci"] = bool(_int_env("CHECKPOINT_WRITER_CI", 0))
+skip_cache["writer_mode"] = os.environ.get("CHECKPOINT_WRITER_MODE", "")
 skip_cache["written_by_verify_sh_sha"] = os.environ.get("CHECKPOINT_VERIFY_SH_SHA", "")
 if not isinstance(skip_cache.get("gates"), dict):
     skip_cache["gates"] = {}
@@ -458,7 +490,13 @@ with open(tmp, "w", encoding="utf-8") as fh:
     json.dump(data, fh, separators=(",", ":"))
 os.replace(tmp, path)
 PY
+  local checkpoint_write_rc=$?
   set -e
+  checkpoint_lock_release
+  checkpoint_lock_restore_traps
+  if [[ "$checkpoint_write_rc" -ne 0 ]]; then
+    warn "checkpoint write failed (rc=$checkpoint_write_rc)"
+  fi
 }
 
 CENSUS_ENTRIES=()
@@ -1352,11 +1390,15 @@ if [[ ! -f "plans/contract_coverage_matrix.py" ]]; then
   fail "Missing contract coverage script: plans/contract_coverage_matrix.py"
 fi
 if should_run_contract_coverage; then
-  decide_skip_gate "contract_coverage" || true
-  ensure_python
-  run_logged "contract_coverage" "$CONTRACT_COVERAGE_TIMEOUT" "$PYTHON_BIN" "plans/contract_coverage_matrix.py"
-  if [[ -z "${CI:-}" && "$CONTRACT_COVERAGE_STRICT" == "1" && ! -f "$CONTRACT_COVERAGE_CI_SENTINEL" ]]; then
-    warn "Contract coverage strict passed locally. Run ./plans/contract_coverage_promote.sh to enable strict coverage in CI."
+  if decide_skip_gate "contract_coverage"; then
+    emit_skip_artifacts "contract_coverage" "${CHECKPOINT_DECISION_REASON:-checkpoint_skip}"
+    echo "info: contract_coverage skipped (${CHECKPOINT_DECISION_REASON:-checkpoint_skip})"
+  else
+    ensure_python
+    run_logged "contract_coverage" "$CONTRACT_COVERAGE_TIMEOUT" "$PYTHON_BIN" "plans/contract_coverage_matrix.py"
+    if [[ -z "${CI:-}" && "$CONTRACT_COVERAGE_STRICT" == "1" && ! -f "$CONTRACT_COVERAGE_CI_SENTINEL" ]]; then
+      warn "Contract coverage strict passed locally. Run ./plans/contract_coverage_promote.sh to enable strict coverage in CI."
+    fi
   fi
 else
   echo "info: contract coverage skipped (no relevant changes detected)"
@@ -1407,8 +1449,12 @@ SPEC_LINT_JOBS=$(detect_cpus)
 [[ $SPEC_LINT_JOBS -gt 4 ]] && SPEC_LINT_JOBS=4
 
 # Run validators in parallel
-decide_skip_gate "spec_validators_group" || true
-run_parallel_group SPEC_VALIDATOR_SPECS "$SPEC_LINT_JOBS"
+if decide_skip_gate "spec_validators_group"; then
+  emit_skip_artifacts "spec_validators_group" "${CHECKPOINT_DECISION_REASON:-checkpoint_skip}"
+  echo "info: spec_validators_group skipped (${CHECKPOINT_DECISION_REASON:-checkpoint_skip})"
+else
+  run_parallel_group SPEC_VALIDATOR_SPECS "$SPEC_LINT_JOBS"
+fi
 
 # -----------------------------------------------------------------------------
 # 0d) Status contract validation (CSP)
