@@ -208,7 +208,8 @@ except ValidationError as e:
 |------|----------------|-----|
 | Review a plan | `/plan-review` | Ad-hoc reviews miss failure modes |
 | Review a PR | `/pr-review` | Systematic checklist prevents omissions |
-| Review risky code | `/failure-mode-review` | Traces failure paths, not just happy paths |
+| Review risky code | `/failure-mode-review` | Traces implementation failure paths, not just happy paths |
+| Review architecture/ops | `/strategic-failure-review` | Systemic risks, hidden assumptions, operational/human factors |
 | Implement PRD story | `/ralph-loop` | Enforces WIP=1, verification gates |
 | Write acceptance test | `/acceptance-test` | Contract alignment |
 | Check contracts | `/contract-check` | Cross-reference validation |
