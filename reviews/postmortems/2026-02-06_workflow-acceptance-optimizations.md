@@ -1,8 +1,8 @@
 # PR Postmortem (Agent-Filled)
 
 ## 0) What shipped
-- Feature/behavior: Added workflow contract gate caching + acceptance test optimizations (Tests 12/12d/0n.1/0k.1/10b/10d/5d), plus PR template linting (template sections + CI job + lint script + exit-code preservation) and review skill split (strategic failure review).
-- What value it has (what problem it solves, upgrade provides): Reduces workflow acceptance wall time, cuts redundant preflight in acceptance tests, and enforces complete PR postmortem/risk sections with correct CI failure behavior.
+- Feature/behavior: Added workflow contract gate caching + acceptance test optimizations (Tests 12/12d/0n/0n.1/0k.1/10b/10d/5d), plus PR template linting (template sections + CI job + lint script + exit-code preservation) and review checklist/skill expansions.
+- What value it has (what problem it solves, upgrade provides): Reduces workflow acceptance wall time, cuts redundant preflight in acceptance tests, improves nested acceptance reliability, and enforces complete PR postmortem/risk sections with correct CI failure behavior.
 - Governing contract: specs/WORKFLOW_CONTRACT.md
 
 ## 1) Constraint (ONE)

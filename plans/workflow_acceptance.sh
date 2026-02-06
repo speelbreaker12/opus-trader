@@ -2209,7 +2209,8 @@ if test_start "0n" "selector flags work for --only/--resume"; then
   tmp_status="$WORKTREE/.ralph/accept_status_only"
   rm -f "$tmp_state" "$tmp_status"
   set +e
-  "$ROOT/plans/workflow_acceptance.sh" --only 0h --state-file "$tmp_state" --status-file "$tmp_status" >/dev/null 2>&1
+  VERIFY_ALLOW_DIRTY=1 WORKFLOW_ACCEPTANCE_SETUP_MODE=archive \
+    "$ROOT/plans/workflow_acceptance.sh" --only 0h --state-file "$tmp_state" --status-file "$tmp_status" >/dev/null 2>&1
   rc=$?
   set -e
   if [[ "$rc" -ne 0 ]]; then
@@ -2223,7 +2224,8 @@ if test_start "0n" "selector flags work for --only/--resume"; then
   last_id="${ALL_TEST_IDS[$((${#ALL_TEST_IDS[@]}-1))]}"
   echo "$last_id" > "$tmp_state"
   set +e
-  resume_output="$("$ROOT/plans/workflow_acceptance.sh" --resume --state-file "$tmp_state" --status-file "$tmp_status" 2>&1)"
+  resume_output="$(VERIFY_ALLOW_DIRTY=1 WORKFLOW_ACCEPTANCE_SETUP_MODE=archive \
+    "$ROOT/plans/workflow_acceptance.sh" --resume --state-file "$tmp_state" --status-file "$tmp_status" 2>&1)"
   rc=$?
   set -e
   if [[ "$rc" -ne 0 ]]; then
@@ -2242,7 +2244,8 @@ if test_start "0n.1" "selector flags work for --only-set"; then
   tmp_status="$WORKTREE/.ralph/accept_status_only_set"
   rm -f "$tmp_state" "$tmp_status"
   set +e
-  only_set_output="$(WORKFLOW_ACCEPTANCE_SETUP_MODE=archive "$ROOT/plans/workflow_acceptance.sh" --only-set "0h, 0i" --state-file "$tmp_state" --status-file "$tmp_status" 2>&1)"
+  only_set_output="$(VERIFY_ALLOW_DIRTY=1 WORKFLOW_ACCEPTANCE_SETUP_MODE=archive \
+    "$ROOT/plans/workflow_acceptance.sh" --only-set "0h, 0i" --state-file "$tmp_state" --status-file "$tmp_status" 2>&1)"
   rc=$?
   set -e
   if [[ "$rc" -ne 0 ]]; then
@@ -2263,7 +2266,8 @@ if test_start "0n.1" "selector flags work for --only-set"; then
     exit 1
   fi
   set +e
-  "$ROOT/plans/workflow_acceptance.sh" --only 0h --only-set "0h,0i" >/dev/null 2>&1
+  VERIFY_ALLOW_DIRTY=1 WORKFLOW_ACCEPTANCE_SETUP_MODE=archive \
+    "$ROOT/plans/workflow_acceptance.sh" --only 0h --only-set "0h,0i" >/dev/null 2>&1
   rc=$?
   set -e
   if [[ "$rc" -eq 0 ]]; then
