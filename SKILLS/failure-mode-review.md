@@ -4,6 +4,7 @@ Purpose
 - Find how code will fail, not just whether it looks correct
 - **Part A**: Adversarial analysis for caching, state, integrations, error paths (implementation-level)
 - **Part B**: Architectural analysis for systemic risks, hidden assumptions, compounding failures, maintenance hazards (system-level)
+- **Part C**: Operational analysis for day-to-day impact, developer ergonomics, privacy, incident response, maintenance burden (human-level)
 - Complements `/pr-review` for risky code patterns and `/plan-review` for design-level risks
 
 When to use
@@ -15,6 +16,7 @@ When to use
 - Aggregation/merge operations (are all inputs present?)
 - Any code where "it looks right" isn't enough
 - **Part B additionally**: New subsystems, multi-phase rollouts, infrastructure that adds persistent state or multiple interacting mechanisms
+- **Part C additionally**: Changes affecting operator workflows, adding configuration surfaces (env vars, flags), introducing telemetry/data collection, or impacting developer day-to-day interaction with tooling
 
 When NOT to use
 - Simple single-file changes with no external dependencies
@@ -460,10 +462,136 @@ For any manually-maintained artifact (manifests, allowlists, lint patterns):
 
 ---
 
+## Part C: Operational & Human Factors
+
+**When to apply Part C**: Plans or PRs that change operator workflows, add configuration surfaces, introduce telemetry/data collection, or affect how developers interact with tooling day-to-day. Parts A and B catch technical bugs; Part C catches problems that emerge when humans use the system.
+
+### 18. Day-to-Day Operations & Incident Response
+
+Ask: "When something goes wrong at 2am, how many steps does it take to diagnose?"
+
+- [ ] **Debug path length**: Count steps to answer "why did gate X not run?" Compare pre-change vs post-change.
+- [ ] **Incident signal clarity**: When a cached/skipped decision causes a missed failure, is the signal loud or buried?
+  - Forced-run failure after N skips should be a distinct alert level, not a normal failure.
+- [ ] **Diagnostic tooling**: Is there a single command to dump system state? (`--status`, `--why-skipped <gate>`, `--checkpoint-info`)
+- [ ] **Rollback clarity**: Can an operator disable the new behavior without reading source code? Is it one env var or five?
+
+Example failure:
+```
+Gate skipped via checkpoint → broken code passes verify → pushed to main
+Diagnosis requires: check rollout mode → check skip decision log → check
+fingerprint match → check forced-run counter → check kill switch token
+= 5 steps across 3 subsystems vs 1 step (read gate .log) before the change
+```
+
+### 19. Integration with Existing Tooling
+
+Check how the change interacts with the developer's actual environment:
+
+- [ ] **Git hooks**: Does the change work in pre-commit context? (`GIT_DIR`/`GIT_WORK_TREE` set, partial staging, timeout constraints)
+- [ ] **IDE/editor integration**: If tools call the script in background, do TTY detection or interactive prompts break?
+- [ ] **Multiple terminals**: Two instances running simultaneously — is shared state safe? (last-writer-wins acceptable if fail-closed)
+- [ ] **CI context leakage**: If a CI env var (`CI=true`) leaks into local shell profile, does the change handle it? Conversely, if `CI=true` is missing in a custom CI, does the change fire inappropriately?
+- [ ] **Shell profile pollution**: Env vars set in `.bashrc`/`.zshrc` leak into all invocations. Are any new env vars dangerous if permanently set?
+
+### 20. Organizational & Process Aspects
+
+- [ ] **Bus factor**: Are >50% of tickets assigned to one person? If that person is unavailable, what stalls?
+- [ ] **Handoff artifacts**: When ticket A's output is ticket B's input, is there a documented handoff point or does B's author need to read A's code?
+- [ ] **Cross-plan coordination**: If another active plan touches the same files/state, is there a detection mechanism? (File ownership, lock file, CI check)
+- [ ] **Ticket ordering**: Are dependencies between tickets explicit, or must implementers discover them by failing?
+
+### 21. Data & Privacy Considerations
+
+For any telemetry, logging, or data collection:
+
+- [ ] **What's captured?** Enumerate exact fields. Is user identity, hostname, or path information included?
+- [ ] **Where's it stored?** Local only? Shared filesystem? Committed to git?
+- [ ] **Retention**: Is there a TTL? Does it apply to all data or only some fields?
+- [ ] **Consent and opt-out**: Is collection documented? Can it be disabled?
+- [ ] **Privacy preservation**: Use hashed identifiers instead of raw usernames/hostnames when identity is needed for uniqueness checks, not identification.
+
+Example failure:
+```
+Telemetry collects $USER and $(hostname) for "sample diversity checks"
+→ stored in local JSON files with 7-day TTL
+→ shared machine: other users can see who ran what and when
+Fix: hash the identity — sha256("$USER@$HOSTNAME") truncated to 12 chars
+```
+
+### 22. Failure Recovery Scenarios
+
+Trace what happens when things go wrong in specific ways:
+
+- [ ] **Disk full during write**: Temp file created but rename fails. Is temp file cleaned up? Does it accumulate over runs?
+- [ ] **Runtime dependency disappears**: Python/jq/rg removed or upgraded mid-rollout. Does the system detect and degrade gracefully, or silently use stale data?
+- [ ] **Process killed (SIGKILL)**: No trap possible. Is state left consistent? (Atomic rename is safe; temp files may leak)
+- [ ] **Concurrent state mutation**: Another process (editor, git hook, background job) modifies state files between read and decision. Is the window small enough? Is the impact bounded?
+- [ ] **Partial previous run**: Script killed mid-execution. What state is left? Does next run detect and recover?
+
+### 23. Mental Model Mismatches
+
+Ask: "Will a developer who doesn't read the docs misunderstand this?"
+
+Common mismatches:
+
+| What developer thinks | What actually happens | Impact |
+|----------------------|----------------------|--------|
+| "verify passed = all gates ran" | Some gates were skipped via cache | False confidence in code correctness |
+| "I changed an env var, verify will catch it" | Env var not in fingerprint manifest → cache hit | Silent behavioral divergence |
+| "kill switch disables skip" | Kill switch is token-match, not toggle. Empty-matches-empty is a pass | Skip still active when developer expects it disabled |
+| "shadow mode is no-op" | Shadow mode writes telemetry silently | Unexpected data collection |
+| "force-run catches all issues" | Force-run triggers after N skips, not immediately | Window of vulnerability between skips |
+
+Checklist:
+- [ ] Does the pass/fail summary line indicate how many gates were skipped?
+- [ ] Is there a visible indicator when shadow/probe mode is active?
+- [ ] Are emergency-disable semantics obvious without reading source code?
+- [ ] Can a developer discover all configuration options from `--help` or a single doc?
+
+### 24. Performance Beyond the Core Change
+
+- [ ] **I/O amplification**: Count additional file reads/writes per run. Schema validation, telemetry writes, manifest reads — each adds I/O.
+- [ ] **Slow filesystem impact**: NFS, Docker overlay, WSL2 — are all file operations tolerant of high-latency I/O?
+- [ ] **Write path divergence**: If skip creates a different write path than normal execution (e.g., writing `.status=skipped` markers vs normal `.rc` files), is the write path tested equally?
+- [ ] **Telemetry write amplification**: In shadow/probe modes, how many extra files per run? At team scale?
+
+### 25. Documentation Discoverability
+
+- [ ] **Single entry point**: Is there one place a developer goes to understand the new behavior? Or must they read 3+ files?
+- [ ] **`--help` coverage**: Are new flags/env vars documented in the script's usage output?
+- [ ] **Migration guide**: For behavior changes, is there a "what changed for me" document?
+- [ ] **Changelog**: Is the change noted somewhere discoverable (not just in a plan file)?
+
+### 26. Manifest & Guard Maintenance Burden
+
+For any manually-maintained artifact introduced by the change:
+
+- [ ] **Update trigger**: What event forces the artifact to be updated? (CI lint, test failure, nothing?)
+- [ ] **Staleness direction**: Does a stale manifest cause false positives (gate runs unnecessarily) or false negatives (gate skipped when it shouldn't be)?
+- [ ] **Removal detection**: Lint catches additions (new env reads not in manifest). Does it catch removals (manifest entry for file that no longer exists)?
+- [ ] **Lint maintenance**: If coding patterns evolve (variable indirection, dynamic imports), does the lint still work?
+- [ ] **Escape hatch accumulation**: Can ignore annotations pile up over time? Is there a review/audit mechanism?
+
+### 27. Ralph / Harness Interaction
+
+Even for changes scoped to manual runs, check harness edge cases:
+
+- [ ] **Env var leakage**: Does the harness explicitly set or unset the new env vars, or does it inherit from the developer's shell?
+- [ ] **Special modes**: Does the harness have modes (verify-only, dry-run, promotion) that interact unexpectedly with the change?
+- [ ] **Phase asymmetry**: If the harness calls the tool twice per iteration (e.g., verify_pre + verify_post), does the change behave correctly in both contexts?
+
+---
+
 ## Output Format
 
 ```markdown
 ## Failure Mode Review: <component/PR>
+
+### Scope Applied
+- [x] Part A: Implementation (caching, state, integrations)
+- [x] Part B: Architectural (systemic risks, hidden assumptions)
+- [ ] Part C: Operational & Human (day-to-day ops, ergonomics, privacy)
 
 ### Findings
 
@@ -513,9 +641,29 @@ For any manually-maintained artifact (manifests, allowlists, lint patterns):
 - [ ] Debug path: <N steps> to answer "why was X skipped?"
 - [ ] Zombie risk: if rollout stalls, scaffolding remains with <overhead>
 
+### Part C: Operational & Human (if applicable)
+
+### Operations & Incident Response
+- [ ] Debug path: <N steps> pre-change vs <M steps> post-change
+- [ ] Diagnostic command exists: <yes/no>
+
+### Developer Ergonomics
+- [ ] Mental model mismatches: <list>
+- [ ] Config discoverability: `--help` covers new options? <yes/no>
+
+### Data & Privacy
+- [ ] Identity data: <what's collected, how stored, retention>
+- [ ] Opt-out mechanism: <exists/missing>
+
+### Tooling Integration
+- [ ] Git hooks: <safe/unsafe/untested>
+- [ ] Concurrent terminals: <safe with last-writer-wins / needs locking>
+
 ### Open Questions
 - <question needing clarification>
 ```
+
+---
 
 ## Common Failure Patterns to Check
 
@@ -547,6 +695,16 @@ For any manually-maintained artifact (manifests, allowlists, lint patterns):
 | Expand-later debt | Complexity justified by future expansion that can't happen | Verify expansion is viable under plan's own constraints |
 | Config explosion | >50 env vars, untestable combinations | Count before/after; flag contradictory combos |
 | Debug archaeology | N-step trace across M subsystems to find root cause | Compare pre-change vs post-change debug path length |
+| "Passed" ≠ "all ran" | Skip changes meaning of pass/fail summary | Does summary line show skip count? |
+| Shell profile pollution | Env var in `.bashrc` leaks into all invocations | Are any new vars dangerous if permanently set? |
+| Pre-commit context | `GIT_DIR`/`GIT_WORK_TREE` set, partial staging | Does script handle hook context? |
+| Last-writer-wins | Two terminals overwrite shared state | Is fail-closed on mismatch sufficient? |
+| Identity in telemetry | Raw `$USER`/`$(hostname)` in local files | Use privacy-preserving hashes for uniqueness |
+| Forced-run failure signal | Cache masked a broken gate | Is post-skip-streak failure a distinct alert level? |
+| Manifest removal detection | Lint catches additions but not stale removals | Dead entries accumulate silently |
+| Diagnostic discoverability | No `--help` or `--status` for new behavior | Developer must read source to understand system |
+| Bus factor / ticket concentration | >50% tickets on one owner | Stalls if owner is unavailable |
+| Cross-plan file ownership | Two plans modify same state file | No detection mechanism for conflicts |
 
 ## Integration with Other Skills
 
