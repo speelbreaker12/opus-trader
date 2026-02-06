@@ -31,7 +31,7 @@ jobs:
 
           set +e
           python3 tools/ci/lint_pr_template_sections.py --body-file pr_body.md --mode "$mode" | tee pr_template_lint.log
-          rc=$?
+          rc=${PIPESTATUS[0]}
           set -e
 
           if [[ -s pr_template_lint.log ]]; then

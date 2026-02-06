@@ -1626,6 +1626,10 @@ if ! run_in_worktree grep -Fq "tools/ci/lint_pr_template_sections.py" ".github/w
   echo "FAIL: CI must invoke tools/ci/lint_pr_template_sections.py" >&2
   exit 1
 fi
+if ! run_in_worktree grep -Eq "PIPESTATUS|pipefail" ".github/workflows/ci.yml"; then
+  echo "FAIL: pr-template-lint must preserve linter exit status (PIPESTATUS or pipefail)" >&2
+  exit 1
+fi
 if ! run_in_worktree grep -Fq "github.event_name == 'pull_request'" ".github/workflows/ci.yml"; then
   echo "FAIL: pr-template-lint must only run on pull_request events" >&2
   exit 1
@@ -1644,6 +1648,18 @@ if ! echo "$lint_strict_output" | grep -q "PLACEHOLDER_FIELD"; then
 fi
 if ! run_in_worktree python3 tools/ci/lint_pr_template_sections.py --body $'## 0) What shipped\n- Feature/behavior: TBD\n' --mode warn >/dev/null 2>&1; then
   echo "FAIL: warn PR template lint mode must not fail CI" >&2
+  exit 1
+fi
+set +e
+lint_none_output="$(run_in_worktree python3 tools/ci/lint_pr_template_sections.py --body $'## 0) What shipped\n- Feature/behavior: none\n' --mode strict 2>&1)"
+lint_none_rc=$?
+set -e
+if [[ "$lint_none_rc" -eq 0 ]]; then
+  echo "FAIL: strict PR template lint must fail on none without rationale" >&2
+  exit 1
+fi
+if ! echo "$lint_none_output" | grep -q "NONE_NOT_ALLOWED"; then
+  echo "FAIL: strict PR template lint must report none-not-allowed failure" >&2
   exit 1
 fi
 
