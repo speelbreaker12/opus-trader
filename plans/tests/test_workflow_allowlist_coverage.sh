@@ -54,7 +54,9 @@ required=(
   plans/prd_preflight.sh
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
+  plans/self_review_logged.sh
   plans/ssot_lint.sh
+  plans/story_review_gate.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh

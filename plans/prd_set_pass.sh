@@ -12,6 +12,7 @@ Rules for passes=true:
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
   - contract review file must exist and contain decision=PASS
+  - story review gate must pass for current HEAD
 USAGE
 }
 
@@ -130,6 +131,11 @@ if [[ "$STATUS" == "true" ]]; then
     echo "ERROR: contract review decision is not PASS in $CONTRACT_REVIEW_FILE" >&2
     exit 4
   fi
+
+  REVIEW_GATE="./plans/story_review_gate.sh"
+  [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
+  HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to read HEAD for review gate" >&2; exit 4; }
+  "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
 fi
 
 tmp="$(mktemp)"

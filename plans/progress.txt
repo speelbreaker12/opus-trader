@@ -224,3 +224,9 @@ Summary: Added deterministic README/CI parity guard to enforce canonical verify 
 Commands: ./plans/readme_ci_parity_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/readme_ci_parity_check.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; artifacts/verify/20260208_144400.
 Next: None.
+Story: workflow-maintenance
+Date: 2026-02-08
+Summary: Added fail-closed story review evidence gate (`plans/story_review_gate.sh`) and self-review logger (`plans/self_review_logged.sh`); wired pass flips in `plans/prd_set_pass.sh` to require HEAD-matched review artifacts/resolution; updated workflow contract and workflow allowlist/coverage checks.
+Commands: bash -n plans/*.sh .githooks/pre-push; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/test_verify_fork_smoke.sh; ./plans/workflow_verify.sh; PREFLIGHT_TIMEOUT=60s ./plans/verify.sh full.
+Evidence: plans/story_review_gate.sh; plans/self_review_logged.sh; plans/prd_set_pass.sh; specs/WORKFLOW_CONTRACT.md; artifacts/verify/20260208_151445.
+Next: Add a small fixture-based test for story_review_gate failure modes if recurring regressions appear.

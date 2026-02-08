@@ -39,6 +39,9 @@ These files must exist in the fork and remain functional:
 - `plans/verify.sh` (stable entrypoint; referenced by PRD `verify[]`)
 - `plans/verify_fork.sh` (canonical verify implementation)
 - `plans/lib/verify_utils.sh` (artifacts + logging convention)
+- `plans/self_review_logged.sh` (self-review artifact logger)
+- `plans/story_review_gate.sh` (HEAD-tied review evidence gate)
+- `plans/codex_review_logged.sh` (Codex review artifact logger)
 - Contract/spec validators (kept as-is unless explicitly changed):
   - `scripts/check_contract_crossrefs.py`
   - `scripts/check_arch_flows.py`
@@ -188,7 +191,11 @@ In this fork, `verify full` MUST be runnable locally without special allow flags
 ### 8.1 Rule
 A story’s `passes` may be set to `true` only when:
 - `./plans/verify.sh full` exited 0 **in that story worktree**, AND
-- verify artifacts show no failing gate (`FAILED_GATE` absent and all `*.rc` are 0).
+- verify artifacts show no failing gate (`FAILED_GATE` absent and all `*.rc` are 0), AND
+- review evidence exists for the same `HEAD`:
+  - self review is present and marked `Decision: PASS` with failure-mode + strategic reviews marked `DONE`,
+  - Codex review artifact exists for the same `HEAD`,
+  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references a Codex review file for the same `HEAD`.
 
 ### 8.2 Mechanism (required)
 Create and use a single script to change PRD passes:
@@ -196,6 +203,7 @@ Create and use a single script to change PRD passes:
 - `plans/prd_set_pass.sh <STORY_ID> true|false --artifacts <dir>`
 
 This script must refuse `true` unless the rule in 8.1 is proven via artifacts.
+`plans/prd_set_pass.sh` MUST run `plans/story_review_gate.sh` for the current `HEAD`.
 
 Manual PRD edits to flip `passes=true` are forbidden.
 
