@@ -4802,20 +4802,20 @@ cleanup_tmp_cache() {
   rm -rf "$tmp_cache"
 }
 run_in_worktree env WORKFLOW_CONTRACT_GATE_CACHE_DIR="$tmp_cache" ./plans/workflow_contract_gate.sh >/dev/null 2>&1
-if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-12.1") | .enforcement[] | select(test("smoke") and test("full"))' plans/workflow_contract_map.json >/dev/null; then
-  echo "FAIL: WF-12.1 enforcement must document smoke+full modes" >&2
+if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-9.1") | .tests[] | select(test("Test 12"))' plans/workflow_contract_map.json >/dev/null; then
+  echo "FAIL: WF-9.1 tests must reference workflow acceptance Test 12" >&2
   cleanup_tmp_cache; exit 1
 fi
-if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-12.1") | .tests[] | select(test("smoke suite"))' plans/workflow_contract_map.json >/dev/null; then
-  echo "FAIL: WF-12.1 tests must reference smoke suite coverage" >&2
+if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-1.10") | .artifacts[] | select(.=="plans/prd_set_pass.sh")' plans/workflow_contract_map.json >/dev/null; then
+  echo "FAIL: WF-1.10 must reference plans/prd_set_pass.sh artifact" >&2
   cleanup_tmp_cache; exit 1
 fi
-if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-12.8") | .tests[] | select(test("Test 12"))' plans/workflow_contract_map.json >/dev/null; then
-  echo "FAIL: WF-12.8 tests must point to workflow acceptance Test 12" >&2
+if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-7.1") | .enforcement[] | select(.==".github/workflows/ci.yml")' plans/workflow_contract_map.json >/dev/null; then
+  echo "FAIL: WF-7.1 must reference CI workflow enforcement" >&2
   cleanup_tmp_cache; exit 1
 fi
-if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-1.17") | .artifacts[] | select(.=="plans/preflight.sh")' plans/workflow_contract_map.json >/dev/null; then
-  echo "FAIL: WF-1.17 must reference plans/preflight.sh artifact" >&2
+if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-10.1") | .tests[] | select(test("Test 12"))' plans/workflow_contract_map.json >/dev/null; then
+  echo "FAIL: WF-10.1 tests must point to workflow acceptance Test 12" >&2
   cleanup_tmp_cache; exit 1
 fi
 bad_map="$WORKTREE/.ralph/workflow_contract_map.bad.json"
@@ -4829,7 +4829,7 @@ if [[ "$rc" -eq 0 ]]; then
   cleanup_tmp_cache; exit 1
 fi
 bad_enforcement="$WORKTREE/.ralph/workflow_contract_map.bad_enforcement.json"
-run_in_worktree jq '(.rules[] | select(.id=="WF-1.5").enforcement[0])="scripts/__missing__.sh"' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_enforcement"
+run_in_worktree jq '(.rules[] | select(.id=="WF-1.6").enforcement[0])="scripts/__missing__.sh"' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_enforcement"
 set +e
 run_in_worktree env WORKFLOW_CONTRACT_GATE_CACHE_DIR="$tmp_cache" WORKFLOW_CONTRACT_MAP="$bad_enforcement" ./plans/workflow_contract_gate.sh >/dev/null 2>&1
 rc=$?
@@ -4839,7 +4839,7 @@ if [[ "$rc" -eq 0 ]]; then
   cleanup_tmp_cache; exit 1
 fi
 bad_tests="$WORKTREE/.ralph/workflow_contract_map.bad_tests.json"
-run_in_worktree jq '(.rules[] | select(.id=="WF-1.5").tests[0])="plans/workflow_acceptance.sh (Test 9999)"' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_tests"
+run_in_worktree jq '(.rules[] | select(.id=="WF-1.6").tests[0])="plans/workflow_acceptance.sh (Test 9999)"' "$WORKTREE/plans/workflow_contract_map.json" > "$bad_tests"
 set +e
 run_in_worktree env WORKFLOW_CONTRACT_GATE_CACHE_DIR="$tmp_cache" WORKFLOW_CONTRACT_MAP="$bad_tests" ./plans/workflow_contract_gate.sh >/dev/null 2>&1
 rc=$?
@@ -4857,17 +4857,18 @@ check_required_workflow_artifacts() {
   local f
   local required=(
     "plans/prd.json"
-    "plans/ralph.sh"
-    "plans/verify.sh"
-    "plans/progress.txt"
-    "plans/update_task.sh"
     "plans/prd_schema_check.sh"
-    "plans/story_verify_allowlist.txt"
-    "docs/schemas/contract_review.schema.json"
+    "plans/prd_gate.sh"
+    "plans/verify.sh"
+    "plans/verify_fork.sh"
+    "plans/lib/verify_utils.sh"
+    "plans/progress.txt"
+    "plans/prd_set_pass.sh"
     "plans/workflow_contract_gate.sh"
-    "plans/workflow_acceptance.sh"
     "plans/workflow_contract_map.json"
-    "plans/preflight.sh"
+    "docs/schemas/contract_review.schema.json"
+    "specs/WORKFLOW_CONTRACT.md"
+    "specs/WORKFLOW_CONTRACT_RALPH.md"
   )
   for f in "${required[@]}"; do
     if [[ ! -f "$WORKTREE/$f" ]]; then
@@ -5038,6 +5039,169 @@ SPEC
   # Explicit cleanup (no trap)
   cleanup_tmp
   test_pass "12d"
+fi
+
+if test_start "12e" "fork contract archive + map wiring" 1; then
+  wf_id=""
+  for wf_id in "WF-1.7" "WF-2.3" "WF-6.4" "WF-10.4"; do
+    if ! run_in_worktree grep -q "\\[$wf_id\\]" "specs/WORKFLOW_CONTRACT.md"; then
+      echo "FAIL: missing $wf_id in specs/WORKFLOW_CONTRACT.md" >&2
+      exit 1
+    fi
+    if ! run_in_worktree jq -e --arg id "$wf_id" '.rules[] | select(.id==$id)' "plans/workflow_contract_map.json" >/dev/null; then
+      echo "FAIL: missing $wf_id mapping in plans/workflow_contract_map.json" >&2
+      exit 1
+    fi
+  done
+
+  if ! run_in_worktree grep -q "Verify Fork (Canonical)" "specs/WORKFLOW_CONTRACT.md"; then
+    echo "FAIL: canonical workflow contract must describe Verify Fork mode" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree test -f "specs/WORKFLOW_CONTRACT_RALPH.md"; then
+    echo "FAIL: missing archived specs/WORKFLOW_CONTRACT_RALPH.md" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree grep -q "Ralph Harness (Canonical)" "specs/WORKFLOW_CONTRACT_RALPH.md"; then
+    echo "FAIL: archived workflow contract must preserve Ralph-era header" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-1.7") | .enforcement[] | select(.=="plans/verify_fork.sh")' "plans/workflow_contract_map.json" >/dev/null; then
+    echo "FAIL: WF-1.7 must reference plans/verify_fork.sh enforcement" >&2
+    exit 1
+  fi
+
+  if ! run_in_worktree jq -e '.rules[] | select(.id=="WF-10.4") | .tests[] | select(test("Test 12f"))' "plans/workflow_contract_map.json" >/dev/null; then
+    echo "FAIL: WF-10.4 tests must reference Test 12f" >&2
+    exit 1
+  fi
+
+  test_pass "12e"
+fi
+
+if test_start "12f" "prd_set_pass fail-closed checks" 1; then
+  tmpdir=".ralph/prd_set_pass_test"
+  run_in_worktree rm -rf "$tmpdir"
+  run_in_worktree mkdir -p "$tmpdir/artifacts"
+
+  run_in_worktree bash -c "cat > \"$tmpdir/prd.json\" <<'JSON'
+{
+  \"project\": \"StoicTrader\",
+  \"source\": {
+    \"implementation_plan_path\": \"IMPLEMENTATION_PLAN.md\",
+    \"contract_path\": \"specs/CONTRACT.md\"
+  },
+  \"rules\": {
+    \"one_commit_per_story\": true,
+    \"passes_only_flips_after_verify_green\": true,
+    \"wip_limit\": 2,
+    \"verify_entrypoint\": \"./plans/verify.sh\"
+  },
+  \"items\": [
+    {
+      \"id\": \"S1-001\",
+      \"priority\": 10,
+      \"phase\": 1,
+      \"slice\": 1,
+      \"slice_ref\": \"Slice 1\",
+      \"story_ref\": \"Story\",
+      \"category\": \"workflow\",
+      \"description\": \"test\",
+      \"contract_refs\": [\"WF-6.1\"],
+      \"plan_refs\": [\"WF-6\"],
+      \"scope\": {\"touch\": [\"plans/prd.json\"], \"avoid\": []},
+      \"acceptance\": [\"a\", \"b\", \"c\"],
+      \"steps\": [\"1\", \"2\", \"3\", \"4\", \"5\"],
+      \"verify\": [\"./plans/verify.sh\", \"bash -n plans/verify.sh\"],
+      \"evidence\": [\"artifacts/verify/x\"],
+      \"contract_must_evidence\": [],
+      \"enforcing_contract_ats\": [],
+      \"reason_codes\": {\"type\": \"\", \"values\": []},
+      \"enforcement_point\": \"\",
+      \"failure_mode\": [],
+      \"observability\": {\"metrics\": [], \"status_fields\": [], \"status_contract_ats\": []},
+      \"implementation_tests\": [],
+      \"dependencies\": [],
+      \"est_size\": \"S\",
+      \"risk\": \"low\",
+      \"needs_human_decision\": false,
+      \"passes\": false
+    }
+  ]
+}
+JSON
+"
+
+  run_in_worktree bash -c "printf '0\n' > \"$tmpdir/artifacts/spec.rc\""
+  run_in_worktree bash -c "cat > \"$tmpdir/contract_review.json\" <<'JSON'
+{\"decision\":\"PASS\"}
+JSON
+"
+
+  run_in_worktree touch "$tmpdir/artifacts/FAILED_GATE"
+  set +e
+  out="$(run_in_worktree env PRD_FILE="$tmpdir/prd.json" ./plans/prd_set_pass.sh S1-001 true --artifacts-dir "$tmpdir/artifacts" --contract-review "$tmpdir/contract_review.json" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: prd_set_pass should fail when FAILED_GATE exists" >&2
+    exit 1
+  fi
+  if ! echo "$out" | grep -q "FAILED_GATE present"; then
+    echo "FAIL: expected FAILED_GATE error from prd_set_pass" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+
+  run_in_worktree rm -f "$tmpdir/artifacts/FAILED_GATE"
+  run_in_worktree bash -c "printf '1\n' > \"$tmpdir/artifacts/spec.rc\""
+  set +e
+  out="$(run_in_worktree env PRD_FILE="$tmpdir/prd.json" ./plans/prd_set_pass.sh S1-001 true --artifacts-dir "$tmpdir/artifacts" --contract-review "$tmpdir/contract_review.json" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: prd_set_pass should fail when any rc is non-zero" >&2
+    exit 1
+  fi
+  if ! echo "$out" | grep -q "non-zero gate rc"; then
+    echo "FAIL: expected non-zero rc error from prd_set_pass" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+
+  run_in_worktree bash -c "printf '0\n' > \"$tmpdir/artifacts/spec.rc\""
+  run_in_worktree bash -c "cat > \"$tmpdir/contract_review.json\" <<'JSON'
+{\"decision\":\"FAIL\"}
+JSON
+"
+  set +e
+  out="$(run_in_worktree env PRD_FILE="$tmpdir/prd.json" ./plans/prd_set_pass.sh S1-001 true --artifacts-dir "$tmpdir/artifacts" --contract-review "$tmpdir/contract_review.json" 2>&1)"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    echo "FAIL: prd_set_pass should fail when contract review decision is FAIL" >&2
+    exit 1
+  fi
+  if ! echo "$out" | grep -q "decision is not PASS"; then
+    echo "FAIL: expected contract review PASS enforcement error" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+
+  run_in_worktree bash -c "cat > \"$tmpdir/contract_review.json\" <<'JSON'
+{\"decision\":\"PASS\"}
+JSON
+"
+  run_in_worktree env PRD_FILE="$tmpdir/prd.json" ./plans/prd_set_pass.sh S1-001 true --artifacts-dir "$tmpdir/artifacts" --contract-review "$tmpdir/contract_review.json" >/dev/null
+  if ! run_in_worktree jq -e '.items[] | select(.id=="S1-001") | .passes == true' "$tmpdir/prd.json" >/dev/null; then
+    echo "FAIL: expected passes=true after successful prd_set_pass run" >&2
+    exit 1
+  fi
+
+  test_pass "12f"
 fi
 
 if test_start "13" "missing PRD file stops preflight"; then

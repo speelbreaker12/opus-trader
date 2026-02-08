@@ -10,9 +10,8 @@ Read this first. It is the shortest, enforceable workflow summary.
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.
 - Verification is mandatory; never weaken gates or tests.
-- No postmortem, no merge: every PR must include a filled postmortem entry under `reviews/postmortems/`.
-- MUST declare the governing contract (workflow vs bot) in the PR postmortem; enforced by postmortem check.
-- **Pending PRD stories MUST be implemented via Ralph loop ONLY**: If a user asks to implement a PRD story with `passes=false` from `plans/prd.json`, you MUST check the status first, then refuse manual implementation and guide them to run `./plans/ralph.sh`. Output `<promise>BLOCKED_PRD_REQUIRES_RALPH</promise>` if asked to manually implement pending stories. Post-implementation fixes to stories with `passes=true` are allowed. Read-only operations (reviewing PRD, checking status) are allowed.
+- Pass flips are controlled: `passes=true` is allowed only after `./plans/verify.sh full` is green and `plans/prd_set_pass.sh` validates artifacts.
+- WIP limit is 2 for manual worktrees: at most one story in `VERIFYING` and one in `IMPLEMENTING/REVIEW`.
 
 
 ## Response Protocol
@@ -62,78 +61,36 @@ Then end with: `<promise>COMPLETE</promise>`
 
 ## Start here (only when doing edits / PR work / MED-HIGH risk)
 - Read `specs/CONTRACT.md`, `IMPLEMENTATION_PLAN.md`, `specs/WORKFLOW_CONTRACT.md`.
-- If running the Ralph loop, read `plans/prd.json` and `plans/progress.txt`.
+- Read `plans/prd.json` and `plans/progress.txt`.
 - Read `docs/skills/workflow.md`.
 - Read `WORKFLOW_FRICTION.md` and the relevant files under `SKILLS/`.
 - When reviewing, MUST read `reviews/REVIEW_CHECKLIST.md` and include a "Review Coverage" section enumerating all modified/added files with a 1-line review note each.
-- If running the Ralph loop, run `./plans/init.sh` (if present) then `./plans/verify.sh <mode>`.
+- Run `./plans/verify.sh quick` during iteration and `./plans/verify.sh full` before marking `passes=true`.
 
 For read-only doc reviews: read the target docs first; consult contract/workflow docs only if you detect a conflict or a safety-relevant claim.
 
-## Ralph loop discipline (MANDATORY for PRD stories)
+## Manual Story Discipline (MANDATORY for PRD stories)
 
-**CRITICAL: Pending PRD stories (`passes=false`) from `plans/prd.json` are ONLY implemented via the Ralph harness.**
-
-### When you are INSIDE a Ralph iteration
-You will see context like `.ralph/iter_N_*/selected_item.json` or explicit instructions that Ralph selected a story.
-- WIP=1: exactly one PRD item and one commit per iteration.
-- Work only the selected PRD item.
-- Fail closed on PRD ambiguity; set needs_human_decision=true and stop.
-- Follow the PRD scope (scope.touch, scope.create) strictly.
-
-### When asked to implement PENDING PRD stories OUTSIDE Ralph
-**FORBIDDEN**: Do NOT manually implement stories with `passes=false`.
-- If user says "implement S2-001" and S2-001 has `passes=false` → BLOCK
-- Output: `<promise>BLOCKED_PRD_REQUIRES_RALPH</promise>`
-- Guide user: "Pending PRD stories must be implemented via Ralph harness. Run: ./plans/ralph.sh"
-- How to check: `jq '.items[] | select(.id=="S2-001") | .passes' plans/prd.json`
-
-### ALLOWED: Fixes to already-implemented stories
-**Post-implementation corrections are allowed manually:**
-- If a story has `passes=true` (already implemented by Ralph)
-- User asks to fix/correct/improve the implementation
-- Bug fixes or adjustments to previously-completed work
-- Still requires: `./plans/verify.sh` must pass before commit
-
-**Example allowed:**
-```
-User: "S2-001 was implemented but the quantization logic has a bug, please fix it"
-Agent: [Checks S2-001 passes=true] → Manual fix is allowed
-```
-
-**Example blocked:**
-```
-User: "implement S2-001"
-Agent: [Checks S2-001 passes=false] → BLOCKED, must use Ralph
-```
-
-### ALLOWED: Non-PRD work
-- Workflow maintenance (`plans/ralph.sh`, `plans/verify.sh`, etc.)
-- Bug fixes not tracked in PRD
-- Documentation updates
-- Ad-hoc tasks outside PRD workflow
-
-### Why this matters
-- Ralph enforces WIP=1, contract review, scope gating, verification gates
-- Manual implementation of pending stories bypasses critical safety guardrails
-- Ralph maintains state, artifacts, and audit trail
-- Post-implementation fixes preserve developer agility while maintaining gates
+- Manual PRD execution is allowed; use one Story ID per worktree.
+- Follow the contract story loop: implement -> self review -> quick verify -> Codex review -> quick verify -> sync branch -> full verify -> `prd_set_pass` -> merge.
+- Never edit a worktree while `./plans/verify.sh full` is running in that worktree.
+- `passes=true` flips must go through `./plans/prd_set_pass.sh` with artifact validation.
+- PRD ambiguity is fail-closed: set `needs_human_decision=true` and stop.
 
 ## Repo Path Guardrails (Non-Negotiable)
 
 ### Canonical workflow files (use THESE paths)
 - Workflow contract: `specs/WORKFLOW_CONTRACT.md`
-- Ralph orchestrator: `plans/ralph.sh`
-- Verification gate (canonical): `plans/verify.sh`
-- Acceptance harness: `plans/workflow_acceptance.sh`
-- Initializer: `plans/init.sh`
+- Verification entrypoint (stable): `plans/verify.sh`
+- Verification implementation (canonical): `plans/verify_fork.sh`
+- Pass flip gate: `plans/prd_set_pass.sh`
 - PRD backlog: `plans/prd.json`
 - Contract review tooling: `plans/contract_check.sh`, `plans/contract_review_validate.sh`
 
 ### State + logs (expected runtime artifacts)
-- Ralph state directory: `.ralph/`
-- Canonical state file: `.ralph/state.json`
-- Run logs directory: `plans/logs/`
+- Verify artifacts directory: `artifacts/verify/<run_id>/`
+- Verify run marker files: `<gate>.log`, `<gate>.rc`, `<gate>.time`, `FAILED_GATE`
+- Progress log: `plans/progress.txt`
 
 ### Critical ambiguity guard
 There is also a `./verify.sh` at repo root. **DO NOT edit or reference it** unless explicitly instructed.
@@ -142,57 +99,53 @@ If root `./verify.sh` exists, it must remain a thin wrapper that delegates to `p
 
 ### Contract vs workflow contract
 - `specs/CONTRACT.md` = trading engine contract (runtime behavior/safety gates)
-- `specs/WORKFLOW_CONTRACT.md` = coding workflow contract (Ralph loop + harness rules)
+- `specs/WORKFLOW_CONTRACT.md` = coding workflow contract (manual worktree loop + verify rules)
 Do not mix them. If a workflow rule is being enforced, it must cite `specs/WORKFLOW_CONTRACT.md`.
 
 ### Changes must be self-proving  <!-- VERIFY_CI_SATISFIES_V1 -->
-Any change to workflow/harness files (see allowlist in `plans/verify.sh:is_workflow_file`) must include:
-- updated/added assertions in `plans/workflow_acceptance.sh` (or a dedicated gate script invoked by it)
+Any change to workflow/harness files (see allowlist in `plans/verify_fork.sh:is_workflow_file`) must include:
+- updated/added checks in `plans/verify_fork.sh`, `plans/preflight.sh`, or dedicated gate scripts actually run by verify
 - and a run that passes `./plans/verify.sh`
 
 Verification satisfaction:
 - The “passes `./plans/verify.sh`” requirement MAY be satisfied by CI on the PR (clean checkout).
 - Local verify is recommended but not required if CI will run and report results.
-- If local verify fails due to a dirty worktree, the agent MUST ask for a clean-tree action or CI run; it MUST NOT set `VERIFY_ALLOW_DIRTY` without explicit owner approval recorded in the postmortem.
+- If local verify fails due to a dirty worktree, the agent MUST ask for a clean-tree action or CI run; it MUST NOT set `VERIFY_ALLOW_DIRTY` without explicit owner approval recorded in `plans/progress.txt`.
 
 Dirty worktree policy (default):
 - The agent MUST NOT automatically rerun verify with `VERIFY_ALLOW_DIRTY=1`.
 - The agent MUST present options:
   1) [RECOMMENDED] Rely on CI verify on the PR (clean checkout).
   2) Clean the tree (stash/commit unrelated changes), then rerun verify normally.
-  3) Owner-approved exception: run locally with `VERIFY_ALLOW_DIRTY=1`, list dirty files, record approval + rationale in postmortem, and still require CI verify before merge.
+  3) Owner-approved exception: run locally with `VERIFY_ALLOW_DIRTY=1`, list dirty files, record approval + rationale in `plans/progress.txt`, and still require CI verify before merge.
 
 Operational notes:
-- Do not edit `plans/workflow_acceptance.sh` without running `./plans/verify.sh full` OR relying on CI verify for proof.
-- MUST update workflow acceptance coverage when changing `plans/verify.sh` mode defaults.
-- Keep WF-* IDs synchronized across `specs/WORKFLOW_CONTRACT.md` and `plans/workflow_contract_map.json`.
-- Workflow acceptance runs in CI (smoke when no workflow-critical changes; full when workflow changes or detection fails); locally it may skip when no workflow-critical files changed (WORKFLOW_ACCEPTANCE_POLICY=auto). Force with WORKFLOW_ACCEPTANCE_POLICY=always.
-- SHOULD run `./plans/workflow_verify.sh` during iteration when changes are limited to workflow/harness files (see `plans/verify.sh:is_workflow_file`), then run `./plans/verify.sh full` before PR. [WF-VERIFY-RULE]
+- `plans/verify.sh` must remain a thin wrapper that delegates to `plans/verify_fork.sh`.
+- Run `./plans/workflow_contract_gate.sh` when editing `specs/WORKFLOW_CONTRACT.md` or `plans/workflow_contract_map.json`.
+- SHOULD run `./plans/workflow_verify.sh` during iteration when changes are limited to workflow/harness files, then run `./plans/verify.sh full` before PR. [WF-VERIFY-RULE]
 
 ### Fail-closed default
 If a required script/artifact is missing or invalid, the workflow must produce a deterministic BLOCKED outcome (not a silent pass).
 
 ## Harness guardrails
 - MUST keep fast precheck set limited to schema/self-dep/shellcheck/traceability.
-- SHOULD keep workflow_acceptance test IDs stable and listable.
-- MUST avoid brittle acceptance checks that grep long prose sentences; prefer stable markers (the HTML comments at top) and short headers.
+- SHOULD keep verify/preflight checks deterministic and artifact-backed.
 - MUST avoid bash 4+ builtins (mapfile/readarray) in harness scripts — macOS ships bash 3.2.
 
 ## Workflow editing rules
-- MUST add new fixture paths to `plans/workflow_acceptance.sh` overlays when introducing new workflow fixtures under `plans/fixtures/**`.
-- MUST update workflow acceptance assertions when modifying change-detection helpers (`is_*_affecting_file`, `should_run_*`) in `plans/verify.sh`.
-- MUST run `./plans/workflow_contract_gate.sh` and update workflow acceptance mapping assertions when editing `specs/WORKFLOW_CONTRACT.md` or `plans/workflow_contract_map.json`.
-- MUST add acceptance coverage that exercises the exact validator path and asserts non-zero exit + specific error message when introducing or tightening workflow validation rules.
-- When blocked artifact naming changes, MUST add/update a deterministic acceptance test proving correct naming.
-- SHOULD rebase onto `origin/main` before editing workflow contract/map files to avoid duplicate WF-* entries and traceability gate failures.
-- Any new blocked-exit path MUST either call a shared manifest helper or add an acceptance test proving manifest creation.
+- MUST keep `plans/verify.sh` as thin entrypoint wrapper and place gate logic in `plans/verify_fork.sh`.
+- MUST run `./plans/workflow_contract_gate.sh` when editing `specs/WORKFLOW_CONTRACT.md` or `plans/workflow_contract_map.json`.
+- MUST add/adjust deterministic checks when introducing or tightening workflow validation rules.
+- When artifact naming changes, MUST add/update deterministic checks proving naming and fail-closed behavior.
+- SHOULD rebase onto `origin/main` before editing workflow contract/map files to avoid traceability gate failures.
+- Any new blocked-exit path MUST produce deterministic diagnostics.
 
 ## Contract editing rules
 - For idempotency/WAL semantic changes, MUST include at least one crash/restart AT and one retry-policy AT in `specs/CONTRACT.md`.
 - New contract anchors referenced by ATs MUST exist — consider a contract lint step to verify anchor existence.
 
 ## Top time/token sinks (fix focus)
-- `plans/workflow_acceptance.sh` full runtime → keep acceptance tests targeted; avoid unnecessary workflow file edits; batch changes before full runs.
+- `./plans/verify.sh full` runtime → keep edits scoped; batch workflow changes before full runs.
 - Late discovery of PRD/schema/shell issues → run fast precheck early (schema/self-dep/shellcheck/traceability only).
 - Re-running full verify after small harness tweaks → minimize harness churn; group harness edits and validate once.
 
@@ -202,15 +155,13 @@ If a required script/artifact is missing or invalid, the workflow must produce a
 - If pausing mid-story, fill `plans/pause.md`.
 - Append to `plans/progress.txt`; include Assumptions/Open questions when applicable.
 - Update `docs/skills/workflow.md` only when a new repeated pattern is discovered (manual judgment).
-- Add a PR postmortem entry using `reviews/postmortems/PR_POSTMORTEM_TEMPLATE.md`.
 - If a recurring issue is flagged, update `WORKFLOW_FRICTION.md` with the elevation action.
 
 ## Repo map
 - `crates/` - Rust execution + risk (`soldier_core/`, `soldier_infra/`).
-- `plans/` - harness (PRD, progress, verify, ralph).
+- `plans/` - harness (PRD, progress, verify, preflight, pass-gating).
 - `docs/codebase/` - codebase maps.
 - `SKILLS/` - one file per workflow skill (audit, patch-only edits, diff-first review).
-- `reviews/postmortems/` - PR postmortem entries (agent-filled).
 
 ## MCP Tools Available
 

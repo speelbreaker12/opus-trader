@@ -128,10 +128,10 @@ if [[ ! -f "$PRD_FILE" ]]; then
     "contract_path": "${CONTRACT_PATH}"
   },
   "rules": {
-    "one_story_per_iteration": true,
     "one_commit_per_story": true,
-    "no_prd_rewrite": true,
-    "passes_only_flips_after_verify_green": true
+    "passes_only_flips_after_verify_green": true,
+    "wip_limit": 2,
+    "verify_entrypoint": "./plans/verify.sh"
   },
   "items": [
     {
