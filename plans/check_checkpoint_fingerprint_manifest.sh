@@ -72,7 +72,7 @@ fi
 
 if [[ "${#SCAN_FILES[@]}" -eq 0 ]]; then
   SCAN_FILES=(
-    "plans/verify.sh"
+    "plans/verify_fork.sh"
     "plans/lib/verify_checkpoint.sh"
     "plans/lib/spec_validators_group.sh"
     "plans/contract_coverage_matrix.py"

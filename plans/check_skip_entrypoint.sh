@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERIFY_SH="$ROOT/plans/verify.sh"
+VERIFY_FORK="$ROOT/plans/verify_fork.sh"
+VERIFY_WRAPPER="$ROOT/plans/verify.sh"
 CHECKPOINT_LIB="$ROOT/plans/lib/verify_checkpoint.sh"
 
 fail() {
@@ -10,15 +11,22 @@ fail() {
   exit 1
 }
 
-[[ -f "$VERIFY_SH" ]] || fail "missing plans/verify.sh"
+[[ -f "$VERIFY_WRAPPER" ]] || fail "missing plans/verify.sh"
+[[ -f "$VERIFY_FORK" ]] || fail "missing plans/verify_fork.sh"
 [[ -f "$CHECKPOINT_LIB" ]] || fail "missing plans/lib/verify_checkpoint.sh"
 
-if ! rg -q '^[[:space:]]*decide_skip_gate\(\)' "$VERIFY_SH"; then
-  fail "verify.sh must define decide_skip_gate entrypoint"
+# Wrapper must exec verify_fork.sh
+if ! rg -q 'exec.*verify_fork\.sh' "$VERIFY_WRAPPER"; then
+  fail "verify.sh wrapper must exec verify_fork.sh"
 fi
 
-if rg -n '\bis_cache_eligible\b' "$VERIFY_SH" >/dev/null; then
-  fail "verify.sh must not call is_cache_eligible directly"
+# Implementation checks target verify_fork.sh (not the wrapper)
+if ! rg -q '^[[:space:]]*decide_skip_gate\(\)' "$VERIFY_FORK"; then
+  fail "verify_fork.sh must define decide_skip_gate entrypoint"
+fi
+
+if rg -n '\bis_cache_eligible\b' "$VERIFY_FORK" >/dev/null; then
+  fail "verify_fork.sh must not call is_cache_eligible directly"
 fi
 
 if ! rg -q '^[[:space:]]*is_cache_eligible\(\)' "$CHECKPOINT_LIB"; then
