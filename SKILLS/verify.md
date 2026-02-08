@@ -1,110 +1,42 @@
 # SKILL: /verify (Run Verification and Explain Failures)
 
 Purpose
-- Run the verification suite (plans/verify.sh) and interpret results.
-- Explain failures in context of CONTRACT.md requirements.
-- Suggest fixes for common verification failures.
+- Run `plans/verify.sh` and interpret failures against `specs/CONTRACT.md` and `specs/WORKFLOW_CONTRACT.md`.
 
 When to use
-- Before marking a PRD task as done
-- After making changes to specs/ or plans/
-- When CI verification fails and you need to understand why
-- As final gate before creating a PR
+- Before flipping `passes=true`.
+- After changing `plans/*`, `specs/*`, or validators.
+- When CI verify fails.
 
 ## Workflow
 
-### 1) Run Verification
+### 1) Run verification
 ```bash
-# Full verification
-./plans/verify.sh
+# Quick iteration gate
+./plans/verify.sh quick
 
-# Quick mode (if available)
-./plans/verify.sh --quick
+# Full completion gate
+./plans/verify.sh full
 ```
 
-### 2) Interpret Exit Codes
-| Exit Code | Meaning |
-|-----------|---------|
-| 0 | All checks passed |
-| 1 | General failure |
-| 2 | Contract validation failure |
-| 3 | Acceptance test failure |
-| 4 | Workflow contract violation |
+### 2) Interpret result
+- Exit `0`: all executed gates passed.
+- Exit non-zero: at least one gate failed; inspect `artifacts/verify/<run_id>/FAILED_GATE` and matching `<gate>.log`.
 
-### 3) Common Failures and Fixes
+### 3) Common failure classes
+- Contract/spec validator failures (`contract_crossrefs`, `arch_flows`, `state_machines`, etc.).
+- Language gate failures (`rust_*`, `python_*`, `node_*`).
+- Preflight fail-closed checks.
 
-#### Contract Cross-Reference Errors
-```
-ERROR: Section ref §X.Y not found
-```
-**Fix:** Check section numbering in CONTRACT.md, ensure heading exists.
-
-```
-ERROR: AT-XXX referenced but not defined
-```
-**Fix:** Add AT-XXX definition in the relevant section, or fix the reference.
-
-#### Arch Flow Errors
-```
-ERROR: Flow ACF-XXX refs missing section
-```
-**Fix:** Update `specs/flows/ARCH_FLOWS.yaml` to include the section in `refs.sections`.
-
-```
-ERROR: Where path not covered by any flow
-```
-**Fix:** Add the path to an existing flow or create a new flow.
-
-#### State Machine Errors
-```
-ERROR: Invalid state transition X -> Y
-```
-**Fix:** Check `specs/state_machines/` for allowed transitions, update code or spec.
-
-#### Workflow Contract Errors
-```
-ERROR: Workflow gate X not satisfied
-```
-**Fix:** Check `specs/WORKFLOW_CONTRACT.md` for gate requirements, ensure all prerequisites met.
-
-### 4) Deep Dive Commands
-
-When verification fails, gather more context:
+### 4) Deep-dive commands
 ```bash
-# Contract cross-refs with verbose output
 python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at --include-bare-section-refs
-
-# Arch flows with details
 python3 scripts/check_arch_flows.py --contract specs/CONTRACT.md --flows specs/flows/ARCH_FLOWS.yaml --strict
-
-# State machine check
-python3 scripts/check_state_machines.py
-
-# Global invariants
-python3 scripts/check_global_invariants.py
+python3 scripts/check_state_machines.py --dir specs/state_machines --contract specs/CONTRACT.md --flows specs/flows/ARCH_FLOWS.yaml --invariants specs/invariants/GLOBAL_INVARIANTS.md --strict
+python3 scripts/check_global_invariants.py --file specs/invariants/GLOBAL_INVARIANTS.md --contract specs/CONTRACT.md
 ```
-
-### 5) MCP Tools for Investigation
-
-Use ralph MCP tools to investigate:
-```
-contract_lookup("X.Y")       # Read the failing section
-contract_search("AT-XXX")    # Find AT references
-list_acceptance_tests()      # List all ATs
-check_contract_crossrefs()   # Run crossref check
-check_arch_flows()           # Run flow check
-```
-
-## Failure Resolution Checklist
-
-- [ ] Identify which check failed (crossref, flow, state machine, workflow)
-- [ ] Read the relevant CONTRACT.md section
-- [ ] Determine if the failure is in code or spec
-- [ ] Apply minimal fix (don't over-correct)
-- [ ] Re-run verify.sh to confirm fix
-- [ ] Check for cascading issues (one fix may reveal others)
 
 ## Output
-- Verification result (pass/fail)
-- For failures: specific error, relevant CONTRACT.md section, suggested fix
-- Commands to re-verify after fix
+- Verification result.
+- Failed gate(s) + relevant contract/workflow refs.
+- Minimal fix path + re-verify command.

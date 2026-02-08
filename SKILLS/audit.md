@@ -11,7 +11,7 @@ Checklist
 - Read CONTRACT.md and specs/WORKFLOW_CONTRACT.md.
 - Identify affected WF/contract clauses.
 - Confirm enforcement paths (script, contract, test).
-- Confirm verify.sh and workflow acceptance coverage where required.
+- Confirm verify.sh/preflight/gate coverage where required.
 - Record evidence (commands + outputs).
 
 Output

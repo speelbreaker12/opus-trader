@@ -14,7 +14,7 @@
 - [ ] Platform assumptions: check for macOS bash incompatibilities (e.g., wait -n) or GNU-only tools.
 
 ## Evidence Gate (Required)
-- [ ] Proof includes exact commands, 1–3 key output lines, and artifact/log paths.
+- [ ] Proof includes exact commands, 1-3 key output lines, and artifact/log paths.
 - [ ] Requirements touched list concrete CR-IDs/contract anchors (no vague claims).
 - [ ] If any verification was rerun, the reason is stated.
 - [ ] Evidence/compounding/postmortem claims match the actual code (no stale line refs).
@@ -22,7 +22,7 @@
 - [ ] If workflow/harness files changed, evidence includes `./plans/workflow_verify.sh` during iteration and a final `./plans/verify.sh full` (or CI proof). [WF-VERIFY-EVIDENCE]
 
 ## Compounding Gate (Required)
-- [ ] "AGENTS.md updates proposed" section contains 1–3 enforceable rules (MUST/SHOULD + Trigger + Prevents + Enforce).
+- [ ] "AGENTS.md updates proposed" section contains 1-3 enforceable rules (MUST/SHOULD + Trigger + Prevents + Enforce).
 - [ ] "Elevation plan" includes 1 Elevation + 2 subordinate wins, each with Owner + Effort + Expected gain + Proof.
 - [ ] The elevation plan directly reduces the Top 3 sinks listed.
 
@@ -34,31 +34,31 @@
 - [ ] Long-term maintenance hazards: at least 1 maintainability hazard (complexity/ownership/test brittleness/operational toil) is documented with mitigation owner + smallest follow-up; if none, reviewer writes "none" with explicit rationale.
 
 ## Workflow / Harness Changes (If plans/* or specs/* touched)
-- [ ] Workflow file changes add acceptance coverage in `plans/workflow_acceptance.sh` or a gate invoked by it.
+- [ ] Workflow file changes add deterministic checks in `plans/verify_fork.sh`, `plans/preflight.sh`, or dedicated gate scripts run by verify.
 - [ ] Smoke/acceptance checks validate real integration (not allowlist-only matches).
-- [ ] New gate scripts are added to `plans/verify.sh:is_workflow_file` allowlist.
-- [ ] Stateful cache/checkpoint writes have explicit lock behavior with fail-closed fallback and acceptance coverage for lock contention.
+- [ ] New gate scripts are added to workflow surface controls (`plans/workflow_files_allowlist.txt` and related tests when applicable).
+- [ ] Stateful cache/checkpoint writes have explicit lock behavior with fail-closed fallback and coverage.
 - [ ] Skip precedence is explicit and tested (`mode/policy -> change_detection -> checkpoint`) so layered skip systems cannot conflict silently.
-- [ ] Schema ownership/transition is explicit (writer authority + migration rules) and has acceptance coverage.
+- [ ] Schema ownership/transition is explicit (writer authority + migration rules) and has coverage.
 - [ ] Skipped-artifact semantics are explicit (`.status`/`.rc`/`.time`) and counters/aggregators treat skipped as non-pass.
-- [ ] CI/local trust boundary is explicit (for example `writer_ci`, local-path restrictions) and has acceptance coverage.
+- [ ] CI/local trust boundary is explicit (for example `writer_ci`, local-path restrictions) and has coverage.
 - [ ] Verify requirement satisfied (local full run or CI) and recorded.
 
 ## High-ROI Enforcement Map (Workflow)
-- [ ] Workflow contract/map edits: run `./plans/workflow_contract_gate.sh` and update mapping assertions. Enforcement: script + acceptance. Tests: 12.
-- [ ] PRD edits: run `./plans/prd_gate.sh` + `./plans/prd_audit_check.sh`. Enforcement: script + acceptance. Tests: 0k.1/0k.2/27.
-- [ ] Change-detection helper edits in `plans/verify.sh`: update acceptance assertions. Enforcement: acceptance. Tests: 0k.
-- [ ] Blocked-exit/manifest behavior changes: ensure manifest written. Enforcement: acceptance. Tests: 0g/10c/10d.
-- [ ] New/tightened workflow validation rules: acceptance must call real validator path and assert non-zero + specific error. Enforcement: doc-only until test added. Tests: none.
+- [ ] Workflow contract/map edits: run `./plans/workflow_contract_gate.sh` and update mapping assertions.
+- [ ] PRD edits: run `./plans/prd_gate.sh` + `./plans/prd_audit_check.sh`.
+- [ ] Verify/preflight helper edits in `plans/verify_fork.sh` or `plans/preflight.sh`: update deterministic checks and tests.
+- [ ] Blocked-exit/manifest behavior changes: ensure manifest writing/consumption remains deterministic.
+- [ ] New/tightened workflow validation rules: add a deterministic failing-path check with specific diagnostics.
 
 ## Drift / Split-brain Check
-- [ ] Any coupled artifacts (e.g., workflow contract + map) are updated together and called out.
+- [ ] Any coupled artifacts (for example workflow contract + map) are updated together and called out.
 - [ ] No new duplicate source of truth was introduced without consolidation.
 
 ## Claims & Data
 - [ ] Performance or integration claims are backed by data or explicitly labeled estimates.
 - [ ] Line-number references are avoided or validated; prefer function names/snippets.
-- [ ] Schema fields and counts referenced in plans/pseudocode are verified against validator scripts (e.g., `plans/prd_audit_check.sh`).
+- [ ] Schema fields and counts referenced in plans/pseudocode are verified against validator scripts (for example `plans/prd_audit_check.sh`).
 - [ ] Cache key/dependency scope claims are traced to actual inputs (prompt templates, slice prep, validators, runner scripts).
 - [ ] Cache keys are content-addressed (content/hash inputs), not timestamp-only; timestamp fields may be freshness checks only.
 - [ ] Dependency manifests/group wrappers match actual executed validators; add/remove validator membership invalidates skip or is explicitly excluded.
@@ -71,13 +71,12 @@
 - [ ] Non-TTY/IDE behavior is explicit (default/off/override) and surfaced to users in status/log output.
 - [ ] Org/process fit: ownership, handoffs, and bus-factor risks are identified with a mitigation note.
 - [ ] Data/privacy: telemetry or artifacts containing developer/workstation identity are reviewed for handling, retention, and exposure.
-- [ ] Failure recovery: explicit “when things go wrong” paths are documented beyond the happy path.
+- [ ] Failure recovery: explicit "when things go wrong" paths are documented beyond the happy path.
 - [ ] Recovery UX exists for corrupted state artifacts (for example reset command) and is referenced in remediation output.
 - [ ] Mental model risks: likely developer misunderstandings are called out with clarifying guidance.
 - [ ] Performance beyond hashing: I/O patterns, parallel execution, and contention are assessed.
 - [ ] Telemetry retention window aligns with required evidence window/timebox (avoid expiring promotion evidence before thresholds are met).
 - [ ] Documentation discoverability: where developers learn this behavior is identified (docs, README, workflow guide).
-- [ ] Ralph interaction: effects on Ralph runs, even when designed for manual runs, are checked for edge cases.
 - [ ] Maintenance burden: long-term costs of manifests/lints/guards are assessed with an owner or follow-up.
 - [ ] Opportunity-sizing gate includes explicit timeout/exit criteria to avoid indefinite "shadow/dry-run forever" states.
 

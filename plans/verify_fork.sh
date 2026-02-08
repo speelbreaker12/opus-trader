@@ -236,9 +236,13 @@ if [[ -f "docs/contract_kernel.json" ]]; then
     "$PYTHON_BIN" scripts/check_contract_kernel.py --kernel docs/contract_kernel.json
 fi
 
-log "03) contract coverage"
-run_logged_or_exit "contract_coverage" "$CONTRACT_COVERAGE_TIMEOUT" \
-  "$PYTHON_BIN" plans/contract_coverage_matrix.py
+if [[ "$MODE" == "full" ]]; then
+  log "03) contract coverage"
+  run_logged_or_exit "contract_coverage" "$CONTRACT_COVERAGE_TIMEOUT" \
+    "$PYTHON_BIN" plans/contract_coverage_matrix.py
+else
+  warn "Skipping contract_coverage in quick mode (full-only gate)"
+fi
 
 log "04) contract crossrefs"
 run_logged_or_exit "contract_crossrefs" "$SPEC_LINT_TIMEOUT" \
