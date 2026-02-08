@@ -55,16 +55,18 @@ echo ""
 # 3) verify_fork.sh sources verify_utils.sh (not standalone)
 echo "3) Library sourcing"
 check "verify_fork.sh sources verify_utils.sh" grep -q 'source.*verify_utils\.sh' plans/verify_fork.sh
-check "verify_fork.sh sources verify_checkpoint.sh" grep -q 'source.*verify_checkpoint\.sh' plans/verify_fork.sh
-check "verify_fork.sh sources change_detection.sh" grep -q 'source.*change_detection\.sh' plans/verify_fork.sh
+check_not "verify_fork.sh does not source verify_checkpoint.sh" grep -q 'source.*verify_checkpoint\.sh' plans/verify_fork.sh
+check_not "verify_fork.sh does not source change_detection.sh" grep -q 'source.*change_detection\.sh' plans/verify_fork.sh
 echo ""
 
 # 4) Fork contract: no workflow_acceptance in runtime gates
 echo "4) Fork contract (no workflow_acceptance in runtime path)"
 check_not "verify_fork.sh does not call workflow_acceptance.sh" \
   grep -E '(bash|exec|source|\./plans/).*workflow_acceptance' plans/verify_fork.sh
-check "verify_fork.sh logs skip message" \
-  grep -q 'workflow acceptance skipped' plans/verify_fork.sh
+check_not "verify_fork.sh has no checkpoint skip entrypoint" grep -q '^[[:space:]]*decide_skip_gate\(\)' plans/verify_fork.sh
+check "verify_fork.sh usage is quick/full only" grep -q 'Usage: ./plans/verify.sh \[quick|full\]' plans/verify_fork.sh
+check "verify_fork.sh writes verify.meta.json" grep -q 'verify.meta.json' plans/verify_fork.sh
+check "verify_fork.sh includes contract_kernel gate" grep -q 'run_logged_or_exit \"contract_kernel\"' plans/verify_fork.sh
 echo ""
 
 # 5) Root wrapper chain (if root verify.sh exists)

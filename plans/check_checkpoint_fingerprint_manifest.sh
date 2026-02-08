@@ -18,7 +18,7 @@ Options:
   --scan-file <PATH>       Additional scan file (repeatable).
   --manifest <PATH>        Env-manifest file path.
   --deps-manifest <PATH>   Dependency-manifest JSON path.
-  --changed-only           Scan only changed/untracked skip-eligible files.
+  --changed-only           Scan only changed/untracked checkpoint files.
   -h, --help               Show this help.
 EOF
 }
@@ -72,10 +72,8 @@ fi
 
 if [[ "${#SCAN_FILES[@]}" -eq 0 ]]; then
   SCAN_FILES=(
-    "plans/verify_fork.sh"
     "plans/lib/verify_checkpoint.sh"
     "plans/lib/spec_validators_group.sh"
-    "plans/contract_coverage_matrix.py"
   )
 fi
 
@@ -107,7 +105,7 @@ if [[ "$CHANGED_ONLY" == "1" ]]; then
 fi
 
 if [[ "${#AVAILABLE_SCAN_FILES[@]}" -eq 0 ]]; then
-  echo "PASS: no changed skip-eligible files to scan"
+  echo "PASS: no checkpoint files to scan"
   exit 0
 fi
 
