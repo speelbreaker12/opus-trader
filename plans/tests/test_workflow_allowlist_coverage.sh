@@ -53,6 +53,7 @@ required=(
   plans/prd_gate.sh
   plans/prd_preflight.sh
   plans/preflight.sh
+  plans/readme_ci_parity_check.sh
   plans/ssot_lint.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh

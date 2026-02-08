@@ -33,6 +33,7 @@ plans/prd_gate.sh
 plans/prd_preflight.sh
 plans/prd_set_pass.sh
 plans/preflight.sh
+plans/readme_ci_parity_check.sh
 plans/schemas/verify_checkpoint.schema.json
 plans/ssot_lint.sh
 plans/story_verify_allowlist.txt
