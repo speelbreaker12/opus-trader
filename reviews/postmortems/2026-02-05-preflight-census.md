@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: preflight now supports `--census` and `--census-json`, passing through to verify census.
 - What value it has (what problem it solves, upgrade provides): Enables quick, non-mutating preview of gates without running full verify.

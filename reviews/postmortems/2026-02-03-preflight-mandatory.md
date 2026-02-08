@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Mandatory workflow preflight gate in `plans/verify.sh`, hardened preflight exit codes, and acceptance coverage.
 - What value it has (what problem it solves, upgrade provides): Catches schema/shell/postmortem issues in <30s before expensive gates; fail-closed behavior is consistent and observable.

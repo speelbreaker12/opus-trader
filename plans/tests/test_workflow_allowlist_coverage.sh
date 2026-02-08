@@ -44,6 +44,7 @@ required=(
   plans/contract_coverage_promote.sh
   plans/contract_review_validate.sh
   plans/init.sh
+  plans/legacy_layout_guard.sh
   plans/prd_audit_check.sh
   plans/prd_audit_merge.py
   plans/prd_audit_merge.sh
@@ -60,6 +61,7 @@ required=(
   plans/tests/test_prd_cache.sh
   plans/verify.sh
   plans/verify_day.sh
+  plans/verify_gate_contract_check.sh
   plans/workflow_contract_gate.sh
   plans/workflow_contract_map.json
   plans/workflow_verify.sh

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Added workflow acceptance runner controls (list/only/resume/fast), fast prechecks, and state/status tracking with new contract + map coverage.
 - Contract/plan requirement satisfied: WF-11.1 change control + WF-13.* workflow acceptance runner requirements.

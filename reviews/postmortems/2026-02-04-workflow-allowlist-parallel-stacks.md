@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Workflow allowlist + change-detection module + parallel stack gate scaffolding.
 - What value it has (what problem it solves, upgrade provides): Makes workflow change detection auditable/fail-closed and enables parallel stack execution without log contention.

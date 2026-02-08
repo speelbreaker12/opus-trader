@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Updated workflow contract acceptance text to document smoke vs full modes, aligned WF-12.1/WF-12.8 map entries, and added acceptance assertions to keep the map in sync.
 - What value it has (what problem it solves, upgrade provides): Prevents traceability gate drift and avoids CI failures from stale map/test references.

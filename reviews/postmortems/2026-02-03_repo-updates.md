@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: audit parallel caching + merge tooling; workflow acceptance updates (incl. invariants appendix check + PRD ref-skip CI override); contract kernel refresh; verify-worktree push guard + AGENTS clean-worktree rule + README verify helper note; Deribit vendor doc; knowledge index; invariants appendix; review checklist skill-use prompt.
 - What value it has (what problem it solves, upgrade provides): faster audit runs with cache/merge, clearer vendor + invariant references, and better review discipline.

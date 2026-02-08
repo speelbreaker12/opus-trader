@@ -212,3 +212,9 @@ Summary: acceptance commit without pass including extra detail to satisfy progre
 Commands: echo >> acceptance_tick.txt; git add; git commit (placeholder text to meet minimum command length requirements)
 Evidence: acceptance stub evidence placeholder to meet minimum content length checks in progress gate validation
 Next: continue with subsequent acceptance steps in the workflow acceptance suite
+Story: workflow-maintenance
+Date: 2026-02-08
+Summary: Added fail-closed legacy layout guard and verify quick/full contract-parity check; wired both into preflight/verify workflow checks; labeled legacy-referencing postmortems with archival notes to reduce active-flow ambiguity.
+Commands: ./plans/legacy_layout_guard.sh; ./plans/verify_gate_contract_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
+Evidence: plans/legacy_layout_guard.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/verify_fork.sh; reviews/postmortems/*.md; artifacts/verify/20260208_142926.
+Next: None.

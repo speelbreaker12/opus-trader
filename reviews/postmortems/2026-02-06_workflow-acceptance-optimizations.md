@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Added workflow contract gate caching + acceptance test optimizations (Tests 12/12d/0n/0n.1/0k.1/10b/10d/5d), plus PR template linting (template sections + CI job + lint script + exit-code preservation), review checklist expansions, a day/night verification policy (local full verify guard + daily CI schedule + quick day wrappers + pre-push full-verify guard), and checkpoint fingerprint manifest lint + lock/policy acceptance coverage.
 - What value it has (what problem it solves, upgrade provides): Reduces workflow acceptance wall time, cuts redundant preflight in acceptance tests, improves nested acceptance reliability, and enforces complete PR postmortem/risk sections with correct CI failure behavior.

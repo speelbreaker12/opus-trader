@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Hardened verification workflow by enforcing a single verify entrypoint and expanding workflow-change detection.
 - Contract/plan requirement satisfied: WF-2.8 PR postmortem is mandatory (specs/WORKFLOW_CONTRACT.md).

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Added `--census` and `--census-json` to `plans/verify.sh` to emit a non-mutating gate census without running tests.
 - What value it has (what problem it solves, upgrade provides): Provides fast, safe planning output to understand which gates would run/skip/fail and why.

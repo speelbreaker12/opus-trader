@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Added workflow-verify guidance in AGENTS.md, review checklist evidence requirement, Review Coverage guidance in SKILLS/pr-review, and acceptance checks for the markers.
 - What value it has (what problem it solves, upgrade provides): Reduces unnecessary full verify churn during workflow-only iteration while keeping a full gate before PR.

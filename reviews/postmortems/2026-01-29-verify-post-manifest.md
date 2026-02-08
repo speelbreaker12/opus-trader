@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Always write `.ralph/artifacts.json` when `verify_post` fails so blocked runs have a validated manifest.
 - What value it has (what problem it solves, upgrade provides): Workflow acceptance test 2 can reliably find a manifest on verify_post failure; blocked runs now carry consistent artifacts for triage.
