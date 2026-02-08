@@ -1,68 +1,110 @@
 # OrderSize Discovery Report (S1-008)
 
 ## Scope
-OrderSize struct, sizing invariants, and mapping to contract sizing rules. No dispatcher or policy changes.
+
+OrderSize struct, sizing invariants, and mapping to contract sizing rules.
+This report informs S1-004 (OrderSize canonical sizing implementation).
 
 ## Current implementation
-- `crates/soldier_core/src/execution/order_size.rs`
-  - `OrderSize { contracts, qty_coin, qty_usd, notional_usd }`.
-  - Field types: `contracts: Option<i64>`, `qty_coin: Option<f64>`, `qty_usd: Option<f64>`, `notional_usd: f64`.
-  - `OrderSize::new(...)` chooses canonical unit by `InstrumentKind`:
-    - Option/LinearFuture: requires `qty_coin`, sets `qty_usd=None`, computes `notional_usd = qty_coin * index_price`.
-    - Perpetual/InverseFuture: requires `qty_usd`, sets `qty_coin=None`, computes `notional_usd = qty_usd`.
-  - Logs `OrderSizeComputed instrument_kind=... notional_usd=...` via `eprintln!`.
-  - `contracts` is stored but not validated or derived in `OrderSize::new`.
-- `crates/soldier_core/src/execution/dispatch_map.rs`
-  - Consumes `OrderSize` to map to `DeribitOrderAmount`.
-  - Rejects when `OrderSize` has both `qty_coin` and `qty_usd` set (reason `both_qty`).
-  - Rejects unit mismatches and sets `RiskState::Degraded` (increments `order_intent_reject_unit_mismatch_total`).
-  - `DispatchRejectReason` currently only includes `UnitMismatch` and is always paired with `RiskState::Degraded`.
-  - Uses `UNIT_MISMATCH_EPSILON = 1e-9` when comparing contracts * multiplier to canonical amount.
-  - For USD-sized instruments, derives `qty_coin = qty_usd / index_price` in the outbound mapping.
-  - Rejects non-positive `index_price` for USD-sized instruments.
-  - Treats missing canonical amount or missing contract multiplier as a unit mismatch and logs the reason string.
+
+**None.** Crates were reset to empty scaffolding (bootstrap commit `02b5f6c`).
+
+- `crates/soldier_core/src/lib.rs` — contains only `crate_bootstrapped() -> bool`
+- No `OrderSize` struct, no execution module, no tests
+
+A prior implementation existed but was intentionally discarded for clean reimplementation.
 
 ## Call sites
-- `crates/soldier_core/tests/test_order_size.rs`
-  - Constructs `OrderSize::new` for option/perp and asserts `notional_usd`.
-  - Exercises contract mismatch rejection via `map_order_size_to_deribit_amount`.
-- `crates/soldier_core/tests/test_dispatch_map.rs`
-  - Constructs `OrderSize::new` for option/linear/perp/inverse mapping tests.
-  - Asserts `order_intent_reject_unit_mismatch_total()` increments on mismatch.
-- No production call sites in `crates/soldier_core/src` beyond the `dispatch_map` helper.
-- `crates/soldier_core/src/execution/mod.rs` re-exports `OrderSize` (no additional usage).
 
-## Contract requirements (brief)
-- `OrderSize` struct fields: `contracts`, `qty_coin`, `qty_usd`, `notional_usd`.
-- Canonical units:
-  - `option | linear_future` -> `qty_coin` canonical; `notional_usd = qty_coin * index_price`.
-  - `perpetual | inverse_future` -> `qty_usd` canonical; `notional_usd = qty_usd`.
-- If both `contracts` and canonical amount are provided and mismatch -> reject intent and set `RiskState::Degraded`.
-- Dispatcher rules require deriving `contracts` from canonical amount when contract size/multiplier is defined.
-- Dispatcher rules derive `qty_coin = qty_usd / index_price` for USD-sized instruments.
+None. No production or test code references OrderSize.
 
-## Gaps vs contract
-- `OrderSize::new` uses `expect(...)` for missing canonical fields (panic) instead of a reject path with `RiskState::Degraded`.
-- `OrderSize::new` drops non-canonical inputs (including passing both `qty_coin` and `qty_usd`) instead of rejecting the intent; only `dispatch_map` rejects when both fields are set on the `OrderSize`.
-- `contracts` is passed through but not derived from canonical amounts; no rounding or contract_size_usd handling.
-- Contracts mismatch validation only occurs in `dispatch_map` when a multiplier is supplied; `OrderSize::new` does not enforce contract matching.
-- Mismatch tolerance is implicit: `dispatch_map` uses `UNIT_MISMATCH_EPSILON = 1e-9`, but the contract only says "within tolerance" (needs a defined threshold).
-- Contract rounding rules for derived `contracts` are not implemented; current code only checks approximate equality when `contracts` is provided.
-- No validation for non-positive `index_price` when computing `notional_usd` for coin-sized instruments.
-- `OrderSize` is not wired into a production dispatch path yet (tests only).
+## Contract requirements (CONTRACT.md §1.0)
 
-## Proposed tests to add
-- Rejects when both `qty_coin` and `qty_usd` are provided.
-- Rejects when a non-canonical field is provided for the instrument kind.
-- Returns a deterministic reject (no panic) when the canonical amount is missing for the instrument kind.
-- Derives `contracts` from canonical amount when multiplier/contract size is available.
-- Rejects when `contracts` is provided but multiplier/contract size is missing.
-- Handles invalid `index_price` for coin-sized instruments (if required by contract).
+### OrderSize struct (MUST implement)
 
-## Minimal diff to align with contract
-- Change `OrderSize::new` to return a `Result` with a deterministic error instead of panicking.
-- Validate exactly one canonical amount is provided and matches `InstrumentKind`.
-- Add optional multiplier/contract size inputs to derive `contracts` consistently.
-- Decide whether to enforce contract mismatch inside `OrderSize` or keep it in `dispatch_map`, but ensure it is always applied.
-- Define a shared mismatch tolerance (or rounding rule) aligned with the contract's "within tolerance" requirement.
-- Wire creation into the execution path once build_order_intent exists (future story).
+```rust
+pub struct OrderSize {
+    pub contracts: Option<i64>,     // integer contracts when applicable
+    pub qty_coin: Option<f64>,      // BTC/ETH amount when applicable
+    pub qty_usd: Option<f64>,       // USD amount when applicable
+    pub notional_usd: f64,          // always populated (derived)
+}
+```
+
+### Canonical unit rules
+
+| `instrument_kind`               | Canonical field | `notional_usd` derivation     |
+|----------------------------------|-----------------|-------------------------------|
+| `option` / `linear_future`       | `qty_coin`      | `qty_coin * index_price`      |
+| `perpetual` / `inverse_future`   | `qty_usd`       | `qty_usd` (already USD)       |
+
+- Linear perpetuals (USDC-margined) are treated as `linear_future`.
+- For `instrument_kind == option`, `qty_usd` MUST be unset.
+
+### Contracts/amount consistency
+
+- If both `contracts` and canonical amount are provided, they MUST match within tolerance.
+- Tolerance: `contracts_amount_match_tolerance = 0.001` (0.1%).
+- Formula: `abs(amount - contracts * contract_multiplier) / max(abs(amount), epsilon) <= 0.001` where `epsilon = 1e-9`.
+- On mismatch: reject intent with `Rejected(ContractsAmountMismatch)` and set `RiskState::Degraded`.
+
+### Derivation rules
+
+- `option | linear_future`: derive `contracts` from `qty_coin` if contract multiplier is defined.
+- `perpetual | inverse_future`: derive `contracts = round(qty_usd / contract_size_usd)` if defined; derive `qty_coin = qty_usd / index_price`.
+
+### Acceptance tests
+
+- **AT-277**: option uses `amount=qty_coin`, perp uses `amount=qty_usd`; option `qty_usd` unset; mismatches rejected.
+- **AT-920**: contracts/amount mismatch beyond tolerance → `Rejected(ContractsAmountMismatch)`, dispatch count 0, `RiskState::Degraded`.
+
+## Gaps vs contract (from clean slate)
+
+Everything is a gap — full implementation needed:
+
+1. `OrderSize` struct with all 4 fields
+2. Constructor that selects canonical unit by `InstrumentKind`
+3. `notional_usd` derivation (coin * index_price or passthrough)
+4. `contracts` derivation from canonical amount + multiplier
+5. Contracts/amount consistency check with tolerance `0.001`
+6. Mismatch rejection with `Rejected(ContractsAmountMismatch)` reason code
+7. `RiskState::Degraded` transition on mismatch
+8. Observability: `debug log OrderSizeComputed{instrument_kind, notional_usd}` (per IMPLEMENTATION_PLAN)
+9. Option constraint: `qty_usd` must be `None` for options
+
+## Required tests (for S1-004)
+
+| Test | What it proves |
+|------|---------------|
+| `test_option_canonical_qty_coin` | Option uses `qty_coin`, `notional_usd = qty_coin * index`, `qty_usd` unset |
+| `test_perp_canonical_qty_usd` | Perp uses `qty_usd`, `notional_usd = qty_usd`, derives `qty_coin` |
+| `test_linear_future_canonical_qty_coin` | Linear future uses `qty_coin` like options |
+| `test_inverse_future_canonical_qty_usd` | Inverse future uses `qty_usd` like perps |
+| `test_contracts_derived_from_canonical` | `contracts` correctly derived when multiplier provided |
+| `test_contracts_amount_mismatch_rejected` | Mismatch beyond 0.001 tolerance → rejection + Degraded |
+| `test_contracts_amount_within_tolerance` | Match within 0.001 tolerance → accepted |
+| `test_option_qty_usd_must_be_unset` | Options with `qty_usd` set → rejected |
+| `test_missing_canonical_amount_rejected` | Missing required canonical field → deterministic error (no panic) |
+
+Required test alias (per IMPLEMENTATION_PLAN):
+- `test_atomic_qty_epsilon_tolerates_float_noise_but_rejects_mismatch()`
+
+## Minimal implementation diff (for S1-004)
+
+**File:** `crates/soldier_core/src/execution/order_size.rs`
+
+1. Define `OrderSize` struct (4 fields as above)
+2. Import `InstrumentKind` from S1-002 (`crates/soldier_core/src/venue/types.rs`) — do NOT redefine
+3. Implement `OrderSize::new(kind, qty_coin, qty_usd, contracts, index_price, contract_multiplier) -> Result<OrderSize, OrderSizeError>`
+   - Select canonical field by kind
+   - Compute `notional_usd`
+   - Derive `contracts` if multiplier available
+   - Validate contracts/amount consistency if both present
+   - Return error (not panic) on invalid inputs
+4. Define `OrderSizeError` enum with `ContractsAmountMismatch`, `MissingCanonicalAmount`, `InvalidIndexPrice`
+5. Add `tracing::debug!` for `OrderSizeComputed`
+6. Wire into `crates/soldier_core/src/execution/mod.rs` re-export
+
+**Test file:** `crates/soldier_core/tests/test_order_size.rs` (9 tests listed above)
+
+**Dependencies:** `InstrumentKind` may also be needed by S1-011 (Deribit instrument structs) — coordinate to avoid duplication. S1-002 defines `InstrumentKind` and `RiskState`, so S1-004 depends on both S1-002 and S1-008.
