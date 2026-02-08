@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Added dependency-aware eligibility, schema validation for dependencies, and acceptance fixtures/tests.
 - Contract/plan requirement satisfied: WF-5.3 selection semantics and WF-12.4 dependency behavior coverage.

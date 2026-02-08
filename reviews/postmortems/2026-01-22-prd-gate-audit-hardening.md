@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Hardened PRD gating with strict schema, lint, and audit output checks plus fixture-based fault injection tests.
 - Contract/plan requirement satisfied: WF-1.15, WF-1.16, WF-3.3, WF-3.5, WF-2.8.

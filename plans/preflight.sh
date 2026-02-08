@@ -106,28 +106,36 @@ check_file "plans/prd.json" "PRD file"
 CONTRACT_FILE="${CONTRACT_FILE:-specs/CONTRACT.md}"
 check_file "$CONTRACT_FILE" "Contract spec"
 
-# 3b. Legacy workflow stack must remain removed from active harness surface
-LEGACY_STACK_FILES=(
-  "plans/ralph.sh"
-  "plans/ralph_day.sh"
-  "plans/workflow_acceptance.sh"
-  "plans/workflow_acceptance_parallel.sh"
-  "plans/test_parallel_smoke.sh"
-  "plans/tests/test_ralph_needs_human.sh"
-  "plans/tests/test_workflow_acceptance_fallback.sh"
-)
-
-legacy_found=()
-for f in "${LEGACY_STACK_FILES[@]}"; do
-  if [[ -e "$f" ]]; then
-    legacy_found+=("$f")
+# 3b. Legacy workflow/docs layout guard (fail-closed)
+LEGACY_LAYOUT_GUARD="plans/legacy_layout_guard.sh"
+if [[ -x "$LEGACY_LAYOUT_GUARD" ]]; then
+  if "$LEGACY_LAYOUT_GUARD"; then
+    pass "Legacy layout guard"
+  else
+    fail "Legacy layout guard failed"
   fi
-done
-
-if [[ "${#legacy_found[@]}" -eq 0 ]]; then
-  pass "Legacy Ralph/workflow-acceptance stack absent"
+elif [[ -f "$LEGACY_LAYOUT_GUARD" ]]; then
+  echo "[FAIL] Legacy layout guard not executable: $LEGACY_LAYOUT_GUARD (setup error)" >&2
+  exit 2
 else
-  fail "Legacy Ralph/workflow-acceptance files present: ${legacy_found[*]}"
+  echo "[FAIL] Missing legacy layout guard: $LEGACY_LAYOUT_GUARD (setup error)" >&2
+  exit 2
+fi
+
+# 3c. README/CI parity guard (fail-closed)
+README_CI_PARITY_GUARD="plans/readme_ci_parity_check.sh"
+if [[ -x "$README_CI_PARITY_GUARD" ]]; then
+  if "$README_CI_PARITY_GUARD"; then
+    pass "README/CI parity guard"
+  else
+    fail "README/CI parity guard failed"
+  fi
+elif [[ -f "$README_CI_PARITY_GUARD" ]]; then
+  echo "[FAIL] README/CI parity guard not executable: $README_CI_PARITY_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing README/CI parity guard: $README_CI_PARITY_GUARD (setup error)" >&2
+  exit 2
 fi
 
 # =============================================================================

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: PRD lint now flags contract_refs that mention Anchor/VR titles without the corresponding Anchor-###/VR-### IDs; workflow acceptance asserts the rule is present. Added a parallel workflow acceptance runner helper for faster local runs.
 - What value it has (what problem it solves, upgrade provides): Prevents traceability drift by forcing explicit Anchor/VR IDs when titles are referenced and provides a safer way to reduce local workflow acceptance runtime.

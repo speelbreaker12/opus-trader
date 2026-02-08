@@ -18,6 +18,7 @@ plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
 plans/contract_review_validate.sh
 plans/init.sh
+plans/legacy_layout_guard.sh
 plans/lib/node_gates.sh
 plans/lib/python_gates.sh
 plans/lib/rust_gates.sh
@@ -32,6 +33,7 @@ plans/prd_gate.sh
 plans/prd_preflight.sh
 plans/prd_set_pass.sh
 plans/preflight.sh
+plans/readme_ci_parity_check.sh
 plans/schemas/verify_checkpoint.schema.json
 plans/ssot_lint.sh
 plans/story_verify_allowlist.txt
@@ -43,6 +45,7 @@ plans/tests/test_workflow_allowlist_coverage.sh
 plans/verify.sh
 plans/verify_day.sh
 plans/verify_fork.sh
+plans/verify_gate_contract_check.sh
 plans/workflow_contract_gate.sh
 plans/workflow_contract_map.json
 plans/workflow_files_allowlist.txt

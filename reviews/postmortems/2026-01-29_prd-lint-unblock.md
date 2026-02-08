@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: PRD metadata fixes to unblock Ralph (scope.create/touch alignment, resolvable plan_refs/contract_refs, required observability.metrics) plus story verify allowlist updates, workflow acceptance hardening (duplicate allowlist detection, ralph state tamper stub fix, slice-preflight expectation aligned to warn-not-fail behavior, and a macOS-safe lock fallback in plans/update_task.sh), and the required AGENTS.md Input Guard section.
 - What value it has (what problem it solves, upgrade provides): PRD gate and workflow acceptance now pass so Ralph/verify can reach the agent step; avoids false-negative lint/ref failures, allowlist drift, missing AGENTS.md compliance markers, false negatives in ralph tamper detection tests, and mismatched slice-preflight expectations.

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Add `--only-set` selector to workflow acceptance; switch preflight acceptance test to smoke mode; clarify preflight smoke messaging.
 - What value it has (what problem it solves, upgrade provides): Enables targeted, parallelized acceptance runs and reduces preflight test cost in workflow acceptance.

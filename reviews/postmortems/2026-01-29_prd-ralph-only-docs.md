@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Tightened Ralph-only PRD enforcement docs, fixed PRD jq paths, aligned Ralph skill guidance, and added workflow acceptance check for the Ralph-only sentinel.
 - What value it has (what problem it solves, upgrade provides): Prevents manual implementation of pending PRD stories and removes misleading instructions that bypassed enforcement.

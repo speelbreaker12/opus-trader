@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Ralph harness now uses a single cleanup trap for lock + state-file release, rotates metrics.jsonl at a size cap, and keeps iteration dirs when archive fails. Added a Ralph loop playbook.
 - What value it has (what problem it solves, upgrade provides): Prevents stuck locks after interrupt, bounds metrics growth, avoids losing artifacts on failed tar, and documents operational expectations.

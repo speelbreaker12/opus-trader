@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Stack gate scripts now emit inner failure excerpts when parallel guard flags suppress outer excerpts; workflow acceptance overlays include test_parallel_smoke.sh.
 - What value it has (what problem it solves, upgrade provides): Restores actionable failure context in parallel stacks without reintroducing nondeterministic FAILED_GATE writes, and ensures smoke-test edits are exercised in dirty-tree acceptance runs.

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Simplified postmortem requirement to a minimal, human-readable template; CI gate now only checks that an entry was created.
 - What value it has (what problem it solves, upgrade provides): Reduces postmortem overhead while preserving a lightweight narrative for reviewers.

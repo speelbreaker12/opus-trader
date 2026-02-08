@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Default verify mode now infers full in CI and quick locally when no arg is provided; workflow acceptance asserts the behavior.
 - Contract/plan requirement satisfied: CI-grade verification must run via plans/verify.sh (mode handling aligned with CI usage).

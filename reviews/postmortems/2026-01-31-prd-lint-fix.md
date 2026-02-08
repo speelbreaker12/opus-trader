@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: PRD lint corrections: scope.create/touch fixes, added missing observability metrics, normalized refs, and added parent evidence directories to satisfy create-parent requirements.
 - What value it has (what problem it solves, upgrade provides): PRD gate passes again so workflow acceptance/verify can run; removes false failures from scope mismatches.

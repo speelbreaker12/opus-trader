@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Fail-closed allowlist validation, stricter --only-set parsing, and acceptance coverage for the new failure modes; review checklist and plan-review skill updates.
 - What value it has (what problem it solves, upgrade provides): Prevents silent pass on empty/invalid allowlists and catches typoed --only-set input, reducing false-green verification.
