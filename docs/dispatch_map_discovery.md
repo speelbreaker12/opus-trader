@@ -1,51 +1,126 @@
 # Dispatch Map Discovery Report (S1-009)
 
 ## Scope
-Dispatcher amount mapping for Deribit requests (canonical amount selection + mismatch rejection). No changes outside the dispatch mapping helper.
+
+Dispatcher amount mapping for Deribit requests (canonical amount selection + mismatch rejection).
+This report informs S1-005 (Dispatcher amount mapping) and S1-007 (Dispatcher mismatch rejection).
 
 ## Current implementation
-- `crates/soldier_core/src/execution/dispatch_map.rs`
-  - `map_order_size_to_deribit_amount(instrument_kind, order_size, contract_multiplier, index_price)` returns `DeribitOrderAmount { amount, derived_qty_coin }` or `DispatchReject`.
-  - Rejects with `RiskState::Degraded` when both `qty_coin` and `qty_usd` are set on `OrderSize`.
-  - Canonical amount selection:
-    - `InstrumentKind::Option | LinearFuture` uses `order_size.qty_coin`.
-    - `InstrumentKind::Perpetual | InverseFuture` uses `order_size.qty_usd` and derives `derived_qty_coin = qty_usd / index_price` (rejects `index_price <= 0`).
-  - Rejects if canonical amount is missing (`missing_canonical`).
-  - If `order_size.contracts` is present, checks `contracts * contract_multiplier` against the canonical amount using `UNIT_MISMATCH_EPSILON = 1e-9` and rejects on mismatch.
-  - Missing `contract_multiplier` with `contracts` present is treated as a unit mismatch.
-  - Rejections increment a local `order_intent_reject_unit_mismatch_total` counter and log via `eprintln!`.
-- `crates/soldier_core/src/execution/mod.rs` re-exports `map_order_size_to_deribit_amount` and related types.
+
+**None.** Crates were reset to empty scaffolding (bootstrap commit `02b5f6c`).
+
+- `crates/soldier_core/src/lib.rs` — contains only `crate_bootstrapped() -> bool`
+- No dispatch mapping logic, no `DeribitOrderAmount`, no tests
+
+A prior implementation existed but was intentionally discarded for clean reimplementation.
 
 ## Call sites
-- `crates/soldier_core/tests/test_dispatch_map.rs` exercises mapping for option/linear/perp/inverse and mismatch rejection.
-- `crates/soldier_core/tests/test_order_size.rs` uses the mapping for a mismatch rejection check.
-- No production call sites in `crates/soldier_core/src` yet (mapping helper only).
 
-## Contract requirements (brief)
-- Canonical amount selection for outbound Deribit `amount`:
-  - Option/linear_future -> `amount = qty_coin`.
-  - Perpetual/inverse_future -> `amount = qty_usd`.
-- For USD-sized instruments, derive `qty_coin = qty_usd / index_price`.
-- If `contracts` exists, it must be consistent with the canonical amount before dispatch (mismatch -> reject + Degraded).
-- Derive `contracts` from canonical amount when contract size/multiplier is defined (rounding rule specified in contract).
+None. No production or test code references dispatch mapping.
 
-## Gaps vs contract
-- Dispatcher mapping is not wired into a production dispatch path yet (helper used only by tests).
-- No derivation of `contracts` when `contract_multiplier`/contract size is known; only validates if `contracts` is already provided.
-- No rounding rule for derived `contracts` is implemented; only a strict epsilon comparison when `contracts` is present.
-- Mismatch tolerance is hard-coded to `1e-9`; contract calls for a defined tolerance/rounding rule.
-- `OrderSize` for USD-sized instruments does not persist the derived `qty_coin` (only returned in `DeribitOrderAmount`).
+## Contract requirements (CONTRACT.md §1.0)
 
-## Proposed tests to add (canonical amount selection)
-- `test_dispatch_map_rejects_both_qty_fields`: rejects when both `qty_coin` and `qty_usd` are set on `OrderSize`.
-- `test_dispatch_map_rejects_missing_canonical_amount`: rejects when the canonical amount is missing for the instrument kind.
-- `test_dispatch_map_rejects_invalid_index_price`: rejects when `index_price <= 0` for USD-sized instruments.
-- `test_dispatch_map_rejects_missing_multiplier`: rejects when `contracts` is present but `contract_multiplier` is missing.
-- `test_dispatch_map_accepts_contracts_match_with_tolerance`: accepts when `contracts * contract_multiplier` matches the canonical amount within the defined tolerance.
-- `test_dispatch_map_sets_derived_qty_coin_for_usd`: asserts `derived_qty_coin` is set for USD-sized instruments and matches `qty_usd / index_price`.
+### Dispatcher Rules (Deribit request mapping)
 
-## Minimal diff to align with contract
-- Wire `map_order_size_to_deribit_amount` into the real Deribit request build path so exactly one `amount` field is sent.
-- Add contract-size/multiplier-aware `contracts` derivation (with rounding) when a multiplier is available.
-- Replace the hard-coded epsilon with a shared tolerance/rounding rule aligned to the contract.
-- Decide whether derived `qty_coin` should live in `OrderSize` or remain only in the outbound mapping, but make it consistently available to downstream callers.
+1. Determine `instrument_kind` from instrument metadata (`option | linear_future | inverse_future | perpetual`)
+2. Compute size fields:
+   - `option | linear_future`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined
+   - Linear perpetuals (USDC-margined) are treated as `linear_future`
+   - `perpetual | inverse_future`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` if defined; derive `qty_coin = qty_usd / index_price`
+3. **Outbound order size field**: always send exactly one canonical "amount" value:
+   - coin instruments → send `amount = qty_coin`
+   - USD-sized instruments → send `amount = qty_usd`
+4. If `contracts` exists, it must be consistent with the canonical amount before dispatch (reject if not)
+
+### Mismatch rejection rules
+
+- Tolerance: `contracts_amount_match_tolerance = 0.001` (0.1%)
+- Formula: `abs(amount - contracts * contract_multiplier) / max(abs(amount), epsilon) <= 0.001` where `epsilon = 1e-9`
+- On mismatch: reject intent with `Rejected(ContractsAmountMismatch)` and set `RiskState::Degraded`
+- Dispatch count must remain 0 on rejection
+
+### Reduce-only flag (IMPLEMENTATION_PLAN S1.3)
+
+- Outbound `reduce_only` flag MUST be set from intent classification:
+  - `CLOSE`/`HEDGE` intents → `reduce_only=true`
+  - `OPEN` intents → `reduce_only=false` or omitted
+- This flag MUST NOT be derived from `TradingMode`
+
+### Acceptance tests
+
+- **AT-277**: option uses `amount=qty_coin` (coin), perp uses `amount=qty_usd` (USD); option `qty_usd` unset; mismatches rejected
+- **AT-920**: contracts/amount mismatch beyond tolerance → `Rejected(ContractsAmountMismatch)`, dispatch count 0, `RiskState::Degraded`
+
+## Gaps vs contract (from clean slate)
+
+Everything is a gap — full implementation needed:
+
+1. `map_order_size_to_deribit_amount()` function selecting canonical amount by `InstrumentKind`
+2. Outbound `DeribitOrderAmount` struct (or equivalent) with exactly one `amount` field
+3. Contracts consistency validation using tolerance `0.001`
+4. Contracts derivation from canonical amount when multiplier/contract_size is available
+5. `qty_coin` derivation for USD-sized instruments: `qty_usd / index_price`
+6. Mismatch rejection with `Rejected(ContractsAmountMismatch)` reason code
+7. `RiskState::Degraded` transition on mismatch
+8. `reduce_only` flag from intent classification (not TradingMode)
+9. Observability: counter `order_intent_reject_unit_mismatch_total`
+10. Rejection for invalid `index_price <= 0` on USD-sized instruments
+
+## Required tests (for S1-005 and S1-007)
+
+### S1-005 (Dispatcher amount mapping)
+
+| Test | What it proves |
+|------|---------------|
+| `test_dispatch_amount_field_coin_vs_usd` | Option/linear sends `amount=qty_coin`; perp/inverse sends `amount=qty_usd` |
+| `test_dispatch_derives_qty_coin_for_usd` | USD-sized instruments derive `qty_coin = qty_usd / index_price` |
+| `test_dispatch_derives_contracts_from_canonical` | `contracts` derived via rounding when multiplier available |
+| `test_dispatch_rejects_missing_canonical` | Missing canonical amount → rejection |
+| `test_dispatch_rejects_invalid_index_price` | `index_price <= 0` for USD instruments → rejection |
+| `test_reduce_only_flag_set_by_intent_classification` | CLOSE/HEDGE → `reduce_only=true`; OPEN → false/omitted |
+
+### S1-007 (Dispatcher mismatch rejection)
+
+| Test | What it proves |
+|------|---------------|
+| `test_dispatch_mismatch_rejects_and_degrades` | Contracts/amount mismatch → `Rejected(ContractsAmountMismatch)` + `RiskState::Degraded` |
+| `test_dispatch_mismatch_within_tolerance_accepted` | Match within 0.001 tolerance → accepted |
+| `test_dispatch_mismatch_missing_multiplier_rejects` | `contracts` present but no multiplier → rejection |
+| `test_dispatch_mismatch_zero_dispatch_count` | On rejection, dispatch count remains 0 |
+
+## Minimal implementation diff
+
+### S1-005 — Dispatcher amount mapping
+
+**File:** `crates/soldier_core/src/execution/dispatch_map.rs`
+
+1. Import `InstrumentKind` from S1-002 and `OrderSize` from S1-004
+2. Define `DeribitOrderAmount { amount: f64, derived_qty_coin: Option<f64> }`
+3. Define `DispatchRejectReason` enum including `ContractsAmountMismatch`, `MissingCanonicalAmount`, `InvalidIndexPrice`
+4. Implement `map_order_size_to_deribit_amount(kind, order_size, contract_multiplier, index_price) -> Result<DeribitOrderAmount, DispatchReject>`
+   - Select canonical amount by kind
+   - Derive `qty_coin` for USD-sized instruments
+   - Derive `contracts` when multiplier available
+5. Add `reduce_only` mapping from intent classification
+6. Wire into `crates/soldier_core/src/execution/mod.rs` re-export
+
+**Test file:** `crates/soldier_core/tests/test_dispatch_map.rs`
+
+### S1-007 — Dispatcher mismatch rejection
+
+**File:** Same `dispatch_map.rs`
+
+1. Add contracts/amount consistency check with tolerance `0.001`
+2. Reject with `ContractsAmountMismatch` on mismatch
+3. Set `RiskState::Degraded` on mismatch rejection
+4. Increment `order_intent_reject_unit_mismatch_total` counter
+5. Handle missing multiplier when contracts present
+
+**Test file:** `crates/soldier_core/tests/test_dispatch_map.rs`
+
+### Dependencies
+
+- `InstrumentKind` from S1-002 (`crates/soldier_core/src/venue/types.rs`)
+- `OrderSize` from S1-004 (`crates/soldier_core/src/execution/order_size.rs`)
+- `RiskState` from S1-002 (`crates/soldier_core/src/risk/state.rs`)
+- Intent classification (OPEN/CLOSE/HEDGE) — may need to be defined or imported
