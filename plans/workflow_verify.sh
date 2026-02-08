@@ -16,6 +16,8 @@ check_script "plans/verify.sh"
 check_script "plans/verify_fork.sh"
 check_script "plans/preflight.sh"
 check_script "plans/prd_set_pass.sh"
+check_script "plans/self_review_logged.sh"
+check_script "plans/story_review_gate.sh"
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick

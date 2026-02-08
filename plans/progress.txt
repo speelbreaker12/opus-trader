@@ -212,3 +212,9 @@ Summary: acceptance commit without pass including extra detail to satisfy progre
 Commands: echo >> acceptance_tick.txt; git add; git commit (placeholder text to meet minimum command length requirements)
 Evidence: acceptance stub evidence placeholder to meet minimum content length checks in progress gate validation
 Next: continue with subsequent acceptance steps in the workflow acceptance suite
+Story: workflow-maintenance
+Date: 2026-02-08
+Summary: Added fail-closed story review evidence gate (`plans/story_review_gate.sh`) and self-review logger (`plans/self_review_logged.sh`); wired pass flips in `plans/prd_set_pass.sh` to require HEAD-matched review artifacts/resolution; updated workflow contract and workflow allowlist/coverage checks.
+Commands: bash -n plans/*.sh .githooks/pre-push; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/test_verify_fork_smoke.sh; ./plans/workflow_verify.sh; PREFLIGHT_TIMEOUT=60s ./plans/verify.sh full.
+Evidence: plans/story_review_gate.sh; plans/self_review_logged.sh; plans/prd_set_pass.sh; specs/WORKFLOW_CONTRACT.md; artifacts/verify/20260208_151445.
+Next: Add a small fixture-based test for story_review_gate failure modes if recurring regressions appear.

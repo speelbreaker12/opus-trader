@@ -53,7 +53,9 @@ required=(
   plans/preflight.sh
   plans/ralph.sh
   plans/ralph_day.sh
+  plans/self_review_logged.sh
   plans/ssot_lint.sh
+  plans/story_review_gate.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh
