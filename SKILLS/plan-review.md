@@ -23,7 +23,7 @@ Before reviewing ANY plan, read these based on scope:
 | `specs/*` | `specs/WORKFLOW_CONTRACT.md` §2.1, §11 |
 | Cache/state files | Existing cache schemas in codebase |
 | Parallel execution | Race condition patterns in codebase |
-| PRD stories | `CLAUDE.md` Ralph-only rule for `passes=false` stories |
+| PRD stories | `specs/WORKFLOW_CONTRACT.md` story loop + pass-gating rules |
 
 ---
 
@@ -33,16 +33,16 @@ Before reviewing ANY plan, read these based on scope:
 
 **CRITICAL: Verify exact text, not just presence.** Don't check "does verify.sh appear?" — check "does it match the exact governance requirement?"
 
-- [ ] **Acceptance coverage**: Does plan include updates to `plans/workflow_acceptance.sh`?
+- [ ] **Deterministic coverage**: Does plan include updates to verify/preflight/gates for workflow file changes?
 - [ ] **Verify inclusion**: Does verification section include `./plans/verify.sh full` (not just `verify.sh`) or explicit CI proof? Workflow file changes require `full` mode per REVIEW_CHECKLIST.md line 18.
 - [ ] **Change control**: Does plan follow WORKFLOW_CONTRACT.md §11?
 - [ ] **Postmortem**: If PR-bound, is postmortem mentioned?
 - [ ] **Postmortem template**: Declares "workflow vs bot" governing contract explicitly?
-- [ ] **Ralph-only rule**: No manual implementation of `passes=false` PRD stories (including "amend" options)
+- [ ] **Pass-gating rule**: No `passes=true` without `./plans/verify.sh full` evidence + `plans/prd_set_pass.sh`
 - [ ] **No time estimates**: Plan avoids duration predictions per CLAUDE.md
 
-Reference: `reviews/REVIEW_CHECKLIST.md` lines 20-24:
-> Workflow file changes add acceptance coverage in `plans/workflow_acceptance.sh` or a gate invoked by it.
+Reference: `reviews/REVIEW_CHECKLIST.md` workflow section:
+> Workflow file changes must add deterministic checks in verify/preflight or dedicated gate scripts run by verify.
 
 ### 2. Implementability (could someone build this blind?)
 

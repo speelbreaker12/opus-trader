@@ -102,9 +102,33 @@ check_file() {
 
 check_file "plans/prd.json" "PRD file"
 
-# Honor CONTRACT_FILE override (consistent with verify.sh/ralph.sh)
+# Honor CONTRACT_FILE override (consistent with verify.sh)
 CONTRACT_FILE="${CONTRACT_FILE:-specs/CONTRACT.md}"
 check_file "$CONTRACT_FILE" "Contract spec"
+
+# 3b. Legacy workflow stack must remain removed from active harness surface
+LEGACY_STACK_FILES=(
+  "plans/ralph.sh"
+  "plans/ralph_day.sh"
+  "plans/workflow_acceptance.sh"
+  "plans/workflow_acceptance_parallel.sh"
+  "plans/test_parallel_smoke.sh"
+  "plans/tests/test_ralph_needs_human.sh"
+  "plans/tests/test_workflow_acceptance_fallback.sh"
+)
+
+legacy_found=()
+for f in "${LEGACY_STACK_FILES[@]}"; do
+  if [[ -e "$f" ]]; then
+    legacy_found+=("$f")
+  fi
+done
+
+if [[ "${#legacy_found[@]}" -eq 0 ]]; then
+  pass "Legacy Ralph/workflow-acceptance stack absent"
+else
+  fail "Legacy Ralph/workflow-acceptance files present: ${legacy_found[*]}"
+fi
 
 # =============================================================================
 # Tier 2: Fast checks (<30s)

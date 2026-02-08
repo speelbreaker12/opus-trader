@@ -1,16 +1,15 @@
-# Ralph Harness Tests
+# Plans Harness Tests
 
-Run the selection/blocked-flow checks:
+Run focused harness tests:
 
 ```bash
-./plans/tests/test_ralph_needs_human.sh
+./plans/tests/test_prd_cache.sh
+./plans/tests/test_workflow_allowlist_coverage.sh
 ```
 
-Run lint/update_task checks:
+Run broader harness checks:
 
 ```bash
-./plans/tests/test_prd_lint.sh
-./plans/tests/test_prd_gate.sh
-./plans/tests/test_prd_audit_check.sh
-./plans/tests/test_update_task.sh
+./plans/test_verify_fork_smoke.sh
+./plans/workflow_verify.sh
 ```
