@@ -30,6 +30,7 @@ plans/prd_cache_check.py
 plans/prd_cache_update.py
 plans/prd_gate.sh
 plans/prd_preflight.sh
+plans/prd_set_pass.sh
 plans/preflight.sh
 plans/ralph.sh
 plans/ralph_day.sh
@@ -46,6 +47,7 @@ plans/tests/test_workflow_acceptance_fallback.sh
 plans/tests/test_workflow_allowlist_coverage.sh
 plans/verify.sh
 plans/verify_day.sh
+plans/verify_fork.sh
 plans/workflow_acceptance.sh
 plans/workflow_acceptance_parallel.sh
 plans/workflow_contract_gate.sh
@@ -74,6 +76,7 @@ specs/POLICY.md
 specs/SOURCE_OF_TRUTH.md
 specs/TRACE.yaml
 specs/WORKFLOW_CONTRACT.md
+specs/WORKFLOW_CONTRACT_RALPH.md
 specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
 tools/ci/lint_pr_template_sections.py
 tools/vendor_docs_lint_rust.py

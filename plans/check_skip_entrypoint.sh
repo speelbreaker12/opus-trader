@@ -2,48 +2,38 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERIFY_SH="$ROOT/plans/verify.sh"
-CHECKPOINT_LIB="$ROOT/plans/lib/verify_checkpoint.sh"
+VERIFY_FORK="$ROOT/plans/verify_fork.sh"
+VERIFY_WRAPPER="$ROOT/plans/verify.sh"
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
 
-[[ -f "$VERIFY_SH" ]] || fail "missing plans/verify.sh"
-[[ -f "$CHECKPOINT_LIB" ]] || fail "missing plans/lib/verify_checkpoint.sh"
+[[ -f "$VERIFY_WRAPPER" ]] || fail "missing plans/verify.sh"
+[[ -f "$VERIFY_FORK" ]] || fail "missing plans/verify_fork.sh"
 
-if ! rg -q '^[[:space:]]*decide_skip_gate\(\)' "$VERIFY_SH"; then
-  fail "verify.sh must define decide_skip_gate entrypoint"
+# Wrapper must exec verify_fork.sh
+if ! rg -q 'exec.*verify_fork\.sh' "$VERIFY_WRAPPER"; then
+  fail "verify.sh wrapper must exec verify_fork.sh"
 fi
 
-if rg -n '\bis_cache_eligible\b' "$VERIFY_SH" >/dev/null; then
-  fail "verify.sh must not call is_cache_eligible directly"
+# Fork verify must source shared logging utils.
+if ! rg -q 'source.*verify_utils\.sh' "$VERIFY_FORK"; then
+  fail "verify_fork.sh must source plans/lib/verify_utils.sh"
 fi
 
-if ! rg -q '^[[:space:]]*is_cache_eligible\(\)' "$CHECKPOINT_LIB"; then
-  fail "verify_checkpoint.sh must define is_cache_eligible()"
+# Checkpoint/skip-entrypoint logic is intentionally removed in fork mode.
+if rg -q '^[[:space:]]*decide_skip_gate\(\)' "$VERIFY_FORK"; then
+  fail "verify_fork.sh must not define decide_skip_gate() in fork mode"
 fi
 
-if ! rg -q '^[[:space:]]*checkpoint_decide_skip_gate\(\)' "$CHECKPOINT_LIB"; then
-  fail "verify_checkpoint.sh must define checkpoint_decide_skip_gate()"
+if rg -n 'source.*verify_checkpoint\.sh|source.*change_detection\.sh' "$VERIFY_FORK" >/dev/null; then
+  fail "verify_fork.sh must not source checkpoint/change-detection libs"
 fi
 
-# Structural guard (line-based, no function-body parsing):
-# 1) exactly one definition
-# 2) exactly one wrapper call
-# 3) exactly one entrypoint call pattern
-# 4) exactly three total references
-def_refs="$(rg -n '^[[:space:]]*is_cache_eligible\(\)[[:space:]]*\{' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
-[[ "$def_refs" == "1" ]] || fail "expected exactly one is_cache_eligible() definition (found $def_refs)"
+if rg -n '\bcheckpoint_decide_skip_gate\b|\bis_cache_eligible\b|\bVERIFY_CHECKPOINT_' "$VERIFY_FORK" >/dev/null; then
+  fail "verify_fork.sh must not reference checkpoint skip-entrypoint internals"
+fi
 
-wrapper_refs="$(rg -n '^[[:space:]]*is_cache_eligible[[:space:]]*$' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
-[[ "$wrapper_refs" == "1" ]] || fail "expected exactly one wrapper call to is_cache_eligible (found $wrapper_refs)"
-
-entry_refs="$(rg -n '^[[:space:]]*if ! is_cache_eligible; then$' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
-[[ "$entry_refs" == "1" ]] || fail "expected checkpoint_decide_skip_gate to call is_cache_eligible exactly once (found $entry_refs)"
-
-total_refs="$(rg -n '\bis_cache_eligible\b' "$CHECKPOINT_LIB" | wc -l | tr -d ' ')"
-[[ "$total_refs" == "3" ]] || fail "expected exactly three is_cache_eligible references total (found $total_refs)"
-
-echo "PASS: skip entrypoint guard"
+echo "PASS: fork verify skip-entrypoint guard"

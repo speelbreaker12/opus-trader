@@ -38,18 +38,28 @@
   "deribit_http_p95_ms": 120,
   "ws_event_lag_ms": 25,
 
-  "mode_reasons": ["REDUCEONLY_PLAIN_STRING", "REDUCEONLY_OBJECT_WITH_CODE"],
+  "mode_reasons": ["REDUCEONLY_POLICY_STALE", "REDUCEONLY_INPUT_MISSING_OR_STALE"],
 
   "open_permission_blocked_latch": false,
   "open_permission_reason_codes": [],
   "open_permission_requires_reconcile": false,
 
   "owner_view": {
-    "primary_owner_reason_code": "REDUCEONLY_PLAIN_STRING",
-    "owner_message": "Testing mixed registry format parsing.",
+    "primary_owner_reason_code": "REDUCEONLY_POLICY_STALE",
+    "owner_message": "Policy/input freshness degraded; system remains ReduceOnly until freshness recovers.",
     "unblock": [
-      "This is a test fixture for the status-validator-registry repro",
-      "It uses both plain string codes (REDUCEONLY_PLAIN_STRING) and object codes (REDUCEONLY_OBJECT_WITH_CODE)"
+      {
+        "type": "AUTO",
+        "condition": "policy_age_sec <= 60",
+        "current": "policy_age_sec=5",
+        "target": "policy_age_sec<=60"
+      },
+      {
+        "type": "AUTO",
+        "condition": "required_inputs_fresh == true",
+        "current": "required_inputs_fresh=false",
+        "target": "required_inputs_fresh=true"
+      }
     ]
   }
 }

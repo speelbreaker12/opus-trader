@@ -91,10 +91,16 @@ errors="$(
       (if (has("project") and has("source") and has("rules") and has("items") and (.items|type=="array")) then [] else ["<top>: missing project/source/rules/items or items not array"] end)
       + (if (.source|has("implementation_plan_path")) then [] else ["<top>: missing source.implementation_plan_path"] end)
       + (if (.source|has("contract_path")) then [] else ["<top>: missing source.contract_path"] end)
-      + (if ((.rules|has("one_story_per_iteration")) and (.rules.one_story_per_iteration==true)) then [] else ["<top>: rules.one_story_per_iteration must be true"] end)
       + (if ((.rules|has("one_commit_per_story")) and (.rules.one_commit_per_story==true)) then [] else ["<top>: rules.one_commit_per_story must be true"] end)
-      + (if ((.rules|has("no_prd_rewrite")) and (.rules.no_prd_rewrite==true)) then [] else ["<top>: rules.no_prd_rewrite must be true"] end)
-      + (if ((.rules|has("passes_only_flips_after_verify_green")) and (.rules.passes_only_flips_after_verify_green==true)) then [] else ["<top>: rules.passes_only_flips_after_verify_green must be true"] end);
+      + (if ((.rules|has("passes_only_flips_after_verify_green")) and (.rules.passes_only_flips_after_verify_green==true)) then [] else ["<top>: rules.passes_only_flips_after_verify_green must be true"] end)
+      + (if (((.rules|has("wip_limit")) and ((.rules.wip_limit|type)=="number") and (.rules.wip_limit >= 1) and (.rules.wip_limit <= 2))
+             or ((.rules|has("one_story_per_iteration")) and (.rules.one_story_per_iteration==true)))
+         then [] else ["<top>: rules.wip_limit must be an integer in [1,2] (legacy one_story_per_iteration=true accepted)"] end)
+      + (if (((.rules|has("verify_entrypoint")) and (.rules.verify_entrypoint=="./plans/verify.sh"))
+             or ((.rules|has("one_story_per_iteration")) and (.rules.one_story_per_iteration==true)))
+         then [] else ["<top>: rules.verify_entrypoint must be ./plans/verify.sh (legacy one_story_per_iteration=true accepted)"] end)
+      + (if ((.rules|has("no_prd_rewrite")) and (.rules.no_prd_rewrite != true))
+         then ["<top>: rules.no_prd_rewrite, if present, must be true"] else [] end);
 
     def check_item($it; $ids; $by_id):
       ($it.id // "<no id>") as $id

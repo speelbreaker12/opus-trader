@@ -1,6 +1,6 @@
-# ENTRYPOINTS.md — Ralph Repository Entry Points
+# ENTRYPOINTS.md — Repository Entry Points
 
-Generated: 2026-01-27
+Generated: 2026-02-08 (fork verify model)
 
 ---
 
@@ -16,37 +16,34 @@ ci.yml
 ├── python tools/ci/check_contract_profiles.py  # Profile tag check
 ├── python scripts/check_csp_trace.py          # CSP trace validation
 ├── python scripts/generate_impact_report.py   # Impact report
-└── ./plans/verify.sh full                     # Main verification gate
-    ├── bash -n plans/workflow_acceptance.sh   # Syntax check
-    ├── ./plans/workflow_acceptance.sh         # Acceptance tests
-    │   ├── ./plans/ralph.sh 1                 # Orchestrator (40+ test calls)
-    │   │   ├── ./plans/verify.sh              # Nested verify
-    │   │   ├── ./plans/prd_schema_check.sh    # PRD schema
-    │   │   ├── ./plans/update_task.sh         # Task mutation
-    │   │   ├── ./plans/contract_check.sh      # Contract validation
-    │   │   └── ./plans/contract_review_validate.sh
-    │   ├── ./plans/prd_pipeline.sh
-    │   ├── ./plans/prd_gate.sh
-    │   ├── ./plans/ssot_lint.sh
-    │   ├── ./plans/tests/*.sh
-    │   └── (many more utility scripts)
-    ├── python scripts/check_arch_flows.py
-    ├── python scripts/check_state_machines.py
-    ├── python scripts/check_global_invariants.py
-    ├── python scripts/check_time_freshness.py
-    ├── python scripts/check_crash_matrix.py
-    ├── python scripts/check_crash_replay_idempotency.py
-    ├── python scripts/check_reconciliation_matrix.py
-    ├── python scripts/check_vq_evidence.py
-    └── python scripts/check_contract_crossrefs.py
+└── ./plans/verify.sh full                     # Wrapper (execs verify_fork.sh)
+    └── ./plans/verify_fork.sh                 # Canonical verification (quick|full only)
+        ├── 01 preflight (plans/preflight.sh; POSTMORTEM_GATE=0)
+        ├── 02 contract_kernel (if docs/contract_kernel.json exists)
+        ├── 03 contract_coverage_matrix (plans/contract_coverage_matrix.py)
+        ├── 04-12 contract/spec validators (sequential)
+        │   ├── check_contract_crossrefs.py
+        │   ├── check_arch_flows.py
+        │   ├── check_state_machines.py
+        │   ├── check_global_invariants.py
+        │   ├── check_time_freshness.py
+        │   ├── check_crash_matrix.py
+        │   ├── check_crash_replay_idempotency.py
+        │   ├── check_reconciliation_matrix.py
+        │   └── check_csp_trace.py (strict when CONTRACT/TRACE changed)
+        ├── 13 status fixtures (tests/fixtures/status/**/*.json; sequential)
+        ├── 14 vendor_docs_lint (if rust + vendor config present)
+        ├── 15 rust gates (fmt + tests; clippy in full)
+        ├── 16 python gates (if python project present)
+        └── 17 node gates (if package.json present)
 ```
 
 ---
 
 ## 2. Human CLI Entrypoints
 
-### `./ralph [max_iters]`
-**Purpose:** Run the Ralph iteration loop
+### `./ralph [max_iters]` (legacy)
+**Purpose:** Legacy Ralph harness entrypoint (not canonical in fork workflow)
 **Canonical:** `plans/ralph.sh`
 
 ```
@@ -55,15 +52,14 @@ ralph (root)
     └── (full orchestrator logic)
 ```
 
-### `./verify.sh [quick|full|promotion]`
+### `./verify.sh [quick|full]`
 **Purpose:** Run verification gates
-**Canonical:** `plans/verify.sh`
-**Note:** Local `full`/`promotion` runs are blocked unless `VERIFY_ALLOW_LOCAL_FULL=1`.
+**Canonical:** `plans/verify.sh` (wrapper) → `plans/verify_fork.sh` (implementation)
 
 ```
 verify.sh (root)
 └── exec "$ROOT/plans/verify.sh" "$@"
-    └── (full verification logic)
+    └── exec "$ROOT/plans/verify_fork.sh" "$@"
 ```
 
 ### `./plans/verify_day.sh [args]`
