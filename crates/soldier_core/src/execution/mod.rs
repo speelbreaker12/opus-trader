@@ -6,6 +6,7 @@ pub mod order_size;
 pub mod post_only_guard;
 pub mod preflight;
 pub mod quantize;
+pub mod tlsm;
 
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
@@ -23,3 +24,4 @@ pub use preflight::{
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
 };
+pub use tlsm::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
