@@ -1,0 +1,14 @@
+{
+  "story_id": "S6-001",
+  "title": "Determinism Snapshot Test",
+  "contract_sections": ["CSP.2.1"],
+  "implementation_summary": "13 CI tests proving identical inputs produce identical outputs across 100 iterations for all intent pipeline components: quantize, chokepoint, pricer, net-edge, liquidity gate, label encoding, sid8/gid12 hashing, full pipeline, and HashMap ordering independence.",
+  "acceptance_tests": ["CSP.2.1"],
+  "test_count": 13,
+  "test_file": "crates/soldier_core/tests/test_intent_determinism.rs",
+  "verify_run_id": "20260208_225153",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2026-02-08T22:52:00Z"
+}
