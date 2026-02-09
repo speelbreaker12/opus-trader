@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Added phase timing breakdowns to Ralph iterations and introduced minimal log-level helpers for top-level warnings.
 - What value it has (what problem it solves, upgrade provides): Improves observability for iteration bottlenecks and makes key warnings easier to scan.

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Require PR reviews to enumerate file coverage; expand review checklist sections for coverage, workflow changes, and claims/data; add acceptance checks for review checklist sections.
 - What value it has (what problem it solves, upgrade provides): Makes review scope explicit, reduces missed files, and reinforces workflow change hygiene.

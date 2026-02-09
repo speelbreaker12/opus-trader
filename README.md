@@ -1,23 +1,26 @@
-# ralph-trader
+# opus-trader
 
-## Quickstart
+`opus-trader` uses a manual PRD worktree flow with a single verification source of truth.
 
-1) Run one-time bootstrap to scaffold the harness:
+## Canonical Entrypoints
 
-```bash
-./plans/bootstrap.sh
-```
+- `./plans/verify.sh quick` — fast local iteration checks.
+- `./plans/verify.sh full` — completion gate (required before `passes=true`).
 
-2) See `plans/README.md` for the harness workflow entrypoints.
+## WIP=2 Worktree Workflow
 
-3) Use the clean verify worktree for pushes/verification:
+At most two active story worktrees:
 
-```bash
-ralph-verify-push
-```
+1. One worktree in `VERIFYING` (running `./plans/verify.sh full`, frozen while it runs).
+2. One worktree in `IMPLEMENTING`/`REVIEW`.
 
-This keeps WIP intact and enforces clean-tree verification.
+Required story loop:
 
-## CI Note
+1. Implement in story worktree.
+2. Run `./plans/verify.sh quick`.
+3. Run Codex review (`./plans/codex_review_let_pass.sh <STORY_ID> --commit HEAD`).
+4. Run `./plans/verify.sh quick` again after review fixes.
+5. Freeze worktree and run `./plans/verify.sh full`.
+6. Flip pass using `./plans/prd_set_pass.sh <STORY_ID> true --artifacts artifacts/verify/<run_id>`.
 
-- Contract coverage strictness is enabled in CI after promotion. Run `./plans/contract_coverage_promote.sh` once you’re ready to enforce it.
+For full contract details, see `specs/WORKFLOW_CONTRACT.md`.

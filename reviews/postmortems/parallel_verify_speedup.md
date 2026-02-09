@@ -1,5 +1,7 @@
 # Postmortem: Parallel Verify Speedup
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 **Date**: 2026-01-31
 **Governing Contract**: Workflow (specs/WORKFLOW_CONTRACT.md)
 **Status**: Ready for review
@@ -21,7 +23,8 @@ Initial parallel implementation had several critical blockers:
    - Initial plan quoted $cmd thinking it was more secure
    - Code review found this breaks functionality (entire command becomes single arg → "command not found")
    - Root cause: Misunderstood that validation provides security, not quoting
-   - Fix: UNQUOTED $cmd + comprehensive character validation `[\;\`\$\(\)\&\|\>\<$'\n']`
+   - Fix: UNQUOTED $cmd + comprehensive character validation `[\;\`\$\(\)\&\|\>\<$'
+']`
    - Key insight: Validation before eval is what provides safety; quoting breaks word-splitting needed by run_logged
 
 3. **Timing summary sort (QUALITY)**: Used wrong delimiter (colon vs space)

@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Hardened Ralph loop integrity by reclaiming dead-PID locks immediately, enforcing post-story-verify HEAD/worktree invariants, adding duplicate WF-ID fail-closed checks, and refreshing stale tests/acceptance assertions.
 - What value it has (what problem it solves, upgrade provides): Reduces deadlock stalls, prevents unverified mutations after `verify_post`, and prevents workflow contract/map drift from silently passing.

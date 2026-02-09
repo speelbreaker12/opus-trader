@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Added a PR postmortem questionnaire and enforcement gate, plus new living workflow docs.
 - Contract/plan requirement satisfied: specs/WORKFLOW_CONTRACT.md WF-2.8/WF-2.9 (postmortem + enforcement).

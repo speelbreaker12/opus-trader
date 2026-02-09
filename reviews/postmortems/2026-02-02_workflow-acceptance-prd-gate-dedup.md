@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Removed redundant `prd_gate.sh` call from workflow acceptance preflight; added assertion that prd gate fixtures invoke `plans/prd_gate.sh`.
 - What value it has (what problem it solves, upgrade provides): Cuts unnecessary work in acceptance, reducing wall time without dropping coverage.

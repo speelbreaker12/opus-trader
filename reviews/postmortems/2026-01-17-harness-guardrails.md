@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Added explicit AGENTS.md harness guardrails + sink focus, enforced via workflow acceptance checks; fixed invalid canonical place value in a prior postmortem; refreshed contract coverage timestamp.
 - Contract/plan requirement satisfied: WF-2.2 verification mandatory + WF-11.1 workflow change control in specs/WORKFLOW_CONTRACT.md.

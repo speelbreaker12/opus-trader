@@ -102,9 +102,41 @@ check_file() {
 
 check_file "plans/prd.json" "PRD file"
 
-# Honor CONTRACT_FILE override (consistent with verify.sh/ralph.sh)
+# Honor CONTRACT_FILE override (consistent with verify.sh)
 CONTRACT_FILE="${CONTRACT_FILE:-specs/CONTRACT.md}"
 check_file "$CONTRACT_FILE" "Contract spec"
+
+# 3b. Legacy workflow/docs layout guard (fail-closed)
+LEGACY_LAYOUT_GUARD="plans/legacy_layout_guard.sh"
+if [[ -x "$LEGACY_LAYOUT_GUARD" ]]; then
+  if "$LEGACY_LAYOUT_GUARD"; then
+    pass "Legacy layout guard"
+  else
+    fail "Legacy layout guard failed"
+  fi
+elif [[ -f "$LEGACY_LAYOUT_GUARD" ]]; then
+  echo "[FAIL] Legacy layout guard not executable: $LEGACY_LAYOUT_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing legacy layout guard: $LEGACY_LAYOUT_GUARD (setup error)" >&2
+  exit 2
+fi
+
+# 3c. README/CI parity guard (fail-closed)
+README_CI_PARITY_GUARD="plans/readme_ci_parity_check.sh"
+if [[ -x "$README_CI_PARITY_GUARD" ]]; then
+  if "$README_CI_PARITY_GUARD"; then
+    pass "README/CI parity guard"
+  else
+    fail "README/CI parity guard failed"
+  fi
+elif [[ -f "$README_CI_PARITY_GUARD" ]]; then
+  echo "[FAIL] README/CI parity guard not executable: $README_CI_PARITY_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing README/CI parity guard: $README_CI_PARITY_GUARD (setup error)" >&2
+  exit 2
+fi
 
 # =============================================================================
 # Tier 2: Fast checks (<30s)

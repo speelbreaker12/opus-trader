@@ -1,32 +1,28 @@
 # Codebase Map: Stack
 
 ## Languages
-- Rust (edition 2024 in workspace crates).
-- Bash (plans harness scripts).
-- Python (plans tooling and CI tooling).
-- JSON/YAML/Markdown for configuration and docs.
 
-## Frameworks
-- None in code yet (Rust std + custom modules).
+- Rust (workspace crates)
+- Bash (workflow harness)
+- Python (spec/contract validators)
+- JSON/YAML/Markdown (specs, docs, schemas)
 
 ## Runtime
-- Rust standard library only; no async runtime in repo yet.
+
+- Rust std + local modules (no async runtime committed yet).
 
 ## Build and Tooling
-- Cargo workspace (`Cargo.toml` at repo root).
-- `./plans/verify.sh` is the canonical gate; `./plans/ralph.sh` is the harness loop.
-- CI sets up rustfmt and clippy (see `.github/workflows/ci.yml`).
+
+- Cargo workspace (`Cargo.toml`).
+- `./plans/verify.sh` is the canonical verification gate.
+- CI runs `./plans/verify.sh full`.
 
 ## Key Dependencies
-- `soldier_infra` depends on `soldier_core` (path dependency).
-- No external Rust crates declared yet.
 
-## Data Stores
-- None implemented yet.
+- `soldier_infra` depends on `soldier_core`.
+- Python validator tooling from repository scripts.
 
 ## Observability
-- `eprintln!` structured logs in core modules.
-- Atomic counters for simple metrics (instrument cache, unit mismatch).
 
-## Notes
-- TBD
+- verify artifacts in `artifacts/verify/<run_id>/`.
+- metrics/log counters in core modules.

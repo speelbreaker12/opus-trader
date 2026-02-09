@@ -1,5 +1,7 @@
 # Postmortem
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 Governing contract: Workflow (specs/WORKFLOW_CONTRACT.md)
 
 0) What shipped

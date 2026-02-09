@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Added quiet console mode for verify with artifact-first logs and failure excerpts.
 - Contract/plan requirement satisfied: specs/WORKFLOW_CONTRACT.md WF-8.2/WF-12.7 (VERIFY_SH_SHA first line) preserved while adding artifact-first logging.

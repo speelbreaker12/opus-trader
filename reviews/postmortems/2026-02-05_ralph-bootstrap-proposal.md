@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Added a workflow proposal for a bootstrap mode in `plans/proposals/2026-02-05_bootstrap_ralph_baseline.md` and logged it in `plans/ideas.md`.
 - What value it has (what problem it solves, upgrade provides): Captures a concrete, fail-closed design to unblock Ralph iterations when the workspace is intentionally missing, without relaxing promotion-grade verify.

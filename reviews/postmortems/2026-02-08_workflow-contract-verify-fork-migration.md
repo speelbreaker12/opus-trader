@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) What shipped
 - Feature/behavior: Replaced canonical workflow contract with a verify-fork/manual-WIP model, archived Ralph-era contract, rewired workflow contract map, added `plans/prd_set_pass.sh`, added `plans/verify_fork.sh`, and updated PRD schema rule semantics.
 - What value it has (what problem it solves, upgrade provides): Removes contract split-brain between fork workflow intent and Ralph-era enforcement assumptions; adds explicit fail-closed pass-flip checks based on verify artifacts.

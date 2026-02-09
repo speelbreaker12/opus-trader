@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Made verify change-aware and added workflow acceptance smoke/full modes to separate workflow vs product gates.
 - Contract/plan requirement satisfied: WF-5.5, WF-5.5.1, WF-12.7 (specs/WORKFLOW_CONTRACT.md).

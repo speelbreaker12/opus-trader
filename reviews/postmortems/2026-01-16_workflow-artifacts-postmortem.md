@@ -1,5 +1,7 @@
 # PR Postmortem (Agent-Filled)
 
+> ARCHIVAL NOTE (Legacy Workflow): This postmortem contains historical references to removed Ralph/workflow-acceptance components. Treat these references as archival context only.
+
 ## 0) One-line outcome
 - Outcome: Added required workflow artifacts to the contract, mapped new WF ids, and enforced presence in workflow acceptance.
 - Contract/plan requirement satisfied: WF-1.2 required artifacts list aligned with gates; WF-12.8 traceability kept in sync.
