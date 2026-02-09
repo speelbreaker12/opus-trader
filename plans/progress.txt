@@ -224,3 +224,9 @@ Summary: Added deterministic README/CI parity guard to enforce canonical verify 
 Commands: ./plans/readme_ci_parity_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/readme_ci_parity_check.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; artifacts/verify/20260208_144400.
 Next: None.
+Story: workflow-remediation
+Date: 2026-02-09 17:39:19 UTC
+Summary: Backfilled missing review evidence for all passes=true stories on run/slice1-clean lineage after initial implementation skipped self-review/Codex-review steps. Restored review-evidence harness scripts (self_review logger, story_review_gate, codex digest, postmortem logger), enforced story_review_gate inside prd_set_pass, added deterministic fixture tests and wired them into preflight/workflow checks.
+Commands: bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_codex_review_digest.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full; ./plans/self_review_logged.sh <ID> --decision PASS --head <HEAD>; ./plans/story_review_gate.sh <ID> --head <HEAD>; ./plans/prd_set_pass.sh <ID> true --artifacts-dir artifacts/verify/20260209_111707 --contract-review artifacts/verify/20260209_111707/contract_review.json.
+Evidence: plans/story_review_gate.sh; plans/self_review_logged.sh; plans/codex_review_digest.sh; plans/story_postmortem_logged.sh; plans/prd_set_pass.sh; plans/preflight.sh; plans/tests/test_story_review_gate.sh; plans/tests/test_codex_review_digest.sh; artifacts/verify/20260209_111707; artifacts/story/*/{self_review,codex,review_resolution.md}.
+Next: push branch and open PR; require CI ./plans/verify.sh full on clean checkout before merge.

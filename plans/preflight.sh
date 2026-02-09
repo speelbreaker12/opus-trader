@@ -15,7 +15,7 @@
 #   1 = validation failed
 #   2 = setup error (missing tools/files)
 #
-# Runtime target: <30 seconds
+# Runtime target: <60 seconds
 # =============================================================================
 
 set -euo pipefail
@@ -176,7 +176,25 @@ else
   exit 2
 fi
 
-# 6. Postmortem check: plans/postmortem_check.sh
+# 6. Fixture checks for review tooling scripts (fail-closed)
+REVIEW_FIXTURE_TESTS=(
+  "plans/tests/test_story_review_gate.sh"
+  "plans/tests/test_codex_review_digest.sh"
+)
+
+for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
+  if [[ -f "$fixture_test" ]]; then
+    if bash "$fixture_test" >/dev/null 2>&1; then
+      pass "Fixture test: $(basename "$fixture_test")"
+    else
+      fail "Fixture test failed: $fixture_test (run 'bash $fixture_test' for details)"
+    fi
+  else
+    setup_fail "Missing fixture test: $fixture_test"
+  fi
+done
+
+# 7. Postmortem check: plans/postmortem_check.sh
 POSTMORTEM_CHECK="plans/postmortem_check.sh"
 POSTMORTEM_GATE="${POSTMORTEM_GATE:-0}"
 

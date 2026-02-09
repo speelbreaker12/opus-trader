@@ -11,6 +11,10 @@ Defaults:
   --title "<STORY_ID>: Codex review"
   --out-root "${CODEX_ARTIFACTS_ROOT:-artifacts/story}"
 
+Artifacts:
+  - Raw review:   artifacts/story/<ID>/codex/<UTC_TS>_review.md
+  - Digest review: artifacts/story/<ID>/codex/<UTC_TS>_digest.md (best effort)
+
 Examples:
   plans/codex_review_logged.sh S1-004 --commit HEAD --title "S1-004: OrderSize canonical sizing"
   plans/codex_review_logged.sh S1-004 --uncommitted --title "S1-004: WIP review"
@@ -132,6 +136,15 @@ set +e
 "${cmd[@]}" 2>&1 | tee -a "$outfile"
 rc="${PIPESTATUS[0]}"
 set -e
+
+digest_script="$root/plans/codex_review_digest.sh"
+if [[ -x "$digest_script" ]]; then
+  if ! "$digest_script" "$outfile" >&2; then
+    echo "WARN: failed to generate digest for $outfile" >&2
+  fi
+else
+  echo "WARN: digest script not executable (skipping): $digest_script" >&2
+fi
 
 echo "Saved Codex review: $outfile" >&2
 exit "$rc"
