@@ -3,8 +3,10 @@
 //! AT-277: dispatcher mapping validates option sizing and amount field.
 
 use soldier_core::execution::{
-    DispatchMapError, IntentClass, OrderSize, OrderSizeInput, build_order_size, map_to_dispatch,
+    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, IntentClass, MismatchMetrics, OrderSize,
+    OrderSizeInput, build_order_size, map_to_dispatch, validate_and_dispatch,
 };
+use soldier_core::risk::RiskState;
 use soldier_core::venue::InstrumentKind;
 
 // ─── Amount field selection ─────────────────────────────────────────────
@@ -260,4 +262,249 @@ fn test_at277_perpetual_dispatch_roundtrip() {
     assert!(!req.reduce_only);
     assert!((size.qty_coin.unwrap() - 0.3).abs() < 1e-9);
     assert!((size.notional_usd - 30_000.0).abs() < 0.01);
+}
+
+// ─── AT-920: contracts/amount mismatch rejection ─────────────────────
+
+/// AT-920: consistent contracts/amount → dispatch succeeds, RiskState::Healthy
+#[test]
+fn test_at920_consistent_contracts_passes() {
+    let size = build_order_size(&OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: 3.0,
+        index_price: 100_000.0,
+        contract_multiplier: Some(1.0),
+    })
+    .unwrap();
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    let validated = result.unwrap();
+    assert!((validated.request.amount - 3.0).abs() < 1e-9);
+    assert_eq!(validated.risk_state, RiskState::Healthy);
+    assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+}
+
+/// AT-920: mismatched contracts/amount → rejected with ContractsAmountMismatch
+#[test]
+fn test_at920_mismatch_rejected() {
+    // contracts=10, multiplier=1.0 → implied=10.0, but canonical=3.0
+    // delta = |10 - 3| / 3 = 2.33 >> tolerance
+    let size = OrderSize {
+        contracts: Some(10),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    match result {
+        Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
+            assert!(delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE);
+        }
+        other => panic!("expected ContractsAmountMismatch, got {other:?}"),
+    }
+}
+
+/// AT-920: mismatch rejection increments counter
+#[test]
+fn test_at920_mismatch_increments_counter() {
+    let size = OrderSize {
+        contracts: Some(100),
+        qty_coin: Some(1.0),
+        qty_usd: None,
+        notional_usd: 100_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+
+    let _ = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    assert_eq!(metrics.reject_unit_mismatch_total(), 1);
+
+    // Second rejection increments again
+    let _ = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    assert_eq!(metrics.reject_unit_mismatch_total(), 2);
+}
+
+/// AT-920: no contracts → skip check, dispatch succeeds
+#[test]
+fn test_at920_no_contracts_skips_check() {
+    let size = OrderSize {
+        contracts: None,
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    assert!(result.is_ok());
+    assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+}
+
+/// AT-920: no contract_multiplier → skip check, dispatch succeeds
+#[test]
+fn test_at920_no_multiplier_skips_check() {
+    let size = OrderSize {
+        contracts: Some(3),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        None,
+        &mut metrics,
+    );
+    assert!(result.is_ok());
+    assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+}
+
+/// AT-920: perpetual mismatch (USD-sized) rejected
+#[test]
+fn test_at920_perpetual_mismatch_rejected() {
+    // contracts=100, multiplier=10.0 → implied=1000 USD, but canonical=30_000 USD
+    let size = OrderSize {
+        contracts: Some(100),
+        qty_coin: Some(0.3),
+        qty_usd: Some(30_000.0),
+        notional_usd: 30_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Perpetual,
+        IntentClass::Open,
+        Some(10.0),
+        &mut metrics,
+    );
+    match result {
+        Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
+            assert!(delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE);
+        }
+        other => panic!("expected ContractsAmountMismatch, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_unit_mismatch_total(), 1);
+}
+
+/// AT-920: mismatch within tolerance → passes
+#[test]
+fn test_at920_within_tolerance_passes() {
+    // contracts=3, multiplier=1.0 → implied=3.0
+    // canonical=3.0 → delta=0.0 (within tolerance)
+    let size = OrderSize {
+        contracts: Some(3),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    assert!(result.is_ok());
+    assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+}
+
+/// AT-920: mismatch delta is included in error for deterministic error propagation
+#[test]
+fn test_at920_delta_in_error() {
+    // contracts=5, multiplier=1.0 → implied=5.0, canonical=3.0
+    // delta = |5.0 - 3.0| / 3.0 = 0.6667
+    let size = OrderSize {
+        contracts: Some(5),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    match result {
+        Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
+            assert!(
+                (delta - 2.0 / 3.0).abs() < 1e-9,
+                "delta should be ~0.6667, got {delta}"
+            );
+        }
+        other => panic!("expected ContractsAmountMismatch, got {other:?}"),
+    }
+}
+
+/// AT-920: tolerance constant is 0.001
+#[test]
+fn test_at920_tolerance_constant() {
+    assert!(
+        (CONTRACTS_AMOUNT_MATCH_TOLERANCE - 0.001).abs() < 1e-12,
+        "tolerance must be 0.001 per CONTRACT.md"
+    );
+}
+
+/// AT-920: dispatch count 0 on mismatch (no DispatchRequest created)
+#[test]
+fn test_at920_no_dispatch_on_mismatch() {
+    let size = OrderSize {
+        contracts: Some(10),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0),
+        &mut metrics,
+    );
+    assert!(result.is_err(), "mismatch must prevent dispatch");
 }
