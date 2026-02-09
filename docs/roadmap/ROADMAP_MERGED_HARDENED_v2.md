@@ -63,22 +63,22 @@ So the roadmap protects the constraint:
 ### Outcome (non-coder version)
 Before we argue about features, we lock the **rules of the game**: what the bot is allowed to do, what “unsafe” means, and how we respond when things go wrong.
 
+Canonical Phase 0 checklist source: `docs/PHASE0_CHECKLIST_BLOCK.md`.
+If this file and the canonical checklist differ, the canonical checklist wins.
+
 ### Delivered artifacts
-- **Trading Policy** (allowed venues/instruments, max leverage, max delta/gamma/vega, max daily loss, max order rate, **micro-live caps**).
-- **TradingMode** defined (contract): `ACTIVE`, `REDUCE_ONLY`, `KILL`.
-- **DeploymentEnvironment** defined: `DEV`, `STAGING`, `PAPER`, `LIVE`.
-- **Key & Secrets policy**: separate keys per environment, least privilege, rotation plan.
-- **Ops baseline**: basic logs/metrics, alerts, and an incident runbook (kill-switch steps).
+- **Launch Policy** (`docs/launch_policy.md`) — allowed venues/instruments, order type constraints, risk limits, environments.
+- **Environment Matrix** (`docs/env_matrix.md`) — separate keys/accounts per env, permissions, secret storage.
+- **Keys & Secrets** (`docs/keys_and_secrets.md`) — least privilege, rotation plan, LIVE key protection.
+- **Break-Glass Runbook** (`docs/break_glass_runbook.md`) — stop-trading steps, verification, escalation.
+- **Health Endpoint** (`docs/health_endpoint.md`) — minimal health command/endpoint (`ok`, `build_id`, `contract_version`).
 
 ### Exit criteria (evidence pack)
-- `docs/trading_policy.md` (human-readable policy)
-- `config/trading_policy.(yaml|json)` (machine-readable limits **actually enforced** by the runtime)
-- `docs/runbook.md` (what to do on disconnects, mixed fills, PnL spikes, etc.)
-- `docs/secrets_and_access.md`
-- **Proof of binding + drills**
-  - A recorded **break-glass drill** (at least 1) showing: simulated runaway order attempt → forced `KILL` → verified **no further OPENs**; `REDUCE_ONLY` still permitted.
-  - A recorded **key-scope probe** showing keys are least-privilege (e.g., read-only key cannot trade; trading key cannot withdraw, etc.).
-- A **single command** to start the system in DEV/STAGING and print a `/health` style status (e.g., ok, build_id, contract_version; deployment_environment if available).
+- All required docs above exist.
+- `evidence/phase0/` contains required snapshots, key scope probe, break-glass drill artifacts, and health snapshot.
+- Break-glass drill evidence proves halt triggered and no further OPEN risk.
+- Key scope probe evidence proves least-privilege scopes and withdrawals disabled.
+- Health evidence and tests prove minimal health output (`ok`, `build_id`, `contract_version`).
 
 ---
 

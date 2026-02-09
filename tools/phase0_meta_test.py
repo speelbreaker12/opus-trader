@@ -9,6 +9,7 @@ This enforces that Phase 0 is not "paper-only":
 - Env matrix exists + snapshot
 - Keys/secrets doc exists + key scope probe JSON exists (valid)
 - Break-glass runbook exists + snapshot + executed drill record + logs
+- Health endpoint doc exists + snapshot
 - Evidence pack has owner summary + CI links placeholder
 
 Usage:
@@ -91,6 +92,7 @@ def main() -> int:
         root / "docs" / "env_matrix.md",
         root / "docs" / "keys_and_secrets.md",
         root / "docs" / "break_glass_runbook.md",
+        root / "docs" / "health_endpoint.md",
     ]
 
     # Required evidence files
@@ -103,6 +105,7 @@ def main() -> int:
         root / "evidence" / "phase0" / "break_glass" / "runbook_snapshot.md",
         root / "evidence" / "phase0" / "break_glass" / "drill.md",
         root / "evidence" / "phase0" / "break_glass" / "log_excerpt.txt",
+        root / "evidence" / "phase0" / "health" / "health_endpoint_snapshot.md",
     ]
 
     errors: List[str] = []

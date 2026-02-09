@@ -230,3 +230,10 @@ Summary: Backfilled missing review evidence for all passes=true stories on run/s
 Commands: bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_codex_review_digest.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full; ./plans/self_review_logged.sh <ID> --decision PASS --head <HEAD>; ./plans/story_review_gate.sh <ID> --head <HEAD>; ./plans/prd_set_pass.sh <ID> true --artifacts-dir artifacts/verify/20260209_111707 --contract-review artifacts/verify/20260209_111707/contract_review.json.
 Evidence: plans/story_review_gate.sh; plans/self_review_logged.sh; plans/codex_review_digest.sh; plans/story_postmortem_logged.sh; plans/prd_set_pass.sh; plans/preflight.sh; plans/tests/test_story_review_gate.sh; plans/tests/test_codex_review_digest.sh; artifacts/verify/20260209_111707; artifacts/story/*/{self_review,codex,review_resolution.md}.
 Next: push branch and open PR; require CI ./plans/verify.sh full on clean checkout before merge.
+Story: workflow-maintenance
+Date: 2026-02-09 23:18:21 UTC
+Summary: Aligned Phase 0 contract/docs/enforcement: removed Phase 0 `/status` requirement in contract in favor of minimal health fields, created canonical Phase 0 checklist file, replaced ROADMAP addendum with canonical reference, required health snapshot in phase0 meta-test, wired phase0 meta-test into verify gate flow, and added health snapshot evidence file.
+Commands: python3 scripts/build_contract_kernel.py; python3 tools/phase0_meta_test.py; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: specs/CONTRACT.md; docs/PHASE0_CHECKLIST_BLOCK.md; docs/ROADMAP.md; tools/phase0_meta_test.py; plans/verify_fork.sh; evidence/phase0/health/health_endpoint_snapshot.md; docs/contract_kernel.json; artifacts/verify/20260209_171439; artifacts/verify/20260209_171625.
+Notes: Verify runs completed with dirty-tree warning only; no VERIFY_ALLOW_DIRTY override used.
+Next: None.
