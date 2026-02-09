@@ -1,0 +1,28 @@
+# Sample Rejection Log — Intent ID Propagation
+# CONTRACT.md §0.Z.7.4: Every log/metric entry includes intent_id + run_id.
+#
+# Scenario: OPEN intent rejected at DispatchAuth (RiskState::Degraded)
+#
+# intent_id=intent-def-456 run_id=run-2026-002
+#   stage=chokepoint outcome=rejected reason=RiskStateNotHealthy
+#   gate_trace=[DispatchAuth]
+#   metrics: rejected_total=1, rejected_risk_state=1, approved_total=0
+#
+# Scenario: OPEN intent rejected at NetEdgeGate
+#
+# intent_id=intent-audit-789 run_id=run-audit-001
+#   stage=chokepoint outcome=rejected reason=GateRejected{gate=NetEdgeGate}
+#   gate_trace=[DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate]
+#   metrics: rejected_total=1, approved_total=0
+#
+# Scenario: Full approved pipeline
+#
+# intent_id=intent-abc-123 run_id=run-2026-001
+#   stage=quantize outcome=qty_q=1.5
+#   stage=pricer outcome=LimitPrice{limit_price=95.0}
+#   stage=net_edge outcome=allowed
+#   stage=chokepoint outcome=approved gates=8
+#   gate_trace=[DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate, Pricer, RecordedBeforeDispatch]
+#   metrics: approved_total=1, rejected_total=0
+#
+# Observation: All log entries within a single intent share the same intent_id and run_id.
