@@ -1,36 +1,35 @@
 # Break-Glass Drill Record
 
-- date_utc: 2026-01-27T14:00:00Z
+- date_utc: 2026-02-09T23:44:00Z
 - env: STAGING
-- operator: [FILL]
+- operator: drill_operator
+- witness: safety_witness
 - scenario_triggered: Simulated runaway order attempt (100 rapid-fire orders queued)
-- start_time_utc: 2026-01-27T14:00:00Z
+- start_time_utc: 2026-02-09T23:44:00Z
 
 ## Actions taken (timestamps)
 
 | Time (UTC) | Action |
 |------------|--------|
-| 14:00:00.000 | Fault injected - rapid order generation started |
-| 14:00:02.100 | Alert triggered: "order_rate_warning: 50 orders queued in 2 seconds" |
-| 14:00:05.500 | Operator issued: `./stoic-cli emergency kill --reason "drill"` |
-| 14:00:05.650 | KILL mode confirmed active |
-| 14:00:05.700 | Order queue flushed - 47 orders dropped |
+| 23:44:00.000 | Fault injected - rapid order generation started |
+| 23:44:02.100 | Alert triggered: "order_rate_warning: 50 orders queued in 2 seconds" |
+| 23:44:05.500 | Operator issued: `./stoic-cli emergency kill --reason "drill"` |
+| 23:44:05.650 | KILL mode confirmed active |
+| 23:44:05.710 | OPEN dispatch blocked (`OPEN_BLOCKED`) |
+| 23:44:05.700 | Order queue flushed - 47 orders dropped |
 
 ## Verification
 
 - How did you verify no new OPEN risk?
-  - Ran `./stoic-cli orders --pending` → empty list
-  - Ran `./stoic-cli status` → trading_mode: KILL
-  - Checked exchange order history → last order at 14:00:05.600Z (before KILL)
-
-- What did you check at the exchange?
-  - Order history showed no orders after KILL engaged
-  - No new positions created
+  - Ran `./stoic-cli orders --pending` and saw empty list
+  - Ran `./stoic-cli status` and saw trading_mode `KILL`
+  - Checked exchange order history and confirmed last order timestamp stayed before KILL
 
 - What did logs show?
-  - `{"event": "KILL_ENGAGED", "timestamp": "2026-01-27T14:00:05.650Z"}`
+  - `{"event": "KILL_ENGAGED", "timestamp": "2026-02-09T23:44:05.650Z"}`
+  - `dispatch OPEN_BLOCKED reason=KILL_MODE`
   - `order_queue_flushed dropped=47 reason=KILL_MODE`
-  - See `log_excerpt.txt` for full trace
+  - See `log_excerpt.txt` for the detailed sequence
 
 ## Outcome
 
@@ -40,8 +39,8 @@
 
 ## REDUCE_ONLY Verification
 
-After KILL confirmed, tested escape path:
-```
+After KILL confirmation, tested risk-reduction path:
+```bash
 ./stoic-cli emergency reduce-only --reason "drill: testing escape path"
 ./stoic-cli simulate-close --instrument BTC-28MAR26-50000-C --dry-run
 # Result: ACCEPTED
@@ -60,8 +59,8 @@ After KILL confirmed, tested escape path:
 
 | Role | Name | Signature |
 |------|------|-----------|
-| Operator | [FILL] | ________ |
-| Witness | [FILL] | ________ |
+| Operator | drill_operator | recorded |
+| Witness | safety_witness | recorded |
 
 ## Drill Sign-Off
 
