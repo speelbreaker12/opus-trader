@@ -1,17 +1,17 @@
 # Phase 0 CI Links / Build IDs
 
-Phase 0 is mostly MANUAL + recorded artifacts.
-AUTO tests are minimal (health endpoint only).
+Phase 0 is mostly MANUAL + recorded artifacts, with deterministic verify gates.
 
 ## CI runs
-- `phase0_meta_test.py` run: PASS (local, 2026-01-27)
-- `test_health_endpoint_returns_required_fields`: pending
-- `test_health_command_exits_zero_when_healthy`: pending
+- Local quick verify: PASS (`artifacts/verify/20260209_174607`)
+- Local full verify (dirty tree): PASS (`artifacts/verify/20260209_174800`)
+- Local full verify (clean detached worktree): PASS (commit `4dc48a2`, log: `/tmp/verify_clean_4dc48a2.log`)
+- PR CI full verify: pending until PR checks complete
 
 ## Build IDs / hashes used during Phase 0 proof
-- build_id: [FILL at sign-off]
-- commit: [FILL at sign-off]
-- notes: Phase 0 artifacts created and validated
+- build_id: local-4dc48a2
+- commit: 4dc48a2
+- notes: launch policy seams hardened, executable Phase-0 acceptance checks added, evidence refreshed
 
 ## MANUAL Gates (Evidence-Based)
 
@@ -21,4 +21,4 @@ AUTO tests are minimal (health endpoint only).
 | P0-B | `docs/env_matrix.md` + snapshot | YES |
 | P0-C | `docs/keys_and_secrets.md` + JSON probe | YES |
 | P0-D | `docs/break_glass_runbook.md` + drill | YES |
-| P0-E | `docs/health_endpoint.md` + AUTO tests | pending |
+| P0-E | `docs/health_endpoint.md` + AUTO tests | YES |
