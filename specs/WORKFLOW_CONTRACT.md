@@ -59,6 +59,8 @@ These files must exist in the fork and remain functional:
 
 Optional but recommended:
 - `plans/preflight.sh` (cheap early failure detector)
+- `plans/story_postmortem_logged.sh` (story-level postmortem artifact logger)
+- `plans/codex_review_digest.sh` (concise Codex digest artifact generator)
 - `reviews/REVIEW_CHECKLIST.md`
 - `SKILLS/failure-mode-review.md`, `SKILLS/strategic-failure-review.md`
 

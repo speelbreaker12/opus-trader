@@ -3,8 +3,8 @@
 Governing contract: workflow (`specs/WORKFLOW_CONTRACT.md`)
 
 ## 0) What shipped
-- Feature/behavior: Added a fail-closed story review evidence gate (`plans/story_review_gate.sh`) plus a self-review artifact logger (`plans/self_review_logged.sh`), and enforced this gate in `plans/prd_set_pass.sh` for `passes=true` flips.
-- What value it has (what problem it solves, upgrade provides): Prevents pass flips when review evidence is stale/missing for current `HEAD`, and ensures blocking/major/medium findings are explicitly resolved before PRD pass mutation.
+- Feature/behavior: Added a fail-closed story review evidence gate (`plans/story_review_gate.sh`) plus a self-review artifact logger (`plans/self_review_logged.sh`), enforced this gate in `plans/prd_set_pass.sh` for `passes=true` flips, and added postmortem/digest tooling (`plans/story_postmortem_logged.sh`, `plans/codex_review_digest.sh`) with auto-digest generation in `plans/codex_review_logged.sh`.
+- What value it has (what problem it solves, upgrade provides): Prevents pass flips when review evidence is stale/missing for current `HEAD`, ensures blocking/major/medium findings are explicitly resolved before PRD pass mutation, and makes Codex/postmortem evidence easier to consume without losing raw artifacts.
 
 ## 1) Constraint (ONE)
 - How it manifested (2-3 concrete symptoms): `passes=true` enforcement validated verify artifacts but did not require HEAD-matched review artifacts; review evidence checks were procedural/manual; stale review files could be mistaken for current approval.
@@ -56,6 +56,6 @@ Governing contract: workflow (`specs/WORKFLOW_CONTRACT.md`)
 
 ## Evidence (optional but recommended)
 - Command:
-  - `PREFLIGHT_TIMEOUT=60s ./plans/verify.sh full`
+  - `./plans/verify.sh full`
   - Key output: `=== VERIFY OK (mode=full) ===`
-  - Artifact/log path: `artifacts/verify/20260208_151445/`
+  - Artifact/log path: `artifacts/verify/20260208_180755/`

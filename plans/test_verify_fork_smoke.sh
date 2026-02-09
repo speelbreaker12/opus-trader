@@ -42,8 +42,11 @@ echo ""
 echo "1) Syntax checks"
 check "plans/verify.sh parses"        bash -n plans/verify.sh
 check "plans/verify_fork.sh parses"   bash -n plans/verify_fork.sh
+check "plans/codex_review_logged.sh parses" bash -n plans/codex_review_logged.sh
+check "plans/codex_review_digest.sh parses" bash -n plans/codex_review_digest.sh
 check "plans/prd_set_pass.sh parses"  bash -n plans/prd_set_pass.sh
 check "plans/self_review_logged.sh parses" bash -n plans/self_review_logged.sh
+check "plans/story_postmortem_logged.sh parses" bash -n plans/story_postmortem_logged.sh
 check "plans/story_review_gate.sh parses" bash -n plans/story_review_gate.sh
 check "plans/workflow_verify.sh parses" bash -n plans/workflow_verify.sh
 echo ""

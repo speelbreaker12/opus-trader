@@ -230,3 +230,9 @@ Summary: Added fail-closed story review evidence gate (`plans/story_review_gate.
 Commands: bash -n plans/*.sh .githooks/pre-push; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/test_verify_fork_smoke.sh; ./plans/workflow_verify.sh; PREFLIGHT_TIMEOUT=60s ./plans/verify.sh full.
 Evidence: plans/story_review_gate.sh; plans/self_review_logged.sh; plans/prd_set_pass.sh; specs/WORKFLOW_CONTRACT.md; artifacts/verify/20260208_151445.
 Next: Add a small fixture-based test for story_review_gate failure modes if recurring regressions appear.
+Story: workflow-maintenance
+Date: 2026-02-08
+Summary: Added optional story postmortem logger (`plans/story_postmortem_logged.sh`) and Codex digest generator (`plans/codex_review_digest.sh`); wired `plans/codex_review_logged.sh` to auto-generate digest artifacts after raw review capture; updated workflow verify checks, allowlist coverage, and workflow contract optional-tool docs.
+Commands: bash -n plans/*.sh .githooks/pre-push; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/test_verify_fork_smoke.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full; ./plans/story_postmortem_logged.sh S1-012 --out-root /tmp/story_postmortem_test --verify-artifacts artifacts/verify/20260208_180755; ./plans/codex_review_digest.sh /tmp/sample_codex_review.md --out /tmp/sample_codex_digest.md.
+Evidence: plans/story_postmortem_logged.sh; plans/codex_review_digest.sh; plans/codex_review_logged.sh; specs/WORKFLOW_CONTRACT.md; artifacts/verify/20260208_180755.
+Next: Optionally add a tiny fixture test for codex_review_digest parsing edge cases if output format changes.

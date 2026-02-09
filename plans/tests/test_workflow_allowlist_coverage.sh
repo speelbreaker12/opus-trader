@@ -38,7 +38,9 @@ required=(
   docs/validation_rules.md
   plans/autofix.sh
   plans/check_skip_entrypoint.sh
+  plans/codex_review_digest.sh
   plans/codex_review_let_pass.sh
+  plans/codex_review_logged.sh
   plans/contract_check.sh
   plans/contract_coverage_matrix.py
   plans/contract_coverage_promote.sh
@@ -56,6 +58,7 @@ required=(
   plans/readme_ci_parity_check.sh
   plans/self_review_logged.sh
   plans/ssot_lint.sh
+  plans/story_postmortem_logged.sh
   plans/story_review_gate.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
