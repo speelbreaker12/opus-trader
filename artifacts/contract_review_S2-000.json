@@ -1,0 +1,62 @@
+{
+  "selected_story_id": "S2-000",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.1.1 Canonical Quantization",
+    "CONTRACT.md AT-219",
+    "CONTRACT.md AT-908",
+    "CONTRACT.md AT-926"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/quantize.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_quantize.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to execution quantization within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_204923",
+      "115 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S2-000",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "qty_q = floor(raw_qty / amount_step) * amount_step",
+      "BUY price rounds down, SELL price rounds up (AT-219)",
+      "qty_q < min_amount → TooSmallAfterQuantization (AT-908)",
+      "Missing metadata → InstrumentMetadataMissing (AT-926)",
+      "quantization_reject_too_small_total counter increments",
+      "Integer qty_steps and price_ticks for downstream hashing"
+    ],
+    "evidence_found": [
+      "quantize() implements floor rounding for qty",
+      "BUY floor / SELL ceil for price ticks with tests proving never-worse",
+      "TooSmallAfterQuantization error with qty_q and min_amount fields",
+      "InstrumentMetadataMissing for zero/NaN/negative/infinity constraints",
+      "QuantizeMetrics tracks reject_too_small_total",
+      "QuantizedValues has i64 qty_steps and price_ticks"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Quantization implements CONTRACT.md §1.1.1 deterministic rounding rules",
+    "AT-219: BUY rounds down (never pay extra), SELL rounds up (never sell cheaper)",
+    "AT-908: too-small rejection with explicit error and counter metric",
+    "AT-926: fail-closed on missing/invalid instrument metadata",
+    "Integer tick/step values enable deterministic idempotency hashing"
+  ]
+}
