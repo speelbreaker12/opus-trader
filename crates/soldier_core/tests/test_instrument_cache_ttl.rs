@@ -7,7 +7,7 @@
 use std::time::{Duration, Instant};
 
 use soldier_core::risk::RiskState;
-use soldier_core::venue::{InstrumentCache, InstrumentKind, opens_blocked};
+use soldier_core::venue::{CacheTtlBreach, InstrumentCache, InstrumentKind, opens_blocked};
 
 // ─── Fresh vs stale ─────────────────────────────────────────────────────
 
@@ -283,4 +283,125 @@ fn test_cache_refresh_resets_staleness() {
         RiskState::Healthy,
         "refreshed cache should be healthy"
     );
+}
+
+// ─── S1-006: Observability hooks ────────────────────────────────────────
+
+/// instrument_cache_stale_total increments on each stale access
+#[test]
+fn test_stale_total_counter_increments() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+    assert_eq!(cache.stale_total(), 0);
+
+    // Fresh access → stale_total stays 0
+    cache.get_at("BTC-PERPETUAL", ttl_s, t0);
+    assert_eq!(cache.stale_total(), 0);
+
+    // Stale access → stale_total increments
+    let stale_time = t0 + Duration::from_secs(7200);
+    cache.get_at("BTC-PERPETUAL", ttl_s, stale_time);
+    assert_eq!(cache.stale_total(), 1);
+
+    // Another stale access → increments again
+    cache.get_at("BTC-PERPETUAL", ttl_s, stale_time);
+    assert_eq!(cache.stale_total(), 2);
+}
+
+/// CacheTtlBreach event emitted on stale access with correct fields
+#[test]
+fn test_ttl_breach_event_emitted_on_stale() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Fresh access → no breach
+    cache.get_at("BTC-PERPETUAL", ttl_s, t0);
+    let breaches = cache.drain_breaches();
+    assert!(breaches.is_empty(), "no breach on fresh access");
+
+    // Stale access → breach emitted
+    let stale_time = t0 + Duration::from_secs(7200);
+    cache.get_at("BTC-PERPETUAL", ttl_s, stale_time);
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), 1);
+    assert_eq!(breaches[0].instrument_id, "BTC-PERPETUAL");
+    assert!((breaches[0].age_s - 7200.0).abs() < 0.01);
+    assert!((breaches[0].ttl_s - 3600.0).abs() < 0.01);
+}
+
+/// drain_breaches clears the buffer
+#[test]
+fn test_drain_breaches_clears_buffer() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    let stale_time = t0 + Duration::from_secs(7200);
+    cache.get_at("BTC-PERPETUAL", 3600.0, stale_time);
+    cache.get_at("BTC-PERPETUAL", 3600.0, stale_time);
+
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), 2);
+
+    // After drain, buffer is empty
+    let breaches = cache.drain_breaches();
+    assert!(breaches.is_empty());
+}
+
+/// instrument_cache_refresh_errors_total increments on record_refresh_error
+#[test]
+fn test_refresh_errors_counter() {
+    let mut cache = InstrumentCache::new();
+    assert_eq!(cache.refresh_errors_total(), 0);
+
+    cache.record_refresh_error();
+    assert_eq!(cache.refresh_errors_total(), 1);
+
+    cache.record_refresh_error();
+    cache.record_refresh_error();
+    assert_eq!(cache.refresh_errors_total(), 3);
+}
+
+/// last_age_s gauge updates on every cache access
+#[test]
+fn test_last_age_s_gauge_updates() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+
+    // No lookups yet → None
+    assert_eq!(cache.last_age_s(), None);
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Lookup at t0 → age ~0
+    cache.get_at("BTC-PERPETUAL", 3600.0, t0);
+    let age = cache.last_age_s().unwrap();
+    assert!(age < 1.0, "age should be ~0 at insertion time");
+
+    // Lookup at t0+1800 → age ~1800
+    cache.get_at("BTC-PERPETUAL", 3600.0, t0 + Duration::from_secs(1800));
+    let age = cache.last_age_s().unwrap();
+    assert!((age - 1800.0).abs() < 0.01);
+}
+
+/// Breach event contains correct CacheTtlBreach struct fields
+#[test]
+fn test_breach_struct_fields() {
+    let breach = CacheTtlBreach {
+        instrument_id: "ETH-25JUN26".to_string(),
+        age_s: 4500.0,
+        ttl_s: 3600.0,
+    };
+    // Debug is derived — can be used in structured logging
+    let debug_str = format!("{breach:?}");
+    assert!(debug_str.contains("ETH-25JUN26"));
+    assert!(debug_str.contains("4500"));
+    assert!(debug_str.contains("3600"));
 }

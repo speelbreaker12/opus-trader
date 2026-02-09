@@ -7,6 +7,8 @@
 //! Observability (contract-bound names):
 //! - `instrument_cache_age_s` (gauge)
 //! - `instrument_cache_hits_total` (counter)
+//! - `instrument_cache_stale_total` (counter)
+//! - `instrument_cache_refresh_errors_total` (counter, optional but recommended)
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -29,6 +31,20 @@ pub struct CacheLookupResult {
     pub cache_age_s: f64,
 }
 
+/// Structured event emitted when a cache TTL breach is detected.
+///
+/// CONTRACT.md §1.0.X: callers SHOULD log this as a structured event
+/// `InstrumentCacheTtlBreach { instrument_id, age_s, ttl_s }`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheTtlBreach {
+    /// The instrument whose cache entry is stale.
+    pub instrument_id: String,
+    /// Actual cache age in seconds.
+    pub age_s: f64,
+    /// Configured TTL threshold that was exceeded.
+    pub ttl_s: f64,
+}
+
 /// A single cached instrument entry.
 #[derive(Debug, Clone)]
 struct CacheEntry {
@@ -48,6 +64,15 @@ pub struct InstrumentCache {
     entries: HashMap<String, CacheEntry>,
     /// Running count of cache hits (for `instrument_cache_hits_total` counter).
     hits_total: u64,
+    /// Running count of stale accesses (for `instrument_cache_stale_total` counter).
+    stale_total: u64,
+    /// Running count of metadata refresh errors
+    /// (for `instrument_cache_refresh_errors_total` counter).
+    refresh_errors_total: u64,
+    /// Most recent cache age observed (for `instrument_cache_age_s` gauge).
+    last_age_s: Option<f64>,
+    /// Pending TTL breach events for the caller to drain and log.
+    pending_breaches: Vec<CacheTtlBreach>,
 }
 
 impl Default for InstrumentCache {
@@ -62,6 +87,10 @@ impl InstrumentCache {
         Self {
             entries: HashMap::new(),
             hits_total: 0,
+            stale_total: 0,
+            refresh_errors_total: 0,
+            last_age_s: None,
+            pending_breaches: Vec::new(),
         }
     }
 
@@ -118,10 +147,19 @@ impl InstrumentCache {
         let age = now.saturating_duration_since(entry.inserted_at);
         let cache_age_s = age.as_secs_f64();
 
+        // Update gauge for instrument_cache_age_s observability.
+        self.last_age_s = Some(cache_age_s);
+
         // CONTRACT.md §1.0.X: metadata age "exceeding" instrument_cache_ttl_s
         // → Degraded. "exceeding" = strictly greater than (>), so age == ttl
         // is still Healthy.
         let risk_state = if cache_age_s > ttl_s {
+            self.stale_total += 1;
+            self.pending_breaches.push(CacheTtlBreach {
+                instrument_id: instrument_id.to_string(),
+                age_s: cache_age_s,
+                ttl_s,
+            });
             RiskState::Degraded
         } else {
             RiskState::Healthy
@@ -159,6 +197,40 @@ impl InstrumentCache {
     /// Total number of cache hits (for `instrument_cache_hits_total` counter).
     pub fn hits_total(&self) -> u64 {
         self.hits_total
+    }
+
+    /// Total number of stale accesses (for `instrument_cache_stale_total` counter).
+    pub fn stale_total(&self) -> u64 {
+        self.stale_total
+    }
+
+    /// Total number of metadata refresh errors
+    /// (for `instrument_cache_refresh_errors_total` counter).
+    pub fn refresh_errors_total(&self) -> u64 {
+        self.refresh_errors_total
+    }
+
+    /// Record a metadata refresh error.
+    ///
+    /// Call this when a `/public/get_instruments` request fails.
+    /// Increments `instrument_cache_refresh_errors_total`.
+    pub fn record_refresh_error(&mut self) {
+        self.refresh_errors_total += 1;
+    }
+
+    /// Most recent cache age observed (for `instrument_cache_age_s` gauge).
+    ///
+    /// Returns `None` if no lookups have been performed yet.
+    pub fn last_age_s(&self) -> Option<f64> {
+        self.last_age_s
+    }
+
+    /// Drain pending TTL breach events.
+    ///
+    /// Callers should log each `CacheTtlBreach` as a structured event
+    /// (e.g., via `tracing::warn!`). Draining clears the buffer.
+    pub fn drain_breaches(&mut self) -> Vec<CacheTtlBreach> {
+        std::mem::take(&mut self.pending_breaches)
     }
 
     /// Number of cached instruments.
