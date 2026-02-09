@@ -2,6 +2,7 @@
 
 pub mod dispatch_map;
 pub mod gate;
+pub mod gates;
 pub mod label;
 pub mod order_size;
 pub mod post_only_guard;
@@ -16,6 +17,9 @@ pub use dispatch_map::{
 pub use gate::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
     LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+};
+pub use gates::{
+    NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
 };
 pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
