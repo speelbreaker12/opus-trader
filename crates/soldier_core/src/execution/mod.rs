@@ -1,12 +1,17 @@
-//! Execution types, sizing logic, dispatch mapping, and quantization.
+//! Execution types, sizing logic, dispatch mapping, quantization, and labeling.
 
 pub mod dispatch_map;
+pub mod label;
 pub mod order_size;
 pub mod quantize;
 
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
     MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
+};
+pub use label::{
+    LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
+    encode_label,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use quantize::{
