@@ -1,5 +1,6 @@
 //! Execution types, sizing logic, dispatch mapping, quantization, labeling, and preflight.
 
+pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
 pub mod gates;
@@ -11,6 +12,10 @@ pub mod pricer;
 pub mod quantize;
 pub mod tlsm;
 
+pub use build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
+    build_order_intent,
+};
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
     MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
