@@ -1,8 +1,9 @@
-//! Execution types, sizing logic, dispatch mapping, quantization, and labeling.
+//! Execution types, sizing logic, dispatch mapping, quantization, labeling, and preflight.
 
 pub mod dispatch_map;
 pub mod label;
 pub mod order_size;
+pub mod preflight;
 pub mod quantize;
 
 pub use dispatch_map::{
@@ -14,6 +15,9 @@ pub use label::{
     encode_label,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
+pub use preflight::{
+    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult, preflight_intent,
+};
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
 };
