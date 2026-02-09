@@ -1,0 +1,62 @@
+{
+  "selected_story_id": "S4-002",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md Trade-ID Idempotency Registry (Ghost-Race Hardening)",
+    "AT-269",
+    "AT-270"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_infra/src/store/trade_id_registry.rs",
+      "crates/soldier_infra/src/store/mod.rs",
+      "crates/soldier_infra/tests/test_trade_id_registry.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to store module within soldier_infra"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_215755",
+      "276 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S4-002",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Duplicate trade_id returns NOOP (AT-270)",
+      "REST sweeper then WS duplicate ignored (AT-269)",
+      "Trade_id appended before applying updates",
+      "Insert-if-absent is atomic",
+      "trade_id_duplicates_total counter increments on duplicate",
+      "Record mapping: trade_id -> {group_id, leg_idx, ts, qty, price}"
+    ],
+    "evidence_found": [
+      "Duplicate trade_id returns InsertResult::Duplicate (test_at270_duplicate_trade_id_returns_duplicate)",
+      "Duplicate does not overwrite original (test_at270_duplicate_does_not_overwrite)",
+      "Multiple duplicates increment counter (test_at270_multiple_duplicates_increment_counter)",
+      "REST sweeper then WS replay is duplicate (test_at269_rest_sweeper_then_ws_duplicate)",
+      "insert_if_absent checks contains_key before insert (atomic single HashMap op)",
+      "trade_id_duplicates_total incremented on each duplicate",
+      "TradeRecord has all required fields (test_trade_record_has_all_required_fields)",
+      "14 tests covering dedupe, capacity, schema, and metrics"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Trade-ID registry matches CONTRACT.md Ghost-Race Hardening specification",
+    "Insert-if-absent prevents duplicate trade processing",
+    "Bounded capacity with fail-closed on overflow",
+    "trade_id_duplicates_total counter for observability"
+  ]
+}
