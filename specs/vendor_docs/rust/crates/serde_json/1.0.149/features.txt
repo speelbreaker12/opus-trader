@@ -1,0 +1,7 @@
+serde_json v1.0.149
+├── memchr v2.8.0
+├── serde_core v1.0.228
+├── itoa feature "default"
+│   └── itoa v1.0.17
+└── zmij feature "default"
+    └── zmij v1.0.20
