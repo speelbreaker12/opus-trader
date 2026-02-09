@@ -7,6 +7,7 @@ pub mod label;
 pub mod order_size;
 pub mod post_only_guard;
 pub mod preflight;
+pub mod pricer;
 pub mod quantize;
 pub mod tlsm;
 
@@ -29,6 +30,9 @@ pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size
 pub use post_only_guard::{PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only};
 pub use preflight::{
     OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult, preflight_intent,
+};
+pub use pricer::{
+    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, PricerSide, compute_limit_price,
 };
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
