@@ -1,0 +1,14 @@
+{
+  "story_id": "S6-004",
+  "title": "Gate Ordering Constraints",
+  "contract_sections": ["CSP.5.2", "RecordedBeforeDispatch", "VR-014"],
+  "implementation_summary": "8 new constraint tests proving: C1 reject gates before persist, C2 WAL is last gate for all intent classes, C3 no approval with any gate failed. docs/intent_gate_invariants.md documents 3 normative ordering constraints.",
+  "acceptance_tests": ["VR-014"],
+  "test_count": 8,
+  "test_file": "crates/soldier_core/tests/test_gate_ordering.rs",
+  "verify_run_id": "20260208_230626",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2026-02-08T23:08:00Z"
+}
