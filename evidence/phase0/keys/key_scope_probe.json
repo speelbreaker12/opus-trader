@@ -1,8 +1,8 @@
 {
   "probe_metadata": {
-    "probe_version": "1.0",
+    "probe_version": "1.1",
     "executed_by": "phase0_drill",
-    "timestamp_utc": "2026-01-27T13:00:00Z"
+    "timestamp_utc": "2026-02-09T23:30:00Z"
   },
   "probes": [
     {
@@ -10,29 +10,58 @@
       "exchange": "Deribit",
       "key_id": "key_staging_trade_***",
       "account": "testnet_acct_001",
-      "scopes": ["read", "trade"],
+      "scopes": [
+        "read_account",
+        "trade"
+      ],
       "withdraw_enabled": false,
       "transfer_enabled": false,
       "probe_results": {
-        "read_account": {"attempted": true, "result": "success"},
-        "place_order": {"attempted": true, "result": "success"},
-        "cancel_order": {"attempted": true, "result": "success"},
-        "withdraw": {"attempted": true, "result": "permission_denied", "error": "withdrawal not permitted for this key"}
+        "identity_check": {
+          "attempted": true,
+          "result": "success",
+          "matched_expected_account": true
+        },
+        "read_account": {
+          "attempted": true,
+          "result": "success"
+        },
+        "place_order": {
+          "attempted": true,
+          "result": "success"
+        },
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "withdrawal not permitted for this key"
+        }
       }
     },
     {
       "env": "PAPER",
       "exchange": "Deribit",
-      "key_id": "key_paper_trade_***",
-      "account": "paper_acct_001",
-      "scopes": ["read", "trade"],
+      "key_id": "N/A",
+      "account": "N/A",
+      "scopes": [
+        "public_market_data_only"
+      ],
       "withdraw_enabled": false,
       "transfer_enabled": false,
       "probe_results": {
-        "read_account": {"attempted": true, "result": "success"},
-        "place_order": {"attempted": true, "result": "success"},
-        "cancel_order": {"attempted": true, "result": "success"},
-        "withdraw": {"attempted": true, "result": "permission_denied", "error": "withdrawal not permitted for this key"}
+        "read_market_data": {
+          "attempted": true,
+          "result": "success"
+        },
+        "read_account": {
+          "attempted": false,
+          "result": "not_applicable",
+          "reason": "PAPER has no private key"
+        },
+        "place_order": {
+          "attempted": false,
+          "result": "not_applicable",
+          "reason": "PAPER has no trade-capable key"
+        }
       }
     },
     {
@@ -40,19 +69,42 @@
       "exchange": "Deribit",
       "key_id": "key_live_trade_***",
       "account": "prod_acct_001",
-      "scopes": ["read", "trade"],
+      "scopes": [
+        "read_account",
+        "trade"
+      ],
       "withdraw_enabled": false,
       "transfer_enabled": false,
       "probe_results": {
-        "read_account": {"attempted": true, "result": "success"},
-        "place_order": {"attempted": false, "result": "skipped", "reason": "LIVE probe limited to read-only verification"},
-        "cancel_order": {"attempted": false, "result": "skipped", "reason": "LIVE probe limited to read-only verification"},
-        "withdraw": {"attempted": true, "result": "permission_denied", "error": "withdrawal not permitted for this key"}
+        "identity_check": {
+          "attempted": true,
+          "result": "success",
+          "matched_expected_account": true
+        },
+        "read_account": {
+          "attempted": true,
+          "result": "success"
+        },
+        "place_order": {
+          "attempted": false,
+          "result": "skipped",
+          "reason": "LIVE probe limited to read-only verification"
+        },
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "withdrawal not permitted for this key"
+        }
       }
     }
   ],
   "summary": {
-    "total_keys_probed": 3,
+    "total_envs_reviewed": 3,
+    "trade_capable_envs": [
+      "STAGING",
+      "LIVE"
+    ],
+    "paper_trade_capability": false,
     "all_withdrawals_disabled": true,
     "all_transfers_disabled": true,
     "least_privilege_verified": true

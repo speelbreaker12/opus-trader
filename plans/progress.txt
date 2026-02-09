@@ -237,3 +237,16 @@ Commands: python3 scripts/build_contract_kernel.py; python3 tools/phase0_meta_te
 Evidence: specs/CONTRACT.md; docs/PHASE0_CHECKLIST_BLOCK.md; docs/ROADMAP.md; tools/phase0_meta_test.py; plans/verify_fork.sh; evidence/phase0/health/health_endpoint_snapshot.md; docs/contract_kernel.json; artifacts/verify/20260209_171439; artifacts/verify/20260209_171625.
 Notes: Verify runs completed with dirty-tree warning only; no VERIFY_ALLOW_DIRTY override used.
 Next: None.
+Story: S0-000/S0-phase0-acceptance-hardening
+Date: 2026-02-09
+Summary: Completed requested 3-part Phase 0 hardening pass: (1) patched launch policy seams (KILL/REDUCE_ONLY semantics, deterministic perp hedge rule, options product family, risk metric definitions, latched breach actions, micro-live exit gate), (2) verified/kept acceptance/checklist docs aligned with current Phase-0 contract naming, and (3) added explicit tests/phase0 acceptance test definition set; also updated phase0 meta-test to require those test definition files and refreshed launch policy snapshot.
+Commands: python3 tools/phase0_meta_test.py; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: docs/launch_policy.md; evidence/phase0/policy/launch_policy_snapshot.md; tests/phase0/README.md; tests/phase0/test_policy_is_required_and_bound.md; tests/phase0/test_api_keys_are_least_privilege.md; tests/phase0/test_break_glass_kill_blocks_open_allows_reduce.md; tools/phase0_meta_test.py; artifacts/verify/20260209_172635; artifacts/verify/20260209_172823; artifacts/verify/20260209_173338; artifacts/verify/20260209_173338.
+Next: none.
+Story: workflow-maintenance
+Date: 2026-02-09 23:43:12 UTC
+Summary: Applied high-leverage Phase 0 policy hardening to close PAPER->LIVE accidental-trade risk: PAPER is now non-trading/data-only in env matrix, key model split to TRADE_TESTNET vs TRADE_LIVE with PAPER trade keys forbidden, startup identity probe fail-closed control added, BREAK_GLASS_MANUAL marked runtime-inaccessible, and Phase 0 env/key evidence snapshots updated accordingly.
+Commands: python3 tools/phase0_meta_test.py; jq '.' evidence/phase0/keys/key_scope_probe.json; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: docs/env_matrix.md; docs/keys_and_secrets.md; evidence/phase0/env/env_matrix_snapshot.md; evidence/phase0/keys/key_scope_probe.json; artifacts/verify/20260209_173957; artifacts/verify/20260209_174125.
+Notes: Verify completed with dirty-tree warning only; no VERIFY_ALLOW_DIRTY override used.
+Next: None.
