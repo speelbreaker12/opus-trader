@@ -46,6 +46,7 @@ required=(
   plans/contract_coverage_promote.sh
   plans/contract_review_validate.sh
   plans/init.sh
+  plans/kimi_review_logged.sh
   plans/legacy_layout_guard.sh
   plans/prd_audit_check.sh
   plans/prd_audit_merge.py
@@ -56,6 +57,7 @@ required=(
   plans/prd_preflight.sh
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
+  plans/review_resolution_template.md
   plans/self_review_logged.sh
   plans/ssot_lint.sh
   plans/story_postmortem_logged.sh
@@ -64,7 +66,11 @@ required=(
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh
   plans/story_verify_allowlist_suggest.sh
+  plans/tests/test_codex_review_digest.sh
+  plans/tests/test_codex_review_logged.sh
+  plans/tests/test_kimi_review_logged.sh
   plans/tests/test_prd_cache.sh
+  plans/tests/test_story_review_gate.sh
   plans/verify.sh
   plans/verify_day.sh
   plans/verify_gate_contract_check.sh

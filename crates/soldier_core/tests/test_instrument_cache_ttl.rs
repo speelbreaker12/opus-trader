@@ -1,0 +1,454 @@
+//! Tests for InstrumentCache TTL enforcement.
+//!
+//! CONTRACT.md §1.0.X (Instrument Metadata Freshness):
+//! - AT-104: stale metadata blocks OPEN, allows CLOSE/HEDGE/CANCEL
+//! - instrument_cache_age_s vs instrument_cache_ttl_s comparison
+
+use std::time::{Duration, Instant};
+
+use soldier_core::risk::RiskState;
+use soldier_core::venue::{
+    CacheTtlBreach, InstrumentCache, InstrumentKind, MAX_PENDING_BREACH_EVENTS, opens_blocked,
+};
+
+// ─── Fresh vs stale ─────────────────────────────────────────────────────
+
+/// CONTRACT.md §1.0.X: fresh metadata → RiskState::Healthy
+#[test]
+fn test_fresh_instrument_cache_returns_healthy() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+    let ttl_s = 3600.0; // Appendix A default
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    // Access immediately (age=0) → fresh
+    let result = cache.get_at("BTC-PERPETUAL", ttl_s, now).unwrap();
+    assert_eq!(result.risk_state, RiskState::Healthy);
+    assert_eq!(result.instrument_kind, InstrumentKind::Perpetual);
+    assert!(result.cache_age_s < 1.0, "age should be ~0");
+}
+
+/// CONTRACT.md §1.0.X: stale metadata → RiskState::Degraded
+#[test]
+fn test_stale_instrument_cache_sets_degraded() {
+    let mut cache = InstrumentCache::new();
+    let insert_time = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, insert_time);
+
+    // Access 7200s later (age=7200 > ttl=3600) → stale
+    let check_time = insert_time + Duration::from_secs(7200);
+    let result = cache.get_at("BTC-PERPETUAL", ttl_s, check_time).unwrap();
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert!((result.cache_age_s - 7200.0).abs() < 0.01);
+}
+
+/// Edge case: cache age exactly at TTL boundary → still Healthy (not stale)
+#[test]
+fn test_cache_age_at_exact_ttl_is_healthy() {
+    let mut cache = InstrumentCache::new();
+    let insert_time = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("ETH-PERPETUAL", InstrumentKind::Perpetual, insert_time);
+
+    // Access at exactly ttl_s → boundary: age == ttl, not > ttl
+    let check_time = insert_time + Duration::from_secs(3600);
+    let result = cache.get_at("ETH-PERPETUAL", ttl_s, check_time).unwrap();
+    assert_eq!(
+        result.risk_state,
+        RiskState::Healthy,
+        "age == ttl should be Healthy (not stale until age > ttl)"
+    );
+}
+
+/// One tick past TTL → Degraded
+#[test]
+fn test_cache_age_one_second_past_ttl_is_degraded() {
+    let mut cache = InstrumentCache::new();
+    let insert_time = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-25JUN26", InstrumentKind::InverseFuture, insert_time);
+
+    let check_time = insert_time + Duration::from_secs(3601);
+    let result = cache.get_at("BTC-25JUN26", ttl_s, check_time).unwrap();
+    assert_eq!(result.risk_state, RiskState::Degraded);
+}
+
+/// Fail-closed: non-finite TTL values are treated as stale.
+#[test]
+fn test_nan_ttl_fails_closed_to_degraded() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    let result = cache.get_at("BTC-PERPETUAL", f64::NAN, now).unwrap();
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert!(opens_blocked(result.risk_state));
+}
+
+/// Fail-closed: infinite TTL values are treated as stale.
+#[test]
+fn test_infinite_ttl_fails_closed_to_degraded() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+    cache.insert_at("ETH-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    let pos_inf = cache.get_at("ETH-PERPETUAL", f64::INFINITY, now).unwrap();
+    assert_eq!(pos_inf.risk_state, RiskState::Degraded);
+
+    let neg_inf = cache
+        .get_at("ETH-PERPETUAL", f64::NEG_INFINITY, now)
+        .unwrap();
+    assert_eq!(neg_inf.risk_state, RiskState::Degraded);
+}
+
+// ─── Missing instrument ─────────────────────────────────────────────────
+
+/// Cache miss returns None (caller must handle — fail-closed pattern)
+#[test]
+fn test_missing_instrument_returns_none() {
+    let mut cache = InstrumentCache::new();
+    let result = cache.get_at("NONEXISTENT", 3600.0, Instant::now());
+    assert!(result.is_none(), "missing instrument must return None");
+}
+
+// ─── AT-104: stale blocks OPEN, allows CLOSE/HEDGE/CANCEL ───────────────
+
+/// AT-104: stale metadata → opens_blocked() returns true
+#[test]
+fn test_stale_cache_blocks_opens() {
+    let mut cache = InstrumentCache::new();
+    let insert_time = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, insert_time);
+
+    let check_time = insert_time + Duration::from_secs(7200);
+    let result = cache.get_at("BTC-PERPETUAL", ttl_s, check_time).unwrap();
+
+    // RiskState::Degraded → OPEN blocked
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert!(
+        opens_blocked(result.risk_state),
+        "OPEN must be blocked when cache is stale (AT-104)"
+    );
+}
+
+/// AT-104: fresh metadata → opens_blocked() returns false
+#[test]
+fn test_fresh_cache_allows_opens() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    let result = cache.get_at("BTC-PERPETUAL", 3600.0, now).unwrap();
+    assert_eq!(result.risk_state, RiskState::Healthy);
+    assert!(
+        !opens_blocked(result.risk_state),
+        "OPEN must be allowed when cache is fresh"
+    );
+}
+
+/// AT-104: opens_blocked is the sole gate; no closes_blocked function exists.
+/// CONTRACT.md §2.2.3: ReduceOnly blocks OPEN but CLOSE/HEDGE/CANCEL are
+/// architecturally ungated by this check — there is no closes_blocked().
+#[test]
+fn test_opens_blocked_is_sole_gate_closes_ungated() {
+    let degraded = RiskState::Degraded;
+    assert!(opens_blocked(degraded), "Degraded blocks opens");
+    // No closes_blocked function exists — closes pass through by design.
+    // Full dispatch eligibility for CLOSE in ReduceOnly is validated at
+    // the PolicyGuard integration level, not at the cache layer.
+}
+
+// ─── opens_blocked coverage ─────────────────────────────────────────────
+
+/// Table-driven: opens_blocked for all RiskState variants
+#[test]
+fn test_opens_blocked_all_risk_states() {
+    let cases = [
+        (RiskState::Healthy, false, "Healthy allows OPEN"),
+        (RiskState::Degraded, true, "Degraded blocks OPEN"),
+        (RiskState::Maintenance, true, "Maintenance blocks OPEN"),
+        (RiskState::Kill, true, "Kill blocks OPEN"),
+    ];
+    for (state, expected_blocked, label) in cases {
+        assert_eq!(opens_blocked(state), expected_blocked, "{label}");
+    }
+}
+
+// ─── Observability ──────────────────────────────────────────────────────
+
+/// instrument_cache_hits_total increments on each lookup
+#[test]
+fn test_cache_hits_counter_increments() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    assert_eq!(cache.hits_total(), 0);
+
+    cache.get_at("BTC-PERPETUAL", 3600.0, now);
+    assert_eq!(cache.hits_total(), 1);
+
+    cache.get_at("BTC-PERPETUAL", 3600.0, now);
+    assert_eq!(cache.hits_total(), 2);
+
+    // Misses do NOT increment the counter
+    cache.get_at("NONEXISTENT", 3600.0, now);
+    assert_eq!(cache.hits_total(), 2);
+}
+
+/// instrument_cache_age_s is deterministic (same inputs → same output)
+#[test]
+fn test_cache_age_deterministic() {
+    let mut cache = InstrumentCache::new();
+    let insert_time = Instant::now();
+    let check_time = insert_time + Duration::from_secs(1800);
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, insert_time);
+
+    let result1 = cache.get_at("BTC-PERPETUAL", 3600.0, check_time).unwrap();
+    let result2 = cache.get_at("BTC-PERPETUAL", 3600.0, check_time).unwrap();
+
+    assert_eq!(
+        result1.cache_age_s, result2.cache_age_s,
+        "cache age must be deterministic for same inputs"
+    );
+    assert!((result1.cache_age_s - 1800.0).abs() < 0.01);
+}
+
+// ─── risk_state_for (fail-closed convenience) ───────────────────────────
+
+/// Cache miss via risk_state_for → Degraded (fail-closed)
+#[test]
+fn test_risk_state_for_cache_miss_returns_degraded() {
+    let mut cache = InstrumentCache::new();
+    let state = cache.risk_state_for_at("NONEXISTENT", 3600.0, Instant::now());
+    assert_eq!(
+        state,
+        RiskState::Degraded,
+        "cache miss must fail-closed to Degraded"
+    );
+    assert!(
+        opens_blocked(state),
+        "OPEN must be blocked on cache miss (fail-closed)"
+    );
+}
+
+/// Cache hit via risk_state_for → delegates to freshness check
+#[test]
+fn test_risk_state_for_fresh_returns_healthy() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, now);
+    let state = cache.risk_state_for_at("BTC-PERPETUAL", 3600.0, now);
+    assert_eq!(state, RiskState::Healthy);
+}
+
+/// Cache hit via risk_state_for when stale → Degraded
+#[test]
+fn test_risk_state_for_stale_returns_degraded() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+    let state = cache.risk_state_for_at("BTC-PERPETUAL", 3600.0, t0 + Duration::from_secs(7200));
+    assert_eq!(state, RiskState::Degraded);
+}
+
+// ─── Multi-instrument independence ──────────────────────────────────────
+
+/// Multiple instruments tracked independently: one stale does not affect another
+#[test]
+fn test_multi_instrument_independence() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    // Insert BTC-PERPETUAL early, ETH-PERPETUAL later
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+    let t1 = t0 + Duration::from_secs(3000);
+    cache.insert_at("ETH-PERPETUAL", InstrumentKind::Perpetual, t1);
+
+    // Check at t0+4000: BTC is stale (age=4000>3600), ETH is fresh (age=1000<3600)
+    let check = t0 + Duration::from_secs(4000);
+    let btc = cache.get_at("BTC-PERPETUAL", ttl_s, check).unwrap();
+    let eth = cache.get_at("ETH-PERPETUAL", ttl_s, check).unwrap();
+
+    assert_eq!(btc.risk_state, RiskState::Degraded, "BTC should be stale");
+    assert_eq!(eth.risk_state, RiskState::Healthy, "ETH should be fresh");
+    assert_eq!(cache.len(), 2);
+}
+
+// ─── Cache operations ───────────────────────────────────────────────────
+
+/// Cache update refreshes timestamp (re-insert makes entry fresh again)
+#[test]
+fn test_cache_refresh_resets_staleness() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    // Insert at t0
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Check at t0+7200 → stale
+    let t1 = t0 + Duration::from_secs(7200);
+    let result = cache.get_at("BTC-PERPETUAL", ttl_s, t1).unwrap();
+    assert_eq!(result.risk_state, RiskState::Degraded);
+
+    // Re-insert at t1 (refresh)
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t1);
+
+    // Check at t1 → fresh again
+    let result = cache.get_at("BTC-PERPETUAL", ttl_s, t1).unwrap();
+    assert_eq!(
+        result.risk_state,
+        RiskState::Healthy,
+        "refreshed cache should be healthy"
+    );
+}
+
+// ─── S1-006: Observability hooks ────────────────────────────────────────
+
+/// instrument_cache_stale_total increments on each stale access
+#[test]
+fn test_stale_total_counter_increments() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+    assert_eq!(cache.stale_total(), 0);
+
+    // Fresh access → stale_total stays 0
+    cache.get_at("BTC-PERPETUAL", ttl_s, t0);
+    assert_eq!(cache.stale_total(), 0);
+
+    // Stale access → stale_total increments
+    let stale_time = t0 + Duration::from_secs(7200);
+    cache.get_at("BTC-PERPETUAL", ttl_s, stale_time);
+    assert_eq!(cache.stale_total(), 1);
+
+    // Another stale access → increments again
+    cache.get_at("BTC-PERPETUAL", ttl_s, stale_time);
+    assert_eq!(cache.stale_total(), 2);
+}
+
+/// CacheTtlBreach event emitted on stale access with correct fields
+#[test]
+fn test_ttl_breach_event_emitted_on_stale() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Fresh access → no breach
+    cache.get_at("BTC-PERPETUAL", ttl_s, t0);
+    let breaches = cache.drain_breaches();
+    assert!(breaches.is_empty(), "no breach on fresh access");
+
+    // Stale access → breach emitted
+    let stale_time = t0 + Duration::from_secs(7200);
+    cache.get_at("BTC-PERPETUAL", ttl_s, stale_time);
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), 1);
+    assert_eq!(breaches[0].instrument_id, "BTC-PERPETUAL");
+    assert!((breaches[0].age_s - 7200.0).abs() < 0.01);
+    assert!((breaches[0].ttl_s - 3600.0).abs() < 0.01);
+}
+
+/// drain_breaches clears the buffer
+#[test]
+fn test_drain_breaches_clears_buffer() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    let stale_time = t0 + Duration::from_secs(7200);
+    cache.get_at("BTC-PERPETUAL", 3600.0, stale_time);
+    cache.get_at("BTC-PERPETUAL", 3600.0, stale_time);
+
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), 2);
+
+    // After drain, buffer is empty
+    let breaches = cache.drain_breaches();
+    assert!(breaches.is_empty());
+}
+
+/// Pending breach queue is capped to avoid unbounded memory growth.
+#[test]
+fn test_pending_breaches_queue_is_capped() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    let stale_time = t0 + Duration::from_secs(7200);
+    let total_events = MAX_PENDING_BREACH_EVENTS + 25;
+    for _ in 0..total_events {
+        cache.get_at("BTC-PERPETUAL", 3600.0, stale_time);
+    }
+
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), MAX_PENDING_BREACH_EVENTS);
+}
+
+/// instrument_cache_refresh_errors_total increments on record_refresh_error
+#[test]
+fn test_refresh_errors_counter() {
+    let mut cache = InstrumentCache::new();
+    assert_eq!(cache.refresh_errors_total(), 0);
+
+    cache.record_refresh_error();
+    assert_eq!(cache.refresh_errors_total(), 1);
+
+    cache.record_refresh_error();
+    cache.record_refresh_error();
+    assert_eq!(cache.refresh_errors_total(), 3);
+}
+
+/// last_age_s gauge updates on every cache access
+#[test]
+fn test_last_age_s_gauge_updates() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+
+    // No lookups yet → None
+    assert_eq!(cache.last_age_s(), None);
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Lookup at t0 → age ~0
+    cache.get_at("BTC-PERPETUAL", 3600.0, t0);
+    let age = cache.last_age_s().unwrap();
+    assert!(age < 1.0, "age should be ~0 at insertion time");
+
+    // Lookup at t0+1800 → age ~1800
+    cache.get_at("BTC-PERPETUAL", 3600.0, t0 + Duration::from_secs(1800));
+    let age = cache.last_age_s().unwrap();
+    assert!((age - 1800.0).abs() < 0.01);
+}
+
+/// Breach event contains correct CacheTtlBreach struct fields
+#[test]
+fn test_breach_struct_fields() {
+    let breach = CacheTtlBreach {
+        instrument_id: "ETH-25JUN26".to_string(),
+        age_s: 4500.0,
+        ttl_s: 3600.0,
+    };
+    // Debug is derived — can be used in structured logging
+    let debug_str = format!("{breach:?}");
+    assert!(debug_str.contains("ETH-25JUN26"));
+    assert!(debug_str.contains("4500"));
+    assert!(debug_str.contains("3600"));
+}

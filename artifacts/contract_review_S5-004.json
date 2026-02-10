@@ -1,0 +1,14 @@
+{
+  "story_id": "S5-004",
+  "title": "Single chokepoint gate ordering",
+  "contract_sections": ["CSP.5.2"],
+  "implementation_summary": "build_order_intent() is the single chokepoint for all dispatch. Enforces deterministic gate ordering (1-8): DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate, Pricer, RecordedBeforeDispatch. OPEN intents require all 8 gates. CLOSE/HEDGE skip gates 5-7. CANCEL-only exits after DispatchAuth. RiskState != Healthy blocks OPEN at gate 1.",
+  "acceptance_tests": ["AT-501", "AT-502", "AT-503", "AT-504", "AT-505", "AT-506"],
+  "test_count": 25,
+  "test_file": "crates/soldier_core/tests/test_gate_ordering.rs",
+  "verify_run_id": "20260208_223746",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2025-02-08T22:37:46Z"
+}

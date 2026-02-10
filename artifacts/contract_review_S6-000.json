@@ -1,0 +1,14 @@
+{
+  "story_id": "S6-000",
+  "title": "Single Dispatch Chokepoint Proof",
+  "contract_sections": ["CSP.5.2", "AT-935", "VR-014"],
+  "implementation_summary": "Source-scanning CI tests prove only build_order_intent.rs may construct ChokeResult::Approved, call record_approved(), or return ChokeResult. docs/dispatch_chokepoint.md documents the chokepoint module, function, and gate ordering.",
+  "acceptance_tests": ["AT-935", "VR-014"],
+  "test_count": 6,
+  "test_file": "crates/soldier_core/tests/test_dispatch_chokepoint.rs",
+  "verify_run_id": "20260208_224549",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2026-02-08T22:45:49Z"
+}

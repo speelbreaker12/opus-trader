@@ -1,0 +1,54 @@
+{
+  "selected_story_id": "S5-003",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.4 Fee-Aware IOC Limit Pricer (No Market Orders)",
+    "AT-223"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/pricer.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_pricer.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": ["All changes scoped to execution module within soldier_core"]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": ["Full verify passed, 349 workspace tests pass, clippy clean, fmt clean"]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S5-003",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Limit price clamped to max_price_for_min_edge (AT-223)",
+      "Realized edge at limit_price >= min_edge_usd",
+      "net_edge < min_edge → reject"
+    ],
+    "evidence_found": [
+      "Buy limit clamped to max_price_for_min_edge (test_at223_buy_limit_clamped_to_min_edge)",
+      "Sell limit clamped (test_at223_sell_limit_clamped_to_min_edge)",
+      "Realized edge at limit >= min_edge for buy (test_at223_realized_edge_at_limit_ge_min_edge)",
+      "Realized edge at limit >= min_edge for sell (test_at223_sell_realized_edge_at_limit_ge_min_edge)",
+      "Net edge too low rejected (test_net_edge_too_low_rejected)",
+      "Negative net edge rejected (test_negative_net_edge_rejected)",
+      "Invalid qty rejected (test_zero_qty_rejected, test_negative_qty_rejected)",
+      "Multi-unit quantity correct (test_multi_unit_buy)",
+      "11 tests covering all acceptance criteria"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Pricer matches CONTRACT.md §1.4 specification",
+    "Limit price clamped to guarantee min edge at fill",
+    "No market order fallback — always produces limit price",
+    "Reject when net edge insufficient"
+  ]
+}

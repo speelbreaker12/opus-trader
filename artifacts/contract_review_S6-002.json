@@ -1,0 +1,14 @@
+{
+  "story_id": "S6-002",
+  "title": "No Partial Side Effects on Rejection",
+  "contract_sections": ["AT-201", "RecordedBeforeDispatch"],
+  "implementation_summary": "10 CI tests prove rejected intents produce zero persistent state changes (WAL, orders, positions, exposure). Only metrics counters change. Covers RiskState, preflight, quantize, net-edge, pricer, WAL gate, invalid metadata, stop order, and multiple sequential rejections.",
+  "acceptance_tests": ["AT-201"],
+  "test_count": 10,
+  "test_file": "crates/soldier_core/tests/test_rejection_side_effects.rs",
+  "verify_run_id": "20260208_225540",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2026-02-08T22:58:00Z"
+}

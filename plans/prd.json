@@ -485,7 +485,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -631,7 +631,7 @@
       "est_size": "XS",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -703,7 +703,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md instrument_kind: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).",
@@ -790,7 +790,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
@@ -892,7 +892,7 @@
       "est_size": "XS",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
@@ -997,7 +997,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md OrderSize struct (MUST implement):",
@@ -1089,7 +1089,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
@@ -1175,7 +1175,7 @@
       "est_size": "XS",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md If a mismatch is detected: **reject the intent** and set `RiskState::Degraded`",
@@ -1396,7 +1396,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)",
@@ -1488,7 +1488,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1 Labeling & Idempotency Contract",
@@ -1569,7 +1569,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md §1.1 Labeling & Idempotency Contract",
@@ -1662,7 +1662,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
@@ -1783,7 +1783,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
@@ -1879,7 +1879,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
@@ -1978,7 +1978,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
@@ -2073,7 +2073,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 2.4 Durable Intent Ledger (WAL Truth Source)",
@@ -2175,7 +2175,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 2.1 Trade Lifecycle State Machine (TLSM)",
@@ -2260,7 +2260,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md Trade-ID Idempotency Registry (Ghost-Race Hardening)",
@@ -2356,7 +2356,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "RecordedBeforeDispatch is mandatory. DurableBeforeDispatch is required when the durability barrier flag is enabled.",
@@ -2463,7 +2463,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "Reject if slippage_bps > max_slippage_bps (default 10bps).",
@@ -2579,7 +2579,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "Hard stale (age > fee_cache_hard_s): set RiskState::Degraded.",
@@ -2690,7 +2690,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd.",
@@ -2785,7 +2785,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "Final limit clamped to guarantee min edge at the limit price.",
@@ -2882,7 +2882,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [
         {
           "quote": "This gate MUST run before any OrderIntent is eligible for dispatch.",
@@ -2976,7 +2976,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -3047,7 +3047,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -3120,7 +3120,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -3187,7 +3187,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -3268,7 +3268,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -3340,7 +3340,7 @@
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {
@@ -3414,7 +3414,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": false,
+      "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [],
       "reason_codes": {

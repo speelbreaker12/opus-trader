@@ -1,0 +1,7 @@
+{
+  "crate": "serde_json",
+  "version": "1.0.149",
+  "cargo_lock_sha256": "d0924621ba8311e98aa71e664eec5d5923d7551a41a35e95be5c170cf019a128",
+  "topics": ["value", "streaming", "errors"],
+  "notes": "Added for DeribitInstrument deserialization tests (S1-011, AT-333)"
+}

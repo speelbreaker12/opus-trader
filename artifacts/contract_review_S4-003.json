@@ -1,0 +1,63 @@
+{
+  "selected_story_id": "S4-003",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §2.4 Durable Intent Ledger",
+    "CONTRACT.md §2.4.1 WAL Writer Isolation (Hot Loop Protection)",
+    "AT-935",
+    "AT-906"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_infra/src/wal.rs",
+      "crates/soldier_infra/src/lib.rs",
+      "crates/soldier_infra/tests/test_dispatch_durability.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to soldier_infra, no soldier_core or deribit touched"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_220351",
+      "287 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S4-003",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Barrier enabled: WAL returns only after durability marker (fsync)",
+      "Barrier disabled: WAL returns immediately after enqueue",
+      "Enqueue failure returns error, increments wal_write_errors, does not block",
+      "Config flag require_wal_fsync_before_dispatch controls behavior",
+      "Barrier wait time surfaced for observability"
+    ],
+    "evidence_found": [
+      "Barrier enabled: fsync_applied=true, barrier_wait recorded (test_barrier_enabled_fsync_applied)",
+      "Barrier disabled: fsync_applied=false, barrier_wait_ms=0 (test_barrier_disabled_returns_immediately)",
+      "Queue full returns LedgerAppendError::QueueFull, no block (test_queue_full_returns_error_not_block)",
+      "wal_write_errors incremented on failure (test_queue_full_increments_wal_write_errors)",
+      "No barrier wait when append fails (test_queue_full_no_barrier_wait)",
+      "WalBarrierConfig default has fsync disabled (test_config_default_disabled)",
+      "BarrierMetrics tracks barrier_wait_ms_total and count (test_barrier_enabled_records_wait_time)",
+      "RecordedBeforeDispatch verified for both configs (test_recorded_before_dispatch_on_success)",
+      "11 tests covering all acceptance criteria"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Durable-append barrier matches CONTRACT.md §2.4 specification",
+    "Config flag controls fsync vs immediate return",
+    "Append failure is fail-closed: error returned, never blocks (§2.4.1)",
+    "Barrier wait time tracked for observability"
+  ]
+}

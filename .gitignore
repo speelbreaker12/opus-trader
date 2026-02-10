@@ -3,6 +3,7 @@ target/
 plans/logs/
 plans/progress_archive.txt
 artifacts/verify/
+artifacts/story/
 artifacts/autofix/
 patches/
 .DS_Store

@@ -5,9 +5,9 @@
 
 ## Metadata
 - doc_id: BG-001
-- version: 1.0
+- version: 1.1
 - contract_version_target: 5.2
-- last_updated_utc: 2026-01-27T14:00:00Z
+- last_updated_utc: 2026-02-10T02:00:00Z
 
 ---
 
@@ -56,7 +56,7 @@ Use if CLI is unavailable or unresponsive:
 **Step 2: Confirm API auth fails**
 ```bash
 ./stoic-cli health
-# Should show exchange connection failed
+# Should show policy/config/auth error and exit non-zero
 ```
 
 **Step 3: Manually cancel orders on exchange UI**
@@ -72,7 +72,6 @@ After triggering break-glass, verify:
 |-------|---------|-----------------|
 | No pending orders | `./stoic-cli orders --pending` | Empty list |
 | No orders in flight | `./stoic-cli status --detailed` | orders_in_flight: 0 |
-| Exchange reconciled | `./stoic-cli reconcile --check-only` | "No discrepancies" |
 | Mode is KILL | `./stoic-cli status` | trading_mode: KILL |
 
 ---
@@ -92,10 +91,9 @@ Even in emergency, we must be able to reduce risk:
 # Should show: ACCEPTED
 ```
 
-**Step 3: Execute risk reduction**
-```bash
-./stoic-cli close-position --instrument <INSTRUMENT>
-```
+**Step 3: Execute risk reduction (Phase 0 scope)**
+- Use the venue/exchange close workflow or your strategy's explicit risk-reducing path.
+- `stoic-cli` in Phase 0 provides dry-run verification (`simulate-close`) only.
 
 **Step 4: Restore KILL mode after reduction**
 ```bash
@@ -125,7 +123,7 @@ Even in emergency, we must be able to reduce risk:
 
 - Timestamps (UTC) of all actions
 - Screenshots of exchange state
-- Log excerpts: `./stoic-cli logs export --since "1 hour ago"`
+- Log excerpts from system/venue logs for the incident window
 - Current positions and orders
 
 ---
@@ -149,7 +147,7 @@ Even in emergency, we must be able to reduce risk:
 │                                                 │
 │ REDUCE EXPOSURE:                                │
 │   ./stoic-cli emergency reduce-only             │
-│   ./stoic-cli close-position --instrument X     │
+│   ./stoic-cli simulate-close --instrument X --dry-run │
 │                                                 │
 │ ESCALATE:                                       │
 │   P1: Call [PRIMARY PHONE]                      │

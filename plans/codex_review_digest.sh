@@ -39,7 +39,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd -P)"
 if [[ "$raw_file" != /* ]]; then
   raw_file="$repo_root/$raw_file"
 fi

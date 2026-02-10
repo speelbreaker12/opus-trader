@@ -1,0 +1,53 @@
+{
+  "selected_story_id": "S5-002",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.4.1 Net Edge Gate (Fees + Expected Slippage)",
+    "AT-015", "AT-932"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/gates.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_net_edge_gate.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": ["All changes scoped to execution module within soldier_core"]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": ["Full verify passed, 338 workspace tests pass, clippy clean, fmt clean"]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S5-002",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "net_edge_usd < min_edge_usd → Rejected(NetEdgeTooLow) (AT-015)",
+      "Missing inputs → Rejected(NetEdgeInputMissing) (AT-932)",
+      "Gross edge missing → fail-closed rejection"
+    ],
+    "evidence_found": [
+      "Net edge below min rejected (test_at015_net_edge_below_min_rejected)",
+      "Fees exceeding gross edge rejected (test_fees_exceed_gross_edge)",
+      "Missing gross_edge → NetEdgeInputMissing (test_at932_missing_gross_edge)",
+      "Missing fee_usd → NetEdgeInputMissing (test_at932_missing_fee_usd)",
+      "Missing expected_slippage → NetEdgeInputMissing (test_at932_missing_expected_slippage)",
+      "Missing min_edge → NetEdgeInputMissing (test_at932_missing_min_edge)",
+      "All missing → NetEdgeInputMissing (test_at932_all_missing)",
+      "Net edge formula verified (test_net_edge_formula)",
+      "13 tests covering all acceptance criteria"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Net Edge Gate matches CONTRACT.md §1.4.1 specification",
+    "Fail-closed on any missing input",
+    "Formula: net_edge = gross - fee - slippage"
+  ]
+}
