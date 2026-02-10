@@ -12,6 +12,7 @@ Prove the owner status command is executable and reports minimum authority field
    - `ok`
    - `build_id`
    - `contract_version`
+   - `timestamp_utc`
    - `trading_mode`
    - `is_trading_allowed`
 3. Run forced-unhealthy status path with missing policy:

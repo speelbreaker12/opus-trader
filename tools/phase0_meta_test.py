@@ -32,7 +32,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 def eprint(*args: object) -> None:
@@ -96,7 +96,7 @@ def has_any(text: str, needles: Iterable[str]) -> bool:
     return any(n.lower() in lowered for n in needles)
 
 
-def run_cli_json(root: Path, args: list[str], env: dict[str, str]) -> tuple[int, dict | None, str]:
+def run_cli_json(root: Path, args: List[str], env: Dict[str, str]) -> Tuple[int, Optional[Dict[str, object]], str]:
     proc = subprocess.run(
         [str(root / "stoic-cli")] + args,
         cwd=str(root),

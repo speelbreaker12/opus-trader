@@ -110,7 +110,7 @@ evidence/phase0/
   - exact owner status command/endpoint
   - expected output format
   - health required fields: `ok`, `build_id`, `contract_version`
-  - status required fields: `trading_mode`, `is_trading_allowed`
+  - status required fields: `ok`, `build_id`, `contract_version`, `trading_mode`, `is_trading_allowed`, `timestamp_utc`
 
 **MANUAL evidence (snapshot required):**
 - `evidence/phase0/health/health_endpoint_snapshot.md` (literal snapshot at sign-off)

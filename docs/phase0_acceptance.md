@@ -107,6 +107,10 @@ Phase 0 requires a small owner-readable status surface, not just liveness.
   - `build_id` (string)
   - `contract_version` (string)
 - Status command/endpoint shows:
+  - `ok` (boolean)
+  - `build_id` (string)
+  - `contract_version` (string)
+  - `timestamp_utc` (string)
   - `trading_mode` (string)
   - `is_trading_allowed` (boolean)
 - Readable by a non-coder.

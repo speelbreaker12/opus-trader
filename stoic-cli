@@ -224,6 +224,8 @@ def _status_payload(
 
 def _print_status_text(payload: Dict[str, Any], detailed: bool) -> None:
     print(f"ok: {str(payload.get('ok', False)).lower()}")
+    print(f"build_id: {payload.get('build_id', 'unknown')}")
+    print(f"timestamp_utc: {payload.get('timestamp_utc', '')}")
     print(f"trading_mode: {payload.get('trading_mode', 'UNKNOWN')}")
     print(f"is_trading_allowed: {str(payload.get('is_trading_allowed', False)).lower()}")
     print(f"orders_in_flight: {payload.get('orders_in_flight', 0)}")
@@ -354,11 +356,26 @@ def _next_pending_id(pending_orders: list[Dict[str, Any]]) -> str:
 def _cmd_simulate_open(args: argparse.Namespace) -> int:
     state_path = _runtime_state_path()
     state = _load_runtime_state(state_path)
+    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
+    policy, policy_errors = _load_policy_with_validation(policy_path)
     mode = str(state.get("trading_mode", "ACTIVE")).upper()
     count = int(args.count)
     if count < 1:
         print("--count must be >= 1", file=sys.stderr)
         return 2
+
+    if policy is None:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "policy_validation_failed",
+            "errors": policy_errors,
+            "trading_mode": "KILL",
+            "accepted": 0,
+            "requested": count,
+        }
+        _print_json(payload)
+        return 1
 
     if mode != "ACTIVE":
         payload = {
@@ -527,21 +544,31 @@ def _cmd_keys_check(args: argparse.Namespace) -> int:
         label = f"entry[{idx}] env={entry.get('env', 'UNKNOWN')}"
         if entry.get("withdraw_enabled") is not False:
             errors.append(f"{label}: withdraw_enabled must be false")
+        if entry.get("transfer_enabled") is not False:
+            errors.append(f"{label}: transfer_enabled must be false")
 
         scopes = entry.get("scopes", [])
         scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
+        if "transfer" in scopes_lower:
+            errors.append(f"{label}: scopes must not include transfer")
         results = entry.get("probe_results", {}) if isinstance(entry.get("probe_results"), dict) else {}
         place_order = results.get("place_order", {}) if isinstance(results.get("place_order"), dict) else {}
         place_result = str(place_order.get("result", "")).lower()
+        transfer = results.get("transfer", {}) if isinstance(results.get("transfer"), dict) else {}
+        transfer_result = str(transfer.get("result", "")).lower()
 
         if "trade" in scopes_lower:
             withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
             withdraw_result = str(withdraw.get("result", "")).lower()
             if withdraw_result not in {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}:
                 errors.append(f"{label}: trade scope requires explicit forbidden withdrawal result")
+            if transfer_result in {"success", "accepted"}:
+                errors.append(f"{label}: transfer probe must not show success for trade-capable keys")
         else:
             if place_result in {"success", "accepted"}:
                 errors.append(f"{label}: non-trade scope must not show successful order placement")
+            if transfer_result in {"success", "accepted"}:
+                errors.append(f"{label}: non-trade scope must not show successful transfers")
 
     payload = {
         "ok": len(errors) == 0,
