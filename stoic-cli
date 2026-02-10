@@ -267,6 +267,14 @@ def _runtime_state_lock(path: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _fsync_directory(path: Path) -> None:
+    dir_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     materialized = dict(state)
@@ -289,6 +297,7 @@ def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
             tmp.flush()
             os.fsync(tmp.fileno())
         os.replace(tmp_path, path)
+        _fsync_directory(path.parent)
     finally:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
@@ -926,21 +935,31 @@ def _cmd_keys_check(args: argparse.Namespace) -> int:
         label = f"entry[{idx}] env={entry.get('env', 'UNKNOWN')}"
         if entry.get("withdraw_enabled") is not False:
             errors.append(f"{label}: withdraw_enabled must be false")
+        if entry.get("transfer_enabled") is not False:
+            errors.append(f"{label}: transfer_enabled must be false")
 
         scopes = entry.get("scopes", [])
         scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
+        if "transfer" in scopes_lower:
+            errors.append(f"{label}: scopes must not include transfer")
         results = entry.get("probe_results", {}) if isinstance(entry.get("probe_results"), dict) else {}
         place_order = results.get("place_order", {}) if isinstance(results.get("place_order"), dict) else {}
         place_result = str(place_order.get("result", "")).lower()
+        transfer = results.get("transfer", {}) if isinstance(results.get("transfer"), dict) else {}
+        transfer_result = str(transfer.get("result", "")).lower()
 
         if "trade" in scopes_lower:
             withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
             withdraw_result = str(withdraw.get("result", "")).lower()
             if withdraw_result not in {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}:
                 errors.append(f"{label}: trade scope requires explicit forbidden withdrawal result")
+            if transfer_result in {"success", "accepted"}:
+                errors.append(f"{label}: transfer probe must not show success for trade-capable keys")
         else:
             if place_result in {"success", "accepted"}:
                 errors.append(f"{label}: non-trade scope must not show successful order placement")
+            if transfer_result in {"success", "accepted"}:
+                errors.append(f"{label}: non-trade scope must not show successful transfers")
 
     payload = {
         "ok": len(errors) == 0,

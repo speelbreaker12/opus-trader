@@ -229,9 +229,9 @@ pub fn evaluate_liquidity_gate(
             };
         }
         Some(snap) => {
-            // Check staleness
-            if input.now_ms > snap.timestamp_ms
-                && (input.now_ms - snap.timestamp_ms) > input.l2_book_snapshot_max_age_ms
+            // Reject future-dated snapshots and stale snapshots (fail-closed).
+            if snap.timestamp_ms > input.now_ms
+                || (input.now_ms - snap.timestamp_ms) > input.l2_book_snapshot_max_age_ms
             {
                 metrics.record_reject_no_l2();
                 return LiquidityGateResult::Rejected {

@@ -240,6 +240,24 @@ fn test_stale_l2_fresh_enough_passes() {
     assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
 }
 
+#[test]
+fn test_future_dated_l2_rejected_fail_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // Snapshot timestamp is in the future relative to now_ms.
+    let snap = book(vec![(100.0, 10.0)], vec![], 1_500);
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+}
+
 // ─── AT-421: Cancel allowed, Close/Hedge rejected ───────────────────────
 
 #[test]

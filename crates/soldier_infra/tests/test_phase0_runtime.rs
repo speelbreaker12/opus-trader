@@ -228,6 +228,90 @@ fn test_api_keys_are_least_privilege_runtime() {
 }
 
 #[test]
+fn test_api_keys_transfer_privilege_rejected_runtime() {
+    let bad_probe = unique_temp_file("phase0_bad_transfer_probe", "json");
+    let bad_probe_json = r#"
+{
+  "probes": [
+    {
+      "env": "STAGING",
+      "exchange": "Deribit",
+      "key_id": "key_staging_trade_bad_transfer",
+      "scopes": ["read_account", "trade", "transfer"],
+      "withdraw_enabled": false,
+      "transfer_enabled": true,
+      "probe_results": {
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied"
+        },
+        "transfer": {
+          "attempted": true,
+          "result": "success"
+        }
+      }
+    }
+  ]
+}
+"#;
+    fs::write(&bad_probe, bad_probe_json).expect("write bad transfer probe");
+
+    let bad_out = run_cli(
+        [
+            "keys-check",
+            "--probe",
+            bad_probe.to_str().unwrap(),
+            "--env",
+            "STAGING",
+        ],
+        &[],
+    );
+    assert_eq!(
+        bad_out.status.code(),
+        Some(1),
+        "transfer-capable probe must fail"
+    );
+    let bad_payload = parse_stdout_json(&bad_out);
+    assert_eq!(bad_payload["ok"], Value::Bool(false));
+    let errs = bad_payload["errors"]
+        .as_array()
+        .expect("errors array expected for failing transfer checks");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("transfer")),
+        "failure should explicitly report transfer least-privilege violations"
+    );
+    remove_if_exists(&bad_probe);
+}
+
+#[test]
+fn test_runtime_state_writer_fsyncs_parent_directory() {
+    let source = fs::read_to_string(cli_path()).expect("read stoic-cli source");
+
+    let helper_ix = source
+        .find("def _fsync_directory(path: Path) -> None:")
+        .expect("stoic-cli must define _fsync_directory helper");
+    let dir_fsync_ix = source
+        .find("os.fsync(dir_fd)")
+        .expect("stoic-cli must fsync runtime-state parent directory fd");
+    let replace_ix = source
+        .find("os.replace(tmp_path, path)")
+        .expect("stoic-cli must atomically replace runtime-state file");
+    let call_ix = source
+        .find("_fsync_directory(path.parent)")
+        .expect("stoic-cli must fsync runtime-state parent directory after replace");
+
+    assert!(
+        helper_ix < dir_fsync_ix,
+        "directory fsync helper should include os.fsync(dir_fd)"
+    );
+    assert!(
+        call_ix > replace_ix,
+        "parent directory fsync must occur after atomic replace"
+    );
+}
+
+#[test]
 fn test_break_glass_kill_blocks_open_allows_reduce_runtime() {
     let root = repo_root();
     let valid_policy = root.join("config/policy.json");
