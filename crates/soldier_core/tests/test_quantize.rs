@@ -433,6 +433,38 @@ fn test_large_decimal_boundary_sell_price_stays_on_tick() {
     assert!((result.limit_price_q - raw_price).abs() < 1e-6);
 }
 
+/// Extreme ratios must not let BUY snapping round price up by one tick.
+#[test]
+fn test_extreme_ratio_buy_never_rounds_up_via_snap() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1e-9,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let n_ticks: i64 = 80_000_000_000_000;
+    let raw_price = (n_ticks as f64 + 0.9) * constraints.tick_size;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, n_ticks);
+    assert!(result.limit_price_q <= raw_price);
+}
+
+/// Extreme ratios must not let SELL snapping round price down by one tick.
+#[test]
+fn test_extreme_ratio_sell_never_rounds_down_via_snap() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1e-9,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let n_ticks: i64 = 80_000_000_000_000;
+    let raw_price = (n_ticks as f64 + 0.1) * constraints.tick_size;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, n_ticks + 1);
+    assert!(result.limit_price_q >= raw_price);
+}
+
 // ─── Edge cases ────────────────────────────────────────────────────────
 
 /// min_amount=0 with zero qty_q should pass (0 >= 0)
