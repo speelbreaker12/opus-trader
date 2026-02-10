@@ -4,7 +4,9 @@ pub mod cache;
 pub mod capabilities;
 pub mod types;
 
-pub use cache::{CacheLookupResult, CacheTtlBreach, InstrumentCache, opens_blocked};
+pub use cache::{
+    CacheLookupResult, CacheTtlBreach, InstrumentCache, MAX_PENDING_BREACH_EVENTS, opens_blocked,
+};
 pub use capabilities::{
     BotFeatureFlags, EvaluatedCapabilities, VenueCapabilities, evaluate_capabilities,
 };

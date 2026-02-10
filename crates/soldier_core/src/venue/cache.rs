@@ -16,6 +16,9 @@ use std::time::Instant;
 use crate::risk::RiskState;
 use crate::venue::InstrumentKind;
 
+/// Hard cap for queued TTL breach events to prevent unbounded growth.
+pub const MAX_PENDING_BREACH_EVENTS: usize = 1024;
+
 /// Result of an instrument cache lookup.
 ///
 /// Contains the cached instrument kind, the freshness-derived risk state,
@@ -157,6 +160,10 @@ impl InstrumentCache {
         let ttl_invalid = !ttl_s.is_finite();
         let risk_state = if ttl_invalid || cache_age_s > ttl_s {
             self.stale_total += 1;
+            if self.pending_breaches.len() >= MAX_PENDING_BREACH_EVENTS {
+                // Keep the newest events while bounding memory growth.
+                self.pending_breaches.remove(0);
+            }
             self.pending_breaches.push(CacheTtlBreach {
                 instrument_id: instrument_id.to_string(),
                 age_s: cache_age_s,

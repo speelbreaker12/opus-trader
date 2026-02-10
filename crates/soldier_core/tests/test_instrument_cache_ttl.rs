@@ -7,7 +7,9 @@
 use std::time::{Duration, Instant};
 
 use soldier_core::risk::RiskState;
-use soldier_core::venue::{CacheTtlBreach, InstrumentCache, InstrumentKind, opens_blocked};
+use soldier_core::venue::{
+    CacheTtlBreach, InstrumentCache, InstrumentKind, MAX_PENDING_BREACH_EVENTS, opens_blocked,
+};
 
 // ─── Fresh vs stale ─────────────────────────────────────────────────────
 
@@ -381,6 +383,23 @@ fn test_drain_breaches_clears_buffer() {
     // After drain, buffer is empty
     let breaches = cache.drain_breaches();
     assert!(breaches.is_empty());
+}
+
+/// Pending breach queue is capped to avoid unbounded memory growth.
+#[test]
+fn test_pending_breaches_queue_is_capped() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    let stale_time = t0 + Duration::from_secs(7200);
+    let total_events = MAX_PENDING_BREACH_EVENTS + 25;
+    for _ in 0..total_events {
+        cache.get_at("BTC-PERPETUAL", 3600.0, stale_time);
+    }
+
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), MAX_PENDING_BREACH_EVENTS);
 }
 
 /// instrument_cache_refresh_errors_total increments on record_refresh_error
