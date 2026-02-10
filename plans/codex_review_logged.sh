@@ -110,7 +110,9 @@ case "$mode" in
     cmd+=("--uncommitted")
     ;;
 esac
-cmd+=("${extra[@]}")
+if [[ ${#extra[@]} -gt 0 ]]; then
+  cmd+=("${extra[@]}")
+fi
 
 {
   echo "# Codex review"
