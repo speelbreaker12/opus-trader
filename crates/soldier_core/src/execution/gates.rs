@@ -168,8 +168,25 @@ pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> 
         }
     };
 
+    // Fail-closed on non-finite inputs (NaN/inf).
+    if !gross.is_finite() || !fee.is_finite() || !slippage.is_finite() || !min_edge.is_finite() {
+        metrics.record_reject_input_missing();
+        return NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        };
+    }
+
     // Compute net edge
     let net_edge_usd = gross - fee - slippage;
+
+    if !net_edge_usd.is_finite() {
+        metrics.record_reject_input_missing();
+        return NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        };
+    }
 
     // Reject if below minimum (AT-015)
     if net_edge_usd < min_edge {

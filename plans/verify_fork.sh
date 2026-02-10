@@ -59,6 +59,12 @@ cd "$ROOT"
 
 source "$ROOT/plans/lib/verify_utils.sh"
 
+CONTRACT_COVERAGE_CI_SENTINEL="${CONTRACT_COVERAGE_CI_SENTINEL:-plans/contract_coverage_ci_strict}"
+CONTRACT_COVERAGE_STRICT_EFFECTIVE="${CONTRACT_COVERAGE_STRICT:-0}"
+if [[ "$CONTRACT_COVERAGE_STRICT_EFFECTIVE" != "1" && -f "$CONTRACT_COVERAGE_CI_SENTINEL" ]]; then
+  CONTRACT_COVERAGE_STRICT_EFFECTIVE="1"
+fi
+
 VERIFY_CONSOLE="${VERIFY_CONSOLE:-auto}"
 case "$VERIFY_CONSOLE" in
   auto)
@@ -241,7 +247,13 @@ fi
 
 if [[ "$MODE" == "full" ]]; then
   log "03) contract coverage"
+  if [[ "$CONTRACT_COVERAGE_STRICT_EFFECTIVE" == "1" ]]; then
+    echo "contract_coverage_strict=1 (sentinel/env enabled)"
+  else
+    echo "contract_coverage_strict=0"
+  fi
   run_logged_or_exit "contract_coverage" "$CONTRACT_COVERAGE_TIMEOUT" \
+    env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE" \
     "$PYTHON_BIN" plans/contract_coverage_matrix.py
 else
   warn "Skipping contract_coverage in quick mode (full-only gate)"
@@ -317,6 +329,10 @@ if [[ -f Cargo.toml ]]; then
     warn "vendor docs lint skipped (missing tools/vendor_docs_lint_rust.py or specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml)"
   fi
 fi
+
+log "14b) phase0 meta-test"
+run_logged_or_exit "phase0_meta_test" "$SPEC_LINT_TIMEOUT" \
+  "$PYTHON_BIN" tools/phase0_meta_test.py --root "$ROOT"
 
 export ROOT MODE VERIFY_ARTIFACTS_DIR VERIFY_CONSOLE VERIFY_LOG_CAPTURE
 export TIMEOUT_BIN ENABLE_TIMEOUTS VERIFY_FAIL_TAIL_LINES VERIFY_FAIL_SUMMARY_LINES TIMEOUT_WARNED

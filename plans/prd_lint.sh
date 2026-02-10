@@ -353,7 +353,8 @@ check_path_convention() {
 glob_warn="${PRD_LINT_GLOB_WARN:-25}"
 glob_fail="${PRD_LINT_GLOB_FAIL:-100}"
 
-items_stream=$(jq -r '
+items_stream_err_file="$(mktemp "${TMPDIR:-/tmp}/prd_lint_items_err.XXXXXX")"
+if ! items_stream="$(jq -r '
   .items[]
   | [
       (.id // ""),
@@ -402,7 +403,15 @@ items_stream=$(jq -r '
     ]
   | map(tostring | gsub("\u001e"; " "))
   | join("\u001e")
-' "$prd_file")
+' "$prd_file" 2>"$items_stream_err_file")"; then
+  report_error ITEM_META_EXTRACTION_FAIL GLOBAL "failed to extract PRD item metadata for lint checks"
+  if [[ -s "$items_stream_err_file" ]]; then
+    cat "$items_stream_err_file" >&2
+  fi
+  rm -f "$items_stream_err_file"
+  finish
+fi
+rm -f "$items_stream_err_file"
 idx=0
 while IFS= read -r item_meta; do
   [[ -z "$item_meta" ]] && continue

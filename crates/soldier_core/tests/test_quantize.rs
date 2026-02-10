@@ -17,6 +17,14 @@ fn btc_constraints() -> QuantizeConstraints {
     }
 }
 
+fn decimal_constraints() -> QuantizeConstraints {
+    QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 0.1,
+        min_amount: 0.1,
+    }
+}
+
 // ─── Quantity quantization ─────────────────────────────────────────────
 
 /// qty_q = floor(raw_qty / amount_step) * amount_step
@@ -44,6 +52,22 @@ fn test_qty_steps_integer() {
     let result = quantize(1.99, 50_000.0, Side::Buy, &btc_constraints(), &mut metrics).unwrap();
     assert_eq!(result.qty_steps, 19);
     assert!((result.qty_q - 1.9).abs() < 1e-9);
+}
+
+/// Decimal boundary: 0.3/0.1 should quantize to exactly 3 steps, not 2.
+#[test]
+fn test_qty_decimal_boundary_is_stable() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(
+        0.3,
+        50_000.0,
+        Side::Buy,
+        &decimal_constraints(),
+        &mut metrics,
+    )
+    .unwrap();
+    assert_eq!(result.qty_steps, 3);
+    assert!((result.qty_q - 0.3).abs() < 1e-9);
 }
 
 // ─── AT-219: Price rounding direction ──────────────────────────────────
@@ -98,6 +122,24 @@ fn test_sell_price_exact_tick() {
     let result = quantize(1.0, 50_000.0, Side::Sell, &btc_constraints(), &mut metrics).unwrap();
     assert_eq!(result.price_ticks, 100_000);
     assert!((result.limit_price_q - 50_000.0).abs() < 1e-9);
+}
+
+/// Decimal boundary: 100.3/0.1 should stay on tick for BUY.
+#[test]
+fn test_buy_price_decimal_boundary_is_stable() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(1.0, 100.3, Side::Buy, &decimal_constraints(), &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1003);
+    assert!((result.limit_price_q - 100.3).abs() < 1e-9);
+}
+
+/// Decimal boundary: 100.3/0.1 should stay on tick for SELL.
+#[test]
+fn test_sell_price_decimal_boundary_is_stable() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(1.0, 100.3, Side::Sell, &decimal_constraints(), &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1003);
+    assert!((result.limit_price_q - 100.3).abs() < 1e-9);
 }
 
 /// AT-219: BUY price never increases
@@ -248,6 +290,42 @@ fn test_at926_infinity_tick_size() {
     );
 }
 
+/// Non-finite raw qty must fail-closed before quantization.
+#[test]
+fn test_non_finite_raw_qty_rejected() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(
+        f64::NAN,
+        50_000.0,
+        Side::Buy,
+        &btc_constraints(),
+        &mut metrics,
+    );
+    assert_eq!(
+        result,
+        Err(QuantizeError::InvalidInput { field: "raw_qty" })
+    );
+}
+
+/// Non-finite raw limit price must fail-closed before quantization.
+#[test]
+fn test_non_finite_raw_limit_price_rejected() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(
+        1.0,
+        f64::INFINITY,
+        Side::Buy,
+        &btc_constraints(),
+        &mut metrics,
+    );
+    assert_eq!(
+        result,
+        Err(QuantizeError::InvalidInput {
+            field: "raw_limit_price"
+        })
+    );
+}
+
 // ─── Deterministic round-trip ──────────────────────────────────────────
 
 /// Quantization is deterministic: same inputs → same outputs
@@ -276,6 +354,206 @@ fn test_integer_values_for_hashing() {
     let _price_ticks: i64 = result.price_ticks;
     assert!(result.qty_steps > 0);
     assert!(result.price_ticks > 0);
+}
+
+/// Large ratios must preserve floor semantics for quantity (never round up size).
+#[test]
+fn test_large_ratio_qty_still_floors() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_qty = 1_000_000_000_000.75;
+    let result = quantize(raw_qty, 100.0, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.qty_steps, 1_000_000_000_000);
+    assert_eq!(result.qty_q, 1_000_000_000_000.0);
+    assert!(result.qty_q <= raw_qty);
+}
+
+/// Large ratios must preserve BUY floor semantics for price.
+#[test]
+fn test_large_ratio_buy_price_still_floors() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 1_000_000_000_000.75;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_000_000);
+    assert_eq!(result.limit_price_q, 1_000_000_000_000.0);
+    assert!(result.limit_price_q <= raw_price);
+}
+
+/// Large ratios must preserve SELL ceil semantics for price.
+#[test]
+fn test_large_ratio_sell_price_still_ceils() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 1_000_000_000_000.25;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_000_001);
+    assert_eq!(result.limit_price_q, 1_000_000_000_001.0);
+    assert!(result.limit_price_q >= raw_price);
+}
+
+/// Large decimal boundaries should still snap to exact quantity steps.
+#[test]
+fn test_large_decimal_boundary_qty_stays_on_step() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 0.1,
+        min_amount: 0.0,
+    };
+    let raw_qty = 100_000_000.3;
+    let result = quantize(raw_qty, 100.0, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.qty_steps, 1_000_000_003);
+    assert!((result.qty_q - raw_qty).abs() < 1e-6);
+}
+
+/// Large decimal boundaries should still snap to exact BUY price ticks.
+#[test]
+fn test_large_decimal_boundary_buy_price_stays_on_tick() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 100_000_000.3;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_003);
+    assert!((result.limit_price_q - raw_price).abs() < 1e-6);
+}
+
+/// Large decimal boundaries should still snap to exact SELL price ticks.
+#[test]
+fn test_large_decimal_boundary_sell_price_stays_on_tick() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 100_000_000.3;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_003);
+    assert!((result.limit_price_q - raw_price).abs() < 1e-6);
+}
+
+/// Extreme ratios must not let BUY snapping round price up by one tick.
+#[test]
+fn test_extreme_ratio_buy_never_rounds_up_via_snap() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1e-9,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let n_ticks: i64 = 80_000_000_000_000;
+    let raw_price = (n_ticks as f64 + 0.9) * constraints.tick_size;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, n_ticks);
+    assert!(result.limit_price_q <= raw_price);
+}
+
+/// Extreme ratios must not let SELL snapping round price down by one tick.
+#[test]
+fn test_extreme_ratio_sell_never_rounds_down_via_snap() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1e-9,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let n_ticks: i64 = 80_000_000_000_000;
+    let raw_price = (n_ticks as f64 + 0.1) * constraints.tick_size;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, n_ticks + 1);
+    assert!(result.limit_price_q >= raw_price);
+}
+
+/// Very large decimal boundary: quantity must never round up.
+#[test]
+fn test_very_large_decimal_boundary_qty_never_rounds_up() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 0.1,
+        min_amount: 0.0,
+    };
+    let raw_qty = 5_966_019_221_325.6;
+    let result = quantize(raw_qty, 100.0, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert!(result.qty_q <= raw_qty);
+    assert!(raw_qty - result.qty_q < constraints.amount_step + 1e-6);
+}
+
+/// Very large decimal boundary: BUY price must never round up.
+#[test]
+fn test_very_large_decimal_boundary_buy_never_rounds_up() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 5_966_019_221_325.6;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert!(result.limit_price_q <= raw_price);
+    assert!(raw_price - result.limit_price_q < constraints.tick_size + 1e-6);
+}
+
+/// Very large decimal boundary: SELL price must never round down.
+#[test]
+fn test_very_large_decimal_boundary_sell_never_rounds_down() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 5_966_019_221_325.6;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert!(result.limit_price_q >= raw_price);
+    assert!(result.limit_price_q - raw_price < constraints.tick_size + 1e-6);
+}
+
+/// Large negative prices: BUY should still floor (never round up).
+#[test]
+fn test_large_negative_buy_price_never_rounds_up() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = -100_000_000.3;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert!(result.limit_price_q <= raw_price);
+    assert!(raw_price - result.limit_price_q < constraints.tick_size + 1e-6);
+}
+
+/// Large negative prices: SELL should still ceil (never round down).
+#[test]
+fn test_large_negative_sell_price_never_rounds_down() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = -100_000_000.3;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert!(result.limit_price_q + 1e-6 >= raw_price);
+    assert!(result.limit_price_q - raw_price < constraints.tick_size + 1e-6);
 }
 
 // ─── Edge cases ────────────────────────────────────────────────────────

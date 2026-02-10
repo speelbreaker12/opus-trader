@@ -8,7 +8,7 @@
 //!
 //! AT-269, AT-270.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 // ─── Trade record ────────────────────────────────────────────────────────
 
@@ -139,21 +139,21 @@ impl TradeIdRegistry {
         record: TradeRecord,
         metrics: &mut RegistryMetrics,
     ) -> Result<InsertResult, RegistryError> {
-        // Check if already recorded — duplicate
-        if self.records.contains_key(&record.trade_id) {
-            metrics.record_duplicate();
-            return Ok(InsertResult::Duplicate);
+        let at_capacity = self.records.len() >= self.capacity;
+        match self.records.entry(record.trade_id.clone()) {
+            Entry::Occupied(_) => {
+                metrics.record_duplicate();
+                Ok(InsertResult::Duplicate)
+            }
+            Entry::Vacant(vacant) => {
+                if at_capacity {
+                    return Err(RegistryError::CapacityFull);
+                }
+                vacant.insert(record);
+                metrics.record_insert();
+                Ok(InsertResult::Inserted)
+            }
         }
-
-        // Check capacity
-        if self.records.len() >= self.capacity {
-            return Err(RegistryError::CapacityFull);
-        }
-
-        // Insert — atomic (single HashMap operation)
-        self.records.insert(record.trade_id.clone(), record);
-        metrics.record_insert();
-        Ok(InsertResult::Inserted)
     }
 
     /// Check if a trade_id has been processed.

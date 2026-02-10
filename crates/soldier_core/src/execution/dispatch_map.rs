@@ -54,6 +54,9 @@ pub enum DispatchMapError {
     MissingQtyCoin,
     /// USD-sized instrument but qty_usd is missing from OrderSize.
     MissingQtyUsd,
+    /// `contracts` is populated; caller must run AT-920 validation first.
+    /// Use [`validate_and_dispatch`] with `contract_multiplier`.
+    ContractsRequireValidation,
     /// CONTRACT.md AT-920: contracts and canonical amount mismatch.
     /// Contains the relative mismatch delta.
     ContractsAmountMismatch {
@@ -114,7 +117,23 @@ impl Default for MismatchMetrics {
 /// - coin instruments (`option | linear_future`) → send `amount = qty_coin`
 /// - USD instruments (`perpetual | inverse_future`) → send `amount = qty_usd`
 /// - `reduce_only` is derived from intent classification only.
+/// - If `contracts` is present, use [`validate_and_dispatch`] so AT-920
+///   mismatch checks execute before mapping.
 pub fn map_to_dispatch(
+    order_size: &OrderSize,
+    instrument_kind: InstrumentKind,
+    intent: IntentClass,
+) -> Result<DispatchRequest, DispatchMapError> {
+    // Fail closed: if contracts are present, callers must route through
+    // validate_and_dispatch so AT-920 mismatch checks run before mapping.
+    if order_size.contracts.is_some() {
+        return Err(DispatchMapError::ContractsRequireValidation);
+    }
+
+    map_to_dispatch_unchecked(order_size, instrument_kind, intent)
+}
+
+fn map_to_dispatch_unchecked(
     order_size: &OrderSize,
     instrument_kind: InstrumentKind,
     intent: IntentClass,
@@ -177,7 +196,7 @@ pub fn validate_and_dispatch(
         }
     }
 
-    let request = map_to_dispatch(order_size, instrument_kind, intent)?;
+    let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;
     Ok(ValidatedDispatch {
         request,
         risk_state: RiskState::Healthy,

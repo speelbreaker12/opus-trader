@@ -37,8 +37,8 @@ fn test_at223_buy_limit_clamped_to_min_edge() {
     // fee_per_unit = 3
     // min_edge_per_unit = 2
     // max_price_for_min_edge (buy) = 100 - (2+3) = 95
-    // proposed_limit (buy) = 100 + 0.5*7 = 103.5
-    // clamp: min(103.5, 95) = 95
+    // proposed_limit (buy) = 100 - 0.5*7 = 96.5
+    // clamp: min(96.5, 95) = 95
     let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, PricerSide::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
@@ -63,8 +63,8 @@ fn test_at223_sell_limit_clamped_to_min_edge() {
 
     // fair=100, gross=10, min_edge=2, fee=3, qty=1
     // max_price_for_min_edge (sell) = 100 + (2+3) = 105
-    // proposed_limit (sell) = 100 - 0.5*7 = 96.5
-    // clamp: max(96.5, 105) = 105
+    // proposed_limit (sell) = 100 + 0.5*7 = 103.5
+    // clamp: max(103.5, 105) = 105
     let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, PricerSide::Sell);
     let result = compute_limit_price(&inp, &mut m);
 
@@ -213,8 +213,8 @@ fn test_multi_unit_buy() {
     // net = 20-6 = 14
     // net_per_unit = 7, fee_per_unit = 3, min_edge_per_unit = 2
     // max_price_buy = 100 - (2+3) = 95
-    // proposed = 100 + 0.5*7 = 103.5
-    // clamp: min(103.5, 95) = 95
+    // proposed = 100 - 0.5*7 = 96.5
+    // clamp: min(96.5, 95) = 95
     let inp = input(100.0, 20.0, 4.0, 6.0, 2.0, PricerSide::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
@@ -232,17 +232,17 @@ fn test_multi_unit_buy() {
 fn test_buy_proposed_within_bound_no_clamp() {
     let mut m = PricerMetrics::new();
 
-    // fair=100, gross=100, min_edge=1, fee=1, qty=1
-    // net = 99, net_per_unit = 99
+    // fair=100, gross=10, min_edge=1, fee=1, qty=1
+    // net = 9, net_per_unit = 9
     // max_price_buy = 100 - (1+1) = 98
-    // proposed = 100 + 0.5*99 = 149.5
-    // clamp: min(149.5, 98) = 98 — still clamped
-    let inp = input(100.0, 100.0, 1.0, 1.0, 1.0, PricerSide::Buy);
+    // proposed = 100 - 0.5*9 = 95.5
+    // clamp: min(95.5, 98) = 95.5 (no clamp)
+    let inp = input(100.0, 10.0, 1.0, 1.0, 1.0, PricerSide::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
         PricerResult::LimitPrice { limit_price, .. } => {
-            assert!((limit_price - 98.0).abs() < 1e-9);
+            assert!((limit_price - 95.5).abs() < 1e-9);
         }
         other => panic!("expected LimitPrice, got {other:?}"),
     }

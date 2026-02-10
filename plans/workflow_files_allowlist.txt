@@ -20,6 +20,7 @@ plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
 plans/contract_review_validate.sh
 plans/init.sh
+plans/kimi_review_logged.sh
 plans/legacy_layout_guard.sh
 plans/lib/node_gates.sh
 plans/lib/python_gates.sh
@@ -36,6 +37,7 @@ plans/prd_preflight.sh
 plans/prd_set_pass.sh
 plans/preflight.sh
 plans/readme_ci_parity_check.sh
+plans/review_resolution_template.md
 plans/schemas/verify_checkpoint.schema.json
 plans/self_review_logged.sh
 plans/ssot_lint.sh
@@ -46,6 +48,8 @@ plans/story_verify_allowlist_check.sh
 plans/story_verify_allowlist_lint.sh
 plans/story_verify_allowlist_suggest.sh
 plans/tests/test_codex_review_digest.sh
+plans/tests/test_codex_review_logged.sh
+plans/tests/test_kimi_review_logged.sh
 plans/tests/test_prd_cache.sh
 plans/tests/test_story_review_gate.sh
 plans/tests/test_workflow_allowlist_coverage.sh

@@ -5,9 +5,9 @@
 
 ## Metadata
 - doc_id: KEYS-001
-- version: 1.0
+- version: 1.1
 - contract_version_target: 5.2
-- last_updated_utc: 2026-01-27T14:00:00Z
+- last_updated_utc: 2026-02-09T23:30:00Z
 
 ---
 
@@ -15,7 +15,10 @@
 
 - Least privilege for every key
 - Withdrawals disabled for all keys
-- Separate keys per environment (DEV/STAGING/PAPER/LIVE)
+- Separate keys per environment (DEV/STAGING/PAPER/LIVE) where keys exist
+- PAPER MUST NOT have any trade-capable keys
+- BREAK_GLASS_MANUAL keys are human-only and MUST NOT be accessible to bot runtime
+- Key naming conventions are not enforcement; runtime MUST verify account/subaccount identity
 - Rotation is planned and practiced
 - Secrets never stored in repo
 
@@ -25,14 +28,14 @@
 
 | Key Purpose | Required Scopes | Forbidden Scopes |
 |-------------|-----------------|------------------|
-| DATA_ONLY | read_market_data, read_account | trade, withdraw, transfer |
-| TRADE (any env) | read_account, trade | withdraw, transfer |
-| ADMIN (emergency) | read_account, trade, cancel_all | withdraw, transfer |
+| DATA_ONLY (PAPER optional) | read_market_data (read_account optional) | trade, withdraw, transfer |
+| TRADE_TESTNET (STAGING only) | read_account, trade | withdraw, transfer |
+| TRADE_LIVE (LIVE only) | read_account, trade | withdraw, transfer |
+| BREAK_GLASS_MANUAL (human only, optional) | cancel_all (and read_account only if exchange requires) | withdraw, transfer; MUST NOT be mounted into bot runtime |
 
 **Forbidden scopes (always):**
 - [x] withdraw
 - [x] transfer
-- [x] admin (except emergency key)
 
 ---
 
@@ -44,9 +47,12 @@ key_{environment}_{purpose}_{sequence}
 
 Examples:
 - `key_staging_trade_001`
-- `key_paper_trade_001`
+- `key_paper_data_001`
 - `key_live_trade_001`
 - `key_live_readonly_001`
+- `key_breakglass_manual_001`
+
+Naming is for hygiene only; runtime identity checks are authoritative.
 
 ---
 
@@ -54,11 +60,26 @@ Examples:
 
 | Question | Answer |
 |----------|--------|
-| Secret storage system | HashiCorp Vault (LIVE), .env files (non-LIVE) |
+| Secret storage system | HashiCorp Vault (LIVE), `.env` files (STAGING testnet only), PAPER public endpoints preferred |
 | Who can read LIVE secrets | Ops team only, via IAM role |
 | How devs get DEV secrets | N/A (mocked) |
-| How secrets injected at runtime | Environment variables from Vault/dotenv |
+| How secrets injected at runtime | Environment variables from Vault/dotenv (STAGING only) |
+| Live fallback to local files | Forbidden |
+| Local `.env` constraints | MUST be non-withdraw, non-transfer, and MUST NOT contain LIVE trade keys |
 | What must never appear in logs | Key secrets, passphrases, Vault tokens |
+
+---
+
+## Runtime Identity Enforcement (required)
+
+For any environment that has a private key loaded:
+- On startup, call a private identity endpoint (for example, account summary).
+- Assert returned account/subaccount matches `docs/env_matrix.md` for `TRADING_ENV`.
+- Any mismatch MUST fail closed (no dispatch).
+
+Additional fail-closed rules:
+- `TRADING_ENV=LIVE` without Vault credentials -> fail closed.
+- `TRADING_ENV=PAPER` with any trade-capable key present -> fail closed.
 
 ---
 
@@ -66,19 +87,19 @@ Examples:
 
 | Key Type | Rotation Cadence | Owner |
 |----------|------------------|-------|
-| STAGING | Quarterly | DevOps |
-| PAPER | Quarterly | DevOps |
-| LIVE | Monthly | Security + DevOps |
+| TRADE_TESTNET (STAGING) | Quarterly | DevOps |
+| DATA_ONLY (PAPER, if used) | Quarterly | DevOps |
+| TRADE_LIVE (LIVE) | Monthly | Security + DevOps |
 
-### Rotation Steps (LIVE)
+### Rotation Steps (LIVE/STAGING trade keys)
 
 1. Create new key on exchange (withdraw disabled)
-2. Add new key to Vault with new version
-3. Deploy using new key reference
+2. Add new key to secret store
+3. Deploy/runtime reload using new key reference
 4. Run key scope probe to verify permissions
-5. Verify trading works with new key
+5. Run startup identity check and confirm account/subaccount match
 6. Revoke old key on exchange
-7. Remove old key from Vault
+7. Remove old key from secret store
 
 ### Emergency Rotation Triggers
 
@@ -95,7 +116,7 @@ If you suspect compromise:
 
 1. **Immediately** revoke key on exchange
 2. Rotate all potentially affected secrets
-3. Run break-glass drill steps if active positions
+3. Run break-glass runbook steps if active positions
 4. Record incident in `evidence/incidents/`
 5. Conduct postmortem within 24 hours
 
@@ -103,18 +124,25 @@ If you suspect compromise:
 
 ## Key Inventory
 
-| Key ID | Environment | Scopes | Withdraw | Created | Last Rotated | Next Rotation |
-|--------|-------------|--------|----------|---------|--------------|---------------|
-| key_staging_trade_001 | STAGING | read, trade | **false** | [DATE] | [DATE] | [DATE] |
-| key_paper_trade_001 | PAPER | read, trade | **false** | [DATE] | [DATE] | [DATE] |
-| key_live_trade_001 | LIVE | read, trade | **false** | [DATE] | [DATE] | [DATE] |
-| key_live_readonly_001 | LIVE | read | **false** | [DATE] | [DATE] | [DATE] |
+| Key ID | Environment | Key Type | Scopes | Withdraw | Created | Last Rotated | Next Rotation |
+|--------|-------------|----------|--------|----------|---------|--------------|---------------|
+| key_staging_trade_001 | STAGING | TRADE_TESTNET | read, trade | **false** | [DATE] | [DATE] | [DATE] |
+| N/A (public endpoints only) | PAPER | NONE | public_market_data_only | N/A | N/A | N/A | N/A |
+| key_live_trade_001 | LIVE | TRADE_LIVE | read, trade | **false** | [DATE] | [DATE] | [DATE] |
+| key_live_readonly_001 | LIVE | DATA_ONLY | read_market_data, read_account | **false** | [DATE] | [DATE] | [DATE] |
+| key_breakglass_manual_001 | MANUAL | BREAK_GLASS_MANUAL | cancel_all | **false** | [DATE] | [DATE] | [DATE] |
 
 ---
 
 ## Key Scope Probe (required Phase 0 evidence)
 
-You MUST generate `evidence/phase0/keys/key_scope_probe.json` for each environment.
+Generate `evidence/phase0/keys/key_scope_probe.json` for each environment that uses a real key.
+
+Expected by environment:
+- DEV: none (mocked)
+- PAPER: none (preferred) or DATA_ONLY only
+- STAGING: TRADE_TESTNET
+- LIVE: TRADE_LIVE (and optional LIVE DATA_ONLY)
 
 **Minimum JSON fields:**
 - `env`
@@ -134,15 +162,19 @@ You MUST generate `evidence/phase0/keys/key_scope_probe.json` for each environme
 - [x] Sharing keys across environments
 - [x] Logging key secrets
 - [x] Hardcoding secrets in source code
+- [x] PAPER with trade-capable keys
+- [x] BREAK_GLASS_MANUAL key mounted into runtime
+- [x] Treating key names/prefixes as the sole environment control
 
 ---
 
 ## Owner Sign-Off
 
-- [ ] All keys follow least-privilege principle
-- [ ] Withdrawals disabled on ALL automated trading keys
+- [ ] PAPER has no trade-capable credentials
+- [ ] LIVE keys are unavailable to local/dev environments
+- [ ] Startup identity check is implemented and fail-closed
+- [ ] BREAK_GLASS_MANUAL key is runtime-inaccessible
 - [ ] Rotation plan documented and scheduled
-- [ ] LIVE keys protected from local access
 - [ ] No secrets in repository
 
 **owner_signature:** ______________________

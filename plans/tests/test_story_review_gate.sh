@@ -36,8 +36,9 @@ write_valid_case() {
   local story_dir="$base/$story"
   local self_dir="$story_dir/self_review"
   local codex_dir="$story_dir/codex"
+  local kimi_dir="$story_dir/kimi"
 
-  mkdir -p "$self_dir" "$codex_dir"
+  mkdir -p "$self_dir" "$codex_dir" "$kimi_dir"
 
   cat > "$self_dir/20260209T000000Z_self_review.md" <<EOF
 # Self Review
@@ -55,12 +56,26 @@ EOF
 - HEAD: $head_sha
 EOF
 
+  cat > "$codex_dir/20260209T000100Z_review.md" <<EOF
+# Codex review (second pass)
+- Story: $story
+- HEAD: $head_sha
+EOF
+
+  cat > "$kimi_dir/20260209T000050Z_review.md" <<EOF
+# Kimi review
+- Story: $story
+- HEAD: $head_sha
+EOF
+
   cat > "$story_dir/review_resolution.md" <<EOF
 Story: $story
 HEAD: $head_sha
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-Codex final review file: codex/20260209T000000Z_review.md
+Kimi final review file: kimi/20260209T000050Z_review.md
+Codex final review file: codex/20260209T000100Z_review.md
+Codex second review file: codex/20260209T000000Z_review.md
 EOF
 }
 
@@ -92,12 +107,25 @@ rm -f "$case3/$story/self_review/20260209T000000Z_self_review.md.bak"
 expect_fail "self review head mismatch" "self-review not for current HEAD" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case3"
 
-# Case 4: codex review missing for HEAD.
+# Case 3b: newest self review may target older HEAD; gate should still find matching HEAD artifact.
+case3b="$tmp_dir/case3b"
+write_valid_case "$case3b" "$story" "$head_sha"
+cat > "$case3b/$story/self_review/20260210T000000Z_self_review.md" <<EOF
+# Self Review (old head)
+Story: $story
+HEAD: deadbeef
+Decision: PASS
+Checklist:
+- Failure-Mode Review: DONE
+- Strategic Failure Review: DONE
+EOF
+"$GATE" "$story" --head "$head_sha" --artifacts-root "$case3b" >/dev/null
+
+# Case 4: must keep at least two codex reviews for HEAD.
 case4="$tmp_dir/case4"
 write_valid_case "$case4" "$story" "$head_sha"
-sed -i.bak "s/- HEAD: $head_sha/- HEAD: deadbeef/" "$case4/$story/codex/20260209T000000Z_review.md"
-rm -f "$case4/$story/codex/20260209T000000Z_review.md.bak"
-expect_fail "codex head mismatch" "missing Codex review artifact for HEAD" \
+rm -f "$case4/$story/codex/20260209T000100Z_review.md"
+expect_fail "codex count minimum" "need at least two Codex review artifacts for HEAD" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case4"
 
 # Case 5: resolution unresolved findings.
@@ -111,7 +139,7 @@ expect_fail "resolution unresolved findings" "resolution must assert no BLOCKING
 # Case 6: codex ref escapes codex directory.
 case6="$tmp_dir/case6"
 write_valid_case "$case6" "$story" "$head_sha"
-sed -i.bak "s#Codex final review file: codex/20260209T000000Z_review.md#Codex final review file: ../self_review/20260209T000000Z_self_review.md#" "$case6/$story/review_resolution.md"
+sed -i.bak "s#Codex final review file: codex/20260209T000100Z_review.md#Codex final review file: ../self_review/20260209T000000Z_self_review.md#" "$case6/$story/review_resolution.md"
 rm -f "$case6/$story/review_resolution.md.bak"
 expect_fail "codex ref escape" "Codex final review file must be inside" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case6"
@@ -143,10 +171,26 @@ expect_fail "remaining findings exact" "resolution must assert no BLOCKING/MAJOR
 # Case 10: digest-only codex artifacts are rejected.
 case10="$tmp_dir/case10"
 write_valid_case "$case10" "$story" "$head_sha"
-mv "$case10/$story/codex/20260209T000000Z_review.md" "$case10/$story/codex/20260209T000000Z_digest.md"
-sed -i.bak "s/Codex final review file: codex\\/20260209T000000Z_review.md/Codex final review file: codex\\/20260209T000000Z_digest.md/" "$case10/$story/review_resolution.md"
+cp "$case10/$story/codex/20260209T000100Z_review.md" "$case10/$story/codex/20260209T000100Z_digest.md"
+sed -i.bak "s/Codex final review file: codex\\/20260209T000100Z_review.md/Codex final review file: codex\\/20260209T000100Z_digest.md/" "$case10/$story/review_resolution.md"
 rm -f "$case10/$story/review_resolution.md.bak"
-expect_fail "digest-only codex" "missing Codex review artifact for HEAD" \
+expect_fail "digest-only codex ref" "Codex final review file must be a *_review.md artifact" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case10"
+
+# Case 11: missing Kimi review artifact for HEAD.
+case11="$tmp_dir/case11"
+write_valid_case "$case11" "$story" "$head_sha"
+rm -f "$case11/$story/kimi/20260209T000050Z_review.md"
+expect_fail "missing kimi review" "missing Kimi review artifact for HEAD" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case11"
+
+# Case 12: codex symlink escape to kimi directory is rejected.
+case12="$tmp_dir/case12"
+write_valid_case "$case12" "$story" "$head_sha"
+ln -s ../kimi/20260209T000050Z_review.md "$case12/$story/codex/20260209T000200Z_review.md"
+sed -i.bak "s/Codex final review file: codex\\/20260209T000100Z_review.md/Codex final review file: codex\\/20260209T000200Z_review.md/" "$case12/$story/review_resolution.md"
+rm -f "$case12/$story/review_resolution.md.bak"
+expect_fail "codex symlink escape" "Codex final review file must be inside" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case12"
 
 echo "PASS: story review gate fixtures"

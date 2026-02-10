@@ -61,6 +61,55 @@ pub enum QuantizeError {
         /// Which field is invalid.
         field: &'static str,
     },
+    /// Raw input is non-finite and cannot be safely quantized.
+    InvalidInput {
+        /// Which field is invalid.
+        field: &'static str,
+    },
+}
+
+const BOUNDARY_EPS: f64 = 1e-9;
+// Keep correction well below half-step to preserve directional guarantees:
+// qty/BUY must never round up and SELL must never round down.
+const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.005;
+const BOUNDARY_ULP_MULTIPLIER: f64 = 8.0;
+
+fn boundary_tolerance(raw: f64, step: f64) -> f64 {
+    // Correct one-step drift caused by floating-point division while fail-closing:
+    // if drift exceeds this window, we keep strict floor/ceil behavior instead of
+    // widening snap tolerance and risking direction violations.
+    let step_abs = step.abs();
+    let ulp_scaled = raw.abs().max(1.0) * f64::EPSILON * BOUNDARY_ULP_MULTIPLIER;
+    let step_capped = step_abs * BOUNDARY_STEP_FRACTION_CAP;
+    ulp_scaled.min(step_capped).max(step_abs * BOUNDARY_EPS)
+}
+
+fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> i64 {
+    let ratio = raw / step;
+    let mut steps = if round_up {
+        ratio.ceil() as i64
+    } else {
+        ratio.floor() as i64
+    };
+    let tol = boundary_tolerance(raw, step);
+
+    if round_up {
+        if steps > i64::MIN {
+            let prev = steps - 1;
+            let prev_value = prev as f64 * step;
+            if (raw - prev_value).abs() < tol {
+                steps = prev;
+            }
+        }
+    } else if steps < i64::MAX {
+        let next = steps + 1;
+        let next_value = next as f64 * step;
+        if (raw - next_value).abs() < tol {
+            steps = next;
+        }
+    }
+
+    steps
 }
 
 /// Observability metrics for quantization (AT-908).
@@ -132,9 +181,17 @@ pub fn quantize(
     metrics: &mut QuantizeMetrics,
 ) -> Result<QuantizedValues, QuantizeError> {
     validate_constraints(constraints)?;
+    if !raw_qty.is_finite() {
+        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
+    }
+    if !raw_limit_price.is_finite() {
+        return Err(QuantizeError::InvalidInput {
+            field: "raw_limit_price",
+        });
+    }
 
     // Quantity: always round down (never round up size)
-    let qty_steps = (raw_qty / constraints.amount_step).floor() as i64;
+    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false);
     let qty_q = qty_steps as f64 * constraints.amount_step;
 
     // AT-908: reject if quantized quantity is below minimum
@@ -149,9 +206,9 @@ pub fn quantize(
     // Price: direction-dependent rounding
     let price_ticks = match side {
         // BUY: round down (never pay extra)
-        Side::Buy => (raw_limit_price / constraints.tick_size).floor() as i64,
+        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false),
         // SELL: round up (never sell cheaper)
-        Side::Sell => (raw_limit_price / constraints.tick_size).ceil() as i64,
+        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true),
     };
     let limit_price_q = price_ticks as f64 * constraints.tick_size;
 
