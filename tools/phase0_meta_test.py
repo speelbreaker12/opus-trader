@@ -123,7 +123,7 @@ def build_meta_runtime_state_path(root: Path, prefix: str) -> tuple[Path, bool]:
     allow_external = False
     try:
         runtime_dir.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
+    except OSError:
         runtime_dir = Path(tempfile.gettempdir())
         allow_external = True
     token = f"{prefix}_{os.getpid()}_{time.time_ns()}"
@@ -131,6 +131,12 @@ def build_meta_runtime_state_path(root: Path, prefix: str) -> tuple[Path, bool]:
     if path.exists():
         path.unlink()
     return path, allow_external
+
+
+def cleanup_runtime_state_artifacts(runtime_state: Path) -> None:
+    runtime_state.unlink(missing_ok=True)
+    lock_path = runtime_state.with_name(f".{runtime_state.name}.lock")
+    lock_path.unlink(missing_ok=True)
 
 
 def markdown_table_row_for_env(text: str, env: str) -> List[str]:
@@ -332,8 +338,7 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
             return errors
 
     finally:
-        if runtime_state.exists():
-            runtime_state.unlink()
+        cleanup_runtime_state_artifacts(runtime_state)
 
     return errors
 
@@ -628,8 +633,7 @@ def test_status_command_behavior(root: Path) -> List[str]:
             errors.append("status unhealthy payload errors must mention policy failure")
 
     finally:
-        if runtime_state.exists():
-            runtime_state.unlink()
+        cleanup_runtime_state_artifacts(runtime_state)
 
     return errors
 

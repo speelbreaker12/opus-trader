@@ -214,6 +214,14 @@ def _runtime_state_lock(path: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+def _fsync_directory(path: Path) -> None:
+    dir_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     materialized = dict(state)
@@ -236,6 +244,7 @@ def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
             tmp.flush()
             os.fsync(tmp.fileno())
         os.replace(tmp_path, path)
+        _fsync_directory(path.parent)
     finally:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)

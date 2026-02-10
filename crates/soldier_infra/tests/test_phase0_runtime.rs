@@ -36,11 +36,18 @@ fn unique_temp_file(prefix: &str, suffix: &str) -> PathBuf {
 }
 
 fn unique_temp_state_file(prefix: &str) -> PathBuf {
-    let root = repo_root()
+    let preferred_root = repo_root()
         .join("artifacts")
         .join("phase0")
         .join("runtime_state_tests");
-    fs::create_dir_all(&root).expect("create runtime state test directory");
+    let root = match fs::create_dir_all(&preferred_root) {
+        Ok(()) => preferred_root,
+        Err(_) => {
+            let fallback = env::temp_dir().join("opus_trader_runtime_state_tests");
+            fs::create_dir_all(&fallback).expect("create fallback runtime state test directory");
+            fallback
+        }
+    };
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -80,6 +87,19 @@ fn remove_if_exists(path: &Path) {
             "failed to remove temporary file {}: {err}",
             path.display()
         );
+    }
+
+    if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
+        let lock_name = format!(".{}.lock", name.to_string_lossy());
+        let lock_path = parent.join(lock_name);
+        if let Err(err) = fs::remove_file(&lock_path) {
+            assert_eq!(
+                err.kind(),
+                std::io::ErrorKind::NotFound,
+                "failed to remove temporary lock file {}: {err}",
+                lock_path.display()
+            );
+        }
     }
 }
 
@@ -288,6 +308,7 @@ fn test_status_command_behavior_runtime() {
         &[
             ("STOIC_POLICY_PATH", valid_policy_str),
             ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-status-runtime-test"),
         ],
     );
@@ -310,6 +331,7 @@ fn test_status_command_behavior_runtime() {
         &[
             ("STOIC_POLICY_PATH", missing_policy.to_str().unwrap()),
             ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-status-runtime-test"),
         ],
     );
@@ -349,6 +371,7 @@ fn test_break_glass_command_path_runtime() {
     let env_base = [
         ("STOIC_POLICY_PATH", valid_policy_str),
         ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+        ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
         ("STOIC_BUILD_ID", "phase0-break-glass-runtime-test"),
     ];
 
@@ -506,6 +529,7 @@ fn test_simulate_open_rejects_when_policy_invalid() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-policy-open-reject-test"),
         ],
     );
@@ -623,6 +647,7 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-seed-test"),
         ],
@@ -646,6 +671,7 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-block-test"),
         ],
@@ -694,6 +720,7 @@ fn test_runtime_state_schema_mismatch_fails_closed() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-schema-mismatch-test"),
         ],
     );
@@ -747,6 +774,7 @@ fn test_runtime_state_null_schema_fails_closed() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-schema-null-test"),
         ],
     );
@@ -799,6 +827,7 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-legacy-state-status-test"),
         ],
     );
@@ -831,6 +860,7 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-legacy-state-migrate-test"),
         ],
     );
