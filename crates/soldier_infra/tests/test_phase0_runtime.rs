@@ -373,6 +373,7 @@ fn test_break_glass_command_path_runtime() {
         ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
         ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
         ("STOIC_BUILD_ID", "phase0-break-glass-runtime-test"),
+        ("STOIC_DRILL_MODE", "1"),
     ];
 
     // Active mode should allow simulated OPEN queueing.
@@ -506,6 +507,73 @@ fn test_break_glass_command_path_runtime() {
 }
 
 #[test]
+fn test_simulate_commands_require_drill_mode() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_drill_mode_required");
+    remove_if_exists(&runtime_state);
+
+    let open_out = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-drill-mode-open-gate-test"),
+        ],
+    );
+    assert_eq!(open_out.status.code(), Some(2), "simulate-open must require drill mode");
+    let open_payload = parse_stdout_json(&open_out);
+    assert_eq!(open_payload["reason"], Value::String("drill_mode_required".to_string()));
+    assert_eq!(open_payload["command"], Value::String("simulate-open".to_string()));
+
+    let close_out = run_cli(
+        [
+            "simulate-close",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--dry-run",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-drill-mode-close-gate-test"),
+        ],
+    );
+    assert_eq!(close_out.status.code(), Some(2), "simulate-close must require drill mode");
+    let close_payload = parse_stdout_json(&close_out);
+    assert_eq!(
+        close_payload["reason"],
+        Value::String("drill_mode_required".to_string())
+    );
+    assert_eq!(
+        close_payload["command"],
+        Value::String("simulate-close".to_string())
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
 fn test_simulate_open_rejects_when_policy_invalid() {
     let root = repo_root();
     let runtime_state = unique_temp_state_file("phase0_policy_reject_open");
@@ -530,6 +598,7 @@ fn test_simulate_open_rejects_when_policy_invalid() {
                 runtime_state.to_str().expect("utf8 path"),
             ),
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_BUILD_ID", "phase0-policy-open-reject-test"),
         ],
     );
@@ -648,6 +717,7 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
                 runtime_state.to_str().expect("utf8 path"),
             ),
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-seed-test"),
         ],
@@ -672,6 +742,7 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
                 runtime_state.to_str().expect("utf8 path"),
             ),
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-block-test"),
         ],
@@ -861,6 +932,7 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
                 runtime_state.to_str().expect("utf8 path"),
             ),
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_BUILD_ID", "phase0-legacy-state-migrate-test"),
         ],
     );
