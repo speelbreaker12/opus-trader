@@ -307,33 +307,24 @@ if [[ -n "$AUDITOR_AGENT_ARGS" ]]; then
   IFS="$_old_ifs"
 fi
 
-run_auditor() {
-  local prompt meta_json
-  prompt="$(cat "$AUDITOR_PROMPT")"
+# Build prompt and argv in the current shell so timeout execution does not drop state.
+auditor_prompt="$(cat "$AUDITOR_PROMPT")"
+if [[ -f "$AUDIT_META_FILE" ]]; then
+  meta_json="$(cat "$AUDIT_META_FILE")"
+  auditor_prompt="${auditor_prompt//__AUDIT_META_PLACEHOLDER__/$meta_json}"
+else
+  echo "[prd_auditor] ERROR: missing audit meta file: $AUDIT_META_FILE" >&2
+  exit 1
+fi
 
-  # Embed meta file content directly in prompt to avoid parallel execution race conditions
-  if [[ -f "$AUDIT_META_FILE" ]]; then
-    meta_json="$(cat "$AUDIT_META_FILE")"
-    prompt="${prompt//__AUDIT_META_PLACEHOLDER__/$meta_json}"
-  else
-    echo "[prd_auditor] ERROR: missing audit meta file: $AUDIT_META_FILE" >&2
-    return 1
-  fi
-
-  if [[ -n "$AUDITOR_AGENT_ARGS" ]]; then
-    if [[ -n "${AUDITOR_PROMPT_FLAG:-}" ]]; then
-      "$AUDITOR_AGENT_CMD" "${AUDITOR_AGENT_ARGS_ARR[@]}" "$AUDITOR_PROMPT_FLAG" "$prompt"
-    else
-      "$AUDITOR_AGENT_CMD" "${AUDITOR_AGENT_ARGS_ARR[@]}" "$prompt"
-    fi
-  else
-    if [[ -n "${AUDITOR_PROMPT_FLAG:-}" ]]; then
-      "$AUDITOR_AGENT_CMD" "$AUDITOR_PROMPT_FLAG" "$prompt"
-    else
-      "$AUDITOR_AGENT_CMD" "$prompt"
-    fi
-  fi
-}
+auditor_cmd=("$AUDITOR_AGENT_CMD")
+if [[ ${#AUDITOR_AGENT_ARGS_ARR[@]} -gt 0 ]]; then
+  auditor_cmd+=("${AUDITOR_AGENT_ARGS_ARR[@]}")
+fi
+if [[ -n "${AUDITOR_PROMPT_FLAG:-}" ]]; then
+  auditor_cmd+=("$AUDITOR_PROMPT_FLAG")
+fi
+auditor_cmd+=("$auditor_prompt")
 
 mkdir -p "$(dirname "$AUDIT_STDOUT_LOG")"
 
@@ -343,11 +334,11 @@ progress "Starting auditor agent (timeout=${AUDITOR_TIMEOUT}s)..."
 auditor_start_ts="$(date +%s)"
 auditor_rc=0
 if command -v timeout >/dev/null 2>&1; then
-  timeout "$AUDITOR_TIMEOUT" bash -c "$(declare -f run_auditor); run_auditor" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
+  timeout "$AUDITOR_TIMEOUT" "${auditor_cmd[@]}" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
 elif command -v gtimeout >/dev/null 2>&1; then
-  gtimeout "$AUDITOR_TIMEOUT" bash -c "$(declare -f run_auditor); run_auditor" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
+  gtimeout "$AUDITOR_TIMEOUT" "${auditor_cmd[@]}" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
 else
-  run_auditor > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
+  "${auditor_cmd[@]}" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
 fi
 auditor_end_ts="$(date +%s)"
 auditor_duration=$((auditor_end_ts - auditor_start_ts))
