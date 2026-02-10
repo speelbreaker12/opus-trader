@@ -17,6 +17,14 @@ fn btc_constraints() -> QuantizeConstraints {
     }
 }
 
+fn decimal_constraints() -> QuantizeConstraints {
+    QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 0.1,
+        min_amount: 0.1,
+    }
+}
+
 // ─── Quantity quantization ─────────────────────────────────────────────
 
 /// qty_q = floor(raw_qty / amount_step) * amount_step
@@ -44,6 +52,15 @@ fn test_qty_steps_integer() {
     let result = quantize(1.99, 50_000.0, Side::Buy, &btc_constraints(), &mut metrics).unwrap();
     assert_eq!(result.qty_steps, 19);
     assert!((result.qty_q - 1.9).abs() < 1e-9);
+}
+
+/// Decimal boundary: 0.3/0.1 should quantize to exactly 3 steps, not 2.
+#[test]
+fn test_qty_decimal_boundary_is_stable() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(0.3, 50_000.0, Side::Buy, &decimal_constraints(), &mut metrics).unwrap();
+    assert_eq!(result.qty_steps, 3);
+    assert!((result.qty_q - 0.3).abs() < 1e-9);
 }
 
 // ─── AT-219: Price rounding direction ──────────────────────────────────
@@ -98,6 +115,24 @@ fn test_sell_price_exact_tick() {
     let result = quantize(1.0, 50_000.0, Side::Sell, &btc_constraints(), &mut metrics).unwrap();
     assert_eq!(result.price_ticks, 100_000);
     assert!((result.limit_price_q - 50_000.0).abs() < 1e-9);
+}
+
+/// Decimal boundary: 100.3/0.1 should stay on tick for BUY.
+#[test]
+fn test_buy_price_decimal_boundary_is_stable() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(1.0, 100.3, Side::Buy, &decimal_constraints(), &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1003);
+    assert!((result.limit_price_q - 100.3).abs() < 1e-9);
+}
+
+/// Decimal boundary: 100.3/0.1 should stay on tick for SELL.
+#[test]
+fn test_sell_price_decimal_boundary_is_stable() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(1.0, 100.3, Side::Sell, &decimal_constraints(), &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1003);
+    assert!((result.limit_price_q - 100.3).abs() < 1e-9);
 }
 
 /// AT-219: BUY price never increases
@@ -245,6 +280,33 @@ fn test_at926_infinity_tick_size() {
     assert_eq!(
         result,
         Err(QuantizeError::InstrumentMetadataMissing { field: "tick_size" })
+    );
+}
+
+/// Non-finite raw qty must fail-closed before quantization.
+#[test]
+fn test_non_finite_raw_qty_rejected() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(f64::NAN, 50_000.0, Side::Buy, &btc_constraints(), &mut metrics);
+    assert_eq!(result, Err(QuantizeError::InvalidInput { field: "raw_qty" }));
+}
+
+/// Non-finite raw limit price must fail-closed before quantization.
+#[test]
+fn test_non_finite_raw_limit_price_rejected() {
+    let mut metrics = QuantizeMetrics::new();
+    let result = quantize(
+        1.0,
+        f64::INFINITY,
+        Side::Buy,
+        &btc_constraints(),
+        &mut metrics,
+    );
+    assert_eq!(
+        result,
+        Err(QuantizeError::InvalidInput {
+            field: "raw_limit_price"
+        })
     );
 }
 
