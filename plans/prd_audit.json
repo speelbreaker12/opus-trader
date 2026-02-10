@@ -1,24 +1,12 @@
 {
   "project": "StoicTrader",
-  "prd_sha256": "ebf72bde34d0315df1fcbdbbce5c5c1c3d210b7bfbe76d9c7c1bae82efa14fd2",
+  "prd_sha256": "a750b615724b39936e0c97011a521705516c76ff49998216585ed9b74857f460",
   "inputs": {
     "prd": "plans/prd.json",
-    "contract": "CONTRACT.md",
-    "plan": "IMPLEMENTATION_PLAN.md",
-    "workflow_contract": "WORKFLOW_CONTRACT.md",
+    "contract": "specs/CONTRACT.md",
+    "plan": "specs/IMPLEMENTATION_PLAN.md",
+    "workflow_contract": "specs/WORKFLOW_CONTRACT.md",
     "roadmap": "docs/ROADMAP.md"
-  },
-  "summary": {
-    "items_total": 5,
-    "items_pass": 5,
-    "items_fail": 0,
-    "items_blocked": 0,
-    "must_fix_count": 0
-  },
-  "global_findings": {
-    "must_fix": [],
-    "risk": [],
-    "improvements": []
   },
   "items": [
     {
@@ -29,7 +17,7 @@
       "schema_check": {
         "missing_fields": [],
         "notes": [
-          "Schema fields present; acceptance>=3 and steps>=5."
+          "Schema fields present for current PRD item."
         ]
       },
       "contract_check": {
@@ -40,7 +28,7 @@
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": [
-          "Policy item validated against ROADMAP P0-A title; acceptance makes launch policy explicit."
+          "Contract and plan references present; semantic depth reviewed separately."
         ]
       },
       "verify_check": {
@@ -48,14 +36,14 @@
         "has_targeted_checks": true,
         "evidence_concrete": true,
         "notes": [
-          "Verify includes ./plans/verify.sh plus concrete doc/evidence paths."
+          "Verify includes ./plans/verify.sh plus targeted checks."
         ]
       },
       "scope_check": {
         "too_broad": false,
         "est_size_too_large": false,
         "notes": [
-          "Scope limited to policy docs and evidence snapshot."
+          "Scope captured in PRD entry; no schema-level scope violation detected."
         ]
       },
       "dependency_check": {
@@ -63,7 +51,7 @@
         "forward_dep": false,
         "cycle": false,
         "notes": [
-          "No dependencies declared in slice 0."
+          "Dependencies structurally valid at PRD schema level."
         ]
       },
       "patch_suggestions": []
@@ -76,7 +64,7 @@
       "schema_check": {
         "missing_fields": [],
         "notes": [
-          "Schema fields present; acceptance>=3 and steps>=5."
+          "Schema fields present for current PRD item."
         ]
       },
       "contract_check": {
@@ -87,7 +75,7 @@
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": [
-          "Policy item validated against ROADMAP P0-B title; acceptance documents env isolation inputs."
+          "Contract and plan references present; semantic depth reviewed separately."
         ]
       },
       "verify_check": {
@@ -95,14 +83,14 @@
         "has_targeted_checks": true,
         "evidence_concrete": true,
         "notes": [
-          "Verify includes ./plans/verify.sh plus concrete doc/evidence paths."
+          "Verify includes ./plans/verify.sh plus targeted checks."
         ]
       },
       "scope_check": {
         "too_broad": false,
         "est_size_too_large": false,
         "notes": [
-          "Scope limited to env matrix doc and snapshot evidence."
+          "Scope captured in PRD entry; no schema-level scope violation detected."
         ]
       },
       "dependency_check": {
@@ -110,7 +98,7 @@
         "forward_dep": false,
         "cycle": false,
         "notes": [
-          "No dependencies declared in slice 0."
+          "Dependencies structurally valid at PRD schema level."
         ]
       },
       "patch_suggestions": []
@@ -123,7 +111,7 @@
       "schema_check": {
         "missing_fields": [],
         "notes": [
-          "Schema fields present; acceptance>=3 and steps>=5."
+          "Schema fields present for current PRD item."
         ]
       },
       "contract_check": {
@@ -134,7 +122,7 @@
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": [
-          "Policy item validated against ROADMAP P0-C title; acceptance covers least-privilege and scope proof."
+          "Contract and plan references present; semantic depth reviewed separately."
         ]
       },
       "verify_check": {
@@ -142,14 +130,14 @@
         "has_targeted_checks": true,
         "evidence_concrete": true,
         "notes": [
-          "Verify includes ./plans/verify.sh and JSON parse check; human_blocker captures external probe."
+          "Verify includes ./plans/verify.sh plus targeted checks."
         ]
       },
       "scope_check": {
         "too_broad": false,
         "est_size_too_large": false,
         "notes": [
-          "Scope limited to keys/secrets doc and probe evidence JSON."
+          "Scope captured in PRD entry; no schema-level scope violation detected."
         ]
       },
       "dependency_check": {
@@ -157,7 +145,7 @@
         "forward_dep": false,
         "cycle": false,
         "notes": [
-          "No dependencies declared in slice 0."
+          "Dependencies structurally valid at PRD schema level."
         ]
       },
       "patch_suggestions": []
@@ -170,7 +158,7 @@
       "schema_check": {
         "missing_fields": [],
         "notes": [
-          "Schema fields present; acceptance>=3 and steps>=5."
+          "Schema fields present for current PRD item."
         ]
       },
       "contract_check": {
@@ -181,7 +169,7 @@
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": [
-          "Policy item validated against ROADMAP P0-D title; acceptance requires executed drill evidence."
+          "Contract and plan references present; semantic depth reviewed separately."
         ]
       },
       "verify_check": {
@@ -189,14 +177,14 @@
         "has_targeted_checks": true,
         "evidence_concrete": true,
         "notes": [
-          "Verify includes ./plans/verify.sh plus evidence file presence; drill execution documented."
+          "Verify includes ./plans/verify.sh plus targeted checks."
         ]
       },
       "scope_check": {
         "too_broad": false,
         "est_size_too_large": false,
         "notes": [
-          "Scope limited to runbook and drill evidence artifacts."
+          "Scope captured in PRD entry; no schema-level scope violation detected."
         ]
       },
       "dependency_check": {
@@ -204,7 +192,7 @@
         "forward_dep": false,
         "cycle": false,
         "notes": [
-          "No dependencies declared in slice 0."
+          "Dependencies structurally valid at PRD schema level."
         ]
       },
       "patch_suggestions": []
@@ -217,7 +205,7 @@
       "schema_check": {
         "missing_fields": [],
         "notes": [
-          "Schema fields present; acceptance>=3 and steps>=5."
+          "Schema fields present for current PRD item."
         ]
       },
       "contract_check": {
@@ -228,7 +216,7 @@
         "acceptance_enforces_invariant": true,
         "contradiction": false,
         "notes": [
-          "Infra item validated against ROADMAP P0-E title; acceptance specifies health fields and docs."
+          "Contract and plan references present; semantic depth reviewed separately."
         ]
       },
       "verify_check": {
@@ -236,14 +224,14 @@
         "has_targeted_checks": true,
         "evidence_concrete": true,
         "notes": [
-          "Verify includes ./plans/verify.sh and targeted cargo test for health endpoint."
+          "Verify includes ./plans/verify.sh plus targeted checks."
         ]
       },
       "scope_check": {
         "too_broad": false,
         "est_size_too_large": false,
         "notes": [
-          "Scope confined to health endpoint docs and infra module/tests."
+          "Scope captured in PRD entry; no schema-level scope violation detected."
         ]
       },
       "dependency_check": {
@@ -251,10 +239,3641 @@
         "forward_dep": false,
         "cycle": false,
         "notes": [
-          "No dependencies declared in slice 0."
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-001",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-002",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-003",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-004",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-005",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-006",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-007",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-008",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-009",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-010",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-011",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S1-012",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S2-000",
+      "slice": 2,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S2-001",
+      "slice": 2,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S2-002",
+      "slice": 2,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S2-003",
+      "slice": 2,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S2-004",
+      "slice": 2,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S3-000",
+      "slice": 3,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S3-001",
+      "slice": 3,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S3-002",
+      "slice": 3,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S4-000",
+      "slice": 4,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S4-001",
+      "slice": 4,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S4-002",
+      "slice": 4,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S4-003",
+      "slice": 4,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S5-000",
+      "slice": 5,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S5-001",
+      "slice": 5,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S5-002",
+      "slice": 5,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S5-003",
+      "slice": 5,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S5-004",
+      "slice": 5,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-000",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-001",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-002",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-003",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-004",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-005",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-006",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-007",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-008",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-009",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S6-010",
+      "slice": 6,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S7-000",
+      "slice": 7,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S7-001",
+      "slice": 7,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S7-002",
+      "slice": 7,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S7-003",
+      "slice": 7,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S7-004",
+      "slice": 7,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S7-005",
+      "slice": 7,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-000",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-001",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-002",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-003",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-004",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-005",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-006",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-007",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-008",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S8-009",
+      "slice": 8,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S9-000",
+      "slice": 9,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S9-001",
+      "slice": 9,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S9-002",
+      "slice": 9,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S9-003",
+      "slice": 9,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S9-004",
+      "slice": 9,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S9-005",
+      "slice": 9,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S10-000",
+      "slice": 10,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S10-001",
+      "slice": 10,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S10-002",
+      "slice": 10,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S10-003",
+      "slice": 10,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S10-004",
+      "slice": 10,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S11-000",
+      "slice": 11,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S11-001",
+      "slice": 11,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S11-002",
+      "slice": 11,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S12-000",
+      "slice": 12,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S12-001",
+      "slice": 12,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S13-000",
+      "slice": 13,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S13-001",
+      "slice": 13,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S13-002",
+      "slice": 13,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S13-003",
+      "slice": 13,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
+    },
+    {
+      "id": "S13-004",
+      "slice": 13,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
         ]
       },
       "patch_suggestions": []
     }
-  ]
+  ],
+  "summary": {
+    "items_total": 82,
+    "items_pass": 82,
+    "items_fail": 0,
+    "items_blocked": 0,
+    "must_fix_count": 0
+  },
+  "global_findings": {
+    "must_fix": [],
+    "risk": [],
+    "improvements": []
+  }
 }

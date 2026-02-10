@@ -220,6 +220,14 @@ if [[ -z "$repo_root" ]]; then
   finish
 fi
 
+# Keep string matching in-process and case-insensitive to avoid heavy subprocess usage.
+shopt -s nocasematch
+reason_re='(^|[^a-z0-9_])(reason code|modereasoncode|openpermissionreasoncode|rejectreason)([^a-z0-9_]|$)'
+metrics_re='(^|[^a-z0-9_])(metric|counter|gauge|histogram|log)([^a-z0-9_]|$)'
+metrics_name_re='(^|[^a-z0-9_])[a-z0-9_]+_(total|pct|ms|s)([^a-z0-9_]|$)'
+status_re='(/status|status endpoint|status field|/api/v1/status|operator visible|operator-visible)'
+liveness_re='(^|[^a-z0-9_])(backpressure|stall|hang|queue|lag|latency)([^a-z0-9_]|$)'
+
 core_has_src=0
 infra_has_src=0
 if [[ -d "$repo_root/crates/soldier_core/src" ]]; then
@@ -248,7 +256,9 @@ is_allowlisted() {
   local id="$1"
   local entry
   for entry in "${allow_ids[@]}"; do
-    [[ -n "$entry" && "$entry" == "$id" ]] && return 0
+    if [[ -n "$entry" ]] && [ "$entry" = "$id" ]; then
+      return 0
+    fi
   done
   return 1
 }
@@ -342,82 +352,123 @@ check_path_convention() {
   fi
 }
 
-check_required() {
-  local filter="$1"
-  local field="$2"
-  if ! printf '%s' "$item_json" | jq -e "$filter" >/dev/null 2>&1; then
-    report_error INVALID_FIELD "$item_id" "$field missing or wrong type"
-  fi
-}
-
 glob_warn="${PRD_LINT_GLOB_WARN:-25}"
 glob_fail="${PRD_LINT_GLOB_FAIL:-100}"
 
-items_stream=$(jq -c '.items | to_entries[]' "$prd_file")
-while IFS= read -r entry; do
-  idx=$(printf '%s' "$entry" | jq -r '.key')
-  item_json=$(printf '%s' "$entry" | jq -c '.value')
-  item_id=$(printf '%s' "$item_json" | jq -r '.id // empty')
+items_stream_err_file="$(mktemp "${TMPDIR:-/tmp}/prd_lint_items_err.XXXXXX")"
+if ! items_stream="$(jq -r '
+  .items[]
+  | [
+      (.id // ""),
+      (.category // ""),
+      ([.description // "", (.acceptance // [])[], (.steps // [])[]] | join(" ") | gsub("[\u001e\t\r\n]+"; " ")),
+      (if (.category == "execution" or .category == "risk" or .category == "durability") then "1" else "0" end),
+      (.id | type == "string" and length > 0),
+      (.slice | type == "number"),
+      (.passes | type == "boolean"),
+      (.needs_human_decision | type == "boolean"),
+      (.description | type == "string" and length > 0),
+      (.acceptance | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)),
+      (.verify | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)),
+      (.scope.touch | type == "array" and all(.[]; type == "string" and length > 0)),
+      (if (.scope.touch | type) == "array" then (.scope.touch | length) else -1 end),
+      (has("scope") and (.scope | type == "object") and (.scope | has("create")) and (.scope.create != null)),
+      (.scope.create | type == "array" and all(.[]; type == "string" and length > 0)),
+      (has("contract_refs") and .contract_refs != null),
+      (.contract_refs | type == "array" and all(.[]; type == "string")),
+      (.contract_refs | type == "array"),
+      (has("dependencies") and .dependencies != null),
+      (.dependencies | type == "array"),
+      (.verify | type == "array"),
+      (.verify | index("./plans/verify.sh") != null),
+      (.scope.touch | type == "array"),
+      (.scope.avoid | type == "array"),
+      (.contract_refs | type == "array" and length > 0),
+      (.acceptance | type == "array" and length > 0),
+      ((if (.contract_refs | type) == "array" then .contract_refs else [] end) | join(" | ") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.acceptance | type) == "array" then .acceptance else [] end) | join(" | ") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((.contract_must_evidence // []) | length),
+      ((.enforcing_contract_ats // []) | length),
+      (.reason_codes.type // ""),
+      ((.reason_codes.values // []) | length),
+      (.enforcement_point // ""),
+      ((.observability.metrics // []) | length),
+      ((.observability.status_fields // []) | length),
+      ((.observability.status_contract_ats // []) | length),
+      ((.failure_mode // []) | length),
+      ((.implementation_tests // []) | length),
+      ((if (.scope.touch | type) == "array" then .scope.touch else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.scope.avoid | type) == "array" then .scope.avoid else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.scope.create | type) == "array" then .scope.create else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.contract_refs | type) == "array" then .contract_refs else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.contract_must_evidence | type) == "array" then .contract_must_evidence else [] end) | map(.quote // "" | tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " "))
+    ]
+  | map(tostring | gsub("\u001e"; " "))
+  | join("\u001e")
+' "$prd_file" 2>"$items_stream_err_file")"; then
+  report_error ITEM_META_EXTRACTION_FAIL GLOBAL "failed to extract PRD item metadata for lint checks"
+  if [[ -s "$items_stream_err_file" ]]; then
+    cat "$items_stream_err_file" >&2
+  fi
+  rm -f "$items_stream_err_file"
+  finish
+fi
+rm -f "$items_stream_err_file"
+idx=0
+while IFS= read -r item_meta; do
+  [[ -z "$item_meta" ]] && continue
+
+  IFS=$'\x1e' read -r item_id item_category item_text gate_required id_ok slice_ok passes_ok needs_human_ok desc_ok acceptance_ok verify_ok scope_touch_ok touch_count has_scope_create scope_create_ok has_contract_refs_non_null contract_refs_array_ok contract_refs_is_array has_dependencies_non_null dependencies_is_array verify_is_array verify_has_verify_sh scope_touch_is_array scope_avoid_is_array contract_refs_nonempty acceptance_nonempty contract_refs acceptance_refs contract_evidence_count enforcing_ats_count reason_type reason_values_count enforcement_point metrics_count status_fields_count status_ats_count failure_mode_count impl_tests_count touch_paths_raw avoid_paths_raw create_paths_raw contract_refs_raw quotes_raw <<< "$item_meta"
+
   if [[ -z "$item_id" ]]; then
     item_id="ITEM_$idx"
   fi
-  item_category=$(printf '%s' "$item_json" | jq -r '.category // empty')
-  item_text=$(printf '%s' "$item_json" | jq -r '[.description // "", (.acceptance // [])[], (.steps // [])[]] | join(" ")')
-  item_text_lc=$(printf '%s' "$item_text" | tr '[:upper:]' '[:lower:]')
-  gate_required=0
-  if [[ "$item_category" == "execution" || "$item_category" == "risk" || "$item_category" == "durability" ]]; then
-    gate_required=1
-  fi
+  idx=$((idx + 1))
 
-  check_required '.id | type == "string" and length > 0' 'id'
-  check_required '.slice | type == "number"' 'slice'
-  check_required '.passes | type == "boolean"' 'passes'
-  check_required '.needs_human_decision | type == "boolean"' 'needs_human_decision'
-  check_required '.description | type == "string" and length > 0' 'description'
-  check_required '.acceptance | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' 'acceptance'
-  check_required '.verify | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)' 'verify'
+  item_text_lc="$item_text"
 
-  if ! printf '%s' "$item_json" | jq -e '.scope.touch | type == "array" and all(.[]; type == "string" and length > 0)' >/dev/null 2>&1; then
-    report_error INVALID_FIELD "$item_id" "scope.touch missing or wrong type"
-  fi
+  [[ "$id_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "id missing or wrong type"
+  [[ "$slice_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "slice missing or wrong type"
+  [[ "$passes_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "passes missing or wrong type"
+  [[ "$needs_human_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "needs_human_decision missing or wrong type"
+  [[ "$desc_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "description missing or wrong type"
+  [[ "$acceptance_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "acceptance missing or wrong type"
+  [[ "$verify_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "verify missing or wrong type"
+  [[ "$scope_touch_ok" == "true" ]] || report_error INVALID_FIELD "$item_id" "scope.touch missing or wrong type"
 
   create_paths=()
-  if printf '%s' "$item_json" | jq -e '.scope.create? != null' >/dev/null 2>&1; then
-    if ! printf '%s' "$item_json" | jq -e '.scope.create | type == "array" and all(.[]; type == "string" and length > 0)' >/dev/null 2>&1; then
+  if [[ "$has_scope_create" == "true" ]]; then
+    if [[ "$scope_create_ok" != "true" ]]; then
       report_error INVALID_FIELD "$item_id" "scope.create must be array of strings"
-    else
-      while IFS= read -r create; do
-        [[ -z "$create" ]] && continue
-        create_paths+=("$create")
-      done <<< "$(printf '%s' "$item_json" | jq -r '.scope.create[]')"
+    elif [[ -n "$create_paths_raw" ]]; then
+      IFS=$'\x1f' read -r -a create_paths <<< "$create_paths_raw"
     fi
   fi
 
-  touch_count=0
-  if printf '%s' "$item_json" | jq -e '.scope.touch | type == "array"' >/dev/null 2>&1; then
-    touch_count="$(printf '%s' "$item_json" | jq -r '.scope.touch | length')"
-    if ! [[ "$touch_count" =~ ^[0-9]+$ ]]; then
-      touch_count=0
-    fi
+  touch_paths=()
+  if [[ "$scope_touch_is_array" == "true" && -n "$touch_paths_raw" ]]; then
+    IFS=$'\x1f' read -r -a touch_paths <<< "$touch_paths_raw"
+  fi
+
+  avoid_paths=()
+  if [[ "$scope_avoid_is_array" == "true" && -n "$avoid_paths_raw" ]]; then
+    IFS=$'\x1f' read -r -a avoid_paths <<< "$avoid_paths_raw"
+  fi
+
+  if ! [[ "$touch_count" =~ ^[0-9]+$ ]]; then
+    touch_count=0
   fi
   if (( touch_count == 0 && ${#create_paths[@]} == 0 )); then
     report_error INVALID_FIELD "$item_id" "scope.touch must be non-empty unless scope.create is provided"
   fi
 
-  if printf '%s' "$item_json" | jq -e 'has("contract_refs") and .contract_refs != null' >/dev/null 2>&1; then
-    if ! printf '%s' "$item_json" | jq -e '.contract_refs | (type == "array" and all(.[]; type == "string"))' >/dev/null 2>&1; then
-      report_error INVALID_FIELD "$item_id" "contract_refs must be array of strings"
-    fi
+  if [[ "$has_contract_refs_non_null" == "true" && "$contract_refs_array_ok" != "true" ]]; then
+    report_error INVALID_FIELD "$item_id" "contract_refs must be array of strings"
   fi
 
   contract_refs_list=()
-  contract_refs_lc=()
-  if printf '%s' "$item_json" | jq -e '.contract_refs | type == "array"' >/dev/null 2>&1; then
-    while IFS= read -r cref; do
-      [[ -z "$cref" ]] && continue
-      contract_refs_list+=("$cref")
-      contract_refs_lc+=("$(printf '%s' "$cref" | tr '[:upper:]' '[:lower:]')")
-    done <<< "$(printf '%s' "$item_json" | jq -r '.contract_refs[]?')"
+  if [[ "$contract_refs_is_array" == "true" && -n "$contract_refs_raw" ]]; then
+    IFS=$'\x1f' read -r -a contract_refs_list <<< "$contract_refs_raw"
   fi
 
   if (( ${#contract_refs_list[@]} > 0 )); then
@@ -425,10 +476,9 @@ while IFS= read -r entry; do
       for i in "${!anchor_ids[@]}"; do
         anchor_id="${anchor_ids[$i]}"
         anchor_title="${anchor_titles[$i]}"
-        anchor_title_lc="$(printf '%s' "$anchor_title" | tr '[:upper:]' '[:lower:]')"
         title_found=0
-        for ref_lc in "${contract_refs_lc[@]}"; do
-          if [[ "$ref_lc" == *"$anchor_title_lc"* ]]; then
+        for cref in "${contract_refs_list[@]}"; do
+          if [[ "$cref" == *"$anchor_title"* ]]; then
             title_found=1
             break
           fi
@@ -453,10 +503,9 @@ while IFS= read -r entry; do
       for i in "${!vr_ids[@]}"; do
         vr_id="${vr_ids[$i]}"
         vr_title="${vr_titles[$i]}"
-        vr_title_lc="$(printf '%s' "$vr_title" | tr '[:upper:]' '[:lower:]')"
         title_found=0
-        for ref_lc in "${contract_refs_lc[@]}"; do
-          if [[ "$ref_lc" == *"$vr_title_lc"* ]]; then
+        for cref in "${contract_refs_list[@]}"; do
+          if [[ "$cref" == *"$vr_title"* ]]; then
             title_found=1
             break
           fi
@@ -478,23 +527,21 @@ while IFS= read -r entry; do
     fi
   fi
 
-  if printf '%s' "$item_json" | jq -e 'has("dependencies") and .dependencies != null' >/dev/null 2>&1; then
-    if ! printf '%s' "$item_json" | jq -e '.dependencies | (type == "array")' >/dev/null 2>&1; then
-      report_error INVALID_FIELD "$item_id" "dependencies must be array"
-    fi
+  if [[ "$has_dependencies_non_null" == "true" && "$dependencies_is_array" != "true" ]]; then
+    report_error INVALID_FIELD "$item_id" "dependencies must be array"
   fi
 
-  if printf '%s' "$item_json" | jq -e '.verify | type == "array"' >/dev/null 2>&1; then
+  if [[ "$verify_is_array" == "true" ]]; then
     if ! is_allowlisted "$item_id"; then
-      if ! printf '%s' "$item_json" | jq -e '.verify | index("./plans/verify.sh") != null' >/dev/null 2>&1; then
+      if [[ "$verify_has_verify_sh" != "true" ]]; then
         report_error MISSING_VERIFY_SH "$item_id" "verify must include ./plans/verify.sh"
         suggest_fix MISSING_VERIFY_SH "$item_id" "verify" ""
       fi
     fi
   fi
 
-  if printf '%s' "$item_json" | jq -e '.scope.touch | type == "array"' >/dev/null 2>&1; then
-    while IFS= read -r touch; do
+  if [[ "$scope_touch_is_array" == "true" ]]; then
+    for touch in "${touch_paths[@]}"; do
       [[ -z "$touch" ]] && continue
       touch_norm="$(normalize_path "$touch")"
       check_path_convention "$item_id" "$touch_norm"
@@ -527,15 +574,15 @@ while IFS= read -r entry; do
           suggest_fix MISSING_PATH "$item_id" "touch" "$touch_norm"
         fi
       fi
-    done <<< "$(printf '%s' "$item_json" | jq -r '.scope.touch[]')"
+    done
   fi
 
-  if printf '%s' "$item_json" | jq -e '.scope.avoid | type == "array"' >/dev/null 2>&1; then
-    while IFS= read -r avoid; do
+  if [[ "$scope_avoid_is_array" == "true" ]]; then
+    for avoid in "${avoid_paths[@]}"; do
       [[ -z "$avoid" ]] && continue
       avoid_norm="$(normalize_path "$avoid")"
       check_path_convention "$item_id" "$avoid_norm"
-    done <<< "$(printf '%s' "$item_json" | jq -r '.scope.avoid[]')"
+    done
   fi
 
   if (( ${#create_paths[@]} > 0 )); then
@@ -561,7 +608,8 @@ while IFS= read -r entry; do
         suggest_fix CREATE_PATH_EXISTS "$item_id" "create" "$create_norm"
         continue
       fi
-      parent_dir="$(dirname "$full_create")"
+      parent_dir="${full_create%/*}"
+      [[ -z "$parent_dir" ]] && parent_dir="."
       if [[ ! -d "$parent_dir" ]]; then
         report_error CREATE_PARENT_MISSING "$item_id" "scope.create parent directory missing for: $create_norm"
         suggest_fix CREATE_PARENT_MISSING "$item_id" "create" "$create_norm"
@@ -569,12 +617,9 @@ while IFS= read -r entry; do
     done
   fi
 
-  if printf '%s' "$item_json" | jq -e '.contract_refs | type == "array" and length > 0' >/dev/null 2>&1; then
-    contract_refs=$(printf '%s' "$item_json" | jq -r '.contract_refs | join(" | ")')
-    acceptance_refs=$(printf '%s' "$item_json" | jq -r '.acceptance | join(" | ")')
-
-    contract_lc_scope=$(printf '%s' "$contract_refs" | tr '[:upper:]' '[:lower:]')
-    acceptance_lc_scope=$(printf '%s' "$acceptance_refs" | tr '[:upper:]' '[:lower:]')
+  if [[ "$contract_refs_nonempty" == "true" ]]; then
+    contract_lc_scope="$contract_refs"
+    acceptance_lc_scope="$acceptance_refs"
 
     report_heuristic() {
       local id="$1"
@@ -611,9 +656,8 @@ while IFS= read -r entry; do
     fi
   fi
 
-  if printf '%s' "$item_json" | jq -e '.acceptance | type == "array" and length > 0' >/dev/null 2>&1; then
-    acceptance_refs=$(printf '%s' "$item_json" | jq -r '.acceptance | join(" | ")')
-    acceptance_lc=$(printf '%s' "$acceptance_refs" | tr '[:upper:]' '[:lower:]')
+  if [[ "$acceptance_nonempty" == "true" ]]; then
+    acceptance_lc="$acceptance_refs"
 
     if [[ "$acceptance_lc" == *"policyguard"* || "$acceptance_lc" == *"evidenceguard"* || "$acceptance_lc" == *"f1"* || "$acceptance_lc" == *"replay"* || "$acceptance_lc" == *"wal"* ]]; then
       # Determine which keyword was found for better guidance
@@ -633,7 +677,6 @@ while IFS= read -r entry; do
   fi
 
   if [[ "$gate_required" == "1" ]]; then
-    contract_evidence_count=$(printf '%s' "$item_json" | jq -r '.contract_must_evidence | length')
     if ! [[ "$contract_evidence_count" =~ ^[0-9]+$ ]]; then
       contract_evidence_count=0
     fi
@@ -641,7 +684,6 @@ while IFS= read -r entry; do
       report_error MISSING_CONTRACT_MUST_EVIDENCE "$item_id" "contract_must_evidence required for execution/risk/durability items"
     fi
 
-    enforcing_ats_count=$(printf '%s' "$item_json" | jq -r '.enforcing_contract_ats | length')
     if ! [[ "$enforcing_ats_count" =~ ^[0-9]+$ ]]; then
       enforcing_ats_count=0
     fi
@@ -649,8 +691,6 @@ while IFS= read -r entry; do
       report_error MISSING_ENFORCING_ATS "$item_id" "enforcing_contract_ats required for execution/risk/durability items"
     fi
 
-    reason_type="$(printf '%s' "$item_json" | jq -r '.reason_codes.type // ""')"
-    reason_values_count="$(printf '%s' "$item_json" | jq -r '.reason_codes.values | length')"
     if [[ -z "$reason_type" ]]; then
       report_error MISSING_REASON_CODES "$item_id" "reason_codes.type required for execution/risk/durability items"
     fi
@@ -661,29 +701,28 @@ while IFS= read -r entry; do
       report_error MISSING_REASON_CODES "$item_id" "reason_codes.values required for execution/risk/durability items"
     fi
 
-    enforcement_point="$(printf '%s' "$item_json" | jq -r '.enforcement_point // ""')"
     if [[ -z "$enforcement_point" ]]; then
       report_error MISSING_ENFORCEMENT_POINT "$item_id" "enforcement_point required for execution/risk/durability items"
     fi
   fi
 
-  quotes="$(printf '%s' "$item_json" | jq -r '.contract_must_evidence[]?.quote // empty')"
-  if [[ -n "$quotes" ]]; then
-    while IFS= read -r quote; do
+  if [[ -n "$quotes_raw" ]]; then
+    IFS=$'\x1f' read -r -a quotes <<< "$quotes_raw"
+    for quote in "${quotes[@]}"; do
       [[ -z "$quote" ]] && continue
-      word_count="$(printf '%s' "$quote" | wc -w | tr -d ' ')"
+      IFS=' ' read -r -a quote_words <<< "$quote"
+      word_count="${#quote_words[@]}"
       if [[ "$word_count" =~ ^[0-9]+$ && "$word_count" -gt 25 ]]; then
         report_error CONTRACT_QUOTE_TOO_LONG "$item_id" "contract_must_evidence.quote must be <=25 words"
       fi
-    done <<< "$quotes"
+    done
   fi
 
   reason_mention=0
-  if printf '%s' "$item_text_lc" | grep -Eq '(^|[^a-z0-9_])(reason code|modereasoncode|openpermissionreasoncode|rejectreason)([^a-z0-9_]|$)'; then
+  if [[ "$item_text_lc" =~ $reason_re ]]; then
     reason_mention=1
   fi
   if [[ "$reason_mention" == "1" ]]; then
-    reason_values_count="$(printf '%s' "$item_json" | jq -r '.reason_codes.values | length')"
     if ! [[ "$reason_values_count" =~ ^[0-9]+$ ]]; then
       reason_values_count=0
     fi
@@ -693,14 +732,13 @@ while IFS= read -r entry; do
   fi
 
   metrics_mention=0
-  if printf '%s' "$item_text_lc" | grep -Eq '(^|[^a-z0-9_])(metric|counter|gauge|histogram|log)([^a-z0-9_]|$)'; then
+  if [[ "$item_text_lc" =~ $metrics_re ]]; then
     metrics_mention=1
   fi
-  if printf '%s' "$item_text_lc" | grep -Eq '(^|[^a-z0-9_])[a-z0-9_]+_(total|pct|ms|s)([^a-z0-9_]|$)'; then
+  if [[ "$item_text_lc" =~ $metrics_name_re ]]; then
     metrics_mention=1
   fi
   if [[ "$metrics_mention" == "1" ]]; then
-    metrics_count="$(printf '%s' "$item_json" | jq -r '.observability.metrics | length')"
     if ! [[ "$metrics_count" =~ ^[0-9]+$ ]]; then
       metrics_count=0
     fi
@@ -710,12 +748,10 @@ while IFS= read -r entry; do
   fi
 
   status_mention=0
-  if printf '%s' "$item_text_lc" | grep -Eq '/status|status endpoint|status field|/api/v1/status|operator visible|operator-visible'; then
+  if [[ "$item_text_lc" =~ $status_re ]]; then
     status_mention=1
   fi
   if [[ "$status_mention" == "1" ]]; then
-    status_fields_count="$(printf '%s' "$item_json" | jq -r '.observability.status_fields | length')"
-    status_ats_count="$(printf '%s' "$item_json" | jq -r '.observability.status_contract_ats | length')"
     if ! [[ "$status_fields_count" =~ ^[0-9]+$ ]]; then
       status_fields_count=0
     fi
@@ -731,12 +767,10 @@ while IFS= read -r entry; do
   fi
 
   liveness_mention=0
-  if printf '%s' "$item_text_lc" | grep -Eq '(^|[^a-z0-9_])(backpressure|stall|hang|queue|lag|latency)([^a-z0-9_]|$)'; then
+  if [[ "$item_text_lc" =~ $liveness_re ]]; then
     liveness_mention=1
   fi
   if [[ "$liveness_mention" == "1" ]]; then
-    failure_mode_count="$(printf '%s' "$item_json" | jq -r '.failure_mode | length')"
-    impl_tests_count="$(printf '%s' "$item_json" | jq -r '.implementation_tests | length')"
     if ! [[ "$failure_mode_count" =~ ^[0-9]+$ ]]; then
       failure_mode_count=0
     fi
