@@ -59,9 +59,24 @@ grep -Fq -- "MOCK_CODEX_REVIEW_OK" "$review_file" || fail "missing mock CLI outp
 
 # Extra args path should still execute and be recorded.
 PATH="$mock_bin:$PATH" "$SCRIPT" "$story" --commit HEAD --out-root "$out_root" --title "fixture codex review extra" -- --model o3 >/dev/null
-latest_review="$(find "$out_root/$story/codex" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r | head -n 1 || true)"
+review_count=0
+latest_review=""
+while IFS= read -r f; do
+  [[ -n "$f" ]] || continue
+  review_count=$((review_count + 1))
+  latest_review="$f"
+done < <(find "$out_root/$story/codex" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort)
+[[ "$review_count" -ge 2 ]] || fail "expected at least two codex review artifacts; found $review_count"
 [[ -n "$latest_review" && -f "$latest_review" ]] || fail "missing second review artifact"
+[[ "$latest_review" != "$review_file" ]] || fail "latest review artifact should differ from first artifact"
 grep -Fq -- "--model o3" "$latest_review" || fail "extra args were not recorded"
+
+# Default out-root should honor STORY_ARTIFACTS_ROOT when set.
+story_root="$tmp_dir/story_root"
+default_story="S1-STORY-ROOT"
+PATH="$mock_bin:$PATH" STORY_ARTIFACTS_ROOT="$story_root" "$SCRIPT" "$default_story" --commit HEAD --title "fixture codex story root" >/dev/null
+default_file="$(find "$story_root/$default_story/codex" -maxdepth 1 -type f -name '*_review.md' | head -n 1 || true)"
+[[ -n "$default_file" && -f "$default_file" ]] || fail "default out-root did not honor STORY_ARTIFACTS_ROOT"
 
 # Missing story id must fail.
 expect_fail "missing story id" "Usage:" "$SCRIPT"
