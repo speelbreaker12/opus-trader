@@ -127,16 +127,18 @@ Before any code implementation begins, these operational baseline items MUST be 
 | **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
 | **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
 | **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
-| **P0-E** | Health Endpoint Scaffolding | Implement `/status` returning `ok`, `build_id`, `contract_version` | `docs/health_endpoint.md`, passing tests |
+| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner status output returning `ok`, `build_id`, `contract_version`, `trading_mode`, `is_trading_allowed` | `docs/health_endpoint.md`, passing tests |
+| **P0-F** | Machine Policy Loader Baseline | Bind a machine-readable policy path + strict loader so runtime checks are not doc-only | `config/policy.json`, `tools/policy_loader.py`, passing tests |
 
 **Anchors (for PRD traceability):**
 - P0-A Launch Policy Baseline
 - P0-B Environment Isolation
 - P0-C Keys & Secrets Baseline
 - P0-D Break-Glass Runbook
-- P0-E Health Endpoint Scaffolding
+- P0-E Health + Owner Status Scaffolding
+- P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not system behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented.
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `is_trading_allowed`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
