@@ -1,7 +1,7 @@
-# Health Endpoint (Phase 0)
+# Health + Owner Status (Phase 0)
 
-> **Purpose:** Single command to verify system is running and configured correctly.
-> **NOTE:** This is Phase 0-safe. Do NOT include TradingMode or /status-style reason codes here.
+> **Purpose:** Minimal operator commands to verify both liveness and authority state.
+> Phase 0 requires health plus a tiny owner status surface.
 
 ## Metadata
 - doc_id: HEALTH-001
@@ -11,10 +11,11 @@
 
 ---
 
-## Health Check Command
+## Commands
 
 ```bash
 ./stoic-cli health
+./stoic-cli status
 ```
 
 Implementation note:
@@ -24,11 +25,22 @@ Implementation note:
 
 ## Required Fields (minimal)
 
+### Health fields
 | Field | Type | Description |
 |-------|------|-------------|
 | `ok` | boolean | `true` if all checks pass |
 | `build_id` | string | Git commit SHA or build identifier |
 | `contract_version` | string | Version of CONTRACT.md (e.g., "5.2") |
+| `timestamp_utc` | string | ISO 8601 timestamp |
+
+### Status fields
+| Field | Type | Description |
+|-------|------|-------------|
+| `ok` | boolean | `true` if status checks pass |
+| `trading_mode` | string | Current mode (`ACTIVE`, `REDUCE_ONLY`, `KILL`) |
+| `is_trading_allowed` | boolean | `true` only when mode allows new OPEN risk |
+| `orders_in_flight` | integer | Simulated in-flight order count |
+| `pending_orders` | integer | Simulated pending order count |
 | `timestamp_utc` | string | ISO 8601 timestamp |
 
 ### Example Output (Healthy)
@@ -55,6 +67,20 @@ Implementation note:
 }
 ```
 
+### Example Status Output
+```json
+{
+  "ok": true,
+  "build_id": "abc123def",
+  "contract_version": "5.2",
+  "timestamp_utc": "2026-01-27T14:00:00Z",
+  "trading_mode": "KILL",
+  "is_trading_allowed": false,
+  "orders_in_flight": 0,
+  "pending_orders": 0
+}
+```
+
 ---
 
 ## Exit Codes
@@ -78,15 +104,13 @@ Implementation note:
 
 ---
 
-## Forbidden in Phase 0 Health (explicitly excluded)
+## Phase 0 Boundary (explicitly excluded)
 
-These belong in `/status` (Phase 2), not health:
+Phase 0 includes minimal status fields only; these remain out of scope:
 
-- [x] TradingMode
-- [x] Reason codes
-- [x] Position information
-- [x] P&L data
-- [x] Any permissioning decisions
+- [x] Full `/api/v1/status` schema and reason-code registry
+- [x] Position/P&L dashboards
+- [x] Phase 2+ policy explanation fields
 
 ---
 
@@ -111,12 +135,15 @@ fi
 ### JSON Parsing
 ```bash
 ./stoic-cli health --format json | jq '.ok'
+./stoic-cli status --format json | jq '.trading_mode,.is_trading_allowed'
 ```
 
 ### Forced Unhealthy Path (for gate tests)
 ```bash
 STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli health --format json
 echo $?  # 1 = unhealthy (policy load failure)
+STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli status --format json
+# status shows trading_mode=KILL and is_trading_allowed=false
 ```
 
 ---
@@ -124,9 +151,10 @@ echo $?  # 1 = unhealthy (policy load failure)
 ## Owner Sign-Off
 
 - [ ] Health command implemented
-- [ ] Returns required fields (ok, build_id, contract_version)
-- [ ] Exit codes correct
-- [ ] Does NOT include forbidden fields
+- [ ] Status command implemented
+- [ ] Health returns required fields (ok, build_id, contract_version)
+- [ ] Status returns required fields (trading_mode, is_trading_allowed)
+- [ ] Fail-closed behavior verified on missing policy
 
 **owner_signature:** ______________________
 **date_utc:** ______________________

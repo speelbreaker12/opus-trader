@@ -12,7 +12,9 @@ This enforces that Phase 0 is not "paper-only":
 - PAPER environment remains non-trading in env matrix + key-scope probe evidence
 - Break-glass runbook exists + snapshot + executed drill record + logs
 - Health endpoint doc exists + snapshot + executable command behavior
+- Minimal owner status output exists and is executable (`trading_mode`, `is_trading_allowed`)
 - Minimal Phase-0 test definitions exist with explicit names
+- Code-level Phase-0 runtime integration tests exist and are wired in rust test gates
 - Evidence pack has owner summary + CI links placeholder
 
 Usage:
@@ -28,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Iterable, List
 
@@ -91,6 +94,27 @@ def read_text(path: Path) -> str:
 def has_any(text: str, needles: Iterable[str]) -> bool:
     lowered = text.lower()
     return any(n.lower() in lowered for n in needles)
+
+
+def run_cli_json(root: Path, args: list[str], env: dict[str, str]) -> tuple[int, dict | None, str]:
+    proc = subprocess.run(
+        [str(root / "stoic-cli")] + args,
+        cwd=str(root),
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    combined = (proc.stdout + "\n" + proc.stderr).strip()
+    if not proc.stdout.strip():
+        return proc.returncode, None, combined
+    try:
+        payload = json.loads(proc.stdout)
+    except Exception:
+        return proc.returncode, None, combined
+    if not isinstance(payload, dict):
+        return proc.returncode, None, combined
+    return proc.returncode, payload, combined
 
 
 def markdown_table_row_for_env(text: str, env: str) -> List[str]:
@@ -220,6 +244,74 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         ["was_risk_reduction_possible_if_exposure: yes", "reduce_only", "result=accepted", "reduce_only_works=true"],
     ):
         errors.append("no deterministic evidence that risk reduction remained possible")
+
+    # Executable command-path check (Phase-0 command-level e2e drill).
+    cli = root / "stoic-cli"
+    policy = root / "config" / "policy.json"
+    if not cli.exists():
+        errors.append(f"{cli} missing")
+        return errors
+    if not policy.exists():
+        errors.append(f"{policy} missing")
+        return errors
+
+    with tempfile.TemporaryDirectory(prefix="phase0_break_glass_") as td:
+        runtime_state = Path(td) / "runtime_state.json"
+        env = os.environ.copy()
+        env["STOIC_BUILD_ID"] = "phase0-break-glass-meta-test"
+        env["STOIC_POLICY_PATH"] = str(policy)
+        env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+
+        rc, payload, details = run_cli_json(
+            root,
+            ["simulate-open", "--instrument", "BTC-28MAR26-50000-C", "--count", "2"],
+            env,
+        )
+        if rc != 0 or payload is None or payload.get("result") != "ACCEPTED":
+            errors.append(f"simulate-open command path failed: rc={rc} details={details}")
+            return errors
+
+        rc, payload, details = run_cli_json(root, ["orders", "--pending", "--format", "json"], env)
+        if rc != 0 or payload is None or int(payload.get("pending_count", -1)) < 1:
+            errors.append(f"orders --pending command path failed before kill: rc={rc} details={details}")
+            return errors
+
+        rc, payload, details = run_cli_json(root, ["emergency", "kill", "--reason", "phase0-meta-test"], env)
+        if rc != 0 or payload is None or payload.get("trading_mode") != "KILL":
+            errors.append(f"emergency kill command path failed: rc={rc} details={details}")
+            return errors
+
+        rc, payload, details = run_cli_json(root, ["status", "--format", "json"], env)
+        if rc != 0 or payload is None:
+            errors.append(f"status command failed after kill: rc={rc} details={details}")
+            return errors
+        if payload.get("trading_mode") != "KILL":
+            errors.append("status after kill must report trading_mode=KILL")
+        if payload.get("is_trading_allowed") is not False:
+            errors.append("status after kill must report is_trading_allowed=false")
+
+        rc, payload, details = run_cli_json(root, ["orders", "--pending", "--format", "json"], env)
+        if rc != 0 or payload is None or int(payload.get("pending_count", -1)) != 0:
+            errors.append(f"orders --pending must be empty after kill: rc={rc} details={details}")
+            return errors
+
+        rc, payload, details = run_cli_json(
+            root,
+            ["emergency", "reduce-only", "--reason", "phase0-meta-reduce"],
+            env,
+        )
+        if rc != 0 or payload is None or payload.get("trading_mode") != "REDUCE_ONLY":
+            errors.append(f"emergency reduce-only command path failed: rc={rc} details={details}")
+            return errors
+
+        rc, payload, details = run_cli_json(
+            root,
+            ["simulate-close", "--instrument", "BTC-28MAR26-50000-C", "--dry-run"],
+            env,
+        )
+        if rc != 0 or payload is None or payload.get("result") != "ACCEPTED":
+            errors.append(f"simulate-close command path failed in reduce-only: rc={rc} details={details}")
+            return errors
 
     return errors
 
@@ -462,6 +554,58 @@ def test_health_command_behavior(root: Path) -> List[str]:
     return errors
 
 
+def test_status_command_behavior(root: Path) -> List[str]:
+    errors: List[str] = []
+    cli = root / "stoic-cli"
+    policy = root / "config" / "policy.json"
+
+    if not cli.exists():
+        return [f"{cli} missing"]
+    if not policy.exists():
+        return [f"{policy} missing"]
+    if not os.access(cli, os.X_OK):
+        return [f"{cli} is not executable"]
+
+    with tempfile.TemporaryDirectory(prefix="phase0_status_") as td:
+        runtime_state = Path(td) / "runtime_state.json"
+
+        base_env = os.environ.copy()
+        base_env["STOIC_BUILD_ID"] = "phase0-status-meta-test"
+        base_env["STOIC_POLICY_PATH"] = str(policy)
+        base_env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+
+        rc, payload, details = run_cli_json(root, ["status", "--format", "json"], base_env)
+        if rc != 0 or payload is None:
+            errors.append(f"status healthy path must succeed: rc={rc} details={details}")
+            return errors
+
+        for field in ["ok", "build_id", "contract_version", "timestamp_utc", "trading_mode", "is_trading_allowed"]:
+            if field not in payload:
+                errors.append(f"status healthy payload missing required field: {field}")
+        if payload.get("ok") is not True:
+            errors.append("status healthy payload must set ok=true")
+
+        missing_env = base_env.copy()
+        missing_env["STOIC_POLICY_PATH"] = str(root / "config" / "missing_policy.json")
+        rc, payload, details = run_cli_json(root, ["status", "--format", "json"], missing_env)
+        if rc != 1 or payload is None:
+            errors.append(f"status unhealthy path must fail with rc=1: rc={rc} details={details}")
+            return errors
+        if payload.get("ok") is not False:
+            errors.append("status unhealthy payload must set ok=false")
+        if payload.get("trading_mode") != "KILL":
+            errors.append("status unhealthy payload must force trading_mode=KILL")
+        if payload.get("is_trading_allowed") is not False:
+            errors.append("status unhealthy payload must force is_trading_allowed=false")
+        payload_errors = payload.get("errors")
+        if not isinstance(payload_errors, list) or len(payload_errors) == 0:
+            errors.append("status unhealthy payload must include non-empty errors list")
+        elif not any("policy" in str(err).lower() for err in payload_errors):
+            errors.append("status unhealthy payload errors must mention policy failure")
+
+    return errors
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Repo root (default: cwd)")
@@ -501,8 +645,14 @@ def main() -> int:
         root / "tests" / "phase0" / "test_policy_is_required_and_bound.md",
         root / "tests" / "phase0" / "test_machine_policy_loader_and_config.md",
         root / "tests" / "phase0" / "test_health_command_behavior.md",
+        root / "tests" / "phase0" / "test_status_command_behavior.md",
         root / "tests" / "phase0" / "test_api_keys_are_least_privilege.md",
         root / "tests" / "phase0" / "test_break_glass_kill_blocks_open_allows_reduce.md",
+    ]
+
+    # Required code-level runtime integration tests
+    required_phase0_runtime_tests = [
+        root / "crates" / "soldier_infra" / "tests" / "test_phase0_runtime.rs",
     ]
 
     errors: List[str] = []
@@ -514,6 +664,8 @@ def main() -> int:
     errors += [f"Bad required evidence: {p}" for p in must_be_nonempty(required_evidence)]
     errors += [f"Missing required phase0 test definition: {p}" for p in must_exist(required_phase0_tests)]
     errors += [f"Bad required phase0 test definition: {p}" for p in must_be_nonempty(required_phase0_tests)]
+    errors += [f"Missing required phase0 runtime integration test: {p}" for p in must_exist(required_phase0_runtime_tests)]
+    errors += [f"Bad required phase0 runtime integration test: {p}" for p in must_be_nonempty(required_phase0_runtime_tests)]
 
     # Minimal content checks to prevent 1-line placeholders
     errors += must_contain_lines(root / "evidence" / "phase0" / "README.md", min_lines=8)
@@ -526,6 +678,7 @@ def main() -> int:
         ("test_api_keys_are_least_privilege", test_api_keys_are_least_privilege(root)),
         ("test_paper_is_non_trading", test_paper_is_non_trading(root)),
         ("test_health_command_behavior", test_health_command_behavior(root)),
+        ("test_status_command_behavior", test_status_command_behavior(root)),
         (
             "test_break_glass_kill_blocks_open_allows_reduce",
             test_break_glass_kill_blocks_open_allows_reduce(root),

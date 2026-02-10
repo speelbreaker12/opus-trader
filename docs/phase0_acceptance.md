@@ -97,18 +97,20 @@ Phase 0 is not complete without a recorded break-glass drill.
 
 ---
 
-### 5. Minimal Health Output
+### 5. Minimal Health + Owner Status Output
 
-Before `/status` exists, there must be some owner-readable health output.
+Phase 0 requires a small owner-readable status surface, not just liveness.
 
 **Requirements**
-- Single command or endpoint.
-- Shows:
+- Health command/endpoint shows:
   - `ok` (boolean)
   - `build_id` (string)
   - `contract_version` (string)
+- Status command/endpoint shows:
+  - `trading_mode` (string)
+  - `is_trading_allowed` (boolean)
 - Readable by a non-coder.
-- Includes deterministic unhealthy behavior (non-zero exit) when policy load fails.
+- Includes deterministic fail-closed behavior when policy load fails (status reports `trading_mode=KILL`, `is_trading_allowed=false`).
 
 ---
 
@@ -119,10 +121,12 @@ Phase 0 is considered complete only if all tests below pass.
 - Policy binding test (fail-closed on missing/invalid policy)
 - Machine policy loader test (strict validation against `config/policy.json`)
 - Health command behavior test (healthy and forced-unhealthy paths)
+- Status command behavior test (`trading_mode` + `is_trading_allowed`, healthy and forced-unhealthy paths)
 - Key scope probe test (prove least privilege)
 - Break-glass drill test (forced Kill blocks OPENs)
 
 See `tests/phase0/`, `tools/phase0_meta_test.py`, and `evidence/phase0/` for Phase-0 acceptance evidence in this repository.
+Executable runtime integration coverage lives in `crates/soldier_infra/tests/test_phase0_runtime.rs`.
 
 ---
 
@@ -143,7 +147,7 @@ If any answer is "I think so," Phase 0 is not complete.
 ## Explicit Non-Goals (Do Not Add These Here)
 
 Phase 0 must NOT include:
-- `/status` schema
+- full `/api/v1/status` schema / reason-code registry
 - dashboards
 - chaos drills beyond break-glass
 - replay, evidence, or certification
@@ -189,7 +193,65 @@ Anything more belongs to Phase 1+.
 **Why this matters**
 - Closes: "policy exists but code never read it".
 
-### Test 2 — Key Scope Probe (Least Privilege)
+### Test 2 — Machine Policy Loader (Strict)
+
+**Name**
+- `test_machine_policy_loader_and_config`
+
+**Purpose**
+- Proves policy is machine-readable and strict-validated.
+
+**Procedure**
+- Validate `config/policy.json` schema/required keys.
+- Run strict loader.
+- Verify snapshot consistency.
+
+**Pass Criteria**
+- Strict loader passes on canonical policy.
+- Missing/invalid policy fails.
+
+**Why this matters**
+- Closes: "policy file exists but runtime never validates it".
+
+### Test 3 — Health Command Behavior
+
+**Name**
+- `test_health_command_behavior`
+
+**Purpose**
+- Proves liveness/config health surface is executable and deterministic.
+
+**Procedure**
+- Execute healthy health path.
+- Execute forced-unhealthy path with missing policy.
+
+**Pass Criteria**
+- Healthy path returns required fields and exits `0`.
+- Forced-unhealthy path exits non-zero with explicit policy error.
+
+**Why this matters**
+- Closes: "operators have no deterministic health signal".
+
+### Test 4 — Status Command Behavior
+
+**Name**
+- `test_status_command_behavior`
+
+**Purpose**
+- Proves minimum authority status fields are visible in Phase 0.
+
+**Procedure**
+- Execute healthy status path.
+- Execute forced-unhealthy path with missing policy.
+
+**Pass Criteria**
+- Healthy status includes `trading_mode` and `is_trading_allowed`.
+- Forced-unhealthy status forces `trading_mode=KILL`, `is_trading_allowed=false`.
+
+**Why this matters**
+- Closes: "owner cannot quickly verify whether trading is currently allowed".
+
+### Test 5 — Key Scope Probe (Least Privilege)
 
 **Name**
 - `test_api_keys_are_least_privilege`
@@ -210,7 +272,7 @@ Anything more belongs to Phase 1+.
 **Why this matters**
 - Closes: "keys were accidentally over-privileged".
 
-### Test 3 — Break-Glass Drill (Authority Override)
+### Test 6 — Break-Glass Drill (Authority Override)
 
 **Name**
 - `test_break_glass_kill_blocks_open_allows_reduce`
@@ -238,10 +300,13 @@ Anything more belongs to Phase 1+.
 | Test Count | Purpose |
 |------------|---------|
 | 1 | Policy binding |
+| 1 | Machine policy strict loader |
+| 1 | Health command behavior |
+| 1 | Status command behavior |
 | 1 | Key scope enforcement |
 | 1 | Break-glass authority |
 
-Total: 3 tests.
+Total: 6 tests.
 
 No fixtures.
 No schemas.

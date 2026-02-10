@@ -267,3 +267,22 @@ Next: None.
 - Commands: git stash push -u -m "split-unrelated-local-dirty-2026-02-10" -- plans/codex_review_logged.sh plans/tests/test_workflow_allowlist_coverage.sh plans/workflow_files_allowlist.txt plans/workflow_verify.sh specs/WORKFLOW_CONTRACT.md .worktrees/prd-rest-slices plans/kimi_review_logged.sh; python3 scripts/build_contract_kernel.py; python3 tools/phase0_meta_test.py --root .; ./plans/verify.sh quick; ./plans/verify.sh full.
 - Evidence: config/policy.json; tools/policy_loader.py; stoic-cli; tools/phase0_meta_test.py; docs/PHASE0_CHECKLIST_BLOCK.md; docs/ROADMAP.md; specs/CONTRACT.md; docs/contract_kernel.json; tests/phase0/test_machine_policy_loader_and_config.md; tests/phase0/test_health_command_behavior.md; evidence/phase0/policy/policy_config_snapshot.json; artifacts/verify/20260209_190352; artifacts/verify/20260209_190814.
 - Notes: Stash created for unrelated local edits: stash@{0} "split-unrelated-local-dirty-2026-02-10". Local ignore updated at `.git/info/exclude` for `.worktrees/` so nested worktree path no longer pollutes status.
+Story: workflow/phase0-runtime-automation
+Date: 2026-02-10
+Summary: Added executable Phase-0 runtime automation coverage in `crates/soldier_infra/tests/test_phase0_runtime.rs` and wired meta-check requirements/docs references for runtime test presence. Verified policy fail-closed, key least-privilege fail-closed, and break-glass OPEN-block/reduce-allow behavior through `stoic-cli` command paths.
+Commands: python3 tools/phase0_meta_test.py --root .; cargo test -p soldier_infra --test test_phase0_runtime; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: crates/soldier_infra/tests/test_phase0_runtime.rs; tools/phase0_meta_test.py; docs/PHASE0_CHECKLIST_BLOCK.md; docs/phase0_acceptance.md; tests/phase0/README.md; artifacts/verify/20260209_195422; artifacts/verify/20260209_195611.
+Notes: Working tree is dirty with additional pre-existing workflow/doc changes; no VERIFY_ALLOW_DIRTY override used.
+Next: Review and intentionally stage only desired files for commit.
+Story: workflow-maintenance
+Date: 2026-02-09
+Summary: Updated manual story loop to require Kimi K2.5 review at step 5 and a second Codex review at step 6.1; enforced new review evidence requirements in story_review_gate (Kimi artifact + two Codex artifacts + explicit resolution refs); added kimi review logger script and deterministic fixture test; wired new fixture into preflight/workflow maintenance checks and workflow allowlist coverage.
+Commands: bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_kimi_review_logged.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/workflow_contract_gate.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
+Evidence: specs/WORKFLOW_CONTRACT.md; AGENTS.md; plans/story_review_gate.sh; plans/kimi_review_logged.sh; plans/tests/test_kimi_review_logged.sh; plans/tests/test_story_review_gate.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; artifacts/verify/20260209_200134; artifacts/verify/20260209_200335.
+Next: None.
+Story: phase0-hardening-status-breakglass
+Date: 2026-02-10 02:10:00 UTC
+Summary: Implemented all requested follow-ups: aligned break-glass docs to executable CLI behavior, added executable end-to-end break-glass command-path validation, and promoted minimal owner status fields (`trading_mode`, `is_trading_allowed`) into Phase-0 contract/docs/gates. Extended `stoic-cli` with `status`, `orders --pending`, `emergency` mode controls, and drill helpers (`simulate-open`, `simulate-close`); added runtime tests and meta-test enforcement.
+Commands: ./stoic-cli --help; python3 tools/phase0_meta_test.py --root .; cargo test -p soldier_infra --test test_phase0_runtime; python3 scripts/build_contract_kernel.py; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: stoic-cli; crates/soldier_infra/tests/test_phase0_runtime.rs; tools/phase0_meta_test.py; specs/CONTRACT.md; docs/PHASE0_CHECKLIST_BLOCK.md; docs/phase0_acceptance.md; docs/health_endpoint.md; docs/break_glass_runbook.md; docs/ROADMAP.md; tests/phase0/test_status_command_behavior.md; tests/phase0/test_break_glass_kill_blocks_open_allows_reduce.md; evidence/phase0/health/health_endpoint_snapshot.md; evidence/phase0/break_glass/runbook_snapshot.md; docs/contract_kernel.json; artifacts/verify/20260209_200324; artifacts/verify/20260209_200517.
+Next: none.

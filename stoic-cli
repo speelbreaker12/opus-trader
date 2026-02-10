@@ -4,6 +4,13 @@ Minimal owner CLI entrypoint for Phase 0.
 
 Supported commands:
   ./stoic-cli health [--format json]
+  ./stoic-cli status [--format json] [--detailed]
+  ./stoic-cli orders --pending [--format json]
+  ./stoic-cli emergency <kill|reduce-only|active> --reason "<text>"
+  ./stoic-cli simulate-open --instrument <name> [--count N]
+  ./stoic-cli simulate-close --instrument <name> [--dry-run]
+  ./stoic-cli dispatch-check --intent <OPEN|REDUCE_ONLY|CLOSE|HEDGE|CANCEL> --mode <ACTIVE|REDUCE_ONLY|KILL>
+  ./stoic-cli keys-check [--probe <path>] [--env <name>] [--format json]
 """
 
 from __future__ import annotations
@@ -17,12 +24,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, Optional
 
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_POLICY_PATH = ROOT / "config" / "policy.json"
 DEFAULT_CONTRACT_VERSION = "5.2"
+DEFAULT_KEY_SCOPE_PROBE = ROOT / "evidence" / "phase0" / "keys" / "key_scope_probe.json"
+DEFAULT_RUNTIME_STATE_PATH = ROOT / "artifacts" / "phase0" / "runtime_state.json"
+RUNTIME_MODES = {"ACTIVE", "REDUCE_ONLY", "KILL"}
 
 
 def _load_policy_loader_module() -> ModuleType:
@@ -63,22 +73,111 @@ def _health_payload(ok: bool, build_id: str, contract_version: str, errors: list
     return payload
 
 
+def _print_json(payload: Dict[str, Any]) -> None:
+    print(json.dumps(payload, indent=2))
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _runtime_state_path() -> Path:
+    return Path(os.environ.get("STOIC_RUNTIME_STATE_PATH", str(DEFAULT_RUNTIME_STATE_PATH))).resolve()
+
+
+def _default_runtime_state() -> Dict[str, Any]:
+    return {
+        "trading_mode": "ACTIVE",
+        "orders_in_flight": 0,
+        "pending_orders": [],
+        "last_transition_reason": "",
+        "last_transition_ts": _utc_now_iso(),
+    }
+
+
+def _normalize_pending_orders(raw: Any) -> list[Dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[Dict[str, Any]] = []
+    for idx, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "id": str(item.get("id", f"pending_{idx}")),
+                "intent": str(item.get("intent", "OPEN")).upper(),
+                "instrument": str(item.get("instrument", "UNKNOWN")),
+            }
+        )
+    return out
+
+
+def _load_runtime_state(path: Path) -> Dict[str, Any]:
+    default_state = _default_runtime_state()
+    if not path.exists():
+        return default_state
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default_state
+    if not isinstance(obj, dict):
+        return default_state
+
+    mode = str(obj.get("trading_mode", default_state["trading_mode"])).upper()
+    if mode not in RUNTIME_MODES:
+        mode = default_state["trading_mode"]
+
+    orders_in_flight = obj.get("orders_in_flight", default_state["orders_in_flight"])
+    if not isinstance(orders_in_flight, int) or orders_in_flight < 0:
+        orders_in_flight = default_state["orders_in_flight"]
+
+    pending_orders = _normalize_pending_orders(obj.get("pending_orders", default_state["pending_orders"]))
+
+    state = {
+        "trading_mode": mode,
+        "orders_in_flight": max(orders_in_flight, len(pending_orders)),
+        "pending_orders": pending_orders,
+        "last_transition_reason": str(obj.get("last_transition_reason", "")),
+        "last_transition_ts": str(obj.get("last_transition_ts", default_state["last_transition_ts"])),
+    }
+    return state
+
+
+def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _is_trading_allowed_mode(mode: str) -> bool:
+    return mode == "ACTIVE"
+
+
+def _load_policy_with_validation(policy_path: Path) -> tuple[Optional[Dict[str, Any]], list[str]]:
+    errors: list[str] = []
+    policy_loader = _load_policy_loader_module()
+    try:
+        policy = policy_loader.load_policy(policy_path)
+    except Exception as exc:
+        return None, [f"policy: {exc}"]
+
+    validation_errors = policy_loader.validate_policy(policy)
+    if validation_errors:
+        errors.extend([f"policy: {err}" for err in validation_errors])
+        return None, errors
+
+    return policy, []
+
+
 def _cmd_health(args: argparse.Namespace) -> int:
     errors: list[str] = []
     build_id = _detect_build_id()
     contract_version = DEFAULT_CONTRACT_VERSION
 
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
-    try:
-        policy_loader = _load_policy_loader_module()
-        policy = policy_loader.load_policy(policy_path)
-        validation_errors = policy_loader.validate_policy(policy)
-        if validation_errors:
-            errors.extend([f"policy: {e}" for e in validation_errors])
-        else:
-            contract_version = str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION))
-    except Exception as exc:
-        errors.append(f"policy: {exc}")
+    policy, policy_errors = _load_policy_with_validation(policy_path)
+    errors.extend(policy_errors)
+    if policy is not None:
+        contract_version = str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION))
 
     if not build_id or build_id == "unknown":
         errors.append("build_id: unavailable")
@@ -91,8 +190,370 @@ def _cmd_health(args: argparse.Namespace) -> int:
         print("unsupported format; use --format json", file=sys.stderr)
         return 2
 
-    print(json.dumps(payload, indent=2))
+    _print_json(payload)
     return 0 if ok else 1
+
+
+def _status_payload(
+    ok: bool,
+    build_id: str,
+    contract_version: str,
+    trading_mode: str,
+    errors: list[str],
+    state: Dict[str, Any],
+    detailed: bool,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": ok,
+        "build_id": build_id,
+        "contract_version": contract_version,
+        "timestamp_utc": _utc_now_iso(),
+        "trading_mode": trading_mode,
+        "is_trading_allowed": _is_trading_allowed_mode(trading_mode),
+        "orders_in_flight": int(state.get("orders_in_flight", 0)),
+        "pending_orders": len(state.get("pending_orders", [])),
+        "last_transition_reason": str(state.get("last_transition_reason", "")),
+        "last_transition_ts": str(state.get("last_transition_ts", "")),
+    }
+    if detailed:
+        payload["pending_order_items"] = state.get("pending_orders", [])
+    if errors:
+        payload["errors"] = errors
+    return payload
+
+
+def _print_status_text(payload: Dict[str, Any], detailed: bool) -> None:
+    print(f"ok: {str(payload.get('ok', False)).lower()}")
+    print(f"trading_mode: {payload.get('trading_mode', 'UNKNOWN')}")
+    print(f"is_trading_allowed: {str(payload.get('is_trading_allowed', False)).lower()}")
+    print(f"orders_in_flight: {payload.get('orders_in_flight', 0)}")
+    print(f"pending_orders: {payload.get('pending_orders', 0)}")
+    print(f"contract_version: {payload.get('contract_version', DEFAULT_CONTRACT_VERSION)}")
+    if payload.get("errors"):
+        print(f"errors: {'; '.join(str(x) for x in payload['errors'])}")
+    if detailed:
+        for item in payload.get("pending_order_items", []):
+            print(
+                f"pending_order: id={item.get('id', 'unknown')} intent={item.get('intent', 'UNKNOWN')} "
+                f"instrument={item.get('instrument', 'UNKNOWN')}"
+            )
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    errors: list[str] = []
+    build_id = _detect_build_id()
+    contract_version = DEFAULT_CONTRACT_VERSION
+    if not build_id or build_id == "unknown":
+        errors.append("build_id: unavailable")
+
+    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
+    policy, policy_errors = _load_policy_with_validation(policy_path)
+    errors.extend(policy_errors)
+    if policy is not None:
+        contract_version = str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION))
+
+    state_path = _runtime_state_path()
+    state = _load_runtime_state(state_path)
+    trading_mode = str(state.get("trading_mode", "ACTIVE")).upper()
+    if policy is None:
+        trading_mode = "KILL"
+
+    ok = len(errors) == 0
+    payload = _status_payload(
+        ok=ok,
+        build_id=build_id,
+        contract_version=contract_version,
+        trading_mode=trading_mode,
+        errors=errors,
+        state=state,
+        detailed=bool(args.detailed),
+    )
+    if args.format == "json":
+        _print_json(payload)
+    else:
+        _print_status_text(payload, detailed=bool(args.detailed))
+    return 0 if ok else 1
+
+
+def _cmd_orders(args: argparse.Namespace) -> int:
+    if not args.pending:
+        print("orders requires --pending", file=sys.stderr)
+        return 2
+
+    state = _load_runtime_state(_runtime_state_path())
+    pending_orders = state.get("pending_orders", [])
+    payload = {
+        "ok": True,
+        "pending_count": len(pending_orders),
+        "pending_orders": pending_orders,
+    }
+    if args.format == "json":
+        _print_json(payload)
+    else:
+        if pending_orders:
+            for item in pending_orders:
+                print(
+                    f"pending: id={item.get('id', 'unknown')} intent={item.get('intent', 'UNKNOWN')} "
+                    f"instrument={item.get('instrument', 'UNKNOWN')}"
+                )
+        else:
+            print("0 pending orders")
+    return 0
+
+
+def _cmd_emergency(args: argparse.Namespace) -> int:
+    action = str(args.action).strip().lower()
+    mode = {
+        "kill": "KILL",
+        "reduce-only": "REDUCE_ONLY",
+        "active": "ACTIVE",
+    }.get(action)
+    if mode is None:
+        print(f"unsupported emergency action: {action}", file=sys.stderr)
+        return 2
+
+    state_path = _runtime_state_path()
+    state = _load_runtime_state(state_path)
+    pending_orders = _normalize_pending_orders(state.get("pending_orders", []))
+
+    if mode == "KILL":
+        pending_orders = []
+        orders_in_flight = 0
+    elif mode == "REDUCE_ONLY":
+        pending_orders = [x for x in pending_orders if str(x.get("intent", "")).upper() != "OPEN"]
+        orders_in_flight = len(pending_orders)
+    else:
+        orders_in_flight = max(int(state.get("orders_in_flight", 0)), len(pending_orders))
+
+    next_state = {
+        "trading_mode": mode,
+        "orders_in_flight": orders_in_flight,
+        "pending_orders": pending_orders,
+        "last_transition_reason": str(args.reason),
+        "last_transition_ts": _utc_now_iso(),
+    }
+    _write_runtime_state(state_path, next_state)
+
+    payload = {
+        "ok": True,
+        "event": "MODE_TRANSITION",
+        "trading_mode": mode,
+        "is_trading_allowed": _is_trading_allowed_mode(mode),
+        "orders_in_flight": orders_in_flight,
+        "pending_orders": len(pending_orders),
+        "reason": str(args.reason),
+    }
+    _print_json(payload)
+    return 0
+
+
+def _next_pending_id(pending_orders: list[Dict[str, Any]]) -> str:
+    return f"sim_{len(pending_orders) + 1:04d}"
+
+
+def _cmd_simulate_open(args: argparse.Namespace) -> int:
+    state_path = _runtime_state_path()
+    state = _load_runtime_state(state_path)
+    mode = str(state.get("trading_mode", "ACTIVE")).upper()
+    count = int(args.count)
+    if count < 1:
+        print("--count must be >= 1", file=sys.stderr)
+        return 2
+
+    if mode != "ACTIVE":
+        payload = {
+            "ok": False,
+            "result": "BLOCKED",
+            "reason": f"{mode.lower()}_blocks_open",
+            "trading_mode": mode,
+            "accepted": 0,
+            "requested": count,
+        }
+        _print_json(payload)
+        return 1
+
+    pending_orders = _normalize_pending_orders(state.get("pending_orders", []))
+    for _ in range(count):
+        pending_orders.append(
+            {
+                "id": _next_pending_id(pending_orders),
+                "intent": "OPEN",
+                "instrument": str(args.instrument),
+            }
+        )
+
+    state["pending_orders"] = pending_orders
+    state["orders_in_flight"] = len(pending_orders)
+    state["last_transition_ts"] = _utc_now_iso()
+    _write_runtime_state(state_path, state)
+
+    payload = {
+        "ok": True,
+        "result": "ACCEPTED",
+        "accepted": count,
+        "requested": count,
+        "trading_mode": mode,
+        "pending_orders": len(pending_orders),
+    }
+    _print_json(payload)
+    return 0
+
+
+def _cmd_simulate_close(args: argparse.Namespace) -> int:
+    state = _load_runtime_state(_runtime_state_path())
+    mode = str(state.get("trading_mode", "ACTIVE")).upper()
+    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
+    policy, policy_errors = _load_policy_with_validation(policy_path)
+
+    if policy is None:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "policy_validation_failed",
+            "errors": policy_errors,
+            "instrument": str(args.instrument),
+            "dry_run": bool(args.dry_run),
+            "trading_mode": "KILL",
+        }
+        _print_json(payload)
+        return 1
+
+    if mode not in RUNTIME_MODES:
+        mode = "KILL"
+
+    payload = {
+        "ok": True,
+        "result": "ACCEPTED",
+        "reason": f"{mode.lower()}_allows_risk_reduction",
+        "instrument": str(args.instrument),
+        "dry_run": bool(args.dry_run),
+        "trading_mode": mode,
+    }
+    _print_json(payload)
+    return 0
+
+
+def _is_risk_reducing_intent(intent: str) -> bool:
+    return intent in {"REDUCE_ONLY", "CLOSE", "HEDGE", "CANCEL"}
+
+
+def _dispatch_decision(intent: str, mode: str) -> tuple[bool, str]:
+    # Runtime fail-closed intent gate used by Phase-0 automation tests.
+    if mode == "KILL":
+        if _is_risk_reducing_intent(intent):
+            return True, "kill_mode_allows_risk_reduction"
+        return False, "kill_mode_blocks_open"
+    if mode == "REDUCE_ONLY":
+        if _is_risk_reducing_intent(intent):
+            return True, "reduce_only_allows_risk_reduction"
+        return False, "reduce_only_blocks_open"
+    if mode == "ACTIVE":
+        return True, "active_mode_allows_dispatch"
+    return False, "unknown_mode"
+
+
+def _cmd_dispatch_check(args: argparse.Namespace) -> int:
+    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
+    policy, policy_errors = _load_policy_with_validation(policy_path)
+    if policy is None:
+        payload = {
+            "ok": False,
+            "decision": "BLOCK",
+            "reason": "policy_validation_failed",
+            "errors": policy_errors,
+            "intent": args.intent,
+            "mode": args.mode,
+        }
+        _print_json(payload)
+        return 1
+
+    allowed, reason = _dispatch_decision(intent=args.intent, mode=args.mode)
+    payload = {
+        "ok": bool(allowed),
+        "decision": "ALLOW" if allowed else "BLOCK",
+        "reason": reason,
+        "intent": args.intent,
+        "mode": args.mode,
+        "contract_version": str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION)),
+    }
+    _print_json(payload)
+    return 0 if allowed else 1
+
+
+def _normalize_probe_entries(obj: Any) -> list[Dict[str, Any]]:
+    if isinstance(obj, dict) and isinstance(obj.get("probes"), list):
+        return [p for p in obj.get("probes", []) if isinstance(p, dict)]
+    if isinstance(obj, dict):
+        return [obj]
+    return []
+
+
+def _probe_entries_for_env(entries: Iterable[Dict[str, Any]], env: Optional[str]) -> list[Dict[str, Any]]:
+    if env is None:
+        return list(entries)
+    target = env.strip().upper()
+    return [p for p in entries if str(p.get("env", "")).strip().upper() == target]
+
+
+def _cmd_keys_check(args: argparse.Namespace) -> int:
+    probe_path = Path(args.probe).resolve()
+    errors: list[str] = []
+
+    if not probe_path.exists():
+        payload = {"ok": False, "errors": [f"probe missing: {probe_path}"]}
+        _print_json(payload)
+        return 1
+
+    try:
+        probe_obj = json.loads(probe_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        payload = {"ok": False, "errors": [f"invalid JSON: {exc}"]}
+        _print_json(payload)
+        return 1
+
+    entries = _normalize_probe_entries(probe_obj)
+    if not entries:
+        payload = {"ok": False, "errors": ["probe has no entries"]}
+        _print_json(payload)
+        return 1
+
+    selected = _probe_entries_for_env(entries, args.env)
+    if not selected:
+        payload = {"ok": False, "errors": [f"no probe entry found for env={args.env}"]}
+        _print_json(payload)
+        return 1
+
+    for idx, entry in enumerate(selected, start=1):
+        label = f"entry[{idx}] env={entry.get('env', 'UNKNOWN')}"
+        if entry.get("withdraw_enabled") is not False:
+            errors.append(f"{label}: withdraw_enabled must be false")
+
+        scopes = entry.get("scopes", [])
+        scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
+        results = entry.get("probe_results", {}) if isinstance(entry.get("probe_results"), dict) else {}
+        place_order = results.get("place_order", {}) if isinstance(results.get("place_order"), dict) else {}
+        place_result = str(place_order.get("result", "")).lower()
+
+        if "trade" in scopes_lower:
+            withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
+            withdraw_result = str(withdraw.get("result", "")).lower()
+            if withdraw_result not in {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}:
+                errors.append(f"{label}: trade scope requires explicit forbidden withdrawal result")
+        else:
+            if place_result in {"success", "accepted"}:
+                errors.append(f"{label}: non-trade scope must not show successful order placement")
+
+    payload = {
+        "ok": len(errors) == 0,
+        "checked_entries": len(selected),
+        "env_filter": args.env,
+        "probe_path": str(probe_path),
+    }
+    if errors:
+        payload["errors"] = errors
+
+    _print_json(payload)
+    return 0 if len(errors) == 0 else 1
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -102,6 +563,69 @@ def _build_parser() -> argparse.ArgumentParser:
     p_health = subparsers.add_parser("health", help="Print health status payload")
     p_health.add_argument("--format", default="json", choices=["json"], help="Output format")
     p_health.set_defaults(handler=_cmd_health)
+
+    p_status = subparsers.add_parser("status", help="Print minimal owner status payload")
+    p_status.add_argument("--format", default="text", choices=["text", "json"], help="Output format")
+    p_status.add_argument("--detailed", action="store_true", help="Include pending order details")
+    p_status.set_defaults(handler=_cmd_status)
+
+    p_orders = subparsers.add_parser("orders", help="Inspect simulated order state")
+    p_orders.add_argument("--pending", action="store_true", help="List pending orders")
+    p_orders.add_argument("--format", default="text", choices=["text", "json"], help="Output format")
+    p_orders.set_defaults(handler=_cmd_orders)
+
+    p_emergency = subparsers.add_parser("emergency", help="Set emergency trading mode")
+    p_emergency.add_argument("action", choices=["kill", "reduce-only", "active"], help="Emergency action")
+    p_emergency.add_argument("--reason", required=True, help="Reason for mode transition")
+    p_emergency.set_defaults(handler=_cmd_emergency)
+
+    p_sim_open = subparsers.add_parser(
+        "simulate-open",
+        help="Simulate OPEN intent queueing for break-glass drills",
+    )
+    p_sim_open.add_argument("--instrument", required=True, help="Instrument identifier")
+    p_sim_open.add_argument("--count", type=int, default=1, help="Number of OPEN intents to simulate")
+    p_sim_open.set_defaults(handler=_cmd_simulate_open)
+
+    p_sim_close = subparsers.add_parser(
+        "simulate-close",
+        help="Simulate risk-reducing close intent acceptance",
+    )
+    p_sim_close.add_argument("--instrument", required=True, help="Instrument identifier")
+    p_sim_close.add_argument("--dry-run", action="store_true", help="Do not execute external action")
+    p_sim_close.set_defaults(handler=_cmd_simulate_close)
+
+    p_dispatch = subparsers.add_parser(
+        "dispatch-check",
+        help="Evaluate Phase-0 dispatch safety decision for intent/mode",
+    )
+    p_dispatch.add_argument(
+        "--intent",
+        required=True,
+        choices=["OPEN", "REDUCE_ONLY", "CLOSE", "HEDGE", "CANCEL"],
+        help="Intent class under evaluation",
+    )
+    p_dispatch.add_argument(
+        "--mode",
+        required=True,
+        choices=["ACTIVE", "REDUCE_ONLY", "KILL"],
+        help="Effective runtime mode for the evaluation",
+    )
+    p_dispatch.set_defaults(handler=_cmd_dispatch_check)
+
+    p_keys = subparsers.add_parser("keys-check", help="Validate key-scope probe least-privilege constraints")
+    p_keys.add_argument(
+        "--probe",
+        default=str(DEFAULT_KEY_SCOPE_PROBE),
+        help="Path to key_scope_probe.json",
+    )
+    p_keys.add_argument(
+        "--env",
+        default=None,
+        help="Optional environment filter (e.g., PAPER, STAGING, LIVE)",
+    )
+    p_keys.add_argument("--format", default="json", choices=["json"], help="Output format")
+    p_keys.set_defaults(handler=_cmd_keys_check)
 
     return parser
 

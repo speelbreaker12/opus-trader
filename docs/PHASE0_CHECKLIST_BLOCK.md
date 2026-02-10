@@ -100,25 +100,26 @@ evidence/phase0/
 
 **Unblock condition:** doc + snapshots + drill record + logs exist.
 
-## P0-E — Minimal Health Command/Endpoint
+## P0-E — Minimal Health + Owner Status Command/Endpoint
 
-**Goal:** A single health command/endpoint proves liveness/config basics.
+**Goal:** A minimal operator surface proves both liveness and authority state.
 
 **MANUAL artifacts (docs must exist):**
 - `docs/health_endpoint.md` documenting:
   - exact health command/endpoint
+  - exact owner status command/endpoint
   - expected output format
-  - required fields: `ok`, `build_id`, `contract_version`
+  - health required fields: `ok`, `build_id`, `contract_version`
+  - status required fields: `trading_mode`, `is_trading_allowed`
 
 **MANUAL evidence (snapshot required):**
 - `evidence/phase0/health/health_endpoint_snapshot.md` (literal snapshot at sign-off)
 
 **AUTO gates:**
-- `test_health_endpoint_returns_required_fields`
-- `test_health_command_exits_zero_when_healthy`
 - `test_health_command_behavior` (healthy and forced-unhealthy paths)
+- `test_status_command_behavior` (healthy and forced-unhealthy paths)
 
-**Unblock condition:** health doc exists, health snapshot exists, and AUTO tests are green.
+**Unblock condition:** health/status doc exists, health snapshot exists, and AUTO tests are green.
 
 ## P0-F — Machine-Readable Policy Path + Strict Loader
 
@@ -138,7 +139,7 @@ evidence/phase0/
 
 ## Phase 0 Minimal Tests (must pass)
 
-Phase 0 is complete only if the following tests are defined and evidenced:
+Phase 0 is complete only if the following tests are defined, implemented as code-level runtime integration tests, and evidenced:
 
 1) `test_policy_is_required_and_bound`  
    Proves missing/malformed policy fails closed (no OPEN trading possible).
@@ -146,12 +147,15 @@ Phase 0 is complete only if the following tests are defined and evidenced:
    Proves `config/policy.json` is present, valid, and loader-enforced.
 3) `test_health_command_behavior`  
    Proves `./stoic-cli health` returns required fields when healthy and exits non-zero when forced unhealthy.
-4) `test_api_keys_are_least_privilege`  
+4) `test_status_command_behavior`  
+   Proves `./stoic-cli status` returns `trading_mode` + `is_trading_allowed` and forces `KILL/false` on policy-load failure.
+5) `test_api_keys_are_least_privilege`  
    Proves forbidden key actions fail explicitly (no implicit privilege).
-5) `test_break_glass_kill_blocks_open_allows_reduce`  
+6) `test_break_glass_kill_blocks_open_allows_reduce`  
    Proves forced Kill blocks OPEN while risk reduction remains possible.
 
 Reference location: `tests/phase0/`.
+Runtime implementation location: `crates/soldier_infra/tests/test_phase0_runtime.rs`.
 
 ## Phase 0 Owner Sign-Off (Binary)
 
@@ -161,11 +165,11 @@ Answer YES/NO with links into `evidence/phase0/`. If any answer is “I think so
 2) Are environments isolated (DEV/STAGING/PAPER/LIVE) with separate keys/accounts?
 3) Do we have proof of key scopes (not just claims) and withdrawals are disabled?
 4) Was a break-glass drill executed and recorded, proving we can halt new risk immediately?
-5) Does a single health command/endpoint show `ok` / `build_id` / `contract_version` and fail non-zero when policy load fails?
+5) Do health/status commands show `ok` / `build_id` / `contract_version` / `trading_mode` / `is_trading_allowed`, and fail-closed on policy-load failure?
 
 ## Explicit Phase 0 Non-Goals (Do Not Backport)
 
-- No `/status` endpoint
+- No full `/api/v1/status` schema or reason-code registry
 - No TradingMode/PolicyGuard logic
 - No replay/evidence/certification loop
 - No dashboards/UI
