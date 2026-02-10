@@ -18,6 +18,8 @@ check_script "plans/verify_gate_contract_check.sh"
 check_script "plans/preflight.sh"
 check_script "plans/legacy_layout_guard.sh"
 check_script "plans/readme_ci_parity_check.sh"
+check_script "plans/slice_completion_review_guard.sh"
+check_script "plans/story_review_findings_guard.sh"
 check_script "plans/codex_review_logged.sh"
 check_script "plans/kimi_review_logged.sh"
 check_script "plans/codex_review_digest.sh"
@@ -25,6 +27,7 @@ check_script "plans/prd_set_pass.sh"
 check_script "plans/self_review_logged.sh"
 check_script "plans/story_postmortem_logged.sh"
 check_script "plans/story_review_gate.sh"
+check_script "plans/stoic_cli_invariant_check.sh"
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick

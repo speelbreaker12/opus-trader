@@ -117,6 +117,7 @@ require_code_token "$VERIFY" 'Skipping contract_coverage in quick mode (full-onl
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_CI_SENTINEL'
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_STRICT_EFFECTIVE'
 require_code_token "$VERIFY" 'env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE"'
+require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-300s}"'
 
 # Stack gate scripts: ensure quick/full gate names are present.
 rust_tokens=(

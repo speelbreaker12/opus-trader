@@ -59,8 +59,11 @@ required=(
   plans/readme_ci_parity_check.sh
   plans/review_resolution_template.md
   plans/self_review_logged.sh
+  plans/slice_completion_review_guard.sh
+  plans/stoic_cli_invariant_check.sh
   plans/ssot_lint.sh
   plans/story_postmortem_logged.sh
+  plans/story_review_findings_guard.sh
   plans/story_review_gate.sh
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
@@ -68,8 +71,11 @@ required=(
   plans/story_verify_allowlist_suggest.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
+  plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_kimi_review_logged.sh
   plans/tests/test_prd_cache.sh
+  plans/tests/test_stoic_cli_invariant_check.sh
+  plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_story_review_gate.sh
   plans/verify.sh
   plans/verify_day.sh

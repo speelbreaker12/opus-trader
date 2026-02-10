@@ -138,6 +138,54 @@ else
   exit 2
 fi
 
+# 3d. Slice completion review guard (fail-closed)
+SLICE_COMPLETION_REVIEW_GUARD="plans/slice_completion_review_guard.sh"
+if [[ -x "$SLICE_COMPLETION_REVIEW_GUARD" ]]; then
+  if "$SLICE_COMPLETION_REVIEW_GUARD"; then
+    pass "Slice completion review guard"
+  else
+    fail "Slice completion review guard failed"
+  fi
+elif [[ -f "$SLICE_COMPLETION_REVIEW_GUARD" ]]; then
+  echo "[FAIL] Slice completion review guard not executable: $SLICE_COMPLETION_REVIEW_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing slice completion review guard: $SLICE_COMPLETION_REVIEW_GUARD (setup error)" >&2
+  exit 2
+fi
+
+# 3e. Story findings-review guard (fail-closed)
+STORY_REVIEW_FINDINGS_GUARD="plans/story_review_findings_guard.sh"
+if [[ -x "$STORY_REVIEW_FINDINGS_GUARD" ]]; then
+  if "$STORY_REVIEW_FINDINGS_GUARD"; then
+    pass "Story findings-review guard"
+  else
+    fail "Story findings-review guard failed"
+  fi
+elif [[ -f "$STORY_REVIEW_FINDINGS_GUARD" ]]; then
+  echo "[FAIL] Story findings-review guard not executable: $STORY_REVIEW_FINDINGS_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing story findings-review guard: $STORY_REVIEW_FINDINGS_GUARD (setup error)" >&2
+  exit 2
+fi
+
+# 3f. stoic-cli critical invariants guard (fail-closed)
+STOIC_CLI_INVARIANT_GUARD="plans/stoic_cli_invariant_check.sh"
+if [[ -x "$STOIC_CLI_INVARIANT_GUARD" ]]; then
+  if "$STOIC_CLI_INVARIANT_GUARD"; then
+    pass "stoic-cli invariants guard"
+  else
+    fail "stoic-cli invariants guard failed"
+  fi
+elif [[ -f "$STOIC_CLI_INVARIANT_GUARD" ]]; then
+  echo "[FAIL] stoic-cli invariants guard not executable: $STOIC_CLI_INVARIANT_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing stoic-cli invariants guard: $STOIC_CLI_INVARIANT_GUARD (setup error)" >&2
+  exit 2
+fi
+
 # =============================================================================
 # Tier 2: Fast checks (<30s)
 # =============================================================================
@@ -181,8 +229,12 @@ REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_codex_review_digest.sh"
   "plans/tests/test_run_prd_auditor_invocation.sh"
+  "plans/tests/test_run_prd_auditor_timeout_fallback.sh"
   "plans/tests/test_codex_review_logged.sh"
   "plans/tests/test_kimi_review_logged.sh"
+  "plans/tests/test_guard_no_command_substitution.sh"
+  "plans/tests/test_story_review_findings_guard.sh"
+  "plans/tests/test_stoic_cli_invariant_check.sh"
 )
 
 for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do

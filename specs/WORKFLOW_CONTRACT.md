@@ -113,6 +113,11 @@ This is the only approved execution loop.
 6) Run `./plans/verify.sh quick` again (after review fixes).
 6.1) Second Codex review for `REVIEW_SHA` (`codex review --commit "$REVIEW_SHA" ...`), fix all blocking.
 6.2) Run `./plans/verify.sh quick` again (after second Codex fixes).
+6.3) Run findings review using `~/.agents/skills/code-review-expert/SKILL.md` for `REVIEW_SHA`.
+   - Save artifact: `artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md`.
+6.4) Turn top findings into failing tests first (red phase).
+6.5) Fix until those tests pass (green phase).
+6.6) Run `./plans/verify.sh quick` again after fixes.
 7) Sync with integration branch (merge/rebase `run/slice1-clean` into story branch).
    - If this changed anything, run `./plans/verify.sh quick` again.
 8) Freeze the story worktree and run `./plans/verify.sh full` (nohup allowed).
@@ -229,6 +234,9 @@ After a story is FULL-green and PRD pass is set:
 ### 9.2 Slice completion
 After all Slice 1 stories are merged:
 - Run `./plans/verify.sh full` on the integration branch.
+- Run a slice-close review using `~/.agents/skills/thinking-review-expert/skill.md`.
+- Record the review artifact at `artifacts/slice_reviews/<slice_id>/thinking_review.md` (include integration `HEAD` + final disposition).
+- Start from template: `artifacts/slice_reviews/_template/thinking_review.md`.
 - Only then is the slice considered done.
 
 ---
