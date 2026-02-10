@@ -69,14 +69,14 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 - **Environment Matrix** (`docs/env_matrix.md`) — separate keys/accounts per env, permissions, secret storage.
 - **Keys & Secrets** (`docs/keys_and_secrets.md`) — key creation rules, rotation plan, LIVE key protection.
 - **Break-Glass Runbook** (`docs/break_glass_runbook.md`) — kill switch steps, verify no open risk, escalation.
-- **Health Endpoint** (`docs/health_endpoint.md`) — single command to check system status.
+- **Health + Owner Status** (`docs/health_endpoint.md`) — minimal command surface to check liveness and authority state.
 
 ### Exit criteria (evidence pack)
 - All docs above exist with required content
 - `evidence/phase0/` contains snapshots + drill record + key scope probe (see `docs/PHASE0_CHECKLIST_BLOCK.md` for canonical structure)
 - A recorded **break-glass drill** proving: halt triggered → no further OPENs → risk reduction still possible
 - A recorded **key-scope probe** (`key_scope_probe.json`) proving keys are least-privilege
-- A **single command** that prints `/health` style status including `ok`, `build_id`, and `contract_version`
+- Minimal commands that expose: `ok`, `build_id`, `contract_version`, `trading_mode`, `is_trading_allowed`
 - Strict policy loader validation passes for `config/policy.json`
 
 ---
@@ -91,12 +91,12 @@ Use that file for:
 - binary owner sign-off questions,
 - explicit Phase 0 non-goals.
 
-### Phase 0 Health Enforcement Scope (clarification)
+### Phase 0 Health/Status Enforcement Scope (clarification)
 
-- In Phase 0, `tools/phase0_meta_test.py` (via `./plans/verify.sh`) enforces both health documentation/evidence (`docs/health_endpoint.md`, `evidence/phase0/health/health_endpoint_snapshot.md`) and executable behavior of `./stoic-cli health`.
+- In Phase 0, `tools/phase0_meta_test.py` (via `./plans/verify.sh`) enforces both health documentation/evidence (`docs/health_endpoint.md`, `evidence/phase0/health/health_endpoint_snapshot.md`) and executable behavior of `./stoic-cli health` + `./stoic-cli status`.
 - Executable behavior is checked in CI with deterministic pass/fail paths:
-  - healthy path: exit code `0` with required fields (`ok`, `build_id`, `contract_version`)
-  - forced-unhealthy path: exit code `1` with `ok=false` and explicit policy-load error
+  - healthy path: exit code `0` with required fields (`ok`, `build_id`, `contract_version`, `trading_mode`, `is_trading_allowed`)
+  - forced-unhealthy path: exit code `1` with explicit policy-load error and fail-closed status (`trading_mode=KILL`, `is_trading_allowed=false`)
 
 ---
 
@@ -144,7 +144,7 @@ Use that file for:
 - No multi-leg atomic execution.
 - No TradingMode / PolicyGuard.
 - No emergency flattening logic (automated position liquidation is Phase 2; Phase 1 only ensures risk-reducing orders can pass through gates).
-- No `/status` endpoint (ok if Phase 0 has minimal health output).
+- No full `/status` endpoint/schema (Phase 0 includes minimal owner status fields only).
 - No evidence/attribution/replay governance.
 
 ### Acceptance artifacts (what “proof” looks like)
@@ -349,7 +349,7 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 
 ### Explicit Phase 1 Non-Goals (Do Not Backport)
 
-- ❌ No `/status` endpoint
+- ❌ No full `/status` endpoint/schema
 - ❌ No TradingMode logic beyond minimal gating
 - ❌ No replay/evidence/certification loop
 - ❌ No dashboards/owner UI
@@ -582,7 +582,7 @@ Status: **Fixed** (all items resolved in this document).
 - [x] Key scopes are **proven** (probe tests recorded). → `evidence/phase0/keys/key_scope_probe.json`
 - [x] Incident runbook exists (kill switch, exchange outage, PnL spike, mixed fills). → `docs/break_glass_runbook.md`
 - [x] At least one **break-glass drill** executed and recorded (simulate runaway order → force `KILL` → verify no further OPENs; `REDUCE_ONLY` still works). → `evidence/phase0/break_glass/drill.md`
-- [x] Basic health output exists (API endpoint or CLI) and is readable by a non-coder. → `docs/health_endpoint.md`, `crates/soldier_infra/src/health.rs`
+- [x] Basic health + owner status output exists (CLI) and is readable by a non-coder. → `docs/health_endpoint.md`, `stoic-cli`
 
 **Sign-off statement:** Ops rules are defined **and binding**; "safe" is enforced, drilled, and observable.
 

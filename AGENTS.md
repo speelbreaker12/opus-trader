@@ -72,7 +72,7 @@ For read-only doc reviews: read the target docs first; consult contract/workflow
 ## Manual Story Discipline (MANDATORY for PRD stories)
 
 - Manual PRD execution is allowed; use one Story ID per worktree.
-- Follow the contract story loop: implement -> self review -> quick verify -> Codex review -> quick verify -> sync branch -> full verify -> `prd_set_pass` -> merge.
+- Follow the contract story loop: implement -> self review -> quick verify -> Codex review -> Kimi K2.5 review -> quick verify -> second Codex review -> quick verify -> sync branch -> full verify -> `prd_set_pass` -> merge.
 - Never edit a worktree while `./plans/verify.sh full` is running in that worktree.
 - `passes=true` flips must go through `./plans/prd_set_pass.sh` with artifact validation.
 - PRD ambiguity is fail-closed: set `needs_human_decision=true` and stop.

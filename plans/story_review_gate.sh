@@ -16,15 +16,22 @@ Requires (for HEAD):
       Decision: PASS
       Failure-Mode Review: DONE
       Strategic Failure Review: DONE
+  - artifacts/story/<ID>/kimi/*_review.md containing:
+      - Story: <ID>
+      - HEAD: <sha>
   - artifacts/story/<ID>/codex/*_review.md containing:
       - Story: <ID>
       - HEAD: <sha>
+    and at least 2 Codex review artifacts must match HEAD.
   - artifacts/story/<ID>/review_resolution.md with:
       Story: <ID>
       HEAD: <sha>
       Blocking addressed: YES
       Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
+      Kimi final review file: <path>   (must exist and match HEAD)
       Codex final review file: <path>   (must exist and match HEAD)
+      Codex second review file: <path>  (must exist and match HEAD)
+    template: plans/review_resolution_template.md
 
 Artifact root selection:
   --artifacts-root overrides all.
@@ -60,6 +67,46 @@ latest_matching_file() {
     return 0
   fi
   find "$dir" -maxdepth 1 -type f -name "$pattern" | LC_ALL=C sort -r | head -n 1
+}
+
+validate_review_reference() {
+  local res_file="$1"
+  local label="$2"
+  local prefix="$3"
+  local review_dir="$4"
+
+  local ref_line ref_path ref_abs review_dir_abs
+  ref_line="$(grep -E "^${prefix}[[:space:]]*" "$res_file" | head -n 1 || true)"
+  [[ -n "$ref_line" ]] || die "resolution missing '${label}: ...' ($res_file)"
+
+  ref_path="$(printf '%s' "$ref_line" | sed -E "s#^${prefix}[[:space:]]*##; s/[[:space:]]+$//")"
+  [[ -n "$ref_path" ]] || die "${label} path is empty ($res_file)"
+  [[ "$ref_path" == *_review.md ]] || die "${label} must be a *_review.md artifact: $ref_path"
+
+  if [[ "$ref_path" != /* ]]; then
+    if [[ -f "$repo_root/$ref_path" ]]; then
+      ref_path="$repo_root/$ref_path"
+    elif [[ -f "$story_dir/$ref_path" ]]; then
+      ref_path="$story_dir/$ref_path"
+    elif [[ -f "$review_dir/$ref_path" ]]; then
+      ref_path="$review_dir/$ref_path"
+    fi
+  fi
+  [[ -f "$ref_path" ]] || die "${label} not found: $ref_path"
+
+  review_dir_abs="$(canonical_path "$review_dir")"
+  ref_abs="$(canonical_path "$ref_path")"
+  case "$ref_abs" in
+    "$review_dir_abs"/*) ;;
+    *)
+      die "${label} must be inside $review_dir (got $ref_abs)"
+      ;;
+  esac
+
+  grep -Fxq -- "- Story: $story" "$ref_path" || die "referenced ${label} missing '- Story: $story' ($ref_path)"
+  grep -Fxq -- "- HEAD: $HEAD_SHA" "$ref_path" || die "referenced ${label} does not match HEAD=$HEAD_SHA ($ref_path)"
+
+  printf '%s\n' "$ref_path"
 }
 
 story="${1:-}"
@@ -114,19 +161,32 @@ require_fixed_line "$self_file" "Decision: PASS" "self-review Decision is not PA
 require_fixed_line "$self_file" "- Failure-Mode Review: DONE" "self-review missing '- Failure-Mode Review: DONE'"
 require_fixed_line "$self_file" "- Strategic Failure Review: DONE" "self-review missing '- Strategic Failure Review: DONE'"
 
-# ---------- Codex review (must match HEAD) ----------
+# ---------- Kimi review (must match HEAD) ----------
+kimi_dir="$story_dir/kimi"
+kimi_match=""
+if [[ -d "$kimi_dir" ]]; then
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $HEAD_SHA" "$f"; then
+      kimi_match="$f"
+      break
+    fi
+  done < <(find "$kimi_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
+fi
+[[ -n "$kimi_match" ]] || die "missing Kimi review artifact for HEAD=$HEAD_SHA in: $kimi_dir"
+
+# ---------- Codex review(s) (must match HEAD) ----------
 codex_dir="$story_dir/codex"
-codex_match=""
+codex_matches=()
 if [[ -d "$codex_dir" ]]; then
   while IFS= read -r f; do
     [[ -f "$f" ]] || continue
     if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $HEAD_SHA" "$f"; then
-      codex_match="$f"
-      break
+      codex_matches+=("$f")
     fi
   done < <(find "$codex_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
 fi
-[[ -n "$codex_match" ]] || die "missing Codex review artifact for HEAD=$HEAD_SHA in: $codex_dir"
+[[ "${#codex_matches[@]}" -ge 2 ]] || die "need at least two Codex review artifacts for HEAD=$HEAD_SHA in: $codex_dir"
 
 # ---------- Resolution ----------
 res_file="$story_dir/review_resolution.md"
@@ -136,38 +196,19 @@ require_fixed_line "$res_file" "Story: $story" "resolution missing 'Story: $stor
 require_fixed_line "$res_file" "HEAD: $HEAD_SHA" "resolution not for current HEAD ($HEAD_SHA)"
 require_fixed_line "$res_file" "Blocking addressed: YES" "resolution missing 'Blocking addressed: YES'"
 require_fixed_line "$res_file" "Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0" "resolution must assert no BLOCKING/MAJOR/MEDIUM remain"
+kimi_ref_path="$(validate_review_reference "$res_file" "Kimi final review file" "Kimi final review file:" "$kimi_dir")"
+codex_final_ref_path="$(validate_review_reference "$res_file" "Codex final review file" "Codex final review file:" "$codex_dir")"
+codex_second_ref_path="$(validate_review_reference "$res_file" "Codex second review file" "Codex second review file:" "$codex_dir")"
 
-codex_ref_line="$(grep -E '^Codex final review file:' "$res_file" | head -n 1 || true)"
-[[ -n "$codex_ref_line" ]] || die "resolution missing 'Codex final review file: ...' ($res_file)"
-
-codex_ref_path="$(printf '%s' "$codex_ref_line" | sed -E 's/^Codex final review file:[[:space:]]*//; s/[[:space:]]+$//')"
-[[ -n "$codex_ref_path" ]] || die "Codex final review file path is empty ($res_file)"
-[[ "$codex_ref_path" == *_review.md ]] || die "Codex final review file must be a *_review.md artifact: $codex_ref_path"
-
-if [[ "$codex_ref_path" != /* ]]; then
-  if [[ -f "$repo_root/$codex_ref_path" ]]; then
-    codex_ref_path="$repo_root/$codex_ref_path"
-  elif [[ -f "$story_dir/$codex_ref_path" ]]; then
-    codex_ref_path="$story_dir/$codex_ref_path"
-  elif [[ -f "$codex_dir/$codex_ref_path" ]]; then
-    codex_ref_path="$codex_dir/$codex_ref_path"
-  fi
+if [[ "$(canonical_path "$codex_final_ref_path")" == "$(canonical_path "$codex_second_ref_path")" ]]; then
+  die "Codex final review file and Codex second review file must be different artifacts"
 fi
-[[ -f "$codex_ref_path" ]] || die "Codex final review file not found: $codex_ref_path"
-
-codex_dir_abs="$(canonical_path "$codex_dir")"
-codex_ref_abs="$(canonical_path "$codex_ref_path")"
-case "$codex_ref_abs" in
-  "$codex_dir_abs"/*) ;;
-  *)
-    die "Codex final review file must be inside $codex_dir (got $codex_ref_abs)"
-    ;;
-esac
-
-grep -Fxq -- "- Story: $story" "$codex_ref_path" || die "referenced Codex file missing '- Story: $story' ($codex_ref_path)"
-grep -Fxq -- "- HEAD: $HEAD_SHA" "$codex_ref_path" || die "referenced Codex file does not match HEAD=$HEAD_SHA ($codex_ref_path)"
 
 echo "OK: review gate passed for $story @ $HEAD_SHA"
 echo "  self_review: $self_file"
-echo "  codex_review: $codex_match"
+echo "  kimi_review: $kimi_match"
+echo "  codex_reviews: ${#codex_matches[@]}"
+echo "  kimi_resolution_ref: $kimi_ref_path"
+echo "  codex_final_ref: $codex_final_ref_path"
+echo "  codex_second_ref: $codex_second_ref_path"
 echo "  resolution: $res_file"
