@@ -65,6 +65,7 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 
 ### Delivered artifacts
 - **Launch Policy** (`docs/launch_policy.md`) — allowed venues/instruments, max position, max daily loss, max order rate, environments.
+- **Machine Policy Config + Loader** (`config/policy.json`, `tools/policy_loader.py`) — strict runtime-readable policy baseline.
 - **Environment Matrix** (`docs/env_matrix.md`) — separate keys/accounts per env, permissions, secret storage.
 - **Keys & Secrets** (`docs/keys_and_secrets.md`) — key creation rules, rotation plan, LIVE key protection.
 - **Break-Glass Runbook** (`docs/break_glass_runbook.md`) — kill switch steps, verify no open risk, escalation.
@@ -76,6 +77,7 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 - A recorded **break-glass drill** proving: halt triggered → no further OPENs → risk reduction still possible
 - A recorded **key-scope probe** (`key_scope_probe.json`) proving keys are least-privilege
 - A **single command** that prints `/health` style status including `ok`, `build_id`, and `contract_version`
+- Strict policy loader validation passes for `config/policy.json`
 
 ---
 
@@ -91,8 +93,10 @@ Use that file for:
 
 ### Phase 0 Health Enforcement Scope (clarification)
 
-- In Phase 0, `tools/phase0_meta_test.py` (via `./plans/verify.sh`) enforces health documentation and evidence artifacts (`docs/health_endpoint.md`, `evidence/phase0/health/health_endpoint_snapshot.md`).
-- Runtime behavior of the health command/endpoint (`./stoic-cli health`, output/exit semantics) is tracked as implementation work and is not implied by doc/snapshot presence alone.
+- In Phase 0, `tools/phase0_meta_test.py` (via `./plans/verify.sh`) enforces both health documentation/evidence (`docs/health_endpoint.md`, `evidence/phase0/health/health_endpoint_snapshot.md`) and executable behavior of `./stoic-cli health`.
+- Executable behavior is checked in CI with deterministic pass/fail paths:
+  - healthy path: exit code `0` with required fields (`ok`, `build_id`, `contract_version`)
+  - forced-unhealthy path: exit code `1` with `ok=false` and explicit policy-load error
 
 ---
 

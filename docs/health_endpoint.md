@@ -17,6 +17,9 @@
 ./stoic-cli health
 ```
 
+Implementation note:
+- `./stoic-cli` loads machine policy via `tools/policy_loader.py` from `config/policy.json`.
+
 ---
 
 ## Required Fields (minimal)
@@ -108,6 +111,12 @@ fi
 ### JSON Parsing
 ```bash
 ./stoic-cli health --format json | jq '.ok'
+```
+
+### Forced Unhealthy Path (for gate tests)
+```bash
+STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli health --format json
+echo $?  # 1 = unhealthy (policy load failure)
 ```
 
 ---

@@ -38,7 +38,8 @@ All artifacts below mark Phase 0 complete.
 
 **Files**
 - `docs/launch_policy.md` (human-readable)
-- `config/trading_policy.(json|yaml)` (machine-readable)
+- `config/policy.json` (machine-readable)
+- `tools/policy_loader.py` (strict loader/validator)
 
 **Requirements**
 - Explicit limits:
@@ -49,6 +50,7 @@ All artifacts below mark Phase 0 complete.
   - micro-live caps (even if micro-live is later)
 - No implied defaults.
 - Missing values must fail-closed.
+- Loader must fail non-zero on malformed/missing policy.
 
 ---
 
@@ -106,6 +108,7 @@ Before `/status` exists, there must be some owner-readable health output.
   - `build_id` (string)
   - `contract_version` (string)
 - Readable by a non-coder.
+- Includes deterministic unhealthy behavior (non-zero exit) when policy load fails.
 
 ---
 
@@ -114,6 +117,8 @@ Before `/status` exists, there must be some owner-readable health output.
 Phase 0 is considered complete only if all tests below pass.
 
 - Policy binding test (fail-closed on missing/invalid policy)
+- Machine policy loader test (strict validation against `config/policy.json`)
+- Health command behavior test (healthy and forced-unhealthy paths)
 - Key scope probe test (prove least privilege)
 - Break-glass drill test (forced Kill blocks OPENs)
 

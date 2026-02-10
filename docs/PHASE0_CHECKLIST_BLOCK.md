@@ -17,6 +17,7 @@ evidence/phase0/
   ci_links.md
   policy/
     launch_policy_snapshot.md
+    policy_config_snapshot.json
   env/
     env_matrix_snapshot.md
   keys/
@@ -115,18 +116,39 @@ evidence/phase0/
 **AUTO gates:**
 - `test_health_endpoint_returns_required_fields`
 - `test_health_command_exits_zero_when_healthy`
+- `test_health_command_behavior` (healthy and forced-unhealthy paths)
 
 **Unblock condition:** health doc exists, health snapshot exists, and AUTO tests are green.
 
+## P0-F — Machine-Readable Policy Path + Strict Loader
+
+**Goal:** Policy must be machine-readable and actively loaded/validated so runtime checks are not documentation-only.
+
+**MANUAL artifacts (must exist):**
+- `config/policy.json` with explicit policy keys (envs/order types/limits/fail_closed)
+- `tools/policy_loader.py` with strict validation (non-zero on invalid policy)
+
+**MANUAL evidence (snapshot required):**
+- `evidence/phase0/policy/policy_config_snapshot.json` (literal snapshot at sign-off)
+
+**AUTO gates:**
+- `test_machine_policy_loader_and_config`
+
+**Unblock condition:** machine policy file + loader exist, snapshot exists, and strict loader test is green.
+
 ## Phase 0 Minimal Tests (must pass)
 
-Phase 0 is complete only if the following three tests are defined and evidenced:
+Phase 0 is complete only if the following tests are defined and evidenced:
 
 1) `test_policy_is_required_and_bound`  
    Proves missing/malformed policy fails closed (no OPEN trading possible).
-2) `test_api_keys_are_least_privilege`  
+2) `test_machine_policy_loader_and_config`  
+   Proves `config/policy.json` is present, valid, and loader-enforced.
+3) `test_health_command_behavior`  
+   Proves `./stoic-cli health` returns required fields when healthy and exits non-zero when forced unhealthy.
+4) `test_api_keys_are_least_privilege`  
    Proves forbidden key actions fail explicitly (no implicit privilege).
-3) `test_break_glass_kill_blocks_open_allows_reduce`  
+5) `test_break_glass_kill_blocks_open_allows_reduce`  
    Proves forced Kill blocks OPEN while risk reduction remains possible.
 
 Reference location: `tests/phase0/`.
@@ -139,7 +161,7 @@ Answer YES/NO with links into `evidence/phase0/`. If any answer is “I think so
 2) Are environments isolated (DEV/STAGING/PAPER/LIVE) with separate keys/accounts?
 3) Do we have proof of key scopes (not just claims) and withdrawals are disabled?
 4) Was a break-glass drill executed and recorded, proving we can halt new risk immediately?
-5) Does a single health command/endpoint show `ok` / `build_id` / `contract_version`?
+5) Does a single health command/endpoint show `ok` / `build_id` / `contract_version` and fail non-zero when policy load fails?
 
 ## Explicit Phase 0 Non-Goals (Do Not Backport)
 
