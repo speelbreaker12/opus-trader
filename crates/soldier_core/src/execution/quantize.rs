@@ -69,7 +69,7 @@ pub enum QuantizeError {
 }
 
 const BOUNDARY_EPS: f64 = 1e-9;
-const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.01;
+const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.005;
 const BOUNDARY_ULP_MULTIPLIER: f64 = 8.0;
 
 fn boundary_tolerance(raw: f64, step: f64) -> f64 {
