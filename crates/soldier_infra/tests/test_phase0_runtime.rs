@@ -8,6 +8,7 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process;
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,7 +36,16 @@ fn unique_temp_file(prefix: &str, suffix: &str) -> PathBuf {
 }
 
 fn unique_temp_state_file(prefix: &str) -> PathBuf {
-    unique_temp_file(prefix, "state.json")
+    let root = repo_root()
+        .join("artifacts")
+        .join("phase0")
+        .join("runtime_state_tests");
+    fs::create_dir_all(&root).expect("create runtime state test directory");
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    root.join(format!("{prefix}_{}_{}.state.json", process::id(), nanos))
 }
 
 fn run_cli<I, S>(args: I, env_overrides: &[(&str, &str)]) -> Output
@@ -49,7 +59,12 @@ where
     for (k, v) in env_overrides {
         cmd.env(k, v);
     }
-    cmd.output().expect("stoic-cli should execute")
+    cmd.output().unwrap_or_else(|err| {
+        panic!(
+            "failed to execute stoic-cli at {}: {err}",
+            cli_path().display()
+        )
+    })
 }
 
 fn parse_stdout_json(output: &Output) -> Value {
@@ -58,8 +73,13 @@ fn parse_stdout_json(output: &Output) -> Value {
 }
 
 fn remove_if_exists(path: &Path) {
-    if path.exists() {
-        fs::remove_file(path).ok();
+    if let Err(err) = fs::remove_file(path) {
+        assert_eq!(
+            err.kind(),
+            std::io::ErrorKind::NotFound,
+            "failed to remove temporary file {}: {err}",
+            path.display()
+        );
     }
 }
 
@@ -128,7 +148,7 @@ fn test_policy_is_required_and_bound_runtime() {
         malformed_payload["reason"],
         Value::String("policy_validation_failed".to_string())
     );
-    fs::remove_file(&bad_policy).ok();
+    remove_if_exists(&bad_policy);
 }
 
 #[test]
@@ -204,7 +224,7 @@ fn test_api_keys_are_least_privilege_runtime() {
             .any(|e| e.as_str().unwrap_or("").contains("withdraw_enabled")),
         "failure should explicitly report withdraw_enabled violation"
     );
-    fs::remove_file(&bad_probe).ok();
+    remove_if_exists(&bad_probe);
 }
 
 #[test]
@@ -457,6 +477,207 @@ fn test_break_glass_command_path_runtime() {
     assert_eq!(
         close_payload["result"],
         Value::String("ACCEPTED".to_string())
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_simulate_open_rejects_when_policy_invalid() {
+    let root = repo_root();
+    let runtime_state = unique_temp_state_file("phase0_policy_reject_open");
+    remove_if_exists(&runtime_state);
+    let missing_policy = root.join("config/missing_policy_for_sim_open.json");
+
+    let out = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                missing_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-policy-open-reject-test"),
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "policy failure must reject OPEN"
+    );
+    let payload = parse_stdout_json(&out);
+    assert_eq!(payload["ok"], Value::Bool(false));
+    assert_eq!(
+        payload["reason"],
+        Value::String("policy_validation_failed".to_string())
+    );
+    assert_eq!(payload["result"], Value::String("REJECTED".to_string()));
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_runtime_state_path_outside_repo_rejected() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+
+    let out = run_cli(
+        ["status", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                "/tmp/phase0_outside_repo_state.json",
+            ),
+            ("STOIC_BUILD_ID", "phase0-state-path-guard-test"),
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "path outside repo must fail closed"
+    );
+    let payload = parse_stdout_json(&out);
+    assert_eq!(payload["ok"], Value::Bool(false));
+    assert_eq!(
+        payload["trading_mode"],
+        Value::String("KILL".to_string()),
+        "status should fail closed to KILL when runtime path is invalid"
+    );
+    let errs = payload["errors"]
+        .as_array()
+        .expect("errors array expected on invalid runtime path");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("runtime_state")),
+        "runtime_state path violation should be explicit"
+    );
+}
+
+#[test]
+fn test_simulate_open_enforces_pending_orders_capacity() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_capacity_guard");
+    remove_if_exists(&runtime_state);
+
+    let seed = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_MAX_PENDING_ORDERS", "1"),
+            ("STOIC_BUILD_ID", "phase0-capacity-seed-test"),
+        ],
+    );
+    assert_eq!(seed.status.code(), Some(0), "first OPEN should be accepted");
+
+    let blocked = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_MAX_PENDING_ORDERS", "1"),
+            ("STOIC_BUILD_ID", "phase0-capacity-block-test"),
+        ],
+    );
+    assert_eq!(
+        blocked.status.code(),
+        Some(1),
+        "capacity limit must reject overflow OPEN"
+    );
+    let payload = parse_stdout_json(&blocked);
+    assert_eq!(payload["ok"], Value::Bool(false));
+    assert_eq!(
+        payload["reason"],
+        Value::String("pending_orders_capacity_exceeded".to_string())
+    );
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_runtime_state_schema_mismatch_fails_closed() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_schema_mismatch");
+    remove_if_exists(&runtime_state);
+    fs::write(
+        &runtime_state,
+        r#"{
+  "schema_version": 999,
+  "trading_mode": "ACTIVE",
+  "orders_in_flight": 1,
+  "pending_orders": [{"id":"sim_0001","intent":"OPEN","instrument":"BTC"}],
+  "last_transition_reason": "seed",
+  "last_transition_ts": "2026-01-01T00:00:00Z"
+}"#,
+    )
+    .expect("write mismatched runtime state");
+
+    let out = run_cli(
+        ["status", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-schema-mismatch-test"),
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "schema mismatch must fail closed and surface error"
+    );
+    let payload = parse_stdout_json(&out);
+    assert_eq!(payload["ok"], Value::Bool(false));
+    assert_eq!(payload["trading_mode"], Value::String("KILL".to_string()));
+    let errs = payload["errors"]
+        .as_array()
+        .expect("errors array expected on schema mismatch");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("schema_version")),
+        "schema mismatch should be explicit in errors"
     );
 
     remove_if_exists(&runtime_state);
