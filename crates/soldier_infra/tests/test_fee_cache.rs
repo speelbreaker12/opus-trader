@@ -27,11 +27,8 @@ fn test_at031_staleness_survives_restart() {
 
     let eval = evaluate_fee_staleness(&snapshot, &config);
     // Age = (fee_cache_hard_s * 1000 + 1) / 1000 = fee_cache_hard_s (integer div)
-    // which is 900, so soft-stale boundary. Let's check:
-    // Actually age_s = (t0 + 900*1000 + 1 - t0) / 1000 = 900001 / 1000 = 900
-    // 900 is NOT > 900 (hard threshold), so it's soft-stale
-    // Let's use +1001 to cross the boundary
-    assert!(eval.staleness == FeeStaleness::SoftStale || eval.staleness == FeeStaleness::HardStale);
+    // which is 900, so hard threshold is not crossed yet.
+    assert_eq!(eval.staleness, FeeStaleness::SoftStale);
 
     // Use clearly hard-stale value
     let now_ms_hard = t0 + (config.fee_cache_hard_s * 1000) + 1001;

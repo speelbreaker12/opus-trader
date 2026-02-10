@@ -31,6 +31,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -115,6 +116,27 @@ def run_cli_json(root: Path, args: List[str], env: Dict[str, str]) -> Tuple[int,
     if not isinstance(payload, dict):
         return proc.returncode, None, combined
     return proc.returncode, payload, combined
+
+
+def build_meta_runtime_state_path(root: Path, prefix: str) -> tuple[Path, bool]:
+    runtime_dir = root / "artifacts" / "phase0" / "meta_test_runtime"
+    allow_external = False
+    try:
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        runtime_dir = Path(tempfile.gettempdir())
+        allow_external = True
+    token = f"{prefix}_{os.getpid()}_{time.time_ns()}"
+    path = runtime_dir / f"{token}.json"
+    if path.exists():
+        path.unlink()
+    return path, allow_external
+
+
+def cleanup_runtime_state_artifacts(runtime_state: Path) -> None:
+    runtime_state.unlink(missing_ok=True)
+    lock_path = runtime_state.with_name(f".{runtime_state.name}.lock")
+    lock_path.unlink(missing_ok=True)
 
 
 def markdown_table_row_for_env(text: str, env: str) -> List[str]:
@@ -255,12 +277,14 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         errors.append(f"{policy} missing")
         return errors
 
-    with tempfile.TemporaryDirectory(prefix="phase0_break_glass_") as td:
-        runtime_state = Path(td) / "runtime_state.json"
+    runtime_state, allow_external_runtime_state = build_meta_runtime_state_path(root, "phase0_break_glass")
+    try:
         env = os.environ.copy()
         env["STOIC_BUILD_ID"] = "phase0-break-glass-meta-test"
         env["STOIC_POLICY_PATH"] = str(policy)
         env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+        if allow_external_runtime_state:
+            env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
 
         rc, payload, details = run_cli_json(
             root,
@@ -312,6 +336,9 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         if rc != 0 or payload is None or payload.get("result") != "ACCEPTED":
             errors.append(f"simulate-close command path failed in reduce-only: rc={rc} details={details}")
             return errors
+
+    finally:
+        cleanup_runtime_state_artifacts(runtime_state)
 
     return errors
 
@@ -566,13 +593,15 @@ def test_status_command_behavior(root: Path) -> List[str]:
     if not os.access(cli, os.X_OK):
         return [f"{cli} is not executable"]
 
-    with tempfile.TemporaryDirectory(prefix="phase0_status_") as td:
-        runtime_state = Path(td) / "runtime_state.json"
+    runtime_state, allow_external_runtime_state = build_meta_runtime_state_path(root, "phase0_status")
+    try:
 
         base_env = os.environ.copy()
         base_env["STOIC_BUILD_ID"] = "phase0-status-meta-test"
         base_env["STOIC_POLICY_PATH"] = str(policy)
         base_env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+        if allow_external_runtime_state:
+            base_env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
 
         rc, payload, details = run_cli_json(root, ["status", "--format", "json"], base_env)
         if rc != 0 or payload is None:
@@ -602,6 +631,9 @@ def test_status_command_behavior(root: Path) -> List[str]:
             errors.append("status unhealthy payload must include non-empty errors list")
         elif not any("policy" in str(err).lower() for err in payload_errors):
             errors.append("status unhealthy payload errors must mention policy failure")
+
+    finally:
+        cleanup_runtime_state_artifacts(runtime_state)
 
     return errors
 
