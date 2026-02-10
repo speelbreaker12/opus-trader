@@ -76,6 +76,34 @@ fn test_cache_age_one_second_past_ttl_is_degraded() {
     assert_eq!(result.risk_state, RiskState::Degraded);
 }
 
+/// Fail-closed: non-finite TTL values are treated as stale.
+#[test]
+fn test_nan_ttl_fails_closed_to_degraded() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    let result = cache.get_at("BTC-PERPETUAL", f64::NAN, now).unwrap();
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert!(opens_blocked(result.risk_state));
+}
+
+/// Fail-closed: infinite TTL values are treated as stale.
+#[test]
+fn test_infinite_ttl_fails_closed_to_degraded() {
+    let mut cache = InstrumentCache::new();
+    let now = Instant::now();
+    cache.insert_at("ETH-PERPETUAL", InstrumentKind::Perpetual, now);
+
+    let pos_inf = cache.get_at("ETH-PERPETUAL", f64::INFINITY, now).unwrap();
+    assert_eq!(pos_inf.risk_state, RiskState::Degraded);
+
+    let neg_inf = cache
+        .get_at("ETH-PERPETUAL", f64::NEG_INFINITY, now)
+        .unwrap();
+    assert_eq!(neg_inf.risk_state, RiskState::Degraded);
+}
+
 // ─── Missing instrument ─────────────────────────────────────────────────
 
 /// Cache miss returns None (caller must handle — fail-closed pattern)

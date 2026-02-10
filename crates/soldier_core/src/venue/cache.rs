@@ -153,7 +153,9 @@ impl InstrumentCache {
         // CONTRACT.md §1.0.X: metadata age "exceeding" instrument_cache_ttl_s
         // → Degraded. "exceeding" = strictly greater than (>), so age == ttl
         // is still Healthy.
-        let risk_state = if cache_age_s > ttl_s {
+        // Fail closed: non-finite TTL cannot safely express a staleness bound.
+        let ttl_invalid = !ttl_s.is_finite();
+        let risk_state = if ttl_invalid || cache_age_s > ttl_s {
             self.stale_total += 1;
             self.pending_breaches.push(CacheTtlBreach {
                 instrument_id: instrument_id.to_string(),
