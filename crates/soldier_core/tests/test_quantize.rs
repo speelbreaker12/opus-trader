@@ -340,6 +340,54 @@ fn test_integer_values_for_hashing() {
     assert!(result.price_ticks > 0);
 }
 
+/// Large ratios must preserve floor semantics for quantity (never round up size).
+#[test]
+fn test_large_ratio_qty_still_floors() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_qty = 1_000_000_000_000.75;
+    let result = quantize(raw_qty, 100.0, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.qty_steps, 1_000_000_000_000);
+    assert_eq!(result.qty_q, 1_000_000_000_000.0);
+    assert!(result.qty_q <= raw_qty);
+}
+
+/// Large ratios must preserve BUY floor semantics for price.
+#[test]
+fn test_large_ratio_buy_price_still_floors() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 1_000_000_000_000.75;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_000_000);
+    assert_eq!(result.limit_price_q, 1_000_000_000_000.0);
+    assert!(result.limit_price_q <= raw_price);
+}
+
+/// Large ratios must preserve SELL ceil semantics for price.
+#[test]
+fn test_large_ratio_sell_price_still_ceils() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 1_000_000_000_000.25;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_000_001);
+    assert_eq!(result.limit_price_q, 1_000_000_000_001.0);
+    assert!(result.limit_price_q >= raw_price);
+}
+
 // ─── Edge cases ────────────────────────────────────────────────────────
 
 /// min_amount=0 with zero qty_q should pass (0 >= 0)

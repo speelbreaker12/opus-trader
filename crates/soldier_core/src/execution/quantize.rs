@@ -72,7 +72,7 @@ const BOUNDARY_EPS: f64 = 1e-9;
 
 fn quantize_ratio_to_i64(ratio: f64, round_up: bool) -> i64 {
     let nearest = ratio.round();
-    let snapped = if (ratio - nearest).abs() <= BOUNDARY_EPS * ratio.abs().max(1.0) {
+    let snapped = if (ratio - nearest).abs() <= BOUNDARY_EPS {
         nearest
     } else {
         ratio
