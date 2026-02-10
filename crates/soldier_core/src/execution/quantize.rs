@@ -69,30 +69,44 @@ pub enum QuantizeError {
 }
 
 const BOUNDARY_EPS: f64 = 1e-9;
-const MAX_BOUNDARY_TOLERANCE: f64 = 0.01;
+const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.005;
+const BOUNDARY_ULP_MULTIPLIER: f64 = 8.0;
 
-fn boundary_tolerance(ratio: f64) -> f64 {
-    // Scale tolerance with magnitude to absorb normal f64 division drift at large
-    // ratios, but cap tightly so floor/ceil direction cannot collapse into
-    // round-to-nearest behavior at extreme magnitudes.
-    let scaled = ratio.abs().max(1.0) * f64::EPSILON * 8.0;
-    scaled.max(BOUNDARY_EPS).min(MAX_BOUNDARY_TOLERANCE)
+fn boundary_tolerance(raw: f64, step: f64) -> f64 {
+    // Correct one-step drift caused by floating-point division, but keep the
+    // correction well below half a step so directional floor/ceil semantics hold.
+    let step_abs = step.abs();
+    let ulp_scaled = raw.abs().max(1.0) * f64::EPSILON * BOUNDARY_ULP_MULTIPLIER;
+    let step_capped = step_abs * BOUNDARY_STEP_FRACTION_CAP;
+    ulp_scaled.min(step_capped).max(step_abs * BOUNDARY_EPS)
 }
 
-fn quantize_ratio_to_i64(ratio: f64, round_up: bool) -> i64 {
-    let nearest = ratio.round();
-    let snapped = if (ratio - nearest).abs() <= boundary_tolerance(ratio) {
-        nearest
+fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> i64 {
+    let ratio = raw / step;
+    let mut steps = if round_up {
+        ratio.ceil() as i64
     } else {
-        ratio
+        ratio.floor() as i64
     };
+    let tol = boundary_tolerance(raw, step);
 
-    let steps = if round_up {
-        snapped.ceil()
-    } else {
-        snapped.floor()
-    };
-    steps as i64
+    if round_up {
+        if steps > i64::MIN {
+            let prev = steps - 1;
+            let prev_value = prev as f64 * step;
+            if (raw - prev_value).abs() <= tol {
+                steps = prev;
+            }
+        }
+    } else if steps < i64::MAX {
+        let next = steps + 1;
+        let next_value = next as f64 * step;
+        if (raw - next_value).abs() <= tol {
+            steps = next;
+        }
+    }
+
+    steps
 }
 
 /// Observability metrics for quantization (AT-908).
@@ -174,7 +188,7 @@ pub fn quantize(
     }
 
     // Quantity: always round down (never round up size)
-    let qty_steps = quantize_ratio_to_i64(raw_qty / constraints.amount_step, false);
+    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false);
     let qty_q = qty_steps as f64 * constraints.amount_step;
 
     // AT-908: reject if quantized quantity is below minimum
@@ -189,9 +203,9 @@ pub fn quantize(
     // Price: direction-dependent rounding
     let price_ticks = match side {
         // BUY: round down (never pay extra)
-        Side::Buy => quantize_ratio_to_i64(raw_limit_price / constraints.tick_size, false),
+        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false),
         // SELL: round up (never sell cheaper)
-        Side::Sell => quantize_ratio_to_i64(raw_limit_price / constraints.tick_size, true),
+        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true),
     };
     let limit_price_q = price_ticks as f64 * constraints.tick_size;
 
