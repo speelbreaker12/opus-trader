@@ -388,6 +388,51 @@ fn test_large_ratio_sell_price_still_ceils() {
     assert!(result.limit_price_q >= raw_price);
 }
 
+/// Large decimal boundaries should still snap to exact quantity steps.
+#[test]
+fn test_large_decimal_boundary_qty_stays_on_step() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 0.1,
+        min_amount: 0.0,
+    };
+    let raw_qty = 100_000_000.3;
+    let result = quantize(raw_qty, 100.0, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.qty_steps, 1_000_000_003);
+    assert!((result.qty_q - raw_qty).abs() < 1e-6);
+}
+
+/// Large decimal boundaries should still snap to exact BUY price ticks.
+#[test]
+fn test_large_decimal_boundary_buy_price_stays_on_tick() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 100_000_000.3;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_003);
+    assert!((result.limit_price_q - raw_price).abs() < 1e-6);
+}
+
+/// Large decimal boundaries should still snap to exact SELL price ticks.
+#[test]
+fn test_large_decimal_boundary_sell_price_stays_on_tick() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 100_000_000.3;
+    let result = quantize(1.0, raw_price, Side::Sell, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 1_000_000_003);
+    assert!((result.limit_price_q - raw_price).abs() < 1e-6);
+}
+
 // ─── Edge cases ────────────────────────────────────────────────────────
 
 /// min_amount=0 with zero qty_q should pass (0 >= 0)

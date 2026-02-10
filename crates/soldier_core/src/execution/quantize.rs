@@ -69,10 +69,19 @@ pub enum QuantizeError {
 }
 
 const BOUNDARY_EPS: f64 = 1e-9;
+const MAX_BOUNDARY_TOLERANCE: f64 = 0.125;
+
+fn boundary_tolerance(ratio: f64) -> f64 {
+    // Scale tolerance with magnitude to absorb normal f64 division drift at large
+    // ratios, but cap well below 0.5 so floor/ceil direction cannot collapse into
+    // round-to-nearest behavior.
+    let scaled = ratio.abs().max(1.0) * f64::EPSILON * 8.0;
+    scaled.max(BOUNDARY_EPS).min(MAX_BOUNDARY_TOLERANCE)
+}
 
 fn quantize_ratio_to_i64(ratio: f64, round_up: bool) -> i64 {
     let nearest = ratio.round();
-    let snapped = if (ratio - nearest).abs() <= BOUNDARY_EPS {
+    let snapped = if (ratio - nearest).abs() <= boundary_tolerance(ratio) {
         nearest
     } else {
         ratio
