@@ -9,11 +9,11 @@ Usage:
 Defaults:
   --commit HEAD
   --title "<STORY_ID>: Codex review"
-  --out-root "${CODEX_ARTIFACTS_ROOT:-artifacts/story}"
+  --out-root "${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}"
 
 Artifacts:
-  - Raw review:   artifacts/story/<ID>/codex/<UTC_TS>_review.md
-  - Digest review: artifacts/story/<ID>/codex/<UTC_TS>_digest.md (best effort)
+  - Raw review:   artifacts/story/<ID>/codex/<STAMP>_review.md
+  - Digest review: artifacts/story/<ID>/codex/<STAMP>_digest.md (best effort)
 
 Examples:
   plans/codex_review_logged.sh S1-004 --commit HEAD --title "S1-004: OrderSize canonical sizing"
@@ -34,7 +34,7 @@ mode="commit"
 commit="HEAD"
 base=""
 title=""
-out_root="${CODEX_ARTIFACTS_ROOT:-artifacts/story}"
+out_root="${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}"
 extra=()
 
 while [[ $# -gt 0 ]]; do
@@ -93,7 +93,8 @@ fi
 mkdir -p "$outdir"
 
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
-outfile="$outdir/${ts}_review.md"
+stamp="${ts}_$$_${RANDOM}"
+outfile="$outdir/${stamp}_review.md"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
 head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
@@ -110,7 +111,9 @@ case "$mode" in
     cmd+=("--uncommitted")
     ;;
 esac
-cmd+=("${extra[@]}")
+if [[ ${#extra[@]} -gt 0 ]]; then
+  cmd+=("${extra[@]}")
+fi
 
 {
   echo "# Codex review"

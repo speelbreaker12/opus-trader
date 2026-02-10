@@ -180,6 +180,8 @@ fi
 REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_codex_review_digest.sh"
+  "plans/tests/test_codex_review_logged.sh"
+  "plans/tests/test_kimi_review_logged.sh"
 )
 
 for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do

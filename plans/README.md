@@ -15,6 +15,7 @@
 - `plans/progress.txt` — append-only progress log.
 - `plans/ideas.md` — deferred ideas.
 - `plans/pause.md` — optional pause handoff.
+- `plans/review_resolution_template.md` — canonical template for `artifacts/story/<ID>/review_resolution.md`.
 
 ## Verification contract
 

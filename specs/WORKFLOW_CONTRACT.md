@@ -42,6 +42,7 @@ These files must exist in the fork and remain functional:
 - `plans/self_review_logged.sh` (self-review artifact logger)
 - `plans/story_review_gate.sh` (HEAD-tied review evidence gate)
 - `plans/codex_review_logged.sh` (Codex review artifact logger)
+- `plans/kimi_review_logged.sh` (Kimi review artifact logger)
 - Contract/spec validators (kept as-is unless explicitly changed):
   - `scripts/check_contract_crossrefs.py`
   - `scripts/check_arch_flows.py`
@@ -91,7 +92,7 @@ States are tracked by convention (notes, progress.txt, or dashboard output). PRD
 
 - `PENDING` → worktree exists, story started  
 - `IMPLEMENTING` → coding  
-- `REVIEW` → self-review + Codex review  
+- `REVIEW` → self-review + Kimi/Codex reviews  
 - `VERIFYING` → `verify full` running (worktree frozen)  
 - `FIX_VERIFY` → verify failed; stop-ship; fix in same worktree  
 - `COMPLETE` → verify full green + PRD passes flipped + merged to integration
@@ -106,15 +107,18 @@ This is the only approved execution loop.
 2) Self-review (failure-mode + strategic).
 3) Run `./plans/verify.sh quick`.
 4) Codex review (`codex review --commit HEAD ...`), fix all blocking.
-5) Run `./plans/verify.sh quick` again (after Codex fixes).
-6) Sync with integration branch (merge/rebase `run/slice1-clean` into story branch).
+5) Kimi K2.5 review (`kimi ...` via `plans/kimi_review_logged.sh`), fix all blocking.
+6) Run `./plans/verify.sh quick` again (after review fixes).
+6.1) Second Codex review (`codex review --commit HEAD ...`), fix all blocking.
+6.2) Run `./plans/verify.sh quick` again (after second Codex fixes).
+7) Sync with integration branch (merge/rebase `run/slice1-clean` into story branch).
    - If this changed anything, run `./plans/verify.sh quick` again.
-7) Freeze the story worktree and run `./plans/verify.sh full` (nohup allowed).
-8) If full is green, set `passes=true` using `plans/prd_set_pass.sh` (must validate artifacts).
-9) Merge story branch into integration branch.
+8) Freeze the story worktree and run `./plans/verify.sh full` (nohup allowed).
+9) If full is green, set `passes=true` using `plans/prd_set_pass.sh` (must validate artifacts).
+10) Merge story branch into integration branch.
 
 Notes:
-- WIP=2: while step (7) is running for Story A, you may execute steps (1-6) for Story B in a different worktree.
+- WIP=2: while step (8) is running for Story A, you may execute steps (1-7) for Story B in a different worktree.
 - Never edit a worktree while it is running `full`.
 
 ### Recommended (non-blocking)
@@ -196,8 +200,9 @@ A story’s `passes` may be set to `true` only when:
 - verify artifacts show no failing gate (`FAILED_GATE` absent and all `*.rc` are 0), AND
 - review evidence exists for the same `HEAD`:
   - self review is present and marked `Decision: PASS` with failure-mode + strategic reviews marked `DONE`,
-  - Codex review artifact exists for the same `HEAD`,
-  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references a Codex review file for the same `HEAD`.
+  - Kimi review artifact exists for the same `HEAD`,
+  - at least two Codex review artifacts exist for the same `HEAD`,
+  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references Kimi final review + Codex final review + Codex second review files for the same `HEAD`.
 
 ### 8.2 Mechanism (required)
 Create and use a single script to change PRD passes:
