@@ -138,6 +138,43 @@ if ! echo "$output" | grep -q "CONTRACT_ACCEPTANCE_MISMATCH"; then
   exit 1
 fi
 
+# Test 1b: allowlist is case-sensitive (lowercase entry must not suppress S1-001)
+set +e
+output=$(PRD_LINT_ALLOW_SCHEMA_BYPASS=1 PRD_LINT_VERIFY_ALLOWLIST=s1-001 "$lint_script" "plans/prd.json" 2>&1)
+status=$?
+set -e
+if [[ $status -ne 2 ]]; then
+  echo "Expected exit code 2 with lowercase allowlist mismatch, got $status"
+  echo "$output"
+  exit 1
+fi
+if ! echo "$output" | grep -q "MISSING_VERIFY_SH"; then
+  echo "Expected output to contain MISSING_VERIFY_SH when allowlist case does not match"
+  echo "$output"
+  exit 1
+fi
+
+# Test 1c: exact-case allowlist suppresses verify gate for matching story id
+set +e
+output=$(PRD_LINT_ALLOW_SCHEMA_BYPASS=1 PRD_LINT_VERIFY_ALLOWLIST=S1-001 "$lint_script" "plans/prd.json" 2>&1)
+status=$?
+set -e
+if [[ $status -ne 0 ]]; then
+  echo "Expected exit code 0 with exact-case allowlist, got $status"
+  echo "$output"
+  exit 1
+fi
+if echo "$output" | grep -q "MISSING_VERIFY_SH"; then
+  echo "Did not expect MISSING_VERIFY_SH when exact-case allowlist includes S1-001"
+  echo "$output"
+  exit 1
+fi
+if ! echo "$output" | grep -q "CONTRACT_ACCEPTANCE_MISMATCH"; then
+  echo "Expected CONTRACT_ACCEPTANCE_MISMATCH to remain with allowlist"
+  echo "$output"
+  exit 1
+fi
+
 # Test 2: scope.create allows new files when scope.touch is empty
 mkdir -p new_dir
 cat <<'JSON' > plans/prd_create_ok.json

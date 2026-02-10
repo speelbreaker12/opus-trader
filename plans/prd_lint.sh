@@ -256,7 +256,9 @@ is_allowlisted() {
   local id="$1"
   local entry
   for entry in "${allow_ids[@]}"; do
-    [[ -n "$entry" && "$entry" == "$id" ]] && return 0
+    if [[ -n "$entry" ]] && [ "$entry" = "$id" ]; then
+      return 0
+    fi
   done
   return 1
 }
