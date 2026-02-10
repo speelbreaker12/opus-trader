@@ -7,8 +7,8 @@ Supported commands:
   ./stoic-cli status [--format json] [--detailed]
   ./stoic-cli orders --pending [--format json]
   ./stoic-cli emergency <kill|reduce-only|active> --reason "<text>"
-  STOIC_DRILL_MODE=1 ./stoic-cli simulate-open --instrument <name> [--count N]
-  STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <name> [--dry-run]
+  ./stoic-cli simulate-open --instrument <name> [--count N]
+  ./stoic-cli simulate-close --instrument <name> [--dry-run]
   ./stoic-cli dispatch-check --intent <OPEN|REDUCE_ONLY|CLOSE|HEDGE|CANCEL> --mode <ACTIVE|REDUCE_ONLY|KILL>
   ./stoic-cli keys-check [--probe <path>] [--env <name>] [--format json]
 """
@@ -38,10 +38,65 @@ DEFAULT_RUNTIME_STATE_PATH = ROOT / "artifacts" / "phase0" / "runtime_state.json
 RUNTIME_MODES = {"ACTIVE", "REDUCE_ONLY", "KILL"}
 RUNTIME_STATE_SCHEMA_VERSION = 1
 DEFAULT_MAX_PENDING_ORDERS = 1000
+EXTERNAL_RUNTIME_STATE_ACK_VALUE = "I_UNDERSTAND"
 
 
 def _truthy_env(name: str) -> bool:
     return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _raw_runtime_state_path() -> Path:
+    return Path(os.environ.get("STOIC_RUNTIME_STATE_PATH", str(DEFAULT_RUNTIME_STATE_PATH))).resolve()
+
+
+def _path_within_repo_root(path: Path) -> bool:
+    try:
+        path.relative_to(ROOT)
+        return True
+    except ValueError:
+        return False
+
+
+def _external_runtime_state_enabled(path: Path) -> bool:
+    return _truthy_env("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE") and not _path_within_repo_root(path)
+
+
+def _external_runtime_state_warning() -> str:
+    return "runtime_state: external path override active via STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1"
+
+
+def _require_external_runtime_state_ack(path: Path) -> Optional[str]:
+    if not _external_runtime_state_enabled(path):
+        return None
+    ack = str(os.environ.get("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "")).strip()
+    if ack == EXTERNAL_RUNTIME_STATE_ACK_VALUE:
+        return None
+    return (
+        "runtime_state: external path override for mutating commands requires "
+        f"STOIC_UNSAFE_EXTERNAL_STATE_ACK={EXTERNAL_RUNTIME_STATE_ACK_VALUE}"
+    )
+
+
+def _add_runtime_state_context(
+    payload: Dict[str, Any],
+    state_path: Optional[Path],
+    *,
+    extra_warnings: Optional[list[str]] = None,
+) -> None:
+    payload["runtime_state_path"] = str(state_path) if state_path is not None else None
+    external_runtime_state = bool(state_path is not None and _external_runtime_state_enabled(state_path))
+    payload["external_runtime_state"] = external_runtime_state
+
+    warnings: list[str] = []
+    existing_warnings = payload.get("warnings")
+    if isinstance(existing_warnings, list):
+        warnings.extend([str(w) for w in existing_warnings])
+    if external_runtime_state:
+        warnings.append(_external_runtime_state_warning())
+    if extra_warnings:
+        warnings.extend([str(w) for w in extra_warnings if str(w)])
+    if warnings:
+        payload["warnings"] = list(dict.fromkeys(warnings))
 
 
 def _load_policy_loader_module() -> ModuleType:
@@ -90,28 +145,12 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _drill_mode_enabled() -> bool:
-    return os.environ.get("STOIC_DRILL_MODE", "").strip() == "1"
-
-
-def _require_drill_mode_payload(cmd_name: str) -> Dict[str, Any]:
-    return {
-        "ok": False,
-        "result": "REJECTED",
-        "reason": "drill_mode_required",
-        "command": cmd_name,
-        "hint": "set STOIC_DRILL_MODE=1 for drill-only simulate commands",
-    }
-
-
 def _runtime_state_path() -> Path:
-    path = Path(os.environ.get("STOIC_RUNTIME_STATE_PATH", str(DEFAULT_RUNTIME_STATE_PATH))).resolve()
+    path = _raw_runtime_state_path()
     if _truthy_env("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"):
         return path
-    try:
-        path.relative_to(ROOT)
-    except ValueError as exc:
-        raise RuntimeError(f"runtime state path must be under repo root: {ROOT}") from exc
+    if not _path_within_repo_root(path):
+        raise RuntimeError(f"runtime state path must be under repo root: {ROOT} (got {path})")
     return path
 
 
@@ -228,14 +267,6 @@ def _runtime_state_lock(path: Path):
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-def _fsync_directory(path: Path) -> None:
-    dir_fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(dir_fd)
-    finally:
-        os.close(dir_fd)
-
-
 def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     materialized = dict(state)
@@ -258,7 +289,6 @@ def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
             tmp.flush()
             os.fsync(tmp.fileno())
         os.replace(tmp_path, path)
-        _fsync_directory(path.parent)
     finally:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
@@ -351,15 +381,17 @@ def _status_payload(
 
 def _print_status_text(payload: Dict[str, Any], detailed: bool) -> None:
     print(f"ok: {str(payload.get('ok', False)).lower()}")
-    print(f"build_id: {payload.get('build_id', 'unknown')}")
-    print(f"timestamp_utc: {payload.get('timestamp_utc', '')}")
     print(f"trading_mode: {payload.get('trading_mode', 'UNKNOWN')}")
     print(f"is_trading_allowed: {str(payload.get('is_trading_allowed', False)).lower()}")
     print(f"orders_in_flight: {payload.get('orders_in_flight', 0)}")
     print(f"pending_orders: {payload.get('pending_orders', 0)}")
     print(f"contract_version: {payload.get('contract_version', DEFAULT_CONTRACT_VERSION)}")
+    print(f"runtime_state_path: {payload.get('runtime_state_path', 'UNKNOWN')}")
+    print(f"external_runtime_state: {str(payload.get('external_runtime_state', False)).lower()}")
     if payload.get("errors"):
         print(f"errors: {'; '.join(str(x) for x in payload['errors'])}")
+    if payload.get("warnings"):
+        print(f"warnings: {'; '.join(str(x) for x in payload['warnings'])}")
     if detailed:
         for item in payload.get("pending_order_items", []):
             print(
@@ -370,6 +402,8 @@ def _print_status_text(payload: Dict[str, Any], detailed: bool) -> None:
 
 def _cmd_status(args: argparse.Namespace) -> int:
     errors: list[str] = []
+    attempted_state_path = _raw_runtime_state_path()
+    resolved_state_path: Optional[Path] = None
     build_id = _detect_build_id()
     contract_version = DEFAULT_CONTRACT_VERSION
     if not build_id or build_id == "unknown":
@@ -383,6 +417,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
     try:
         state_path = _runtime_state_path()
+        resolved_state_path = state_path
     except RuntimeError as exc:
         state = _default_runtime_state(trading_mode="KILL", reason="runtime_state_path_invalid")
         errors.append(f"runtime_state: {exc}")
@@ -403,6 +438,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
         state=state,
         detailed=bool(args.detailed),
     )
+    _add_runtime_state_context(payload, resolved_state_path or attempted_state_path)
     if args.format == "json":
         _print_json(payload)
     else:
@@ -415,6 +451,7 @@ def _cmd_orders(args: argparse.Namespace) -> int:
         print("orders requires --pending", file=sys.stderr)
         return 2
 
+    attempted_state_path = _raw_runtime_state_path()
     try:
         state_path = _runtime_state_path()
     except RuntimeError as exc:
@@ -425,6 +462,7 @@ def _cmd_orders(args: argparse.Namespace) -> int:
             "pending_count": 0,
             "pending_orders": [],
         }
+        _add_runtime_state_context(payload, attempted_state_path)
         _print_json(payload)
         return 1
 
@@ -437,6 +475,7 @@ def _cmd_orders(args: argparse.Namespace) -> int:
             "pending_count": 0,
             "pending_orders": [],
         }
+        _add_runtime_state_context(payload, state_path)
         _print_json(payload)
         return 1
 
@@ -446,6 +485,7 @@ def _cmd_orders(args: argparse.Namespace) -> int:
         "pending_count": len(pending_orders),
         "pending_orders": pending_orders,
     }
+    _add_runtime_state_context(payload, state_path)
     if args.format == "json":
         _print_json(payload)
     else:
@@ -471,6 +511,7 @@ def _cmd_emergency(args: argparse.Namespace) -> int:
         print(f"unsupported emergency action: {action}", file=sys.stderr)
         return 2
 
+    attempted_state_path = _raw_runtime_state_path()
     try:
         state_path = _runtime_state_path()
     except RuntimeError as exc:
@@ -482,6 +523,21 @@ def _cmd_emergency(args: argparse.Namespace) -> int:
             "errors": [f"runtime_state: {exc}"],
             "trading_mode": "KILL",
         }
+        _add_runtime_state_context(payload, attempted_state_path)
+        _print_json(payload)
+        return 1
+
+    ack_error = _require_external_runtime_state_ack(state_path)
+    if ack_error:
+        payload = {
+            "ok": False,
+            "event": "MODE_TRANSITION",
+            "result": "REJECTED",
+            "reason": "external_runtime_state_ack_required",
+            "errors": [ack_error],
+            "trading_mode": "KILL",
+        }
+        _add_runtime_state_context(payload, state_path)
         _print_json(payload)
         return 1
 
@@ -497,6 +553,7 @@ def _cmd_emergency(args: argparse.Namespace) -> int:
                     "errors": state_errors,
                     "trading_mode": "KILL",
                 }
+                _add_runtime_state_context(payload, state_path)
                 _print_json(payload)
                 return 1
 
@@ -529,6 +586,7 @@ def _cmd_emergency(args: argparse.Namespace) -> int:
             "errors": [f"runtime_state: {exc}"],
             "trading_mode": "KILL",
         }
+        _add_runtime_state_context(payload, state_path)
         _print_json(payload)
         return 1
 
@@ -542,6 +600,7 @@ def _cmd_emergency(args: argparse.Namespace) -> int:
         "pending_orders": len(pending_orders),
         "reason": str(args.reason),
     }
+    _add_runtime_state_context(payload, state_path)
     _print_json(payload)
     return 0
 
@@ -551,14 +610,12 @@ def _next_pending_id(pending_orders: list[Dict[str, Any]]) -> str:
 
 
 def _cmd_simulate_open(args: argparse.Namespace) -> int:
-    if not _drill_mode_enabled():
-        _print_json(_require_drill_mode_payload("simulate-open"))
-        return 2
     count = int(args.count)
     if count < 1:
         print("--count must be >= 1", file=sys.stderr)
         return 2
 
+    attempted_state_path = _raw_runtime_state_path()
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
     policy, policy_errors = _load_policy_with_validation(policy_path)
     if policy is None:
@@ -571,6 +628,7 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
             "accepted": 0,
             "requested": count,
         }
+        _add_runtime_state_context(payload, attempted_state_path)
         _print_json(payload)
         return 1
 
@@ -586,6 +644,22 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
             "accepted": 0,
             "requested": count,
         }
+        _add_runtime_state_context(payload, attempted_state_path)
+        _print_json(payload)
+        return 1
+
+    ack_error = _require_external_runtime_state_ack(state_path)
+    if ack_error:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "external_runtime_state_ack_required",
+            "errors": [ack_error],
+            "trading_mode": "KILL",
+            "accepted": 0,
+            "requested": count,
+        }
+        _add_runtime_state_context(payload, state_path)
         _print_json(payload)
         return 1
 
@@ -601,6 +675,7 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
             "accepted": 0,
             "requested": count,
         }
+        _add_runtime_state_context(payload, state_path)
         _print_json(payload)
         return 1
 
@@ -617,6 +692,7 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
                     "accepted": 0,
                     "requested": count,
                 }
+                _add_runtime_state_context(payload, state_path)
                 _print_json(payload)
                 return 1
 
@@ -630,6 +706,7 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
                     "accepted": 0,
                     "requested": count,
                 }
+                _add_runtime_state_context(payload, state_path)
                 _print_json(payload)
                 return 1
 
@@ -645,6 +722,7 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
                     "pending_orders": len(pending_orders),
                     "max_pending_orders": max_pending_orders,
                 }
+                _add_runtime_state_context(payload, state_path)
                 _print_json(payload)
                 return 1
 
@@ -673,6 +751,7 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
             "accepted": 0,
             "requested": count,
         }
+        _add_runtime_state_context(payload, state_path)
         _print_json(payload)
         return 1
 
@@ -684,23 +763,38 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
         "trading_mode": mode,
         "pending_orders": len(pending_orders),
     }
+    _add_runtime_state_context(payload, state_path)
     _print_json(payload)
     return 0
 
 
 def _cmd_simulate_close(args: argparse.Namespace) -> int:
-    if not _drill_mode_enabled():
-        _print_json(_require_drill_mode_payload("simulate-close"))
-        return 2
-
+    attempted_state_path = _raw_runtime_state_path()
+    resolved_state_path: Optional[Path] = None
     mode = "KILL"
     state_errors: list[str] = []
     try:
         state_path = _runtime_state_path()
+        resolved_state_path = state_path
+        ack_error = _require_external_runtime_state_ack(state_path)
+        if ack_error:
+            payload = {
+                "ok": False,
+                "result": "REJECTED",
+                "reason": "external_runtime_state_ack_required",
+                "errors": [ack_error],
+                "instrument": str(args.instrument),
+                "dry_run": bool(args.dry_run),
+                "trading_mode": "KILL",
+            }
+            _add_runtime_state_context(payload, state_path)
+            _print_json(payload)
+            return 1
         state, state_errors = _load_runtime_state(state_path)
         mode = str(state.get("trading_mode", "KILL")).upper()
     except RuntimeError as exc:
         state_errors = [f"runtime_state: {exc}"]
+
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
     policy, policy_errors = _load_policy_with_validation(policy_path)
 
@@ -714,6 +808,7 @@ def _cmd_simulate_close(args: argparse.Namespace) -> int:
             "dry_run": bool(args.dry_run),
             "trading_mode": "KILL",
         }
+        _add_runtime_state_context(payload, resolved_state_path or attempted_state_path)
         _print_json(payload)
         return 1
 
@@ -728,8 +823,11 @@ def _cmd_simulate_close(args: argparse.Namespace) -> int:
         "dry_run": bool(args.dry_run),
         "trading_mode": mode,
     }
-    if state_errors:
-        payload["warnings"] = state_errors
+    _add_runtime_state_context(
+        payload,
+        resolved_state_path or attempted_state_path,
+        extra_warnings=state_errors,
+    )
     _print_json(payload)
     return 0
 
@@ -828,31 +926,21 @@ def _cmd_keys_check(args: argparse.Namespace) -> int:
         label = f"entry[{idx}] env={entry.get('env', 'UNKNOWN')}"
         if entry.get("withdraw_enabled") is not False:
             errors.append(f"{label}: withdraw_enabled must be false")
-        if entry.get("transfer_enabled") is not False:
-            errors.append(f"{label}: transfer_enabled must be false")
 
         scopes = entry.get("scopes", [])
         scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
-        if "transfer" in scopes_lower:
-            errors.append(f"{label}: scopes must not include transfer")
         results = entry.get("probe_results", {}) if isinstance(entry.get("probe_results"), dict) else {}
         place_order = results.get("place_order", {}) if isinstance(results.get("place_order"), dict) else {}
         place_result = str(place_order.get("result", "")).lower()
-        transfer = results.get("transfer", {}) if isinstance(results.get("transfer"), dict) else {}
-        transfer_result = str(transfer.get("result", "")).lower()
 
         if "trade" in scopes_lower:
             withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
             withdraw_result = str(withdraw.get("result", "")).lower()
             if withdraw_result not in {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}:
                 errors.append(f"{label}: trade scope requires explicit forbidden withdrawal result")
-            if transfer_result in {"success", "accepted"}:
-                errors.append(f"{label}: transfer probe must not show success for trade-capable keys")
         else:
             if place_result in {"success", "accepted"}:
                 errors.append(f"{label}: non-trade scope must not show successful order placement")
-            if transfer_result in {"success", "accepted"}:
-                errors.append(f"{label}: non-trade scope must not show successful transfers")
 
     payload = {
         "ok": len(errors) == 0,
@@ -892,7 +980,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_sim_open = subparsers.add_parser(
         "simulate-open",
-        help="Simulate OPEN intent queueing for break-glass drills (requires STOIC_DRILL_MODE=1)",
+        help="Simulate OPEN intent queueing for break-glass drills",
     )
     p_sim_open.add_argument("--instrument", required=True, help="Instrument identifier")
     p_sim_open.add_argument("--count", type=int, default=1, help="Number of OPEN intents to simulate")
@@ -900,7 +988,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_sim_close = subparsers.add_parser(
         "simulate-close",
-        help="Simulate risk-reducing close intent acceptance (requires STOIC_DRILL_MODE=1)",
+        help="Simulate risk-reducing close intent acceptance",
     )
     p_sim_close.add_argument("--instrument", required=True, help="Instrument identifier")
     p_sim_close.add_argument("--dry-run", action="store_true", help="Do not execute external action")

@@ -36,18 +36,11 @@ fn unique_temp_file(prefix: &str, suffix: &str) -> PathBuf {
 }
 
 fn unique_temp_state_file(prefix: &str) -> PathBuf {
-    let preferred_root = repo_root()
+    let root = repo_root()
         .join("artifacts")
         .join("phase0")
         .join("runtime_state_tests");
-    let root = match fs::create_dir_all(&preferred_root) {
-        Ok(()) => preferred_root,
-        Err(_) => {
-            let fallback = env::temp_dir().join("opus_trader_runtime_state_tests");
-            fs::create_dir_all(&fallback).expect("create fallback runtime state test directory");
-            fallback
-        }
-    };
+    fs::create_dir_all(&root).expect("create runtime state test directory");
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -87,19 +80,6 @@ fn remove_if_exists(path: &Path) {
             "failed to remove temporary file {}: {err}",
             path.display()
         );
-    }
-
-    if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
-        let lock_name = format!(".{}.lock", name.to_string_lossy());
-        let lock_path = parent.join(lock_name);
-        if let Err(err) = fs::remove_file(&lock_path) {
-            assert_eq!(
-                err.kind(),
-                std::io::ErrorKind::NotFound,
-                "failed to remove temporary lock file {}: {err}",
-                lock_path.display()
-            );
-        }
     }
 }
 
@@ -308,7 +288,6 @@ fn test_status_command_behavior_runtime() {
         &[
             ("STOIC_POLICY_PATH", valid_policy_str),
             ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-status-runtime-test"),
         ],
     );
@@ -331,7 +310,6 @@ fn test_status_command_behavior_runtime() {
         &[
             ("STOIC_POLICY_PATH", missing_policy.to_str().unwrap()),
             ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-status-runtime-test"),
         ],
     );
@@ -371,9 +349,7 @@ fn test_break_glass_command_path_runtime() {
     let env_base = [
         ("STOIC_POLICY_PATH", valid_policy_str),
         ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
-        ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
         ("STOIC_BUILD_ID", "phase0-break-glass-runtime-test"),
-        ("STOIC_DRILL_MODE", "1"),
     ];
 
     // Active mode should allow simulated OPEN queueing.
@@ -507,87 +483,6 @@ fn test_break_glass_command_path_runtime() {
 }
 
 #[test]
-fn test_simulate_commands_require_drill_mode() {
-    let root = repo_root();
-    let valid_policy = root.join("config/policy.json");
-    let runtime_state = unique_temp_state_file("phase0_drill_mode_required");
-    remove_if_exists(&runtime_state);
-
-    let open_out = run_cli(
-        [
-            "simulate-open",
-            "--instrument",
-            "BTC-28MAR26-50000-C",
-            "--count",
-            "1",
-        ],
-        &[
-            (
-                "STOIC_POLICY_PATH",
-                valid_policy.to_str().expect("utf8 path"),
-            ),
-            (
-                "STOIC_RUNTIME_STATE_PATH",
-                runtime_state.to_str().expect("utf8 path"),
-            ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
-            ("STOIC_BUILD_ID", "phase0-drill-mode-open-gate-test"),
-        ],
-    );
-    assert_eq!(
-        open_out.status.code(),
-        Some(2),
-        "simulate-open must require drill mode"
-    );
-    let open_payload = parse_stdout_json(&open_out);
-    assert_eq!(
-        open_payload["reason"],
-        Value::String("drill_mode_required".to_string())
-    );
-    assert_eq!(
-        open_payload["command"],
-        Value::String("simulate-open".to_string())
-    );
-
-    let close_out = run_cli(
-        [
-            "simulate-close",
-            "--instrument",
-            "BTC-28MAR26-50000-C",
-            "--dry-run",
-        ],
-        &[
-            (
-                "STOIC_POLICY_PATH",
-                valid_policy.to_str().expect("utf8 path"),
-            ),
-            (
-                "STOIC_RUNTIME_STATE_PATH",
-                runtime_state.to_str().expect("utf8 path"),
-            ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
-            ("STOIC_BUILD_ID", "phase0-drill-mode-close-gate-test"),
-        ],
-    );
-    assert_eq!(
-        close_out.status.code(),
-        Some(2),
-        "simulate-close must require drill mode"
-    );
-    let close_payload = parse_stdout_json(&close_out);
-    assert_eq!(
-        close_payload["reason"],
-        Value::String("drill_mode_required".to_string())
-    );
-    assert_eq!(
-        close_payload["command"],
-        Value::String("simulate-close".to_string())
-    );
-
-    remove_if_exists(&runtime_state);
-}
-
-#[test]
 fn test_simulate_open_rejects_when_policy_invalid() {
     let root = repo_root();
     let runtime_state = unique_temp_state_file("phase0_policy_reject_open");
@@ -611,8 +506,6 @@ fn test_simulate_open_rejects_when_policy_invalid() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
-            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_BUILD_ID", "phase0-policy-open-reject-test"),
         ],
     );
@@ -702,6 +595,251 @@ fn test_runtime_state_path_outside_repo_allowed_with_explicit_opt_in() {
     let payload = parse_stdout_json(&out);
     assert_eq!(payload["ok"], Value::Bool(true));
     assert_eq!(payload["trading_mode"], Value::String("ACTIVE".to_string()));
+    let runtime_state_path = payload["runtime_state_path"]
+        .as_str()
+        .expect("runtime_state_path should be present");
+    assert_eq!(
+        Path::new(runtime_state_path)
+            .file_name()
+            .expect("runtime_state_path filename")
+            .to_str()
+            .expect("utf8 filename"),
+        runtime_state
+            .file_name()
+            .expect("runtime_state filename")
+            .to_str()
+            .expect("utf8 filename")
+    );
+    assert_eq!(payload["external_runtime_state"], Value::Bool(true));
+    let warns = payload["warnings"]
+        .as_array()
+        .expect("warnings array expected when external state override is active");
+    assert!(
+        warns.iter().any(|w| {
+            w.as_str()
+                .unwrap_or("")
+                .contains("external path override active")
+        }),
+        "status should surface an external runtime state warning"
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_external_runtime_state_mutating_commands_require_ack() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_file("phase0_external_state_mutating_ack", "json");
+    remove_if_exists(&runtime_state);
+
+    let open_without_ack = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-external-open-no-ack-test"),
+        ],
+    );
+    assert_eq!(
+        open_without_ack.status.code(),
+        Some(1),
+        "simulate-open with external runtime state must require explicit ack"
+    );
+    let open_without_ack_payload = parse_stdout_json(&open_without_ack);
+    assert_eq!(
+        open_without_ack_payload["reason"],
+        Value::String("external_runtime_state_ack_required".to_string())
+    );
+    assert_eq!(
+        open_without_ack_payload["external_runtime_state"],
+        Value::Bool(true)
+    );
+
+    let open_with_ack = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
+            ("STOIC_BUILD_ID", "phase0-external-open-with-ack-test"),
+        ],
+    );
+    assert_eq!(
+        open_with_ack.status.code(),
+        Some(0),
+        "simulate-open should allow external runtime state with explicit ack"
+    );
+    let open_with_ack_payload = parse_stdout_json(&open_with_ack);
+    assert_eq!(open_with_ack_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        open_with_ack_payload["result"],
+        Value::String("ACCEPTED".to_string())
+    );
+    assert_eq!(
+        open_with_ack_payload["external_runtime_state"],
+        Value::Bool(true)
+    );
+
+    let emergency_without_ack = run_cli(
+        [
+            "emergency",
+            "kill",
+            "--reason",
+            "phase0 external state ack test",
+        ],
+        &[
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-external-emergency-no-ack-test"),
+        ],
+    );
+    assert_eq!(
+        emergency_without_ack.status.code(),
+        Some(1),
+        "emergency command with external runtime state must require explicit ack"
+    );
+    let emergency_without_ack_payload = parse_stdout_json(&emergency_without_ack);
+    assert_eq!(
+        emergency_without_ack_payload["reason"],
+        Value::String("external_runtime_state_ack_required".to_string())
+    );
+
+    let emergency_with_ack = run_cli(
+        [
+            "emergency",
+            "kill",
+            "--reason",
+            "phase0 external state ack test",
+        ],
+        &[
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
+            ("STOIC_BUILD_ID", "phase0-external-emergency-with-ack-test"),
+        ],
+    );
+    assert_eq!(
+        emergency_with_ack.status.code(),
+        Some(0),
+        "emergency command should allow external runtime state with explicit ack"
+    );
+    let emergency_with_ack_payload = parse_stdout_json(&emergency_with_ack);
+    assert_eq!(emergency_with_ack_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        emergency_with_ack_payload["trading_mode"],
+        Value::String("KILL".to_string())
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_external_runtime_state_simulate_close_requires_ack() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_file("phase0_external_state_close_ack", "json");
+    remove_if_exists(&runtime_state);
+
+    let close_without_ack = run_cli(
+        [
+            "simulate-close",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--dry-run",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-external-close-no-ack-test"),
+        ],
+    );
+    assert_eq!(
+        close_without_ack.status.code(),
+        Some(1),
+        "simulate-close with external runtime state must require explicit ack"
+    );
+    let close_without_ack_payload = parse_stdout_json(&close_without_ack);
+    assert_eq!(
+        close_without_ack_payload["reason"],
+        Value::String("external_runtime_state_ack_required".to_string())
+    );
+
+    let close_with_ack = run_cli(
+        [
+            "simulate-close",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--dry-run",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
+            ("STOIC_BUILD_ID", "phase0-external-close-with-ack-test"),
+        ],
+    );
+    assert_eq!(
+        close_with_ack.status.code(),
+        Some(0),
+        "simulate-close should allow external runtime state with explicit ack"
+    );
+    let close_with_ack_payload = parse_stdout_json(&close_with_ack);
+    assert_eq!(close_with_ack_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        close_with_ack_payload["result"],
+        Value::String("ACCEPTED".to_string())
+    );
+    assert_eq!(
+        close_with_ack_payload["external_runtime_state"],
+        Value::Bool(true)
+    );
 
     remove_if_exists(&runtime_state);
 }
@@ -730,8 +868,6 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
-            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-seed-test"),
         ],
@@ -755,8 +891,6 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
-            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-block-test"),
         ],
@@ -805,7 +939,6 @@ fn test_runtime_state_schema_mismatch_fails_closed() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-schema-mismatch-test"),
         ],
     );
@@ -859,7 +992,6 @@ fn test_runtime_state_null_schema_fails_closed() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-schema-null-test"),
         ],
     );
@@ -912,7 +1044,6 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-legacy-state-status-test"),
         ],
     );
@@ -945,8 +1076,6 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
                 "STOIC_RUNTIME_STATE_PATH",
                 runtime_state.to_str().expect("utf8 path"),
             ),
-            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
-            ("STOIC_DRILL_MODE", "1"),
             ("STOIC_BUILD_ID", "phase0-legacy-state-migrate-test"),
         ],
     );

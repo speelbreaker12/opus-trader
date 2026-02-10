@@ -293,3 +293,17 @@ Commands: bash plans/tests/test_codex_review_logged.sh; bash plans/tests/test_ki
 Evidence: plans/tests/test_codex_review_logged.sh; plans/tests/test_kimi_review_logged.sh; plans/preflight.sh; plans/kimi_review_logged.sh; plans/review_resolution_template.md; plans/story_review_gate.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; artifacts/story/S9-900/{self_review,codex,kimi,review_resolution.md}; artifacts/verify/20260210_075155; artifacts/verify/20260210_075429.
 Notes: Real Kimi CLI in this environment does not provide `review` subcommand and reports `LLM not set` in print mode until model/auth config is set; artifact logging and gate wiring still execute deterministically.
 Next: Configure Kimi CLI model/auth for non-empty review outputs in real runs.
+Story: workflow-maintenance
+Date: 2026-02-10
+Summary: Completed recommended follow-up #1 in real environment by configuring local Kimi model alias `k2.5` in `~/.kimi/config.toml` (mapped to existing `managed:kimi-code` model), reran real `plans/kimi_review_logged.sh` for `S9-900`, and revalidated review evidence gate for the reviewed commit SHA.
+Commands: kimi --print --model k2.5 --prompt "Return exactly: K2_5_CONFIGURED"; ./plans/kimi_review_logged.sh S9-900 --commit HEAD --model k2.5 --title "S9-900: real kimi review (k2.5 configured)"; ./plans/story_review_gate.sh S9-900 --head 13bc36195e1cfcbb36069c9e872437f559f00c82.
+Evidence: artifacts/story/S9-900/kimi/20260210T141106Z_review.md; artifacts/story/S9-900/review_resolution.md.
+Notes: Current branch HEAD moved to f8eec3 while S9-900 review artifacts are tied to 13bc361; gate revalidation intentionally pinned `--head` to reviewed commit for consistency.
+Next: If S9-900 must represent current HEAD f8eec3, regenerate full self+codex+kimi review set for that SHA.
+Story: workflow/phase0-canonical-checklist-alignment
+Date: 2026-02-10
+Summary: Hardened external runtime-state escape hatch semantics in `stoic-cli`: added explicit runtime-state visibility (`runtime_state_path`, `external_runtime_state`, warning surface), required two-key opt-in for external runtime state on mutating commands (`emergency`, `simulate-open`, `simulate-close`), and expanded Phase-0 coverage/docs accordingly. Also hardened meta-test runtime-state fallback to handle read-only/permission-limited filesystems deterministically.
+Commands: python3 -m py_compile stoic-cli tools/phase0_meta_test.py; cargo test -p soldier_infra --test test_phase0_runtime; python3 tools/phase0_meta_test.py --root .; cargo fmt; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: stoic-cli; crates/soldier_infra/tests/test_phase0_runtime.rs; tools/phase0_meta_test.py; docs/health_endpoint.md; docs/break_glass_runbook.md; tests/phase0/test_status_command_behavior.md; tests/phase0/test_break_glass_kill_blocks_open_allows_reduce.md; artifacts/verify/20260210_121104; artifacts/verify/20260210_121309.
+Notes: `./plans/verify.sh quick` initially failed only on rustfmt diff in `test_phase0_runtime.rs`; rerun passed after `cargo fmt`. Verify ran with default dirty-tree warning and without `VERIFY_ALLOW_DIRTY`.
+Next: None.

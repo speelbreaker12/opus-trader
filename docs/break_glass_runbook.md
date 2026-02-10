@@ -76,6 +76,16 @@ After triggering break-glass, verify:
 
 ---
 
+## Runtime State Path Safety (external override)
+
+- Default: runtime state path must be under repo root (fail-closed).
+- If you must run from an external path (for example read-only review harnesses), set both:
+  - `STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1`
+  - `STOIC_UNSAFE_EXTERNAL_STATE_ACK=I_UNDERSTAND` for mutating commands (`emergency`, `simulate-open`, `simulate-close`)
+- Treat this as break-glass/testing-only behavior and record usage in incident notes.
+
+---
+
 ## If Exposure Exists (risk reduction allowed)
 
 Even in emergency, we must be able to reduce risk:
