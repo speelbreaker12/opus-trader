@@ -8,6 +8,7 @@ This enforces that Phase 0 is not "paper-only":
 - Launch policy exists + snapshot
 - Env matrix exists + snapshot
 - Keys/secrets doc exists + key scope probe JSON exists (valid)
+- PAPER environment remains non-trading in env matrix + key-scope probe evidence
 - Break-glass runbook exists + snapshot + executed drill record + logs
 - Health endpoint doc exists + snapshot
 - Minimal Phase-0 test definitions exist with explicit names
@@ -87,6 +88,20 @@ def read_text(path: Path) -> str:
 def has_any(text: str, needles: Iterable[str]) -> bool:
     lowered = text.lower()
     return any(n.lower() in lowered for n in needles)
+
+
+def markdown_table_row_for_env(text: str, env: str) -> List[str]:
+    target = env.strip().lower()
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line.startswith("|"):
+            continue
+        cols = [c.strip() for c in line.strip("|").split("|")]
+        if not cols:
+            continue
+        if cols[0].lower() == target:
+            return cols
+    return []
 
 
 def test_policy_is_required_and_bound(root: Path) -> List[str]:
@@ -206,6 +221,101 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
     return errors
 
 
+def test_paper_is_non_trading(root: Path) -> List[str]:
+    env_matrix = root / "docs" / "env_matrix.md"
+    probe_path = root / "evidence" / "phase0" / "keys" / "key_scope_probe.json"
+    errors: List[str] = []
+
+    if not env_matrix.exists():
+        return [f"{env_matrix} missing"]
+
+    env_text = read_text(env_matrix)
+    if not has_any(
+        env_text,
+        [
+            "paper must not hold trade-capable credentials",
+            "paper must not have trade-capable keys",
+            "paper cannot place private orders",
+        ],
+    ):
+        errors.append("env_matrix missing explicit PAPER non-trading invariant")
+
+    row = markdown_table_row_for_env(env_text, "PAPER")
+    if not row:
+        errors.append("env_matrix missing PAPER row in Matrix table")
+    else:
+        if len(row) < 11:
+            errors.append(f"PAPER row has too few columns: {len(row)} < 11")
+        else:
+            account = row[2].strip().lower()
+            api_key = row[3].strip().lower()
+            key_type = row[4].strip().lower()
+            perms = row[5].strip().lower()
+            withdraw = row[6].strip().lower()
+            secrets_source = row[8].strip().lower()
+            notes = row[10].strip().lower()
+
+            if key_type not in {"none", "data_only"}:
+                errors.append(f"PAPER key type must be NONE or DATA_ONLY (got '{row[4].strip()}')")
+            if "trade" in perms:
+                errors.append("PAPER permissions/scopes must not include trade")
+            if key_type == "none":
+                if account not in {"n/a", "none", ""}:
+                    errors.append("PAPER account/subaccount must be N/A when key type is NONE")
+                if api_key not in {"n/a", "none", ""}:
+                    errors.append("PAPER API key must be N/A when key type is NONE")
+                if secrets_source not in {"n/a", "none", ""}:
+                    errors.append("PAPER secrets source must be N/A when key type is NONE")
+            if withdraw in {"true", "yes", "1"}:
+                errors.append("PAPER withdraw flag must not be true")
+            if not has_any(notes, ["public endpoints only", "execution simulated", "no private trade auth"]):
+                errors.append("PAPER notes must state non-trading/public-only intent")
+
+    if not probe_path.exists():
+        errors.append(f"{probe_path} missing")
+        return errors
+
+    try:
+        probe_obj = json.loads(read_text(probe_path))
+    except Exception as e:
+        errors.append(f"{probe_path} invalid JSON: {e}")
+        return errors
+
+    if isinstance(probe_obj, dict) and isinstance(probe_obj.get("probes"), list):
+        paper_probe = None
+        for probe in probe_obj.get("probes", []):
+            if isinstance(probe, dict) and str(probe.get("env", "")).strip().upper() == "PAPER":
+                paper_probe = probe
+                break
+        if paper_probe is None:
+            errors.append("key_scope_probe missing PAPER probe entry")
+            return errors
+
+        scopes = paper_probe.get("scopes", [])
+        scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
+        if "trade" in scopes_lower:
+            errors.append("PAPER probe scopes must not include trade")
+        if paper_probe.get("withdraw_enabled") not in {False, None}:
+            errors.append("PAPER probe withdraw_enabled must be false or omitted")
+
+        results = paper_probe.get("probe_results", {})
+        if isinstance(results, dict):
+            place_order = results.get("place_order")
+            if isinstance(place_order, dict):
+                presult = str(place_order.get("result", "")).lower()
+                if presult in {"success", "accepted"}:
+                    errors.append("PAPER probe must not show successful order placement")
+    elif isinstance(probe_obj, dict) and str(probe_obj.get("env", "")).strip().upper() == "PAPER":
+        scopes = probe_obj.get("scopes", [])
+        scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
+        if "trade" in scopes_lower:
+            errors.append("PAPER probe scopes must not include trade")
+        if probe_obj.get("withdraw_enabled") not in {False, None}:
+            errors.append("PAPER probe withdraw_enabled must be false or omitted")
+
+    return errors
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Repo root (default: cwd)")
@@ -261,6 +371,7 @@ def main() -> int:
     phase0_tests = [
         ("test_policy_is_required_and_bound", test_policy_is_required_and_bound(root)),
         ("test_api_keys_are_least_privilege", test_api_keys_are_least_privilege(root)),
+        ("test_paper_is_non_trading", test_paper_is_non_trading(root)),
         (
             "test_break_glass_kill_blocks_open_allows_reduce",
             test_break_glass_kill_blocks_open_allows_reduce(root),

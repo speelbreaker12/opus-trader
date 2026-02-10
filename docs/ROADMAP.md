@@ -89,6 +89,11 @@ Use that file for:
 - binary owner sign-off questions,
 - explicit Phase 0 non-goals.
 
+### Phase 0 Health Enforcement Scope (clarification)
+
+- In Phase 0, `tools/phase0_meta_test.py` (via `./plans/verify.sh`) enforces health documentation and evidence artifacts (`docs/health_endpoint.md`, `evidence/phase0/health/health_endpoint_snapshot.md`).
+- Runtime behavior of the health command/endpoint (`./stoic-cli health`, output/exit semantics) is tracked as implementation work and is not implied by doc/snapshot presence alone.
+
 ---
 
 # Phase 1 — Foundation

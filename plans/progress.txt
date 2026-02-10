@@ -250,3 +250,14 @@ Commands: python3 tools/phase0_meta_test.py; jq '.' evidence/phase0/keys/key_sco
 Evidence: docs/env_matrix.md; docs/keys_and_secrets.md; evidence/phase0/env/env_matrix_snapshot.md; evidence/phase0/keys/key_scope_probe.json; artifacts/verify/20260209_173957; artifacts/verify/20260209_174125.
 Notes: Verify completed with dirty-tree warning only; no VERIFY_ALLOW_DIRTY override used.
 Next: None.
+- Story: workflow/phase0-canonical-checklist-alignment
+- Date: 2026-02-09
+- Summary: Hardened Phase-0 gating with semantic PAPER non-trading checks in `tools/phase0_meta_test.py`; clarified Phase-0 health enforcement scope in `docs/ROADMAP.md`; backfilled deferred runtime identity-probe ticket in `plans/ideas.md`.
+- Commands: python3 tools/phase0_meta_test.py --root .; ./plans/verify.sh quick.
+- Evidence: tools/phase0_meta_test.py; docs/ROADMAP.md; plans/ideas.md; verify artifacts from latest run.
+- Story: workflow/phase0-canonical-checklist-alignment
+- Date: 2026-02-10
+- Summary: Re-verified after Phase-0 semantic PAPER gate + ROADMAP clarification changes; full verify is green.
+- Commands: ./plans/verify.sh full.
+- Evidence: artifacts/verify/20260209_180018; tools/phase0_meta_test.py; docs/ROADMAP.md; plans/ideas.md.
+- Notes: Working tree remained dirty from unrelated local changes; no VERIFY_ALLOW_DIRTY override used.
