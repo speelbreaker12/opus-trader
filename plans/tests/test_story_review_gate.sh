@@ -107,6 +107,20 @@ rm -f "$case3/$story/self_review/20260209T000000Z_self_review.md.bak"
 expect_fail "self review head mismatch" "self-review not for current HEAD" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case3"
 
+# Case 3b: newest self review may target older HEAD; gate should still find matching HEAD artifact.
+case3b="$tmp_dir/case3b"
+write_valid_case "$case3b" "$story" "$head_sha"
+cat > "$case3b/$story/self_review/20260210T000000Z_self_review.md" <<EOF
+# Self Review (old head)
+Story: $story
+HEAD: deadbeef
+Decision: PASS
+Checklist:
+- Failure-Mode Review: DONE
+- Strategic Failure Review: DONE
+EOF
+"$GATE" "$story" --head "$head_sha" --artifacts-root "$case3b" >/dev/null
+
 # Case 4: must keep at least two codex reviews for HEAD.
 case4="$tmp_dir/case4"
 write_valid_case "$case4" "$story" "$head_sha"
@@ -169,5 +183,14 @@ write_valid_case "$case11" "$story" "$head_sha"
 rm -f "$case11/$story/kimi/20260209T000050Z_review.md"
 expect_fail "missing kimi review" "missing Kimi review artifact for HEAD" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case11"
+
+# Case 12: codex symlink escape to kimi directory is rejected.
+case12="$tmp_dir/case12"
+write_valid_case "$case12" "$story" "$head_sha"
+ln -s ../kimi/20260209T000050Z_review.md "$case12/$story/codex/20260209T000200Z_review.md"
+sed -i.bak "s/Codex final review file: codex\\/20260209T000100Z_review.md/Codex final review file: codex\\/20260209T000200Z_review.md/" "$case12/$story/review_resolution.md"
+rm -f "$case12/$story/review_resolution.md.bak"
+expect_fail "codex symlink escape" "Codex final review file must be inside" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case12"
 
 echo "PASS: story review gate fixtures"

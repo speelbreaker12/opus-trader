@@ -285,6 +285,7 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
         if allow_external_runtime_state:
             env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
+        env["STOIC_DRILL_MODE"] = "1"
 
         rc, payload, details = run_cli_json(
             root,
