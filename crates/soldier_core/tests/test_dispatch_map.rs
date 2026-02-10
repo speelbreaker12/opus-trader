@@ -135,6 +135,21 @@ fn test_missing_qty_usd_error() {
     assert_eq!(result, Err(DispatchMapError::MissingQtyUsd));
 }
 
+/// `map_to_dispatch` is fail-closed when contracts are populated.
+/// Callers must use validate_and_dispatch so AT-920 mismatch checks run.
+#[test]
+fn test_map_to_dispatch_rejects_contracts_without_validation() {
+    let size = OrderSize {
+        contracts: Some(3),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let result = map_to_dispatch(&size, InstrumentKind::Option, IntentClass::Open);
+    assert_eq!(result, Err(DispatchMapError::ContractsRequireValidation));
+}
+
 // ─── reduce_only mapping ────────────────────────────────────────────────
 
 /// OPEN → reduce_only = false
