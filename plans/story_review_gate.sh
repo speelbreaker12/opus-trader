@@ -55,12 +55,17 @@ canonical_path() {
     return 0
   fi
   if command -v python3 >/dev/null 2>&1; then
-    python3 - "$path" <<'PY'
+    local resolved=""
+    resolved="$(
+      python3 - "$path" <<'PY'
 import os
 import sys
 
 print(os.path.realpath(sys.argv[1]))
 PY
+    )" || die "canonical_path: python3 realpath failed for $path"
+    [[ -n "$resolved" ]] || die "canonical_path: python3 realpath returned empty output for $path"
+    printf '%s\n' "$resolved"
     return 0
   fi
   die "canonical_path: need either realpath or python3 for reliable path resolution"
