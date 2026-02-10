@@ -718,6 +718,59 @@ fn test_runtime_state_schema_mismatch_fails_closed() {
 }
 
 #[test]
+fn test_runtime_state_null_schema_fails_closed() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_schema_null");
+    remove_if_exists(&runtime_state);
+    fs::write(
+        &runtime_state,
+        r#"{
+  "schema_version": null,
+  "trading_mode": "ACTIVE",
+  "orders_in_flight": 1,
+  "pending_orders": [{"id":"sim_0001","intent":"OPEN","instrument":"BTC"}],
+  "last_transition_reason": "seed",
+  "last_transition_ts": "2026-01-01T00:00:00Z"
+}"#,
+    )
+    .expect("write null-schema runtime state");
+
+    let out = run_cli(
+        ["status", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-schema-null-test"),
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "null schema_version must fail closed"
+    );
+    let payload = parse_stdout_json(&out);
+    assert_eq!(payload["ok"], Value::Bool(false));
+    assert_eq!(payload["trading_mode"], Value::String("KILL".to_string()));
+    let errs = payload["errors"]
+        .as_array()
+        .expect("errors array expected on null schema");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("schema_version")),
+        "null schema error should explicitly mention schema_version"
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
 fn test_legacy_runtime_state_without_schema_is_migrated() {
     let root = repo_root();
     let valid_policy = root.join("config/policy.json");

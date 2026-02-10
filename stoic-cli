@@ -157,10 +157,8 @@ def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
             ["runtime_state: expected top-level JSON object"],
         )
 
-    schema_version = obj.get("schema_version")
+    schema_version = obj.get("schema_version") if "schema_version" in obj else 0
     # Backward-compatible migration: legacy files without schema_version are accepted.
-    if schema_version is None:
-        schema_version = 0
     if schema_version not in {0, RUNTIME_STATE_SCHEMA_VERSION}:
         return (
             _default_runtime_state(
