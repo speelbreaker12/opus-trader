@@ -465,6 +465,36 @@ fn test_extreme_ratio_sell_never_rounds_down_via_snap() {
     assert!(result.limit_price_q >= raw_price);
 }
 
+/// Very large decimal boundaries should still recover exact quantity steps.
+#[test]
+fn test_very_large_decimal_boundary_qty_stays_on_step() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 1.0,
+        amount_step: 0.1,
+        min_amount: 0.0,
+    };
+    let raw_qty = 5_966_019_221_325.6;
+    let result = quantize(raw_qty, 100.0, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.qty_steps, 59_660_192_213_256);
+    assert!((result.qty_q - raw_qty).abs() < 1e-3);
+}
+
+/// Very large decimal boundaries should still recover exact BUY price ticks.
+#[test]
+fn test_very_large_decimal_boundary_buy_price_stays_on_tick() {
+    let mut metrics = QuantizeMetrics::new();
+    let constraints = QuantizeConstraints {
+        tick_size: 0.1,
+        amount_step: 1.0,
+        min_amount: 0.0,
+    };
+    let raw_price = 5_966_019_221_325.6;
+    let result = quantize(1.0, raw_price, Side::Buy, &constraints, &mut metrics).unwrap();
+    assert_eq!(result.price_ticks, 59_660_192_213_256);
+    assert!((result.limit_price_q - raw_price).abs() < 1e-3);
+}
+
 // ─── Edge cases ────────────────────────────────────────────────────────
 
 /// min_amount=0 with zero qty_q should pass (0 >= 0)

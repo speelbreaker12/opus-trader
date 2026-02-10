@@ -69,7 +69,7 @@ pub enum QuantizeError {
 }
 
 const BOUNDARY_EPS: f64 = 1e-9;
-const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.005;
+const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.01;
 const BOUNDARY_ULP_MULTIPLIER: f64 = 8.0;
 
 fn boundary_tolerance(raw: f64, step: f64) -> f64 {
@@ -94,14 +94,14 @@ fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> i64 {
         if steps > i64::MIN {
             let prev = steps - 1;
             let prev_value = prev as f64 * step;
-            if (raw - prev_value).abs() <= tol {
+            if (raw - prev_value).abs() < tol {
                 steps = prev;
             }
         }
     } else if steps < i64::MAX {
         let next = steps + 1;
         let next_value = next as f64 * step;
-        if (raw - next_value).abs() <= tol {
+        if (raw - next_value).abs() < tol {
             steps = next;
         }
     }
