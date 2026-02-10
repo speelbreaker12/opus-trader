@@ -30,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Iterable, List
@@ -117,14 +118,19 @@ def run_cli_json(root: Path, args: list[str], env: dict[str, str]) -> tuple[int,
     return proc.returncode, payload, combined
 
 
-def build_meta_runtime_state_path(root: Path, prefix: str) -> Path:
+def build_meta_runtime_state_path(root: Path, prefix: str) -> tuple[Path, bool]:
     runtime_dir = root / "artifacts" / "phase0" / "meta_test_runtime"
-    runtime_dir.mkdir(parents=True, exist_ok=True)
+    allow_external = False
+    try:
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        runtime_dir = Path(tempfile.gettempdir())
+        allow_external = True
     token = f"{prefix}_{os.getpid()}_{time.time_ns()}"
     path = runtime_dir / f"{token}.json"
     if path.exists():
         path.unlink()
-    return path
+    return path, allow_external
 
 
 def markdown_table_row_for_env(text: str, env: str) -> List[str]:
@@ -265,12 +271,14 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         errors.append(f"{policy} missing")
         return errors
 
-    runtime_state = build_meta_runtime_state_path(root, "phase0_break_glass")
+    runtime_state, allow_external_runtime_state = build_meta_runtime_state_path(root, "phase0_break_glass")
     try:
         env = os.environ.copy()
         env["STOIC_BUILD_ID"] = "phase0-break-glass-meta-test"
         env["STOIC_POLICY_PATH"] = str(policy)
         env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+        if allow_external_runtime_state:
+            env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
 
         rc, payload, details = run_cli_json(
             root,
@@ -580,13 +588,15 @@ def test_status_command_behavior(root: Path) -> List[str]:
     if not os.access(cli, os.X_OK):
         return [f"{cli} is not executable"]
 
-    runtime_state = build_meta_runtime_state_path(root, "phase0_status")
+    runtime_state, allow_external_runtime_state = build_meta_runtime_state_path(root, "phase0_status")
     try:
 
         base_env = os.environ.copy()
         base_env["STOIC_BUILD_ID"] = "phase0-status-meta-test"
         base_env["STOIC_POLICY_PATH"] = str(policy)
         base_env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+        if allow_external_runtime_state:
+            base_env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
 
         rc, payload, details = run_cli_json(root, ["status", "--format", "json"], base_env)
         if rc != 0 or payload is None:

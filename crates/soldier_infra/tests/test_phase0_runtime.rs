@@ -566,6 +566,40 @@ fn test_runtime_state_path_outside_repo_rejected() {
 }
 
 #[test]
+fn test_runtime_state_path_outside_repo_allowed_with_explicit_opt_in() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_file("phase0_external_state_opt_in", "json");
+    remove_if_exists(&runtime_state);
+
+    let out = run_cli(
+        ["status", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-state-path-opt-in-test"),
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "explicit external-state opt-in should allow outside-repo path"
+    );
+    let payload = parse_stdout_json(&out);
+    assert_eq!(payload["ok"], Value::Bool(true));
+    assert_eq!(payload["trading_mode"], Value::String("ACTIVE".to_string()));
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
 fn test_simulate_open_enforces_pending_orders_capacity() {
     let root = repo_root();
     let valid_policy = root.join("config/policy.json");
@@ -679,6 +713,86 @@ fn test_runtime_state_schema_mismatch_fails_closed() {
             .any(|e| e.as_str().unwrap_or("").contains("schema_version")),
         "schema mismatch should be explicit in errors"
     );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_legacy_runtime_state_without_schema_is_migrated() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_legacy_state_migration");
+    remove_if_exists(&runtime_state);
+    fs::write(
+        &runtime_state,
+        r#"{
+  "trading_mode": "ACTIVE",
+  "orders_in_flight": 1,
+  "pending_orders": [{"id":"sim_0001","intent":"OPEN","instrument":"BTC"}],
+  "last_transition_reason": "legacy_seed",
+  "last_transition_ts": "2026-01-01T00:00:00Z"
+}"#,
+    )
+    .expect("write legacy runtime state");
+
+    let status_out = run_cli(
+        ["status", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-legacy-state-status-test"),
+        ],
+    );
+    assert_eq!(
+        status_out.status.code(),
+        Some(0),
+        "legacy unversioned state should remain readable"
+    );
+    let status_payload = parse_stdout_json(&status_out);
+    assert_eq!(status_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        status_payload["trading_mode"],
+        Value::String("ACTIVE".to_string())
+    );
+
+    let open_out = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-legacy-state-migrate-test"),
+        ],
+    );
+    assert_eq!(
+        open_out.status.code(),
+        Some(0),
+        "legacy state should be writable and migratable"
+    );
+    let open_payload = parse_stdout_json(&open_out);
+    assert_eq!(open_payload["ok"], Value::Bool(true));
+
+    let persisted = fs::read_to_string(&runtime_state).expect("read migrated runtime state");
+    let persisted_obj: Value =
+        serde_json::from_str(&persisted).expect("migrated state must be valid JSON");
+    assert_eq!(persisted_obj["schema_version"], Value::from(1));
 
     remove_if_exists(&runtime_state);
 }

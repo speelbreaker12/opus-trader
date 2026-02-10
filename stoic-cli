@@ -40,6 +40,10 @@ RUNTIME_STATE_SCHEMA_VERSION = 1
 DEFAULT_MAX_PENDING_ORDERS = 1000
 
 
+def _truthy_env(name: str) -> bool:
+    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _load_policy_loader_module() -> ModuleType:
     loader_path = ROOT / "tools" / "policy_loader.py"
     spec = importlib.util.spec_from_file_location("policy_loader", loader_path)
@@ -88,6 +92,8 @@ def _utc_now_iso() -> str:
 
 def _runtime_state_path() -> Path:
     path = Path(os.environ.get("STOIC_RUNTIME_STATE_PATH", str(DEFAULT_RUNTIME_STATE_PATH))).resolve()
+    if _truthy_env("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"):
+        return path
     try:
         path.relative_to(ROOT)
     except ValueError as exc:
@@ -152,7 +158,10 @@ def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
         )
 
     schema_version = obj.get("schema_version")
-    if schema_version != RUNTIME_STATE_SCHEMA_VERSION:
+    # Backward-compatible migration: legacy files without schema_version are accepted.
+    if schema_version is None:
+        schema_version = 0
+    if schema_version not in {0, RUNTIME_STATE_SCHEMA_VERSION}:
         return (
             _default_runtime_state(
                 trading_mode="KILL",
