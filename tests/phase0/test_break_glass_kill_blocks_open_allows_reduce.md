@@ -17,6 +17,9 @@ Prove break-glass authority can halt new risk while preserving risk reduction.
 5. Attempt a REDUCE_ONLY order (or equivalent risk-reducing action).
    - Example: `./stoic-cli emergency reduce-only --reason "test reduce path"`
    - Example: `./stoic-cli simulate-close --instrument BTC-28MAR26-50000-C --dry-run`
+6. If using external runtime state path, require explicit two-key override for mutating commands:
+   - `STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1`
+   - `STOIC_UNSAFE_EXTERNAL_STATE_ACK=I_UNDERSTAND`
 
 ## Pass Criteria
 

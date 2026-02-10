@@ -26,6 +26,7 @@ Optional:
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import subprocess
@@ -123,8 +124,12 @@ def build_meta_runtime_state_path(root: Path, prefix: str) -> tuple[Path, bool]:
     allow_external = False
     try:
         runtime_dir.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        runtime_dir = Path(tempfile.gettempdir())
+    except OSError as exc:
+        # Read-only or permission-restricted environments need an explicit external fallback.
+        if exc.errno not in {errno.EACCES, errno.EPERM, errno.EROFS}:
+            raise
+        runtime_dir = Path(tempfile.gettempdir()) / "stoic_phase0_meta_runtime"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
         allow_external = True
     token = f"{prefix}_{os.getpid()}_{time.time_ns()}"
     path = runtime_dir / f"{token}.json"
@@ -279,6 +284,7 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
         if allow_external_runtime_state:
             env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
+            env["STOIC_UNSAFE_EXTERNAL_STATE_ACK"] = "I_UNDERSTAND"
 
         rc, payload, details = run_cli_json(
             root,
@@ -597,13 +603,23 @@ def test_status_command_behavior(root: Path) -> List[str]:
         base_env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
         if allow_external_runtime_state:
             base_env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
+            base_env["STOIC_UNSAFE_EXTERNAL_STATE_ACK"] = "I_UNDERSTAND"
 
         rc, payload, details = run_cli_json(root, ["status", "--format", "json"], base_env)
         if rc != 0 or payload is None:
             errors.append(f"status healthy path must succeed: rc={rc} details={details}")
             return errors
 
-        for field in ["ok", "build_id", "contract_version", "timestamp_utc", "trading_mode", "is_trading_allowed"]:
+        for field in [
+            "ok",
+            "build_id",
+            "contract_version",
+            "timestamp_utc",
+            "trading_mode",
+            "is_trading_allowed",
+            "runtime_state_path",
+            "external_runtime_state",
+        ]:
             if field not in payload:
                 errors.append(f"status healthy payload missing required field: {field}")
         if payload.get("ok") is not True:

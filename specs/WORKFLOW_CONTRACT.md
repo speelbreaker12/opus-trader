@@ -104,12 +104,14 @@ States are tracked by convention (notes, progress.txt, or dashboard output). PRD
 This is the only approved execution loop.
 
 1) Implement in story worktree (single Story ID).
-2) Self-review (failure-mode + strategic).
+2) Capture `REVIEW_SHA="$(git rev-parse HEAD)"` and write self-review for that SHA using:
+   - `SKILLS/failure-mode-review.md`
+   - `SKILLS/strategic-failure-review.md`
 3) Run `./plans/verify.sh quick`.
-4) Codex review (`codex review --commit HEAD ...`), fix all blocking.
-5) Kimi K2.5 review (`kimi ...` via `plans/kimi_review_logged.sh`), fix all blocking.
+4) Codex review for `REVIEW_SHA` (`codex review --commit "$REVIEW_SHA" ...`), fix all blocking.
+5) Kimi K2.5 review for `REVIEW_SHA` (`kimi ...` via `plans/kimi_review_logged.sh --commit "$REVIEW_SHA"`), fix all blocking.
 6) Run `./plans/verify.sh quick` again (after review fixes).
-6.1) Second Codex review (`codex review --commit HEAD ...`), fix all blocking.
+6.1) Second Codex review for `REVIEW_SHA` (`codex review --commit "$REVIEW_SHA" ...`), fix all blocking.
 6.2) Run `./plans/verify.sh quick` again (after second Codex fixes).
 7) Sync with integration branch (merge/rebase `run/slice1-clean` into story branch).
    - If this changed anything, run `./plans/verify.sh quick` again.
@@ -120,6 +122,8 @@ This is the only approved execution loop.
 Notes:
 - WIP=2: while step (8) is running for Story A, you may execute steps (1-7) for Story B in a different worktree.
 - Never edit a worktree while it is running `full`.
+- Story review evidence MUST be SHA-consistent: self review, Kimi review, both Codex reviews, resolution file, and `story_review_gate` must all target the same `REVIEW_SHA`.
+- If `HEAD` changes after review starts, discard partial review artifacts for the old/new mix and regenerate the full review set for the chosen SHA.
 
 ### Recommended (non-blocking)
 - Keep a single commit per story (use `--amend` until full is green) to keep review/merge simple.

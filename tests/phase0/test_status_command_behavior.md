@@ -14,6 +14,8 @@ Prove the owner status command is executable and reports minimum authority field
    - `contract_version`
    - `trading_mode`
    - `is_trading_allowed`
+   - `runtime_state_path`
+   - `external_runtime_state`
 3. Run forced-unhealthy status path with missing policy:
    - `STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli status --format json`
 

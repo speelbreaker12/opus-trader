@@ -5,9 +5,9 @@
 
 ## Metadata
 - doc_id: HEALTH-001
-- version: 1.0
+- version: 1.1
 - contract_version_target: 5.2
-- last_updated_utc: 2026-01-27T14:00:00Z
+- last_updated_utc: 2026-02-10T16:30:00Z
 
 ---
 
@@ -41,6 +41,8 @@ Implementation note:
 | `is_trading_allowed` | boolean | `true` only when mode allows new OPEN risk |
 | `orders_in_flight` | integer | Simulated in-flight order count |
 | `pending_orders` | integer | Simulated pending order count |
+| `runtime_state_path` | string/null | Resolved runtime state file path used by command |
+| `external_runtime_state` | boolean | `true` only when outside-repo runtime state override is active |
 | `timestamp_utc` | string | ISO 8601 timestamp |
 
 ### Example Output (Healthy)
@@ -77,9 +79,20 @@ Implementation note:
   "trading_mode": "KILL",
   "is_trading_allowed": false,
   "orders_in_flight": 0,
-  "pending_orders": 0
+  "pending_orders": 0,
+  "runtime_state_path": "/repo/artifacts/phase0/runtime_state.json",
+  "external_runtime_state": false
 }
 ```
+
+### Runtime state override safety
+
+- Default mode is fail-closed: `STOIC_RUNTIME_STATE_PATH` must stay under repo root.
+- Outside-repo runtime state is allowed only with explicit override:
+  - `STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1`
+- Mutating commands (`emergency`, `simulate-open`, `simulate-close`) require a second explicit ack when external override is active:
+  - `STOIC_UNSAFE_EXTERNAL_STATE_ACK=I_UNDERSTAND`
+- Status/command JSON surfaces this state via `runtime_state_path`, `external_runtime_state`, and warnings.
 
 ---
 
@@ -136,6 +149,18 @@ fi
 ```bash
 ./stoic-cli health --format json | jq '.ok'
 ./stoic-cli status --format json | jq '.trading_mode,.is_trading_allowed'
+```
+
+### External Runtime State Override (explicit break-glass only)
+```bash
+STOIC_RUNTIME_STATE_PATH=/tmp/phase0_runtime_state.json \
+STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1 \
+./stoic-cli status --format json
+
+STOIC_RUNTIME_STATE_PATH=/tmp/phase0_runtime_state.json \
+STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1 \
+STOIC_UNSAFE_EXTERNAL_STATE_ACK=I_UNDERSTAND \
+./stoic-cli emergency kill --reason "phase0 drill"
 ```
 
 ### Forced Unhealthy Path (for gate tests)

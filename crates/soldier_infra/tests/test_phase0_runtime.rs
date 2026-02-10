@@ -595,6 +595,251 @@ fn test_runtime_state_path_outside_repo_allowed_with_explicit_opt_in() {
     let payload = parse_stdout_json(&out);
     assert_eq!(payload["ok"], Value::Bool(true));
     assert_eq!(payload["trading_mode"], Value::String("ACTIVE".to_string()));
+    let runtime_state_path = payload["runtime_state_path"]
+        .as_str()
+        .expect("runtime_state_path should be present");
+    assert_eq!(
+        Path::new(runtime_state_path)
+            .file_name()
+            .expect("runtime_state_path filename")
+            .to_str()
+            .expect("utf8 filename"),
+        runtime_state
+            .file_name()
+            .expect("runtime_state filename")
+            .to_str()
+            .expect("utf8 filename")
+    );
+    assert_eq!(payload["external_runtime_state"], Value::Bool(true));
+    let warns = payload["warnings"]
+        .as_array()
+        .expect("warnings array expected when external state override is active");
+    assert!(
+        warns.iter().any(|w| {
+            w.as_str()
+                .unwrap_or("")
+                .contains("external path override active")
+        }),
+        "status should surface an external runtime state warning"
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_external_runtime_state_mutating_commands_require_ack() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_file("phase0_external_state_mutating_ack", "json");
+    remove_if_exists(&runtime_state);
+
+    let open_without_ack = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-external-open-no-ack-test"),
+        ],
+    );
+    assert_eq!(
+        open_without_ack.status.code(),
+        Some(1),
+        "simulate-open with external runtime state must require explicit ack"
+    );
+    let open_without_ack_payload = parse_stdout_json(&open_without_ack);
+    assert_eq!(
+        open_without_ack_payload["reason"],
+        Value::String("external_runtime_state_ack_required".to_string())
+    );
+    assert_eq!(
+        open_without_ack_payload["external_runtime_state"],
+        Value::Bool(true)
+    );
+
+    let open_with_ack = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
+            ("STOIC_BUILD_ID", "phase0-external-open-with-ack-test"),
+        ],
+    );
+    assert_eq!(
+        open_with_ack.status.code(),
+        Some(0),
+        "simulate-open should allow external runtime state with explicit ack"
+    );
+    let open_with_ack_payload = parse_stdout_json(&open_with_ack);
+    assert_eq!(open_with_ack_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        open_with_ack_payload["result"],
+        Value::String("ACCEPTED".to_string())
+    );
+    assert_eq!(
+        open_with_ack_payload["external_runtime_state"],
+        Value::Bool(true)
+    );
+
+    let emergency_without_ack = run_cli(
+        [
+            "emergency",
+            "kill",
+            "--reason",
+            "phase0 external state ack test",
+        ],
+        &[
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-external-emergency-no-ack-test"),
+        ],
+    );
+    assert_eq!(
+        emergency_without_ack.status.code(),
+        Some(1),
+        "emergency command with external runtime state must require explicit ack"
+    );
+    let emergency_without_ack_payload = parse_stdout_json(&emergency_without_ack);
+    assert_eq!(
+        emergency_without_ack_payload["reason"],
+        Value::String("external_runtime_state_ack_required".to_string())
+    );
+
+    let emergency_with_ack = run_cli(
+        [
+            "emergency",
+            "kill",
+            "--reason",
+            "phase0 external state ack test",
+        ],
+        &[
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
+            ("STOIC_BUILD_ID", "phase0-external-emergency-with-ack-test"),
+        ],
+    );
+    assert_eq!(
+        emergency_with_ack.status.code(),
+        Some(0),
+        "emergency command should allow external runtime state with explicit ack"
+    );
+    let emergency_with_ack_payload = parse_stdout_json(&emergency_with_ack);
+    assert_eq!(emergency_with_ack_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        emergency_with_ack_payload["trading_mode"],
+        Value::String("KILL".to_string())
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_external_runtime_state_simulate_close_requires_ack() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_file("phase0_external_state_close_ack", "json");
+    remove_if_exists(&runtime_state);
+
+    let close_without_ack = run_cli(
+        [
+            "simulate-close",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--dry-run",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_BUILD_ID", "phase0-external-close-no-ack-test"),
+        ],
+    );
+    assert_eq!(
+        close_without_ack.status.code(),
+        Some(1),
+        "simulate-close with external runtime state must require explicit ack"
+    );
+    let close_without_ack_payload = parse_stdout_json(&close_without_ack);
+    assert_eq!(
+        close_without_ack_payload["reason"],
+        Value::String("external_runtime_state_ack_required".to_string())
+    );
+
+    let close_with_ack = run_cli(
+        [
+            "simulate-close",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--dry-run",
+        ],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 path"),
+            ),
+            (
+                "STOIC_RUNTIME_STATE_PATH",
+                runtime_state.to_str().expect("utf8 path"),
+            ),
+            ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
+            ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
+            ("STOIC_BUILD_ID", "phase0-external-close-with-ack-test"),
+        ],
+    );
+    assert_eq!(
+        close_with_ack.status.code(),
+        Some(0),
+        "simulate-close should allow external runtime state with explicit ack"
+    );
+    let close_with_ack_payload = parse_stdout_json(&close_with_ack);
+    assert_eq!(close_with_ack_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        close_with_ack_payload["result"],
+        Value::String("ACCEPTED".to_string())
+    );
+    assert_eq!(
+        close_with_ack_payload["external_runtime_state"],
+        Value::Bool(true)
+    );
 
     remove_if_exists(&runtime_state);
 }
