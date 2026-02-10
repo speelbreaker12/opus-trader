@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""
+Minimal owner CLI entrypoint for Phase 0.
+
+Supported commands:
+  ./stoic-cli health [--format json]
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from types import ModuleType
+from typing import Any, Dict
+
+
+ROOT = Path(__file__).resolve().parent
+DEFAULT_POLICY_PATH = ROOT / "config" / "policy.json"
+DEFAULT_CONTRACT_VERSION = "5.2"
+
+
+def _load_policy_loader_module() -> ModuleType:
+    loader_path = ROOT / "tools" / "policy_loader.py"
+    spec = importlib.util.spec_from_file_location("policy_loader", loader_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load policy loader module from {loader_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _detect_build_id() -> str:
+    env_build = os.environ.get("STOIC_BUILD_ID", "").strip()
+    if env_build:
+        return env_build
+
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        out = ""
+    return out or "unknown"
+
+
+def _health_payload(ok: bool, build_id: str, contract_version: str, errors: list[str]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": ok,
+        "build_id": build_id,
+        "contract_version": contract_version,
+        "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    if errors:
+        payload["errors"] = errors
+    return payload
+
+
+def _cmd_health(args: argparse.Namespace) -> int:
+    errors: list[str] = []
+    build_id = _detect_build_id()
+    contract_version = DEFAULT_CONTRACT_VERSION
+
+    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
+    try:
+        policy_loader = _load_policy_loader_module()
+        policy = policy_loader.load_policy(policy_path)
+        validation_errors = policy_loader.validate_policy(policy)
+        if validation_errors:
+            errors.extend([f"policy: {e}" for e in validation_errors])
+        else:
+            contract_version = str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION))
+    except Exception as exc:
+        errors.append(f"policy: {exc}")
+
+    if not build_id or build_id == "unknown":
+        errors.append("build_id: unavailable")
+
+    ok = len(errors) == 0
+    payload = _health_payload(ok=ok, build_id=build_id, contract_version=contract_version, errors=errors)
+
+    # Only json is currently supported; keep explicit check so misuse exits with code 2.
+    if args.format != "json":
+        print("unsupported format; use --format json", file=sys.stderr)
+        return 2
+
+    print(json.dumps(payload, indent=2))
+    return 0 if ok else 1
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="stoic-cli")
+    subparsers = parser.add_subparsers(dest="command")
+
+    p_health = subparsers.add_parser("health", help="Print health status payload")
+    p_health.add_argument("--format", default="json", choices=["json"], help="Output format")
+    p_health.set_defaults(handler=_cmd_health)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if not hasattr(args, "handler"):
+        parser.print_help()
+        return 2
+    return args.handler(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

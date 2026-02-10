@@ -6,11 +6,12 @@ Phase-0 CI meta-test: fail if required Phase-0 docs + evidence artifacts are mis
 
 This enforces that Phase 0 is not "paper-only":
 - Launch policy exists + snapshot
+- Machine-readable policy config + loader are present and valid
 - Env matrix exists + snapshot
 - Keys/secrets doc exists + key scope probe JSON exists (valid)
 - PAPER environment remains non-trading in env matrix + key-scope probe evidence
 - Break-glass runbook exists + snapshot + executed drill record + logs
-- Health endpoint doc exists + snapshot
+- Health endpoint doc exists + snapshot + executable command behavior
 - Minimal Phase-0 test definitions exist with explicit names
 - Evidence pack has owner summary + CI links placeholder
 
@@ -24,6 +25,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Iterable, List
@@ -221,6 +224,75 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
     return errors
 
 
+def test_machine_policy_loader_and_config(root: Path) -> List[str]:
+    errors: List[str] = []
+    policy_path = root / "config" / "policy.json"
+    snapshot_path = root / "evidence" / "phase0" / "policy" / "policy_config_snapshot.json"
+    loader_path = root / "tools" / "policy_loader.py"
+
+    if not policy_path.exists():
+        errors.append(f"{policy_path} missing")
+        return errors
+    if not snapshot_path.exists():
+        errors.append(f"{snapshot_path} missing")
+        return errors
+    if not loader_path.exists():
+        errors.append(f"{loader_path} missing")
+        return errors
+
+    try:
+        policy_obj = json.loads(read_text(policy_path))
+    except Exception as e:
+        errors.append(f"policy config invalid JSON: {e}")
+        return errors
+
+    if not isinstance(policy_obj, dict) or not policy_obj:
+        errors.append("policy config must be a non-empty JSON object")
+        return errors
+
+    required_keys = [
+        "policy_id",
+        "policy_version",
+        "contract_version_target",
+        "environments",
+        "allowed_order_types",
+        "forbidden_order_types",
+        "risk_limits",
+        "fail_closed",
+    ]
+    for key in required_keys:
+        if key not in policy_obj:
+            errors.append(f"policy config missing required key: {key}")
+
+    if policy_obj.get("fail_closed") is not True:
+        errors.append("policy config fail_closed must be true")
+
+    envs = policy_obj.get("environments")
+    if isinstance(envs, dict):
+        paper = envs.get("PAPER")
+        if isinstance(paper, dict) and paper.get("trade_capable") is not False:
+            errors.append("policy config environments.PAPER.trade_capable must be false")
+    else:
+        errors.append("policy config environments must be an object")
+
+    if read_text(policy_path) != read_text(snapshot_path):
+        errors.append("policy config snapshot is not a literal copy of config/policy.json")
+
+    cmd = [sys.executable, str(loader_path), "--policy", str(policy_path), "--strict"]
+    proc = subprocess.run(
+        cmd,
+        cwd=str(root),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        details = (proc.stdout + "\n" + proc.stderr).strip()
+        errors.append(f"policy loader strict validation failed: {details}")
+
+    return errors
+
+
 def test_paper_is_non_trading(root: Path) -> List[str]:
     env_matrix = root / "docs" / "env_matrix.md"
     probe_path = root / "evidence" / "phase0" / "keys" / "key_scope_probe.json"
@@ -316,6 +388,80 @@ def test_paper_is_non_trading(root: Path) -> List[str]:
     return errors
 
 
+def test_health_command_behavior(root: Path) -> List[str]:
+    errors: List[str] = []
+    cli = root / "stoic-cli"
+
+    if not cli.exists():
+        return [f"{cli} missing"]
+    if not os.access(cli, os.X_OK):
+        return [f"{cli} is not executable"]
+
+    base_env = os.environ.copy()
+    base_env["STOIC_BUILD_ID"] = "phase0-health-test-build"
+
+    cmd = [str(cli), "health", "--format", "json"]
+    healthy = subprocess.run(
+        cmd,
+        cwd=str(root),
+        env=base_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if healthy.returncode != 0:
+        details = (healthy.stdout + "\n" + healthy.stderr).strip()
+        errors.append(f"health command healthy path must exit 0; got {healthy.returncode}: {details}")
+        return errors
+
+    try:
+        healthy_payload = json.loads(healthy.stdout)
+    except Exception as e:
+        errors.append(f"health command healthy output is not valid JSON: {e}")
+        return errors
+
+    for field in ["ok", "build_id", "contract_version", "timestamp_utc"]:
+        if field not in healthy_payload:
+            errors.append(f"healthy payload missing required field: {field}")
+    if healthy_payload.get("ok") is not True:
+        errors.append("healthy payload must set ok=true")
+    if not isinstance(healthy_payload.get("build_id"), str) or not healthy_payload.get("build_id"):
+        errors.append("healthy payload build_id must be a non-empty string")
+    if not isinstance(healthy_payload.get("contract_version"), str) or not healthy_payload.get("contract_version"):
+        errors.append("healthy payload contract_version must be a non-empty string")
+
+    unhealthy_env = base_env.copy()
+    unhealthy_env["STOIC_POLICY_PATH"] = str(root / "config" / "missing_policy.json")
+    unhealthy = subprocess.run(
+        cmd,
+        cwd=str(root),
+        env=unhealthy_env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if unhealthy.returncode != 1:
+        details = (unhealthy.stdout + "\n" + unhealthy.stderr).strip()
+        errors.append(f"health command unhealthy path must exit 1; got {unhealthy.returncode}: {details}")
+        return errors
+
+    try:
+        unhealthy_payload = json.loads(unhealthy.stdout)
+    except Exception as e:
+        errors.append(f"health command unhealthy output is not valid JSON: {e}")
+        return errors
+
+    if unhealthy_payload.get("ok") is not False:
+        errors.append("unhealthy payload must set ok=false")
+    payload_errors = unhealthy_payload.get("errors")
+    if not isinstance(payload_errors, list) or len(payload_errors) == 0:
+        errors.append("unhealthy payload must include non-empty errors list")
+    elif not any("policy" in str(err).lower() for err in payload_errors):
+        errors.append("unhealthy payload errors must mention policy failure")
+
+    return errors
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Repo root (default: cwd)")
@@ -330,6 +476,9 @@ def main() -> int:
         root / "docs" / "keys_and_secrets.md",
         root / "docs" / "break_glass_runbook.md",
         root / "docs" / "health_endpoint.md",
+        root / "config" / "policy.json",
+        root / "tools" / "policy_loader.py",
+        root / "stoic-cli",
     ]
 
     # Required evidence files
@@ -337,6 +486,7 @@ def main() -> int:
         root / "evidence" / "phase0" / "README.md",
         root / "evidence" / "phase0" / "ci_links.md",
         root / "evidence" / "phase0" / "policy" / "launch_policy_snapshot.md",
+        root / "evidence" / "phase0" / "policy" / "policy_config_snapshot.json",
         root / "evidence" / "phase0" / "env" / "env_matrix_snapshot.md",
         root / "evidence" / "phase0" / "keys" / "key_scope_probe.json",
         root / "evidence" / "phase0" / "break_glass" / "runbook_snapshot.md",
@@ -349,6 +499,8 @@ def main() -> int:
     required_phase0_tests = [
         root / "tests" / "phase0" / "README.md",
         root / "tests" / "phase0" / "test_policy_is_required_and_bound.md",
+        root / "tests" / "phase0" / "test_machine_policy_loader_and_config.md",
+        root / "tests" / "phase0" / "test_health_command_behavior.md",
         root / "tests" / "phase0" / "test_api_keys_are_least_privilege.md",
         root / "tests" / "phase0" / "test_break_glass_kill_blocks_open_allows_reduce.md",
     ]
@@ -370,8 +522,10 @@ def main() -> int:
 
     phase0_tests = [
         ("test_policy_is_required_and_bound", test_policy_is_required_and_bound(root)),
+        ("test_machine_policy_loader_and_config", test_machine_policy_loader_and_config(root)),
         ("test_api_keys_are_least_privilege", test_api_keys_are_least_privilege(root)),
         ("test_paper_is_non_trading", test_paper_is_non_trading(root)),
+        ("test_health_command_behavior", test_health_command_behavior(root)),
         (
             "test_break_glass_kill_blocks_open_allows_reduce",
             test_break_glass_kill_blocks_open_allows_reduce(root),

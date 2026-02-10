@@ -261,3 +261,9 @@ Next: None.
 - Commands: ./plans/verify.sh full.
 - Evidence: artifacts/verify/20260209_180018; tools/phase0_meta_test.py; docs/ROADMAP.md; plans/ideas.md.
 - Notes: Working tree remained dirty from unrelated local changes; no VERIFY_ALLOW_DIRTY override used.
+- Story: workflow/phase0-canonical-checklist-alignment
+- Date: 2026-02-10 01:09:39 UTC
+- Summary: Implemented all requested follow-ups: executable health command gate, machine-readable policy path + strict loader baseline, and split unrelated local dirty files into stash.
+- Commands: git stash push -u -m "split-unrelated-local-dirty-2026-02-10" -- plans/codex_review_logged.sh plans/tests/test_workflow_allowlist_coverage.sh plans/workflow_files_allowlist.txt plans/workflow_verify.sh specs/WORKFLOW_CONTRACT.md .worktrees/prd-rest-slices plans/kimi_review_logged.sh; python3 scripts/build_contract_kernel.py; python3 tools/phase0_meta_test.py --root .; ./plans/verify.sh quick; ./plans/verify.sh full.
+- Evidence: config/policy.json; tools/policy_loader.py; stoic-cli; tools/phase0_meta_test.py; docs/PHASE0_CHECKLIST_BLOCK.md; docs/ROADMAP.md; specs/CONTRACT.md; docs/contract_kernel.json; tests/phase0/test_machine_policy_loader_and_config.md; tests/phase0/test_health_command_behavior.md; evidence/phase0/policy/policy_config_snapshot.json; artifacts/verify/20260209_190352; artifacts/verify/20260209_190814.
+- Notes: Stash created for unrelated local edits: stash@{0} "split-unrelated-local-dirty-2026-02-10". Local ignore updated at `.git/info/exclude` for `.worktrees/` so nested worktree path no longer pollutes status.
