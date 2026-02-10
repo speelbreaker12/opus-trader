@@ -72,171 +72,27 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 
 ### Exit criteria (evidence pack)
 - All docs above exist with required content
-- `evidence/phase0/` contains snapshots + drill record + key scope probe (see Addendum below for full structure)
+- `evidence/phase0/` contains snapshots + drill record + key scope probe (see `docs/PHASE0_CHECKLIST_BLOCK.md` for canonical structure)
 - A recorded **break-glass drill** proving: halt triggered → no further OPENs → risk reduction still possible
 - A recorded **key-scope probe** (`key_scope_probe.json`) proving keys are least-privilege
 - A **single command** that prints `/health` style status including `ok`, `build_id`, and `contract_version`
 
 ---
 
-## Phase 0 Addendum — Launch Policy & Ops Baseline (AUTO/MANUAL, Ungameable)
+## Phase 0 Addendum — Canonical Checklist
 
-**Purpose:** Phase 0 proves you have a *binding* operational baseline (policies + keys + break-glass).
-If this is paperwork only, the rest of the roadmap is gameable.
+Canonical source: `docs/PHASE0_CHECKLIST_BLOCK.md`
 
-**Rule:** Phase 0 is DONE only if every item below is satisfied with its required evidence.
+Use that file for:
+- required evidence pack structure,
+- P0-A through P0-E unblock conditions,
+- binary owner sign-off questions,
+- explicit Phase 0 non-goals.
 
-### Phase 0 Evidence Pack (required)
+### Phase 0 Health Enforcement Scope (clarification)
 
-Create: `evidence/phase0/` with the following **required** files:
-
-```
-evidence/phase0/
-  README.md
-  ci_links.md
-  policy/
-    launch_policy_snapshot.md
-  env/
-    env_matrix_snapshot.md
-  keys/
-    key_scope_probe.json
-  break_glass/
-    runbook_snapshot.md
-    drill.md
-    log_excerpt.txt
-  health/
-    health_endpoint_snapshot.md
-```
-
-- `README.md`: 1-page owner summary: what was proven, what failed, what remains risky.
-- `ci_links.md`: links to CI runs + build IDs used for proof. If CI is not wired, must include recorded local test output proving AUTO gates passed.
-- Snapshots are literal copies of the docs used at sign-off (prevents silent edits later).
-
----
-
-### P0-A — Launch Policy Baseline is Explicit (no hidden assumptions)
-
-**MANUAL artifacts (docs must exist):**
-- `docs/launch_policy.md` — owner-readable constraints:
-  - allowed instruments / venues
-  - allowed order types
-  - max position / max daily loss (or equivalent capital stop)
-  - max order rate / pacing rule (coarse)
-  - environments: DEV / STAGING / PAPER / LIVE (names + purpose)
-
-**MANUAL evidence:**
-- `evidence/phase0/policy/launch_policy_snapshot.md` — snapshot of the above at sign-off.
-
-**Unblock condition:**
-MANUAL: doc exists + snapshot exists.
-
----
-
-### P0-B — Environment Isolation (keys and configs cannot leak across envs)
-
-**MANUAL artifacts (docs must exist):**
-- `docs/env_matrix.md` — table with:
-  - each environment (DEV/STAGING/PAPER/LIVE)
-  - which exchange account + API key is used
-  - permissions/scope per key (read-only vs trade vs withdraw disabled)
-  - where secrets are stored (vault, env vars, etc.)
-
-**MANUAL evidence:**
-- `evidence/phase0/env/env_matrix_snapshot.md` — snapshot at sign-off.
-
-**Unblock condition:**
-MANUAL: doc exists + snapshot exists.
-
----
-
-### P0-C — Keys & Secrets Baseline (least privilege, verifiable scope)
-
-**MANUAL artifacts (docs must exist):**
-- `docs/keys_and_secrets.md` must include:
-  - key creation rules (least privilege; withdrawals disabled)
-  - rotation plan (who/when/how)
-  - where secrets live (and what must never appear in repo)
-  - how "LIVE" keys are protected from local/dev usage
-
-**AUTO/MANUAL evidence (must exist):**
-- `evidence/phase0/keys/key_scope_probe.json`
-  Required fields (minimum):
-  - `env`
-  - `exchange`
-  - `key_id` (redacted ok)
-  - `scopes` (list)
-  - `withdraw_enabled` (bool)
-  - `timestamp_utc`
-  - `operator`
-
-**Unblock condition:**
-MANUAL: doc exists
-AND MANUAL/AUTO: scope probe JSON exists and is valid JSON (non-empty).
-
----
-
-### P0-D — Break-Glass Runbook + Executed Drill (paperwork is not enough)
-
-**MANUAL artifacts (docs must exist):**
-- `docs/break_glass_runbook.md` includes:
-  - exact "STOP TRADING" steps (kill switch)
-  - how to verify "no further OPEN risk"
-  - how to verify "risk reduction still possible if exposure exists"
-  - escalation + who to notify
-
-**MANUAL evidence (recorded drill required):**
-- `evidence/phase0/break_glass/runbook_snapshot.md` — snapshot at sign-off
-- `evidence/phase0/break_glass/drill.md` — record of a drill execution, including:
-  - trigger scenario (e.g., simulated runaway order attempt)
-  - time to halt
-  - observed behavior (no further OPENs)
-  - any gaps found + follow-ups
-- `evidence/phase0/break_glass/log_excerpt.txt` — small excerpt proving the drill occurred
-
-**Unblock condition:**
-MANUAL: doc + snapshots + drill record + logs exist.
-
----
-
-### P0-E — Health Endpoint
-
-**Goal:** Single command shows system health with build_id and contract_version.
-
-**MANUAL evidence:**
-- `docs/health_endpoint.md` **(MANUAL)** documenting:
-  - The exact command to check health
-  - Expected output format
-
-**AUTO gates:**
-- `test_health_endpoint_returns_required_fields`
-  - Pass iff health output includes: `ok` (bool), `build_id` (string), `contract_version` (string).
-- `test_health_command_exits_zero_when_healthy`
-  - Pass iff health command exits 0 when system is healthy.
-
-**Unblock condition:**
-AUTO: tests green **AND** MANUAL: health doc exists.
-
----
-
-### Phase 0 Owner Sign-Off (Binary)
-
-Answer YES/NO with links into `evidence/phase0/`. If any answer is "I think so," Phase 0 is NOT DONE.
-
-1) Are launch boundaries written down clearly enough that a non-coder can detect a violation?
-2) Are environments isolated (DEV/STAGING/PAPER/LIVE) with separate keys/accounts?
-3) Do we have proof of key scopes (not just claims) and withdrawals are disabled?
-4) Was a break-glass drill executed and recorded, proving we can halt new risk immediately?
-5) Does a single health command show ok/build_id/contract_version?
-
----
-
-### Explicit Phase 0 Non-Goals (Do Not Backport)
-
-- ❌ No `/status` endpoint
-- ❌ No TradingMode/PolicyGuard logic
-- ❌ No replay/evidence/certification loop
-- ❌ No dashboards / UI
-- ❌ No chaos suite beyond the single break-glass drill
+- In Phase 0, `tools/phase0_meta_test.py` (via `./plans/verify.sh`) enforces health documentation and evidence artifacts (`docs/health_endpoint.md`, `evidence/phase0/health/health_endpoint_snapshot.md`).
+- Runtime behavior of the health command/endpoint (`./stoic-cli health`, output/exit semantics) is tracked as implementation work and is not implied by doc/snapshot presence alone.
 
 ---
 

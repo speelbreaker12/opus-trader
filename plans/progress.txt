@@ -230,3 +230,34 @@ Summary: Backfilled missing review evidence for all passes=true stories on run/s
 Commands: bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_codex_review_digest.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full; ./plans/self_review_logged.sh <ID> --decision PASS --head <HEAD>; ./plans/story_review_gate.sh <ID> --head <HEAD>; ./plans/prd_set_pass.sh <ID> true --artifacts-dir artifacts/verify/20260209_111707 --contract-review artifacts/verify/20260209_111707/contract_review.json.
 Evidence: plans/story_review_gate.sh; plans/self_review_logged.sh; plans/codex_review_digest.sh; plans/story_postmortem_logged.sh; plans/prd_set_pass.sh; plans/preflight.sh; plans/tests/test_story_review_gate.sh; plans/tests/test_codex_review_digest.sh; artifacts/verify/20260209_111707; artifacts/story/*/{self_review,codex,review_resolution.md}.
 Next: push branch and open PR; require CI ./plans/verify.sh full on clean checkout before merge.
+Story: workflow-maintenance
+Date: 2026-02-09 23:18:21 UTC
+Summary: Aligned Phase 0 contract/docs/enforcement: removed Phase 0 `/status` requirement in contract in favor of minimal health fields, created canonical Phase 0 checklist file, replaced ROADMAP addendum with canonical reference, required health snapshot in phase0 meta-test, wired phase0 meta-test into verify gate flow, and added health snapshot evidence file.
+Commands: python3 scripts/build_contract_kernel.py; python3 tools/phase0_meta_test.py; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: specs/CONTRACT.md; docs/PHASE0_CHECKLIST_BLOCK.md; docs/ROADMAP.md; tools/phase0_meta_test.py; plans/verify_fork.sh; evidence/phase0/health/health_endpoint_snapshot.md; docs/contract_kernel.json; artifacts/verify/20260209_171439; artifacts/verify/20260209_171625.
+Notes: Verify runs completed with dirty-tree warning only; no VERIFY_ALLOW_DIRTY override used.
+Next: None.
+Story: S0-000/S0-phase0-acceptance-hardening
+Date: 2026-02-09
+Summary: Completed requested 3-part Phase 0 hardening pass: (1) patched launch policy seams (KILL/REDUCE_ONLY semantics, deterministic perp hedge rule, options product family, risk metric definitions, latched breach actions, micro-live exit gate), (2) verified/kept acceptance/checklist docs aligned with current Phase-0 contract naming, and (3) added explicit tests/phase0 acceptance test definition set; also updated phase0 meta-test to require those test definition files and refreshed launch policy snapshot.
+Commands: python3 tools/phase0_meta_test.py; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: docs/launch_policy.md; evidence/phase0/policy/launch_policy_snapshot.md; tests/phase0/README.md; tests/phase0/test_policy_is_required_and_bound.md; tests/phase0/test_api_keys_are_least_privilege.md; tests/phase0/test_break_glass_kill_blocks_open_allows_reduce.md; tools/phase0_meta_test.py; artifacts/verify/20260209_172635; artifacts/verify/20260209_172823; artifacts/verify/20260209_173338; artifacts/verify/20260209_173338.
+Next: none.
+Story: workflow-maintenance
+Date: 2026-02-09 23:43:12 UTC
+Summary: Applied high-leverage Phase 0 policy hardening to close PAPER->LIVE accidental-trade risk: PAPER is now non-trading/data-only in env matrix, key model split to TRADE_TESTNET vs TRADE_LIVE with PAPER trade keys forbidden, startup identity probe fail-closed control added, BREAK_GLASS_MANUAL marked runtime-inaccessible, and Phase 0 env/key evidence snapshots updated accordingly.
+Commands: python3 tools/phase0_meta_test.py; jq '.' evidence/phase0/keys/key_scope_probe.json; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: docs/env_matrix.md; docs/keys_and_secrets.md; evidence/phase0/env/env_matrix_snapshot.md; evidence/phase0/keys/key_scope_probe.json; artifacts/verify/20260209_173957; artifacts/verify/20260209_174125.
+Notes: Verify completed with dirty-tree warning only; no VERIFY_ALLOW_DIRTY override used.
+Next: None.
+- Story: workflow/phase0-canonical-checklist-alignment
+- Date: 2026-02-09
+- Summary: Hardened Phase-0 gating with semantic PAPER non-trading checks in `tools/phase0_meta_test.py`; clarified Phase-0 health enforcement scope in `docs/ROADMAP.md`; backfilled deferred runtime identity-probe ticket in `plans/ideas.md`.
+- Commands: python3 tools/phase0_meta_test.py --root .; ./plans/verify.sh quick.
+- Evidence: tools/phase0_meta_test.py; docs/ROADMAP.md; plans/ideas.md; verify artifacts from latest run.
+- Story: workflow/phase0-canonical-checklist-alignment
+- Date: 2026-02-10
+- Summary: Re-verified after Phase-0 semantic PAPER gate + ROADMAP clarification changes; full verify is green.
+- Commands: ./plans/verify.sh full.
+- Evidence: artifacts/verify/20260209_180018; tools/phase0_meta_test.py; docs/ROADMAP.md; plans/ideas.md.
+- Notes: Working tree remained dirty from unrelated local changes; no VERIFY_ALLOW_DIRTY override used.

@@ -1,41 +1,42 @@
 # Break-Glass Drill Log Excerpt
-# Date: 2026-01-27
+# Date: 2026-02-09
 # Environment: STAGING
 
 # === Pre-drill state ===
-2026-01-27T14:00:00.000Z [INFO] trading_mode=ACTIVE orders_in_flight=0 queued=0
+2026-02-09T23:44:00.000Z [INFO] trading_mode=ACTIVE orders_in_flight=0 queued=0
 
 # === Fault injection (simulated runaway) ===
-2026-01-27T14:00:00.100Z [INFO] strategy_signal instrument=BTC-28MAR26-50000-C action=BUY size=1
-2026-01-27T14:00:00.150Z [INFO] order_queued intent_id=int_001 instrument=BTC-28MAR26-50000-C
-2026-01-27T14:00:00.200Z [INFO] strategy_signal instrument=BTC-28MAR26-52000-C action=BUY size=1
-2026-01-27T14:00:00.250Z [INFO] order_queued intent_id=int_002 instrument=BTC-28MAR26-52000-C
+2026-02-09T23:44:00.100Z [INFO] strategy_signal instrument=BTC-28MAR26-50000-C action=BUY size=1
+2026-02-09T23:44:00.150Z [INFO] order_queued intent_id=int_001 instrument=BTC-28MAR26-50000-C
+2026-02-09T23:44:00.200Z [INFO] strategy_signal instrument=BTC-28MAR26-52000-C action=BUY size=1
+2026-02-09T23:44:00.250Z [INFO] order_queued intent_id=int_002 instrument=BTC-28MAR26-52000-C
 # ... rapid orders continue ...
-2026-01-27T14:00:02.000Z [INFO] order_queued intent_id=int_047 instrument=ETH-28MAR26-3000-P
-2026-01-27T14:00:02.100Z [WARN] order_rate_warning queued=50 window_seconds=2 threshold=20
+2026-02-09T23:44:02.000Z [INFO] order_queued intent_id=int_047 instrument=ETH-28MAR26-3000-P
+2026-02-09T23:44:02.100Z [WARN] order_rate_warning queued=50 window_seconds=2 threshold=20
 
 # === Operator intervention ===
-2026-01-27T14:00:05.500Z [INFO] emergency_command received=KILL reason="drill: simulated runaway orders" operator=drill_operator
+2026-02-09T23:44:05.500Z [INFO] emergency_command received=KILL reason="drill: simulated runaway orders" operator=drill_operator
 
 # === KILL mode engaged ===
-2026-01-27T14:00:05.650Z [WARN] {"event": "KILL_ENGAGED", "timestamp": "2026-01-27T14:00:05.650Z", "reason": "drill: simulated runaway orders", "operator": "drill_operator"}
-2026-01-27T14:00:05.700Z [INFO] order_queue_flushed dropped=47 reason=KILL_MODE
+2026-02-09T23:44:05.650Z [WARN] {"event": "KILL_ENGAGED", "timestamp": "2026-02-09T23:44:05.650Z", "reason": "drill: simulated runaway orders", "operator": "drill_operator"}
+2026-02-09T23:44:05.700Z [INFO] order_queue_flushed dropped=47 reason=KILL_MODE
+2026-02-09T23:44:05.710Z [INFO] dispatch OPEN_BLOCKED reason=KILL_MODE
 
 # === Verification: No orders after KILL ===
-2026-01-27T14:00:06.000Z [INFO] trading_mode=KILL orders_in_flight=0 queued=0
-2026-01-27T14:00:10.000Z [INFO] trading_mode=KILL orders_in_flight=0 queued=0
+2026-02-09T23:44:06.000Z [INFO] trading_mode=KILL orders_in_flight=0 queued=0
+2026-02-09T23:44:10.000Z [INFO] trading_mode=KILL orders_in_flight=0 queued=0
 
 # === REDUCE_ONLY test ===
-2026-01-27T14:00:15.000Z [INFO] emergency_command received=REDUCE_ONLY reason="drill: testing escape path"
-2026-01-27T14:00:15.050Z [INFO] {"event": "MODE_TRANSITION", "from": "KILL", "to": "REDUCE_ONLY", "reason": "drill: testing escape path"}
-2026-01-27T14:00:20.000Z [INFO] simulate_close dry_run=true instrument=BTC-28MAR26-50000-C action=SELL size=1 result=ACCEPTED
+2026-02-09T23:44:15.000Z [INFO] emergency_command received=REDUCE_ONLY reason="drill: testing escape path"
+2026-02-09T23:44:15.050Z [INFO] {"event": "MODE_TRANSITION", "from": "KILL", "to": "REDUCE_ONLY", "reason": "drill: testing escape path"}
+2026-02-09T23:44:20.000Z [INFO] simulate_close dry_run=true instrument=BTC-28MAR26-50000-C action=SELL size=1 result=ACCEPTED
 
 # === Restore KILL for drill completion ===
-2026-01-27T14:00:25.000Z [INFO] emergency_command received=KILL reason="drill: restoring after test"
-2026-01-27T14:00:25.050Z [WARN] {"event": "KILL_ENGAGED", "timestamp": "2026-01-27T14:00:25.050Z", "reason": "drill: restoring after test"}
+2026-02-09T23:44:25.000Z [INFO] emergency_command received=KILL reason="drill: restoring after test"
+2026-02-09T23:44:25.050Z [WARN] {"event": "KILL_ENGAGED", "timestamp": "2026-02-09T23:44:25.050Z", "reason": "drill: restoring after test"}
 
 # === Reconciliation check ===
-2026-01-27T14:00:30.000Z [INFO] reconcile_check local_positions=0 exchange_positions=0 discrepancies=0
+2026-02-09T23:44:30.000Z [INFO] reconcile_check local_positions=0 exchange_positions=0 discrepancies=0
 
 # === Drill complete ===
-2026-01-27T14:00:35.000Z [INFO] drill_complete status=PASSED kill_time_ms=5700 orders_escaped=0 reduce_only_works=true
+2026-02-09T23:44:35.000Z [INFO] drill_complete status=PASSED kill_time_ms=5700 orders_escaped=0 reduce_only_works=true

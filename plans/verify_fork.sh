@@ -318,6 +318,10 @@ if [[ -f Cargo.toml ]]; then
   fi
 fi
 
+log "14b) phase0 meta-test"
+run_logged_or_exit "phase0_meta_test" "$SPEC_LINT_TIMEOUT" \
+  "$PYTHON_BIN" tools/phase0_meta_test.py --root "$ROOT"
+
 export ROOT MODE VERIFY_ARTIFACTS_DIR VERIFY_CONSOLE VERIFY_LOG_CAPTURE
 export TIMEOUT_BIN ENABLE_TIMEOUTS VERIFY_FAIL_TAIL_LINES VERIFY_FAIL_SUMMARY_LINES TIMEOUT_WARNED
 export RUST_FMT_TIMEOUT RUST_CLIPPY_TIMEOUT RUST_TEST_TIMEOUT
