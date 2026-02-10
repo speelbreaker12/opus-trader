@@ -534,10 +534,20 @@ fn test_simulate_commands_require_drill_mode() {
             ("STOIC_BUILD_ID", "phase0-drill-mode-open-gate-test"),
         ],
     );
-    assert_eq!(open_out.status.code(), Some(2), "simulate-open must require drill mode");
+    assert_eq!(
+        open_out.status.code(),
+        Some(2),
+        "simulate-open must require drill mode"
+    );
     let open_payload = parse_stdout_json(&open_out);
-    assert_eq!(open_payload["reason"], Value::String("drill_mode_required".to_string()));
-    assert_eq!(open_payload["command"], Value::String("simulate-open".to_string()));
+    assert_eq!(
+        open_payload["reason"],
+        Value::String("drill_mode_required".to_string())
+    );
+    assert_eq!(
+        open_payload["command"],
+        Value::String("simulate-open".to_string())
+    );
 
     let close_out = run_cli(
         [
@@ -559,7 +569,11 @@ fn test_simulate_commands_require_drill_mode() {
             ("STOIC_BUILD_ID", "phase0-drill-mode-close-gate-test"),
         ],
     );
-    assert_eq!(close_out.status.code(), Some(2), "simulate-close must require drill mode");
+    assert_eq!(
+        close_out.status.code(),
+        Some(2),
+        "simulate-close must require drill mode"
+    );
     let close_payload = parse_stdout_json(&close_out);
     assert_eq!(
         close_payload["reason"],

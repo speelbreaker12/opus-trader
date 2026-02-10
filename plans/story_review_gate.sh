@@ -54,19 +54,16 @@ canonical_path() {
     realpath "$path"
     return 0
   fi
-  (
-    cd "$(dirname "$path")" && \
-      printf '%s/%s\n' "$(pwd -P)" "$(basename "$path")"
-  )
-}
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$path" <<'PY'
+import os
+import sys
 
-latest_matching_file() {
-  local dir="$1"
-  local pattern="$2"
-  if [[ ! -d "$dir" ]]; then
+print(os.path.realpath(sys.argv[1]))
+PY
     return 0
   fi
-  find "$dir" -maxdepth 1 -type f -name "$pattern" | LC_ALL=C sort -r | head -n 1
+  die "canonical_path: need either realpath or python3 for reliable path resolution"
 }
 
 validate_review_reference() {
@@ -152,8 +149,24 @@ story_dir="$art_root/$story"
 
 # ---------- Self review ----------
 self_dir="$story_dir/self_review"
-self_file="$(latest_matching_file "$self_dir" '*_self_review.md')"
-[[ -n "$self_file" && -f "$self_file" ]] || die "missing self-review artifact in: $self_dir"
+self_file=""
+self_files_found=0
+if [[ -d "$self_dir" ]]; then
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    self_files_found=1
+    if grep -Fxq -- "Story: $story" "$f" && grep -Fxq -- "HEAD: $HEAD_SHA" "$f"; then
+      self_file="$f"
+      break
+    fi
+  done < <(find "$self_dir" -maxdepth 1 -type f -name '*_self_review.md' | LC_ALL=C sort -r)
+fi
+if [[ -z "$self_file" ]]; then
+  if [[ "$self_files_found" -eq 1 ]]; then
+    die "self-review not for current HEAD ($HEAD_SHA) in: $self_dir"
+  fi
+  die "missing self-review artifact in: $self_dir"
+fi
 
 require_fixed_line "$self_file" "Story: $story" "self-review missing 'Story: $story'"
 require_fixed_line "$self_file" "HEAD: $HEAD_SHA" "self-review not for current HEAD ($HEAD_SHA)"

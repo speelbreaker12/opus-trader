@@ -207,7 +207,7 @@ A story’s `passes` may be set to `true` only when:
 ### 8.2 Mechanism (required)
 Create and use a single script to change PRD passes:
 
-- `plans/prd_set_pass.sh <STORY_ID> true|false --artifacts <dir>`
+- `plans/prd_set_pass.sh <STORY_ID> true|false --artifacts-dir <dir>`
 
 This script must refuse `true` unless the rule in 8.1 is proven via artifacts.
 `plans/prd_set_pass.sh` MUST run `plans/story_review_gate.sh` for the current `HEAD`.
