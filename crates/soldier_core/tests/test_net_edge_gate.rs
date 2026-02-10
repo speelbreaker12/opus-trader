@@ -232,6 +232,48 @@ fn test_at932_all_missing() {
     ));
 }
 
+#[test]
+fn test_non_finite_gross_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(f64::NAN),
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_non_finite_min_edge_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(f64::INFINITY),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
 // ─── Net edge computation ───────────────────────────────────────────────
 
 #[test]

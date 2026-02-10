@@ -162,8 +162,8 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
 
     // proposed_limit from fill aggressiveness
     let proposed_limit = match input.side {
-        PricerSide::Buy => input.fair_price + 0.5 * net_edge_per_unit,
-        PricerSide::Sell => input.fair_price - 0.5 * net_edge_per_unit,
+        PricerSide::Buy => input.fair_price - 0.5 * net_edge_per_unit,
+        PricerSide::Sell => input.fair_price + 0.5 * net_edge_per_unit,
     };
 
     // Clamp to guarantee min edge

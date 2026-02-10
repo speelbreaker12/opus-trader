@@ -10,10 +10,10 @@ Defaults:
   --commit HEAD
   --model k2.5
   --title "<STORY_ID>: Kimi review"
-  --out-root "${CODEX_ARTIFACTS_ROOT:-artifacts/story}"
+  --out-root "${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}"
 
 Artifacts:
-  - Raw review: artifacts/story/<ID>/kimi/<UTC_TS>_review.md
+  - Raw review: artifacts/story/<ID>/kimi/<STAMP>_review.md
 
 Notes:
   - If your installed `kimi` CLI supports `kimi review`, this script uses it directly.
@@ -38,7 +38,7 @@ commit="HEAD"
 base=""
 model="k2.5"
 title=""
-out_root="${CODEX_ARTIFACTS_ROOT:-artifacts/story}"
+out_root="${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}"
 extra=()
 
 while [[ $# -gt 0 ]]; do
@@ -104,10 +104,21 @@ fi
 mkdir -p "$outdir"
 
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
-outfile="$outdir/${ts}_review.md"
+stamp="${ts}_$$_${RANDOM}"
+outfile="$outdir/${stamp}_review.md"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
-head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
+repo_head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
+artifact_head_sha="$repo_head_sha"
+
+if [[ "$mode" == "commit" ]]; then
+  resolved_commit="$(git rev-parse "${commit}^{commit}" 2>/dev/null || true)"
+  [[ -n "$resolved_commit" ]] || {
+    echo "ERROR: --commit ref is not a valid commit: $commit" >&2
+    exit 2
+  }
+  artifact_head_sha="$resolved_commit"
+fi
 
 supports_review_subcommand() {
   set +e
@@ -137,13 +148,13 @@ else
   review_target=""
   case "$mode" in
     commit)
-      review_target="Review commit '$commit' (current HEAD is $head_sha)."
+      review_target="Review commit '$commit' (resolved $artifact_head_sha; repo HEAD $repo_head_sha)."
       ;;
     base)
-      review_target="Review diff from base '$base' to HEAD '$head_sha'."
+      review_target="Review diff from base '$base' to HEAD '$repo_head_sha'."
       ;;
     uncommitted)
-      review_target="Review uncommitted changes in the current worktree (HEAD $head_sha)."
+      review_target="Review uncommitted changes in the current worktree (HEAD $repo_head_sha)."
       ;;
   esac
   review_prompt="You are reviewing story $story on branch $branch.
@@ -161,12 +172,14 @@ fi
   echo "- Story: $story"
   echo "- Timestamp (UTC): $ts"
   echo "- Branch: $branch"
-  echo "- HEAD: $head_sha"
+  echo "- Repo HEAD: $repo_head_sha"
+  echo "- HEAD: $artifact_head_sha"
   echo "- Model: $model"
   echo "- Command mode: $cmd_mode"
   echo "- Mode: $mode"
   if [[ "$mode" == "commit" ]]; then
     echo "- Commit ref: $commit"
+    echo "- Reviewed commit SHA: $artifact_head_sha"
   fi
   if [[ "$mode" == "base" ]]; then
     echo "- Base ref: $base"

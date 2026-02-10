@@ -37,6 +37,8 @@ Implementation note:
 | Field | Type | Description |
 |-------|------|-------------|
 | `ok` | boolean | `true` if status checks pass |
+| `build_id` | string | Git commit SHA or build identifier |
+| `contract_version` | string | Version of CONTRACT.md (e.g., "5.2") |
 | `trading_mode` | string | Current mode (`ACTIVE`, `REDUCE_ONLY`, `KILL`) |
 | `is_trading_allowed` | boolean | `true` only when mode allows new OPEN risk |
 | `orders_in_flight` | integer | Simulated in-flight order count |
@@ -153,7 +155,7 @@ STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli status --format json
 - [ ] Health command implemented
 - [ ] Status command implemented
 - [ ] Health returns required fields (ok, build_id, contract_version)
-- [ ] Status returns required fields (trading_mode, is_trading_allowed)
+- [ ] Status returns required fields (ok, build_id, contract_version, trading_mode, is_trading_allowed, timestamp_utc)
 - [ ] Fail-closed behavior verified on missing policy
 
 **owner_signature:** ______________________

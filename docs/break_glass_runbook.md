@@ -97,13 +97,14 @@ Even in emergency, we must be able to reduce risk:
 
 **Step 2: Verify close orders work**
 ```bash
-./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-run
+STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-run
 # Should show: ACCEPTED
 ```
 
 **Step 3: Execute risk reduction (Phase 0 scope)**
 - Use the venue/exchange close workflow or your strategy's explicit risk-reducing path.
 - `stoic-cli` in Phase 0 provides dry-run verification (`simulate-close`) only.
+- Guardrail: `simulate-*` commands are drill-only and require `STOIC_DRILL_MODE=1`.
 
 **Step 4: Restore KILL mode after reduction**
 ```bash
@@ -157,7 +158,7 @@ Even in emergency, we must be able to reduce risk:
 │                                                 │
 │ REDUCE EXPOSURE:                                │
 │   ./stoic-cli emergency reduce-only             │
-│   ./stoic-cli simulate-close --instrument X --dry-run │
+│   STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument X --dry-run │
 │                                                 │
 │ ESCALATE:                                       │
 │   P1: Call [PRIMARY PHONE]                      │

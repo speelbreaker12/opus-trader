@@ -84,9 +84,17 @@ def validate_policy(policy: Dict[str, Any]) -> List[str]:
 
     allowed = policy["allowed_order_types"]
     forbidden = policy["forbidden_order_types"]
-    if not isinstance(allowed, list) or not all(isinstance(x, str) and x.strip() for x in allowed):
+    if (
+        not isinstance(allowed, list)
+        or not allowed
+        or not all(isinstance(x, str) and x.strip() for x in allowed)
+    ):
         errors.append("allowed_order_types must be a non-empty string list")
-    if not isinstance(forbidden, list) or not all(isinstance(x, str) and x.strip() for x in forbidden):
+    if (
+        not isinstance(forbidden, list)
+        or not forbidden
+        or not all(isinstance(x, str) and x.strip() for x in forbidden)
+    ):
         errors.append("forbidden_order_types must be a non-empty string list")
     if isinstance(allowed, list) and isinstance(forbidden, list):
         overlap = set(allowed) & set(forbidden)
