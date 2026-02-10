@@ -69,12 +69,15 @@ pub enum QuantizeError {
 }
 
 const BOUNDARY_EPS: f64 = 1e-9;
+// Keep correction well below half-step to preserve directional guarantees:
+// qty/BUY must never round up and SELL must never round down.
 const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.005;
 const BOUNDARY_ULP_MULTIPLIER: f64 = 8.0;
 
 fn boundary_tolerance(raw: f64, step: f64) -> f64 {
-    // Correct one-step drift caused by floating-point division, but keep the
-    // correction well below half a step so directional floor/ceil semantics hold.
+    // Correct one-step drift caused by floating-point division while fail-closing:
+    // if drift exceeds this window, we keep strict floor/ceil behavior instead of
+    // widening snap tolerance and risking direction violations.
     let step_abs = step.abs();
     let ulp_scaled = raw.abs().max(1.0) * f64::EPSILON * BOUNDARY_ULP_MULTIPLIER;
     let step_capped = step_abs * BOUNDARY_STEP_FRACTION_CAP;
