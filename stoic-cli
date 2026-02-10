@@ -7,8 +7,8 @@ Supported commands:
   ./stoic-cli status [--format json] [--detailed]
   ./stoic-cli orders --pending [--format json]
   ./stoic-cli emergency <kill|reduce-only|active> --reason "<text>"
-  ./stoic-cli simulate-open --instrument <name> [--count N]
-  ./stoic-cli simulate-close --instrument <name> [--dry-run]
+  STOIC_DRILL_MODE=1 ./stoic-cli simulate-open --instrument <name> [--count N]
+  STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <name> [--dry-run]
   ./stoic-cli dispatch-check --intent <OPEN|REDUCE_ONLY|CLOSE|HEDGE|CANCEL> --mode <ACTIVE|REDUCE_ONLY|KILL>
   ./stoic-cli keys-check [--probe <path>] [--env <name>] [--format json]
 """
@@ -79,6 +79,20 @@ def _print_json(payload: Dict[str, Any]) -> None:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _drill_mode_enabled() -> bool:
+    return os.environ.get("STOIC_DRILL_MODE", "").strip() == "1"
+
+
+def _require_drill_mode_payload(cmd_name: str) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "result": "REJECTED",
+        "reason": "drill_mode_required",
+        "command": cmd_name,
+        "hint": "set STOIC_DRILL_MODE=1 for drill-only simulate commands",
+    }
 
 
 def _runtime_state_path() -> Path:
@@ -352,6 +366,10 @@ def _next_pending_id(pending_orders: list[Dict[str, Any]]) -> str:
 
 
 def _cmd_simulate_open(args: argparse.Namespace) -> int:
+    if not _drill_mode_enabled():
+        _print_json(_require_drill_mode_payload("simulate-open"))
+        return 2
+
     state_path = _runtime_state_path()
     state = _load_runtime_state(state_path)
     mode = str(state.get("trading_mode", "ACTIVE")).upper()
@@ -400,6 +418,10 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
 
 
 def _cmd_simulate_close(args: argparse.Namespace) -> int:
+    if not _drill_mode_enabled():
+        _print_json(_require_drill_mode_payload("simulate-close"))
+        return 2
+
     state = _load_runtime_state(_runtime_state_path())
     mode = str(state.get("trading_mode", "ACTIVE")).upper()
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
@@ -581,7 +603,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_sim_open = subparsers.add_parser(
         "simulate-open",
-        help="Simulate OPEN intent queueing for break-glass drills",
+        help="Simulate OPEN intent queueing for break-glass drills (requires STOIC_DRILL_MODE=1)",
     )
     p_sim_open.add_argument("--instrument", required=True, help="Instrument identifier")
     p_sim_open.add_argument("--count", type=int, default=1, help="Number of OPEN intents to simulate")
@@ -589,7 +611,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_sim_close = subparsers.add_parser(
         "simulate-close",
-        help="Simulate risk-reducing close intent acceptance",
+        help="Simulate risk-reducing close intent acceptance (requires STOIC_DRILL_MODE=1)",
     )
     p_sim_close.add_argument("--instrument", required=True, help="Instrument identifier")
     p_sim_close.add_argument("--dry-run", action="store_true", help="Do not execute external action")

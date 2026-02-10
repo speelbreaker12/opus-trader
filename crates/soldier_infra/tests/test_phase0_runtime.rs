@@ -330,6 +330,7 @@ fn test_break_glass_command_path_runtime() {
         ("STOIC_POLICY_PATH", valid_policy_str),
         ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
         ("STOIC_BUILD_ID", "phase0-break-glass-runtime-test"),
+        ("STOIC_DRILL_MODE", "1"),
     ];
 
     // Active mode should allow simulated OPEN queueing.

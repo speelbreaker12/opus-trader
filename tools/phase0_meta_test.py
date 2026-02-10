@@ -261,6 +261,7 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         env["STOIC_BUILD_ID"] = "phase0-break-glass-meta-test"
         env["STOIC_POLICY_PATH"] = str(policy)
         env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+        env["STOIC_DRILL_MODE"] = "1"
 
         rc, payload, details = run_cli_json(
             root,
