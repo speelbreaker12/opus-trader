@@ -228,11 +228,6 @@ impl WalLedger {
         new_state: TlsState,
         metrics: &mut LedgerMetrics,
     ) -> Result<(), LedgerAppendError> {
-        if self.records.len() >= self.capacity {
-            metrics.record_write_error();
-            return Err(LedgerAppendError::QueueFull);
-        }
-
         if let Some(&idx) = self.index.get(intent_hash) {
             self.records[idx].tls_state = new_state;
             metrics.record_append();

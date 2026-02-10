@@ -16,11 +16,14 @@ Supported commands:
 from __future__ import annotations
 
 import argparse
+import fcntl
 import importlib.util
 import json
 import os
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
@@ -33,6 +36,12 @@ DEFAULT_CONTRACT_VERSION = "5.2"
 DEFAULT_KEY_SCOPE_PROBE = ROOT / "evidence" / "phase0" / "keys" / "key_scope_probe.json"
 DEFAULT_RUNTIME_STATE_PATH = ROOT / "artifacts" / "phase0" / "runtime_state.json"
 RUNTIME_MODES = {"ACTIVE", "REDUCE_ONLY", "KILL"}
+RUNTIME_STATE_SCHEMA_VERSION = 1
+DEFAULT_MAX_PENDING_ORDERS = 1000
+
+
+def _truthy_env(name: str) -> bool:
+    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _load_policy_loader_module() -> ModuleType:
@@ -82,15 +91,28 @@ def _utc_now_iso() -> str:
 
 
 def _runtime_state_path() -> Path:
-    return Path(os.environ.get("STOIC_RUNTIME_STATE_PATH", str(DEFAULT_RUNTIME_STATE_PATH))).resolve()
+    path = Path(os.environ.get("STOIC_RUNTIME_STATE_PATH", str(DEFAULT_RUNTIME_STATE_PATH))).resolve()
+    if _truthy_env("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"):
+        return path
+    try:
+        path.relative_to(ROOT)
+    except ValueError as exc:
+        raise RuntimeError(f"runtime state path must be under repo root: {ROOT}") from exc
+    return path
 
 
-def _default_runtime_state() -> Dict[str, Any]:
+def _default_runtime_state(*, trading_mode: str = "ACTIVE", reason: str = "") -> Dict[str, Any]:
+    mode = str(trading_mode).upper()
+    if mode not in RUNTIME_MODES:
+        mode = "KILL"
+    pending_orders: list[Dict[str, Any]] = []
+    orders_in_flight = 0 if mode == "KILL" else len(pending_orders)
     return {
-        "trading_mode": "ACTIVE",
-        "orders_in_flight": 0,
-        "pending_orders": [],
-        "last_transition_reason": "",
+        "schema_version": RUNTIME_STATE_SCHEMA_VERSION,
+        "trading_mode": mode,
+        "orders_in_flight": orders_in_flight,
+        "pending_orders": pending_orders,
+        "last_transition_reason": reason,
         "last_transition_ts": _utc_now_iso(),
     }
 
@@ -112,20 +134,52 @@ def _normalize_pending_orders(raw: Any) -> list[Dict[str, Any]]:
     return out
 
 
-def _load_runtime_state(path: Path) -> Dict[str, Any]:
+def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
     default_state = _default_runtime_state()
     if not path.exists():
-        return default_state
+        return default_state, []
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return default_state
+    except Exception as exc:
+        return (
+            _default_runtime_state(
+                trading_mode="KILL",
+                reason="runtime_state_read_failed",
+            ),
+            [f"runtime_state: unable to read/parse state file: {exc}"],
+        )
     if not isinstance(obj, dict):
-        return default_state
+        return (
+            _default_runtime_state(
+                trading_mode="KILL",
+                reason="runtime_state_invalid_shape",
+            ),
+            ["runtime_state: expected top-level JSON object"],
+        )
+
+    schema_version = obj.get("schema_version") if "schema_version" in obj else 0
+    # Backward-compatible migration: legacy files without schema_version are accepted.
+    if schema_version not in {0, RUNTIME_STATE_SCHEMA_VERSION}:
+        return (
+            _default_runtime_state(
+                trading_mode="KILL",
+                reason="runtime_state_schema_mismatch",
+            ),
+            [
+                "runtime_state: unsupported schema_version "
+                f"(expected {RUNTIME_STATE_SCHEMA_VERSION}, got {schema_version!r})"
+            ],
+        )
 
     mode = str(obj.get("trading_mode", default_state["trading_mode"])).upper()
     if mode not in RUNTIME_MODES:
-        mode = default_state["trading_mode"]
+        return (
+            _default_runtime_state(
+                trading_mode="KILL",
+                reason="runtime_state_invalid_mode",
+            ),
+            [f"runtime_state: invalid trading_mode={mode!r}"],
+        )
 
     orders_in_flight = obj.get("orders_in_flight", default_state["orders_in_flight"])
     if not isinstance(orders_in_flight, int) or orders_in_flight < 0:
@@ -134,18 +188,68 @@ def _load_runtime_state(path: Path) -> Dict[str, Any]:
     pending_orders = _normalize_pending_orders(obj.get("pending_orders", default_state["pending_orders"]))
 
     state = {
+        "schema_version": RUNTIME_STATE_SCHEMA_VERSION,
         "trading_mode": mode,
         "orders_in_flight": max(orders_in_flight, len(pending_orders)),
         "pending_orders": pending_orders,
         "last_transition_reason": str(obj.get("last_transition_reason", "")),
         "last_transition_ts": str(obj.get("last_transition_ts", default_state["last_transition_ts"])),
     }
-    return state
+    return state, []
+
+
+def _runtime_state_lock_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.lock")
+
+
+@contextmanager
+def _runtime_state_lock(path: Path):
+    lock_path = _runtime_state_lock_path(path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    materialized = dict(state)
+    materialized["schema_version"] = RUNTIME_STATE_SCHEMA_VERSION
+
+    # Atomic write via temp file + rename prevents partial file visibility.
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    tmp_path = Path(tmp.name)
+    try:
+        with tmp:
+            tmp.write(json.dumps(materialized, indent=2, sort_keys=True))
+            tmp.write("\n")
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
+def _max_pending_orders() -> int:
+    raw = str(os.environ.get("STOIC_MAX_PENDING_ORDERS", str(DEFAULT_MAX_PENDING_ORDERS))).strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise RuntimeError("STOIC_MAX_PENDING_ORDERS must be an integer >= 1") from exc
+    if value < 1:
+        raise RuntimeError("STOIC_MAX_PENDING_ORDERS must be >= 1")
+    return value
 
 
 def _is_trading_allowed_mode(mode: str) -> bool:
@@ -254,9 +358,15 @@ def _cmd_status(args: argparse.Namespace) -> int:
     if policy is not None:
         contract_version = str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION))
 
-    state_path = _runtime_state_path()
-    state = _load_runtime_state(state_path)
-    trading_mode = str(state.get("trading_mode", "ACTIVE")).upper()
+    try:
+        state_path = _runtime_state_path()
+    except RuntimeError as exc:
+        state = _default_runtime_state(trading_mode="KILL", reason="runtime_state_path_invalid")
+        errors.append(f"runtime_state: {exc}")
+    else:
+        state, state_errors = _load_runtime_state(state_path)
+        errors.extend(state_errors)
+    trading_mode = str(state.get("trading_mode", "KILL")).upper()
     if policy is None:
         trading_mode = "KILL"
 
@@ -282,7 +392,31 @@ def _cmd_orders(args: argparse.Namespace) -> int:
         print("orders requires --pending", file=sys.stderr)
         return 2
 
-    state = _load_runtime_state(_runtime_state_path())
+    try:
+        state_path = _runtime_state_path()
+    except RuntimeError as exc:
+        payload = {
+            "ok": False,
+            "reason": "runtime_state_path_invalid",
+            "errors": [f"runtime_state: {exc}"],
+            "pending_count": 0,
+            "pending_orders": [],
+        }
+        _print_json(payload)
+        return 1
+
+    state, state_errors = _load_runtime_state(state_path)
+    if state_errors:
+        payload = {
+            "ok": False,
+            "reason": "runtime_state_unavailable",
+            "errors": state_errors,
+            "pending_count": 0,
+            "pending_orders": [],
+        }
+        _print_json(payload)
+        return 1
+
     pending_orders = state.get("pending_orders", [])
     payload = {
         "ok": True,
@@ -314,27 +448,67 @@ def _cmd_emergency(args: argparse.Namespace) -> int:
         print(f"unsupported emergency action: {action}", file=sys.stderr)
         return 2
 
-    state_path = _runtime_state_path()
-    state = _load_runtime_state(state_path)
-    pending_orders = _normalize_pending_orders(state.get("pending_orders", []))
+    try:
+        state_path = _runtime_state_path()
+    except RuntimeError as exc:
+        payload = {
+            "ok": False,
+            "event": "MODE_TRANSITION",
+            "result": "REJECTED",
+            "reason": "runtime_state_path_invalid",
+            "errors": [f"runtime_state: {exc}"],
+            "trading_mode": "KILL",
+        }
+        _print_json(payload)
+        return 1
 
-    if mode == "KILL":
-        pending_orders = []
-        orders_in_flight = 0
-    elif mode == "REDUCE_ONLY":
-        pending_orders = [x for x in pending_orders if str(x.get("intent", "")).upper() != "OPEN"]
-        orders_in_flight = len(pending_orders)
-    else:
-        orders_in_flight = max(int(state.get("orders_in_flight", 0)), len(pending_orders))
+    try:
+        with _runtime_state_lock(state_path):
+            state, state_errors = _load_runtime_state(state_path)
+            if state_errors:
+                payload = {
+                    "ok": False,
+                    "event": "MODE_TRANSITION",
+                    "result": "REJECTED",
+                    "reason": "runtime_state_unavailable",
+                    "errors": state_errors,
+                    "trading_mode": "KILL",
+                }
+                _print_json(payload)
+                return 1
 
-    next_state = {
-        "trading_mode": mode,
-        "orders_in_flight": orders_in_flight,
-        "pending_orders": pending_orders,
-        "last_transition_reason": str(args.reason),
-        "last_transition_ts": _utc_now_iso(),
-    }
-    _write_runtime_state(state_path, next_state)
+            pending_orders = _normalize_pending_orders(state.get("pending_orders", []))
+
+            if mode == "KILL":
+                pending_orders = []
+                orders_in_flight = 0
+            elif mode == "REDUCE_ONLY":
+                pending_orders = [x for x in pending_orders if str(x.get("intent", "")).upper() != "OPEN"]
+                orders_in_flight = len(pending_orders)
+            else:
+                orders_in_flight = max(int(state.get("orders_in_flight", 0)), len(pending_orders))
+
+            next_state = {
+                "schema_version": RUNTIME_STATE_SCHEMA_VERSION,
+                "trading_mode": mode,
+                "orders_in_flight": orders_in_flight,
+                "pending_orders": pending_orders,
+                "last_transition_reason": str(args.reason),
+                "last_transition_ts": _utc_now_iso(),
+            }
+            _write_runtime_state(state_path, next_state)
+    except OSError as exc:
+        payload = {
+            "ok": False,
+            "event": "MODE_TRANSITION",
+            "result": "REJECTED",
+            "reason": "runtime_state_lock_failed",
+            "errors": [f"runtime_state: {exc}"],
+            "trading_mode": "KILL",
+        }
+        _print_json(payload)
+        return 1
+
 
     payload = {
         "ok": True,
@@ -354,16 +528,13 @@ def _next_pending_id(pending_orders: list[Dict[str, Any]]) -> str:
 
 
 def _cmd_simulate_open(args: argparse.Namespace) -> int:
-    state_path = _runtime_state_path()
-    state = _load_runtime_state(state_path)
-    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
-    policy, policy_errors = _load_policy_with_validation(policy_path)
-    mode = str(state.get("trading_mode", "ACTIVE")).upper()
     count = int(args.count)
     if count < 1:
         print("--count must be >= 1", file=sys.stderr)
         return 2
 
+    policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
+    policy, policy_errors = _load_policy_with_validation(policy_path)
     if policy is None:
         payload = {
             "ok": False,
@@ -377,32 +548,107 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
         _print_json(payload)
         return 1
 
-    if mode != "ACTIVE":
+    try:
+        state_path = _runtime_state_path()
+    except RuntimeError as exc:
         payload = {
             "ok": False,
-            "result": "BLOCKED",
-            "reason": f"{mode.lower()}_blocks_open",
-            "trading_mode": mode,
+            "result": "REJECTED",
+            "reason": "runtime_state_path_invalid",
+            "errors": [f"runtime_state: {exc}"],
+            "trading_mode": "KILL",
             "accepted": 0,
             "requested": count,
         }
         _print_json(payload)
         return 1
 
-    pending_orders = _normalize_pending_orders(state.get("pending_orders", []))
-    for _ in range(count):
-        pending_orders.append(
-            {
-                "id": _next_pending_id(pending_orders),
-                "intent": "OPEN",
-                "instrument": str(args.instrument),
-            }
-        )
+    try:
+        max_pending_orders = _max_pending_orders()
+    except RuntimeError as exc:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "invalid_runtime_limits",
+            "errors": [str(exc)],
+            "trading_mode": "KILL",
+            "accepted": 0,
+            "requested": count,
+        }
+        _print_json(payload)
+        return 1
 
-    state["pending_orders"] = pending_orders
-    state["orders_in_flight"] = len(pending_orders)
-    state["last_transition_ts"] = _utc_now_iso()
-    _write_runtime_state(state_path, state)
+    try:
+        with _runtime_state_lock(state_path):
+            state, state_errors = _load_runtime_state(state_path)
+            if state_errors:
+                payload = {
+                    "ok": False,
+                    "result": "REJECTED",
+                    "reason": "runtime_state_unavailable",
+                    "errors": state_errors,
+                    "trading_mode": "KILL",
+                    "accepted": 0,
+                    "requested": count,
+                }
+                _print_json(payload)
+                return 1
+
+            mode = str(state.get("trading_mode", "KILL")).upper()
+            if mode != "ACTIVE":
+                payload = {
+                    "ok": False,
+                    "result": "BLOCKED",
+                    "reason": f"{mode.lower()}_blocks_open",
+                    "trading_mode": mode,
+                    "accepted": 0,
+                    "requested": count,
+                }
+                _print_json(payload)
+                return 1
+
+            pending_orders = _normalize_pending_orders(state.get("pending_orders", []))
+            if len(pending_orders) + count > max_pending_orders:
+                payload = {
+                    "ok": False,
+                    "result": "REJECTED",
+                    "reason": "pending_orders_capacity_exceeded",
+                    "trading_mode": mode,
+                    "accepted": 0,
+                    "requested": count,
+                    "pending_orders": len(pending_orders),
+                    "max_pending_orders": max_pending_orders,
+                }
+                _print_json(payload)
+                return 1
+
+            for _ in range(count):
+                pending_orders.append(
+                    {
+                        "id": _next_pending_id(pending_orders),
+                        "intent": "OPEN",
+                        "instrument": str(args.instrument),
+                    }
+                )
+
+            state["schema_version"] = RUNTIME_STATE_SCHEMA_VERSION
+            state["pending_orders"] = pending_orders
+            state["orders_in_flight"] = len(pending_orders)
+            state["last_transition_ts"] = _utc_now_iso()
+            _write_runtime_state(state_path, state)
+            mode = str(state.get("trading_mode", "KILL")).upper()
+    except OSError as exc:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "runtime_state_lock_failed",
+            "errors": [f"runtime_state: {exc}"],
+            "trading_mode": "KILL",
+            "accepted": 0,
+            "requested": count,
+        }
+        _print_json(payload)
+        return 1
 
     payload = {
         "ok": True,
@@ -417,8 +663,15 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
 
 
 def _cmd_simulate_close(args: argparse.Namespace) -> int:
-    state = _load_runtime_state(_runtime_state_path())
-    mode = str(state.get("trading_mode", "ACTIVE")).upper()
+    mode = "KILL"
+    state_errors: list[str] = []
+    try:
+        state_path = _runtime_state_path()
+        state, state_errors = _load_runtime_state(state_path)
+        mode = str(state.get("trading_mode", "KILL")).upper()
+    except RuntimeError as exc:
+        state_errors = [f"runtime_state: {exc}"]
+
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
     policy, policy_errors = _load_policy_with_validation(policy_path)
 
@@ -427,7 +680,7 @@ def _cmd_simulate_close(args: argparse.Namespace) -> int:
             "ok": False,
             "result": "REJECTED",
             "reason": "policy_validation_failed",
-            "errors": policy_errors,
+            "errors": policy_errors + state_errors,
             "instrument": str(args.instrument),
             "dry_run": bool(args.dry_run),
             "trading_mode": "KILL",
@@ -446,6 +699,8 @@ def _cmd_simulate_close(args: argparse.Namespace) -> int:
         "dry_run": bool(args.dry_run),
         "trading_mode": mode,
     }
+    if state_errors:
+        payload["warnings"] = state_errors
     _print_json(payload)
     return 0
 

@@ -218,6 +218,35 @@ fn test_update_state_unknown_hash_fails() {
     assert_eq!(m.wal_write_errors(), 1);
 }
 
+#[test]
+fn test_update_state_succeeds_when_queue_is_at_capacity() {
+    let mut ledger = WalLedger::new(1);
+    let mut m = LedgerMetrics::new();
+
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+    assert_eq!(ledger.queue_depth(), ledger.queue_capacity());
+
+    let result = ledger.update_state("hash1", TlsState::Sent, &mut m);
+    assert!(result.is_ok(), "state update must not fail on full queue");
+    assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
+}
+
+#[test]
+fn test_update_state_unknown_hash_still_fails_at_capacity() {
+    let mut ledger = WalLedger::new(1);
+    let mut m = LedgerMetrics::new();
+
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+    assert_eq!(ledger.queue_depth(), ledger.queue_capacity());
+
+    match ledger.update_state("unknown", TlsState::Sent, &mut m) {
+        Err(LedgerAppendError::WriteFailed { reason }) => {
+            assert!(reason.contains("not found"));
+        }
+        other => panic!("expected WriteFailed, got {other:?}"),
+    }
+}
+
 // ─── Replay ─────────────────────────────────────────────────────────────
 
 #[test]

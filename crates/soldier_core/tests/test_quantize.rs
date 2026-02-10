@@ -58,7 +58,14 @@ fn test_qty_steps_integer() {
 #[test]
 fn test_qty_decimal_boundary_is_stable() {
     let mut metrics = QuantizeMetrics::new();
-    let result = quantize(0.3, 50_000.0, Side::Buy, &decimal_constraints(), &mut metrics).unwrap();
+    let result = quantize(
+        0.3,
+        50_000.0,
+        Side::Buy,
+        &decimal_constraints(),
+        &mut metrics,
+    )
+    .unwrap();
     assert_eq!(result.qty_steps, 3);
     assert!((result.qty_q - 0.3).abs() < 1e-9);
 }
@@ -287,8 +294,17 @@ fn test_at926_infinity_tick_size() {
 #[test]
 fn test_non_finite_raw_qty_rejected() {
     let mut metrics = QuantizeMetrics::new();
-    let result = quantize(f64::NAN, 50_000.0, Side::Buy, &btc_constraints(), &mut metrics);
-    assert_eq!(result, Err(QuantizeError::InvalidInput { field: "raw_qty" }));
+    let result = quantize(
+        f64::NAN,
+        50_000.0,
+        Side::Buy,
+        &btc_constraints(),
+        &mut metrics,
+    );
+    assert_eq!(
+        result,
+        Err(QuantizeError::InvalidInput { field: "raw_qty" })
+    );
 }
 
 /// Non-finite raw limit price must fail-closed before quantization.
