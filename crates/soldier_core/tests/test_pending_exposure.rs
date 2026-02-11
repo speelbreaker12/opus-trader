@@ -93,3 +93,35 @@ fn test_pending_exposure_missing_budget_fails_closed() {
         }
     }
 }
+
+#[test]
+fn test_pending_exposure_opposite_side_does_not_reopen_capacity() {
+    let mut metrics = PendingExposureMetrics::new();
+    let mut book = PendingExposureBook::new(Some(100.0));
+
+    let first = book.reserve(0.0, 100.0, &mut metrics);
+    match first {
+        PendingExposureResult::Reserved { .. } => {}
+        other => panic!("expected first +100 reservation to pass, got {other:?}"),
+    }
+
+    let second = book.reserve(0.0, -100.0, &mut metrics);
+    match second {
+        PendingExposureResult::Reserved { .. } => {}
+        other => panic!("expected second -100 reservation to pass, got {other:?}"),
+    }
+
+    // Net pending is now zero, but worst-case long fill remains +100. Another +1 must reject.
+    let third = book.reserve(0.0, 1.0, &mut metrics);
+    match third {
+        PendingExposureResult::Rejected {
+            reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+            ..
+        } => {}
+        other => panic!("expected worst-case overfill rejection, got {other:?}"),
+    }
+
+    assert_eq!(book.pending_total(), 0.0);
+    assert_eq!(metrics.reserve_success_total(), 2);
+    assert_eq!(metrics.reserve_reject_total(), 1);
+}

@@ -86,6 +86,8 @@ impl PendingExposureMetrics {
 pub struct PendingExposureBook {
     delta_limit: Option<f64>,
     pending_total: f64,
+    pending_positive: f64,
+    pending_negative: f64,
     next_reservation_id: u64,
     reservations: BTreeMap<u64, f64>,
 }
@@ -93,12 +95,14 @@ pub struct PendingExposureBook {
 impl PendingExposureBook {
     /// Construct a reservation book.
     ///
-    /// `delta_limit` is absolute budget for `abs(current_delta + pending_delta)`.
+    /// `delta_limit` is absolute budget enforced against worst-case pending outcomes.
     /// Missing/invalid value is fail-closed at reserve time.
     pub fn new(delta_limit: Option<f64>) -> Self {
         Self {
             delta_limit,
             pending_total: 0.0,
+            pending_positive: 0.0,
+            pending_negative: 0.0,
             next_reservation_id: 1,
             reservations: BTreeMap::new(),
         }
@@ -134,6 +138,8 @@ impl PendingExposureBook {
         if !current_delta.is_finite()
             || !delta_impact_est.is_finite()
             || !self.pending_total.is_finite()
+            || !self.pending_positive.is_finite()
+            || !self.pending_negative.is_finite()
         {
             metrics.record_reserve_reject();
             return PendingExposureResult::Rejected {
@@ -142,8 +148,19 @@ impl PendingExposureBook {
             };
         }
 
-        let projected = current_delta + self.pending_total + delta_impact_est;
-        if projected.abs() > limit {
+        let projected_positive = if delta_impact_est >= 0.0 {
+            self.pending_positive + delta_impact_est
+        } else {
+            self.pending_positive
+        };
+        let projected_negative = if delta_impact_est < 0.0 {
+            self.pending_negative + delta_impact_est
+        } else {
+            self.pending_negative
+        };
+        let worst_case_long = current_delta + projected_positive;
+        let worst_case_short = current_delta + projected_negative;
+        if worst_case_long.abs() > limit || worst_case_short.abs() > limit {
             metrics.record_reserve_reject();
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
@@ -162,7 +179,12 @@ impl PendingExposureBook {
         let reservation_id = self.next_reservation_id;
         self.next_reservation_id = next_reservation_id;
         self.reservations.insert(reservation_id, delta_impact_est);
-        self.pending_total += delta_impact_est;
+        if delta_impact_est >= 0.0 {
+            self.pending_positive += delta_impact_est;
+        } else {
+            self.pending_negative += delta_impact_est;
+        }
+        self.pending_total = self.pending_positive + self.pending_negative;
         metrics.record_reserve_success();
 
         PendingExposureResult::Reserved {
@@ -184,7 +206,19 @@ impl PendingExposureBook {
             return false;
         };
 
-        self.pending_total -= delta_impact_est;
+        if delta_impact_est >= 0.0 {
+            self.pending_positive -= delta_impact_est;
+        } else {
+            self.pending_negative -= delta_impact_est;
+        }
+        self.pending_total = self.pending_positive + self.pending_negative;
+
+        if self.pending_positive.abs() < 1e-12 {
+            self.pending_positive = 0.0;
+        }
+        if self.pending_negative.abs() < 1e-12 {
+            self.pending_negative = 0.0;
+        }
         if self.pending_total.abs() < 1e-12 {
             self.pending_total = 0.0;
         }
