@@ -84,6 +84,7 @@ pub fn evaluate_margin_headroom_gate(
     ) || !input.maintenance_margin_usd.is_finite()
         || !input.equity_usd.is_finite()
         || input.maintenance_margin_usd < 0.0
+        || input.equity_usd <= 0.0
     {
         metrics.record_reject();
         return MarginGateResult::Rejected {

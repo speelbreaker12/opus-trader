@@ -110,3 +110,45 @@ fn test_margin_gate_invalid_inputs_fail_closed() {
     }
     assert_eq!(metrics.reject_total(), 1);
 }
+
+#[test]
+fn test_margin_gate_non_positive_equity_fails_closed() {
+    let mut metrics = MarginGateMetrics::new();
+
+    let zero_equity = MarginGateInput {
+        maintenance_margin_usd: 0.0,
+        equity_usd: 0.0,
+        mm_util_reject_opens: 0.70,
+        mm_util_reduceonly: 0.85,
+        mm_util_kill: 0.95,
+    };
+    let out = evaluate_margin_headroom_gate(&zero_equity, &mut metrics);
+    match out {
+        MarginGateResult::Rejected {
+            reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
+            mm_util: None,
+            mode_hint: MarginGateMode::Kill,
+        } => {}
+        other => panic!("expected fail-closed rejection for zero equity, got {other:?}"),
+    }
+
+    let negative_equity = MarginGateInput {
+        maintenance_margin_usd: 1.0,
+        equity_usd: -10.0,
+        mm_util_reject_opens: 0.70,
+        mm_util_reduceonly: 0.85,
+        mm_util_kill: 0.95,
+    };
+    let out = evaluate_margin_headroom_gate(&negative_equity, &mut metrics);
+    match out {
+        MarginGateResult::Rejected {
+            reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
+            mm_util: None,
+            mode_hint: MarginGateMode::Kill,
+        } => {}
+        other => panic!("expected fail-closed rejection for negative equity, got {other:?}"),
+    }
+
+    assert_eq!(metrics.reject_total(), 2);
+    assert_eq!(metrics.allowed_total(), 0);
+}
