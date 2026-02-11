@@ -356,6 +356,10 @@ if [[ -f package.json ]]; then
   bash "$ROOT/plans/lib/node_gates.sh"
 fi
 
+log "17b) phase1 meta-test"
+run_logged_or_exit "phase1_meta_test" "$SPEC_LINT_TIMEOUT" \
+  "$PYTHON_BIN" tools/phase1_meta_test.py --root "$ROOT"
+
 if [[ "$MODE" == "full" ]]; then
   log "18) slice completion enforcement"
   run_logged_or_exit "slice_completion_enforce" "$SPEC_LINT_TIMEOUT" \
