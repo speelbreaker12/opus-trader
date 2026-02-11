@@ -2,7 +2,7 @@
 
 - Slice ID: <slice_id>
 - Integration HEAD: <git_sha>
-- Skill Path: ~/.agents/skills/thinking-review-expert/skill.md
+- Skill Path: ~/.agents/skills/thinking-review-expert/SKILL.md
 - Reviewer: <name>
 - Timestamp (UTC): YYYY-MM-DDTHH:MM:SSZ
 

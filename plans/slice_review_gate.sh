@@ -14,7 +14,7 @@ Requires:
   - exact lines:
       - Slice ID: <slice_id>
       - Integration HEAD: <sha>
-      - Skill Path: ~/.agents/skills/thinking-review-expert/skill.md
+      - Skill Path: ~/.agents/skills/thinking-review-expert/SKILL.md
       - Ready To Close Slice: YES
 USAGE
 }
@@ -71,7 +71,7 @@ review_file="$artifacts_root/$slice_id/thinking_review.md"
 
 require_fixed_line "$review_file" "- Slice ID: $slice_id" "slice review has wrong slice id"
 require_fixed_line "$review_file" "- Integration HEAD: $head_sha" "slice review does not match HEAD=$head_sha"
-require_fixed_line "$review_file" "- Skill Path: ~/.agents/skills/thinking-review-expert/skill.md" "slice review missing canonical skill path"
+require_fixed_line "$review_file" "- Skill Path: ~/.agents/skills/thinking-review-expert/SKILL.md" "slice review missing canonical skill path"
 require_fixed_line "$review_file" "- Ready To Close Slice: YES" "slice review must assert ready-to-close YES"
 
 grep -Fq -- "## Final Disposition" "$review_file" || die "slice review missing '## Final Disposition' section ($review_file)"

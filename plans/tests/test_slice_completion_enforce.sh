@@ -73,7 +73,7 @@ cat > "$review_dir/thinking_review.md" <<'EOF_REVIEW'
 
 - Slice ID: slice1
 - Integration HEAD: deadbeef
-- Skill Path: ~/.agents/skills/thinking-review-expert/skill.md
+- Skill Path: ~/.agents/skills/thinking-review-expert/SKILL.md
 - Reviewer: tester
 - Timestamp (UTC): 2026-02-10T00:00:00Z
 

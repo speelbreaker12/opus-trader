@@ -44,7 +44,7 @@ cat > "$review_file" <<EOF
 
 - Slice ID: $slice_id
 - Integration HEAD: $head_sha
-- Skill Path: ~/.agents/skills/thinking-review-expert/skill.md
+- Skill Path: ~/.agents/skills/thinking-review-expert/SKILL.md
 - Reviewer: tester
 - Timestamp (UTC): 2026-02-10T00:00:00Z
 

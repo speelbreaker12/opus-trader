@@ -44,4 +44,25 @@ set -e
 [[ $rc -ne 0 ]] || fail "expected guard to fail when required token is missing"
 echo "$out" | grep -Fq "workflow contract missing required findings-review token" || fail "missing expected error message"
 
+scoped_doc="$tmp_dir/workflow_contract_scoped_invalid.md"
+cat > "$scoped_doc" <<'EOF'
+## 6. Story loop (minimal, mandatory)
+Use ~/.agents/skills/code-review-expert/SKILL.md
+Save artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md
+Fix until those tests pass (green phase).
+Run ./plans/verify.sh quick again after fixes.
+
+## 7. Outside section
+Turn top findings into failing tests first (red phase).
+Run plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE
+EOF
+
+set +e
+out_scoped="$(WORKFLOW_CONTRACT_FILE="$scoped_doc" "$GUARD" 2>&1)"
+rc_scoped=$?
+set -e
+
+[[ $rc_scoped -ne 0 ]] || fail "expected guard to fail when required token is only outside Story loop section"
+echo "$out_scoped" | grep -Fq "in Story loop section" || fail "missing section-scoped failure message"
+
 echo "PASS: story review findings guard fixtures"

@@ -92,7 +92,7 @@ cat > "$out_file" <<EOF
 
 - Slice ID: $slice_id
 - Integration HEAD: $head_sha
-- Skill Path: ~/.agents/skills/thinking-review-expert/skill.md
+- Skill Path: ~/.agents/skills/thinking-review-expert/SKILL.md
 - Reviewer: $reviewer
 - Timestamp (UTC): $ts
 

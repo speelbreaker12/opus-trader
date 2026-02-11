@@ -240,7 +240,7 @@ After a story is FULL-green and PRD pass is set:
 ### 9.2 Slice completion
 After all Slice 1 stories are merged:
 - Run `./plans/verify.sh full` on the integration branch.
-- Run a slice-close review using `~/.agents/skills/thinking-review-expert/skill.md`.
+- Run a slice-close review using `~/.agents/skills/thinking-review-expert/SKILL.md`.
 - Save/update the review artifact using `plans/thinking_review_logged.sh <slice_id> --head <integration_head_sha>`.
 - Artifact path is fixed: `artifacts/slice_reviews/<slice_id>/thinking_review.md` (include integration `HEAD` + final disposition).
 - Start from template: `artifacts/slice_reviews/_template/thinking_review.md`.
