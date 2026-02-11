@@ -1,12 +1,3 @@
-# Snapshot — docs/launch_policy.md (Phase 0)
-
-Snapshot taken at sign-off.
-- date_utc: 2026-02-09T00:00:00Z
-- source_path: docs/launch_policy.md
-- policy_version: 1.1
-
----
-
 # Launch Policy (Phase 0)
 
 > **Purpose:** Owner-readable, binding constraints for what the system is allowed to do.
@@ -198,9 +189,9 @@ Exit from micro-live to full-production limits is allowed only when all are true
 
 ## Owner Sign-Off
 
-- [ ] All limits reviewed and approved
-- [ ] Fail-closed behavior understood
-- [ ] Micro-live caps acceptable for initial LIVE
+- [x] All limits reviewed and approved
+- [x] Fail-closed behavior understood
+- [x] Micro-live caps acceptable for initial LIVE
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

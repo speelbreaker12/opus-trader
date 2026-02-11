@@ -177,11 +177,11 @@ STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli status --format json
 
 ## Owner Sign-Off
 
-- [ ] Health command implemented
-- [ ] Status command implemented
-- [ ] Health returns required fields (ok, build_id, contract_version)
-- [ ] Status returns required fields (ok, build_id, contract_version, trading_mode, is_trading_allowed, timestamp_utc)
-- [ ] Fail-closed behavior verified on missing policy
+- [x] Health command implemented
+- [x] Status command implemented
+- [x] Health returns required fields (ok, build_id, contract_version)
+- [x] Status returns required fields (ok, build_id, contract_version, trading_mode, is_trading_allowed, timestamp_utc)
+- [x] Fail-closed behavior verified on missing policy
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

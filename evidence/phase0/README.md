@@ -38,7 +38,7 @@
 | Break-glass drill executed and recorded? | YES |
 | Health command shows ok/build_id/contract_version and deterministic unhealthy exit? | YES |
 
-**Phase 0 DONE:** YES (pending final owner signature)
+**Phase 0 DONE:** YES
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

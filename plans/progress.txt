@@ -333,3 +333,33 @@ Summary: Closed review findings by (1) enforcing code-review-expert quality at s
 Commands: bash plans/tests/test_code_review_expert_logged.sh; bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_story_review_findings_guard.sh; bash plans/tests/test_slice_completion_review_guard.sh; bash plans/tests/test_slice_review_gate.sh; bash plans/tests/test_slice_completion_enforce.sh; bash plans/tests/test_guard_no_command_substitution.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/workflow_contract_gate.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/code_review_expert_logged.sh; plans/story_review_gate.sh; plans/slice_completion_enforce.sh; plans/verify_fork.sh; plans/verify_gate_contract_check.sh; plans/tests/test_code_review_expert_logged.sh; plans/tests/test_slice_completion_enforce.sh; artifacts/verify/20260210_180912; artifacts/verify/20260210_181450.
 Next: stage workflow files only and open/update PR with these fixes.
+Story: workflow/phase0-index-and-roadmap-alignment
+Date: 2026-02-11
+Summary: Anchored Phase 0 decision inputs to docs/PHASE0_CHECKLIST_BLOCK.md + docs/ROADMAP.md, marked merged roadmap file as historical context, updated legacy evidence template path to evidence/phase0 in both roadmap files, and added a checked-in merged Phase 0 navigation index.
+Commands: ./plans/verify.sh quick.
+Evidence: docs/ROADMAP.md; docs/roadmap/ROADMAP_MERGED_HARDENED_v2.md; docs/phase0_index.md; artifacts/verify/20260211_095609.
+Next: None.
+Story: workflow/phase0-index-and-roadmap-alignment
+Date: 2026-02-11
+Summary: Re-ran quick verify after final progress-log update; all quick gates remain green.
+Commands: ./plans/verify.sh quick.
+Evidence: artifacts/verify/20260211_095909.
+Next: None.
+Story: workflow/remove-historical-roadmap-copy
+Date: 2026-02-11
+Summary: Removed docs/roadmap/ROADMAP_MERGED_HARDENED_v2.md, updated decision-policy wording in docs/ROADMAP.md to reference git history for prior merged roadmap text, and updated docs/phase0_index.md historical note accordingly.
+Commands: ./plans/verify.sh quick.
+Evidence: docs/ROADMAP.md; docs/phase0_index.md; artifacts/verify/20260211_100558.
+Next: None.
+Story: workflow/remove-historical-roadmap-copy
+Date: 2026-02-11
+Summary: Re-ran quick verify after progress-log update; all quick gates remain green after removing historical roadmap copy.
+Commands: ./plans/verify.sh quick.
+Evidence: artifacts/verify/20260211_100849.
+Next: None.
+Story: workflow/phase0-gap-closure
+Date: 2026-02-11
+Summary: Closed Phase-0 review findings by enforcing runtime drill-mode gating for `simulate-open`/`simulate-close`, tightening `tools/phase0_meta_test.py` with literal snapshot parity and owner sign-off completeness checks, refreshing Phase-0 docs/sign-off sections, and resyncing phase0 snapshots as literal copies.
+Commands: cargo test -p soldier_infra --test test_phase0_runtime test_simulate_commands_require_drill_mode_runtime (red then green via full test file); cargo test -p soldier_infra --test test_phase0_runtime; python3 tools/phase0_meta_test.py --root . (red then green); ./plans/verify.sh quick.
+Evidence: stoic-cli; crates/soldier_infra/tests/test_phase0_runtime.rs; tools/phase0_meta_test.py; docs/{launch_policy.md,env_matrix.md,keys_and_secrets.md,break_glass_runbook.md,health_endpoint.md}; evidence/phase0/{README.md,policy/launch_policy_snapshot.md,env/env_matrix_snapshot.md,break_glass/runbook_snapshot.md,health/health_endpoint_snapshot.md,break_glass/drill.md}; artifacts/verify/20260211_102300.
+Next: Optional full verify and commit/push if you want to publish this closure set.

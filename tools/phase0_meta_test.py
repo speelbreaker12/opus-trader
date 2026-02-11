@@ -309,6 +309,7 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         env["STOIC_BUILD_ID"] = "phase0-break-glass-meta-test"
         env["STOIC_POLICY_PATH"] = str(policy)
         env["STOIC_RUNTIME_STATE_PATH"] = str(runtime_state)
+        env["STOIC_DRILL_MODE"] = "1"
         if allow_external_runtime_state:
             env["STOIC_ALLOW_EXTERNAL_RUNTIME_STATE"] = "1"
             env["STOIC_UNSAFE_EXTERNAL_STATE_ACK"] = "I_UNDERSTAND"
@@ -367,6 +368,88 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
     finally:
         if runtime_state.exists():
             runtime_state.unlink()
+
+    return errors
+
+
+def test_phase0_snapshot_literal_copies(root: Path) -> List[str]:
+    errors: List[str] = []
+    pairs = [
+        (
+            root / "docs" / "launch_policy.md",
+            root / "evidence" / "phase0" / "policy" / "launch_policy_snapshot.md",
+        ),
+        (
+            root / "docs" / "env_matrix.md",
+            root / "evidence" / "phase0" / "env" / "env_matrix_snapshot.md",
+        ),
+        (
+            root / "docs" / "break_glass_runbook.md",
+            root / "evidence" / "phase0" / "break_glass" / "runbook_snapshot.md",
+        ),
+        (
+            root / "docs" / "health_endpoint.md",
+            root / "evidence" / "phase0" / "health" / "health_endpoint_snapshot.md",
+        ),
+        (
+            root / "config" / "policy.json",
+            root / "evidence" / "phase0" / "policy" / "policy_config_snapshot.json",
+        ),
+    ]
+
+    for source, snapshot in pairs:
+        if not source.exists():
+            errors.append(f"{source} missing")
+            continue
+        if not snapshot.exists():
+            errors.append(f"{snapshot} missing")
+            continue
+        if read_text(source) != read_text(snapshot):
+            try:
+                source_rel = source.relative_to(root)
+                snap_rel = snapshot.relative_to(root)
+            except Exception:
+                source_rel = source
+                snap_rel = snapshot
+            errors.append(f"{snap_rel} is not a literal copy of {source_rel}")
+    return errors
+
+
+def test_phase0_owner_signoff_complete(root: Path) -> List[str]:
+    errors: List[str] = []
+    signoff_files = [
+        root / "docs" / "launch_policy.md",
+        root / "docs" / "env_matrix.md",
+        root / "docs" / "keys_and_secrets.md",
+        root / "docs" / "break_glass_runbook.md",
+        root / "docs" / "health_endpoint.md",
+        root / "evidence" / "phase0" / "README.md",
+    ]
+    placeholder_patterns = [
+        (re.compile(r"owner_signature:\s*_+", re.IGNORECASE), "owner_signature placeholder"),
+        (re.compile(r"date_utc:\s*_+", re.IGNORECASE), "date_utc placeholder"),
+        (re.compile(r"\[DATE\]"), "[DATE] placeholder"),
+    ]
+
+    for path in signoff_files:
+        if not path.exists():
+            errors.append(f"{path} missing")
+            continue
+        text = read_text(path)
+
+        for pattern, label in placeholder_patterns:
+            if pattern.search(text):
+                errors.append(f"{path}: contains unresolved {label}")
+
+        if "## Owner Sign-Off" in text:
+            section = text.split("## Owner Sign-Off", 1)[1]
+            if "\n## " in section:
+                section = section.split("\n## ", 1)[0]
+            if "[ ]" in section:
+                errors.append(f"{path}: Owner Sign-Off section has unchecked items")
+
+        if path.name == "README.md" and "pending final owner signature" in text.lower():
+            errors.append(f"{path}: still marked pending final owner signature")
 
     return errors
 
@@ -770,6 +853,8 @@ def main() -> int:
         ("test_machine_policy_loader_and_config", test_machine_policy_loader_and_config(root)),
         ("test_api_keys_are_least_privilege", test_api_keys_are_least_privilege(root)),
         ("test_paper_is_non_trading", test_paper_is_non_trading(root)),
+        ("test_phase0_snapshot_literal_copies", test_phase0_snapshot_literal_copies(root)),
+        ("test_phase0_owner_signoff_complete", test_phase0_owner_signoff_complete(root)),
         ("test_health_command_behavior", test_health_command_behavior(root)),
         ("test_status_command_behavior", test_status_command_behavior(root)),
         (

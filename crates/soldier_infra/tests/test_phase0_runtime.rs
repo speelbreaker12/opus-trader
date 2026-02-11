@@ -358,6 +358,71 @@ fn test_break_glass_kill_blocks_open_allows_reduce_runtime() {
 }
 
 #[test]
+fn test_simulate_commands_require_drill_mode_runtime() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_drill_mode_required");
+    remove_if_exists(&runtime_state);
+
+    let base_env = [
+        (
+            "STOIC_POLICY_PATH",
+            valid_policy.to_str().expect("utf8 policy path"),
+        ),
+        (
+            "STOIC_RUNTIME_STATE_PATH",
+            runtime_state.to_str().expect("utf8 runtime state path"),
+        ),
+        ("STOIC_BUILD_ID", "phase0-drill-mode-required-test"),
+    ];
+
+    let open_without_drill = run_cli(
+        [
+            "simulate-open",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--count",
+            "1",
+        ],
+        &base_env,
+    );
+    assert_eq!(
+        open_without_drill.status.code(),
+        Some(1),
+        "simulate-open must require STOIC_DRILL_MODE=1"
+    );
+    let open_payload = parse_stdout_json(&open_without_drill);
+    assert_eq!(open_payload["ok"], Value::Bool(false));
+    assert_eq!(
+        open_payload["reason"],
+        Value::String("drill_mode_required".to_string())
+    );
+
+    let close_without_drill = run_cli(
+        [
+            "simulate-close",
+            "--instrument",
+            "BTC-28MAR26-50000-C",
+            "--dry-run",
+        ],
+        &base_env,
+    );
+    assert_eq!(
+        close_without_drill.status.code(),
+        Some(1),
+        "simulate-close must require STOIC_DRILL_MODE=1"
+    );
+    let close_payload = parse_stdout_json(&close_without_drill);
+    assert_eq!(close_payload["ok"], Value::Bool(false));
+    assert_eq!(
+        close_payload["reason"],
+        Value::String("drill_mode_required".to_string())
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
 fn test_status_command_behavior_runtime() {
     let root = repo_root();
     let valid_policy = root.join("config/policy.json");
@@ -434,6 +499,7 @@ fn test_break_glass_command_path_runtime() {
         ("STOIC_POLICY_PATH", valid_policy_str),
         ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
         ("STOIC_BUILD_ID", "phase0-break-glass-runtime-test"),
+        ("STOIC_DRILL_MODE", "1"),
     ];
 
     // Active mode should allow simulated OPEN queueing.
@@ -591,6 +657,7 @@ fn test_simulate_open_rejects_when_policy_invalid() {
                 runtime_state.to_str().expect("utf8 path"),
             ),
             ("STOIC_BUILD_ID", "phase0-policy-open-reject-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(
@@ -736,6 +803,7 @@ fn test_external_runtime_state_mutating_commands_require_ack() {
             ),
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-external-open-no-ack-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(
@@ -773,6 +841,7 @@ fn test_external_runtime_state_mutating_commands_require_ack() {
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
             ("STOIC_BUILD_ID", "phase0-external-open-with-ack-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(
@@ -875,6 +944,7 @@ fn test_external_runtime_state_simulate_close_requires_ack() {
             ),
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_BUILD_ID", "phase0-external-close-no-ack-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(
@@ -907,6 +977,7 @@ fn test_external_runtime_state_simulate_close_requires_ack() {
             ("STOIC_ALLOW_EXTERNAL_RUNTIME_STATE", "1"),
             ("STOIC_UNSAFE_EXTERNAL_STATE_ACK", "I_UNDERSTAND"),
             ("STOIC_BUILD_ID", "phase0-external-close-with-ack-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(
@@ -954,6 +1025,7 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
             ),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-seed-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(seed.status.code(), Some(0), "first OPEN should be accepted");
@@ -977,6 +1049,7 @@ fn test_simulate_open_enforces_pending_orders_capacity() {
             ),
             ("STOIC_MAX_PENDING_ORDERS", "1"),
             ("STOIC_BUILD_ID", "phase0-capacity-block-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(
@@ -1161,6 +1234,7 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
                 runtime_state.to_str().expect("utf8 path"),
             ),
             ("STOIC_BUILD_ID", "phase0-legacy-state-migrate-test"),
+            ("STOIC_DRILL_MODE", "1"),
         ],
     );
     assert_eq!(

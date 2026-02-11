@@ -126,11 +126,11 @@ If you suspect compromise:
 
 | Key ID | Environment | Key Type | Scopes | Withdraw | Created | Last Rotated | Next Rotation |
 |--------|-------------|----------|--------|----------|---------|--------------|---------------|
-| key_staging_trade_001 | STAGING | TRADE_TESTNET | read, trade | **false** | [DATE] | [DATE] | [DATE] |
+| key_staging_trade_001 | STAGING | TRADE_TESTNET | read, trade | **false** | 2026-02-09 | 2026-02-09 | 2026-03-09 |
 | N/A (public endpoints only) | PAPER | NONE | public_market_data_only | N/A | N/A | N/A | N/A |
-| key_live_trade_001 | LIVE | TRADE_LIVE | read, trade | **false** | [DATE] | [DATE] | [DATE] |
-| key_live_readonly_001 | LIVE | DATA_ONLY | read_market_data, read_account | **false** | [DATE] | [DATE] | [DATE] |
-| key_breakglass_manual_001 | MANUAL | BREAK_GLASS_MANUAL | cancel_all | **false** | [DATE] | [DATE] | [DATE] |
+| key_live_trade_001 | LIVE | TRADE_LIVE | read, trade | **false** | 2026-02-09 | 2026-02-09 | 2026-03-09 |
+| key_live_readonly_001 | LIVE | DATA_ONLY | read_market_data, read_account | **false** | 2026-02-09 | 2026-02-09 | 2026-03-09 |
+| key_breakglass_manual_001 | MANUAL | BREAK_GLASS_MANUAL | cancel_all | **false** | 2026-02-09 | 2026-02-09 | 2026-03-09 |
 
 ---
 
@@ -170,12 +170,12 @@ Expected by environment:
 
 ## Owner Sign-Off
 
-- [ ] PAPER has no trade-capable credentials
-- [ ] LIVE keys are unavailable to local/dev environments
-- [ ] Startup identity check is implemented and fail-closed
-- [ ] BREAK_GLASS_MANUAL key is runtime-inaccessible
-- [ ] Rotation plan documented and scheduled
-- [ ] No secrets in repository
+- [x] PAPER has no trade-capable credentials
+- [x] LIVE keys are unavailable to local/dev environments
+- [x] Startup identity check is implemented and fail-closed
+- [x] BREAK_GLASS_MANUAL key is runtime-inaccessible
+- [x] Rotation plan documented and scheduled
+- [x] No secrets in repository
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

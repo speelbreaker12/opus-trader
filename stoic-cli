@@ -77,6 +77,12 @@ def _require_external_runtime_state_ack(path: Path) -> Optional[str]:
     )
 
 
+def _require_drill_mode() -> Optional[str]:
+    if _truthy_env("STOIC_DRILL_MODE"):
+        return None
+    return "simulate commands require STOIC_DRILL_MODE=1"
+
+
 def _add_runtime_state_context(
     payload: Dict[str, Any],
     state_path: Optional[Path],
@@ -625,6 +631,21 @@ def _cmd_simulate_open(args: argparse.Namespace) -> int:
         return 2
 
     attempted_state_path = _raw_runtime_state_path()
+    drill_error = _require_drill_mode()
+    if drill_error:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "drill_mode_required",
+            "errors": [drill_error],
+            "trading_mode": "KILL",
+            "accepted": 0,
+            "requested": count,
+        }
+        _add_runtime_state_context(payload, attempted_state_path)
+        _print_json(payload)
+        return 1
+
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
     policy, policy_errors = _load_policy_with_validation(policy_path)
     if policy is None:
@@ -782,6 +803,21 @@ def _cmd_simulate_close(args: argparse.Namespace) -> int:
     resolved_state_path: Optional[Path] = None
     mode = "KILL"
     state_errors: list[str] = []
+    drill_error = _require_drill_mode()
+    if drill_error:
+        payload = {
+            "ok": False,
+            "result": "REJECTED",
+            "reason": "drill_mode_required",
+            "errors": [drill_error],
+            "instrument": str(args.instrument),
+            "dry_run": bool(args.dry_run),
+            "trading_mode": "KILL",
+        }
+        _add_runtime_state_context(payload, attempted_state_path)
+        _print_json(payload)
+        return 1
+
     try:
         state_path = _runtime_state_path()
         resolved_state_path = state_path

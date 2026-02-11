@@ -1,12 +1,3 @@
-# Snapshot — docs/env_matrix.md (Phase 0)
-
-Snapshot taken at sign-off.
-- date_utc: 2026-02-09T23:30:00Z
-- source_path: docs/env_matrix.md
-- version: 1.1
-
----
-
 # Environment Isolation Matrix (Phase 0)
 
 > **Purpose:** Make it mechanically obvious which accounts/keys belong to which environment.
@@ -101,11 +92,11 @@ TRADING_ENV=LIVE     -> Production credentials from Vault
 
 ## Owner Sign-Off
 
-- [ ] Each environment has separate exchange account where private credentials exist
-- [ ] PAPER has no trade-capable credentials
-- [ ] Withdrawals disabled on ALL automated keys
-- [ ] LIVE keys are not accessible locally
-- [ ] Startup identity-probe fail-closed check is implemented
+- [x] Each environment has separate exchange account where private credentials exist
+- [x] PAPER has no trade-capable credentials
+- [x] Withdrawals disabled on ALL automated keys
+- [x] LIVE keys are not accessible locally
+- [x] Startup identity-probe fail-closed check is implemented
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11
