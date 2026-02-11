@@ -38,6 +38,7 @@ required=(
   docs/validation_rules.md
   plans/autofix.sh
   plans/check_skip_entrypoint.sh
+  plans/code_review_expert_logged.sh
   plans/codex_review_digest.sh
   plans/codex_review_let_pass.sh
   plans/codex_review_logged.sh
@@ -59,7 +60,9 @@ required=(
   plans/readme_ci_parity_check.sh
   plans/review_resolution_template.md
   plans/self_review_logged.sh
+  plans/slice_completion_enforce.sh
   plans/slice_completion_review_guard.sh
+  plans/slice_review_gate.sh
   plans/stoic_cli_invariant_check.sh
   plans/ssot_lint.sh
   plans/story_postmortem_logged.sh
@@ -71,12 +74,18 @@ required=(
   plans/story_verify_allowlist_suggest.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
+  plans/tests/test_code_review_expert_logged.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_kimi_review_logged.sh
   plans/tests/test_prd_cache.sh
+  plans/tests/test_slice_completion_enforce.sh
+  plans/tests/test_slice_completion_review_guard.sh
+  plans/tests/test_slice_review_gate.sh
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_story_review_gate.sh
+  plans/tests/test_thinking_review_logged.sh
+  plans/thinking_review_logged.sh
   plans/verify.sh
   plans/verify_day.sh
   plans/verify_gate_contract_check.sh

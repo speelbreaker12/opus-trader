@@ -43,6 +43,10 @@ These files must exist in the fork and remain functional:
 - `plans/story_review_gate.sh` (HEAD-tied review evidence gate)
 - `plans/codex_review_logged.sh` (Codex review artifact logger)
 - `plans/kimi_review_logged.sh` (Kimi review artifact logger)
+- `plans/code_review_expert_logged.sh` (findings review artifact logger)
+- `plans/thinking_review_logged.sh` (slice-close thinking review artifact logger)
+- `plans/slice_completion_enforce.sh` (verify-full slice-close enforcement bridge)
+- `plans/slice_review_gate.sh` (slice-close thinking review evidence gate)
 - Contract/spec validators (kept as-is unless explicitly changed):
   - `scripts/check_contract_crossrefs.py`
   - `scripts/check_arch_flows.py`
@@ -114,7 +118,8 @@ This is the only approved execution loop.
 6.1) Second Codex review for `REVIEW_SHA` (`codex review --commit "$REVIEW_SHA" ...`), fix all blocking.
 6.2) Run `./plans/verify.sh quick` again (after second Codex fixes).
 6.3) Run findings review using `~/.agents/skills/code-review-expert/SKILL.md` for `REVIEW_SHA`.
-   - Save artifact: `artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md`.
+   - Save artifact using `plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE`.
+   - Artifact path: `artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md`.
 6.4) Turn top findings into failing tests first (red phase).
 6.5) Fix until those tests pass (green phase).
 6.6) Run `./plans/verify.sh quick` again after fixes.
@@ -127,7 +132,7 @@ This is the only approved execution loop.
 Notes:
 - WIP=2: while step (8) is running for Story A, you may execute steps (1-7) for Story B in a different worktree.
 - Never edit a worktree while it is running `full`.
-- Story review evidence MUST be SHA-consistent: self review, Kimi review, both Codex reviews, resolution file, and `story_review_gate` must all target the same `REVIEW_SHA`.
+- Story review evidence MUST be SHA-consistent: self review, Kimi review, both Codex reviews, code-review-expert review, resolution file, and `story_review_gate` must all target the same `REVIEW_SHA`.
 - If `HEAD` changes after review starts, discard partial review artifacts for the old/new mix and regenerate the full review set for the chosen SHA.
 
 ### Recommended (non-blocking)
@@ -211,7 +216,8 @@ A story’s `passes` may be set to `true` only when:
   - self review is present and marked `Decision: PASS` with failure-mode + strategic reviews marked `DONE`,
   - Kimi review artifact exists for the same `HEAD`,
   - at least two Codex review artifacts exist for the same `HEAD`,
-  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references Kimi final review + Codex final review + Codex second review files for the same `HEAD`.
+  - code-review-expert review artifact exists for the same `HEAD` and is marked `Review Status: COMPLETE`,
+  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references Kimi final review + Codex final review + Codex second review + code-review-expert final review files for the same `HEAD`.
 
 ### 8.2 Mechanism (required)
 Create and use a single script to change PRD passes:
@@ -235,8 +241,11 @@ After a story is FULL-green and PRD pass is set:
 After all Slice 1 stories are merged:
 - Run `./plans/verify.sh full` on the integration branch.
 - Run a slice-close review using `~/.agents/skills/thinking-review-expert/skill.md`.
-- Record the review artifact at `artifacts/slice_reviews/<slice_id>/thinking_review.md` (include integration `HEAD` + final disposition).
+- Save/update the review artifact using `plans/thinking_review_logged.sh <slice_id> --head <integration_head_sha>`.
+- Artifact path is fixed: `artifacts/slice_reviews/<slice_id>/thinking_review.md` (include integration `HEAD` + final disposition).
 - Start from template: `artifacts/slice_reviews/_template/thinking_review.md`.
+- Hard gate the artifact with `plans/slice_review_gate.sh <slice_id> --head <integration_head_sha>`.
+- `./plans/verify.sh full` on `run/sliceN-clean` enforces this gate once all PRD stories in that slice are `passes=true` (via `plans/slice_completion_enforce.sh`).
 - Only then is the slice considered done.
 
 ---

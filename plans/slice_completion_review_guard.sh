@@ -22,8 +22,11 @@ require_token() {
 
 require_token "### 9.2 Slice completion"
 require_token "~/.agents/skills/thinking-review-expert/skill.md"
+require_token "plans/thinking_review_logged.sh <slice_id> --head <integration_head_sha>"
 require_token "artifacts/slice_reviews/<slice_id>/thinking_review.md"
 require_token "artifacts/slice_reviews/_template/thinking_review.md"
+require_token "plans/slice_review_gate.sh <slice_id> --head <integration_head_sha>"
+require_token "plans/slice_completion_enforce.sh"
 require_token "Only then is the slice considered done."
 
 # Template must keep canonical fields to avoid ad hoc artifacts.

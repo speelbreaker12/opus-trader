@@ -23,6 +23,10 @@ Requires (for HEAD):
       - Story: <ID>
       - HEAD: <sha>
     and at least 2 Codex review artifacts must match HEAD.
+  - artifacts/story/<ID>/code_review_expert/*_review.md containing:
+      - Story: <ID>
+      - HEAD: <sha>
+      - Review Status: COMPLETE
   - artifacts/story/<ID>/review_resolution.md with:
       Story: <ID>
       HEAD: <sha>
@@ -31,6 +35,7 @@ Requires (for HEAD):
       Kimi final review file: <path>   (must exist and match HEAD)
       Codex final review file: <path>   (must exist and match HEAD)
       Codex second review file: <path>  (must exist and match HEAD)
+      Code-review-expert final review file: <path>  (must exist and match HEAD)
     template: plans/review_resolution_template.md
 
 Artifact root selection:
@@ -206,6 +211,29 @@ if [[ -d "$codex_dir" ]]; then
 fi
 [[ "${#codex_matches[@]}" -ge 2 ]] || die "need at least two Codex review artifacts for HEAD=$HEAD_SHA in: $codex_dir"
 
+# ---------- Code-review-expert review (must match HEAD) ----------
+code_review_expert_dir="$story_dir/code_review_expert"
+code_review_expert_match=""
+if [[ -d "$code_review_expert_dir" ]]; then
+  while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $HEAD_SHA" "$f"; then
+      code_review_expert_match="$f"
+      break
+    fi
+  done < <(find "$code_review_expert_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
+fi
+[[ -n "$code_review_expert_match" ]] || die "missing code-review-expert review artifact for HEAD=$HEAD_SHA in: $code_review_expert_dir"
+grep -Fxq -- "- Review Status: COMPLETE" "$code_review_expert_match" || die "code-review-expert review must be marked '- Review Status: COMPLETE' ($code_review_expert_match)"
+for placeholder in \
+  "- Blocking: <none | summary>" \
+  "- Major: <none | summary>" \
+  "- Medium: <none | summary>"; do
+  if grep -Fxq -- "$placeholder" "$code_review_expert_match"; then
+    die "code-review-expert review contains unresolved placeholder '$placeholder' ($code_review_expert_match)"
+  fi
+done
+
 # ---------- Resolution ----------
 res_file="$story_dir/review_resolution.md"
 [[ -f "$res_file" ]] || die "missing review resolution file: $res_file"
@@ -217,6 +245,7 @@ require_fixed_line "$res_file" "Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0"
 kimi_ref_path="$(validate_review_reference "$res_file" "Kimi final review file" "Kimi final review file:" "$kimi_dir")"
 codex_final_ref_path="$(validate_review_reference "$res_file" "Codex final review file" "Codex final review file:" "$codex_dir")"
 codex_second_ref_path="$(validate_review_reference "$res_file" "Codex second review file" "Codex second review file:" "$codex_dir")"
+code_review_expert_ref_path="$(validate_review_reference "$res_file" "Code-review-expert final review file" "Code-review-expert final review file:" "$code_review_expert_dir")"
 
 if [[ "$(canonical_path "$codex_final_ref_path")" == "$(canonical_path "$codex_second_ref_path")" ]]; then
   die "Codex final review file and Codex second review file must be different artifacts"
@@ -226,7 +255,9 @@ echo "OK: review gate passed for $story @ $HEAD_SHA"
 echo "  self_review: $self_file"
 echo "  kimi_review: $kimi_match"
 echo "  codex_reviews: ${#codex_matches[@]}"
+echo "  code_review_expert_review: $code_review_expert_match"
 echo "  kimi_resolution_ref: $kimi_ref_path"
 echo "  codex_final_ref: $codex_final_ref_path"
 echo "  codex_second_ref: $codex_second_ref_path"
+echo "  code_review_expert_ref: $code_review_expert_ref_path"
 echo "  resolution: $res_file"

@@ -20,6 +20,7 @@ require_token() {
 
 require_token "## 6. Story loop (minimal, mandatory)"
 require_token "~/.agents/skills/code-review-expert/SKILL.md"
+require_token 'plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE'
 require_token "artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md"
 require_token "Turn top findings into failing tests first (red phase)."
 require_token "Fix until those tests pass (green phase)."

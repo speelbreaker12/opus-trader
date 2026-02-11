@@ -18,6 +18,7 @@ valid_doc="$tmp_dir/workflow_contract_valid.md"
 cat > "$valid_doc" <<'EOF'
 ## 6. Story loop (minimal, mandatory)
 Use ~/.agents/skills/code-review-expert/SKILL.md
+Run plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE
 Save artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md
 Turn top findings into failing tests first (red phase).
 Fix until those tests pass (green phase).

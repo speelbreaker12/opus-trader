@@ -12,7 +12,7 @@ Rules for passes=true:
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
   - contract review file must exist and contain decision=PASS
-  - story review gate must pass for current HEAD
+  - story review gate must pass for current HEAD (self/Kimi/Codex/code-review-expert/resolution evidence)
 USAGE
 }
 

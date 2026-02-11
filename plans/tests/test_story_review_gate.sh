@@ -37,8 +37,9 @@ write_valid_case() {
   local self_dir="$story_dir/self_review"
   local codex_dir="$story_dir/codex"
   local kimi_dir="$story_dir/kimi"
+  local code_review_expert_dir="$story_dir/code_review_expert"
 
-  mkdir -p "$self_dir" "$codex_dir" "$kimi_dir"
+  mkdir -p "$self_dir" "$codex_dir" "$kimi_dir" "$code_review_expert_dir"
 
   cat > "$self_dir/20260209T000000Z_self_review.md" <<EOF
 # Self Review
@@ -68,6 +69,16 @@ EOF
 - HEAD: $head_sha
 EOF
 
+  cat > "$code_review_expert_dir/20260209T000080Z_review.md" <<EOF
+# Code-review-expert findings
+- Story: $story
+- HEAD: $head_sha
+- Review Status: COMPLETE
+- Blocking: none
+- Major: none
+- Medium: none
+EOF
+
   cat > "$story_dir/review_resolution.md" <<EOF
 Story: $story
 HEAD: $head_sha
@@ -76,6 +87,7 @@ Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 Kimi final review file: kimi/20260209T000050Z_review.md
 Codex final review file: codex/20260209T000100Z_review.md
 Codex second review file: codex/20260209T000000Z_review.md
+Code-review-expert final review file: code_review_expert/20260209T000080Z_review.md
 EOF
 }
 
@@ -192,5 +204,36 @@ sed -i.bak "s/Codex final review file: codex\\/20260209T000100Z_review.md/Codex 
 rm -f "$case12/$story/review_resolution.md.bak"
 expect_fail "codex symlink escape" "Codex final review file must be inside" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case12"
+
+# Case 13: missing code-review-expert artifact for HEAD.
+case13="$tmp_dir/case13"
+write_valid_case "$case13" "$story" "$head_sha"
+rm -f "$case13/$story/code_review_expert/20260209T000080Z_review.md"
+expect_fail "missing code-review-expert review" "missing code-review-expert review artifact for HEAD" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case13"
+
+# Case 14: code-review-expert ref escapes directory.
+case14="$tmp_dir/case14"
+write_valid_case "$case14" "$story" "$head_sha"
+sed -i.bak "s#Code-review-expert final review file: code_review_expert/20260209T000080Z_review.md#Code-review-expert final review file: ../kimi/20260209T000050Z_review.md#" "$case14/$story/review_resolution.md"
+rm -f "$case14/$story/review_resolution.md.bak"
+expect_fail "code-review-expert ref escape" "Code-review-expert final review file must be inside" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case14"
+
+# Case 15: code-review-expert review status must be COMPLETE.
+case15="$tmp_dir/case15"
+write_valid_case "$case15" "$story" "$head_sha"
+sed -i.bak "s/- Review Status: COMPLETE/- Review Status: DRAFT/" "$case15/$story/code_review_expert/20260209T000080Z_review.md"
+rm -f "$case15/$story/code_review_expert/20260209T000080Z_review.md.bak"
+expect_fail "code-review-expert status complete" "code-review-expert review must be marked '- Review Status: COMPLETE'" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case15"
+
+# Case 16: unresolved placeholders are rejected.
+case16="$tmp_dir/case16"
+write_valid_case "$case16" "$story" "$head_sha"
+sed -i.bak "s/- Blocking: none/- Blocking: <none | summary>/" "$case16/$story/code_review_expert/20260209T000080Z_review.md"
+rm -f "$case16/$story/code_review_expert/20260209T000080Z_review.md.bak"
+expect_fail "code-review-expert unresolved placeholder" "code-review-expert review contains unresolved placeholder" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case16"
 
 echo "PASS: story review gate fixtures"

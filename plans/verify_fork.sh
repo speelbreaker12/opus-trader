@@ -356,6 +356,12 @@ if [[ -f package.json ]]; then
   bash "$ROOT/plans/lib/node_gates.sh"
 fi
 
+if [[ "$MODE" == "full" ]]; then
+  log "18) slice completion enforcement"
+  run_logged_or_exit "slice_completion_enforce" "$SPEC_LINT_TIMEOUT" \
+    ./plans/slice_completion_enforce.sh --head "$(git rev-parse HEAD)"
+fi
+
 log "Timing Summary"
 for f in "$VERIFY_ARTIFACTS_DIR"/*.time; do
   [[ -f "$f" ]] || continue
