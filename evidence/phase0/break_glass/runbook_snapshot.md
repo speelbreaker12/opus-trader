@@ -117,10 +117,10 @@ STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-ru
 
 | Role | Name | Phone | Slack |
 |------|------|-------|-------|
-| Primary On-Call | [FILL] | [FILL] | @[FILL] |
-| Secondary On-Call | [FILL] | [FILL] | @[FILL] |
-| Engineering Lead | [FILL] | [FILL] | @[FILL] |
-| Operations Lead | [FILL] | [FILL] | @[FILL] |
+| Primary On-Call | Trading On-Call | PagerDuty Primary Schedule | @trading-oncall |
+| Secondary On-Call | Platform On-Call | PagerDuty Secondary Schedule | @platform-oncall |
+| Engineering Lead | Engineering Lead | PagerDuty Eng Lead Escalation | @eng-lead |
+| Operations Lead | Operations Lead | PagerDuty Ops Lead Escalation | @ops-lead |
 
 ### Severity Levels
 
@@ -161,7 +161,7 @@ STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-ru
 │   STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument X --dry-run │
 │                                                 │
 │ ESCALATE:                                       │
-│   P1: Call [PRIMARY PHONE]                      │
+│   P1: Page Primary On-Call (PagerDuty)          │
 │   P2+: Slack #trading-incidents                 │
 └─────────────────────────────────────────────────┘
 ```

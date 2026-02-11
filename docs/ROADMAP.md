@@ -85,6 +85,10 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 
 Canonical source: `docs/PHASE0_CHECKLIST_BLOCK.md`
 
+Decision input policy (drift control):
+- Use `docs/PHASE0_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` for Phase 0 decisions.
+- Treat prior merged roadmap text as historical context in git history only.
+
 Use that file for:
 - required evidence pack structure,
 - P0-A through P0-E unblock conditions,
@@ -643,7 +647,7 @@ Status: **Fixed** (all items resolved in this document).
 
 Create one folder per phase completion:
 
-- `evidence/phase0_policy/`
+- `evidence/phase0/`
 - `evidence/phase1_foundation/`
 - `evidence/phase2_guardrails/`
 - `evidence/phase3_dataloop/`
