@@ -28,6 +28,14 @@ USAGE
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+validate_identifier() {
+  local value="$1"
+  local label="$2"
+  if ! [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$ ]]; then
+    die "invalid $label value: $value"
+  fi
+}
+
 story="${1:-}"
 [[ -n "$story" ]] || { usage >&2; exit 2; }
 shift
@@ -67,6 +75,11 @@ done
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$repo_root"
+
+validate_identifier "$story" "STORY_ID"
+if [[ -n "$slice_id" ]]; then
+  validate_identifier "$slice_id" "slice-id"
+fi
 
 if [[ -z "$head_sha" ]]; then
   head_sha="$(git rev-parse HEAD 2>/dev/null)" || die "failed to read HEAD"
