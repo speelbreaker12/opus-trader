@@ -4,12 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ./plans/pr_gate.sh [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--story <ID>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>]
+  ./plans/pr_gate.sh [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--story <ID>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision]
 
 What it checks (blocking):
-  - PR mergeable_state is clean (no merge conflicts/blocked state)
+  - PR mergeability is not blocked by conflicts (`mergeable=false` or blocked/dirty state)
   - All check-runs for PR head SHA are completed and successful
-  - reviewDecision is known and not CHANGES_REQUESTED
+  - reviewDecision is not CHANGES_REQUESTED (known-decision requirement is optional)
   - Inline bot/copilot review comments are addressed by file changes after each comment's original commit
   - If bot/copilot issue comments exist, PR conversation includes: AFTERCARE_ACK: <HEAD_SHA>
 
@@ -21,6 +21,10 @@ Copilot review (opt-in):
   - Disabled by default; enable with --require-copilot-review or REQUIRE_COPILOT_REVIEW=1
   - Signals accepted: review tied to HEAD SHA, bot comment after HEAD commit time, or copilot-like check-run name
   - In --wait mode, missing signal times out after COPILOT_WAIT_SECS (default 600)
+
+Review decision policy:
+  - Default: unknown reviewDecision is warning-only
+  - Optional strict mode: --require-known-review-decision or REQUIRE_KNOWN_REVIEW_DECISION=1
 
 No PR link required:
   - If --pr omitted, auto-detects PR for current branch via `gh pr view`.
@@ -42,6 +46,33 @@ need() {
 need gh
 need git
 need jq
+
+gh_api_array() {
+  local endpoint="$1"
+  local jq_filter="${2:-.[]}"
+  local out=""
+  set +e
+  out="$(
+    gh api --paginate "$endpoint" --jq "$jq_filter" 2>/dev/null | jq -s '.'
+  )"
+  local rc=$?
+  set -e
+  [[ $rc -eq 0 ]] || return $rc
+  printf '%s\n' "$out"
+}
+
+gh_api_check_runs() {
+  local endpoint="$1"
+  local out=""
+  set +e
+  out="$(
+    gh api --paginate "$endpoint" --jq '.check_runs[]?' 2>/dev/null | jq -s '{check_runs: .}'
+  )"
+  local rc=$?
+  set -e
+  [[ $rc -eq 0 ]] || return $rc
+  printf '%s\n' "$out"
+}
 
 validate_story_id() {
   local value="$1"
@@ -69,6 +100,7 @@ BOT_COMMENTS_MODE="${PR_GATE_BOT_COMMENT_MODE:-warn}"
 REQUIRE_COPILOT_REVIEW="${REQUIRE_COPILOT_REVIEW:-0}"
 COPILOT_LOGIN_REGEX="${COPILOT_LOGIN_REGEX:-copilot}"
 COPILOT_WAIT_SECS="${COPILOT_WAIT_SECS:-600}"
+REQUIRE_KNOWN_REVIEW_DECISION="${REQUIRE_KNOWN_REVIEW_DECISION:-0}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -112,6 +144,10 @@ while [[ $# -gt 0 ]]; do
       COPILOT_WAIT_SECS="${2:?missing n}"
       shift 2
       ;;
+    --require-known-review-decision)
+      REQUIRE_KNOWN_REVIEW_DECISION=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -129,6 +165,10 @@ esac
 case "$REQUIRE_COPILOT_REVIEW" in
   0|1) ;;
   *) die "invalid REQUIRE_COPILOT_REVIEW: $REQUIRE_COPILOT_REVIEW (expected 0|1)" ;;
+esac
+case "$REQUIRE_KNOWN_REVIEW_DECISION" in
+  0|1) ;;
+  *) die "invalid REQUIRE_KNOWN_REVIEW_DECISION: $REQUIRE_KNOWN_REVIEW_DECISION (expected 0|1)" ;;
 esac
 [[ "$COPILOT_WAIT_SECS" =~ ^[0-9]+$ ]] || die "invalid COPILOT_WAIT_SECS: $COPILOT_WAIT_SECS (expected integer seconds)"
 
@@ -195,6 +235,7 @@ mergeable: $MERGEABLE
 mergeable_state: $MERGEABLE_STATE
 reviewDecision: $REVIEW_DECISION
 bot_comments_mode: $BOT_COMMENTS_MODE
+require_known_review_decision: $REQUIRE_KNOWN_REVIEW_DECISION
 
 ## Check-runs
 $CHECK_SUMMARY
@@ -238,7 +279,7 @@ while true; do
   [[ -n "$HEAD_COMMIT_TIME" ]] || die "missing head commit timestamp"
 
   set +e
-  checks_json="$(gh api "repos/$repo/commits/$HEAD_SHA/check-runs" 2>/dev/null)"
+  checks_json="$(gh_api_check_runs "repos/$repo/commits/$HEAD_SHA/check-runs?per_page=100")"
   checks_rc=$?
   set -e
   if [[ $checks_rc -ne 0 || -z "$checks_json" ]]; then
@@ -257,12 +298,23 @@ state=${status_state:-<missing>}
 pending=$CHECK_PENDING
 failing=$CHECK_FAIL"
   else
-    CHECK_PENDING="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks_json")"
-    CHECK_FAIL="$(jq '[.check_runs[] | select(.status=="completed") | select(.conclusion != null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")] | length' <<<"$checks_json")"
+    checks_latest_json="$(
+      jq '{
+        check_runs: (
+          (.check_runs // [])
+          | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+          | group_by(.name // "")
+          | map(last)
+        )
+      }' <<<"$checks_json"
+    )"
+    CHECK_PENDING="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks_latest_json")"
+    CHECK_FAIL="$(jq '[.check_runs[] | select(.status=="completed") | select(.conclusion != null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")] | length' <<<"$checks_latest_json")"
     CHECK_SUMMARY="$(
       jq -r '
         (.check_runs // []) as $r
-        | "pending=" + ([ $r[] | select(.status!="completed") ] | length | tostring)
+        | "total_unique_check_names=" + ([ $r[] ] | length | tostring)
+        + "\npending=" + ([ $r[] | select(.status!="completed") ] | length | tostring)
         + "\nfailing=" + ([ $r[] | select(.status=="completed") | select(.conclusion!=null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped") ] | length | tostring)
         + "\n"
         + (
@@ -273,17 +325,17 @@ failing=$CHECK_FAIL"
               | "- " + (.name // "unknown") + " (" + (.conclusion // "unknown") + "): " + (.html_url // "")
             ] | join("\n")
           )
-      ' <<<"$checks_json"
+      ' <<<"$checks_latest_json"
     )"
   fi
 
-  pr_comments="$(gh api "repos/$repo/pulls/$PR/comments?per_page=100")" || die "failed to fetch PR review comments"
-  issue_comments="$(gh api "repos/$repo/issues/$PR/comments?per_page=100")" || die "failed to fetch PR issue comments"
+  pr_comments="$(gh_api_array "repos/$repo/pulls/$PR/comments?per_page=100")" || die "failed to fetch PR review comments"
+  issue_comments="$(gh_api_array "repos/$repo/issues/$PR/comments?per_page=100")" || die "failed to fetch PR issue comments"
   copilot_seen=0
   copilot_reason="not_required"
 
   if [[ "$REQUIRE_COPILOT_REVIEW" == "1" ]]; then
-    reviews_json="$(gh api "repos/$repo/pulls/$PR/reviews?per_page=100")" || die "failed to fetch PR reviews"
+    reviews_json="$(gh_api_array "repos/$repo/pulls/$PR/reviews?per_page=100")" || die "failed to fetch PR reviews"
     copilot_reason="not_observed"
 
     if jq -e --arg sha "$HEAD_SHA" --arg re "$COPILOT_LOGIN_REGEX" '
@@ -429,7 +481,9 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
   # mergeability (null means GitHub hasn't computed yet).
   if [[ "$MERGEABLE" == "null" || "$MERGEABLE_STATE" == "unknown" ]]; then
     problems+=("mergeability_not_ready")
-  elif [[ "$MERGEABLE_STATE" != "clean" ]]; then
+  elif [[ "$MERGEABLE" == "false" ]]; then
+    problems+=("merge_conflict_or_blocked: mergeable_state=$MERGEABLE_STATE")
+  elif [[ "$MERGEABLE_STATE" == "dirty" || "$MERGEABLE_STATE" == "blocked" ]]; then
     problems+=("merge_conflict_or_blocked: mergeable_state=$MERGEABLE_STATE")
   fi
 
@@ -440,8 +494,12 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
     problems+=("checks_pending")
   fi
 
+  review_decision_unknown=0
   if [[ -z "$REVIEW_DECISION" || "$REVIEW_DECISION" == "UNKNOWN" || "$REVIEW_DECISION" == "null" ]]; then
-    problems+=("review_decision_unknown")
+    review_decision_unknown=1
+    if [[ "$REQUIRE_KNOWN_REVIEW_DECISION" == "1" ]]; then
+      problems+=("review_decision_unknown")
+    fi
   elif [[ "$REVIEW_DECISION" == "CHANGES_REQUESTED" ]]; then
     problems+=("changes_requested")
   fi
@@ -467,6 +525,9 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
     if [[ "$bot_new_count" -gt 0 ]]; then
       echo "WARN: detected new bot/copilot comments since head commit ($bot_new_count); mode=$BOT_COMMENTS_MODE" >&2
     fi
+    if [[ "$review_decision_unknown" -eq 1 && "$REQUIRE_KNOWN_REVIEW_DECISION" != "1" ]]; then
+      echo "WARN: reviewDecision is unknown but non-blocking in default mode" >&2
+    fi
     echo "OK: PR gate passed"
     echo "  $PR_URL"
     [[ -n "$report_path" ]] && echo "  report: $report_path"
@@ -479,6 +540,9 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
   [[ -n "$report_path" ]] && echo "  report: $report_path" >&2
   if [[ "$bot_new_count" -gt 0 && "$BOT_COMMENTS_MODE" == "warn" ]]; then
     echo "WARN: new bot/copilot comments since head commit are present ($bot_new_count) but non-blocking in warn mode" >&2
+  fi
+  if [[ "$review_decision_unknown" -eq 1 && "$REQUIRE_KNOWN_REVIEW_DECISION" != "1" ]]; then
+    echo "WARN: reviewDecision is unknown but non-blocking in default mode" >&2
   fi
 
   if [[ "$WAIT" != "1" ]]; then

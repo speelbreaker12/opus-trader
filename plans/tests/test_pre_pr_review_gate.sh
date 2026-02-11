@@ -65,6 +65,9 @@ EOF
 expect_fail "missing review artifact" "missing code-review-expert review artifact" \
   "$SCRIPT" "S1-MISSING" --head "$head_sha" --artifacts-root "$story_root"
 
+expect_fail "invalid story id" "invalid STORY_ID value: ../escape" \
+  "$SCRIPT" "../escape" --head "$head_sha" --artifacts-root "$story_root"
+
 draft_story="S1-DRAFT"
 mkdir -p "$story_root/$draft_story/code_review_expert"
 cat > "$story_root/$draft_story/code_review_expert/20260211T000001Z_review.md" <<EOF
@@ -90,6 +93,9 @@ expect_fail "placeholder findings" "contains unresolved placeholder" \
 
 expect_fail "slice review missing" "missing slice thinking-review artifact" \
   "$SCRIPT" "$story" --head "$head_sha" --artifacts-root "$story_root" --slice-id "slice-1" --slice-artifacts-root "$slice_root"
+
+expect_fail "invalid slice id" "invalid slice-id value: ../slice" \
+  "$SCRIPT" "$story" --head "$head_sha" --artifacts-root "$story_root" --slice-id "../slice" --slice-artifacts-root "$slice_root"
 
 mkdir -p "$slice_root/slice-1"
 cat > "$slice_root/slice-1/thinking_review.md" <<EOF
