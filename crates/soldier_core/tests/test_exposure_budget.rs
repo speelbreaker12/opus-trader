@@ -86,3 +86,30 @@ fn test_global_exposure_budget_missing_limit_fails_closed() {
     }
     assert_eq!(metrics.reject_limit_missing_total(), 1);
 }
+
+#[test]
+fn test_global_exposure_budget_non_finite_portfolio_fails_closed() {
+    let mut metrics = ExposureBudgetMetrics::new();
+    let input = ExposureBudgetInput {
+        current_btc_delta_usd: f64::MAX,
+        pending_btc_delta_usd: f64::MAX,
+        current_eth_delta_usd: f64::MAX,
+        pending_eth_delta_usd: f64::MAX,
+        current_alts_delta_usd: f64::MAX,
+        pending_alts_delta_usd: f64::MAX,
+        candidate_bucket: ExposureBucket::Btc,
+        candidate_delta_usd: f64::MAX,
+        global_delta_limit_usd: Some(f64::MAX),
+    };
+
+    let out = evaluate_global_exposure_budget(&input, &mut metrics);
+    match out {
+        ExposureBudgetResult::Rejected {
+            reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
+            portfolio_delta_usd: Some(v),
+            ..
+        } => assert!(!v.is_finite()),
+        other => panic!("expected fail-closed rejection on non-finite portfolio, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_total(), 1);
+}

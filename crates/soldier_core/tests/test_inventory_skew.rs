@@ -138,3 +138,28 @@ fn test_inventory_skew_sell_risk_reducing_can_pass_after_min_edge_adjustment() {
 
     assert_eq!(metrics.allowed_total(), 1);
 }
+
+#[test]
+fn test_inventory_skew_tick_penalty_large_value_clamps_safely() {
+    let mut metrics = InventorySkewMetrics::new();
+    let input = InventorySkewInput {
+        current_delta: 100.0,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 1_000.0,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: u8::MAX,
+    };
+
+    let out = evaluate_inventory_skew(&input, &mut metrics);
+    match out {
+        InventorySkewResult::Allowed { bias_ticks, .. } => {
+            assert_eq!(bias_ticks, u8::MAX);
+        }
+        other => panic!("expected Allowed with large tick penalty max, got {other:?}"),
+    }
+}

@@ -170,5 +170,14 @@ fn conservative_corr_magnitude(btc: f64, eth: f64, alts: f64) -> f64 {
         + (2.0 * 0.8 * b * e)
         + (2.0 * 0.6 * b * a)
         + (2.0 * 0.6 * e * a);
-    variance.max(0.0).sqrt()
+
+    // Fail-closed on numerically unexpected materially negative variance.
+    const EPS: f64 = 1e-12;
+    if variance >= 0.0 {
+        variance.sqrt()
+    } else if variance >= -EPS {
+        0.0
+    } else {
+        f64::INFINITY
+    }
 }

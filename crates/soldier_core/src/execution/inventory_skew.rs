@@ -168,7 +168,8 @@ pub fn evaluate_inventory_skew(
     };
 
     let raw_ticks = (abs_bias * f64::from(input.inventory_skew_tick_penalty_max)).ceil();
-    let bias_ticks = raw_ticks as u8;
+    let clamped_ticks = raw_ticks.clamp(0.0, f64::from(u8::MAX));
+    let bias_ticks = clamped_ticks as u8;
     let price_shift = f64::from(bias_ticks) * input.tick_size;
     let adjusted_limit_price = match (input.side, risk_increasing) {
         (InventorySkewSide::Buy, true) => input.limit_price - price_shift,
