@@ -40,5 +40,7 @@ This is mandated by CONTRACT.md CSP.5.2.
 
 - Only `build_order_intent.rs` constructs `ChokeResult::Approved`
 - Only `build_order_intent.rs` calls `record_approved()`
+- No production code calls `map_to_dispatch()` / `validate_and_dispatch()` outside the chokepoint boundary
+- No production code constructs `DispatchRequest` outside `dispatch_map.rs` and the chokepoint boundary
 - Only `build_order_intent.rs` defines functions returning `ChokeResult`
 - No production code constructs `GateResults` outside the chokepoint module
