@@ -116,6 +116,64 @@ fn test_dispatch_chokepoint_no_bypass_metrics() {
     );
 }
 
+// ─── Test: No direct exchange dispatch usage outside approved boundary ──
+
+#[test]
+fn test_dispatch_chokepoint_no_direct_exchange_client_usage() {
+    let src = src_dir();
+    let files = collect_rs_files(&src);
+    let mut violations = Vec::new();
+    let forbidden_dispatch_symbols = [
+        "dispatch_map::",
+        "map_to_dispatch",
+        "validate_and_dispatch",
+        "DispatchRequest",
+        "DispatchMapError",
+        "ValidatedDispatch",
+    ];
+
+    for (path, content) in &files {
+        let rel = path.strip_prefix(&src).unwrap_or(path);
+        let rel_str = rel.to_string_lossy();
+        // dispatch_map defines DispatchRequest and dispatch helpers.
+        if rel_str == "execution/dispatch_map.rs" {
+            continue;
+        }
+        // build_order_intent is the chokepoint boundary.
+        if rel_str == "execution/build_order_intent.rs" {
+            continue;
+        }
+        // execution/mod.rs re-exports symbols and is not a call site.
+        if rel_str == "execution/mod.rs" {
+            continue;
+        }
+
+        for (line_num, line) in content.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") || trimmed.starts_with("///") {
+                continue;
+            }
+
+            for sym in &forbidden_dispatch_symbols {
+                if line.contains(sym) {
+                    violations.push(format!(
+                        "{}:{}: references forbidden dispatch boundary symbol `{sym}` outside dispatch_map/chokepoint boundary",
+                        path.display(),
+                        line_num + 1,
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Direct exchange dispatch usage is only allowed via the chokepoint boundary.\n\
+         Violations:\n{}",
+        violations.join("\n")
+    );
+}
+
 // ─── Test: build_order_intent is the only function returning ChokeResult ──
 
 #[test]
@@ -238,5 +296,26 @@ fn test_chokepoint_reexported_from_execution() {
     assert!(
         content.contains("build_order_intent,"),
         "execution/mod.rs must re-export build_order_intent function"
+    );
+}
+
+// ─── Test: Chokepoint metrics mutators are not publicly callable ───────
+
+#[test]
+fn test_chokepoint_metrics_mutators_not_public() {
+    let chokepoint_path = src_dir().join("execution").join("build_order_intent.rs");
+    let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
+
+    assert!(
+        !content.contains("pub fn record_approved"),
+        "record_approved must not be public outside chokepoint module"
+    );
+    assert!(
+        !content.contains("pub fn record_rejected"),
+        "record_rejected must not be public outside chokepoint module"
+    );
+    assert!(
+        !content.contains("pub fn record_rejected_risk_state"),
+        "record_rejected_risk_state must not be public outside chokepoint module"
     );
 }

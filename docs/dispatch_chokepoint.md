@@ -12,7 +12,9 @@ This is mandated by CONTRACT.md CSP.5.2.
 
 **Function:** `pub fn build_order_intent(intent_class, risk_state, metrics, gate_results) -> ChokeResult`
 
-**Exchange Client Type:** `DispatchRequest` (constructed only after `ChokeResult::Approved` is returned by the chokepoint)
+**Dispatch Boundary Type:** `execution::dispatch_map::DispatchRequest` (constructed only after `ChokeResult::Approved` is returned by the chokepoint)
+
+**Venue Client Boundary:** Venue adapters/clients are downstream of `soldier_core` (in `soldier_infra`). This doc enforces the dispatch boundary at `soldier_core` level.
 
 ## Gate Ordering (Deterministic)
 
@@ -40,5 +42,7 @@ This is mandated by CONTRACT.md CSP.5.2.
 
 - Only `build_order_intent.rs` constructs `ChokeResult::Approved`
 - Only `build_order_intent.rs` calls `record_approved()`
+- No production code calls `map_to_dispatch()` / `validate_and_dispatch()` outside the chokepoint boundary
+- No production code constructs `DispatchRequest` outside `dispatch_map.rs` and the chokepoint boundary
 - Only `build_order_intent.rs` defines functions returning `ChokeResult`
 - No production code constructs `GateResults` outside the chokepoint module

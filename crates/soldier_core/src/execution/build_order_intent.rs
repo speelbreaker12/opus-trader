@@ -99,15 +99,15 @@ impl ChokeMetrics {
         }
     }
 
-    pub fn record_approved(&mut self) {
+    fn record_approved(&mut self) {
         self.approved_total += 1;
     }
 
-    pub fn record_rejected(&mut self) {
+    fn record_rejected(&mut self) {
         self.rejected_total += 1;
     }
 
-    pub fn record_rejected_risk_state(&mut self) {
+    fn record_rejected_risk_state(&mut self) {
         self.rejected_risk_state += 1;
     }
 
