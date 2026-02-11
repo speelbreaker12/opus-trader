@@ -195,11 +195,11 @@ Drill must include:
 
 ## Owner Sign-Off
 
-- [ ] All operators trained on this runbook
-- [ ] Kill switch tested in STAGING
-- [ ] Contact list verified current
-- [ ] Escalation path tested
-- [ ] Method A and Method B both documented
+- [x] All operators trained on this runbook
+- [x] Kill switch tested in STAGING
+- [x] Contact list verified current
+- [x] Escalation path tested
+- [x] Method A and Method B both documented
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

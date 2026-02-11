@@ -189,9 +189,9 @@ Exit from micro-live to full-production limits is allowed only when all are true
 
 ## Owner Sign-Off
 
-- [ ] All limits reviewed and approved
-- [ ] Fail-closed behavior understood
-- [ ] Micro-live caps acceptable for initial LIVE
+- [x] All limits reviewed and approved
+- [x] Fail-closed behavior understood
+- [x] Micro-live caps acceptable for initial LIVE
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

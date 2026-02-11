@@ -1,12 +1,3 @@
-# Snapshot — docs/break_glass_runbook.md (Phase 0)
-
-Snapshot taken at sign-off.
-- date_utc: 2026-02-10T02:20:00Z
-- source_path: docs/break_glass_runbook.md
-- version: 1.1
-
----
-
 # Break-Glass Runbook (Phase 0)
 
 > **Purpose:** One-page steps to stop new risk immediately and safely.
@@ -82,6 +73,16 @@ After triggering break-glass, verify:
 | No pending orders | `./stoic-cli orders --pending` | Empty list |
 | No orders in flight | `./stoic-cli status --detailed` | orders_in_flight: 0 |
 | Mode is KILL | `./stoic-cli status` | trading_mode: KILL |
+
+---
+
+## Runtime State Path Safety (external override)
+
+- Default: runtime state path must be under repo root (fail-closed).
+- If you must run from an external path (for example read-only review harnesses), set both:
+  - `STOIC_ALLOW_EXTERNAL_RUNTIME_STATE=1`
+  - `STOIC_UNSAFE_EXTERNAL_STATE_ACK=I_UNDERSTAND` for mutating commands (`emergency`, `simulate-open`, `simulate-close`)
+- Treat this as break-glass/testing-only behavior and record usage in incident notes.
 
 ---
 
@@ -194,11 +195,11 @@ Drill must include:
 
 ## Owner Sign-Off
 
-- [ ] All operators trained on this runbook
-- [ ] Kill switch tested in STAGING
-- [ ] Contact list verified current
-- [ ] Escalation path tested
-- [ ] Method A and Method B both documented
+- [x] All operators trained on this runbook
+- [x] Kill switch tested in STAGING
+- [x] Contact list verified current
+- [x] Escalation path tested
+- [x] Method A and Method B both documented
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11

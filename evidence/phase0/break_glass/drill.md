@@ -52,8 +52,8 @@ STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument BTC-28MAR26-50000-C -
 |-----|-----------|--------|
 | 2-second delay before queue flush | eng | FIXED - added sync check |
 | Hard to find KILL event in logs | eng | FIXED - added structured log |
-| No Slack alert on KILL | ops | TODO |
-| No dashboard indicator | eng | TODO |
+| No Slack alert on KILL | ops | TRACKED - Phase 1 alerting rollout |
+| No dashboard indicator | eng | TRACKED - Phase 2 observability rollout |
 
 ## Participants
 

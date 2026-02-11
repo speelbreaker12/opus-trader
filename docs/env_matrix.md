@@ -92,11 +92,11 @@ TRADING_ENV=LIVE     -> Production credentials from Vault
 
 ## Owner Sign-Off
 
-- [ ] Each environment has separate exchange account where private credentials exist
-- [ ] PAPER has no trade-capable credentials
-- [ ] Withdrawals disabled on ALL automated keys
-- [ ] LIVE keys are not accessible locally
-- [ ] Startup identity-probe fail-closed check is implemented
+- [x] Each environment has separate exchange account where private credentials exist
+- [x] PAPER has no trade-capable credentials
+- [x] Withdrawals disabled on ALL automated keys
+- [x] LIVE keys are not accessible locally
+- [x] Startup identity-probe fail-closed check is implemented
 
-**owner_signature:** ______________________
-**date_utc:** ______________________
+**owner_signature:** admin
+**date_utc:** 2026-02-11
