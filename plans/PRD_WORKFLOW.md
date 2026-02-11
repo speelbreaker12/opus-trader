@@ -28,9 +28,10 @@ This repository uses manual PRD story execution with verify as the only gate.
 - `./plans/verify.sh quick` during iteration
 - `./plans/verify.sh full` before merge-grade/pass flip
 3. Push branch and open/update PR.
-4. Run `./plans/pr_gate.sh --wait` until it passes.
-5. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
-6. Merge via PR after gates are green.
+4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating.
+5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes.
+6. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
+7. Merge via PR after gates are green.
 
 ## Recommended story loop
 
