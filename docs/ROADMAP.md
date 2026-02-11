@@ -103,6 +103,14 @@ Use that file for:
 # Phase 1 — Foundation
 ### “Never Panic, Never Duplicate”
 
+## Phase 1 Canonical Inputs
+
+Canonical source: `docs/PHASE1_CHECKLIST_BLOCK.md`
+
+Decision input policy (drift control):
+- Use `docs/PHASE1_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` for Phase 1 decisions.
+- Treat `docs/phase1_acceptance.md`, `docs/PLAN_PHASE1_EXCERPT.md`, and `docs/bundle_CONTRACT_PHASE1.md` as supporting references.
+
 ## Definition of Done (Phase 1)
 
 ### 1) Delivered artifacts (merged)
