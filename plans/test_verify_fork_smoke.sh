@@ -74,6 +74,7 @@ check "verify_fork.sh usage is quick/full only" grep -q 'Usage: ./plans/verify.s
 check "verify_fork.sh writes verify.meta.json" grep -q 'verify.meta.json' plans/verify_fork.sh
 check "verify_fork.sh includes contract_kernel gate" grep -q 'run_logged_or_exit \"contract_kernel\"' plans/verify_fork.sh
 check "verify_fork.sh includes phase0_meta_test gate" grep -q 'run_logged_or_exit \"phase0_meta_test\"' plans/verify_fork.sh
+check "verify_fork.sh includes phase1_meta_test gate" grep -q 'run_logged_or_exit \"phase1_meta_test\"' plans/verify_fork.sh
 echo ""
 
 # 5) Root wrapper chain (if root verify.sh exists)
