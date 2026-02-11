@@ -137,6 +137,7 @@ else
 fi
 
 # Process cached slices: copy from cache and validate
+if [[ ${#valid_slices[@]} -gt 0 ]]; then
 for slice in "${valid_slices[@]}"; do
   cached_audit=$(jq -r ".slices[\"$slice\"].audit_json // empty" .context/prd_audit_slice_cache.json 2>/dev/null || true)
 
@@ -195,6 +196,7 @@ PY
     invalid_slices+=("$slice")
   fi
 done
+fi
 
 # Run parallel audits for invalid slices
 declare -a pids=()
@@ -245,6 +247,9 @@ while [[ $idx -lt ${#invalid_slices[@]} ]] || [[ $running -gt 0 ]]; do
     else
       # bash <4.3: poll for any PID to finish
       while :; do
+        if [[ ${#invalid_slices[@]} -eq 0 ]]; then
+          break
+        fi
         for slice in "${invalid_slices[@]}"; do
           if [[ -n "${pids[$slice]:-}" ]] && ! kill -0 "${pids[$slice]}" 2>/dev/null; then
             break 2
@@ -255,11 +260,13 @@ while [[ $idx -lt ${#invalid_slices[@]} ]] || [[ $running -gt 0 ]]; do
     fi
     # Count still running
     running=0
-    for slice in "${invalid_slices[@]}"; do
-      if [[ -n "${pids[$slice]:-}" ]] && kill -0 "${pids[$slice]}" 2>/dev/null; then
-        ((running++)) || true
-      fi
-    done
+    if [[ ${#invalid_slices[@]} -gt 0 ]]; then
+      for slice in "${invalid_slices[@]}"; do
+        if [[ -n "${pids[$slice]:-}" ]] && kill -0 "${pids[$slice]}" 2>/dev/null; then
+          ((running++)) || true
+        fi
+      done
+    fi
   fi
 done
 
@@ -269,6 +276,7 @@ wait
 # Collect results for audited slices
 failed=0
 passed=0
+if [[ ${#audited_slices[@]} -gt 0 ]]; then
 for slice in "${audited_slices[@]}"; do
   rc_file="$WORK_DIR/rc_$slice"
   if [[ -f "$rc_file" ]]; then
@@ -285,10 +293,12 @@ for slice in "${audited_slices[@]}"; do
     ((passed++)) || true
   fi
 done
+fi
 
 # Update cache for all freshly audited slices (sequential to avoid race)
 # Note: cache update errors are non-fatal (audit already succeeded, we just can't cache it)
 echo "[audit_parallel] Updating cache for ${#audited_slices[@]} audited slices..." >&2
+if [[ ${#audited_slices[@]} -gt 0 ]]; then
 for slice in "${audited_slices[@]}"; do
   audit_file="$AUDIT_OUTPUT_DIR/audit_slice_$slice.json"
   if [[ -f "$audit_file" ]]; then
@@ -298,6 +308,7 @@ for slice in "${audited_slices[@]}"; do
     }
   fi
 done
+fi
 
 # Count total passed (cached + fresh)
 total_passed=$((${#reused_slices[@]} + passed))

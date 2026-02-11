@@ -45,6 +45,9 @@ AUDIT_PLAN_DIGEST_FILE="${AUDIT_PLAN_DIGEST_FILE:-.context/plan_digest.json}"
 AUDIT_CONTRACT_SLICE_DIGEST_FILE="${AUDIT_CONTRACT_SLICE_DIGEST_FILE:-.context/contract_digest_slice.json}"
 AUDIT_PLAN_SLICE_DIGEST_FILE="${AUDIT_PLAN_SLICE_DIGEST_FILE:-.context/plan_digest_slice.json}"
 AUDIT_PRD_SLICE_FILE="${AUDIT_PRD_SLICE_FILE:-.context/prd_slice.json}"
+AUDITOR_TIMEOUT_FALLBACK_PARALLEL="${AUDITOR_TIMEOUT_FALLBACK_PARALLEL:-1}"
+AUDITOR_PARALLEL_MAX="${AUDITOR_PARALLEL_MAX:-4}"
+AUDITOR_PARALLEL_OUTPUT_DIR="${AUDITOR_PARALLEL_OUTPUT_DIR:-.context/parallel_audits}"
 
 if [[ ! -f "$AUDITOR_PROMPT" ]]; then
   echo "[prd_auditor] ERROR: missing prompt file: $AUDITOR_PROMPT" >&2
@@ -346,8 +349,35 @@ progress "Auditor completed in ${auditor_duration}s (rc=$auditor_rc)"
 audit_cost_stage "auditor"
 
 if [[ "$auditor_rc" -eq 124 || "$auditor_rc" -eq 137 ]]; then
-  echo "[prd_auditor] ERROR: auditor timed out after ${AUDITOR_TIMEOUT}s" >&2
-  exit 5
+  if [[ "$AUDIT_SCOPE" == "full" && "$AUDITOR_TIMEOUT_FALLBACK_PARALLEL" == "1" && -x "./plans/audit_parallel.sh" ]]; then
+    progress "Auditor timed out; attempting parallel slice fallback..."
+    {
+      echo "[prd_auditor] WARN: primary auditor timed out after ${AUDITOR_TIMEOUT}s (rc=$auditor_rc)"
+      echo "[prd_auditor] INFO: invoking parallel slice fallback via ./plans/audit_parallel.sh"
+    } >> "$AUDIT_STDOUT_LOG"
+
+    fallback_rc=0
+    PRD_FILE="$AUDIT_PRD_FILE" \
+      MAX_PARALLEL="$AUDITOR_PARALLEL_MAX" \
+      AUDIT_OUTPUT_DIR="$AUDITOR_PARALLEL_OUTPUT_DIR" \
+      MERGED_AUDIT_FILE="$AUDIT_OUTPUT_JSON" \
+      AUDIT_PROGRESS="$AUDIT_PROGRESS" \
+      ./plans/audit_parallel.sh >> "$AUDIT_STDOUT_LOG" 2>&1 || fallback_rc=$?
+
+    if [[ "$fallback_rc" -ne 0 ]]; then
+      echo "[prd_auditor] ERROR: parallel slice fallback failed (rc=$fallback_rc)" >&2
+      exit 5
+    fi
+
+    # Merged fallback audit is deterministic and validated by prd_audit_check below.
+    # Emit promise token so downstream promise checks remain consistent.
+    echo "<promise>AUDIT_COMPLETE</promise>" >> "$AUDIT_STDOUT_LOG"
+    auditor_rc=0
+    progress "Parallel slice fallback completed successfully."
+  else
+    echo "[prd_auditor] ERROR: auditor timed out after ${AUDITOR_TIMEOUT}s" >&2
+    exit 5
+  fi
 fi
 
 # Auditor prompt hardcodes output to plans/prd_audit.json
