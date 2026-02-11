@@ -1,6 +1,6 @@
 # PRD Workflow (Manual Verify Model)
 
-This repository uses manual PRD story execution with verify as the only gate.
+This repository uses manual PRD story execution with verify and review/PR gates.
 `specs/WORKFLOW_CONTRACT.md` is the source of truth; this file is a concise operator guide and must stay contract-aligned.
 
 ## Core rules
