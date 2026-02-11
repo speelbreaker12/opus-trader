@@ -94,9 +94,7 @@ pub fn evaluate_margin_headroom_gate(
         };
     }
 
-    const EQUITY_EPSILON: f64 = 1e-9;
-    let safe_equity = input.equity_usd.max(EQUITY_EPSILON);
-    let mm_util = input.maintenance_margin_usd / safe_equity;
+    let mm_util = input.maintenance_margin_usd / input.equity_usd;
     let mode_hint = compute_mode_hint(mm_util, input.mm_util_reduceonly, input.mm_util_kill);
 
     if mm_util >= input.mm_util_reject_opens {

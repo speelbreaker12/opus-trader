@@ -151,8 +151,16 @@ impl PendingExposureBook {
             };
         }
 
+        let Some(next_reservation_id) = self.next_reservation_id.checked_add(1) else {
+            metrics.record_reserve_reject();
+            return PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total: self.pending_total,
+            };
+        };
+
         let reservation_id = self.next_reservation_id;
-        self.next_reservation_id = self.next_reservation_id.saturating_add(1);
+        self.next_reservation_id = next_reservation_id;
         self.reservations.insert(reservation_id, delta_impact_est);
         self.pending_total += delta_impact_est;
         metrics.record_reserve_success();
@@ -198,5 +206,34 @@ fn normalized_limit(delta_limit: Option<f64>) -> Option<f64> {
     match delta_limit {
         Some(v) if v.is_finite() && v > 0.0 => Some(v.abs()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reserve_fails_closed_on_reservation_id_overflow() {
+        let mut metrics = PendingExposureMetrics::new();
+        let mut book = PendingExposureBook::new(Some(100.0));
+        book.next_reservation_id = u64::MAX;
+
+        let out = book.reserve(0.0, 1.0, &mut metrics);
+        match out {
+            PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total,
+            } => {
+                assert_eq!(pending_total, 0.0);
+            }
+            other => panic!("expected overflow fail-closed rejection, got {other:?}"),
+        }
+
+        assert_eq!(book.active_reservations(), 0);
+        assert_eq!(book.pending_total(), 0.0);
+        assert_eq!(metrics.reserve_attempt_total(), 1);
+        assert_eq!(metrics.reserve_success_total(), 0);
+        assert_eq!(metrics.reserve_reject_total(), 1);
     }
 }

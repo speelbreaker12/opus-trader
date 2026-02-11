@@ -152,3 +152,33 @@ fn test_margin_gate_non_positive_equity_fails_closed() {
     assert_eq!(metrics.reject_total(), 2);
     assert_eq!(metrics.allowed_total(), 0);
 }
+
+#[test]
+fn test_margin_gate_tiny_positive_equity_uses_actual_ratio() {
+    let mut metrics = MarginGateMetrics::new();
+    let input = MarginGateInput {
+        maintenance_margin_usd: 1e-10,
+        equity_usd: 1e-12,
+        mm_util_reject_opens: 0.70,
+        mm_util_reduceonly: 0.85,
+        mm_util_kill: 0.95,
+    };
+
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    match out {
+        MarginGateResult::Rejected {
+            reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
+            mm_util: Some(mm_util),
+            mode_hint: MarginGateMode::Kill,
+        } => {
+            assert!(
+                mm_util > 1.0,
+                "tiny positive equity must not be clamped to a larger denominator"
+            );
+        }
+        other => panic!("expected tiny-equity rejection, got {other:?}"),
+    }
+
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(metrics.allowed_total(), 0);
+}
