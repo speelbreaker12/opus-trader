@@ -123,6 +123,14 @@ fn test_dispatch_chokepoint_no_direct_exchange_client_usage() {
     let src = src_dir();
     let files = collect_rs_files(&src);
     let mut violations = Vec::new();
+    let forbidden_dispatch_symbols = [
+        "dispatch_map::",
+        "map_to_dispatch",
+        "validate_and_dispatch",
+        "DispatchRequest",
+        "DispatchMapError",
+        "ValidatedDispatch",
+    ];
 
     for (path, content) in &files {
         let rel = path.strip_prefix(&src).unwrap_or(path);
@@ -146,20 +154,14 @@ fn test_dispatch_chokepoint_no_direct_exchange_client_usage() {
                 continue;
             }
 
-            if line.contains("map_to_dispatch(") || line.contains("validate_and_dispatch(") {
-                violations.push(format!(
-                    "{}:{}: directly calls dispatch mapping outside chokepoint boundary",
-                    path.display(),
-                    line_num + 1,
-                ));
-            }
-
-            if line.contains("DispatchRequest {") {
-                violations.push(format!(
-                    "{}:{}: directly constructs DispatchRequest outside dispatch_map/chokepoint boundary",
-                    path.display(),
-                    line_num + 1,
-                ));
+            for sym in &forbidden_dispatch_symbols {
+                if line.contains(sym) {
+                    violations.push(format!(
+                        "{}:{}: references forbidden dispatch boundary symbol `{sym}` outside dispatch_map/chokepoint boundary",
+                        path.display(),
+                        line_num + 1,
+                    ));
+                }
             }
         }
     }
