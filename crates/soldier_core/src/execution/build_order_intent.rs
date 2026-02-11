@@ -6,11 +6,12 @@
 //! 1. Dispatch authorization (RiskState check)
 //! 2. Preflight (order type validation)
 //! 3. Quantize
-//! 4. Fee cache staleness check
-//! 5. Liquidity Gate (book-walk slippage)
-//! 6. Net Edge Gate (fee + slippage vs min_edge)
-//! 7. Pricer (IOC limit price clamping)
-//! 8. RecordedBeforeDispatch (WAL append)
+//! 4. Dispatch consistency (AT-920 contracts/amount validation)
+//! 5. Fee cache staleness check
+//! 6. Liquidity Gate (book-walk slippage)
+//! 7. Net Edge Gate (fee + slippage vs min_edge)
+//! 8. Pricer (IOC limit price clamping)
+//! 9. RecordedBeforeDispatch (WAL append)
 //!
 //! Only after all gates pass is an `OrderIntent` produced.
 
@@ -39,6 +40,7 @@ pub enum GateStep {
     DispatchAuth,
     Preflight,
     Quantize,
+    DispatchConsistency,
     FeeCacheCheck,
     LiquidityGate,
     NetEdgeGate,
@@ -189,7 +191,20 @@ pub fn build_order_intent(
         };
     }
 
-    // Gate 4: Fee cache staleness
+    // Gate 4: Dispatch consistency (AT-920 contracts/amount validation)
+    trace.push(GateStep::DispatchConsistency);
+    if !gate_results.dispatch_consistency_passed {
+        metrics.record_rejected();
+        return ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::DispatchConsistency,
+                reason: "dispatch consistency failed".to_string(),
+            },
+            gate_trace: trace,
+        };
+    }
+
+    // Gate 5: Fee cache staleness
     trace.push(GateStep::FeeCacheCheck);
     if !gate_results.fee_cache_passed {
         metrics.record_rejected();
@@ -202,9 +217,9 @@ pub fn build_order_intent(
         };
     }
 
-    // Gates 5-7 only for OPEN intents
+    // Gates 6-8 only for OPEN intents
     if intent_class == ChokeIntentClass::Open {
-        // Gate 5: Liquidity Gate
+        // Gate 6: Liquidity Gate
         trace.push(GateStep::LiquidityGate);
         if !gate_results.liquidity_gate_passed {
             metrics.record_rejected();
@@ -217,7 +232,7 @@ pub fn build_order_intent(
             };
         }
 
-        // Gate 6: Net Edge Gate
+        // Gate 7: Net Edge Gate
         trace.push(GateStep::NetEdgeGate);
         if !gate_results.net_edge_passed {
             metrics.record_rejected();
@@ -230,7 +245,7 @@ pub fn build_order_intent(
             };
         }
 
-        // Gate 7: Pricer
+        // Gate 8: Pricer
         trace.push(GateStep::Pricer);
         if !gate_results.pricer_passed {
             metrics.record_rejected();
@@ -244,7 +259,7 @@ pub fn build_order_intent(
         }
     }
 
-    // Gate 8: RecordedBeforeDispatch
+    // Gate 9: RecordedBeforeDispatch
     trace.push(GateStep::RecordedBeforeDispatch);
     if !gate_results.wal_recorded {
         metrics.record_rejected();
@@ -271,6 +286,7 @@ pub fn build_order_intent(
 pub struct GateResults {
     pub preflight_passed: bool,
     pub quantize_passed: bool,
+    pub dispatch_consistency_passed: bool,
     pub fee_cache_passed: bool,
     pub liquidity_gate_passed: bool,
     pub net_edge_passed: bool,
@@ -283,6 +299,7 @@ impl Default for GateResults {
         Self {
             preflight_passed: true,
             quantize_passed: true,
+            dispatch_consistency_passed: true,
             fee_cache_passed: true,
             liquidity_gate_passed: true,
             net_edge_passed: true,

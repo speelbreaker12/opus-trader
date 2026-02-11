@@ -389,9 +389,9 @@ fn test_at920_no_contracts_skips_check() {
     assert_eq!(metrics.reject_unit_mismatch_total(), 0);
 }
 
-/// AT-920: no contract_multiplier → skip check, dispatch succeeds
+/// AT-920: contracts present but no contract_multiplier → fail closed
 #[test]
-fn test_at920_no_multiplier_skips_check() {
+fn test_at920_no_multiplier_rejected_fail_closed() {
     let size = OrderSize {
         contracts: Some(3),
         qty_coin: Some(3.0),
@@ -407,8 +407,63 @@ fn test_at920_no_multiplier_skips_check() {
         None,
         &mut metrics,
     );
-    assert!(result.is_ok());
+    assert_eq!(result, Err(DispatchMapError::ContractsRequireValidation));
     assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+}
+
+/// AT-920: denominator uses max(abs(amount), 1e-9) for very small canonical amounts.
+#[test]
+fn test_at920_epsilon_denominator_allows_small_amount_within_tolerance() {
+    // contracts=0, multiplier=0 => implied=0
+    // canonical=1e-12 => delta = 1e-12 / max(1e-12,1e-9) = 0.001 (exact tolerance)
+    // Equality is allowed; only > tolerance rejects.
+    let size = OrderSize {
+        contracts: Some(0),
+        qty_coin: Some(1e-12),
+        qty_usd: None,
+        notional_usd: 1e-7,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(0.0),
+        &mut metrics,
+    );
+    assert!(result.is_ok(), "delta at tolerance boundary should pass");
+    assert_eq!(metrics.reject_unit_mismatch_total(), 0);
+}
+
+/// AT-920: non-finite multiplier must fail closed and reject dispatch.
+#[test]
+fn test_at920_non_finite_multiplier_rejected() {
+    let size = OrderSize {
+        contracts: Some(3),
+        qty_coin: Some(3.0),
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(f64::NAN),
+        &mut metrics,
+    );
+    match result {
+        Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
+            assert!(
+                !delta.is_finite(),
+                "non-finite multiplier should produce non-finite mismatch delta"
+            );
+        }
+        other => panic!("expected ContractsAmountMismatch, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_unit_mismatch_total(), 1);
 }
 
 /// AT-920: perpetual mismatch (USD-sized) rejected

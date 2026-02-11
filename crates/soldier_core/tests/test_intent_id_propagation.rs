@@ -325,11 +325,12 @@ fn test_gate_trace_ordering_enables_correlation() {
                     0 => assert_eq!(*step, GateStep::DispatchAuth),
                     1 => assert_eq!(*step, GateStep::Preflight),
                     2 => assert_eq!(*step, GateStep::Quantize),
-                    3 => assert_eq!(*step, GateStep::FeeCacheCheck),
-                    4 => assert_eq!(*step, GateStep::LiquidityGate),
-                    5 => assert_eq!(*step, GateStep::NetEdgeGate),
-                    6 => assert_eq!(*step, GateStep::Pricer),
-                    7 => assert_eq!(*step, GateStep::RecordedBeforeDispatch),
+                    3 => assert_eq!(*step, GateStep::DispatchConsistency),
+                    4 => assert_eq!(*step, GateStep::FeeCacheCheck),
+                    5 => assert_eq!(*step, GateStep::LiquidityGate),
+                    6 => assert_eq!(*step, GateStep::NetEdgeGate),
+                    7 => assert_eq!(*step, GateStep::Pricer),
+                    8 => assert_eq!(*step, GateStep::RecordedBeforeDispatch),
                     _ => panic!("unexpected gate index {i}"),
                 }
             }

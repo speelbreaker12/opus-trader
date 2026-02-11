@@ -307,3 +307,29 @@ Commands: python3 -m py_compile stoic-cli tools/phase0_meta_test.py; cargo test 
 Evidence: stoic-cli; crates/soldier_infra/tests/test_phase0_runtime.rs; tools/phase0_meta_test.py; docs/health_endpoint.md; docs/break_glass_runbook.md; tests/phase0/test_status_command_behavior.md; tests/phase0/test_break_glass_kill_blocks_open_allows_reduce.md; artifacts/verify/20260210_121104; artifacts/verify/20260210_121309.
 Notes: `./plans/verify.sh quick` initially failed only on rustfmt diff in `test_phase0_runtime.rs`; rerun passed after `cargo fmt`. Verify ran with default dirty-tree warning and without `VERIFY_ALLOW_DIRTY`.
 Next: None.
+Story: workflow/phase0-followup-regression-fixes
+Date: 2026-02-10
+Summary: Applied forensic follow-up fixes for PR #18 regressions: restored transfer least-privilege checks in `stoic-cli keys-check` (transfer_enabled flag, transfer scope ban, transfer success rejection), restored runtime-state parent-directory fsync after atomic rename, and added regression tests for future-dated L2 fail-closed behavior, transfer privilege rejection, and fsync durability anchor.
+Commands: cargo test -p soldier_core --test test_liquidity_gate test_future_dated_l2_rejected_fail_closed; cargo test -p soldier_infra --test test_phase0_runtime test_api_keys_transfer_privilege_rejected_runtime; cargo test -p soldier_infra --test test_phase0_runtime test_runtime_state_writer_fsyncs_parent_directory; cargo test -p soldier_core --test test_liquidity_gate; cargo test -p soldier_infra --test test_phase0_runtime; python3 -m py_compile stoic-cli; ./plans/verify.sh quick.
+Evidence: crates/soldier_core/src/execution/gate.rs; crates/soldier_core/tests/test_liquidity_gate.rs; stoic-cli; crates/soldier_infra/tests/test_phase0_runtime.rs; artifacts/verify/20260210_152117.
+Notes: verify quick passed with dirty-tree warning only.
+Next: Optional: add a small dedicated guard script that asserts key `stoic-cli` security anchors to catch merge rollbacks even earlier in preflight.
+Story: workflow/phase0-followup-regression-fixes
+Date: 2026-02-10
+Summary: Implemented requested follow-ups (1) and (2): added deterministic `plans/stoic_cli_invariant_check.sh` guard for critical `stoic-cli` security/durability anchors (transfer least-privilege checks + post-rename directory fsync), wired it into `plans/preflight.sh` + `plans/workflow_verify.sh`, added fixture coverage `plans/tests/test_stoic_cli_invariant_check.sh`, updated workflow allowlist coverage, and added checklist item in `reviews/REVIEW_CHECKLIST.md` for merge-rollback audit of these anchors.
+Commands: bash plans/tests/test_stoic_cli_invariant_check.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
+Evidence: plans/stoic_cli_invariant_check.sh; plans/tests/test_stoic_cli_invariant_check.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; reviews/REVIEW_CHECKLIST.md; artifacts/verify/20260210_170836; artifacts/verify/20260210_171250.
+Notes: full verify passed with default dirty-tree warning only.
+Next: None.
+Story: workflow-maintenance
+Date: 2026-02-10
+Summary: Hardened review-evidence gates by requiring code-review-expert artifacts in story_review_gate and adding slice-close thinking-review hard gate + logger scripts. Added deterministic fixture coverage and wired new scripts/tests into preflight/workflow verify allowlists.
+Commands: bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_story_review_findings_guard.sh; bash plans/tests/test_slice_completion_review_guard.sh; bash plans/tests/test_code_review_expert_logged.sh; bash plans/tests/test_thinking_review_logged.sh; bash plans/tests/test_slice_review_gate.sh; bash plans/tests/test_guard_no_command_substitution.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/workflow_contract_gate.sh; ./plans/workflow_verify.sh.
+Evidence: specs/WORKFLOW_CONTRACT.md; plans/story_review_gate.sh; plans/review_resolution_template.md; plans/code_review_expert_logged.sh; plans/thinking_review_logged.sh; plans/slice_review_gate.sh; plans/tests/test_story_review_gate.sh; plans/tests/test_code_review_expert_logged.sh; plans/tests/test_thinking_review_logged.sh; plans/tests/test_slice_review_gate.sh; artifacts/verify/20260210_172933.
+Next: If desired, I can stage only the workflow files from this change-set and open a focused PR.
+Story: workflow-maintenance
+Date: 2026-02-10
+Summary: Closed review findings by (1) enforcing code-review-expert quality at story gate (HEAD match + Review Status COMPLETE + placeholder rejection), (2) making full verify enforce slice-close thinking review on run/sliceN-clean once all slice stories are passes=true via slice_completion_enforce, and (3) de-flaking code-review-expert logger fixtures by parsing explicit emitted artifact paths.
+Commands: bash plans/tests/test_code_review_expert_logged.sh; bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_story_review_findings_guard.sh; bash plans/tests/test_slice_completion_review_guard.sh; bash plans/tests/test_slice_review_gate.sh; bash plans/tests/test_slice_completion_enforce.sh; bash plans/tests/test_guard_no_command_substitution.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/workflow_contract_gate.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
+Evidence: plans/code_review_expert_logged.sh; plans/story_review_gate.sh; plans/slice_completion_enforce.sh; plans/verify_fork.sh; plans/verify_gate_contract_check.sh; plans/tests/test_code_review_expert_logged.sh; plans/tests/test_slice_completion_enforce.sh; artifacts/verify/20260210_180912; artifacts/verify/20260210_181450.
+Next: stage workflow files only and open/update PR with these fixes.

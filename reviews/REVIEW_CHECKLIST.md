@@ -64,6 +64,7 @@
 - [ ] Dependency manifests/group wrappers match actual executed validators; add/remove validator membership invalidates skip or is explicitly excluded.
 - [ ] Fail-closed audit: any `|| true`, suppressed errors, or ignored exits are reviewed for silent-success risk.
 - [ ] New workflow paths include at least one integration/smoke test (or an explicit rationale for omission).
+- [ ] Merge-rollback audit for critical anchors: when `stoic-cli` changes, explicitly verify transfer least-privilege checks and runtime-state post-rename directory fsync are preserved (or intentionally changed with rationale + tests).
 
 ## Operational & Org Lens
 - [ ] Operational impact: day-to-day workflows, incident response, and debugging paths are reviewed for regressions or new toil.

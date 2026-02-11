@@ -338,7 +338,6 @@
       "category": "infra",
       "description": "Implement health endpoint returning ok/build_id/contract_version.",
       "contract_refs": [
-        "P0-E Health Endpoint Scaffolding",
         "Anchor-021",
         "VR-024"
       ],

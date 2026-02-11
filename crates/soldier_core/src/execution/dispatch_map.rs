@@ -7,7 +7,8 @@
 //!
 //! CONTRACT.md AT-920: If `contracts` and canonical amount are both present
 //! and mismatch beyond `CONTRACTS_AMOUNT_MATCH_TOLERANCE`, the intent is
-//! rejected and `RiskState::Degraded` is returned.
+//! rejected before dispatch. The caller maps the rejection to
+//! `RiskState::Degraded` in runtime policy.
 
 use crate::execution::OrderSize;
 use crate::risk::RiskState;
@@ -15,9 +16,12 @@ use crate::venue::InstrumentKind;
 
 /// Tolerance for contracts-vs-amount consistency check (AT-920).
 ///
-/// If `|contracts * multiplier - canonical_amount| / canonical_amount > tolerance`,
+/// If `|contracts * multiplier - canonical_amount| /
+/// max(|canonical_amount|, CONTRACTS_AMOUNT_MATCH_EPSILON) > tolerance`,
 /// the sizing is rejected as a unit mismatch.
 pub const CONTRACTS_AMOUNT_MATCH_TOLERANCE: f64 = 0.001;
+
+const CONTRACTS_AMOUNT_MATCH_EPSILON: f64 = 1e-9;
 
 /// Intent classification for dispatch authorization.
 ///
@@ -161,14 +165,17 @@ fn map_to_dispatch_unchecked(
 /// Validate contracts/amount consistency and dispatch (AT-920).
 ///
 /// CONTRACT.md AT-920: If `contracts` and canonical amount are both present,
-/// validates that `|contracts * contract_multiplier - canonical_amount| / canonical_amount`
-/// does not exceed [`CONTRACTS_AMOUNT_MATCH_TOLERANCE`].
+/// validates that
+/// `|contracts * contract_multiplier - canonical_amount| /
+/// max(|canonical_amount|, epsilon)` does not exceed
+/// [`CONTRACTS_AMOUNT_MATCH_TOLERANCE`] (`epsilon = 1e-9`).
 ///
-/// On mismatch: returns `Err(ContractsAmountMismatch)` and the caller must
-/// set `RiskState::Degraded` and increment the mismatch counter.
+/// On mismatch: returns `Err(ContractsAmountMismatch)` and increments
+/// mismatch metrics. The caller is responsible for setting
+/// `RiskState::Degraded` in policy/runtime handling.
 ///
-/// When `contracts` is `None` or `contract_multiplier` is `None`, the
-/// consistency check is skipped (nothing to compare).
+/// When `contracts` is present, missing `contract_multiplier` is rejected
+/// fail-closed with [`DispatchMapError::ContractsRequireValidation`].
 pub fn validate_and_dispatch(
     order_size: &OrderSize,
     instrument_kind: InstrumentKind,
@@ -177,7 +184,8 @@ pub fn validate_and_dispatch(
     metrics: &mut MismatchMetrics,
 ) -> Result<ValidatedDispatch, DispatchMapError> {
     // AT-920: contracts/amount consistency check
-    if let (Some(contracts), Some(multiplier)) = (order_size.contracts, contract_multiplier) {
+    if let Some(contracts) = order_size.contracts {
+        let multiplier = contract_multiplier.ok_or(DispatchMapError::ContractsRequireValidation)?;
         let canonical_amount = match instrument_kind {
             InstrumentKind::Option | InstrumentKind::LinearFuture => order_size
                 .qty_coin
@@ -187,10 +195,22 @@ pub fn validate_and_dispatch(
             }
         };
 
-        let contracts_implied = contracts as f64 * multiplier;
-        let delta = (contracts_implied - canonical_amount).abs() / canonical_amount;
+        // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.
+        if !canonical_amount.is_finite() || !multiplier.is_finite() {
+            metrics.record_mismatch_rejection();
+            return Err(DispatchMapError::ContractsAmountMismatch {
+                delta: f64::INFINITY,
+            });
+        }
 
-        if delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE {
+        let contracts_implied = contracts as f64 * multiplier;
+        let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);
+        let delta = (contracts_implied - canonical_amount).abs() / denominator;
+
+        if !contracts_implied.is_finite()
+            || !delta.is_finite()
+            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE
+        {
             metrics.record_mismatch_rejection();
             return Err(DispatchMapError::ContractsAmountMismatch { delta });
         }

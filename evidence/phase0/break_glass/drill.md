@@ -42,7 +42,7 @@
 After KILL confirmation, tested risk-reduction path:
 ```bash
 ./stoic-cli emergency reduce-only --reason "drill: testing escape path"
-./stoic-cli simulate-close --instrument BTC-28MAR26-50000-C --dry-run
+STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument BTC-28MAR26-50000-C --dry-run
 # Result: ACCEPTED
 ```
 

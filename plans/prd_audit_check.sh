@@ -9,6 +9,8 @@ AUDIT_PROMISE="${AUDIT_PROMISE:-<promise>AUDIT_COMPLETE</promise>}"
 AUDIT_PROMISE_REQUIRED="${AUDIT_PROMISE_REQUIRED:-1}"
 AUDIT_META_FILE="${AUDIT_META_FILE:-.context/prd_audit_meta.json}"
 AUDIT_FAIL_FAST="${AUDIT_FAIL_FAST:-0}"
+audit_scope="${audit_scope:-}"
+prd_slice_file="${prd_slice_file:-}"
 
 fail() {
   echo "ERROR: $*" >&2

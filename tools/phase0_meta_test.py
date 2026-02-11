@@ -29,12 +29,22 @@ import argparse
 import errno
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Iterable, List
+
+FORBIDDEN_WITHDRAW_RESULTS = {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}
+REVOKED_TRADE_FAILURE_RESULTS = FORBIDDEN_WITHDRAW_RESULTS | {
+    "revoked",
+    "unauthorized",
+    "auth_failed",
+    "invalid_key",
+    "invalid_api_key",
+}
 
 
 def eprint(*args: object) -> None:
@@ -185,6 +195,7 @@ def test_api_keys_are_least_privilege(root: Path) -> List[str]:
     if isinstance(obj, dict) and isinstance(obj.get("probes"), list):
         trade_envs = 0
         trade_envs_with_forbidden_withdraw = 0
+        trade_envs_with_revoked_trade_failure = 0
 
         for i, probe in enumerate(obj.get("probes", []), start=1):
             if not isinstance(probe, dict):
@@ -202,11 +213,25 @@ def test_api_keys_are_least_privilege(root: Path) -> List[str]:
                 trade_envs += 1
                 withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
                 wresult = str(withdraw.get("result", "")).lower()
-                if wresult in {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}:
+                if wresult in FORBIDDEN_WITHDRAW_RESULTS:
                     trade_envs_with_forbidden_withdraw += 1
                 else:
                     errors.append(
                         f"probe[{i}] trade-capable key must show forbidden withdrawal; got result={wresult or 'missing'}"
+                    )
+
+                revoked_trade = (
+                    results.get("trade_with_revoked_key", {})
+                    if isinstance(results.get("trade_with_revoked_key"), dict)
+                    else {}
+                )
+                rresult = str(revoked_trade.get("result", "")).lower()
+                if rresult in REVOKED_TRADE_FAILURE_RESULTS:
+                    trade_envs_with_revoked_trade_failure += 1
+                else:
+                    errors.append(
+                        f"probe[{i}] trade-capable key must show revoked-key trade rejection; "
+                        f"got result={rresult or 'missing'}"
                     )
 
             # If a probe is read-only/public, it must not demonstrate successful trading.
@@ -220,6 +245,8 @@ def test_api_keys_are_least_privilege(root: Path) -> List[str]:
             errors.append("no trade-capable environment probe found")
         if trade_envs_with_forbidden_withdraw == 0:
             errors.append("no evidence that withdrawal is forbidden for trade-capable keys")
+        if trade_envs_with_revoked_trade_failure == 0:
+            errors.append("no evidence that revoked keys are rejected for trading")
 
         summary = obj.get("summary", {})
         if isinstance(summary, dict) and "least_privilege_verified" in summary:
@@ -341,6 +368,28 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         if runtime_state.exists():
             runtime_state.unlink()
 
+    return errors
+
+
+def test_simulate_command_docs_require_drill_mode(root: Path) -> List[str]:
+    """Grep-style docs guard: simulate commands must be prefixed with STOIC_DRILL_MODE=1."""
+    targets = [
+        root / "docs" / "break_glass_runbook.md",
+        root / "evidence" / "phase0" / "break_glass" / "runbook_snapshot.md",
+        root / "evidence" / "phase0" / "break_glass" / "drill.md",
+        root / "tests" / "phase0" / "test_break_glass_kill_blocks_open_allows_reduce.md",
+    ]
+    pattern = re.compile(r"\./stoic-cli\s+simulate-(open|close)\b")
+    errors: List[str] = []
+    for path in targets:
+        if not path.exists():
+            errors.append(f"{path} missing")
+            continue
+        for lineno, line in enumerate(read_text(path).splitlines(), start=1):
+            if not pattern.search(line):
+                continue
+            if "STOIC_DRILL_MODE=1" not in line:
+                errors.append(f"{path}:{lineno} simulate command must include STOIC_DRILL_MODE=1")
     return errors
 
 
@@ -727,6 +776,7 @@ def main() -> int:
             "test_break_glass_kill_blocks_open_allows_reduce",
             test_break_glass_kill_blocks_open_allows_reduce(root),
         ),
+        ("test_simulate_command_docs_require_drill_mode", test_simulate_command_docs_require_drill_mode(root)),
     ]
 
     for name, t_errors in phase0_tests:

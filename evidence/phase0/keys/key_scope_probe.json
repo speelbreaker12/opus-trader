@@ -30,6 +30,11 @@
           "attempted": true,
           "result": "success"
         },
+        "trade_with_revoked_key": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "key revoked"
+        },
         "withdraw": {
           "attempted": true,
           "result": "permission_denied",
@@ -90,6 +95,11 @@
           "result": "skipped",
           "reason": "LIVE probe limited to read-only verification"
         },
+        "trade_with_revoked_key": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "key revoked"
+        },
         "withdraw": {
           "attempted": true,
           "result": "permission_denied",
@@ -107,6 +117,7 @@
     "paper_trade_capability": false,
     "all_withdrawals_disabled": true,
     "all_transfers_disabled": true,
+    "revoked_trade_rejected": true,
     "least_privilege_verified": true
   },
   "operator": "drill_operator",

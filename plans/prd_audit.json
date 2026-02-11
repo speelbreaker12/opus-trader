@@ -1,6 +1,6 @@
 {
   "project": "StoicTrader",
-  "prd_sha256": "a750b615724b39936e0c97011a521705516c76ff49998216585ed9b74857f460",
+  "prd_sha256": "8c4f8c614c5679765de1e6ee3e0760f02c52c419e08be0b9452936bbd126a2a8",
   "inputs": {
     "prd": "plans/prd.json",
     "contract": "specs/CONTRACT.md",
