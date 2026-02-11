@@ -241,6 +241,7 @@ REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
+  "plans/tests/test_pr_gate.sh"
 )
 
 for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
