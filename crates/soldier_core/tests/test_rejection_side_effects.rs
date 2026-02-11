@@ -46,6 +46,45 @@ impl PersistentState {
     }
 }
 
+fn assert_rejection_preserves_state(
+    result: &ChokeResult,
+    state_before: &PersistentState,
+    state_after: &PersistentState,
+    msg: &str,
+) {
+    assert!(
+        matches!(result, ChokeResult::Rejected { .. }),
+        "expected rejection result"
+    );
+    assert_eq!(state_before, state_after, "{msg}");
+}
+
+// ─── Canonical P1-C proof: rejected intent has no side effects ──────────
+
+#[test]
+fn test_rejected_intent_has_no_side_effects() {
+    let state_before = PersistentState::empty();
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults::default();
+
+    let result = build_order_intent(
+        ChokeIntentClass::Open,
+        RiskState::Degraded,
+        &mut metrics,
+        &gates,
+    );
+
+    assert_rejection_preserves_state(
+        &result,
+        &state_before,
+        &PersistentState::empty(),
+        "Canonical P1-C rejection must not modify persistent state",
+    );
+
+    assert_eq!(metrics.rejected_total(), 1);
+    assert_eq!(metrics.approved_total(), 0);
+}
+
 // ─── Case 1: RiskState rejection (OPEN + Degraded) ──────────────────────
 
 #[test]

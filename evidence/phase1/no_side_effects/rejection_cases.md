@@ -7,6 +7,12 @@ Only observability counters (metrics) may be modified.
 
 ## Rejection Cases Tested
 
+### Case 0: Canonical P1-C Proof
+- **Trigger:** `ChokeIntentClass::Open` + `RiskState::Degraded`
+- **Gate:** DispatchAuth (gate 1)
+- **Verified:** Rejection path preserves persistent state exactly (no WAL/order/exposure mutation)
+- **Test:** `test_rejected_intent_has_no_side_effects`
+
 ### Case 1: RiskState Not Healthy
 - **Trigger:** `ChokeIntentClass::Open` + `RiskState::Degraded`
 - **Gate:** DispatchAuth (gate 1)

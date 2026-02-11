@@ -357,3 +357,9 @@ Summary: Re-ran quick verify after progress-log update; phase0 + phase1 meta-tes
 Commands: ./plans/verify.sh quick.
 Evidence: artifacts/verify/20260211_110032.
 Next: Commit and open PR, then continue with P1-C.
+Story: workflow/phase1-p1c-no-side-effects-canonical
+Date: 2026-02-11
+Summary: Added canonical P1-C proof test test_rejected_intent_has_no_side_effects with a shared rejection-state assertion helper, and updated no-side-effects evidence cases to include the canonical test mapping.
+Commands: cargo test -p soldier_core --test test_rejection_side_effects; ./plans/verify.sh quick.
+Evidence: crates/soldier_core/tests/test_rejection_side_effects.rs; evidence/phase1/no_side_effects/rejection_cases.md; artifacts/verify/20260211_110546.
+Next: Push commit to PR #20.
