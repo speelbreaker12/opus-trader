@@ -61,7 +61,3 @@ For each item below, provide at least one concrete case. If none, write `none` p
 - Command:
   - Key output:
   - Artifact/log path:
-- Pre-PR review gate command:
-  - `./plans/pre_pr_review_gate.sh <STORY_ID>`
-- PR gate command:
-  - `./plans/pr_gate.sh --wait --story <STORY_ID>`
