@@ -333,3 +333,27 @@ Summary: Closed review findings by (1) enforcing code-review-expert quality at s
 Commands: bash plans/tests/test_code_review_expert_logged.sh; bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_story_review_findings_guard.sh; bash plans/tests/test_slice_completion_review_guard.sh; bash plans/tests/test_slice_review_gate.sh; bash plans/tests/test_slice_completion_enforce.sh; bash plans/tests/test_guard_no_command_substitution.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/workflow_contract_gate.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/code_review_expert_logged.sh; plans/story_review_gate.sh; plans/slice_completion_enforce.sh; plans/verify_fork.sh; plans/verify_gate_contract_check.sh; plans/tests/test_code_review_expert_logged.sh; plans/tests/test_slice_completion_enforce.sh; artifacts/verify/20260210_180912; artifacts/verify/20260210_181450.
 Next: stage workflow files only and open/update PR with these fixes.
+Story: workflow/phase1-meta-test-wire
+Date: 2026-02-11
+Summary: Wired Phase-1 meta-test into canonical verify flow after language test gates, and extended verify-fork smoke coverage to require the new phase1_meta_test gate.
+Commands: bash plans/test_verify_fork_smoke.sh; python3 tools/phase1_meta_test.py --root .; ./plans/workflow_verify.sh; ./plans/verify.sh full.
+Evidence: plans/verify_fork.sh; plans/test_verify_fork_smoke.sh; tools/phase1_meta_test.py; artifacts/verify/20260211_102907; artifacts/verify/20260211_103214.
+Next: None.
+Story: workflow/phase1-p1a-chokepoint-guard
+Date: 2026-02-11
+Summary: Added explicit P1-A enforcement test test_dispatch_chokepoint_no_direct_exchange_client_usage to block direct dispatch mapping/request construction outside chokepoint boundary, and updated dispatch chokepoint docs to describe those CI constraints.
+Commands: cargo test -p soldier_core --test test_dispatch_chokepoint; ./plans/verify.sh quick.
+Evidence: crates/soldier_core/tests/test_dispatch_chokepoint.rs; docs/dispatch_chokepoint.md; artifacts/verify/20260211_104605.
+Next: None.
+Story: workflow/phase1-p1a-visibility-tightening
+Date: 2026-02-11
+Summary: Tightened chokepoint compile-time boundary by making ChokeMetrics approval/rejection mutators non-public, and added a failing-first CI test to enforce mutator visibility constraints.
+Commands: cargo test -p soldier_core --test test_dispatch_chokepoint test_chokepoint_metrics_mutators_not_public; cargo test -p soldier_core --test test_dispatch_chokepoint; ./plans/verify.sh quick.
+Evidence: crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/tests/test_dispatch_chokepoint.rs; artifacts/verify/20260211_105703.
+Next: Commit and open PR, then continue with P1-C.
+Story: workflow/phase1-p1a-visibility-tightening
+Date: 2026-02-11
+Summary: Re-ran quick verify after progress-log update; phase0 + phase1 meta-tests and quick gates remain green.
+Commands: ./plans/verify.sh quick.
+Evidence: artifacts/verify/20260211_110032.
+Next: Commit and open PR, then continue with P1-C.
