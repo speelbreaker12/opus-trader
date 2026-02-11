@@ -1,0 +1,202 @@
+//! Pending exposure reservation (S6.2, anti over-fill).
+//!
+//! Contract mapping:
+//! - §1.4.2.1: reserve before dispatch; reject if reservation breaches budget.
+//! - AT-225: concurrent reserves must not overfill budget.
+//! - AT-910: over-budget reserve rejects with PendingExposureBudgetExceeded.
+
+use std::collections::BTreeMap;
+
+/// Rejection reasons for pending exposure reservation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PendingExposureRejectReason {
+    /// Reservation would breach budget, or budget input is invalid (fail-closed).
+    PendingExposureBudgetExceeded,
+}
+
+/// Reservation attempt outcome.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PendingExposureResult {
+    Reserved {
+        reservation_id: u64,
+        pending_total: f64,
+    },
+    Rejected {
+        reason: PendingExposureRejectReason,
+        pending_total: f64,
+    },
+}
+
+/// Terminal outcome used to release reservation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PendingExposureTerminalOutcome {
+    Filled,
+    Rejected,
+    Canceled,
+    Failed,
+}
+
+/// Observability counters for pending exposure.
+#[derive(Debug, Default)]
+pub struct PendingExposureMetrics {
+    reserve_attempt_total: u64,
+    reserve_success_total: u64,
+    reserve_reject_total: u64,
+    release_total: u64,
+}
+
+impl PendingExposureMetrics {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn reserve_attempt_total(&self) -> u64 {
+        self.reserve_attempt_total
+    }
+
+    pub fn reserve_success_total(&self) -> u64 {
+        self.reserve_success_total
+    }
+
+    pub fn reserve_reject_total(&self) -> u64 {
+        self.reserve_reject_total
+    }
+
+    pub fn release_total(&self) -> u64 {
+        self.release_total
+    }
+
+    fn record_reserve_success(&mut self) {
+        self.reserve_attempt_total += 1;
+        self.reserve_success_total += 1;
+    }
+
+    fn record_reserve_reject(&mut self) {
+        self.reserve_attempt_total += 1;
+        self.reserve_reject_total += 1;
+    }
+
+    fn record_release(&mut self) {
+        self.release_total += 1;
+    }
+}
+
+/// In-memory reservation book keyed by reservation id.
+#[derive(Debug, Default)]
+pub struct PendingExposureBook {
+    delta_limit: Option<f64>,
+    pending_total: f64,
+    next_reservation_id: u64,
+    reservations: BTreeMap<u64, f64>,
+}
+
+impl PendingExposureBook {
+    /// Construct a reservation book.
+    ///
+    /// `delta_limit` is absolute budget for `abs(current_delta + pending_delta)`.
+    /// Missing/invalid value is fail-closed at reserve time.
+    pub fn new(delta_limit: Option<f64>) -> Self {
+        Self {
+            delta_limit,
+            pending_total: 0.0,
+            next_reservation_id: 1,
+            reservations: BTreeMap::new(),
+        }
+    }
+
+    pub fn pending_total(&self) -> f64 {
+        self.pending_total
+    }
+
+    pub fn active_reservations(&self) -> usize {
+        self.reservations.len()
+    }
+
+    /// Reserve projected delta impact before dispatch.
+    ///
+    /// Fail-closed behavior:
+    /// - invalid/missing `delta_limit`
+    /// - non-finite inputs
+    pub fn reserve(
+        &mut self,
+        current_delta: f64,
+        delta_impact_est: f64,
+        metrics: &mut PendingExposureMetrics,
+    ) -> PendingExposureResult {
+        let Some(limit) = normalized_limit(self.delta_limit) else {
+            metrics.record_reserve_reject();
+            return PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total: self.pending_total,
+            };
+        };
+
+        if !current_delta.is_finite()
+            || !delta_impact_est.is_finite()
+            || !self.pending_total.is_finite()
+        {
+            metrics.record_reserve_reject();
+            return PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total: self.pending_total,
+            };
+        }
+
+        let projected = current_delta + self.pending_total + delta_impact_est;
+        if projected.abs() > limit {
+            metrics.record_reserve_reject();
+            return PendingExposureResult::Rejected {
+                reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
+                pending_total: self.pending_total,
+            };
+        }
+
+        let reservation_id = self.next_reservation_id;
+        self.next_reservation_id = self.next_reservation_id.saturating_add(1);
+        self.reservations.insert(reservation_id, delta_impact_est);
+        self.pending_total += delta_impact_est;
+        metrics.record_reserve_success();
+
+        PendingExposureResult::Reserved {
+            reservation_id,
+            pending_total: self.pending_total,
+        }
+    }
+
+    /// Release reservation on TLSM terminal transition.
+    ///
+    /// Returns true when a reservation existed and was released.
+    pub fn settle(
+        &mut self,
+        reservation_id: u64,
+        outcome: PendingExposureTerminalOutcome,
+        metrics: &mut PendingExposureMetrics,
+    ) -> bool {
+        let Some(delta_impact_est) = self.reservations.remove(&reservation_id) else {
+            return false;
+        };
+
+        self.pending_total -= delta_impact_est;
+        if self.pending_total.abs() < 1e-12 {
+            self.pending_total = 0.0;
+        }
+
+        // Filled conversion to realized exposure is owned by exposure state handlers.
+        match outcome {
+            PendingExposureTerminalOutcome::Filled
+            | PendingExposureTerminalOutcome::Rejected
+            | PendingExposureTerminalOutcome::Canceled
+            | PendingExposureTerminalOutcome::Failed => {}
+        }
+
+        metrics.record_release();
+        true
+    }
+}
+
+fn normalized_limit(delta_limit: Option<f64>) -> Option<f64> {
+    match delta_limit {
+        Some(v) if v.is_finite() && v > 0.0 => Some(v.abs()),
+        _ => None,
+    }
+}
