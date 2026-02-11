@@ -49,6 +49,7 @@ required=(
   plans/init.sh
   plans/kimi_review_logged.sh
   plans/legacy_layout_guard.sh
+  plans/pr_gate.sh
   plans/prd_audit_check.sh
   plans/prd_audit_merge.py
   plans/prd_audit_merge.sh
@@ -56,6 +57,7 @@ required=(
   plans/prd_cache_update.py
   plans/prd_gate.sh
   plans/prd_preflight.sh
+  plans/pre_pr_review_gate.sh
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
   plans/review_resolution_template.md
@@ -77,7 +79,9 @@ required=(
   plans/tests/test_code_review_expert_logged.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_kimi_review_logged.sh
+  plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
+  plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh

@@ -15,6 +15,7 @@
 
 ## Evidence Gate (Required)
 - [ ] Proof includes exact commands, 1-3 key output lines, and artifact/log paths.
+- [ ] Pre-PR review wrapper evidence is present: `./plans/pre_pr_review_gate.sh <STORY_ID>` ran for the final HEAD before `./plans/pr_gate.sh --wait --story <STORY_ID>`.
 - [ ] Requirements touched list concrete CR-IDs/contract anchors (no vague claims).
 - [ ] If any verification was rerun, the reason is stated.
 - [ ] Evidence/compounding/postmortem claims match the actual code (no stale line refs).

@@ -6,17 +6,32 @@ This repository uses manual PRD story execution with verify as the only gate.
 ## Core rules
 
 1. Use one branch/worktree per Story ID.
-2. Run `./plans/verify.sh quick` during implementation/review.
-3. Run `./plans/verify.sh full` before marking complete.
-4. Flip `passes=true` only via:
+2. Use PRs as the merge mechanism; do not merge story branches into local `main`.
+3. Keep the same story worktree until PR merge (or explicit abandonment), then clean it up.
+4. Keep WIP=2 maximum:
+- one story in `VERIFYING` (full verify running, worktree frozen)
+- one story in `IMPLEMENTING/REVIEW`
+5. Run `./plans/verify.sh quick` during implementation/review.
+6. Run `./plans/verify.sh full` before marking complete/merge-grade.
+7. Flip `passes=true` only via:
 
 ```bash
 ./plans/prd_set_pass.sh <STORY_ID> true --artifacts-dir artifacts/verify/<run_id>
 ```
 
-5. Keep WIP=2 maximum:
-- one story in `VERIFYING` (full verify running, worktree frozen)
-- one story in `IMPLEMENTING/REVIEW`
+8. Dirty-tree policy: do not use dirty verify exceptions by default; prefer CI verify on PR (clean checkout) or clean the worktree first.
+
+## PR loop (trimmed)
+
+1. Rebase/sync story branch onto latest integration/mainline branch.
+2. Run required gates in that story worktree:
+- `./plans/verify.sh quick` during iteration
+- `./plans/verify.sh full` before merge-grade/pass flip
+3. Push branch and open/update PR.
+4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating.
+5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes.
+6. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
+7. Merge via PR after gates are green.
 
 ## Recommended story loop
 
