@@ -45,6 +45,8 @@ cat > "$fake_bin/gh" <<'EOF_GH'
 set -euo pipefail
 
 mode="${GH_MODE:-clean}"
+head_sha="${GH_HEAD_SHA:-abc123}"
+orig_sha="${GH_ORIG_SHA:-orig123}"
 cmd="${1:-}"
 sub="${2:-}"
 
@@ -54,11 +56,11 @@ if [[ "$cmd" == "pr" && "$sub" == "view" ]]; then
     exit 0
   fi
 
-  if [[ "$mode" == "changes_requested" ]]; then
-    echo "CHANGES_REQUESTED"
-  else
-    echo "APPROVED"
-  fi
+  case "$mode" in
+    changes_requested) echo "CHANGES_REQUESTED" ;;
+    review_unknown) echo "" ;;
+    *) echo "APPROVED" ;;
+  esac
   exit 0
 fi
 
@@ -71,21 +73,28 @@ endpoint="${2:-}"
 case "$endpoint" in
   repos/acme/demo/pulls/17)
     if [[ "$mode" == "dirty_merge" ]]; then
-      cat <<'EOF_JSON'
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"abc123"},"base":{"ref":"main"},"mergeable":false,"mergeable_state":"dirty"}
+      cat <<EOF_JSON
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":false,"mergeable_state":"dirty"}
 EOF_JSON
     else
-      cat <<'EOF_JSON'
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"abc123"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean"}
+      cat <<EOF_JSON
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean"}
 EOF_JSON
     fi
     ;;
-  repos/acme/demo/commits/abc123)
-    cat <<'EOF_JSON'
-{"commit":{"committer":{"date":"2026-02-11T00:00:00Z"}}}
+  repos/acme/demo/pulls/17/reviews?per_page=100)
+    case "$mode" in
+      copilot_review_for_head)
+        cat <<EOF_JSON
+[{"id":901,"commit_id":"$head_sha","state":"COMMENTED","user":{"login":"copilot-swe-agent","type":"Bot"}}]
 EOF_JSON
+        ;;
+      *)
+        echo '[]'
+        ;;
+    esac
     ;;
-  repos/acme/demo/commits/abc123/check-runs)
+  repos/acme/demo/commits/*/check-runs)
     case "$mode" in
       pending_checks)
         cat <<'EOF_JSON'
@@ -97,6 +106,9 @@ EOF_JSON
 {"check_runs":[{"name":"verify","status":"completed","conclusion":"failure","html_url":"https://example.invalid/check/1"}]}
 EOF_JSON
         ;;
+      fallback_pending|fallback_failure)
+        exit 1
+        ;;
       *)
         cat <<'EOF_JSON'
 {"check_runs":[{"name":"verify","status":"completed","conclusion":"success","html_url":"https://example.invalid/check/1"}]}
@@ -104,22 +116,63 @@ EOF_JSON
         ;;
     esac
     ;;
-  repos/acme/demo/commits/abc123/status)
+  repos/acme/demo/commits/*/status)
+    case "$mode" in
+      fallback_pending)
+        cat <<'EOF_JSON'
+{"state":"pending","statuses":[]}
+EOF_JSON
+        ;;
+      fallback_failure)
+        cat <<'EOF_JSON'
+{"state":"failure","statuses":[]}
+EOF_JSON
+        ;;
+      *)
+        cat <<'EOF_JSON'
+{"state":"success","statuses":[{"state":"success"}]}
+EOF_JSON
+        ;;
+    esac
+    ;;
+  repos/acme/demo/commits/*)
     cat <<'EOF_JSON'
-{"statuses":[{"state":"success"}]}
+{"commit":{"committer":{"date":"2026-02-11T00:00:00Z"}}}
 EOF_JSON
     ;;
   repos/acme/demo/pulls/17/comments?per_page=100)
-    if [[ "$mode" == "bot_comment" ]]; then
-      cat <<'EOF_JSON'
-[{"created_at":"2026-02-11T00:05:00Z","html_url":"https://example.invalid/pr-comment/1","body":"Automated finding","user":{"login":"copilot-swe-agent","type":"Bot"}}]
+    case "$mode" in
+      inline_unaddressed)
+        cat <<EOF_JSON
+[{"created_at":"2026-02-11T00:05:00Z","html_url":"https://example.invalid/pr-comment/1","body":"Automated finding","path":"docs/unchanged.txt","original_commit_id":"$orig_sha","user":{"login":"copilot-swe-agent","type":"Bot"}}]
 EOF_JSON
-    else
-      echo '[]'
-    fi
+        ;;
+      inline_addressed|bot_comment)
+        cat <<EOF_JSON
+[{"created_at":"2026-02-11T00:05:00Z","html_url":"https://example.invalid/pr-comment/2","body":"Automated finding","path":"README.md","original_commit_id":"$orig_sha","user":{"login":"copilot-swe-agent","type":"Bot"}}]
+EOF_JSON
+        ;;
+      *)
+        echo '[]'
+        ;;
+    esac
     ;;
   repos/acme/demo/issues/17/comments?per_page=100)
-    echo '[]'
+    case "$mode" in
+      issue_bot_no_ack)
+        cat <<'EOF_JSON'
+[{"created_at":"2026-02-11T00:06:00Z","html_url":"https://example.invalid/issue-comment/1","body":"Bot finding","user":{"login":"copilot-review-bot","type":"Bot"}}]
+EOF_JSON
+        ;;
+      issue_bot_with_ack)
+        cat <<EOF_JSON
+[{"created_at":"2026-02-11T00:06:00Z","html_url":"https://example.invalid/issue-comment/1","body":"Bot finding","user":{"login":"copilot-review-bot","type":"Bot"}},{"created_at":"2026-02-11T00:07:00Z","html_url":"https://example.invalid/issue-comment/2","body":"AFTERCARE_ACK: $head_sha","user":{"login":"maintainer","type":"User"}}]
+EOF_JSON
+        ;;
+      *)
+        echo '[]'
+        ;;
+    esac
     ;;
   *)
     echo "unsupported gh api endpoint: $endpoint" >&2
@@ -132,15 +185,22 @@ chmod +x "$fake_bin/gh"
 git -C "$repo_dir" init -q
 git -C "$repo_dir" config user.email "ci@example.com"
 git -C "$repo_dir" config user.name "CI"
+mkdir -p "$repo_dir/docs"
 echo "fixture" > "$repo_dir/README.md"
+echo "keep-me" > "$repo_dir/docs/unchanged.txt"
+git -C "$repo_dir" add README.md docs/unchanged.txt
+git -C "$repo_dir" commit -q -m "base fixture repo"
+orig_sha="$(git -C "$repo_dir" rev-parse HEAD)"
+echo "fixture-v2" > "$repo_dir/README.md"
 git -C "$repo_dir" add README.md
-git -C "$repo_dir" commit -q -m "init fixture repo"
+git -C "$repo_dir" commit -q -m "head fixture repo"
+head_sha="$(git -C "$repo_dir" rev-parse HEAD)"
 git -C "$repo_dir" remote add origin "https://github.com/acme/demo.git"
 
-# Case 1: auto-detected PR passes; bot comments are warnings in default mode.
+# Case 1: auto-detected PR passes; new bot comments are warnings in default mode.
 set +e
 out_case1="$(
-  cd "$repo_dir" && GH_MODE=bot_comment PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --story S1 --artifacts-root "$tmp_dir/artifacts" 2>&1
+  cd "$repo_dir" && GH_MODE=inline_addressed GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --story S1 --artifacts-root "$tmp_dir/artifacts" 2>&1
 )"
 rc_case1=$?
 set -e
@@ -153,14 +213,62 @@ report_count="$(find "$tmp_dir/artifacts/S1/pr_gate" -type f -name '*_pr_gate.md
 
 # Case 2: merge conflicts/blocked state fail closed.
 expect_fail "mergeable state dirty" "merge_conflict_or_blocked: mergeable_state=dirty" \
-  bash -lc "cd '$repo_dir' && GH_MODE=dirty_merge PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=dirty_merge GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
 
 # Case 3: pending checks fail.
 expect_fail "checks pending" "checks_pending" \
-  bash -lc "cd '$repo_dir' && GH_MODE=pending_checks PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=pending_checks GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
 
-# Case 4: bot comments can be elevated to blocking mode.
+# Case 4: warn-mode bot findings can be elevated to blocking mode.
 expect_fail "bot comment blocking mode" "new_bot_comments_since_last_push" \
-  bash -lc "cd '$repo_dir' && GH_MODE=bot_comment PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --bot-comments-mode block"
+  bash -lc "cd '$repo_dir' && GH_MODE=inline_addressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --bot-comments-mode block"
+
+# Case 5: fallback commit status API must fail when top-level state is pending.
+expect_fail "fallback pending state" "checks_pending" \
+  bash -lc "cd '$repo_dir' && GH_MODE=fallback_pending GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+
+# Case 6: fallback commit status API must fail when top-level state is failure.
+expect_fail "fallback failure state" "checks_failing" \
+  bash -lc "cd '$repo_dir' && GH_MODE=fallback_failure GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+
+# Case 7: unknown review decision is blocking.
+expect_fail "unknown review decision" "review_decision_unknown" \
+  bash -lc "cd '$repo_dir' && GH_MODE=review_unknown GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+
+# Case 8: story id path traversal must be rejected.
+expect_fail "invalid story id" "invalid --story value: ../escape" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story '../escape'"
+
+# Case 9: inline bot review comments must be backed by file diffs.
+expect_fail "inline bot comment unaddressed" "inline_bot_comments_unaddressed" \
+  bash -lc "cd '$repo_dir' && GH_MODE=inline_unaddressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+
+# Case 10: issue bot comments require head-specific AFTERCARE_ACK.
+expect_fail "missing aftercare ack" "missing_aftercare_ack_for_head" \
+  bash -lc "cd '$repo_dir' && GH_MODE=issue_bot_no_ack GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+
+# Case 11: issue bot comments + valid ACK token pass.
+set +e
+out_case11="$(
+  cd "$repo_dir" && GH_MODE=issue_bot_with_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case11=$?
+set -e
+[[ $rc_case11 -eq 0 ]] || fail "expected case11 to pass"
+printf '%s\n' "$out_case11" | grep -Fq "OK: PR gate passed" || fail "case11 missing pass output"
+
+# Case 12: opt-in Copilot requirement blocks when no Copilot signal is present.
+expect_fail "copilot required pending" "copilot_review_pending" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-copilot-review"
+
+# Case 13: opt-in Copilot requirement passes when PR review is tied to HEAD SHA.
+set +e
+out_case13="$(
+  cd "$repo_dir" && GH_MODE=copilot_review_for_head GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-copilot-review 2>&1
+)"
+rc_case13=$?
+set -e
+[[ $rc_case13 -eq 0 ]] || fail "expected case13 to pass"
+printf '%s\n' "$out_case13" | grep -Fq "OK: PR gate passed" || fail "case13 missing pass output"
 
 echo "PASS: pr_gate fixtures"
