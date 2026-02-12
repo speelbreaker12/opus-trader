@@ -95,7 +95,13 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 # Timeout defaults (fork contract)
-PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-300s}"
+if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then
+  PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT}"
+elif [[ "$MODE" == "full" ]]; then
+  PREFLIGHT_TIMEOUT="900s"
+else
+  PREFLIGHT_TIMEOUT="300s"
+fi
 CONTRACT_KERNEL_TIMEOUT="${CONTRACT_KERNEL_TIMEOUT:-30s}"
 CONTRACT_COVERAGE_TIMEOUT="${CONTRACT_COVERAGE_TIMEOUT:-2m}"
 SPEC_LINT_TIMEOUT="${SPEC_LINT_TIMEOUT:-2m}"
@@ -234,7 +240,7 @@ fi
 ensure_python
 
 log "01) preflight"
-run_logged_or_exit "preflight" "$PREFLIGHT_TIMEOUT" env POSTMORTEM_GATE=0 ./plans/preflight.sh
+run_logged_or_exit "preflight" "$PREFLIGHT_TIMEOUT" env POSTMORTEM_GATE=0 PREFLIGHT_FIXTURE_MODE="$MODE" ./plans/preflight.sh
 
 log "01b) verify gate contract"
 run_logged_or_exit "verify_gate_contract" "$PREFLIGHT_TIMEOUT" ./plans/verify_gate_contract_check.sh

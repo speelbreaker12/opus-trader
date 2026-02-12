@@ -193,6 +193,7 @@ fn test_liquidity_gate_same_inputs_same_result() {
         order_qty: 3.0,
         is_buy: true,
         intent_class: GateIntentClass::Open,
+        is_marketable: true,
         l2_snapshot: Some(L2BookSnapshot {
             asks: vec![
                 L2Level {

@@ -2,19 +2,19 @@
 //!
 //! **Rule:**
 //! - `net_edge = gross_edge - fees`
-//! - If `net_edge < min_edge` → reject.
+//! - If `net_edge < min_edge` -> reject.
 //! - `net_edge_per_unit = net_edge / qty`
 //! - `fee_per_unit = fee_estimate_usd / qty`
 //! - `min_edge_per_unit = min_edge_usd / qty`
 //! - `max_price_for_min_edge`:
 //!   - BUY: `fair_price - (min_edge_per_unit + fee_per_unit)`
 //!   - SELL: `fair_price + (min_edge_per_unit + fee_per_unit)`
-//! - `proposed_limit = fair_price ± 0.5 * net_edge_per_unit`
+//! - `proposed_limit = fair_price +/- 0.5 * net_edge_per_unit`
 //! - Final limit clamped to guarantee min edge at limit price.
 //!
 //! AT-223.
 
-// ─── Pricer side ─────────────────────────────────────────────────────────
+// --- Pricer side ---------------------------------------------------------
 
 /// Order side for the pricer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +23,7 @@ pub enum PricerSide {
     Sell,
 }
 
-// ─── Pricer input ────────────────────────────────────────────────────────
+// --- Pricer input --------------------------------------------------------
 
 /// Input to the IOC limit pricer.
 #[derive(Debug, Clone)]
@@ -42,14 +42,14 @@ pub struct PricerInput {
     pub side: PricerSide,
 }
 
-// ─── Pricer result ──────────────────────────────────────────────────────
+// --- Pricer result -------------------------------------------------------
 
 /// Reject reason from the pricer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PricerRejectReason {
     /// Net edge after fees is below min_edge_usd.
     NetEdgeTooLow,
-    /// Invalid input (qty <= 0, etc).
+    /// Invalid input (non-finite numerics, qty <= 0, etc).
     InvalidInput,
 }
 
@@ -74,7 +74,7 @@ pub enum PricerResult {
     },
 }
 
-// ─── Metrics ─────────────────────────────────────────────────────────────
+// --- Metrics -------------------------------------------------------------
 
 /// Observability metrics for the pricer.
 #[derive(Debug)]
@@ -121,24 +121,40 @@ impl Default for PricerMetrics {
     }
 }
 
-// ─── Pricer evaluator ───────────────────────────────────────────────────
+fn reject_invalid(metrics: &mut PricerMetrics) -> PricerResult {
+    metrics.record_reject();
+    PricerResult::Rejected {
+        reason: PricerRejectReason::InvalidInput,
+        net_edge_usd: None,
+    }
+}
+
+// --- Pricer evaluator ----------------------------------------------------
 
 /// Compute IOC limit price with fee-aware min-edge clamping.
 ///
 /// CONTRACT.md §1.4: "No Market Orders" — always produce a limit price
 /// that guarantees min_edge_usd at the limit.
 pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> PricerResult {
-    // Validate input
-    if input.qty <= 0.0 {
-        metrics.record_reject();
-        return PricerResult::Rejected {
-            reason: PricerRejectReason::InvalidInput,
-            net_edge_usd: None,
-        };
+    // Standalone fail-closed input validation.
+    if !input.fair_price.is_finite()
+        || input.fair_price <= 0.0
+        || !input.gross_edge_usd.is_finite()
+        || !input.min_edge_usd.is_finite()
+        || input.min_edge_usd < 0.0
+        || !input.fee_estimate_usd.is_finite()
+        || input.fee_estimate_usd < 0.0
+        || !input.qty.is_finite()
+        || input.qty <= 0.0
+    {
+        return reject_invalid(metrics);
     }
 
     // net_edge = gross_edge - fees
     let net_edge = input.gross_edge_usd - input.fee_estimate_usd;
+    if !net_edge.is_finite() {
+        return reject_invalid(metrics);
+    }
 
     // Reject if net_edge < min_edge
     if net_edge < input.min_edge_usd {
@@ -153,6 +169,10 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
     let net_edge_per_unit = net_edge / input.qty;
     let fee_per_unit = input.fee_estimate_usd / input.qty;
     let min_edge_per_unit = input.min_edge_usd / input.qty;
+    if !net_edge_per_unit.is_finite() || !fee_per_unit.is_finite() || !min_edge_per_unit.is_finite()
+    {
+        return reject_invalid(metrics);
+    }
 
     // max_price_for_min_edge (guarantees min edge at fill)
     let max_price_for_min_edge = match input.side {
@@ -166,11 +186,19 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
         PricerSide::Sell => input.fair_price + 0.5 * net_edge_per_unit,
     };
 
+    if !max_price_for_min_edge.is_finite() || !proposed_limit.is_finite() {
+        return reject_invalid(metrics);
+    }
+
     // Clamp to guarantee min edge
     let limit_price = match input.side {
         PricerSide::Buy => proposed_limit.min(max_price_for_min_edge),
         PricerSide::Sell => proposed_limit.max(max_price_for_min_edge),
     };
+
+    if !limit_price.is_finite() || limit_price <= 0.0 {
+        return reject_invalid(metrics);
+    }
 
     metrics.record_priced();
     PricerResult::LimitPrice {

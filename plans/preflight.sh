@@ -7,15 +7,21 @@
 #   issues early (postmortem, schema, shell syntax) without the full verify cost.
 #
 # Usage:
-#   ./plans/preflight.sh          # Run all checks (warn on minor issues)
+#   ./plans/preflight.sh          # Run checks (smoke fixture profile by default)
 #   ./plans/preflight.sh --strict # Fail on warnings (e.g., missing BASE_REF)
+#
+# Environment:
+#   PREFLIGHT_FIXTURE_MODE=smoke|full|quick
+#     smoke/quick: fast fixture subset (default)
+#     full: full fixture matrix (used by verify full)
 #
 # Exit codes:
 #   0 = all checks passed
 #   1 = validation failed
 #   2 = setup error (missing tools/files)
 #
-# Runtime target: <60 seconds
+# Runtime target (smoke/quick): <60 seconds
+# Runtime target (full): may take several minutes depending on fixture matrix
 # =============================================================================
 
 set -euo pipefail
@@ -35,6 +41,16 @@ for arg in "$@"; do
     *) echo "Unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
+
+PREFLIGHT_FIXTURE_MODE="${PREFLIGHT_FIXTURE_MODE:-smoke}"
+case "$PREFLIGHT_FIXTURE_MODE" in
+  quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;
+  smoke|full) ;;
+  *)
+    echo "[FAIL] Invalid PREFLIGHT_FIXTURE_MODE='$PREFLIGHT_FIXTURE_MODE' (expected smoke|full|quick)" >&2
+    exit 2
+    ;;
+esac
 
 # --- Counters ---
 PASS_COUNT=0
@@ -225,25 +241,36 @@ else
 fi
 
 # 6. Fixture checks for review tooling scripts (fail-closed)
-REVIEW_FIXTURE_TESTS=(
-  "plans/tests/test_story_review_gate.sh"
-  "plans/tests/test_codex_review_digest.sh"
+# Split into fast smoke checks (default) vs full matrix checks (full verify).
+SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_run_prd_auditor_invocation.sh"
-  "plans/tests/test_run_prd_auditor_timeout_fallback.sh"
-  "plans/tests/test_audit_parallel_empty_cache_arrays.sh"
   "plans/tests/test_codex_review_logged.sh"
   "plans/tests/test_kimi_review_logged.sh"
   "plans/tests/test_code_review_expert_logged.sh"
   "plans/tests/test_thinking_review_logged.sh"
   "plans/tests/test_slice_review_gate.sh"
-  "plans/tests/test_slice_completion_review_guard.sh"
-  "plans/tests/test_slice_completion_enforce.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
+)
+
+FULL_ONLY_REVIEW_FIXTURE_TESTS=(
+  "plans/tests/test_story_review_gate.sh"
+  "plans/tests/test_codex_review_digest.sh"
+  "plans/tests/test_run_prd_auditor_timeout_fallback.sh"
+  "plans/tests/test_audit_parallel_empty_cache_arrays.sh"
+  "plans/tests/test_slice_completion_review_guard.sh"
+  "plans/tests/test_slice_completion_enforce.sh"
   "plans/tests/test_pr_gate.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
 )
+
+REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
+if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
+  REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
+fi
+
+pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
 
 for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
   if [[ -f "$fixture_test" ]]; then

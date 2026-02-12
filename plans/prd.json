@@ -2855,11 +2855,10 @@
           "crates/soldier_core/src/risk/state.rs",
           "crates/soldier_infra/src/deribit/account_summary.rs",
           "crates/soldier_core/src/risk/fees.rs",
-          "crates/soldier_core/tests/test_fee_staleness.rs"
+          "crates/soldier_core/tests/test_fee_staleness.rs",
+          "crates/soldier_infra/tests/test_fee_cache.rs"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_fee_cache.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -2876,16 +2875,16 @@
         "Implement fee staleness logic in crates/soldier_core/src/risk/fees.rs to apply fee_stale_buffer in the soft-stale window.",
         "Treat hard-stale or missing fee_model_cached_at_ts_ms as RiskState::Degraded and expose the flag to Phase 1 dispatch authorization (OPEN blocked, CLOSE/HEDGE/CANCEL allowed).",
         "Add unit tests in crates/soldier_core/tests/test_fee_staleness.rs for soft buffer and hard stale behavior.",
-        "Add unit tests in crates/soldier_core/tests/test_fee_cache.rs for missing timestamp handling, epoch-ms restart arithmetic, and fee tier update within one polling cycle."
+        "Add unit tests in crates/soldier_infra/tests/test_fee_cache.rs for missing timestamp handling, epoch-ms restart arithmetic, and fee tier update within one polling cycle."
       ],
       "verify": [
         "./plans/verify.sh",
         "cargo test -p soldier_core --test test_fee_staleness",
-        "cargo test -p soldier_core --test test_fee_cache"
+        "cargo test -p soldier_infra --test test_fee_cache"
       ],
       "evidence": [
         "cargo test -p soldier_core --test test_fee_staleness output",
-        "cargo test -p soldier_core --test test_fee_cache output",
+        "cargo test -p soldier_infra --test test_fee_cache output",
         "Test assertions showing soft-stale fee buffer and hard-stale OPEN rejection"
       ],
       "dependencies": [
@@ -2939,7 +2938,7 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_fee_staleness.rs",
-        "crates/soldier_core/tests/test_fee_cache.rs"
+        "crates/soldier_infra/tests/test_fee_cache.rs"
       ]
     },
     {
@@ -3162,9 +3161,7 @@
           "crates/soldier_core/src/execution/build_order_intent.rs",
           "crates/soldier_core/tests/test_gate_ordering.rs"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_phase1_dispatch_auth.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**",
           "crates/soldier_infra/**"
@@ -3182,16 +3179,14 @@
         "Enforce Phase 1 dispatch authorization: if RiskState != Healthy, reject OPEN intents and allow CLOSE/HEDGE/CANCEL.",
         "Ensure intent recording occurs before any network dispatch (RecordedBeforeDispatch).",
         "Restrict dispatch helpers to pub(crate) and update module exports to prevent bypass.",
-        "Add tests in crates/soldier_core/tests/test_gate_ordering.rs and test_phase1_dispatch_auth.rs."
+        "Add tests in crates/soldier_core/tests/test_gate_ordering.rs."
       ],
       "verify": [
         "./plans/verify.sh",
-        "cargo test -p soldier_core --test test_gate_ordering",
-        "cargo test -p soldier_core --test test_phase1_dispatch_auth"
+        "cargo test -p soldier_core --test test_gate_ordering"
       ],
       "evidence": [
         "cargo test -p soldier_core --test test_gate_ordering output",
-        "cargo test -p soldier_core --test test_phase1_dispatch_auth output",
         "Gate sequence trace assertions showing ordered steps"
       ],
       "dependencies": [
@@ -3234,8 +3229,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_gate_ordering.rs",
-        "crates/soldier_core/tests/test_phase1_dispatch_auth.rs"
+        "crates/soldier_core/tests/test_gate_ordering.rs"
       ]
     },
     {
@@ -3751,7 +3745,7 @@
     {
       "id": "S6-007",
       "priority": 89,
-      "phase": 1,
+      "phase": 2,
       "slice": 6,
       "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
       "story_ref": "S6.1 Inventory skew gate",
@@ -3843,7 +3837,7 @@
     {
       "id": "S6-008",
       "priority": 88,
-      "phase": 1,
+      "phase": 2,
       "slice": 6,
       "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
       "story_ref": "S6.2 Pending exposure reservation",
@@ -3930,7 +3924,7 @@
     {
       "id": "S6-009",
       "priority": 87,
-      "phase": 1,
+      "phase": 2,
       "slice": 6,
       "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
       "story_ref": "S6.3 Global exposure budget (corr buckets)",
@@ -4017,7 +4011,7 @@
     {
       "id": "S6-010",
       "priority": 86,
-      "phase": 1,
+      "phase": 2,
       "slice": 6,
       "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
       "story_ref": "S6.4 Margin headroom gate",
