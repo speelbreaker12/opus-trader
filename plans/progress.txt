@@ -363,3 +363,41 @@ Summary: Closed Phase-0 review findings by enforcing runtime drill-mode gating f
 Commands: cargo test -p soldier_infra --test test_phase0_runtime test_simulate_commands_require_drill_mode_runtime (red then green via full test file); cargo test -p soldier_infra --test test_phase0_runtime; python3 tools/phase0_meta_test.py --root . (red then green); ./plans/verify.sh quick.
 Evidence: stoic-cli; crates/soldier_infra/tests/test_phase0_runtime.rs; tools/phase0_meta_test.py; docs/{launch_policy.md,env_matrix.md,keys_and_secrets.md,break_glass_runbook.md,health_endpoint.md}; evidence/phase0/{README.md,policy/launch_policy_snapshot.md,env/env_matrix_snapshot.md,break_glass/runbook_snapshot.md,health/health_endpoint_snapshot.md,break_glass/drill.md}; artifacts/verify/20260211_102300.
 Next: Optional full verify and commit/push if you want to publish this closure set.
+Story: workflow/pr-gate-automation
+Date: 2026-02-11
+Summary: Added `plans/pr_gate.sh` to automate PR merge-readiness checks (mergeable state, check-runs, review decision) with auto-detected PR and optional artifact report. Set new bot/copilot comments since head commit to warn-by-default (`--bot-comments-mode warn|block`, default warn), added deterministic fixture test coverage, and wired the fixture into preflight/workflow allowlist enforcement.
+Commands: bash plans/tests/test_pr_gate.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/preflight.sh; ./plans/verify.sh quick.
+Evidence: plans/pr_gate.sh; plans/tests/test_pr_gate.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; artifacts/verify/20260211_110507.
+Next: If desired, promote bot-comment check from warn to block once false-positive rate is acceptable.
+Story: workflow/phase0-evidence-followups
+Date: 2026-02-11
+Summary: Completed requested Phase-0 follow-ups by replacing break-glass escalation placeholders with concrete role/channel contacts (and resyncing literal snapshot), then recording a key-rotation validation exercise with command outputs for all/LIVE/STAGING probe checks.
+Commands: ./stoic-cli keys-check --probe evidence/phase0/keys/key_scope_probe.json --format json > evidence/phase0/keys/rotation_check_all.json; ./stoic-cli keys-check --probe evidence/phase0/keys/key_scope_probe.json --env LIVE --format json > evidence/phase0/keys/rotation_check_live.json; ./stoic-cli keys-check --probe evidence/phase0/keys/key_scope_probe.json --env STAGING --format json > evidence/phase0/keys/rotation_check_staging.json; python3 tools/phase0_meta_test.py --root .
+Evidence: docs/break_glass_runbook.md; evidence/phase0/break_glass/runbook_snapshot.md; evidence/phase0/keys/rotation_exercise.md; evidence/phase0/keys/rotation_check_all.json; evidence/phase0/keys/rotation_check_live.json; evidence/phase0/keys/rotation_check_staging.json; evidence/phase0/README.md; docs/phase0_index.md.
+Notes: Rotation evidence is a validation rehearsal; full LIVE key cutover remains pending maintenance window and is still tracked as residual risk.
+Next: Schedule and execute first full LIVE key cutover drill with incident-grade evidence capture.
+Story: workflow/phase0-evidence-followups
+Date: 2026-02-11
+Summary: Re-ran quick verify after documenting key-rotation validation exercise and updating Phase-0 evidence/index references; quick gates remained green.
+Commands: ./plans/verify.sh quick.
+Evidence: artifacts/verify/20260211_153024.
+Next: None.
+Story: workflow/phase0-live-key-cutover-drill
+Date: 2026-02-11
+Summary: Started next-step execution for full LIVE key cutover drill; recorded incident-grade cutover drill artifact with explicit blocker and completion criteria. Current status is BLOCKED in this workspace due to missing prod Vault/exchange key-admin authority; linked artifact into Phase-0 evidence/index to keep residual risk explicit.
+Commands: ./stoic-cli --help; ./stoic-cli keys-check --help; env | cut -d= -f1 | rg -i "VAULT|LIVE|DERIBIT|API_KEY|SECRET|TRADING_ENV|EXCHANGE"; python3 tools/phase0_meta_test.py --root .
+Evidence: evidence/phase0/keys/live_cutover_drill.md; evidence/phase0/README.md; docs/phase0_index.md.
+Notes: `stoic-cli` supports key-scope validation only (`keys-check`) and has no key create/swap/revoke command path; full cutover must execute in production maintenance window with Vault + exchange admin access.
+Next: Run the eight-step maintenance-window procedure in `evidence/phase0/keys/live_cutover_drill.md` and replace status BLOCKED -> PASSED with resulting post-swap/revocation artifacts.
+Story: workflow/phase0-live-key-cutover-drill
+Date: 2026-02-11
+Summary: Re-ran quick verify after adding LIVE cutover drill blocker artifact and Phase-0 index/summary linkage; quick gates remained green.
+Commands: ./plans/verify.sh quick.
+Evidence: artifacts/verify/20260211_164441.
+Next: Execute LIVE cutover in authorized maintenance window and update `evidence/phase0/keys/live_cutover_drill.md` status to PASSED.
+Story: workflow/phase0-doc-evidence-cleanup-v2
+Date: 2026-02-11
+Summary: Addressed PR #27 review feedback by sanitizing machine-local absolute probe paths in committed rotation check artifacts, clarifying Phase-1 index evidence as existing vs pending, aligning ROADMAP evidence folder template names to canonical `evidence/phaseN/` layout, and adding the referenced postmortem entry at `reviews/postmortems/2026-02-11_phase0_doc_evidence_cleanup.md`.
+Commands: ./plans/verify.sh quick.
+Evidence: evidence/phase0/keys/{rotation_check_all.json,rotation_check_live.json,rotation_check_staging.json}; docs/phase1_index.md; docs/ROADMAP.md; artifacts/verify/20260211_182332.
+Next: Push branch update and resolve PR review threads.

@@ -85,6 +85,10 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 
 Canonical source: `docs/PHASE0_CHECKLIST_BLOCK.md`
 
+Decision input policy (drift control):
+- Use `docs/PHASE0_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` for Phase 0 decisions.
+- Treat prior merged roadmap text as historical context in git history only.
+
 Use that file for:
 - required evidence pack structure,
 - P0-A through P0-E unblock conditions,
@@ -102,6 +106,14 @@ Use that file for:
 
 # Phase 1 — Foundation
 ### “Never Panic, Never Duplicate”
+
+## Phase 1 Canonical Inputs
+
+Canonical source: `docs/PHASE1_CHECKLIST_BLOCK.md`
+
+Decision input policy (drift control):
+- Use `docs/PHASE1_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` for Phase 1 decisions.
+- Treat `docs/phase1_acceptance.md`, `docs/PLAN_PHASE1_EXCERPT.md`, and `docs/bundle_CONTRACT_PHASE1.md` as supporting references.
 
 ## Definition of Done (Phase 1)
 
@@ -635,11 +647,11 @@ Status: **Fixed** (all items resolved in this document).
 
 Create one folder per phase completion:
 
-- `evidence/phase0_policy/`
-- `evidence/phase1_foundation/`
-- `evidence/phase2_guardrails/`
-- `evidence/phase3_dataloop/`
-- `evidence/phase4_livefire/`
+- `evidence/phase0/`
+- `evidence/phase1/`
+- `evidence/phase2/`
+- `evidence/phase3/`
+- `evidence/phase4/`
 
 Each folder should contain:
 - `README.md` (what was tested, how to reproduce)

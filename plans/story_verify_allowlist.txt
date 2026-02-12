@@ -2,6 +2,8 @@
 # Add or update entries as needed; require human review via RPH_ALLOW_HARNESS_EDIT=1.
 
 bash -n plans/verify.sh
+bash plans/tests/test_pr_gate.sh
+bash plans/tests/test_workflow_allowlist_coverage.sh
 cargo test --workspace
 cargo test -p soldier_infra
 cargo test -p soldier_core --test test_dispatch_map
