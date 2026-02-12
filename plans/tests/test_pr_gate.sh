@@ -148,6 +148,12 @@ EOF_JSON
 EOF_JSON
 )"
         ;;
+      self_pending_check)
+        payload="$(cat <<'EOF_JSON'
+{"check_runs":[{"id":1,"name":"verify","status":"completed","conclusion":"success","completed_at":"2026-02-11T00:02:00Z","html_url":"https://example.invalid/check/1"},{"id":2,"name":"pr-gate-enforced","status":"in_progress","conclusion":null,"started_at":"2026-02-11T00:03:00Z","html_url":"https://example.invalid/check/2"}]}
+EOF_JSON
+)"
+        ;;
       fallback_pending|fallback_failure)
         exit 1
         ;;
@@ -217,6 +223,12 @@ EOF_JSON
       issue_bot_with_ack)
         payload="$(cat <<EOF_JSON
 [{"created_at":"2026-02-11T00:06:00Z","html_url":"https://example.invalid/issue-comment/1","body":"Bot finding","user":{"login":"copilot-review-bot","type":"Bot"}},{"created_at":"2026-02-11T00:07:00Z","html_url":"https://example.invalid/issue-comment/2","body":"AFTERCARE_ACK: $head_sha","user":{"login":"maintainer","type":"User"}}]
+EOF_JSON
+)"
+        ;;
+      clean_with_ack)
+        payload="$(cat <<EOF_JSON
+[{"created_at":"2026-02-11T00:07:00Z","html_url":"https://example.invalid/issue-comment/2","body":"AFTERCARE_ACK: $head_sha","user":{"login":"maintainer","type":"User"}}]
 EOF_JSON
 )"
         ;;
@@ -340,15 +352,39 @@ set -e
 [[ $rc_case11 -eq 0 ]] || fail "expected case11 to pass"
 printf '%s\n' "$out_case11" | grep -Fq "OK: PR gate passed" || fail "case11 missing pass output"
 
-# Case 14: warn-mode bot findings can be elevated to blocking mode.
+# Case 14: strict ACK mode blocks when no head-specific ACK exists.
+expect_fail "strict ack missing" "missing_aftercare_ack_for_head" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-aftercare-ack"
+
+# Case 15: strict ACK mode passes when HEAD-specific ACK exists without bot issue comments.
+set +e
+out_case15="$(
+  cd "$repo_dir" && GH_MODE=clean_with_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-aftercare-ack 2>&1
+)"
+rc_case15=$?
+set -e
+[[ $rc_case15 -eq 0 ]] || fail "expected case15 to pass"
+printf '%s\n' "$out_case15" | grep -Fq "OK: PR gate passed" || fail "case15 missing pass output"
+
+# Case 16: self check-run pending can be ignored by name to avoid CI deadlocks.
+set +e
+out_case16="$(
+  cd "$repo_dir" && GH_MODE=self_pending_check GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --ignore-check-run-regex '^pr-gate-enforced$' 2>&1
+)"
+rc_case16=$?
+set -e
+[[ $rc_case16 -eq 0 ]] || fail "expected case16 to pass"
+printf '%s\n' "$out_case16" | grep -Fq "OK: PR gate passed" || fail "case16 missing pass output"
+
+# Case 17: warn-mode bot findings can be elevated to blocking mode.
 expect_fail "bot comment blocking mode" "new_bot_comments_since_last_push" \
   bash -lc "cd '$repo_dir' && GH_MODE=inline_addressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --bot-comments-mode block"
 
-# Case 15: opt-in Copilot requirement blocks when no Copilot signal is present.
+# Case 18: opt-in Copilot requirement blocks when no Copilot signal is present.
 expect_fail "copilot required pending" "copilot_review_pending" \
   bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-copilot-review"
 
-# Case 16: opt-in Copilot requirement passes when PR review is tied to HEAD SHA.
+# Case 19: opt-in Copilot requirement passes when PR review is tied to HEAD SHA.
 set +e
 out_case13="$(
   cd "$repo_dir" && GH_MODE=copilot_review_for_head GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-copilot-review 2>&1
@@ -358,7 +394,7 @@ set -e
 [[ $rc_case13 -eq 0 ]] || fail "expected case13 to pass"
 printf '%s\n' "$out_case13" | grep -Fq "OK: PR gate passed" || fail "case13 missing pass output"
 
-# Case 17: explicit changes requested is always blocking.
+# Case 20: explicit changes requested is always blocking.
 expect_fail "changes requested blocking" "changes_requested" \
   bash -lc "cd '$repo_dir' && GH_MODE=changes_requested GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
 
