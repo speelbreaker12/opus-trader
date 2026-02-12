@@ -100,22 +100,32 @@ case "$endpoint" in
   repos/acme/demo/pulls/17)
     if [[ "$mode" == "dirty_merge" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":false,"mergeable_state":"dirty"}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":false,"mergeable_state":"dirty","requested_reviewers":[]}
 EOF_JSON
 )"
     elif [[ "$mode" == "self_pending_check_blocked" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked"}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked","requested_reviewers":[]}
+EOF_JSON
+)"
+    elif [[ "$mode" == "blocked_no_self" ]]; then
+      payload="$(cat <<EOF_JSON
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked","requested_reviewers":[]}
+EOF_JSON
+)"
+    elif [[ "$mode" == "copilot_requested_reviewer" ]]; then
+      payload="$(cat <<EOF_JSON
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean","requested_reviewers":[{"login":"copilot-pull-request-reviewer[bot]","type":"Bot"}]}
 EOF_JSON
 )"
     elif [[ "$mode" == "unstable_merge" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"unstable"}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"unstable","requested_reviewers":[]}
 EOF_JSON
 )"
     else
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean"}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean","requested_reviewers":[]}
 EOF_JSON
 )"
     fi
@@ -392,15 +402,19 @@ set -e
 printf '%s\n' "$out_case17" | grep -Fq "OK: PR gate passed" || fail "case17 missing pass output"
 printf '%s\n' "$out_case17" | grep -Fq "mergeable_state=blocked ignored" || fail "case17 missing blocked-ignore warning"
 
-# Case 18: warn-mode bot findings can be elevated to blocking mode.
+# Case 18: mergeable_state=blocked must fail when no ignored pending check exists.
+expect_fail "blocked mergeable state without ignored pending check" "merge_conflict_or_blocked: mergeable_state=blocked" \
+  bash -lc "cd '$repo_dir' && GH_MODE=blocked_no_self GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --ignore-check-run-regex '^pr-gate-enforced$'"
+
+# Case 19: warn-mode bot findings can be elevated to blocking mode.
 expect_fail "bot comment blocking mode" "new_bot_comments_since_last_push" \
   bash -lc "cd '$repo_dir' && GH_MODE=inline_addressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --bot-comments-mode block"
 
-# Case 19: opt-in Copilot requirement blocks when no Copilot signal is present.
+# Case 20: opt-in Copilot requirement blocks when no Copilot signal is present.
 expect_fail "copilot required pending" "copilot_review_pending" \
   bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-copilot-review"
 
-# Case 20: opt-in Copilot requirement passes when PR review is tied to HEAD SHA.
+# Case 21: opt-in Copilot requirement passes when PR review is tied to HEAD SHA.
 set +e
 out_case13="$(
   cd "$repo_dir" && GH_MODE=copilot_review_for_head GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-copilot-review 2>&1
@@ -410,7 +424,17 @@ set -e
 [[ $rc_case13 -eq 0 ]] || fail "expected case13 to pass"
 printf '%s\n' "$out_case13" | grep -Fq "OK: PR gate passed" || fail "case13 missing pass output"
 
-# Case 21: explicit changes requested is always blocking.
+# Case 22: opt-in Copilot requirement passes when Copilot is a requested reviewer.
+set +e
+out_case21="$(
+  cd "$repo_dir" && GH_MODE=copilot_requested_reviewer GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-copilot-review 2>&1
+)"
+rc_case21=$?
+set -e
+[[ $rc_case21 -eq 0 ]] || fail "expected case21 to pass"
+printf '%s\n' "$out_case21" | grep -Fq "OK: PR gate passed" || fail "case21 missing pass output"
+
+# Case 23: explicit changes requested is always blocking.
 expect_fail "changes requested blocking" "changes_requested" \
   bash -lc "cd '$repo_dir' && GH_MODE=changes_requested GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
 

@@ -20,7 +20,7 @@ Bot/copilot comments:
 
 Copilot review (opt-in):
   - Disabled by default; enable with --require-copilot-review or REQUIRE_COPILOT_REVIEW=1
-  - Signals accepted: review tied to HEAD SHA, bot comment after HEAD commit time, or copilot-like check-run name
+  - Signals accepted: review tied to HEAD SHA, requested Copilot reviewer, bot comment after HEAD commit time, or copilot-like check-run name
   - In --wait mode, missing signal times out after COPILOT_WAIT_SECS (default 600)
 
 Review decision policy:
@@ -241,6 +241,7 @@ HEAD_COMMIT_TIME=""
 CHECK_PENDING="0"
 CHECK_FAIL="0"
 MERGEABLE_BLOCKED_IGNORED=0
+IGNORED_PENDING_CHECKS=0
 
 write_report() {
   [[ -n "$report_path" ]] || return 0
@@ -307,6 +308,7 @@ while true; do
   checks_json="$(gh_api_check_runs "repos/$repo/commits/$HEAD_SHA/check-runs?per_page=100")"
   checks_rc=$?
   set -e
+  IGNORED_PENDING_CHECKS=0
   if [[ $checks_rc -ne 0 || -z "$checks_json" ]]; then
     status_json="$(gh api "repos/$repo/commits/$HEAD_SHA/status")" || die "failed to fetch commit status"
     CHECK_PENDING="$(jq '[.statuses[] | select(.state=="pending")] | length' <<<"$status_json")"
@@ -323,6 +325,20 @@ state=${status_state:-<missing>}
 pending=$CHECK_PENDING
 failing=$CHECK_FAIL"
   else
+    if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+      IGNORED_PENDING_CHECKS="$(
+        jq --arg re "$IGNORE_CHECK_RUN_REGEX" '
+          [
+            (.check_runs // [])
+            | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+            | group_by(.name // "")
+            | map(last)[]
+            | select(((.name // "") | test($re)) and (.status != "completed"))
+          ] | length
+        ' <<<"$checks_json"
+      )"
+    fi
+
     if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
       checks_latest_json="$(
         jq --arg re "$IGNORE_CHECK_RUN_REGEX" '{
@@ -382,6 +398,15 @@ failing=$CHECK_FAIL"
     ' <<<"$reviews_json" >/dev/null; then
       copilot_seen=1
       copilot_reason="pr_review_for_head"
+    fi
+
+    if [[ "$copilot_seen" -eq 0 ]]; then
+      if jq -e --arg re "$COPILOT_LOGIN_REGEX" '
+        any((.requested_reviewers // [])[]?; (((.login // "") | ascii_downcase) | test($re)))
+      ' <<<"$pr_json" >/dev/null; then
+        copilot_seen=1
+        copilot_reason="requested_reviewer"
+      fi
     fi
 
     if [[ "$copilot_seen" -eq 0 ]]; then
@@ -538,7 +563,7 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
   elif [[ "$MERGEABLE_STATE" == "blocked" ]]; then
     # In CI, this script runs as required check `pr-gate-enforced`; when that check
     # is pending, GitHub can report mergeable_state=blocked, creating self-deadlock.
-    if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+    if [[ -n "$IGNORE_CHECK_RUN_REGEX" && "$IGNORED_PENDING_CHECKS" != "0" ]]; then
       MERGEABLE_BLOCKED_IGNORED=1
     else
       problems+=("merge_conflict_or_blocked: mergeable_state=$MERGEABLE_STATE")
@@ -584,7 +609,7 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
       echo "WARN: detected new bot/copilot comments since head commit ($bot_new_count); mode=$BOT_COMMENTS_MODE" >&2
     fi
     if [[ "$MERGEABLE_BLOCKED_IGNORED" -eq 1 ]]; then
-      echo "WARN: mergeable_state=blocked ignored due --ignore-check-run-regex (self-check deadlock avoidance)" >&2
+      echo "WARN: mergeable_state=blocked ignored because ignored pending checks=$IGNORED_PENDING_CHECKS (self-check deadlock avoidance)" >&2
     fi
     if [[ "$review_decision_unknown" -eq 1 && "$REQUIRE_KNOWN_REVIEW_DECISION" != "1" ]]; then
       echo "WARN: reviewDecision is unknown but non-blocking in default mode" >&2
