@@ -85,6 +85,8 @@ pub struct LiquidityGateInput {
 pub enum LiquidityGateRejectReason {
     /// L2 book is missing, unparseable, or stale.
     LiquidityGateNoL2,
+    /// OPEN order cannot be fully filled within the configured slippage budget.
+    InsufficientDepthWithinBudget,
     /// Estimated slippage exceeds max_slippage_bps.
     ExpectedSlippageTooHigh,
 }
@@ -127,6 +129,8 @@ pub struct LiquidityGateMetrics {
     reject_no_l2: u64,
     /// Rejections due to slippage too high.
     reject_slippage: u64,
+    /// Rejections due to insufficient in-budget depth for OPEN intents.
+    reject_depth_shortfall: u64,
     /// Total evaluations that passed.
     allowed_total: u64,
 }
@@ -137,6 +141,7 @@ impl LiquidityGateMetrics {
         Self {
             reject_no_l2: 0,
             reject_slippage: 0,
+            reject_depth_shortfall: 0,
             allowed_total: 0,
         }
     }
@@ -149,6 +154,11 @@ impl LiquidityGateMetrics {
     /// Record a slippage rejection.
     pub fn record_reject_slippage(&mut self) {
         self.reject_slippage += 1;
+    }
+
+    /// Record an insufficient-depth rejection.
+    pub fn record_reject_depth_shortfall(&mut self) {
+        self.reject_depth_shortfall += 1;
     }
 
     /// Record an allowed evaluation.
@@ -164,6 +174,11 @@ impl LiquidityGateMetrics {
     /// Total slippage rejections.
     pub fn reject_slippage(&self) -> u64 {
         self.reject_slippage
+    }
+
+    /// Total insufficient-depth rejections.
+    pub fn reject_depth_shortfall(&self) -> u64 {
+        self.reject_depth_shortfall
     }
 
     /// Total allowed evaluations.
@@ -345,7 +360,8 @@ fn compute_reject_diagnostics(
 ///
 /// CANCEL-only intents are always allowed (AT-421).
 /// Missing/stale L2 rejects OPEN and CLOSE/HEDGE order placement (AT-344, AT-909, AT-421).
-/// Slippage exceeding max_slippage_bps rejects with ExpectedSlippageTooHigh (AT-222).
+/// OPEN depth shortfall within the slippage budget rejects with
+/// InsufficientDepthWithinBudget (AT-222).
 pub fn evaluate_liquidity_gate(
     input: &LiquidityGateInput,
     metrics: &mut LiquidityGateMetrics,
@@ -466,9 +482,9 @@ pub fn evaluate_liquidity_gate(
             Err(FillableDepthError::NoDepthWithinBudget) => {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                metrics.record_reject_slippage();
+                metrics.record_reject_depth_shortfall();
                 return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                    reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
                     wap,
                     slippage_bps,
                     fillable_qty: Some(0.0),
@@ -482,9 +498,9 @@ pub fn evaluate_liquidity_gate(
             if fillable_qty + 1e-12 < input.order_qty {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                metrics.record_reject_slippage();
+                metrics.record_reject_depth_shortfall();
                 return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                    reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
                     wap,
                     slippage_bps,
                     fillable_qty: Some(fillable_qty),

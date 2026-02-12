@@ -1,6 +1,6 @@
 //! Tests for Pre-Trade Liquidity Gate per CONTRACT.md §1.3.
 //!
-//! AT-222: Slippage > max_slippage_bps → reject with ExpectedSlippageTooHigh.
+//! AT-222: OPEN depth shortfall within slippage budget -> reject with InsufficientDepthWithinBudget.
 //! AT-344: Missing/stale L2 → reject OPEN, no dispatch.
 //! AT-909: Missing/stale L2 → Rejected(LiquidityGateNoL2).
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
@@ -64,13 +64,17 @@ fn test_at222_slippage_exceeds_max_rejected() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!((wap.unwrap() - 105.0).abs() < 1e-9);
             assert!(slippage_bps.unwrap() > 10.0);
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
-    assert_eq!(m.reject_slippage(), 1);
+    assert_eq!(m.reject_depth_shortfall(), 1);
+    assert_eq!(m.reject_slippage(), 0);
 }
 
 #[test]
@@ -85,7 +89,7 @@ fn test_at222_no_order_intent_on_rejection() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
@@ -171,7 +175,10 @@ fn test_sell_walks_bids() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!((wap.unwrap() - 95.0).abs() < 1e-9);
             assert!(slippage_bps.unwrap() > 10.0);
         }
@@ -353,7 +360,7 @@ fn test_partial_fill_from_thin_book_evaluates_available() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
@@ -434,6 +441,7 @@ fn test_metrics_default() {
     let m = LiquidityGateMetrics::default();
     assert_eq!(m.reject_no_l2(), 0);
     assert_eq!(m.reject_slippage(), 0);
+    assert_eq!(m.reject_depth_shortfall(), 0);
     assert_eq!(m.allowed_total(), 0);
 }
 
