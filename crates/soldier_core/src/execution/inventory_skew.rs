@@ -156,6 +156,7 @@ pub fn evaluate_inventory_skew(
     let inventory_bias = clamp_bias(combined_delta / delta_limit);
     let abs_bias = inventory_bias.abs();
 
+    // Risk-increasing side tightens thresholds; risk-reducing side can loosen them.
     let risk_increasing = match input.side {
         InventorySkewSide::Buy => inventory_bias > 0.0,
         InventorySkewSide::Sell => inventory_bias < 0.0,

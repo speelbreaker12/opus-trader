@@ -1,4 +1,5 @@
 //! Risk assessment types.
+//! Module exports are intentionally centralized for deterministic gate wiring.
 
 pub mod exposure_budget;
 pub mod fees;
