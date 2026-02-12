@@ -115,8 +115,8 @@ STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-ru
 
 ## Escalation / Contacts
 
-| Role | Name | Phone | Slack |
-|------|------|-------|-------|
+| Role | Name | Escalation Path | Slack |
+|------|------|-----------------|-------|
 | Primary On-Call | Trading On-Call | PagerDuty Primary Schedule | @trading-oncall |
 | Secondary On-Call | Platform On-Call | PagerDuty Secondary Schedule | @platform-oncall |
 | Engineering Lead | Engineering Lead | PagerDuty Eng Lead Escalation | @eng-lead |
