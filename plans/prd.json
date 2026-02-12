@@ -3695,9 +3695,7 @@
           "crates/soldier_core/src/execution",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_inventory_skew.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -3728,7 +3726,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "S6.1 contract tests must pass before enabling OPEN behavior.",
@@ -3785,9 +3783,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_pending_exposure.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -3818,7 +3814,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "Fail-closed contract behavior must be verified by targeted acceptance tests.",
@@ -3872,9 +3868,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_exposure_budget.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -3905,7 +3899,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "Fail-closed contract behavior must be verified by targeted acceptance tests.",
@@ -3959,9 +3953,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_margin_gate.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -3992,7 +3984,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "Fail-closed contract behavior must be verified by targeted acceptance tests.",
@@ -4023,6 +4015,122 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_margin_gate.rs::test_margin_gate_thresholds_block_reduceonly_kill"
+      ]
+    },
+    {
+      "id": "S6-011",
+      "priority": 85,
+      "phase": 1,
+      "slice": 6,
+      "slice_ref": "Slice 6 — Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "story_ref": "S6.5 Runtime chokepoint wiring for Slice 6 gates",
+      "category": "risk",
+      "description": "Wire S6.1-S6.4 evaluators into the runtime OPEN chokepoint path so inventory/pending/global/margin checks are enforced before dispatch.",
+      "contract_refs": [
+        "AT-001",
+        "AT-030",
+        "AT-043",
+        "CONTRACT.md Inventory skew gate",
+        "CONTRACT.md Pending exposure reservation",
+        "CONTRACT.md Global exposure budget (corr buckets)",
+        "CONTRACT.md Margin headroom gate"
+      ],
+      "plan_refs": [
+        "Slice 6 — Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+        "S6.1 — Inventory skew gate",
+        "S6.2 — Pending exposure reservation",
+        "S6.3 — Global exposure budget (corr buckets)",
+        "S6.4 — Margin headroom gate"
+      ],
+      "scope": {
+        "touch": [
+          "crates/soldier_core/src/execution",
+          "crates/soldier_core/src/risk",
+          "crates/soldier_core/tests"
+        ],
+        "create": [],
+        "avoid": [
+          "plans/**"
+        ]
+      },
+      "acceptance": [
+        "OPEN runtime path evaluates S6.1-S6.4 before dispatch and fail-closes when required config/input is missing or invalid.",
+        "InventorySkew ordering semantics are enforced (after NetEdge and before Pricer) with NetEdge re-evaluation when skew-adjusted min edge changes.",
+        "Pending exposure reservation is taken before dispatch and released on terminal outcomes without allowing overfill under concurrent opens.",
+        "Global exposure budget uses current + pending exposure and rejects over-budget OPENs.",
+        "Margin headroom transitions enforce OPEN reject / ReduceOnly / Kill thresholds per contract."
+      ],
+      "steps": [
+        "Add runtime caller wiring so Slice 6 evaluators feed GateResults/authorization for OPEN intents at the chokepoint.",
+        "Extend gate ordering/trace checks to cover Slice 6 runtime gate execution order and fail-closed rejects.",
+        "Integrate pending exposure reservation lifecycle with dispatch + terminal release handling.",
+        "Add deterministic integration tests proving wired behavior is exercised in non-test runtime path and blocks OPEN when gates fail.",
+        "Run verification commands and archive artifact evidence before setting passes=true for S6-007 through S6-011."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "cargo test --workspace"
+      ],
+      "evidence": [
+        "CLI grep evidence showing non-test callers for S6 runtime evaluators in production path.",
+        "cargo test outputs for updated chokepoint/gate-ordering integration tests.",
+        "PRD entries S6-007..S6-011 updated only after runtime wiring proof."
+      ],
+      "dependencies": [
+        "S6-010"
+      ],
+      "est_size": "S",
+      "risk": "high",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [
+        {
+          "quote": "InventorySkew MUST run after NetEdge Gate and before IOC limit pricer.",
+          "location": "specs/IMPLEMENTATION_PLAN.md:600",
+          "anchor": "AT-030"
+        },
+        {
+          "quote": "If delta_limit is missing for the instrument: reject OPEN intent and set RiskState::Degraded (AT-043).",
+          "location": "specs/IMPLEMENTATION_PLAN.md:602",
+          "anchor": "AT-043"
+        },
+        {
+          "quote": "if mm_util >= mm_util_kill (default 0.95) => PolicyGuard MUST force Kill and trigger deterministic emergency flatten.",
+          "location": "specs/IMPLEMENTATION_PLAN.md:623",
+          "anchor": "AT-001"
+        }
+      ],
+      "enforcing_contract_ats": [
+        "AT-001",
+        "AT-030",
+        "AT-043"
+      ],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "INVENTORY_SKEW_REJECT",
+          "PENDING_EXPOSURE_OVERFILL",
+          "GLOBAL_EXPOSURE_BUDGET_REJECT",
+          "REDUCEONLY_MM_UTIL_THRESHOLD"
+        ]
+      },
+      "enforcement_point": "DispatcherChokepoint",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [],
+        "status_fields": [
+          "trading_mode",
+          "risk_state"
+        ],
+        "status_contract_ats": [
+          "AT-001",
+          "AT-030",
+          "AT-043"
+        ]
+      },
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_gate_ordering.rs",
+        "crates/soldier_core/tests/test_pending_exposure.rs"
       ]
     },
     {
