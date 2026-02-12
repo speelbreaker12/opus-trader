@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ./plans/pr_gate.sh [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--story <ID>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision]
+  ./plans/pr_gate.sh [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--story <ID>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--ignore-check-run-regex <regex>]
 
 What it checks (blocking):
   - PR mergeability is not blocked by conflicts (`mergeable=false` or blocked/dirty state)
@@ -12,6 +12,7 @@ What it checks (blocking):
   - reviewDecision is not CHANGES_REQUESTED (known-decision requirement is optional)
   - Inline bot/copilot review comments are addressed by file changes after each comment's original commit
   - If bot/copilot issue comments exist, PR conversation includes: AFTERCARE_ACK: <HEAD_SHA>
+    (or always, when --require-aftercare-ack / REQUIRE_AFTERCARE_ACK=1)
 
 Bot/copilot comments:
   - Default mode is warn: new bot/copilot comments since head commit are printed as warnings only
@@ -25,6 +26,10 @@ Copilot review (opt-in):
 Review decision policy:
   - Default: unknown reviewDecision is warning-only
   - Optional strict mode: --require-known-review-decision or REQUIRE_KNOWN_REVIEW_DECISION=1
+
+Check-run filtering:
+  - Optional: ignore matching check-run names via --ignore-check-run-regex or PR_GATE_IGNORE_CHECK_RUN_REGEX
+  - Useful when this gate runs as a GitHub check and should ignore its own in-progress run
 
 No PR link required:
   - If --pr omitted, auto-detects PR for current branch via `gh pr view`.
@@ -101,6 +106,8 @@ REQUIRE_COPILOT_REVIEW="${REQUIRE_COPILOT_REVIEW:-0}"
 COPILOT_LOGIN_REGEX="${COPILOT_LOGIN_REGEX:-copilot}"
 COPILOT_WAIT_SECS="${COPILOT_WAIT_SECS:-600}"
 REQUIRE_KNOWN_REVIEW_DECISION="${REQUIRE_KNOWN_REVIEW_DECISION:-0}"
+REQUIRE_AFTERCARE_ACK="${REQUIRE_AFTERCARE_ACK:-0}"
+IGNORE_CHECK_RUN_REGEX="${PR_GATE_IGNORE_CHECK_RUN_REGEX:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -148,6 +155,14 @@ while [[ $# -gt 0 ]]; do
       REQUIRE_KNOWN_REVIEW_DECISION=1
       shift
       ;;
+    --require-aftercare-ack)
+      REQUIRE_AFTERCARE_ACK=1
+      shift
+      ;;
+    --ignore-check-run-regex)
+      IGNORE_CHECK_RUN_REGEX="${2:?missing regex}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -170,7 +185,14 @@ case "$REQUIRE_KNOWN_REVIEW_DECISION" in
   0|1) ;;
   *) die "invalid REQUIRE_KNOWN_REVIEW_DECISION: $REQUIRE_KNOWN_REVIEW_DECISION (expected 0|1)" ;;
 esac
+case "$REQUIRE_AFTERCARE_ACK" in
+  0|1) ;;
+  *) die "invalid REQUIRE_AFTERCARE_ACK: $REQUIRE_AFTERCARE_ACK (expected 0|1)" ;;
+esac
 [[ "$COPILOT_WAIT_SECS" =~ ^[0-9]+$ ]] || die "invalid COPILOT_WAIT_SECS: $COPILOT_WAIT_SECS (expected integer seconds)"
+if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+  jq -n --arg re "$IGNORE_CHECK_RUN_REGEX" '"" | test($re)' >/dev/null 2>&1 || die "invalid --ignore-check-run-regex: $IGNORE_CHECK_RUN_REGEX"
+fi
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$repo_root"
@@ -236,6 +258,8 @@ mergeable_state: $MERGEABLE_STATE
 reviewDecision: $REVIEW_DECISION
 bot_comments_mode: $BOT_COMMENTS_MODE
 require_known_review_decision: $REQUIRE_KNOWN_REVIEW_DECISION
+require_aftercare_ack: $REQUIRE_AFTERCARE_ACK
+ignore_check_run_regex: ${IGNORE_CHECK_RUN_REGEX:-<none>}
 
 ## Check-runs
 $CHECK_SUMMARY
@@ -298,16 +322,30 @@ state=${status_state:-<missing>}
 pending=$CHECK_PENDING
 failing=$CHECK_FAIL"
   else
-    checks_latest_json="$(
-      jq '{
-        check_runs: (
-          (.check_runs // [])
-          | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
-          | group_by(.name // "")
-          | map(last)
-        )
-      }' <<<"$checks_json"
-    )"
+    if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+      checks_latest_json="$(
+        jq --arg re "$IGNORE_CHECK_RUN_REGEX" '{
+          check_runs: (
+            (.check_runs // [])
+            | map(select((((.name // "") | test($re)) | not)))
+            | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+            | group_by(.name // "")
+            | map(last)
+          )
+        }' <<<"$checks_json"
+      )"
+    else
+      checks_latest_json="$(
+        jq '{
+          check_runs: (
+            (.check_runs // [])
+            | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+            | group_by(.name // "")
+            | map(last)
+          )
+        }' <<<"$checks_json"
+      )"
+    fi
     CHECK_PENDING="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks_latest_json")"
     CHECK_FAIL="$(jq '[.check_runs[] | select(.status=="completed") | select(.conclusion != null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")] | length' <<<"$checks_latest_json")"
     CHECK_SUMMARY="$(
@@ -448,22 +486,32 @@ $inline_unfixed_lines"
   ' <<<"$issue_comments")"
   ack_token="AFTERCARE_ACK: $HEAD_SHA"
   ack_match_count="$(jq -r --arg token "$ack_token" '
-    [ .[] | select(((.body // "") | contains($token))) ] | length
+    [ .[] | select(((.body // "") | contains($token))) | select((.user.type // "") != "Bot") ] | length
   ' <<<"$issue_comments")"
   issue_bot_urls="$(jq -r '
     def is_bot($u):
       ($u.type == "Bot") or (((($u.login // "") | ascii_downcase) | contains("copilot")));
     [ .[] | select(is_bot(.user)) | "- " + (.html_url // "") ] | join("\n")
   ' <<<"$issue_comments")"
-  if [[ "$bot_issue_count" -gt 0 ]]; then
+  ack_required=0
+  ack_required_reason="not_required"
+  if [[ "$REQUIRE_AFTERCARE_ACK" == "1" ]]; then
+    ack_required=1
+    ack_required_reason="strict_mode"
+  elif [[ "$bot_issue_count" -gt 0 ]]; then
+    ack_required=1
+    ack_required_reason="bot_issue_comments_present"
+  fi
+  if [[ "$ack_required" -eq 1 ]]; then
     AFTERCARE_ACK_SUMMARY="required=yes
+reason=$ack_required_reason
 ack_token=$ack_token
 ack_found=$ack_match_count
 bot_issue_comments=$bot_issue_count
 bot_issue_urls:
 ${issue_bot_urls:-none}"
   else
-    AFTERCARE_ACK_SUMMARY="required=no (no bot issue comments)"
+    AFTERCARE_ACK_SUMMARY="required=no (no bot issue comments and strict mode disabled)"
   fi
 
   if [[ "$REQUIRE_COPILOT_REVIEW" == "1" ]]; then
@@ -508,7 +556,7 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
     problems+=("inline_bot_comments_unaddressed")
   fi
 
-  if [[ "$bot_issue_count" -gt 0 && "$ack_match_count" -eq 0 ]]; then
+  if [[ "$ack_required" -eq 1 && "$ack_match_count" -eq 0 ]]; then
     problems+=("missing_aftercare_ack_for_head")
   fi
 

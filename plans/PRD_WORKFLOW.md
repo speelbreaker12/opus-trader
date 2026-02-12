@@ -33,6 +33,26 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 6. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
 7. Merge via PR after gates are green.
 
+## Repository enforcement for merge
+
+To block PR merges until Copilot/bot feedback is handled and re-reviewed on the latest head, use a required CI check that runs:
+
+```bash
+./plans/pr_gate.sh \
+  --pr <number> \
+  --bot-comments-mode block \
+  --require-aftercare-ack \
+  --require-copilot-review \
+  --ignore-check-run-regex '^pr-gate-enforced$'
+```
+
+- `--bot-comments-mode block`: fail when new bot/copilot comments appear after the current head commit.
+- `--require-aftercare-ack`: require a fresh `AFTERCARE_ACK: <HEAD_SHA>` comment for every new head.
+- `--require-copilot-review`: require a Copilot review signal on the current head before pass.
+- `--ignore-check-run-regex`: avoids self-deadlock when this command runs as the `pr-gate-enforced` CI check itself.
+
+Mark that CI job as required in branch protection.
+
 ## Recommended story loop
 
 1. Implement in story worktree (single Story ID).
