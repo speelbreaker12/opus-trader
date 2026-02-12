@@ -234,7 +234,7 @@ fi
 ensure_python
 
 log "01) preflight"
-run_logged_or_exit "preflight" "$PREFLIGHT_TIMEOUT" env POSTMORTEM_GATE=0 ./plans/preflight.sh
+run_logged_or_exit "preflight" "$PREFLIGHT_TIMEOUT" env POSTMORTEM_GATE=0 PREFLIGHT_FIXTURE_MODE="$MODE" ./plans/preflight.sh
 
 log "01b) verify gate contract"
 run_logged_or_exit "verify_gate_contract" "$PREFLIGHT_TIMEOUT" ./plans/verify_gate_contract_check.sh

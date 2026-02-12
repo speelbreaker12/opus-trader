@@ -401,3 +401,17 @@ Summary: Addressed PR #27 review feedback by sanitizing machine-local absolute p
 Commands: ./plans/verify.sh quick.
 Evidence: evidence/phase0/keys/{rotation_check_all.json,rotation_check_live.json,rotation_check_staging.json}; docs/phase1_index.md; docs/ROADMAP.md; artifacts/verify/20260211_182332.
 Next: Push branch update and resolve PR review threads.
+Story: roadmap-plan-alignment
+Date: 2026-02-12
+Summary: Applied all requested alignment fixes from review: removed drift-prone Phase 1 bundle reference in roadmap; clarified Phase 2 micro-live CSP gate sequencing; added explicit secondary disk corroboration implementation tasks (S8.11) and CSP_ONLY CI/profile-isolation gate (S8.12) in Phase 2; added explicit GOP optimizer coverage (Slice 14, Contract §5.1); clarified Phase 4 gating as full-scale/promotion governance rather than replacing runtime F1 enforcement.
+Commands: ./plans/prd_gate.sh; ./plans/prd_audit_check.sh; python3 scripts/build_contract_kernel.py --out docs/contract_kernel.json; PREFLIGHT_TIMEOUT=900s ./plans/verify.sh full.
+Evidence: docs/ROADMAP.md; specs/IMPLEMENTATION_PLAN.md; docs/contract_kernel.json; artifacts/verify/20260212_154139.
+Notes: Unrelated dirty-tree changes were intentionally not modified per owner instruction.
+Next: map new plan slices (S8.11/S8.12/S14) into PRD stories for execution tracking.
+Story: workflow/preflight-fixture-profiles
+Date: 2026-02-12
+Summary: Split preflight fixture execution into explicit profiles (`smoke` vs `full`) and wired verify mode -> fixture mode so quick verify runs only fast review fixtures while full verify retains the full fixture suite. This cuts quick preflight runtime from ~272-309s to ~54-56s while preserving full-gate semantics.
+Commands: rg -n "PREFLIGHT_FIXTURE_MODE|REVIEW_FIXTURE_TESTS|run_logged_or_exit \"preflight\"" plans/preflight.sh plans/verify_fork.sh; PREFLIGHT_TIMEOUT=900s ./plans/verify.sh quick; ./plans/workflow_verify.sh; bash plans/tests/test_pr_gate.sh; bash plans/tests/test_pre_pr_review_gate.sh.
+Evidence: plans/preflight.sh; plans/verify_fork.sh; artifacts/verify/20260212_160417 (preflight.time=56); artifacts/verify/20260212_161332 (preflight.time=54); artifacts/verify/20260212_154841 (preflight.time=309 baseline); artifacts/verify/20260212_154717 (preflight.time=272 baseline); artifacts/verify/20260212_154139 (preflight.time=293 baseline).
+Notes: Local `./plans/verify.sh full` could not be completed in this tool session due external session termination before the full gate finished; quick/workflow verify and full-only fixture coverage were validated locally, and clean-checkout CI full verify remains the authoritative completion proof.
+Next: Run `./plans/verify.sh full` on CI clean checkout for canonical full-gate artifact after merging this preflight profile split.
