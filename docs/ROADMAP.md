@@ -144,8 +144,8 @@ Use that file for:
 Canonical source: `docs/PHASE1_CHECKLIST_BLOCK.md`
 
 Decision input policy (drift control):
-- Use `docs/PHASE1_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` for Phase 1 decisions.
-- Treat `specs/CONTRACT.md` and `specs/IMPLEMENTATION_PLAN.md` as supporting references; do not use drift-prone excerpt/bundle files as normative inputs.
+- Use `docs/PHASE1_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` as Phase 1 planning/gating inputs.
+- `specs/CONTRACT.md` and `specs/IMPLEMENTATION_PLAN.md` remain normative for safety/requirements; if checklist or roadmap text conflicts, contract/plan win.
 
 ## Definition of Done (Phase 1)
 
@@ -164,6 +164,7 @@ Decision input policy (drift control):
   - deterministic parser/disambiguation behavior covered by AT-216, AT-217, AT-041, AT-921
 - Preflight guards that **hard-reject** illegal orders (market/stop/linked/post-only crossing, etc.).
 - Deribit Venue Facts Addendum enforcement is artifact-backed and CI-gated (evidence check failure blocks build).
+- **Early CSP compile-isolation proof:** `cargo build --no-default-features --features csp_only` passes before GOP-only code paths are introduced.
 - “Pre-dispatch gates” wired before any exchange call:
   - liquidity gate (data must be good enough)
   - fee staleness gate
@@ -498,7 +499,8 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 - Time-drift gate (clock correctness enforced) — move earlier if strategy is time-sensitive.
 - chrony/NTP discipline is documented and operationally health-checked (time-drift gate dependency).
 - Deterministic **fill simulator** (for replay + regression).
-- Shadow mode writes the same evidence schema as live (`mode=shadow|live`) for replay parity.
+- **Shadow mode deployment:** strategy emits intents + evidence while exchange dispatch remains disabled (proves loop behavior without capital risk).
+- Shadow-mode outputs remain schema-compatible with live (`mode=shadow|live`) for replay parity.
 - Slippage calibration with safe default penalty.
 - (Optional) full tick/L2 archive writer with rolling 72h retention for deep diagnostics (Decision Snapshots remain required).
 - (Optional) options-surface stability gates (SVI/no-arb) if your strategy depends on them.
@@ -558,7 +560,7 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
   - force `Kill` at `92%`
   - default retention: tick/L2 `72h`; Decision Snapshots `30d` (never violating replay-window minimum)
 - **F1 Certification pipeline** (name optional): CI-generated artifact + promotion gate that binds build + config + contract version (runtime enforcement is already active from Phase 2).
-- Release-gate scoreboard for contract metrics (including `atomic_naked_events`, `429_count_5m`, `10028_count_5m`) is wired into promotion decisions.
+- Release-gate scoreboard for contract metrics (including `atomic_naked_events`, `429_count_5m`, `10028_count_5m`) is wired into promotion decisions, and alert routing is configured for threshold breaches.
 - Human approval latch for risk-increasing changes.
 
 ### 2) System guarantees
@@ -573,7 +575,7 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 ### Acceptance artifacts
 - Canary tests: abort + rollback work for every abort condition.
 - Certification artifact produced in CI, verified by promotion gates, and validated against the already-active runtime F1 gate.
-- Release-gate scoreboard artifact proves threshold evaluation for `atomic_naked_events`, `429_count_5m`, `10028_count_5m`, and related contract metrics.
+- Release-gate scoreboard artifact proves threshold evaluation for `atomic_naked_events`, `429_count_5m`, `10028_count_5m`, and related contract metrics, with alert routing evidence.
 - Retention/watermark tests prove 80/85/92 transitions plus replay-window-safe Decision Snapshot retention.
 - Governance artifact: approvals recorded for risk-increasing changes.
 - Governance rule: risk-increasing approvals are **limited in scope and frequency**; bulk/cumulative changes require separate review (prevents approval fatigue).
@@ -654,7 +656,7 @@ Status: **Fixed** (all items resolved in this document).
 
 ### Phase 0 — Launch Policy & Ops Baseline ✅ COMPLETE (2026-01-28)
 - [x] Trading Policy exists (risk limits, instruments, max daily loss, max order rate). → `docs/launch_policy.md`
-- [x] Policy limits are **machine-readable and enforced** at runtime (not just in docs). → `config/policy.json`, `tools/policy_loader.py`, `tests/phase0/test_machine_policy_loader_and_config.md`
+- [x] Policy limits are **machine-readable** (schema + strict loader validation; fail-closed on load/parse). → `config/policy.json`, `tools/policy_loader.py`, `tests/phase0/test_machine_policy_loader_and_config.md`
 - [x] Trading modes defined and documented (`Active`, `ReduceOnly`, `Kill`) with who/what can switch them. → `docs/launch_policy.md`
 - [x] Separate API keys per environment; least privilege; rotation plan documented. → `docs/env_matrix.md`, `docs/keys_and_secrets.md`
 - [x] Key scopes are **proven** (probe tests recorded). → `evidence/phase0/keys/key_scope_probe.json`
@@ -681,6 +683,7 @@ Status: **Fixed** (all items resolved in this document).
 ### Phase 2 — Guardrails
 - [ ] Atomic group executor + bounded rescue attempts implemented and tested.
 - [ ] PolicyGuard is authoritative and monotonic (no re-enable leaks).
+- [ ] Policy limits are enforced on intents at runtime (position caps, rate caps, and OPEN permission controls).
 - [ ] Runtime F1 gate is active in PolicyGuard (`F1_CERT` missing/stale/invalid/mismatched => at most `ReduceOnly`; OPEN blocked).
 - [ ] Policy fallback ladder (Dead Man's Switch) is explicit and monotonic (`Active -> ReduceOnly -> Kill`) with deterministic reason codes.
 - [ ] Reconciliation loop exists (WS gaps + REST; zombie/orphan sweeps).
@@ -712,7 +715,7 @@ Status: **Fixed** (all items resolved in this document).
 - [ ] ExecutionStyle is locked to `Sniper` (IOC limit-only) for live-fire rollout unless contract-amended.
 - [ ] ReduceOnly cooldown and rollback behaviors tested end-to-end.
 - [ ] Certification artifact binds build+config+contract version in CI/promotion and is consistent with the runtime F1 gate introduced in Phase 2.
-- [ ] Release-gate scoreboard includes `atomic_naked_events`, `429_count_5m`, `10028_count_5m` and blocks promotion on threshold failures.
+- [ ] Release-gate scoreboard includes `atomic_naked_events`, `429_count_5m`, `10028_count_5m`, blocks promotion on threshold failures, and has alerting wired for threshold breaches.
 - [ ] Human approval recorded for risk-increasing changes.
 - [ ] Risk-increasing approvals are limited in **scope and frequency**; bulk/cumulative changes require separate review.
 - [ ] Retention/watermark gates enforce 80/85/92 transitions plus default retention safety (`tick_l2_retention_hours=72`, `decision_snapshot_retention_days=30` with replay-window protection).

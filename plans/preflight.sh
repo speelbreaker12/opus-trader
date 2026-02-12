@@ -20,7 +20,8 @@
 #   1 = validation failed
 #   2 = setup error (missing tools/files)
 #
-# Runtime target: <60 seconds
+# Runtime target (smoke/quick): <60 seconds
+# Runtime target (full): may take several minutes depending on fixture matrix
 # =============================================================================
 
 set -euo pipefail

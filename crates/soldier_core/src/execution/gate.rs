@@ -279,10 +279,14 @@ fn compute_reject_diagnostics(
     order_qty: f64,
     best_price: f64,
 ) -> (Option<f64>, Option<f64>) {
-    let (wap, _filled) = match compute_wap(levels, order_qty) {
+    let (wap, filled) = match compute_wap(levels, order_qty) {
         Some(v) => v,
         None => return (None, None),
     };
+    // Avoid partial-fill diagnostics for full-size rejection paths.
+    if filled + 1e-12 < order_qty {
+        return (None, None);
+    }
     let slippage_bps = ((wap - best_price) / best_price * 10_000.0).abs();
     if !slippage_bps.is_finite() {
         return (Some(wap), None);
@@ -394,12 +398,25 @@ pub fn evaluate_liquidity_gate(
 
     // Non-marketable (maker/post-only) OPEN paths bypass only the depth-budget
     // check; they still require valid/fresh L2 (AT-344/AT-421 fail-closed behavior).
+    // Emit best-effort WAP/slippage diagnostics for observability only.
     if !input.is_marketable && input.intent_class == GateIntentClass::Open {
+        let (wap, slippage_bps, fillable_qty) = match compute_wap(levels, input.order_qty) {
+            Some((wap, filled_qty)) => {
+                let slippage = ((wap - best_price) / best_price * 10_000.0).abs();
+                let slippage_bps = if slippage.is_finite() {
+                    Some(slippage)
+                } else {
+                    None
+                };
+                (Some(wap), slippage_bps, Some(filled_qty))
+            }
+            None => (None, None, None),
+        };
         metrics.record_allowed();
         return LiquidityGateResult::Allowed {
-            wap: None,
-            slippage_bps: None,
-            fillable_qty: None,
+            wap,
+            slippage_bps,
+            fillable_qty,
             allowed_qty: Some(input.order_qty),
         };
     }
