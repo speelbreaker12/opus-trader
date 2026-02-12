@@ -1464,6 +1464,82 @@
       ]
     },
     {
+      "id": "S1-013",
+      "priority": 62,
+      "phase": 1,
+      "slice": 1,
+      "slice_ref": "Slice 1 \u2014 Instrument Units + Dispatcher Invariants",
+      "story_ref": "S1.0b PR merge-readiness automation gate",
+      "category": "infra",
+      "description": "Add a workflow harness script that auto-detects current-branch PR and fail-closes on non-mergeable CI/review states, with deterministic fixture coverage.",
+      "contract_refs": [
+        "CONTRACT.md 0.Z.9 CSP-Only CI Gate",
+        "AT-1056",
+        "AT-1057"
+      ],
+      "plan_refs": [
+        "IMPLEMENTATION_PLAN.md Slice 1 \u2014 Instrument Units + Dispatcher Invariants / S1.0 \u2014 Repo verification harness (plans/verify.sh) + safety-critical config defaults (Appendix A)"
+      ],
+      "scope": {
+        "touch": [
+          "plans/pr_gate.sh",
+          "plans/tests/test_pr_gate.sh",
+          "plans/preflight.sh",
+          "plans/workflow_verify.sh",
+          "plans/workflow_files_allowlist.txt",
+          "plans/tests/test_workflow_allowlist_coverage.sh"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/**",
+          "specs/CONTRACT.md"
+        ]
+      },
+      "acceptance": [
+        "GIVEN a branch with an open PR WHEN running `./plans/pr_gate.sh` without `--pr` THEN it auto-detects the PR and returns pass/fail from GitHub state.",
+        "GIVEN PR mergeability/check-run/review blockers WHEN running `./plans/pr_gate.sh` THEN it exits non-zero with deterministic reason tokens (`merge_conflict_or_blocked`, `checks_pending`, `checks_failing`, `changes_requested`).",
+        "GIVEN bot/copilot comments newer than head commit WHEN running in default mode THEN gate warns but does not block; WHEN `--bot-comments-mode block` THEN gate blocks."
+      ],
+      "steps": [
+        "Add `plans/pr_gate.sh` with fail-closed checks for mergeable state, check-runs, and reviewDecision using `gh`+`jq`.",
+        "Implement PR auto-detection via `gh pr view --json number` when `--pr` is omitted.",
+        "Implement optional story artifact report output under `artifacts/story/<ID>/pr_gate/<ts>_pr_gate.md`.",
+        "Add deterministic fixture test `plans/tests/test_pr_gate.sh` with mocked `gh` responses to verify pass/fail/warn/block behavior.",
+        "Wire fixture into `plans/preflight.sh` and workflow allowlist coverage checks so harness edits are self-proving under verify."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "bash plans/tests/test_pr_gate.sh",
+        "bash plans/tests/test_workflow_allowlist_coverage.sh"
+      ],
+      "evidence": [
+        "plans/pr_gate.sh",
+        "plans/tests/test_pr_gate.sh",
+        "artifacts/verify/<run_id>/preflight.log"
+      ],
+      "dependencies": [],
+      "est_size": "XS",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "",
+        "values": []
+      },
+      "enforcement_point": "",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/tests/test_pr_gate.sh"
+      ]
+    },
+    {
       "id": "S2-000",
       "priority": 100,
       "phase": 1,

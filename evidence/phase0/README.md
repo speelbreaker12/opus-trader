@@ -5,6 +5,7 @@
 - Machine-readable policy exists (`config/policy.json`) and strict loader validation is executable.
 - Environment isolation matrix exists (DEV/STAGING/PAPER/LIVE separated with distinct keys).
 - Key scope probe recorded (scopes captured; withdrawals disabled on all keys).
+- Key-rotation validation exercise recorded (STAGING + LIVE checks via `stoic-cli keys-check`).
 - Break-glass drill executed and recorded (halt new OPEN risk within 6 seconds).
 - Health command behavior is executable (`./stoic-cli health`) with deterministic healthy/unhealthy exit semantics.
 
@@ -15,14 +16,18 @@
 ## What remains risky (known limits)
 - This does not prove full trading-mode/runtime safety enforcement yet (Phase 1+).
 - This does not include /status, TradingMode logic, or reconciliation (Phase 2+).
-- LIVE key rotation process not yet exercised (scheduled for first rotation).
-- Escalation contacts are placeholders (need to fill with real contacts before LIVE).
+- Full LIVE key cutover drill remains pending; current record is BLOCKED in this workspace due to missing production Vault/exchange key-admin authority (`evidence/phase0/keys/live_cutover_drill.md`).
 
 ## Evidence index (paths)
 - Launch policy snapshot: `evidence/phase0/policy/launch_policy_snapshot.md`
 - Policy config snapshot: `evidence/phase0/policy/policy_config_snapshot.json`
 - Env matrix snapshot: `evidence/phase0/env/env_matrix_snapshot.md`
 - Key scope probe: `evidence/phase0/keys/key_scope_probe.json`
+- Key rotation exercise record: `evidence/phase0/keys/rotation_exercise.md`
+- Key rotation check output (all envs): `evidence/phase0/keys/rotation_check_all.json`
+- Key rotation check output (LIVE): `evidence/phase0/keys/rotation_check_live.json`
+- Key rotation check output (STAGING): `evidence/phase0/keys/rotation_check_staging.json`
+- LIVE key cutover drill record: `evidence/phase0/keys/live_cutover_drill.md`
 - Break-glass runbook snapshot: `evidence/phase0/break_glass/runbook_snapshot.md`
 - Break-glass drill record: `evidence/phase0/break_glass/drill.md`
 - Break-glass log excerpt: `evidence/phase0/break_glass/log_excerpt.txt`
