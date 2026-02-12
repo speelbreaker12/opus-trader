@@ -395,3 +395,9 @@ Summary: Re-ran quick verify after adding LIVE cutover drill blocker artifact an
 Commands: ./plans/verify.sh quick.
 Evidence: artifacts/verify/20260211_164441.
 Next: Execute LIVE cutover in authorized maintenance window and update `evidence/phase0/keys/live_cutover_drill.md` status to PASSED.
+Story: workflow/phase0-doc-evidence-cleanup-v2
+Date: 2026-02-12
+Summary: Addressed PR #27 review feedback by sanitizing machine-local absolute probe paths in committed rotation check artifacts, clarifying Phase-1 index evidence as existing vs pending, and aligning ROADMAP evidence folder template names to canonical `evidence/phaseN/` layout.
+Commands: ./plans/verify.sh quick.
+Evidence: evidence/phase0/keys/{rotation_check_all.json,rotation_check_live.json,rotation_check_staging.json}; docs/phase1_index.md; docs/ROADMAP.md; artifacts/verify/20260211_182332.
+Next: Push branch update and resolve PR review threads.

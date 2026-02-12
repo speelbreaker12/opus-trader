@@ -648,10 +648,10 @@ Status: **Fixed** (all items resolved in this document).
 Create one folder per phase completion:
 
 - `evidence/phase0/`
-- `evidence/phase1_foundation/`
-- `evidence/phase2_guardrails/`
-- `evidence/phase3_dataloop/`
-- `evidence/phase4_livefire/`
+- `evidence/phase1/`
+- `evidence/phase2/`
+- `evidence/phase3/`
+- `evidence/phase4/`
 
 Each folder should contain:
 - `README.md` (what was tested, how to reproduce)
