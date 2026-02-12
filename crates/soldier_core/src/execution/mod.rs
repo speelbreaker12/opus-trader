@@ -15,6 +15,7 @@ pub mod tlsm;
 
 pub use build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeResult, build_open_order_intent_runtime,
     build_order_intent,
 };
 pub use dispatch_map::{
