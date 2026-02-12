@@ -482,14 +482,29 @@ pub fn evaluate_liquidity_gate(
             Err(FillableDepthError::NoDepthWithinBudget) => {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                metrics.record_reject_depth_shortfall();
-                return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
-                    wap,
-                    slippage_bps,
-                    fillable_qty: Some(0.0),
-                    allowed_qty: None,
-                };
+                match input.intent_class {
+                    GateIntentClass::Open => {
+                        metrics.record_reject_depth_shortfall();
+                        return LiquidityGateResult::Rejected {
+                            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
+                            wap,
+                            slippage_bps,
+                            fillable_qty: Some(0.0),
+                            allowed_qty: None,
+                        };
+                    }
+                    GateIntentClass::Close | GateIntentClass::Hedge => {
+                        metrics.record_reject_slippage();
+                        return LiquidityGateResult::Rejected {
+                            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                            wap,
+                            slippage_bps,
+                            fillable_qty: Some(0.0),
+                            allowed_qty: Some(0.0),
+                        };
+                    }
+                    GateIntentClass::CancelOnly => unreachable!("handled above"),
+                }
             }
         };
 
