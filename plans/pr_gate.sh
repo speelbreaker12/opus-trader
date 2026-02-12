@@ -240,6 +240,7 @@ COPILOT_REVIEW_SUMMARY=""
 HEAD_COMMIT_TIME=""
 CHECK_PENDING="0"
 CHECK_FAIL="0"
+MERGEABLE_BLOCKED_IGNORED=0
 
 write_report() {
   [[ -n "$report_path" ]] || return 0
@@ -527,12 +528,21 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
   problems=()
 
   # mergeability (null means GitHub hasn't computed yet).
+  MERGEABLE_BLOCKED_IGNORED=0
   if [[ "$MERGEABLE" == "null" || "$MERGEABLE_STATE" == "unknown" ]]; then
     problems+=("mergeability_not_ready")
   elif [[ "$MERGEABLE" == "false" ]]; then
     problems+=("merge_conflict_or_blocked: mergeable_state=$MERGEABLE_STATE")
-  elif [[ "$MERGEABLE_STATE" == "dirty" || "$MERGEABLE_STATE" == "blocked" ]]; then
+  elif [[ "$MERGEABLE_STATE" == "dirty" ]]; then
     problems+=("merge_conflict_or_blocked: mergeable_state=$MERGEABLE_STATE")
+  elif [[ "$MERGEABLE_STATE" == "blocked" ]]; then
+    # In CI, this script runs as required check `pr-gate-enforced`; when that check
+    # is pending, GitHub can report mergeable_state=blocked, creating self-deadlock.
+    if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+      MERGEABLE_BLOCKED_IGNORED=1
+    else
+      problems+=("merge_conflict_or_blocked: mergeable_state=$MERGEABLE_STATE")
+    fi
   fi
 
   if [[ "$CHECK_FAIL" != "0" ]]; then
@@ -572,6 +582,9 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
     write_report
     if [[ "$bot_new_count" -gt 0 ]]; then
       echo "WARN: detected new bot/copilot comments since head commit ($bot_new_count); mode=$BOT_COMMENTS_MODE" >&2
+    fi
+    if [[ "$MERGEABLE_BLOCKED_IGNORED" -eq 1 ]]; then
+      echo "WARN: mergeable_state=blocked ignored due --ignore-check-run-regex (self-check deadlock avoidance)" >&2
     fi
     if [[ "$review_decision_unknown" -eq 1 && "$REQUIRE_KNOWN_REVIEW_DECISION" != "1" ]]; then
       echo "WARN: reviewDecision is unknown but non-blocking in default mode" >&2
