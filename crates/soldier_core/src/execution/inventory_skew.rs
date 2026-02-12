@@ -179,6 +179,18 @@ pub fn evaluate_inventory_skew(
         (InventorySkewSide::Sell, false) => input.limit_price - price_shift,
     };
 
+    // Fail-closed if price_shift or adjusted_limit_price overflowed to a non-finite value.
+    if !price_shift.is_finite() || !adjusted_limit_price.is_finite() {
+        metrics.record_reject();
+        return InventorySkewResult::Rejected {
+            reason: InventorySkewRejectReason::InventorySkewReject,
+            inventory_bias: Some(inventory_bias),
+            bias_ticks: Some(bias_ticks),
+            adjusted_min_edge_usd: Some(adjusted_min_edge_usd),
+            adjusted_limit_price: Some(adjusted_limit_price),
+        };
+    }
+
     if input.net_edge_usd < adjusted_min_edge_usd {
         metrics.record_reject();
         return InventorySkewResult::Rejected {

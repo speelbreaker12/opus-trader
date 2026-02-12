@@ -163,3 +163,34 @@ fn test_inventory_skew_tick_penalty_large_value_clamps_safely() {
         other => panic!("expected Allowed with large tick penalty max, got {other:?}"),
     }
 }
+
+#[test]
+fn test_inventory_skew_fails_closed_on_non_finite_price_shift() {
+    // Regression: extremely large tick_size (but finite) can cause price_shift
+    // to overflow to infinity. Verify we fail-closed.
+    let mut metrics = InventorySkewMetrics::new();
+    let input = InventorySkewInput {
+        current_delta: 100.0,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 1_000.0,
+        limit_price: 100.0,
+        tick_size: f64::MAX / 2.0, // finite but will overflow in price_shift computation
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 10,
+    };
+
+    let out = evaluate_inventory_skew(&input, &mut metrics);
+    match out {
+        InventorySkewResult::Rejected {
+            reason: InventorySkewRejectReason::InventorySkewReject,
+            ..
+        } => {
+            // Expected: fail-closed on non-finite price_shift
+        }
+        other => panic!("expected InventorySkewReject on non-finite price_shift, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_total(), 1);
+}
