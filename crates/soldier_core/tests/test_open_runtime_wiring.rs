@@ -38,6 +38,7 @@ fn base_open_input() -> OpenRuntimeInput {
             order_qty: 1.0,
             is_buy: true,
             intent_class: GateIntentClass::Open,
+            is_marketable: true,
             l2_snapshot: Some(open_l2_snapshot()),
             now_ms: 1_050,
             l2_book_snapshot_max_age_ms: 100,
