@@ -228,7 +228,7 @@ fn compute_fillable_depth(
     is_buy: bool,
     best_price: f64,
     max_slippage_bps: f64,
-) -> Result<(usize, f64), FillableDepthError> {
+) -> Result<f64, FillableDepthError> {
     if levels.is_empty()
         || !best_price.is_finite()
         || best_price <= 0.0
@@ -241,9 +241,17 @@ fn compute_fillable_depth(
     let budget = max_slippage_bps / 10_000.0;
     let max_buy_price = best_price * (1.0 + budget);
     let min_sell_price = best_price * (1.0 - budget);
+    if !budget.is_finite() || !max_buy_price.is_finite() || !min_sell_price.is_finite() {
+        return Err(FillableDepthError::InvalidBook);
+    }
 
+    let price_limit = if is_buy {
+        max_buy_price
+    } else {
+        min_sell_price
+    };
     let mut fillable_qty = 0.0;
-    let mut levels_in_budget = 0_usize;
+    let mut fillable_notional = 0.0;
 
     for level in levels {
         if !level.price.is_finite()
@@ -255,23 +263,61 @@ fn compute_fillable_depth(
         }
 
         let in_budget = if is_buy {
-            level.price <= max_buy_price
+            level.price <= price_limit
         } else {
-            level.price >= min_sell_price
+            level.price >= price_limit
         };
-        if !in_budget {
+
+        if in_budget {
+            fillable_qty += level.qty;
+            fillable_notional += level.price * level.qty;
+            if !fillable_qty.is_finite() || !fillable_notional.is_finite() {
+                return Err(FillableDepthError::InvalidBook);
+            }
+            continue;
+        }
+
+        if fillable_qty <= 0.0 {
             break;
         }
 
-        fillable_qty += level.qty;
-        levels_in_budget += 1;
+        let numerator = if is_buy {
+            price_limit * fillable_qty - fillable_notional
+        } else {
+            fillable_notional - price_limit * fillable_qty
+        };
+        let denominator = if is_buy {
+            level.price - price_limit
+        } else {
+            price_limit - level.price
+        };
+
+        if !numerator.is_finite() || !denominator.is_finite() || denominator <= 0.0 {
+            return Err(FillableDepthError::InvalidBook);
+        }
+
+        if numerator > 0.0 {
+            let partial = (numerator / denominator).min(level.qty);
+            if !partial.is_finite() || partial < 0.0 {
+                return Err(FillableDepthError::InvalidBook);
+            }
+            if partial > 0.0 {
+                fillable_qty += partial;
+                fillable_notional += level.price * partial;
+                if !fillable_qty.is_finite() || !fillable_notional.is_finite() {
+                    return Err(FillableDepthError::InvalidBook);
+                }
+            }
+        }
+
+        break;
     }
 
-    if levels_in_budget == 0 || fillable_qty <= 0.0 || !fillable_qty.is_finite() {
+    if fillable_qty <= 0.0 || !fillable_qty.is_finite() {
         return Err(FillableDepthError::NoDepthWithinBudget);
     }
 
-    Ok((levels_in_budget, fillable_qty))
+    Ok(fillable_qty)
 }
 
 fn compute_reject_diagnostics(
@@ -404,7 +450,7 @@ pub fn evaluate_liquidity_gate(
         };
     }
 
-    let (levels_in_budget, fillable_qty) =
+    let fillable_qty =
         match compute_fillable_depth(levels, input.is_buy, best_price, input.max_slippage_bps) {
             Ok(values) => values,
             Err(FillableDepthError::InvalidBook) => {
@@ -464,9 +510,8 @@ pub fn evaluate_liquidity_gate(
         GateIntentClass::CancelOnly => unreachable!("handled above"),
     };
 
-    // Walk only the in-budget levels for the allowed quantity.
-    let levels_in_budget = &levels[..levels_in_budget];
-    let (wap, _filled) = match compute_wap(levels_in_budget, allowed_qty) {
+    // Compute WAP from the full book for the allowed quantity.
+    let (wap, _filled) = match compute_wap(levels, allowed_qty) {
         Some(result) => result,
         None => {
             metrics.record_reject_no_l2();

@@ -387,6 +387,46 @@ fn test_multi_level_wap_computation() {
     }
 }
 
+#[test]
+fn test_open_wap_budget_allows_small_tail_beyond_level_cap() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // Full-order WAP is within 10 bps despite a tiny tail at a far level.
+    let snap = book(vec![(100.0, 10.0), (200.0, 0.01)], vec![], 900);
+    let input = gate_input(10.01, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed {
+            allowed_qty,
+            slippage_bps,
+            ..
+        } => {
+            assert!((allowed_qty.unwrap() - 10.01).abs() < 1e-9);
+            assert!(slippage_bps.unwrap() <= 10.0 + 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_overflowed_slippage_budget_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(f64::MAX, 1.0)], vec![], 900);
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+    assert_eq!(m.reject_no_l2(), 1);
+}
+
 // ─── Metrics default ────────────────────────────────────────────────────
 
 #[test]
