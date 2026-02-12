@@ -454,6 +454,8 @@ pub fn build_open_order_intent_runtime(
     let mut liquidity_gate_passed = false;
     let mut net_edge_passed = false;
     let mut pricer_passed = false;
+    let mut clamp_requested_qty = None;
+    let mut clamp_max_dispatch_qty = None;
     let mut pending_total_after_reserve = pending_book.pending_total();
     let mut adjusted_min_edge_usd = input.net_edge_input.min_edge_usd;
     let mut adjusted_limit_price = None;
@@ -490,10 +492,13 @@ pub fn build_open_order_intent_runtime(
         if pending_passed && global_budget_passed {
             let mut liquidity_input = input.liquidity_input.clone();
             liquidity_input.intent_class = GateIntentClass::Open;
-            liquidity_gate_passed = matches!(
-                evaluate_liquidity_gate(&liquidity_input, &mut runtime_metrics.liquidity_gate),
-                LiquidityGateResult::Allowed { .. }
-            );
+            let liquidity_result =
+                evaluate_liquidity_gate(&liquidity_input, &mut runtime_metrics.liquidity_gate);
+            if let LiquidityGateResult::Allowed { allowed_qty, .. } = liquidity_result {
+                liquidity_gate_passed = true;
+                clamp_requested_qty = Some(liquidity_input.order_qty);
+                clamp_max_dispatch_qty = allowed_qty.or(Some(liquidity_input.order_qty));
+            }
         }
 
         if pending_passed && global_budget_passed && liquidity_gate_passed {
@@ -563,6 +568,8 @@ pub fn build_open_order_intent_runtime(
         net_edge_passed: pending_passed && global_budget_passed && net_edge_passed,
         pricer_passed,
         wal_recorded: input.wal_recorded,
+        requested_qty: clamp_requested_qty,
+        max_dispatch_qty: clamp_max_dispatch_qty,
     };
 
     let choke_result = build_order_intent(
