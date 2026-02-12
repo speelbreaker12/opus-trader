@@ -1230,7 +1230,7 @@ AT-957
 If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents. CLOSE/HEDGE/replace order placement is rejected; CANCEL-only intents remain allowed. Deterministic Emergency Close is exempt from profitability gates, but still requires a valid price source; if L2 is missing/stale it MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
 Rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateNoL2)`.
 
-**Output:** `Allowed | Rejected(reason=ExpectedSlippageTooHigh)`
+**Output:** `Allowed | Rejected(reason=ExpectedSlippageTooHigh | InsufficientDepthWithinBudget)`
 
 **Algorithm (Deterministic):**
 
@@ -1247,9 +1247,9 @@ Rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateN
 
 **Acceptance Test (REQUIRED):**
 AT-222
-- Given: an L2 book where `OrderQty` requires consuming multiple levels causing `slippage_bps > max_slippage_bps`.
+- Given: an L2 book where `OrderQty` requires consuming multiple levels and full quantity cannot be filled within `max_slippage_bps`.
 - When: Liquidity Gate evaluates the order.
-- Then: intent is rejected with `Rejected(ExpectedSlippageTooHigh)` and a `LiquidityGateReject` log; no `OrderIntent` is emitted.
+- Then: intent is rejected with `Rejected(InsufficientDepthWithinBudget)` and a `LiquidityGateReject` log; no `OrderIntent` is emitted.
 - Pass criteria: rejection + log; pricer/NetEdge gate does not run.
 - Fail criteria: order proceeds or log missing.
 - And: emergency close proceeds even if Liquidity Gate would reject under the same slippage conditions.
@@ -2651,6 +2651,7 @@ Profile: CSP
 - `LiquidityGateNoL2`
 - `EmergencyCloseNoPrice`
 - `ExpectedSlippageTooHigh`
+- `InsufficientDepthWithinBudget`
 - `NetEdgeTooLow`
 - `NetEdgeInputMissing`
 - `InventorySkew`
