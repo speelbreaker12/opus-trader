@@ -211,7 +211,6 @@ impl PendingExposureBook {
         } else {
             self.pending_negative -= delta_impact_est;
         }
-        self.pending_total = self.pending_positive + self.pending_negative;
 
         if self.pending_positive.abs() < 1e-12 {
             self.pending_positive = 0.0;
@@ -219,6 +218,7 @@ impl PendingExposureBook {
         if self.pending_negative.abs() < 1e-12 {
             self.pending_negative = 0.0;
         }
+        self.pending_total = self.pending_positive + self.pending_negative;
         if self.pending_total.abs() < 1e-12 {
             self.pending_total = 0.0;
         }
@@ -269,5 +269,37 @@ mod tests {
         assert_eq!(metrics.reserve_attempt_total(), 1);
         assert_eq!(metrics.reserve_success_total(), 0);
         assert_eq!(metrics.reserve_reject_total(), 1);
+    }
+
+    #[test]
+    fn test_settle_recomputes_total_after_component_snap() {
+        let mut metrics = PendingExposureMetrics::new();
+        let mut book = PendingExposureBook::new(Some(1_000.0));
+
+        let first_id = match book.reserve(0.0, 10.0, &mut metrics) {
+            PendingExposureResult::Reserved { reservation_id, .. } => reservation_id,
+            other => panic!("expected reserve success, got {other:?}"),
+        };
+        match book.reserve(0.0, 1e-13, &mut metrics) {
+            PendingExposureResult::Reserved { .. } => {}
+            other => panic!("expected tiny reserve success, got {other:?}"),
+        }
+        match book.reserve(0.0, -4.0, &mut metrics) {
+            PendingExposureResult::Reserved { .. } => {}
+            other => panic!("expected negative reserve success, got {other:?}"),
+        }
+
+        assert!(book.settle(
+            first_id,
+            PendingExposureTerminalOutcome::Rejected,
+            &mut metrics
+        ));
+        assert_eq!(book.pending_positive, 0.0);
+        assert_eq!(book.pending_negative, -4.0);
+        assert_eq!(book.pending_total, -4.0);
+        assert_eq!(
+            book.pending_total,
+            book.pending_positive + book.pending_negative
+        );
     }
 }
