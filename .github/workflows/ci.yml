@@ -9,6 +9,37 @@ on:
     - cron: "0 1 * * *"
 
 jobs:
+  pr-gate-enforced:
+    if: github.event_name == 'pull_request'
+    needs:
+      - pr-template-lint
+      - verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce PR gate (Copilot + aftercare + no new bot comments)
+        run: |
+          chmod +x ./plans/pr_gate.sh
+          ./plans/pr_gate.sh \
+            --pr "${{ github.event.pull_request.number }}" \
+            --wait \
+            --timeout-secs 1800 \
+            --poll-secs 20 \
+            --bot-comments-mode block \
+            --require-aftercare-ack \
+            --require-copilot-review \
+            --ignore-check-run-regex '^pr-gate-enforced$'
+
   pr-template-lint:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
