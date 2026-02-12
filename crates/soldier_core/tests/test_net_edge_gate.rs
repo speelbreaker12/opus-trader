@@ -301,3 +301,66 @@ fn test_metrics_default() {
     assert_eq!(m.reject_input_missing(), 0);
     assert_eq!(m.allowed_total(), 0);
 }
+
+#[test]
+fn test_negative_fee_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(-0.01),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_negative_slippage_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(-0.01),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_negative_min_edge_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(-0.5),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}

@@ -8,12 +8,12 @@
 //!
 //! AT-015, AT-932.
 
-// ─── Gate input ─────────────────────────────────────────────────────────
+// --- Gate input ----------------------------------------------------------
 
 /// Input to the Net Edge Gate.
 ///
 /// CONTRACT.md §1.4.1: All fields must be present. Missing/unparseable
-/// → Rejected(NetEdgeInputMissing).
+/// -> Rejected(NetEdgeInputMissing).
 #[derive(Debug, Clone)]
 pub struct NetEdgeInput {
     /// Gross edge in USD (signal-derived expected profit before costs).
@@ -26,7 +26,7 @@ pub struct NetEdgeInput {
     pub min_edge_usd: Option<f64>,
 }
 
-// ─── Gate result ─────────────────────────────────────────────────────────
+// --- Gate result ---------------------------------------------------------
 
 /// Reject reason from the Net Edge Gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +54,7 @@ pub enum NetEdgeResult {
     },
 }
 
-// ─── Metrics ─────────────────────────────────────────────────────────────
+// --- Metrics -------------------------------------------------------------
 
 /// Observability metrics for the Net Edge Gate.
 #[derive(Debug)]
@@ -114,81 +114,62 @@ impl Default for NetEdgeMetrics {
     }
 }
 
-// ─── Gate evaluator ─────────────────────────────────────────────────────
+fn reject_missing(metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
+    metrics.record_reject_input_missing();
+    NetEdgeResult::Rejected {
+        reason: NetEdgeRejectReason::NetEdgeInputMissing,
+        net_edge_usd: None,
+    }
+}
+
+// --- Gate evaluator ------------------------------------------------------
 
 /// Evaluate an intent against the Net Edge Gate.
 ///
 /// CONTRACT.md §1.4.1:
 /// - `net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd`
-/// - Missing inputs → Rejected(NetEdgeInputMissing) (fail-closed).
-/// - `net_edge_usd < min_edge_usd` → Rejected(NetEdgeTooLow).
+/// - Missing inputs -> Rejected(NetEdgeInputMissing) (fail-closed).
+/// - `net_edge_usd < min_edge_usd` -> Rejected(NetEdgeTooLow).
 pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
     // Fail-closed: reject if any input is missing (AT-932)
     let gross = match input.gross_edge_usd {
         Some(v) => v,
-        None => {
-            metrics.record_reject_input_missing();
-            return NetEdgeResult::Rejected {
-                reason: NetEdgeRejectReason::NetEdgeInputMissing,
-                net_edge_usd: None,
-            };
-        }
+        None => return reject_missing(metrics),
     };
 
     let fee = match input.fee_usd {
         Some(v) => v,
-        None => {
-            metrics.record_reject_input_missing();
-            return NetEdgeResult::Rejected {
-                reason: NetEdgeRejectReason::NetEdgeInputMissing,
-                net_edge_usd: None,
-            };
-        }
+        None => return reject_missing(metrics),
     };
 
     let slippage = match input.expected_slippage_usd {
         Some(v) => v,
-        None => {
-            metrics.record_reject_input_missing();
-            return NetEdgeResult::Rejected {
-                reason: NetEdgeRejectReason::NetEdgeInputMissing,
-                net_edge_usd: None,
-            };
-        }
+        None => return reject_missing(metrics),
     };
 
     let min_edge = match input.min_edge_usd {
         Some(v) => v,
-        None => {
-            metrics.record_reject_input_missing();
-            return NetEdgeResult::Rejected {
-                reason: NetEdgeRejectReason::NetEdgeInputMissing,
-                net_edge_usd: None,
-            };
-        }
+        None => return reject_missing(metrics),
     };
 
     // Fail-closed on non-finite inputs (NaN/inf).
     if !gross.is_finite() || !fee.is_finite() || !slippage.is_finite() || !min_edge.is_finite() {
-        metrics.record_reject_input_missing();
-        return NetEdgeResult::Rejected {
-            reason: NetEdgeRejectReason::NetEdgeInputMissing,
-            net_edge_usd: None,
-        };
+        return reject_missing(metrics);
     }
 
-    // Compute net edge
+    // Fail-closed on invalid negative costs/thresholds.
+    if fee < 0.0 || slippage < 0.0 || min_edge < 0.0 {
+        return reject_missing(metrics);
+    }
+
+    // Compute net edge.
     let net_edge_usd = gross - fee - slippage;
 
     if !net_edge_usd.is_finite() {
-        metrics.record_reject_input_missing();
-        return NetEdgeResult::Rejected {
-            reason: NetEdgeRejectReason::NetEdgeInputMissing,
-            net_edge_usd: None,
-        };
+        return reject_missing(metrics);
     }
 
-    // Reject if below minimum (AT-015)
+    // Reject if below minimum (AT-015).
     if net_edge_usd < min_edge {
         metrics.record_reject_too_low();
         return NetEdgeResult::Rejected {

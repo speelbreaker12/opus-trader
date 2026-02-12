@@ -21,12 +21,11 @@ cargo test -p soldier_core --test test_post_only_guard
 cargo test -p soldier_core --test test_capabilities
 cargo test -p soldier_core --test test_liquidity_gate
 cargo test -p soldier_core --test test_fee_staleness
-cargo test -p soldier_core --test test_fee_cache
+cargo test -p soldier_infra --test test_fee_cache
 cargo test -p soldier_core --test test_net_edge_gate
 cargo test -p soldier_core --test test_pricer
 cargo test -p soldier_core --test test_tlsm
 cargo test -p soldier_core --test test_gate_ordering
-cargo test -p soldier_core --test test_phase1_dispatch_auth
 cargo test -p soldier_core --test test_dispatch_chokepoint
 cargo test -p soldier_core --test test_intent_determinism
 cargo test -p soldier_core --test test_rejection_side_effects

@@ -211,6 +211,7 @@ fn test_missing_l2_book_fails_closed() {
         order_qty: 1.0,
         is_buy: true,
         intent_class: GateIntentClass::Open,
+        is_marketable: true,
         l2_snapshot: None, // missing book
         now_ms: 1000,
         l2_book_snapshot_max_age_ms: 5000,
@@ -372,6 +373,7 @@ fn test_config_missing_no_side_effects() {
             order_qty: 1.0,
             is_buy: true,
             intent_class: GateIntentClass::Open,
+            is_marketable: true,
             l2_snapshot: None,
             now_ms: 1000,
             l2_book_snapshot_max_age_ms: 5000,
