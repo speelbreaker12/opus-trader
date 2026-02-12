@@ -1,5 +1,9 @@
 1\) Phase → Slice Mapping Table (contract-aligned)  
-| Phase | Goal | Slices Included | Exit Criteria (objective/measurable) | Key Risks | |---|---|---|---|---| | Phase 1 — Foundation (Panic‑Free Deterministic Intents) | Deterministic intent construction: sizing invariants, quantization+idempotency, venue preflight, durable WAL/TLSM, and hard execution gates behind one chokepoint. | Slices 1–5 | (1) build\_order\_intent() gate ordering proven by test; (2) OPEN dispatch blocked when RiskState::Degraded (0 dispatches); (3) WAL replay proves “no resend after crash”; (4) Market/stop/linked/post-only-crossing are rejected preflight (tests); (5) Liquidity+NetEdge+Fee staleness fail-closed (tests). | Gate bypass via alternate codepaths; float/rounding drift; WAL durability miswired before dispatch. | | Phase 2 — Guardrails (Runtime Safety \+ Recovery) | Atomic containment \+ emergency close, risk budgets (inventory/pending/global/margin), PolicyGuard precedence incl F1 runtime gate, EvidenceGuard, Bunker Mode, plus rate-limit brownout, WS-gap recovery, reconcile, zombie sweep, and required owner endpoints. | Slices 6–9 | (1) Mixed-leg state always contains/neutralizes (tests); (2) PolicyGuard precedence enforces ReduceOnly/Kill correctly incl F1/Evidence/Bunker (tests); (3) 10028/429 behavior preserves emergency actions and blocks opens (tests); (4) New endpoints pass endpoint-level tests. | Recon races causing duplicates; rate limiter starving emergency close; “fail-open” gaps in PolicyGuard. | | Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. | | Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), and F1 cert (runtime \+ CI). | Slice 13 | (1) Replay gatekeeper ladder enforced: GOOD (coverage >=95) apply, DEGRADED (80-95) apply-with-haircut + tighten-only, BROKEN (<80 or unreadable) shadow-only; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for opens (runtime). | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
+| Phase | Goal | Slices Included | Exit Criteria (objective/measurable) | Key Risks | |---|---|---|---|---| | Phase 1 — Foundation (Panic‑Free Deterministic Intents) | Deterministic intent construction: sizing invariants, quantization+idempotency, venue preflight, durable WAL/TLSM, and hard execution gates behind one chokepoint. | Slices 1–5 | (1) build\_order\_intent() gate ordering proven by test; (2) OPEN dispatch blocked when RiskState::Degraded (0 dispatches); (3) WAL replay proves “no resend after crash”; (4) Market/stop/linked/post-only-crossing are rejected preflight (tests); (5) Liquidity+NetEdge+Fee staleness fail-closed (tests). | Gate bypass via alternate codepaths; float/rounding drift; WAL durability miswired before dispatch. | | Phase 2 — Guardrails (Runtime Safety \+ Recovery) | Atomic containment \+ emergency close, risk budgets (inventory/pending/global/margin), PolicyGuard precedence incl F1 runtime gate, EvidenceGuard, Bunker Mode, plus rate-limit brownout, WS-gap recovery, reconcile, zombie sweep, and required owner endpoints. | Slices 6–9 | (1) Mixed-leg state always contains/neutralizes (tests); (2) PolicyGuard precedence enforces ReduceOnly/Kill correctly incl F1/Evidence/Bunker (tests); (3) 10028/429 behavior preserves emergency actions and blocks opens (tests); (4) New endpoints pass endpoint-level tests. | Recon races causing duplicates; rate limiter starving emergency close; “fail-open” gaps in PolicyGuard. | | Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. | | Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), F1 cert promotion gates, and GOP optimization cycle. | Slices 13–14 | (1) Replay gatekeeper ladder enforced: GOOD (coverage >=95) apply, DEGRADED (80-95) apply-with-haircut + tighten-only, BROKEN (<80 or unreadable) shadow-only; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for full-scale promotion/governance while runtime OPEN gating remains enforced by Phase 2 PolicyGuard F1 checks; (5) GOP optimization produces bounded dry-run patches with explicit approvals. | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
+
+Phase permission clarifications (contract-bound)  
+- Phase 2 unlocks PAPER and MICRO-LIVE only when the CSP micro-live gate is green: runtime F1 fail-closed enforcement (S8.2), CSP profile status fields (`supported_profiles`, `enforced_profile`) at `/status` (S8.8), secondary disk corroboration telemetry online (S8.11), and CSP_ONLY CI evidence jobs (S8.12).  
+- Phase 4 certification extends governance for scale-up and GOP policy evolution; it does not replace runtime F1 enforcement that already blocks unsafe OPENs in Phase 2.  
 
 Global Non‑Negotiables (apply to ALL stories)  
 Minimum Alert Set (contract): configure/emit alerts for: atomic_naked_events>0; 429_count_5m>0; 10028_count_5m>0; policy_age_sec>300; decision_snapshot_write_errors>0; truth_capsule_write_errors>0; parquet_queue_overflow_count>0; evidence_guard_blocked_opens_count>0.  
@@ -46,7 +50,8 @@ Deribit Venue Facts Addendum: all VERIFIED facts are enforced with artifacts und
 - Fee cache staleness + time drift + SVI trip counts -> S5.2 + S10.5 + S11.1
 - WAL + trade-id registry -> S4.1 + S4.3
 - CSP Profile Isolation from Replay/Snapshot failures (contract §5.2, §0.Z.7) -> S13.1 (AT-1070)
-- CSP_ONLY CI gate + build isolation (contract §0.Z.9) -> S13.5 (AT-1056, AT-1057, AT-990)
+- CSP micro-live safety gate (runtime F1 + profile status fields + secondary disk corroboration) -> S8.2 + S8.8 + S8.11 + S8.12
+- CSP_ONLY CI gate + build isolation (contract §0.Z.9) -> S8.12 (AT-1056, AT-1057, AT-990)
 
 
 
@@ -572,6 +577,7 @@ D) Exit Criteria
 Mixed-state containment always reaches neutralization path within bounds (tests).  
 PolicyGuard tests cover F1 missing/stale/fail; Evidence RED; bunker mode; maintenance.  
 Endpoints /api/v1/status, /api/v1/health, and /api/v1/emergency/reduce\_only have endpoint-level tests.  
+CSP micro-live gate evidence is complete: runtime F1 fail-closed behavior proven, `supported_profiles`/`enforced_profile` status fields validated, secondary disk corroboration telemetry active, and CSP_ONLY CI jobs green.  
 E) Slices Breakdown (Phase 2\)  
 Slice 6 — Inventory Skew \+ Pending Exposure \+ Global Budget \+ Margin Gate  
 Slice intent: prevent risk-budget double spend and liquidation.
@@ -1030,6 +1036,30 @@ crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_reduceonly\_tri
 crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_kill\_trip (AT-952)  
 crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_missing\_stale\_fails\_closed (AT-954)  
 Observability: counter basis\_trip\_total.  
+S8.11 — Secondary disk corroboration probe ingestion (contract §2.2.3.1.2)  
+Allowed paths: crates/soldier\_infra/telemetry/disk_probe.rs, crates/soldier\_core/policy/input_snapshot.rs, crates/soldier\_infra/http/status.rs  
+Acceptance criteria:  
+- Independent source for `disk_used_pct_secondary` is implemented via platform adapters (macOS `iostat`, Linux proc/statvfs path) with deterministic parsing and normalization.  
+- `disk_used_secondary_last_update_ts_ms` is refreshed on successful reads and exposed to PolicyGuard snapshot reads.  
+- If secondary probe is missing/stale/unparseable while a disk-kill predicate is otherwise true, PolicyGuard MUST fail-closed to ReduceOnly with `REDUCEONLY_DISK_KILL_UNCONFIRMED`.  
+- `/api/v1/status` reports `disk_used_pct_secondary` and freshness timestamp coherently with primary disk fields.  
+Tests:  
+crates/soldier\_infra/tests/test\_disk\_probe.rs::test\_disk\_secondary\_probe\_parser\_normalizes\_pct  
+crates/soldier\_core/tests/test\_policy\_guard.rs::test\_disk\_kill\_secondary\_probe\_missing\_forces\_reduceonly\_unconfirmed  
+crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_includes\_secondary\_disk\_fields  
+Observability: gauge disk_used_pct_secondary, gauge disk_secondary_probe_age_ms, counter disk_secondary_probe_errors_total.  
+
+S8.12 — CSP_ONLY CI gate + profile isolation evidence (micro-live prerequisite)  
+Allowed paths: .github/workflows/**, plans/verify_fork.sh, crates/soldier\_core/tests/test\_profile\_isolation.rs  
+Acceptance criteria:  
+- CI jobs `build:csp_only`, `test:csp_only`, and `test:gop` exist and are required checks for micro-live approval.  
+- `build:csp_only` runs `cargo build --no-default-features --features csp_only` and passes (AT-1056).  
+- `test:csp_only` runs CSP acceptance in CSP_ONLY mode and passes (AT-1057).  
+- `test:gop` failures do not block CSP deployment but disable GOP claims until fixed.  
+- Runtime `/status` evidence proves `supported_profiles` contains CSP and `enforced_profile` is coherent with deployed profile.  
+Tests: crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_only\_build\_starts\_and\_reports\_csp (AT-990).  
+Evidence artifacts: CI logs for `build:csp_only`, `test:csp_only`, `test:gop` tied to release candidate SHA.  
+
 Slice 9 — Rate Limit Circuit Breaker \+ WS Gaps \+ Reconcile \+ Zombie Sweeper  
 Slice intent: survive throttling and data gaps; block opens until safe.
 
@@ -1277,20 +1307,20 @@ S12.1 → S12.2 (calibration depends on simulator)
 Slice 10 required before Slice 13 replay correctness.  
 G) De-scope line (Phase 3\)  
 No replay/canary/reviews application yet; no disk watermark enforcement beyond metrics.  
-PHASE 4 — Live Fire Controls (Slice 13\)  
+PHASE 4 — Live Fire Controls (Slices 13–14\)  
 A) Phase Objective  
-Implement governance and release gates: replay gatekeeper using Decision Snapshots (required) with realism penalty; staged canary rollout with abort/rollback \+ ReduceOnly cooldown; daily/incident reviewer with human approval for aggressive patches; disk retention and watermark behavior per Patch A; F1 cert generation used by CI and by runtime F1 gate.
+Implement governance and release gates: replay gatekeeper using Decision Snapshots (required) with realism penalty; staged canary rollout with abort/rollback \+ ReduceOnly cooldown; daily/incident reviewer with human approval for aggressive patches; disk retention and watermark behavior per Patch A; F1 certification artifacts for promotion governance (runtime F1 gate is already active from Phase 2).
 
 B) Constraint (TOC)  
 Bottleneck: avoiding “false pass” governance.  
-Relief: ReplayQuality ladder (GOOD apply; DEGRADED tighten-only + haircut; BROKEN shadow-only); penalized replay profitability gate; F1 cert PASS required for opens.
+Relief: ReplayQuality ladder (GOOD apply; DEGRADED tighten-only + haircut; BROKEN shadow-only); penalized replay profitability gate; F1 cert PASS required for full-scale promotion/GOP policy apply (not as a replacement for Phase 2 runtime F1 enforcement).
 
 C) Entry Criteria  
 Phase 3 evidence \+ snapshots \+ calibration working.  
 /status reports snapshot coverage and F1 state.  
 D) Exit Criteria  
 Replay gatekeeper \+ canary \+ reviewer \+ watermarks \+ F1 cert tests all green.  
-artifacts/F1\_CERT.json PASS produced and required for opens.  
+artifacts/F1\_CERT.json PASS produced and required for full-scale promotion and GOP policy-apply actions.  
 E) Slice Breakdown (Phase 4\)  
 Slice 13 — Replay Gatekeeper \+ Canary \+ Reviews \+ Retention \+ F1 Cert  
 S13.1 — Replay Gatekeeper (Decision Snapshots required; quality ladder + ungameable apply)  
@@ -1414,8 +1444,8 @@ Add tests verifying:
 - incident report generation triggers ReduceOnly cooldown
 
 
-S13.5 — F1 cert generation \+ CI gate  
-Implement Contract §8.1 Release Gate Metrics: compute and enforce all listed metrics/thresholds per stage (shadow/testnet/live). F1_CERT PASS requires all thresholds satisfied.  
+S13.5 — F1 cert generation + CI gate  
+Implement Contract §8.1 Release Gate Metrics for promotion/scaling decisions: compute and enforce all listed thresholds per stage (shadow/testnet/live). Runtime OPEN legality remains enforced by Phase 2 PolicyGuard F1 checks. F1_CERT PASS in this slice gates full-scale promotion and GOP policy apply.  
 Explicit metrics (contract §8.1):  
 - Rate Limits: `429_count_5m == 0` AND `10028_count_5m == 0`.  
 - Time Drift: `p99_clock_drift <= 50ms`.  
@@ -1427,15 +1457,7 @@ Tests: python/tests/test\_f1\_certify.py::test\_f1\_cert\_fail\_on\_atomic\_nake
 Add test: python/tests/test\_f1\_certify.py::test\_runtime\_config\_hash\_canonicalization (AT-113).  
 Evidence artifacts: artifacts/F1\_CERT.json, artifacts/F1\_CERT.md  
 
-**CSP_ONLY CI gate (contract §0.Z.9):**  
-- Provide CI jobs: build:csp_only, test:csp_only, test:gop.  
-- build:csp_only MUST run `cargo build --no-default-features --features csp_only` and succeed (AT-1056).  
-- test:csp_only MUST run `cargo test --no-default-features --features csp_only --test acceptance`, execute ONLY CSP tests, and pass (AT-1057).  
-- test:gop runs GOP tests with GOP features enabled; failure disables GOP features but MUST NOT block CSP deployments.  
-- Codebase MUST support CSP_ONLY build (GOP-only modules not linked; GOP-only deps feature-gated).  
-Add/alias tests:  
-crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_only\_build\_starts\_and\_reports\_csp (AT-990)  
-CI job assertions for AT-1056/AT-1057 are validated via build:csp_only/test:csp_only job logs (no repo test path required).  
+CSP_ONLY CI job ownership and profile isolation proof are delivered in S8.12 (Phase 2 micro-live gate) and consumed here as release inputs.  
 
 **PL-9 — Add missing REQUIRED named tests (exact names):**
 
@@ -1471,8 +1493,34 @@ Define exact metric windows per contract:
 
 Add tests that assert thresholds exactly match contract comparators (≤ vs <, ==0, etc.).
 
+Slice 14 — GOP Optimization Cycle (Contract §5.1)  
+Slice intent: implement the closed-loop policy tuner for GOP/FULL profiles without weakening CSP safety guarantees.  
+
+S14.1 — Daily optimizer ingestion + dry-run patch proposal  
+Allowed paths: python/optimizer/closed_loop.py, python/optimizer/patch_model.py, python/tests/test_closed_loop.py  
+Acceptance criteria:  
+- Daily job ingests Parquet attribution/replay artifacts and computes policy deltas from closed-loop rules (§5.1).  
+- Output includes bounded candidate patches with rationale and pre/post metrics.  
+- Default mode is dry-run (`apply=false`); no live policy mutation without downstream gate success.  
+- When `enforced_profile == CSP`, optimizer output is informational only and MUST NOT affect TradingMode/OpenPermissionLatch.  
+Tests:  
+python/tests/test_closed_loop.py::test_closed_loop_generates_bounded_patch_candidates  
+python/tests/test_closed_loop.py::test_closed_loop_csp_profile_is_non_enforcing  
+Evidence artifacts: artifacts/policy_patches/<ts>_patch.json, artifacts/policy_patches/<ts>_result.json.  
+
+S14.2 — Governor clamps + approval coupling for apply path  
+Allowed paths: python/optimizer/closed_loop.py, python/governor/replay_gatekeeper.py, python/reviewer/daily_ops_review.py  
+Acceptance criteria:  
+- Policy deltas are clamped to configured safe bounds before apply consideration.  
+- Apply path requires Replay Gatekeeper pass and reviewer/approval artifacts per governance rules.  
+- Any optimizer-induced `atomic_naked_events > 0` forces immediate cooldown patch and ReduceOnly recommendation.  
+Tests:  
+python/tests/test_closed_loop.py::test_closed_loop_requires_replay_and_review_before_apply  
+python/tests/test_closed_loop.py::test_closed_loop_atomic_naked_forces_cooldown_recommendation  
+
 F) Dependencies DAG (Phase 4\)  
 Slice 10 \+ Slice 12 → S13.1  
 S13.1 → S13.3 (replay pass required before canary)  
-S13.2 \+ S13.4 \+ S13.5 must be in place before any “enable live” decision.  
+S13.2 \+ S13.4 \+ S13.5 \+ S14.* must be in place before any “enable full-scale/prod” decision.  
+Phase 2 CSP micro-live decision requires S8.2 \+ S8.8 \+ S8.11 \+ S8.12 evidence (runtime F1/profile/corroboration/CSP_ONLY CI).  
 G) De-scope line (Phase 4\)

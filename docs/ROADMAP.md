@@ -1,12 +1,22 @@
 # Roadmap (Merged + Hardened) — Automated Crypto Options Trading System
-_Last updated: January 28, 2026_
+_Last updated: February 12, 2026_
 
 This document merges:
 - Your phase-based roadmap with strong mechanical safety guarantees (Phases 1–4). 
 - The strategic structure: constraint-first scheduling (TOC), environment ladder, and deployment/testing gates.
 
-> **Contract + Implementation Plan remain the source of truth for requirements.** This roadmap is the human-readable control layer.  
-> (Note: the files you shared for Contract/Implementation Plan are redirect stubs pointing to `specs/…`.)
+> **Contract + Implementation Plan remain the source of truth for requirements.** This roadmap is the human-readable control layer.
+
+---
+
+## Document precedence (normative)
+
+1. `specs/CONTRACT.md`
+2. `specs/IMPLEMENTATION_PLAN.md`
+3. Phase checklist blocks (`docs/PHASE0_CHECKLIST_BLOCK.md`, `docs/PHASE1_CHECKLIST_BLOCK.md`, and phase-specific successors)
+4. `docs/ROADMAP.md`
+
+If a lower-precedence document conflicts with a higher-precedence one, the higher-precedence document wins and roadmap/plan text must be corrected before phase sign-off.
 
 ---
 
@@ -44,6 +54,26 @@ So the roadmap protects the constraint:
 - **MICRO-LIVE:** real money, tiny caps, automatic rollback, human-supervised.
 - **PROD:** only after stability + evidence gates.
 
+### Stage terminology map (roadmap vs gates)
+
+Use this table for interpretation only. Automated release/certification gates MUST use the canonical contract terms.
+
+| Intent | Roadmap term | Contract/Cert term | Plan term |
+|---|---|---|---|
+| Non-capital evidence run | PAPER | Shadow | Shadow |
+| Limited canary deployment | MICRO-LIVE | Testnet (micro-canary gate stage) | Canary |
+| Scaled production | PROD | Live | Full |
+
+### Profile compliance gates (CSP/GOP/FULL)
+
+- `/status` must publish `supported_profiles` and `enforced_profile` with profile-consistent fields.
+- Runtime safety baseline is CSP; when `enforced_profile == CSP`, GOP-only subsystem failures are surfaced but not allowed to drive CSP safety decisions.
+- CI profile isolation gates are mandatory before claiming profile-complete milestones:
+  - `build:csp_only`
+  - `test:csp_only`
+  - `test:gop`
+- Phase completion claims must cite evidence for profile isolation behavior, not only feature implementation.
+
 ---
 
 ## 3) One-page Executive Table (Outcome + Permission)
@@ -52,7 +82,7 @@ So the roadmap protects the constraint:
 |---:|---|---|---|---|
 | 0 | Launch Policy & Ops Baseline | We agree on risk limits, modes, keys, and how incidents are handled. | We can run safely in DEV/STAGING without ambiguity. | DEV/STAGING |
 | 1 | Foundation (“Never Panic, Never Duplicate”) | The system is mechanically prevented from sending illegal/duplicate orders or sizing wrong silently. | Safe dry-run + restart/replay testing. | DEV/STAGING |
-| 2 | Guardrails (“Contain Damage Automatically”) | If we get exposed, the system can always contain/reduce exposure automatically under exchange/infrastructure failures. | **Paper trading** is allowed. **Micro-live** is allowed only after paper gates pass. | STAGING/PAPER |
+| 2 | Guardrails (“Contain Damage Automatically”) | If we get exposed, the system can always contain/reduce exposure automatically under exchange/infrastructure failures. | **Paper trading** is allowed. **Micro-live** is allowed only after paper gates and the CSP certification gate pass (CSP_ONLY CI + runtime F1 binding + `/status` profile fields + CSP safety acceptance). | STAGING/PAPER |
 | 3 | Data Loop (“Make Every Outcome Explainable”) | Every trade is explainable, attributable, and replayable with measurable coverage. | We can iterate strategy with evidence and regression tests. | PAPER/MICRO-LIVE |
 | 4 | Live Fire Controls (“Change Nothing Unsafely”) | No risky change reaches production without replay proof + controlled rollout + rollback. | Scaled production with safe evolution. | MICRO-LIVE/PROD |
 
@@ -70,6 +100,7 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 - **Keys & Secrets** (`docs/keys_and_secrets.md`) — key creation rules, rotation plan, LIVE key protection.
 - **Break-Glass Runbook** (`docs/break_glass_runbook.md`) — kill switch steps, verify no open risk, escalation.
 - **Health + Owner Status** (`docs/health_endpoint.md`) — minimal command surface to check liveness and authority state.
+- **Repo layout + verify harness baseline** (`plans/verify.sh`, `plans/verify_fork.sh`, `specs/WORKFLOW_CONTRACT.md`) — canonical workflow paths and deterministic verification entrypoint are defined and executable.
 
 ### Exit criteria (evidence pack)
 - All docs above exist with required content
@@ -78,6 +109,7 @@ Before we argue about features, we lock the **rules of the game**: what the bot 
 - A recorded **key-scope probe** (`key_scope_probe.json`) proving keys are least-privilege
 - Minimal commands that expose: `ok`, `build_id`, `contract_version`, `trading_mode`, `is_trading_allowed`
 - Strict policy loader validation passes for `config/policy.json`
+- Canonical verification path guard passes: `plans/verify.sh` remains a thin wrapper to `plans/verify_fork.sh`
 
 ---
 
@@ -113,7 +145,7 @@ Canonical source: `docs/PHASE1_CHECKLIST_BLOCK.md`
 
 Decision input policy (drift control):
 - Use `docs/PHASE1_CHECKLIST_BLOCK.md` and `docs/ROADMAP.md` for Phase 1 decisions.
-- Treat `docs/phase1_acceptance.md`, `docs/PLAN_PHASE1_EXCERPT.md`, and `docs/bundle_CONTRACT_PHASE1.md` as supporting references.
+- Treat `specs/CONTRACT.md` and `specs/IMPLEMENTATION_PLAN.md` as supporting references; do not use drift-prone excerpt/bundle files as normative inputs.
 
 ## Definition of Done (Phase 1)
 
@@ -125,7 +157,13 @@ Decision input policy (drift control):
   - sizing units + quantization
   - intent hashing
   - label generation
+- Explicit `s4` label contract is enforced:
+  - outbound format: `s4:{sid8}:{gid12}:{li}:{ih16}`
+  - Deribit hard limit `label <= 64` chars with **no truncation**
+  - overflow semantics: `Rejected(LabelTooLong)` before dispatch + `RiskState::Degraded`
+  - deterministic parser/disambiguation behavior covered by AT-216, AT-217, AT-041, AT-921
 - Preflight guards that **hard-reject** illegal orders (market/stop/linked/post-only crossing, etc.).
+- Deribit Venue Facts Addendum enforcement is artifact-backed and CI-gated (evidence check failure blocks build).
 - “Pre-dispatch gates” wired before any exchange call:
   - liquidity gate (data must be good enough)
   - fee staleness gate
@@ -162,6 +200,7 @@ Decision input policy (drift control):
 ### Acceptance artifacts (what “proof” looks like)
 - **Tests**
   - determinism tests for hashing/quantization/labels
+  - label contract tests for `s4` parse/overflow/disambiguation semantics
   - WAL crash-replay tests (no duplicate dispatch)
   - illegal order rejection tests
 - **Operational proof**
@@ -380,6 +419,7 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
   - ≤2 rescue attempts
   - deterministic emergency close + hedge fallback
 - **PolicyGuard** as the *single* TradingMode authority (monotonic; no subsystem can re-enable risk).
+- **Policy Fallback Ladder (Dead Man's Switch)** is explicit and monotonic: `Active -> ReduceOnly -> Kill` with deterministic reason codes.
 - Runtime enforcement of:
   - `REDUCE_ONLY`
   - `KILL`
@@ -393,12 +433,18 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
   - `GET /api/v1/status`
   - `GET /api/v1/health`
   - `POST /api/v1/emergency/reduce_only`
+- `/status` contract fields for profile isolation are present and validated:
+  - `supported_profiles`
+  - `enforced_profile`
+- **Runtime F1 safety gate active in PolicyGuard**:
+  - missing/stale/invalid/mismatched `F1_CERT` => at most `ReduceOnly` (OPEN blocked; containment still permitted)
 
 ### 2) System guarantees
 - **Capital supremacy invariant:** if exposure exists, at least one risk-reducing action is always permitted.
 - **Mixed fills never persist:** partial/asymmetric execution triggers containment.
 - **TradingMode is monotonic and authoritative:** once risk is blocked, it stays blocked until explicit operator action.
 - **External failures are survivable:** rate limits, disconnects, websocket gaps, maintenance windows.
+- **F1 is enforced as runtime safety input:** cert failures cannot be deferred to deployment governance.
 
 ### 3) Operational meaning
 - Operators no longer need to react instantly to incidents.
@@ -425,10 +471,15 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
   **Minimum chaos requirement:** execute and record **≥8** injected fault scenarios (the list above is the baseline) and verify correct TradingMode transitions + containment outcomes.
 - **Paper trading gate**
   - micro-live caps are defined in policy and enforced (tiny size; cannot be silently raised)
-  - run 7–14 days paper with:
+  - run at least 10 trading days (or 14 calendar days) paper with:
     - zero unreconciled positions
     - zero duplicate dispatches
     - bounded “containment events” with clear reasons
+- **Mandatory CSP certification gate before any micro-live capital**
+  - CI profile isolation: `build:csp_only` + `test:csp_only` are green (and profile matrix evidence is recorded)
+  - runtime F1 binding gate is proven fail-closed for mismatch on `build_id`, `runtime_config_hash`, and `contract_version`
+  - `/status` profile fields are correct (`supported_profiles`, `enforced_profile`)
+  - CSP safety acceptance is green for reconciliation, emergency containment, and OpenPermissionLatch
 - **Operational proof**
   - `/status` shows mode transitions correctly under fault tests
 - A non-technical owner can read `/status` and identify **TradingMode + reason code** in **≤5 seconds** (no engineer translation).
@@ -445,8 +496,11 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 - **Decision Snapshot** (decision-time market state, e.g., L2 top-N) linked to every dispatched order.
 - Full **trade attribution** (slippage, fees, timing, opportunity cost if relevant).
 - Time-drift gate (clock correctness enforced) — move earlier if strategy is time-sensitive.
+- chrony/NTP discipline is documented and operationally health-checked (time-drift gate dependency).
 - Deterministic **fill simulator** (for replay + regression).
+- Shadow mode writes the same evidence schema as live (`mode=shadow|live`) for replay parity.
 - Slippage calibration with safe default penalty.
+- (Optional) full tick/L2 archive writer with rolling 72h retention for deep diagnostics (Decision Snapshots remain required).
 - (Optional) options-surface stability gates (SVI/no-arb) if your strategy depends on them.
 
 ### 2) System guarantees
@@ -477,6 +531,10 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 - Adversarial replay pack:
   - defined stress scenarios are included and pass (e.g., vol spike, illiquidity/wide spreads, late fills, exchange outage/gap)
   - coverage thresholds are met on those scenarios (not just “average days”)
+- Operations evidence:
+  - chrony/NTP health checks are recorded for phase runs
+  - shadow-mode replay outputs are schema-compatible with live outputs
+  - if full tick/L2 archives are enabled, retention is validated at 72h with watermark behavior
 
 ---
 
@@ -493,8 +551,14 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 - **Canary rollout system**:
   - Shadow → Micro-live → Full
   - automatic rollback + ReduceOnly cooldown
-- Disk retention + watermark enforcement (evidence cannot silently disappear).
-- **F1 Certification** (name optional): CI-generated, runtime-enforced, binds build + config + contract version.
+- **ExecutionStyle lock:** `Sniper` (IOC limit-only) is enforced for live-fire rollout unless a contract amendment explicitly changes it.
+- Disk retention + watermark enforcement (evidence cannot silently disappear), with explicit defaults:
+  - pause full tick/L2 archives at `80%` disk usage
+  - force `ReduceOnly` at `85%`
+  - force `Kill` at `92%`
+  - default retention: tick/L2 `72h`; Decision Snapshots `30d` (never violating replay-window minimum)
+- **F1 Certification pipeline** (name optional): CI-generated artifact + promotion gate that binds build + config + contract version (runtime enforcement is already active from Phase 2).
+- Release-gate scoreboard for contract metrics (including `atomic_naked_events`, `429_count_5m`, `10028_count_5m`) is wired into promotion decisions.
 - Human approval latch for risk-increasing changes.
 
 ### 2) System guarantees
@@ -508,7 +572,9 @@ At end of Phase 1, answer **YES/NO** with linked evidence from `evidence/phase1/
 
 ### Acceptance artifacts
 - Canary tests: abort + rollback work for every abort condition.
-- Certification artifact produced in CI and verified at runtime.
+- Certification artifact produced in CI, verified by promotion gates, and validated against the already-active runtime F1 gate.
+- Release-gate scoreboard artifact proves threshold evaluation for `atomic_naked_events`, `429_count_5m`, `10028_count_5m`, and related contract metrics.
+- Retention/watermark tests prove 80/85/92 transitions plus replay-window-safe Decision Snapshot retention.
 - Governance artifact: approvals recorded for risk-increasing changes.
 - Governance rule: risk-increasing approvals are **limited in scope and frequency**; bulk/cumulative changes require separate review (prevents approval fatigue).
 - Production SLOs defined and met for **at least 14 calendar days** before scaling.
@@ -588,13 +654,14 @@ Status: **Fixed** (all items resolved in this document).
 
 ### Phase 0 — Launch Policy & Ops Baseline ✅ COMPLETE (2026-01-28)
 - [x] Trading Policy exists (risk limits, instruments, max daily loss, max order rate). → `docs/launch_policy.md`
-- [x] Policy limits are **machine-readable and enforced** at runtime (not just in docs). → Enforcement deferred to Phase 1; docs complete.
+- [x] Policy limits are **machine-readable and enforced** at runtime (not just in docs). → `config/policy.json`, `tools/policy_loader.py`, `tests/phase0/test_machine_policy_loader_and_config.md`
 - [x] Trading modes defined and documented (`Active`, `ReduceOnly`, `Kill`) with who/what can switch them. → `docs/launch_policy.md`
 - [x] Separate API keys per environment; least privilege; rotation plan documented. → `docs/env_matrix.md`, `docs/keys_and_secrets.md`
 - [x] Key scopes are **proven** (probe tests recorded). → `evidence/phase0/keys/key_scope_probe.json`
 - [x] Incident runbook exists (kill switch, exchange outage, PnL spike, mixed fills). → `docs/break_glass_runbook.md`
 - [x] At least one **break-glass drill** executed and recorded (simulate runaway order → force `KILL` → verify no further OPENs; `REDUCE_ONLY` still works). → `evidence/phase0/break_glass/drill.md`
 - [x] Basic health + owner status output exists (CLI) and is readable by a non-coder. → `docs/health_endpoint.md`, `stoic-cli`
+- [x] Canonical verify harness entrypoint is enforced (`plans/verify.sh` delegates to `plans/verify_fork.sh`), and workflow paths follow canonical contract locations.
 
 **Sign-off statement:** Ops rules are defined **and binding**; "safe" is enforced, drilled, and observable.
 
@@ -602,8 +669,10 @@ Status: **Fixed** (all items resolved in this document).
 - [ ] All exchange dispatch routes through the single **dispatch chokepoint** (only one module may call the exchange client).
 - [ ] WAL/intent ledger prevents duplicates across crash/restart/reconnect.
 - [ ] Determinism tests pass (hashing/quantization/labels).
+- [ ] `s4` label schema is enforced exactly (`s4:{sid8}:{gid12}:{li}:{ih16}`), including Deribit `<=64` chars, no truncation, overflow reject semantics (`Rejected(LabelTooLong)` + `RiskState::Degraded`), and AT-216/217/041/921 coverage.
 - [ ] Illegal orders are rejected before any exchange API call.
 - [ ] Any edge/profitability gate is explicitly labeled **policy** and cannot block risk-reducing orders (close/reduce-only).
+- [ ] Deribit Venue Facts Addendum checks are artifact-backed and CI-enforced (evidence check failure blocks build).
 - [ ] Verification harness fails the build on contract violations.
 - [ ] Logs/metrics include `run_id` and `intent_id` (traceability).
 
@@ -612,11 +681,15 @@ Status: **Fixed** (all items resolved in this document).
 ### Phase 2 — Guardrails
 - [ ] Atomic group executor + bounded rescue attempts implemented and tested.
 - [ ] PolicyGuard is authoritative and monotonic (no re-enable leaks).
+- [ ] Runtime F1 gate is active in PolicyGuard (`F1_CERT` missing/stale/invalid/mismatched => at most `ReduceOnly`; OPEN blocked).
+- [ ] Policy fallback ladder (Dead Man's Switch) is explicit and monotonic (`Active -> ReduceOnly -> Kill`) with deterministic reason codes.
 - [ ] Reconciliation loop exists (WS gaps + REST; zombie/orphan sweeps).
-[ ] `/status` exposes *why* trading is blocked/reduced using contract fields (`trading_mode`, `mode_reasons`, `open_permission_reason_codes`) and the Owner dashboard passes the 5-second rule.
+- [ ] `/status` exposes *why* trading is blocked/reduced using contract fields (`trading_mode`, `mode_reasons`, `open_permission_reason_codes`) and the Owner dashboard passes the 5-second rule.
+- [ ] `/status` profile isolation fields are correct and present (`supported_profiles`, `enforced_profile`) under CSP semantics.
 - [ ] A non-technical owner can read `/status` and identify **TradingMode + reason** in **≤5 seconds**.
 - [ ] Fault-injection tests pass (rate limits, disconnects, gaps, mixed fills) **with ≥8 injected scenarios executed + recorded**.
 - [ ] Paper trading completed for **at least 10 trading days (or 14 calendar days)** with clean reconciliation, no duplicates, and fault handling verified.
+- [ ] CSP certification gate passes before micro-live (`build:csp_only`, `test:csp_only`, runtime F1 binding checks, and CSP acceptance coverage for reconciliation/emergency containment/OpenPermissionLatch).
 
 **Sign-off statement:** Exposure cannot persist accidentally; the system chooses safety automatically.
 
@@ -624,19 +697,25 @@ Status: **Fixed** (all items resolved in this document).
 - [ ] Truth Capsule is written before dispatch for every order intent.
 - [ ] Decision Snapshot is linked to every dispatch; coverage metric computed.
 - [ ] Trade attribution matches fills (100% of fills attributed).
+- [ ] chrony/NTP discipline is enforced operationally and health-checked.
+- [ ] Shadow-mode outputs are schema-compatible with live evidence outputs.
 - [ ] Replay runner can reconstruct decisions from evidence within defined tolerances.
 - [ ] Replay acceptance includes defined **stress scenarios** (vol spike, illiquidity, late fills, outage/gaps), not just average periods.
 - [ ] Evidence/telemetry failure blocks **new** risk creation (reduce-only still allowed).
+- [ ] If enabled, full tick/L2 archives honor rolling 72h retention and watermark behavior (Decision Snapshots remain mandatory regardless).
 
 **Sign-off statement:** Every trade is explainable and replayable with measurable coverage.
 
 ### Phase 4 — Live Fire Controls
 - [ ] Replay Gatekeeper blocks promotion when thresholds fail.
 - [ ] Canary ladder exists (shadow → micro-live → full) with automatic rollback.
+- [ ] ExecutionStyle is locked to `Sniper` (IOC limit-only) for live-fire rollout unless contract-amended.
 - [ ] ReduceOnly cooldown and rollback behaviors tested end-to-end.
-- [ ] Certification artifact binds build+config+contract version and is enforced at runtime.
+- [ ] Certification artifact binds build+config+contract version in CI/promotion and is consistent with the runtime F1 gate introduced in Phase 2.
+- [ ] Release-gate scoreboard includes `atomic_naked_events`, `429_count_5m`, `10028_count_5m` and blocks promotion on threshold failures.
 - [ ] Human approval recorded for risk-increasing changes.
 - [ ] Risk-increasing approvals are limited in **scope and frequency**; bulk/cumulative changes require separate review.
+- [ ] Retention/watermark gates enforce 80/85/92 transitions plus default retention safety (`tick_l2_retention_hours=72`, `decision_snapshot_retention_days=30` with replay-window protection).
 - [ ] Production SLOs met for **at least 14 calendar days** before scaling up.
 
 **Sign-off statement:** The system can evolve safely without relying on human vigilance.

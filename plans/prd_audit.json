@@ -1,6 +1,6 @@
 {
   "project": "StoicTrader",
-  "prd_sha256": "8c4f8c614c5679765de1e6ee3e0760f02c52c419e08be0b9452936bbd126a2a8",
+  "prd_sha256": "6d5bd6a74eae3f69f07aa2a426bbe358fc9b0d188ad632f96ff8afa58d799801",
   "inputs": {
     "prd": "plans/prd.json",
     "contract": "specs/CONTRACT.md",
@@ -3862,11 +3862,58 @@
         ]
       },
       "patch_suggestions": []
+    },
+    {
+      "id": "S1-013",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "Schema fields present for current PRD item."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": [
+          "Contract and plan references present; semantic depth reviewed separately."
+        ]
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": [
+          "Verify includes ./plans/verify.sh plus targeted checks."
+        ]
+      },
+      "scope_check": {
+        "too_broad": false,
+        "est_size_too_large": false,
+        "notes": [
+          "Scope captured in PRD entry; no schema-level scope violation detected."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": [
+          "Dependencies structurally valid at PRD schema level."
+        ]
+      },
+      "patch_suggestions": []
     }
   ],
   "summary": {
-    "items_total": 82,
-    "items_pass": 82,
+    "items_total": 83,
+    "items_pass": 83,
     "items_fail": 0,
     "items_blocked": 0,
     "must_fix_count": 0
