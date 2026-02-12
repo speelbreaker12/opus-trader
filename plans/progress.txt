@@ -384,7 +384,7 @@ Evidence: artifacts/verify/20260211_153024.
 Next: None.
 Story: workflow/phase0-live-key-cutover-drill
 Date: 2026-02-11
-Summary: Started next-step execution for full LIVE key cutover drill; recorded incident-grade cutover drill artifact with explicit blocker and completion criteria. Current status is BLOCKED in this workspace due missing prod Vault/exchange key-admin authority; linked artifact into Phase-0 evidence/index to keep residual risk explicit.
+Summary: Started next-step execution for full LIVE key cutover drill; recorded incident-grade cutover drill artifact with explicit blocker and completion criteria. Current status is BLOCKED in this workspace due to missing prod Vault/exchange key-admin authority; linked artifact into Phase-0 evidence/index to keep residual risk explicit.
 Commands: ./stoic-cli --help; ./stoic-cli keys-check --help; env | cut -d= -f1 | rg -i "VAULT|LIVE|DERIBIT|API_KEY|SECRET|TRADING_ENV|EXCHANGE"; python3 tools/phase0_meta_test.py --root .
 Evidence: evidence/phase0/keys/live_cutover_drill.md; evidence/phase0/README.md; docs/phase0_index.md.
 Notes: `stoic-cli` supports key-scope validation only (`keys-check`) and has no key create/swap/revoke command path; full cutover must execute in production maintenance window with Vault + exchange admin access.
@@ -396,8 +396,8 @@ Commands: ./plans/verify.sh quick.
 Evidence: artifacts/verify/20260211_164441.
 Next: Execute LIVE cutover in authorized maintenance window and update `evidence/phase0/keys/live_cutover_drill.md` status to PASSED.
 Story: workflow/phase0-doc-evidence-cleanup-v2
-Date: 2026-02-12
-Summary: Addressed PR #27 review feedback by sanitizing machine-local absolute probe paths in committed rotation check artifacts, clarifying Phase-1 index evidence as existing vs pending, and aligning ROADMAP evidence folder template names to canonical `evidence/phaseN/` layout.
+Date: 2026-02-11
+Summary: Addressed PR #27 review feedback by sanitizing machine-local absolute probe paths in committed rotation check artifacts, clarifying Phase-1 index evidence as existing vs pending, aligning ROADMAP evidence folder template names to canonical `evidence/phaseN/` layout, and adding the referenced postmortem entry at `reviews/postmortems/2026-02-11_phase0_doc_evidence_cleanup.md`.
 Commands: ./plans/verify.sh quick.
 Evidence: evidence/phase0/keys/{rotation_check_all.json,rotation_check_live.json,rotation_check_staging.json}; docs/phase1_index.md; docs/ROADMAP.md; artifacts/verify/20260211_182332.
 Next: Push branch update and resolve PR review threads.

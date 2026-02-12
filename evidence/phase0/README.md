@@ -16,7 +16,7 @@
 ## What remains risky (known limits)
 - This does not prove full trading-mode/runtime safety enforcement yet (Phase 1+).
 - This does not include /status, TradingMode logic, or reconciliation (Phase 2+).
-- Full LIVE key cutover drill remains pending; current record is BLOCKED in this workspace due missing prod Vault/exchange key-admin authority (`evidence/phase0/keys/live_cutover_drill.md`).
+- Full LIVE key cutover drill remains pending; current record is BLOCKED in this workspace due to missing production Vault/exchange key-admin authority (`evidence/phase0/keys/live_cutover_drill.md`).
 
 ## Evidence index (paths)
 - Launch policy snapshot: `evidence/phase0/policy/launch_policy_snapshot.md`
