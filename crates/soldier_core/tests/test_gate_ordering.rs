@@ -131,6 +131,8 @@ fn test_at504_cancel_only_dispatch_auth_only() {
         net_edge_passed: false,
         pricer_passed: false,
         wal_recorded: false,
+        requested_qty: None,
+        max_dispatch_qty: None,
     };
 
     let result = build_order_intent(
@@ -798,4 +800,86 @@ fn test_constraint_wal_after_all_validation_gates() {
             other => panic!("expected Approved for {intent_class:?}, got {other:?}"),
         }
     }
+}
+
+#[test]
+fn test_dispatch_consistency_rejects_when_requested_qty_exceeds_clamp() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        requested_qty: Some(5.0),
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::default()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::DispatchConsistency,
+                ..
+            },
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_dispatch_consistency_allows_when_requested_qty_within_clamp() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        requested_qty: Some(2.0),
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::default()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+}
+
+#[test]
+fn test_dispatch_consistency_rejects_when_clamp_requested_qty_missing() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        requested_qty: None,
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::default()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::DispatchConsistency,
+                ..
+            },
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_dispatch_consistency_rejects_when_clamp_max_dispatch_qty_missing() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        requested_qty: Some(2.0),
+        max_dispatch_qty: None,
+        ..GateResults::default()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::DispatchConsistency,
+                ..
+            },
+            ..
+        }
+    ));
 }

@@ -256,3 +256,67 @@ fn test_metrics_default() {
     assert_eq!(m.reject_total(), 0);
     assert_eq!(m.priced_total(), 0);
 }
+
+#[test]
+fn test_nan_fair_price_rejected() {
+    let mut m = PricerMetrics::new();
+
+    let inp = input(f64::NAN, 10.0, 2.0, 3.0, 1.0, PricerSide::Buy);
+    let result = compute_limit_price(&inp, &mut m);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_negative_fee_rejected() {
+    let mut m = PricerMetrics::new();
+
+    let inp = input(100.0, 10.0, 2.0, -0.1, 1.0, PricerSide::Buy);
+    let result = compute_limit_price(&inp, &mut m);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_negative_min_edge_rejected() {
+    let mut m = PricerMetrics::new();
+
+    let inp = input(100.0, 10.0, -1.0, 1.0, 1.0, PricerSide::Buy);
+    let result = compute_limit_price(&inp, &mut m);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_infinite_gross_edge_rejected() {
+    let mut m = PricerMetrics::new();
+
+    let inp = input(100.0, f64::INFINITY, 2.0, 3.0, 1.0, PricerSide::Sell);
+    let result = compute_limit_price(&inp, &mut m);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
+}

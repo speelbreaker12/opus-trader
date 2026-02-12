@@ -36,6 +36,7 @@ fn gate_input(
         order_qty,
         is_buy,
         intent_class,
+        is_marketable: true,
         l2_snapshot: l2,
         now_ms: 1000,
         l2_book_snapshot_max_age_ms: 500,
@@ -61,6 +62,7 @@ fn test_at222_slippage_exceeds_max_rejected() {
             reason,
             wap,
             slippage_bps,
+            ..
         } => {
             assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
             assert!((wap.unwrap() - 105.0).abs() < 1e-9);
@@ -167,6 +169,7 @@ fn test_sell_walks_bids() {
             reason,
             wap,
             slippage_bps,
+            ..
         } => {
             assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
             assert!((wap.unwrap() - 95.0).abs() < 1e-9);
@@ -342,13 +345,18 @@ fn test_empty_bids_for_sell_rejects() {
 fn test_partial_fill_from_thin_book_evaluates_available() {
     let mut m = LiquidityGateMetrics::new();
 
-    // Only 2.0 available but asking for 10.0 — WAP based on what's there
+    // Only 2.0 available but asking for 10.0 -> OPEN must fail-closed.
     let snap = book(vec![(100.0, 2.0)], vec![], 900);
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    // WAP = 100.0, slippage = 0 → allowed (even though qty not fully available)
-    assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            ..
+        }
+    ));
 }
 
 // ─── Multi-level book walk ──────────────────────────────────────────────
@@ -379,6 +387,46 @@ fn test_multi_level_wap_computation() {
     }
 }
 
+#[test]
+fn test_open_wap_budget_allows_small_tail_beyond_level_cap() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // Full-order WAP is within 10 bps despite a tiny tail at a far level.
+    let snap = book(vec![(100.0, 10.0), (200.0, 0.01)], vec![], 900);
+    let input = gate_input(10.01, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed {
+            allowed_qty,
+            slippage_bps,
+            ..
+        } => {
+            assert!((allowed_qty.unwrap() - 10.01).abs() < 1e-9);
+            assert!(slippage_bps.unwrap() <= 10.0 + 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_overflowed_slippage_budget_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(f64::MAX, 1.0)], vec![], 900);
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+    assert_eq!(m.reject_no_l2(), 1);
+}
+
 // ─── Metrics default ────────────────────────────────────────────────────
 
 #[test]
@@ -400,4 +448,148 @@ fn test_close_allowed_with_valid_l2() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+}
+
+#[test]
+fn test_close_clamps_to_fillable_qty() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // 2.0 units visible within budget, requested 10.0.
+    let snap = book(vec![(100.0, 2.0)], vec![], 900);
+    let input = gate_input(10.0, true, GateIntentClass::Close, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed {
+            fillable_qty,
+            allowed_qty,
+            ..
+        } => {
+            assert_eq!(fillable_qty, Some(2.0));
+            assert_eq!(allowed_qty, Some(2.0));
+        }
+        other => panic!("expected Allowed for CLOSE clamp, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_hedge_clamps_to_fillable_qty() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(100.0, 1.5)], vec![], 900);
+    let input = gate_input(5.0, true, GateIntentClass::Hedge, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed {
+            fillable_qty,
+            allowed_qty,
+            ..
+        } => {
+            assert_eq!(fillable_qty, Some(1.5));
+            assert_eq!(allowed_qty, Some(1.5));
+        }
+        other => panic!("expected Allowed for HEDGE clamp, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_non_marketable_bypasses_depth_gate() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // OPEN path with valid L2 bypasses depth-budget clamp when non-marketable.
+    let mut input = gate_input(
+        3.0,
+        true,
+        GateIntentClass::Open,
+        Some(book(vec![(100.0, 1.0)], vec![], 900)),
+    );
+    input.is_marketable = false;
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Allowed {
+            allowed_qty: Some(3.0),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_non_marketable_open_without_l2_still_rejected_fail_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let mut input = gate_input(1.0, true, GateIntentClass::Open, None);
+    input.is_marketable = false;
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_non_marketable_close_without_l2_still_rejected_fail_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let mut input = gate_input(1.0, true, GateIntentClass::Close, None);
+    input.is_marketable = false;
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_non_marketable_hedge_with_stale_l2_still_rejected_fail_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let mut input = gate_input(
+        1.0,
+        true,
+        GateIntentClass::Hedge,
+        Some(book(vec![(100.0, 10.0)], vec![], 200)),
+    );
+    input.is_marketable = false;
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let mut input = gate_input(
+        1.0,
+        true,
+        GateIntentClass::Open,
+        Some(book(vec![(100.0, 10.0)], vec![], 200)),
+    );
+    input.is_marketable = false;
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
 }

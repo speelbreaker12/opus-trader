@@ -6,7 +6,7 @@
 //! 1. Dispatch authorization (RiskState check)
 //! 2. Preflight (order type validation)
 //! 3. Quantize
-//! 4. Dispatch consistency (AT-920 contracts/amount validation)
+//! 4. Dispatch consistency (AT-920 contracts/amount + quantity clamp validation)
 //! 5. Fee cache staleness check
 //! 6. Liquidity Gate (book-walk slippage)
 //! 7. Net Edge Gate (fee + slippage vs min_edge)
@@ -32,12 +32,12 @@ use crate::risk::{
     evaluate_global_exposure_budget, evaluate_margin_headroom_gate,
 };
 
-// ─── Intent class ────────────────────────────────────────────────────────
+// --- Intent class --------------------------------------------------------
 
 /// Intent classification for dispatch authorization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChokeIntentClass {
-    /// Risk-increasing intent — requires all gates.
+    /// Risk-increasing intent -> requires all gates.
     Open,
     /// Risk-reducing order placement.
     Close,
@@ -47,7 +47,7 @@ pub enum ChokeIntentClass {
     CancelOnly,
 }
 
-// ─── Gate step ──────────────────────────────────────────────────────────
+// --- Gate step -----------------------------------------------------------
 
 /// Named gate steps for ordering trace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,12 +63,12 @@ pub enum GateStep {
     RecordedBeforeDispatch,
 }
 
-// ─── Chokepoint result ──────────────────────────────────────────────────
+// --- Chokepoint result ---------------------------------------------------
 
 /// Reject reason from the chokepoint.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChokeRejectReason {
-    /// RiskState is not Healthy — OPEN blocked.
+    /// RiskState is not Healthy -> OPEN blocked.
     RiskStateNotHealthy,
     /// A gate rejected the intent (gate name + reason string).
     GateRejected { gate: GateStep, reason: String },
@@ -77,7 +77,7 @@ pub enum ChokeRejectReason {
 /// Result of the chokepoint evaluation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ChokeResult {
-    /// All gates passed — OrderIntent is ready for dispatch.
+    /// All gates passed -> OrderIntent is ready for dispatch.
     Approved {
         /// Ordered list of gates that were executed.
         gate_trace: Vec<GateStep>,
@@ -91,7 +91,7 @@ pub enum ChokeResult {
     },
 }
 
-// ─── Metrics ─────────────────────────────────────────────────────────────
+// --- Metrics -------------------------------------------------------------
 
 /// Observability metrics for the chokepoint.
 #[derive(Debug)]
@@ -145,7 +145,7 @@ impl Default for ChokeMetrics {
     }
 }
 
-// ─── Chokepoint evaluator ───────────────────────────────────────────────
+// --- Chokepoint evaluator ------------------------------------------------
 
 /// Build an order intent through the single chokepoint.
 ///
@@ -174,7 +174,7 @@ pub fn build_order_intent(
         };
     }
 
-    // CANCEL-only intents skip remaining gates
+    // CANCEL-only intents skip remaining gates.
     if intent_class == ChokeIntentClass::CancelOnly {
         metrics.record_approved();
         return ChokeResult::Approved { gate_trace: trace };
@@ -219,6 +219,36 @@ pub fn build_order_intent(
         };
     }
 
+    // Anti-bypass clamp check: when liquidity clamp metadata is provided,
+    // dispatch qty must never exceed the gate-approved max.
+    match (gate_results.requested_qty, gate_results.max_dispatch_qty) {
+        (None, None) => {}
+        (Some(requested_qty), Some(max_dispatch_qty)) => {
+            let invalid_requested = !requested_qty.is_finite() || requested_qty <= 0.0;
+            let invalid_max = !max_dispatch_qty.is_finite() || max_dispatch_qty <= 0.0;
+            if invalid_requested || invalid_max || requested_qty > max_dispatch_qty + 1e-12 {
+                metrics.record_rejected();
+                return ChokeResult::Rejected {
+                    reason: ChokeRejectReason::GateRejected {
+                        gate: GateStep::DispatchConsistency,
+                        reason: "requested qty exceeds liquidity clamp".to_string(),
+                    },
+                    gate_trace: trace,
+                };
+            }
+        }
+        _ => {
+            metrics.record_rejected();
+            return ChokeResult::Rejected {
+                reason: ChokeRejectReason::GateRejected {
+                    gate: GateStep::DispatchConsistency,
+                    reason: "incomplete liquidity clamp metadata".to_string(),
+                },
+                gate_trace: trace,
+            };
+        }
+    }
+
     // Gate 5: Fee cache staleness
     trace.push(GateStep::FeeCacheCheck);
     if !gate_results.fee_cache_passed {
@@ -232,7 +262,7 @@ pub fn build_order_intent(
         };
     }
 
-    // Gates 6-8 only for OPEN intents
+    // Gates 6-8 only for OPEN intents.
     if intent_class == ChokeIntentClass::Open {
         // Gate 6: Liquidity Gate
         trace.push(GateStep::LiquidityGate);
@@ -291,7 +321,7 @@ pub fn build_order_intent(
     ChokeResult::Approved { gate_trace: trace }
 }
 
-// ─── Gate results (pre-computed by caller) ──────────────────────────────
+// --- Gate results (pre-computed by caller) ------------------------------
 
 /// Pre-computed gate results passed to the chokepoint.
 ///
@@ -307,6 +337,10 @@ pub struct GateResults {
     pub net_edge_passed: bool,
     pub pricer_passed: bool,
     pub wal_recorded: bool,
+    /// Caller-provided requested dispatch quantity.
+    pub requested_qty: Option<f64>,
+    /// Caller-provided max allowed quantity from upstream liquidity clamp.
+    pub max_dispatch_qty: Option<f64>,
 }
 
 impl Default for GateResults {
@@ -320,6 +354,8 @@ impl Default for GateResults {
             net_edge_passed: true,
             pricer_passed: true,
             wal_recorded: true,
+            requested_qty: None,
+            max_dispatch_qty: None,
         }
     }
 }
@@ -418,6 +454,8 @@ pub fn build_open_order_intent_runtime(
     let mut liquidity_gate_passed = false;
     let mut net_edge_passed = false;
     let mut pricer_passed = false;
+    let mut clamp_requested_qty = None;
+    let mut clamp_max_dispatch_qty = None;
     let mut pending_total_after_reserve = pending_book.pending_total();
     let mut adjusted_min_edge_usd = input.net_edge_input.min_edge_usd;
     let mut adjusted_limit_price = None;
@@ -454,10 +492,13 @@ pub fn build_open_order_intent_runtime(
         if pending_passed && global_budget_passed {
             let mut liquidity_input = input.liquidity_input.clone();
             liquidity_input.intent_class = GateIntentClass::Open;
-            liquidity_gate_passed = matches!(
-                evaluate_liquidity_gate(&liquidity_input, &mut runtime_metrics.liquidity_gate),
-                LiquidityGateResult::Allowed { .. }
-            );
+            let liquidity_result =
+                evaluate_liquidity_gate(&liquidity_input, &mut runtime_metrics.liquidity_gate);
+            if let LiquidityGateResult::Allowed { allowed_qty, .. } = liquidity_result {
+                liquidity_gate_passed = true;
+                clamp_requested_qty = Some(liquidity_input.order_qty);
+                clamp_max_dispatch_qty = allowed_qty.or(Some(liquidity_input.order_qty));
+            }
         }
 
         if pending_passed && global_budget_passed && liquidity_gate_passed {
@@ -527,6 +568,8 @@ pub fn build_open_order_intent_runtime(
         net_edge_passed: pending_passed && global_budget_passed && net_edge_passed,
         pricer_passed,
         wal_recorded: input.wal_recorded,
+        requested_qty: clamp_requested_qty,
+        max_dispatch_qty: clamp_max_dispatch_qty,
     };
 
     let choke_result = build_order_intent(
