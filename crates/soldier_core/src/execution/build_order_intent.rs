@@ -367,6 +367,23 @@ pub struct OpenRuntimeResult {
     pub adjusted_limit_price: Option<f64>,
 }
 
+fn stricter_risk_state(left: RiskState, right: RiskState) -> RiskState {
+    fn rank(state: RiskState) -> u8 {
+        match state {
+            RiskState::Healthy => 0,
+            RiskState::Degraded => 1,
+            RiskState::Maintenance => 2,
+            RiskState::Kill => 3,
+        }
+    }
+
+    if rank(left) >= rank(right) {
+        left
+    } else {
+        right
+    }
+}
+
 /// Evaluate OPEN runtime gates (including Slice 6) and run the chokepoint.
 ///
 /// Contract mapping:
@@ -382,7 +399,7 @@ pub fn build_open_order_intent_runtime(
 ) -> OpenRuntimeResult {
     let margin_result =
         evaluate_margin_headroom_gate(&input.margin_gate_input, &mut runtime_metrics.margin_gate);
-    let (mode_hint, mut effective_risk_state) = match margin_result {
+    let (mode_hint, margin_risk_state) = match margin_result {
         MarginGateResult::Allowed { mode_hint, .. } => (mode_hint, input.risk_state),
         MarginGateResult::Rejected { mode_hint, .. } => {
             let state = if mode_hint == MarginGateMode::Kill {
@@ -393,13 +410,14 @@ pub fn build_open_order_intent_runtime(
             (mode_hint, state)
         }
     };
+    let mut effective_risk_state = stricter_risk_state(input.risk_state, margin_risk_state);
 
     let mut pending_reservation_id = None;
-    let mut pending_passed = true;
-    let mut global_budget_passed = true;
-    let mut liquidity_gate_passed = true;
-    let mut net_edge_passed = true;
-    let mut pricer_passed = true;
+    let mut pending_passed = false;
+    let mut global_budget_passed = false;
+    let mut liquidity_gate_passed = false;
+    let mut net_edge_passed = false;
+    let mut pricer_passed = false;
     let mut pending_total_after_reserve = pending_book.pending_total();
     let mut adjusted_min_edge_usd = input.net_edge_input.min_edge_usd;
     let mut adjusted_limit_price = None;
@@ -414,6 +432,7 @@ pub fn build_open_order_intent_runtime(
                 reservation_id,
                 pending_total,
             } => {
+                pending_passed = true;
                 pending_reservation_id = Some(reservation_id);
                 pending_total_after_reserve = pending_total;
             }
@@ -445,60 +464,57 @@ pub fn build_open_order_intent_runtime(
             let mut net_edge_input = input.net_edge_input.clone();
             let base_net_edge =
                 match evaluate_net_edge(&net_edge_input, &mut runtime_metrics.net_edge) {
-                    NetEdgeResult::Allowed { net_edge_usd } => net_edge_usd,
-                    NetEdgeResult::Rejected { .. } => {
+                    NetEdgeResult::Allowed { net_edge_usd } => {
+                        net_edge_passed = true;
+                        net_edge_usd
+                    }
+                    NetEdgeResult::Rejected { net_edge_usd, .. } => {
                         net_edge_passed = false;
-                        0.0
+                        net_edge_usd.unwrap_or(0.0)
                     }
                 };
 
-            if net_edge_passed {
-                let mut inventory_input = input.inventory_skew_input.clone();
-                inventory_input.current_delta = input.current_delta;
-                inventory_input.pending_delta = pending_total_after_reserve;
-                inventory_input.net_edge_usd = base_net_edge;
-                if let Some(min_edge) = input.net_edge_input.min_edge_usd {
-                    inventory_input.min_edge_usd = min_edge;
-                }
+            let mut inventory_input = input.inventory_skew_input.clone();
+            inventory_input.current_delta = input.current_delta;
+            inventory_input.pending_delta = pending_total_after_reserve;
+            inventory_input.net_edge_usd = base_net_edge;
+            if let Some(min_edge) = input.net_edge_input.min_edge_usd {
+                inventory_input.min_edge_usd = min_edge;
+            }
 
-                match evaluate_inventory_skew(&inventory_input, &mut runtime_metrics.inventory_skew)
-                {
-                    InventorySkewResult::Allowed {
-                        adjusted_min_edge_usd: adjusted_min_edge,
-                        adjusted_limit_price: adjusted_limit,
-                        ..
-                    } => {
-                        adjusted_min_edge_usd = Some(adjusted_min_edge);
-                        adjusted_limit_price = Some(adjusted_limit);
-                        if input.net_edge_input.min_edge_usd != Some(adjusted_min_edge) {
-                            net_edge_input.min_edge_usd = Some(adjusted_min_edge);
-                            net_edge_passed = matches!(
-                                evaluate_net_edge(&net_edge_input, &mut runtime_metrics.net_edge),
-                                NetEdgeResult::Allowed { .. }
-                            );
-                        }
-
-                        if net_edge_passed {
-                            let mut pricer_input = input.pricer_input.clone();
-                            pricer_input.min_edge_usd = adjusted_min_edge;
-                            pricer_passed = matches!(
-                                compute_limit_price(&pricer_input, &mut runtime_metrics.pricer),
-                                PricerResult::LimitPrice { .. }
-                            );
-                        }
+            match evaluate_inventory_skew(&inventory_input, &mut runtime_metrics.inventory_skew) {
+                InventorySkewResult::Allowed {
+                    adjusted_min_edge_usd: adjusted_min_edge,
+                    adjusted_limit_price: adjusted_limit,
+                    ..
+                } => {
+                    adjusted_min_edge_usd = Some(adjusted_min_edge);
+                    adjusted_limit_price = Some(adjusted_limit);
+                    if input.net_edge_input.min_edge_usd != Some(adjusted_min_edge) {
+                        net_edge_input.min_edge_usd = Some(adjusted_min_edge);
+                        net_edge_passed = matches!(
+                            evaluate_net_edge(&net_edge_input, &mut runtime_metrics.net_edge),
+                            NetEdgeResult::Allowed { .. }
+                        );
                     }
-                    InventorySkewResult::Rejected { reason, .. } => {
-                        net_edge_passed = false;
-                        if reason == InventorySkewRejectReason::InventorySkewDeltaLimitMissing {
-                            effective_risk_state = RiskState::Degraded;
-                        }
+
+                    if net_edge_passed {
+                        let mut pricer_input = input.pricer_input.clone();
+                        pricer_input.min_edge_usd = adjusted_min_edge;
+                        pricer_passed = matches!(
+                            compute_limit_price(&pricer_input, &mut runtime_metrics.pricer),
+                            PricerResult::LimitPrice { .. }
+                        );
+                    }
+                }
+                InventorySkewResult::Rejected { reason, .. } => {
+                    net_edge_passed = false;
+                    if reason == InventorySkewRejectReason::InventorySkewDeltaLimitMissing {
+                        effective_risk_state =
+                            stricter_risk_state(effective_risk_state, RiskState::Degraded);
                     }
                 }
             }
-        }
-
-        if !pending_passed || !global_budget_passed {
-            net_edge_passed = false;
         }
     }
 
