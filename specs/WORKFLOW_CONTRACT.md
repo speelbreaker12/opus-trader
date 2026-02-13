@@ -170,6 +170,10 @@ Goal: fast, repeatable, contract-first.
 QUICK must run:
 1) `preflight` (if present; no postmortem enforcement)
 2) Contract/spec validators (the “spec_validators_group”):
+   - contract_profiles
+   - at_profile_parity
+   - at_coverage_report
+   - crossref_invariants
    - contract_crossrefs
    - arch_flows
    - state_machines
@@ -193,6 +197,7 @@ Goal: “mergeable green” for marking PRD pass.
 
 FULL must run:
 - Everything in QUICK, plus:
+  - `crossref_gate` (marker-based evidence gate in CI mode; strictness controlled by sentinel/env)
   - `contract_coverage`
   - Rust: `rust_clippy`, `rust_tests_full`
   - Python: `python_mypy`, `python_pytest_full`, optional `python_ruff_format`
