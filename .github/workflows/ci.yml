@@ -55,10 +55,8 @@ jobs:
 
           chmod +x ./plans/pr_gate.sh
           ./plans/pr_gate.sh \
-
             --pr "${PR_NUMBER}" \
             --story "${story_id}" \
-
             --wait \
             --timeout-secs 1800 \
             --poll-secs 20 \
