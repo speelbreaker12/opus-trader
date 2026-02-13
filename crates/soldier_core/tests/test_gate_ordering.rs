@@ -77,7 +77,10 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
     ));
 
     let after = gate_sequence_total(GateSequenceResult::Rejected);
-    assert_eq!(after, before + 1);
+    assert!(
+        after > before,
+        "counter must increase by at least one even under parallel test execution"
+    );
 
     let lines = take_execution_metric_lines();
     assert!(

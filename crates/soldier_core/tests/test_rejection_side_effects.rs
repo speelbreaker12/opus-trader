@@ -134,8 +134,8 @@ fn test_rejected_preflight_no_side_effects() {
         order_type: OrderType::Market,
         has_trigger: false,
         linked_order_type: None,
-        linked_orders_supported: false,
-        enable_linked_orders: false,
+        linked_orders_allowed: false,
+        post_only_input: None,
     };
 
     let result = preflight_intent(&input, &mut metrics);
@@ -422,8 +422,8 @@ fn test_rejected_stop_order_no_side_effects() {
         order_type: OrderType::StopLimit,
         has_trigger: true,
         linked_order_type: None,
-        linked_orders_supported: false,
-        enable_linked_orders: false,
+        linked_orders_allowed: false,
+        post_only_input: None,
     };
 
     let result = preflight_intent(&input, &mut metrics);

@@ -3,11 +3,11 @@
 use soldier_core::execution::{
     ChokeIntentClass, ChokeRejectReason, ChokeResult, GateIntentClass, GateStep,
     IntentPipelineInput, IntentPipelineMetrics, L2BookSnapshot, L2Level, LiquidityGateInput,
-    NetEdgeInput, OrderType, PreflightInput, PricerInput, PricerSide, QuantizeConstraints,
-    QuantizePipelineInput, RejectReasonCode, Side, evaluate_intent_pipeline,
+    NetEdgeInput, OrderType, PostOnlyInput, PreflightInput, PricerInput, PricerSide,
+    QuantizeConstraints, QuantizePipelineInput, Side, evaluate_intent_pipeline,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
-use soldier_core::venue::InstrumentKind;
+use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
 
 fn book(asks: Vec<(f64, f64)>, bids: Vec<(f64, f64)>, ts: u64) -> L2BookSnapshot {
     L2BookSnapshot {
@@ -32,9 +32,11 @@ fn base_open_input<'a>() -> IntentPipelineInput<'a> {
             order_type: OrderType::Limit,
             has_trigger: false,
             linked_order_type: None,
-            linked_orders_supported: false,
-            enable_linked_orders: false,
+            linked_orders_allowed: false,
+            post_only_input: None,
         },
+        venue_capabilities: VenueCapabilities::default(),
+        bot_feature_flags: BotFeatureFlags::default(),
         quantize: QuantizePipelineInput {
             raw_qty: 1.0,
             raw_limit_price: 100.0,
@@ -122,16 +124,19 @@ fn test_pipeline_open_missing_l2_rejected_at_liquidity_gate() {
         }
         other => panic!("expected Rejected at LiquidityGate, got {other:?}"),
     }
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::LiquidityGateNoL2)
-    );
 }
 
 #[test]
-fn test_pipeline_open_market_order_maps_preflight_reject_reason() {
+fn test_pipeline_post_only_cross_rejected_at_preflight() {
     let mut input = base_open_input();
-    input.preflight.order_type = OrderType::Market;
+    input.preflight.instrument_kind = InstrumentKind::Perpetual;
+    input.preflight.post_only_input = Some(PostOnlyInput {
+        post_only: true,
+        side: Side::Buy,
+        limit_price: 100.0,
+        best_ask: Some(100.0),
+        best_bid: None,
+    });
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
@@ -144,12 +149,39 @@ fn test_pipeline_open_market_order_maps_preflight_reject_reason() {
                     ..
                 }
             ));
-            assert!(gate_trace.contains(&GateStep::Preflight));
+            assert_eq!(gate_trace.last(), Some(&GateStep::Preflight));
         }
         other => panic!("expected Rejected at Preflight, got {other:?}"),
     }
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::OrderTypeMarketForbidden)
-    );
+}
+
+#[test]
+fn test_pipeline_capabilities_matrix_overrides_preflight_linked_flag() {
+    let mut input = base_open_input();
+    input.preflight.instrument_kind = InstrumentKind::Perpetual;
+    input.preflight.linked_order_type = Some("oco");
+    // Caller-provided value should be ignored in favor of evaluated capabilities.
+    input.preflight.linked_orders_allowed = true;
+    input.venue_capabilities = VenueCapabilities {
+        linked_orders_supported: false,
+    };
+    input.bot_feature_flags = BotFeatureFlags {
+        enable_linked_orders: false,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match result.decision {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(matches!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::Preflight,
+                    ..
+                }
+            ));
+            assert_eq!(gate_trace.last(), Some(&GateStep::Preflight));
+        }
+        other => panic!("expected Rejected at Preflight, got {other:?}"),
+    }
 }

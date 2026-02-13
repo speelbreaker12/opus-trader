@@ -19,8 +19,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::risk::RiskState;
 
-use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
-
 // --- Intent class --------------------------------------------------------
 
 /// Intent classification for dispatch authorization.
@@ -207,7 +205,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::Preflight,
-                reason: REJECT_REASON_PREFLIGHT.to_string(),
+                reason: "preflight rejected".to_string(),
             },
             trace,
         );
@@ -220,7 +218,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::Quantize,
-                reason: REJECT_REASON_QUANTIZE.to_string(),
+                reason: "quantize failed".to_string(),
             },
             trace,
         );
@@ -233,7 +231,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::DispatchConsistency,
-                reason: REJECT_REASON_DISPATCH_CONSISTENCY.to_string(),
+                reason: "dispatch consistency failed".to_string(),
             },
             trace,
         );
@@ -251,7 +249,7 @@ pub fn build_order_intent(
                     metrics,
                     ChokeRejectReason::GateRejected {
                         gate: GateStep::DispatchConsistency,
-                        reason: REJECT_REASON_DISPATCH_CLAMP_EXCEEDED.to_string(),
+                        reason: "requested qty exceeds liquidity clamp".to_string(),
                     },
                     trace,
                 );
@@ -262,7 +260,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::DispatchConsistency,
-                    reason: REJECT_REASON_DISPATCH_CLAMP_INCOMPLETE.to_string(),
+                    reason: "incomplete liquidity clamp metadata".to_string(),
                 },
                 trace,
             );
@@ -276,7 +274,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::FeeCacheCheck,
-                reason: REJECT_REASON_FEE_CACHE_STALE.to_string(),
+                reason: "fee cache stale".to_string(),
             },
             trace,
         );
@@ -291,7 +289,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::LiquidityGate,
-                    reason: REJECT_REASON_LIQUIDITY_GATE.to_string(),
+                    reason: "liquidity gate rejected".to_string(),
                 },
                 trace,
             );
@@ -304,7 +302,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::NetEdgeGate,
-                    reason: REJECT_REASON_NET_EDGE.to_string(),
+                    reason: "net edge too low".to_string(),
                 },
                 trace,
             );
@@ -317,7 +315,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::Pricer,
-                    reason: REJECT_REASON_PRICER.to_string(),
+                    reason: "pricer rejected".to_string(),
                 },
                 trace,
             );
@@ -331,31 +329,13 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::RecordedBeforeDispatch,
-                reason: REJECT_REASON_WAL.to_string(),
+                reason: "WAL append failed".to_string(),
             },
             trace,
         );
     }
 
     finish_approved(metrics, trace)
-}
-
-/// Build an order intent and attach a contract registry reject reason code.
-pub fn build_order_intent_with_reject_reason_code(
-    intent_class: ChokeIntentClass,
-    risk_state: RiskState,
-    metrics: &mut ChokeMetrics,
-    gate_results: &GateResults,
-    gate_reject_codes: &GateRejectCodes,
-) -> (ChokeResult, Option<RejectReasonCode>) {
-    let result = build_order_intent(intent_class, risk_state, metrics, gate_results);
-    let code = match &result {
-        ChokeResult::Approved { .. } => None,
-        ChokeResult::Rejected { reason, .. } => {
-            Some(reject_reason_from_chokepoint(reason, gate_reject_codes))
-        }
-    };
-    (result, code)
 }
 
 // --- Gate results (pre-computed by caller) ------------------------------
