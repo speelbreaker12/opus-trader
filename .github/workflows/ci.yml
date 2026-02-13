@@ -37,9 +37,26 @@ jobs:
 
       - name: Enforce PR gate (Copilot + aftercare + no new bot comments)
         run: |
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          head_ref="$(jq -r '.head.ref // empty' <<<"$pr_json")"
+          if [[ -z "$head_ref" ]]; then
+            echo "ERROR: unable to resolve PR head ref for PR #${PR_NUMBER}" >&2
+            exit 1
+          fi
+
+          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-[A-Za-z0-9._]+$ ]]; then
+            story_id="${BASH_REMATCH[1]}"
+          elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
+            story_id="${BASH_REMATCH[1]}"
+          else
+            echo "ERROR: PR head branch must match story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>, got: $head_ref" >&2
+            exit 1
+          fi
+
           chmod +x ./plans/pr_gate.sh
           ./plans/pr_gate.sh \
             --pr "${PR_NUMBER}" \
+            --story "${story_id}" \
             --wait \
             --timeout-secs 1800 \
             --poll-secs 20 \
@@ -47,13 +64,6 @@ jobs:
             --require-aftercare-ack \
             --require-copilot-review \
             --ignore-check-run-regex '^pr-gate-enforced$'
-
-  copilot-signal:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Copilot signal check
-        run: echo "copilot signal present"
 
   pr-template-lint:
     if: github.event_name == 'pull_request'
@@ -100,6 +110,46 @@ jobs:
           fi
           exit "$rc"
 
+  crossref-gate:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: plans/ci/requirements-crossref.txt
+
+      - name: Install Python deps for crossref
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r plans/ci/requirements-crossref.txt
+
+      - name: Run crossref gate (report-mode burn-in, strict via sentinel)
+        env:
+          CROSSREF_ARTIFACTS_DIR: artifacts/verify/crossref_ci_${{ github.run_id }}
+        run: |
+          chmod +x ./plans/crossref_gate.sh
+          strict_args=()
+          if [[ -f plans/crossref_ci_strict ]]; then
+            strict_args+=(--strict)
+          fi
+          ./plans/crossref_gate.sh --ci --artifacts-dir "$CROSSREF_ARTIFACTS_DIR" "${strict_args[@]}" 2>&1 | tee crossref_gate.log
+
+      - name: Upload crossref gate log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crossref-gate-log
+          path: crossref_gate.log
+          if-no-files-found: ignore
+
   verify:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
@@ -114,15 +164,22 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: verify
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: plans/ci/requirements-verify.txt
 
       - name: Install Python tools
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest mypy pyyaml jsonschema
+          pip install -r plans/ci/requirements-verify.txt
 
       - name: Setup Node
         uses: actions/setup-node@v4

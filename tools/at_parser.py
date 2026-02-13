@@ -58,6 +58,9 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
                     f"{contract_path}:{lineno}: malformed Profile tag; expected exactly one of: "
                     f"Profile: CSP | Profile: GOP (got {line!r})."
                 )
+                # Fail closed: malformed profile tags clear inheritance scope so
+                # subsequent AT lines are reported as unscoped.
+                current_profile = None
                 continue
             current_profile = "CSP" if normalized.endswith("CSP") else "GOP"
             continue

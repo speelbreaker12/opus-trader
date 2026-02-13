@@ -116,6 +116,21 @@ expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
 expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_spacing" --prd "$prd_ok"
 expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
 
+
+# Malformed profile after a valid scope must clear inheritance and report unscoped AT IDs.
+contract_bad_rescope="$tmp_dir/bad_profile_rescope.md"
+cat > "$contract_bad_rescope" <<'EOF_BAD_PROFILE_RESCOPE'
+Profile: CSP
+AT-001
+Profile : GOP
+AT-002
+EOF_BAD_PROFILE_RESCOPE
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_bad_rescope"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+expect_err_contains "AT-002 has no Profile tag in scope"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_rescope" --prd "$prd_ok"
+expect_err_contains "AT-002 has no Profile tag in scope"
 # Malformed casing must fail checker and coverage with rc=5.
 contract_bad_casing="$tmp_dir/bad_profile_casing.md"
 cat > "$contract_bad_casing" <<'EOF_BAD_PROFILE_CASING'
