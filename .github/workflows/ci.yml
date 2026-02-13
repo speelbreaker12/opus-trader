@@ -100,6 +100,43 @@ jobs:
           fi
           exit "$rc"
 
+  crossref-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps for crossref
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml jsonschema
+
+      - name: Run crossref gate (report-mode burn-in, strict via sentinel)
+        env:
+          CROSSREF_ARTIFACTS_DIR: artifacts/verify/crossref_ci_${{ github.run_id }}
+        run: |
+          chmod +x ./plans/crossref_gate.sh
+          strict_args=()
+          if [[ -f plans/crossref_ci_strict ]]; then
+            strict_args+=(--strict)
+          fi
+          ./plans/crossref_gate.sh --ci --artifacts-dir "$CROSSREF_ARTIFACTS_DIR" "${strict_args[@]}" 2>&1 | tee crossref_gate.log
+
+      - name: Upload crossref gate log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crossref-gate-log
+          path: crossref_gate.log
+          if-no-files-found: ignore
+
   verify:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
