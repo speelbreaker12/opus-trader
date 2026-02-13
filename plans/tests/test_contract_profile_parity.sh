@@ -15,16 +15,19 @@ expect_rc() {
   local expected_rc="$1"
   shift
 
+  local out_file="$tmp_dir/contract_profile_parity_test.out"
+  local err_file="$tmp_dir/contract_profile_parity_test.err"
+
   set +e
-  "$@" >/tmp/contract_profile_parity_test.out 2>/tmp/contract_profile_parity_test.err
+  "$@" >"$out_file" 2>"$err_file"
   local rc=$?
   set -e
 
   if [[ "$rc" -ne "$expected_rc" ]]; then
     echo "stdout:" >&2
-    cat /tmp/contract_profile_parity_test.out >&2 || true
+    cat "$out_file" >&2 || true
     echo "stderr:" >&2
-    cat /tmp/contract_profile_parity_test.err >&2 || true
+    cat "$err_file" >&2 || true
     fail "expected rc=$expected_rc got rc=$rc for: $*"
   fi
 }
@@ -34,7 +37,7 @@ expect_rc() {
 [[ -f "$PARITY" ]] || fail "missing parity script: $PARITY"
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir" /tmp/contract_profile_parity_test.out /tmp/contract_profile_parity_test.err' EXIT
+trap 'rm -rf "$tmp_dir"' EXIT
 
 contract_ok="$tmp_dir/contract_ok.md"
 prd_ok="$tmp_dir/prd_ok.json"

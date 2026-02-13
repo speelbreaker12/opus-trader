@@ -39,6 +39,7 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
                 errors.append(
                     f"{contract_path}:{lineno}: malformed Profile tag; expected exactly 'Profile: CSP' or 'Profile: GOP' (got {line!r})."
                 )
+                current_profile = None
                 continue
 
             profile = profile_match.group(1)
@@ -47,6 +48,7 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
                 errors.append(
                     f"{contract_path}:{lineno}: Profile: FULL is not allowed for AT inheritance."
                 )
+                current_profile = None
                 continue
             current_profile = profile
             continue

@@ -94,7 +94,7 @@ validate_story_id() {
 
 extract_story_from_head_ref() {
   local head_ref="$1"
-  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-[A-Za-z0-9._]+$ ]]; then
+  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-([A-Za-z0-9._]*[A-Za-z][A-Za-z0-9._]*)$ ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
     return 0
   fi
