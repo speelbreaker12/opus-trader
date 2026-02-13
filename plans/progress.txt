@@ -450,9 +450,9 @@ Evidence: specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md.
 Next: regenerate external traceability workbook from current repo files to confirm matrix output matches updated counts.
 Story: roadmap-traceability
 Date: 2026-02-13
-Summary: Executed requested 3-step closure set: (1) regenerated traceability workbook from current docs at /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx (Summary now reports 334/334 mapped, 0 unmapped, 0 story gaps), (2) added canonical contract AT-1071 for S11.3 NaN/Inf guard in specs/CONTRACT.md and mapped S11.3 explicitly in specs/IMPLEMENTATION_PLAN.md (removed manual-only fallback), and (3) ran verify quick/full.
+Summary: Executed requested 3-step closure set: (1) regenerated traceability workbook from current docs into artifacts/traceability/ (Summary now reports 334/334 mapped, 0 unmapped, 0 story gaps; regenerate via python3 traceability scripts from repo sources), (2) added canonical contract AT-1071 for S11.3 NaN/Inf guard in specs/CONTRACT.md and mapped S11.3 explicitly in specs/IMPLEMENTATION_PLAN.md (removed manual-only fallback), and (3) ran verify quick/full.
 Commands: python3 doc patch/generation scripts; ./plans/verify.sh quick; ./plans/verify.sh full.
-Evidence: specs/CONTRACT.md; specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md; /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx; artifacts/verify/20260212_180012; artifacts/verify/20260212_180132.
+Evidence: specs/CONTRACT.md; specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md; artifacts/traceability/; artifacts/verify/20260212_180012; artifacts/verify/20260212_180132.
 Verify results: quick failed at verify gate contract check with "missing code token 'PREFLIGHT_TIMEOUT=\"${PREFLIGHT_TIMEOUT:-300s}\"' in plans/verify_fork.sh"; full failed during preflight with "./plans/preflight.sh: line 286: il: command not found".
 Next: fix the workflow harness gate issues in plans/verify_fork.sh and plans/preflight.sh, then rerun ./plans/verify.sh quick/full.
 Story: workflow/verify-timeout-token-guard

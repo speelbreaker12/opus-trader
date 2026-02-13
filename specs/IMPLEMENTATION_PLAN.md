@@ -54,7 +54,7 @@ Deribit Venue Facts Addendum: all VERIFIED facts are enforced with artifacts und
 - CSP_ONLY CI gate + build isolation (contract §0.Z.9) -> S8.12 (AT-1056, AT-1057, AT-990)
 
 **CSP-first unmapped AT assignment (2026-02-12 snapshot):**
-- Source workbook: `/Users/admin/Desktop/todo/TRACEABILITY_MATRIX_UPDATED (1).xlsx` (`GAP_Unmapped_ATs`, `Contract Profile = CSP`).
+- Source workbook: traceability artifacts under `artifacts/traceability/` (regenerate via traceability tooling from CONTRACT.md + PRD).
 - Primary story ownership mapping for all currently unmapped CSP ATs is tracked in `plans/csp_at_mapping.md`.
 - Phase 2 micro-live gate cannot be declared complete while any CSP AT in that mapping is unassigned.
 

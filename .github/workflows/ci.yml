@@ -111,6 +111,7 @@ jobs:
           exit "$rc"
 
   crossref-gate:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -128,7 +129,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml jsonschema
 
-      - name: Run crossref gate (report-mode burn-in, strict via sentinel)
+      - name: Run crossref gate (strict mode via sentinel)
         env:
           CROSSREF_ARTIFACTS_DIR: artifacts/verify/crossref_ci_${{ github.run_id }}
         run: |

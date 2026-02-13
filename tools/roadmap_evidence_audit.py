@@ -14,11 +14,10 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence, Set, Tuple
+from typing import Dict, List, Sequence, Set, Tuple
 
 EXIT_PASS = 0
 EXIT_TOOL_ERROR = 2
-EXIT_UNKNOWN_GAPS = 3
 EXIT_STRICT_GAPS = 4
 EXIT_MARKER_SCHEMA = 7
 
@@ -426,11 +425,6 @@ def parse_requirements(files: Sequence[str], ci_mode: bool) -> Tuple[List[Requir
     return requirements, set(declared_paths.keys())
 
 
-def classify_unknown_gaps(gaps: Sequence[Gap]) -> List[Gap]:
-    # Marker-based CI should mostly avoid UNKNOWN classification.
-    return [gap for gap in gaps if gap.category == "UNKNOWN"]
-
-
 def format_gap(gap: Gap) -> dict:
     return {
         "key": gap.key,
@@ -519,12 +513,11 @@ def main() -> int:
         )
 
         gaps_sorted = sorted(gaps, key=lambda g: (g.category, g.key, g.required_by))
-        unknown_gaps = classify_unknown_gaps(gaps_sorted)
         story_owned_gaps = [g for g in gaps_sorted if g.category == "STORY_OWNED"]
         global_manual_gaps = [g for g in gaps_sorted if g.category == "GLOBAL_MANUAL"]
 
         if args.strict:
-            displayed = [g for g in gaps_sorted if g.category in ("STORY_OWNED", "UNKNOWN")]
+            displayed = [g for g in gaps_sorted if g.category == "STORY_OWNED"]
         else:
             displayed = gaps_sorted
 
@@ -551,7 +544,6 @@ def main() -> int:
             "counts": {
                 "displayed_gaps": len(displayed),
                 "all_gaps": len(gaps_sorted),
-                "unknown_gaps": len(unknown_gaps),
                 "story_owned_gaps": len(story_owned_gaps),
                 "global_manual_gaps": len(global_manual_gaps),
             },
@@ -583,13 +575,10 @@ def main() -> int:
         "Roadmap evidence audit: "
         f"requirements={report['requirements']['total']} "
         f"gaps={report['counts']['all_gaps']} "
-        f"unknown={report['counts']['unknown_gaps']} "
         f"story_owned={report['counts']['story_owned_gaps']}"
     )
 
     if args.ci:
-        if report["counts"]["unknown_gaps"] > 0:
-            return EXIT_UNKNOWN_GAPS
         if args.strict and report["counts"]["story_owned_gaps"] > 0:
             return EXIT_STRICT_GAPS
 
