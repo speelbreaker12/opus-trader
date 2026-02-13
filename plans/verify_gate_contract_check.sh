@@ -118,6 +118,8 @@ require_code_token "$VERIFY" 'CONTRACT_COVERAGE_CI_SENTINEL'
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_STRICT_EFFECTIVE'
 require_code_token "$VERIFY" 'env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE"'
 require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-300s}"'
+require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT_WAS_SET=0'
+require_code_token "$VERIFY" 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then'
 require_code_token "$VERIFY" 'run_logged_or_exit "slice_completion_enforce"'
 
 # Stack gate scripts: ensure quick/full gate names are present.

@@ -15,7 +15,7 @@ fail() {
 require_file_token() {
   local file="$1"
   local token="$2"
-  if ! grep -Fq "$token" "$file"; then
+  if ! grep -Fq -- "$token" "$file"; then
     fail "$file missing required token: $token"
   fi
 }
@@ -56,7 +56,7 @@ verify_section="$(
 
 require_section_token() {
   local token="$1"
-  if ! printf '%s\n' "$verify_section" | grep -Fq "$token"; then
+  if ! printf '%s\n' "$verify_section" | grep -Fq -- "$token"; then
     fail "$CI_WORKFLOW verify job missing required token: $token"
   fi
 }
@@ -80,5 +80,47 @@ forbid_section_regex '(^|[^.[:alnum:]_])\./verify\.sh([[:space:]]|$)' "non-canon
 forbid_section_regex '\./plans/verify\.sh[[:space:]]+quick' "quick mode in CI verify job"
 forbid_section_regex 'ralph-verify-push|workflow_acceptance|(^|[^[:alnum:]_])ralph([^[:alnum:]_]|$)' "legacy workflow command"
 forbid_section_regex 'scripts/check_(contract_crossrefs|arch_flows|state_machines|global_invariants|time_freshness|crash_matrix|crash_replay_idempotency|reconciliation_matrix|csp_trace)\.py' "duplicate contract checks outside verify"
+
+# Workflow must re-run gate checks when review/comment activity lands after gate pass.
+require_file_token "$CI_WORKFLOW" "pull_request_review:"
+require_file_token "$CI_WORKFLOW" "pull_request_review_comment:"
+require_file_token "$CI_WORKFLOW" "issue_comment:"
+
+pr_gate_section="$(
+  awk '
+    /^  pr-gate-enforced:/ {in_gate=1}
+    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  pr-gate-enforced:/ {exit}
+    in_gate {print}
+  ' "$CI_WORKFLOW"
+)"
+
+[[ -n "$pr_gate_section" ]] || fail "unable to parse pr-gate-enforced job from $CI_WORKFLOW"
+
+require_pr_gate_token() {
+  local token="$1"
+  if ! printf '%s\n' "$pr_gate_section" | grep -Fq -- "$token"; then
+    fail "$CI_WORKFLOW pr-gate-enforced job missing required token: $token"
+  fi
+}
+
+forbid_pr_gate_regex() {
+  local pattern="$1"
+  local reason="$2"
+  if printf '%s\n' "$pr_gate_section" | grep -Eq "$pattern"; then
+    fail "$CI_WORKFLOW pr-gate-enforced job contains forbidden reference ($reason): $pattern"
+  fi
+}
+
+require_pr_gate_token "github.event_name == 'pull_request_review'"
+require_pr_gate_token "github.event_name == 'pull_request_review_comment'"
+require_pr_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
+require_pr_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}'
+require_pr_gate_token '--pr "${PR_NUMBER}"'
+require_pr_gate_token "--bot-comments-mode block"
+require_pr_gate_token "--require-aftercare-ack"
+require_pr_gate_token "--require-copilot-review"
+
+# needs can skip this job on comment/review events when upstream jobs are pull_request-only.
+forbid_pr_gate_regex '^[[:space:]]+needs:' "pr-gate must not depend on pull_request-only jobs"
 
 echo "PASS: README/CI verify parity check"

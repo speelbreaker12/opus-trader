@@ -422,3 +422,43 @@ Commands: pkill -f '/plans/verify_fork.sh full|/plans/preflight.sh'; ./plans/ver
 Evidence: artifacts/verify/20260212_161242 (VERIFY OK, preflight.rc=0, rust_tests_full.rc=0).
 Notes: Contract kernel was aligned to current plan SHA before full verify.
 Next: Use this run as the local full verification artifact for this branch update.
+Story: roadmap-traceability-at-alignment-fixes
+Date: 2026-02-12
+Summary: Fixed remaining traceability defects by replacing non-contract AT references in `specs/IMPLEMENTATION_PLAN.md` (AT-943/944/945/437) with valid contract ATs (AT-935/1047/256/973), and resolved duplicate AT definition in `specs/CONTRACT.md` by renumbering the atomic-group append-group-intent persistence test from AT-935 to AT-939.
+Commands: rg -n "AT-437|AT-943|AT-944|AT-945" specs/IMPLEMENTATION_PLAN.md; rg -n "AT-935" specs/CONTRACT.md; python3 (AT ID set checks for plan-vs-contract and duplicate definition scan).
+Evidence: specs/IMPLEMENTATION_PLAN.md; specs/CONTRACT.md; python check output showing `missing_in_contract 0`; python duplicate scan showing `def_count 333 unique 333 dups []`.
+Notes: Per owner request, skipped `./plans/verify.sh` for this iteration to continue comment-driven doc alignment edits first.
+Next: run quick/full verify once comment pass is complete.
+Story: workflow/pr-gate-comment-race-fix
+Date: 2026-02-12
+Summary: Closed the late-comment merge race by re-triggering `pr-gate-enforced` on PR review/comment activity (`pull_request_review`, `pull_request_review_comment`, PR `issue_comment`), removing pr-gate job `needs` fan-in that could skip comment-event runs, and hardening README/CI parity checks to enforce these trigger and job-shape invariants.
+Commands: ./plans/readme_ci_parity_check.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; bash plans/tests/test_pr_gate.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh.
+Evidence: .github/workflows/ci.yml; plans/readme_ci_parity_check.sh; artifacts/verify/20260212_170202 (workflow_verify stopped at contract kernel mismatch due existing dirty-tree drift); preflight pass output in current session.
+Notes: `workflow_verify` reached preflight/contract checks then failed at `contract kernel` mismatch from pre-existing working-tree drift; no dirty-tree bypass flags were used.
+Next: Validate on CI with a smoke PR by posting a new Copilot/ bot comment after initial gate pass and confirming `pr-gate-enforced` re-runs and blocks merge until addressed.
+Story: roadmap-traceability
+Date: 2026-02-12
+Summary: Applied CSP-first traceability closure pass: added explicit AT mappings for all 27 workbook-flagged no-AT stories in specs/IMPLEMENTATION_PLAN.md (plus manual-evidence fallback for S11.3), added CSP unmapped-AT assignment guardrail block in the implementation plan, and generated plans/csp_at_mapping.md with all 144 currently unmapped CSP ATs assigned to primary story owners from the 2026-02-12 workbook snapshot.
+Commands: python3 scripted line-aware edits of specs/IMPLEMENTATION_PLAN.md; python3 generation of plans/csp_at_mapping.md; review via git diff/rg checks.
+Evidence: specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md.
+Next: run traceability workbook refresh to verify no remaining "story has no explicit AT mapping" gaps and confirm CSP unmapped list now resolves to assigned owners.
+Story: roadmap-traceability
+Date: 2026-02-12
+Summary: Completed 100% contract-to-plan AT traceability mapping in docs: replaced orphan AT-1070 references with contract AT-991, injected story-level traceability assignment lines to cover all previously unmapped contract ATs, and added explicit AT coverage for S8.11/S14.1/S14.2. Current counts from repo docs: contract ATs=333, mapped=333, unmapped=0, plan AT refs not in contract=0; stories with no AT/manual evidence=0 (S11.3 remains manual-evidence-only by design).
+Commands: python3 mapping/injection script over specs/IMPLEMENTATION_PLAN.md; python3 consistency checks for mapped/unmapped/orphan refs and story AT/manual coverage.
+Evidence: specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md.
+Next: regenerate external traceability workbook from current repo files to confirm matrix output matches updated counts.
+Story: roadmap-traceability
+Date: 2026-02-13
+Summary: Executed requested 3-step closure set: (1) regenerated traceability workbook from current docs at /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx (Summary now reports 334/334 mapped, 0 unmapped, 0 story gaps), (2) added canonical contract AT-1071 for S11.3 NaN/Inf guard in specs/CONTRACT.md and mapped S11.3 explicitly in specs/IMPLEMENTATION_PLAN.md (removed manual-only fallback), and (3) ran verify quick/full.
+Commands: python3 doc patch/generation scripts; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: specs/CONTRACT.md; specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md; /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx; artifacts/verify/20260212_180012; artifacts/verify/20260212_180132.
+Verify results: quick failed at verify gate contract check with "missing code token 'PREFLIGHT_TIMEOUT=\"${PREFLIGHT_TIMEOUT:-300s}\"' in plans/verify_fork.sh"; full failed during preflight with "./plans/preflight.sh: line 286: il: command not found".
+Next: fix the workflow harness gate issues in plans/verify_fork.sh and plans/preflight.sh, then rerun ./plans/verify.sh quick/full.
+Story: workflow/verify-timeout-token-guard
+Date: 2026-02-13
+Summary: Closed the remaining harness failures after traceability edits by restoring the contract-required preflight-timeout token in `plans/verify_fork.sh` with preserved precedence semantics (env override > full default > quick default), adding deterministic timeout-policy fixture coverage, and tightening `verify_gate_contract_check` token assertions. Also refreshed `docs/contract_kernel.json` to current contract/plan hashes after contract updates.
+Commands: bash plans/tests/test_verify_timeout_policy.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/verify_gate_contract_check.sh; python3 scripts/build_contract_kernel.py --out docs/contract_kernel.json; python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: plans/verify_fork.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/tests/test_verify_timeout_policy.sh; plans/tests/test_preflight_fixture_profiles.sh; docs/contract_kernel.json; artifacts/verify/20260212_181930; artifacts/verify/20260212_182116.
+Notes: Both quick and full verify now pass locally with dirty-tree warning only; no dirty-tree bypass flags were used.
+Next: run `./plans/prd_set_pass.sh` for the target stories when owner wants to flip `passes=true`.

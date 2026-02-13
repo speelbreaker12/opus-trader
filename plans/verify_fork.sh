@@ -95,12 +95,13 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 # Timeout defaults (fork contract)
+PREFLIGHT_TIMEOUT_WAS_SET=0
 if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then
-  PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT}"
-elif [[ "$MODE" == "full" ]]; then
+  PREFLIGHT_TIMEOUT_WAS_SET=1
+fi
+PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-300s}"
+if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then
   PREFLIGHT_TIMEOUT="900s"
-else
-  PREFLIGHT_TIMEOUT="300s"
 fi
 CONTRACT_KERNEL_TIMEOUT="${CONTRACT_KERNEL_TIMEOUT:-30s}"
 CONTRACT_COVERAGE_TIMEOUT="${CONTRACT_COVERAGE_TIMEOUT:-2m}"

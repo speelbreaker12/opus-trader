@@ -49,9 +49,14 @@ Deribit Venue Facts Addendum: all VERIFIED facts are enforced with artifacts und
 - Execution gate ordering + inventory skew ordering/delta_limit fail-closed -> S5.x + S6.1
 - Fee cache staleness + time drift + SVI trip counts -> S5.2 + S10.5 + S11.1
 - WAL + trade-id registry -> S4.1 + S4.3
-- CSP Profile Isolation from Replay/Snapshot failures (contract §5.2, §0.Z.7) -> S13.1 (AT-1070)
+- CSP Profile Isolation from Replay/Snapshot failures (contract §5.2, §0.Z.7) -> S13.1 (AT-991)
 - CSP micro-live safety gate (runtime F1 + profile status fields + secondary disk corroboration) -> S8.2 + S8.8 + S8.11 + S8.12
 - CSP_ONLY CI gate + build isolation (contract §0.Z.9) -> S8.12 (AT-1056, AT-1057, AT-990)
+
+**CSP-first unmapped AT assignment (2026-02-12 snapshot):**
+- Source workbook: `/Users/admin/Desktop/todo/TRACEABILITY_MATRIX_UPDATED (1).xlsx` (`GAP_Unmapped_ATs`, `Contract Profile = CSP`).
+- Primary story ownership mapping for all currently unmapped CSP ATs is tracked in `plans/csp_at_mapping.md`.
+- Phase 2 micro-live gate cannot be declared complete while any CSP AT in that mapping is unassigned.
 
 
 
@@ -103,7 +108,7 @@ CI guardrail: `python scripts/check_vq_evidence.py` MUST be invoked by `plans/ve
 If a safety-critical config value is missing at runtime, apply the Appendix A default (fail-closed; no “None/0 means safe”).  
 Required default application proof (minimum): start with config missing `instrument_cache_ttl_s` and `evidenceguard_global_cooldown` and verify defaults are applied.  
 Tests:  
-crates/soldier_infra/tests/test_config_defaults.rs::test_defaults_applied_when_missing  
+crates/soldier_infra/tests/test_config_defaults.rs::test_defaults_applied_when_missing (AT-341, AT-424; harness invariants AT-901, AT-905 validated by `plans/verify.sh` + workspace layout checks)
 Evidence artifacts: none  
 Rollout \+ rollback: repo harness; rollback via revert only.  
 Observability hooks: none.
@@ -190,6 +195,8 @@ Observability hooks: counters instrument\_cache\_hits\_total, instrument\_cache\
 - `test_instrument_cache_ttl_blocks_opens_allows_closes()`  
 
 **Reason**: C-1.0-INSTKIND-001, C-8.2-TEST_SUITE-001  
+Contract AT coverage (traceability assignment): AT-279, AT-333.
+
 
 S1.2 — OrderSize canonical sizing \+ notional invariant  
 Allowed paths: crates/soldier\_core/execution/order\_size.rs  
@@ -202,7 +209,7 @@ perpetual|inverse\_future: canonical qty\_usd
 notional\_usd always populated deterministically.  
 Explicit identifiers: `instrument_kind`, `qty_coin`, `qty_usd`; for `instrument_kind == option`, `qty_usd` MUST be unset.  
 Tests:  
-crates/soldier\_core/tests/test\_order\_size.rs::test\_order\_size\_option\_perp\_canonical\_amount  
+crates/soldier\_core/tests/test\_order\_size.rs::test\_order\_size\_option\_perp\_canonical\_amount (AT-277)
 Evidence artifacts: none  
 Rollout \+ rollback: core library; rollback via revert commit only.  
 Observability hooks: debug log OrderSizeComputed{instrument\_kind, notional\_usd}.  
@@ -210,9 +217,11 @@ Observability hooks: debug log OrderSizeComputed{instrument\_kind, notional\_usd
 **Threshold**: Set `contracts_amount_match_tolerance = 0.001` and enforce: if both contracts-derived amount and canonical amount exist and mismatch beyond tolerance ⇒ reject + RiskState::Degraded.  
 If both `contracts` and `amount` are provided, they MUST match within tolerance (contract_multiplier-based check).  
 
-**Required test alias**: Add/alias `test_atomic_qty_epsilon_tolerates_float_noise_but_rejects_mismatch()`.  
+**Required test alias**: Add/alias `test_atomic_qty_epsilon_tolerates_float_noise_but_rejects_mismatch()` (AT-280).
 
 **Reason**: C-1.0-ORDER_SIZE-001, C-8.2-TEST_SUITE-001  
+Contract AT coverage (traceability assignment): AT-278.
+
 
 S1.3 — Dispatcher amount mapping \+ mismatch reject→Degraded  
 Allowed paths: crates/soldier\_core/execution/dispatch\_map.rs  
@@ -225,9 +234,9 @@ Outbound Deribit reduce_only flag MUST be set from intent classification:
 - OPEN intents -> reduce_only=false or omitted  
 This flag MUST NOT be derived from TradingMode.  
 Tests:  
-crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_dispatch\_amount\_field\_coin\_vs\_usd  
-crates/soldier\_core/tests/test\_order\_size.rs::test\_order\_size\_mismatch\_rejects\_and\_degrades  
-crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_reduce\_only\_flag\_set\_by\_intent\_classification  
+crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_dispatch\_amount\_field\_coin\_vs\_usd (AT-920)
+crates/soldier\_core/tests/test\_order\_size.rs::test\_order\_size\_mismatch\_rejects\_and\_degrades (AT-920)
+crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_reduce\_only\_flag\_set\_by\_intent\_classification (AT-201 fail-closed classification rule)
 Evidence artifacts: none  
 Rollout \+ rollback: core; rollback via revert only (hot-path invariant).  
 Observability hooks: counter order\_intent\_reject\_unit\_mismatch\_total.  
@@ -268,6 +277,8 @@ crates/soldier\_core/tests/test\_quantize.rs::test\_missing\_metadata\_rejects\_
 Evidence artifacts: artifacts/deribit\_testnet\_trade\_final\_20260103\_020002.log (F‑03 reference; enforced by evidence-check script)  
 Rollout \+ rollback: core; rollback via revert only.  
 Observability hooks: counter quantization\_reject\_too\_small\_total.  
+Contract AT coverage (traceability assignment): AT-219, AT-908.
+
 S2.2 — Intent hash from quantized fields only  
 Allowed paths: crates/soldier\_core/idempotency/hash.rs  
 New/changed endpoints: none  
@@ -286,6 +297,8 @@ Hard rule (contract Definitions): If an intent cannot be classified, it MUST be 
 Add test: crates/soldier\_core/tests/test\_build\_order\_intent.rs::test\_unclassifiable\_intent\_defaults\_to\_open\_and\_is\_blocked\_when\_opens\_blocked  
 Add/alias AT-201 to the above test name.  
 Phase 1 blocks OPEN when RiskState != Healthy per Phase 1 Dispatch Authorization Rule.  
+Contract AT coverage (traceability assignment): AT-218.
+
 S2.3 — Compact label schema encode/decode (≤64 chars)  
 Allowed paths: crates/soldier\_core/execution/label.rs  
 New/changed endpoints: none  
@@ -322,9 +335,9 @@ Acceptance criteria (contract §2.2.6):
 - Any intent rejected before dispatch MUST include reject\_reason\_code and it MUST be in the contract registry.  
 - Registry must be updated in the same patch when a new rejection token is added.  
 Tests:  
-crates/soldier\_core/tests/test\_reject\_reason.rs::test\_reject\_reason\_present\_on\_pre\_dispatch\_reject  
-crates/soldier\_core/tests/test\_reject\_reason.rs::test\_reject\_reason\_in\_registry  
-crates/soldier\_core/tests/test\_reject\_reason.rs::test\_registry\_contains\_contract\_minimum\_set  
+crates/soldier\_core/tests/test\_reject\_reason.rs::test\_reject\_reason\_present\_on\_pre\_dispatch\_reject (AT-930)
+crates/soldier\_core/tests/test\_reject\_reason.rs::test\_reject\_reason\_in\_registry (AT-930)
+crates/soldier\_core/tests/test\_reject\_reason.rs::test\_registry\_contains\_contract\_minimum\_set (AT-930)
 Evidence artifacts: none  
 Rollout \+ rollback: core; rollback via revert only.  
 Observability hooks: counter reject\_reason\_missing\_total.  
@@ -393,7 +406,7 @@ Allowed paths: crates/soldier\_core/venue/capabilities.rs
 New/changed endpoints: none  
 Acceptance criteria: linked/OCO impossible by default; only enabled with explicit feature flag \+ capability.  
 Defaults (contract): `linked_orders_supported = false`; `ENABLE_LINKED_ORDERS_FOR_BOT = false` (fail-closed if missing).  
-Tests: crates/soldier\_core/tests/test\_capabilities.rs::test\_oco\_not\_supported  
+Tests: crates/soldier\_core/tests/test\_capabilities.rs::test\_oco\_not\_supported (AT-004, AT-915)
 Evidence artifacts: none  
 Rollout \+ rollback: compile/runtime flag.  
 Observability hooks: none (configuration enforced).  
@@ -405,18 +418,20 @@ Allowed paths: crates/soldier\_infra/store/ledger.rs
 New/changed endpoints: none  
 Acceptance criteria: intent recorded before dispatch; replay reconstructs in-flight without resending.  
 Contract path mapping: `soldier/infra/store/ledger.rs` ⇒ `crates/soldier\_infra/store/ledger.rs`.  
-Tests: crates/soldier\_infra/tests/test\_ledger\_replay.rs::test\_ledger\_replay\_no\_resend\_after\_crash  
+Tests: crates/soldier\_infra/tests/test\_ledger\_replay.rs::test\_ledger\_replay\_no\_resend\_after\_crash (AT-233, AT-234, AT-935, AT-940)
 Evidence artifacts: none  
 Rollout \+ rollback: creates local DB; rollback (dev-only) \= delete DB; production rollback \= revert binary (keep WAL).  
 Observability hooks: histogram wal\_append\_latency\_ms; counter wal\_write\_errors\_total.  
 
 **Persisted record schema (contract §2.4, minimum):**
 WAL records MUST include at least: intent_hash, group_id, leg_idx, instrument, side, qty, limit_price, tls_state, created_ts, sent_ts, ack_ts, last_fill_ts, exchange_order_id (if known), last_trade_id (if known). Extra fields are allowed.
+Contract AT coverage (traceability assignment): AT-933.
+
 S4.2 — TLSM out‑of‑order events (fill-before-ack)  
 Allowed paths: crates/soldier\_core/execution/state.rs, crates/soldier\_core/execution/tlsm.rs  
 New/changed endpoints: none  
 Acceptance criteria: never panics; converges to correct terminal state; WAL records transitions.  
-Tests: crates/soldier\_core/tests/test\_tlsm.rs::test\_tlsm\_fill\_before\_ack\_no\_panic  
+Tests: crates/soldier\_core/tests/test\_tlsm.rs::test\_tlsm\_fill\_before\_ack\_no\_panic (AT-230)
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
 Observability hooks: counter tlsm\_out\_of\_order\_total.  
@@ -424,7 +439,7 @@ S4.3 — Trade‑ID registry dedupe
 Allowed paths: crates/soldier\_infra/store/trade\_id\_registry.rs  
 New/changed endpoints: none  
 Acceptance criteria: trade\_id appended first; duplicates NOOP across WS/REST.  
-Tests: crates/soldier\_infra/tests/test\_trade\_id\_registry.rs::test\_trade\_id\_registry\_dedupes\_ws\_trade  
+Tests: crates/soldier\_infra/tests/test\_trade\_id\_registry.rs::test\_trade\_id\_registry\_dedupes\_ws\_trade (AT-269, AT-270)
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
 Observability hooks: counter trade\_id\_duplicates\_total.  
@@ -448,6 +463,8 @@ Rollout \+ rollback: config require\_wal\_fsync\_before\_dispatch controls Durab
 Observability hooks: histogram wal\_fsync\_latency\_ms.  
 Slice 5 — Liquidity Gate \+ Fee Model \+ Net Edge \+ Gate Ordering \+ Pricer  
 Slice intent: Deterministic reject/price logic before any order leaves the process.
+Contract AT coverage (traceability assignment): AT-925.
+
 
 S5.1 — Liquidity Gate (book-walk WAP, reject sweep)  
 Allowed paths: crates/soldier\_core/execution/gate.rs  
@@ -468,6 +485,8 @@ Observability hooks: histogram expected\_slippage\_bps; counter liquidity\_gate\
 **Scope**: Liquidity Gate applies to OPEN intents (normal \+ rescue) and MUST NOT block emergency close paths.  
 Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.  
 Phase 1: document-only constraint; enforcement tests land in Phase 2 S7.3.  
+Contract AT coverage (traceability assignment): AT-222, AT-317.
+
 
 S5.2 — Fee cache staleness (soft buffer / hard ReduceOnly latch)  
 Allowed paths: crates/soldier\_infra/deribit/account\_summary.rs, crates/soldier\_core/strategy/fees.rs  
@@ -507,6 +526,8 @@ Staleness arithmetic uses now_ms - fee_model_cached_at_ts_ms (monotonic‑epoch)
 **AT-031 (contract-required):** fee_model_cached_at_ts_ms MUST be epoch milliseconds (monotonic‑epoch per contract §0.Z.2.2.H), and staleness MUST compute correctly across process restart.
 
 Add test: crates/soldier_core/tests/test_fee_cache.rs::test_fee_cache_epoch_ms_survives_restart (or alias implementing AT-031).
+Contract AT coverage (traceability assignment): AT-245, AT-318, AT-319, AT-320.
+
 
 S5.3 — NetEdge gate  
 Allowed paths: crates/soldier\_core/execution/gates.rs  
@@ -534,7 +555,7 @@ S5.4 — IOC limit pricer clamp (guarantee min edge at limit)
 Allowed paths: crates/soldier\_core/execution/pricer.rs  
 New/changed endpoints: none  
 Acceptance criteria: clamp per contract; never “market-like”.  
-Tests: crates/soldier\_core/tests/test\_pricer.rs::test\_pricer\_sets\_ioc\_limit\_with\_min\_edge  
+Tests: crates/soldier\_core/tests/test\_pricer.rs::test\_pricer\_sets\_ioc\_limit\_with\_min\_edge (AT-223)
 Evidence artifacts: none  
 Rollout \+ rollback: hot-path; rollback \= none (contract).  
 Observability hooks: histogram pricer\_limit\_vs\_fair\_bps.  
@@ -547,8 +568,8 @@ Phase 1 Dispatch Authorization (Temporary, Conservative):
 If RiskState != Healthy, OPEN dispatch MUST be blocked at the chokepoint.  
 CLOSE/HEDGE/CANCEL remain allowed (subject to existing gates).  
 Tests:  
-crates/soldier\_core/tests/test\_gate\_ordering.rs::test\_gate\_ordering\_call\_log  
-crates/soldier\_core/tests/test\_phase1\_dispatch\_auth.rs::test\_phase1\_degraded\_blocks\_opens  
+crates/soldier\_core/tests/test\_gate\_ordering.rs::test\_gate\_ordering\_call\_log (AT-931 dispatch authorization re-check at chokepoint)
+crates/soldier\_core/tests/test\_phase1\_dispatch\_auth.rs::test\_phase1\_degraded\_blocks\_opens (AT-229)
 Evidence artifacts: none  
 Rollout \+ rollback: make dispatch helpers pub(crate) so other modules cannot bypass; rollback requires code revert.  
 Observability hooks: log GateSequence{steps,result}.  
@@ -605,30 +626,34 @@ Add test: crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_
 - If InventorySkew adjusts min_edge_usd, NetEdge MUST be re-evaluated with the adjusted value before dispatch.
 - InventorySkew MUST use current+pending exposure (or run after Pending Exposure Reservation).
 - If delta_limit is missing for the instrument: reject OPEN intent and set RiskState::Degraded (AT-043).
+Contract AT coverage (traceability assignment): AT-224, AT-281, AT-282, AT-922, AT-934.
+
 
 
 S6.2 — Pending exposure reservation  
 Allowed paths: crates/soldier\_core/risk/pending\_exposure.rs  
 Endpoints: none  
 Acceptance criteria: reserve before dispatch; release on terminal TLSM; concurrent opens cannot overfill.  
-Tests: crates/soldier\_core/tests/test\_pending\_exposure.rs::test\_pending\_exposure\_reservation\_blocks\_overfill  
+Tests: crates/soldier\_core/tests/test\_pending\_exposure.rs::test\_pending\_exposure\_reservation\_blocks\_overfill (AT-225, AT-910)
 Rollout/rollback: hot-path; no runtime disable. Rollback for Pending Exposure Reservation logic \= revert commit only (contract safety gate).  
 Observability: gauge pending\_delta, counter pending\_reserve\_reject\_total.  
 S6.3 — Global exposure budget (corr buckets)  
 Allowed paths: crates/soldier\_core/risk/exposure\_budget.rs  
 Acceptance criteria: correlation-aware; uses current+pending.  
 Contract integration rule: Global Budget MUST be checked using current + pending exposure (no current-only).  
-Tests: crates/soldier\_core/tests/test\_exposure\_budget.rs::test\_global\_exposure\_budget\_correlation\_rejects  
+Tests: crates/soldier\_core/tests/test\_exposure\_budget.rs::test\_global\_exposure\_budget\_correlation\_rejects (AT-226, AT-911, AT-929)
 Observability: gauge portfolio\_delta\_usd, counter portfolio\_budget\_reject\_total.  
 S6.4 — Margin headroom gate  
 Allowed paths: crates/soldier\_core/risk/margin\_gate.rs  
 Acceptance criteria: 70% reject opens; 85% ReduceOnly; 95% Kill.  
 Contract defaults: `mm_util_reduceonly = 0.85` (ReduceOnly allows CLOSE/HEDGE/CANCEL), `mm_util_kill = 0.95`.  
 Contract detail: if `mm_util >= mm_util_kill` (default 0.95) ⇒ PolicyGuard MUST force Kill and trigger deterministic emergency flatten (per §3.1) when eligible.  
-Tests: crates/soldier\_core/tests/test\_margin\_gate.rs::test\_margin\_gate\_thresholds\_block\_reduceonly\_kill  
+Tests: crates/soldier\_core/tests/test\_margin\_gate.rs::test\_margin\_gate\_thresholds\_block\_reduceonly\_kill (AT-206, AT-207, AT-208, AT-300, AT-301, AT-302)
 Observability: gauge mm\_util, counter margin\_gate\_trip\_total{level}.  
 Slice 7 — Atomic Group Executor \+ Emergency Close \+ Sequencer \+ Churn Breaker  
 Slice intent: runtime atomicity: bounded rescue then deterministic flatten/hedge fallback.
+Contract AT coverage (traceability assignment): AT-227, AT-228, AT-912.
+
 
 S7.1 — Group state machine \+ first-fail invariant  
 Allowed paths: crates/soldier\_core/execution/{group.rs,atomic\_group\_executor.rs}  
@@ -638,6 +663,8 @@ Tests: crates/soldier\_core/tests/test\_atomic\_group.rs::test\_atomic\_group\_m
 Add test: crates/soldier\_core/tests/test\_atomic\_group.rs::test\_mixed\_failed\_blocks\_opens\_until\_neutral (AT-116)  
 Rollout/rollback: staged rollout behind config ENABLE\_ATOMIC\_GROUPS. MUST be enabled before any multi-leg strategy is allowed to trade. Rollback \= revert commit (do not disable as a live “bypass”).  
 Observability: counter atomic\_group\_state\_total{state}.  
+Contract AT coverage (traceability assignment): AT-118, AT-220, AT-924, AT-939.
+
 S7.2 — Bounded rescue (≤2) and no chase loop  
 Allowed paths: crates/soldier\_core/execution/atomic\_group\_executor.rs  
 Acceptance criteria: max 2 rescue IOC attempts; then flatten.  
@@ -691,6 +718,8 @@ Add tests proving containment is still permitted under Kill-tier causes while ex
 - `test_kill_allows_containment_when_session_terminated()` — aligns to AT-346
 - `test_kill_allows_containment_when_watchdog_stale()` — aligns to AT-347
 - `test_kill_allows_containment_when_bunker_mode_active()` — aligns to AT-013
+Contract AT coverage (traceability assignment): AT-211, AT-213, AT-235, AT-236, AT-283, AT-316, AT-327, AT-328, AT-936, AT-937, AT-938.
+
 
 
 
@@ -700,14 +729,14 @@ Acceptance criteria: close→confirm→hedge.
 Repair path: flatten filled legs first via emergency\_close\_algorithm; hedge only after flatten retries fail and exposure remains above limit.  
 Never increase exposure while RiskState != Healthy (includes Degraded/Maintenance/Kill).  
 Tests:  
-crates/soldier\_core/tests/test\_sequencer.rs::test\_sequencer\_close\_then\_hedge\_ordering  
-crates/soldier\_core/tests/test\_sequencer.rs::test\_sequencer\_blocks\_exposure\_increase\_when\_riskstate\_not\_healthy  
-crates/soldier\_core/tests/test\_sequencer.rs::test\_sequencer\_repair\_flattens\_before\_hedge  
+crates/soldier\_core/tests/test\_sequencer.rs::test\_sequencer\_close\_then\_hedge\_ordering (AT-229)
+crates/soldier\_core/tests/test\_sequencer.rs::test\_sequencer\_blocks\_exposure\_increase\_when\_riskstate\_not\_healthy (AT-229)
+crates/soldier\_core/tests/test\_sequencer.rs::test\_sequencer\_repair\_flattens\_before\_hedge (AT-229)
 Observability: counter sequencer\_order\_violation\_total.  
 S7.5 — Churn breaker  
 Allowed paths: crates/soldier\_core/risk/churn\_breaker.rs  
 Acceptance criteria: \>2 flattens/5m \=\> 15m blacklist blocks opens for that key.  
-Tests: crates/soldier\_core/tests/test\_churn\_breaker.rs::test\_churn\_breaker\_blacklists\_after\_three  
+Tests: crates/soldier\_core/tests/test\_churn\_breaker.rs::test\_churn\_breaker\_blacklists\_after\_three (AT-221)
 Observability: counter churn\_breaker\_trip\_total.  
 
 S7.6 — Self‑Impact Feedback Loop Guard (Echo Chamber Breaker)  
@@ -791,6 +820,8 @@ Explicit Kill reasons (contract):
 - Trigger: Kill only if **both** watchdog and loop tick are stale beyond watchdog_kill_s; otherwise ReduceOnly with REDUCEONLY_WATCHDOG_UNCONFIRMED.
 - Containment remains permitted under KILL_WATCHDOG_HEARTBEAT_STALE; only OPEN is blocked.
 - Add test: test_watchdog_kill_s_triggers_kill_after_10s_no_health_report().
+Contract AT coverage (traceability assignment): AT-295, AT-296, AT-315, AT-336, AT-337, AT-348, AT-349, AT-350, AT-413, AT-416, AT-417, AT-918.
+
 
 S8.2 — Runtime F1 gate (HARD): artifacts/F1\_CERT.json  
 Binding enforcement (contract v5.2): Runtime MUST treat F1_CERT as INVALID and force ReduceOnly if contract_version in F1_CERT != runtime contract_version (and include as ModeReasonCode).  
@@ -824,6 +855,8 @@ Add: test_f1_cert_policy_hash_at_cert_time_is_ignored_for_validity().
 Define runtime contract_version literal as numeric-only (e.g., "5.2"; no "v" prefix, no codename).
 
 Add test: crates/soldier_core/tests/test_f1_gate.rs::test_contract_version_format_numeric_only_rejects_v_prefix (AT-012).
+Contract AT coverage (traceability assignment): AT-294, AT-410, AT-423.
+
 
 
 
@@ -881,6 +914,8 @@ Add test (exact): crates/soldier_core/tests/test_evidence_guard.rs::test_evidenc
 
 **Boundary test for strictness:**
 Add boundary test: verify parquet_queue_depth_pct == 0.90 does not trip; 0.9001 trips after ≥5s.
+Contract AT coverage (traceability assignment): AT-214, AT-215, AT-304, AT-307, AT-308, AT-309, AT-310, AT-334, AT-335, AT-404, AT-414, AT-415, AT-422, AT-923, AT-969.
+
 
 
 S8.4 — Bunker Mode network jitter monitor (Patch C)  
@@ -900,6 +935,8 @@ Observability: gauge ws\_event\_lag\_ms, deribit\_http\_p95\_ms, counter bunker\
 - Add boundary tests for each threshold comparator.  
 
 **Reason**: C-2.3.2-BUNKER-001  
+Contract AT coverage (traceability assignment): AT-209, AT-267, AT-268, AT-298.
+
 
 S8.5 — Cortex enforcement  
 Allowed paths: crates/soldier\_core/reflex/cortex.rs  
@@ -919,6 +956,8 @@ Observability: counter `cortex_override_total{kind}`.
 
 **Risk-increasing cancel/replace definition (contract §2.3):**
 Risk-increasing cancel/replace means any cancel/replace that increases absolute net exposure, increases exposure in the current risk direction, or removes reduce_only protection on a closing/hedging order. When ws_gap_flag==true, block these at the single chokepoint; allow risk-reducing cancels/replaces and closes.
+Contract AT coverage (traceability assignment): AT-231, AT-284, AT-285, AT-286, AT-288, AT-289, AT-290, AT-291, AT-292, AT-293, AT-418, AT-420.
+
 
 S8.6 — Exchange maintenance monitor  
 Allowed paths: crates/soldier\_core/risk/exchange\_health.rs  
@@ -926,12 +965,14 @@ Acceptance criteria: maint within 60m \=\> set RiskState::Maintenance; PolicyGua
 Fail-closed handling (contract): if `/public/get_announcements` unreachable/invalid for `exchange_health_stale_s` (default 180s), set `cortex_override = ForceReduceOnly` and block OPENs (AT-204).  
 Tests: crates/soldier\_core/tests/test\_exchange\_health.rs::test\_exchange\_health\_maintenance\_blocks\_opens  
 Add test: crates/soldier\_core/tests/test\_exchange\_health.rs::test\_exchange\_health\_stale\_announcements\_force\_reduceonly (AT-204).  
+Contract AT coverage (traceability assignment): AT-232, AT-299.
+
 S8.7 — Endpoint: POST /api/v1/emergency/reduce\_only (existing plan)  
 Allowed paths: crates/soldier\_infra/http/\*\*, crates/soldier\_core/policy/watchdog.rs  
 New/changed endpoints: POST /api/v1/emergency/reduce\_only  
 Required endpoint-level tests: yes  
 Acceptance criteria: flips to ReduceOnly; cancels only non-reduce-only opens; preserves closes/hedges.  
-Tests: crates/soldier\_infra/tests/test\_http\_emergency.rs::test\_post\_emergency\_reduce\_only\_endpoint  
+Tests: crates/soldier\_infra/tests/test\_http\_emergency.rs::test\_post\_emergency\_reduce\_only\_endpoint (AT-132, AT-203, AT-237)
 Observability: counter http\_emergency\_reduce\_only\_calls\_total.  
 
 **Emergency reduce-only cooldown semantics (contract §2.2/§3.2):**
@@ -944,6 +985,8 @@ Observability: counter http\_emergency\_reduce\_only\_calls\_total.
 **Smart Watchdog trigger (contract §3.2):**
 - If ws\_silence\_ms > 5000, invoke the same handler as POST /api/v1/emergency/reduce\_only (do not duplicate logic).
 - Add test: test\_watchdog\_silence\_over\_5s\_calls\_emergency\_reduceonly\_handler().
+Contract AT coverage (traceability assignment): AT-297.
+
 S8.8 — Owner endpoint: GET /api/v1/status (Patch D)  
 Add wrapper test with exact required name: test_status_endpoint_returns_required_fields() asserting all required keys exist.  
 Allowed paths: crates/soldier\_infra/http/{router.rs,status.rs} and read-only state accessors  
@@ -1009,6 +1052,8 @@ f1_cert_expires_at may be null ONLY when F1_CERT is missing or unparseable.
 Add test (AT-003): crates/soldier_core/tests/test_status_endpoint.rs::test_status_endpoint_f1_cert_expires_at_matches_generated_plus_window
 
 Include cases for PASS, FAIL, STALE, INVALID with parseable cert.
+Contract AT coverage (traceability assignment): AT-212, AT-342, AT-351, AT-352, AT-353, AT-403, AT-406, AT-412, AT-968.
+
 
 S8.9 — Owner endpoint: GET /api/v1/health (minimal, read-only)  
 Add wrapper test with exact required name: test_health_endpoint_returns_minimal_payload() calling existing health endpoint assertions.  
@@ -1036,6 +1081,8 @@ crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_reduceonly\_tri
 crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_kill\_trip (AT-952)  
 crates/soldier\_core/tests/test\_basis\_monitor.rs::test\_basis\_missing\_stale\_fails\_closed (AT-954)  
 Observability: counter basis\_trip\_total.  
+Contract AT coverage (traceability assignment): AT-958, AT-959, AT-963.
+
 S8.11 — Secondary disk corroboration probe ingestion (contract §2.2.3.1.2)  
 Allowed paths: crates/soldier\_infra/telemetry/disk_probe.rs, crates/soldier\_core/policy/input_snapshot.rs, crates/soldier\_infra/http/status.rs  
 Acceptance criteria:  
@@ -1048,6 +1095,8 @@ crates/soldier\_infra/tests/test\_disk\_probe.rs::test\_disk\_secondary\_probe\_
 crates/soldier\_core/tests/test\_policy\_guard.rs::test\_disk\_kill\_secondary\_probe\_missing\_forces\_reduceonly\_unconfirmed  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_includes\_secondary\_disk\_fields  
 Observability: gauge disk_used_pct_secondary, gauge disk_secondary_probe_age_ms, counter disk_secondary_probe_errors_total.  
+Contract AT coverage (traceability assignment): AT-339, AT-1067.
+
 
 S8.12 — CSP_ONLY CI gate + profile isolation evidence (micro-live prerequisite)  
 Allowed paths: .github/workflows/**, plans/verify_fork.sh, crates/soldier\_core/tests/test\_profile\_isolation.rs  
@@ -1088,12 +1137,14 @@ Add test: test_rate_limit_dynamic_limits_repeated_refresh_failures_force_degrade
 Add test: test_rate_limit_dynamic_limits_no_trip_when_failures_outside_window (AT-133)
 
 Define "repeated" as 3 consecutive polls of `/private/get_account_summary` fail → RiskState::Degraded.
+Contract AT coverage (traceability assignment): AT-238, AT-239, AT-919.
+
 
 
 S9.2 — 10028/too\_many\_requests \=\> Kill \+ reconnect \+ reconcile  
 Allowed paths: crates/soldier\_infra/api/\*\*, crates/soldier\_core/recovery/reconcile.rs  
 Acceptance criteria: 10028 triggers rate\_limit\_session\_kill\_active == true, TradingMode == Kill, RiskState == Degraded immediately; backoff; reconcile before resume.  
-Tests: crates/soldier\_infra/tests/test\_rate\_limiter.rs::test\_rate\_limit\_10028\_triggers\_kill\_and\_reconnect  
+Tests: crates/soldier\_infra/tests/test\_rate\_limiter.rs::test\_rate\_limit\_10028\_triggers\_kill\_and\_reconnect (AT-240, AT-409, AT-330)
 Observability: counter rate\_limit\_10028\_total.  
 
 **On 10028**: set open permission latch reason `SESSION_TERMINATION_RECONCILE_REQUIRED` and require full reconcile before unlatching.  
@@ -1104,8 +1155,8 @@ S9.3 — WS gap detection (book/trades/private) \=\> Degraded \+ REST snapshots
 Allowed paths: crates/soldier\_core/recovery/ws\_gap.rs  
 Acceptance criteria: per-channel continuity rules; gap \=\> Degraded \+ resubscribe \+ snapshot rebuild.  
 Tests:  
-crates/soldier\_core/tests/test\_ws\_gap.rs::test\_orderbook\_gap\_triggers\_resubscribe\_and\_snapshot  
-crates/soldier\_core/tests/test\_ws\_gap.rs::test\_trades\_gap\_triggers\_reconcile  
+crates/soldier\_core/tests/test\_ws\_gap.rs::test\_orderbook\_gap\_triggers\_resubscribe\_and\_snapshot (AT-271, AT-408)
+crates/soldier\_core/tests/test\_ws\_gap.rs::test\_trades\_gap\_triggers\_reconcile (AT-272, AT-202, AT-409, AT-941)
 Observability: counter ws\_gap\_count\_total{channel}.  
 Contract §3.4 requires CorrectiveActions enumeration:  
 - CancelStaleOrder(order_id)  
@@ -1153,6 +1204,8 @@ Add test: crates/soldier\_core/tests/test\_cancel\_replace.rs::test\_risk\_incre
 Add test: test_open_permission_reason_codes_excludes_f1_and_evidence
 
 Given PolicyGuard has F1_CERT invalid AND EvidenceChainState != GREEN, assert that `open_permission_reason_codes` contains neither F1 nor Evidence-related codes (those belong only in `mode_reasons`).
+Contract AT coverage (traceability assignment): AT-305, AT-306, AT-401, AT-402, AT-411, AT-430.
+
 
 S9.5 — Zombie sweeper (ghost orders \+ orphan fills)  
 Allowed paths: crates/soldier\_core/recovery/zombie\_sweeper.rs  
@@ -1173,6 +1226,8 @@ Observability: counter ghost\_order\_canceled\_total, orphan\_fill\_reconciled\_
 **Required test alias**: Add `test_stale_order_sec_cancels_non_reduce_only_orders()`.  
 
 **Reason**: C-3.5-ZOMBIE_SWEEPER-001, C-8.2-TEST_SUITE-001  
+Contract AT coverage (traceability assignment): AT-210, AT-303, AT-329.
+
 
 S9.6 — WS data liveness (Zombie Socket Detection)  
 Allowed paths: crates/soldier\_core/recovery/ws\_liveness.rs  
@@ -1225,6 +1280,8 @@ crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_evidence_commit_barrie
 crates/soldier\_core/tests/test\_truth\_capsule.rs::test\_evidence_commit_barrier_fail_closed (AT-1047)  
 Rollout/rollback: hot-path; rollback \= disable trading opens (ReduceOnly) if writer unstable (must remain fail-closed).  
 Observability: gauge parquet\_queue\_depth, counter truth\_capsule\_write\_errors\_total.  
+Contract AT coverage (traceability assignment): AT-249, AT-250, AT-251, AT-252.
+
 S10.2 — Decision Snapshot capture/persist/link (Patch A requirement)  
 Allowed paths: crates/soldier\_core/analytics/decision\_snapshot.rs, crates/soldier\_core/analytics/truth\_capsule.rs  
 Acceptance criteria: L2 top‑N snapshot persisted; `decision_snapshot_id` stored in TruthCapsule; every dispatched intent MUST reference `decision_snapshot_id` and `SnapshotRecordedBeforeDispatch` MUST be true immediately before dispatch; `record_decision_snapshot()` returns Ok only after crash-safe persistence; `l2_snapshot_id` MUST NOT be emitted; failure treated as evidence failure (opens blocked, `decision_snapshot_write_errors` increments).  
@@ -1233,23 +1290,23 @@ Tests:
 crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_is\_required\_and\_linked  
 crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_write\_failure\_blocks\_opens  
 crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_id\_present\_and\_l2\_snapshot\_id\_absent (AT-044)  
-crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_recorded\_before\_dispatch\_survives\_restart (AT-943)  
-crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_persistence\_failure\_blocks\_dispatch (AT-944)  
-crates/soldier\_core/tests/test\_wal\_intent\_fields.rs::test\_wal\_intent\_includes\_decision\_snapshot\_fields (AT-945)  
+crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_recorded\_before\_dispatch\_survives\_restart (AT-935)  
+crates/soldier\_core/tests/test\_decision\_snapshot.rs::test\_decision\_snapshot\_persistence\_failure\_blocks\_dispatch (AT-1047)  
+crates/soldier\_core/tests/test\_wal\_intent\_fields.rs::test\_wal\_intent\_includes\_decision\_snapshot\_fields (AT-256)  
 Observability: counter decision\_snapshot\_written\_total, decision\_snapshot\_write\_errors\_total.  
 S10.3 — Attribution rows \== fills (+ joins)  
 Allowed paths: crates/soldier\_core/analytics/attribution.rs  
 Acceptance criteria: for each fill, one attribution row with truth\_capsule\_id and friction fields.  
 Required fields include `fair_price_at_signal`, `exchange_ts`, `local_send_ts`, `local_recv_ts`, `drift_ms`.  
-Tests: crates/soldier\_core/tests/test\_attribution.rs::test\_attribution\_row\_links\_truth\_capsule  
+Tests: crates/soldier\_core/tests/test\_attribution.rs::test\_attribution\_row\_links\_truth\_capsule (AT-253)
 Contract §4.4: Shadow mode MUST write the SAME Parquet schema as live with field mode = shadow|live.  
 Add test: crates/soldier\_core/tests/test\_parquet\_schema.rs::test\_shadow\_and\_live\_schema\_parity\_includes\_mode\_field  
 S10.4 — PnL decomposition units enforced (Python)  
 Allowed paths: python/analytics/pnl\_attribution.py  
 Acceptance criteria: theta/day, vega/1pct; raw+normalized stored.  
-Tests: python/tests/test\_pnl\_attribution.py::test\_pnl\_decomposition\_theta\_units  
+Tests: python/tests/test\_pnl\_attribution.py::test\_pnl\_decomposition\_theta\_units (AT-248)
 Contract §4.3: If S_fill == S_signal and IV_fill == IV_signal then delta_pnl approx 0 and vega_pnl approx 0; residual must not explode.  
-Add test: python/tests/test\_pnl\_attribution.py::test\_pnl\_decomposition\_zero\_when\_no\_move  
+Add test: python/tests/test\_pnl\_attribution.py::test\_pnl\_decomposition\_zero\_when\_no\_move (AT-247)
 S10.5 — Time drift gate \=\> ReduceOnly  
 Allowed paths: crates/soldier\_core/risk/time\_drift\_gate.rs  
 Acceptance criteria: if drift\_ms > time\_drift\_threshold\_ms then set RiskState::Degraded and PolicyGuard forces ReduceOnly; exposed in /status.  
@@ -1257,6 +1314,8 @@ Default threshold (contract): `time_drift_threshold_ms = 50` (configurable).
 Tests: crates/soldier\_core/tests/test\_time\_drift.rs::test\_time\_drift\_gate\_forces\_reduceonly  
 Add test: crates/soldier\_core/tests/test\_time\_drift.rs::test\_time\_drift\_forces\_policyguard\_reduceonly (AT-108)  
 Slice 11 — SVI Stability Gates \+ Arb Guards  
+Contract AT coverage (traceability assignment): AT-273, AT-314.
+
 S11.1 — RMSE/drift gates (liquidity-aware)  
 Allowed paths: crates/soldier\_core/quant/svi\_fit.rs  
 Acceptance criteria:  
@@ -1266,25 +1325,29 @@ Gate 1 (RMSE): rmse > rmse\_max ⇒ reject new fit.
 Gate 2 (Drift): params drift > drift\_max ⇒ reject new fit and hold last valid.  
 SVI Math Guard and Arb Guards do not loosen under low depth.  
 Tests:  
-crates/soldier\_core/tests/test\_svi.rs::test\_svi\_rmse\_drift\_gates  
-crates/soldier\_core/tests/test\_svi.rs::test\_svi\_depth\_min\_applies\_loosened\_thresholds  
+crates/soldier\_core/tests/test\_svi.rs::test\_svi\_rmse\_drift\_gates (AT-321, AT-322)
+crates/soldier\_core/tests/test\_svi.rs::test\_svi\_depth\_min\_applies\_loosened\_thresholds (AT-242)
 
 **SVI trip window semantics (contract §4.1):**
 - Maintain a rolling window counter of SVI gate trips over svi_guard_trip_window_s.
 - If trips >= svi_guard_trip_count within the window: set RiskState::Degraded and pause opens until stable.
 - Required tests: test_svi_guard_trip_count_triggers_degraded_after_3_trips() and test_svi_guard_trip_window_s_counts_over_300s().
+Contract AT coverage (traceability assignment): AT-287.
+
 S11.2 — Arb guards (convexity/calendar/density)  
 Allowed paths: crates/soldier\_core/quant/svi\_arb.rs  
 Acceptance criteria:  
 On any arb-guard failure: invalidate fit, hold last valid, increment svi\_arb\_guard\_trips.  
 If trips >= svi\_guard\_trip\_count within svi\_guard\_trip\_window\_s: set RiskState::Degraded and pause opens.  
 Tests:  
-crates/soldier\_core/tests/test\_svi.rs::test\_svi\_arb\_guard\_convexity\_rejects  
-crates/soldier\_core/tests/test\_svi.rs::test\_svi\_arb\_guard\_trip\_count\_triggers\_degraded\_after\_3\_trips  
-crates/soldier\_core/tests/test\_svi.rs::test\_svi\_arb\_violation\_rejects\_and\_holds\_last\_fit  
+crates/soldier\_core/tests/test\_svi.rs::test\_svi\_arb\_guard\_convexity\_rejects (AT-241)
+crates/soldier\_core/tests/test\_svi.rs::test\_svi\_arb\_guard\_trip\_count\_triggers\_degraded\_after\_3\_trips (AT-321)
+crates/soldier\_core/tests/test\_svi.rs::test\_svi\_arb\_violation\_rejects\_and\_holds\_last\_fit (AT-241)
 S11.3 — NaN/Inf guard holds last fit  
 Allowed paths: crates/soldier\_core/quant/svi\_fit.rs  
-Tests: crates/soldier\_core/tests/test\_svi.rs::test\_svi\_nan\_guard\_holds\_last\_fit  
+Tests: crates/soldier\_core/tests/test\_svi.rs::test\_svi\_nan\_guard\_holds\_last\_fit (AT-1071)  
+Contract AT coverage (traceability assignment): AT-1071.
+
 (Observability for Slice 11: gauges svi\_rmse, svi\_drift\_pct, counters svi\_guard\_trips\_total, svi\_arb\_guard\_trips\_total.)
 
 Slice 12 — Fill Simulator \+ Slippage Calibration  
@@ -1292,13 +1355,13 @@ S12.1 — Deterministic fill simulator (book-walk \+ fees)
 Allowed paths: crates/soldier\_core/sim/exchange.rs  
 Acceptance criteria: given fixed L2 snapshot + size, simulator outputs deterministic WAP and `slippage_bps`.  
 Tests: crates/soldier\_core/tests/test\_fill\_sim.rs::test\_fill\_simulator\_deterministic\_wap  
-crates/soldier\_core/tests/test\_fill\_sim.rs::test\_fill\_simulator\_deterministic\_slippage\_bps  
+crates/soldier\_core/tests/test\_fill\_sim.rs::test\_fill\_simulator\_deterministic\_slippage\_bps (AT-254)
 S12.2 — Slippage calibration \+ safe default (1.3)  
 Allowed paths: crates/soldier\_core/analytics/slippage\_calibration.rs, python/commander/analytics/slippage\_calibration.py  
 Contract requirement: Replay Gatekeeper MUST apply this realism penalty factor (see §5.2).  
 Tests:  
-crates/soldier\_core/tests/test\_slippage\_calibration.rs::test\_slippage\_calibration\_penalty\_factor\_converges  
-crates/soldier\_core/tests/test\_slippage\_calibration.rs::test\_realism\_penalty\_default\_applied\_when\_missing  
+crates/soldier\_core/tests/test\_slippage\_calibration.rs::test\_slippage\_calibration\_penalty\_factor\_converges (AT-255)
+crates/soldier\_core/tests/test\_slippage\_calibration.rs::test\_realism\_penalty\_default\_applied\_when\_missing (AT-255)
 (Observability: gauge realism\_penalty\_factor{bucket}, counter slippage\_calibration\_samples\_total.)
 
 F) Dependencies DAG (Phase 3\)  
@@ -1341,9 +1404,11 @@ python/tests/test\_replay\_gatekeeper.py::test\_replay\_quality\_broken\_shadow\
 python/tests/test\_replay\_gatekeeper.py::test\_replay\_rejects\_loosen\_or\_unknown\_params\_in\_degraded (AT-1064)  
 python/tests/test\_replay\_gatekeeper.py::test\_replay\_hard\_fails\_when\_dd\_limit\_missing (AT-034, AT-040)  
 crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_open\_haircut\_mult\_applies\_to\_open\_only (AT-257)
-crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_isolation\_from\_replay\_snapshot\_failures (AT-1070)
+crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_isolation\_from\_replay\_snapshot\_failures (AT-991)
 Evidence artifacts: artifacts/policy\_patches/\<ts\>\_result.json
 Observability: log ReplayGatekeeperResult{coverage\_pct, replay\_quality, apply\_mode, net\_pnl\_penalized, pass}.  
+Contract AT coverage (traceability assignment): AT-258, AT-259, AT-324, AT-331, AT-332, AT-431, AT-432.
+
 S13.2 — Disk retention \+ watermarks (Patch A semantics)  
 Clarify: when disk_used_pct >= 92%, TradingMode Kill; OPEN blocked; containment attempts still permitted while exposed (evidence integrity MUST NOT block containment).  
 Add test: test_disk_kill_pct_hard_stops_at_92_pct (exact contract name; ensure it asserts containment still permitted while exposed).  
@@ -1356,7 +1421,7 @@ Acceptance criteria:
 80% disk: pause full tick/L2 archives only; Decision Snapshots continue; does NOT force Degraded by itself.  
 85% disk: force ReduceOnly (Degraded).  
 92% disk: Kill.  
-Tests: crates/soldier\_core/tests/test\_disk\_watermark\_stops\_tick\_archives\_and\_forces\_reduceonly  
+Tests: crates/soldier\_core/tests/test\_disk\_watermark\_stops\_tick\_archives\_and\_forces\_reduceonly (AT-260, AT-261, AT-262, AT-263, AT-311, AT-312, AT-313, AT-323, AT-325, AT-326, AT-942)
 Observability: gauge disk_used_pct, counter tick_archive_paused_total.  
 
 **Explicitly list retention defaults** referenced in contract (tick/L2 archives 72h; parquet analytics 30d; decision snapshots 30d with minimum bound ≥2d per contract §7.2).  
@@ -1388,7 +1453,7 @@ All five MUST be provided by configuration; if any missing/unparseable or violat
 Add tests: python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_missing\_thresholds\_aborts (AT-035)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_aborts\_when\_slippage\_exceeds\_limit (AT-036)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_aborts\_when\_evidence\_chain\_exceeds\_abort\_window (AT-435)  
-python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_does\_not\_abort\_on\_evidence\_chain\_threshold (AT-437)  
+python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_does\_not\_abort\_on\_evidence\_chain\_threshold (AT-973)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_fails_preflight_on_miscalibrated_evidence_abort (AT-972)  
 python/tests/test\_canary\_rollout.py::test\_canary\_rollout\_does\_not\_abort_within_recovery_horizon (AT-973)  
 
@@ -1410,11 +1475,13 @@ Stage 1 Testnet micro-canary PASS duration 2–6h
 Any abort trigger → rollback + ReduceOnly cooldown
 
 Add tests asserting stage durations are within contract ranges and that abort triggers enforce rollback+cooldown.
+Contract AT coverage (traceability assignment): AT-433, AT-434, AT-436.
+
 
 
 S13.4 — AutoReviewer daily \+ incident reports \+ human approval gate  
 Allowed paths: python/reviewer/{daily\_ops\_review.py,incident\_review.py}  
-Tests: python/tests/test\_reviewer.py::test\_autoreviewer\_blocks\_aggressive\_without\_human\_approval  
+Tests: python/tests/test\_reviewer.py::test\_autoreviewer\_blocks\_aggressive\_without\_human\_approval (AT-274, AT-275, AT-276, AT-902, AT-903, AT-904)
 Contract rule: AGGRESSIVE patch without `artifacts/HUMAN_APPROVAL.json` MUST NOT apply (even if replay/canary pass).  
 
 **Artifacts required**:  
@@ -1456,6 +1523,8 @@ Allowed paths: python/tools/f1\_certify.py
 Tests: python/tests/test\_f1\_certify.py::test\_f1\_cert\_fail\_on\_atomic\_naked\_event  
 Add test: python/tests/test\_f1\_certify.py::test\_runtime\_config\_hash\_canonicalization (AT-113).  
 Evidence artifacts: artifacts/F1\_CERT.json, artifacts/F1\_CERT.md  
+Contract AT coverage (traceability assignment): AT-264, AT-265, AT-266.
+
 
 CSP_ONLY CI job ownership and profile isolation proof are delivered in S8.12 (Phase 2 micro-live gate) and consumed here as release inputs.  
 
@@ -1496,6 +1565,7 @@ Add tests that assert thresholds exactly match contract comparators (≤ vs <, =
 Slice 14 — GOP Optimization Cycle (Contract §5.1)  
 Slice intent: implement the closed-loop policy tuner for GOP/FULL profiles without weakening CSP safety guarantees.  
 
+
 S14.1 — Daily optimizer ingestion + dry-run patch proposal  
 Allowed paths: python/optimizer/closed_loop.py, python/optimizer/patch_model.py, python/tests/test_closed_loop.py  
 Acceptance criteria:  
@@ -1507,6 +1577,8 @@ Tests:
 python/tests/test_closed_loop.py::test_closed_loop_generates_bounded_patch_candidates  
 python/tests/test_closed_loop.py::test_closed_loop_csp_profile_is_non_enforcing  
 Evidence artifacts: artifacts/policy_patches/<ts>_patch.json, artifacts/policy_patches/<ts>_result.json.  
+Contract AT coverage (traceability assignment): AT-970.
+
 
 S14.2 — Governor clamps + approval coupling for apply path  
 Allowed paths: python/optimizer/closed_loop.py, python/governor/replay_gatekeeper.py, python/reviewer/daily_ops_review.py  
@@ -1517,6 +1589,8 @@ Acceptance criteria:
 Tests:  
 python/tests/test_closed_loop.py::test_closed_loop_requires_replay_and_review_before_apply  
 python/tests/test_closed_loop.py::test_closed_loop_atomic_naked_forces_cooldown_recommendation  
+Contract AT coverage (traceability assignment): AT-971.
+
 
 F) Dependencies DAG (Phase 4\)  
 Slice 10 \+ Slice 12 → S13.1  
@@ -1524,3 +1598,4 @@ S13.1 → S13.3 (replay pass required before canary)
 S13.2 \+ S13.4 \+ S13.5 \+ S14.* must be in place before any “enable full-scale/prod” decision.  
 Phase 2 CSP micro-live decision requires S8.2 \+ S8.8 \+ S8.11 \+ S8.12 evidence (runtime F1/profile/corroboration/CSP_ONLY CI).  
 G) De-scope line (Phase 4\)
+
