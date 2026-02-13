@@ -115,7 +115,11 @@ require_pr_gate_token "github.event_name == 'pull_request_review'"
 require_pr_gate_token "github.event_name == 'pull_request_review_comment'"
 require_pr_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
 require_pr_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}'
+require_pr_gate_token 'pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+require_pr_gate_token "head_ref=\"\$(jq -r '.head.ref // empty' <<<\"\$pr_json\")\""
+require_pr_gate_token 'story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>'
 require_pr_gate_token '--pr "${PR_NUMBER}"'
+require_pr_gate_token '--story "${story_id}"'
 require_pr_gate_token "--bot-comments-mode block"
 require_pr_gate_token "--require-aftercare-ack"
 require_pr_gate_token "--require-copilot-review"
