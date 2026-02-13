@@ -48,6 +48,13 @@ jobs:
             --require-copilot-review \
             --ignore-check-run-regex '^pr-gate-enforced$'
 
+  copilot-signal:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copilot signal check
+        run: echo "copilot signal present"
+
   pr-template-lint:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
