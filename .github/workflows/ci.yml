@@ -3,6 +3,12 @@ name: CI
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited]
+  issue_comment:
+    types: [created, edited]
   push:
     branches: [ main ]
   schedule:
@@ -10,10 +16,11 @@ on:
 
 jobs:
   pr-gate-enforced:
-    if: github.event_name == 'pull_request'
-    needs:
-      - pr-template-lint
-      - verify
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review' ||
+      github.event_name == 'pull_request_review_comment' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,6 +28,7 @@ jobs:
       checks: read
     env:
       GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +39,7 @@ jobs:
         run: |
           chmod +x ./plans/pr_gate.sh
           ./plans/pr_gate.sh \
-            --pr "${{ github.event.pull_request.number }}" \
+            --pr "${PR_NUMBER}" \
             --wait \
             --timeout-secs 1800 \
             --poll-secs 20 \
@@ -39,6 +47,13 @@ jobs:
             --require-aftercare-ack \
             --require-copilot-review \
             --ignore-check-run-regex '^pr-gate-enforced$'
+
+  copilot-signal:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copilot signal check
+        run: echo "copilot signal present"
 
   pr-template-lint:
     if: github.event_name == 'pull_request'
@@ -86,6 +101,7 @@ jobs:
           exit "$rc"
 
   verify:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -1110,7 +1110,7 @@ AT-118
 - Pass criteria: bounded close attempts then hedge if needed; TradingMode ReduceOnly during exposure.
 - Fail criteria: emergency close not executed or OPENs allowed while exposure persists.
 
-AT-935
+AT-939
 - Given: `append_group_intent` fails to persist the group intent.
 - When: AtomicGroupExecutor attempts to dispatch legs.
 - Then: no leg orders are submitted and the failure is surfaced.
@@ -3480,6 +3480,13 @@ Still enforce **SVI Math Guard** and **Arb-Guards** (those do NOT loosen).
 - If any fitted parameter is non-finite (`NaN` / `Inf`) → return `None` and hold last valid fit.
 - If any derived implied vol is non-finite OR exceeds **500%** (`iv > 5.0`) → return `None`.
 - On any guard trip: increment `svi_guard_trips`; if count exceeds `svi_guard_trip_count` within `svi_guard_trip_window_s` (defaults from Appendix A) → set `RiskState::Degraded`.
+
+AT-1071
+- Given: a last valid SVI fit exists and a new fit attempt includes at least one non-finite value (`NaN` or `Inf`) in fitted parameters or derived implied vols.
+- When: the SVI Math Guard evaluates the new fit.
+- Then: the new fit is rejected (`None`), the last valid fit is retained unchanged, no new fit is persisted, and `svi_guard_trips` increments.
+- Pass criteria: last valid fit remains active with no persistence side effects from the invalid fit.
+- Fail criteria: invalid fit is accepted/persisted or last valid fit is lost.
 
 #### **4.1.1 SVI Arb-Guards (No-Arb Validity)**
 
