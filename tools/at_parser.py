@@ -13,6 +13,7 @@ import re
 from typing import Dict, List
 
 PROFILE_RE = re.compile(r"^Profile:\s+(CSP|GOP|FULL)\s*$")
+PROFILE_PREFIX_RE = re.compile(r"^Profile:\s*")
 AT_RE = re.compile(r"^\s*(AT-\d+)\b")
 
 
@@ -32,8 +33,14 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
     errors: List[str] = []
 
     for lineno, line in enumerate(lines, start=1):
-        profile_match = PROFILE_RE.match(line)
-        if profile_match:
+        if PROFILE_PREFIX_RE.match(line):
+            profile_match = PROFILE_RE.match(line)
+            if not profile_match:
+                errors.append(
+                    f"{contract_path}:{lineno}: malformed Profile tag; expected exactly 'Profile: CSP' or 'Profile: GOP' (got {line!r})."
+                )
+                continue
+
             profile = profile_match.group(1)
             # FULL is not valid for AT inheritance.
             if profile == "FULL":

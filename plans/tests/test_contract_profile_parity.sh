@@ -92,4 +92,16 @@ EOF_CONTRACT_BAD
 
 expect_rc 5 python3 "$CHECKER" --contract "$contract_bad"
 
+# Malformed profile tags must fail checker and coverage with rc=5.
+contract_malformed="$tmp_dir/contract_malformed.md"
+cat > "$contract_malformed" <<'EOF_CONTRACT_MALFORMED'
+Profile: CSP
+AT-001
+Profile: CS P
+AT-002
+EOF_CONTRACT_MALFORMED
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_malformed"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_malformed" --prd "$prd_ok"
+
 echo "PASS: contract profile parity gate"
