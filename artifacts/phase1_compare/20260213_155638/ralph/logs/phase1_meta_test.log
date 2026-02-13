@@ -1,0 +1,9 @@
+$ python3 /Users/admin/Desktop/ralph/tools/phase1_meta_test.py
+[exit=0] [elapsed_s=0.282]
+
+=== STDOUT ===
+PHASE 1 META-TEST OK
+
+
+=== STDERR ===
+

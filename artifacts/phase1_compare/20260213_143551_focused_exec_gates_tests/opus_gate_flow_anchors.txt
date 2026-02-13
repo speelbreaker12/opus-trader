@@ -1,0 +1,10 @@
+3://! CONTRACT.md CSP.5.2: All dispatch must route through `build_order_intent()`.
+14://! 9. RecordedBeforeDispatch (WAL append)
+39:pub enum GateStep {
+40:    DispatchAuth,
+48:    RecordedBeforeDispatch,
+143:pub fn build_order_intent(
+152:    trace.push(GateStep::DispatchAuth);
+292:    // Gate 9: RecordedBeforeDispatch
+293:    trace.push(GateStep::RecordedBeforeDispatch);
+298:                gate: GateStep::RecordedBeforeDispatch,

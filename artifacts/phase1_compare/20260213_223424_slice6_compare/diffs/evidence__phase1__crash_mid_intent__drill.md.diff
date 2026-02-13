@@ -1,0 +1,63 @@
+diff --git a/tmp/slice6-compare-wOA1/opus/evidence/phase1/crash_mid_intent/drill.md b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/crash_mid_intent/drill.md
+index b71d109..91bc1f9 100644
+--- a/tmp/slice6-compare-wOA1/opus/evidence/phase1/crash_mid_intent/drill.md
++++ b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/crash_mid_intent/drill.md
+@@ -1,28 +1,30 @@
+-# Crash Mid-Intent Drill Evidence
+-
+-## Invariant
+-
+-CONTRACT.md AT-935, AT-233, §2.4: A crash before dispatch must not cause duplicate dispatch on restart. WAL replay detects in-flight intents and classifies them for reconciliation.
+-
+-## Automated Test Results
+-
+-`cargo test -p soldier_infra --test test_crash_mid_intent` — 7 tests PASS.
+-
+-### Scenarios Tested
+-
+-| Scenario | WAL State | sent_ts | Restart Action | Test |
+-|----------|-----------|---------|---------------|------|
+-| Crash before dispatch | Created | 0 | Discard (stale signal) | `test_crash_mid_intent_no_duplicate_dispatch` |
+-| Crash after dispatch | Sent | >0 | Reconcile with exchange | `test_crash_after_dispatch_detected_on_replay` |
+-| Terminal states | Filled/Cancelled/Rejected/Failed | * | No action needed | `test_terminal_states_not_in_flight_on_restart` |
+-| Mixed states | Various | Various | Per-intent classification | `test_mixed_states_on_restart` |
+-| Ghost state check | Created | 0 | Safe to discard | `test_no_ghost_state_after_crash` |
+-| WAL append failure | (none) | N/A | No dispatch possible | `test_wal_append_failure_prevents_dispatch` |
+-| Fsync barrier | Created | 0 | Durable before dispatch | `test_durable_append_with_fsync_barrier` |
+-
+-### Key Findings
+-
+-1. **Unsent intents (Created, sent_ts=0):** Safe to discard on restart. The signal that created them is stale. No exchange order exists.
+-2. **Sent intents (Sent/Acked, sent_ts>0):** Must be reconciled with the exchange via `get_open_orders` / `get_order_state`. Never re-dispatch.
+-3. **Terminal intents (Filled/Cancelled/etc.):** No action needed. Already resolved.
+-4. **WAL failure:** If `durable_append()` fails, the chokepoint gate (`RecordedBeforeDispatch`) rejects the intent. No dispatch without WAL record.
++# P1-G Crash-Mid-Intent Drill (Supplemental)
++
++This drill is supplemental evidence for P1-G. The AUTO gate
++`test_crash_mid_intent_no_duplicate_dispatch` exists and passes.
++
++## Trigger
++- Simulate process termination after WAL record is persisted and flushed, but before dispatch.
++- Test implementation: `crates/soldier_infra/tests/test_crash_mid_intent.rs`.
++
++## Restart Steps
++1. Open WAL ledger and write one pending intent with `record_before_dispatch(...)`.
++2. Flush and drop the process context (simulated crash before send).
++3. Re-open ledger and replay.
++4. Dispatch exactly once from replay pending set.
++5. Persist replay outcome with `ReplayOutcome::Sent`.
++6. Re-open ledger again and replay to confirm no pending duplicates.
++
++## Proof
++- Command:
++  - `cargo test -p soldier_infra --test test_crash_mid_intent`
++- Result:
++  - `test test_crash_mid_intent_no_duplicate_dispatch ... ok`
++  - `test result: ok. 1 passed; 0 failed`
++- Consolidated log:
++  - `evidence/phase1/phase1_gate_tests_20260209_114250.log`
++
++## Assertions Demonstrated
++- No duplicate dispatch after restart (`dispatch_count == 1`).
++- No ghost pending state on second restart (`pending.is_empty()`).
++- Record is durably advanced (`latest.sent_ts == Some(200)`).

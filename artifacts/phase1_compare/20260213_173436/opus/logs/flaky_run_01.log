@@ -1,0 +1,32 @@
+$ bash -lc 'cargo test -p soldier_core --test test_phase1_dispatch_auth'
+[exit=101] [elapsed_s=0.627]
+
+=== STDOUT ===
+
+
+=== STDERR ===
+error: no test target named `test_phase1_dispatch_auth` in `soldier_core` package
+help: available test targets:
+    test_capabilities
+    test_dispatch_chokepoint
+    test_dispatch_map
+    test_fee_staleness
+    test_gate_ordering
+    test_idempotency
+    test_instrument_cache_ttl
+    test_instrument_kind_mapping
+    test_intent_determinism
+    test_intent_id_propagation
+    test_label
+    test_label_match
+    test_liquidity_gate
+    test_missing_config
+    test_net_edge_gate
+    test_order_size
+    test_post_only_guard
+    test_preflight
+    test_pricer
+    test_quantize
+    test_rejection_side_effects
+    test_tlsm
+

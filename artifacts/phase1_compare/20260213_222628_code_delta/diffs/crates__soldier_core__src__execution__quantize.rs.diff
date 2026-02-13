@@ -1,0 +1,386 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/quantize.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/quantize.rs
+index 07f7a99..4b333b0 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/quantize.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/quantize.rs
+@@ -1,221 +1,203 @@
+-//! Canonical quantization per CONTRACT.md §1.1.1.
+-//!
+-//! All idempotency keys and order payloads MUST use canonical,
+-//! exchange-valid rounded values. Quantization is deterministic
+-//! and rounds in the "safer" direction.
+-//!
+-//! - `qty_q = floor(raw_qty / amount_step) * amount_step` (never round up size)
+-//! - BUY: `limit_price_q = floor(raw_limit_price / tick_size) * tick_size`
+-//! - SELL: `limit_price_q = ceil(raw_limit_price / tick_size) * tick_size`
+-//! - If `qty_q < min_amount` → Reject(TooSmallAfterQuantization)
+-
+-/// Order side — determines price rounding direction.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+-pub enum Side {
+-    Buy,
+-    Sell,
+-}
++use std::sync::atomic::{AtomicU64, Ordering};
++
++use crate::venue::InstrumentMetadata;
+ 
+-/// Instrument constraints required for quantization.
+-///
+-/// CONTRACT.md: these MUST come from fetched instrument metadata,
+-/// never hardcoded.
+-#[derive(Debug, Clone)]
+-pub struct QuantizeConstraints {
+-    /// Minimum price increment.
++static QUANTIZATION_REJECT_TOO_SMALL_TOTAL: AtomicU64 = AtomicU64::new(0);
++
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct InstrumentQuantization {
+     pub tick_size: f64,
+-    /// Minimum quantity increment.
+     pub amount_step: f64,
+-    /// Minimum order quantity.
+     pub min_amount: f64,
+ }
+ 
+-/// Result of successful quantization.
+-///
+-/// Contains both the quantized float values and their integer
+-/// tick/step counts for deterministic idempotency hashing.
+-#[derive(Debug, Clone, PartialEq)]
+-pub struct QuantizedValues {
+-    /// Quantized quantity: `qty_steps * amount_step`.
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct QuantizedFields {
+     pub qty_q: f64,
+-    /// Integer number of amount steps: `floor(raw_qty / amount_step)`.
+-    pub qty_steps: i64,
+-    /// Quantized limit price: `price_ticks * tick_size`.
+     pub limit_price_q: f64,
+-    /// Integer number of ticks (direction-dependent).
++}
++
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct QuantizedSteps {
++    pub qty_steps: i64,
+     pub price_ticks: i64,
++    pub qty_q: f64,
++    pub limit_price_q: f64,
+ }
+ 
+-/// Error returned when quantization fails.
+-#[derive(Debug, Clone, PartialEq)]
+-pub enum QuantizeError {
+-    /// CONTRACT.md AT-908: `qty_q < min_amount` after quantization.
+-    TooSmallAfterQuantization {
+-        /// The quantized quantity that was too small.
+-        qty_q: f64,
+-        /// The minimum required amount.
+-        min_amount: f64,
+-    },
+-    /// CONTRACT.md AT-926: instrument metadata missing or unparseable.
+-    InstrumentMetadataMissing {
+-        /// Which field is invalid.
+-        field: &'static str,
+-    },
+-    /// Raw input is non-finite and cannot be safely quantized.
+-    InvalidInput {
+-        /// Which field is invalid.
+-        field: &'static str,
+-    },
+-}
+-
+-const BOUNDARY_EPS: f64 = 1e-9;
+-// Keep correction well below half-step to preserve directional guarantees:
+-// qty/BUY must never round up and SELL must never round down.
+-const BOUNDARY_STEP_FRACTION_CAP: f64 = 0.005;
+-const BOUNDARY_ULP_MULTIPLIER: f64 = 8.0;
+-
+-fn boundary_tolerance(raw: f64, step: f64) -> f64 {
+-    // Correct one-step drift caused by floating-point division while fail-closing:
+-    // if drift exceeds this window, we keep strict floor/ceil behavior instead of
+-    // widening snap tolerance and risking direction violations.
+-    let step_abs = step.abs();
+-    let ulp_scaled = raw.abs().max(1.0) * f64::EPSILON * BOUNDARY_ULP_MULTIPLIER;
+-    let step_capped = step_abs * BOUNDARY_STEP_FRACTION_CAP;
+-    ulp_scaled.min(step_capped).max(step_abs * BOUNDARY_EPS)
+-}
+-
+-fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> i64 {
+-    let ratio = raw / step;
+-    let mut steps = if round_up {
+-        ratio.ceil() as i64
+-    } else {
+-        ratio.floor() as i64
+-    };
+-    let tol = boundary_tolerance(raw, step);
+-
+-    if round_up {
+-        if steps > i64::MIN {
+-            let prev = steps - 1;
+-            let prev_value = prev as f64 * step;
+-            if (raw - prev_value).abs() < tol {
+-                steps = prev;
+-            }
+-        }
+-    } else if steps < i64::MAX {
+-        let next = steps + 1;
+-        let next_value = next as f64 * step;
+-        if (raw - next_value).abs() < tol {
+-            steps = next;
+-        }
+-    }
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum Side {
++    Buy,
++    Sell,
++}
+ 
+-    steps
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum QuantizeRejectReason {
++    TooSmallAfterQuantization,
++    InstrumentMetadataMissing,
++    InvalidInput,
+ }
+ 
+-/// Observability metrics for quantization (AT-908).
+-#[derive(Debug)]
+-pub struct QuantizeMetrics {
+-    /// `quantization_reject_too_small_total` counter.
+-    reject_too_small_total: u64,
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct QuantizeReject {
++    pub reason: QuantizeRejectReason,
+ }
+ 
+-impl QuantizeMetrics {
+-    /// Create a new metrics tracker with all counters at zero.
+-    pub fn new() -> Self {
+-        Self {
+-            reject_too_small_total: 0,
+-        }
++impl InstrumentQuantization {
++    pub fn from_metadata(meta: &InstrumentMetadata) -> Result<Self, QuantizeReject> {
++        let quant = Self {
++            tick_size: meta.tick_size,
++            amount_step: meta.amount_step,
++            min_amount: meta.min_amount,
++        };
++        validate_metadata(&quant)?;
++        Ok(quant)
+     }
+ 
+-    /// Increment the too-small rejection counter.
+-    pub fn record_too_small_rejection(&mut self) {
+-        self.reject_too_small_total += 1;
++    pub fn quantize(
++        &self,
++        side: Side,
++        raw_qty: f64,
++        raw_limit_price: f64,
++    ) -> Result<QuantizedFields, QuantizeReject> {
++        quantize(side, raw_qty, raw_limit_price, self)
+     }
+ 
+-    /// Current value of `quantization_reject_too_small_total`.
+-    pub fn reject_too_small_total(&self) -> u64 {
+-        self.reject_too_small_total
++    pub fn quantize_steps(
++        &self,
++        side: Side,
++        raw_qty: f64,
++        raw_limit_price: f64,
++    ) -> Result<QuantizedSteps, QuantizeReject> {
++        quantize_steps(side, raw_qty, raw_limit_price, self)
+     }
+ }
+ 
+-impl Default for QuantizeMetrics {
+-    fn default() -> Self {
+-        Self::new()
+-    }
++pub fn quantize_from_metadata(
++    side: Side,
++    raw_qty: f64,
++    raw_limit_price: f64,
++    meta: &InstrumentMetadata,
++) -> Result<QuantizedFields, QuantizeReject> {
++    let quant = InstrumentQuantization::from_metadata(meta)?;
++    quantize(side, raw_qty, raw_limit_price, &quant)
+ }
+ 
+-/// Validate that quantization constraints are usable.
+-///
+-/// CONTRACT.md AT-926: missing/unparseable metadata → reject.
+-fn validate_constraints(constraints: &QuantizeConstraints) -> Result<(), QuantizeError> {
+-    if !constraints.tick_size.is_finite() || constraints.tick_size <= 0.0 {
+-        return Err(QuantizeError::InstrumentMetadataMissing { field: "tick_size" });
+-    }
+-    if !constraints.amount_step.is_finite() || constraints.amount_step <= 0.0 {
+-        return Err(QuantizeError::InstrumentMetadataMissing {
+-            field: "amount_step",
+-        });
++pub fn quantize(
++    side: Side,
++    raw_qty: f64,
++    raw_limit_price: f64,
++    meta: &InstrumentQuantization,
++) -> Result<QuantizedFields, QuantizeReject> {
++    let steps = quantize_steps(side, raw_qty, raw_limit_price, meta)?;
++    Ok(QuantizedFields {
++        qty_q: steps.qty_q,
++        limit_price_q: steps.limit_price_q,
++    })
++}
++
++pub fn quantize_steps(
++    side: Side,
++    raw_qty: f64,
++    raw_limit_price: f64,
++    meta: &InstrumentQuantization,
++) -> Result<QuantizedSteps, QuantizeReject> {
++    validate_metadata(meta)?;
++    validate_raw_inputs(raw_qty, raw_limit_price, meta)?;
++
++    let qty_steps = steps_floor(raw_qty, meta.amount_step);
++    let qty_q = qty_steps as f64 * meta.amount_step;
++    if qty_q < meta.min_amount {
++        return reject_too_small();
+     }
+-    if !constraints.min_amount.is_finite() || constraints.min_amount < 0.0 {
+-        return Err(QuantizeError::InstrumentMetadataMissing {
+-            field: "min_amount",
++
++    let price_ticks = match side {
++        Side::Buy => steps_floor(raw_limit_price, meta.tick_size),
++        Side::Sell => steps_ceil(raw_limit_price, meta.tick_size),
++    };
++    let limit_price_q = price_ticks as f64 * meta.tick_size;
++
++    Ok(QuantizedSteps {
++        qty_steps,
++        price_ticks,
++        qty_q,
++        limit_price_q,
++    })
++}
++
++pub fn quantization_reject_too_small_total() -> u64 {
++    QUANTIZATION_REJECT_TOO_SMALL_TOTAL.load(Ordering::Relaxed)
++}
++
++fn validate_metadata(meta: &InstrumentQuantization) -> Result<(), QuantizeReject> {
++    if !meta.tick_size.is_finite()
++        || !meta.amount_step.is_finite()
++        || !meta.min_amount.is_finite()
++        || meta.tick_size <= 0.0
++        || meta.amount_step <= 0.0
++        || meta.min_amount < 0.0
++    {
++        return Err(QuantizeReject {
++            reason: QuantizeRejectReason::InstrumentMetadataMissing,
+         });
+     }
+     Ok(())
+ }
+ 
+-/// Quantize raw order values per CONTRACT.md §1.1.1.
+-///
+-/// # Rules (deterministic)
+-/// - `qty_steps = floor(raw_qty / amount_step)`
+-/// - `qty_q = qty_steps * amount_step`
+-/// - BUY: `price_ticks = floor(raw_limit_price / tick_size)` (never pay extra)
+-/// - SELL: `price_ticks = ceil(raw_limit_price / tick_size)` (never sell cheaper)
+-/// - `limit_price_q = price_ticks * tick_size`
+-/// - If `qty_q < min_amount` → `Err(TooSmallAfterQuantization)`
+-pub fn quantize(
++fn validate_raw_inputs(
+     raw_qty: f64,
+     raw_limit_price: f64,
+-    side: Side,
+-    constraints: &QuantizeConstraints,
+-    metrics: &mut QuantizeMetrics,
+-) -> Result<QuantizedValues, QuantizeError> {
+-    validate_constraints(constraints)?;
+-    if !raw_qty.is_finite() {
+-        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
++    meta: &InstrumentQuantization,
++) -> Result<(), QuantizeReject> {
++    if !raw_qty.is_finite()
++        || !raw_limit_price.is_finite()
++        || raw_qty <= 0.0
++        || raw_limit_price <= 0.0
++    {
++        return Err(QuantizeReject {
++            reason: QuantizeRejectReason::InvalidInput,
++        });
+     }
+-    if !raw_limit_price.is_finite() {
+-        return Err(QuantizeError::InvalidInput {
+-            field: "raw_limit_price",
++    if !(raw_qty / meta.amount_step).is_finite() || !(raw_limit_price / meta.tick_size).is_finite()
++    {
++        return Err(QuantizeReject {
++            reason: QuantizeRejectReason::InvalidInput,
+         });
+     }
++    Ok(())
++}
+ 
+-    // Quantity: always round down (never round up size)
+-    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false);
+-    let qty_q = qty_steps as f64 * constraints.amount_step;
++fn steps_floor(value: f64, step: f64) -> i64 {
++    let ratio = value / step;
++    if let Some(integer) = near_integer(ratio) {
++        return integer;
++    }
++    ratio.floor() as i64
++}
+ 
+-    // AT-908: reject if quantized quantity is below minimum
+-    if qty_q < constraints.min_amount {
+-        metrics.record_too_small_rejection();
+-        return Err(QuantizeError::TooSmallAfterQuantization {
+-            qty_q,
+-            min_amount: constraints.min_amount,
+-        });
++fn steps_ceil(value: f64, step: f64) -> i64 {
++    let ratio = value / step;
++    if let Some(integer) = near_integer(ratio) {
++        return integer;
+     }
++    ratio.ceil() as i64
++}
+ 
+-    // Price: direction-dependent rounding
+-    let price_ticks = match side {
+-        // BUY: round down (never pay extra)
+-        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false),
+-        // SELL: round up (never sell cheaper)
+-        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true),
+-    };
+-    let limit_price_q = price_ticks as f64 * constraints.tick_size;
++fn near_integer(value: f64) -> Option<i64> {
++    if !value.is_finite() {
++        return None;
++    }
++    let rounded = value.round();
++    let tolerance = f64::EPSILON * value.abs().max(1.0) * 4.0;
++    if (value - rounded).abs() <= tolerance {
++        return Some(rounded as i64);
++    }
++    None
++}
+ 
+-    Ok(QuantizedValues {
+-        qty_q,
+-        qty_steps,
+-        limit_price_q,
+-        price_ticks,
++fn reject_too_small<T>() -> Result<T, QuantizeReject> {
++    QUANTIZATION_REJECT_TOO_SMALL_TOTAL.fetch_add(1, Ordering::Relaxed);
++    Err(QuantizeReject {
++        reason: QuantizeRejectReason::TooSmallAfterQuantization,
+     })
+ }

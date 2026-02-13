@@ -1,0 +1,15 @@
+crates/soldier_core/tests/test_dispatch_chokepoint.rs
+crates/soldier_core/tests/test_gate_ordering.rs
+crates/soldier_core/tests/test_intent_determinism.rs
+crates/soldier_core/tests/test_intent_id_propagation.rs
+crates/soldier_core/tests/test_missing_config.rs
+crates/soldier_core/tests/test_rejection_side_effects.rs
+crates/soldier_infra/tests/test_crash_mid_intent.rs
+docs/critical_config_keys.md
+docs/dispatch_chokepoint.md
+docs/intent_gate_invariants.md
+evidence/phase1/config_fail_closed/missing_keys_matrix.json
+evidence/phase1/crash_mid_intent/drill.md
+evidence/phase1/determinism/intent_hashes.txt
+evidence/phase1/no_side_effects/rejection_cases.md
+evidence/phase1/traceability/sample_rejection_log.txt

@@ -5,12 +5,14 @@
 //!
 //! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::venue::InstrumentKind;
 
 // ─── Rejection reasons ──────────────────────────────────────────────────
 
 /// Deterministic rejection reason from the preflight guard.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreflightReject {
     /// `type == market` is forbidden for all instrument kinds.
     /// CONTRACT.md §1.4.4 A/B: "REJECT with Rejected(OrderTypeMarketForbidden)"
@@ -125,6 +127,40 @@ impl Default for PreflightMetrics {
     }
 }
 
+static PREFLIGHT_MARKET_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
+static PREFLIGHT_STOP_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
+static PREFLIGHT_LINKED_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+pub fn preflight_reject_total(reason: PreflightReject) -> u64 {
+    match reason {
+        PreflightReject::OrderTypeMarketForbidden => {
+            PREFLIGHT_MARKET_FORBIDDEN_TOTAL.load(Ordering::Relaxed)
+        }
+        PreflightReject::OrderTypeStopForbidden => {
+            PREFLIGHT_STOP_FORBIDDEN_TOTAL.load(Ordering::Relaxed)
+        }
+        PreflightReject::LinkedOrderTypeForbidden => {
+            PREFLIGHT_LINKED_FORBIDDEN_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_preflight_reject(reason: PreflightReject) {
+    match reason {
+        PreflightReject::OrderTypeMarketForbidden => {
+            PREFLIGHT_MARKET_FORBIDDEN_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        PreflightReject::OrderTypeStopForbidden => {
+            PREFLIGHT_STOP_FORBIDDEN_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        PreflightReject::LinkedOrderTypeForbidden => {
+            PREFLIGHT_LINKED_FORBIDDEN_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line("preflight_reject_total", &tail);
+}
+
 // ─── Core preflight function ────────────────────────────────────────────
 
 /// Run the order-type preflight guard per CONTRACT.md §1.4.4.
@@ -144,6 +180,7 @@ pub fn preflight_intent(
     if input.order_type == OrderType::Market {
         let reason = PreflightReject::OrderTypeMarketForbidden;
         metrics.record_reject(&reason);
+        bump_preflight_reject(reason);
         return PreflightResult::Rejected(reason);
     }
 
@@ -158,6 +195,7 @@ pub fn preflight_intent(
     {
         let reason = PreflightReject::OrderTypeStopForbidden;
         metrics.record_reject(&reason);
+        bump_preflight_reject(reason);
         return PreflightResult::Rejected(reason);
     }
 
@@ -179,6 +217,7 @@ pub fn preflight_intent(
         if !allowed {
             let reason = PreflightReject::LinkedOrderTypeForbidden;
             metrics.record_reject(&reason);
+            bump_preflight_reject(reason);
             return PreflightResult::Rejected(reason);
         }
     }

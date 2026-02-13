@@ -1,0 +1,437 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_preflight.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_preflight.rs
+index af188d5..b640344 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_preflight.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_preflight.rs
+@@ -1,367 +1,107 @@
+-//! Tests for order-type preflight guard per CONTRACT.md §1.4.4.
+-//!
+-//! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915.
+-
+ use soldier_core::execution::{
+-    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult, preflight_intent,
++    BuildOrderIntentError, LinkedOrderType, OrderIntent, OrderType, OrderTypeGuardConfig,
++    OrderTypeRejectReason, TriggerType, build_order_intent, preflight_intent,
+ };
+ use soldier_core::venue::InstrumentKind;
+ 
+-/// Helper: build a PreflightInput with defaults (limit order, no triggers, no linked).
+-fn limit_input(kind: InstrumentKind) -> PreflightInput<'static> {
+-    PreflightInput {
+-        instrument_kind: kind,
++fn base_intent(instrument_kind: InstrumentKind) -> OrderIntent {
++    OrderIntent {
++        instrument_kind,
+         order_type: OrderType::Limit,
+-        has_trigger: false,
++        trigger: None,
++        trigger_price: None,
+         linked_order_type: None,
+-        linked_orders_supported: false,
+-        enable_linked_orders: false,
+     }
+ }
+ 
+-// ─── Limit orders allowed ───────────────────────────────────────────────
+-
+-#[test]
+-fn test_limit_order_option_allowed() {
+-    let input = limit_input(InstrumentKind::Option);
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-    assert_eq!(m.reject_total(), 0);
+-}
+-
+-#[test]
+-fn test_limit_order_perpetual_allowed() {
+-    let input = limit_input(InstrumentKind::Perpetual);
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-}
+-
+-#[test]
+-fn test_limit_order_linear_future_allowed() {
+-    let input = limit_input(InstrumentKind::LinearFuture);
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-}
+-
+ #[test]
+-fn test_limit_order_inverse_future_allowed() {
+-    let input = limit_input(InstrumentKind::InverseFuture);
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-}
+-
+-// ─── AT-016: Market order on options → reject ───────────────────────────
+-
+-#[test]
+-fn test_at016_market_order_option_rejected() {
+-    let input = PreflightInput {
++fn preflight_rejects_option_market_orders() {
++    let intent = OrderIntent {
+         order_type: OrderType::Market,
+-        ..limit_input(InstrumentKind::Option)
++        ..base_intent(InstrumentKind::Option)
+     };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+-    );
++    let err = preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect_err("expected market reject");
++    assert_eq!(err.reason, OrderTypeRejectReason::OrderTypeMarketForbidden);
+ }
+ 
+-// ─── AT-017: Market order on perpetual → reject ─────────────────────────
+-
+ #[test]
+-fn test_at017_market_order_perpetual_rejected() {
+-    let input = PreflightInput {
+-        order_type: OrderType::Market,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+-    );
+-}
+-
+-// ─── AT-913: Market order rejected with correct reason ──────────────────
+-
+-#[test]
+-fn test_at913_market_order_reason_matches() {
+-    // Test across all instrument kinds
+-    let kinds = [
+-        InstrumentKind::Option,
+-        InstrumentKind::Perpetual,
+-        InstrumentKind::LinearFuture,
+-        InstrumentKind::InverseFuture,
+-    ];
+-    for kind in kinds {
+-        let input = PreflightInput {
+-            order_type: OrderType::Market,
+-            ..limit_input(kind)
+-        };
+-        let mut m = PreflightMetrics::new();
+-        match preflight_intent(&input, &mut m) {
+-            PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden) => {}
+-            other => panic!("kind={kind:?}: expected MarketForbidden, got {other:?}"),
+-        }
+-    }
+-}
+-
+-// ─── AT-018: Stop-market on options → reject ────────────────────────────
+-
+-#[test]
+-fn test_at018_stop_market_option_rejected() {
+-    let input = PreflightInput {
+-        order_type: OrderType::StopMarket,
+-        ..limit_input(InstrumentKind::Option)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeStopForbidden)
+-    );
+-}
+-
+-// ─── AT-019: Stop-market on perpetual → reject ──────────────────────────
+-
+-#[test]
+-fn test_at019_stop_market_perpetual_rejected() {
+-    let input = PreflightInput {
++fn preflight_rejects_option_stop_orders() {
++    let intent = OrderIntent {
+         order_type: OrderType::StopMarket,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeStopForbidden)
+-    );
+-}
+-
+-// ─── AT-914: Stop orders rejected with correct reason ───────────────────
+-
+-#[test]
+-fn test_at914_stop_limit_rejected() {
+-    let input = PreflightInput {
+-        order_type: OrderType::StopLimit,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeStopForbidden)
+-    );
+-}
+-
+-#[test]
+-fn test_at914_trigger_field_presence_rejected() {
+-    // Even with order_type=limit, if trigger fields are present → reject
+-    let input = PreflightInput {
+-        has_trigger: true,
+-        ..limit_input(InstrumentKind::Option)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeStopForbidden)
+-    );
+-}
+-
+-#[test]
+-fn test_at914_stop_market_all_kinds() {
+-    let kinds = [
+-        InstrumentKind::Option,
+-        InstrumentKind::Perpetual,
+-        InstrumentKind::LinearFuture,
+-        InstrumentKind::InverseFuture,
+-    ];
+-    for kind in kinds {
+-        let input = PreflightInput {
+-            order_type: OrderType::StopMarket,
+-            ..limit_input(kind)
+-        };
+-        let mut m = PreflightMetrics::new();
+-        match preflight_intent(&input, &mut m) {
+-            PreflightResult::Rejected(PreflightReject::OrderTypeStopForbidden) => {}
+-            other => panic!("kind={kind:?}: expected StopForbidden, got {other:?}"),
+-        }
+-    }
+-}
+-
+-// ─── AT-915: Linked orders rejected ─────────────────────────────────────
+-
+-#[test]
+-fn test_at915_linked_order_rejected_default() {
+-    let input = PreflightInput {
+-        linked_order_type: Some("one_cancels_other"),
+-        ..limit_input(InstrumentKind::Perpetual)
++        ..base_intent(InstrumentKind::Option)
+     };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::LinkedOrderTypeForbidden)
+-    );
++    let err = preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect_err("expected stop reject");
++    assert_eq!(err.reason, OrderTypeRejectReason::OrderTypeStopForbidden);
+ }
+ 
+-// ─── AT-004 / AT-013: Linked orders gating ──────────────────────────────
+-
+ #[test]
+-fn test_at004_linked_order_option_always_rejected() {
+-    // Options: linked orders always forbidden, even if both flags are true
+-    let input = PreflightInput {
+-        linked_order_type: Some("one_cancels_other"),
+-        linked_orders_supported: true,
+-        enable_linked_orders: true,
+-        ..limit_input(InstrumentKind::Option)
++fn preflight_rejects_option_trigger_fields() {
++    let intent = OrderIntent {
++        trigger: Some(TriggerType::IndexPrice),
++        ..base_intent(InstrumentKind::Option)
+     };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::LinkedOrderTypeForbidden)
+-    );
++    let err = preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect_err("expected trigger reject");
++    assert_eq!(err.reason, OrderTypeRejectReason::OrderTypeStopForbidden);
+ }
+ 
+ #[test]
+-fn test_linked_order_perp_both_flags_allowed() {
+-    // Futures/perps: allowed only if BOTH flags are true
+-    let input = PreflightInput {
+-        linked_order_type: Some("one_cancels_other"),
+-        linked_orders_supported: true,
+-        enable_linked_orders: true,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-}
+-
+-#[test]
+-fn test_linked_order_perp_only_supported_rejected() {
+-    // linked_orders_supported=true but enable_linked_orders=false → reject
+-    let input = PreflightInput {
+-        linked_order_type: Some("one_cancels_other"),
+-        linked_orders_supported: true,
+-        enable_linked_orders: false,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::LinkedOrderTypeForbidden)
+-    );
+-}
+-
+-#[test]
+-fn test_linked_order_perp_only_enabled_rejected() {
+-    // linked_orders_supported=false but enable_linked_orders=true → reject
+-    let input = PreflightInput {
+-        linked_order_type: Some("one_cancels_other"),
+-        linked_orders_supported: false,
+-        enable_linked_orders: true,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::LinkedOrderTypeForbidden)
+-    );
+-}
+-
+-#[test]
+-fn test_linked_order_linear_future_both_flags_allowed() {
+-    let input = PreflightInput {
+-        linked_order_type: Some("oco"),
+-        linked_orders_supported: true,
+-        enable_linked_orders: true,
+-        ..limit_input(InstrumentKind::LinearFuture)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-}
+-
+-// ─── No linked_order_type → no check ────────────────────────────────────
+-
+-#[test]
+-fn test_no_linked_order_type_passes() {
+-    // linked_order_type is None → no linked-order check at all
+-    let input = PreflightInput {
+-        linked_order_type: None,
+-        linked_orders_supported: false,
+-        enable_linked_orders: false,
+-        ..limit_input(InstrumentKind::Perpetual)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+-}
+-
+-// ─── Metrics ────────────────────────────────────────────────────────────
+-
+-#[test]
+-fn test_metrics_market_forbidden_counter() {
+-    let mut m = PreflightMetrics::new();
+-    let input = PreflightInput {
++fn preflight_rejects_future_market_orders() {
++    let intent = OrderIntent {
+         order_type: OrderType::Market,
+-        ..limit_input(InstrumentKind::Option)
++        ..base_intent(InstrumentKind::LinearFuture)
+     };
+-    let _ = preflight_intent(&input, &mut m);
+-    let _ = preflight_intent(&input, &mut m);
+-    assert_eq!(m.market_forbidden_total(), 2);
+-    assert_eq!(m.reject_total(), 2);
++    let err = preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect_err("expected market reject");
++    assert_eq!(err.reason, OrderTypeRejectReason::OrderTypeMarketForbidden);
+ }
+ 
+ #[test]
+-fn test_metrics_stop_forbidden_counter() {
+-    let mut m = PreflightMetrics::new();
+-    let input = PreflightInput {
+-        order_type: OrderType::StopMarket,
+-        ..limit_input(InstrumentKind::Perpetual)
++fn preflight_rejects_perp_stop_orders() {
++    let intent = OrderIntent {
++        order_type: OrderType::StopLimit,
++        ..base_intent(InstrumentKind::Perpetual)
+     };
+-    let _ = preflight_intent(&input, &mut m);
+-    assert_eq!(m.stop_forbidden_total(), 1);
++    let err = preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect_err("expected stop reject");
++    assert_eq!(err.reason, OrderTypeRejectReason::OrderTypeStopForbidden);
+ }
+ 
+ #[test]
+-fn test_metrics_linked_forbidden_counter() {
+-    let mut m = PreflightMetrics::new();
+-    let input = PreflightInput {
+-        linked_order_type: Some("oco"),
+-        ..limit_input(InstrumentKind::Perpetual)
++fn preflight_rejects_linked_orders_by_default() {
++    let intent = OrderIntent {
++        linked_order_type: Some(LinkedOrderType::Oco),
++        ..base_intent(InstrumentKind::LinearFuture)
+     };
+-    let _ = preflight_intent(&input, &mut m);
+-    assert_eq!(m.linked_forbidden_total(), 1);
+-}
+-
+-#[test]
+-fn test_metrics_no_reject_on_allowed() {
+-    let mut m = PreflightMetrics::new();
+-    let input = limit_input(InstrumentKind::Perpetual);
+-    let _ = preflight_intent(&input, &mut m);
+-    assert_eq!(m.reject_total(), 0);
++    let err = preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect_err("expected linked-order reject");
++    assert_eq!(err.reason, OrderTypeRejectReason::LinkedOrderTypeForbidden);
+ }
+ 
+-// ─── Priority: market checked before stop ───────────────────────────────
+-
+ #[test]
+-fn test_market_checked_before_trigger() {
+-    // If both market and trigger are set, market rejection takes priority
+-    let input = PreflightInput {
++fn build_order_intent_runs_preflight() {
++    let intent = OrderIntent {
+         order_type: OrderType::Market,
+-        has_trigger: true,
+-        ..limit_input(InstrumentKind::Option)
+-    };
+-    let mut m = PreflightMetrics::new();
+-    assert_eq!(
+-        preflight_intent(&input, &mut m),
+-        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+-    );
++        ..base_intent(InstrumentKind::Option)
++    };
++    let err = build_order_intent(intent, OrderTypeGuardConfig::default())
++        .expect_err("expected preflight reject");
++    match err {
++        BuildOrderIntentError::Preflight(reject) => {
++            assert_eq!(
++                reject.reason,
++                OrderTypeRejectReason::OrderTypeMarketForbidden
++            );
++        }
++        other => panic!("expected preflight error, got {other:?}"),
++    }
+ }
+ 
+-// ─── Deterministic rejection ────────────────────────────────────────────
+-
+ #[test]
+-fn test_deterministic_same_input_same_result() {
+-    let input = PreflightInput {
+-        order_type: OrderType::StopLimit,
+-        ..limit_input(InstrumentKind::InverseFuture)
+-    };
+-    let mut m1 = PreflightMetrics::new();
+-    let mut m2 = PreflightMetrics::new();
+-    let r1 = preflight_intent(&input, &mut m1);
+-    let r2 = preflight_intent(&input, &mut m2);
+-    assert_eq!(r1, r2);
++fn preflight_allows_limit_orders_without_triggers() {
++    let intent = base_intent(InstrumentKind::InverseFuture);
++    preflight_intent(&intent, OrderTypeGuardConfig::default())
++        .expect("limit orders should pass preflight");
+ }

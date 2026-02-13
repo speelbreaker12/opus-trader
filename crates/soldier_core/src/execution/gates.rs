@@ -8,6 +8,8 @@
 //!
 //! AT-015, AT-932.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 // --- Gate input ----------------------------------------------------------
 
 /// Input to the Net Edge Gate.
@@ -114,8 +116,38 @@ impl Default for NetEdgeMetrics {
     }
 }
 
+static NET_EDGE_REJECT_TOO_LOW_TOTAL: AtomicU64 = AtomicU64::new(0);
+static NET_EDGE_REJECT_INPUT_MISSING_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+pub fn net_edge_reject_total(reason: NetEdgeRejectReason) -> u64 {
+    match reason {
+        NetEdgeRejectReason::NetEdgeTooLow => NET_EDGE_REJECT_TOO_LOW_TOTAL.load(Ordering::Relaxed),
+        NetEdgeRejectReason::NetEdgeInputMissing => {
+            NET_EDGE_REJECT_INPUT_MISSING_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_net_edge_reject(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) {
+    match reason {
+        NetEdgeRejectReason::NetEdgeTooLow => {
+            NET_EDGE_REJECT_TOO_LOW_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        NetEdgeRejectReason::NetEdgeInputMissing => {
+            NET_EDGE_REJECT_INPUT_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line("net_edge_reject_total", &tail);
+    eprintln!(
+        "NetEdgeReject reason={:?} net_edge_usd={:?}",
+        reason, net_edge_usd
+    );
+}
+
 fn reject_missing(metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
     metrics.record_reject_input_missing();
+    bump_net_edge_reject(NetEdgeRejectReason::NetEdgeInputMissing, None);
     NetEdgeResult::Rejected {
         reason: NetEdgeRejectReason::NetEdgeInputMissing,
         net_edge_usd: None,
@@ -172,6 +204,7 @@ pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> 
     // Reject if below minimum (AT-015).
     if net_edge_usd < min_edge {
         metrics.record_reject_too_low();
+        bump_net_edge_reject(NetEdgeRejectReason::NetEdgeTooLow, Some(net_edge_usd));
         return NetEdgeResult::Rejected {
             reason: NetEdgeRejectReason::NetEdgeTooLow,
             net_edge_usd: Some(net_edge_usd),

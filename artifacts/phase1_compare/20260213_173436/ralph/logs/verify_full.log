@@ -1,0 +1,9 @@
+$ ./plans/verify.sh full
+[exit=2] [elapsed_s=0.600]
+
+=== STDOUT ===
+
+
+=== STDERR ===
+FAIL: local full verify disabled; run in CI or set VERIFY_ALLOW_LOCAL_FULL=1 with approval
+

@@ -1,0 +1,12 @@
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/mod.rs:110:pub fn preflight_intent_with_post_only(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/pricer.rs:26:pub fn price_ioc_limit(intent: &PricerIntent) -> Result<PricerOutcome, PricerReject> {
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/preflight.rs:81:pub fn preflight_intent(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/preflight.rs:98:pub fn build_order_intent(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/gate.rs:125:pub fn evaluate_liquidity_gate(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/quantize.rs:57:    pub fn quantize(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/quantize.rs:66:    pub fn quantize_steps(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/quantize.rs:76:pub fn quantize_from_metadata(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/quantize.rs:86:pub fn quantize(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/quantize.rs:99:pub fn quantize_steps(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/build_order_intent.rs:230:pub fn build_order_intent(
+/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core/src/execution/gates.rs:78:pub fn evaluate_net_edge_gate(

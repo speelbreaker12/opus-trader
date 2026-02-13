@@ -1,0 +1,17 @@
+$ bash -lc 'cargo test -p soldier_core --test test_gate_ordering'
+[exit=0] [elapsed_s=0.566]
+
+=== STDOUT ===
+
+running 2 tests
+test test_gate_ordering_constraints ... ok
+test gate_sequence_is_deterministic_for_open ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+
+=== STDERR ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running tests/test_gate_ordering.rs (target/debug/deps/test_gate_ordering-8593737869d632df)
+

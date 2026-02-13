@@ -1,0 +1,18 @@
+$ bash -lc 'cargo test -p soldier_core --test test_phase1_dispatch_auth'
+[exit=0] [elapsed_s=3.316]
+
+=== STDOUT ===
+
+running 2 tests
+test open_rejected_when_risk_state_degraded ... ok
+test close_hedge_cancel_allowed_when_risk_state_degraded ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+
+=== STDERR ===
+   Compiling soldier_core v0.1.0 (/private/tmp/phase1-compare-full-20260213/ralph/crates/soldier_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.52s
+     Running tests/test_phase1_dispatch_auth.rs (target/debug/deps/test_phase1_dispatch_auth-87666c4950d0cc92)
+

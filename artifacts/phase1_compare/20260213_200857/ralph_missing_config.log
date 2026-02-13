@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/test_missing_config.rs (target/debug/deps/test_missing_config-2879c3121ecd66b8)
+
+running 1 test
+gate_sequence_total result=rejected
+gate_sequence_total result=rejected
+gate_sequence_total result=rejected
+liquidity_gate_reject_total reason=LiquidityGateNoL2
+LiquidityGateReject reason=LiquidityGateNoL2 wap=None slippage_bps=None
+gate_sequence_total result=rejected
+gate_sequence_total result=rejected
+expected_slippage_bps value=0
+net_edge_reject_total reason=NetEdgeInputMissing
+NetEdgeReject reason=NetEdgeInputMissing net_edge_usd=None
+gate_sequence_total result=rejected
+[P1Evidence] Wrote: /private/tmp/phase1-compare-no-wa-20260213_140855/ralph/evidence/phase1/config_fail_closed/missing_keys_matrix.json
+test test_missing_config_fails_closed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+

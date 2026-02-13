@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Crossref Execution Invariants",
+  "type": "object",
+  "required": [
+    "version",
+    "scope",
+    "authoritative",
+    "global_invariants",
+    "slice_1",
+    "slice_2",
+    "slice_3",
+    "slice_4",
+    "workflow_loop",
+    "definition_of_done"
+  ],
+  "properties": {
+    "version": { "type": ["string", "number"] },
+    "scope": { "type": "string", "minLength": 1 },
+    "authoritative": { "type": "boolean" },
+    "global_invariants": {
+      "type": "object",
+      "required": ["artifact_scope", "ci_gating_scope", "promotion_rules"],
+      "properties": {
+        "artifact_scope": { "type": "object" },
+        "ci_gating_scope": {
+          "type": "object",
+          "required": ["canonical_sources"],
+          "properties": {
+            "canonical_sources": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1
+            },
+            "roadmap_blocking_allowed": { "type": "boolean" },
+            "roadmap_informational_only_in_ci": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "promotion_rules": {
+          "type": "object",
+          "required": ["burnin_conditions"],
+          "properties": {
+            "burnin_conditions": {
+              "type": "object",
+              "required": [
+                "clean_merge_count_min",
+                "unexplained_drift_count_max",
+                "unknown_gap_count_max"
+              ],
+              "properties": {
+                "clean_merge_count_min": { "type": "integer", "minimum": 0 },
+                "unexplained_drift_count_max": { "type": "integer", "minimum": 0 },
+                "unknown_gap_count_max": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "slice_1": { "type": "object" },
+    "slice_2": {
+      "type": "object",
+      "required": ["exit_codes"],
+      "properties": {
+        "exit_codes": {
+          "type": "object",
+          "required": ["0", "2", "3", "4", "5", "6", "7"],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "slice_3": { "type": "object" },
+    "slice_4": { "type": "object" },
+    "workflow_loop": {
+      "type": "object",
+      "required": ["required_sequence", "optional_prd_pass_flip_condition"],
+      "properties": {
+        "required_sequence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "optional_prd_pass_flip_condition": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "definition_of_done": { "type": "object" }
+  },
+  "additionalProperties": true
+}

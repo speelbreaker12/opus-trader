@@ -1,0 +1,54 @@
+diff --git a/tmp/slice6-compare-wOA1/opus/docs/intent_gate_invariants.md b/tmp/slice6-compare-wOA1/ralph/docs/intent_gate_invariants.md
+index 977ed59..b65aeb0 100644
+--- a/tmp/slice6-compare-wOA1/opus/docs/intent_gate_invariants.md
++++ b/tmp/slice6-compare-wOA1/ralph/docs/intent_gate_invariants.md
+@@ -2,42 +2,12 @@
+ 
+ ## Normative Ordering Constraints
+ 
+-### C1: Reject Before Persist
++1. **Reject before persist:** If any gate or authorization rejects an OPEN intent, the system MUST NOT attempt WAL recording or any dispatch side effects.
++2. **WAL before dispatch:** For any OPEN intent that is allowed, the intent MUST be recorded (RecordedBeforeDispatch) before any network dispatch attempt.
++3. **Side effects after accept:** Record and dispatch side effects MUST occur only after all gates succeed; a record failure MUST block dispatch.
+ 
+-All validation gates (DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate, Pricer) **must** execute before RecordedBeforeDispatch (WAL append).
++## Contract References
+ 
+-**Rationale:** If we persist an intent to WAL before validating it, a crash after WAL write but before rejection would leave an invalid intent in the log, requiring reconciliation of something that should never have been recorded.
+-
+-### C2: WAL Before Dispatch
+-
+-RecordedBeforeDispatch (WAL append) is always the **last** gate before the intent is approved for dispatch to the exchange. No dispatch may occur without a prior WAL entry.
+-
+-**Rationale:** CONTRACT.md RecordedBeforeDispatch — if the process crashes after dispatch but before WAL write, the system cannot reconcile the exchange state on restart. WAL-first guarantees crash recovery can detect all dispatched intents.
+-
+-### C3: No Side Effects Before Accept
+-
+-An intent is only approved (ChokeResult::Approved) when **all** gates pass. If any single gate fails, the result is ChokeResult::Rejected. The gate trace stops at the failing gate — no subsequent gates execute.
+-
+-**Rationale:** Partial execution of the gate pipeline could create inconsistent state. Early-exit on failure ensures rejected intents produce zero persistent side effects (proven by S6-002 tests).
+-
+-## Gate Ordering (Deterministic)
+-
+-```
+-1. DispatchAuth     — RiskState check (OPEN requires Healthy)
+-2. Preflight        — Order type validation
+-3. Quantize         — Lot size quantization
+-4. FeeCacheCheck    — Fee cache staleness
+-5. LiquidityGate    — Book-walk slippage (OPEN only)
+-6. NetEdgeGate      — Fee + slippage vs min_edge (OPEN only)
+-7. Pricer           — IOC limit price clamping (OPEN only)
+-8. RecordedBeforeDispatch — WAL append (LAST, always)
+-```
+-
+-## CI Enforcement
+-
+-Tests in `crates/soldier_core/tests/test_gate_ordering.rs` enforce:
+-- C1: `test_constraint_reject_gates_before_persist`
+-- C2: `test_constraint_wal_is_last_gate_{open,close,hedge}`
+-- C3: `test_constraint_no_approval_with_any_gate_failed`
+-- Trace stops at failure: `test_constraint_rejected_trace_stops_at_failure`
+-- WAL after all validation: `test_constraint_wal_after_all_validation_gates`
++- RecordedBeforeDispatch (CSP.3)
++- Enforcement rules (CSP.5.2)
++- Anchor-006, VR-014

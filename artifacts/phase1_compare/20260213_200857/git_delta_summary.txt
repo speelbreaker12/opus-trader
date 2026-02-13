@@ -1,0 +1,55 @@
+BASE=/tmp/phase1-compare-no-wa-20260213_140855
+=== diff --shortstat ===
+opus:
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ralph:
+ 12 files changed, 183 insertions(+), 32 deletions(-)
+
+=== diff --stat ===
+opus:
+ docs/contract_kernel.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+ralph:
+ .github/workflows/ci.yml                           |  6 ++-
+ .../src/execution/build_order_intent.rs            |  5 +-
+ crates/soldier_core/src/execution/mod.rs           | 56 ++++++++++++++++++++++
+ crates/soldier_core/src/execution/preflight.rs     |  3 +-
+ crates/soldier_core/src/execution/quantize.rs      | 25 ++++++++++
+ .../tests/test_intent_id_propagation.rs            | 35 +++++---------
+ crates/soldier_core/tests/test_quantize.rs         | 22 +++++++++
+ plans/reset_verify_checkpoint.sh                   |  6 +--
+ plans/workflow_acceptance.sh                       | 28 +++++++++++
+ .../2026-02-10_pr112-review-gap-closures.md        | 23 +++++++++
+ .../rust/crates/serde/1.0.228/features.txt         |  4 +-
+ .../rust/crates/serde_json/1.0.149/features.txt    |  2 +-
+ 12 files changed, 183 insertions(+), 32 deletions(-)
+
+=== dirstat ===
+opus:
+ 100.0% docs/
+ralph:
+   8.3% .github/workflows/
+  33.3% crates/soldier_core/src/execution/
+  16.6% crates/soldier_core/tests/
+  16.6% plans/
+   8.3% reviews/postmortems/
+   8.3% specs/vendor_docs/rust/crates/serde/1.0.228/
+   8.3% specs/vendor_docs/rust/crates/serde_json/1.0.149/
+
+=== changed file overlap ===
+shared files:
+opus files:
+docs/contract_kernel.json
+ralph files:
+.github/workflows/ci.yml
+crates/soldier_core/src/execution/build_order_intent.rs
+crates/soldier_core/src/execution/mod.rs
+crates/soldier_core/src/execution/preflight.rs
+crates/soldier_core/src/execution/quantize.rs
+crates/soldier_core/tests/test_intent_id_propagation.rs
+crates/soldier_core/tests/test_quantize.rs
+plans/reset_verify_checkpoint.sh
+plans/workflow_acceptance.sh
+reviews/postmortems/2026-02-10_pr112-review-gap-closures.md
+specs/vendor_docs/rust/crates/serde/1.0.228/features.txt
+specs/vendor_docs/rust/crates/serde_json/1.0.149/features.txt

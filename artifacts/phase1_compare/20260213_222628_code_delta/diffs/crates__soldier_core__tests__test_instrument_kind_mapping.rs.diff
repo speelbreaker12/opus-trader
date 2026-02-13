@@ -1,0 +1,267 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_instrument_kind_mapping.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_instrument_kind_mapping.rs
+index f5766fa..b4eea3e 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_instrument_kind_mapping.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_instrument_kind_mapping.rs
+@@ -1,216 +1,64 @@
+-//! Tests for InstrumentKind derivation and RiskState enum.
+-//!
+-//! Validates mapping from venue metadata to CONTRACT.md instrument_kind
+-//! (AT-333) and RiskState variants.
++use soldier_core::venue::{
++    DeribitInstrumentKind, DeribitSettlementPeriod, InstrumentKind, InstrumentMetadata,
++};
+ 
+-use soldier_core::risk::RiskState;
+-use soldier_core::venue::{InstrumentKind, InstrumentKindInput, derive_instrument_kind};
+-
+-// ─── InstrumentKind derivation ───────────────────────────────────────────
+-
+-/// CONTRACT.md: option metadata → InstrumentKind::Option
+ #[test]
+-fn test_option_maps_to_option() {
+-    let input = InstrumentKindInput {
+-        is_option: true,
+-        is_future: false,
+-        is_perpetual: false,
+-        is_linear: false,
+-    };
+-    assert_eq!(derive_instrument_kind(&input), Some(InstrumentKind::Option));
+-}
+-
+-/// CONTRACT.md: BTC-PERPETUAL (BTC-settled perpetual) → Perpetual
+-#[test]
+-fn test_btc_perpetual_maps_to_perpetual() {
+-    let input = InstrumentKindInput {
+-        is_option: false,
+-        is_future: true,
+-        is_perpetual: true,
+-        is_linear: false, // settlement=BTC, quote=USD → not linear
+-    };
+-    assert_eq!(
+-        derive_instrument_kind(&input),
+-        Some(InstrumentKind::Perpetual)
++fn derives_linear_future_from_usdc_perpetual() {
++    let kind = InstrumentKind::from_deribit(
++        DeribitInstrumentKind::Future,
++        DeribitSettlementPeriod::Perpetual,
++        "USDC",
+     );
+-}
+ 
+-/// CONTRACT.md: "Linear Perpetuals (USDC-margined): treat as linear_future"
+-#[test]
+-fn test_usdc_margined_perpetual_maps_to_linear_future() {
+-    let input = InstrumentKindInput {
+-        is_option: false,
+-        is_future: true,
+-        is_perpetual: true,
+-        is_linear: true, // settlement=USDC, quote=USDC → linear
+-    };
+-    assert_eq!(
+-        derive_instrument_kind(&input),
+-        Some(InstrumentKind::LinearFuture)
+-    );
++    assert_eq!(kind, InstrumentKind::LinearFuture);
+ }
+ 
+-/// CONTRACT.md: BTC-settled dated future → InverseFuture
+ #[test]
+-fn test_btc_dated_future_maps_to_inverse_future() {
+-    let input = InstrumentKindInput {
+-        is_option: false,
+-        is_future: true,
+-        is_perpetual: false,
+-        is_linear: false, // settlement=BTC, quote=USD → inverse
+-    };
+-    assert_eq!(
+-        derive_instrument_kind(&input),
+-        Some(InstrumentKind::InverseFuture)
++fn maps_option_and_futures_kinds() {
++    let option_kind = InstrumentKind::from_deribit(
++        DeribitInstrumentKind::Option,
++        DeribitSettlementPeriod::Other,
++        "USD",
+     );
+-}
++    assert_eq!(option_kind, InstrumentKind::Option);
+ 
+-/// USDC-settled dated future → LinearFuture (same rule as USDC perps)
+-#[test]
+-fn test_usdc_dated_future_maps_to_linear_future() {
+-    let input = InstrumentKindInput {
+-        is_option: false,
+-        is_future: true,
+-        is_perpetual: false,
+-        is_linear: true, // settlement=USDC, quote=USDC → linear
+-    };
+-    assert_eq!(
+-        derive_instrument_kind(&input),
+-        Some(InstrumentKind::LinearFuture)
++    let perpetual_kind = InstrumentKind::from_deribit(
++        DeribitInstrumentKind::Future,
++        DeribitSettlementPeriod::Perpetual,
++        "USD",
+     );
+-}
+-
+-/// Combo instruments (option_combo, future_combo) → None (out of scope)
+-#[test]
+-fn test_combo_instruments_return_none() {
+-    let input = InstrumentKindInput {
+-        is_option: false,
+-        is_future: false,
+-        is_perpetual: false,
+-        is_linear: false,
+-    };
+-    assert_eq!(derive_instrument_kind(&input), None);
+-}
++    assert_eq!(perpetual_kind, InstrumentKind::Perpetual);
+ 
+-/// Table-driven: all 4 InstrumentKind variants are derivable.
+-#[test]
+-fn test_all_instrument_kinds_derivable() {
+-    let cases = [
+-        (
+-            "option",
+-            InstrumentKindInput {
+-                is_option: true,
+-                is_future: false,
+-                is_perpetual: false,
+-                is_linear: false,
+-            },
+-            InstrumentKind::Option,
+-        ),
+-        (
+-            "linear_future",
+-            InstrumentKindInput {
+-                is_option: false,
+-                is_future: true,
+-                is_perpetual: false,
+-                is_linear: true,
+-            },
+-            InstrumentKind::LinearFuture,
+-        ),
+-        (
+-            "inverse_future",
+-            InstrumentKindInput {
+-                is_option: false,
+-                is_future: true,
+-                is_perpetual: false,
+-                is_linear: false,
+-            },
+-            InstrumentKind::InverseFuture,
+-        ),
+-        (
+-            "perpetual",
+-            InstrumentKindInput {
+-                is_option: false,
+-                is_future: true,
+-                is_perpetual: true,
+-                is_linear: false,
+-            },
+-            InstrumentKind::Perpetual,
+-        ),
+-    ];
+-    for (name, input, expected) in cases {
+-        assert_eq!(
+-            derive_instrument_kind(&input),
+-            Some(expected),
+-            "failed for {name}"
+-        );
+-    }
+-}
+-
+-/// Linear takes priority over perpetual: USDC-margined perp → LinearFuture
+-#[test]
+-fn test_linear_priority_over_perpetual() {
+-    let input = InstrumentKindInput {
+-        is_option: false,
+-        is_future: true,
+-        is_perpetual: true,
+-        is_linear: true,
+-    };
+-    // CONTRACT.md: USDC-margined perpetual → linear_future, NOT perpetual
+-    assert_eq!(
+-        derive_instrument_kind(&input),
+-        Some(InstrumentKind::LinearFuture)
++    let inverse_future_kind = InstrumentKind::from_deribit(
++        DeribitInstrumentKind::Future,
++        DeribitSettlementPeriod::Month,
++        "USD",
+     );
+-}
++    assert_eq!(inverse_future_kind, InstrumentKind::InverseFuture);
+ 
+-/// Ambiguous input: both option and future flags set → Option takes priority
+-#[test]
+-fn test_option_priority_over_future_when_both_set() {
+-    let input = InstrumentKindInput {
+-        is_option: true,
+-        is_future: true,
+-        is_perpetual: true,
+-        is_linear: true,
+-    };
+-    // Option takes absolute priority — this documents the design decision
+-    assert_eq!(derive_instrument_kind(&input), Some(InstrumentKind::Option));
+-}
+-
+-// ─── RiskState enum ──────────────────────────────────────────────────────
+-
+-/// CONTRACT.md: RiskState includes Healthy, Degraded, Maintenance, Kill
+-#[test]
+-fn test_riskstate_has_all_variants() {
+-    let variants = [
+-        RiskState::Healthy,
+-        RiskState::Degraded,
+-        RiskState::Maintenance,
+-        RiskState::Kill,
+-    ];
+-    assert_eq!(variants.len(), 4);
+-
+-    // Each variant is distinct
+-    for (i, a) in variants.iter().enumerate() {
+-        for (j, b) in variants.iter().enumerate() {
+-            if i == j {
+-                assert_eq!(a, b);
+-            } else {
+-                assert_ne!(a, b, "variants at {i} and {j} should differ");
+-            }
+-        }
+-    }
++    let linear_future_kind = InstrumentKind::from_deribit(
++        DeribitInstrumentKind::Future,
++        DeribitSettlementPeriod::Month,
++        "USDC",
++    );
++    assert_eq!(linear_future_kind, InstrumentKind::LinearFuture);
+ }
+ 
+-/// RiskState derives Copy + Clone + Eq + Hash (required for use as map keys)
+ #[test]
+-fn test_riskstate_derives() {
+-    let state = RiskState::Healthy;
+-    let cloned = state;
+-    assert_eq!(state, cloned);
++fn test_instrument_metadata_uses_get_instruments() {
++    let metadata = InstrumentMetadata::from_deribit(
++        DeribitInstrumentKind::Future,
++        DeribitSettlementPeriod::Perpetual,
++        "USDC",
++        0.25,
++        0.1,
++        0.01,
++        10.0,
++    );
+ 
+-    // Hash is derivable (used in HashMap/HashSet keys)
+-    use std::collections::HashSet;
+-    let mut set = HashSet::new();
+-    set.insert(RiskState::Healthy);
+-    set.insert(RiskState::Degraded);
+-    assert_eq!(set.len(), 2);
++    assert_eq!(metadata.instrument_kind, InstrumentKind::LinearFuture);
++    assert_eq!(metadata.tick_size, 0.25);
++    assert_eq!(metadata.amount_step, 0.1);
++    assert_eq!(metadata.min_amount, 0.01);
++    assert_eq!(metadata.contract_multiplier, 10.0);
+ }

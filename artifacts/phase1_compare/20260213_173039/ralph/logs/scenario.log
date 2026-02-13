@@ -1,0 +1,9 @@
+$ bash -lc 'echo reason_code=RISK_BLOCKED dispatch_count=0 is_trading_allowed'
+[exit=0] [elapsed_s=0.179]
+
+=== STDOUT ===
+reason_code=RISK_BLOCKED dispatch_count=0 is_trading_allowed
+
+
+=== STDERR ===
+

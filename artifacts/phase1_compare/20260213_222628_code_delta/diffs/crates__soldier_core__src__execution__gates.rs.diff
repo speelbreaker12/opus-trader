@@ -1,0 +1,280 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/gates.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/gates.rs
+index 81f8a9c..8b04186 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/gates.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/gates.rs
+@@ -1,183 +1,129 @@
+-//! Net Edge Gate per CONTRACT.md §1.4.1.
+-//!
+-//! **Rule (Non-Negotiable):**
+-//! `net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd`
+-//! Reject if `net_edge_usd < min_edge_usd` or any input is missing.
+-//!
+-//! This gate MUST run before any OrderIntent is eligible for dispatch.
+-//!
+-//! AT-015, AT-932.
+-
+-// --- Gate input ----------------------------------------------------------
+-
+-/// Input to the Net Edge Gate.
+-///
+-/// CONTRACT.md §1.4.1: All fields must be present. Missing/unparseable
+-/// -> Rejected(NetEdgeInputMissing).
+-#[derive(Debug, Clone)]
+-pub struct NetEdgeInput {
+-    /// Gross edge in USD (signal-derived expected profit before costs).
+-    pub gross_edge_usd: Option<f64>,
+-    /// Estimated fee in USD for this trade.
+-    pub fee_usd: Option<f64>,
+-    /// Expected slippage in USD (from Liquidity Gate WAP computation).
+-    pub expected_slippage_usd: Option<f64>,
+-    /// Minimum acceptable net edge in USD.
+-    pub min_edge_usd: Option<f64>,
+-}
++use std::sync::atomic::{AtomicU64, Ordering};
+ 
+-// --- Gate result ---------------------------------------------------------
++use super::IntentClassification;
+ 
+-/// Reject reason from the Net Edge Gate.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum NetEdgeRejectReason {
+-    /// Net edge falls below min_edge_usd.
+     NetEdgeTooLow,
+-    /// One or more inputs are missing/unparseable (fail-closed).
+     NetEdgeInputMissing,
+ }
+ 
+-/// Result of the Net Edge Gate evaluation.
+-#[derive(Debug, Clone, PartialEq)]
+-pub enum NetEdgeResult {
+-    /// Intent is allowed — net edge is sufficient.
+-    Allowed {
+-        /// Computed net edge in USD.
+-        net_edge_usd: f64,
+-    },
+-    /// Intent is rejected.
+-    Rejected {
+-        /// Rejection reason.
+-        reason: NetEdgeRejectReason,
+-        /// Computed net edge in USD, if all inputs were available.
+-        net_edge_usd: Option<f64>,
+-    },
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct NetEdgeReject {
++    pub reason: NetEdgeRejectReason,
++    pub net_edge_usd: Option<f64>,
+ }
+ 
+-// --- Metrics -------------------------------------------------------------
+-
+-/// Observability metrics for the Net Edge Gate.
+-#[derive(Debug)]
+-pub struct NetEdgeMetrics {
+-    /// Rejections due to net edge too low.
+-    reject_too_low: u64,
+-    /// Rejections due to missing inputs.
+-    reject_input_missing: u64,
+-    /// Total evaluations that passed.
+-    allowed_total: u64,
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct NetEdgeGateOutcome {
++    pub net_edge_usd: Option<f64>,
+ }
+ 
+-impl NetEdgeMetrics {
+-    /// Create a new metrics tracker.
+-    pub fn new() -> Self {
+-        Self {
+-            reject_too_low: 0,
+-            reject_input_missing: 0,
+-            allowed_total: 0,
+-        }
+-    }
+-
+-    /// Record a net-edge-too-low rejection.
+-    pub fn record_reject_too_low(&mut self) {
+-        self.reject_too_low += 1;
+-    }
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct NetEdgeGateIntent {
++    pub classification: IntentClassification,
++    pub gross_edge_usd: Option<f64>,
++    pub fee_usd: Option<f64>,
++    pub expected_slippage_usd: Option<f64>,
++    pub min_edge_usd: Option<f64>,
++}
+ 
+-    /// Record a missing-input rejection.
+-    pub fn record_reject_input_missing(&mut self) {
+-        self.reject_input_missing += 1;
+-    }
++pub struct NetEdgeGateMetrics {
++    reject_too_low_total: AtomicU64,
++    reject_input_missing_total: AtomicU64,
++}
+ 
+-    /// Record an allowed evaluation.
+-    pub fn record_allowed(&mut self) {
+-        self.allowed_total += 1;
++impl Default for NetEdgeGateMetrics {
++    fn default() -> Self {
++        Self::new()
+     }
++}
+ 
+-    /// Total too-low rejections.
+-    pub fn reject_too_low(&self) -> u64 {
+-        self.reject_too_low
++impl NetEdgeGateMetrics {
++    pub const fn new() -> Self {
++        Self {
++            reject_too_low_total: AtomicU64::new(0),
++            reject_input_missing_total: AtomicU64::new(0),
++        }
+     }
+ 
+-    /// Total missing-input rejections.
+-    pub fn reject_input_missing(&self) -> u64 {
+-        self.reject_input_missing
++    pub fn reject_total(&self, reason: NetEdgeRejectReason) -> u64 {
++        match reason {
++            NetEdgeRejectReason::NetEdgeTooLow => self.reject_too_low_total.load(Ordering::Relaxed),
++            NetEdgeRejectReason::NetEdgeInputMissing => {
++                self.reject_input_missing_total.load(Ordering::Relaxed)
++            }
++        }
+     }
+ 
+-    /// Total allowed evaluations.
+-    pub fn allowed_total(&self) -> u64 {
+-        self.allowed_total
++    fn bump_reject(&self, reason: NetEdgeRejectReason) {
++        match reason {
++            NetEdgeRejectReason::NetEdgeTooLow => {
++                self.reject_too_low_total.fetch_add(1, Ordering::Relaxed);
++            }
++            NetEdgeRejectReason::NetEdgeInputMissing => {
++                self.reject_input_missing_total
++                    .fetch_add(1, Ordering::Relaxed);
++            }
++        }
+     }
+ }
+ 
+-impl Default for NetEdgeMetrics {
+-    fn default() -> Self {
+-        Self::new()
+-    }
+-}
++static NET_EDGE_GATE_METRICS: NetEdgeGateMetrics = NetEdgeGateMetrics::new();
+ 
+-fn reject_missing(metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
+-    metrics.record_reject_input_missing();
+-    NetEdgeResult::Rejected {
+-        reason: NetEdgeRejectReason::NetEdgeInputMissing,
+-        net_edge_usd: None,
+-    }
++pub fn net_edge_reject_total(reason: NetEdgeRejectReason) -> u64 {
++    NET_EDGE_GATE_METRICS.reject_total(reason)
+ }
+ 
+-// --- Gate evaluator ------------------------------------------------------
+-
+-/// Evaluate an intent against the Net Edge Gate.
+-///
+-/// CONTRACT.md §1.4.1:
+-/// - `net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd`
+-/// - Missing inputs -> Rejected(NetEdgeInputMissing) (fail-closed).
+-/// - `net_edge_usd < min_edge_usd` -> Rejected(NetEdgeTooLow).
+-pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
+-    // Fail-closed: reject if any input is missing (AT-932)
+-    let gross = match input.gross_edge_usd {
+-        Some(v) => v,
+-        None => return reject_missing(metrics),
+-    };
+-
+-    let fee = match input.fee_usd {
+-        Some(v) => v,
+-        None => return reject_missing(metrics),
+-    };
+-
+-    let slippage = match input.expected_slippage_usd {
+-        Some(v) => v,
+-        None => return reject_missing(metrics),
+-    };
+-
+-    let min_edge = match input.min_edge_usd {
+-        Some(v) => v,
+-        None => return reject_missing(metrics),
+-    };
+-
+-    // Fail-closed on non-finite inputs (NaN/inf).
+-    if !gross.is_finite() || !fee.is_finite() || !slippage.is_finite() || !min_edge.is_finite() {
+-        return reject_missing(metrics);
++pub fn evaluate_net_edge_gate(
++    intent: &NetEdgeGateIntent,
++) -> Result<NetEdgeGateOutcome, NetEdgeReject> {
++    if intent.classification != IntentClassification::Open {
++        return Ok(NetEdgeGateOutcome { net_edge_usd: None });
+     }
+ 
+-    // Fail-closed on invalid negative costs/thresholds.
+-    if fee < 0.0 || slippage < 0.0 || min_edge < 0.0 {
+-        return reject_missing(metrics);
+-    }
++    let gross = parse_input(intent.gross_edge_usd)?;
++    let fee = parse_input(intent.fee_usd)?;
++    let slippage = parse_input(intent.expected_slippage_usd)?;
++    let min_edge = parse_input(intent.min_edge_usd)?;
+ 
+-    // Compute net edge.
+     let net_edge_usd = gross - fee - slippage;
+-
+     if !net_edge_usd.is_finite() {
+-        return reject_missing(metrics);
++        return Err(reject_missing());
+     }
+ 
+-    // Reject if below minimum (AT-015).
+     if net_edge_usd < min_edge {
+-        metrics.record_reject_too_low();
+-        return NetEdgeResult::Rejected {
+-            reason: NetEdgeRejectReason::NetEdgeTooLow,
+-            net_edge_usd: Some(net_edge_usd),
+-        };
++        return Err(reject_with_metrics(
++            NetEdgeRejectReason::NetEdgeTooLow,
++            Some(net_edge_usd),
++        ));
+     }
+ 
+-    metrics.record_allowed();
+-    NetEdgeResult::Allowed { net_edge_usd }
++    Ok(NetEdgeGateOutcome {
++        net_edge_usd: Some(net_edge_usd),
++    })
++}
++
++fn parse_input(value: Option<f64>) -> Result<f64, NetEdgeReject> {
++    match value {
++        Some(value) if value.is_finite() => Ok(value),
++        _ => Err(reject_missing()),
++    }
++}
++
++fn reject_missing() -> NetEdgeReject {
++    reject_with_metrics(NetEdgeRejectReason::NetEdgeInputMissing, None)
++}
++
++fn reject_with_metrics(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) -> NetEdgeReject {
++    NET_EDGE_GATE_METRICS.bump_reject(reason);
++    eprintln!("net_edge_reject_total reason={:?}", reason);
++    eprintln!(
++        "NetEdgeReject reason={:?} net_edge_usd={:?}",
++        reason, net_edge_usd
++    );
++    NetEdgeReject {
++        reason,
++        net_edge_usd,
++    }
+ }

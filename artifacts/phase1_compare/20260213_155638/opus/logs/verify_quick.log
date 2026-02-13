@@ -1,0 +1,61 @@
+$ ./plans/verify.sh quick
+[exit=1] [elapsed_s=92.134]
+
+=== STDOUT ===
+
+[0;32m=== 0) Verify context ===[0m
+mode=quick
+root=/Users/admin/Desktop/opus-trader
+verify_run_id=20260213_095640
+artifacts_dir=/Users/admin/Desktop/opus-trader/artifacts/verify/20260213_095640
+base_ref=origin/main
+
+[0;32m=== 01) preflight ===[0m
+[PASS] Git repository
+[PASS] Tool: git
+[PASS] Tool: jq
+[PASS] Tool: bash
+[PASS] File: PRD file
+[PASS] File: Contract spec
+PASS: legacy layout guard
+[PASS] Legacy layout guard
+PASS: README/CI verify parity check
+[PASS] README/CI parity guard
+PASS: slice completion review guard
+[PASS] Slice completion review guard
+PASS: story review findings guard
+[PASS] Story findings-review guard
+PASS: stoic-cli invariant check
+[PASS] stoic-cli invariants guard
+[PASS] Shell syntax (plans/*.sh)
+[PASS] PRD schema validation
+[PASS] Fixture profile: smoke (15 tests)
+[PASS] Fixture test: test_run_prd_auditor_invocation.sh
+[PASS] Fixture test: test_codex_review_logged.sh
+[PASS] Fixture test: test_kimi_review_logged.sh
+[PASS] Fixture test: test_code_review_expert_logged.sh
+[PASS] Fixture test: test_thinking_review_logged.sh
+[PASS] Fixture test: test_slice_review_gate.sh
+[PASS] Fixture test: test_guard_no_command_substitution.sh
+[PASS] Fixture test: test_story_review_findings_guard.sh
+[PASS] Fixture test: test_preflight_fixture_profiles.sh
+[PASS] Fixture test: test_stoic_cli_invariant_check.sh
+[PASS] Fixture test: test_verify_timeout_policy.sh
+[PASS] Fixture test: test_contract_profile_parity.sh
+[PASS] Fixture test: test_roadmap_evidence_audit.sh
+[PASS] Fixture test: test_crossref_invariants.sh
+[PASS] Fixture test: test_crossref_gate.sh
+[WARN] POSTMORTEM_GATE=0 (postmortem check skipped)
+
+preflight: 29 passed, 0 failed, 1 warnings
+
+[0;32m=== 01b) verify gate contract ===[0m
+PASS: verify gate contract check
+
+[0;32m=== 02) contract kernel ===[0m
+ERROR: sources.contract_sha256 mismatch (expected da565d5c8ff92e6b2d5abe0a8449f3d0815002486ab24376730bfcba203178ba)
+
+
+=== STDERR ===
+[1;33mWARN: Working tree is dirty[0m
+

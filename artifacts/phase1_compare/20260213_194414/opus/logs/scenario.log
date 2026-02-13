@@ -1,0 +1,51 @@
+$ bash -lc 'cargo test -p soldier_core --test test_gate_ordering'
+[exit=0] [elapsed_s=0.633]
+
+=== STDOUT ===
+
+running 36 tests
+test test_at501_open_all_gates_pass_trace_order ... ok
+test test_at502_open_gate_count ... ok
+test test_at503_close_skips_liquidity_edge_pricer ... ok
+test test_at503_hedge_skips_liquidity_edge_pricer ... ok
+test test_at504_cancel_approved_even_degraded ... ok
+test test_at504_cancel_only_dispatch_auth_only ... ok
+test test_at505_close_degraded_allowed ... ok
+test test_at505_hedge_degraded_allowed ... ok
+test test_at505_open_degraded_rejected ... ok
+test test_at505_open_kill_rejected ... ok
+test test_at505_open_maintenance_rejected ... ok
+test test_at506_dispatch_consistency_reject_stops_at_gate4 ... ok
+test test_at506_fee_cache_reject_stops_at_gate5 ... ok
+test test_at506_liquidity_reject_stops_at_gate6 ... ok
+test test_at506_net_edge_reject_stops_at_gate7 ... ok
+test test_at506_preflight_reject_stops_at_gate2 ... ok
+test test_at506_pricer_reject_stops_at_gate8 ... ok
+test test_at506_quantize_reject_stops_at_gate3 ... ok
+test test_at506_wal_reject_stops_at_gate9 ... ok
+test test_close_wal_failure_rejected ... ok
+test test_constraint_approval_requires_all_gates_pass ... ok
+test test_constraint_no_approval_with_any_gate_failed ... ok
+test test_constraint_reject_gates_before_persist ... ok
+test test_constraint_rejected_trace_stops_at_failure ... ok
+test test_constraint_wal_after_all_validation_gates ... ok
+test test_constraint_wal_is_last_gate_close ... ok
+test test_constraint_wal_is_last_gate_hedge ... ok
+test test_constraint_wal_is_last_gate_open ... ok
+test test_dispatch_consistency_allows_when_requested_qty_within_clamp ... ok
+test test_dispatch_consistency_rejects_when_clamp_max_dispatch_qty_missing ... ok
+test test_dispatch_consistency_rejects_when_clamp_requested_qty_missing ... ok
+test test_dispatch_consistency_rejects_when_requested_qty_exceeds_clamp ... ok
+test test_metrics_approved_increments ... ok
+test test_metrics_default ... ok
+test test_metrics_rejected_increments ... ok
+test test_metrics_risk_state_rejection_counted ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+
+=== STDERR ===
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/test_gate_ordering.rs (target/debug/deps/test_gate_ordering-e36b2d7590d65b27)
+

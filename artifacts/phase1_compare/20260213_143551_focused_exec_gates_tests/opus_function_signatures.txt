@@ -1,0 +1,6 @@
+/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core/src/execution/build_order_intent.rs:143:pub fn build_order_intent(
+/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core/src/execution/gate.rs:307:pub fn evaluate_liquidity_gate(
+/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core/src/execution/pricer.rs:138:pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> PricerResult {
+/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core/src/execution/gates.rs:133:pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
+/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core/src/execution/preflight.rs:137:pub fn preflight_intent(
+/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core/src/execution/quantize.rs:176:pub fn quantize(

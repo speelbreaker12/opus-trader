@@ -1,0 +1,36 @@
+diff --git a/tmp/slice6-compare-wOA1/opus/evidence/phase1/determinism/intent_hashes.txt b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/determinism/intent_hashes.txt
+index 6aea921..523ee49 100644
+--- a/tmp/slice6-compare-wOA1/opus/evidence/phase1/determinism/intent_hashes.txt
++++ b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/determinism/intent_hashes.txt
+@@ -1,19 +1,12 @@
+-# Intent Determinism Evidence
+-# CSP.2.1: Same inputs produce identical outputs across runs.
+-#
+-# Test: test_intent_determinism (13 tests)
+-# All tests run 100 iterations with fixed inputs and assert byte-exact equality.
+-#
+-# Pipeline components tested:
+-# - quantize() [Buy + Sell]: qty_q, qty_steps, limit_price_q, price_ticks
+-# - build_order_intent() [Approved + Rejected]: gate_trace ordering
+-# - compute_limit_price() [Buy + Sell]: limit_price, max_price_for_min_edge, net_edge_usd
+-# - evaluate_net_edge(): net_edge_usd computation
+-# - evaluate_liquidity_gate(): WAP + slippage computation
+-# - encode_label(): s4 label string
+-# - derive_sid8(): strategy ID hash prefix
+-# - derive_gid12(): group ID hash prefix
+-# - Full pipeline: quantize + pricer + chokepoint combined
+-# - HashMap ordering independence: varying insertion order does not affect output
+-#
+-# Result: ALL DETERMINISTIC — 100/100 iterations identical for every component.
++# test_intent_determinism_same_inputs_same_hash
++# Generated: 2026-02-09T08:05:08Z
++# Inputs: instrument_id=BTC-PERP side=Buy group_id=determinism-group-1 leg_idx=0
++# Encoding: len-prefixed LE strings, u8 side, i64 qty_steps/price_ticks, u8 leg_idx
++
++intent_bytes_hex: 080000004254432d50455250000c00000000000000c9000000000000001300000064657465726d696e69736d2d67726f75702d3100
++intent_hash_hex: e8639a540275a523
++
++run_1: e8639a540275a523
++run_2: e8639a540275a523
++
++RESULT: PASS (all hashes identical)

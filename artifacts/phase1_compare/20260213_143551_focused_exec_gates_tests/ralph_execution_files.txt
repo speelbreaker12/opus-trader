@@ -1,0 +1,14 @@
+crates/soldier_core/src/execution/build_order_intent.rs
+crates/soldier_core/src/execution/dispatch_map.rs
+crates/soldier_core/src/execution/gate.rs
+crates/soldier_core/src/execution/gates.rs
+crates/soldier_core/src/execution/label.rs
+crates/soldier_core/src/execution/mod.rs
+crates/soldier_core/src/execution/order_size.rs
+crates/soldier_core/src/execution/order_type_guard.rs
+crates/soldier_core/src/execution/post_only_guard.rs
+crates/soldier_core/src/execution/preflight.rs
+crates/soldier_core/src/execution/pricer.rs
+crates/soldier_core/src/execution/quantize.rs
+crates/soldier_core/src/execution/state.rs
+crates/soldier_core/src/execution/tlsm.rs

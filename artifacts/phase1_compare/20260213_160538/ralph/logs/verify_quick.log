@@ -1,0 +1,15 @@
+$ ./plans/verify.sh quick
+[exit=1] [elapsed_s=1.205]
+
+=== STDOUT ===
+VERIFY_SH_SHA=49f1e5d95e48383ffdfcd2b4b5e78e2e8fa404453562cfe784e5fb424950010a
+
+[0;32m=== 0) Repo sanity ===[0m
+mode=quick verify_mode=none root=/Users/admin/Desktop/ralph
+verify_run_id=20260213_100707 artifacts_dir=/Users/admin/Desktop/ralph/artifacts/verify/20260213_100707
+
+
+=== STDERR ===
+[1;33mWARN: non_tty_default_off: VERIFY_CHECKPOINT_ROLLOUT unset in non-TTY context; forcing rollout=off[0m
+[0;31mFAIL: Working tree is dirty (set VERIFY_ALLOW_DIRTY=1 to continue locally)[0m
+

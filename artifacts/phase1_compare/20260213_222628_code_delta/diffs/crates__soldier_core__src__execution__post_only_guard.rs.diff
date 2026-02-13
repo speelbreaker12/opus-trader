@@ -1,0 +1,173 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/post_only_guard.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/post_only_guard.rs
+index c8b945d..05dd9da 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/post_only_guard.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/post_only_guard.rs
+@@ -1,106 +1,92 @@
+-//! Post-only crossing guard per CONTRACT.md §1.4.4 C.
+-//!
+-//! If `post_only == true` and the limit price would cross the book,
+-//! Deribit rejects the order (F-06). Preflight must detect this
+-//! deterministically and reject before dispatch.
+-//!
+-//! AT-916.
++use std::sync::atomic::{AtomicU64, Ordering};
+ 
+-use crate::execution::quantize::Side;
++use super::Side;
+ 
+-// ─── Input ──────────────────────────────────────────────────────────────
+-
+-/// Input for the post-only crossing check.
+-#[derive(Debug, Clone)]
+-pub struct PostOnlyInput {
+-    /// Whether the order has `post_only == true`.
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct PostOnlyIntent {
+     pub post_only: bool,
+-    /// The order side (buy or sell).
+     pub side: Side,
+-    /// The quantized limit price of the order.
+     pub limit_price: f64,
+-    /// Best ask (lowest offer) from the order book. `None` if book is empty.
+-    pub best_ask: Option<f64>,
+-    /// Best bid (highest bid) from the order book. `None` if book is empty.
+     pub best_bid: Option<f64>,
++    pub best_ask: Option<f64>,
+ }
+ 
+-// ─── Result ─────────────────────────────────────────────────────────────
+-
+-/// Result of the post-only crossing check.
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub enum PostOnlyResult {
+-    /// Order is allowed (not post_only, or would not cross).
+-    Allowed,
+-    /// Order would cross the book — reject before dispatch.
+-    Rejected,
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum PostOnlyRejectReason {
++    PostOnlyWouldCross,
+ }
+ 
+-// ─── Metrics ────────────────────────────────────────────────────────────
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct PostOnlyReject {
++    pub reason: PostOnlyRejectReason,
++}
+ 
+-/// Observability metrics for the post-only crossing guard.
+-#[derive(Debug)]
+ pub struct PostOnlyMetrics {
+-    /// `post_only_cross_reject_total` counter.
+-    reject_total: u64,
++    cross_reject_total: AtomicU64,
+ }
+ 
+-impl PostOnlyMetrics {
+-    /// Create a new metrics tracker.
+-    pub fn new() -> Self {
+-        Self { reject_total: 0 }
++impl Default for PostOnlyMetrics {
++    fn default() -> Self {
++        Self::new()
+     }
++}
+ 
+-    /// Increment the rejection counter.
+-    pub fn record_reject(&mut self) {
+-        self.reject_total += 1;
++impl PostOnlyMetrics {
++    pub const fn new() -> Self {
++        Self {
++            cross_reject_total: AtomicU64::new(0),
++        }
+     }
+ 
+-    /// Current value of `post_only_cross_reject_total`.
+-    pub fn reject_total(&self) -> u64 {
+-        self.reject_total
++    pub fn cross_reject_total(&self) -> u64 {
++        self.cross_reject_total.load(Ordering::Relaxed)
+     }
+-}
+ 
+-impl Default for PostOnlyMetrics {
+-    fn default() -> Self {
+-        Self::new()
++    fn bump_cross_reject(&self) {
++        self.cross_reject_total.fetch_add(1, Ordering::Relaxed);
+     }
+ }
+ 
+-// ─── Core function ──────────────────────────────────────────────────────
++static POST_ONLY_METRICS: PostOnlyMetrics = PostOnlyMetrics::new();
+ 
+-/// Check whether a post-only order would cross the book.
+-///
+-/// CONTRACT.md §1.4.4 C:
+-/// - If `post_only == true` and order would cross the book → reject.
+-/// - A buy crosses if `limit_price >= best_ask`.
+-/// - A sell crosses if `limit_price <= best_bid`.
+-/// - If the relevant side of the book is empty (None), the order cannot
+-///   cross, so it is allowed.
+-pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> PostOnlyResult {
+-    // If not post_only, no check needed.
+-    if !input.post_only {
+-        return PostOnlyResult::Allowed;
++pub fn post_only_cross_reject_total() -> u64 {
++    POST_ONLY_METRICS.cross_reject_total()
++}
++
++pub fn preflight_post_only(intent: &PostOnlyIntent) -> Result<(), PostOnlyReject> {
++    if !intent.post_only {
++        return Ok(());
++    }
++    if would_cross(
++        intent.side,
++        intent.limit_price,
++        intent.best_bid,
++        intent.best_ask,
++    ) {
++        return Err(reject_with_metrics());
+     }
++    Ok(())
++}
+ 
+-    let would_cross = match input.side {
+-        // A buy order crosses if its price >= the best ask (it would take liquidity).
+-        Side::Buy => match input.best_ask {
+-            Some(ask) => input.limit_price >= ask,
+-            None => false, // No asks → cannot cross
++fn would_cross(side: Side, limit_price: f64, best_bid: Option<f64>, best_ask: Option<f64>) -> bool {
++    if !limit_price.is_finite() {
++        return false;
++    }
++    match side {
++        Side::Buy => match best_ask {
++            Some(ask) if ask.is_finite() => limit_price >= ask,
++            _ => false,
+         },
+-        // A sell order crosses if its price <= the best bid (it would take liquidity).
+-        Side::Sell => match input.best_bid {
+-            Some(bid) => input.limit_price <= bid,
+-            None => false, // No bids → cannot cross
++        Side::Sell => match best_bid {
++            Some(bid) if bid.is_finite() => limit_price <= bid,
++            _ => false,
+         },
+-    };
+-
+-    if would_cross {
+-        metrics.record_reject();
+-        PostOnlyResult::Rejected
+-    } else {
+-        PostOnlyResult::Allowed
+     }
+ }
++
++fn reject_with_metrics() -> PostOnlyReject {
++    POST_ONLY_METRICS.bump_cross_reject();
++    let reason = PostOnlyRejectReason::PostOnlyWouldCross;
++    eprintln!("post_only_cross_reject_total reason={:?}", reason);
++    PostOnlyReject { reason }
++}

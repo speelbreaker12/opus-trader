@@ -1,0 +1,548 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_tlsm.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_tlsm.rs
+index 66f2176..74bfbe2 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_tlsm.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_tlsm.rs
+@@ -1,459 +1,121 @@
+-//! Tests for Trade Lifecycle State Machine (TLSM) per CONTRACT.md §2.1.
+-//!
+-//! AT-230: Fill-before-ack is valid reality.
+-//! AT-210: Orphan fill (fill-before-send).
++use std::sync::{Arc, Mutex};
+ 
+-use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
++use soldier_core::execution::{
++    Tlsm, TlsmError, TlsmEvent, TlsmIntent, TlsmLedger, TlsmLedgerEntry, TlsmLedgerError, TlsmSide,
++    TlsmState,
++};
+ 
+-// ─── Normal lifecycle ────────────────────────────────────────────────────
+-
+-#[test]
+-fn test_normal_lifecycle_created_to_filled() {
+-    let mut sm = Tlsm::new();
+-    assert_eq!(sm.state(), TlsmState::Created);
+-
+-    // Created → Sent
+-    let r = sm.apply(TlsmEvent::Sent);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Created,
+-            to: TlsmState::Sent
+-        }
+-    ));
+-
+-    // Sent → Acked
+-    let r = sm.apply(TlsmEvent::Acked);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Sent,
+-            to: TlsmState::Acked
+-        }
+-    ));
+-
+-    // Acked → PartiallyFilled
+-    let r = sm.apply(TlsmEvent::PartialFill);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Acked,
+-            to: TlsmState::PartiallyFilled
+-        }
+-    ));
+-
+-    // PartiallyFilled → Filled
+-    let r = sm.apply(TlsmEvent::Filled);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::PartiallyFilled,
+-            to: TlsmState::Filled
+-        }
+-    ));
+-
+-    assert!(sm.state().is_terminal());
+-    assert_eq!(sm.transition_count(), 4);
+-}
+-
+-#[test]
+-fn test_normal_lifecycle_acked_to_filled_direct() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-
+-    // Acked → Filled (skip partial)
+-    let r = sm.apply(TlsmEvent::Filled);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Acked,
+-            to: TlsmState::Filled
+-        }
+-    ));
++#[derive(Clone, Default)]
++struct TestLedger {
++    entries: Arc<Mutex<Vec<TlsmLedgerEntry>>>,
+ }
+ 
+-#[test]
+-fn test_multiple_partial_fills() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-    sm.apply(TlsmEvent::PartialFill);
+-
+-    // PartiallyFilled → PartiallyFilled (another partial)
+-    let r = sm.apply(TlsmEvent::PartialFill);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::PartiallyFilled,
+-            to: TlsmState::PartiallyFilled
+-        }
+-    ));
+-    assert_eq!(sm.state(), TlsmState::PartiallyFilled);
+-}
+-
+-// ─── Terminal state ignoring ─────────────────────────────────────────────
+-
+-#[test]
+-fn test_terminal_state_ignores_all_events() {
+-    let events = vec![
+-        TlsmEvent::Sent,
+-        TlsmEvent::Acked,
+-        TlsmEvent::PartialFill,
+-        TlsmEvent::Filled,
+-        TlsmEvent::Cancelled,
+-        TlsmEvent::Rejected,
+-        TlsmEvent::Failed,
+-    ];
+-
+-    for event in events {
+-        let mut sm = Tlsm::new();
+-        sm.apply(TlsmEvent::Sent);
+-        sm.apply(TlsmEvent::Acked);
+-        sm.apply(TlsmEvent::Filled); // terminal
+-
+-        let r = sm.apply(event);
+-        assert!(
+-            matches!(r, TransitionResult::Ignored { .. }),
+-            "event after terminal should be ignored"
+-        );
+-        assert_eq!(sm.state(), TlsmState::Filled);
++impl TestLedger {
++    fn len(&self) -> usize {
++        self.entries.lock().expect("lock ledger entries").len()
+     }
+-}
+-
+-#[test]
+-fn test_cancelled_is_terminal() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Cancelled);
+-
+-    assert!(sm.state().is_terminal());
+-    let r = sm.apply(TlsmEvent::Acked);
+-    assert!(matches!(r, TransitionResult::Ignored { .. }));
+-}
+-
+-#[test]
+-fn test_failed_is_terminal() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Failed);
+-
+-    assert!(sm.state().is_terminal());
+-    let r = sm.apply(TlsmEvent::Filled);
+-    assert!(matches!(r, TransitionResult::Ignored { .. }));
+-}
+-
+-// ─── Cancel from any non-terminal ────────────────────────────────────────
+-
+-#[test]
+-fn test_cancel_from_created() {
+-    let mut sm = Tlsm::new();
+-    let r = sm.apply(TlsmEvent::Cancelled);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Created,
+-            to: TlsmState::Cancelled
+-        }
+-    ));
+-}
+-
+-#[test]
+-fn test_cancel_from_sent() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    let r = sm.apply(TlsmEvent::Cancelled);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Sent,
+-            to: TlsmState::Cancelled
+-        }
+-    ));
+-}
+-
+-#[test]
+-fn test_cancel_from_acked() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-    let r = sm.apply(TlsmEvent::Cancelled);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Acked,
+-            to: TlsmState::Cancelled
+-        }
+-    ));
+-}
+-
+-#[test]
+-fn test_cancel_from_partially_filled() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-    sm.apply(TlsmEvent::PartialFill);
+-    let r = sm.apply(TlsmEvent::Cancelled);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::PartiallyFilled,
+-            to: TlsmState::Cancelled
+-        }
+-    ));
+-}
+-
+-// ─── Rejection ───────────────────────────────────────────────────────────
+ 
+-#[test]
+-fn test_reject_from_created() {
+-    let mut sm = Tlsm::new();
+-    let r = sm.apply(TlsmEvent::Rejected);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Created,
+-            to: TlsmState::Failed
+-        }
+-    ));
+-}
+-
+-#[test]
+-fn test_reject_from_sent() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    let r = sm.apply(TlsmEvent::Rejected);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Sent,
+-            to: TlsmState::Failed
+-        }
+-    ));
+-}
+-
+-// ─── Failed from any non-terminal ────────────────────────────────────────
+-
+-#[test]
+-fn test_failed_from_acked() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-    let r = sm.apply(TlsmEvent::Failed);
+-    assert!(matches!(
+-        r,
+-        TransitionResult::Transitioned {
+-            from: TlsmState::Acked,
+-            to: TlsmState::Failed
+-        }
+-    ));
+-}
+-
+-// ─── AT-230: Fill-before-ack ─────────────────────────────────────────────
+-
+-#[test]
+-fn test_at230_fill_before_ack() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-
+-    // Fill arrives before Ack — CONTRACT.md: "Fill-before-Ack is valid reality"
+-    let r = sm.apply(TlsmEvent::Filled);
+-    match r {
+-        TransitionResult::OutOfOrder {
+-            from,
+-            to,
+-            ref anomaly,
+-        } => {
+-            assert_eq!(from, TlsmState::Sent);
+-            assert_eq!(to, TlsmState::Filled);
+-            assert!(anomaly.contains("fill-before-ack"));
+-        }
+-        other => panic!("expected OutOfOrder, got {other:?}"),
++    fn entries(&self) -> Vec<TlsmLedgerEntry> {
++        self.entries.lock().expect("lock ledger entries").clone()
+     }
+-    assert_eq!(sm.state(), TlsmState::Filled);
+ }
+ 
+-#[test]
+-fn test_at230_partial_fill_before_ack() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-
+-    let r = sm.apply(TlsmEvent::PartialFill);
+-    match r {
+-        TransitionResult::OutOfOrder {
+-            from,
+-            to,
+-            ref anomaly,
+-        } => {
+-            assert_eq!(from, TlsmState::Sent);
+-            assert_eq!(to, TlsmState::PartiallyFilled);
+-            assert!(anomaly.contains("partial-fill-before-ack"));
+-        }
+-        other => panic!("expected OutOfOrder, got {other:?}"),
++impl TlsmLedger for TestLedger {
++    fn append_transition(&self, entry: &TlsmLedgerEntry) -> Result<(), TlsmLedgerError> {
++        self.entries
++            .lock()
++            .expect("lock ledger entries")
++            .push(entry.clone());
++        Ok(())
+     }
+-    assert_eq!(sm.state(), TlsmState::PartiallyFilled);
+ }
+ 
+-// ─── AT-210: Orphan fill (fill-before-send) ──────────────────────────────
+-
+-#[test]
+-fn test_at210_fill_before_send() {
+-    let mut sm = Tlsm::new();
++struct FailingLedger;
+ 
+-    // Fill arrives before order even sent — orphan fill
+-    let r = sm.apply(TlsmEvent::Filled);
+-    match r {
+-        TransitionResult::OutOfOrder {
+-            from,
+-            to,
+-            ref anomaly,
+-        } => {
+-            assert_eq!(from, TlsmState::Created);
+-            assert_eq!(to, TlsmState::Filled);
+-            assert!(anomaly.contains("orphan fill"));
+-        }
+-        other => panic!("expected OutOfOrder, got {other:?}"),
++impl TlsmLedger for FailingLedger {
++    fn append_transition(&self, _entry: &TlsmLedgerEntry) -> Result<(), TlsmLedgerError> {
++        Err(TlsmLedgerError::new("append failed"))
+     }
+-    assert_eq!(sm.state(), TlsmState::Filled);
+ }
+ 
+-#[test]
+-fn test_at210_partial_fill_before_send() {
+-    let mut sm = Tlsm::new();
+-
+-    let r = sm.apply(TlsmEvent::PartialFill);
+-    match r {
+-        TransitionResult::OutOfOrder {
+-            from,
+-            to,
+-            ref anomaly,
+-        } => {
+-            assert_eq!(from, TlsmState::Created);
+-            assert_eq!(to, TlsmState::PartiallyFilled);
+-            assert!(anomaly.contains("partial-fill-before-send"));
+-        }
+-        other => panic!("expected OutOfOrder, got {other:?}"),
++fn sample_intent() -> TlsmIntent {
++    TlsmIntent {
++        intent_hash: 0xdeadbeef,
++        group_id: "group-1".to_string(),
++        leg_idx: 0,
++        instrument: "BTC-PERP".to_string(),
++        side: TlsmSide::Buy,
++        qty_steps: Some(10),
++        qty_q: Some(1.0),
++        limit_price_q: Some(100.0),
++        price_ticks: Some(1000),
++        created_ts: 1,
+     }
+ }
+ 
+ #[test]
+-fn test_ack_before_send() {
+-    let mut sm = Tlsm::new();
+-
+-    let r = sm.apply(TlsmEvent::Acked);
+-    match r {
+-        TransitionResult::OutOfOrder {
+-            from,
+-            to,
+-            ref anomaly,
+-        } => {
+-            assert_eq!(from, TlsmState::Created);
+-            assert_eq!(to, TlsmState::Acked);
+-            assert!(anomaly.contains("ack-before-send"));
+-        }
+-        other => panic!("expected OutOfOrder, got {other:?}"),
+-    }
+-}
++fn test_tlsm_fill_before_ack_no_panic() {
++    let ledger = TestLedger::default();
++    let mut tlsm = Tlsm::new(sample_intent());
+ 
+-// ─── Late ack after fills ────────────────────────────────────────────────
++    tlsm.apply_event(&ledger, TlsmEvent::Filled { ts_ms: 200 })
++        .expect("apply fill");
++    assert_eq!(ledger.len(), 1);
+ 
+-#[test]
+-fn test_late_ack_after_partial_fill_ignored() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-    sm.apply(TlsmEvent::PartialFill);
++    tlsm.apply_event(&ledger, TlsmEvent::Acked { ts_ms: 150 })
++        .expect("apply ack");
++    assert_eq!(ledger.len(), 2);
++    assert_eq!(tlsm.state(), TlsmState::Filled);
+ 
+-    // Late ack arrives after partial fill
+-    let r = sm.apply(TlsmEvent::Acked);
+-    assert!(matches!(r, TransitionResult::Ignored { .. }));
+-    assert_eq!(sm.state(), TlsmState::PartiallyFilled);
++    let entries = ledger.entries();
++    assert_eq!(entries[0].tls_state, TlsmState::Filled);
++    assert_eq!(entries[0].last_fill_ts, Some(200));
++    assert_eq!(entries[0].ack_ts, None);
++    assert_eq!(entries[1].tls_state, TlsmState::Filled);
++    assert_eq!(entries[1].ack_ts, Some(150));
+ }
+ 
+-// ─── Never panic ─────────────────────────────────────────────────────────
+-
+ #[test]
+-fn test_never_panic_random_events() {
+-    // CONTRACT.md §2.1: "Never panic on out-of-order WS events"
+-    let events = vec![
+-        TlsmEvent::Sent,
+-        TlsmEvent::Acked,
+-        TlsmEvent::PartialFill,
+-        TlsmEvent::Filled,
+-        TlsmEvent::Cancelled,
+-        TlsmEvent::Rejected,
+-        TlsmEvent::Failed,
++fn test_tlsm_out_of_order_converges() {
++    let ordered = vec![
++        TlsmEvent::Sent { ts_ms: 10 },
++        TlsmEvent::Acked { ts_ms: 20 },
++        TlsmEvent::Filled { ts_ms: 30 },
++    ];
++    let out_of_order = vec![
++        TlsmEvent::Filled { ts_ms: 30 },
++        TlsmEvent::Acked { ts_ms: 20 },
++        TlsmEvent::Sent { ts_ms: 10 },
+     ];
+ 
+-    // Apply all events from Created — should not panic
+-    for event in &events {
+-        let mut sm = Tlsm::new();
+-        let _ = sm.apply(event.clone());
+-    }
+-
+-    // Apply all events from Sent — should not panic
+-    for event in &events {
+-        let mut sm = Tlsm::new();
+-        sm.apply(TlsmEvent::Sent);
+-        let _ = sm.apply(event.clone());
+-    }
+-
+-    // Apply all events from Acked — should not panic
+-    for event in &events {
+-        let mut sm = Tlsm::new();
+-        sm.apply(TlsmEvent::Sent);
+-        sm.apply(TlsmEvent::Acked);
+-        let _ = sm.apply(event.clone());
+-    }
+-}
+-
+-// ─── State terminal checks ──────────────────────────────────────────────
+-
+-#[test]
+-fn test_terminal_states() {
+-    assert!(TlsmState::Filled.is_terminal());
+-    assert!(TlsmState::Cancelled.is_terminal());
+-    assert!(TlsmState::Failed.is_terminal());
+-}
++    let ordered_state = apply_events(ordered);
++    let out_of_order_state = apply_events(out_of_order);
+ 
+-#[test]
+-fn test_non_terminal_states() {
+-    assert!(!TlsmState::Created.is_terminal());
+-    assert!(!TlsmState::Sent.is_terminal());
+-    assert!(!TlsmState::Acked.is_terminal());
+-    assert!(!TlsmState::PartiallyFilled.is_terminal());
++    assert_eq!(ordered_state, TlsmState::Filled);
++    assert_eq!(out_of_order_state, TlsmState::Filled);
+ }
+ 
+-// ─── Default ─────────────────────────────────────────────────────────────
+-
+ #[test]
+-fn test_default_creates_in_created_state() {
+-    let sm = Tlsm::default();
+-    assert_eq!(sm.state(), TlsmState::Created);
+-    assert_eq!(sm.transition_count(), 0);
+-}
++fn test_tlsm_ledger_append_failure_is_atomic() {
++    let ledger = FailingLedger;
++    let mut tlsm = Tlsm::new(sample_intent());
+ 
+-// ─── Duplicate event ignored ─────────────────────────────────────────────
++    let err = tlsm
++        .apply_event(&ledger, TlsmEvent::Sent { ts_ms: 10 })
++        .expect_err("append should fail");
++    assert!(matches!(err, TlsmError::Ledger(_)));
+ 
+-#[test]
+-fn test_duplicate_sent_ignored() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-
+-    // Second Sent — no valid transition from Sent+Sent
+-    let r = sm.apply(TlsmEvent::Sent);
+-    assert!(matches!(r, TransitionResult::Ignored { .. }));
+-    assert_eq!(sm.state(), TlsmState::Sent);
++    assert_eq!(tlsm.state(), TlsmState::Created);
++    assert_eq!(tlsm.sent_ts(), None);
++    assert_eq!(tlsm.ack_ts(), None);
++    assert_eq!(tlsm.last_fill_ts(), None);
+ }
+ 
+-#[test]
+-fn test_reject_from_acked_ignored() {
+-    let mut sm = Tlsm::new();
+-    sm.apply(TlsmEvent::Sent);
+-    sm.apply(TlsmEvent::Acked);
+-
+-    // Reject only valid from Created/Sent
+-    let r = sm.apply(TlsmEvent::Rejected);
+-    assert!(matches!(r, TransitionResult::Ignored { .. }));
+-    assert_eq!(sm.state(), TlsmState::Acked);
++fn apply_events(events: Vec<TlsmEvent>) -> TlsmState {
++    let ledger = TestLedger::default();
++    let mut tlsm = Tlsm::new(sample_intent());
++    for event in events {
++        tlsm.apply_event(&ledger, event).expect("apply event");
++    }
++    tlsm.state()
+ }

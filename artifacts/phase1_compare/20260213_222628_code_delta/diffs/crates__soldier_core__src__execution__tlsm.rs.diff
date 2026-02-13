@@ -1,0 +1,457 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/tlsm.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/tlsm.rs
+index 55e9201..de8e0ce 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/tlsm.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/tlsm.rs
+@@ -1,240 +1,260 @@
+-//! Trade Lifecycle State Machine (TLSM) per CONTRACT.md §2.1.
+-//!
+-//! **States:** `Created -> Sent -> Acked -> PartiallyFilled -> Filled | Canceled | Failed`
+-//!
+-//! **Hard Rules:**
+-//! - Never panic on out-of-order WS events.
+-//! - "Fill-before-Ack" is valid reality: accept fill, log anomaly, reconcile later.
+-//! - Every transition is appended to WAL immediately.
+-//!
+-//! AT-230, AT-210.
+-
+-// ─── States ─────────────────────────────────────────────────────────────
+-
+-/// TLSM states per CONTRACT.md §2.1.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+-pub enum TlsmState {
+-    Created,
+-    Sent,
+-    Acked,
+-    PartiallyFilled,
+-    Filled,
+-    Cancelled,
+-    Failed,
++use std::fmt;
++use std::sync::atomic::{AtomicU64, Ordering};
++
++use super::state::{TlsmEvent, TlsmIntent, TlsmLedgerEntry, TlsmState};
++
++pub struct TlsmMetrics {
++    out_of_order_total: AtomicU64,
+ }
+ 
+-impl TlsmState {
+-    /// Whether this state is terminal (no further transitions expected).
+-    pub fn is_terminal(self) -> bool {
+-        matches!(
+-            self,
+-            TlsmState::Filled | TlsmState::Cancelled | TlsmState::Failed
+-        )
++impl Default for TlsmMetrics {
++    fn default() -> Self {
++        Self::new()
+     }
+ }
+ 
+-// ─── Events ─────────────────────────────────────────────────────────────
+-
+-/// Events that can drive TLSM transitions.
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub enum TlsmEvent {
+-    /// Order sent to exchange.
+-    Sent,
+-    /// Exchange acknowledged the order.
+-    Acked,
+-    /// Partial fill received.
+-    PartialFill,
+-    /// Full fill received.
+-    Filled,
+-    /// Order cancelled.
+-    Cancelled,
+-    /// Order rejected by exchange.
+-    Rejected,
+-    /// Internal failure.
+-    Failed,
++impl TlsmMetrics {
++    pub const fn new() -> Self {
++        Self {
++            out_of_order_total: AtomicU64::new(0),
++        }
++    }
++
++    pub fn out_of_order_total(&self) -> u64 {
++        self.out_of_order_total.load(Ordering::Relaxed)
++    }
+ }
+ 
+-// ─── Transition result ──────────────────────────────────────────────────
+-
+-/// Result of applying an event to the TLSM.
+-#[derive(Debug, Clone, PartialEq, Eq)]
+-pub enum TransitionResult {
+-    /// Normal transition — state changed as expected.
+-    Transitioned { from: TlsmState, to: TlsmState },
+-    /// Out-of-order event accepted — state changed but order was unexpected.
+-    /// CONTRACT.md: "Fill-before-Ack is valid reality: accept fill, log anomaly."
+-    OutOfOrder {
+-        from: TlsmState,
+-        to: TlsmState,
+-        anomaly: String,
+-    },
+-    /// Event ignored — already in terminal state or no-op.
+-    Ignored {
+-        current: TlsmState,
+-        event: TlsmEvent,
+-        reason: String,
+-    },
++static TLSM_METRICS: TlsmMetrics = TlsmMetrics::new();
++
++pub fn tlsm_out_of_order_total() -> u64 {
++    TLSM_METRICS.out_of_order_total()
+ }
+ 
+-// ─── TLSM instance ─────────────────────────────────────────────────────
++#[derive(Debug, Clone, PartialEq)]
++pub struct TlsmTransition {
++    pub from: TlsmState,
++    pub to: TlsmState,
++    pub event: TlsmEvent,
++    pub entry: TlsmLedgerEntry,
++}
+ 
+-/// A single TLSM instance tracking one order's lifecycle.
+-///
+-/// **Never panics** — all out-of-order events are handled gracefully.
+ #[derive(Debug, Clone)]
++pub struct TlsmLedgerError {
++    pub message: String,
++}
++
++impl TlsmLedgerError {
++    pub fn new(message: impl Into<String>) -> Self {
++        Self {
++            message: message.into(),
++        }
++    }
++}
++
++impl fmt::Display for TlsmLedgerError {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(f, "{}", self.message)
++    }
++}
++
++impl std::error::Error for TlsmLedgerError {}
++
++#[derive(Debug)]
++pub enum TlsmError {
++    Ledger(TlsmLedgerError),
++}
++
++impl From<TlsmLedgerError> for TlsmError {
++    fn from(err: TlsmLedgerError) -> Self {
++        TlsmError::Ledger(err)
++    }
++}
++
++pub trait TlsmLedger {
++    fn append_transition(&self, entry: &TlsmLedgerEntry) -> Result<(), TlsmLedgerError>;
++}
++
+ pub struct Tlsm {
++    intent: TlsmIntent,
+     state: TlsmState,
+-    /// History of transitions for WAL append.
+-    transitions: Vec<(TlsmEvent, TlsmState, TlsmState)>,
++    sent_ts: Option<u64>,
++    ack_ts: Option<u64>,
++    last_fill_ts: Option<u64>,
++    exchange_order_id: Option<String>,
++    last_trade_id: Option<String>,
+ }
+ 
+ impl Tlsm {
+-    /// Create a new TLSM in the `Created` state.
+-    pub fn new() -> Self {
++    pub fn new(intent: TlsmIntent) -> Self {
+         Self {
++            intent,
+             state: TlsmState::Created,
+-            transitions: Vec::new(),
++            sent_ts: None,
++            ack_ts: None,
++            last_fill_ts: None,
++            exchange_order_id: None,
++            last_trade_id: None,
+         }
+     }
+ 
+-    /// Current state.
+     pub fn state(&self) -> TlsmState {
+         self.state
+     }
+ 
+-    /// Number of transitions recorded.
+-    pub fn transition_count(&self) -> usize {
+-        self.transitions.len()
++    pub fn sent_ts(&self) -> Option<u64> {
++        self.sent_ts
+     }
+ 
+-    /// Apply an event to the TLSM.
+-    ///
+-    /// CONTRACT.md §2.1: "Never panic on out-of-order WS events."
+-    /// Returns the transition result — never panics.
+-    pub fn apply(&mut self, event: TlsmEvent) -> TransitionResult {
+-        let from = self.state;
++    pub fn ack_ts(&self) -> Option<u64> {
++        self.ack_ts
++    }
+ 
+-        // Terminal states: ignore all further events.
+-        if from.is_terminal() {
+-            return TransitionResult::Ignored {
+-                current: from,
+-                event,
+-                reason: "already in terminal state".to_string(),
+-            };
++    pub fn last_fill_ts(&self) -> Option<u64> {
++        self.last_fill_ts
++    }
++
++    pub fn apply_event<L: TlsmLedger>(
++        &mut self,
++        ledger: &L,
++        event: TlsmEvent,
++    ) -> Result<TlsmTransition, TlsmError> {
++        let from = self.state;
++        if self.is_out_of_order(&event) {
++            TLSM_METRICS
++                .out_of_order_total
++                .fetch_add(1, Ordering::Relaxed);
+         }
+ 
+-        match (&from, &event) {
+-            // ─── Normal transitions ─────────────────────────────────
+-            (TlsmState::Created, TlsmEvent::Sent) => self.transition(from, TlsmState::Sent, event),
++        let (sent_ts, ack_ts, last_fill_ts) = self.projected_event_ts(&event);
++        let to = self.next_state(from, &event);
++        let entry = self.build_ledger_entry_for(to, sent_ts, ack_ts, last_fill_ts);
++        ledger.append_transition(&entry)?;
+ 
+-            (TlsmState::Sent, TlsmEvent::Acked) => self.transition(from, TlsmState::Acked, event),
++        self.state = to;
++        self.sent_ts = sent_ts;
++        self.ack_ts = ack_ts;
++        self.last_fill_ts = last_fill_ts;
+ 
+-            (TlsmState::Acked, TlsmEvent::PartialFill) => {
+-                self.transition(from, TlsmState::PartiallyFilled, event)
+-            }
++        Ok(TlsmTransition {
++            from,
++            to,
++            event,
++            entry,
++        })
++    }
+ 
+-            (TlsmState::Acked, TlsmEvent::Filled) => {
+-                self.transition(from, TlsmState::Filled, event)
+-            }
++    fn next_state(&self, current: TlsmState, event: &TlsmEvent) -> TlsmState {
++        if matches!(event, TlsmEvent::Filled { .. }) {
++            return TlsmState::Filled;
++        }
++        if current.is_terminal() {
++            return current;
++        }
++        match event {
++            TlsmEvent::Sent { .. } => match current {
++                TlsmState::Created => TlsmState::Sent,
++                _ => current,
++            },
++            TlsmEvent::Acked { .. } => match current {
++                TlsmState::Created | TlsmState::Sent => TlsmState::Acked,
++                _ => current,
++            },
++            TlsmEvent::PartiallyFilled { .. } => TlsmState::PartiallyFilled,
++            TlsmEvent::Canceled { .. } => TlsmState::Canceled,
++            TlsmEvent::Failed { .. } => TlsmState::Failed,
++            TlsmEvent::Filled { .. } => TlsmState::Filled,
++        }
++    }
+ 
+-            (TlsmState::PartiallyFilled, TlsmEvent::PartialFill) => {
+-                self.transition(from, TlsmState::PartiallyFilled, event)
+-            }
++    fn projected_event_ts(&self, event: &TlsmEvent) -> (Option<u64>, Option<u64>, Option<u64>) {
++        let mut sent_ts = self.sent_ts;
++        let mut ack_ts = self.ack_ts;
++        let mut last_fill_ts = self.last_fill_ts;
+ 
+-            (TlsmState::PartiallyFilled, TlsmEvent::Filled) => {
+-                self.transition(from, TlsmState::Filled, event)
++        match event {
++            TlsmEvent::Sent { ts_ms } => {
++                if sent_ts.is_none() {
++                    sent_ts = Some(*ts_ms);
++                }
+             }
+-
+-            // Cancel from any non-terminal state
+-            (_, TlsmEvent::Cancelled) => self.transition(from, TlsmState::Cancelled, event),
+-
+-            // Reject from Sent or Created
+-            (TlsmState::Created | TlsmState::Sent, TlsmEvent::Rejected) => {
+-                // Rejected maps to Failed state
+-                self.transition(from, TlsmState::Failed, event)
++            TlsmEvent::Acked { ts_ms } => {
++                if ack_ts.is_none() {
++                    ack_ts = Some(*ts_ms);
++                }
+             }
++            TlsmEvent::PartiallyFilled { ts_ms } | TlsmEvent::Filled { ts_ms } => {
++                last_fill_ts = Some(match last_fill_ts {
++                    Some(existing) => existing.max(*ts_ms),
++                    None => *ts_ms,
++                });
++            }
++            TlsmEvent::Canceled { .. } | TlsmEvent::Failed { .. } => {}
++        }
+ 
+-            // Failed from any non-terminal state
+-            (_, TlsmEvent::Failed) => self.transition(from, TlsmState::Failed, event),
++        (sent_ts, ack_ts, last_fill_ts)
++    }
+ 
+-            // ─── Out-of-order: Fill before Ack (AT-230) ─────────────
+-            (TlsmState::Sent, TlsmEvent::Filled) => {
+-                self.out_of_order(from, TlsmState::Filled, event, "fill-before-ack")
++    fn is_out_of_order(&self, event: &TlsmEvent) -> bool {
++        match event {
++            TlsmEvent::Sent { .. } => {
++                self.sent_ts.is_some()
++                    || self.ack_ts.is_some()
++                    || self.last_fill_ts.is_some()
++                    || self.state.is_terminal()
+             }
+-
+-            (TlsmState::Sent, TlsmEvent::PartialFill) => self.out_of_order(
+-                from,
+-                TlsmState::PartiallyFilled,
+-                event,
+-                "partial-fill-before-ack",
+-            ),
+-
+-            // ─── Out-of-order: Fill from Created (AT-210) ───────────
+-            (TlsmState::Created, TlsmEvent::Filled) => self.out_of_order(
+-                from,
+-                TlsmState::Filled,
+-                event,
+-                "fill-before-send (orphan fill)",
+-            ),
+-
+-            (TlsmState::Created, TlsmEvent::PartialFill) => self.out_of_order(
+-                from,
+-                TlsmState::PartiallyFilled,
+-                event,
+-                "partial-fill-before-send",
+-            ),
+-
+-            (TlsmState::Created, TlsmEvent::Acked) => {
+-                self.out_of_order(from, TlsmState::Acked, event, "ack-before-send")
++            TlsmEvent::Acked { .. } => {
++                self.sent_ts.is_none()
++                    || self.last_fill_ts.is_some()
++                    || matches!(self.state, TlsmState::Canceled | TlsmState::Failed)
+             }
+-
+-            // ─── Out-of-order: Ack after fills ──────────────────────
+-            (TlsmState::PartiallyFilled, TlsmEvent::Acked) => {
+-                // Already partially filled, ack arrives late — ignore
+-                // (state is already past Acked)
+-                TransitionResult::Ignored {
+-                    current: from,
+-                    event,
+-                    reason: "ack after partial fill — already past Acked".to_string(),
+-                }
++            TlsmEvent::PartiallyFilled { .. } => {
++                self.ack_ts.is_none()
++                    || matches!(
++                        self.state,
++                        TlsmState::Canceled | TlsmState::Failed | TlsmState::Filled
++                    )
++            }
++            TlsmEvent::Filled { .. } => {
++                self.ack_ts.is_none()
++                    || matches!(
++                        self.state,
++                        TlsmState::Canceled | TlsmState::Failed | TlsmState::Filled
++                    )
++            }
++            TlsmEvent::Canceled { .. } => {
++                self.sent_ts.is_none() || matches!(self.state, TlsmState::Filled)
++            }
++            TlsmEvent::Failed { .. } => {
++                self.sent_ts.is_none() || matches!(self.state, TlsmState::Filled)
+             }
+-
+-            // ─── Anything else: ignore ──────────────────────────────
+-            _ => TransitionResult::Ignored {
+-                current: from,
+-                event,
+-                reason: "no valid transition".to_string(),
+-            },
+         }
+     }
+ 
+-    /// Record a normal transition.
+-    fn transition(&mut self, from: TlsmState, to: TlsmState, event: TlsmEvent) -> TransitionResult {
+-        self.state = to;
+-        self.transitions.push((event, from, to));
+-        TransitionResult::Transitioned { from, to }
+-    }
+-
+-    /// Record an out-of-order transition.
+-    fn out_of_order(
+-        &mut self,
+-        from: TlsmState,
+-        to: TlsmState,
+-        event: TlsmEvent,
+-        anomaly: &str,
+-    ) -> TransitionResult {
+-        self.state = to;
+-        self.transitions.push((event, from, to));
+-        TransitionResult::OutOfOrder {
+-            from,
+-            to,
+-            anomaly: anomaly.to_string(),
++    fn build_ledger_entry_for(
++        &self,
++        tls_state: TlsmState,
++        sent_ts: Option<u64>,
++        ack_ts: Option<u64>,
++        last_fill_ts: Option<u64>,
++    ) -> TlsmLedgerEntry {
++        TlsmLedgerEntry {
++            intent_hash: self.intent.intent_hash,
++            group_id: self.intent.group_id.clone(),
++            leg_idx: self.intent.leg_idx,
++            instrument: self.intent.instrument.clone(),
++            side: self.intent.side,
++            qty_steps: self.intent.qty_steps,
++            qty_q: self.intent.qty_q,
++            limit_price_q: self.intent.limit_price_q,
++            price_ticks: self.intent.price_ticks,
++            tls_state,
++            created_ts: self.intent.created_ts,
++            sent_ts,
++            ack_ts,
++            last_fill_ts,
++            exchange_order_id: self.exchange_order_id.clone(),
++            last_trade_id: self.last_trade_id.clone(),
+         }
+     }
+ }
+-
+-impl Default for Tlsm {
+-    fn default() -> Self {
+-        Self::new()
+-    }
+-}

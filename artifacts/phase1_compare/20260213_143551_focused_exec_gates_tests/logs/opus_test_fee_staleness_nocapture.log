@@ -1,0 +1,18 @@
+   Compiling soldier_core v0.1.0 (/private/tmp/phase1-focused-compare-20260213_143323/opus/crates/soldier_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.03s
+     Running tests/test_fee_staleness.rs (target/debug/deps/test_fee_staleness-686b3d17808471fb)
+
+running 10 tests
+test test_at032_buffer_not_applied_when_fresh ... ok
+test test_at032_soft_stale_applies_buffer ... ok
+test test_at032_soft_stale_at_hard_boundary ... ok
+test test_at033_hard_stale_open_blocked ... ok
+test test_at033_hard_stale_sets_degraded ... ok
+test test_at042_missing_timestamp_blocks_open ... ok
+test test_at042_missing_timestamp_is_hard_stale ... ok
+test test_at244_fresh_at_boundary ... ok
+test test_at244_fresh_cache_uses_actual_rate ... ok
+test test_config_defaults ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

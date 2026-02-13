@@ -1,0 +1,291 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/pricer.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/pricer.rs
+index 89418c3..ddf8a01 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/pricer.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/pricer.rs
+@@ -1,209 +1,108 @@
+-//! Fee-Aware IOC Limit Pricer per CONTRACT.md §1.4.
+-//!
+-//! **Rule:**
+-//! - `net_edge = gross_edge - fees`
+-//! - If `net_edge < min_edge` -> reject.
+-//! - `net_edge_per_unit = net_edge / qty`
+-//! - `fee_per_unit = fee_estimate_usd / qty`
+-//! - `min_edge_per_unit = min_edge_usd / qty`
+-//! - `max_price_for_min_edge`:
+-//!   - BUY: `fair_price - (min_edge_per_unit + fee_per_unit)`
+-//!   - SELL: `fair_price + (min_edge_per_unit + fee_per_unit)`
+-//! - `proposed_limit = fair_price +/- 0.5 * net_edge_per_unit`
+-//! - Final limit clamped to guarantee min edge at limit price.
+-//!
+-//! AT-223.
+-
+-// --- Pricer side ---------------------------------------------------------
+-
+-/// Order side for the pricer.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum PricerSide {
+-    Buy,
+-    Sell,
+-}
+-
+-// --- Pricer input --------------------------------------------------------
++use super::{RejectReason, Side};
+ 
+-/// Input to the IOC limit pricer.
+-#[derive(Debug, Clone)]
+-pub struct PricerInput {
+-    /// Fair price from the signal/model.
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct PricerIntent {
++    pub side: Side,
+     pub fair_price: f64,
+-    /// Gross edge in USD (signal-derived expected profit before costs).
+     pub gross_edge_usd: f64,
+-    /// Minimum acceptable net edge in USD.
+-    pub min_edge_usd: f64,
+-    /// Estimated fee in USD for this trade.
+     pub fee_estimate_usd: f64,
+-    /// Order quantity.
++    pub min_edge_usd: f64,
+     pub qty: f64,
+-    /// Order side.
+-    pub side: PricerSide,
+-}
+-
+-// --- Pricer result -------------------------------------------------------
+-
+-/// Reject reason from the pricer.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum PricerRejectReason {
+-    /// Net edge after fees is below min_edge_usd.
+-    NetEdgeTooLow,
+-    /// Invalid input (non-finite numerics, qty <= 0, etc).
+-    InvalidInput,
+ }
+ 
+-/// Result of the pricer evaluation.
+-#[derive(Debug, Clone, PartialEq)]
+-pub enum PricerResult {
+-    /// Limit price computed successfully.
+-    LimitPrice {
+-        /// Final clamped limit price for IOC order.
+-        limit_price: f64,
+-        /// The max_price_for_min_edge bound used for clamping.
+-        max_price_for_min_edge: f64,
+-        /// Computed net edge in USD.
+-        net_edge_usd: f64,
+-    },
+-    /// Intent rejected — cannot achieve min edge.
+-    Rejected {
+-        /// Rejection reason.
+-        reason: PricerRejectReason,
+-        /// Net edge if computable.
+-        net_edge_usd: Option<f64>,
+-    },
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct PricerOutcome {
++    pub limit_price: f64,
++    pub net_edge_usd: f64,
++    pub max_price_for_min_edge: f64,
+ }
+ 
+-// --- Metrics -------------------------------------------------------------
+-
+-/// Observability metrics for the pricer.
+-#[derive(Debug)]
+-pub struct PricerMetrics {
+-    /// Rejections due to net edge too low.
+-    reject_total: u64,
+-    /// Total successful pricings.
+-    priced_total: u64,
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct PricerReject {
++    pub reason: RejectReason,
++    pub net_edge_usd: Option<f64>,
+ }
+ 
+-impl PricerMetrics {
+-    /// Create a new metrics tracker.
+-    pub fn new() -> Self {
+-        Self {
+-            reject_total: 0,
+-            priced_total: 0,
+-        }
+-    }
++pub fn price_ioc_limit(intent: &PricerIntent) -> Result<PricerOutcome, PricerReject> {
++    let fair_price = parse_positive(intent.fair_price)?;
++    let gross_edge = parse_finite(intent.gross_edge_usd)?;
++    let fee_estimate = parse_finite(intent.fee_estimate_usd)?;
++    let min_edge = parse_finite(intent.min_edge_usd)?;
++    let qty = parse_positive(intent.qty)?;
+ 
+-    /// Record a rejection.
+-    pub fn record_reject(&mut self) {
+-        self.reject_total += 1;
++    let net_edge_usd = gross_edge - fee_estimate;
++    if !net_edge_usd.is_finite() {
++        return Err(reject(None));
+     }
+ 
+-    /// Record a successful pricing.
+-    pub fn record_priced(&mut self) {
+-        self.priced_total += 1;
++    if net_edge_usd < min_edge {
++        return Err(reject(Some(net_edge_usd)));
+     }
+ 
+-    /// Total rejections.
+-    pub fn reject_total(&self) -> u64 {
+-        self.reject_total
+-    }
++    let net_edge_per_unit = net_edge_usd / qty;
++    let fee_per_unit = fee_estimate / qty;
++    let min_edge_per_unit = min_edge / qty;
+ 
+-    /// Total successful pricings.
+-    pub fn priced_total(&self) -> u64 {
+-        self.priced_total
+-    }
+-}
+-
+-impl Default for PricerMetrics {
+-    fn default() -> Self {
+-        Self::new()
+-    }
+-}
++    let max_price_for_min_edge = match intent.side {
++        Side::Buy => fair_price - (min_edge_per_unit + fee_per_unit),
++        Side::Sell => fair_price + (min_edge_per_unit + fee_per_unit),
++    };
+ 
+-fn reject_invalid(metrics: &mut PricerMetrics) -> PricerResult {
+-    metrics.record_reject();
+-    PricerResult::Rejected {
+-        reason: PricerRejectReason::InvalidInput,
+-        net_edge_usd: None,
+-    }
+-}
++    let proposed_limit = match intent.side {
++        Side::Buy => fair_price - 0.5 * net_edge_per_unit,
++        Side::Sell => fair_price + 0.5 * net_edge_per_unit,
++    };
+ 
+-// --- Pricer evaluator ----------------------------------------------------
+-
+-/// Compute IOC limit price with fee-aware min-edge clamping.
+-///
+-/// CONTRACT.md §1.4: "No Market Orders" — always produce a limit price
+-/// that guarantees min_edge_usd at the limit.
+-pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> PricerResult {
+-    // Standalone fail-closed input validation.
+-    if !input.fair_price.is_finite()
+-        || input.fair_price <= 0.0
+-        || !input.gross_edge_usd.is_finite()
+-        || !input.min_edge_usd.is_finite()
+-        || input.min_edge_usd < 0.0
+-        || !input.fee_estimate_usd.is_finite()
+-        || input.fee_estimate_usd < 0.0
+-        || !input.qty.is_finite()
+-        || input.qty <= 0.0
+-    {
+-        return reject_invalid(metrics);
+-    }
++    let limit_price = match intent.side {
++        Side::Buy => proposed_limit.min(max_price_for_min_edge),
++        Side::Sell => proposed_limit.max(max_price_for_min_edge),
++    };
+ 
+-    // net_edge = gross_edge - fees
+-    let net_edge = input.gross_edge_usd - input.fee_estimate_usd;
+-    if !net_edge.is_finite() {
+-        return reject_invalid(metrics);
+-    }
++    record_limit_vs_fair_bps(fair_price, limit_price);
+ 
+-    // Reject if net_edge < min_edge
+-    if net_edge < input.min_edge_usd {
+-        metrics.record_reject();
+-        return PricerResult::Rejected {
+-            reason: PricerRejectReason::NetEdgeTooLow,
+-            net_edge_usd: Some(net_edge),
+-        };
+-    }
++    Ok(PricerOutcome {
++        limit_price,
++        net_edge_usd,
++        max_price_for_min_edge,
++    })
++}
+ 
+-    // Per-unit calculations
+-    let net_edge_per_unit = net_edge / input.qty;
+-    let fee_per_unit = input.fee_estimate_usd / input.qty;
+-    let min_edge_per_unit = input.min_edge_usd / input.qty;
+-    if !net_edge_per_unit.is_finite() || !fee_per_unit.is_finite() || !min_edge_per_unit.is_finite()
+-    {
+-        return reject_invalid(metrics);
++fn parse_finite(value: f64) -> Result<f64, PricerReject> {
++    if value.is_finite() {
++        Ok(value)
++    } else {
++        Err(reject(None))
+     }
++}
+ 
+-    // max_price_for_min_edge (guarantees min edge at fill)
+-    let max_price_for_min_edge = match input.side {
+-        PricerSide::Buy => input.fair_price - (min_edge_per_unit + fee_per_unit),
+-        PricerSide::Sell => input.fair_price + (min_edge_per_unit + fee_per_unit),
+-    };
+-
+-    // proposed_limit from fill aggressiveness
+-    let proposed_limit = match input.side {
+-        PricerSide::Buy => input.fair_price - 0.5 * net_edge_per_unit,
+-        PricerSide::Sell => input.fair_price + 0.5 * net_edge_per_unit,
+-    };
+-
+-    if !max_price_for_min_edge.is_finite() || !proposed_limit.is_finite() {
+-        return reject_invalid(metrics);
++fn parse_positive(value: f64) -> Result<f64, PricerReject> {
++    if value.is_finite() && value > 0.0 {
++        Ok(value)
++    } else {
++        Err(reject(None))
+     }
++}
+ 
+-    // Clamp to guarantee min edge
+-    let limit_price = match input.side {
+-        PricerSide::Buy => proposed_limit.min(max_price_for_min_edge),
+-        PricerSide::Sell => proposed_limit.max(max_price_for_min_edge),
+-    };
++fn reject(net_edge_usd: Option<f64>) -> PricerReject {
++    reject_with_metrics(RejectReason::NetEdgeTooLow, net_edge_usd)
++}
+ 
+-    if !limit_price.is_finite() || limit_price <= 0.0 {
+-        return reject_invalid(metrics);
++fn reject_with_metrics(reason: RejectReason, net_edge_usd: Option<f64>) -> PricerReject {
++    eprintln!("pricer_reject_total reason={:?}", reason);
++    eprintln!(
++        "PricerReject reason={:?} net_edge_usd={:?}",
++        reason, net_edge_usd
++    );
++    PricerReject {
++        reason,
++        net_edge_usd,
+     }
++}
+ 
+-    metrics.record_priced();
+-    PricerResult::LimitPrice {
+-        limit_price,
+-        max_price_for_min_edge,
+-        net_edge_usd: net_edge,
++fn record_limit_vs_fair_bps(fair_price: f64, limit_price: f64) {
++    if fair_price == 0.0 {
++        return;
+     }
++    let bps = (limit_price - fair_price) / fair_price * 10_000.0;
++    eprintln!("pricer_limit_vs_fair_bps value={}", bps);
+ }

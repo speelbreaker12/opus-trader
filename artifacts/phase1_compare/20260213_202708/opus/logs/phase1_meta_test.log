@@ -1,0 +1,9 @@
+$ python3 /private/tmp/phase1-compare-pinned-clean-20260213_142706/opus/tools/phase1_meta_test.py
+[exit=0] [elapsed_s=0.347]
+
+=== STDOUT ===
+PHASE 1 META-TEST OK
+
+
+=== STDERR ===
+

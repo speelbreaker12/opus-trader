@@ -1,0 +1,202 @@
+{
+  "generated_utc": "2026-02-13T15:51:41.694557+00:00",
+  "opus": {
+    "blockers": 1,
+    "config_matrix_entries": 0,
+    "config_matrix_fail": 0,
+    "config_matrix_pass": 0,
+    "determinism_line_count": 19,
+    "determinism_unique_hashes": 17,
+    "diff_changed_files": null,
+    "diff_shortstat": null,
+    "dirty_files": 27,
+    "failed_any_of": [],
+    "file_checks": [
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/README.md",
+        "sha256": "4d71ba799103e541011eb8217883057025334d4bad59b68e20785f67c0c327bf",
+        "size_bytes": 1258
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/ci_links.md",
+        "sha256": "fe81cc17cdaab5c33a074d9eab2325ab7410f4a4e868d328d2172d483ba45c81",
+        "size_bytes": 689
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/config_fail_closed/missing_keys_matrix.json",
+        "sha256": "b97b41ab95e6246481627e9f990b7d9604f49f029a339f28b85466827ac47e55",
+        "size_bytes": 1800
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/determinism/intent_hashes.txt",
+        "sha256": "fccec7c809dcdef88e79a87da6db06aa9c56815a38791a47d7040386bb930300",
+        "size_bytes": 935
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/no_side_effects/rejection_cases.md",
+        "sha256": "72a10a06181d74861737d0c3782e635de94be8054db08463d09b5e1397d3dbc6",
+        "size_bytes": 2955
+      },
+      {
+        "exists": false,
+        "non_empty": false,
+        "path": "evidence/phase1/restart_loop/restart_100_cycles.log",
+        "sha256": "",
+        "size_bytes": 0
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/traceability/sample_rejection_log.txt",
+        "sha256": "e507b6a7c8cb8ef14cd58e33a81be76cdef2d4bf2892d60b47ae530769273507",
+        "size_bytes": 1259
+      }
+    ],
+    "head_branch": "codex/preflight-fixture-profiles-sync",
+    "head_sha": "7152fb9fcc186b34391a261c48580f9cd7a37d6e",
+    "is_ref_head": true,
+    "meta_test": null,
+    "missing_required_all": [
+      "evidence/phase1/restart_loop/restart_100_cycles.log"
+    ],
+    "name": "opus",
+    "path": "/Users/admin/Desktop/opus-trader",
+    "ref": "HEAD",
+    "required_all": [
+      "evidence/phase1/README.md",
+      "evidence/phase1/ci_links.md",
+      "evidence/phase1/config_fail_closed/missing_keys_matrix.json",
+      "evidence/phase1/determinism/intent_hashes.txt",
+      "evidence/phase1/no_side_effects/rejection_cases.md",
+      "evidence/phase1/restart_loop/restart_100_cycles.log",
+      "evidence/phase1/traceability/sample_rejection_log.txt"
+    ],
+    "required_all_ok": 6,
+    "required_all_total": 7,
+    "required_any_of": [
+      [
+        "evidence/phase1/crash_mid_intent/auto_test_passed.txt",
+        "evidence/phase1/crash_mid_intent/drill.md"
+      ]
+    ],
+    "required_any_of_ok": 1,
+    "required_any_of_total": 1,
+    "required_source": "docs/PHASE1_CHECKLIST_BLOCK.md",
+    "resolved_ref_sha": "7152fb9fcc186b34391a261c48580f9cd7a37d6e",
+    "scenario": null,
+    "traceability_line_count": 28,
+    "traceability_unique_intent_ids": 4,
+    "verify_quick": null,
+    "warnings": []
+  },
+  "ralph": {
+    "blockers": 1,
+    "config_matrix_entries": 6,
+    "config_matrix_fail": 0,
+    "config_matrix_pass": 6,
+    "determinism_line_count": 9,
+    "determinism_unique_hashes": 9,
+    "diff_changed_files": null,
+    "diff_shortstat": null,
+    "dirty_files": 2,
+    "failed_any_of": [],
+    "file_checks": [
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/README.md",
+        "sha256": "7059c89f2f42b84763b90319d50accc48ae3fe0f4426e737bdc8c34416dd152e",
+        "size_bytes": 3564
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/ci_links.md",
+        "sha256": "ef3d4b9e28d925545db19b4c6e3c3549c2fba2b158b087933ad1fcd73402fe70",
+        "size_bytes": 2454
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/config_fail_closed/missing_keys_matrix.json",
+        "sha256": "3e07391cde186ab54f6d5556b1ab2c2bb2a724c0ee4b70307fc839e2d65a7be5",
+        "size_bytes": 740
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/determinism/intent_hashes.txt",
+        "sha256": "63d45afc86c1927d6d31d0b188a534a6685171a355c9ffa99819e1830acfa035",
+        "size_bytes": 493
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/no_side_effects/rejection_cases.md",
+        "sha256": "31ccd489fa9e4ae009c7df1b40e6b1b05f009d65725abd822121cf7af535ef29",
+        "size_bytes": 1159
+      },
+      {
+        "exists": false,
+        "non_empty": false,
+        "path": "evidence/phase1/restart_loop/restart_100_cycles.log",
+        "sha256": "",
+        "size_bytes": 0
+      },
+      {
+        "exists": true,
+        "non_empty": true,
+        "path": "evidence/phase1/traceability/sample_rejection_log.txt",
+        "sha256": "3d29af7d8646c856a40296c16d1495be929d97b6dae5ac08155623b97d24513a",
+        "size_bytes": 344
+      }
+    ],
+    "head_branch": "pr-112",
+    "head_sha": "9d1be45a6942affca60bf29a23ea1b0077ab27ec",
+    "is_ref_head": true,
+    "meta_test": null,
+    "missing_required_all": [
+      "evidence/phase1/restart_loop/restart_100_cycles.log"
+    ],
+    "name": "ralph",
+    "path": "/Users/admin/Desktop/ralph",
+    "ref": "HEAD",
+    "required_all": [
+      "evidence/phase1/README.md",
+      "evidence/phase1/ci_links.md",
+      "evidence/phase1/config_fail_closed/missing_keys_matrix.json",
+      "evidence/phase1/determinism/intent_hashes.txt",
+      "evidence/phase1/no_side_effects/rejection_cases.md",
+      "evidence/phase1/restart_loop/restart_100_cycles.log",
+      "evidence/phase1/traceability/sample_rejection_log.txt"
+    ],
+    "required_all_ok": 6,
+    "required_all_total": 7,
+    "required_any_of": [
+      [
+        "evidence/phase1/crash_mid_intent/auto_test_passed.txt",
+        "evidence/phase1/crash_mid_intent/drill.md"
+      ]
+    ],
+    "required_any_of_ok": 1,
+    "required_any_of_total": 1,
+    "required_source": "fallback defaults",
+    "resolved_ref_sha": "9d1be45a6942affca60bf29a23ea1b0077ab27ec",
+    "scenario": null,
+    "traceability_line_count": 6,
+    "traceability_unique_intent_ids": 1,
+    "verify_quick": null,
+    "warnings": []
+  },
+  "run_id": "20260213_155139"
+}

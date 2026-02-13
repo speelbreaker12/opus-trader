@@ -1,0 +1,11 @@
+   Compiling soldier_core v0.1.0 (/private/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.53s
+     Running tests/test_fee_cache.rs (target/debug/deps/test_fee_cache-dd8ffb46ce228aad)
+
+running 3 tests
+test test_fee_cache_timestamp_missing_or_unparseable_forces_reduceonly ... ok
+test test_fee_cache_epoch_ms_survives_restart ... ok
+test test_fee_tier_change_updates_net_edge_within_one_cycle ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

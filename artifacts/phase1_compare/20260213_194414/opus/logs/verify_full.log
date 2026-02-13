@@ -1,0 +1,898 @@
+$ ./plans/verify.sh full
+[exit=0] [elapsed_s=358.135]
+
+=== STDOUT ===
+
+[0;32m=== 0) Verify context ===[0m
+mode=full
+root=/private/tmp/phase1-compare-all5-20260213_134411/opus
+verify_run_id=20260213_134612
+artifacts_dir=/private/tmp/phase1-compare-all5-20260213_134411/opus/artifacts/verify/20260213_134612
+base_ref=origin/main
+
+[0;32m=== 01) preflight ===[0m
+[PASS] Git repository
+[PASS] Tool: git
+[PASS] Tool: jq
+[PASS] Tool: bash
+[PASS] File: PRD file
+[PASS] File: Contract spec
+PASS: legacy layout guard
+[PASS] Legacy layout guard
+PASS: README/CI verify parity check
+[PASS] README/CI parity guard
+PASS: slice completion review guard
+[PASS] Slice completion review guard
+PASS: story review findings guard
+[PASS] Story findings-review guard
+PASS: stoic-cli invariant check
+[PASS] stoic-cli invariants guard
+[PASS] Shell syntax (plans/*.sh)
+[PASS] PRD schema validation
+[PASS] Fixture profile: full (19 tests)
+[PASS] Fixture test: test_run_prd_auditor_invocation.sh
+[PASS] Fixture test: test_codex_review_logged.sh
+[PASS] Fixture test: test_kimi_review_logged.sh
+[PASS] Fixture test: test_code_review_expert_logged.sh
+[PASS] Fixture test: test_thinking_review_logged.sh
+[PASS] Fixture test: test_slice_review_gate.sh
+[PASS] Fixture test: test_guard_no_command_substitution.sh
+[PASS] Fixture test: test_story_review_findings_guard.sh
+[PASS] Fixture test: test_preflight_fixture_profiles.sh
+[PASS] Fixture test: test_stoic_cli_invariant_check.sh
+[PASS] Fixture test: test_verify_timeout_policy.sh
+[PASS] Fixture test: test_story_review_gate.sh
+[PASS] Fixture test: test_codex_review_digest.sh
+[PASS] Fixture test: test_run_prd_auditor_timeout_fallback.sh
+[PASS] Fixture test: test_audit_parallel_empty_cache_arrays.sh
+[PASS] Fixture test: test_slice_completion_review_guard.sh
+[PASS] Fixture test: test_slice_completion_enforce.sh
+[PASS] Fixture test: test_pr_gate.sh
+[PASS] Fixture test: test_pre_pr_review_gate.sh
+[WARN] POSTMORTEM_GATE=0 (postmortem check skipped)
+
+preflight: 33 passed, 0 failed, 1 warnings
+
+[0;32m=== 01b) verify gate contract ===[0m
+PASS: verify gate contract check
+
+[0;32m=== 02) contract kernel ===[0m
+
+[0;32m=== 03) contract coverage ===[0m
+contract_coverage_strict=1 (sentinel/env enabled)
+
+[0;32m=== 04) contract crossrefs ===[0m
+PASS: no cross-reference issues found.
+
+[0;32m=== 05) arch flows ===[0m
+OK: ARCH_FLOW_INDEX checks passed.
+
+[0;32m=== 06) state machines ===[0m
+STATE MACHINES OK
+
+[0;32m=== 07) global invariants ===[0m
+INVARIANTS OK
+
+[0;32m=== 08) time freshness ===[0m
+OK: time/freshness spec checks passed.
+
+[0;32m=== 09) crash matrix ===[0m
+OK: CRASH_MATRIX.md looks mechanically consistent.
+
+[0;32m=== 10) crash replay idempotency ===[0m
+OK: crash/replay/idempotency spec checks passed.
+
+[0;32m=== 11) reconciliation matrix ===[0m
+OK: RECONCILIATION_MATRIX checks passed.
+
+[0;32m=== 12) csp trace ===[0m
+CSP Trace Validation
+====================
+Contract: specs/CONTRACT.md
+Trace: specs/TRACE.yaml
+
+Coverage: 100.0%
+  Total clauses: 9
+  Fully mapped: 1
+  Partial: 8
+  Unmapped: 0
+
+PASS: No errors found
+
+[0;32m=== 13) status fixtures ===[0m
+VALIDATION OK: tests/fixtures/status/market_data_stale.json
+VALIDATION OK: tests/fixtures/status/partial_fill_containment.json
+VALIDATION OK: tests/fixtures/status/repro-only/mixed_registry_test.json
+VALIDATION OK: tests/fixtures/status/restart_reconcile.json
+VALIDATION OK: tests/fixtures/status/session_termination.json
+VALIDATION OK: tests/fixtures/status/unknown_token_force_kill.json
+VALIDATION OK: tests/fixtures/status/wal_backpressure.json
+validated_status_fixtures=7
+
+[0;32m=== 14) vendor docs lint ===[0m
+OK: Cargo.lock unchanged; skipping vendor docs lint.
+
+[0;32m=== 14b) phase0 meta-test ===[0m
+test_policy_is_required_and_bound: PASS
+test_machine_policy_loader_and_config: PASS
+test_api_keys_are_least_privilege: PASS
+test_paper_is_non_trading: PASS
+test_phase0_snapshot_literal_copies: PASS
+test_phase0_owner_signoff_complete: PASS
+test_health_command_behavior: PASS
+test_status_command_behavior: PASS
+test_break_glass_kill_blocks_open_allows_reduce: PASS
+test_simulate_command_docs_require_drill_mode: PASS
+PHASE 0 META-TEST OK
+
+[0;32m=== 15) rust gates ===[0m
+
+[0;32m=== 2a) Rust format ===[0m
+
+[0;32m=== 2b) Rust clippy ===[0m
+    Checking xxhash-rust v0.8.15
+    Checking serde_core v1.0.228
+    Checking zmij v1.0.20
+    Checking memchr v2.8.0
+    Checking soldier_core v0.1.0 (/private/tmp/phase1-compare-all5-20260213_134411/opus/crates/soldier_core)
+    Checking itoa v1.0.17
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking soldier_infra v0.1.0 (/private/tmp/phase1-compare-all5-20260213_134411/opus/crates/soldier_infra)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.84s
+
+[0;32m=== 2c) Rust tests ===[0m
+   Compiling soldier_core v0.1.0 (/private/tmp/phase1-compare-all5-20260213_134411/opus/crates/soldier_core)
+   Compiling soldier_infra v0.1.0 (/private/tmp/phase1-compare-all5-20260213_134411/opus/crates/soldier_infra)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.77s
+     Running unittests src/lib.rs (target/debug/deps/soldier_core-ecaccd2269587d2f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_capabilities.rs (target/debug/deps/test_capabilities-3d83c8118849c627)
+
+running 13 tests
+test test_all_flag_combinations ... ok
+test test_both_flags_true_linked_orders_allowed ... ok
+test test_default_config_oco_not_supported ... ok
+test test_deribit_v51_default_linked_orders_not_supported ... ok
+test test_deterministic_evaluation ... ok
+test test_evaluated_capabilities_eq ... ok
+test test_evaluated_capabilities_ne ... ok
+test test_feature_flags_default_flags_linked_orders_disabled ... ok
+test test_feature_flags_default_linked_orders_disabled ... ok
+test test_neither_flag_not_allowed ... ok
+test test_only_feature_flag_not_allowed ... ok
+test test_only_venue_supported_not_allowed ... ok
+test test_venue_default_linked_orders_not_supported ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_dispatch_chokepoint.rs (target/debug/deps/test_dispatch_chokepoint-2ce02580350165fd)
+
+running 8 tests
+test test_chokepoint_module_exists ... ok
+test test_chokepoint_metrics_mutators_not_public ... ok
+test test_chokepoint_reexported_from_execution ... ok
+test test_dispatch_chokepoint_no_bypass_approved ... ok
+test test_dispatch_visibility_is_restricted ... ok
+test test_dispatch_chokepoint_no_bypass_metrics ... ok
+test test_dispatch_chokepoint_no_direct_exchange_client_usage ... ok
+test test_no_direct_gate_results_construction_in_production ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/test_dispatch_map.rs (target/debug/deps/test_dispatch_map-0f9c392b359b9fc5)
+
+running 27 tests
+test test_at277_option_dispatch_roundtrip ... ok
+test test_at277_perpetual_dispatch_roundtrip ... ok
+test test_at920_consistent_contracts_passes ... ok
+test test_at920_delta_in_error ... ok
+test test_at920_epsilon_denominator_allows_small_amount_within_tolerance ... ok
+test test_at920_mismatch_increments_counter ... ok
+test test_at920_mismatch_rejected ... ok
+test test_at920_no_contracts_skips_check ... ok
+test test_at920_no_dispatch_on_mismatch ... ok
+test test_at920_no_multiplier_rejected_fail_closed ... ok
+test test_at920_non_finite_multiplier_rejected ... ok
+test test_at920_perpetual_mismatch_rejected ... ok
+test test_at920_tolerance_constant ... ok
+test test_at920_within_tolerance_passes ... ok
+test test_cancel_intent_is_reduce_only ... ok
+test test_hedge_intent_is_reduce_only ... ok
+test test_close_intent_is_reduce_only ... ok
+test test_intent_class_reduce_only_table ... ok
+test test_inverse_future_amount_is_qty_usd ... ok
+test test_linear_future_amount_is_qty_coin ... ok
+test test_missing_qty_coin_error ... ok
+test test_map_to_dispatch_rejects_contracts_without_validation ... ok
+test test_missing_qty_usd_error ... ok
+test test_open_intent_not_reduce_only ... ok
+test test_option_amount_is_qty_coin ... ok
+test test_option_only_one_amount_field ... ok
+test test_perpetual_amount_is_qty_usd ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_fee_staleness.rs (target/debug/deps/test_fee_staleness-686b3d17808471fb)
+
+running 10 tests
+test test_at032_soft_stale_applies_buffer ... ok
+test test_at032_buffer_not_applied_when_fresh ... ok
+test test_at032_soft_stale_at_hard_boundary ... ok
+test test_at033_hard_stale_open_blocked ... ok
+test test_at033_hard_stale_sets_degraded ... ok
+test test_at042_missing_timestamp_blocks_open ... ok
+test test_at042_missing_timestamp_is_hard_stale ... ok
+test test_at244_fresh_at_boundary ... ok
+test test_at244_fresh_cache_uses_actual_rate ... ok
+test test_config_defaults ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_gate_ordering.rs (target/debug/deps/test_gate_ordering-e36b2d7590d65b27)
+
+running 36 tests
+test test_at501_open_all_gates_pass_trace_order ... ok
+test test_at502_open_gate_count ... ok
+test test_at503_hedge_skips_liquidity_edge_pricer ... ok
+test test_at503_close_skips_liquidity_edge_pricer ... ok
+test test_at504_cancel_approved_even_degraded ... ok
+test test_at504_cancel_only_dispatch_auth_only ... ok
+test test_at505_hedge_degraded_allowed ... ok
+test test_at505_close_degraded_allowed ... ok
+test test_at505_open_kill_rejected ... ok
+test test_at505_open_degraded_rejected ... ok
+test test_at505_open_maintenance_rejected ... ok
+test test_at506_dispatch_consistency_reject_stops_at_gate4 ... ok
+test test_at506_fee_cache_reject_stops_at_gate5 ... ok
+test test_at506_liquidity_reject_stops_at_gate6 ... ok
+test test_at506_net_edge_reject_stops_at_gate7 ... ok
+test test_at506_preflight_reject_stops_at_gate2 ... ok
+test test_at506_pricer_reject_stops_at_gate8 ... ok
+test test_at506_quantize_reject_stops_at_gate3 ... ok
+test test_at506_wal_reject_stops_at_gate9 ... ok
+test test_close_wal_failure_rejected ... ok
+test test_constraint_approval_requires_all_gates_pass ... ok
+test test_constraint_reject_gates_before_persist ... ok
+test test_constraint_no_approval_with_any_gate_failed ... ok
+test test_constraint_rejected_trace_stops_at_failure ... ok
+test test_constraint_wal_after_all_validation_gates ... ok
+test test_constraint_wal_is_last_gate_close ... ok
+test test_constraint_wal_is_last_gate_hedge ... ok
+test test_constraint_wal_is_last_gate_open ... ok
+test test_dispatch_consistency_allows_when_requested_qty_within_clamp ... ok
+test test_dispatch_consistency_rejects_when_clamp_max_dispatch_qty_missing ... ok
+test test_dispatch_consistency_rejects_when_clamp_requested_qty_missing ... ok
+test test_dispatch_consistency_rejects_when_requested_qty_exceeds_clamp ... ok
+test test_metrics_approved_increments ... ok
+test test_metrics_default ... ok
+test test_metrics_rejected_increments ... ok
+test test_metrics_risk_state_rejection_counted ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_idempotency.rs (target/debug/deps/test_idempotency-adaed8aa108a1ac9)
+
+running 14 tests
+test test_at218_deterministic_hash ... ok
+test test_at218_two_codepaths_same_hash ... ok
+test test_at343_no_timestamp_field ... ok
+test test_at343_no_timestamp_in_hash ... ok
+test test_different_group_id_different_hash ... ok
+test test_different_instrument_different_hash ... ok
+test test_different_leg_idx_different_hash ... ok
+test test_different_side_different_hash ... ok
+test test_field_boundary_separation ... ok
+test test_format_intent_hash_length ... ok
+test test_hash_nonzero ... ok
+test test_ih16_is_full_hash_hex ... ok
+test test_uses_integer_price_ticks ... ok
+test test_uses_integer_qty_steps ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_instrument_cache_ttl.rs (target/debug/deps/test_instrument_cache_ttl-077e4cc62c5ad162)
+
+running 25 tests
+test test_cache_age_deterministic ... ok
+test test_cache_age_at_exact_ttl_is_healthy ... ok
+test test_cache_age_one_second_past_ttl_is_degraded ... ok
+test test_breach_struct_fields ... ok
+test test_cache_hits_counter_increments ... ok
+test test_cache_refresh_resets_staleness ... ok
+test test_drain_breaches_clears_buffer ... ok
+test test_fresh_instrument_cache_returns_healthy ... ok
+test test_fresh_cache_allows_opens ... ok
+test test_infinite_ttl_fails_closed_to_degraded ... ok
+test test_last_age_s_gauge_updates ... ok
+test test_missing_instrument_returns_none ... ok
+test test_multi_instrument_independence ... ok
+test test_nan_ttl_fails_closed_to_degraded ... ok
+test test_opens_blocked_all_risk_states ... ok
+test test_opens_blocked_is_sole_gate_closes_ungated ... ok
+test test_refresh_errors_counter ... ok
+test test_risk_state_for_cache_miss_returns_degraded ... ok
+test test_risk_state_for_fresh_returns_healthy ... ok
+test test_risk_state_for_stale_returns_degraded ... ok
+test test_stale_cache_blocks_opens ... ok
+test test_stale_instrument_cache_sets_degraded ... ok
+test test_pending_breaches_queue_is_capped ... ok
+test test_stale_total_counter_increments ... ok
+test test_ttl_breach_event_emitted_on_stale ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_instrument_kind_mapping.rs (target/debug/deps/test_instrument_kind_mapping-61dfb193659f3504)
+
+running 11 tests
+test test_all_instrument_kinds_derivable ... ok
+test test_btc_dated_future_maps_to_inverse_future ... ok
+test test_btc_perpetual_maps_to_perpetual ... ok
+test test_combo_instruments_return_none ... ok
+test test_linear_priority_over_perpetual ... ok
+test test_option_maps_to_option ... ok
+test test_option_priority_over_future_when_both_set ... ok
+test test_riskstate_has_all_variants ... ok
+test test_riskstate_derives ... ok
+test test_usdc_dated_future_maps_to_linear_future ... ok
+test test_usdc_margined_perpetual_maps_to_linear_future ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_intent_determinism.rs (target/debug/deps/test_intent_determinism-f514d519831f0d14)
+
+running 13 tests
+test test_gid12_deterministic ... ok
+test test_chokepoint_same_inputs_same_trace ... ok
+test test_chokepoint_rejected_deterministic ... ok
+test test_full_pipeline_determinism ... ok
+test test_label_encode_deterministic ... ok
+test test_net_edge_same_inputs_same_result ... ok
+test test_liquidity_gate_same_inputs_same_result ... ok
+test test_pricer_same_inputs_same_price ... ok
+test test_pricer_sell_deterministic ... ok
+test test_quantize_same_inputs_same_output ... ok
+test test_quantize_sell_deterministic ... ok
+test test_sid8_deterministic ... ok
+test test_no_hashmap_ordering_dependency ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_intent_id_propagation.rs (target/debug/deps/test_intent_id_propagation-9f8cdb574458fad7)
+
+running 6 tests
+test test_gate_trace_ordering_enables_correlation ... ok
+test test_gate_trace_provides_audit_trail ... ok
+test test_different_intents_have_distinct_ids ... ok
+test test_intent_id_propagates_through_approved_pipeline ... ok
+test test_intent_id_propagates_through_rejected_pipeline ... ok
+test test_metrics_attributable_to_intent ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_label.rs (target/debug/deps/test_label-558e79b4239c850f)
+
+running 23 tests
+test test_at216_label_starts_with_s4 ... ok
+test test_at216_decode_components ... ok
+test test_at216_decode_leg_idx_1 ... ok
+test test_at216_label_format ... ok
+test test_at216_label_within_limit ... ok
+test test_at216_leg_idx_1 ... ok
+test test_at216_typical_label_length ... ok
+test test_decode_empty_string ... ok
+test test_decode_invalid_leg_idx ... ok
+test test_decode_invalid_prefix ... ok
+test test_decode_too_many_segments ... ok
+test test_decode_wrong_segment_count ... ok
+test test_derive_gid12 ... ok
+test test_derive_gid12_deterministic ... ok
+test test_derive_sid8_deterministic ... ok
+test test_derive_sid8_different_inputs ... ok
+test test_derive_sid8_length ... ok
+test test_encode_decode_roundtrip ... ok
+test test_encode_decode_roundtrip_leg1 ... ok
+test test_full_pipeline_roundtrip ... ok
+test test_label_max_len_constant ... ok
+test test_label_too_long_rejected ... ok
+test test_no_truncation ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_label_match.rs (target/debug/deps/test_label_match-203ad74eaaefdc83)
+
+running 13 tests
+test test_ambiguity_returns_degraded ... ok
+test test_ambiguity_increments_counter ... ok
+test test_deterministic_matching ... ok
+test test_empty_intents ... ok
+test test_no_candidates ... ok
+test test_single_candidate_matches ... ok
+test test_three_candidates_ih16_resolves ... ok
+test test_tiebreaker_ih16 ... ok
+test test_tiebreaker_instrument ... ok
+test test_tiebreaker_order_ih16_before_instrument ... ok
+test test_tiebreaker_qty_q ... ok
+test test_tiebreaker_side ... ok
+test test_wrong_leg_idx_no_match ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_liquidity_gate.rs (target/debug/deps/test_liquidity_gate-8380f60d91eec679)
+
+running 27 tests
+test test_at344_missing_l2_rejects_open ... ok
+test test_at222_no_order_intent_on_rejection ... ok
+test test_at222_slippage_exceeds_max_rejected ... ok
+test test_at222_reject_log_includes_wap_and_slippage ... ok
+test test_at344_stale_l2_rejects_open ... ok
+test test_at421_cancel_only_allowed_without_l2 ... ok
+test test_at421_cancel_allowed_with_stale_l2 ... ok
+test test_at421_close_rejected_without_l2 ... ok
+test test_at909_missing_l2_reason_is_no_l2 ... ok
+test test_close_allowed_with_valid_l2 ... ok
+test test_close_clamps_to_fillable_qty ... ok
+test test_empty_asks_for_buy_rejects ... ok
+test test_empty_bids_for_sell_rejects ... ok
+test test_future_dated_l2_rejected_fail_closed ... ok
+test test_hedge_clamps_to_fillable_qty ... ok
+test test_metrics_default ... ok
+test test_multi_level_wap_computation ... ok
+test test_non_marketable_bypasses_depth_gate ... ok
+test test_non_marketable_close_without_l2_still_rejected_fail_closed ... ok
+test test_non_marketable_hedge_with_stale_l2_still_rejected_fail_closed ... ok
+test test_non_marketable_open_with_stale_l2_still_rejected_fail_closed ... ok
+test test_non_marketable_open_without_l2_still_rejected_fail_closed ... ok
+test test_partial_fill_from_thin_book_evaluates_available ... ok
+test test_sell_walks_bids ... ok
+test test_slippage_at_boundary_allowed ... ok
+test test_slippage_within_limit_allowed ... ok
+test test_stale_l2_fresh_enough_passes ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_missing_config.rs (target/debug/deps/test_missing_config-9f39641bf6e7a412)
+
+running 14 tests
+test test_all_rejections_have_enumerated_reason_codes ... ok
+test test_config_missing_no_side_effects ... ok
+test test_infinity_amount_step_fails_closed ... ok
+test test_missing_amount_step_fails_closed ... ok
+test test_missing_fee_usd_fails_closed ... ok
+test test_missing_gross_edge_fails_closed ... ok
+test test_missing_l2_book_fails_closed ... ok
+test test_missing_min_edge_fails_closed ... ok
+test test_missing_slippage_fails_closed ... ok
+test test_missing_tick_size_fails_closed ... ok
+test test_nan_tick_size_fails_closed ... ok
+test test_negative_tick_size_fails_closed ... ok
+test test_unhealthy_risk_state_fails_closed ... ok
+test test_zero_qty_pricer_fails_closed ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_net_edge_gate.rs (target/debug/deps/test_net_edge_gate-4e025be26294afe4)
+
+running 18 tests
+test test_at932_all_missing ... ok
+test test_at015_net_edge_below_min_rejected ... ok
+test test_at015_zero_dispatch_on_rejection ... ok
+test test_at932_missing_expected_slippage ... ok
+test test_at932_missing_fee_usd ... ok
+test test_at932_missing_gross_edge ... ok
+test test_at932_missing_min_edge ... ok
+test test_fees_exceed_gross_edge ... ok
+test test_metrics_default ... ok
+test test_negative_fee_fails_closed ... ok
+test test_negative_min_edge_fails_closed ... ok
+test test_negative_slippage_fails_closed ... ok
+test test_net_edge_above_min_allowed ... ok
+test test_net_edge_exactly_at_min_allowed ... ok
+test test_net_edge_formula ... ok
+test test_non_finite_gross_fails_closed ... ok
+test test_non_finite_min_edge_fails_closed ... ok
+test test_zero_costs_full_edge ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_order_size.rs (target/debug/deps/test_order_size-a985d8339af34e85)
+
+running 15 tests
+test test_at277_option_sizing ... ok
+test test_at277_perpetual_sizing ... ok
+test test_contracts_derived_for_option ... ok
+test test_contracts_derived_for_perpetual ... ok
+test test_invalid_contract_multiplier_rejected ... ok
+test test_inverse_future_canonical_is_qty_usd ... ok
+test test_linear_future_canonical_is_qty_coin ... ok
+test test_nan_index_price_rejected ... ok
+test test_negative_index_price_rejected ... ok
+test test_no_multiplier_no_contracts ... ok
+test test_notional_usd_always_populated ... ok
+test test_option_canonical_is_qty_coin ... ok
+test test_perpetual_canonical_is_qty_usd ... ok
+test test_zero_canonical_qty_rejected ... ok
+test test_zero_index_price_rejected ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_post_only_guard.rs (target/debug/deps/test_post_only_guard-c1341f760fc7b5f4)
+
+running 14 tests
+test test_at916_buy_above_ask_rejected ... ok
+test test_at916_buy_crosses_at_ask_rejected ... ok
+test test_at916_sell_below_bid_rejected ... ok
+test test_at916_sell_crosses_at_bid_rejected ... ok
+test test_buy_below_ask_allowed ... ok
+test test_buy_just_below_ask_allowed ... ok
+test test_buy_no_ask_allowed ... ok
+test test_deterministic_result ... ok
+test test_metrics_no_increment_on_allowed ... ok
+test test_metrics_reject_counter_increments ... ok
+test test_not_post_only_always_allowed ... ok
+test test_sell_above_bid_allowed ... ok
+test test_sell_just_above_bid_allowed ... ok
+test test_sell_no_bid_allowed ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_preflight.rs (target/debug/deps/test_preflight-6010dfa70cbc1c6a)
+
+running 25 tests
+test test_at018_stop_market_option_rejected ... ok
+test test_at004_linked_order_option_always_rejected ... ok
+test test_at017_market_order_perpetual_rejected ... ok
+test test_at016_market_order_option_rejected ... ok
+test test_at019_stop_market_perpetual_rejected ... ok
+test test_at913_market_order_reason_matches ... ok
+test test_at914_stop_limit_rejected ... ok
+test test_at914_stop_market_all_kinds ... ok
+test test_at914_trigger_field_presence_rejected ... ok
+test test_at915_linked_order_rejected_default ... ok
+test test_deterministic_same_input_same_result ... ok
+test test_limit_order_inverse_future_allowed ... ok
+test test_limit_order_linear_future_allowed ... ok
+test test_limit_order_option_allowed ... ok
+test test_limit_order_perpetual_allowed ... ok
+test test_linked_order_linear_future_both_flags_allowed ... ok
+test test_linked_order_perp_both_flags_allowed ... ok
+test test_linked_order_perp_only_enabled_rejected ... ok
+test test_linked_order_perp_only_supported_rejected ... ok
+test test_market_checked_before_trigger ... ok
+test test_metrics_linked_forbidden_counter ... ok
+test test_metrics_market_forbidden_counter ... ok
+test test_metrics_no_reject_on_allowed ... ok
+test test_metrics_stop_forbidden_counter ... ok
+test test_no_linked_order_type_passes ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_pricer.rs (target/debug/deps/test_pricer-1bf44be0545255f6)
+
+running 15 tests
+test test_at223_sell_limit_clamped_to_min_edge ... ok
+test test_at223_realized_edge_at_limit_ge_min_edge ... ok
+test test_at223_buy_limit_clamped_to_min_edge ... ok
+test test_at223_sell_realized_edge_at_limit_ge_min_edge ... ok
+test test_buy_proposed_within_bound_no_clamp ... ok
+test test_infinite_gross_edge_rejected ... ok
+test test_metrics_default ... ok
+test test_multi_unit_buy ... ok
+test test_nan_fair_price_rejected ... ok
+test test_negative_fee_rejected ... ok
+test test_negative_min_edge_rejected ... ok
+test test_negative_net_edge_rejected ... ok
+test test_negative_qty_rejected ... ok
+test test_net_edge_too_low_rejected ... ok
+test test_zero_qty_rejected ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_quantize.rs (target/debug/deps/test_quantize-3550da5d58598acf)
+
+running 38 tests
+test test_at219_buy_never_increases ... ok
+test test_at219_sell_never_decreases ... ok
+test test_at908_counter_increments ... ok
+test test_at908_exactly_min_amount_passes ... ok
+test test_at908_no_output_on_rejection ... ok
+test test_at908_too_small_rejected ... ok
+test test_at926_infinity_tick_size ... ok
+test test_at926_nan_amount_step ... ok
+test test_at926_negative_min_amount ... ok
+test test_at926_zero_tick_size ... ok
+test test_buy_price_decimal_boundary_is_stable ... ok
+test test_buy_price_exact_tick ... ok
+test test_buy_price_rounds_down ... ok
+test test_deterministic_quantization ... ok
+test test_extreme_ratio_buy_never_rounds_up_via_snap ... ok
+test test_extreme_ratio_sell_never_rounds_down_via_snap ... ok
+test test_integer_values_for_hashing ... ok
+test test_large_decimal_boundary_buy_price_stays_on_tick ... ok
+test test_large_decimal_boundary_qty_stays_on_step ... ok
+test test_large_decimal_boundary_sell_price_stays_on_tick ... ok
+test test_large_negative_buy_price_never_rounds_up ... ok
+test test_large_negative_sell_price_never_rounds_down ... ok
+test test_large_ratio_buy_price_still_floors ... ok
+test test_large_ratio_qty_still_floors ... ok
+test test_large_ratio_sell_price_still_ceils ... ok
+test test_non_finite_raw_limit_price_rejected ... ok
+test test_non_finite_raw_qty_rejected ... ok
+test test_qty_decimal_boundary_is_stable ... ok
+test test_qty_exact_multiple ... ok
+test test_qty_rounds_down ... ok
+test test_qty_steps_integer ... ok
+test test_sell_price_decimal_boundary_is_stable ... ok
+test test_sell_price_exact_tick ... ok
+test test_sell_price_rounds_up ... ok
+test test_very_large_decimal_boundary_buy_never_rounds_up ... ok
+test test_very_large_decimal_boundary_qty_never_rounds_up ... ok
+test test_very_large_decimal_boundary_sell_never_rounds_down ... ok
+test test_zero_min_amount_allows_zero_qty ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_rejection_side_effects.rs (target/debug/deps/test_rejection_side_effects-45caeb33902f8a01)
+
+running 11 tests
+test test_rejected_invalid_metadata_no_side_effects ... ok
+test test_multiple_rejections_no_state_accumulation ... ok
+test test_rejected_intent_has_no_side_effects ... ok
+test test_rejected_net_edge_missing_input_no_side_effects ... ok
+test test_rejected_net_edge_no_side_effects ... ok
+test test_rejected_preflight_no_side_effects ... ok
+test test_rejected_pricer_no_side_effects ... ok
+test test_rejected_quantize_no_side_effects ... ok
+test test_rejected_risk_state_no_side_effects ... ok
+test test_rejected_stop_order_no_side_effects ... ok
+test test_rejected_wal_gate_no_side_effects ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_tlsm.rs (target/debug/deps/test_tlsm-dbb1c021d7e0ce92)
+
+running 25 tests
+test test_at230_fill_before_ack ... ok
+test test_at210_partial_fill_before_send ... ok
+test test_ack_before_send ... ok
+test test_at210_fill_before_send ... ok
+test test_at230_partial_fill_before_ack ... ok
+test test_cancel_from_acked ... ok
+test test_cancel_from_created ... ok
+test test_cancel_from_partially_filled ... ok
+test test_cancel_from_sent ... ok
+test test_cancelled_is_terminal ... ok
+test test_default_creates_in_created_state ... ok
+test test_duplicate_sent_ignored ... ok
+test test_failed_from_acked ... ok
+test test_failed_is_terminal ... ok
+test test_late_ack_after_partial_fill_ignored ... ok
+test test_multiple_partial_fills ... ok
+test test_never_panic_random_events ... ok
+test test_non_terminal_states ... ok
+test test_normal_lifecycle_acked_to_filled_direct ... ok
+test test_normal_lifecycle_created_to_filled ... ok
+test test_reject_from_acked_ignored ... ok
+test test_reject_from_created ... ok
+test test_reject_from_sent ... ok
+test test_terminal_state_ignores_all_events ... ok
+test test_terminal_states ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soldier_infra-9d739a1a460341b0)
+
+running 3 tests
+test config::tests::all_params_have_names ... ok
+test config::tests::all_params_have_defaults ... ok
+test config::tests::all_params_listed_in_constant ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_config_defaults.rs (target/debug/deps/test_config_defaults-9293dd3e584ac5d0)
+
+running 10 tests
+test test_all_appendix_a_params_have_defaults ... ok
+test test_all_params_resolve_through_resolver ... ok
+test test_missing_evidenceguard_global_cooldown_applies_default_120 ... ok
+test test_missing_instrument_cache_ttl_s_applies_default_3600 ... ok
+test test_missing_mm_util_kill_applies_default_095 ... ok
+test test_appendix_a_defaults_match_contract ... ok
+test test_resolve_none_with_default_returns_default ... ok
+test test_missing_non_appendix_a_param_fails_closed ... ok
+test test_resolve_some_returns_explicit_value ... ok
+test test_resolve_with_explicit_value_overrides_default ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_crash_mid_intent.rs (target/debug/deps/test_crash_mid_intent-ff3ddd485a71ac12)
+
+running 7 tests
+test test_durable_append_with_fsync_barrier ... ok
+test test_crash_mid_intent_no_duplicate_dispatch ... ok
+test test_crash_after_dispatch_detected_on_replay ... ok
+test test_mixed_states_on_restart ... ok
+test test_no_ghost_state_after_crash ... ok
+test test_terminal_states_not_in_flight_on_restart ... ok
+test test_wal_append_failure_prevents_dispatch ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_deribit_instrument.rs (target/debug/deps/test_deribit_instrument-c656c81cd369b8b2)
+
+running 10 tests
+test test_amount_step_none_when_absent ... ok
+test test_contract_required_fields_present ... ok
+test test_btc_perpetual_deserializes ... ok
+test test_amount_step_some_when_present ... ok
+test test_future_combo_kind ... ok
+test test_option_kind ... ok
+test test_perpetual_no_expiration ... ok
+test test_tick_size_steps ... ok
+test test_pub_reexport ... ok
+test test_tick_size_steps_default_empty ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_dispatch_durability.rs (target/debug/deps/test_dispatch_durability-78fc4e70bfa58143)
+
+running 11 tests
+test test_barrier_disabled_returns_immediately ... ok
+test test_barrier_enabled_fsync_applied ... ok
+test test_barrier_disabled_no_fsync ... ok
+test test_barrier_enabled_records_wait_time ... ok
+test test_barrier_metrics_default ... ok
+test test_config_default_disabled ... ok
+test test_mixed_barrier_configs ... ok
+test test_queue_full_increments_wal_write_errors ... ok
+test test_queue_full_no_barrier_wait ... ok
+test test_queue_full_returns_error_not_block ... ok
+test test_recorded_before_dispatch_on_success ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_fee_cache.rs (target/debug/deps/test_fee_cache-0c2c769f2a679d8c)
+
+running 9 tests
+test test_at031_no_monotonic_reset_underflow ... ok
+test test_at031_staleness_survives_restart ... ok
+test test_clock_skew_fails_closed ... ok
+test test_fee_cache_default ... ok
+test test_fee_cache_empty ... ok
+test test_at246_fee_tier_update_within_one_cycle ... ok
+test test_fee_cache_empty_to_staleness_hard_stale ... ok
+test test_fee_cache_to_staleness_fresh ... ok
+test test_fee_cache_update_and_get ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_ledger_replay.rs (target/debug/deps/test_ledger_replay-01688260a99290d8)
+
+running 22 tests
+test test_at233_created_intent_not_marked_sent ... ok
+test test_at233_unknown_hash_not_sent ... ok
+test test_at233_sent_intent_not_resent_on_replay ... ok
+test test_append_and_lookup ... ok
+test test_at234_filled_intent_detected_on_replay ... ok
+test test_at234_partial_fill_is_in_flight ... ok
+test test_at906_no_error_on_success ... ok
+test test_at906_write_error_counter_increments ... ok
+test test_at935_queue_full_no_record_stored ... ok
+test test_at935_queue_full_returns_error ... ok
+test test_lookup_missing_returns_none ... ok
+test test_non_terminal_states ... ok
+test test_queue_depth_and_capacity ... ok
+test test_queue_full_returns_immediately ... ok
+test test_record_has_all_required_fields ... ok
+test test_replay_empty_ledger ... ok
+test test_replay_mixed_states ... ok
+test test_terminal_states ... ok
+test test_update_state_succeeds_when_queue_is_at_capacity ... ok
+test test_update_state_transitions ... ok
+test test_update_state_unknown_hash_fails ... ok
+test test_update_state_unknown_hash_still_fails_at_capacity ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/test_phase0_runtime.rs (target/debug/deps/test_phase0_runtime-acea8014e79370f4)
+
+running 17 tests
+test test_api_keys_transfer_privilege_rejected_runtime ... ok
+test test_api_keys_are_least_privilege_runtime ... ok
+test test_break_glass_kill_blocks_open_allows_reduce_runtime ... ok
+test test_legacy_runtime_state_without_schema_is_migrated ... ok
+test test_external_runtime_state_simulate_close_requires_ack ... ok
+test test_runtime_state_null_schema_fails_closed ... ok
+test test_external_runtime_state_mutating_commands_require_ack ... ok
+test test_runtime_state_path_outside_repo_allowed_with_explicit_opt_in ... ok
+test test_runtime_state_path_outside_repo_rejected ... ok
+test test_runtime_state_writer_fsyncs_parent_directory ... ok
+test test_break_glass_command_path_runtime ... ok
+test test_policy_is_required_and_bound_runtime ... ok
+test test_runtime_state_schema_mismatch_fails_closed ... ok
+test test_simulate_open_rejects_when_policy_invalid ... ok
+test test_simulate_commands_require_drill_mode_runtime ... ok
+test test_simulate_open_enforces_pending_orders_capacity ... ok
+test test_status_command_behavior_runtime ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
+
+     Running tests/test_trade_id_registry.rs (target/debug/deps/test_trade_id_registry-2e22400182da2273)
+
+running 14 tests
+test test_at269_rest_sweeper_then_ws_duplicate ... ok
+test test_at270_multiple_duplicates_increment_counter ... ok
+test test_at270_duplicate_does_not_overwrite ... ok
+test test_at270_duplicate_trade_id_returns_duplicate ... ok
+test test_capacity_full_returns_error ... ok
+test test_empty_registry ... ok
+test test_insert_is_atomic_single_operation ... ok
+test test_insert_new_trade_id ... ok
+test test_lookup_after_insert ... ok
+test test_lookup_missing_returns_none ... ok
+test test_metrics_default ... ok
+test test_multiple_distinct_trade_ids ... ok
+test test_trade_record_has_all_required_fields ... ok
+test test_zero_capacity ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests soldier_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests soldier_infra
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+✓ rust gates passed
+
+[0;32m=== 17b) phase1 meta-test ===[0m
+PHASE 1 META-TEST OK
+
+[0;32m=== 18) slice completion enforcement ===[0m
+SKIP: slice completion enforcement not applicable on branch 'HEAD'
+
+[0;32m=== Timing Summary ===[0m
+  arch_flows: 1s
+  contract_coverage: 1s
+  contract_crossrefs: 0s
+  contract_kernel: 1s
+  crash_matrix: 0s
+  crash_replay_idempotency: 1s
+  csp_trace: 1s
+  global_invariants: 0s
+  phase0_meta_test: 5s
+  phase1_meta_test: 1s
+  preflight: 278s
+  reconciliation_matrix: 1s
+  rust_clippy: 17s
+  rust_fmt: 2s
+  rust_tests_full: 28s
+  slice_completion_enforce: 1s
+  state_machines: 1s
+  status_fixture_market_data_stale: 1s
+  status_fixture_partial_fill_containment: 1s
+  status_fixture_repro_only_mixed_registry_test: 1s
+  status_fixture_restart_reconcile: 1s
+  status_fixture_session_termination: 1s
+  status_fixture_unknown_token_force_kill: 0s
+  status_fixture_wal_backpressure: 0s
+  time_freshness: 1s
+  vendor_docs_lint: 1s
+  verify_gate_contract: 6s
+
+[0;32m=== VERIFY OK (mode=full) ===[0m
+
+
+=== STDERR ===
+[1;33mWARN: Working tree is dirty[0m
+

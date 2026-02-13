@@ -209,7 +209,7 @@
     }
   ],
   "contract_version": "5.2",
-  "generated_at_utc": "2026-02-13T17:55:05Z",
+  "generated_at_utc": "2026-02-13T17:12:49Z",
   "kernel_version": 3,
   "sources": {
     "anchors_path": "docs/architecture/contract_anchors.md",

@@ -1,0 +1,17 @@
+   Compiling soldier_core v0.1.0 (/private/tmp/phase1-focused-compare-20260213_143323/ralph/crates/soldier_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.21s
+     Running tests/test_phase1_dispatch_auth.rs (target/debug/deps/test_phase1_dispatch_auth-87666c4950d0cc92)
+
+running 2 tests
+pricer_limit_vs_fair_bps value=-414.1666666666666
+gate_sequence_total result=allowed
+pricer_limit_vs_fair_bps value=-414.1666666666666
+gate_sequence_total result=allowed
+pricer_limit_vs_fair_bps value=-414.1666666666666
+gate_sequence_total result=allowed
+gate_sequence_total result=rejected
+test close_hedge_cancel_allowed_when_risk_state_degraded ... ok
+test open_rejected_when_risk_state_degraded ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

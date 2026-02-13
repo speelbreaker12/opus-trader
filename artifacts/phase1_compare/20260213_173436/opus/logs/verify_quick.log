@@ -1,0 +1,210 @@
+$ ./plans/verify.sh quick
+[exit=0] [elapsed_s=124.425]
+
+=== STDOUT ===
+
+[0;32m=== 0) Verify context ===[0m
+mode=quick
+root=/private/tmp/phase1-compare-full-20260213/opus
+verify_run_id=20260213_113442
+artifacts_dir=/private/tmp/phase1-compare-full-20260213/opus/artifacts/verify/20260213_113442
+base_ref=origin/main
+
+[0;32m=== 01) preflight ===[0m
+[PASS] Git repository
+[PASS] Tool: git
+[PASS] Tool: jq
+[PASS] Tool: bash
+[PASS] File: PRD file
+[PASS] File: Contract spec
+PASS: legacy layout guard
+[PASS] Legacy layout guard
+PASS: README/CI verify parity check
+[PASS] README/CI parity guard
+PASS: slice completion review guard
+[PASS] Slice completion review guard
+PASS: story review findings guard
+[PASS] Story findings-review guard
+PASS: stoic-cli invariant check
+[PASS] stoic-cli invariants guard
+[PASS] Shell syntax (plans/*.sh)
+[PASS] PRD schema validation
+[PASS] Fixture profile: smoke (15 tests)
+[PASS] Fixture test: test_run_prd_auditor_invocation.sh
+[PASS] Fixture test: test_codex_review_logged.sh
+[PASS] Fixture test: test_kimi_review_logged.sh
+[PASS] Fixture test: test_code_review_expert_logged.sh
+[PASS] Fixture test: test_thinking_review_logged.sh
+[PASS] Fixture test: test_slice_review_gate.sh
+[PASS] Fixture test: test_guard_no_command_substitution.sh
+[PASS] Fixture test: test_story_review_findings_guard.sh
+[PASS] Fixture test: test_preflight_fixture_profiles.sh
+[PASS] Fixture test: test_stoic_cli_invariant_check.sh
+[PASS] Fixture test: test_verify_timeout_policy.sh
+[PASS] Fixture test: test_contract_profile_parity.sh
+[PASS] Fixture test: test_roadmap_evidence_audit.sh
+[PASS] Fixture test: test_crossref_invariants.sh
+[PASS] Fixture test: test_crossref_gate.sh
+[WARN] POSTMORTEM_GATE=0 (postmortem check skipped)
+
+preflight: 29 passed, 0 failed, 1 warnings
+
+[0;32m=== 01b) verify gate contract ===[0m
+PASS: verify gate contract check
+
+[0;32m=== 02) contract kernel ===[0m
+
+[0;32m=== 02b) contract profiles ===[0m
+OK: 335 AT definitions tagged (CSP=260, GOP=75).
+
+[0;32m=== 02c) AT coverage report ===[0m
+OK: AT coverage generated (CSP unique=260, referenced=128, coverage=49.2%).
+
+[0;32m=== 02d) AT profile parity ===[0m
+OK: AT profile map parity passed (335 AT IDs).
+
+[0;32m=== 02e) crossref execution invariants ===[0m
+OK: crossref execution invariants are schema-valid and semantically consistent.
+
+[0;32m=== 04) contract crossrefs ===[0m
+PASS: no cross-reference issues found.
+
+[0;32m=== 05) arch flows ===[0m
+OK: ARCH_FLOW_INDEX checks passed.
+
+[0;32m=== 06) state machines ===[0m
+STATE MACHINES OK
+
+[0;32m=== 07) global invariants ===[0m
+INVARIANTS OK
+
+[0;32m=== 08) time freshness ===[0m
+OK: time/freshness spec checks passed.
+
+[0;32m=== 09) crash matrix ===[0m
+OK: CRASH_MATRIX.md looks mechanically consistent.
+
+[0;32m=== 10) crash replay idempotency ===[0m
+OK: crash/replay/idempotency spec checks passed.
+
+[0;32m=== 11) reconciliation matrix ===[0m
+OK: RECONCILIATION_MATRIX checks passed.
+
+[0;32m=== 12) csp trace ===[0m
+CSP Trace Validation
+====================
+Contract: specs/CONTRACT.md
+Trace: specs/TRACE.yaml
+
+Coverage: 100.0%
+  Total clauses: 9
+  Fully mapped: 1
+  Partial: 8
+  Unmapped: 0
+
+PASS: No errors found
+
+[0;32m=== 13) status fixtures ===[0m
+VALIDATION OK: tests/fixtures/status/market_data_stale.json
+VALIDATION OK: tests/fixtures/status/partial_fill_containment.json
+VALIDATION OK: tests/fixtures/status/repro-only/mixed_registry_test.json
+VALIDATION OK: tests/fixtures/status/restart_reconcile.json
+VALIDATION OK: tests/fixtures/status/session_termination.json
+VALIDATION OK: tests/fixtures/status/unknown_token_force_kill.json
+VALIDATION OK: tests/fixtures/status/wal_backpressure.json
+validated_status_fixtures=7
+
+[0;32m=== 14) vendor docs lint ===[0m
+OK: Cargo.lock unchanged; skipping vendor docs lint.
+
+[0;32m=== 14b) phase0 meta-test ===[0m
+test_policy_is_required_and_bound: PASS
+test_machine_policy_loader_and_config: PASS
+test_api_keys_are_least_privilege: PASS
+test_paper_is_non_trading: PASS
+test_phase0_snapshot_literal_copies: PASS
+test_phase0_owner_signoff_complete: PASS
+test_health_command_behavior: PASS
+test_status_command_behavior: PASS
+test_break_glass_kill_blocks_open_allows_reduce: PASS
+test_simulate_command_docs_require_drill_mode: PASS
+PHASE 0 META-TEST OK
+
+[0;32m=== 15) rust gates ===[0m
+
+[0;32m=== 2a) Rust format ===[0m
+
+[0;32m=== 2c) Rust tests ===[0m
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.44
+   Compiling unicode-ident v1.0.23
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.20
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling xxhash-rust v0.8.15
+   Compiling memchr v2.8.0
+   Compiling itoa v1.0.17
+   Compiling soldier_core v0.1.0 (/private/tmp/phase1-compare-full-20260213/opus/crates/soldier_core)
+   Compiling syn v2.0.114
+   Compiling serde_derive v1.0.228
+   Compiling soldier_infra v0.1.0 (/private/tmp/phase1-compare-full-20260213/opus/crates/soldier_infra)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.15s
+     Running unittests src/lib.rs (target/debug/deps/soldier_core-ecaccd2269587d2f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soldier_infra-9d739a1a460341b0)
+
+running 3 tests
+test config::tests::all_params_have_defaults ... ok
+test config::tests::all_params_have_names ... ok
+test config::tests::all_params_listed_in_constant ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+✓ rust gates passed
+
+[0;32m=== 17b) phase1 meta-test ===[0m
+PHASE 1 META-TEST OK
+
+[0;32m=== Timing Summary ===[0m
+  arch_flows: 1s
+  at_coverage_report: 0s
+  at_profile_parity: 1s
+  contract_crossrefs: 0s
+  contract_kernel: 0s
+  contract_profiles: 1s
+  crash_matrix: 0s
+  crash_replay_idempotency: 1s
+  crossref_invariants: 1s
+  csp_trace: 0s
+  global_invariants: 1s
+  phase0_meta_test: 4s
+  phase1_meta_test: 1s
+  preflight: 70s
+  reconciliation_matrix: 0s
+  rust_fmt: 1s
+  rust_tests_quick: 19s
+  state_machines: 0s
+  status_fixture_market_data_stale: 0s
+  status_fixture_partial_fill_containment: 1s
+  status_fixture_repro_only_mixed_registry_test: 1s
+  status_fixture_restart_reconcile: 0s
+  status_fixture_session_termination: 0s
+  status_fixture_unknown_token_force_kill: 1s
+  status_fixture_wal_backpressure: 1s
+  time_freshness: 1s
+  vendor_docs_lint: 1s
+  verify_gate_contract: 7s
+
+[0;32m=== VERIFY OK (mode=quick) ===[0m
+
+
+=== STDERR ===
+[1;33mWARN: Skipping crossref_gate in quick mode (full-only gate)[0m
+[1;33mWARN: Skipping contract_coverage in quick mode (full-only gate)[0m
+[1;33mWARN: Skipping clippy in quick mode[0m
+

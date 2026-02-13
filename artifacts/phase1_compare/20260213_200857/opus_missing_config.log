@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running tests/test_missing_config.rs (target/debug/deps/test_missing_config-9f39641bf6e7a412)
+
+running 14 tests
+test test_infinity_amount_step_fails_closed ... ok
+test test_all_rejections_have_enumerated_reason_codes ... ok
+test test_missing_amount_step_fails_closed ... ok
+test test_config_missing_no_side_effects ... ok
+test test_missing_fee_usd_fails_closed ... ok
+test test_missing_gross_edge_fails_closed ... ok
+test test_missing_min_edge_fails_closed ... ok
+test test_missing_l2_book_fails_closed ... ok
+test test_missing_slippage_fails_closed ... ok
+test test_missing_tick_size_fails_closed ... ok
+test test_nan_tick_size_fails_closed ... ok
+test test_negative_tick_size_fails_closed ... ok
+test test_zero_qty_pricer_fails_closed ... ok
+test test_unhealthy_risk_state_fails_closed ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,866 @@
+[
+  {
+    "id": "S6-000",
+    "priority": 95,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-A Single Dispatch Chokepoint Proof",
+    "category": "hardening",
+    "description": "Implement CI tests proving exactly one module/function may dispatch exchange orders with no bypass paths.",
+    "contract_refs": [
+      "RecordedBeforeDispatch",
+      "AT-935",
+      "Anchor-006",
+      "VR-014",
+      "1. Execution Architecture: The \"Atomic Group\" (Real-Time Repair)"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/tests/test_dispatch_chokepoint.rs",
+        "docs/dispatch_chokepoint.md"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_dispatch_chokepoint_no_direct_exchange_client_usage runs WHEN exchange client is imported outside chokepoint module THEN test fails.",
+      "GIVEN test_dispatch_visibility_is_restricted runs WHEN dispatch function is public beyond pub(crate) THEN test fails.",
+      "GIVEN docs/dispatch_chokepoint.md exists WHEN reviewed THEN it names the exact module, function, and exchange client type."
+    ],
+    "steps": [
+      "Create crates/soldier_core/tests/test_dispatch_chokepoint.rs with AST/grep checks for exchange client usage.",
+      "Implement test_dispatch_chokepoint_no_direct_exchange_client_usage that fails if exchange client constructed outside chokepoint.",
+      "Implement test_dispatch_visibility_is_restricted that fails if dispatch fn is not pub(crate).",
+      "Create docs/dispatch_chokepoint.md documenting the chokepoint module, function, and normative statement.",
+      "Run tests and verify they pass on compliant code."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_core --test test_dispatch_chokepoint"
+    ],
+    "evidence": [
+      "cargo test output showing test_dispatch_chokepoint_no_direct_exchange_client_usage PASS",
+      "cargo test output showing test_dispatch_visibility_is_restricted PASS",
+      "docs/dispatch_chokepoint.md exists with required content"
+    ],
+    "dependencies": [
+      "S5-004"
+    ],
+    "est_size": "S",
+    "risk": "low",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "",
+      "values": []
+    },
+    "enforcement_point": "DispatcherChokepoint",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_dispatch_chokepoint.rs"
+    ]
+  },
+  {
+    "id": "S6-001",
+    "priority": 94,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-B Determinism Snapshot Test",
+    "category": "hardening",
+    "description": "Implement CI test proving identical inputs produce identical intent bytes/hashes across runs and restarts.",
+    "contract_refs": [
+      "CSP.2.1 Stable Intent Identity",
+      "1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "evidence/phase1/determinism/intent_hashes.txt",
+        "crates/soldier_core/tests/test_intent_determinism.rs"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_intent_determinism_same_inputs_same_hash runs with fixed inputs and frozen clock WHEN executed twice THEN intent hash is identical.",
+      "GIVEN test runs across process restart WHEN inputs are identical THEN hash is identical.",
+      "GIVEN HashMap iteration order varies WHEN intent is built THEN hash is still identical (no map ordering dependency)."
+    ],
+    "steps": [
+      "Create crates/soldier_core/tests/test_intent_determinism.rs.",
+      "Implement test_intent_determinism_same_inputs_same_hash with clock injection.",
+      "Use deterministic seed/inputs and assert exact byte equality or hash equality.",
+      "Emit hash values to evidence/phase1/determinism/intent_hashes.txt.",
+      "Run test twice and verify hashes match."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_core --test test_intent_determinism"
+    ],
+    "evidence": [
+      "cargo test output showing test_intent_determinism_same_inputs_same_hash PASS",
+      "evidence/phase1/determinism/intent_hashes.txt showing identical hashes"
+    ],
+    "dependencies": [
+      "S2-001"
+    ],
+    "est_size": "S",
+    "risk": "low",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "",
+      "values": []
+    },
+    "enforcement_point": "",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_intent_determinism.rs"
+    ]
+  },
+  {
+    "id": "S6-002",
+    "priority": 93,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-C No Partial Side Effects on Rejection",
+    "category": "hardening",
+    "description": "Implement CI test proving rejected intents leave no persistent state changes except counters/logs.",
+    "contract_refs": [
+      "RecordedBeforeDispatch",
+      "AT-201",
+      "Anchor-006",
+      "1.2 Atomic Group Executor"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/tests/test_rejection_side_effects.rs",
+        "evidence/phase1/no_side_effects/rejection_cases.md"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_rejected_intent_has_no_side_effects runs for missing config rejection THEN durable ledger unchanged, no orders, no position delta.",
+      "GIVEN test runs for invalid instrument meta rejection THEN same assertions hold.",
+      "GIVEN test runs for quantization failure rejection THEN same assertions hold.",
+      "GIVEN evidence/phase1/no_side_effects/rejection_cases.md exists THEN it lists at least 3 rejection cases with CI links."
+    ],
+    "steps": [
+      "Create crates/soldier_core/tests/test_rejection_side_effects.rs.",
+      "Implement test_rejected_intent_has_no_side_effects with parameterized rejection cases.",
+      "Assert: WAL unchanged, no open orders, no position deltas, no exposure increments.",
+      "Create evidence/phase1/no_side_effects/rejection_cases.md documenting 3+ cases.",
+      "Link CI logs in the evidence doc."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_core --test test_rejection_side_effects"
+    ],
+    "evidence": [
+      "cargo test output showing test_rejected_intent_has_no_side_effects PASS",
+      "evidence/phase1/no_side_effects/rejection_cases.md with 3+ cases"
+    ],
+    "dependencies": [
+      "S6-000"
+    ],
+    "est_size": "S",
+    "risk": "low",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "",
+      "values": []
+    },
+    "enforcement_point": "",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_rejection_side_effects.rs"
+    ]
+  },
+  {
+    "id": "S6-003",
+    "priority": 92,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-D intent_id/run_id Propagation Contract",
+    "category": "hardening",
+    "description": "Implement CI test proving every intent-handling log/metric includes the same intent_id and run_id.",
+    "contract_refs": [
+      "0.Z.7.4 Observability Requirement"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "evidence/phase1/traceability/sample_rejection_log.txt",
+        "crates/soldier_core/tests/test_intent_id_propagation.rs"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_intent_id_propagates_to_logs_and_metrics triggers a rejected intent WHEN logs are captured THEN every log line includes identical intent_id.",
+      "GIVEN metrics are emitted during intent handling WHEN inspected THEN they include intent_id label.",
+      "GIVEN evidence/phase1/traceability/sample_rejection_log.txt exists THEN it shows consistent intent_id across all log lines."
+    ],
+    "steps": [
+      "Create crates/soldier_core/tests/test_intent_id_propagation.rs.",
+      "Implement test_intent_id_propagates_to_logs_and_metrics with log capture.",
+      "Trigger a rejection and collect all logs/metrics from the intent span.",
+      "Assert all entries include the same intent_id.",
+      "Emit sample log to evidence/phase1/traceability/sample_rejection_log.txt."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_core --test test_intent_id_propagation"
+    ],
+    "evidence": [
+      "cargo test output showing test_intent_id_propagates_to_logs_and_metrics PASS",
+      "evidence/phase1/traceability/sample_rejection_log.txt"
+    ],
+    "dependencies": [],
+    "est_size": "S",
+    "risk": "low",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "",
+      "values": []
+    },
+    "enforcement_point": "",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [
+        {
+          "name": "intent_id_propagation_total",
+          "type": "counter",
+          "unit": "count",
+          "labels": [
+            "result"
+          ]
+        }
+      ],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_intent_id_propagation.rs"
+    ]
+  },
+  {
+    "id": "S6-004",
+    "priority": 91,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-E Gate Ordering Constraints",
+    "category": "hardening",
+    "description": "Implement CI test and doc proving gate ordering invariants: reject before persist, WAL before dispatch.",
+    "contract_refs": [
+      "CONTRACT.md RecordedBeforeDispatch",
+      "CONTRACT.md CSP.5.2 Enforcement Rules",
+      "Anchor-006",
+      "VR-014"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/tests/test_gate_ordering.rs",
+        "docs/intent_gate_invariants.md"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_gate_ordering_constraints runs WHEN a side effect occurs before final accept THEN test fails.",
+      "GIVEN durable ledger commit is attempted after dispatch WHEN test runs THEN test fails.",
+      "GIVEN docs/intent_gate_invariants.md exists THEN it states the 3 normative ordering constraints."
+    ],
+    "steps": [
+      "Extend or create crates/soldier_core/tests/test_gate_ordering.rs.",
+      "Implement test_gate_ordering_constraints with instrumented gate/side-effect events.",
+      "Assert: reject gates before persist, WAL before dispatch, no side effects before accept.",
+      "Create docs/intent_gate_invariants.md with normative statements.",
+      "Run test and verify pass."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_core --test test_gate_ordering"
+    ],
+    "evidence": [
+      "cargo test output showing test_gate_ordering_constraints PASS",
+      "docs/intent_gate_invariants.md with 3 normative statements"
+    ],
+    "dependencies": [
+      "S5-004"
+    ],
+    "est_size": "S",
+    "risk": "low",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "",
+      "values": []
+    },
+    "enforcement_point": "DispatcherChokepoint",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_gate_ordering.rs"
+    ]
+  },
+  {
+    "id": "S6-005",
+    "priority": 90,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-F Fail-Closed Defaults for Missing Config",
+    "category": "hardening",
+    "description": "Implement CI test proving missing critical config causes fail-closed rejection with enumerated reason code.",
+    "contract_refs": [
+      "Appendix A",
+      "Appendix A: Configuration Defaults (Safety-Critical Thresholds)"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "evidence/phase1/config_fail_closed/missing_keys_matrix.json",
+        "crates/soldier_core/tests/test_missing_config.rs",
+        "docs/critical_config_keys.md"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_missing_config_fails_closed runs for each critical key WHEN key is removed THEN intent rejected.",
+      "GIVEN rejection occurs THEN no persistent side effects (durable ledger, orders, positions).",
+      "GIVEN rejection occurs THEN reject reason is enumerated (not free text).",
+      "GIVEN evidence/phase1/config_fail_closed/missing_keys_matrix.json exists THEN it shows PASS/FAIL + reason code per key."
+    ],
+    "steps": [
+      "Create docs/critical_config_keys.md listing Phase-1 critical config keys.",
+      "Create crates/soldier_core/tests/test_missing_config.rs.",
+      "Implement test_missing_config_fails_closed parameterized over critical keys.",
+      "Assert rejection, no side effects, enumerated reason code.",
+      "Emit evidence/phase1/config_fail_closed/missing_keys_matrix.json from test."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_core --test test_missing_config"
+    ],
+    "evidence": [
+      "cargo test output showing test_missing_config_fails_closed PASS",
+      "evidence/phase1/config_fail_closed/missing_keys_matrix.json",
+      "docs/critical_config_keys.md"
+    ],
+    "dependencies": [],
+    "est_size": "S",
+    "risk": "low",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "RejectReason",
+      "values": [
+        "CONFIG_MISSING"
+      ]
+    },
+    "enforcement_point": "",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_missing_config.rs"
+    ]
+  },
+  {
+    "id": "S6-006",
+    "priority": 89,
+    "phase": 1,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Phase 1 Hardening Gates (Supplementary)",
+    "story_ref": "P1-G Minimal Crash-Mid-Intent Proof",
+    "category": "hardening",
+    "description": "Implement CI test or drill proving crash mid-intent before dispatch causes no duplicate dispatch on restart.",
+    "contract_refs": [
+      "AT-935",
+      "AT-233",
+      "2.4 \u2014 WAL / intent ledger (RecordedBeforeDispatch)"
+    ],
+    "plan_refs": [
+      "Phase 1 \u2014 Foundation (Panic\u2011Free Deterministic Intents)"
+    ],
+    "scope": {
+      "touch": [
+        "evidence/phase1/crash_mid_intent/drill.md",
+        "crates/soldier_infra/tests/test_crash_mid_intent.rs"
+      ],
+      "create": [],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "GIVEN test_crash_mid_intent_no_duplicate_dispatch runs WHEN process crashes before dispatch THEN restart produces no dispatch.",
+      "GIVEN crash occurs mid-intent THEN no ghost state or unsafe opens on restart.",
+      "IF AUTO test not feasible THEN evidence/phase1/crash_mid_intent/drill.md documents manual drill with proof logs."
+    ],
+    "steps": [
+      "Create crates/soldier_infra/tests/test_crash_mid_intent.rs (preferred AUTO).",
+      "Implement test_crash_mid_intent_no_duplicate_dispatch simulating crash before dispatch.",
+      "Assert: no dispatch on restart, no side effects beyond counters/logs.",
+      "If AUTO not feasible, document manual drill in evidence/phase1/crash_mid_intent/drill.md.",
+      "Include trigger, restart steps, and proof logs in drill doc."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test -p soldier_infra --test test_crash_mid_intent"
+    ],
+    "evidence": [
+      "cargo test output showing test_crash_mid_intent_no_duplicate_dispatch PASS",
+      "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof",
+      "evidence/phase1/restart_loop/restart_100_cycles.log"
+    ],
+    "dependencies": [
+      "S4-000",
+      "S4-003"
+    ],
+    "est_size": "S",
+    "risk": "med",
+    "needs_human_decision": false,
+    "passes": true,
+    "contract_must_evidence": [],
+    "enforcing_contract_ats": [],
+    "reason_codes": {
+      "type": "",
+      "values": []
+    },
+    "enforcement_point": "WAL",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [],
+      "status_contract_ats": []
+    },
+    "implementation_tests": [
+      "crates/soldier_infra/tests/test_crash_mid_intent.rs"
+    ]
+  },
+  {
+    "id": "S6-007",
+    "priority": 89,
+    "phase": 2,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+    "story_ref": "S6.1 Inventory skew gate",
+    "category": "risk",
+    "description": "Implement S6.1 (Inventory skew gate) with contract-aligned behavior and deterministic tests.",
+    "contract_refs": [
+      "AT-030",
+      "AT-043",
+      "CONTRACT.md Inventory skew gate"
+    ],
+    "plan_refs": [
+      "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "S6.1 \u2014 Inventory skew gate"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/src/execution",
+        "crates/soldier_core/tests"
+      ],
+      "create": [
+        "crates/soldier_core/tests/test_inventory_skew.rs"
+      ],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "tightens only for risk-increasing, may relax only for risk-reducing.",
+      "Inputs (contract): `current_delta`, `delta_limit`, `side`, `min_edge_usd`, `limit_price`, `fair_price`.",
+      "`delta_limit` MUST be provided by policy/config; missing \u21d2 reject OPEN intents (fail-closed)."
+    ],
+    "steps": [
+      "Map S6.1 contract obligations and implementation-plan acceptance criteria into executable checks.",
+      "Implement S6.1 logic in the smallest practical surface area while preserving fail-closed behavior.",
+      "Add/adjust targeted tests for S6.1: crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_rejects_risk_increasing_near_limit, crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_tick_penalty_max_is_exactly_3_ticks_at_bias_1_0.",
+      "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+      "Run verification commands and archive artifact evidence before setting passes=true."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test --workspace"
+    ],
+    "evidence": [
+      "cargo test -p soldier_core --test test_inventory_skew output",
+      "PRD entry S6-007 records contract AT and test mappings for this story."
+    ],
+    "dependencies": [
+      "S5-004"
+    ],
+    "est_size": "S",
+    "risk": "med",
+    "needs_human_decision": false,
+    "passes": false,
+    "contract_must_evidence": [
+      {
+        "quote": "S6.1 contract tests must pass before enabling OPEN behavior.",
+        "location": "specs/IMPLEMENTATION_PLAN.md:579",
+        "anchor": "AT-030"
+      }
+    ],
+    "enforcing_contract_ats": [
+      "AT-030",
+      "AT-043"
+    ],
+    "reason_codes": {
+      "type": "RejectReason",
+      "values": [
+        "INVENTORY_SKEW_REJECT"
+      ]
+    },
+    "enforcement_point": "DispatcherChokepoint",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [
+        "trading_mode",
+        "risk_state"
+      ],
+      "status_contract_ats": [
+        "AT-030",
+        "AT-043"
+      ]
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_rejects_risk_increasing_near_limit",
+      "crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_tick_penalty_max_is_exactly_3_ticks_at_bias_1_0"
+    ]
+  },
+  {
+    "id": "S6-008",
+    "priority": 88,
+    "phase": 2,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+    "story_ref": "S6.2 Pending exposure reservation",
+    "category": "risk",
+    "description": "Implement S6.2 (Pending exposure reservation) with contract-aligned behavior and deterministic tests.",
+    "contract_refs": [
+      "CONTRACT.md Pending exposure reservation"
+    ],
+    "plan_refs": [
+      "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "S6.2 \u2014 Pending exposure reservation"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/src/risk",
+        "crates/soldier_core/tests"
+      ],
+      "create": [
+        "crates/soldier_core/tests/test_pending_exposure.rs"
+      ],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "reserve before dispatch; release on terminal TLSM; concurrent opens cannot overfill.",
+      "GIVEN contract AT coverage for S6.2 WHEN regression tests execute THEN required guard behavior is enforced before dispatch.",
+      "GIVEN adverse inputs for S6.2 WHEN evaluation runs THEN OPEN paths are blocked unless all safety conditions pass."
+    ],
+    "steps": [
+      "Map S6.2 contract obligations and implementation-plan acceptance criteria into executable checks.",
+      "Implement S6.2 logic in the smallest practical surface area while preserving fail-closed behavior.",
+      "Add/adjust targeted tests for S6.2: crates/soldier_core/tests/test_pending_exposure.rs::test_pending_exposure_reservation_blocks_overfill.",
+      "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+      "Run verification commands and archive artifact evidence before setting passes=true."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test --workspace"
+    ],
+    "evidence": [
+      "cargo test -p soldier_core --test test_pending_exposure output",
+      "PRD entry S6-008 records contract AT and test mappings for this story."
+    ],
+    "dependencies": [
+      "S6-007"
+    ],
+    "est_size": "S",
+    "risk": "med",
+    "needs_human_decision": false,
+    "passes": false,
+    "contract_must_evidence": [
+      {
+        "quote": "Fail-closed contract behavior must be verified by targeted acceptance tests.",
+        "location": "plans/prd.json S6-008",
+        "anchor": "AT-043"
+      }
+    ],
+    "enforcing_contract_ats": [
+      "AT-043"
+    ],
+    "reason_codes": {
+      "type": "RejectReason",
+      "values": [
+        "PENDING_EXPOSURE_OVERFILL"
+      ]
+    },
+    "enforcement_point": "DispatcherChokepoint",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [
+        "trading_mode",
+        "risk_state"
+      ],
+      "status_contract_ats": [
+        "AT-043"
+      ]
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_pending_exposure.rs::test_pending_exposure_reservation_blocks_overfill"
+    ]
+  },
+  {
+    "id": "S6-009",
+    "priority": 87,
+    "phase": 2,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+    "story_ref": "S6.3 Global exposure budget (corr buckets)",
+    "category": "risk",
+    "description": "Implement S6.3 (Global exposure budget (corr buckets)) with contract-aligned behavior and deterministic tests.",
+    "contract_refs": [
+      "CONTRACT.md Global exposure budget (corr buckets)"
+    ],
+    "plan_refs": [
+      "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "S6.3 \u2014 Global exposure budget (corr buckets)"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/src/risk",
+        "crates/soldier_core/tests"
+      ],
+      "create": [
+        "crates/soldier_core/tests/test_exposure_budget.rs"
+      ],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "correlation-aware; uses current+pending.",
+      "Contract integration rule: Global Budget MUST be checked using current + pending exposure (no current-only).",
+      "GIVEN adverse inputs for S6.3 WHEN evaluation runs THEN OPEN paths are blocked unless all safety conditions pass."
+    ],
+    "steps": [
+      "Map S6.3 contract obligations and implementation-plan acceptance criteria into executable checks.",
+      "Implement S6.3 logic in the smallest practical surface area while preserving fail-closed behavior.",
+      "Add/adjust targeted tests for S6.3: crates/soldier_core/tests/test_exposure_budget.rs::test_global_exposure_budget_correlation_rejects.",
+      "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+      "Run verification commands and archive artifact evidence before setting passes=true."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test --workspace"
+    ],
+    "evidence": [
+      "cargo test -p soldier_core --test test_exposure_budget output",
+      "PRD entry S6-009 records contract AT and test mappings for this story."
+    ],
+    "dependencies": [
+      "S6-008"
+    ],
+    "est_size": "S",
+    "risk": "med",
+    "needs_human_decision": false,
+    "passes": false,
+    "contract_must_evidence": [
+      {
+        "quote": "Fail-closed contract behavior must be verified by targeted acceptance tests.",
+        "location": "plans/prd.json S6-009",
+        "anchor": "AT-043"
+      }
+    ],
+    "enforcing_contract_ats": [
+      "AT-043"
+    ],
+    "reason_codes": {
+      "type": "RejectReason",
+      "values": [
+        "GLOBAL_EXPOSURE_BUDGET_REJECT"
+      ]
+    },
+    "enforcement_point": "DispatcherChokepoint",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [
+        "trading_mode",
+        "risk_state"
+      ],
+      "status_contract_ats": [
+        "AT-043"
+      ]
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_exposure_budget.rs::test_global_exposure_budget_correlation_rejects"
+    ]
+  },
+  {
+    "id": "S6-010",
+    "priority": 86,
+    "phase": 2,
+    "slice": 6,
+    "slice_ref": "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+    "story_ref": "S6.4 Margin headroom gate",
+    "category": "risk",
+    "description": "Implement S6.4 (Margin headroom gate) with contract-aligned behavior and deterministic tests.",
+    "contract_refs": [
+      "CONTRACT.md Margin headroom gate"
+    ],
+    "plan_refs": [
+      "Slice 6 \u2014 Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "S6.4 \u2014 Margin headroom gate"
+    ],
+    "scope": {
+      "touch": [
+        "crates/soldier_core/src/risk",
+        "crates/soldier_core/tests"
+      ],
+      "create": [
+        "crates/soldier_core/tests/test_margin_gate.rs"
+      ],
+      "avoid": [
+        "plans/**"
+      ]
+    },
+    "acceptance": [
+      "70% reject opens; 85% ReduceOnly; 95% Kill.",
+      "GIVEN contract AT coverage for S6.4 WHEN regression tests execute THEN required guard behavior is enforced before dispatch.",
+      "GIVEN adverse inputs for S6.4 WHEN evaluation runs THEN OPEN paths are blocked unless all safety conditions pass."
+    ],
+    "steps": [
+      "Map S6.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
+      "Implement S6.4 logic in the smallest practical surface area while preserving fail-closed behavior.",
+      "Add/adjust targeted tests for S6.4: crates/soldier_core/tests/test_margin_gate.rs::test_margin_gate_thresholds_block_reduceonly_kill.",
+      "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+      "Run verification commands and archive artifact evidence before setting passes=true."
+    ],
+    "verify": [
+      "./plans/verify.sh",
+      "cargo test --workspace"
+    ],
+    "evidence": [
+      "cargo test -p soldier_core --test test_margin_gate output",
+      "PRD entry S6-010 records contract AT and test mappings for this story."
+    ],
+    "dependencies": [
+      "S6-009"
+    ],
+    "est_size": "S",
+    "risk": "med",
+    "needs_human_decision": false,
+    "passes": false,
+    "contract_must_evidence": [
+      {
+        "quote": "Fail-closed contract behavior must be verified by targeted acceptance tests.",
+        "location": "plans/prd.json S6-010",
+        "anchor": "AT-001"
+      }
+    ],
+    "enforcing_contract_ats": [
+      "AT-001"
+    ],
+    "reason_codes": {
+      "type": "ModeReasonCode",
+      "values": [
+        "REDUCEONLY_MM_UTIL_THRESHOLD"
+      ]
+    },
+    "enforcement_point": "PolicyGuard",
+    "failure_mode": [],
+    "observability": {
+      "metrics": [],
+      "status_fields": [
+        "trading_mode",
+        "risk_state"
+      ],
+      "status_contract_ats": [
+        "AT-001"
+      ]
+    },
+    "implementation_tests": [
+      "crates/soldier_core/tests/test_margin_gate.rs::test_margin_gate_thresholds_block_reduceonly_kill"
+    ]
+  }
+]

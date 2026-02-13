@@ -5,7 +5,7 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 
 ## Core rules
 
-1. Use one branch/worktree per Story ID.
+1. Use one branch/worktree per Story ID (slash-free `STORY_ID`), with branch naming `story/<STORY_ID>` (or `story/<STORY_ID>/<slug>`; PRD legacy form `story/<PRD_STORY_ID>-<slug>` is also accepted; in this legacy form slug must be a single token without `-`).
 2. Use PRs as the merge mechanism; do not merge story branches into local `main`.
 3. Keep the same story worktree until PR merge (or explicit abandonment), then clean it up.
 4. Keep WIP=2 maximum:
@@ -13,13 +13,14 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 - one story in `IMPLEMENTING/REVIEW`
 5. Run `./plans/verify.sh quick` during implementation/review.
 6. Run `./plans/verify.sh full` before marking complete/merge-grade.
-7. Flip `passes=true` only via:
+7. Crossref integrity is enforced through `./plans/crossref_gate.sh --ci` (strict evidence blocking is enabled when `plans/crossref_ci_strict` exists).
+8. Flip `passes=true` only via:
 
 ```bash
 ./plans/prd_set_pass.sh <STORY_ID> true --artifacts-dir artifacts/verify/<run_id>
 ```
 
-8. Dirty-tree policy: do not use dirty verify exceptions by default; prefer CI verify on PR (clean checkout) or clean the worktree first.
+9. Dirty-tree policy: do not use dirty verify exceptions by default; prefer CI verify on PR (clean checkout) or clean the worktree first.
 
 ## PR loop (trimmed)
 
@@ -28,8 +29,8 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 - `./plans/verify.sh quick` during iteration
 - `./plans/verify.sh full` before merge-grade/pass flip
 3. Push branch and open/update PR.
-4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating.
-5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes.
+4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating (this now enforces full `story_review_gate` evidence + story/branch binding).
+5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes (story is mandatory; PR head ref must be `story/<STORY_ID>[/<slug>]` or `story/<PRD_STORY_ID>-<slug>`; legacy slug cannot contain `-`).
 6. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
 7. Merge via PR after gates are green.
 
@@ -39,6 +40,7 @@ To block PR merges until Copilot/bot feedback is handled and re-reviewed on the 
 
 ```bash
 ./plans/pr_gate.sh \
+  --story <STORY_ID> \
   --pr <number> \
   --bot-comments-mode block \
   --require-aftercare-ack \

@@ -1,0 +1,353 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/dispatch_map.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/dispatch_map.rs
+index 70348e7..082b29f 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/src/execution/dispatch_map.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/src/execution/dispatch_map.rs
+@@ -1,224 +1,165 @@
+-//! Dispatcher amount mapping per CONTRACT.md Dispatcher Rules.
+-//!
+-//! Maps `OrderSize` to outbound Deribit request fields.
+-//! Exactly one canonical amount field is set per instrument_kind:
+-//! - `option | linear_future` → `amount = qty_coin`
+-//! - `perpetual | inverse_future` → `amount = qty_usd`
+-//!
+-//! CONTRACT.md AT-920: If `contracts` and canonical amount are both present
+-//! and mismatch beyond `CONTRACTS_AMOUNT_MATCH_TOLERANCE`, the intent is
+-//! rejected before dispatch. The caller maps the rejection to
+-//! `RiskState::Degraded` in runtime policy.
+-
+-use crate::execution::OrderSize;
++use std::sync::atomic::{AtomicU64, Ordering};
++
+ use crate::risk::RiskState;
+ use crate::venue::InstrumentKind;
+ 
+-/// Tolerance for contracts-vs-amount consistency check (AT-920).
+-///
+-/// If `|contracts * multiplier - canonical_amount| /
+-/// max(|canonical_amount|, CONTRACTS_AMOUNT_MATCH_EPSILON) > tolerance`,
+-/// the sizing is rejected as a unit mismatch.
+-pub const CONTRACTS_AMOUNT_MATCH_TOLERANCE: f64 = 0.001;
++use super::{OrderSize, contracts_amount_matches};
+ 
+-const CONTRACTS_AMOUNT_MATCH_EPSILON: f64 = 1e-9;
++pub struct DispatchMetrics {
++    unit_mismatch_total: AtomicU64,
++}
+ 
+-/// Intent classification for dispatch authorization.
+-///
+-/// CONTRACT.md: if uncertain, treat as OPEN (most restrictive).
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum IntentClass {
+-    /// New exposure — blocked in ReduceOnly/Kill.
+-    Open,
+-    /// Risk-reducing — allowed in ReduceOnly.
+-    Close,
+-    /// Risk-reducing hedge — allowed in ReduceOnly.
+-    Hedge,
+-    /// Order cancellation — always allowed.
+-    Cancel,
++impl DispatchMetrics {
++    pub const fn new() -> Self {
++        Self {
++            unit_mismatch_total: AtomicU64::new(0),
++        }
++    }
++
++    pub fn unit_mismatch_total(&self) -> u64 {
++        self.unit_mismatch_total.load(Ordering::Relaxed)
++    }
++}
++
++impl Default for DispatchMetrics {
++    fn default() -> Self {
++        Self::new()
++    }
+ }
+ 
+-/// Outbound Deribit order request fields.
+-///
+-/// CONTRACT.md: "always send exactly one canonical amount value."
+-#[derive(Debug, Clone, PartialEq)]
+-pub struct DispatchRequest {
+-    /// The single canonical amount to send to Deribit.
+-    /// For coin instruments: qty_coin. For USD instruments: qty_usd.
++static DISPATCH_METRICS: DispatchMetrics = DispatchMetrics::new();
++
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct DeribitOrderAmount {
+     pub amount: f64,
+-    /// Whether this is a reduce-only order.
+-    /// CLOSE/HEDGE → true; OPEN → false.
+-    pub reduce_only: bool,
++    pub contracts: Option<i64>,
++    pub derived_qty_coin: Option<f64>,
+ }
+ 
+-/// Error returned when dispatch mapping fails.
+-#[derive(Debug, Clone, PartialEq)]
+-pub enum DispatchMapError {
+-    /// Coin-sized instrument but qty_coin is missing from OrderSize.
+-    MissingQtyCoin,
+-    /// USD-sized instrument but qty_usd is missing from OrderSize.
+-    MissingQtyUsd,
+-    /// `contracts` is populated; caller must run AT-920 validation first.
+-    /// Use [`validate_and_dispatch`] with `contract_multiplier`.
+-    ContractsRequireValidation,
+-    /// CONTRACT.md AT-920: contracts and canonical amount mismatch.
+-    /// Contains the relative mismatch delta.
+-    ContractsAmountMismatch {
+-        /// Relative delta: `|contracts_implied - canonical| / canonical`.
+-        delta: f64,
+-    },
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum DispatchRejectReason {
++    UnitMismatch,
+ }
+ 
+-/// Result of a validated dispatch, including risk assessment.
+-///
+-/// Returned by [`validate_and_dispatch`] when the sizing is valid.
+-#[derive(Debug, Clone, PartialEq)]
+-pub struct ValidatedDispatch {
+-    /// The dispatch request to send to the venue.
+-    pub request: DispatchRequest,
+-    /// Risk state resulting from validation.
+-    /// `Healthy` when all checks pass.
++#[derive(Debug, Clone, Copy, PartialEq)]
++pub struct DispatchReject {
+     pub risk_state: RiskState,
++    pub reason: DispatchRejectReason,
++    pub mismatch_delta: Option<f64>,
+ }
+ 
+-/// Mismatch rejection metrics (AT-920 observability).
+-///
+-/// Tracks the count of contract/amount mismatch rejections.
+-#[derive(Debug)]
+-pub struct MismatchMetrics {
+-    /// `order_intent_reject_unit_mismatch_total` counter.
+-    reject_unit_mismatch_total: u64,
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum IntentClassification {
++    Open,
++    Close,
++    Hedge,
++    Cancel,
+ }
+ 
+-impl MismatchMetrics {
+-    /// Create a new metrics tracker with all counters at zero.
+-    pub fn new() -> Self {
+-        Self {
+-            reject_unit_mismatch_total: 0,
+-        }
+-    }
+-
+-    /// Increment the mismatch rejection counter.
+-    pub fn record_mismatch_rejection(&mut self) {
+-        self.reject_unit_mismatch_total += 1;
+-    }
+-
+-    /// Current value of `order_intent_reject_unit_mismatch_total`.
+-    pub fn reject_unit_mismatch_total(&self) -> u64 {
+-        self.reject_unit_mismatch_total
++pub fn reduce_only_from_intent_classification(
++    classification: IntentClassification,
++) -> Option<bool> {
++    match classification {
++        IntentClassification::Close | IntentClassification::Hedge => Some(true),
++        IntentClassification::Open | IntentClassification::Cancel => None,
+     }
+ }
+ 
+-impl Default for MismatchMetrics {
+-    fn default() -> Self {
+-        Self::new()
+-    }
++pub fn map_order_size_to_deribit_amount(
++    instrument_kind: InstrumentKind,
++    order_size: &OrderSize,
++    contract_multiplier: Option<f64>,
++    index_price: f64,
++) -> Result<DeribitOrderAmount, DispatchReject> {
++    map_order_size_to_deribit_amount_with_metrics(
++        &DISPATCH_METRICS,
++        instrument_kind,
++        order_size,
++        contract_multiplier,
++        index_price,
++    )
+ }
+ 
+-/// Map an `OrderSize` to a `DispatchRequest` for Deribit.
+-///
+-/// CONTRACT.md Dispatcher Rules:
+-/// - coin instruments (`option | linear_future`) → send `amount = qty_coin`
+-/// - USD instruments (`perpetual | inverse_future`) → send `amount = qty_usd`
+-/// - `reduce_only` is derived from intent classification only.
+-/// - If `contracts` is present, use [`validate_and_dispatch`] so AT-920
+-///   mismatch checks execute before mapping.
+-pub fn map_to_dispatch(
+-    order_size: &OrderSize,
++pub fn map_order_size_to_deribit_amount_with_metrics(
++    metrics: &DispatchMetrics,
+     instrument_kind: InstrumentKind,
+-    intent: IntentClass,
+-) -> Result<DispatchRequest, DispatchMapError> {
+-    // Fail closed: if contracts are present, callers must route through
+-    // validate_and_dispatch so AT-920 mismatch checks run before mapping.
+-    if order_size.contracts.is_some() {
+-        return Err(DispatchMapError::ContractsRequireValidation);
++    order_size: &OrderSize,
++    contract_multiplier: Option<f64>,
++    index_price: f64,
++) -> Result<DeribitOrderAmount, DispatchReject> {
++    if order_size.qty_coin.is_some() && order_size.qty_usd.is_some() {
++        return reject_unit_mismatch(metrics, "both_qty", None);
+     }
+ 
+-    map_to_dispatch_unchecked(order_size, instrument_kind, intent)
+-}
+-
+-fn map_to_dispatch_unchecked(
+-    order_size: &OrderSize,
+-    instrument_kind: InstrumentKind,
+-    intent: IntentClass,
+-) -> Result<DispatchRequest, DispatchMapError> {
+-    let amount = match instrument_kind {
+-        InstrumentKind::Option | InstrumentKind::LinearFuture => order_size
+-            .qty_coin
+-            .ok_or(DispatchMapError::MissingQtyCoin)?,
++    let (canonical_amount, derived_qty_coin) = match instrument_kind {
++        InstrumentKind::Option | InstrumentKind::LinearFuture => {
++            let amount = order_size.qty_coin;
++            (amount, amount)
++        }
+         InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {
+-            order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?
++            if index_price <= 0.0 {
++                return reject_unit_mismatch(metrics, "invalid_index_price", None);
++            }
++            let amount = order_size.qty_usd;
++            let derived_qty_coin = amount.map(|qty_usd| qty_usd / index_price);
++            (amount, derived_qty_coin)
+         }
+     };
+ 
+-    let reduce_only = match intent {
+-        IntentClass::Open => false,
+-        IntentClass::Close | IntentClass::Hedge | IntentClass::Cancel => true,
++    let canonical_amount = match canonical_amount {
++        Some(amount) => amount,
++        None => return reject_unit_mismatch(metrics, "missing_canonical", None),
+     };
+ 
+-    Ok(DispatchRequest {
+-        amount,
+-        reduce_only,
+-    })
+-}
++    // Derive or Validate contracts
++    let derived_contracts = if let Some(multiplier) = contract_multiplier {
++        if multiplier > 0.0 {
++            Some((canonical_amount / multiplier).round() as i64)
++        } else {
++            None
++        }
++    } else {
++        None
++    };
+ 
+-/// Validate contracts/amount consistency and dispatch (AT-920).
+-///
+-/// CONTRACT.md AT-920: If `contracts` and canonical amount are both present,
+-/// validates that
+-/// `|contracts * contract_multiplier - canonical_amount| /
+-/// max(|canonical_amount|, epsilon)` does not exceed
+-/// [`CONTRACTS_AMOUNT_MATCH_TOLERANCE`] (`epsilon = 1e-9`).
+-///
+-/// On mismatch: returns `Err(ContractsAmountMismatch)` and increments
+-/// mismatch metrics. The caller is responsible for setting
+-/// `RiskState::Degraded` in policy/runtime handling.
+-///
+-/// When `contracts` is present, missing `contract_multiplier` is rejected
+-/// fail-closed with [`DispatchMapError::ContractsRequireValidation`].
+-pub fn validate_and_dispatch(
+-    order_size: &OrderSize,
+-    instrument_kind: InstrumentKind,
+-    intent: IntentClass,
+-    contract_multiplier: Option<f64>,
+-    metrics: &mut MismatchMetrics,
+-) -> Result<ValidatedDispatch, DispatchMapError> {
+-    // AT-920: contracts/amount consistency check
+     if let Some(contracts) = order_size.contracts {
+-        let multiplier = contract_multiplier.ok_or(DispatchMapError::ContractsRequireValidation)?;
+-        let canonical_amount = match instrument_kind {
+-            InstrumentKind::Option | InstrumentKind::LinearFuture => order_size
+-                .qty_coin
+-                .ok_or(DispatchMapError::MissingQtyCoin)?,
+-            InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {
+-                order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?
++        let multiplier = match contract_multiplier {
++            Some(value) => value,
++            None => {
++                return reject_unit_mismatch(metrics, "missing_multiplier_for_validation", None);
+             }
+         };
+-
+-        // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.
+-        if !canonical_amount.is_finite() || !multiplier.is_finite() {
+-            metrics.record_mismatch_rejection();
+-            return Err(DispatchMapError::ContractsAmountMismatch {
+-                delta: f64::INFINITY,
+-            });
++        if !contracts_amount_matches(canonical_amount, contracts, multiplier) {
++            let expected = contracts as f64 * multiplier;
++            let delta = (canonical_amount - expected).abs();
++            return reject_unit_mismatch(metrics, "contracts_mismatch", Some(delta));
+         }
++    }
+ 
+-        let contracts_implied = contracts as f64 * multiplier;
+-        let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);
+-        let delta = (contracts_implied - canonical_amount).abs() / denominator;
++    Ok(DeribitOrderAmount {
++        amount: canonical_amount,
++        contracts: derived_contracts,
++        derived_qty_coin,
++    })
++}
+ 
+-        if !contracts_implied.is_finite()
+-            || !delta.is_finite()
+-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE
+-        {
+-            metrics.record_mismatch_rejection();
+-            return Err(DispatchMapError::ContractsAmountMismatch { delta });
+-        }
+-    }
++pub fn order_intent_reject_unit_mismatch_total() -> u64 {
++    DISPATCH_METRICS.unit_mismatch_total()
++}
+ 
+-    let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;
+-    Ok(ValidatedDispatch {
+-        request,
+-        risk_state: RiskState::Healthy,
++fn reject_unit_mismatch(
++    metrics: &DispatchMetrics,
++    reason: &str,
++    mismatch_delta: Option<f64>,
++) -> Result<DeribitOrderAmount, DispatchReject> {
++    metrics.unit_mismatch_total.fetch_add(1, Ordering::Relaxed);
++    eprintln!(
++        "order_intent_reject_unit_mismatch reason={} mismatch_delta={:?}",
++        reason, mismatch_delta
++    );
++    Err(DispatchReject {
++        risk_state: RiskState::Degraded,
++        reason: DispatchRejectReason::UnitMismatch,
++        mismatch_delta,
+     })
+ }

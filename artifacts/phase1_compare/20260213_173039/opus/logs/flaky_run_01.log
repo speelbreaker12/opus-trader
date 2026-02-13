@@ -1,0 +1,9 @@
+$ bash -lc 'echo stable'
+[exit=0] [elapsed_s=0.209]
+
+=== STDOUT ===
+stable
+
+
+=== STDERR ===
+

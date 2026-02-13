@@ -1,0 +1,23 @@
+16:pub enum GateStep {
+26:pub enum DispatchStep {
+42:    DispatchAuth(RiskState),
+46:    RecordedBeforeDispatch,
+123:    static DISPATCH_TRACE: RefCell<Vec<DispatchStep>> = const { RefCell::new(Vec::new()) };
+143:pub fn take_dispatch_trace() -> Vec<DispatchStep> {
+151:pub fn gate_sequence_total(result: GateSequenceResult) -> u64 {
+165:fn record_gate_step(step: GateStep) {
+169:fn record_dispatch_step(step: DispatchStep) {
+177:            super::emit_execution_metric_line("gate_sequence_total", "result=allowed");
+181:            super::emit_execution_metric_line("gate_sequence_total", "result=rejected");
+230:pub fn build_order_intent(
+235:    record_gate_step(GateStep::Preflight);
+236:    let intent = match preflight::build_order_intent(intent, config) {
+254:    record_gate_step(GateStep::Quantize);
+269:    record_gate_step(GateStep::FeeCache);
+282:            BuildOrderIntentRejectReason::DispatchAuth(combined_risk_state),
+286:    record_gate_step(GateStep::LiquidityGate);
+304:    record_gate_step(GateStep::NetEdgeGate);
+321:    record_gate_step(GateStep::Pricer);
+336:    record_dispatch_step(DispatchStep::RecordIntent);
+342:            BuildOrderIntentRejectReason::RecordedBeforeDispatch,
+346:    record_dispatch_step(DispatchStep::DispatchAttempt);

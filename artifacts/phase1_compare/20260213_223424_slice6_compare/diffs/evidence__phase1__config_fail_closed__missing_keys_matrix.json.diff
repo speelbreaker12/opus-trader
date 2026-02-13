@@ -1,0 +1,57 @@
+diff --git a/tmp/slice6-compare-wOA1/opus/evidence/phase1/config_fail_closed/missing_keys_matrix.json b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/config_fail_closed/missing_keys_matrix.json
+index 709d953..0b5e09a 100644
+--- a/tmp/slice6-compare-wOA1/opus/evidence/phase1/config_fail_closed/missing_keys_matrix.json
++++ b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/config_fail_closed/missing_keys_matrix.json
+@@ -1,19 +1,35 @@
+ {
+-  "description": "Missing/invalid config fail-closed test matrix",
+-  "contract_ref": "Appendix A",
+-  "test_file": "crates/soldier_core/tests/test_missing_config.rs",
+-  "keys": [
+-    {"key": "tick_size", "test": "test_missing_tick_size_fails_closed", "result": "PASS", "reason_code": "InstrumentMetadataMissing"},
+-    {"key": "amount_step", "test": "test_missing_amount_step_fails_closed", "result": "PASS", "reason_code": "InstrumentMetadataMissing"},
+-    {"key": "tick_size (NaN)", "test": "test_nan_tick_size_fails_closed", "result": "PASS", "reason_code": "InstrumentMetadataMissing"},
+-    {"key": "amount_step (Inf)", "test": "test_infinity_amount_step_fails_closed", "result": "PASS", "reason_code": "InstrumentMetadataMissing"},
+-    {"key": "tick_size (negative)", "test": "test_negative_tick_size_fails_closed", "result": "PASS", "reason_code": "InstrumentMetadataMissing"},
+-    {"key": "gross_edge_usd", "test": "test_missing_gross_edge_fails_closed", "result": "PASS", "reason_code": "NetEdgeInputMissing"},
+-    {"key": "fee_usd", "test": "test_missing_fee_usd_fails_closed", "result": "PASS", "reason_code": "NetEdgeInputMissing"},
+-    {"key": "expected_slippage_usd", "test": "test_missing_slippage_fails_closed", "result": "PASS", "reason_code": "NetEdgeInputMissing"},
+-    {"key": "min_edge_usd", "test": "test_missing_min_edge_fails_closed", "result": "PASS", "reason_code": "NetEdgeInputMissing"},
+-    {"key": "l2_snapshot", "test": "test_missing_l2_book_fails_closed", "result": "PASS", "reason_code": "LiquidityGateNoL2"},
+-    {"key": "qty (zero)", "test": "test_zero_qty_pricer_fails_closed", "result": "PASS", "reason_code": "InvalidInput"},
+-    {"key": "RiskState", "test": "test_unhealthy_risk_state_fails_closed", "result": "PASS", "reason_code": "RiskStateNotHealthy"}
+-  ]
++  "generated": "2026-02-10T14:40:11Z",
++  "test": "test_missing_config_fails_closed",
++  "results": {
++    "INSTRUMENT_TICK_SIZE": {
++      "status": "PASS",
++      "reason": "CONFIG_MISSING"
++    },
++    "INSTRUMENT_AMOUNT_STEP": {
++      "status": "PASS",
++      "reason": "CONFIG_MISSING"
++    },
++    "INSTRUMENT_MIN_AMOUNT": {
++      "status": "PASS",
++      "reason": "CONFIG_MISSING"
++    },
++    "L2_BOOK_SNAPSHOT": {
++      "status": "PASS",
++      "reason": "CONFIG_MISSING"
++    },
++    "FEE_MODEL_CACHED_AT_TS_MS": {
++      "status": "PASS",
++      "reason": "CONFIG_MISSING"
++    },
++    "NET_EDGE_MIN_USD": {
++      "status": "PASS",
++      "reason": "CONFIG_MISSING"
++    }
++  },
++  "summary": {
++    "total": 6,
++    "passed": 6,
++    "failed": 0
++  }
+ }

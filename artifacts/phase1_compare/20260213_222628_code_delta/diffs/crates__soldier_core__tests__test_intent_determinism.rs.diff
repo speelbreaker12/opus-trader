@@ -1,0 +1,602 @@
+diff --git a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_intent_determinism.rs b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_intent_determinism.rs
+index 221b8db..ec06e61 100644
+--- a/tmp/phase1-code-delta-ygRu/opus/crates/soldier_core/tests/test_intent_determinism.rs
++++ b/tmp/phase1-code-delta-ygRu/ralph/crates/soldier_core/tests/test_intent_determinism.rs
+@@ -1,401 +1,247 @@
+-//! CI test proving identical inputs produce identical intent outputs.
+-//!
+-//! CSP.2.1 Stable Intent Identity: Same inputs → same quantized values,
+-//! same gate trace, same limit price, same label — across runs and restarts.
+-//!
+-//! No HashMap iteration order dependency, no clock dependency, no randomness.
+-
+-use soldier_core::execution::{
+-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateResults, GateStep, build_order_intent,
+-};
+-use soldier_core::execution::{
+-    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
+-    evaluate_liquidity_gate,
+-};
+-use soldier_core::execution::{LabelInput, derive_gid12, derive_sid8, encode_label};
+-use soldier_core::execution::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
+-use soldier_core::execution::{
+-    PricerInput, PricerMetrics, PricerResult, PricerSide, compute_limit_price,
+-};
+-use soldier_core::execution::{QuantizeConstraints, QuantizeMetrics, Side, quantize};
+-use soldier_core::risk::RiskState;
+ use std::collections::HashMap;
++use std::fs;
++use std::path::{Path, PathBuf};
+ 
+-// ─── Quantize determinism ────────────────────────────────────────────────
++use soldier_core::execution::{InstrumentQuantization, QuantizedSteps, Side};
++use soldier_core::idempotency::{IntentHashInput, intent_hash};
+ 
+-#[test]
+-fn test_quantize_same_inputs_same_output() {
+-    let constraints = QuantizeConstraints {
+-        tick_size: 0.5,
+-        amount_step: 0.1,
+-        min_amount: 0.1,
+-    };
+-
+-    let mut results = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = QuantizeMetrics::new();
+-        let r = quantize(1.23456, 100.789, Side::Buy, &constraints, &mut m).unwrap();
+-        results.push((r.qty_q, r.qty_steps, r.limit_price_q, r.price_ticks));
+-    }
++const EVIDENCE_RELATIVE_PATH: &str = "evidence/phase1/determinism/intent_hashes.txt";
++const SAMPLE_INSTRUMENT_ID: &str = "BTC-PERP";
++const SAMPLE_GROUP_ID: &str = "determinism-group-1";
+ 
+-    // All 100 runs must produce identical results
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(
+-            r, first,
+-            "Quantize run {i} differs from run 0: {r:?} vs {first:?}"
+-        );
+-    }
++struct FixedClock {
++    now_ms: u64,
+ }
+ 
+-#[test]
+-fn test_quantize_sell_deterministic() {
+-    let constraints = QuantizeConstraints {
+-        tick_size: 0.5,
+-        amount_step: 0.1,
+-        min_amount: 0.1,
+-    };
+-
+-    let mut results = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = QuantizeMetrics::new();
+-        let r = quantize(1.23456, 100.789, Side::Sell, &constraints, &mut m).unwrap();
+-        results.push((r.qty_q, r.qty_steps, r.limit_price_q, r.price_ticks));
++impl FixedClock {
++    fn new(now_ms: u64) -> Self {
++        Self { now_ms }
+     }
+ 
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(r, first, "Quantize sell run {i} differs from run 0");
++    fn now_ms(&self) -> u64 {
++        self.now_ms
+     }
+ }
+ 
+-// ─── Chokepoint determinism ──────────────────────────────────────────────
+-
+-#[test]
+-fn test_chokepoint_same_inputs_same_trace() {
+-    let gates = GateResults::default();
+-
+-    let mut traces = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = ChokeMetrics::new();
+-        let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+-        match result {
+-            ChokeResult::Approved { gate_trace } => traces.push(gate_trace),
+-            other => panic!("expected Approved, got {other:?}"),
+-        }
+-    }
+-
+-    let first = &traces[0];
+-    for (i, t) in traces.iter().enumerate() {
+-        assert_eq!(t, first, "Chokepoint trace run {i} differs from run 0");
+-    }
++struct IntentSnapshot<'a> {
++    input: IntentHashInput<'a>,
++    created_ts_ms: u64,
+ }
+ 
+-#[test]
+-fn test_chokepoint_rejected_deterministic() {
+-    let gates = GateResults {
+-        liquidity_gate_passed: false,
+-        ..GateResults::default()
++fn sample_quantized() -> QuantizedSteps {
++    let meta = InstrumentQuantization {
++        tick_size: 0.5,
++        amount_step: 0.1,
++        min_amount: 0.0,
+     };
+-
+-    let mut results = Vec::new();
+-    for _ in 0..50 {
+-        let mut m = ChokeMetrics::new();
+-        let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+-        results.push(result);
+-    }
+-
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(r, first, "Chokepoint rejected run {i} differs from run 0");
+-    }
++    meta.quantize_steps(Side::Buy, 1.29, 100.74)
++        .expect("quantize sample")
+ }
+ 
+-// ─── Pricer determinism ──────────────────────────────────────────────────
+-
+-#[test]
+-fn test_pricer_same_inputs_same_price() {
+-    let input = PricerInput {
+-        fair_price: 100.0,
+-        gross_edge_usd: 10.0,
+-        min_edge_usd: 2.0,
+-        fee_estimate_usd: 3.0,
+-        qty: 1.0,
+-        side: PricerSide::Buy,
+-    };
+-
+-    let mut results = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = PricerMetrics::new();
+-        let r = compute_limit_price(&input, &mut m);
+-        results.push(r);
++fn build_input<'a>(
++    instrument_id: &'a str,
++    group_id: &'a str,
++    leg_idx: u8,
++    side: Side,
++    quantized: QuantizedSteps,
++) -> IntentHashInput<'a> {
++    IntentHashInput {
++        instrument_id,
++        side,
++        quantized,
++        group_id,
++        leg_idx,
+     }
++}
+ 
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(r, first, "Pricer run {i} differs from run 0");
++fn build_snapshot<'a>(clock: &FixedClock, input: IntentHashInput<'a>) -> IntentSnapshot<'a> {
++    IntentSnapshot {
++        input,
++        created_ts_ms: clock.now_ms(),
+     }
+ }
+ 
+-#[test]
+-fn test_pricer_sell_deterministic() {
+-    let input = PricerInput {
+-        fair_price: 100.0,
+-        gross_edge_usd: 10.0,
+-        min_edge_usd: 2.0,
+-        fee_estimate_usd: 3.0,
+-        qty: 1.0,
+-        side: PricerSide::Sell,
+-    };
+-
+-    let mut results = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = PricerMetrics::new();
+-        let r = compute_limit_price(&input, &mut m);
+-        results.push(r);
+-    }
++fn encode_intent_bytes(input: &IntentHashInput<'_>) -> Vec<u8> {
++    let mut buf = Vec::with_capacity(64);
++    write_str(&mut buf, input.instrument_id);
++    write_u8(&mut buf, side_code(input.side));
++    write_i64(&mut buf, input.quantized.qty_steps);
++    write_i64(&mut buf, input.quantized.price_ticks);
++    write_str(&mut buf, input.group_id);
++    write_u8(&mut buf, input.leg_idx);
++    buf
++}
+ 
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(r, first, "Pricer sell run {i} differs from run 0");
+-    }
++fn write_str(buf: &mut Vec<u8>, value: &str) {
++    let len = value.len() as u32;
++    buf.extend_from_slice(&len.to_le_bytes());
++    buf.extend_from_slice(value.as_bytes());
+ }
+ 
+-// ─── Net edge determinism ────────────────────────────────────────────────
++fn write_u8(buf: &mut Vec<u8>, value: u8) {
++    buf.push(value);
++}
+ 
+-#[test]
+-fn test_net_edge_same_inputs_same_result() {
+-    let input = NetEdgeInput {
+-        gross_edge_usd: Some(10.0),
+-        fee_usd: Some(3.0),
+-        expected_slippage_usd: Some(1.0),
+-        min_edge_usd: Some(2.0),
+-    };
++fn write_i64(buf: &mut Vec<u8>, value: i64) {
++    buf.extend_from_slice(&value.to_le_bytes());
++}
+ 
+-    let mut results = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = NetEdgeMetrics::new();
+-        let r = evaluate_net_edge(&input, &mut m);
+-        results.push(r);
++fn side_code(side: Side) -> u8 {
++    match side {
++        Side::Buy => 0,
++        Side::Sell => 1,
+     }
++}
+ 
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(r, first, "Net edge run {i} differs from run 0");
++fn hex_bytes(bytes: &[u8]) -> String {
++    let mut out = String::with_capacity(bytes.len() * 2);
++    for byte in bytes {
++        use std::fmt::Write as _;
++        let _ = write!(out, "{:02x}", byte);
+     }
++    out
+ }
+ 
+-// ─── Liquidity gate determinism ──────────────────────────────────────────
+-
+-#[test]
+-fn test_liquidity_gate_same_inputs_same_result() {
+-    let make_input = || LiquidityGateInput {
+-        order_qty: 3.0,
+-        is_buy: true,
+-        intent_class: GateIntentClass::Open,
+-        is_marketable: true,
+-        l2_snapshot: Some(L2BookSnapshot {
+-            asks: vec![
+-                L2Level {
+-                    price: 101.0,
+-                    qty: 5.0,
+-                },
+-                L2Level {
+-                    price: 102.0,
+-                    qty: 10.0,
+-                },
+-            ],
+-            bids: vec![
+-                L2Level {
+-                    price: 99.0,
+-                    qty: 5.0,
+-                },
+-                L2Level {
+-                    price: 98.0,
+-                    qty: 10.0,
+-                },
+-            ],
+-            timestamp_ms: 1000,
+-        }),
+-        now_ms: 2000,
+-        l2_book_snapshot_max_age_ms: 5000,
+-        max_slippage_bps: 200.0,
+-    };
+-
+-    let mut results = Vec::new();
+-    for _ in 0..100 {
+-        let mut m = LiquidityGateMetrics::new();
+-        let input = make_input();
+-        let r = evaluate_liquidity_gate(&input, &mut m);
+-        results.push(r);
+-    }
++fn hash_hex(hash: u64) -> String {
++    format!("{:016x}", hash)
++}
+ 
+-    let first = &results[0];
+-    for (i, r) in results.iter().enumerate() {
+-        assert_eq!(r, first, "Liquidity gate run {i} differs from run 0");
+-    }
++fn evidence_path() -> PathBuf {
++    Path::new(env!("CARGO_MANIFEST_DIR"))
++        .join("..")
++        .join("..")
++        .join(EVIDENCE_RELATIVE_PATH)
+ }
+ 
+-// ─── Label determinism ───────────────────────────────────────────────────
++struct EvidenceSnapshot {
++    intent_bytes_hex: String,
++    intent_hash_hex: String,
++    run_1: String,
++    run_2: String,
++}
+ 
+-#[test]
+-fn test_label_encode_deterministic() {
+-    let input = LabelInput {
+-        sid8: "abcd1234",
+-        gid12: "012345678901",
+-        leg_idx: 0,
+-        ih16: "deadbeef01234567",
+-    };
++fn parse_evidence(contents: &str) -> EvidenceSnapshot {
++    let mut intent_bytes_hex = None;
++    let mut intent_hash_hex = None;
++    let mut run_1 = None;
++    let mut run_2 = None;
+ 
+-    let mut labels = Vec::new();
+-    for _ in 0..100 {
+-        let label = encode_label(&input).unwrap();
+-        labels.push(label);
++    for line in contents.lines() {
++        let line = line.trim();
++        if line.is_empty() || line.starts_with('#') {
++            continue;
++        }
++        let (key, value) = match line.split_once(':') {
++            Some((key, value)) => (key.trim(), value.trim()),
++            None => continue,
++        };
++        match key {
++            "intent_bytes_hex" => intent_bytes_hex = Some(value.to_string()),
++            "intent_hash_hex" => intent_hash_hex = Some(value.to_string()),
++            "run_1" => run_1 = Some(value.to_string()),
++            "run_2" => run_2 = Some(value.to_string()),
++            _ => {}
++        }
+     }
+ 
+-    let first = &labels[0];
+-    for (i, l) in labels.iter().enumerate() {
+-        assert_eq!(l, first, "Label encode run {i} differs from run 0");
++    EvidenceSnapshot {
++        intent_bytes_hex: intent_bytes_hex.expect("intent_bytes_hex missing"),
++        intent_hash_hex: intent_hash_hex.expect("intent_hash_hex missing"),
++        run_1: run_1.expect("run_1 missing"),
++        run_2: run_2.expect("run_2 missing"),
+     }
+ }
+ 
+-#[test]
+-fn test_sid8_deterministic() {
+-    let mut hashes = Vec::new();
+-    for _ in 0..100 {
+-        let h = derive_sid8("my-strategy-id");
+-        hashes.push(h);
+-    }
+-
+-    let first = &hashes[0];
+-    for (i, h) in hashes.iter().enumerate() {
+-        assert_eq!(h, first, "sid8 run {i} differs from run 0");
++fn maybe_log_snapshot(label: &str, bytes_hex: &str, hash_hex: &str) {
++    if std::env::var("INTENT_DETERMINISM_DEBUG").is_ok() {
++        println!("{label} bytes_hex={bytes_hex}");
++        println!("{label} hash_hex={hash_hex}");
+     }
+ }
+ 
+-#[test]
+-fn test_gid12_deterministic() {
+-    let mut hashes = Vec::new();
+-    for _ in 0..100 {
+-        let h = derive_gid12("550e8400-e29b-41d4-a716-446655440000");
+-        hashes.push(h);
+-    }
+-
+-    let first = &hashes[0];
+-    for (i, h) in hashes.iter().enumerate() {
+-        assert_eq!(h, first, "gid12 run {i} differs from run 0");
+-    }
++fn stable_group_id_from_tags(tags: &HashMap<&'static str, &'static str>) -> String {
++    let mut entries: Vec<_> = tags.iter().collect();
++    entries.sort_by(|a, b| a.0.cmp(b.0));
++    entries
++        .into_iter()
++        .map(|(key, value)| format!("{key}={value}"))
++        .collect::<Vec<_>>()
++        .join("|")
+ }
+ 
+-// ─── No HashMap ordering dependency ─────────────────────────────────────
+-
+ #[test]
+-fn test_no_hashmap_ordering_dependency() {
+-    // Build a HashMap with many keys to trigger different iteration orders,
+-    // then feed values to quantize. Prove the output is identical regardless.
+-    let constraints = QuantizeConstraints {
+-        tick_size: 0.5,
+-        amount_step: 0.1,
+-        min_amount: 0.1,
+-    };
+-
+-    let mut reference = None;
+-
+-    for seed in 0u64..50 {
+-        // Build HashMap with varying insertion order
+-        let mut map: HashMap<String, f64> = HashMap::new();
+-        for i in 0..20 {
+-            let key = format!("key_{}", (i + seed) % 20);
+-            map.insert(key, 1.5);
+-        }
+-
+-        // Use a fixed value from the map (not iteration order)
+-        let qty = *map.get("key_0").unwrap();
+-        let price = 100.5;
+-
+-        let mut m = QuantizeMetrics::new();
+-        let result = quantize(qty, price, Side::Buy, &constraints, &mut m).unwrap();
+-        let output = (
+-            result.qty_q,
+-            result.qty_steps,
+-            result.limit_price_q,
+-            result.price_ticks,
+-        );
+-
+-        match &reference {
+-            None => reference = Some(output),
+-            Some(ref_val) => {
+-                assert_eq!(
+-                    &output, ref_val,
+-                    "HashMap seed {seed} produced different quantize output"
+-                );
+-            }
+-        }
+-    }
++fn test_intent_determinism_same_inputs_same_hash() {
++    let clock = FixedClock::new(1_700_000_000_000);
++    let quantized = sample_quantized();
++
++    assert_eq!(quantized.qty_steps, 12, "expected canonical qty steps");
++    assert_eq!(quantized.price_ticks, 201, "expected canonical price ticks");
++
++    let input = build_input(
++        SAMPLE_INSTRUMENT_ID,
++        SAMPLE_GROUP_ID,
++        0,
++        Side::Buy,
++        quantized,
++    );
++    let first = build_snapshot(&clock, input.clone());
++    let second = build_snapshot(&clock, input);
++
++    assert_eq!(first.created_ts_ms, second.created_ts_ms);
++
++    let hash_a = intent_hash(&first.input);
++    let hash_b = intent_hash(&second.input);
++    assert_eq!(
++        hash_a, hash_b,
++        "hash must be identical for identical inputs"
++    );
++
++    let bytes_hex = hex_bytes(&encode_intent_bytes(&first.input));
++    let hash_hex = hash_hex(hash_a);
++    maybe_log_snapshot("intent", &bytes_hex, &hash_hex);
++
++    let evidence_contents = fs::read_to_string(evidence_path()).expect("read evidence file");
++    let evidence = parse_evidence(&evidence_contents);
++
++    assert_eq!(evidence.intent_bytes_hex, bytes_hex);
++    assert_eq!(evidence.intent_hash_hex, hash_hex);
++    assert_eq!(evidence.run_1, hash_hex);
++    assert_eq!(evidence.run_2, hash_hex);
+ }
+ 
+-// ─── Full pipeline determinism ───────────────────────────────────────────
+-
+ #[test]
+-fn test_full_pipeline_determinism() {
+-    // Run the complete intent pipeline with fixed inputs 100 times
+-    let constraints = QuantizeConstraints {
+-        tick_size: 0.5,
+-        amount_step: 0.1,
+-        min_amount: 0.1,
+-    };
+-
+-    let pricer_input = PricerInput {
+-        fair_price: 100.0,
+-        gross_edge_usd: 10.0,
+-        min_edge_usd: 2.0,
+-        fee_estimate_usd: 3.0,
+-        qty: 1.0,
+-        side: PricerSide::Buy,
+-    };
+-
+-    let gate_results = GateResults::default();
+-
+-    #[derive(Debug, PartialEq)]
+-    struct PipelineSnapshot {
+-        qty_q: f64,
+-        price_ticks: i64,
+-        limit_price: PricerResult,
+-        choke_trace: Vec<GateStep>,
+-    }
+-
+-    let mut snapshots = Vec::new();
+-
+-    for _ in 0..100 {
+-        let mut qm = QuantizeMetrics::new();
+-        let qv = quantize(1.5, 100.3, Side::Buy, &constraints, &mut qm).unwrap();
+-
+-        let mut pm = PricerMetrics::new();
+-        let pr = compute_limit_price(&pricer_input, &mut pm);
+-
+-        let mut cm = ChokeMetrics::new();
+-        let cr = build_order_intent(
+-            ChokeIntentClass::Open,
+-            RiskState::Healthy,
+-            &mut cm,
+-            &gate_results,
+-        );
+-
+-        let trace = match cr {
+-            ChokeResult::Approved { gate_trace } => gate_trace,
+-            other => panic!("expected Approved, got {other:?}"),
+-        };
+-
+-        snapshots.push(PipelineSnapshot {
+-            qty_q: qv.qty_q,
+-            price_ticks: qv.price_ticks,
+-            limit_price: pr,
+-            choke_trace: trace,
+-        });
+-    }
+-
+-    let first = &snapshots[0];
+-    for (i, s) in snapshots.iter().enumerate() {
+-        assert_eq!(s, first, "Full pipeline run {i} differs from run 0");
+-    }
++fn test_intent_determinism_hashmap_order_independent() {
++    let quantized = sample_quantized();
++
++    let mut tags_a = HashMap::new();
++    tags_a.insert("leg", "0");
++    tags_a.insert("strategy", "alpha");
++    tags_a.insert("group", "determinism");
++
++    let mut tags_b = HashMap::new();
++    tags_b.insert("group", "determinism");
++    tags_b.insert("strategy", "alpha");
++    tags_b.insert("leg", "0");
++
++    let group_a = stable_group_id_from_tags(&tags_a);
++    let group_b = stable_group_id_from_tags(&tags_b);
++
++    assert_eq!(group_a, group_b);
++
++    let input_a = build_input(
++        SAMPLE_INSTRUMENT_ID,
++        group_a.as_str(),
++        0,
++        Side::Buy,
++        quantized,
++    );
++    let input_b = build_input(
++        SAMPLE_INSTRUMENT_ID,
++        group_b.as_str(),
++        0,
++        Side::Buy,
++        quantized,
++    );
++
++    assert_eq!(intent_hash(&input_a), intent_hash(&input_b));
+ }

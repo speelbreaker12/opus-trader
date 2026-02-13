@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/test_gate_ordering.rs (target/debug/deps/test_gate_ordering-8593737869d632df)
+
+running 2 tests
+expected_slippage_bps value=0
+pricer_limit_vs_fair_bps value=-414.1666666666666
+gate_sequence_total result=allowed
+gate_sequence_total result=rejected
+expected_slippage_bps value=0
+pricer_limit_vs_fair_bps value=-414.1666666666666
+gate_sequence_total result=allowed
+expected_slippage_bps value=0
+pricer_limit_vs_fair_bps value=-414.1666666666666
+gate_sequence_total result=rejected
+test gate_sequence_is_deterministic_for_open ... ok
+test test_gate_ordering_constraints ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

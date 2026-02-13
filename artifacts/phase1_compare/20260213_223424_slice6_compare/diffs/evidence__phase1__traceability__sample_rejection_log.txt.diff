@@ -1,0 +1,41 @@
+diff --git a/tmp/slice6-compare-wOA1/opus/evidence/phase1/traceability/sample_rejection_log.txt b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/traceability/sample_rejection_log.txt
+index bbb8c12..6713357 100644
+--- a/tmp/slice6-compare-wOA1/opus/evidence/phase1/traceability/sample_rejection_log.txt
++++ b/tmp/slice6-compare-wOA1/ralph/evidence/phase1/traceability/sample_rejection_log.txt
+@@ -1,28 +1,8 @@
+-# Sample Rejection Log — Intent ID Propagation
+-# CONTRACT.md §0.Z.7.4: Every log/metric entry includes intent_id + run_id.
+-#
+-# Scenario: OPEN intent rejected at DispatchAuth (RiskState::Degraded)
+-#
+-# intent_id=intent-def-456 run_id=run-2026-002
+-#   stage=chokepoint outcome=rejected reason=RiskStateNotHealthy
+-#   gate_trace=[DispatchAuth]
+-#   metrics: rejected_total=1, rejected_risk_state=1, approved_total=0
+-#
+-# Scenario: OPEN intent rejected at NetEdgeGate
+-#
+-# intent_id=intent-audit-789 run_id=run-audit-001
+-#   stage=chokepoint outcome=rejected reason=GateRejected{gate=NetEdgeGate}
+-#   gate_trace=[DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate]
+-#   metrics: rejected_total=1, approved_total=0
+-#
+-# Scenario: Full approved pipeline
+-#
+-# intent_id=intent-abc-123 run_id=run-2026-001
+-#   stage=quantize outcome=qty_q=1.5
+-#   stage=pricer outcome=LimitPrice{limit_price=95.0}
+-#   stage=net_edge outcome=allowed
+-#   stage=chokepoint outcome=approved gates=8
+-#   gate_trace=[DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate, Pricer, RecordedBeforeDispatch]
+-#   metrics: approved_total=1, rejected_total=0
+-#
+-# Observation: All log entries within a single intent share the same intent_id and run_id.
++# Sample Rejection Log (P1-D)
++# Generated: 2026-02-09T09:00:00Z
++# Expected intent_id: intent-p1d-001
++
++preflight_reject_total intent_id=intent-p1d-001 run_id=run-p1d-001 reason=LinkedOrderTypeForbidden
++gate_sequence_total intent_id=intent-p1d-001 run_id=run-p1d-001 result=rejected
++
++# VERIFIED: intent_id=intent-p1d-001 present in all log lines
