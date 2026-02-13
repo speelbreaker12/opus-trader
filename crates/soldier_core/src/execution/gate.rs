@@ -17,6 +17,8 @@
 //!
 //! AT-222, AT-344, AT-909, AT-421.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 // --- L2 Book -------------------------------------------------------------
 
 /// A single price level in the L2 order book.
@@ -65,8 +67,11 @@ pub struct LiquidityGateInput {
     pub is_buy: bool,
     /// Intent classification.
     pub intent_class: GateIntentClass,
-    /// True for marketable/taker paths. Non-marketable (e.g. post-only maker)
-    /// bypasses this depth-budget gate.
+    /// True for marketable/taker paths.
+    ///
+    /// Reserved for call-site diagnostics. The liquidity gate itself remains
+    /// fail-closed and applies the same slippage/depth checks regardless of
+    /// marketability to satisfy CONTRACT.md §1.3.
     pub is_marketable: bool,
     /// L2 book snapshot, if available.
     pub l2_snapshot: Option<L2BookSnapshot>,
@@ -81,7 +86,7 @@ pub struct LiquidityGateInput {
 // --- Gate result ---------------------------------------------------------
 
 /// Reject reason from the Liquidity Gate.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiquidityGateRejectReason {
     /// L2 book is missing, unparseable, or stale.
     LiquidityGateNoL2,
@@ -176,6 +181,52 @@ impl Default for LiquidityGateMetrics {
     fn default() -> Self {
         Self::new()
     }
+}
+
+static LIQUIDITY_GATE_REJECT_NO_L2_TOTAL: AtomicU64 = AtomicU64::new(0);
+static LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL: AtomicU64 = AtomicU64::new(0);
+static EXPECTED_SLIPPAGE_BPS_SAMPLES: AtomicU64 = AtomicU64::new(0);
+
+pub fn liquidity_gate_reject_total(reason: LiquidityGateRejectReason) -> u64 {
+    match reason {
+        LiquidityGateRejectReason::LiquidityGateNoL2 => {
+            LIQUIDITY_GATE_REJECT_NO_L2_TOTAL.load(Ordering::Relaxed)
+        }
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
+            LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+pub fn expected_slippage_bps_samples() -> u64 {
+    EXPECTED_SLIPPAGE_BPS_SAMPLES.load(Ordering::Relaxed)
+}
+
+fn bump_liquidity_gate_reject(
+    reason: LiquidityGateRejectReason,
+    wap: Option<f64>,
+    slippage_bps: Option<f64>,
+) {
+    match reason {
+        LiquidityGateRejectReason::LiquidityGateNoL2 => {
+            LIQUIDITY_GATE_REJECT_NO_L2_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
+            LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line("liquidity_gate_reject_total", &tail);
+    eprintln!(
+        "LiquidityGateReject reason={:?} wap={:?} slippage_bps={:?}",
+        reason, wap, slippage_bps
+    );
+}
+
+fn record_expected_slippage_sample(slippage_bps: f64) {
+    EXPECTED_SLIPPAGE_BPS_SAMPLES.fetch_add(1, Ordering::Relaxed);
+    let tail = format!("value={slippage_bps}");
+    super::emit_execution_metric_line("expected_slippage_bps", &tail);
 }
 
 // --- Book walk -----------------------------------------------------------
@@ -279,19 +330,39 @@ fn compute_reject_diagnostics(
     order_qty: f64,
     best_price: f64,
 ) -> (Option<f64>, Option<f64>) {
-    let (wap, filled) = match compute_wap(levels, order_qty) {
+    let (wap, _filled) = match compute_wap(levels, order_qty) {
         Some(v) => v,
         None => return (None, None),
     };
-    // Avoid partial-fill diagnostics for full-size rejection paths.
-    if filled + 1e-12 < order_qty {
-        return (None, None);
-    }
+    // Emit best-effort diagnostics even when depth is insufficient so reject
+    // logs always carry actionable WAP/slippage context.
     let slippage_bps = ((wap - best_price) / best_price * 10_000.0).abs();
     if !slippage_bps.is_finite() {
         return (Some(wap), None);
     }
     (Some(wap), Some(slippage_bps))
+}
+
+fn reject_with_metrics(
+    metrics: &mut LiquidityGateMetrics,
+    reason: LiquidityGateRejectReason,
+    wap: Option<f64>,
+    slippage_bps: Option<f64>,
+    fillable_qty: Option<f64>,
+    allowed_qty: Option<f64>,
+) -> LiquidityGateResult {
+    match reason {
+        LiquidityGateRejectReason::LiquidityGateNoL2 => metrics.record_reject_no_l2(),
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh => metrics.record_reject_slippage(),
+    }
+    bump_liquidity_gate_reject(reason, wap, slippage_bps);
+    LiquidityGateResult::Rejected {
+        reason,
+        wap,
+        slippage_bps,
+        fillable_qty,
+        allowed_qty,
+    }
 }
 
 // --- Gate evaluator ------------------------------------------------------
@@ -325,41 +396,41 @@ pub fn evaluate_liquidity_gate(
         || !input.max_slippage_bps.is_finite()
         || input.max_slippage_bps < 0.0
     {
-        metrics.record_reject_slippage();
-        return LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-            wap: None,
-            slippage_bps: None,
-            fillable_qty: None,
-            allowed_qty: None,
-        };
+        return reject_with_metrics(
+            metrics,
+            LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            None,
+            None,
+            None,
+            None,
+        );
     }
 
     // Check L2 availability and staleness.
     let snapshot = match &input.l2_snapshot {
         None => {
-            metrics.record_reject_no_l2();
-            return LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-                wap: None,
-                slippage_bps: None,
-                fillable_qty: None,
-                allowed_qty: None,
-            };
+            return reject_with_metrics(
+                metrics,
+                LiquidityGateRejectReason::LiquidityGateNoL2,
+                None,
+                None,
+                None,
+                None,
+            );
         }
         Some(snap) => {
             // Reject future-dated snapshots and stale snapshots (fail-closed).
             if snap.timestamp_ms > input.now_ms
                 || (input.now_ms - snap.timestamp_ms) > input.l2_book_snapshot_max_age_ms
             {
-                metrics.record_reject_no_l2();
-                return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-                    wap: None,
-                    slippage_bps: None,
-                    fillable_qty: None,
-                    allowed_qty: None,
-                };
+                return reject_with_metrics(
+                    metrics,
+                    LiquidityGateRejectReason::LiquidityGateNoL2,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
             }
             snap
         }
@@ -373,78 +444,56 @@ pub fn evaluate_liquidity_gate(
     };
 
     if levels.is_empty() {
-        metrics.record_reject_no_l2();
-        return LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            wap: None,
-            slippage_bps: None,
-            fillable_qty: None,
-            allowed_qty: None,
-        };
+        return reject_with_metrics(
+            metrics,
+            LiquidityGateRejectReason::LiquidityGateNoL2,
+            None,
+            None,
+            None,
+            None,
+        );
     }
 
     // Best price is the first level.
     let best_price = levels[0].price;
     if !best_price.is_finite() || best_price <= 0.0 {
-        metrics.record_reject_no_l2();
-        return LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            wap: None,
-            slippage_bps: None,
-            fillable_qty: None,
-            allowed_qty: None,
-        };
-    }
-
-    // Non-marketable (maker/post-only) OPEN paths bypass only the depth-budget
-    // check; they still require valid/fresh L2 (AT-344/AT-421 fail-closed behavior).
-    // Emit best-effort WAP/slippage diagnostics for observability only.
-    if !input.is_marketable && input.intent_class == GateIntentClass::Open {
-        let (wap, slippage_bps, fillable_qty) = match compute_wap(levels, input.order_qty) {
-            Some((wap, filled_qty)) => {
-                let slippage = ((wap - best_price) / best_price * 10_000.0).abs();
-                let slippage_bps = if slippage.is_finite() {
-                    Some(slippage)
-                } else {
-                    None
-                };
-                (Some(wap), slippage_bps, Some(filled_qty))
-            }
-            None => (None, None, None),
-        };
-        metrics.record_allowed();
-        return LiquidityGateResult::Allowed {
-            wap,
-            slippage_bps,
-            fillable_qty,
-            allowed_qty: Some(input.order_qty),
-        };
+        return reject_with_metrics(
+            metrics,
+            LiquidityGateRejectReason::LiquidityGateNoL2,
+            None,
+            None,
+            None,
+            None,
+        );
     }
 
     let (levels_in_budget, fillable_qty) =
         match compute_fillable_depth(levels, input.is_buy, best_price, input.max_slippage_bps) {
             Ok(values) => values,
             Err(FillableDepthError::InvalidBook) => {
-                metrics.record_reject_no_l2();
-                return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-                    wap: None,
-                    slippage_bps: None,
-                    fillable_qty: None,
-                    allowed_qty: None,
-                };
+                return reject_with_metrics(
+                    metrics,
+                    LiquidityGateRejectReason::LiquidityGateNoL2,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
             }
             Err(FillableDepthError::NoDepthWithinBudget) => {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                metrics.record_reject_slippage();
-                return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                if let Some(value) = slippage_bps {
+                    record_expected_slippage_sample(value);
+                }
+                return reject_with_metrics(
+                    metrics,
+                    LiquidityGateRejectReason::ExpectedSlippageTooHigh,
                     wap,
                     slippage_bps,
-                    fillable_qty: Some(0.0),
-                    allowed_qty: None,
-                };
+                    Some(0.0),
+                    None,
+                );
             }
         };
 
@@ -453,28 +502,31 @@ pub fn evaluate_liquidity_gate(
             if fillable_qty + 1e-12 < input.order_qty {
                 let (wap, slippage_bps) =
                     compute_reject_diagnostics(levels, input.order_qty, best_price);
-                metrics.record_reject_slippage();
-                return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                if let Some(value) = slippage_bps {
+                    record_expected_slippage_sample(value);
+                }
+                return reject_with_metrics(
+                    metrics,
+                    LiquidityGateRejectReason::ExpectedSlippageTooHigh,
                     wap,
                     slippage_bps,
-                    fillable_qty: Some(fillable_qty),
-                    allowed_qty: Some(fillable_qty),
-                };
+                    Some(fillable_qty),
+                    Some(fillable_qty),
+                );
             }
             input.order_qty
         }
         GateIntentClass::Close | GateIntentClass::Hedge => {
             let clamped = fillable_qty.min(input.order_qty);
             if clamped <= 0.0 || !clamped.is_finite() {
-                metrics.record_reject_slippage();
-                return LiquidityGateResult::Rejected {
-                    reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-                    wap: None,
-                    slippage_bps: None,
-                    fillable_qty: Some(fillable_qty),
-                    allowed_qty: Some(0.0),
-                };
+                return reject_with_metrics(
+                    metrics,
+                    LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                    None,
+                    None,
+                    Some(fillable_qty),
+                    Some(0.0),
+                );
             }
             clamped
         }
@@ -486,14 +538,14 @@ pub fn evaluate_liquidity_gate(
     let (wap, _filled) = match compute_wap(levels_in_budget, allowed_qty) {
         Some(result) => result,
         None => {
-            metrics.record_reject_no_l2();
-            return LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-                wap: None,
-                slippage_bps: None,
-                fillable_qty: None,
-                allowed_qty: None,
-            };
+            return reject_with_metrics(
+                metrics,
+                LiquidityGateRejectReason::LiquidityGateNoL2,
+                None,
+                None,
+                None,
+                None,
+            );
         }
     };
 
@@ -502,26 +554,27 @@ pub fn evaluate_liquidity_gate(
     // For sells: BestPrice >= WAP (walking down bids)
     let slippage_bps = ((wap - best_price) / best_price * 10_000.0).abs();
     if !slippage_bps.is_finite() {
-        metrics.record_reject_slippage();
-        return LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-            wap: Some(wap),
-            slippage_bps: None,
-            fillable_qty: Some(fillable_qty),
-            allowed_qty: Some(allowed_qty),
-        };
+        return reject_with_metrics(
+            metrics,
+            LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            Some(wap),
+            None,
+            Some(fillable_qty),
+            Some(allowed_qty),
+        );
     }
+    record_expected_slippage_sample(slippage_bps);
 
     // Reject if slippage exceeds max.
     if slippage_bps > input.max_slippage_bps {
-        metrics.record_reject_slippage();
-        return LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-            wap: Some(wap),
-            slippage_bps: Some(slippage_bps),
-            fillable_qty: Some(fillable_qty),
-            allowed_qty: Some(allowed_qty),
-        };
+        return reject_with_metrics(
+            metrics,
+            LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            Some(wap),
+            Some(slippage_bps),
+            Some(fillable_qty),
+            Some(allowed_qty),
+        );
     }
 
     metrics.record_allowed();

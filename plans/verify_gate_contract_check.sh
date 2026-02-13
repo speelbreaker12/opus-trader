@@ -56,6 +56,10 @@ full_section="$(extract_section "$DOC" "#### FULL (story completion)" "### 7.5 L
 # Docs: quick gate coverage.
 quick_tokens=(
   preflight
+  contract_profiles
+  at_profile_parity
+  at_coverage_report
+  crossref_invariants
   contract_crossrefs
   arch_flows
   state_machines
@@ -81,6 +85,7 @@ done
 
 # Docs: full-only gate coverage.
 full_tokens=(
+  crossref_gate
   contract_coverage
   rust_clippy
   rust_tests_full
@@ -96,6 +101,11 @@ done
 # Verify implementation: contract/spec/status gates.
 verify_tokens=(
   'run_logged_or_exit "preflight"'
+  'run_logged_or_exit "contract_profiles"'
+  'run_logged_or_exit "at_profile_parity"'
+  'run_logged_or_exit "at_coverage_report"'
+  'run_logged_or_exit "crossref_invariants"'
+  'run_logged_or_exit "crossref_gate"'
   'run_logged_or_exit "contract_crossrefs"'
   'run_logged_or_exit "arch_flows"'
   'run_logged_or_exit "state_machines"'
@@ -113,9 +123,18 @@ for token in "${verify_tokens[@]}"; do
 done
 
 require_code_token "$VERIFY" 'run_logged_or_exit "contract_coverage"'
+require_code_token "$VERIFY" 'tools/ci/check_contract_profiles.py'
+require_code_token "$VERIFY" 'tools/ci/check_contract_profile_map_parity.py'
+require_code_token "$VERIFY" 'tools/at_coverage_report.py'
+require_code_token "$VERIFY" 'plans/validate_crossref_invariants.py'
+require_code_token "$VERIFY" './plans/crossref_gate.sh'
 require_code_token "$VERIFY" 'Skipping contract_coverage in quick mode (full-only gate)'
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_CI_SENTINEL'
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_STRICT_EFFECTIVE'
+require_code_token "$VERIFY" 'CROSSREF_CI_STRICT_SENTINEL'
+require_code_token "$VERIFY" 'CROSSREF_STRICT_EFFECTIVE'
+require_code_token "$VERIFY" 'crossref_strict=1 (sentinel/env enabled)'
+require_code_token "$VERIFY" 'Skipping crossref_gate in quick mode (full-only gate)'
 require_code_token "$VERIFY" 'env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE"'
 require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-300s}"'
 require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT_WAS_SET=0'

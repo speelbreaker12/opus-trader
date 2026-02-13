@@ -3,7 +3,8 @@
 //! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915.
 
 use soldier_core::execution::{
-    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult, preflight_intent,
+    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
+    preflight_intent, preflight_reject_total, take_execution_metric_lines, with_intent_trace_ids,
 };
 use soldier_core::venue::InstrumentKind;
 
@@ -364,4 +365,39 @@ fn test_deterministic_same_input_same_result() {
     let r1 = preflight_intent(&input, &mut m1);
     let r2 = preflight_intent(&input, &mut m2);
     assert_eq!(r1, r2);
+}
+
+#[test]
+fn test_preflight_emits_structured_reject_metric_line() {
+    let intent_id = "intent-preflight-001";
+    let run_id = "run-preflight-001";
+    let _ = take_execution_metric_lines();
+
+    let before = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
+    let input = PreflightInput {
+        order_type: OrderType::Market,
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+    let mut metrics = PreflightMetrics::new();
+
+    let result =
+        with_intent_trace_ids(intent_id, run_id, || preflight_intent(&input, &mut metrics));
+    assert_eq!(
+        result,
+        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+    );
+
+    let after = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
+    assert_eq!(after, before + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("preflight_reject_total")
+                && line.contains("reason=OrderTypeMarketForbidden")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected structured preflight metric line, got {lines:?}"
+    );
 }

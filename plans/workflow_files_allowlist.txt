@@ -12,6 +12,8 @@ plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_skip_entrypoint.sh
 plans/checkpoint_dependency_manifest.json
 plans/checkpoint_fingerprint_env_manifest.txt
+plans/ci/requirements-crossref.txt
+plans/ci/requirements-verify.txt
 plans/code_review_expert_logged.sh
 plans/codex_review_digest.sh
 plans/codex_review_let_pass.sh
@@ -20,6 +22,12 @@ plans/contract_check.sh
 plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
 plans/contract_review_validate.sh
+plans/crossref_burnin_check.sh
+plans/crossref_ci_strict
+plans/crossref_execution_invariants.yaml
+plans/crossref_gate.sh
+plans/evidence_sources.txt
+plans/global_manual_allowlist.json
 plans/init.sh
 plans/kimi_review_logged.sh
 plans/legacy_layout_guard.sh
@@ -41,6 +49,7 @@ plans/pre_pr_review_gate.sh
 plans/preflight.sh
 plans/readme_ci_parity_check.sh
 plans/review_resolution_template.md
+plans/schemas/crossref_execution_invariants.schema.json
 plans/schemas/verify_checkpoint.schema.json
 plans/self_review_logged.sh
 plans/slice_completion_enforce.sh
@@ -58,12 +67,16 @@ plans/story_verify_allowlist_suggest.sh
 plans/tests/test_code_review_expert_logged.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
+plans/tests/test_contract_profile_parity.sh
+plans/tests/test_crossref_gate.sh
+plans/tests/test_crossref_invariants.sh
 plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_kimi_review_logged.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
+plans/tests/test_roadmap_evidence_audit.sh
 plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh
 plans/tests/test_slice_review_gate.sh
@@ -73,6 +86,7 @@ plans/tests/test_story_review_gate.sh
 plans/tests/test_thinking_review_logged.sh
 plans/tests/test_workflow_allowlist_coverage.sh
 plans/thinking_review_logged.sh
+plans/validate_crossref_invariants.py
 plans/verify.sh
 plans/verify_day.sh
 plans/verify_fork.sh
@@ -105,6 +119,11 @@ specs/TRACE.yaml
 specs/WORKFLOW_CONTRACT.md
 specs/WORKFLOW_CONTRACT_RALPH.md
 specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
+tools/at_coverage_report.py
+tools/at_parser.py
+tools/ci/check_contract_profile_map_parity.py
+tools/ci/check_contract_profiles.py
 tools/ci/lint_pr_template_sections.py
+tools/roadmap_evidence_audit.py
 tools/vendor_docs_lint_rust.py
 verify.sh

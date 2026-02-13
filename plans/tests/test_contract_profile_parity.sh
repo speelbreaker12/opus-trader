@@ -184,4 +184,19 @@ EOF_PROFILE_IN_CODEBLOCK_TILDES
 expect_rc 0 python3 "$CHECKER" --contract "$contract_fence_tildes"
 expect_rc 0 python3 "$COVERAGE" --contract "$contract_fence_tildes" --prd "$prd_ok"
 
+# Unterminated fenced blocks must fail closed with rc=5.
+contract_unterminated_fence="$tmp_dir/unterminated_fence.md"
+cat > "$contract_unterminated_fence" <<'EOF_UNTERMINATED_FENCE'
+Profile: CSP
+AT-001
+```txt
+Profile: GOP
+AT-999
+EOF_UNTERMINATED_FENCE
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_unterminated_fence"
+expect_err_contains "unterminated fenced block"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_unterminated_fence" --prd "$prd_ok"
+expect_err_contains "unterminated fenced block"
+
 echo "PASS: contract profile parity gate"

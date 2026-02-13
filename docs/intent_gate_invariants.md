@@ -4,7 +4,7 @@
 
 ### C1: Reject Before Persist
 
-All validation gates (DispatchAuth, Preflight, Quantize, FeeCacheCheck, LiquidityGate, NetEdgeGate, Pricer) **must** execute before RecordedBeforeDispatch (WAL append).
+All validation gates (DispatchAuth, Preflight, Quantize, DispatchConsistency, FeeCacheCheck, LiquidityGate, NetEdgeGate, Pricer) **must** execute before RecordedBeforeDispatch (WAL append).
 
 **Rationale:** If we persist an intent to WAL before validating it, a crash after WAL write but before rejection would leave an invalid intent in the log, requiring reconciliation of something that should never have been recorded.
 
@@ -26,11 +26,12 @@ An intent is only approved (ChokeResult::Approved) when **all** gates pass. If a
 1. DispatchAuth     — RiskState check (OPEN requires Healthy)
 2. Preflight        — Order type validation
 3. Quantize         — Lot size quantization
-4. FeeCacheCheck    — Fee cache staleness
-5. LiquidityGate    — Book-walk slippage (OPEN only)
-6. NetEdgeGate      — Fee + slippage vs min_edge (OPEN only)
-7. Pricer           — IOC limit price clamping (OPEN only)
-8. RecordedBeforeDispatch — WAL append (LAST, always)
+4. DispatchConsistency — contracts/amount + liquidity-clamp consistency
+5. FeeCacheCheck    — Fee cache staleness
+6. LiquidityGate    — Book-walk slippage (OPEN only)
+7. NetEdgeGate      — Fee + slippage vs min_edge (OPEN only)
+8. Pricer           — IOC limit price clamping (OPEN only)
+9. RecordedBeforeDispatch — WAL append (LAST, always)
 ```
 
 ## CI Enforcement
