@@ -49,7 +49,7 @@ Deribit Venue Facts Addendum: all VERIFIED facts are enforced with artifacts und
 - Execution gate ordering + inventory skew ordering/delta_limit fail-closed -> S5.x + S6.1
 - Fee cache staleness + time drift + SVI trip counts -> S5.2 + S10.5 + S11.1
 - WAL + trade-id registry -> S4.1 + S4.3
-- CSP Profile Isolation from Replay/Snapshot failures (contract §5.2, §0.Z.7) -> S13.1 (AT-991)
+- CSP Profile Isolation from Replay/Snapshot failures (contract §5.2, §0.Z.7) -> S13.1 (AT-1070)
 - CSP micro-live safety gate (runtime F1 + profile status fields + secondary disk corroboration) -> S8.2 + S8.8 + S8.11 + S8.12
 - CSP_ONLY CI gate + build isolation (contract §0.Z.9) -> S8.12 (AT-1056, AT-1057, AT-990)
 
@@ -1404,7 +1404,7 @@ python/tests/test\_replay\_gatekeeper.py::test\_replay\_quality\_broken\_shadow\
 python/tests/test\_replay\_gatekeeper.py::test\_replay\_rejects\_loosen\_or\_unknown\_params\_in\_degraded (AT-1064)  
 python/tests/test\_replay\_gatekeeper.py::test\_replay\_hard\_fails\_when\_dd\_limit\_missing (AT-034, AT-040)  
 crates/soldier\_core/tests/test\_dispatch\_map.rs::test\_open\_haircut\_mult\_applies\_to\_open\_only (AT-257)
-crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_isolation\_from\_replay\_snapshot\_failures (AT-991)
+crates/soldier\_core/tests/test\_profile\_isolation.rs::test\_csp\_isolation\_from\_replay\_snapshot\_failures (AT-1070)
 Evidence artifacts: artifacts/policy\_patches/\<ts\>\_result.json
 Observability: log ReplayGatekeeperResult{coverage\_pct, replay\_quality, apply\_mode, net\_pnl\_penalized, pass}.  
 Contract AT coverage (traceability assignment): AT-258, AT-259, AT-324, AT-331, AT-332, AT-431, AT-432.
