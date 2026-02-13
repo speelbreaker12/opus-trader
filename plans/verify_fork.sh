@@ -261,32 +261,36 @@ if [[ -f "docs/contract_kernel.json" ]]; then
     "$PYTHON_BIN" scripts/check_contract_kernel.py --kernel docs/contract_kernel.json
 fi
 
-log "02b) contract profiles"
-run_logged_or_exit "contract_profiles" "$CONTRACT_PROFILE_TIMEOUT" \
-  "$PYTHON_BIN" tools/ci/check_contract_profiles.py \
-    --contract specs/CONTRACT.md \
-    --emit-map "$CROSSREF_ARTIFACTS_DIR/contract_at_profile_map.json" \
-    --emit-summary "$CROSSREF_ARTIFACTS_DIR/contract_profile_summary.json"
+if [[ "$MODE" == "quick" ]]; then
+  log "02b) contract profiles"
+  run_logged_or_exit "contract_profiles" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" tools/ci/check_contract_profiles.py \
+      --contract specs/CONTRACT.md \
+      --emit-map "$CROSSREF_ARTIFACTS_DIR/contract_at_profile_map.json" \
+      --emit-summary "$CROSSREF_ARTIFACTS_DIR/contract_profile_summary.json"
 
-log "02c) AT coverage report"
-run_logged_or_exit "at_coverage_report" "$CONTRACT_PROFILE_TIMEOUT" \
-  "$PYTHON_BIN" tools/at_coverage_report.py \
-    --contract specs/CONTRACT.md \
-    --prd plans/prd.json \
-    --emit-map "$CROSSREF_ARTIFACTS_DIR/report_at_profile_map.json" \
-    --output-json "$CROSSREF_ARTIFACTS_DIR/at_coverage_report.json" \
-    --output-md "$CROSSREF_ARTIFACTS_DIR/at_coverage_report.md"
+  log "02c) AT coverage report"
+  run_logged_or_exit "at_coverage_report" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" tools/at_coverage_report.py \
+      --contract specs/CONTRACT.md \
+      --prd plans/prd.json \
+      --emit-map "$CROSSREF_ARTIFACTS_DIR/report_at_profile_map.json" \
+      --output-json "$CROSSREF_ARTIFACTS_DIR/at_coverage_report.json" \
+      --output-md "$CROSSREF_ARTIFACTS_DIR/at_coverage_report.md"
 
-log "02d) AT profile parity"
-run_logged_or_exit "at_profile_parity" "$CONTRACT_PROFILE_TIMEOUT" \
-  "$PYTHON_BIN" tools/ci/check_contract_profile_map_parity.py \
-    --checker-map "$CROSSREF_ARTIFACTS_DIR/contract_at_profile_map.json" \
-    --report-map "$CROSSREF_ARTIFACTS_DIR/report_at_profile_map.json" \
-    --out "$CROSSREF_ARTIFACTS_DIR/at_profile_parity.json"
+  log "02d) AT profile parity"
+  run_logged_or_exit "at_profile_parity" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" tools/ci/check_contract_profile_map_parity.py \
+      --checker-map "$CROSSREF_ARTIFACTS_DIR/contract_at_profile_map.json" \
+      --report-map "$CROSSREF_ARTIFACTS_DIR/report_at_profile_map.json" \
+      --out "$CROSSREF_ARTIFACTS_DIR/at_profile_parity.json"
 
-log "02e) crossref execution invariants"
-run_logged_or_exit "crossref_invariants" "$CONTRACT_PROFILE_TIMEOUT" \
-  "$PYTHON_BIN" plans/validate_crossref_invariants.py
+  log "02e) crossref execution invariants"
+  run_logged_or_exit "crossref_invariants" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" plans/validate_crossref_invariants.py
+else
+  warn "Skipping 02b-02e in full mode (crossref_gate runs the same checks and writes canonical artifacts)"
+fi
 
 if [[ "$MODE" == "full" ]]; then
   log "02f) crossref gate"

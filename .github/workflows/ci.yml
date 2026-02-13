@@ -101,6 +101,7 @@ jobs:
           exit "$rc"
 
   crossref-gate:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
