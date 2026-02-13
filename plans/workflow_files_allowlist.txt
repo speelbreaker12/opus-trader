@@ -72,6 +72,7 @@ plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_kimi_review_logged.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
+plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
 plans/tests/test_roadmap_evidence_audit.sh

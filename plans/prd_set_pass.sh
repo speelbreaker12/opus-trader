@@ -9,6 +9,7 @@ If --artifacts-dir is omitted, the latest artifacts/verify/<run_id>/ directory i
 
 Rules for passes=true:
   - verify.meta.json must exist and report mode=full
+  - verify.meta.json head_sha must equal current HEAD
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
   - contract review file must exist and contain decision=PASS
@@ -97,6 +98,16 @@ if [[ "$STATUS" == "true" ]]; then
     echo "ERROR: verify artifacts are not from full mode (mode=${verify_mode:-<missing>}) in $meta_file" >&2
     exit 4
   fi
+  HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to read current HEAD" >&2; exit 4; }
+  verify_head_sha="$(jq -r '.head_sha // empty' "$meta_file" 2>/dev/null || true)"
+  if [[ -z "$verify_head_sha" ]]; then
+    echo "ERROR: verify metadata missing head_sha in $meta_file" >&2
+    exit 4
+  fi
+  if [[ "$verify_head_sha" != "$HEAD_SHA" ]]; then
+    echo "ERROR: verify metadata HEAD mismatch (verify=$verify_head_sha current=$HEAD_SHA)" >&2
+    exit 4
+  fi
 
   if [[ -f "$ARTIFACTS_DIR/FAILED_GATE" ]]; then
     echo "ERROR: FAILED_GATE present in $ARTIFACTS_DIR" >&2
@@ -132,9 +143,8 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
-  REVIEW_GATE="./plans/story_review_gate.sh"
+  REVIEW_GATE="${STORY_REVIEW_GATE:-./plans/story_review_gate.sh}"
   [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
-  HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to read HEAD for review gate" >&2; exit 4; }
   "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
 fi
 
