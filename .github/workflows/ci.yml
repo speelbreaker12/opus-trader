@@ -44,7 +44,11 @@ jobs:
             exit 1
           fi
 
-          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-[A-Za-z0-9._]+$ ]]; then
+          # Parse legacy story/<PRD_STORY_ID>-<slug> first so canonical matching
+          # does not swallow legacy refs such as story/S1-TEST-fix.
+          # Require at least one alphabetic character in slug to avoid
+          # misclassifying canonical IDs like story/S1-005.
+          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-([A-Za-z0-9._]*[A-Za-z][A-Za-z0-9._]*)$ ]]; then
             story_id="${BASH_REMATCH[1]}"
           elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
             story_id="${BASH_REMATCH[1]}"
