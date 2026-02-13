@@ -3458,8 +3458,10 @@ AT-124
 
 
 ## **4\. Quantitative Logic: The "Truth" Engine**
+Profile: CSP
 
 ### **4.1 SVI Stability Gates**
+Profile: CSP
 
 **Gate 0 (Liquidity-Aware Thresholds):**
 SVI behavior must adapt to liquidity conditions. If `depth_topN < depth_min` (same metric used by Liquidity Gate / Cortex):
@@ -3527,6 +3529,7 @@ AT-242
 - Fail criteria: reject despite arb-pass or accept despite arb-fail.
 
 ### **4.2 Fee-Aware Execution**
+Profile: CSP
 
 **Dynamic Fee Model:**
 - Fee depends on instrument type (option/perp), maker/taker, and delivery proximity.
@@ -3624,6 +3627,7 @@ AT-246
 
 
 ### **4.3 Trade Attribution Schema (Realized Friction Truth)**
+Profile: CSP
 
 **Council Weakness Covered:** Self-improving open loop \+ time handling / drift. **Where:** `soldier/core/analytics/attribution.rs` **Requirement:** Every trade must log projected edge vs realized execution friction with timestamps to measure drift. **Key Fields:** `exchange_ts`, `local_send_ts`, `local_recv_ts`, `drift_ms = local_recv_ts - exchange_ts`. **Rules:**
 
