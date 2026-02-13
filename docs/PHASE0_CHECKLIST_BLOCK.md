@@ -34,6 +34,17 @@ evidence/phase0/
 - `ci_links.md`: links to CI runs + build IDs used for proof; if CI is not wired yet, include recorded local output for AUTO gates.
 - Snapshots are literal copies of sign-off docs (prevents silent edits after sign-off).
 
+<!-- REQUIRED_EVIDENCE: evidence/phase0/README.md -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/ci_links.md -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/policy/launch_policy_snapshot.md -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/policy/policy_config_snapshot.json -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/env/env_matrix_snapshot.md -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/keys/key_scope_probe.json -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/break_glass/runbook_snapshot.md -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/break_glass/drill.md -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/break_glass/log_excerpt.txt -->
+<!-- REQUIRED_EVIDENCE: evidence/phase0/health/health_endpoint_snapshot.md -->
+
 ## P0-A — Launch Policy Baseline is Explicit (no hidden assumptions)
 
 **MANUAL artifacts (docs must exist):**
