@@ -251,6 +251,8 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
+  "plans/tests/test_fork_attestation_remediation_verify.sh"
+  "plans/tests/test_fork_attestation_mirror.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"

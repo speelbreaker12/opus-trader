@@ -27,6 +27,8 @@ plans/crossref_ci_strict
 plans/crossref_execution_invariants.yaml
 plans/crossref_gate.sh
 plans/evidence_sources.txt
+plans/fork_attestation_mirror.sh
+plans/fork_attestation_remediation_verify.sh
 plans/global_manual_allowlist.json
 plans/init.sh
 plans/kimi_review_logged.sh
@@ -50,6 +52,7 @@ plans/preflight.sh
 plans/readme_ci_parity_check.sh
 plans/review_resolution_template.md
 plans/schemas/crossref_execution_invariants.schema.json
+plans/schemas/fork_attestation_remediation.schema.json
 plans/schemas/verify_checkpoint.schema.json
 plans/self_review_logged.sh
 plans/slice_completion_enforce.sh
@@ -70,6 +73,8 @@ plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
+plans/tests/test_fork_attestation_mirror.sh
+plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_kimi_review_logged.sh
 plans/tests/test_pr_gate.sh

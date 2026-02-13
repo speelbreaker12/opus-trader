@@ -55,6 +55,20 @@ To block PR merges until Copilot/bot feedback is handled and re-reviewed on the 
 
 Mark that CI job as required in branch protection.
 
+## Fork PR remediation metadata
+
+- PR author marks fork-attestation as blocked and requests maintainer remediation.
+- Maintainer runs:
+```bash
+./plans/fork_attestation_mirror.sh \
+  --pr <number> \
+  --story <STORY_ID> \
+  --mirror-branch <mirror_branch> \
+  --attestation-commit <sha>
+```
+- Command writes machine-readable metadata at `plans/review_attestations/fork_remediation/pr_<PR_NUMBER>.json`.
+- Gate verification uses `./plans/fork_attestation_remediation_verify.sh --pr <number>` and fails closed on missing/invalid metadata.
+
 ## Recommended story loop
 
 1. Implement in story worktree (single Story ID).

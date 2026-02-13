@@ -254,6 +254,11 @@ After all Slice 1 stories are merged:
 - `./plans/verify.sh full` on `run/sliceN-clean` enforces this gate once all PRD stories in that slice are `passes=true` (via `plans/slice_completion_enforce.sh`).
 - Only then is the slice considered done.
 
+### 9.3 Fork remediation metadata (merge-path evidence)
+- Fork PR remediation metadata is tracked at `plans/review_attestations/fork_remediation/pr_<PR_NUMBER>.json`.
+- Metadata must be written by maintainer remediation flow (`plans/fork_attestation_mirror.sh`) and validated with `plans/fork_attestation_remediation_verify.sh`.
+- Missing/invalid metadata is fail-closed for fork remediation readiness.
+
 ---
 
 ## 10. Harness change control (minimal)
