@@ -116,7 +116,6 @@ expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
 expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_spacing" --prd "$prd_ok"
 expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
 
-
 # Malformed profile after a valid scope must clear inheritance and report unscoped AT IDs.
 contract_bad_rescope="$tmp_dir/bad_profile_rescope.md"
 cat > "$contract_bad_rescope" <<'EOF_BAD_PROFILE_RESCOPE'
@@ -131,6 +130,7 @@ expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
 expect_err_contains "AT-002 has no Profile tag in scope"
 expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_rescope" --prd "$prd_ok"
 expect_err_contains "AT-002 has no Profile tag in scope"
+
 # Malformed casing must fail checker and coverage with rc=5.
 contract_bad_casing="$tmp_dir/bad_profile_casing.md"
 cat > "$contract_bad_casing" <<'EOF_BAD_PROFILE_CASING'
@@ -183,5 +183,34 @@ EOF_PROFILE_IN_CODEBLOCK_TILDES
 
 expect_rc 0 python3 "$CHECKER" --contract "$contract_fence_tildes"
 expect_rc 0 python3 "$COVERAGE" --contract "$contract_fence_tildes" --prd "$prd_ok"
+
+# Longer opening fences must not be closed by shorter inner fences.
+contract_fence_long="$tmp_dir/profile_in_codeblock_long_fence.md"
+cat > "$contract_fence_long" <<'EOF_PROFILE_IN_CODEBLOCK_LONG_FENCE'
+````txt
+Profile: FULL
+```
+profile: CSP
+````
+
+Profile: CSP
+AT-001
+EOF_PROFILE_IN_CODEBLOCK_LONG_FENCE
+
+expect_rc 0 python3 "$CHECKER" --contract "$contract_fence_long"
+expect_rc 0 python3 "$COVERAGE" --contract "$contract_fence_long" --prd "$prd_ok"
+
+# Unterminated fences must fail closed instead of silently skipping remaining lines.
+contract_fence_unterminated="$tmp_dir/profile_in_codeblock_unterminated.md"
+cat > "$contract_fence_unterminated" <<'EOF_PROFILE_IN_CODEBLOCK_UNTERMINATED'
+```txt
+Profile: FULL
+AT-001
+EOF_PROFILE_IN_CODEBLOCK_UNTERMINATED
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_fence_unterminated"
+expect_err_contains "unterminated code fence"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_fence_unterminated" --prd "$prd_ok"
+expect_err_contains "unterminated code fence"
 
 echo "PASS: contract profile parity gate"
