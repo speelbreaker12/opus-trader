@@ -81,6 +81,7 @@ required=(
   plans/tests/test_kimi_review_logged.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
+  plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_slice_completion_enforce.sh
