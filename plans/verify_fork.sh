@@ -309,6 +309,8 @@ if [[ "$MODE" == "full" ]]; then
     echo "crossref_strict=0"
   fi
   run_logged_or_exit "crossref_gate" "$CONTRACT_COVERAGE_TIMEOUT" "${crossref_args[@]}"
+else
+  warn "Skipping crossref_gate in quick mode (full-only gate)"
 fi
 
 if [[ "$MODE" == "full" ]]; then
