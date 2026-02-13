@@ -1,0 +1,50 @@
+[
+  {
+    "id": "self_review_pass",
+    "gate_requirement": "Self review for story/head exists with Decision: PASS",
+    "attested_field": "artifacts/story/<STORY_ID>/self_review/*.md",
+    "verifier_check": "story_review_gate.sh checks Story, HEAD, and Decision: PASS"
+  },
+  {
+    "id": "self_review_markers_done",
+    "gate_requirement": "Self review failure-mode and strategic markers are DONE",
+    "attested_field": "artifacts/story/<STORY_ID>/self_review/*.md",
+    "verifier_check": "story_review_gate.sh checks exact marker lines"
+  },
+  {
+    "id": "kimi_review_for_head",
+    "gate_requirement": "Kimi review exists for story/head",
+    "attested_field": "artifacts/story/<STORY_ID>/kimi/*.md",
+    "verifier_check": "story_review_gate.sh checks Story and HEAD lines"
+  },
+  {
+    "id": "codex_two_reviews",
+    "gate_requirement": "At least two Codex reviews exist for story/head",
+    "attested_field": "artifacts/story/<STORY_ID>/codex/*_review.md",
+    "verifier_check": "story_review_gate.sh requires review count >= 2 for head"
+  },
+  {
+    "id": "code_review_expert_complete",
+    "gate_requirement": "code-review-expert review exists for story/head and is COMPLETE",
+    "attested_field": "artifacts/story/<STORY_ID>/code_review_expert/*_review.md",
+    "verifier_check": "story_review_gate.sh checks status COMPLETE and canonical skill path"
+  },
+  {
+    "id": "resolution_blocking_cleared",
+    "gate_requirement": "Resolution asserts blocking addressed and remaining findings are zero",
+    "attested_field": "artifacts/story/<STORY_ID>/review_resolution.md",
+    "verifier_check": "story_review_gate.sh checks exact Blocking/Remaining findings lines"
+  },
+  {
+    "id": "resolution_reference_consistency",
+    "gate_requirement": "Resolution references Kimi/Codex/code-review-expert artifacts that exist and match head/story",
+    "attested_field": "artifacts/story/<STORY_ID>/review_resolution.md + referenced files",
+    "verifier_check": "story_review_gate.sh validates referenced paths and head/story consistency"
+  },
+  {
+    "id": "evidence_head_consistency",
+    "gate_requirement": "All required review evidence is for the same HEAD",
+    "attested_field": "all review artifacts for STORY_ID",
+    "verifier_check": "story_review_gate.sh validates HEAD line consistency across artifacts"
+  }
+]

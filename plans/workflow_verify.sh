@@ -33,6 +33,7 @@ check_script "plans/prd_set_pass.sh"
 check_script "plans/self_review_logged.sh"
 check_script "plans/story_postmortem_logged.sh"
 check_script "plans/story_review_gate.sh"
+check_script "plans/story_review_equivalence_check.sh"
 check_script "plans/stoic_cli_invariant_check.sh"
 
 ./plans/workflow_contract_gate.sh
