@@ -15,6 +15,13 @@ on:
     - cron: "0 1 * * *"
 
 jobs:
+  copilot-signal:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copilot signal
+        run: echo "copilot-signal"
+
   pr-gate-enforced:
     if: |
       github.event_name == 'pull_request' ||
@@ -44,12 +51,16 @@ jobs:
             exit 1
           fi
 
-          if [[ "$head_ref" =~ ^story/(S[0-9]+-[0-9]{3})(/[A-Za-z0-9._-]+)?$ ]]; then
+          # Parse legacy story/<PRD_STORY_ID>-<slug> first so canonical matching
+          # does not swallow legacy refs such as story/S1-TEST-fix.
+          # Require at least one alphabetic character in slug to avoid
+          # misclassifying canonical IDs like story/S1-005.
+          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-([A-Za-z0-9._]*[A-Za-z][A-Za-z0-9._]*)$ ]]; then
             story_id="${BASH_REMATCH[1]}"
-          elif [[ "$head_ref" =~ ^story/(S[0-9]+-[0-9]{3})-[A-Za-z0-9._-]+$ ]]; then
+          elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
             story_id="${BASH_REMATCH[1]}"
           else
-            echo "ERROR: PR head branch must match story/<STORY_ID>[/<slug>] or story/<STORY_ID>-<slug> (slash-free STORY_ID, e.g., S{slice}-{NNN}), got: $head_ref" >&2
+            echo "ERROR: PR head branch must match story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>, got: $head_ref" >&2
             exit 1
           fi
 
@@ -64,13 +75,6 @@ jobs:
             --require-aftercare-ack \
             --require-copilot-review \
             --ignore-check-run-regex '^pr-gate-enforced$'
-
-  copilot-signal:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Copilot signal check
-        run: echo "copilot signal present"
 
   pr-template-lint:
     if: github.event_name == 'pull_request'
