@@ -82,6 +82,12 @@ crossref_dir="$artifacts_ok/crossref"
 [[ -f "$crossref_dir/report_at_profile_map.json" ]] || fail "missing report profile map artifact"
 [[ -f "$crossref_dir/at_profile_parity.json" ]] || fail "missing parity artifact"
 [[ -f "$crossref_dir/roadmap_evidence_audit.json" ]] || fail "missing roadmap audit artifact"
+[[ -f "$crossref_dir/crossref_invariants.json" ]] || fail "missing invariants artifact"
+python3 - "$crossref_dir/crossref_invariants.json" <<'PYJSON'
+import json
+import sys
+json.load(open(sys.argv[1]))
+PYJSON
 
 # Fails closed when marker intent is missing in CI mode.
 checklist_bad="$tmp_dir/checklist_bad.md"

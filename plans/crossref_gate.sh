@@ -99,7 +99,7 @@ parity_json="$crossref_dir/at_profile_parity.json"
 audit_json="$crossref_dir/roadmap_evidence_audit.json"
 invariants_json="$crossref_dir/crossref_invariants.json"
 
-python3 plans/validate_crossref_invariants.py > "$invariants_json"
+python3 plans/validate_crossref_invariants.py --output-json "$invariants_json"
 
 python3 tools/ci/check_contract_profiles.py \
   --contract "$contract" \

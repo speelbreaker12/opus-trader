@@ -45,6 +45,11 @@ def load_schema(path: Path) -> dict:
     return payload
 
 
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def semantic_checks(inv: dict) -> List[str]:
     findings: List[str] = []
 
@@ -108,6 +113,11 @@ def main() -> int:
         default="plans/schemas/crossref_execution_invariants.schema.json",
         help="Path to invariants JSON schema",
     )
+    parser.add_argument(
+        "--output-json",
+        default="",
+        help="Optional path for machine-readable validation result",
+    )
     args = parser.parse_args()
 
     inv_path = Path(args.invariants)
@@ -130,10 +140,31 @@ def main() -> int:
 
     findings = semantic_checks(invariants)
     if findings:
+        if args.output_json:
+            write_json(
+                Path(args.output_json),
+                {
+                    "status": "fail",
+                    "exit_code": EXIT_SEMANTIC,
+                    "findings": findings,
+                },
+            )
         print("ERROR: invariant semantic checks failed:", file=sys.stderr)
         for finding in findings:
             print(f"  - {finding}", file=sys.stderr)
         return EXIT_SEMANTIC
+
+    if args.output_json:
+        write_json(
+            Path(args.output_json),
+            {
+                "status": "pass",
+                "exit_code": EXIT_PASS,
+                "invariants": str(inv_path),
+                "schema": str(schema_path),
+                "findings": [],
+            },
+        )
 
     print("OK: crossref execution invariants are schema-valid and semantically consistent.")
     return EXIT_PASS
