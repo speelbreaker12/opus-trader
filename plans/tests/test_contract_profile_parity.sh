@@ -14,10 +14,8 @@ fail() {
 expect_rc() {
   local expected_rc="$1"
   shift
-
-  local out_file err_file
-  out_file="$(mktemp "$tmp_dir/expect_rc.out.XXXXXX")"
-  err_file="$(mktemp "$tmp_dir/expect_rc.err.XXXXXX")"
+  local out_file="$tmp_dir/expect_rc.out"
+  local err_file="$tmp_dir/expect_rc.err"
 
   set +e
   "$@" >"$out_file" 2>"$err_file"
@@ -30,6 +28,15 @@ expect_rc() {
     echo "stderr:" >&2
     cat "$err_file" >&2 || true
     fail "expected rc=$expected_rc got rc=$rc for: $*"
+  fi
+}
+
+expect_err_contains() {
+  local needle="$1"
+  if ! grep -Fq "$needle" "$tmp_dir/expect_rc.err"; then
+    echo "stderr:" >&2
+    cat "$tmp_dir/expect_rc.err" >&2 || true
+    fail "expected stderr to contain: $needle"
   fi
 }
 
@@ -95,18 +102,115 @@ AT-002
 EOF_CONTRACT_BAD
 
 expect_rc 5 python3 "$CHECKER" --contract "$contract_bad"
+expect_err_contains "has no Profile tag in scope"
 
+# Malformed spacing must fail checker and coverage with rc=5.
+contract_bad_spacing="$tmp_dir/bad_profile_spacing.md"
+cat > "$contract_bad_spacing" <<'EOF_BAD_PROFILE_SPACING'
+Profile : CSP
+AT-001
+EOF_BAD_PROFILE_SPACING
 
-# Malformed profile tags must fail checker and coverage with rc=5.
-contract_malformed="$tmp_dir/contract_malformed.md"
-cat > "$contract_malformed" <<'EOF_CONTRACT_MALFORMED'
+expect_rc 5 python3 "$CHECKER" --contract "$contract_bad_spacing"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_spacing" --prd "$prd_ok"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+
+# Malformed profile after a valid scope must clear inheritance and report unscoped AT IDs.
+contract_bad_rescope="$tmp_dir/bad_profile_rescope.md"
+cat > "$contract_bad_rescope" <<'EOF_BAD_PROFILE_RESCOPE'
 Profile: CSP
 AT-001
-Profile: CS P
+Profile : GOP
 AT-002
-EOF_CONTRACT_MALFORMED
+EOF_BAD_PROFILE_RESCOPE
 
-expect_rc 5 python3 "$CHECKER" --contract "$contract_malformed"
-expect_rc 5 python3 "$COVERAGE" --contract "$contract_malformed" --prd "$prd_ok"
+expect_rc 5 python3 "$CHECKER" --contract "$contract_bad_rescope"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+expect_err_contains "AT-002 has no Profile tag in scope"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_rescope" --prd "$prd_ok"
+expect_err_contains "AT-002 has no Profile tag in scope"
+
+# Malformed casing must fail checker and coverage with rc=5.
+contract_bad_casing="$tmp_dir/bad_profile_casing.md"
+cat > "$contract_bad_casing" <<'EOF_BAD_PROFILE_CASING'
+profile: CSP
+AT-001
+EOF_BAD_PROFILE_CASING
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_bad_casing"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_casing" --prd "$prd_ok"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+
+# FULL is forbidden for AT tagging and must fail with rc=5.
+contract_bad_full="$tmp_dir/bad_profile_full.md"
+cat > "$contract_bad_full" <<'EOF_BAD_PROFILE_FULL'
+Profile: FULL
+AT-001
+EOF_BAD_PROFILE_FULL
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_bad_full"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_bad_full" --prd "$prd_ok"
+expect_err_contains "expected exactly one of: Profile: CSP | Profile: GOP"
+
+# Profile-like strings inside fenced blocks are ignored.
+contract_fence_backticks="$tmp_dir/profile_in_codeblock_backticks.md"
+cat > "$contract_fence_backticks" <<'EOF_PROFILE_IN_CODEBLOCK_BACKTICKS'
+```txt
+profile: CSP
+Profile : GOP
+Profile: FULL
+```
+
+Profile: CSP
+AT-001
+EOF_PROFILE_IN_CODEBLOCK_BACKTICKS
+
+expect_rc 0 python3 "$CHECKER" --contract "$contract_fence_backticks"
+expect_rc 0 python3 "$COVERAGE" --contract "$contract_fence_backticks" --prd "$prd_ok"
+
+contract_fence_tildes="$tmp_dir/profile_in_codeblock_tildes.md"
+cat > "$contract_fence_tildes" <<'EOF_PROFILE_IN_CODEBLOCK_TILDES'
+~~~txt
+Profile: FULL
+~~~
+
+Profile: GOP
+AT-003
+EOF_PROFILE_IN_CODEBLOCK_TILDES
+
+expect_rc 0 python3 "$CHECKER" --contract "$contract_fence_tildes"
+expect_rc 0 python3 "$COVERAGE" --contract "$contract_fence_tildes" --prd "$prd_ok"
+
+# Longer opening fences must not be closed by shorter inner fences.
+contract_fence_long="$tmp_dir/profile_in_codeblock_long_fence.md"
+cat > "$contract_fence_long" <<'EOF_PROFILE_IN_CODEBLOCK_LONG_FENCE'
+````txt
+Profile: FULL
+```
+profile: CSP
+````
+
+Profile: CSP
+AT-001
+EOF_PROFILE_IN_CODEBLOCK_LONG_FENCE
+
+expect_rc 0 python3 "$CHECKER" --contract "$contract_fence_long"
+expect_rc 0 python3 "$COVERAGE" --contract "$contract_fence_long" --prd "$prd_ok"
+
+# Unterminated fences must fail closed instead of silently skipping remaining lines.
+contract_fence_unterminated="$tmp_dir/profile_in_codeblock_unterminated.md"
+cat > "$contract_fence_unterminated" <<'EOF_PROFILE_IN_CODEBLOCK_UNTERMINATED'
+```txt
+Profile: FULL
+AT-001
+EOF_PROFILE_IN_CODEBLOCK_UNTERMINATED
+
+expect_rc 5 python3 "$CHECKER" --contract "$contract_fence_unterminated"
+expect_err_contains "unterminated code fence"
+expect_rc 5 python3 "$COVERAGE" --contract "$contract_fence_unterminated" --prd "$prd_ok"
+expect_err_contains "unterminated code fence"
 
 echo "PASS: contract profile parity gate"
