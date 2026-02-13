@@ -236,4 +236,31 @@ rm -f "$case16/$story/code_review_expert/20260209T000080Z_review.md.bak"
 expect_fail "code-review-expert unresolved placeholder" "code-review-expert review contains unresolved placeholder" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case16"
 
+# Case 17: artifact-only top commit can fallback review HEAD to parent commit.
+case17_repo="$tmp_dir/case17_repo"
+mkdir -p "$case17_repo/plans"
+cp "$GATE" "$case17_repo/plans/story_review_gate.sh"
+chmod +x "$case17_repo/plans/story_review_gate.sh"
+
+(
+  cd "$case17_repo"
+  git init -q
+  git config user.name "story-review-gate-test"
+  git config user.email "story-review-gate-test@example.com"
+  git config commit.gpgsign false
+
+  mkdir -p src
+  echo "baseline" > src/baseline.txt
+  git add src/baseline.txt
+  git commit -q -m "baseline"
+  parent_sha="$(git rev-parse HEAD)"
+
+  write_valid_case "$case17_repo/artifacts/story" "$story" "$parent_sha"
+  git add artifacts/story/"$story"
+  git commit -q -m "artifact-only review bundle"
+  child_sha="$(git rev-parse HEAD)"
+
+  "$case17_repo/plans/story_review_gate.sh" "$story" --head "$child_sha" --artifacts-root "$case17_repo/artifacts/story" >/dev/null
+)
+
 echo "PASS: story review gate fixtures"

@@ -15,6 +15,13 @@ on:
     - cron: "0 1 * * *"
 
 jobs:
+  copilot-signal:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copilot signal
+        run: echo "copilot-signal"
+
   pr-gate-enforced:
     if: |
       github.event_name == 'pull_request' ||
