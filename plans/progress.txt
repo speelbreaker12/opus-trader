@@ -462,3 +462,31 @@ Commands: bash plans/tests/test_verify_timeout_policy.sh; bash plans/tests/test_
 Evidence: plans/verify_fork.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/tests/test_verify_timeout_policy.sh; plans/tests/test_preflight_fixture_profiles.sh; docs/contract_kernel.json; artifacts/verify/20260212_181930; artifacts/verify/20260212_182116.
 Notes: Both quick and full verify now pass locally with dirty-tree warning only; no dirty-tree bypass flags were used.
 Next: run `./plans/prd_set_pass.sh` for the target stories when owner wants to flip `passes=true`.
+Story: workflow/at-profile-completeness-and-parity-gates
+Date: 2026-02-13
+Summary: Implemented fail-closed AT profile integrity gating end-to-end: added verify gates for canonical profile completeness (`contract_profiles`) and exact AT->Profile map parity (`at_profile_parity`), added independent parity checker tool (`tools/ci/check_contract_profile_map_parity.py`), updated workflow contract + verify gate-contract assertions, and added deterministic fixture coverage in preflight (`test_contract_profile_parity.sh`).
+Commands: ./plans/workflow_contract_gate.sh; bash plans/tests/test_contract_profile_parity.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; bash plans/verify_gate_contract_check.sh; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: tools/ci/check_contract_profile_map_parity.py; plans/verify_fork.sh; plans/verify_gate_contract_check.sh; specs/WORKFLOW_CONTRACT.md; plans/preflight.sh; plans/tests/test_contract_profile_parity.sh; artifacts/verify/20260212_184534; artifacts/verify/20260212_184720.
+Notes: New gates are now in QUICK+FULL via verify; CI verify job inherits them automatically because CI runs `./plans/verify.sh full`.
+Next: none.
+Story: workflow/at-profile-completeness-and-parity-gates
+Date: 2026-02-13
+Summary: Tightened the two AT profile integrity gates in `plans/verify_fork.sh` to fail-closed by removing optional skip branches; both `contract_profiles` and `at_profile_parity` now run unconditionally as required verify gates.
+Commands: bash -n plans/verify_fork.sh; bash plans/tests/test_contract_profile_parity.sh; bash plans/verify_gate_contract_check.sh; ./plans/verify.sh quick.
+Evidence: plans/verify_fork.sh; artifacts/verify/20260212_185534.
+Notes: Quick verify passed with the required profile gates active; no dirty-tree bypass flags were used.
+Next: run `./plans/verify.sh full` when ready to produce a fresh full-gate artifact for this post-tightening delta.
+Story: workflow/at-profile-completeness-and-parity-gates
+Date: 2026-02-13
+Summary: Re-validated post-tightening state with full verify; both profile integrity gates (`contract_profiles`, `at_profile_parity`) executed as required gates and full verify passed.
+Commands: ./plans/verify.sh full.
+Evidence: artifacts/verify/20260212_185747.
+Notes: Full run completed with dirty-tree warning only; no dirty-tree bypass flags were used.
+Next: run `./plans/prd_set_pass.sh` for the target stories when owner confirms pass flips.
+Story: roadmap-traceability
+Date: 2026-02-13
+Summary: Regenerated traceability workbook from current repo docs (`specs/CONTRACT.md` + `specs/IMPLEMENTATION_PLAN.md`) and flipped PRD pass state for S1-013 using full-verify artifact gating.
+Commands: python3 (workbook generator) -> /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx; ./plans/prd_set_pass.sh S1-013 true --artifacts-dir artifacts/verify/20260212_185747.
+Evidence: /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx; plans/prd.json; artifacts/verify/20260212_185747/contract_review.json; artifacts/story/S1-013/review_resolution.md.
+Notes: `prd_set_pass` passed after adding required review artifacts for current HEAD and a PASS contract-review artifact in the verify run directory.
+Next: commit/push/PR for the pass-flip and workflow-gate fixes.
