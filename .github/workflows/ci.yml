@@ -46,7 +46,7 @@ jobs:
 
           if [[ "$head_ref" =~ ^story/(S[0-9]+-[0-9]{3})(/[A-Za-z0-9._-]+)?$ ]]; then
             story_id="${BASH_REMATCH[1]}"
-          elif [[ "$head_ref" =~ ^story/(S[0-9]+-[0-9]{3})-[A-Za-z0-9._]+$ ]]; then
+          elif [[ "$head_ref" =~ ^story/(S[0-9]+-[0-9]{3})-[A-Za-z0-9._-]+$ ]]; then
             story_id="${BASH_REMATCH[1]}"
           else
             echo "ERROR: PR head branch must match story/<STORY_ID>[/<slug>] or story/<STORY_ID>-<slug> (slash-free STORY_ID, e.g., S{slice}-{NNN}), got: $head_ref" >&2
