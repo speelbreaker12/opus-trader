@@ -1,0 +1,2 @@
+# Enable strict crossref evidence gating in verify/CI.
+# Presence of this file forces --strict in plans/crossref_gate.sh via verify/ci wiring.

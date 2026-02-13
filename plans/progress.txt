@@ -490,3 +490,9 @@ Commands: python3 (workbook generator) -> /Users/admin/Desktop/todo/TRACEABILITY
 Evidence: /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx; plans/prd.json; artifacts/verify/20260212_185747/contract_review.json; artifacts/story/S1-013/review_resolution.md.
 Notes: `prd_set_pass` passed after adding required review artifacts for current HEAD and a PASS contract-review artifact in the verify run directory.
 Next: commit/push/PR for the pass-flip and workflow-gate fixes.
+Story: workflow-maintenance
+Date: 2026-02-12
+Summary: Implemented crossref validator slices 1-4 end-to-end with shared AT parser, exact map parity, marker-based evidence audit, run-scoped crossref gate wrapper, invariant validator/schema, burn-in checker, and CI/report-mode wiring with strict sentinel opt-in.
+Commands: bash plans/tests/test_contract_profile_parity.sh; bash plans/tests/test_roadmap_evidence_audit.sh; bash plans/tests/test_crossref_invariants.sh; bash plans/tests/test_crossref_gate.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/preflight.sh; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: tools/at_parser.py; tools/ci/check_contract_profiles.py; tools/at_coverage_report.py; tools/ci/check_contract_profile_map_parity.py; tools/roadmap_evidence_audit.py; plans/crossref_gate.sh; plans/crossref_burnin_check.sh; plans/crossref_execution_invariants.yaml; plans/schemas/crossref_execution_invariants.schema.json; plans/validate_crossref_invariants.py; docs/PHASE0_CHECKLIST_BLOCK.md; docs/PHASE1_CHECKLIST_BLOCK.md; artifacts/verify/20260212_193318; artifacts/verify/20260212_194009.
+Next: Optional promotion to strict crossref gating by adding plans/crossref_ci_strict after burn-in criteria are met.

@@ -56,7 +56,8 @@
       ],
       "evidence": [
         "docs/launch_policy.md",
-        "evidence/phase0/policy/launch_policy_snapshot.md"
+        "evidence/phase0/policy/launch_policy_snapshot.md",
+        "evidence/phase0/policy/policy_config_snapshot.json"
       ],
       "dependencies": [],
       "est_size": "S",
@@ -372,7 +373,8 @@
       ],
       "evidence": [
         "cargo test output",
-        "docs/health_endpoint.md"
+        "docs/health_endpoint.md",
+        "evidence/phase0/health/health_endpoint_snapshot.md"
       ],
       "dependencies": [],
       "est_size": "S",
@@ -3715,7 +3717,8 @@
       ],
       "evidence": [
         "cargo test output showing test_crash_mid_intent_no_duplicate_dispatch PASS",
-        "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof"
+        "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof",
+        "evidence/phase1/restart_loop/restart_100_cycles.log"
       ],
       "dependencies": [
         "S4-000",
