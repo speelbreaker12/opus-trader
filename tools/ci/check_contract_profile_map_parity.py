@@ -25,6 +25,10 @@ class ToolError(RuntimeError):
     """Deterministic tool/config error."""
 
 
+class ParityMismatch(RuntimeError):
+    """Deterministic parity mismatch."""
+
+
 def load_map(path: Path, label: str) -> dict[str, str]:
     if not path.exists():
         raise ToolError(f"missing {label} map: {path}")
