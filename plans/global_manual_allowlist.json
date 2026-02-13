@@ -1,0 +1,24 @@
+{
+  "entries": [
+    {
+      "evidence_path": "evidence/phase0/README.md",
+      "justification": "Phase-level owner summary is manual narrative evidence.",
+      "owning_story_id": "GLOBAL-PHASE0"
+    },
+    {
+      "evidence_path": "evidence/phase0/ci_links.md",
+      "justification": "CI links index is manual evidence curation.",
+      "owning_story_id": "GLOBAL-PHASE0"
+    },
+    {
+      "evidence_path": "evidence/phase1/README.md",
+      "justification": "Phase-level owner summary is manual narrative evidence.",
+      "owning_story_id": "GLOBAL-PHASE1"
+    },
+    {
+      "evidence_path": "evidence/phase1/ci_links.md",
+      "justification": "CI links index is manual evidence curation.",
+      "owning_story_id": "GLOBAL-PHASE1"
+    }
+  ]
+}

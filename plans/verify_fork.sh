@@ -65,6 +65,12 @@ if [[ "$CONTRACT_COVERAGE_STRICT_EFFECTIVE" != "1" && -f "$CONTRACT_COVERAGE_CI_
   CONTRACT_COVERAGE_STRICT_EFFECTIVE="1"
 fi
 
+CROSSREF_CI_STRICT_SENTINEL="${CROSSREF_CI_STRICT_SENTINEL:-plans/crossref_ci_strict}"
+CROSSREF_STRICT_EFFECTIVE="${CROSSREF_STRICT:-0}"
+if [[ "$CROSSREF_STRICT_EFFECTIVE" != "1" && -f "$CROSSREF_CI_STRICT_SENTINEL" ]]; then
+  CROSSREF_STRICT_EFFECTIVE="1"
+fi
+
 VERIFY_CONSOLE="${VERIFY_CONSOLE:-auto}"
 case "$VERIFY_CONSOLE" in
   auto)
@@ -104,6 +110,7 @@ if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then
   PREFLIGHT_TIMEOUT="900s"
 fi
 CONTRACT_KERNEL_TIMEOUT="${CONTRACT_KERNEL_TIMEOUT:-30s}"
+CONTRACT_PROFILE_TIMEOUT="${CONTRACT_PROFILE_TIMEOUT:-30s}"
 CONTRACT_COVERAGE_TIMEOUT="${CONTRACT_COVERAGE_TIMEOUT:-2m}"
 SPEC_LINT_TIMEOUT="${SPEC_LINT_TIMEOUT:-2m}"
 CSP_TRACE_TIMEOUT="${CSP_TRACE_TIMEOUT:-2m}"
@@ -122,6 +129,8 @@ NODE_TEST_TIMEOUT="${NODE_TEST_TIMEOUT:-10m}"
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
 mkdir -p "$VERIFY_ARTIFACTS_DIR"
+CROSSREF_ARTIFACTS_DIR="$VERIFY_ARTIFACTS_DIR/crossref"
+mkdir -p "$CROSSREF_ARTIFACTS_DIR"
 
 VERIFY_STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 VERIFY_BASE_REF="${BASE_REF:-origin/main}"
@@ -250,6 +259,59 @@ if [[ -f "docs/contract_kernel.json" ]]; then
   log "02) contract kernel"
   run_logged_or_exit "contract_kernel" "$CONTRACT_KERNEL_TIMEOUT" \
     "$PYTHON_BIN" scripts/check_contract_kernel.py --kernel docs/contract_kernel.json
+fi
+
+if [[ "$MODE" == "quick" ]]; then
+  log "02b) contract profiles"
+  run_logged_or_exit "contract_profiles" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" tools/ci/check_contract_profiles.py \
+      --contract specs/CONTRACT.md \
+      --emit-map "$CROSSREF_ARTIFACTS_DIR/contract_at_profile_map.json" \
+      --emit-summary "$CROSSREF_ARTIFACTS_DIR/contract_profile_summary.json"
+
+  log "02c) AT coverage report"
+  run_logged_or_exit "at_coverage_report" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" tools/at_coverage_report.py \
+      --contract specs/CONTRACT.md \
+      --prd plans/prd.json \
+      --emit-map "$CROSSREF_ARTIFACTS_DIR/report_at_profile_map.json" \
+      --output-json "$CROSSREF_ARTIFACTS_DIR/at_coverage_report.json" \
+      --output-md "$CROSSREF_ARTIFACTS_DIR/at_coverage_report.md"
+
+  log "02d) AT profile parity"
+  run_logged_or_exit "at_profile_parity" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" tools/ci/check_contract_profile_map_parity.py \
+      --checker-map "$CROSSREF_ARTIFACTS_DIR/contract_at_profile_map.json" \
+      --report-map "$CROSSREF_ARTIFACTS_DIR/report_at_profile_map.json" \
+      --out "$CROSSREF_ARTIFACTS_DIR/at_profile_parity.json"
+
+  log "02e) crossref execution invariants"
+  run_logged_or_exit "crossref_invariants" "$CONTRACT_PROFILE_TIMEOUT" \
+    "$PYTHON_BIN" plans/validate_crossref_invariants.py
+else
+  warn "Skipping 02b-02e in full mode (crossref_gate runs the same checks and writes canonical artifacts)"
+fi
+
+if [[ "$MODE" == "full" ]]; then
+  log "02f) crossref gate"
+  crossref_args=(
+    ./plans/crossref_gate.sh
+    --contract specs/CONTRACT.md
+    --prd plans/prd.json
+    --inputs @plans/evidence_sources.txt
+    --allowlist plans/global_manual_allowlist.json
+    --artifacts-dir "$VERIFY_ARTIFACTS_DIR"
+    --ci
+  )
+  if [[ "$CROSSREF_STRICT_EFFECTIVE" == "1" ]]; then
+    echo "crossref_strict=1 (sentinel/env enabled)"
+    crossref_args+=(--strict)
+  else
+    echo "crossref_strict=0"
+  fi
+  run_logged_or_exit "crossref_gate" "$CONTRACT_COVERAGE_TIMEOUT" "${crossref_args[@]}"
+else
+  warn "Skipping crossref_gate in quick mode (full-only gate)"
 fi
 
 if [[ "$MODE" == "full" ]]; then

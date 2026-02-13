@@ -13,13 +13,14 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 - one story in `IMPLEMENTING/REVIEW`
 5. Run `./plans/verify.sh quick` during implementation/review.
 6. Run `./plans/verify.sh full` before marking complete/merge-grade.
-7. Flip `passes=true` only via:
+7. Crossref integrity is enforced through `./plans/crossref_gate.sh --ci` (strict evidence blocking is enabled when `plans/crossref_ci_strict` exists).
+8. Flip `passes=true` only via:
 
 ```bash
 ./plans/prd_set_pass.sh <STORY_ID> true --artifacts-dir artifacts/verify/<run_id>
 ```
 
-8. Dirty-tree policy: do not use dirty verify exceptions by default; prefer CI verify on PR (clean checkout) or clean the worktree first.
+9. Dirty-tree policy: do not use dirty verify exceptions by default; prefer CI verify on PR (clean checkout) or clean the worktree first.
 
 ## PR loop (trimmed)
 
