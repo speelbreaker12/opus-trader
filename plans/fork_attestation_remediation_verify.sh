@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$pr_number" ]] || { usage >&2; exit 2; }
-[[ "$pr_number" =~ ^[0-9]+$ ]] || die "invalid PR number: $pr_number"
+[[ "$pr_number" =~ ^[1-9][0-9]*$ ]] || die "invalid PR number: $pr_number"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -67,7 +67,7 @@ $(jq -r '
 EOF
 
 [[ "$schema_version" == "1" ]] || die "FORK_REMEDIATION_SCHEMA_INVALID (schema_version must be 1)"
-[[ "$file_pr" =~ ^[0-9]+$ ]] || die "FORK_REMEDIATION_SCHEMA_INVALID (pr_number must be integer)"
+[[ "$file_pr" =~ ^[1-9][0-9]*$ ]] || die "FORK_REMEDIATION_SCHEMA_INVALID (pr_number must be positive integer)"
 [[ "$file_pr" == "$pr_number" ]] || die "FORK_REMEDIATION_PR_MISMATCH (expected=$pr_number actual=$file_pr)"
 [[ -n "$story_id" ]] || die "FORK_REMEDIATION_SCHEMA_INVALID (story_id missing)"
 [[ -n "$mirror_branch" ]] || die "FORK_REMEDIATION_SCHEMA_INVALID (mirror_branch missing)"

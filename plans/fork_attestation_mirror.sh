@@ -69,8 +69,8 @@ done
   usage >&2
   exit 2
 }
-[[ "$pr_number" =~ ^[0-9]+$ ]] || die "invalid PR number: $pr_number"
-[[ "$story_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$ ]] || die "invalid story id: $story_id"
+[[ "$pr_number" =~ ^[1-9][0-9]*$ ]] || die "invalid PR number: $pr_number"
+[[ "$story_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "invalid story id: $story_id"
 [[ "$attestation_commit_sha" =~ ^[0-9a-f]{40}$ ]] || die "attestation commit must be 40-char lowercase sha"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -98,22 +98,36 @@ fi
 mkdir -p "$(dirname "$out_file")"
 
 tmp_file="$(mktemp)"
+cleanup() {
+  if [[ -n "${tmp_file:-}" && -f "$tmp_file" ]]; then
+    rm -f "$tmp_file"
+  fi
+}
+trap cleanup EXIT
+
 now_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-cat > "$tmp_file" <<EOF
-{
-  "schema_version": 1,
-  "pr_number": $pr_number,
-  "story_id": "$story_id",
-  "mirror_branch": "$mirror_branch",
-  "mirror_head_sha": "$mirror_head_sha",
-  "attestation_commit_sha": "$attestation_commit_sha",
-  "remediated_by": "$actor",
-  "remediated_at_utc": "$now_utc"
-}
-EOF
+jq -n \
+  --arg story_id "$story_id" \
+  --arg mirror_branch "$mirror_branch" \
+  --arg mirror_head_sha "$mirror_head_sha" \
+  --arg attestation_commit_sha "$attestation_commit_sha" \
+  --arg remediated_by "$actor" \
+  --arg remediated_at_utc "$now_utc" \
+  --argjson pr_number "$pr_number" \
+  '{
+    schema_version: 1,
+    pr_number: $pr_number,
+    story_id: $story_id,
+    mirror_branch: $mirror_branch,
+    mirror_head_sha: $mirror_head_sha,
+    attestation_commit_sha: $attestation_commit_sha,
+    remediated_by: $remediated_by,
+    remediated_at_utc: $remediated_at_utc
+  }' > "$tmp_file"
 
 mv "$tmp_file" "$out_file"
+tmp_file=""
 
 verify_script="$ROOT/plans/fork_attestation_remediation_verify.sh"
 [[ -x "$verify_script" ]] || die "missing remediation verifier: $verify_script"
