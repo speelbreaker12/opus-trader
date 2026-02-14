@@ -63,6 +63,20 @@ command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 2; }
 
 lock_file="${PRD_FILE}.lock"
 lock_dir="${lock_file}.d"
+tmp=""
+lock_dir_acquired=0
+
+cleanup() {
+  if [[ -n "$tmp" && -f "$tmp" ]]; then
+    rm -f "$tmp" 2>/dev/null || true
+  fi
+  if [[ "$lock_dir_acquired" == "1" ]]; then
+    rmdir "$lock_dir" 2>/dev/null || true
+  fi
+}
+
+trap cleanup EXIT
+
 if command -v flock >/dev/null 2>&1; then
   exec 200>"$lock_file"
   if ! flock -n 200; then
@@ -74,7 +88,7 @@ else
     echo "ERROR: PRD is locked by another process" >&2
     exit 7
   fi
-  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+  lock_dir_acquired=1
 fi
 
 if ! jq -e . "$PRD_FILE" >/dev/null 2>&1; then
