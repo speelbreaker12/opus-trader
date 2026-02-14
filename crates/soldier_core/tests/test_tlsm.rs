@@ -3,7 +3,30 @@
 //! AT-230: Fill-before-ack is valid reality.
 //! AT-210: Orphan fill (fill-before-send).
 
-use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
+use soldier_core::execution::{
+    PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink,
+    TransitionResult,
+};
+
+#[derive(Default)]
+struct CollectingSink {
+    transitions: Vec<PersistedTransition>,
+}
+
+impl TlsmTransitionSink for CollectingSink {
+    fn append_transition(&mut self, transition: PersistedTransition) -> Result<(), String> {
+        self.transitions.push(transition);
+        Ok(())
+    }
+}
+
+struct FailingSink;
+
+impl TlsmTransitionSink for FailingSink {
+    fn append_transition(&mut self, _transition: PersistedTransition) -> Result<(), String> {
+        Err("sink append failed".to_string())
+    }
+}
 
 // ─── Normal lifecycle ────────────────────────────────────────────────────
 
@@ -456,4 +479,62 @@ fn test_reject_from_acked_ignored() {
     let r = sm.apply(TlsmEvent::Rejected);
     assert!(matches!(r, TransitionResult::Ignored { .. }));
     assert_eq!(sm.state(), TlsmState::Acked);
+}
+
+// ─── WAL transition sink emission ───────────────────────────────────────
+
+#[test]
+fn test_apply_with_sink_emits_transition_records() {
+    let mut sm = Tlsm::new();
+    let mut sink = CollectingSink::default();
+
+    let _ = sm
+        .apply_with_sink(TlsmEvent::Sent, &mut sink)
+        .expect("sink append should succeed");
+    let _ = sm
+        .apply_with_sink(TlsmEvent::Filled, &mut sink)
+        .expect("sink append should succeed"); // out-of-order from Sent
+
+    assert_eq!(sink.transitions.len(), 2);
+    assert_eq!(sink.transitions[0].from, TlsmState::Created);
+    assert_eq!(sink.transitions[0].to, TlsmState::Sent);
+    assert!(sink.transitions[0].anomaly.is_none());
+
+    assert_eq!(sink.transitions[1].from, TlsmState::Sent);
+    assert_eq!(sink.transitions[1].to, TlsmState::Filled);
+    assert!(
+        sink.transitions[1]
+            .anomaly
+            .as_deref()
+            .unwrap_or("")
+            .contains("fill-before-ack")
+    );
+}
+
+#[test]
+fn test_ignored_event_does_not_emit_transition() {
+    let mut sm = Tlsm::new();
+    let mut sink = CollectingSink::default();
+
+    let _ = sm
+        .apply_with_sink(TlsmEvent::Sent, &mut sink)
+        .expect("sink append should succeed");
+    let _ = sm
+        .apply_with_sink(TlsmEvent::Sent, &mut sink)
+        .expect("ignored event should remain infallible"); // ignored
+
+    assert_eq!(sink.transitions.len(), 1);
+}
+
+#[test]
+fn test_sink_failure_is_atomic_no_state_change() {
+    let mut sm = Tlsm::new();
+    let mut sink = FailingSink;
+
+    let err = sm
+        .apply_with_sink(TlsmEvent::Sent, &mut sink)
+        .expect_err("sink failure must propagate");
+    assert!(matches!(err, TlsmError::PersistFailed { .. }));
+    assert_eq!(sm.state(), TlsmState::Created);
+    assert_eq!(sm.transition_count(), 0);
 }

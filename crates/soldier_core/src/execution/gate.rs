@@ -200,12 +200,16 @@ impl Default for LiquidityGateMetrics {
 
 static LIQUIDITY_GATE_REJECT_NO_L2_TOTAL: AtomicU64 = AtomicU64::new(0);
 static LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL: AtomicU64 = AtomicU64::new(0);
+static LIQUIDITY_GATE_REJECT_DEPTH_SHORTFALL_TOTAL: AtomicU64 = AtomicU64::new(0);
 static EXPECTED_SLIPPAGE_BPS_SAMPLES: AtomicU64 = AtomicU64::new(0);
 
 pub fn liquidity_gate_reject_total(reason: LiquidityGateRejectReason) -> u64 {
     match reason {
         LiquidityGateRejectReason::LiquidityGateNoL2 => {
             LIQUIDITY_GATE_REJECT_NO_L2_TOTAL.load(Ordering::Relaxed)
+        }
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
+            LIQUIDITY_GATE_REJECT_DEPTH_SHORTFALL_TOTAL.load(Ordering::Relaxed)
         }
         LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
             LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL.load(Ordering::Relaxed)
@@ -225,6 +229,9 @@ fn bump_liquidity_gate_reject(
     match reason {
         LiquidityGateRejectReason::LiquidityGateNoL2 => {
             LIQUIDITY_GATE_REJECT_NO_L2_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
+            LIQUIDITY_GATE_REJECT_DEPTH_SHORTFALL_TOTAL.fetch_add(1, Ordering::Relaxed);
         }
         LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
             LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL.fetch_add(1, Ordering::Relaxed);
@@ -414,6 +421,9 @@ fn reject_with_metrics(
 ) -> LiquidityGateResult {
     match reason {
         LiquidityGateRejectReason::LiquidityGateNoL2 => metrics.record_reject_no_l2(),
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
+            metrics.record_reject_depth_shortfall()
+        }
         LiquidityGateRejectReason::ExpectedSlippageTooHigh => metrics.record_reject_slippage(),
     }
     bump_liquidity_gate_reject(reason, wap, slippage_bps);
@@ -550,7 +560,7 @@ pub fn evaluate_liquidity_gate(
                 }
                 return reject_with_metrics(
                     metrics,
-                    LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                    LiquidityGateRejectReason::InsufficientDepthWithinBudget,
                     wap,
                     slippage_bps,
                     Some(0.0),
@@ -569,7 +579,7 @@ pub fn evaluate_liquidity_gate(
                 }
                 return reject_with_metrics(
                     metrics,
-                    LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                    LiquidityGateRejectReason::InsufficientDepthWithinBudget,
                     wap,
                     slippage_bps,
                     Some(fillable_qty),

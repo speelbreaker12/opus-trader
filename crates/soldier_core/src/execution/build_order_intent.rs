@@ -52,6 +52,67 @@ pub enum GateStep {
     RecordedBeforeDispatch,
 }
 
+const REJECT_REASON_PREFLIGHT: &str = "preflight rejected";
+const REJECT_REASON_QUANTIZE: &str = "quantize failed";
+const REJECT_REASON_DISPATCH_CONSISTENCY: &str = "dispatch consistency failed";
+const REJECT_REASON_DISPATCH_CLAMP_EXCEEDED: &str = "requested qty exceeds liquidity clamp";
+const REJECT_REASON_DISPATCH_CLAMP_INCOMPLETE: &str = "incomplete liquidity clamp metadata";
+const REJECT_REASON_FEE_CACHE_STALE: &str = "fee cache stale";
+const REJECT_REASON_LIQUIDITY_GATE: &str = "liquidity gate rejected";
+const REJECT_REASON_NET_EDGE: &str = "net edge too low";
+const REJECT_REASON_PRICER: &str = "pricer rejected";
+const REJECT_REASON_WAL: &str = "WAL append failed";
+
+/// Runtime adapter for the final RecordedBeforeDispatch gate.
+///
+/// Implementations perform the concrete WAL append attempt and return an
+/// error when recording fails.
+pub trait RecordedBeforeDispatchGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String>;
+}
+
+/// Evaluate the chokepoint with a runtime WAL gate adapter.
+///
+/// This helper prevents callsites from passing precomputed `wal_recorded`
+/// values and instead derives gate 9 from the actual append attempt.
+pub fn build_order_intent_with_wal_gate(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: &mut dyn RecordedBeforeDispatchGate,
+) -> ChokeResult {
+    build_order_intent_internal(
+        intent_class,
+        risk_state,
+        metrics,
+        gate_results,
+        Some(wal_gate),
+    )
+}
+
+/// Evaluate the chokepoint with an optional runtime WAL gate adapter.
+///
+/// Missing adapter is fail-closed and treated as `wal_recorded = false`.
+pub fn build_order_intent_with_optional_wal_gate(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
+) -> ChokeResult {
+    match wal_gate {
+        Some(gate) => {
+            build_order_intent_internal(intent_class, risk_state, metrics, gate_results, Some(gate))
+        }
+        None => {
+            let mut merged = gate_results.clone();
+            merged.wal_recorded = false;
+            build_order_intent_internal(intent_class, risk_state, metrics, &merged, None)
+        }
+    }
+}
+
 // --- Chokepoint result ---------------------------------------------------
 
 /// Reject reason from the chokepoint.
@@ -186,6 +247,16 @@ pub fn build_order_intent(
     risk_state: RiskState,
     metrics: &mut ChokeMetrics,
     gate_results: &GateResults,
+) -> ChokeResult {
+    build_order_intent_internal(intent_class, risk_state, metrics, gate_results, None)
+}
+
+fn build_order_intent_internal(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
 ) -> ChokeResult {
     let mut trace = Vec::new();
 
@@ -326,7 +397,11 @@ pub fn build_order_intent(
 
     // Gate 9: RecordedBeforeDispatch
     trace.push(GateStep::RecordedBeforeDispatch);
-    if !gate_results.wal_recorded {
+    let wal_recorded = match wal_gate {
+        Some(gate) => gate.record_before_dispatch().is_ok(),
+        None => gate_results.wal_recorded,
+    };
+    if !wal_recorded {
         return finish_rejected(
             metrics,
             ChokeRejectReason::GateRejected {

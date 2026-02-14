@@ -11,6 +11,7 @@ pub mod gate;
 pub mod gates;
 pub mod inventory_skew;
 pub mod label;
+pub mod open_runtime;
 pub mod order_size;
 pub mod pipeline;
 pub mod post_only_guard;
@@ -22,8 +23,10 @@ pub mod tlsm;
 
 pub use build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
-    GateSequenceResult, GateStep, build_gate_results, build_order_intent,
-    build_order_intent_with_reject_reason_code, gate_sequence_total,
+    GateSequenceResult, GateStep, RecordedBeforeDispatchGate, build_gate_results,
+    build_order_intent, build_order_intent_with_optional_wal_gate,
+    build_order_intent_with_reject_reason_code, build_order_intent_with_wal_gate,
+    gate_sequence_total,
 };
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
@@ -46,6 +49,9 @@ pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
     encode_label,
 };
+pub use open_runtime::{
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
+};
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use pipeline::{
     IntentPipelineInput, IntentPipelineMetrics, PipelineResult, QuantizePipelineInput,
@@ -66,7 +72,10 @@ pub use reject_reason::{
     GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
     reject_reason_registry_contains,
 };
-pub use tlsm::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
+pub use tlsm::{
+    NoopTransitionSink, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
+    TlsmTransitionSink, TransitionResult,
+};
 
 #[derive(Debug, Clone)]
 struct ExecutionTraceIds {
