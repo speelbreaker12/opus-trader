@@ -366,7 +366,10 @@ fn test_partial_fill_from_thin_book_evaluates_available() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!(
                 wap.is_some(),
                 "thin-book reject must include WAP diagnostics"
@@ -532,7 +535,7 @@ fn test_non_marketable_open_still_enforces_depth_budget() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
@@ -622,7 +625,7 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
     let run_id = "run-liquidity-001";
     let _ = take_execution_metric_lines();
     let before_reject =
-        liquidity_gate_reject_total(LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+        liquidity_gate_reject_total(LiquidityGateRejectReason::InsufficientDepthWithinBudget);
     let before_samples = expected_slippage_bps_samples();
 
     let snap = book(vec![(100.0, 1.0), (110.0, 1.0)], vec![], 900);
@@ -634,13 +637,13 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
 
     let after_reject =
-        liquidity_gate_reject_total(LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+        liquidity_gate_reject_total(LiquidityGateRejectReason::InsufficientDepthWithinBudget);
     let after_samples = expected_slippage_bps_samples();
     assert_eq!(after_reject, before_reject + 1);
     assert_eq!(after_samples, before_samples + 1);
@@ -649,7 +652,7 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
     assert!(
         lines.iter().any(|line| {
             line.starts_with("liquidity_gate_reject_total")
-                && line.contains("reason=ExpectedSlippageTooHigh")
+                && line.contains("reason=InsufficientDepthWithinBudget")
                 && line.contains(&format!("intent_id={intent_id}"))
                 && line.contains(&format!("run_id={run_id}"))
         }),

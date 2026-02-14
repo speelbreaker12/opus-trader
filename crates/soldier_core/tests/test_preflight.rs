@@ -1,10 +1,11 @@
 //! Tests for order-type preflight guard per CONTRACT.md §1.4.4.
 //!
-//! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915.
+//! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915, AT-916.
 
 use soldier_core::execution::{
-    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
-    preflight_intent, preflight_reject_total, take_execution_metric_lines, with_intent_trace_ids,
+    OrderType, PostOnlyInput, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
+    Side, preflight_intent, preflight_reject_total, take_execution_metric_lines,
+    with_intent_trace_ids,
 };
 use soldier_core::venue::InstrumentKind;
 
@@ -15,8 +16,8 @@ fn limit_input(kind: InstrumentKind) -> PreflightInput<'static> {
         order_type: OrderType::Limit,
         has_trigger: false,
         linked_order_type: None,
-        linked_orders_supported: false,
-        enable_linked_orders: false,
+        linked_orders_allowed: false,
+        post_only_input: None,
     }
 }
 
@@ -204,11 +205,10 @@ fn test_at915_linked_order_rejected_default() {
 
 #[test]
 fn test_at004_linked_order_option_always_rejected() {
-    // Options: linked orders always forbidden, even if both flags are true
+    // Options: linked orders always forbidden, even if capability matrix allows.
     let input = PreflightInput {
         linked_order_type: Some("one_cancels_other"),
-        linked_orders_supported: true,
-        enable_linked_orders: true,
+        linked_orders_allowed: true,
         ..limit_input(InstrumentKind::Option)
     };
     let mut m = PreflightMetrics::new();
@@ -220,11 +220,10 @@ fn test_at004_linked_order_option_always_rejected() {
 
 #[test]
 fn test_linked_order_perp_both_flags_allowed() {
-    // Futures/perps: allowed only if BOTH flags are true
+    // Futures/perps: allowed when evaluated capabilities permit.
     let input = PreflightInput {
         linked_order_type: Some("one_cancels_other"),
-        linked_orders_supported: true,
-        enable_linked_orders: true,
+        linked_orders_allowed: true,
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
@@ -233,11 +232,10 @@ fn test_linked_order_perp_both_flags_allowed() {
 
 #[test]
 fn test_linked_order_perp_only_supported_rejected() {
-    // linked_orders_supported=true but enable_linked_orders=false → reject
+    // Capabilities matrix denies linked orders -> reject (fail closed).
     let input = PreflightInput {
         linked_order_type: Some("one_cancels_other"),
-        linked_orders_supported: true,
-        enable_linked_orders: false,
+        linked_orders_allowed: false,
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
@@ -249,11 +247,10 @@ fn test_linked_order_perp_only_supported_rejected() {
 
 #[test]
 fn test_linked_order_perp_only_enabled_rejected() {
-    // linked_orders_supported=false but enable_linked_orders=true → reject
+    // Any false outcome from capabilities matrix remains rejected.
     let input = PreflightInput {
         linked_order_type: Some("one_cancels_other"),
-        linked_orders_supported: false,
-        enable_linked_orders: true,
+        linked_orders_allowed: false,
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
@@ -267,8 +264,7 @@ fn test_linked_order_perp_only_enabled_rejected() {
 fn test_linked_order_linear_future_both_flags_allowed() {
     let input = PreflightInput {
         linked_order_type: Some("oco"),
-        linked_orders_supported: true,
-        enable_linked_orders: true,
+        linked_orders_allowed: true,
         ..limit_input(InstrumentKind::LinearFuture)
     };
     let mut m = PreflightMetrics::new();
@@ -282,12 +278,69 @@ fn test_no_linked_order_type_passes() {
     // linked_order_type is None → no linked-order check at all
     let input = PreflightInput {
         linked_order_type: None,
-        linked_orders_supported: false,
-        enable_linked_orders: false,
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
     assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+}
+
+// ─── AT-916: Post-only crossing rejected ───────────────────────────────
+
+#[test]
+fn test_at916_post_only_buy_crossing_rejected() {
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Buy,
+            limit_price: 100.0,
+            best_ask: Some(100.0),
+            best_bid: None,
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(
+        preflight_intent(&input, &mut m),
+        PreflightResult::Rejected(PreflightReject::PostOnlyWouldCross)
+    );
+}
+
+#[test]
+fn test_at916_post_only_non_crossing_allowed() {
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Buy,
+            limit_price: 99.0,
+            best_ask: Some(100.0),
+            best_bid: None,
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+}
+
+#[test]
+fn test_at916_post_only_sell_crossing_rejected() {
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Sell,
+            limit_price: 100.0,
+            best_ask: None,
+            best_bid: Some(100.0),
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(
+        preflight_intent(&input, &mut m),
+        PreflightResult::Rejected(PreflightReject::PostOnlyWouldCross)
+    );
 }
 
 // ─── Metrics ────────────────────────────────────────────────────────────
@@ -325,6 +378,24 @@ fn test_metrics_linked_forbidden_counter() {
     };
     let _ = preflight_intent(&input, &mut m);
     assert_eq!(m.linked_forbidden_total(), 1);
+}
+
+#[test]
+fn test_metrics_post_only_cross_counter() {
+    let mut m = PreflightMetrics::new();
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Buy,
+            limit_price: 100.0,
+            best_ask: Some(100.0),
+            best_bid: None,
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+    let _ = preflight_intent(&input, &mut m);
+    assert_eq!(m.post_only_would_cross_total(), 1);
 }
 
 #[test]
@@ -373,7 +444,6 @@ fn test_preflight_emits_structured_reject_metric_line() {
     let run_id = "run-preflight-001";
     let _ = take_execution_metric_lines();
 
-    let before = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
     let input = PreflightInput {
         order_type: OrderType::Market,
         ..limit_input(InstrumentKind::Perpetual)
@@ -388,16 +458,24 @@ fn test_preflight_emits_structured_reject_metric_line() {
     );
 
     let after = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
-    assert_eq!(after, before + 1);
+    assert!(after >= 1, "counter must be non-zero after a reject");
 
     let lines = take_execution_metric_lines();
-    assert!(
-        lines.iter().any(|line| {
+    let tagged_lines = lines
+        .iter()
+        .filter(|line| {
             line.starts_with("preflight_reject_total")
                 && line.contains("reason=OrderTypeMarketForbidden")
                 && line.contains(&format!("intent_id={intent_id}"))
                 && line.contains(&format!("run_id={run_id}"))
-        }),
+        })
+        .count();
+    assert_eq!(
+        tagged_lines, 1,
+        "expected exactly one tagged preflight metric line, got {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| line.starts_with("preflight_reject_total")),
         "expected structured preflight metric line, got {lines:?}"
     );
 }

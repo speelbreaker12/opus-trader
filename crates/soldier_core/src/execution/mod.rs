@@ -11,6 +11,7 @@ pub mod gate;
 pub mod gates;
 pub mod inventory_skew;
 pub mod label;
+pub mod open_runtime;
 pub mod order_size;
 pub mod pipeline;
 pub mod post_only_guard;
@@ -36,7 +37,6 @@ pub use gate::{
 };
 pub use gates::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
-    net_edge_reject_total,
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
@@ -45,6 +45,9 @@ pub use inventory_skew::{
 pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
     encode_label,
+};
+pub use open_runtime::{
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use pipeline::{

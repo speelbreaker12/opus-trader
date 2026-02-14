@@ -21,6 +21,17 @@ use crate::risk::RiskState;
 
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
+const REJECT_REASON_PREFLIGHT: &str = "preflight rejected";
+const REJECT_REASON_QUANTIZE: &str = "quantize failed";
+const REJECT_REASON_DISPATCH_CONSISTENCY: &str = "dispatch consistency failed";
+const REJECT_REASON_DISPATCH_CLAMP_EXCEEDED: &str = "requested qty exceeds liquidity clamp";
+const REJECT_REASON_DISPATCH_CLAMP_INCOMPLETE: &str = "incomplete liquidity clamp metadata";
+const REJECT_REASON_FEE_CACHE_STALE: &str = "fee cache stale";
+const REJECT_REASON_LIQUIDITY_GATE: &str = "liquidity gate rejected";
+const REJECT_REASON_NET_EDGE: &str = "net edge too low";
+const REJECT_REASON_PRICER: &str = "pricer rejected";
+const REJECT_REASON_WAL: &str = "WAL append failed";
+
 // --- Intent class --------------------------------------------------------
 
 /// Intent classification for dispatch authorization.
