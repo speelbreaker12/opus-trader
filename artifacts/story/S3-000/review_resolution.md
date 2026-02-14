@@ -1,5 +1,5 @@
 Story: S3-000
-HEAD: 1aac385d18a1f228ecff98d301038ecb1bbb0ada
+HEAD: ce571d327292a2ddc92519ae030c9387f650908a
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 Kimi final review file: kimi/20260214T181034Z_manual_review.md
