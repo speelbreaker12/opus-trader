@@ -392,16 +392,27 @@ pub struct GateResults {
 }
 
 impl Default for GateResults {
+    /// Fail-closed default for safety: every gate must be explicitly enabled.
     fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl GateResults {
+    pub const fn all_passed() -> Self {
+        Self::new(true)
+    }
+
+    pub const fn new(pass: bool) -> Self {
         Self {
-            preflight_passed: true,
-            quantize_passed: true,
-            dispatch_consistency_passed: true,
-            fee_cache_passed: true,
-            liquidity_gate_passed: true,
-            net_edge_passed: true,
-            pricer_passed: true,
-            wal_recorded: true,
+            preflight_passed: pass,
+            quantize_passed: pass,
+            dispatch_consistency_passed: pass,
+            fee_cache_passed: pass,
+            liquidity_gate_passed: pass,
+            net_edge_passed: pass,
+            pricer_passed: pass,
+            wal_recorded: pass,
             requested_qty: None,
             max_dispatch_qty: None,
         }

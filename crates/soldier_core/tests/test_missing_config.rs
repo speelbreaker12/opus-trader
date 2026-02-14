@@ -265,7 +265,7 @@ fn test_zero_qty_pricer_fails_closed() {
 #[test]
 fn test_unhealthy_risk_state_fails_closed() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::default();
+    let gates = GateResults::all_passed();
 
     // All non-Healthy states must reject OPEN
     for risk_state in [RiskState::Degraded, RiskState::Maintenance, RiskState::Kill] {

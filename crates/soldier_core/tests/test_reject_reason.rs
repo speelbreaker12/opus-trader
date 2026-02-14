@@ -10,7 +10,7 @@ use soldier_core::risk::RiskState;
 #[test]
 fn test_reject_reason_present_on_pre_dispatch_reject() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::default();
+    let gates = GateResults::all_passed();
 
     let (result, code) = build_order_intent_with_reject_reason_code(
         ChokeIntentClass::Open,
@@ -29,7 +29,7 @@ fn test_reject_reason_in_registry() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..GateResults::default()
+        ..GateResults::all_passed()
     };
 
     let (_, code) = build_order_intent_with_reject_reason_code(
@@ -52,7 +52,7 @@ fn test_typed_preflight_code_wins_over_text_heuristics() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::default()
+        ..GateResults::all_passed()
     };
     let gate_reject_codes = GateRejectCodes {
         preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
@@ -68,6 +68,44 @@ fn test_typed_preflight_code_wins_over_text_heuristics() {
     );
 
     assert_eq!(code, Some(RejectReasonCode::OrderTypeMarketForbidden));
+}
+
+#[test]
+fn test_fee_cache_check_maps_to_fee_cache_stale() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults {
+        fee_cache_passed: false,
+        ..GateResults::all_passed()
+    };
+
+    let (_, code) = build_order_intent_with_reject_reason_code(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &GateRejectCodes::default(),
+    );
+
+    assert_eq!(code, Some(RejectReasonCode::FeeCacheStale));
+}
+
+#[test]
+fn test_recorded_before_dispatch_maps_to_recorded_before_dispatch_failed() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults {
+        wal_recorded: false,
+        ..GateResults::all_passed()
+    };
+
+    let (_, code) = build_order_intent_with_reject_reason_code(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &GateRejectCodes::default(),
+    );
+
+    assert_eq!(code, Some(RejectReasonCode::RecordedBeforeDispatchFailed));
 }
 
 #[test]
@@ -96,6 +134,8 @@ fn test_registry_contains_contract_minimum_set() {
         "OrderTypeStopForbidden",
         "LinkedOrderTypeForbidden",
         "PostOnlyWouldCross",
+        "FeeCacheStale",
+        "RecordedBeforeDispatchFailed",
         "RiskIncreasingCancelReplaceForbidden",
         "RateLimitBrownout",
         "InstrumentExpiredOrDelisted",

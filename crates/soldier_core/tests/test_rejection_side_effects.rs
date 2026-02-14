@@ -65,7 +65,7 @@ fn assert_rejection_preserves_state(
 fn test_rejected_intent_has_no_side_effects() {
     let state_before = PersistentState::empty();
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::default();
+    let gates = GateResults::all_passed();
 
     let result = build_order_intent(
         ChokeIntentClass::Open,
@@ -91,7 +91,7 @@ fn test_rejected_intent_has_no_side_effects() {
 fn test_rejected_risk_state_no_side_effects() {
     let state_before = PersistentState::empty();
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::default();
+    let gates = GateResults::all_passed();
 
     let result = build_order_intent(
         ChokeIntentClass::Open,
@@ -303,7 +303,7 @@ fn test_rejected_wal_gate_no_side_effects() {
 
     let gates = GateResults {
         wal_recorded: false,
-        ..GateResults::default()
+        ..GateResults::all_passed()
     };
 
     let result = build_order_intent(
@@ -370,7 +370,7 @@ fn test_multiple_rejections_no_state_accumulation() {
     let mut quantize_metrics = QuantizeMetrics::new();
 
     // Rejection 1: RiskState
-    let gates = GateResults::default();
+    let gates = GateResults::all_passed();
     build_order_intent(
         ChokeIntentClass::Open,
         RiskState::Kill,
@@ -389,7 +389,7 @@ fn test_multiple_rejections_no_state_accumulation() {
     // Rejection 3: Gate failure
     let bad_gates = GateResults {
         preflight_passed: false,
-        ..GateResults::default()
+        ..GateResults::all_passed()
     };
     build_order_intent(
         ChokeIntentClass::Open,

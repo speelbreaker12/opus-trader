@@ -73,7 +73,7 @@ fn test_quantize_sell_deterministic() {
 
 #[test]
 fn test_chokepoint_same_inputs_same_trace() {
-    let gates = GateResults::default();
+    let gates = GateResults::all_passed();
 
     let mut traces = Vec::new();
     for _ in 0..100 {
@@ -95,7 +95,7 @@ fn test_chokepoint_same_inputs_same_trace() {
 fn test_chokepoint_rejected_deterministic() {
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..GateResults::default()
+        ..GateResults::all_passed()
     };
 
     let mut results = Vec::new();
@@ -354,7 +354,7 @@ fn test_full_pipeline_determinism() {
         side: PricerSide::Buy,
     };
 
-    let gate_results = GateResults::default();
+    let gate_results = GateResults::all_passed();
 
     #[derive(Debug, PartialEq)]
     struct PipelineSnapshot {

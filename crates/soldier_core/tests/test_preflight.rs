@@ -475,7 +475,9 @@ fn test_preflight_emits_structured_reject_metric_line() {
         "expected exactly one tagged preflight metric line, got {lines:?}"
     );
     assert!(
-        lines.iter().any(|line| line.starts_with("preflight_reject_total")),
+        lines
+            .iter()
+            .any(|line| line.starts_with("preflight_reject_total")),
         "expected structured preflight metric line, got {lines:?}"
     );
 }
