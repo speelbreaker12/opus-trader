@@ -83,31 +83,53 @@ pub fn evaluate_intent_pipeline(
     let mut preflight_input = input.preflight.clone();
     preflight_input.linked_orders_allowed = evaluated_caps.linked_orders_allowed;
 
-    let preflight_passed = matches!(
-        preflight_intent(&preflight_input, &mut metrics.preflight),
-        PreflightResult::Allowed
-    );
+    // Mirror chokepoint early-exit behavior so downstream gate metrics are not
+    // emitted for intents that never reach those gates.
+    let dispatch_auth_short_circuit = input.intent_class == ChokeIntentClass::CancelOnly
+        || (input.intent_class == ChokeIntentClass::Open && input.risk_state != RiskState::Healthy);
 
-    let quantize_passed = quantize(
-        input.quantize.raw_qty,
-        input.quantize.raw_limit_price,
-        input.quantize.side,
-        &input.quantize.constraints,
-        &mut metrics.quantize,
-    )
-    .is_ok();
+    let mut preflight_passed = true;
+    let mut quantize_passed = true;
+    let mut fee_cache_passed = true;
 
-    let fee_eval = evaluate_fee_staleness(&input.fee_snapshot, &input.fee_config);
-    let fee_cache_passed = fee_eval.risk_state == RiskState::Healthy;
-    if !fee_cache_passed {
-        metrics.fee.record_refresh_fail();
+    if !dispatch_auth_short_circuit {
+        preflight_passed = matches!(
+            preflight_intent(&preflight_input, &mut metrics.preflight),
+            PreflightResult::Allowed
+        );
+
+        if preflight_passed {
+            quantize_passed = quantize(
+                input.quantize.raw_qty,
+                input.quantize.raw_limit_price,
+                input.quantize.side,
+                &input.quantize.constraints,
+                &mut metrics.quantize,
+            )
+            .is_ok();
+        }
+
+        if preflight_passed && quantize_passed && input.dispatch_consistency_passed {
+            let fee_eval = evaluate_fee_staleness(&input.fee_snapshot, &input.fee_config);
+            fee_cache_passed = fee_eval.risk_state == RiskState::Healthy;
+            if !fee_cache_passed {
+                metrics.fee.record_refresh_fail();
+            }
+        }
     }
 
     let mut liquidity_gate_passed = true;
     let mut net_edge_passed = true;
     let mut pricer_passed = true;
 
-    if input.intent_class == ChokeIntentClass::Open {
+    let open_path_active = input.intent_class == ChokeIntentClass::Open
+        && input.risk_state == RiskState::Healthy
+        && preflight_passed
+        && quantize_passed
+        && input.dispatch_consistency_passed
+        && fee_cache_passed;
+
+    if open_path_active {
         liquidity_gate_passed = match input.liquidity.as_ref() {
             Some(liquidity_input) => matches!(
                 evaluate_liquidity_gate(liquidity_input, &mut metrics.liquidity),
