@@ -22,6 +22,14 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 
 9. Dirty-tree policy: do not use dirty verify exceptions by default; prefer CI verify on PR (clean checkout) or clean the worktree first.
 
+## Rollout toggles (defaults)
+
+- `WORKFLOW_SEQUENCE_ENFORCEMENT=warn|block` (default `warn`)
+- `CODEX_STAGE_POLICY=warn|require` (default `warn`)
+- `CI_REPO_ONLY_ENFORCEMENT=off|on` (default `off`)
+- `TRUSTED_CONTEXT_SOURCE_SCOPE_POLICY=require|fallback_runtime_fail_closed` (default `require`)
+- `./plans/toggle_policy_check.sh` validates all toggle values fail-closed.
+
 ## PR loop (trimmed)
 
 1. Rebase/sync story branch onto latest integration/mainline branch.

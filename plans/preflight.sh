@@ -202,6 +202,22 @@ else
   exit 2
 fi
 
+# 3g. rollout toggle policy wiring guard (fail-closed)
+TOGGLE_POLICY_GUARD="plans/toggle_policy_check.sh"
+if [[ -x "$TOGGLE_POLICY_GUARD" ]]; then
+  if "$TOGGLE_POLICY_GUARD" >/dev/null; then
+    pass "Toggle policy wiring guard"
+  else
+    fail "Toggle policy wiring guard failed"
+  fi
+elif [[ -f "$TOGGLE_POLICY_GUARD" ]]; then
+  echo "[FAIL] Toggle policy guard not executable: $TOGGLE_POLICY_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing toggle policy guard: $TOGGLE_POLICY_GUARD (setup error)" >&2
+  exit 2
+fi
+
 # =============================================================================
 # Tier 2: Fast checks (<30s)
 # =============================================================================
@@ -252,6 +268,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
   "plans/tests/test_workflow_quick_step.sh"
+  "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
