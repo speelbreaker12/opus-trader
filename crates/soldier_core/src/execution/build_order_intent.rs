@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::risk::RiskState;
 
-use super::reject_reason::{RejectReasonCode, reject_reason_from_chokepoint};
+use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
 // --- Intent class --------------------------------------------------------
 
@@ -346,11 +346,14 @@ pub fn build_order_intent_with_reject_reason_code(
     risk_state: RiskState,
     metrics: &mut ChokeMetrics,
     gate_results: &GateResults,
+    gate_reject_codes: &GateRejectCodes,
 ) -> (ChokeResult, Option<RejectReasonCode>) {
     let result = build_order_intent(intent_class, risk_state, metrics, gate_results);
     let code = match &result {
         ChokeResult::Approved { .. } => None,
-        ChokeResult::Rejected { reason, .. } => Some(reject_reason_from_chokepoint(reason)),
+        ChokeResult::Rejected { reason, .. } => {
+            Some(reject_reason_from_chokepoint(reason, gate_reject_codes))
+        }
     };
     (result, code)
 }

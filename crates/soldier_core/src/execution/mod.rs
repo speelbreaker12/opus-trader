@@ -58,7 +58,7 @@ pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
 };
 pub use reject_reason::{
-    RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
+    GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
     reject_reason_registry_contains,
 };
 pub use tlsm::{Tlsm, TlsmEvent, TlsmState, TransitionResult};

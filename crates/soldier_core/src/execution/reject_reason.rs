@@ -30,6 +30,20 @@ pub enum RejectReasonCode {
     LabelTooLong,
 }
 
+/// Typed per-gate rejection codes produced by real gate evaluators.
+///
+/// The chokepoint only knows gate pass/fail booleans; this sidecar carries
+/// concrete gate causes so reject-reason code translation does not rely on
+/// brittle text matching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GateRejectCodes {
+    pub preflight: Option<RejectReasonCode>,
+    pub quantize: Option<RejectReasonCode>,
+    pub liquidity_gate: Option<RejectReasonCode>,
+    pub net_edge_gate: Option<RejectReasonCode>,
+    pub pricer: Option<RejectReasonCode>,
+}
+
 impl RejectReasonCode {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -97,31 +111,24 @@ pub fn reject_reason_registry_contains(code: RejectReasonCode) -> bool {
 }
 
 /// Map chokepoint rejection output to a contract registry token.
-pub fn reject_reason_from_chokepoint(reason: &ChokeRejectReason) -> RejectReasonCode {
+pub fn reject_reason_from_chokepoint(
+    reason: &ChokeRejectReason,
+    gate_reject_codes: &GateRejectCodes,
+) -> RejectReasonCode {
     match reason {
         ChokeRejectReason::RiskStateNotHealthy => RejectReasonCode::MarginHeadroomRejectOpens,
         ChokeRejectReason::GateRejected {
             gate: GateStep::Preflight,
-            reason,
-        } => {
-            if reason.contains("linked") {
-                RejectReasonCode::LinkedOrderTypeForbidden
-            } else if reason.contains("market") {
-                RejectReasonCode::OrderTypeMarketForbidden
-            } else {
-                RejectReasonCode::OrderTypeStopForbidden
-            }
-        }
+            ..
+        } => gate_reject_codes
+            .preflight
+            .unwrap_or(RejectReasonCode::OrderTypeStopForbidden),
         ChokeRejectReason::GateRejected {
             gate: GateStep::Quantize,
-            reason,
-        } => {
-            if reason.contains("too small") {
-                RejectReasonCode::TooSmallAfterQuantization
-            } else {
-                RejectReasonCode::InstrumentMetadataMissing
-            }
-        }
+            ..
+        } => gate_reject_codes
+            .quantize
+            .unwrap_or(RejectReasonCode::InstrumentMetadataMissing),
         ChokeRejectReason::GateRejected {
             gate: GateStep::DispatchConsistency,
             ..
@@ -132,28 +139,22 @@ pub fn reject_reason_from_chokepoint(reason: &ChokeRejectReason) -> RejectReason
         } => RejectReasonCode::RateLimitBrownout,
         ChokeRejectReason::GateRejected {
             gate: GateStep::LiquidityGate,
-            reason,
-        } => {
-            if reason.contains("no l2") {
-                RejectReasonCode::LiquidityGateNoL2
-            } else {
-                RejectReasonCode::ExpectedSlippageTooHigh
-            }
-        }
+            ..
+        } => gate_reject_codes
+            .liquidity_gate
+            .unwrap_or(RejectReasonCode::ExpectedSlippageTooHigh),
         ChokeRejectReason::GateRejected {
             gate: GateStep::NetEdgeGate,
-            reason,
-        } => {
-            if reason.contains("missing") {
-                RejectReasonCode::NetEdgeInputMissing
-            } else {
-                RejectReasonCode::NetEdgeTooLow
-            }
-        }
+            ..
+        } => gate_reject_codes
+            .net_edge_gate
+            .unwrap_or(RejectReasonCode::NetEdgeTooLow),
         ChokeRejectReason::GateRejected {
             gate: GateStep::Pricer,
             ..
-        } => RejectReasonCode::NetEdgeTooLow,
+        } => gate_reject_codes
+            .pricer
+            .unwrap_or(RejectReasonCode::NetEdgeTooLow),
         ChokeRejectReason::GateRejected {
             gate: GateStep::RecordedBeforeDispatch,
             ..

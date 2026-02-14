@@ -4,7 +4,7 @@ use soldier_core::execution::{
     ChokeIntentClass, ChokeRejectReason, ChokeResult, GateIntentClass, GateStep,
     IntentPipelineInput, IntentPipelineMetrics, L2BookSnapshot, L2Level, LiquidityGateInput,
     NetEdgeInput, OrderType, PreflightInput, PricerInput, PricerSide, QuantizeConstraints,
-    QuantizePipelineInput, Side, evaluate_intent_pipeline,
+    QuantizePipelineInput, RejectReasonCode, Side, evaluate_intent_pipeline,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use soldier_core::venue::InstrumentKind;
@@ -122,4 +122,34 @@ fn test_pipeline_open_missing_l2_rejected_at_liquidity_gate() {
         }
         other => panic!("expected Rejected at LiquidityGate, got {other:?}"),
     }
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::LiquidityGateNoL2)
+    );
+}
+
+#[test]
+fn test_pipeline_open_market_order_maps_preflight_reject_reason() {
+    let mut input = base_open_input();
+    input.preflight.order_type = OrderType::Market;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match result.decision {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(matches!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::Preflight,
+                    ..
+                }
+            ));
+            assert!(gate_trace.contains(&GateStep::Preflight));
+        }
+        other => panic!("expected Rejected at Preflight, got {other:?}"),
+    }
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::OrderTypeMarketForbidden)
+    );
 }
