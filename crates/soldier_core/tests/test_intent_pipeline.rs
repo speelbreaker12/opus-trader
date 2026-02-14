@@ -185,3 +185,42 @@ fn test_pipeline_capabilities_matrix_overrides_preflight_linked_flag() {
         other => panic!("expected Rejected at Preflight, got {other:?}"),
     }
 }
+
+#[test]
+fn test_pipeline_cancel_only_skips_preflight_and_quantize_side_effects() {
+    let mut input = base_open_input();
+    input.intent_class = ChokeIntentClass::CancelOnly;
+    input.preflight.order_type = OrderType::Market;
+    input.quantize.raw_qty = 0.0;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match result.decision {
+        ChokeResult::Approved { gate_trace } => {
+            assert_eq!(gate_trace, vec![GateStep::DispatchAuth]);
+        }
+        other => panic!("expected Approved cancel-only decision, got {other:?}"),
+    }
+
+    assert_eq!(metrics.preflight.reject_total(), 0);
+    assert_eq!(metrics.quantize.reject_too_small_total(), 0);
+}
+
+#[test]
+fn test_pipeline_open_degraded_skips_preflight_side_effects() {
+    let mut input = base_open_input();
+    input.risk_state = RiskState::Degraded;
+    input.preflight.order_type = OrderType::Market;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match result.decision {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
+            assert_eq!(gate_trace, vec![GateStep::DispatchAuth]);
+        }
+        other => panic!("expected DispatchAuth rejection, got {other:?}"),
+    }
+
+    assert_eq!(metrics.preflight.reject_total(), 0);
+}

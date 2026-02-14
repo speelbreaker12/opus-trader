@@ -1,6 +1,7 @@
 //! Execution types, sizing logic, dispatch mapping, quantization, labeling, and preflight.
 
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 pub mod build_order_intent;
 pub mod dispatch_map;
@@ -60,8 +61,10 @@ struct ExecutionTraceIds {
 
 thread_local! {
     static EXECUTION_TRACE_IDS: RefCell<Option<ExecutionTraceIds>> = const { RefCell::new(None) };
-    static EXECUTION_METRIC_LINES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static EXECUTION_METRIC_LINES: RefCell<VecDeque<String>> = const { RefCell::new(VecDeque::new()) };
 }
+
+const EXECUTION_METRIC_LINES_MAX: usize = 512;
 
 pub fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
 where
@@ -96,5 +99,11 @@ pub(crate) fn emit_execution_metric_line(metric_name: &str, tail_fields: &str) {
         line.push_str(tail_fields);
     }
     eprintln!("{line}");
-    EXECUTION_METRIC_LINES.with(|cell| cell.borrow_mut().push(line));
+    EXECUTION_METRIC_LINES.with(|cell| {
+        let mut lines = cell.borrow_mut();
+        lines.push_back(line);
+        if lines.len() > EXECUTION_METRIC_LINES_MAX {
+            let _ = lines.pop_front();
+        }
+    });
 }

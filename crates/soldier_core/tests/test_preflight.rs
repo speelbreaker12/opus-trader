@@ -1,6 +1,6 @@
 //! Tests for order-type preflight guard per CONTRACT.md §1.4.4.
 //!
-//! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915.
+//! AT-013, AT-016, AT-017, AT-018, AT-019, AT-913, AT-914, AT-915, AT-916.
 
 use soldier_core::execution::{
     OrderType, PostOnlyInput, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
@@ -321,6 +321,26 @@ fn test_at916_post_only_non_crossing_allowed() {
     };
     let mut m = PreflightMetrics::new();
     assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+}
+
+#[test]
+fn test_at916_post_only_sell_crossing_rejected() {
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Sell,
+            limit_price: 100.0,
+            best_ask: None,
+            best_bid: Some(100.0),
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(
+        preflight_intent(&input, &mut m),
+        PreflightResult::Rejected(PreflightReject::PostOnlyWouldCross)
+    );
 }
 
 // ─── Metrics ────────────────────────────────────────────────────────────
