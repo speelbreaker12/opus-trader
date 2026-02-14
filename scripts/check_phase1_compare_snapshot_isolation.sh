@@ -59,12 +59,15 @@ else
   OUTPUT_DIR="$(dirname "${OUTPUT_ARG}")"
 fi
 
+REPORT_JSON="${OUTPUT_DIR}/report.json"
+# Always evaluate fresh artifacts for this invocation.
+rm -f "${OUTPUT_ARG}" "${REPORT_JSON}"
+
 set +e
 python3 "${REPO_ROOT}/tools/phase1_compare.py" "${FILTERED_ARGS[@]}" --output "${OUTPUT_ARG}"
 phase1_compare_rc=$?
 set -e
 
-REPORT_JSON="${OUTPUT_DIR}/report.json"
 if [[ ! -f "${REPORT_JSON}" ]]; then
   echo "[snapshot_smoke] ERROR: expected report JSON at ${REPORT_JSON}" >&2
   exit 1

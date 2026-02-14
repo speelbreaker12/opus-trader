@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -395,6 +396,54 @@ class CollectRepoResultTests(unittest.TestCase):
             _, _, ref_arg = gather_mock.call_args.args
             self.assertEqual(ref_arg, result.resolved_ref_sha)
             self.assertNotEqual(ref_arg, "HEAD~1")
+
+
+class SnapshotIsolationSmokeScriptTests(unittest.TestCase):
+    def test_stale_report_json_is_not_reused_when_phase1_compare_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            output_md = base / "report.md"
+            stale_report = base / "report.json"
+            stale_report.write_text(
+                json.dumps(
+                    {
+                        "opus": {
+                            "is_ref_head": False,
+                            "path": "/tmp/stale-opus",
+                            "analysis_path": "/tmp/stale-opus-snapshot",
+                        },
+                        "ralph": {
+                            "is_ref_head": False,
+                            "path": "/tmp/stale-ralph",
+                            "analysis_path": "/tmp/stale-ralph-snapshot",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            missing_repo = base / "does-not-exist"
+            repo_root = Path(__file__).resolve().parents[2]
+            script = repo_root / "scripts" / "check_phase1_compare_snapshot_isolation.sh"
+
+            result = subprocess.run(
+                [
+                    str(script),
+                    "--opus",
+                    str(missing_repo),
+                    "--ralph",
+                    str(missing_repo),
+                    "--skip-meta-test",
+                    "--output",
+                    str(output_md),
+                ],
+                cwd=repo_root,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("expected report JSON", result.stderr)
 
 
 if __name__ == "__main__":
