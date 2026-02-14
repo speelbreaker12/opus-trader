@@ -27,6 +27,8 @@ plans/crossref_ci_strict
 plans/crossref_execution_invariants.yaml
 plans/crossref_gate.sh
 plans/evidence_sources.txt
+plans/fork_attestation_mirror.sh
+plans/fork_attestation_remediation_verify.sh
 plans/global_manual_allowlist.json
 plans/init.sh
 plans/kimi_review_logged.sh
@@ -50,6 +52,7 @@ plans/preflight.sh
 plans/readme_ci_parity_check.sh
 plans/review_resolution_template.md
 plans/schemas/crossref_execution_invariants.schema.json
+plans/schemas/fork_attestation_remediation.schema.json
 plans/schemas/verify_checkpoint.schema.json
 plans/self_review_logged.sh
 plans/slice_completion_enforce.sh
@@ -72,6 +75,8 @@ plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
+plans/tests/test_fork_attestation_mirror.sh
+plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_kimi_review_logged.sh
 plans/tests/test_pr_gate.sh
@@ -88,8 +93,11 @@ plans/tests/test_story_review_equivalence_check.sh
 plans/tests/test_story_review_findings_guard.sh
 plans/tests/test_story_review_gate.sh
 plans/tests/test_thinking_review_logged.sh
+plans/tests/test_toggle_policy_check.sh
 plans/tests/test_workflow_allowlist_coverage.sh
+plans/tests/test_workflow_quick_step.sh
 plans/thinking_review_logged.sh
+plans/toggle_policy_check.sh
 plans/validate_crossref_invariants.py
 plans/verify.sh
 plans/verify_day.sh
@@ -98,6 +106,7 @@ plans/verify_gate_contract_check.sh
 plans/workflow_contract_gate.sh
 plans/workflow_contract_map.json
 plans/workflow_files_allowlist.txt
+plans/workflow_quick_step.sh
 plans/workflow_verify.sh
 scripts/build_contract_kernel.py
 scripts/check_arch_flows.py

@@ -29,12 +29,16 @@ check_script "plans/thinking_review_logged.sh"
 check_script "plans/codex_review_digest.sh"
 check_script "plans/pr_gate.sh"
 check_script "plans/pre_pr_review_gate.sh"
+check_script "plans/fork_attestation_mirror.sh"
+check_script "plans/fork_attestation_remediation_verify.sh"
 check_script "plans/prd_set_pass.sh"
 check_script "plans/self_review_logged.sh"
 check_script "plans/story_postmortem_logged.sh"
 check_script "plans/story_review_gate.sh"
 check_script "plans/story_review_equivalence_check.sh"
 check_script "plans/stoic_cli_invariant_check.sh"
+check_script "plans/workflow_quick_step.sh"
+check_script "plans/toggle_policy_check.sh"
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick

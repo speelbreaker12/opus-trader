@@ -46,6 +46,8 @@ required=(
   plans/contract_coverage_matrix.py
   plans/contract_coverage_promote.sh
   plans/contract_review_validate.sh
+  plans/fork_attestation_mirror.sh
+  plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/kimi_review_logged.sh
   plans/legacy_layout_guard.sh
@@ -61,11 +63,13 @@ required=(
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
   plans/review_resolution_template.md
+  plans/schemas/fork_attestation_remediation.schema.json
   plans/self_review_logged.sh
   plans/slice_completion_enforce.sh
   plans/slice_completion_review_guard.sh
   plans/slice_review_gate.sh
   plans/stoic_cli_invariant_check.sh
+  plans/toggle_policy_check.sh
   plans/ssot_lint.sh
   plans/story_postmortem_logged.sh
   plans/story_review_equivalence_check.sh
@@ -81,6 +85,8 @@ required=(
   plans/tests/test_contract_profile_parity.sh
   plans/tests/test_code_review_expert_logged.sh
   plans/tests/test_guard_no_command_substitution.sh
+  plans/tests/test_fork_attestation_mirror.sh
+  plans/tests/test_fork_attestation_remediation_verify.sh
   plans/tests/test_kimi_review_logged.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
@@ -95,12 +101,15 @@ required=(
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_story_review_gate.sh
   plans/tests/test_thinking_review_logged.sh
+  plans/tests/test_workflow_quick_step.sh
+  plans/tests/test_toggle_policy_check.sh
   plans/thinking_review_logged.sh
   plans/verify.sh
   plans/verify_day.sh
   plans/verify_gate_contract_check.sh
   plans/workflow_contract_gate.sh
   plans/workflow_contract_map.json
+  plans/workflow_quick_step.sh
   plans/workflow_verify.sh
   scripts/build_contract_kernel.py
   scripts/check_arch_flows.py
