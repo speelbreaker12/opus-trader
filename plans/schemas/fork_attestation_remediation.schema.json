@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "fork_attestation_remediation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "pr_number",
+    "story_id",
+    "mirror_branch",
+    "mirror_head_sha",
+    "attestation_commit_sha",
+    "remediated_by",
+    "remediated_at_utc"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "pr_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "story_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mirror_branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mirror_head_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "attestation_commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "remediated_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "remediated_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}
