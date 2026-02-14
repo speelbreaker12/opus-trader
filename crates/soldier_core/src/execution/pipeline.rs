@@ -180,11 +180,11 @@ pub fn evaluate_intent_pipeline(
                             LiquidityGateRejectReason::LiquidityGateNoL2 => {
                                 RejectReasonCode::LiquidityGateNoL2
                             }
-                            LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
-                                RejectReasonCode::ExpectedSlippageTooHigh
-                            }
                             LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
                                 RejectReasonCode::InsufficientDepthWithinBudget
+                            }
+                            LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
+                                RejectReasonCode::ExpectedSlippageTooHigh
                             }
                         });
                         false

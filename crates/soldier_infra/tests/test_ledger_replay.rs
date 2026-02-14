@@ -6,7 +6,11 @@
 //! AT-234: crash after fill → detect fill on replay.
 
 use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
-use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
+use soldier_infra::store::{
+    IntentRecord, LedgerAppendError, LedgerMetrics, LedgerTransitionSink, TlsState, WalLedger,
+};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Helper: build a minimal intent record.
 fn intent(hash: &str, group_id: &str, leg_idx: u32, state: TlsState) -> IntentRecord {
@@ -26,6 +30,22 @@ fn intent(hash: &str, group_id: &str, leg_idx: u32, state: TlsState) -> IntentRe
         exchange_order_id: None,
         last_trade_id: None,
     }
+}
+
+fn temp_wal_path(tag: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock before unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "soldier_ledger_{tag}_{}_{}.jsonl",
+        std::process::id(),
+        nanos
+    ))
+}
+
+fn remove_if_exists(path: &Path) {
+    let _ = std::fs::remove_file(path);
 }
 
 // ─── Basic append + lookup ──────────────────────────────────────────────
@@ -102,6 +122,7 @@ fn test_at906_write_error_counter_increments() {
     let r3 = intent("hash3", "g3", 0, TlsState::Created);
     let _ = ledger.append(r3, &mut m);
     assert_eq!(m.wal_write_errors(), 2);
+    assert_eq!(m.wal_queue_enqueue_failures(), 2);
 }
 
 #[test]
@@ -206,6 +227,56 @@ fn test_update_state_transitions() {
 }
 
 #[test]
+fn test_mark_sent_updates_sent_ts_and_state() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+    let mut record = intent("hash1", "g1", 0, TlsState::Created);
+    record.sent_ts = 0;
+
+    let _ = ledger.append(record, &mut m);
+    ledger.mark_sent("hash1", 2222, &mut m).unwrap();
+
+    let stored = ledger.get("hash1").unwrap();
+    assert_eq!(stored.sent_ts, 2222);
+    assert_eq!(stored.tls_state, TlsState::Sent);
+    assert!(ledger.was_sent("hash1"));
+}
+
+#[test]
+fn test_tlsm_transition_sink_updates_ledger_state() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+
+    {
+        let mut sink = LedgerTransitionSink::new(&mut ledger, &mut m, "hash1");
+        let mut tlsm = Tlsm::new();
+        let _ = tlsm
+            .apply_with_sink(TlsmEvent::Sent, &mut sink)
+            .expect("ledger sink append should succeed");
+        assert!(sink.last_error().is_none());
+    }
+
+    assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
+}
+
+#[test]
+fn test_tlsm_transition_sink_failure_keeps_tlsm_state_unchanged() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+
+    // Sink points at a missing intent hash so update_state fails.
+    let mut sink = LedgerTransitionSink::new(&mut ledger, &mut m, "missing-hash");
+    let mut tlsm = Tlsm::new();
+    let result = tlsm.apply_with_sink(TlsmEvent::Sent, &mut sink);
+
+    assert!(result.is_err(), "sink failure should propagate");
+    assert_eq!(tlsm.state(), soldier_core::execution::TlsmState::Created);
+    assert!(sink.last_error().is_some());
+}
+
+#[test]
 fn test_update_state_unknown_hash_fails() {
     let mut ledger = WalLedger::new(10);
     let mut m = LedgerMetrics::new();
@@ -281,6 +352,29 @@ fn test_replay_mixed_states() {
     assert!(outcome.in_flight_hashes.contains(&"h1".to_string()));
     assert!(outcome.in_flight_hashes.contains(&"h2".to_string()));
     assert!(outcome.in_flight_hashes.contains(&"h5".to_string()));
+}
+
+#[test]
+fn test_replay_round_trip_from_durable_storage() {
+    let wal_path = temp_wal_path("round_trip");
+
+    {
+        let mut ledger = WalLedger::with_storage_path(10, &wal_path).expect("create wal");
+        let mut m = LedgerMetrics::new();
+        let _ = ledger.append(intent("h1", "g1", 0, TlsState::Created), &mut m);
+        let _ = ledger.append(intent("h2", "g2", 0, TlsState::Sent), &mut m);
+        let _ = ledger.update_state("h2", TlsState::Acked, &mut m);
+        let _ = ledger.mark_sent("h1", 3000, &mut m);
+    }
+
+    {
+        let ledger = WalLedger::with_storage_path(10, &wal_path).expect("reload wal");
+        assert_eq!(ledger.replay().records_replayed, 2);
+        assert_eq!(ledger.get("h2").unwrap().tls_state, TlsState::Acked);
+        assert_eq!(ledger.get("h1").unwrap().sent_ts, 3000);
+    }
+
+    remove_if_exists(&wal_path);
 }
 
 // ─── Terminal states ────────────────────────────────────────────────────
@@ -492,6 +586,7 @@ fn test_queue_full_returns_immediately() {
     let result = ledger.append(r, &mut m);
     assert_eq!(result, Err(LedgerAppendError::QueueFull));
     assert_eq!(m.wal_write_errors(), 1);
+    assert_eq!(m.wal_queue_enqueue_failures(), 1);
 }
 
 // ─── TLSM ↔ WAL whitelist sync ──────────────────────────────────────────

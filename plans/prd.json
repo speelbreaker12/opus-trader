@@ -2367,9 +2367,9 @@
       "phase": 1,
       "slice": 4,
       "slice_ref": "Slice 4 \u2014 Durable WAL \\+ TLSM \\+ Trade\u2011ID Registry",
-      "story_ref": "S4.1 WAL append + replay no-resend",
+      "story_ref": "S4.1 WAL append + replay exactly-once restart dispatch",
       "category": "durability",
-      "description": "Persist intents to a durable WAL and replay without resending after crash.",
+      "description": "Persist intents to a durable WAL and replay unsent intents exactly once after reconciliation, without duplicate resend.",
       "contract_refs": [
         "CONTRACT.md 2.4 Durable Intent Ledger (WAL Truth Source)",
         "CONTRACT.md \u00a72.4.1 WAL Writer Isolation (Hot Loop Protection)",
@@ -2384,7 +2384,7 @@
         "VR-014"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md \u00a7Slice 4 \u2014 Durable WAL \\+ TLSM \\+ Trade\u2011ID Registry / S4.1 \u2014 WAL append \\+ replay no-resend"
+        "IMPLEMENTATION_PLAN.md \u00a7Slice 4 \u2014 Durable WAL \\+ TLSM \\+ Trade\u2011ID Registry / S4.1 \u2014 WAL append \\+ replay exactly-once restart dispatch"
       ],
       "scope": {
         "touch": [
@@ -2398,8 +2398,9 @@
         ]
       },
       "acceptance": [
-        "GIVEN an intent is appended to the durable ledger before dispatch WHEN the system restarts THEN the intent is not resent.",
-        "GIVEN the system restarts WHEN reconstructing state from the durable ledger THEN in-flight intents are rebuilt without duplicate dispatch.",
+        "GIVEN a crash occurs after RecordedBeforeDispatch and before any send WHEN the system restarts and reconciliation confirms no open order/trade for the label THEN the intent is dispatched exactly once and sent_ts is recorded.",
+        "GIVEN sent_ts is recorded after restart #1 WHEN the system restarts again and reconciliation runs THEN no second dispatch occurs for the same intent.",
+        "GIVEN the system restarts WHEN reconstructing state from the durable ledger THEN in-flight intents are rebuilt for reconciliation without duplicate dispatch.",
         "GIVEN a recorded intent WHEN persisted THEN the record includes intent_hash, group_id, leg_idx, instrument, side, qty_steps or qty_q, limit_price_q or price_ticks, tls_state, created_ts, sent_ts, ack_ts, last_fill_ts, and exchange_order_id when available.",
         "GIVEN ledger append fails WHEN dispatch is attempted THEN the OPEN intent is rejected and the error counter increments.",
         "GIVEN the ledger writer queue is full WHEN an append is attempted THEN the append returns immediately with an error (hot loop not blocked)."
@@ -2409,7 +2410,7 @@
         "Wire the store module into crates/soldier_infra/src/lib.rs.",
         "Record intents before dispatch (RecordedBeforeDispatch) and mark replay outcomes.",
         "Define the minimum persisted intent schema in ledger storage comments and enforce it in the record struct.",
-        "Add unit tests in crates/soldier_infra/tests/test_ledger_replay.rs for no-resend after crash.",
+        "Add unit tests in crates/soldier_infra/tests/test_ledger_replay.rs for exactly-once dispatch across two restarts.",
         "Document WAL initialization and replay expectations in module-level comments."
       ],
       "verify": [
@@ -3754,14 +3755,14 @@
         ]
       },
       "acceptance": [
-        "GIVEN test_crash_mid_intent_no_duplicate_dispatch runs WHEN process crashes before dispatch THEN restart produces no dispatch.",
+        "GIVEN test_at935_unsent_dispatches_exactly_once_across_two_restarts runs WHEN process crashes before dispatch THEN restart #1 dispatches once after reconciliation and restart #2 produces no extra dispatch.",
         "GIVEN crash occurs mid-intent THEN no ghost state or unsafe opens on restart.",
         "IF AUTO test not feasible THEN evidence/phase1/crash_mid_intent/drill.md documents manual drill with proof logs."
       ],
       "steps": [
         "Create crates/soldier_infra/tests/test_crash_mid_intent.rs (preferred AUTO).",
-        "Implement test_crash_mid_intent_no_duplicate_dispatch simulating crash before dispatch.",
-        "Assert: no dispatch on restart, no side effects beyond counters/logs.",
+        "Implement test_at935_unsent_dispatches_exactly_once_across_two_restarts simulating crash before dispatch.",
+        "Assert: restart #1 dispatches exactly once after reconciliation, restart #2 does not dispatch again, and no duplicate side effects occur.",
         "If AUTO not feasible, document manual drill in evidence/phase1/crash_mid_intent/drill.md.",
         "Include trigger, restart steps, and proof logs in drill doc."
       ],
@@ -3770,7 +3771,7 @@
         "cargo test -p soldier_infra --test test_crash_mid_intent"
       ],
       "evidence": [
-        "cargo test output showing test_crash_mid_intent_no_duplicate_dispatch PASS",
+        "cargo test output showing test_at935_unsent_dispatches_exactly_once_across_two_restarts PASS",
         "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof",
         "evidence/phase1/restart_loop/restart_100_cycles.log"
       ],

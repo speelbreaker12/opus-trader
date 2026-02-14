@@ -574,3 +574,31 @@ Summary: Completed OPUS-SUG-008 by porting structured execution telemetry into o
 Commands: cargo test -p soldier_core --test test_preflight --test test_liquidity_gate --test test_net_edge_gate --test test_gate_ordering.
 Evidence: crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/preflight.rs; crates/soldier_core/src/execution/gate.rs; crates/soldier_core/src/execution/gates.rs; crates/soldier_core/tests/test_preflight.rs; crates/soldier_core/tests/test_liquidity_gate.rs; crates/soldier_core/tests/test_net_edge_gate.rs; crates/soldier_core/tests/test_gate_ordering.rs.
 Next: Rerun focused cross-repo compare artifact refresh when needed.
+Story: slice4-contract-remediation
+Date: 2026-02-13
+Summary: Completed Slice 4 remediation bundle aligned to `AT-935`: updated PRD wording/evidence for exact restart semantics, switched WAL storage to append-only events with replay reduction and fsync-backed JSONL persistence, added TLSM transition sink plumbing to persist accepted transitions, removed gate-9 bypass by introducing runtime RecordedBeforeDispatch gate adapters, and hardened trade-id registry with mutex-backed atomic insert-if-absent behavior plus concurrent same-ID race coverage.
+Commands: cargo fmt --all -- --check; confirm: cargo fmt --all; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh quick; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh full; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh quick; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh full; cargo test --workspace.
+Evidence: plans/prd.json; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/tlsm.rs; crates/soldier_core/tests/test_recorded_before_dispatch_gate.rs; crates/soldier_core/tests/test_tlsm.rs; crates/soldier_infra/src/store/ledger.rs; crates/soldier_infra/src/store/trade_id_registry.rs; crates/soldier_infra/src/wal.rs; crates/soldier_infra/tests/test_crash_mid_intent.rs; crates/soldier_infra/tests/test_dispatch_durability.rs; crates/soldier_infra/tests/test_ledger_replay.rs; crates/soldier_infra/tests/test_trade_id_registry.rs; artifacts/verify/20260213_171135; artifacts/verify/20260213_171433; artifacts/verify/20260213_172328; artifacts/verify/20260213_172741.
+Notes: On current `origin/main`, `crates/soldier_core/src/execution/pipeline.rs` does not exist, so the anti-bypass enforcement was implemented at the core intent-construction chokepoint via gate adapter traits and dedicated tests. Full verify passed locally; no dirty-tree bypass flags were used.
+Next: run story-specific review gates and pass flips only if owner wants explicit PRD `passes` updates in this branch.
+Story: slice4-contract-remediation
+Date: 2026-02-13
+Summary: Applied high-value sync-from-ralph delta for Trade-ID durability: added file-backed `TradeIdRegistry::with_storage_path(...)` with JSONL replay, fail-closed corrupt-file handling, duplicate-on-disk detection, and fsync-backed append-before-apply persistence under the existing mutex critical section; preserved existing in-memory API for non-durable callsites.
+Commands: cargo fmt --all -- --check; confirm: cargo fmt --all; cargo test -p soldier_infra --test test_trade_id_registry; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh quick.
+Evidence: crates/soldier_infra/src/store/trade_id_registry.rs; crates/soldier_infra/tests/test_trade_id_registry.rs; artifacts/verify/20260213_180427.
+Notes: Added durable restart and corruption tests (`test_durable_registry_persists_across_restart`, `test_durable_registry_fails_closed_on_corrupt_file`) to prove persistence and fail-closed semantics.
+Next: continue sync-from-ralph deltas by deciding whether to adopt fallible TLSM append semantics (`Result`-returning sink) and/or durable gate wiring at the chokepoint callsites.
+Story: slice4-contract-remediation
+Date: 2026-02-13
+Summary: Tightened gate-9 ordering semantics for runtime WAL adapters: `build_order_intent_with_wal_gate` no longer performs WAL append before gate evaluation; it now calls WAL append exactly at gate 9 after prior gates pass (risk/preflight/quantize/etc), preserving deterministic gate ordering and avoiding side effects on early rejection paths.
+Commands: cargo fmt --all -- --check; confirm: cargo fmt --all; cargo test -p soldier_core --test test_recorded_before_dispatch_gate; cargo test -p soldier_core --test test_gate_ordering; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh quick.
+Evidence: crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/tests/test_recorded_before_dispatch_gate.rs; artifacts/verify/20260213_181515.
+Notes: Added explicit tests proving WAL gate adapter is not invoked when risk-state or preflight gates reject early.
+Next: decide whether to ignore external auto-review snapshot `auto-review-c8f17643` (its reject-reason findings target files absent in this worktree) or cherry-pick only if owner wants broader non-slice4 reject-reason work.
+Story: slice4-contract-remediation
+Date: 2026-02-13
+Summary: Adopted fallible TLSM transition persistence semantics: `TlsmTransitionSink::append_transition` now returns `Result`, `Tlsm::apply_with_sink` propagates persistence failures as `TlsmError::PersistFailed`, and transition/state mutation is now atomic (state/history update only after sink append succeeds). Infra `LedgerTransitionSink` now returns append failures to caller while preserving diagnostic `last_error`.
+Commands: cargo fmt --all -- --check; cargo test -p soldier_core --test test_tlsm; cargo test -p soldier_infra --test test_ledger_replay; env PREFLIGHT_TIMEOUT=900s ./plans/verify.sh quick.
+Evidence: crates/soldier_core/src/execution/tlsm.rs; crates/soldier_core/src/execution/mod.rs; crates/soldier_core/tests/test_tlsm.rs; crates/soldier_infra/src/store/ledger.rs; crates/soldier_infra/tests/test_ledger_replay.rs; artifacts/verify/20260213_182520.
+Notes: Added explicit atomicity tests (`test_sink_failure_is_atomic_no_state_change`, `test_tlsm_transition_sink_failure_keeps_tlsm_state_unchanged`) to prove no local state transition occurs when WAL append path fails.
+Next: if desired, extend this fail-closed pattern to a stricter end-to-end caller contract so production callsites cannot ignore `apply_with_sink` errors.

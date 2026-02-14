@@ -12,6 +12,7 @@
 //! AT-935, AT-906.
 
 use crate::store::{IntentRecord, LedgerAppendError, LedgerMetrics, WalLedger};
+use soldier_core::execution::RecordedBeforeDispatchGate;
 use std::time::Instant;
 
 // ─── Configuration ──────────────────────────────────────────────────────
@@ -76,6 +77,60 @@ impl BarrierMetrics {
 impl Default for BarrierMetrics {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// --- Core gate adapter --------------------------------------------------
+
+/// Adapter that lets core chokepoint gate 9 call into infra durable append.
+///
+/// The adapter is single-use by default: one append attempt consumes
+/// `record_to_append`. Callers can provide a new record via `set_record`.
+pub struct DurableWalGate<'a> {
+    pub ledger: &'a mut WalLedger,
+    pub config: &'a WalBarrierConfig,
+    pub ledger_metrics: &'a mut LedgerMetrics,
+    pub barrier_metrics: &'a mut BarrierMetrics,
+    record_to_append: Option<IntentRecord>,
+}
+
+impl<'a> DurableWalGate<'a> {
+    pub fn new(
+        ledger: &'a mut WalLedger,
+        config: &'a WalBarrierConfig,
+        ledger_metrics: &'a mut LedgerMetrics,
+        barrier_metrics: &'a mut BarrierMetrics,
+        record_to_append: IntentRecord,
+    ) -> Self {
+        Self {
+            ledger,
+            config,
+            ledger_metrics,
+            barrier_metrics,
+            record_to_append: Some(record_to_append),
+        }
+    }
+
+    pub fn set_record(&mut self, record: IntentRecord) {
+        self.record_to_append = Some(record);
+    }
+}
+
+impl RecordedBeforeDispatchGate for DurableWalGate<'_> {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        let record = self
+            .record_to_append
+            .take()
+            .ok_or_else(|| "durable wal gate missing record".to_string())?;
+        durable_append(
+            self.ledger,
+            record,
+            self.config,
+            self.ledger_metrics,
+            self.barrier_metrics,
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
     }
 }
 

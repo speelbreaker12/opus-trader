@@ -3,8 +3,11 @@
 //! AT-935: RecordedBeforeDispatch + restart → dispatch exactly once.
 //! AT-906: WAL enqueue failure blocks OPEN; hot loop continues.
 
+use soldier_core::execution::RecordedBeforeDispatchGate;
 use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
-use soldier_infra::wal::{BarrierMetrics, DurableAppendResult, WalBarrierConfig, durable_append};
+use soldier_infra::wal::{
+    BarrierMetrics, DurableAppendResult, DurableWalGate, WalBarrierConfig, durable_append,
+};
 
 /// Helper: build a minimal intent record.
 fn intent(hash: &str) -> IntentRecord {
@@ -125,6 +128,7 @@ fn test_queue_full_returns_error_not_block() {
     let r2 = durable_append(&mut ledger, intent("h2"), &config, &mut lm, &mut bm);
     assert_eq!(r2, Err(LedgerAppendError::QueueFull));
     assert_eq!(lm.wal_write_errors(), 1);
+    assert_eq!(lm.wal_queue_enqueue_failures(), 1);
 }
 
 #[test]
@@ -138,9 +142,11 @@ fn test_queue_full_increments_wal_write_errors() {
 
     let _ = durable_append(&mut ledger, intent("h1"), &config, &mut lm, &mut bm);
     assert_eq!(lm.wal_write_errors(), 1);
+    assert_eq!(lm.wal_queue_enqueue_failures(), 1);
 
     let _ = durable_append(&mut ledger, intent("h2"), &config, &mut lm, &mut bm);
     assert_eq!(lm.wal_write_errors(), 2);
+    assert_eq!(lm.wal_queue_enqueue_failures(), 2);
 }
 
 #[test]
@@ -221,4 +227,20 @@ fn test_mixed_barrier_configs() {
 
     assert_eq!(lm.appends_total(), 2);
     assert_eq!(bm.barrier_wait_count(), 1); // only the second had barrier
+}
+
+#[test]
+fn test_core_wal_gate_adapter_calls_durable_append() {
+    let mut ledger = WalLedger::new(10);
+    let mut lm = LedgerMetrics::new();
+    let mut bm = BarrierMetrics::new();
+    let config = WalBarrierConfig::default();
+    let record = intent("gate-adapter");
+
+    let mut gate = DurableWalGate::new(&mut ledger, &config, &mut lm, &mut bm, record);
+    gate.record_before_dispatch()
+        .expect("gate append should pass");
+
+    assert!(ledger.get("gate-adapter").is_some());
+    assert_eq!(lm.appends_total(), 1);
 }
