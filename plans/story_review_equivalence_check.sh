@@ -27,8 +27,10 @@ expected_ids=(
   kimi_review_for_head
   codex_two_reviews
   code_review_expert_complete
+  code_review_expert_no_placeholders
   resolution_blocking_cleared
   resolution_reference_consistency
+  resolution_codex_distinct_artifacts
   evidence_head_consistency
 )
 

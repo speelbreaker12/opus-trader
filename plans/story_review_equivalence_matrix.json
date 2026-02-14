@@ -30,6 +30,12 @@
     "verifier_check": "story_review_gate.sh checks status COMPLETE and canonical skill path"
   },
   {
+    "id": "code_review_expert_no_placeholders",
+    "gate_requirement": "code-review-expert review does not contain unresolved placeholder findings text",
+    "attested_field": "artifacts/story/<STORY_ID>/code_review_expert/*_review.md",
+    "verifier_check": "story_review_gate.sh rejects placeholder finding tokens"
+  },
+  {
     "id": "resolution_blocking_cleared",
     "gate_requirement": "Resolution asserts blocking addressed and remaining findings are zero",
     "attested_field": "artifacts/story/<STORY_ID>/review_resolution.md",
@@ -40,6 +46,12 @@
     "gate_requirement": "Resolution references Kimi/Codex/code-review-expert artifacts that exist and match head/story",
     "attested_field": "artifacts/story/<STORY_ID>/review_resolution.md + referenced files",
     "verifier_check": "story_review_gate.sh validates referenced paths and head/story consistency"
+  },
+  {
+    "id": "resolution_codex_distinct_artifacts",
+    "gate_requirement": "Resolution references two distinct Codex artifacts for final and second review slots",
+    "attested_field": "artifacts/story/<STORY_ID>/review_resolution.md",
+    "verifier_check": "story_review_gate.sh enforces codex reference paths are not identical"
   },
   {
     "id": "evidence_head_consistency",

@@ -189,7 +189,7 @@ fi
 # 3ea. Story-review equivalence matrix guard (fail-closed)
 STORY_REVIEW_EQUIVALENCE_GUARD="plans/story_review_equivalence_check.sh"
 if [[ -x "$STORY_REVIEW_EQUIVALENCE_GUARD" ]]; then
-  if "$STORY_REVIEW_EQUIVALENCE_GUARD" >/dev/null; then
+  if "$STORY_REVIEW_EQUIVALENCE_GUARD"; then
     pass "Story-review equivalence matrix guard"
   else
     fail "Story-review equivalence matrix guard failed"
