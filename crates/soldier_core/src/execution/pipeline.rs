@@ -5,6 +5,7 @@
 //! finally the chokepoint gate-order evaluator.
 
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState, evaluate_fee_staleness};
+use crate::venue::{BotFeatureFlags, VenueCapabilities, evaluate_capabilities};
 
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, LiquidityGateInput,
@@ -31,6 +32,8 @@ pub struct IntentPipelineInput<'a> {
     pub intent_class: ChokeIntentClass,
     pub risk_state: RiskState,
     pub preflight: PreflightInput<'a>,
+    pub venue_capabilities: VenueCapabilities,
+    pub bot_feature_flags: BotFeatureFlags,
     pub quantize: QuantizePipelineInput,
     pub dispatch_consistency_passed: bool,
     pub fee_snapshot: FeeCacheSnapshot,
@@ -79,48 +82,74 @@ pub fn evaluate_intent_pipeline(
     input: &IntentPipelineInput<'_>,
     metrics: &mut IntentPipelineMetrics,
 ) -> PipelineResult {
-    let preflight_result = preflight_intent(&input.preflight, &mut metrics.preflight);
-    let (preflight_passed, preflight_reject_code) = match preflight_result {
-        PreflightResult::Allowed => (true, None),
-        PreflightResult::Rejected(reason) => (
-            false,
-            Some(match reason {
-                PreflightReject::OrderTypeMarketForbidden => {
-                    RejectReasonCode::OrderTypeMarketForbidden
-                }
-                PreflightReject::OrderTypeStopForbidden => RejectReasonCode::OrderTypeStopForbidden,
-                PreflightReject::LinkedOrderTypeForbidden => {
-                    RejectReasonCode::LinkedOrderTypeForbidden
-                }
-            }),
-        ),
-    };
+    let evaluated_caps = evaluate_capabilities(&input.venue_capabilities, &input.bot_feature_flags);
+    let mut preflight_input = input.preflight.clone();
+    preflight_input.linked_orders_allowed = evaluated_caps.linked_orders_allowed;
 
-    let quantize_result = quantize(
-        input.quantize.raw_qty,
-        input.quantize.raw_limit_price,
-        input.quantize.side,
-        &input.quantize.constraints,
-        &mut metrics.quantize,
-    );
-    let (quantize_passed, quantize_reject_code) = match quantize_result {
-        Ok(_) => (true, None),
-        Err(reason) => (
-            false,
-            Some(match reason {
-                QuantizeError::TooSmallAfterQuantization { .. } => {
-                    RejectReasonCode::TooSmallAfterQuantization
-                }
-                QuantizeError::InstrumentMetadataMissing { .. }
-                | QuantizeError::InvalidInput { .. } => RejectReasonCode::InstrumentMetadataMissing,
-            }),
-        ),
-    };
+    // Mirror chokepoint early-exit behavior so downstream gate metrics are not
+    // emitted for intents that never reach those gates.
+    let dispatch_auth_short_circuit = input.intent_class == ChokeIntentClass::CancelOnly
+        || (input.intent_class == ChokeIntentClass::Open && input.risk_state != RiskState::Healthy);
 
-    let fee_eval = evaluate_fee_staleness(&input.fee_snapshot, &input.fee_config);
-    let fee_cache_passed = fee_eval.risk_state == RiskState::Healthy;
-    if !fee_cache_passed {
-        metrics.fee.record_refresh_fail();
+    let mut preflight_passed = true;
+    let mut preflight_reject_code = None;
+    let mut quantize_passed = true;
+    let mut quantize_reject_code = None;
+    let mut fee_cache_passed = true;
+
+    if !dispatch_auth_short_circuit {
+        let preflight_result = preflight_intent(&preflight_input, &mut metrics.preflight);
+        (preflight_passed, preflight_reject_code) = match preflight_result {
+            PreflightResult::Allowed => (true, None),
+            PreflightResult::Rejected(reason) => (
+                false,
+                Some(match reason {
+                    PreflightReject::OrderTypeMarketForbidden => {
+                        RejectReasonCode::OrderTypeMarketForbidden
+                    }
+                    PreflightReject::OrderTypeStopForbidden => {
+                        RejectReasonCode::OrderTypeStopForbidden
+                    }
+                    PreflightReject::LinkedOrderTypeForbidden => {
+                        RejectReasonCode::LinkedOrderTypeForbidden
+                    }
+                    PreflightReject::PostOnlyWouldCross => RejectReasonCode::PostOnlyWouldCross,
+                }),
+            ),
+        };
+
+        if preflight_passed {
+            let quantize_result = quantize(
+                input.quantize.raw_qty,
+                input.quantize.raw_limit_price,
+                input.quantize.side,
+                &input.quantize.constraints,
+                &mut metrics.quantize,
+            );
+            (quantize_passed, quantize_reject_code) = match quantize_result {
+                Ok(_) => (true, None),
+                Err(reason) => (
+                    false,
+                    Some(match reason {
+                        QuantizeError::TooSmallAfterQuantization { .. } => {
+                            RejectReasonCode::TooSmallAfterQuantization
+                        }
+                        QuantizeError::InstrumentMetadataMissing { .. }
+                        | QuantizeError::InvalidInput { .. } => {
+                            RejectReasonCode::InstrumentMetadataMissing
+                        }
+                    }),
+                ),
+            };
+        }
+
+        if preflight_passed && quantize_passed && input.dispatch_consistency_passed {
+            let fee_eval = evaluate_fee_staleness(&input.fee_snapshot, &input.fee_config);
+            fee_cache_passed = fee_eval.risk_state == RiskState::Healthy;
+            if !fee_cache_passed {
+                metrics.fee.record_refresh_fail();
+            }
+        }
     }
 
     let mut liquidity_gate_passed = true;
@@ -130,7 +159,14 @@ pub fn evaluate_intent_pipeline(
     let mut net_edge_reject_code = None;
     let mut pricer_reject_code = None;
 
-    if input.intent_class == ChokeIntentClass::Open {
+    let open_path_active = input.intent_class == ChokeIntentClass::Open
+        && input.risk_state == RiskState::Healthy
+        && preflight_passed
+        && quantize_passed
+        && input.dispatch_consistency_passed
+        && fee_cache_passed;
+
+    if open_path_active {
         liquidity_gate_passed = match input.liquidity.as_ref() {
             Some(liquidity_input) => {
                 let liquidity_result =
@@ -145,6 +181,9 @@ pub fn evaluate_intent_pipeline(
                             LiquidityGateRejectReason::InsufficientDepthWithinBudget
                             | LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
                                 RejectReasonCode::ExpectedSlippageTooHigh
+                            }
+                            LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
+                                RejectReasonCode::InsufficientDepthWithinBudget
                             }
                         });
                         false

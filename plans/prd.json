@@ -2079,13 +2079,16 @@
       ],
       "scope": {
         "touch": [
+          "crates/soldier_core/src/execution/build_order_intent.rs",
           "crates/soldier_core/src/execution/mod.rs",
+          "crates/soldier_core/src/execution/pipeline.rs",
           "crates/soldier_core/src/execution/preflight.rs",
-          "crates/soldier_core/tests/test_preflight.rs"
+          "crates/soldier_core/tests/test_gate_ordering.rs",
+          "crates/soldier_core/tests/test_intent_pipeline.rs",
+          "crates/soldier_core/tests/test_preflight.rs",
+          "crates/soldier_core/tests/test_rejection_side_effects.rs"
         ],
-        "create": [
-          "crates/soldier_core/src/execution/order_type_guard.rs"
-        ],
+        "create": [],
         "avoid": [
           "crates/soldier_core/src/execution/dispatch_map.rs",
           "crates/soldier_core/src/execution/order_size.rs",
@@ -2102,9 +2105,11 @@
         "GIVEN intent construction via build_order_intent WHEN preflight runs THEN it is invoked through a single shared preflight entrypoint (no bypass)."
       ],
       "steps": [
-        "Create execution/preflight.rs and execution/order_type_guard.rs and wire them into crates/soldier_core/src/execution/mod.rs.",
+        "Create execution/preflight.rs and wire it into crates/soldier_core/src/execution/mod.rs.",
+        "Create execution/pipeline.rs and test_intent_pipeline.rs to prove preflight and capabilities are enforced through one runtime path.",
         "Implement preflight checks for options and futures/perps per contract, returning explicit rejection reasons.",
         "Reject any linked_order_type unless feature-flagged and capability-enabled (default false).",
+        "Integrate post-only crossing rejections into the preflight sequence and surface deterministic reject reasons.",
         "Add preflight_reject_total{reason} counter for rejects.",
         "Add unit tests in crates/soldier_core/tests/test_preflight.rs for market, stop, linked, and trigger requirements.",
         "Ensure preflight is invoked before any API dispatch path in the execution module.",

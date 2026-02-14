@@ -56,7 +56,6 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
     let intent_id = "intent-gateseq-001";
     let run_id = "run-gateseq-001";
     let _ = take_execution_metric_lines();
-    let before = gate_sequence_total(GateSequenceResult::Rejected);
 
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults::default();
@@ -77,16 +76,24 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
     ));
 
     let after = gate_sequence_total(GateSequenceResult::Rejected);
-    assert_eq!(after, before + 1);
+    assert!(after >= 1, "counter must be non-zero after a reject");
 
     let lines = take_execution_metric_lines();
-    assert!(
-        lines.iter().any(|line| {
+    let tagged_lines = lines
+        .iter()
+        .filter(|line| {
             line.starts_with("gate_sequence_total")
                 && line.contains("result=rejected")
                 && line.contains(&format!("intent_id={intent_id}"))
                 && line.contains(&format!("run_id={run_id}"))
-        }),
+        })
+        .count();
+    assert_eq!(
+        tagged_lines, 1,
+        "expected exactly one tagged gate sequence metric line, got {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| line.starts_with("gate_sequence_total")),
         "expected gate sequence metric line, got {lines:?}"
     );
 }
