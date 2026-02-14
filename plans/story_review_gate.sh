@@ -19,14 +19,29 @@ Requires (for HEAD):
   - artifacts/story/<ID>/kimi/*_review.md containing:
       - Story: <ID>
       - HEAD: <sha>
+      - Artifact Provenance: logger-v1
+      - Generator Script: plans/kimi_review_logged.sh
+      - Command Exit Code: 0
+      - Transcript SHA256: <sha256>
+      - transcript block between <<<REVIEW_TRANSCRIPT_BEGIN>>> / <<<REVIEW_TRANSCRIPT_END>>>
   - artifacts/story/<ID>/codex/*_review.md containing:
       - Story: <ID>
       - HEAD: <sha>
+      - Artifact Provenance: logger-v1
+      - Generator Script: plans/codex_review_logged.sh
+      - Command Exit Code: 0
+      - Transcript SHA256: <sha256>
+      - transcript block between <<<REVIEW_TRANSCRIPT_BEGIN>>> / <<<REVIEW_TRANSCRIPT_END>>>
     and at least 2 Codex review artifacts must match HEAD.
   - artifacts/story/<ID>/code_review_expert/*_review.md containing:
       - Story: <ID>
       - HEAD: <sha>
       - Review Status: COMPLETE
+      - Artifact Provenance: logger-v1
+      - Generator Script: plans/code_review_expert_logged.sh
+      - Content Source: template|from-file|from-stdin
+      - Findings SHA256: <sha256>
+      - findings block between <<<FINDINGS_BEGIN>>> / <<<FINDINGS_END>>>
   - artifacts/story/<ID>/review_resolution.md with:
       Story: <ID>
       HEAD: <sha>
@@ -51,6 +66,59 @@ require_fixed_line() {
   local expected="$2"
   local message="$3"
   grep -Fxq -- "$expected" "$file" || die "$message ($file)"
+}
+
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file" | awk '{print $1}'
+}
+
+extract_sha256_field() {
+  local file="$1"
+  local field="$2"
+  local label="$3"
+  local line=""
+
+  line="$(grep -E "^- ${field}: [0-9a-f]{64}$" "$file" | head -n 1 || true)"
+  [[ -n "$line" ]] || die "missing ${label} SHA256 marker '- ${field}: <sha256>' ($file)"
+  printf '%s\n' "${line#- ${field}: }"
+}
+
+verify_hashed_block() {
+  local file="$1"
+  local field="$2"
+  local start_marker="$3"
+  local end_marker="$4"
+  local label="$5"
+  local expected_hash=""
+  local actual_hash=""
+  local start_count=0
+  local end_count=0
+  local start_line=""
+  local end_line=""
+  local block_tmp=""
+
+  expected_hash="$(extract_sha256_field "$file" "$field" "$label")"
+
+  start_count="$(grep -Fxc -- "$start_marker" "$file" || true)"
+  end_count="$(grep -Fxc -- "$end_marker" "$file" || true)"
+  [[ "$start_count" == "1" ]] || die "${label} missing start marker '$start_marker' ($file)"
+  [[ "$end_count" == "1" ]] || die "${label} missing end marker '$end_marker' ($file)"
+
+  start_line="$(grep -Fn -- "$start_marker" "$file" | head -n 1 | cut -d: -f1)"
+  end_line="$(grep -Fn -- "$end_marker" "$file" | head -n 1 | cut -d: -f1)"
+  [[ "$end_line" -gt "$start_line" ]] || die "${label} marker order is invalid in $file"
+
+  block_tmp="$(mktemp)"
+  sed -n "$((start_line + 1)),$((end_line - 1))p" "$file" > "$block_tmp"
+  actual_hash="$(sha256_file "$block_tmp")"
+  rm -f "$block_tmp"
+
+  [[ "$actual_hash" == "$expected_hash" ]] || die "${label} hash mismatch ($file)"
 }
 
 canonical_path() {
@@ -248,6 +316,10 @@ if [[ -d "$kimi_dir" ]]; then
   done < <(find "$kimi_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
 fi
 [[ -n "$kimi_match" ]] || die "missing Kimi review artifact for HEAD=$REVIEW_HEAD_SHA in: $kimi_dir"
+require_fixed_line "$kimi_match" "- Artifact Provenance: logger-v1" "missing Kimi provenance marker"
+require_fixed_line "$kimi_match" "- Generator Script: plans/kimi_review_logged.sh" "missing Kimi generator script marker"
+require_fixed_line "$kimi_match" "- Command Exit Code: 0" "Kimi review command did not exit 0"
+verify_hashed_block "$kimi_match" "Transcript SHA256" "<<<REVIEW_TRANSCRIPT_BEGIN>>>" "<<<REVIEW_TRANSCRIPT_END>>>" "Kimi transcript"
 
 # ---------- Codex review(s) (must match HEAD) ----------
 codex_dir="$story_dir/codex"
@@ -261,6 +333,12 @@ if [[ -d "$codex_dir" ]]; then
   done < <(find "$codex_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
 fi
 [[ "${#codex_matches[@]}" -ge 2 ]] || die "need at least two Codex review artifacts for HEAD=$REVIEW_HEAD_SHA in: $codex_dir"
+for codex_file in "${codex_matches[@]}"; do
+  require_fixed_line "$codex_file" "- Artifact Provenance: logger-v1" "missing Codex provenance marker"
+  require_fixed_line "$codex_file" "- Generator Script: plans/codex_review_logged.sh" "missing Codex generator script marker"
+  require_fixed_line "$codex_file" "- Command Exit Code: 0" "Codex review command did not exit 0"
+  verify_hashed_block "$codex_file" "Transcript SHA256" "<<<REVIEW_TRANSCRIPT_BEGIN>>>" "<<<REVIEW_TRANSCRIPT_END>>>" "Codex transcript"
+done
 
 # ---------- Code-review-expert review (must match HEAD) ----------
 code_review_expert_dir="$story_dir/code_review_expert"
@@ -276,6 +354,11 @@ if [[ -d "$code_review_expert_dir" ]]; then
 fi
 [[ -n "$code_review_expert_match" ]] || die "missing code-review-expert review artifact for HEAD=$REVIEW_HEAD_SHA in: $code_review_expert_dir"
 grep -Fxq -- "- Review Status: COMPLETE" "$code_review_expert_match" || die "code-review-expert review must be marked '- Review Status: COMPLETE' ($code_review_expert_match)"
+require_fixed_line "$code_review_expert_match" "- Artifact Provenance: logger-v1" "missing code-review-expert provenance marker"
+require_fixed_line "$code_review_expert_match" "- Generator Script: plans/code_review_expert_logged.sh" "missing code-review-expert generator script marker"
+if ! grep -Eq '^- Content Source: (template|from-file|from-stdin)$' "$code_review_expert_match"; then
+  die "code-review-expert review missing valid '- Content Source: ...' marker ($code_review_expert_match)"
+fi
 for placeholder in \
   "- Blocking: <none | summary>" \
   "- Major: <none | summary>" \
@@ -284,6 +367,7 @@ for placeholder in \
     die "code-review-expert review contains unresolved placeholder '$placeholder' ($code_review_expert_match)"
   fi
 done
+verify_hashed_block "$code_review_expert_match" "Findings SHA256" "<<<FINDINGS_BEGIN>>>" "<<<FINDINGS_END>>>" "code-review-expert findings"
 
 # ---------- Resolution ----------
 res_file="$story_dir/review_resolution.md"

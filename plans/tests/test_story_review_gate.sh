@@ -28,6 +28,15 @@ expect_fail() {
   fi
 }
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file" | awk '{print $1}'
+}
+
 write_valid_case() {
   local base="$1"
   local story="$2"
@@ -41,6 +50,15 @@ write_valid_case() {
 
   mkdir -p "$self_dir" "$codex_dir" "$kimi_dir" "$code_review_expert_dir"
 
+  local codex_one_transcript="$story_dir/.codex_one_transcript.txt"
+  local codex_two_transcript="$story_dir/.codex_two_transcript.txt"
+  local kimi_transcript="$story_dir/.kimi_transcript.txt"
+  local expert_findings="$story_dir/.expert_findings.txt"
+  local codex_one_hash=""
+  local codex_two_hash=""
+  local kimi_hash=""
+  local expert_findings_hash=""
+
   cat > "$self_dir/20260209T000000Z_self_review.md" <<EOF
 # Self Review
 Story: $story
@@ -51,32 +69,93 @@ Checklist:
 - Strategic Failure Review: DONE
 EOF
 
+  cat > "$codex_one_transcript" <<'EOF'
+OpenAI Codex vfixture
+session id: codex-fixture-one
+finding: no blocking issues
+EOF
+  codex_one_hash="$(sha256_file "$codex_one_transcript")"
   cat > "$codex_dir/20260209T000000Z_review.md" <<EOF
 # Codex review
 - Story: $story
 - HEAD: $head_sha
+- Artifact Provenance: logger-v1
+- Generator Script: plans/codex_review_logged.sh
+- Command Exit Code: 0
+- Transcript SHA256: $codex_one_hash
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+EOF
+  cat "$codex_one_transcript" >> "$codex_dir/20260209T000000Z_review.md"
+  cat >> "$codex_dir/20260209T000000Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
+  cat > "$codex_two_transcript" <<'EOF'
+OpenAI Codex vfixture
+session id: codex-fixture-two
+finding: second pass complete
+EOF
+  codex_two_hash="$(sha256_file "$codex_two_transcript")"
   cat > "$codex_dir/20260209T000100Z_review.md" <<EOF
 # Codex review (second pass)
 - Story: $story
 - HEAD: $head_sha
+- Artifact Provenance: logger-v1
+- Generator Script: plans/codex_review_logged.sh
+- Command Exit Code: 0
+- Transcript SHA256: $codex_two_hash
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+EOF
+  cat "$codex_two_transcript" >> "$codex_dir/20260209T000100Z_review.md"
+  cat >> "$codex_dir/20260209T000100Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
+  cat > "$kimi_transcript" <<'EOF'
+TurnBegin(user_input="fixture")
+ToolCall(name="Shell")
+TextPart(text="No blocking findings")
+EOF
+  kimi_hash="$(sha256_file "$kimi_transcript")"
   cat > "$kimi_dir/20260209T000050Z_review.md" <<EOF
 # Kimi review
 - Story: $story
 - HEAD: $head_sha
+- Artifact Provenance: logger-v1
+- Generator Script: plans/kimi_review_logged.sh
+- Command Exit Code: 0
+- Transcript SHA256: $kimi_hash
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+EOF
+  cat "$kimi_transcript" >> "$kimi_dir/20260209T000050Z_review.md"
+  cat >> "$kimi_dir/20260209T000050Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
+  cat > "$expert_findings" <<'EOF'
+- Blocking: none
+- Major: none
+- Medium: none
+EOF
+  expert_findings_hash="$(sha256_file "$expert_findings")"
   cat > "$code_review_expert_dir/20260209T000080Z_review.md" <<EOF
 # Code-review-expert findings
 - Story: $story
 - HEAD: $head_sha
 - Review Status: COMPLETE
+- Artifact Provenance: logger-v1
+- Generator Script: plans/code_review_expert_logged.sh
+- Content Source: template
+- Findings SHA256: $expert_findings_hash
+
+<<<FINDINGS_BEGIN>>>
 - Blocking: none
 - Major: none
 - Medium: none
+<<<FINDINGS_END>>>
 EOF
 
   cat > "$story_dir/review_resolution.md" <<EOF
@@ -89,6 +168,8 @@ Codex final review file: codex/20260209T000100Z_review.md
 Codex second review file: codex/20260209T000000Z_review.md
 Code-review-expert final review file: code_review_expert/20260209T000080Z_review.md
 EOF
+
+  rm -f "$codex_one_transcript" "$codex_two_transcript" "$kimi_transcript" "$expert_findings"
 }
 
 [[ -x "$GATE" ]] || fail "missing executable gate: $GATE"
@@ -262,5 +343,37 @@ chmod +x "$case17_repo/plans/story_review_gate.sh"
 
   "$case17_repo/plans/story_review_gate.sh" "$story" --head "$child_sha" --artifacts-root "$case17_repo/artifacts/story" >/dev/null
 )
+
+# Case 18: codex provenance marker must be present.
+case18="$tmp_dir/case18"
+write_valid_case "$case18" "$story" "$head_sha"
+sed -i.bak "/- Generator Script: plans\\/codex_review_logged.sh/d" "$case18/$story/codex/20260209T000100Z_review.md"
+rm -f "$case18/$story/codex/20260209T000100Z_review.md.bak"
+expect_fail "codex generator marker required" "missing Codex generator script marker" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case18"
+
+# Case 19: codex transcript hash must match transcript body.
+case19="$tmp_dir/case19"
+write_valid_case "$case19" "$story" "$head_sha"
+sed -i.bak "s/- Transcript SHA256: .*/- Transcript SHA256: 0000000000000000000000000000000000000000000000000000000000000000/" "$case19/$story/codex/20260209T000100Z_review.md"
+rm -f "$case19/$story/codex/20260209T000100Z_review.md.bak"
+expect_fail "codex transcript hash mismatch" "Codex transcript hash mismatch" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case19"
+
+# Case 20: kimi transcript hash must match transcript body.
+case20="$tmp_dir/case20"
+write_valid_case "$case20" "$story" "$head_sha"
+sed -i.bak "s/- Transcript SHA256: .*/- Transcript SHA256: 0000000000000000000000000000000000000000000000000000000000000000/" "$case20/$story/kimi/20260209T000050Z_review.md"
+rm -f "$case20/$story/kimi/20260209T000050Z_review.md.bak"
+expect_fail "kimi transcript hash mismatch" "Kimi transcript hash mismatch" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case20"
+
+# Case 21: code-review-expert findings hash must match findings body.
+case21="$tmp_dir/case21"
+write_valid_case "$case21" "$story" "$head_sha"
+sed -i.bak "s/- Findings SHA256: .*/- Findings SHA256: 0000000000000000000000000000000000000000000000000000000000000000/" "$case21/$story/code_review_expert/20260209T000080Z_review.md"
+rm -f "$case21/$story/code_review_expert/20260209T000080Z_review.md.bak"
+expect_fail "code-review-expert findings hash mismatch" "code-review-expert findings hash mismatch" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case21"
 
 echo "PASS: story review gate fixtures"

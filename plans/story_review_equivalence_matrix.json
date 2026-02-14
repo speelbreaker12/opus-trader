@@ -18,16 +18,52 @@
     "verifier_check": "story_review_gate.sh checks Story and HEAD lines"
   },
   {
+    "id": "kimi_provenance_attested",
+    "gate_requirement": "Kimi review includes logger provenance and generator markers",
+    "attested_field": "artifacts/story/<STORY_ID>/kimi/*_review.md",
+    "verifier_check": "story_review_gate.sh requires Artifact Provenance and Generator Script markers for Kimi artifacts"
+  },
+  {
+    "id": "kimi_transcript_hash_integrity",
+    "gate_requirement": "Kimi transcript hash matches transcript block content",
+    "attested_field": "artifacts/story/<STORY_ID>/kimi/*_review.md",
+    "verifier_check": "story_review_gate.sh recomputes Transcript SHA256 over <<<REVIEW_TRANSCRIPT_BEGIN/END>>>"
+  },
+  {
     "id": "codex_two_reviews",
     "gate_requirement": "At least two Codex reviews exist for story/head",
     "attested_field": "artifacts/story/<STORY_ID>/codex/*_review.md",
     "verifier_check": "story_review_gate.sh requires review count >= 2 for head"
   },
   {
+    "id": "codex_provenance_attested",
+    "gate_requirement": "Codex reviews include logger provenance and generator markers",
+    "attested_field": "artifacts/story/<STORY_ID>/codex/*_review.md",
+    "verifier_check": "story_review_gate.sh requires Artifact Provenance and Generator Script markers for each matching Codex artifact"
+  },
+  {
+    "id": "codex_transcript_hash_integrity",
+    "gate_requirement": "Codex transcript hash matches transcript block content",
+    "attested_field": "artifacts/story/<STORY_ID>/codex/*_review.md",
+    "verifier_check": "story_review_gate.sh recomputes Transcript SHA256 over <<<REVIEW_TRANSCRIPT_BEGIN/END>>>"
+  },
+  {
     "id": "code_review_expert_complete",
     "gate_requirement": "code-review-expert review exists for story/head and is COMPLETE",
     "attested_field": "artifacts/story/<STORY_ID>/code_review_expert/*_review.md",
-    "verifier_check": "story_review_gate.sh checks status COMPLETE and canonical skill path"
+    "verifier_check": "story_review_gate.sh checks status COMPLETE"
+  },
+  {
+    "id": "code_review_expert_provenance_attested",
+    "gate_requirement": "code-review-expert review includes logger provenance and generator markers",
+    "attested_field": "artifacts/story/<STORY_ID>/code_review_expert/*_review.md",
+    "verifier_check": "story_review_gate.sh requires Artifact Provenance, Generator Script, and valid Content Source markers"
+  },
+  {
+    "id": "code_review_expert_findings_hash_integrity",
+    "gate_requirement": "code-review-expert findings hash matches findings block content",
+    "attested_field": "artifacts/story/<STORY_ID>/code_review_expert/*_review.md",
+    "verifier_check": "story_review_gate.sh recomputes Findings SHA256 over <<<FINDINGS_BEGIN/END>>>"
   },
   {
     "id": "code_review_expert_no_placeholders",
