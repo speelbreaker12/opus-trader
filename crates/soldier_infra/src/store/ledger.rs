@@ -210,8 +210,6 @@ impl Default for LedgerMetrics {
 /// WAL ledger with append-only events and optional durable storage path.
 #[derive(Debug)]
 pub struct WalLedger {
-    /// Ordered append-only events.
-    events: Vec<WalEvent>,
     /// Reconstructed latest state per intent hash.
     latest_by_hash: HashMap<String, IntentRecord>,
     /// Maximum queue capacity (intent records only).
@@ -224,7 +222,6 @@ impl WalLedger {
     /// Create a new in-memory WAL ledger with the given capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
-            events: Vec::new(),
             latest_by_hash: HashMap::new(),
             capacity,
             storage_path: None,
@@ -247,7 +244,6 @@ impl WalLedger {
         }
 
         Ok(Self {
-            events,
             latest_by_hash,
             capacity,
             storage_path: Some(path),
@@ -381,7 +377,6 @@ impl WalLedger {
             LedgerAppendError::WriteFailed { reason }
         })?;
 
-        self.events.push(event);
         metrics.record_append();
         Ok(())
     }
@@ -508,8 +503,8 @@ fn write_event_to_path(path: &Path, event: &WalEvent) -> Result<(), String> {
         .map_err(|e| format!("failed to write wal event {}: {e}", path.display()))?;
     file.write_all(b"\n")
         .map_err(|e| format!("failed to write wal newline {}: {e}", path.display()))?;
-    file.sync_all()
-        .map_err(|e| format!("failed to fsync wal {}: {e}", path.display()))
+    file.flush()
+        .map_err(|e| format!("failed to flush wal {}: {e}", path.display()))
 }
 
 fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {

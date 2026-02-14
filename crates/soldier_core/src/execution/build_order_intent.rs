@@ -397,8 +397,15 @@ fn build_order_intent_internal(
 
     // Gate 9: RecordedBeforeDispatch
     trace.push(GateStep::RecordedBeforeDispatch);
+    let mut wal_error: Option<String> = None;
     let wal_recorded = match wal_gate {
-        Some(gate) => gate.record_before_dispatch().is_ok(),
+        Some(gate) => match gate.record_before_dispatch() {
+            Ok(()) => true,
+            Err(reason) => {
+                wal_error = Some(reason);
+                false
+            }
+        },
         None => gate_results.wal_recorded,
     };
     if !wal_recorded {
@@ -406,7 +413,7 @@ fn build_order_intent_internal(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::RecordedBeforeDispatch,
-                reason: REJECT_REASON_WAL.to_string(),
+                reason: wal_error.unwrap_or_else(|| REJECT_REASON_WAL.to_string()),
             },
             trace,
         );

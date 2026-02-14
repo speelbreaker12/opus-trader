@@ -3771,7 +3771,6 @@
         "cargo test -p soldier_infra --test test_crash_mid_intent"
       ],
       "evidence": [
-        "cargo test output showing test_crash_mid_intent_no_duplicate_dispatch PASS",
         "cargo test output showing test_at935_unsent_dispatches_exactly_once_across_two_restarts PASS",
         "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof",
         "evidence/phase1/restart_loop/restart_100_cycles.log"
