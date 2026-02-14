@@ -33,10 +33,16 @@ grep -Eq '\.audited_scope == \$audit_scope and' "$script" \
   || fail "cache predicate must match requested scope"
 grep -Eq '\(\$audit_scope != "slice" or \.slice == \$audit_slice\) and' "$script" \
   || fail "cache predicate must scope slice cache hits to the requested slice"
-grep -Eq -- '--arg slice_sha "\$slice_cache_sha"' "$script" \
+grep -Eq 'cache_slice_sha="\$\(jq -r '\''\.slice_prd_sha256 // empty'\'' "\$AUDIT_CACHE_FILE"' "$script" \
+  || fail "cache predicate must derive slice hash from cache metadata"
+grep -Eq -- '--arg slice_sha "\$cache_slice_sha"' "$script" \
   || fail "cache predicate must include slice hash argument"
 grep -Eq '\(\.prd_sha256 == \$prd_sha or \(\$audit_scope == "slice" and \$slice_sha != "" and \.prd_sha256 == \$slice_sha\)\) and' "$script" \
   || fail "slice scope cache must accept either full or slice prd hash"
+grep -Eq -- '--arg slice_prd_sha "\$slice_prd_sha"' "$script" \
+  || fail "cache writer must persist slice prd hash"
+grep -Eq 'slice_prd_sha256: \$slice_prd_sha,' "$script" \
+  || fail "cache metadata must include slice_prd_sha256"
 grep -Eq 'AUDITOR_TIMEOUT_FALLBACK_PARALLEL="\$\{AUDITOR_TIMEOUT_FALLBACK_PARALLEL:-1\}"' "$script" \
   || fail "missing timeout fallback config"
 grep -Eq '\[\[ "\$AUDIT_SCOPE" == "full" && "\$AUDITOR_TIMEOUT_FALLBACK_PARALLEL" == "1" && -x "\./plans/audit_parallel.sh" \]\]' "$script" \

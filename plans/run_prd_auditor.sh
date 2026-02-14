@@ -180,10 +180,6 @@ contract_sha="$(sha256_file "$AUDIT_CONTRACT_FILE")"
 plan_sha="$(sha256_file "$AUDIT_PLAN_FILE")"
 workflow_sha="$(sha256_file "$AUDIT_WORKFLOW_CONTRACT_FILE")"
 prompt_sha="$(sha256_file "$AUDITOR_PROMPT")"
-slice_cache_sha=""
-if [[ "$AUDIT_SCOPE" == "slice" && -f "$AUDIT_PRD_SLICE_FILE" ]]; then
-  slice_cache_sha="$(sha256_file "$AUDIT_PRD_SLICE_FILE")"
-fi
 
 audit_cache_matches() {
   if ! command -v jq >/dev/null 2>&1; then
@@ -215,9 +211,16 @@ audit_cache_matches() {
     ' "$AUDIT_CACHE_FILE" >/dev/null 2>&1; then
     return 1
   fi
+
+  local cache_slice_sha=""
+  cache_slice_sha="$(jq -r '.slice_prd_sha256 // empty' "$AUDIT_CACHE_FILE" 2>/dev/null || true)"
+  if [[ "$AUDIT_SCOPE" == "slice" && -z "$cache_slice_sha" ]]; then
+    return 1
+  fi
+
   if ! jq -e \
     --arg prd_sha "$expected_sha" \
-    --arg slice_sha "$slice_cache_sha" \
+    --arg slice_sha "$cache_slice_sha" \
     --arg audit_scope "$AUDIT_SCOPE" \
     '
       (.prd_sha256 == $prd_sha or ($audit_scope == "slice" and $slice_sha != "" and .prd_sha256 == $slice_sha)) and
@@ -452,8 +455,12 @@ write_audit_cache() {
     return 0
   fi
   local decision="BLOCKED"
+  local slice_prd_sha=""
   local items_fail
   local items_blocked
+  if [[ "$AUDIT_SCOPE" == "slice" && -f "$AUDIT_PRD_SLICE_FILE" ]]; then
+    slice_prd_sha="$(sha256_file "$AUDIT_PRD_SLICE_FILE")"
+  fi
   items_fail="$(jq -r '.summary.items_fail // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
   items_blocked="$(jq -r '.summary.items_blocked // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
   if [[ "$items_fail" =~ ^[0-9]+$ && "$items_blocked" =~ ^[0-9]+$ ]]; then
@@ -476,6 +483,7 @@ write_audit_cache() {
     --arg decision "$decision" \
     --arg audited_scope "$AUDIT_SCOPE" \
     --arg slice "${AUDIT_SLICE:-}" \
+    --arg slice_prd_sha "$slice_prd_sha" \
     --arg audit_json "$AUDIT_OUTPUT_JSON" \
     --arg contract_file "$AUDIT_CONTRACT_FILE" \
     --arg plan_file "$AUDIT_PLAN_FILE" \
@@ -492,6 +500,7 @@ write_audit_cache() {
       auditor_prompt_sha256: $prompt_sha,
       audited_scope: $audited_scope,
       slice: $slice,
+      slice_prd_sha256: $slice_prd_sha,
       decision: $decision,
       audit_json: $audit_json,
       contract_file: $contract_file,
