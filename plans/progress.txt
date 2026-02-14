@@ -6,7 +6,7 @@
 - Notes: Read AGENTS.md and plans/progress.txt per workflow.
 - Next: proceed to S2-001.
 - 2026-01-14 01:36:17 UTC S2-000: git add/commit blocked by sandbox external gitdir permissions.
-- Commands: git add -A (failed: cannot create /Users/admin/Desktop/ralph/.git/worktrees/honolulu/index.lock).
+- Commands: git add -A (failed: cannot create <ralph_repo_root>/.git/worktrees/honolulu/index.lock).
 - Notes: commit still required once git operations are permitted.
 - 2026-01-14 01:43:05 UTC S2-000: verified existing quantization implementation and tests are green; no code changes needed.
 - Commands: pwd; git log --oneline -10; cat AGENTS.md; cat CONTRACT.md; cat IMPLEMENTATION_PLAN.md; cat specs/WORKFLOW_CONTRACT.md; cat docs/skills/workflow.md; cat plans/prd.json; cat plans/progress.txt; cat .ralph/iter_1_20260113-194009/selected_item.json; cat .ralph/iter_1_20260113-194009/progress_tail_before.txt; git status -s; test -f plans/init.sh && ./plans/init.sh; ./plans/verify.sh full.
@@ -14,7 +14,7 @@
 - Notes: Read AGENTS.md and plans/progress.txt per workflow.
 - Next: proceed to S2-001.
 - 2026-01-14 01:43:38 UTC S2-000: git add/commit blocked by sandbox external gitdir permissions.
-- Commands: git add -A (failed: cannot create /Users/admin/Desktop/ralph/.git/worktrees/honolulu/index.lock).
+- Commands: git add -A (failed: cannot create <ralph_repo_root>/.git/worktrees/honolulu/index.lock).
 - Notes: commit still required once git operations are permitted.
 - 2026-01-14 17:03:26 UTC S2-000: verified quantization implementation is present and tests are green; no code changes; acknowledged AGENTS.md and plans/progress.txt.
 - Commands: pwd; git log --oneline -10; cat AGENTS.md; cat .ralph/iter_1_20260114-110034/selected_item.json; cat .ralph/iter_1_20260114-110034/progress_tail_before.txt; cat CONTRACT.md; cat IMPLEMENTATION_PLAN.md; cat specs/WORKFLOW_CONTRACT.md; cat docs/skills/workflow.md; cat plans/prd.json; cat plans/progress.txt; ./plans/init.sh; ./plans/verify.sh full; rg -n "quantize|quantization|qty_q|limit_price_q" crates/soldier_core/src/execution crates/soldier_core/tests; sed -n '1,200p' crates/soldier_core/src/execution/quantize.rs; sed -n '1,200p' crates/soldier_core/tests/test_quantize.rs; sed -n '1,160p' crates/soldier_core/src/execution/mod.rs; rg -n "scope\\.touch|scope touch|scope_check|scope check" plans/ralph.sh; sed -n '820,910p' plans/ralph.sh; git status -s.
@@ -450,9 +450,9 @@ Evidence: specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md.
 Next: regenerate external traceability workbook from current repo files to confirm matrix output matches updated counts.
 Story: roadmap-traceability
 Date: 2026-02-13
-Summary: Executed requested 3-step closure set: (1) regenerated traceability workbook from current docs at /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx (Summary now reports 334/334 mapped, 0 unmapped, 0 story gaps), (2) added canonical contract AT-1071 for S11.3 NaN/Inf guard in specs/CONTRACT.md and mapped S11.3 explicitly in specs/IMPLEMENTATION_PLAN.md (removed manual-only fallback), and (3) ran verify quick/full.
+Summary: Executed requested 3-step closure set: (1) regenerated traceability workbook from current docs at TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx (local export; Summary now reports 334/334 mapped, 0 unmapped, 0 story gaps), (2) added canonical contract AT-1071 for S11.3 NaN/Inf guard in specs/CONTRACT.md and mapped S11.3 explicitly in specs/IMPLEMENTATION_PLAN.md (removed manual-only fallback), and (3) ran verify quick/full.
 Commands: python3 doc patch/generation scripts; ./plans/verify.sh quick; ./plans/verify.sh full.
-Evidence: specs/CONTRACT.md; specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md; /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx; artifacts/verify/20260212_180012; artifacts/verify/20260212_180132.
+Evidence: specs/CONTRACT.md; specs/IMPLEMENTATION_PLAN.md; plans/csp_at_mapping.md; TRACEABILITY_MATRIX_REGENERATED_2026-02-12.xlsx (local export); artifacts/verify/20260212_180012; artifacts/verify/20260212_180132.
 Verify results: quick failed at verify gate contract check with "missing code token 'PREFLIGHT_TIMEOUT=\"${PREFLIGHT_TIMEOUT:-300s}\"' in plans/verify_fork.sh"; full failed during preflight with "./plans/preflight.sh: line 286: il: command not found".
 Next: fix the workflow harness gate issues in plans/verify_fork.sh and plans/preflight.sh, then rerun ./plans/verify.sh quick/full.
 Story: workflow/verify-timeout-token-guard
@@ -486,8 +486,8 @@ Next: run `./plans/prd_set_pass.sh` for the target stories when owner confirms p
 Story: roadmap-traceability
 Date: 2026-02-13
 Summary: Regenerated traceability workbook from current repo docs (`specs/CONTRACT.md` + `specs/IMPLEMENTATION_PLAN.md`) and flipped PRD pass state for S1-013 using full-verify artifact gating.
-Commands: python3 (workbook generator) -> /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx; ./plans/prd_set_pass.sh S1-013 true --artifacts-dir artifacts/verify/20260212_185747.
-Evidence: /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx; plans/prd.json; artifacts/verify/20260212_185747/contract_review.json; artifacts/story/S1-013/review_resolution.md.
+Commands: python3 (workbook generator) -> TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx (local export); ./plans/prd_set_pass.sh S1-013 true --artifacts-dir artifacts/verify/20260212_185747.
+Evidence: TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx (local export); plans/prd.json; artifacts/verify/20260212_185747/contract_review.json; artifacts/story/S1-013/review_resolution.md.
 Notes: `prd_set_pass` passed after adding required review artifacts for current HEAD and a PASS contract-review artifact in the verify run directory.
 Next: commit/push/PR for the pass-flip and workflow-gate fixes.
 Story: workflow-maintenance

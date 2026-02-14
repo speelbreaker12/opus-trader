@@ -76,11 +76,13 @@ required=(
   plans/story_verify_allowlist_suggest.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
+  plans/tests/test_contract_profile_parity.sh
   plans/tests/test_code_review_expert_logged.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_kimi_review_logged.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
+  plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_slice_completion_enforce.sh
@@ -120,6 +122,8 @@ required=(
   specs/TRACE.yaml
   specs/WORKFLOW_CONTRACT.md
   specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
+  tools/ci/check_contract_profile_map_parity.py
+  tools/ci/check_contract_profiles.py
   tools/ci/lint_pr_template_sections.py
   tools/vendor_docs_lint_rust.py
   verify.sh
@@ -129,8 +133,24 @@ required=(
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
   plans/lib/verify_checkpoint.sh
+  plans/ci/requirements-crossref.txt
+  plans/ci/requirements-verify.txt
+  plans/crossref_burnin_check.sh
+  plans/crossref_ci_strict
+  plans/crossref_execution_invariants.yaml
+  plans/crossref_gate.sh
+  plans/evidence_sources.txt
+  plans/global_manual_allowlist.json
   plans/lib/verify_utils.sh
+  plans/schemas/crossref_execution_invariants.schema.json
   plans/schemas/verify_checkpoint.schema.json
+  plans/tests/test_crossref_gate.sh
+  plans/tests/test_crossref_invariants.sh
+  plans/tests/test_roadmap_evidence_audit.sh
+  plans/validate_crossref_invariants.py
+  tools/at_coverage_report.py
+  tools/at_parser.py
+  tools/roadmap_evidence_audit.py
 )
 
 for path in "${required[@]}"; do

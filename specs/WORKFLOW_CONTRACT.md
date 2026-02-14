@@ -170,6 +170,10 @@ Goal: fast, repeatable, contract-first.
 QUICK must run:
 1) `preflight` (if present; no postmortem enforcement)
 2) Contract/spec validators (the “spec_validators_group”):
+   - contract_profiles
+   - at_profile_parity
+   - at_coverage_report
+   - crossref_invariants
    - contract_crossrefs
    - arch_flows
    - state_machines
@@ -193,6 +197,7 @@ Goal: “mergeable green” for marking PRD pass.
 
 FULL must run:
 - Everything in QUICK, plus:
+  - `crossref_gate` (marker-based evidence gate in CI mode; strictness controlled by sentinel/env)
   - `contract_coverage`
   - Rust: `rust_clippy`, `rust_tests_full`
   - Python: `python_mypy`, `python_pytest_full`, optional `python_ruff_format`
@@ -211,6 +216,7 @@ In this fork, `verify full` MUST be runnable locally without special allow flags
 ### 8.1 Rule
 A story’s `passes` may be set to `true` only when:
 - `./plans/verify.sh full` exited 0 **in that story worktree**, AND
+- `verify.meta.json.head_sha` equals the current story branch `HEAD` at pass-flip time, AND
 - verify artifacts show no failing gate (`FAILED_GATE` absent and all `*.rc` are 0), AND
 - review evidence exists for the same `HEAD`:
   - self review is present and marked `Decision: PASS` with failure-mode + strategic reviews marked `DONE`,

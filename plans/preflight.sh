@@ -254,6 +254,10 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
+  "plans/tests/test_contract_profile_parity.sh"
+  "plans/tests/test_roadmap_evidence_audit.sh"
+  "plans/tests/test_crossref_invariants.sh"
+  "plans/tests/test_crossref_gate.sh"
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(
@@ -264,6 +268,7 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_slice_completion_review_guard.sh"
   "plans/tests/test_slice_completion_enforce.sh"
   "plans/tests/test_pr_gate.sh"
+  "plans/tests/test_prd_set_pass.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
 )
 

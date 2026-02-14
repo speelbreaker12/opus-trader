@@ -9,6 +9,7 @@ If --artifacts-dir is omitted, the latest artifacts/verify/<run_id>/ directory i
 
 Rules for passes=true:
   - verify.meta.json must exist and report mode=full
+  - verify.meta.json head_sha must equal current HEAD
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
   - contract review file must exist and contain decision=PASS
@@ -62,6 +63,20 @@ command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 2; }
 
 lock_file="${PRD_FILE}.lock"
 lock_dir="${lock_file}.d"
+tmp=""
+lock_dir_acquired=0
+
+cleanup() {
+  if [[ -n "$tmp" && -f "$tmp" ]]; then
+    rm -f "$tmp" 2>/dev/null || true
+  fi
+  if [[ "$lock_dir_acquired" == "1" ]]; then
+    rmdir "$lock_dir" 2>/dev/null || true
+  fi
+}
+
+trap cleanup EXIT
+
 if command -v flock >/dev/null 2>&1; then
   exec 200>"$lock_file"
   if ! flock -n 200; then
@@ -73,7 +88,7 @@ else
     echo "ERROR: PRD is locked by another process" >&2
     exit 7
   fi
-  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+  lock_dir_acquired=1
 fi
 
 if ! jq -e . "$PRD_FILE" >/dev/null 2>&1; then
@@ -95,6 +110,16 @@ if [[ "$STATUS" == "true" ]]; then
   verify_mode="$(jq -r '.mode // empty' "$meta_file" 2>/dev/null || true)"
   if [[ "$verify_mode" != "full" ]]; then
     echo "ERROR: verify artifacts are not from full mode (mode=${verify_mode:-<missing>}) in $meta_file" >&2
+    exit 4
+  fi
+  HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to read current HEAD" >&2; exit 4; }
+  verify_head_sha="$(jq -r '.head_sha // empty' "$meta_file" 2>/dev/null || true)"
+  if [[ -z "$verify_head_sha" ]]; then
+    echo "ERROR: verify metadata missing head_sha in $meta_file" >&2
+    exit 4
+  fi
+  if [[ "$verify_head_sha" != "$HEAD_SHA" ]]; then
+    echo "ERROR: verify metadata HEAD mismatch (verify=$verify_head_sha current=$HEAD_SHA)" >&2
     exit 4
   fi
 
@@ -134,7 +159,6 @@ if [[ "$STATUS" == "true" ]]; then
 
   REVIEW_GATE="./plans/story_review_gate.sh"
   [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
-  HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to read HEAD for review gate" >&2; exit 4; }
   "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
 fi
 
@@ -142,6 +166,14 @@ tmp="$(mktemp)"
 jq --arg id "$ID" --argjson status "$STATUS" '
   .items = (.items | map(if .id == $id then .passes = $status else . end))
 ' "$PRD_FILE" > "$tmp"
+if [[ "$STATUS" == "true" ]]; then
+  final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; rm -f "$tmp"; exit 4; }
+  if [[ "$final_head_sha" != "$HEAD_SHA" ]]; then
+    echo "ERROR: HEAD changed during pass flip validation (initial=$HEAD_SHA current=$final_head_sha)" >&2
+    rm -f "$tmp"
+    exit 4
+  fi
+fi
 mv "$tmp" "$PRD_FILE"
 
 echo "Updated task $ID: passes=$STATUS"

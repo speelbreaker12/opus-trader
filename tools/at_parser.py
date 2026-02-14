@@ -35,6 +35,7 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
 
     in_fence = False
     fence_delim: str | None = None
+    fence_start_lineno: int | None = None
 
     for lineno, line in enumerate(lines, start=1):
         fence_match = FENCE_START_RE.match(line)
@@ -43,9 +44,11 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
             if not in_fence:
                 in_fence = True
                 fence_delim = delim
+                fence_start_lineno = lineno
             elif fence_delim == delim:
                 in_fence = False
                 fence_delim = None
+                fence_start_lineno = None
             continue
 
         if in_fence:
@@ -82,5 +85,11 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
 
         at_profiles[at_id] = current_profile
         counts[current_profile] += 1
+
+    if in_fence:
+        start_line = fence_start_lineno if fence_start_lineno is not None else "?"
+        errors.append(
+            f"{contract_path}:{start_line}: unterminated fenced block starting with {fence_delim!r}."
+        )
 
     return ParseResult(at_profile_map=at_profiles, counts=counts, errors=errors)

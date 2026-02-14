@@ -15,6 +15,13 @@ on:
     - cron: "0 1 * * *"
 
 jobs:
+  copilot-signal:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copilot signal
+        run: echo "copilot-signal"
+
   pr-gate-enforced:
     if: |
       github.event_name == 'pull_request' ||
@@ -44,14 +51,34 @@ jobs:
             exit 1
           fi
 
-          # Parse legacy story/<PRD_STORY_ID>-<slug> first so canonical matching
-          # does not swallow legacy refs such as story/S1-TEST-fix.
-          # Require at least one alphabetic character in slug to avoid
-          # misclassifying canonical IDs like story/S1-005.
-          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-([A-Za-z0-9._]*[A-Za-z][A-Za-z0-9._]*)$ ]]; then
+          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)/([A-Za-z0-9._-]+)$ ]]; then
             story_id="${BASH_REMATCH[1]}"
-          elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
-            story_id="${BASH_REMATCH[1]}"
+          elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)$ ]]; then
+            ref_token="${BASH_REMATCH[1]}"
+            story_id=""
+
+            # Prefer exact canonical story/<STORY_ID> when the token is a PRD story id.
+            if [[ -f plans/prd.json ]]; then
+              story_id="$(jq -r --arg id "$ref_token" '[.items[]?.id | select(. == $id)] | first // ""' plans/prd.json)"
+            fi
+
+            # Fallback for legacy story/<PRD_STORY_ID>-<slug> (legacy slug has no '-').
+            if [[ -z "$story_id" && -f plans/prd.json ]]; then
+              story_id="$(jq -r --arg ref "$ref_token" '
+                [
+                  .items[]?.id as $id
+                  | select(($ref | startswith($id + "-")))
+                  | ($ref | ltrimstr($id + "-")) as $slug
+                  | select($slug != "" and ($slug | test("-") | not))
+                  | $id
+                ] | sort_by(length) | last // ""
+              ' plans/prd.json)"
+            fi
+
+            # Last resort: keep canonical token to avoid misparsing hyphenated IDs.
+            if [[ -z "$story_id" ]]; then
+              story_id="$ref_token"
+            fi
           else
             echo "ERROR: PR head branch must match story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>, got: $head_ref" >&2
             exit 1

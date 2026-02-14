@@ -40,12 +40,32 @@ mkdir -p "$fake_bin" "$repo_dir/plans"
 cp "$GATE" "$repo_dir/plans/pr_gate.sh"
 chmod +x "$repo_dir/plans/pr_gate.sh"
 
+cat > "$repo_dir/plans/pre_pr_review_gate.sh" <<'EOF_PRE_PR'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${PRE_PR_MODE:-pass}" == "fail" ]]; then
+  echo "pre-pr gate forced failure" >&2
+  exit 1
+fi
+
+story="${1:-}"
+if [[ -z "$story" ]]; then
+  echo "missing story" >&2
+  exit 2
+fi
+
+echo "OK: pre_pr stub for $story"
+EOF_PRE_PR
+chmod +x "$repo_dir/plans/pre_pr_review_gate.sh"
+
 cat > "$fake_bin/gh" <<'EOF_GH'
 #!/usr/bin/env bash
 set -euo pipefail
 
 mode="${GH_MODE:-clean}"
 head_sha="${GH_HEAD_SHA:-abc123}"
+head_ref="${GH_HEAD_REF:-story/S1/gate}"
 orig_sha="${GH_ORIG_SHA:-orig123}"
 cmd="${1:-}"
 sub="${2:-}"
@@ -100,32 +120,32 @@ case "$endpoint" in
   repos/acme/demo/pulls/17)
     if [[ "$mode" == "dirty_merge" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":false,"mergeable_state":"dirty","requested_reviewers":[]}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha","ref":"$head_ref"},"base":{"ref":"main"},"mergeable":false,"mergeable_state":"dirty","requested_reviewers":[]}
 EOF_JSON
 )"
     elif [[ "$mode" == "self_pending_check_blocked" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked","requested_reviewers":[]}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha","ref":"$head_ref"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked","requested_reviewers":[]}
 EOF_JSON
 )"
     elif [[ "$mode" == "blocked_no_self" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked","requested_reviewers":[]}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha","ref":"$head_ref"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"blocked","requested_reviewers":[]}
 EOF_JSON
 )"
     elif [[ "$mode" == "copilot_requested_reviewer" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean","requested_reviewers":[{"login":"copilot-pull-request-reviewer[bot]","type":"Bot"}]}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha","ref":"$head_ref"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean","requested_reviewers":[{"login":"copilot-pull-request-reviewer[bot]","type":"Bot"}]}
 EOF_JSON
 )"
     elif [[ "$mode" == "unstable_merge" ]]; then
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"unstable","requested_reviewers":[]}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha","ref":"$head_ref"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"unstable","requested_reviewers":[]}
 EOF_JSON
 )"
     else
       payload="$(cat <<EOF_JSON
-{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean","requested_reviewers":[]}
+{"html_url":"https://github.com/acme/demo/pull/17","head":{"sha":"$head_sha","ref":"$head_ref"},"base":{"ref":"main"},"mergeable":true,"mergeable_state":"clean","requested_reviewers":[]}
 EOF_JSON
 )"
     fi
@@ -297,22 +317,42 @@ report_count="$(find "$tmp_dir/artifacts/S1/pr_gate" -type f -name '*_pr_gate.md
 
 # Case 2: merge conflicts/blocked state fail closed.
 expect_fail "mergeable state dirty" "merge_conflict_or_blocked: mergeable_state=dirty" \
-  bash -lc "cd '$repo_dir' && GH_MODE=dirty_merge GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=dirty_merge GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 # Case 3: unstable mergeable_state does not block when mergeable=true.
 set +e
 out_case3="$(
-  cd "$repo_dir" && GH_MODE=unstable_merge GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+  cd "$repo_dir" && GH_MODE=unstable_merge GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 2>&1
 )"
 rc_case3=$?
 set -e
 [[ $rc_case3 -eq 0 ]] || fail "expected case3 to pass"
 printf '%s\n' "$out_case3" | grep -Fq "OK: PR gate passed" || fail "case3 missing pass output"
 
+# Case 3b: legacy PRD-style branch supports non-numeric suffix in story id (e.g. S1-TEST).
+set +e
+out_case3b="$(
+  cd "$repo_dir" && GH_MODE=unstable_merge GH_HEAD_SHA="$head_sha" GH_HEAD_REF='story/S1-TEST-fix' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1-TEST 2>&1
+)"
+rc_case3b=$?
+set -e
+[[ $rc_case3b -eq 0 ]] || fail "expected case3b to pass"
+printf '%s\n' "$out_case3b" | grep -Fq "OK: PR gate passed" || fail "case3b missing pass output"
+
+# Case 3c: plain story branch with hyphenated story id must not be truncated.
+set +e
+out_case3c="$(
+  cd "$repo_dir" && GH_MODE=unstable_merge GH_HEAD_SHA="$head_sha" GH_HEAD_REF='story/S1-TEST' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1-TEST 2>&1
+)"
+rc_case3c=$?
+set -e
+[[ $rc_case3c -eq 0 ]] || fail "expected case3c to pass"
+printf '%s\n' "$out_case3c" | grep -Fq "OK: PR gate passed" || fail "case3c missing pass output"
+
 # Case 4: duplicate check-run history resolves by latest run per check name.
 set +e
 out_case4="$(
-  cd "$repo_dir" && GH_MODE=duplicate_checks GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+  cd "$repo_dir" && GH_MODE=duplicate_checks GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 2>&1
 )"
 rc_case4=$?
 set -e
@@ -321,20 +361,20 @@ printf '%s\n' "$out_case4" | grep -Fq "OK: PR gate passed" || fail "case4 missin
 
 # Case 5: pending checks fail.
 expect_fail "checks pending" "checks_pending" \
-  bash -lc "cd '$repo_dir' && GH_MODE=pending_checks GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=pending_checks GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 # Case 6: fallback commit status API must fail when top-level state is pending.
 expect_fail "fallback pending state" "checks_pending" \
-  bash -lc "cd '$repo_dir' && GH_MODE=fallback_pending GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=fallback_pending GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 # Case 7: fallback commit status API must fail when top-level state is failure.
 expect_fail "fallback failure state" "checks_failing" \
-  bash -lc "cd '$repo_dir' && GH_MODE=fallback_failure GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=fallback_failure GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 # Case 8: unknown review decision is warning-only in default mode.
 set +e
 out_case8="$(
-  cd "$repo_dir" && GH_MODE=review_unknown GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+  cd "$repo_dir" && GH_MODE=review_unknown GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 2>&1
 )"
 rc_case8=$?
 set -e
@@ -343,24 +383,28 @@ printf '%s\n' "$out_case8" | grep -Fq "reviewDecision is unknown but non-blockin
 
 # Case 9: unknown review decision can be made blocking in strict mode.
 expect_fail "unknown review decision strict mode" "review_decision_unknown" \
-  bash -lc "cd '$repo_dir' && GH_MODE=review_unknown GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-known-review-decision"
+  bash -lc "cd '$repo_dir' && GH_MODE=review_unknown GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --require-known-review-decision"
 
 # Case 10: story id path traversal must be rejected.
 expect_fail "invalid story id" "invalid --story value: ../escape" \
   bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story '../escape'"
 
+# Case 10b: slash-containing story ids must be rejected.
+expect_fail "invalid slash story id" "invalid --story value: workflow/maintenance" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story 'workflow/maintenance'"
+
 # Case 11: inline bot review comments must be backed by file diffs.
 expect_fail "inline bot comment unaddressed" "inline_bot_comments_unaddressed" \
-  bash -lc "cd '$repo_dir' && GH_MODE=inline_unaddressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=inline_unaddressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 # Case 12: issue bot comments require head-specific AFTERCARE_ACK.
 expect_fail "missing aftercare ack" "missing_aftercare_ack_for_head" \
-  bash -lc "cd '$repo_dir' && GH_MODE=issue_bot_no_ack GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=issue_bot_no_ack GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 # Case 13: issue bot comments + valid ACK token pass.
 set +e
 out_case11="$(
-  cd "$repo_dir" && GH_MODE=issue_bot_with_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+  cd "$repo_dir" && GH_MODE=issue_bot_with_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 2>&1
 )"
 rc_case11=$?
 set -e
@@ -369,12 +413,12 @@ printf '%s\n' "$out_case11" | grep -Fq "OK: PR gate passed" || fail "case11 miss
 
 # Case 14: strict ACK mode blocks when no head-specific ACK exists.
 expect_fail "strict ack missing" "missing_aftercare_ack_for_head" \
-  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-aftercare-ack"
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --require-aftercare-ack"
 
 # Case 15: strict ACK mode passes when HEAD-specific ACK exists without bot issue comments.
 set +e
 out_case15="$(
-  cd "$repo_dir" && GH_MODE=clean_with_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-aftercare-ack 2>&1
+  cd "$repo_dir" && GH_MODE=clean_with_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --require-aftercare-ack 2>&1
 )"
 rc_case15=$?
 set -e
@@ -384,7 +428,7 @@ printf '%s\n' "$out_case15" | grep -Fq "OK: PR gate passed" || fail "case15 miss
 # Case 16: self check-run pending can be ignored by name to avoid CI deadlocks.
 set +e
 out_case16="$(
-  cd "$repo_dir" && GH_MODE=self_pending_check GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --ignore-check-run-regex '^pr-gate-enforced$' 2>&1
+  cd "$repo_dir" && GH_MODE=self_pending_check GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --ignore-check-run-regex '^pr-gate-enforced$' 2>&1
 )"
 rc_case16=$?
 set -e
@@ -394,7 +438,7 @@ printf '%s\n' "$out_case16" | grep -Fq "OK: PR gate passed" || fail "case16 miss
 # Case 17: mergeable_state=blocked + self pending check can still pass when self-check is ignored.
 set +e
 out_case17="$(
-  cd "$repo_dir" && GH_MODE=self_pending_check_blocked GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --ignore-check-run-regex '^pr-gate-enforced$' 2>&1
+  cd "$repo_dir" && GH_MODE=self_pending_check_blocked GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --ignore-check-run-regex '^pr-gate-enforced$' 2>&1
 )"
 rc_case17=$?
 set -e
@@ -404,20 +448,20 @@ printf '%s\n' "$out_case17" | grep -Fq "mergeable_state=blocked ignored" || fail
 
 # Case 18: mergeable_state=blocked must fail when no ignored pending check exists.
 expect_fail "blocked mergeable state without ignored pending check" "merge_conflict_or_blocked: mergeable_state=blocked" \
-  bash -lc "cd '$repo_dir' && GH_MODE=blocked_no_self GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --ignore-check-run-regex '^pr-gate-enforced$'"
+  bash -lc "cd '$repo_dir' && GH_MODE=blocked_no_self GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --ignore-check-run-regex '^pr-gate-enforced$'"
 
 # Case 19: warn-mode bot findings can be elevated to blocking mode.
 expect_fail "bot comment blocking mode" "new_bot_comments_since_last_push" \
-  bash -lc "cd '$repo_dir' && GH_MODE=inline_addressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --bot-comments-mode block"
+  bash -lc "cd '$repo_dir' && GH_MODE=inline_addressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --bot-comments-mode block"
 
 # Case 20: opt-in Copilot requirement blocks when no Copilot signal is present.
 expect_fail "copilot required pending" "copilot_review_pending" \
-  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --require-copilot-review"
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --require-copilot-review"
 
 # Case 21: opt-in Copilot requirement passes when PR review is tied to HEAD SHA.
 set +e
 out_case13="$(
-  cd "$repo_dir" && GH_MODE=copilot_review_for_head GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-copilot-review 2>&1
+  cd "$repo_dir" && GH_MODE=copilot_review_for_head GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --require-copilot-review 2>&1
 )"
 rc_case13=$?
 set -e
@@ -427,15 +471,31 @@ printf '%s\n' "$out_case13" | grep -Fq "OK: PR gate passed" || fail "case13 miss
 # Case 22: opt-in Copilot requirement passes when Copilot is a requested reviewer.
 set +e
 out_case21="$(
-  cd "$repo_dir" && GH_MODE=copilot_requested_reviewer GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --require-copilot-review 2>&1
+  cd "$repo_dir" && GH_MODE=copilot_requested_reviewer GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --require-copilot-review 2>&1
 )"
 rc_case21=$?
 set -e
 [[ $rc_case21 -eq 0 ]] || fail "expected case21 to pass"
 printf '%s\n' "$out_case21" | grep -Fq "OK: PR gate passed" || fail "case21 missing pass output"
 
+# Case 0: --story is required.
+expect_fail "story required" "story is required" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+
 # Case 23: explicit changes requested is always blocking.
 expect_fail "changes requested blocking" "changes_requested" \
-  bash -lc "cd '$repo_dir' && GH_MODE=changes_requested GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+  bash -lc "cd '$repo_dir' && GH_MODE=changes_requested GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
+
+# Case 24: branch story mismatch blocks.
+expect_fail "branch story mismatch" "story_branch_mismatch" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_HEAD_REF='story/S9/mismatch' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
+
+# Case 25: invalid head branch naming blocks.
+expect_fail "invalid branch naming" "invalid_story_branch_name" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_HEAD_REF='codex/not-story-bound' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
+
+# Case 26: failing pre-pr gate blocks.
+expect_fail "pre-pr gate failure" "pre_pr_review_gate_failed" \
+  bash -lc "cd '$repo_dir' && PRE_PR_MODE=fail GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
 
 echo "PASS: pr_gate fixtures"

@@ -28,6 +28,69 @@ expect_fail() {
   fi
 }
 
+write_valid_case() {
+  local base="$1"
+  local story="$2"
+  local head_sha="$3"
+
+  local story_dir="$base/$story"
+  local self_dir="$story_dir/self_review"
+  local codex_dir="$story_dir/codex"
+  local kimi_dir="$story_dir/kimi"
+  local code_review_expert_dir="$story_dir/code_review_expert"
+
+  mkdir -p "$self_dir" "$codex_dir" "$kimi_dir" "$code_review_expert_dir"
+
+  cat > "$self_dir/20260209T000000Z_self_review.md" <<EOF_SELF
+# Self Review
+Story: $story
+HEAD: $head_sha
+Decision: PASS
+Checklist:
+- Failure-Mode Review: DONE
+- Strategic Failure Review: DONE
+EOF_SELF
+
+  cat > "$codex_dir/20260209T000000Z_review.md" <<EOF_CODEX1
+# Codex review
+- Story: $story
+- HEAD: $head_sha
+EOF_CODEX1
+
+  cat > "$codex_dir/20260209T000100Z_review.md" <<EOF_CODEX2
+# Codex review (second pass)
+- Story: $story
+- HEAD: $head_sha
+EOF_CODEX2
+
+  cat > "$kimi_dir/20260209T000050Z_review.md" <<EOF_KIMI
+# Kimi review
+- Story: $story
+- HEAD: $head_sha
+EOF_KIMI
+
+  cat > "$code_review_expert_dir/20260209T000080Z_review.md" <<EOF_EXPERT
+# Code-review-expert findings
+- Story: $story
+- HEAD: $head_sha
+- Review Status: COMPLETE
+- Blocking: none
+- Major: none
+- Medium: none
+EOF_EXPERT
+
+  cat > "$story_dir/review_resolution.md" <<EOF_RES
+Story: $story
+HEAD: $head_sha
+Blocking addressed: YES
+Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
+Kimi final review file: kimi/20260209T000050Z_review.md
+Codex final review file: codex/20260209T000100Z_review.md
+Codex second review file: codex/20260209T000000Z_review.md
+Code-review-expert final review file: code_review_expert/20260209T000080Z_review.md
+EOF_RES
+}
+
 [[ -x "$SCRIPT" ]] || fail "missing executable script: $SCRIPT"
 
 tmp_dir="$(mktemp -d)"
@@ -38,67 +101,42 @@ slice_root="$tmp_dir/slice_reviews"
 story="S1-TEST"
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 
-mkdir -p "$story_root/$story/code_review_expert"
-review_file="$story_root/$story/code_review_expert/20260211T000000Z_review.md"
-cat > "$review_file" <<EOF
-# Code-review-expert findings
+write_valid_case "$story_root" "$story" "$head_sha"
 
-- Story: $story
-- HEAD: $head_sha
-- Timestamp (UTC): 2026-02-11T00:00:00Z
-- Branch: test-branch
-- Skill Path: ~/.agents/skills/code-review-expert/SKILL.md
-- Review Status: COMPLETE
-- Title: test review
+"$SCRIPT" "$story" --head "$head_sha" --branch "story/$story/gate" --artifacts-root "$story_root" >/dev/null
 
-## Findings
-- Blocking: none
-- Major: none
-- Medium: none
+"$SCRIPT" "$story" --head "$head_sha" --branch "story/$story" --artifacts-root "$story_root" >/dev/null
 
-## Final Disposition
-- Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-EOF
+"$SCRIPT" "$story" --head "$head_sha" --branch "story/$story-fix" --artifacts-root "$story_root" >/dev/null
 
-"$SCRIPT" "$story" --head "$head_sha" --artifacts-root "$story_root" >/dev/null
-
-expect_fail "missing review artifact" "missing code-review-expert review artifact" \
-  "$SCRIPT" "S1-MISSING" --head "$head_sha" --artifacts-root "$story_root"
+expect_fail "missing story artifact" "missing self-review artifact" \
+  "$SCRIPT" "S1-MISSING" --head "$head_sha" --branch "story/S1-MISSING/gate" --artifacts-root "$story_root"
 
 expect_fail "invalid story id" "invalid STORY_ID value: ../escape" \
-  "$SCRIPT" "../escape" --head "$head_sha" --artifacts-root "$story_root"
+  "$SCRIPT" "../escape" --head "$head_sha" --branch "story/S1-TEST/gate" --artifacts-root "$story_root"
 
-draft_story="S1-DRAFT"
-mkdir -p "$story_root/$draft_story/code_review_expert"
-cat > "$story_root/$draft_story/code_review_expert/20260211T000001Z_review.md" <<EOF
-- Story: $draft_story
-- HEAD: $head_sha
-- Skill Path: ~/.agents/skills/code-review-expert/SKILL.md
-- Review Status: DRAFT
-EOF
-expect_fail "draft review status" "review must be COMPLETE" \
-  "$SCRIPT" "$draft_story" --head "$head_sha" --artifacts-root "$story_root"
+expect_fail "invalid slash story id" "invalid STORY_ID value: workflow/maintenance" \
+  "$SCRIPT" "workflow/maintenance" --head "$head_sha" --branch "story/S1-TEST/gate" --artifacts-root "$story_root"
 
-placeholder_story="S1-PLACEHOLDER"
-mkdir -p "$story_root/$placeholder_story/code_review_expert"
-cat > "$story_root/$placeholder_story/code_review_expert/20260211T000002Z_review.md" <<EOF
-- Story: $placeholder_story
-- HEAD: $head_sha
-- Skill Path: ~/.agents/skills/code-review-expert/SKILL.md
-- Review Status: COMPLETE
-- Blocking: <none | summary>
-EOF
-expect_fail "placeholder findings" "contains unresolved placeholder" \
-  "$SCRIPT" "$placeholder_story" --head "$head_sha" --artifacts-root "$story_root"
+expect_fail "invalid branch format" "branch must be story-scoped" \
+  "$SCRIPT" "$story" --head "$head_sha" --branch "codex/$story/gate" --artifacts-root "$story_root"
+
+expect_fail "branch/story mismatch" "story id mismatch" \
+  "$SCRIPT" "$story" --head "$head_sha" --branch "story/S9-999/gate" --artifacts-root "$story_root"
+
+rm -f "$story_root/$story/kimi/20260209T000050Z_review.md"
+expect_fail "story review gate failure propagates" "missing Kimi review artifact for HEAD" \
+  "$SCRIPT" "$story" --head "$head_sha" --branch "story/$story/gate" --artifacts-root "$story_root"
+
+# Restore valid story artifacts for slice checks.
+rm -rf "$story_root/$story"
+write_valid_case "$story_root" "$story" "$head_sha"
 
 expect_fail "slice review missing" "missing slice thinking-review artifact" \
-  "$SCRIPT" "$story" --head "$head_sha" --artifacts-root "$story_root" --slice-id "slice-1" --slice-artifacts-root "$slice_root"
-
-expect_fail "invalid slice id" "invalid slice-id value: ../slice" \
-  "$SCRIPT" "$story" --head "$head_sha" --artifacts-root "$story_root" --slice-id "../slice" --slice-artifacts-root "$slice_root"
+  "$SCRIPT" "$story" --head "$head_sha" --branch "story/$story/gate" --artifacts-root "$story_root" --slice-id "slice-1" --slice-artifacts-root "$slice_root"
 
 mkdir -p "$slice_root/slice-1"
-cat > "$slice_root/slice-1/thinking_review.md" <<EOF
+cat > "$slice_root/slice-1/thinking_review.md" <<EOF_SLICE
 # Thinking Review (Slice Close)
 
 - Slice ID: slice-1
@@ -119,8 +157,8 @@ cat > "$slice_root/slice-1/thinking_review.md" <<EOF
 ## Final Disposition
 - Ready To Close Slice: YES
 - Follow-ups: none
-EOF
+EOF_SLICE
 
-"$SCRIPT" "$story" --head "$head_sha" --artifacts-root "$story_root" --slice-id "slice-1" --slice-artifacts-root "$slice_root" >/dev/null
+"$SCRIPT" "$story" --head "$head_sha" --branch "story/$story/gate" --artifacts-root "$story_root" --slice-id "slice-1" --slice-artifacts-root "$slice_root" >/dev/null
 
 echo "PASS: pre_pr_review_gate fixtures"
