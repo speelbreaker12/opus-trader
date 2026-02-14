@@ -1,13 +1,8 @@
 Story: S5-004
-HEAD: 04c3a44397bbbb6685c5734e56336a68fbecd95b
+HEAD: 8ea5eac120d7a42cc3d1cbc6bca03c3833bf3b69
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-
-Kimi final review file: kimi/20260213T232227Z_review.md
-Codex final review file: codex/20260213T232227Z_first_review.md
-Codex second review file: codex/20260213T232227Z_second_review.md
-Code-review-expert final review file: code_review_expert/20260213T232227Z_review.md
-
-Notes:
-- Review artifacts map to the functional gate-fix commit.
-- Artifact-only top commit is used only to carry evidence files.
+Kimi final review file: kimi/20260214T015938Z_3708_21975_review.md
+Codex final review file: codex/20260214T015847Z_3150_6992_review.md
+Codex second review file: codex/20260214T015748Z_2746_9641_review.md
+Code-review-expert final review file: code_review_expert/20260214T020208Z_2734_8075_review.md
