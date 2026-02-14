@@ -21,6 +21,23 @@ Optional: use branch names/tags/SHAs with `--opus-ref` and `--ralph-ref`.
   /Users/admin/Desktop/ralph
 ```
 
+## 2b) Snapshot-isolation smoke check (non-HEAD refs)
+
+Validate non-HEAD comparisons are analyzed from detached snapshots:
+
+```bash
+./scripts/check_phase1_compare_snapshot_isolation.sh \
+  --opus /Users/admin/Desktop/opus-trader \
+  --ralph /Users/admin/Desktop/ralph \
+  --opus-ref phase1-compare-explicit-20260214-003126-opus \
+  --ralph-ref phase1-compare-explicit-20260214-003126-ralph \
+  --skip-meta-test
+```
+
+The script exits non-zero if a non-HEAD repo result has `path == analysis_path`.
+
+CI also runs this check as `phase1-snapshot-isolation-smoke` with both repos set to the same checkout (`HEAD` vs `HEAD~1`) to assert non-HEAD snapshot behavior in automation.
+
 What this gives:
 - evidence-pack coverage (required + any-of evidence items),
 - `tools/phase1_meta_test.py` result for both repos,

@@ -30,9 +30,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import re
 import shlex
 import subprocess
+import tempfile
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -101,6 +103,14 @@ class VerifyGateSummary:
     gate_headers: List[str]
     first_failure: str
     failure_lines: List[str]
+
+
+@dataclass
+class RefWorkspace:
+    path: Path
+    resolved_ref_sha: str
+    is_ref_head: bool
+    cleanup_dir: Optional[Path]
 
 
 @dataclass
@@ -186,6 +196,7 @@ class ScenarioBehaviorSummary:
 class RepoResult:
     name: str
     path: str
+    analysis_path: str
     ref: str
     head_branch: str
     head_sha: str
@@ -259,6 +270,59 @@ def run_cmd(
         ]
         log_path.write_text("\n".join(payload), encoding="utf-8")
     return result.returncode, result.stdout, result.stderr, elapsed
+
+
+def resolve_ref_sha(repo_path: Path, ref: str) -> str:
+    try:
+        return git_read(repo_path, ["rev-parse", f"{ref}^{{}}"])
+    except RuntimeError:
+        return git_read(repo_path, ["rev-parse", ref])
+
+
+def checkout_ref_worktree(repo_path: Path, ref: str) -> RefWorkspace:
+    if not repo_path.exists():
+        raise RuntimeError(f"repo path does not exist: {repo_path}")
+
+    resolved_ref_sha = resolve_ref_sha(repo_path, ref)
+    head_sha = git_read(repo_path, ["rev-parse", "HEAD"])
+    is_ref_head = resolved_ref_sha == head_sha
+    if is_ref_head:
+        return RefWorkspace(
+            path=repo_path,
+            resolved_ref_sha=resolved_ref_sha,
+            is_ref_head=True,
+            cleanup_dir=None,
+        )
+
+    worktree_dir = Path(tempfile.mkdtemp(prefix="phase1-compare-wt-"))
+    rc, _, err, _ = run_cmd(
+        ["git", "-C", str(repo_path), "worktree", "add", "--detach", str(worktree_dir), resolved_ref_sha],
+        cwd=repo_path,
+    )
+    if rc != 0:
+        shutil.rmtree(worktree_dir, ignore_errors=True)
+        raise RuntimeError(f"git worktree add --detach for {repo_path} at {ref} failed: {err.strip()}")
+
+    return RefWorkspace(
+        path=worktree_dir,
+        resolved_ref_sha=resolved_ref_sha,
+        is_ref_head=False,
+        cleanup_dir=worktree_dir,
+    )
+
+
+def cleanup_ref_worktree(repo_path: Path, snapshot: RefWorkspace, warnings: List[str]) -> None:
+    if snapshot.cleanup_dir is None:
+        return
+    if snapshot.cleanup_dir == repo_path:
+        return
+    rc, _, err, _ = run_cmd(
+        ["git", "-C", str(repo_path), "worktree", "remove", "--force", str(snapshot.cleanup_dir)],
+        cwd=repo_path,
+    )
+    if rc != 0:
+        warnings.append(f"failed to remove temporary worktree {snapshot.cleanup_dir}: {err.strip()}")
+    shutil.rmtree(snapshot.cleanup_dir, ignore_errors=True)
 
 
 def git_read(repo: Path, args: Sequence[str]) -> str:
@@ -340,10 +404,19 @@ def analyze_config_matrix(path: Path) -> Tuple[int, int, int]:
     except Exception:
         return 0, 0, 0
 
+    def extract_entry_status(node: object) -> Optional[str]:
+        if not isinstance(node, dict):
+            return None
+        for key in ("status", "result"):
+            value = node.get(key)
+            if isinstance(value, str):
+                return value
+        return None
+
     def walk(node: object) -> Iterable[str]:
         if isinstance(node, dict):
-            status = node.get("status")
-            if isinstance(status, str):
+            status = extract_entry_status(node)
+            if status is not None:
                 yield status
             for value in node.values():
                 yield from walk(value)
@@ -351,10 +424,41 @@ def analyze_config_matrix(path: Path) -> Tuple[int, int, int]:
             for item in node:
                 yield from walk(item)
 
-    statuses = [value.upper() for value in walk(payload)]
+    statuses: List[str] = []
+    if isinstance(payload, dict):
+        results = payload.get("results")
+        if isinstance(results, dict):
+            for item in results.values():
+                status = extract_entry_status(item)
+                if status is not None:
+                    statuses.append(status)
+
+        keys = payload.get("keys")
+        if isinstance(keys, list):
+            for item in keys:
+                status = extract_entry_status(item)
+                if status is not None:
+                    statuses.append(status)
+
+    if not statuses:
+        # Fallback: walk the full payload tree.  walk() is only invoked when
+        # the structured "results"/"keys" schemas found nothing, so duplicate
+        # counting cannot occur with the primary parsers above.
+        statuses = [value.upper() for value in walk(payload)]
+
+    if not statuses and isinstance(payload, dict):
+        summary = payload.get("summary")
+        if isinstance(summary, dict):
+            total = summary.get("total")
+            passed = summary.get("passed")
+            failed = summary.get("failed")
+            if all(isinstance(value, int) for value in (total, passed, failed)):
+                return int(total), int(passed), int(failed)
+
+    statuses = [value.upper() for value in statuses if value.strip()]
     entries = len(statuses)
-    pass_count = sum(1 for s in statuses if s == "PASS")
-    fail_count = sum(1 for s in statuses if s == "FAIL")
+    pass_count = sum(1 for s in statuses if s in {"PASS", "PASSED", "OK", "SUCCESS"})
+    fail_count = sum(1 for s in statuses if s in {"FAIL", "FAILED", "ERROR"})
     return entries, pass_count, fail_count
 
 
@@ -844,228 +948,244 @@ def collect_repo_result(
         raise RuntimeError(f"repo path does not exist: {repo_path}")
 
     warnings: List[str] = []
-    head_branch = git_read(repo_path, ["rev-parse", "--abbrev-ref", "HEAD"])
-    head_sha = git_read(repo_path, ["rev-parse", "HEAD"])
-    resolved_ref_sha = git_read(repo_path, ["rev-parse", ref])
+    snapshot = checkout_ref_worktree(repo_path, ref)
+    active_repo = snapshot.path
     try:
-        # Peel annotated/lightweight tags to underlying commit SHA for stable HEAD parity checks.
-        resolved_ref_sha = git_read(repo_path, ["rev-parse", f"{ref}^{{}}"])
-    except RuntimeError:
-        pass
-    is_ref_head = resolved_ref_sha == head_sha
-    status_lines = git_read(repo_path, ["status", "--porcelain"]).splitlines()
-    dirty_files = len(status_lines)
+        head_branch = git_read(active_repo, ["rev-parse", "--abbrev-ref", "HEAD"])
+        head_sha = git_read(active_repo, ["rev-parse", "HEAD"])
+        resolved_ref_sha = snapshot.resolved_ref_sha
+        is_ref_head = snapshot.is_ref_head
+        status_lines = git_read(active_repo, ["status", "--porcelain"]).splitlines()
+        dirty_files = len(status_lines)
 
-    required_all, required_any_of, required_source = parse_required_evidence(repo_path)
-    file_checks = [file_check(repo_path, path) for path in required_all]
-    missing_required_all = [
-        check.path for check in file_checks if not (check.exists and check.non_empty)
-    ]
-    required_all_ok = len(required_all) - len(missing_required_all)
-
-    failed_any_of: List[List[str]] = []
-    for group in required_any_of:
-        checks = [file_check(repo_path, path) for path in group]
-        if not any(check.exists and check.non_empty for check in checks):
-            failed_any_of.append(group)
-
-    required_any_of_ok = len(required_any_of) - len(failed_any_of)
-
-    determinism_path = repo_path / "evidence" / "phase1" / "determinism" / "intent_hashes.txt"
-    traceability_path = (
-        repo_path / "evidence" / "phase1" / "traceability" / "sample_rejection_log.txt"
-    )
-    config_path = (
-        repo_path / "evidence" / "phase1" / "config_fail_closed" / "missing_keys_matrix.json"
-    )
-
-    determinism_line_count = count_non_empty_lines(determinism_path)
-    determinism_unique_hashes = 0
-    if determinism_path.exists():
-        lines = [
-            line.strip()
-            for line in determinism_path.read_text(encoding="utf-8", errors="replace").splitlines()
-            if line.strip()
+        required_all, required_any_of, required_source = parse_required_evidence(active_repo)
+        all_required_paths = set(required_all)
+        for group in required_any_of:
+            all_required_paths.update(group)
+        file_checks = [file_check(active_repo, path) for path in sorted(all_required_paths)]
+        file_checks_by_path = {check.path: check for check in file_checks}
+        missing_required_all = [
+            path
+            for path in required_all
+            if not (
+                path in file_checks_by_path
+                and file_checks_by_path[path].exists
+                and file_checks_by_path[path].non_empty
+            )
         ]
-        determinism_unique_hashes = len(set(lines))
+        required_all_ok = len(required_all) - len(missing_required_all)
 
-    traceability_line_count = count_non_empty_lines(traceability_path)
-    traceability_unique_intent_ids = count_unique_intent_ids(traceability_path)
-    config_entries, config_pass, config_fail = analyze_config_matrix(config_path)
-    prd_items = read_prd_items(repo_path)
-    prd_phase1 = analyze_phase1_prd(prd_items)
-    traceability = analyze_traceability(repo_path, prd_items)
-    operational_readiness = analyze_operational_readiness(repo_path, warnings)
+        failed_any_of: List[List[str]] = []
+        for group in required_any_of:
+            checks = [file_checks_by_path[path] for path in group if path in file_checks_by_path]
+            if not any(check.exists and check.non_empty for check in checks):
+                failed_any_of.append(group)
 
-    logs_dir = run_dir / name / "logs"
-    meta_test_result: Optional[CommandResult] = None
-    verify_result: Optional[CommandResult] = None
-    verify_full_result: Optional[CommandResult] = None
-    scenario_result: Optional[CommandResult] = None
-    verify_gate_summary = VerifyGateSummary(gate_headers=[], first_failure="", failure_lines=[])
-    verify_full_gate_summary = VerifyGateSummary(gate_headers=[], first_failure="", failure_lines=[])
-    verify_artifacts_latest = parse_verify_artifacts(repo_path)
-    verify_artifacts_quick: Optional[VerifyArtifactsSummary] = None
-    verify_artifacts_full: Optional[VerifyArtifactsSummary] = None
-    flakiness: Optional[FlakinessSummary] = None
-    scenario_behavior = ScenarioBehaviorSummary(
-        reason_codes=[],
-        status_fields_seen=[],
-        dispatch_counts=[],
-        rejection_lines=0,
-    )
+        required_any_of_ok = len(required_any_of) - len(failed_any_of)
 
-    if run_meta_test:
-        meta_script = repo_path / "tools" / "phase1_meta_test.py"
-        if meta_script.exists():
-            meta_test_result = run_named_command(
-                "phase1_meta_test",
-                ["python3", str(meta_script)],
-                repo_path=repo_path,
-                logs_dir=logs_dir,
-            )
-        else:
-            warnings.append("meta test skipped: tools/phase1_meta_test.py not found")
-
-    if run_quick_verify:
-        verify_script = repo_path / "plans" / "verify.sh"
-        if verify_script.exists():
-            if not is_ref_head:
-                warnings.append(
-                    "quick verify runs on working tree HEAD; requested ref differs from HEAD"
-                )
-            verify_result = run_named_command(
-                "verify_quick",
-                ["./plans/verify.sh", "quick"],
-                repo_path=repo_path,
-                logs_dir=logs_dir,
-            )
-            verify_gate_summary = analyze_verify_quick_log(Path(verify_result.log_path))
-            quick_run_id = extract_verify_run_id_from_log(Path(verify_result.log_path))
-            verify_artifacts_quick = parse_verify_artifacts(repo_path, run_id=quick_run_id)
-            if quick_run_id and verify_artifacts_quick.run_id != quick_run_id:
-                warnings.append(
-                    f"quick verify artifacts for run_id {quick_run_id!r} not found; used latest run {verify_artifacts_quick.run_id!r}"
-                )
-        else:
-            warnings.append("quick verify skipped: plans/verify.sh not found")
-
-    if run_full_verify:
-        verify_script = repo_path / "plans" / "verify.sh"
-        if verify_script.exists():
-            if not is_ref_head:
-                warnings.append(
-                    "full verify runs on working tree HEAD; requested ref differs from HEAD"
-                )
-            verify_full_result = run_named_command(
-                "verify_full",
-                ["./plans/verify.sh", "full"],
-                repo_path=repo_path,
-                logs_dir=logs_dir,
-            )
-            verify_full_gate_summary = analyze_verify_quick_log(Path(verify_full_result.log_path))
-            full_run_id = extract_verify_run_id_from_log(Path(verify_full_result.log_path))
-            verify_artifacts_full = parse_verify_artifacts(repo_path, run_id=full_run_id)
-            if full_run_id and verify_artifacts_full.run_id != full_run_id:
-                warnings.append(
-                    f"full verify artifacts for run_id {full_run_id!r} not found; used latest run {verify_artifacts_full.run_id!r}"
-                )
-        else:
-            warnings.append("full verify skipped: plans/verify.sh not found")
-
-    if scenario_cmd:
-        if not is_ref_head:
-            warnings.append("scenario command runs on working tree HEAD; requested ref differs from HEAD")
-        scenario_result = run_named_command(
-            "scenario",
-            ["bash", "-lc", scenario_cmd],
-            repo_path=repo_path,
-            logs_dir=logs_dir,
+        determinism_path = (
+            active_repo / "evidence" / "phase1" / "determinism" / "intent_hashes.txt"
         )
-        scenario_behavior = analyze_scenario_behavior(Path(scenario_result.log_path))
+        traceability_path = (
+            active_repo / "evidence" / "phase1" / "traceability" / "sample_rejection_log.txt"
+        )
+        config_path = (
+            active_repo
+            / "evidence"
+            / "phase1"
+            / "config_fail_closed"
+            / "missing_keys_matrix.json"
+        )
 
-    if flaky_runs > 0:
-        cmd_text = (flaky_cmd or "").strip()
-        if not cmd_text:
-            if scenario_cmd:
-                cmd_text = scenario_cmd
+        determinism_line_count = count_non_empty_lines(determinism_path)
+        determinism_unique_hashes = 0
+        if determinism_path.exists():
+            lines = [
+                line.strip()
+                for line in determinism_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                if line.strip()
+            ]
+            determinism_unique_hashes = len(set(lines))
+
+        traceability_line_count = count_non_empty_lines(traceability_path)
+        traceability_unique_intent_ids = count_unique_intent_ids(traceability_path)
+        config_entries, config_pass, config_fail = analyze_config_matrix(config_path)
+        prd_items = read_prd_items(active_repo)
+        prd_phase1 = analyze_phase1_prd(prd_items)
+        traceability = analyze_traceability(active_repo, prd_items)
+        operational_readiness = analyze_operational_readiness(active_repo, warnings)
+
+        logs_dir = run_dir / name / "logs"
+        meta_test_result: Optional[CommandResult] = None
+        verify_result: Optional[CommandResult] = None
+        verify_full_result: Optional[CommandResult] = None
+        scenario_result: Optional[CommandResult] = None
+        verify_gate_summary = VerifyGateSummary(gate_headers=[], first_failure="", failure_lines=[])
+        verify_full_gate_summary = VerifyGateSummary(
+            gate_headers=[], first_failure="", failure_lines=[]
+        )
+        verify_artifacts_latest = parse_verify_artifacts(active_repo)
+        verify_artifacts_quick: Optional[VerifyArtifactsSummary] = None
+        verify_artifacts_full: Optional[VerifyArtifactsSummary] = None
+        flakiness: Optional[FlakinessSummary] = None
+        scenario_behavior = ScenarioBehaviorSummary(
+            reason_codes=[],
+            status_fields_seen=[],
+            dispatch_counts=[],
+            rejection_lines=0,
+        )
+
+        if run_meta_test:
+            meta_script = active_repo / "tools" / "phase1_meta_test.py"
+            if meta_script.exists():
+                meta_test_result = run_named_command(
+                    "phase1_meta_test",
+                    ["python3", str(meta_script)],
+                    repo_path=active_repo,
+                    logs_dir=logs_dir,
+                )
             else:
-                cmd_text = "./plans/verify.sh quick"
-        if not is_ref_head:
-            warnings.append("flakiness command runs on working tree HEAD; requested ref differs from HEAD")
-        flakiness = run_flakiness_series(
-            repo_path=repo_path,
-            logs_dir=logs_dir,
-            command_text=cmd_text,
-            runs=flaky_runs,
+                warnings.append("meta test skipped: tools/phase1_meta_test.py not found")
+
+        if run_quick_verify:
+            verify_script = active_repo / "plans" / "verify.sh"
+            if verify_script.exists():
+                verify_result = run_named_command(
+                    "verify_quick",
+                    ["./plans/verify.sh", "quick"],
+                    repo_path=active_repo,
+                    logs_dir=logs_dir,
+                )
+                verify_gate_summary = analyze_verify_quick_log(Path(verify_result.log_path))
+                quick_run_id = extract_verify_run_id_from_log(Path(verify_result.log_path))
+                verify_artifacts_quick = parse_verify_artifacts(active_repo, run_id=quick_run_id)
+                if quick_run_id and verify_artifacts_quick.run_id != quick_run_id:
+                    warnings.append(
+                        f"quick verify artifacts for run_id {quick_run_id!r} not found; used latest run {verify_artifacts_quick.run_id!r}"
+                    )
+            else:
+                warnings.append("quick verify skipped: plans/verify.sh not found")
+
+        if run_full_verify:
+            verify_script = active_repo / "plans" / "verify.sh"
+            if verify_script.exists():
+                verify_full_result = run_named_command(
+                    "verify_full",
+                    ["./plans/verify.sh", "full"],
+                    repo_path=active_repo,
+                    logs_dir=logs_dir,
+                )
+                verify_full_gate_summary = analyze_verify_quick_log(
+                    Path(verify_full_result.log_path)
+                )
+                full_run_id = extract_verify_run_id_from_log(Path(verify_full_result.log_path))
+                verify_artifacts_full = parse_verify_artifacts(active_repo, run_id=full_run_id)
+                if full_run_id and verify_artifacts_full.run_id != full_run_id:
+                    warnings.append(
+                        f"full verify artifacts for run_id {full_run_id!r} not found; used latest run {verify_artifacts_full.run_id!r}"
+                    )
+            else:
+                warnings.append("full verify skipped: plans/verify.sh not found")
+
+        if scenario_cmd:
+            scenario_result = run_named_command(
+                "scenario",
+                ["bash", "-lc", scenario_cmd],
+                repo_path=active_repo,
+                logs_dir=logs_dir,
+            )
+            scenario_behavior = analyze_scenario_behavior(Path(scenario_result.log_path))
+
+        if flaky_runs > 0:
+            cmd_text = (flaky_cmd or "").strip()
+            if not cmd_text:
+                if scenario_cmd:
+                    cmd_text = scenario_cmd
+                else:
+                    cmd_text = "./plans/verify.sh quick"
+            flakiness = run_flakiness_series(
+                repo_path=active_repo,
+                logs_dir=logs_dir,
+                command_text=cmd_text,
+                runs=flaky_runs,
+            )
+
+        # Keep "latest artifact" reporting authoritative when this invocation
+        # produced new verify artifacts.
+        if run_quick_verify or run_full_verify:
+            verify_artifacts_latest = parse_verify_artifacts(active_repo)
+
+        diff_shortstat: Optional[str] = None
+        diff_changed_files: Optional[int] = None
+        if base_ref:
+            diff_shortstat, diff_changed_files = gather_diff_stats(
+                active_repo, base_ref, resolved_ref_sha
+            )
+            if diff_shortstat is None:
+                warnings.append(f"diff stats unavailable for base ref {base_ref!r}")
+
+        blockers = (
+            len(missing_required_all)
+            + len(failed_any_of)
+            + (1 if meta_test_result and meta_test_result.exit_code != 0 else 0)
+            + (1 if verify_result and verify_result.exit_code != 0 else 0)
+            + (1 if verify_full_result and verify_full_result.exit_code != 0 else 0)
+            + (1 if scenario_result and scenario_result.exit_code != 0 else 0)
         )
 
-    # Keep "latest artifact" reporting authoritative when this invocation
-    # produced new verify artifacts.
-    if run_quick_verify or run_full_verify:
-        verify_artifacts_latest = parse_verify_artifacts(repo_path)
-
-    diff_shortstat: Optional[str] = None
-    diff_changed_files: Optional[int] = None
-    if base_ref:
-        diff_shortstat, diff_changed_files = gather_diff_stats(repo_path, base_ref, ref)
-        if diff_shortstat is None:
-            warnings.append(f"diff stats unavailable for base ref {base_ref!r}")
-
-    blockers = (
-        len(missing_required_all)
-        + len(failed_any_of)
-        + (1 if meta_test_result and meta_test_result.exit_code != 0 else 0)
-        + (1 if verify_result and verify_result.exit_code != 0 else 0)
-        + (1 if verify_full_result and verify_full_result.exit_code != 0 else 0)
-        + (1 if scenario_result and scenario_result.exit_code != 0 else 0)
-    )
-
-    return RepoResult(
-        name=name,
-        path=str(repo_path),
-        ref=ref,
-        head_branch=head_branch,
-        head_sha=head_sha,
-        resolved_ref_sha=resolved_ref_sha,
-        is_ref_head=is_ref_head,
-        dirty_files=dirty_files,
-        required_source=required_source,
-        required_all=required_all,
-        required_any_of=required_any_of,
-        required_all_ok=required_all_ok,
-        required_all_total=len(required_all),
-        required_any_of_ok=required_any_of_ok,
-        required_any_of_total=len(required_any_of),
-        missing_required_all=missing_required_all,
-        failed_any_of=failed_any_of,
-        file_checks=file_checks,
-        determinism_line_count=determinism_line_count,
-        determinism_unique_hashes=determinism_unique_hashes,
-        traceability_line_count=traceability_line_count,
-        traceability_unique_intent_ids=traceability_unique_intent_ids,
-        config_matrix_entries=config_entries,
-        config_matrix_pass=config_pass,
-        config_matrix_fail=config_fail,
-        verify_gate_summary=verify_gate_summary,
-        prd_phase1=prd_phase1,
-        traceability=traceability,
-        operational_readiness=operational_readiness,
-        verify_full=verify_full_result,
-        verify_full_gate_summary=verify_full_gate_summary,
-        verify_artifacts_latest=verify_artifacts_latest,
-        verify_artifacts_quick=verify_artifacts_quick,
-        verify_artifacts_full=verify_artifacts_full,
-        flakiness=flakiness,
-        scenario_behavior=scenario_behavior,
-        meta_test=meta_test_result,
-        verify_quick=verify_result,
-        scenario=scenario_result,
-        diff_shortstat=diff_shortstat,
-        diff_changed_files=diff_changed_files,
-        blockers=blockers,
-        warnings=warnings,
-    )
+        return RepoResult(
+            name=name,
+            path=str(repo_path),
+            analysis_path=str(active_repo),
+            ref=ref,
+            head_branch=head_branch,
+            head_sha=head_sha,
+            resolved_ref_sha=resolved_ref_sha,
+            is_ref_head=is_ref_head,
+            dirty_files=dirty_files,
+            required_source=required_source,
+            required_all=required_all,
+            required_any_of=required_any_of,
+            required_all_ok=required_all_ok,
+            required_all_total=len(required_all),
+            required_any_of_ok=required_any_of_ok,
+            required_any_of_total=len(required_any_of),
+            missing_required_all=missing_required_all,
+            failed_any_of=failed_any_of,
+            file_checks=file_checks,
+            determinism_line_count=determinism_line_count,
+            determinism_unique_hashes=determinism_unique_hashes,
+            traceability_line_count=traceability_line_count,
+            traceability_unique_intent_ids=traceability_unique_intent_ids,
+            config_matrix_entries=config_entries,
+            config_matrix_pass=config_pass,
+            config_matrix_fail=config_fail,
+            verify_gate_summary=verify_gate_summary,
+            prd_phase1=prd_phase1,
+            traceability=traceability,
+            operational_readiness=operational_readiness,
+            verify_full=verify_full_result,
+            verify_full_gate_summary=verify_full_gate_summary,
+            verify_artifacts_latest=verify_artifacts_latest,
+            verify_artifacts_quick=verify_artifacts_quick,
+            verify_artifacts_full=verify_artifacts_full,
+            flakiness=flakiness,
+            scenario_behavior=scenario_behavior,
+            meta_test=meta_test_result,
+            verify_quick=verify_result,
+            scenario=scenario_result,
+            diff_shortstat=diff_shortstat,
+            diff_changed_files=diff_changed_files,
+            blockers=blockers,
+            warnings=warnings,
+        )
+    finally:
+        # NOTE: cleanup_ref_worktree may append to `warnings`, but RepoResult
+        # was already constructed above.  This is intentional — cleanup warnings
+        # are logged via the list reference but do not affect the result's
+        # blockers/status.  The caller logs all warnings separately.
+        if snapshot:
+            cleanup_ref_worktree(repo_path, snapshot, warnings)
 
 
 def command_status(result: Optional[CommandResult]) -> str:
@@ -1355,7 +1475,9 @@ def build_report_markdown(
     lines.append(f"- Run ID: `{run_id}`")
     lines.append(f"- Generated (UTC): `{datetime.now(timezone.utc).isoformat()}`")
     lines.append(f"- Repo A: `{a.name}` at `{a.path}`")
+    lines.append(f"- Repo A analysis snapshot: `{a.analysis_path}`")
     lines.append(f"- Repo B: `{b.name}` at `{b.path}`")
+    lines.append(f"- Repo B analysis snapshot: `{b.analysis_path}`")
     lines.append("")
     lines.append("## Snapshot")
     lines.append("")
@@ -1673,9 +1795,9 @@ def build_report_markdown(
         check_a = path_to_a.get(path)
         check_b = path_to_b.get(path)
         if check_a is None:
-            check_a = file_check(Path(a.path), path)
+            check_a = file_check(Path(a.analysis_path), path)
         if check_b is None:
-            check_b = file_check(Path(b.path), path)
+            check_b = file_check(Path(b.analysis_path), path)
         same_hash = (
             "yes"
             if check_a.exists

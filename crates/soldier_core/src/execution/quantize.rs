@@ -84,8 +84,16 @@ fn boundary_tolerance(raw: f64, step: f64) -> f64 {
     ulp_scaled.min(step_capped).max(step_abs * BOUNDARY_EPS)
 }
 
-fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> i64 {
+fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> Result<i64, QuantizeError> {
     let ratio = raw / step;
+    // Guard: NaN, ±Infinity from division
+    if !ratio.is_finite() {
+        return Err(QuantizeError::InvalidInput { field: "ratio" });
+    }
+    // Guard: i64 overflow before cast
+    if ratio.abs() > (i64::MAX as f64) {
+        return Err(QuantizeError::InvalidInput { field: "ratio_overflow" });
+    }
     let mut steps = if round_up {
         ratio.ceil() as i64
     } else {
@@ -109,7 +117,7 @@ fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> i64 {
         }
     }
 
-    steps
+    Ok(steps)
 }
 
 /// Observability metrics for quantization (AT-908).
@@ -189,9 +197,12 @@ pub fn quantize(
             field: "raw_limit_price",
         });
     }
+    if raw_qty < 0.0 {
+        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
+    }
 
     // Quantity: always round down (never round up size)
-    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false);
+    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false)?;
     let qty_q = qty_steps as f64 * constraints.amount_step;
 
     // AT-908: reject if quantized quantity is below minimum
@@ -206,9 +217,9 @@ pub fn quantize(
     // Price: direction-dependent rounding
     let price_ticks = match side {
         // BUY: round down (never pay extra)
-        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false),
+        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false)?,
         // SELL: round up (never sell cheaper)
-        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true),
+        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true)?,
     };
     let limit_price_q = price_ticks as f64 * constraints.tick_size;
 
