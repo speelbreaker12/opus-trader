@@ -182,9 +182,7 @@ pub fn evaluate_intent_pipeline(
                                 RejectReasonCode::ExpectedSlippageTooHigh
                             }
                             LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
-                                // Depth shortfall is a liquidity rejection without a dedicated
-                                // reject-reason code in the current registry.
-                                RejectReasonCode::ExpectedSlippageTooHigh
+                                RejectReasonCode::InsufficientDepthWithinBudget
                             }
                         });
                         false

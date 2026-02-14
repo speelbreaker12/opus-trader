@@ -33,6 +33,7 @@ pub use dispatch_map::{
 pub use gate::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
     LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    expected_slippage_bps_samples, liquidity_gate_reject_total,
 };
 pub use gates::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,

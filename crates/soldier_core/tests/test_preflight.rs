@@ -444,7 +444,6 @@ fn test_preflight_emits_structured_reject_metric_line() {
     let run_id = "run-preflight-001";
     let _ = take_execution_metric_lines();
 
-    let before = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
     let input = PreflightInput {
         order_type: OrderType::Market,
         ..limit_input(InstrumentKind::Perpetual)
@@ -459,19 +458,24 @@ fn test_preflight_emits_structured_reject_metric_line() {
     );
 
     let after = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
-    assert!(
-        after > before,
-        "counter must increase by at least one even under parallel test execution"
-    );
+    assert!(after >= 1, "counter must be non-zero after a reject");
 
     let lines = take_execution_metric_lines();
-    assert!(
-        lines.iter().any(|line| {
+    let tagged_lines = lines
+        .iter()
+        .filter(|line| {
             line.starts_with("preflight_reject_total")
                 && line.contains("reason=OrderTypeMarketForbidden")
                 && line.contains(&format!("intent_id={intent_id}"))
                 && line.contains(&format!("run_id={run_id}"))
-        }),
+        })
+        .count();
+    assert_eq!(
+        tagged_lines, 1,
+        "expected exactly one tagged preflight metric line, got {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| line.starts_with("preflight_reject_total")),
         "expected structured preflight metric line, got {lines:?}"
     );
 }

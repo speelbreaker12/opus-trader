@@ -96,10 +96,11 @@ pub fn build_open_order_intent_runtime(
         true,
         input.wal_recorded,
         Some(input.liquidity_input.order_qty),
-        Some(input.liquidity_input.order_qty),
+        None,
     );
 
     let mut pending_reservation_id = None;
+    let mut max_dispatch_qty = Some(input.liquidity_input.order_qty);
     let mut adjusted_min_edge_usd = None;
     let mut liquidity_override_reason: Option<&'static str> = None;
 
@@ -142,10 +143,23 @@ pub fn build_open_order_intent_runtime(
         }
 
         if liquidity_override_reason.is_none() {
-            gate_results.liquidity_gate_passed = matches!(
-                evaluate_liquidity_gate(&input.liquidity_input, &mut runtime_metrics.liquidity),
-                LiquidityGateResult::Allowed { .. }
-            );
+            gate_results.liquidity_gate_passed = match evaluate_liquidity_gate(
+                &input.liquidity_input,
+                &mut runtime_metrics.liquidity,
+            ) {
+                LiquidityGateResult::Allowed { allowed_qty, .. } => {
+                    if let Some(qty) = allowed_qty {
+                        max_dispatch_qty = Some(qty);
+                    }
+                    true
+                }
+                LiquidityGateResult::Rejected { allowed_qty, .. } => {
+                    if let Some(qty) = allowed_qty {
+                        max_dispatch_qty = Some(qty);
+                    }
+                    false
+                }
+            };
 
             if gate_results.liquidity_gate_passed {
                 let first_net_edge =
@@ -221,6 +235,7 @@ pub fn build_open_order_intent_runtime(
         gate_results.pricer_passed = false;
     }
 
+    gate_results.max_dispatch_qty = max_dispatch_qty;
     let mut choke_result = build_order_intent(
         ChokeIntentClass::Open,
         effective_risk_state,

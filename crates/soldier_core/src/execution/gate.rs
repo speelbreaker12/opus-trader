@@ -558,11 +558,14 @@ pub fn evaluate_liquidity_gate(
                 if let Some(value) = slippage_bps {
                     record_expected_slippage_sample(value);
                 }
-                let reject_reason = match slippage_bps {
-                    Some(value) if value > input.max_slippage_bps => {
+                let reject_reason = match input.intent_class {
+                    GateIntentClass::Open => {
                         LiquidityGateRejectReason::InsufficientDepthWithinBudget
                     }
-                    _ => LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+                    GateIntentClass::Close | GateIntentClass::Hedge => {
+                        LiquidityGateRejectReason::ExpectedSlippageTooHigh
+                    }
+                    GateIntentClass::CancelOnly => unreachable!("handled above"),
                 };
                 return reject_with_metrics(
                     metrics,
@@ -583,15 +586,9 @@ pub fn evaluate_liquidity_gate(
                 if let Some(value) = slippage_bps {
                     record_expected_slippage_sample(value);
                 }
-                let reject_reason = match slippage_bps {
-                    Some(value) if value > input.max_slippage_bps => {
-                        LiquidityGateRejectReason::InsufficientDepthWithinBudget
-                    }
-                    _ => LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-                };
                 return reject_with_metrics(
                     metrics,
-                    reject_reason,
+                    LiquidityGateRejectReason::InsufficientDepthWithinBudget,
                     wap,
                     slippage_bps,
                     Some(fillable_qty),

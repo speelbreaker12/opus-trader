@@ -366,7 +366,10 @@ fn test_partial_fill_from_thin_book_evaluates_available() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!(
                 wap.is_some(),
                 "thin-book reject must include WAP diagnostics"
@@ -532,7 +535,7 @@ fn test_non_marketable_open_still_enforces_depth_budget() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
