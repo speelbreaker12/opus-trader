@@ -180,6 +180,10 @@ contract_sha="$(sha256_file "$AUDIT_CONTRACT_FILE")"
 plan_sha="$(sha256_file "$AUDIT_PLAN_FILE")"
 workflow_sha="$(sha256_file "$AUDIT_WORKFLOW_CONTRACT_FILE")"
 prompt_sha="$(sha256_file "$AUDITOR_PROMPT")"
+slice_cache_sha=""
+if [[ "$AUDIT_SCOPE" == "slice" && -f "$AUDIT_PRD_SLICE_FILE" ]]; then
+  slice_cache_sha="$(sha256_file "$AUDIT_PRD_SLICE_FILE")"
+fi
 
 audit_cache_matches() {
   if ! command -v jq >/dev/null 2>&1; then
@@ -213,8 +217,10 @@ audit_cache_matches() {
   fi
   if ! jq -e \
     --arg prd_sha "$expected_sha" \
+    --arg slice_sha "$slice_cache_sha" \
+    --arg audit_scope "$AUDIT_SCOPE" \
     '
-      .prd_sha256 == $prd_sha and
+      (.prd_sha256 == $prd_sha or ($audit_scope == "slice" and $slice_sha != "" and .prd_sha256 == $slice_sha)) and
       ((.summary.items_fail | tonumber? // 1) == 0) and
       ((.summary.items_blocked | tonumber? // 1) == 0)
     ' "$AUDIT_OUTPUT_JSON" >/dev/null 2>&1; then
