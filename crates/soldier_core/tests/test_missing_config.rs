@@ -337,6 +337,14 @@ fn test_all_rejections_have_enumerated_reason_codes() {
         LiquidityGateRejectReason::LiquidityGateNoL2,
         LiquidityGateRejectReason::LiquidityGateNoL2
     ));
+    assert!(matches!(
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget,
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget
+    ));
+    assert!(matches!(
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh
+    ));
 }
 
 // ─── No persistent side effects on config-missing rejections ─────────────
