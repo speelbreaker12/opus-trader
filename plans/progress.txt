@@ -497,3 +497,10 @@ Commands: ./plans/codex_review_logged.sh S3-000 --commit HEAD --title 'S3-000: C
 Evidence: crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/execution/pipeline.rs; crates/soldier_core/tests/test_intent_pipeline.rs; crates/soldier_core/tests/test_preflight.rs; artifacts/story/S3-000/codex/20260213T234952Z_53894_142_review.md; artifacts/story/S3-000/kimi/20260213T235835Z_63006_2856_review.md; artifacts/story/S3-000/codex/20260214T000130Z_64416_2490_review.md; artifacts/verify/20260213_181052; artifacts/verify/20260213_182512; plans/prd.json.
 Notes: `./plans/verify.sh quick` passed after fixes and after PRD scope alignment (dirty-tree warning only from generated artifacts, no bypass flags).
 Next: run `./plans/verify.sh full` before any further pass-state changes or merge gating.
+Story: S3-000
+Date: 2026-02-13
+Summary: Completed full verify after review-loop remediation and PRD alignment.
+Commands: ./plans/verify.sh full.
+Evidence: artifacts/verify/20260213_183150.
+Notes: Full verify passed (dirty-tree warning only from generated artifacts, no bypass flags).
+Next: prepare merge/PR handoff with review artifacts attached.
