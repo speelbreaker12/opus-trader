@@ -1,0 +1,12 @@
+# Codex review
+
+- Story: WF-002
+- HEAD: 8a33b5037267c35dd6c3bbc6d7fcdc4b0db9fd89
+- Timestamp (UTC): 20260214T183102Z
+- Branch: story/WF-002-findings-guard-wrapper
+- Review pass: first
+
+## Findings
+- Blocking: none
+- Major: none
+- Medium: none

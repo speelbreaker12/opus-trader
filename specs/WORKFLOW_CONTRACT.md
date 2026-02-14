@@ -123,6 +123,7 @@ This is the only approved execution loop.
 6.4) Turn top findings into failing tests first (red phase).
 6.5) Fix until those tests pass (green phase).
 6.6) Run `./plans/verify.sh quick` again after fixes.
+  - Sequence-bound equivalent is `plans/workflow_quick_step.sh <STORY_ID> <checkpoint>`; it must execute `./plans/verify.sh quick`.
 7) Sync with integration branch (merge/rebase `run/slice1-clean` into story branch).
    - If this changed anything, run `./plans/verify.sh quick` again.
 8) Freeze the story worktree and run `./plans/verify.sh full` (nohup allowed).
@@ -266,6 +267,7 @@ Changes to any of these are “harness changes”:
 
 Harness changes require:
 - `./plans/verify.sh full` green on a clean worktree before merge.
+- deterministic toggle-policy validation via `./plans/toggle_policy_check.sh` (invalid values fail closed).
 
 No other process requirements are imposed.
 

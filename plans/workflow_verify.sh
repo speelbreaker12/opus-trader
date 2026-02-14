@@ -34,6 +34,8 @@ check_script "plans/self_review_logged.sh"
 check_script "plans/story_postmortem_logged.sh"
 check_script "plans/story_review_gate.sh"
 check_script "plans/stoic_cli_invariant_check.sh"
+check_script "plans/workflow_quick_step.sh"
+check_script "plans/toggle_policy_check.sh"
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick
