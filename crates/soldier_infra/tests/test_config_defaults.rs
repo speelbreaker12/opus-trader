@@ -207,3 +207,55 @@ fn test_resolve_some_returns_explicit_value() {
     let result = resolve_config_value(ConfigParam::MmUtilKill, Some(0.90));
     assert_eq!(result.unwrap(), 0.90);
 }
+
+// --- Config value validation (fail-closed on invalid inputs) ---
+
+#[test]
+fn test_nan_config_value_rejected() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(f64::NAN));
+    assert!(result.is_err());
+    assert!(result.unwrap_err().reason.contains("non-finite"));
+}
+
+#[test]
+fn test_infinity_config_value_rejected() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(f64::INFINITY));
+    assert!(result.is_err());
+    assert!(result.unwrap_err().reason.contains("non-finite"));
+}
+
+#[test]
+fn test_neg_infinity_config_value_rejected() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(f64::NEG_INFINITY));
+    assert!(result.is_err());
+    // NEG_INFINITY is non-finite, so either "non-finite" or "negative" reason is acceptable
+}
+
+#[test]
+fn test_negative_config_value_rejected() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(-1.0));
+    assert!(result.is_err());
+    assert!(result.unwrap_err().reason.contains("negative"));
+}
+
+#[test]
+fn test_zero_config_value_allowed() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(0.0));
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 0.0);
+}
+
+#[test]
+fn test_positive_config_value_allowed() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(300.0));
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 300.0);
+}
+
+#[test]
+fn test_none_with_default_returns_default() {
+    // WatchdogKillS has an Appendix A default of 10.0
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, None);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 10.0);
+}

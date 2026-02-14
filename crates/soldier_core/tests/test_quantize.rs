@@ -571,3 +571,62 @@ fn test_zero_min_amount_allows_zero_qty() {
     let result = quantize(0.05, 50_000.0, Side::Buy, &constraints, &mut metrics);
     assert!(result.is_ok());
 }
+
+// ─── Overflow / non-finite ratio guards ─────────────────────────────────
+
+#[test]
+fn test_ratio_nan_rejected() {
+    let mut m = QuantizeMetrics::new();
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 0.001, min_amount: 0.001 };
+    let result = quantize(f64::NAN, 100.0, Side::Buy, &c, &mut m);
+    assert!(matches!(result, Err(QuantizeError::InvalidInput { field: "raw_qty" })));
+}
+
+#[test]
+fn test_ratio_infinity_rejected() {
+    let mut m = QuantizeMetrics::new();
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 0.001, min_amount: 0.001 };
+    let result = quantize(f64::INFINITY, 100.0, Side::Buy, &c, &mut m);
+    assert!(matches!(result, Err(QuantizeError::InvalidInput { .. })));
+}
+
+#[test]
+fn test_ratio_neg_infinity_rejected() {
+    let mut m = QuantizeMetrics::new();
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 0.001, min_amount: 0.001 };
+    let result = quantize(f64::NEG_INFINITY, 100.0, Side::Buy, &c, &mut m);
+    assert!(matches!(result, Err(QuantizeError::InvalidInput { .. })));
+}
+
+#[test]
+fn test_overflow_ratio_rejected() {
+    let mut m = QuantizeMetrics::new();
+    // qty=1e18, amount_step=1e-9 → ratio ~1e27 which overflows i64
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 1e-9, min_amount: 0.0 };
+    let result = quantize(1e18, 100.0, Side::Buy, &c, &mut m);
+    assert!(matches!(result, Err(QuantizeError::InvalidInput { .. })));
+}
+
+#[test]
+fn test_negative_qty_rejected() {
+    let mut m = QuantizeMetrics::new();
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 0.001, min_amount: 0.001 };
+    let result = quantize(-1.0, 100.0, Side::Buy, &c, &mut m);
+    assert!(matches!(result, Err(QuantizeError::InvalidInput { field: "raw_qty" })));
+}
+
+#[test]
+fn test_zero_qty_with_zero_min_allowed() {
+    let mut m = QuantizeMetrics::new();
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 0.001, min_amount: 0.0 };
+    let result = quantize(0.0, 100.0, Side::Buy, &c, &mut m);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_nan_limit_price_rejected() {
+    let mut m = QuantizeMetrics::new();
+    let c = QuantizeConstraints { tick_size: 0.01, amount_step: 0.001, min_amount: 0.001 };
+    let result = quantize(1.0, f64::NAN, Side::Buy, &c, &mut m);
+    assert!(matches!(result, Err(QuantizeError::InvalidInput { field: "raw_limit_price" })));
+}
