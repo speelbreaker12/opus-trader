@@ -1,4 +1,4 @@
-//! Expiry Cliff Guard per CONTRACT.md §S1.4.
+//! Expiry Cliff Guard per CONTRACT.md §1.0.Y.
 //!
 //! **Purpose:** Prevent new exposure (OPEN intents) on instruments approaching
 //! or past their expiration timestamp. CLOSE/HEDGE/CANCEL remain allowed.
@@ -199,7 +199,7 @@ impl Default for ExpiryGuardMetrics {
 
 /// Evaluate an intent against the Expiry Cliff Guard.
 ///
-/// CONTRACT.md §S1.4:
+/// CONTRACT.md §1.0.Y:
 /// - If `expiration_timestamp_ms` is present and `now_ms` is within
 ///   `expiry_delist_buffer_s` of expiry, reject OPEN with
 ///   `Rejected(InstrumentExpiredOrDelisted)`.
@@ -252,7 +252,7 @@ pub fn evaluate_expiry_guard(
 
 /// Handle a terminal lifecycle error for an instrument.
 ///
-/// CONTRACT.md §S1.4:
+/// CONTRACT.md §1.0.Y:
 /// - Terminal errors → classify as `Terminal(InstrumentExpiredOrDelisted)`.
 /// - MUST NOT panic. MUST NOT restart process.
 /// - Reconcile that instrument only, mark `instrument_state=ExpiredOrDelisted`.

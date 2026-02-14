@@ -1,6 +1,6 @@
 //! Acceptance tests for the Expiry Cliff Guard (S1-012).
 //!
-//! CONTRACT.md §S1.4: Instrument lifecycle + expiry safety.
+//! CONTRACT.md §1.0.Y: Instrument lifecycle + expiry safety.
 //!
 //! Each test isolates the expiry guard as the sole cause of the outcome,
 //! proving causality via dispatch count (0 vs 1), specific reject reason,
