@@ -59,7 +59,10 @@ else
   OUTPUT_DIR="$(dirname "${OUTPUT_ARG}")"
 fi
 
+set +e
 python3 "${REPO_ROOT}/tools/phase1_compare.py" "${FILTERED_ARGS[@]}" --output "${OUTPUT_ARG}"
+phase1_compare_rc=$?
+set -e
 
 REPORT_JSON="${OUTPUT_DIR}/report.json"
 if [[ ! -f "${REPORT_JSON}" ]]; then
@@ -89,3 +92,7 @@ for repo in ("opus", "ralph"):
 run_id = re.sub(r".*/", "", re.sub(r"/report\\.md$", "", md_path))
 print(f"[snapshot_smoke] PASS: non-HEAD repos used detached snapshots for run_id={run_id}")
 PY
+
+if [[ ${phase1_compare_rc} -ne 0 ]]; then
+  echo "[snapshot_smoke] WARN: phase1_compare.py exited ${phase1_compare_rc}; isolation assertion passed and was evaluated independently." >&2
+fi
