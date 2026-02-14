@@ -272,6 +272,7 @@ Changes to any of these are “harness changes”:
 
 Harness changes require:
 - `./plans/verify.sh full` green on a clean worktree before merge.
+- `./plans/story_review_equivalence_check.sh` must pass; drift is fail-closed (`STORY_REVIEW_EQUIVALENCE_DRIFT`).
 - deterministic toggle-policy validation via `./plans/toggle_policy_check.sh` (invalid values fail closed).
 
 No other process requirements are imposed.

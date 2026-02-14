@@ -72,8 +72,10 @@ required=(
   plans/toggle_policy_check.sh
   plans/ssot_lint.sh
   plans/story_postmortem_logged.sh
+  plans/story_review_equivalence_check.sh
   plans/story_review_findings_guard.sh
   plans/story_review_gate.sh
+  plans/story_review_equivalence_matrix.json
   plans/story_verify_allowlist.txt
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh
@@ -95,6 +97,7 @@ required=(
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh
   plans/tests/test_stoic_cli_invariant_check.sh
+  plans/tests/test_story_review_equivalence_check.sh
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_story_review_gate.sh
   plans/tests/test_thinking_review_logged.sh

@@ -102,6 +102,7 @@ Mark that CI job as required in branch protection.
 - `passes=true` requires full-verify artifacts and review evidence for the same `HEAD`.
 - `verify.meta.json.head_sha` must equal the current branch `HEAD` at pass-flip time.
 - `./plans/prd_set_pass.sh` enforces evidence checks via `./plans/story_review_gate.sh`.
+- `./plans/story_review_equivalence_check.sh` enforces anti-drift parity between required review invariants and tracked matrix rows.
 - If `HEAD` changes after review starts, regenerate the complete review set for the chosen SHA.
 
 ## References

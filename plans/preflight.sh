@@ -186,6 +186,22 @@ else
   exit 2
 fi
 
+# 3ea. Story-review equivalence matrix guard (fail-closed)
+STORY_REVIEW_EQUIVALENCE_GUARD="plans/story_review_equivalence_check.sh"
+if [[ -x "$STORY_REVIEW_EQUIVALENCE_GUARD" ]]; then
+  if "$STORY_REVIEW_EQUIVALENCE_GUARD"; then
+    pass "Story-review equivalence matrix guard"
+  else
+    fail "Story-review equivalence matrix guard failed"
+  fi
+elif [[ -f "$STORY_REVIEW_EQUIVALENCE_GUARD" ]]; then
+  echo "[FAIL] Story-review equivalence guard not executable: $STORY_REVIEW_EQUIVALENCE_GUARD (setup error)" >&2
+  exit 2
+else
+  echo "[FAIL] Missing story-review equivalence guard: $STORY_REVIEW_EQUIVALENCE_GUARD (setup error)" >&2
+  exit 2
+fi
+
 # 3f. stoic-cli critical invariants guard (fail-closed)
 STOIC_CLI_INVARIANT_GUARD="plans/stoic_cli_invariant_check.sh"
 if [[ -x "$STOIC_CLI_INVARIANT_GUARD" ]]; then
@@ -267,6 +283,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
+  "plans/tests/test_story_review_equivalence_check.sh"
   "plans/tests/test_fork_attestation_remediation_verify.sh"
   "plans/tests/test_fork_attestation_mirror.sh"
   "plans/tests/test_workflow_quick_step.sh"
