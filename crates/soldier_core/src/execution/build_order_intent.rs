@@ -207,7 +207,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::Preflight,
-                reason: "preflight rejected".to_string(),
+                reason: REJECT_REASON_PREFLIGHT.to_string(),
             },
             trace,
         );
@@ -220,7 +220,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::Quantize,
-                reason: "quantize failed".to_string(),
+                reason: REJECT_REASON_QUANTIZE.to_string(),
             },
             trace,
         );
@@ -233,7 +233,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::DispatchConsistency,
-                reason: "dispatch consistency failed".to_string(),
+                reason: REJECT_REASON_DISPATCH_CONSISTENCY.to_string(),
             },
             trace,
         );
@@ -251,7 +251,7 @@ pub fn build_order_intent(
                     metrics,
                     ChokeRejectReason::GateRejected {
                         gate: GateStep::DispatchConsistency,
-                        reason: "requested qty exceeds liquidity clamp".to_string(),
+                        reason: REJECT_REASON_DISPATCH_CLAMP_EXCEEDED.to_string(),
                     },
                     trace,
                 );
@@ -262,7 +262,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::DispatchConsistency,
-                    reason: "incomplete liquidity clamp metadata".to_string(),
+                    reason: REJECT_REASON_DISPATCH_CLAMP_INCOMPLETE.to_string(),
                 },
                 trace,
             );
@@ -276,7 +276,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::FeeCacheCheck,
-                reason: "fee cache stale".to_string(),
+                reason: REJECT_REASON_FEE_CACHE_STALE.to_string(),
             },
             trace,
         );
@@ -291,7 +291,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::LiquidityGate,
-                    reason: "liquidity gate rejected".to_string(),
+                    reason: REJECT_REASON_LIQUIDITY_GATE.to_string(),
                 },
                 trace,
             );
@@ -304,7 +304,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::NetEdgeGate,
-                    reason: "net edge too low".to_string(),
+                    reason: REJECT_REASON_NET_EDGE.to_string(),
                 },
                 trace,
             );
@@ -317,7 +317,7 @@ pub fn build_order_intent(
                 metrics,
                 ChokeRejectReason::GateRejected {
                     gate: GateStep::Pricer,
-                    reason: "pricer rejected".to_string(),
+                    reason: REJECT_REASON_PRICER.to_string(),
                 },
                 trace,
             );
@@ -331,7 +331,7 @@ pub fn build_order_intent(
             metrics,
             ChokeRejectReason::GateRejected {
                 gate: GateStep::RecordedBeforeDispatch,
-                reason: "WAL append failed".to_string(),
+                reason: REJECT_REASON_WAL.to_string(),
             },
             trace,
         );

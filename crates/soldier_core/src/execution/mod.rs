@@ -9,6 +9,7 @@ pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
 pub mod gates;
+pub mod inventory_skew;
 pub mod label;
 pub mod order_size;
 pub mod pipeline;
@@ -36,6 +37,10 @@ pub use gate::{
 pub use gates::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
     net_edge_reject_total,
+};
+pub use inventory_skew::{
+    InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
+    InventorySkewSide, evaluate_inventory_skew,
 };
 pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,

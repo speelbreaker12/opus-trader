@@ -1,6 +1,6 @@
 //! Tests for Pre-Trade Liquidity Gate per CONTRACT.md §1.3.
 //!
-//! AT-222: Slippage > max_slippage_bps → reject with ExpectedSlippageTooHigh.
+//! AT-222: OPEN depth shortfall within slippage budget -> reject with InsufficientDepthWithinBudget.
 //! AT-344: Missing/stale L2 → reject OPEN, no dispatch.
 //! AT-909: Missing/stale L2 → Rejected(LiquidityGateNoL2).
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
@@ -66,13 +66,17 @@ fn test_at222_slippage_exceeds_max_rejected() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!((wap.unwrap() - 105.0).abs() < 1e-9);
             assert!(slippage_bps.unwrap() > 10.0);
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
-    assert_eq!(m.reject_slippage(), 1);
+    assert_eq!(m.reject_depth_shortfall(), 1);
+    assert_eq!(m.reject_slippage(), 0);
 }
 
 #[test]
@@ -87,7 +91,7 @@ fn test_at222_no_order_intent_on_rejection() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
@@ -173,7 +177,10 @@ fn test_sell_walks_bids() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!((wap.unwrap() - 95.0).abs() < 1e-9);
             assert!(slippage_bps.unwrap() > 10.0);
         }
@@ -401,6 +408,46 @@ fn test_multi_level_wap_computation() {
     }
 }
 
+#[test]
+fn test_open_wap_budget_allows_small_tail_beyond_level_cap() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // Full-order WAP is within 10 bps despite a tiny tail at a far level.
+    let snap = book(vec![(100.0, 10.0), (200.0, 0.01)], vec![], 900);
+    let input = gate_input(10.01, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed {
+            allowed_qty,
+            slippage_bps,
+            ..
+        } => {
+            assert!((allowed_qty.unwrap() - 10.01).abs() < 1e-9);
+            assert!(slippage_bps.unwrap() <= 10.0 + 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_overflowed_slippage_budget_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(f64::MAX, 1.0)], vec![], 900);
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+    assert_eq!(m.reject_no_l2(), 1);
+}
+
 // ─── Metrics default ────────────────────────────────────────────────────
 
 #[test]
@@ -408,6 +455,7 @@ fn test_metrics_default() {
     let m = LiquidityGateMetrics::default();
     assert_eq!(m.reject_no_l2(), 0);
     assert_eq!(m.reject_slippage(), 0);
+    assert_eq!(m.reject_depth_shortfall(), 0);
     assert_eq!(m.allowed_total(), 0);
 }
 
