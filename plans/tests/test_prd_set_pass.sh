@@ -219,7 +219,7 @@ EOF
 
 noflock_bin="$tmp_dir/noflock-bin"
 mkdir -p "$noflock_bin"
-for tool in bash jq mkdir rmdir mktemp mv; do
+for tool in bash dirname jq mkdir rmdir mktemp mv; do
   tool_path="$(command -v "$tool" || true)"
   [[ -n "$tool_path" ]] || fail "missing required tool for no-flock case: $tool"
   ln -s "$tool_path" "$noflock_bin/$tool"
