@@ -12,6 +12,8 @@ plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_skip_entrypoint.sh
 plans/checkpoint_dependency_manifest.json
 plans/checkpoint_fingerprint_env_manifest.txt
+plans/ci/requirements-crossref.txt
+plans/ci/requirements-verify.txt
 plans/code_review_expert_logged.sh
 plans/codex_review_digest.sh
 plans/codex_review_let_pass.sh
@@ -72,6 +74,7 @@ plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_kimi_review_logged.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
+plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
 plans/tests/test_roadmap_evidence_audit.sh

@@ -111,9 +111,54 @@ validate_review_reference() {
   esac
 
   grep -Fxq -- "- Story: $story" "$ref_path" || die "referenced ${label} missing '- Story: $story' ($ref_path)"
-  grep -Fxq -- "- HEAD: $HEAD_SHA" "$ref_path" || die "referenced ${label} does not match HEAD=$HEAD_SHA ($ref_path)"
+  grep -Fxq -- "- HEAD: $REVIEW_HEAD_SHA" "$ref_path" || die "referenced ${label} does not match HEAD=$REVIEW_HEAD_SHA ($ref_path)"
 
   printf '%s\n' "$ref_path"
+}
+
+find_self_review_for_head() {
+  local self_dir="$1"
+  local story_id="$2"
+  local head_sha="$3"
+  local match=""
+
+  if [[ -d "$self_dir" ]]; then
+    while IFS= read -r f; do
+      [[ -f "$f" ]] || continue
+      if grep -Fxq -- "Story: $story_id" "$f" && grep -Fxq -- "HEAD: $head_sha" "$f"; then
+        match="$f"
+        break
+      fi
+    done < <(find "$self_dir" -maxdepth 1 -type f -name '*_self_review.md' | LC_ALL=C sort -r)
+  fi
+
+  printf '%s\n' "$match"
+}
+
+resolve_artifact_only_parent_head() {
+  local head_sha="$1"
+  local story_id="$2"
+  local parent_sha=""
+  local changed_paths=""
+  local path=""
+
+  [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+  git cat-file -e "${head_sha}^{commit}" >/dev/null 2>&1 || return 1
+  parent_sha="$(git rev-parse "${head_sha}^" 2>/dev/null || true)"
+  [[ -n "$parent_sha" ]] || return 1
+
+  changed_paths="$(git diff --name-only "$parent_sha..$head_sha" 2>/dev/null || true)"
+  [[ -n "$changed_paths" ]] || return 1
+
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    case "$path" in
+      artifacts/story/"$story_id"/*) ;;
+      *) return 1 ;;
+    esac
+  done <<< "$changed_paths"
+
+  printf '%s\n' "$parent_sha"
 }
 
 story="${1:-}"
@@ -150,6 +195,8 @@ cd "$repo_root"
 if [[ -z "$HEAD_SHA" ]]; then
   HEAD_SHA="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null)" || die "failed to read HEAD"
 fi
+REQUESTED_HEAD_SHA="$HEAD_SHA"
+REVIEW_HEAD_SHA="$HEAD_SHA"
 
 art_root="${ART_ROOT_OVERRIDE:-${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}}"
 if [[ "$art_root" != /* ]]; then
@@ -159,27 +206,31 @@ story_dir="$art_root/$story"
 
 # ---------- Self review ----------
 self_dir="$story_dir/self_review"
-self_file=""
+self_file="$(find_self_review_for_head "$self_dir" "$story" "$REVIEW_HEAD_SHA")"
+self_files_found=0
+review_head_fallback=0
+fallback_parent_sha=""
 self_files_found=0
 if [[ -d "$self_dir" ]]; then
-  while IFS= read -r f; do
-    [[ -f "$f" ]] || continue
-    self_files_found=1
-    if grep -Fxq -- "Story: $story" "$f" && grep -Fxq -- "HEAD: $HEAD_SHA" "$f"; then
-      self_file="$f"
-      break
-    fi
-  done < <(find "$self_dir" -maxdepth 1 -type f -name '*_self_review.md' | LC_ALL=C sort -r)
+  self_files_found="$(find "$self_dir" -maxdepth 1 -type f -name '*_self_review.md' | wc -l | tr -d ' ')"
+fi
+if [[ -z "$self_file" ]]; then
+  fallback_parent_sha="$(resolve_artifact_only_parent_head "$REQUESTED_HEAD_SHA" "$story" || true)"
+  if [[ -n "$fallback_parent_sha" ]]; then
+    REVIEW_HEAD_SHA="$fallback_parent_sha"
+    review_head_fallback=1
+    self_file="$(find_self_review_for_head "$self_dir" "$story" "$REVIEW_HEAD_SHA")"
+  fi
 fi
 if [[ -z "$self_file" ]]; then
   if [[ "$self_files_found" -eq 1 ]]; then
-    die "self-review not for current HEAD ($HEAD_SHA) in: $self_dir"
+    die "self-review not for current HEAD ($REQUESTED_HEAD_SHA) in: $self_dir"
   fi
   die "missing self-review artifact in: $self_dir"
 fi
 
 require_fixed_line "$self_file" "Story: $story" "self-review missing 'Story: $story'"
-require_fixed_line "$self_file" "HEAD: $HEAD_SHA" "self-review not for current HEAD ($HEAD_SHA)"
+require_fixed_line "$self_file" "HEAD: $REVIEW_HEAD_SHA" "self-review not for current HEAD ($REVIEW_HEAD_SHA)"
 require_fixed_line "$self_file" "Decision: PASS" "self-review Decision is not PASS"
 require_fixed_line "$self_file" "- Failure-Mode Review: DONE" "self-review missing '- Failure-Mode Review: DONE'"
 require_fixed_line "$self_file" "- Strategic Failure Review: DONE" "self-review missing '- Strategic Failure Review: DONE'"
@@ -190,13 +241,13 @@ kimi_match=""
 if [[ -d "$kimi_dir" ]]; then
   while IFS= read -r f; do
     [[ -f "$f" ]] || continue
-    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $HEAD_SHA" "$f"; then
+    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $REVIEW_HEAD_SHA" "$f"; then
       kimi_match="$f"
       break
     fi
   done < <(find "$kimi_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
 fi
-[[ -n "$kimi_match" ]] || die "missing Kimi review artifact for HEAD=$HEAD_SHA in: $kimi_dir"
+[[ -n "$kimi_match" ]] || die "missing Kimi review artifact for HEAD=$REVIEW_HEAD_SHA in: $kimi_dir"
 
 # ---------- Codex review(s) (must match HEAD) ----------
 codex_dir="$story_dir/codex"
@@ -204,12 +255,12 @@ codex_matches=()
 if [[ -d "$codex_dir" ]]; then
   while IFS= read -r f; do
     [[ -f "$f" ]] || continue
-    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $HEAD_SHA" "$f"; then
+    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $REVIEW_HEAD_SHA" "$f"; then
       codex_matches+=("$f")
     fi
   done < <(find "$codex_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
 fi
-[[ "${#codex_matches[@]}" -ge 2 ]] || die "need at least two Codex review artifacts for HEAD=$HEAD_SHA in: $codex_dir"
+[[ "${#codex_matches[@]}" -ge 2 ]] || die "need at least two Codex review artifacts for HEAD=$REVIEW_HEAD_SHA in: $codex_dir"
 
 # ---------- Code-review-expert review (must match HEAD) ----------
 code_review_expert_dir="$story_dir/code_review_expert"
@@ -217,13 +268,13 @@ code_review_expert_match=""
 if [[ -d "$code_review_expert_dir" ]]; then
   while IFS= read -r f; do
     [[ -f "$f" ]] || continue
-    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $HEAD_SHA" "$f"; then
+    if grep -Fxq -- "- Story: $story" "$f" && grep -Fxq -- "- HEAD: $REVIEW_HEAD_SHA" "$f"; then
       code_review_expert_match="$f"
       break
     fi
   done < <(find "$code_review_expert_dir" -maxdepth 1 -type f -name '*_review.md' | LC_ALL=C sort -r)
 fi
-[[ -n "$code_review_expert_match" ]] || die "missing code-review-expert review artifact for HEAD=$HEAD_SHA in: $code_review_expert_dir"
+[[ -n "$code_review_expert_match" ]] || die "missing code-review-expert review artifact for HEAD=$REVIEW_HEAD_SHA in: $code_review_expert_dir"
 grep -Fxq -- "- Review Status: COMPLETE" "$code_review_expert_match" || die "code-review-expert review must be marked '- Review Status: COMPLETE' ($code_review_expert_match)"
 for placeholder in \
   "- Blocking: <none | summary>" \
@@ -239,7 +290,7 @@ res_file="$story_dir/review_resolution.md"
 [[ -f "$res_file" ]] || die "missing review resolution file: $res_file"
 
 require_fixed_line "$res_file" "Story: $story" "resolution missing 'Story: $story'"
-require_fixed_line "$res_file" "HEAD: $HEAD_SHA" "resolution not for current HEAD ($HEAD_SHA)"
+require_fixed_line "$res_file" "HEAD: $REVIEW_HEAD_SHA" "resolution not for current HEAD ($REVIEW_HEAD_SHA)"
 require_fixed_line "$res_file" "Blocking addressed: YES" "resolution missing 'Blocking addressed: YES'"
 require_fixed_line "$res_file" "Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0" "resolution must assert no BLOCKING/MAJOR/MEDIUM remain"
 kimi_ref_path="$(validate_review_reference "$res_file" "Kimi final review file" "Kimi final review file:" "$kimi_dir")"
@@ -251,7 +302,11 @@ if [[ "$(canonical_path "$codex_final_ref_path")" == "$(canonical_path "$codex_s
   die "Codex final review file and Codex second review file must be different artifacts"
 fi
 
-echo "OK: review gate passed for $story @ $HEAD_SHA"
+echo "OK: review gate passed for $story @ $REVIEW_HEAD_SHA"
+if [[ "$review_head_fallback" -eq 1 ]]; then
+  echo "  requested_head: $REQUESTED_HEAD_SHA"
+  echo "  review_head_fallback: artifact-only commit, using parent $REVIEW_HEAD_SHA"
+fi
 echo "  self_review: $self_file"
 echo "  kimi_review: $kimi_match"
 echo "  codex_reviews: ${#codex_matches[@]}"

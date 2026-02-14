@@ -11,6 +11,7 @@ import argparse
 import json
 import posixpath
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -240,7 +241,7 @@ def extract_prd_producers(prd_path: Path) -> Dict[str, Set[str]]:
     return producers
 
 
-def load_global_manual_allowlist(path: Path, ci_mode: bool) -> Dict[str, dict]:
+def load_global_manual_allowlist(path: Path, ci_mode: bool, repo_root: Path) -> Dict[str, dict]:
     if not path.exists():
         raise ToolFailure(f"global manual allowlist not found: {path}")
 
@@ -267,7 +268,7 @@ def load_global_manual_allowlist(path: Path, ci_mode: bool) -> Dict[str, dict]:
         if norm_path in out:
             raise SchemaFailure(f"allowlist {path}: duplicate evidence_path {norm_path}")
 
-        if ci_mode and not Path(norm_path).exists():
+        if ci_mode and not (repo_root / norm_path).exists():
             raise SchemaFailure(f"allowlist {path}: evidence_path not found in repo: {norm_path}")
 
         out[norm_path] = {
@@ -277,6 +278,32 @@ def load_global_manual_allowlist(path: Path, ci_mode: bool) -> Dict[str, dict]:
         }
 
     return out
+
+
+def discover_repo_root(anchor_path: Path) -> Path:
+    candidates: List[Path] = []
+    if anchor_path.exists():
+        if anchor_path.is_dir():
+            candidates.append(anchor_path)
+        else:
+            candidates.append(anchor_path.parent)
+    candidates.append(Path.cwd())
+
+    seen: Set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+
+        command = ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"]
+        proc = subprocess.run(command, capture_output=True, text=True, check=False)
+        if proc.returncode == 0:
+            root = proc.stdout.strip()
+            if root:
+                return Path(root)
+
+    raise ToolFailure("unable to determine repo root via git")
 
 
 def pick_fuzzy_match(required: str, producers: Dict[str, Set[str]]) -> Tuple[str, float] | None:
@@ -478,6 +505,9 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        allowlist_path = Path(args.global_manual_allowlist)
+        repo_root = discover_repo_root(allowlist_path)
+
         input_files = parse_inputs_arg(args.inputs)
         checklist_files = sorted(set(args.checklist))
 
@@ -499,7 +529,7 @@ def main() -> int:
 
         requirements, declared_paths = parse_requirements(gating_files, ci_mode=args.ci)
 
-        allowlist = load_global_manual_allowlist(Path(args.global_manual_allowlist), ci_mode=args.ci)
+        allowlist = load_global_manual_allowlist(allowlist_path, ci_mode=args.ci, repo_root=repo_root)
         allowlist_paths = set(allowlist.keys())
 
         if args.ci:

@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ./plans/pr_gate.sh [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--story <ID>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--ignore-check-run-regex <regex>]
+  ./plans/pr_gate.sh --story <ID> [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--ignore-check-run-regex <regex>]
 
 What it checks (blocking):
   - PR mergeability is not blocked by conflicts (`mergeable=false` or blocked/dirty state)
@@ -34,8 +34,14 @@ Check-run filtering:
 No PR link required:
   - If --pr omitted, auto-detects PR for current branch via `gh pr view`.
 
-Artifacts (optional):
-  - If --story is provided, writes a report under artifacts/story/<ID>/pr_gate/<ts>_pr_gate.md
+Story binding (required):
+  - --story is mandatory.
+  - Story ID must be slash-free (`[A-Za-z0-9][A-Za-z0-9._-]*`).
+  - PR head branch must match: story/<STORY_ID>[/<slug>] or story/<PRD_STORY_ID>-<slug> (legacy slug token cannot contain `-`).
+  - This gate runs ./plans/pre_pr_review_gate.sh against PR HEAD and branch before pass.
+
+Artifacts:
+  - Writes a report under artifacts/story/<ID>/pr_gate/<ts>_pr_gate.md
 USAGE
 }
 
@@ -81,9 +87,41 @@ gh_api_check_runs() {
 
 validate_story_id() {
   local value="$1"
-  if ! [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$ ]]; then
+  if ! [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     die "invalid --story value: $value"
   fi
+}
+
+extract_story_from_head_ref() {
+  local head_ref="$1"
+  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-[A-Za-z0-9._]+$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+escape_regex() {
+  printf '%s\n' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
+head_ref_matches_story() {
+  local head_ref="$1"
+  local story_id="$2"
+  local escaped_story
+  escaped_story="$(escape_regex "$story_id")"
+
+  if [[ "$head_ref" =~ ^story/${escaped_story}(/([A-Za-z0-9._-]+))?$ ]]; then
+    return 0
+  fi
+  if [[ "$head_ref" =~ ^story/${escaped_story}-[A-Za-z0-9._]+$ ]]; then
+    return 0
+  fi
+  return 1
 }
 
 ensure_commit() {
@@ -194,6 +232,9 @@ if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
   jq -n --arg re "$IGNORE_CHECK_RUN_REGEX" '"" | test($re)' >/dev/null 2>&1 || die "invalid --ignore-check-run-regex: $IGNORE_CHECK_RUN_REGEX"
 fi
 
+[[ -n "$STORY_ID" ]] || die "--story is required"
+validate_story_id "$STORY_ID"
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$repo_root"
 
@@ -215,19 +256,15 @@ if [[ -z "$PR" ]]; then
 fi
 
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
-report_path=""
-
-if [[ -n "$STORY_ID" ]]; then
-  validate_story_id "$STORY_ID"
-  root="${ART_ROOT:-${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}}"
-  [[ "$root" == /* ]] || root="$repo_root/$root"
-  outdir="$root/$STORY_ID/pr_gate"
-  mkdir -p "$outdir"
-  report_path="$outdir/${ts}_pr_gate.md"
-fi
+root="${ART_ROOT:-${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}}"
+[[ "$root" == /* ]] || root="$repo_root/$root"
+outdir="$root/$STORY_ID/pr_gate"
+mkdir -p "$outdir"
+report_path="$outdir/${ts}_pr_gate.md"
 
 PR_URL=""
 HEAD_SHA=""
+HEAD_REF=""
 BASE_REF=""
 MERGEABLE=""
 MERGEABLE_STATE=""
@@ -237,9 +274,15 @@ BOT_COMMENT_SUMMARY=""
 INLINE_BOT_ENFORCEMENT_SUMMARY=""
 AFTERCARE_ACK_SUMMARY=""
 COPILOT_REVIEW_SUMMARY=""
+PRE_PR_REVIEW_SUMMARY=""
 HEAD_COMMIT_TIME=""
 CHECK_PENDING="0"
 CHECK_FAIL="0"
+PRE_PR_CACHE_HEAD=""
+PRE_PR_CACHE_REF=""
+PRE_PR_CACHE_RC=""
+PRE_PR_CACHE_OUTPUT=""
+PRE_PR_CACHE_SUMMARY=""
 MERGEABLE_BLOCKED_IGNORED=0
 IGNORED_PENDING_CHECKS=0
 
@@ -251,9 +294,11 @@ write_report() {
 Timestamp (UTC): $ts
 Repo: $repo
 PR: $PR
+Story ID: $STORY_ID
 URL: $PR_URL
 
 Head SHA: $HEAD_SHA
+Head Ref: $HEAD_REF
 Base: $BASE_REF
 mergeable: $MERGEABLE
 mergeable_state: $MERGEABLE_STATE
@@ -278,6 +323,9 @@ $AFTERCARE_ACK_SUMMARY
 ## Copilot review enforcement
 $COPILOT_REVIEW_SUMMARY
 
+## Pre-PR Review Gate
+$PRE_PR_REVIEW_SUMMARY
+
 EOF
 }
 
@@ -288,11 +336,12 @@ while true; do
 
   PR_URL="$(jq -r '.html_url // ""' <<<"$pr_json")"
   HEAD_SHA="$(jq -r '.head.sha // ""' <<<"$pr_json")"
+  HEAD_REF="$(jq -r '.head.ref // ""' <<<"$pr_json")"
   BASE_REF="$(jq -r '.base.ref // ""' <<<"$pr_json")"
   MERGEABLE="$(jq -r 'if .mergeable == null then "null" elif .mergeable then "true" else "false" end' <<<"$pr_json")"
   MERGEABLE_STATE="$(jq -r '.mergeable_state // "unknown"' <<<"$pr_json")"
 
-  [[ -n "$PR_URL" && -n "$HEAD_SHA" && -n "$BASE_REF" ]] || die "incomplete PR payload from GitHub API"
+  [[ -n "$PR_URL" && -n "$HEAD_SHA" && -n "$HEAD_REF" && -n "$BASE_REF" ]] || die "incomplete PR payload from GitHub API"
 
   # reviewDecision from gh pr view (GraphQL-backed).
   set +e
@@ -388,6 +437,52 @@ failing=$CHECK_FAIL"
   issue_comments="$(gh_api_array "repos/$repo/issues/$PR/comments?per_page=100")" || die "failed to fetch PR issue comments"
   copilot_seen=0
   copilot_reason="not_required"
+
+  branch_story_id="$(extract_story_from_head_ref "$HEAD_REF" || true)"
+  if [[ -n "$branch_story_id" ]]; then
+    branch_story_match=1
+    if head_ref_matches_story "$HEAD_REF" "$STORY_ID"; then
+      branch_story_id="$STORY_ID"
+    fi
+  else
+    branch_story_match=0
+  fi
+
+  if [[ "$HEAD_SHA" == "$PRE_PR_CACHE_HEAD" && "$HEAD_REF" == "$PRE_PR_CACHE_REF" && "$PRE_PR_CACHE_RC" == "0" ]]; then
+    pre_pr_rc="$PRE_PR_CACHE_RC"
+    pre_pr_output="$PRE_PR_CACHE_OUTPUT"
+    PRE_PR_REVIEW_SUMMARY="$PRE_PR_CACHE_SUMMARY"
+  else
+    pre_pr_cmd=(
+      "$repo_root/plans/pre_pr_review_gate.sh"
+      "$STORY_ID"
+      --head "$HEAD_SHA"
+      --branch "$HEAD_REF"
+      --artifacts-root "$root"
+    )
+    set +e
+    pre_pr_output="$("${pre_pr_cmd[@]}" 2>&1)"
+    pre_pr_rc=$?
+    set -e
+    if [[ "$pre_pr_rc" -eq 0 ]]; then
+      PRE_PR_REVIEW_SUMMARY="pass"
+    else
+      PRE_PR_REVIEW_SUMMARY="fail (rc=$pre_pr_rc)\n$pre_pr_output"
+    fi
+    if [[ "$pre_pr_rc" -eq 0 ]]; then
+      PRE_PR_CACHE_HEAD="$HEAD_SHA"
+      PRE_PR_CACHE_REF="$HEAD_REF"
+      PRE_PR_CACHE_RC="$pre_pr_rc"
+      PRE_PR_CACHE_OUTPUT="$pre_pr_output"
+      PRE_PR_CACHE_SUMMARY="$PRE_PR_REVIEW_SUMMARY"
+    else
+      PRE_PR_CACHE_HEAD=""
+      PRE_PR_CACHE_REF=""
+      PRE_PR_CACHE_RC=""
+      PRE_PR_CACHE_OUTPUT=""
+      PRE_PR_CACHE_SUMMARY=""
+    fi
+  fi
 
   if [[ "$REQUIRE_COPILOT_REVIEW" == "1" ]]; then
     reviews_json="$(gh_api_array "repos/$repo/pulls/$PR/reviews?per_page=100")" || die "failed to fetch PR reviews"
@@ -601,6 +696,16 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
 
   if [[ "$REQUIRE_COPILOT_REVIEW" == "1" && "$copilot_seen" -eq 0 ]]; then
     problems+=("copilot_review_pending")
+  fi
+
+  if [[ "$branch_story_match" -ne 1 ]]; then
+    problems+=("invalid_story_branch_name:$HEAD_REF")
+  elif [[ "$branch_story_id" != "$STORY_ID" ]]; then
+    problems+=("story_branch_mismatch:expected=$STORY_ID actual=$branch_story_id")
+  fi
+
+  if [[ "$pre_pr_rc" -ne 0 ]]; then
+    problems+=("pre_pr_review_gate_failed")
   fi
 
   if [[ ${#problems[@]} -eq 0 ]]; then

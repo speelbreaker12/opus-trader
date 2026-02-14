@@ -5,7 +5,7 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 
 ## Core rules
 
-1. Use one branch/worktree per Story ID.
+1. Use one branch/worktree per Story ID (slash-free `STORY_ID`), with branch naming `story/<STORY_ID>` (or `story/<STORY_ID>/<slug>`; PRD legacy form `story/<PRD_STORY_ID>-<slug>` is also accepted; in this legacy form slug must be a single token without `-`).
 2. Use PRs as the merge mechanism; do not merge story branches into local `main`.
 3. Keep the same story worktree until PR merge (or explicit abandonment), then clean it up.
 4. Keep WIP=2 maximum:
@@ -29,8 +29,8 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 - `./plans/verify.sh quick` during iteration
 - `./plans/verify.sh full` before merge-grade/pass flip
 3. Push branch and open/update PR.
-4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating.
-5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes.
+4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating (this now enforces full `story_review_gate` evidence + story/branch binding).
+5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes (story is mandatory; PR head ref must be `story/<STORY_ID>[/<slug>]` or `story/<PRD_STORY_ID>-<slug>`; legacy slug cannot contain `-`).
 6. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
 7. Merge via PR after gates are green.
 
@@ -40,6 +40,7 @@ To block PR merges until Copilot/bot feedback is handled and re-reviewed on the 
 
 ```bash
 ./plans/pr_gate.sh \
+  --story <STORY_ID> \
   --pr <number> \
   --bot-comments-mode block \
   --require-aftercare-ack \
@@ -76,6 +77,7 @@ Mark that CI job as required in branch protection.
 ## Required evidence notes
 
 - `passes=true` requires full-verify artifacts and review evidence for the same `HEAD`.
+- `verify.meta.json.head_sha` must equal the current branch `HEAD` at pass-flip time.
 - `./plans/prd_set_pass.sh` enforces evidence checks via `./plans/story_review_gate.sh`.
 - If `HEAD` changes after review starts, regenerate the complete review set for the chosen SHA.
 

@@ -9,6 +9,9 @@
 use std::fs;
 use std::path::PathBuf;
 
+const CHOKEPOINT_RELATIVE_PATH: &str = "execution/build_order_intent.rs";
+const APPROVAL_SENTINEL: &str = "record_approved();";
+
 /// Locate the soldier_core/src directory relative to the test binary.
 fn src_dir() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -113,6 +116,19 @@ fn test_dispatch_chokepoint_no_bypass_metrics() {
         "record_approved() must only be called in {chokepoint_file}.\n\
          Violations:\n{}",
         violations.join("\n")
+    );
+}
+
+// ─── Test: Chokepoint keeps the approval sentinel call ────────────────────
+
+#[test]
+fn test_dispatch_chokepoint_approval_sentinel_present() {
+    let chokepoint_path = src_dir().join(CHOKEPOINT_RELATIVE_PATH);
+    let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
+
+    assert!(
+        content.contains(APPROVAL_SENTINEL),
+        "chokepoint must contain approval sentinel `{APPROVAL_SENTINEL}` in {CHOKEPOINT_RELATIVE_PATH}",
     );
 }
 

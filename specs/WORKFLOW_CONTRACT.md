@@ -216,6 +216,7 @@ In this fork, `verify full` MUST be runnable locally without special allow flags
 ### 8.1 Rule
 A story’s `passes` may be set to `true` only when:
 - `./plans/verify.sh full` exited 0 **in that story worktree**, AND
+- `verify.meta.json.head_sha` equals the current story branch `HEAD` at pass-flip time, AND
 - verify artifacts show no failing gate (`FAILED_GATE` absent and all `*.rc` are 0), AND
 - review evidence exists for the same `HEAD`:
   - self review is present and marked `Decision: PASS` with failure-mode + strategic reviews marked `DONE`,

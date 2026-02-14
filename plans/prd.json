@@ -65,7 +65,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-905"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -133,7 +135,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-277",
+        "AT-920"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -200,7 +205,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-277",
+        "AT-920"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -292,7 +300,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-341",
+        "AT-040"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -382,7 +393,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-333"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -459,7 +472,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-905"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -1095,7 +1110,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-277",
+        "AT-920"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -1162,7 +1180,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-277",
+        "AT-920"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -1258,7 +1279,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-341",
+        "AT-040"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -1335,7 +1359,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-333"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -1525,7 +1551,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-1056",
+        "AT-1057"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -3292,7 +3321,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-935",
+        "AT-906"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -3362,7 +3394,12 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-343",
+        "AT-218",
+        "AT-219",
+        "AT-216"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -3435,7 +3472,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-201",
+        "AT-926"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -3502,7 +3542,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-902"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -3583,7 +3625,11 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-010",
+        "AT-1055",
+        "AT-338"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -3654,7 +3700,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-926",
+        "AT-930"
+      ],
       "reason_codes": {
         "type": "RejectReason",
         "values": [
@@ -3717,7 +3766,8 @@
       ],
       "evidence": [
         "cargo test output showing test_crash_mid_intent_no_duplicate_dispatch PASS",
-        "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof"
+        "OR evidence/phase1/crash_mid_intent/drill.md with recorded proof",
+        "evidence/phase1/restart_loop/restart_100_cycles.log"
       ],
       "dependencies": [
         "S4-000",
@@ -3728,7 +3778,11 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-935",
+        "AT-233",
+        "AT-234"
+      ],
       "reason_codes": {
         "type": "",
         "values": []

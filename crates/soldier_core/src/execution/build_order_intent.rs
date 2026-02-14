@@ -15,7 +15,11 @@
 //!
 //! Only after all gates pass is an `OrderIntent` produced.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::risk::RiskState;
+
+use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
 // --- Intent class --------------------------------------------------------
 
@@ -130,6 +134,43 @@ impl Default for ChokeMetrics {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GateSequenceResult {
+    Allowed,
+    Rejected,
+}
+
+static GATE_SEQUENCE_ALLOWED_TOTAL: AtomicU64 = AtomicU64::new(0);
+static GATE_SEQUENCE_REJECTED_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+pub fn gate_sequence_total(result: GateSequenceResult) -> u64 {
+    match result {
+        GateSequenceResult::Allowed => GATE_SEQUENCE_ALLOWED_TOTAL.load(Ordering::Relaxed),
+        GateSequenceResult::Rejected => GATE_SEQUENCE_REJECTED_TOTAL.load(Ordering::Relaxed),
+    }
+}
+
+fn finish_approved(metrics: &mut ChokeMetrics, gate_trace: Vec<GateStep>) -> ChokeResult {
+    metrics.record_approved();
+    GATE_SEQUENCE_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line("gate_sequence_total", "result=allowed");
+    ChokeResult::Approved { gate_trace }
+}
+
+fn finish_rejected(
+    metrics: &mut ChokeMetrics,
+    reason: ChokeRejectReason,
+    gate_trace: Vec<GateStep>,
+) -> ChokeResult {
+    metrics.record_rejected();
+    if reason == ChokeRejectReason::RiskStateNotHealthy {
+        metrics.record_rejected_risk_state();
+    }
+    GATE_SEQUENCE_REJECTED_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line("gate_sequence_total", "result=rejected");
+    ChokeResult::Rejected { reason, gate_trace }
+}
+
 // --- Chokepoint evaluator ------------------------------------------------
 
 /// Build an order intent through the single chokepoint.
@@ -151,57 +192,51 @@ pub fn build_order_intent(
     // Gate 1: Dispatch authorization (RiskState check)
     trace.push(GateStep::DispatchAuth);
     if intent_class == ChokeIntentClass::Open && risk_state != RiskState::Healthy {
-        metrics.record_rejected();
-        metrics.record_rejected_risk_state();
-        return ChokeResult::Rejected {
-            reason: ChokeRejectReason::RiskStateNotHealthy,
-            gate_trace: trace,
-        };
+        return finish_rejected(metrics, ChokeRejectReason::RiskStateNotHealthy, trace);
     }
 
     // CANCEL-only intents skip remaining gates.
     if intent_class == ChokeIntentClass::CancelOnly {
-        metrics.record_approved();
-        return ChokeResult::Approved { gate_trace: trace };
+        return finish_approved(metrics, trace);
     }
 
     // Gate 2: Preflight
     trace.push(GateStep::Preflight);
     if !gate_results.preflight_passed {
-        metrics.record_rejected();
-        return ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::GateRejected {
                 gate: GateStep::Preflight,
-                reason: "preflight rejected".to_string(),
+                reason: REJECT_REASON_PREFLIGHT.to_string(),
             },
-            gate_trace: trace,
-        };
+            trace,
+        );
     }
 
     // Gate 3: Quantize
     trace.push(GateStep::Quantize);
     if !gate_results.quantize_passed {
-        metrics.record_rejected();
-        return ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::GateRejected {
                 gate: GateStep::Quantize,
-                reason: "quantize failed".to_string(),
+                reason: REJECT_REASON_QUANTIZE.to_string(),
             },
-            gate_trace: trace,
-        };
+            trace,
+        );
     }
 
     // Gate 4: Dispatch consistency (AT-920 contracts/amount validation)
     trace.push(GateStep::DispatchConsistency);
     if !gate_results.dispatch_consistency_passed {
-        metrics.record_rejected();
-        return ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::GateRejected {
                 gate: GateStep::DispatchConsistency,
-                reason: "dispatch consistency failed".to_string(),
+                reason: REJECT_REASON_DISPATCH_CONSISTENCY.to_string(),
             },
-            gate_trace: trace,
-        };
+            trace,
+        );
     }
 
     // Anti-bypass clamp check: when liquidity clamp metadata is provided,
@@ -212,39 +247,39 @@ pub fn build_order_intent(
             let invalid_requested = !requested_qty.is_finite() || requested_qty <= 0.0;
             let invalid_max = !max_dispatch_qty.is_finite() || max_dispatch_qty <= 0.0;
             if invalid_requested || invalid_max || requested_qty > max_dispatch_qty + 1e-12 {
-                metrics.record_rejected();
-                return ChokeResult::Rejected {
-                    reason: ChokeRejectReason::GateRejected {
+                return finish_rejected(
+                    metrics,
+                    ChokeRejectReason::GateRejected {
                         gate: GateStep::DispatchConsistency,
-                        reason: "requested qty exceeds liquidity clamp".to_string(),
+                        reason: REJECT_REASON_DISPATCH_CLAMP_EXCEEDED.to_string(),
                     },
-                    gate_trace: trace,
-                };
+                    trace,
+                );
             }
         }
         _ => {
-            metrics.record_rejected();
-            return ChokeResult::Rejected {
-                reason: ChokeRejectReason::GateRejected {
+            return finish_rejected(
+                metrics,
+                ChokeRejectReason::GateRejected {
                     gate: GateStep::DispatchConsistency,
-                    reason: "incomplete liquidity clamp metadata".to_string(),
+                    reason: REJECT_REASON_DISPATCH_CLAMP_INCOMPLETE.to_string(),
                 },
-                gate_trace: trace,
-            };
+                trace,
+            );
         }
     }
 
     // Gate 5: Fee cache staleness
     trace.push(GateStep::FeeCacheCheck);
     if !gate_results.fee_cache_passed {
-        metrics.record_rejected();
-        return ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::GateRejected {
                 gate: GateStep::FeeCacheCheck,
-                reason: "fee cache stale".to_string(),
+                reason: REJECT_REASON_FEE_CACHE_STALE.to_string(),
             },
-            gate_trace: trace,
-        };
+            trace,
+        );
     }
 
     // Gates 6-8 only for OPEN intents.
@@ -252,58 +287,75 @@ pub fn build_order_intent(
         // Gate 6: Liquidity Gate
         trace.push(GateStep::LiquidityGate);
         if !gate_results.liquidity_gate_passed {
-            metrics.record_rejected();
-            return ChokeResult::Rejected {
-                reason: ChokeRejectReason::GateRejected {
+            return finish_rejected(
+                metrics,
+                ChokeRejectReason::GateRejected {
                     gate: GateStep::LiquidityGate,
-                    reason: "liquidity gate rejected".to_string(),
+                    reason: REJECT_REASON_LIQUIDITY_GATE.to_string(),
                 },
-                gate_trace: trace,
-            };
+                trace,
+            );
         }
 
         // Gate 7: Net Edge Gate
         trace.push(GateStep::NetEdgeGate);
         if !gate_results.net_edge_passed {
-            metrics.record_rejected();
-            return ChokeResult::Rejected {
-                reason: ChokeRejectReason::GateRejected {
+            return finish_rejected(
+                metrics,
+                ChokeRejectReason::GateRejected {
                     gate: GateStep::NetEdgeGate,
-                    reason: "net edge too low".to_string(),
+                    reason: REJECT_REASON_NET_EDGE.to_string(),
                 },
-                gate_trace: trace,
-            };
+                trace,
+            );
         }
 
         // Gate 8: Pricer
         trace.push(GateStep::Pricer);
         if !gate_results.pricer_passed {
-            metrics.record_rejected();
-            return ChokeResult::Rejected {
-                reason: ChokeRejectReason::GateRejected {
+            return finish_rejected(
+                metrics,
+                ChokeRejectReason::GateRejected {
                     gate: GateStep::Pricer,
-                    reason: "pricer rejected".to_string(),
+                    reason: REJECT_REASON_PRICER.to_string(),
                 },
-                gate_trace: trace,
-            };
+                trace,
+            );
         }
     }
 
     // Gate 9: RecordedBeforeDispatch
     trace.push(GateStep::RecordedBeforeDispatch);
     if !gate_results.wal_recorded {
-        metrics.record_rejected();
-        return ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::GateRejected {
                 gate: GateStep::RecordedBeforeDispatch,
-                reason: "WAL append failed".to_string(),
+                reason: REJECT_REASON_WAL.to_string(),
             },
-            gate_trace: trace,
-        };
+            trace,
+        );
     }
 
-    metrics.record_approved();
-    ChokeResult::Approved { gate_trace: trace }
+    finish_approved(metrics, trace)
+}
+
+/// Build an order intent and attach a contract registry reject reason code.
+pub fn build_order_intent_with_reject_reason_code(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    gate_reject_codes: &GateRejectCodes,
+) -> (ChokeResult, Option<RejectReasonCode>) {
+    let result = build_order_intent(intent_class, risk_state, metrics, gate_results);
+    let code = match &result {
+        ChokeResult::Approved { .. } => None,
+        ChokeResult::Rejected { reason, .. } => {
+            Some(reject_reason_from_chokepoint(reason, gate_reject_codes))
+        }
+    };
+    (result, code)
 }
 
 // --- Gate results (pre-computed by caller) ------------------------------
@@ -342,5 +394,36 @@ impl Default for GateResults {
             requested_qty: None,
             max_dispatch_qty: None,
         }
+    }
+}
+
+/// Construct gate results inside the chokepoint module.
+///
+/// Keeping `GateResults` construction here preserves the single-boundary
+/// invariant enforced by `test_dispatch_chokepoint`.
+#[allow(clippy::too_many_arguments)]
+pub fn build_gate_results(
+    preflight_passed: bool,
+    quantize_passed: bool,
+    dispatch_consistency_passed: bool,
+    fee_cache_passed: bool,
+    liquidity_gate_passed: bool,
+    net_edge_passed: bool,
+    pricer_passed: bool,
+    wal_recorded: bool,
+    requested_qty: Option<f64>,
+    max_dispatch_qty: Option<f64>,
+) -> GateResults {
+    GateResults {
+        preflight_passed,
+        quantize_passed,
+        dispatch_consistency_passed,
+        fee_cache_passed,
+        liquidity_gate_passed,
+        net_edge_passed,
+        pricer_passed,
+        wal_recorded,
+        requested_qty,
+        max_dispatch_qty,
     }
 }

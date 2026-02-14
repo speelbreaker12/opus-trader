@@ -26,7 +26,7 @@ By Phase 1 completion, it must be mechanically impossible to:
 - `docs/critical_config_keys.md`
 - `evidence/phase1/README.md`
 - `evidence/phase1/ci_links.md`
-- `evidence/phase1/restart_loop/restart_100_cycles.log` (pending until restart-loop proof wiring is complete)
+- `evidence/phase1/restart_loop/restart_100_cycles.log`
 - `evidence/phase1/determinism/intent_hashes.txt`
 - `evidence/phase1/no_side_effects/rejection_cases.md`
 - `evidence/phase1/traceability/sample_rejection_log.txt`

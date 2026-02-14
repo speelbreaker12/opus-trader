@@ -1,6 +1,6 @@
 //! Tests for Pre-Trade Liquidity Gate per CONTRACT.md §1.3.
 //!
-//! AT-222: Slippage > max_slippage_bps → reject with ExpectedSlippageTooHigh.
+//! AT-222: OPEN depth shortfall within slippage budget -> reject with InsufficientDepthWithinBudget.
 //! AT-344: Missing/stale L2 → reject OPEN, no dispatch.
 //! AT-909: Missing/stale L2 → Rejected(LiquidityGateNoL2).
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
@@ -8,6 +8,8 @@
 use soldier_core::execution::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
     LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    expected_slippage_bps_samples, liquidity_gate_reject_total, take_execution_metric_lines,
+    with_intent_trace_ids,
 };
 
 /// Helper: build a simple L2 book with given ask/bid levels.
@@ -64,13 +66,17 @@ fn test_at222_slippage_exceeds_max_rejected() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!((wap.unwrap() - 105.0).abs() < 1e-9);
             assert!(slippage_bps.unwrap() > 10.0);
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
-    assert_eq!(m.reject_slippage(), 1);
+    assert_eq!(m.reject_depth_shortfall(), 1);
+    assert_eq!(m.reject_slippage(), 0);
 }
 
 #[test]
@@ -85,7 +91,7 @@ fn test_at222_no_order_intent_on_rejection() {
     assert!(matches!(
         result,
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
             ..
         }
     ));
@@ -171,7 +177,10 @@ fn test_sell_walks_bids() {
             slippage_bps,
             ..
         } => {
-            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert_eq!(
+                reason,
+                LiquidityGateRejectReason::InsufficientDepthWithinBudget
+            );
             assert!((wap.unwrap() - 95.0).abs() < 1e-9);
             assert!(slippage_bps.unwrap() > 10.0);
         }
@@ -350,13 +359,25 @@ fn test_partial_fill_from_thin_book_evaluates_available() {
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(
-        result,
+    match result {
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            reason,
+            wap,
+            slippage_bps,
             ..
+        } => {
+            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert!(
+                wap.is_some(),
+                "thin-book reject must include WAP diagnostics"
+            );
+            assert!(
+                slippage_bps.is_some(),
+                "thin-book reject must include slippage diagnostics"
+            );
         }
-    ));
+        other => panic!("expected Rejected, got {other:?}"),
+    }
 }
 
 // ─── Multi-level book walk ──────────────────────────────────────────────
@@ -387,6 +408,46 @@ fn test_multi_level_wap_computation() {
     }
 }
 
+#[test]
+fn test_open_wap_budget_allows_small_tail_beyond_level_cap() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // Full-order WAP is within 10 bps despite a tiny tail at a far level.
+    let snap = book(vec![(100.0, 10.0), (200.0, 0.01)], vec![], 900);
+    let input = gate_input(10.01, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed {
+            allowed_qty,
+            slippage_bps,
+            ..
+        } => {
+            assert!((allowed_qty.unwrap() - 10.01).abs() < 1e-9);
+            assert!(slippage_bps.unwrap() <= 10.0 + 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_overflowed_slippage_budget_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(f64::MAX, 1.0)], vec![], 900);
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+            ..
+        }
+    ));
+    assert_eq!(m.reject_no_l2(), 1);
+}
+
 // ─── Metrics default ────────────────────────────────────────────────────
 
 #[test]
@@ -394,6 +455,7 @@ fn test_metrics_default() {
     let m = LiquidityGateMetrics::default();
     assert_eq!(m.reject_no_l2(), 0);
     assert_eq!(m.reject_slippage(), 0);
+    assert_eq!(m.reject_depth_shortfall(), 0);
     assert_eq!(m.allowed_total(), 0);
 }
 
@@ -454,10 +516,10 @@ fn test_hedge_clamps_to_fillable_qty() {
 }
 
 #[test]
-fn test_non_marketable_bypasses_depth_gate() {
+fn test_non_marketable_open_still_enforces_depth_budget() {
     let mut m = LiquidityGateMetrics::new();
 
-    // OPEN path with valid L2 bypasses depth-budget clamp when non-marketable.
+    // OPEN path remains fail-closed under §1.3 regardless of marketability.
     let mut input = gate_input(
         3.0,
         true,
@@ -469,8 +531,8 @@ fn test_non_marketable_bypasses_depth_gate() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result,
-        LiquidityGateResult::Allowed {
-            allowed_qty: Some(3.0),
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
             ..
         }
     ));
@@ -552,4 +614,53 @@ fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
             ..
         }
     ));
+}
+
+#[test]
+fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
+    let intent_id = "intent-liquidity-001";
+    let run_id = "run-liquidity-001";
+    let _ = take_execution_metric_lines();
+    let before_reject =
+        liquidity_gate_reject_total(LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+    let before_samples = expected_slippage_bps_samples();
+
+    let snap = book(vec![(100.0, 1.0), (110.0, 1.0)], vec![], 900);
+    let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
+    let mut metrics = LiquidityGateMetrics::new();
+    let result = with_intent_trace_ids(intent_id, run_id, || {
+        evaluate_liquidity_gate(&input, &mut metrics)
+    });
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            ..
+        }
+    ));
+
+    let after_reject =
+        liquidity_gate_reject_total(LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+    let after_samples = expected_slippage_bps_samples();
+    assert_eq!(after_reject, before_reject + 1);
+    assert_eq!(after_samples, before_samples + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("liquidity_gate_reject_total")
+                && line.contains("reason=ExpectedSlippageTooHigh")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected liquidity gate reject metric line, got {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("expected_slippage_bps")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected slippage sample metric line, got {lines:?}"
+    );
 }
