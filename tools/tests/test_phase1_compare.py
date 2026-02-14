@@ -573,6 +573,26 @@ class EvidenceFallbackTests(unittest.TestCase):
             markdown = PHASE1_COMPARE.build_report_markdown(result_a, result_b, "test_run")
             self.assertIn("| `evidence/phase1/extra.md` | `ok` | `ok` | `yes` |", markdown)
 
+    def test_file_check_from_git_ref_records_unexpected_git_errors(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir) / "repo"
+            self.init_repo(repo)
+            (repo / "tracked.txt").write_text("ok\n", encoding="utf-8")
+            self.commit_all(repo, "base")
+
+            warnings: list[str] = []
+            check = PHASE1_COMPARE.file_check_from_git_ref(
+                repo,
+                "definitely-missing-ref",
+                "tracked.txt",
+                warnings=warnings,
+            )
+
+            self.assertFalse(check.exists)
+            self.assertFalse(check.non_empty)
+            self.assertEqual(check.sha256, "")
+            self.assertTrue(any("cat-file type failed" in warning for warning in warnings))
+
 
 class SnapshotIsolationSmokeScriptTests(unittest.TestCase):
     def test_stale_report_json_is_not_reused_when_phase1_compare_fails(self):

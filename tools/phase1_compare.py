@@ -479,13 +479,34 @@ def file_check(repo: Path, rel_path: str) -> FileCheck:
     )
 
 
-def file_check_from_git_ref(repo: Path, resolved_ref_sha: str, rel_path: str) -> FileCheck:
+def file_check_from_git_ref(
+    repo: Path,
+    resolved_ref_sha: str,
+    rel_path: str,
+    warnings: Optional[List[str]] = None,
+) -> FileCheck:
     object_spec = f"{resolved_ref_sha}:{rel_path}"
-    rc, out, _, _ = run_cmd(
+    rc, out, err, _ = run_cmd(
         ["git", "-C", str(repo), "cat-file", "-t", object_spec],
         cwd=repo,
     )
-    if rc != 0 or out.strip() != "blob":
+    if rc != 0:
+        err_text = err.strip()
+        expected_missing = (
+            "does not exist in" in err_text or "Not a valid object name" in err_text
+        )
+        if warnings is not None and err_text and not expected_missing:
+            warning = f"git cat-file type failed for {object_spec!r}: {err_text}"
+            if warning not in warnings:
+                warnings.append(warning)
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+    if out.strip() != "blob":
         return FileCheck(
             path=rel_path,
             exists=False,
@@ -502,15 +523,33 @@ def file_check_from_git_ref(repo: Path, resolved_ref_sha: str, rel_path: str) ->
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    assert proc.stdout is not None
+    if proc.stdout is None:
+        if warnings is not None:
+            warning = f"git cat-file did not provide stdout for {object_spec!r}"
+            if warning not in warnings:
+                warnings.append(warning)
+        proc.kill()
+        proc.wait()
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
     while True:
         chunk = proc.stdout.read(65536)
         if not chunk:
             break
         size += len(chunk)
         digest.update(chunk)
-    _, _ = proc.communicate()
+    _, stderr_bytes = proc.communicate()
     if proc.returncode != 0:
+        if warnings is not None:
+            err_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+            warning = f"git cat-file blob failed for {object_spec!r}: {err_text}"
+            if warning not in warnings:
+                warnings.append(warning)
         return FileCheck(
             path=rel_path,
             exists=False,
@@ -532,7 +571,10 @@ def file_check_for_result(repo_result: RepoResult, rel_path: str) -> FileCheck:
     if repo_result.is_ref_head:
         return file_check(Path(repo_result.path), rel_path)
     return file_check_from_git_ref(
-        Path(repo_result.path), repo_result.resolved_ref_sha, rel_path
+        Path(repo_result.path),
+        repo_result.resolved_ref_sha,
+        rel_path,
+        warnings=repo_result.warnings,
     )
 
 
