@@ -89,6 +89,36 @@ import sys
 json.load(open(sys.argv[1]))
 PYJSON
 
+# crossref_gate must honor selected python interpreter (PYTHON_BIN) end-to-end.
+python_wrapper="$tmp_dir/python-wrapper.sh"
+python_wrapper_log="$tmp_dir/python-wrapper.log"
+cat > "$python_wrapper" <<EOF_WRAPPER
+#!/usr/bin/env bash
+set -euo pipefail
+echo "\$*" >> "$python_wrapper_log"
+exec python3 "\$@"
+EOF_WRAPPER
+chmod +x "$python_wrapper"
+
+artifacts_wrapper="$tmp_dir/artifacts_wrapper"
+expect_rc 0 env PYTHON_BIN="$python_wrapper" "$GATE" \
+  --contract "$contract_ok" \
+  --prd "$prd_ok" \
+  --inputs "$checklist_ok" \
+  --allowlist "$allowlist" \
+  --artifacts-dir "$artifacts_wrapper" \
+  --ci \
+  --strict
+
+for script in \
+  plans/validate_crossref_invariants.py \
+  tools/ci/check_contract_profiles.py \
+  tools/at_coverage_report.py \
+  tools/ci/check_contract_profile_map_parity.py \
+  tools/roadmap_evidence_audit.py; do
+  grep -Fq "$script" "$python_wrapper_log" || fail "expected PYTHON_BIN wrapper to execute $script"
+done
+
 # Fails closed when marker intent is missing in CI mode.
 checklist_bad="$tmp_dir/checklist_bad.md"
 cat > "$checklist_bad" <<'EOF_CHECKLIST_BAD'

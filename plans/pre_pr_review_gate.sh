@@ -36,12 +36,31 @@ validate_identifier() {
 
 extract_story_from_branch() {
   local branch="$1"
-  if [[ "$branch" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-([A-Za-z0-9._]*[A-Za-z][A-Za-z0-9._]*)$ ]]; then
+  if [[ "$branch" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
     return 0
   fi
-  if [[ "$branch" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
+  if [[ "$branch" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-[A-Za-z0-9._]+$ ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+escape_regex() {
+  printf '%s\n' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
+branch_matches_story() {
+  local branch="$1"
+  local story_id="$2"
+  local escaped_story
+  escaped_story="$(escape_regex "$story_id")"
+
+  if [[ "$branch" =~ ^story/${escaped_story}(/([A-Za-z0-9._-]+))?$ ]]; then
+    return 0
+  fi
+  if [[ "$branch" =~ ^story/${escaped_story}-[A-Za-z0-9._]+$ ]]; then
     return 0
   fi
   return 1
@@ -108,7 +127,7 @@ fi
 
 branch_story="$(extract_story_from_branch "$branch_name" || true)"
 [[ -n "$branch_story" ]] || die "branch must be story-scoped: expected story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>, got '$branch_name'"
-if [[ "$branch_story" != "$story" ]]; then
+if ! branch_matches_story "$branch_name" "$story"; then
   die "story id mismatch: STORY_ID=$story does not match branch story id=$branch_story (branch=$branch_name)"
 fi
 

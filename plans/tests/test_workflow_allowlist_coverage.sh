@@ -133,6 +133,8 @@ required=(
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
   plans/lib/verify_checkpoint.sh
+  plans/ci/requirements-crossref.txt
+  plans/ci/requirements-verify.txt
   plans/crossref_burnin_check.sh
   plans/crossref_ci_strict
   plans/crossref_execution_invariants.yaml

@@ -132,4 +132,57 @@ expect_rc 7 python3 "$TOOL" \
   --global-manual-allowlist "$allowlist" \
   --ci
 
+# Case 6: CI allowlist path existence is anchored to repo root, not caller CWD.
+checklist_repo_root="$tmp_dir/checklist_repo_root.md"
+cat > "$checklist_repo_root" <<'EOF_CHECKLIST_REPO_ROOT'
+<!-- REQUIRED_EVIDENCE: evidence/phase0/README.md -->
+EOF_CHECKLIST_REPO_ROOT
+
+prd_repo_root="$tmp_dir/prd_repo_root.json"
+cat > "$prd_repo_root" <<'EOF_PRD_REPO_ROOT'
+{
+  "items": [
+    {
+      "id": "S-ROOT",
+      "evidence": [
+        "evidence/phase0/README.md"
+      ]
+    }
+  ]
+}
+EOF_PRD_REPO_ROOT
+
+allowlist_repo_root="$tmp_dir/allowlist_repo_root.json"
+cat > "$allowlist_repo_root" <<'EOF_ALLOWLIST_REPO_ROOT'
+{
+  "entries": [
+    {
+      "evidence_path": "evidence/phase0/README.md",
+      "justification": "manual evidence index",
+      "owning_story_id": "GLOBAL-PHASE0"
+    }
+  ]
+}
+EOF_ALLOWLIST_REPO_ROOT
+
+set +e
+(
+  cd "$ROOT/tools"
+  python3 "$TOOL" \
+    --prd "$prd_repo_root" \
+    --inputs "$checklist_repo_root" \
+    --global-manual-allowlist "$allowlist_repo_root" \
+    --ci \
+    --strict
+) >"$tmp_dir/out.txt" 2>"$tmp_dir/err.txt"
+case6_rc=$?
+set -e
+if [[ "$case6_rc" -ne 0 ]]; then
+  echo "stdout:" >&2
+  cat "$tmp_dir/out.txt" >&2 || true
+  echo "stderr:" >&2
+  cat "$tmp_dir/err.txt" >&2 || true
+  fail "case6 expected rc=0 from non-root cwd"
+fi
+
 echo "PASS: roadmap evidence audit"

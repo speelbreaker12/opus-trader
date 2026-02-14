@@ -3,8 +3,7 @@
 
 pub mod exposure_budget;
 pub mod fees;
-pub mod margin_gate;
-pub mod pending_exposure;
+pub mod instrument_state;
 pub mod state;
 
 pub use exposure_budget::{
@@ -15,12 +14,5 @@ pub use fees::{
     FeeCacheSnapshot, FeeEvaluation, FeeMetrics, FeeStaleness, FeeStalenessConfig,
     evaluate_fee_staleness,
 };
-pub use margin_gate::{
-    MarginGateInput, MarginGateMetrics, MarginGateMode, MarginGateRejectReason, MarginGateResult,
-    evaluate_margin_headroom_gate,
-};
-pub use pending_exposure::{
-    PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
-    PendingExposureResult, PendingExposureTerminalOutcome,
-};
+pub use instrument_state::InstrumentState;
 pub use state::RiskState;

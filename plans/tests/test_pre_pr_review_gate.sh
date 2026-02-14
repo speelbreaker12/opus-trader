@@ -105,6 +105,8 @@ write_valid_case "$story_root" "$story" "$head_sha"
 
 "$SCRIPT" "$story" --head "$head_sha" --branch "story/$story/gate" --artifacts-root "$story_root" >/dev/null
 
+"$SCRIPT" "$story" --head "$head_sha" --branch "story/$story" --artifacts-root "$story_root" >/dev/null
+
 "$SCRIPT" "$story" --head "$head_sha" --branch "story/$story-fix" --artifacts-root "$story_root" >/dev/null
 
 expect_fail "missing story artifact" "missing self-review artifact" \

@@ -339,6 +339,16 @@ set -e
 [[ $rc_case3b -eq 0 ]] || fail "expected case3b to pass"
 printf '%s\n' "$out_case3b" | grep -Fq "OK: PR gate passed" || fail "case3b missing pass output"
 
+# Case 3c: plain story branch with hyphenated story id must not be truncated.
+set +e
+out_case3c="$(
+  cd "$repo_dir" && GH_MODE=unstable_merge GH_HEAD_SHA="$head_sha" GH_HEAD_REF='story/S1-TEST' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1-TEST 2>&1
+)"
+rc_case3c=$?
+set -e
+[[ $rc_case3c -eq 0 ]] || fail "expected case3c to pass"
+printf '%s\n' "$out_case3c" | grep -Fq "OK: PR gate passed" || fail "case3c missing pass output"
+
 # Case 4: duplicate check-run history resolves by latest run per check name.
 set +e
 out_case4="$(

@@ -5,6 +5,7 @@
 
 use soldier_core::execution::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
+    net_edge_reject_total, take_execution_metric_lines, with_intent_trace_ids,
 };
 
 /// Helper: build a complete net edge input.
@@ -272,6 +273,46 @@ fn test_non_finite_min_edge_fails_closed() {
             net_edge_usd: None,
         }
     ));
+}
+
+#[test]
+fn test_net_edge_emits_structured_reject_metric_line() {
+    let intent_id = "intent-netedge-001";
+    let run_id = "run-netedge-001";
+    let _ = take_execution_metric_lines();
+    let before = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
+
+    let mut metrics = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: None,
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = with_intent_trace_ids(intent_id, run_id, || {
+        evaluate_net_edge(&input, &mut metrics)
+    });
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            ..
+        }
+    ));
+
+    let after = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
+    assert_eq!(after, before + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("net_edge_reject_total")
+                && line.contains("reason=NetEdgeInputMissing")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected net-edge reject metric line, got {lines:?}"
+    );
 }
 
 // ─── Net edge computation ───────────────────────────────────────────────

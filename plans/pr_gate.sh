@@ -94,12 +94,31 @@ validate_story_id() {
 
 extract_story_from_head_ref() {
   local head_ref="$1"
-  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-([A-Za-z0-9._]*[A-Za-z][A-Za-z0-9._]*)$ ]]; then
+  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
     return 0
   fi
-  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)(/[A-Za-z0-9._-]+)?$ ]]; then
+  if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)-[A-Za-z0-9._]+$ ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+escape_regex() {
+  printf '%s\n' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
+head_ref_matches_story() {
+  local head_ref="$1"
+  local story_id="$2"
+  local escaped_story
+  escaped_story="$(escape_regex "$story_id")"
+
+  if [[ "$head_ref" =~ ^story/${escaped_story}(/([A-Za-z0-9._-]+))?$ ]]; then
+    return 0
+  fi
+  if [[ "$head_ref" =~ ^story/${escaped_story}-[A-Za-z0-9._]+$ ]]; then
     return 0
   fi
   return 1
@@ -422,6 +441,9 @@ failing=$CHECK_FAIL"
   branch_story_id="$(extract_story_from_head_ref "$HEAD_REF" || true)"
   if [[ -n "$branch_story_id" ]]; then
     branch_story_match=1
+    if head_ref_matches_story "$HEAD_REF" "$STORY_ID"; then
+      branch_story_id="$STORY_ID"
+    fi
   else
     branch_story_match=0
   fi

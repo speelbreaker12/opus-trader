@@ -7,13 +7,14 @@ from CONTRACT.md. Consumers should import this instead of duplicating regexes.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Dict, List
 
-PROFILE_RE = re.compile(r"^Profile:\s+(CSP|GOP|FULL)\s*$")
-PROFILE_PREFIX_RE = re.compile(r"^Profile:\s*")
+PROFILE_LIKE_RE = re.compile(r"^\s*profile\s*:", re.IGNORECASE)
+PROFILE_ALLOWED_LINES = {"Profile: CSP", "Profile: GOP"}
+FENCE_START_RE = re.compile(r"^\s*(```|~~~)")
 AT_RE = re.compile(r"^\s*(AT-\d+)\b")
 
 
@@ -32,25 +33,39 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
     counts: Dict[str, int] = {"CSP": 0, "GOP": 0}
     errors: List[str] = []
 
-    for lineno, line in enumerate(lines, start=1):
-        if PROFILE_PREFIX_RE.match(line):
-            profile_match = PROFILE_RE.match(line)
-            if not profile_match:
-                errors.append(
-                    f"{contract_path}:{lineno}: malformed Profile tag; expected exactly 'Profile: CSP' or 'Profile: GOP' (got {line!r})."
-                )
-                current_profile = None
-                continue
+    in_fence = False
+    fence_delim: str | None = None
+    fence_start_lineno: int | None = None
 
-            profile = profile_match.group(1)
-            # FULL is not valid for AT inheritance.
-            if profile == "FULL":
+    for lineno, line in enumerate(lines, start=1):
+        fence_match = FENCE_START_RE.match(line)
+        if fence_match:
+            delim = fence_match.group(1)
+            if not in_fence:
+                in_fence = True
+                fence_delim = delim
+                fence_start_lineno = lineno
+            elif fence_delim == delim:
+                in_fence = False
+                fence_delim = None
+                fence_start_lineno = None
+            continue
+
+        if in_fence:
+            continue
+
+        if PROFILE_LIKE_RE.match(line):
+            normalized = line.strip()
+            if normalized not in PROFILE_ALLOWED_LINES:
                 errors.append(
-                    f"{contract_path}:{lineno}: Profile: FULL is not allowed for AT inheritance."
+                    f"{contract_path}:{lineno}: malformed Profile tag; expected exactly one of: "
+                    f"Profile: CSP | Profile: GOP (got {line!r})."
                 )
+                # Fail closed: malformed profile tags clear inheritance scope so
+                # subsequent AT lines are reported as unscoped.
                 current_profile = None
                 continue
-            current_profile = profile
+            current_profile = "CSP" if normalized.endswith("CSP") else "GOP"
             continue
 
         at_match = AT_RE.match(line)
@@ -70,5 +85,11 @@ def parse_contract_profiles(contract_path: Path) -> ParseResult:
 
         at_profiles[at_id] = current_profile
         counts[current_profile] += 1
+
+    if in_fence:
+        start_line = fence_start_lineno if fence_start_lineno is not None else "?"
+        errors.append(
+            f"{contract_path}:{start_line}: unterminated fenced block starting with {fence_delim!r}."
+        )
 
     return ParseResult(at_profile_map=at_profiles, counts=counts, errors=errors)

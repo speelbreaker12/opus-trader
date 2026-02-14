@@ -75,6 +75,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+python_bin="${PYTHON_BIN:-python3}"
+command -v "$python_bin" >/dev/null 2>&1 || die "python interpreter not found: $python_bin"
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$repo_root"
 
@@ -99,27 +102,27 @@ parity_json="$crossref_dir/at_profile_parity.json"
 audit_json="$crossref_dir/roadmap_evidence_audit.json"
 invariants_json="$crossref_dir/crossref_invariants.json"
 
-python3 plans/validate_crossref_invariants.py --output-json "$invariants_json"
+"$python_bin" plans/validate_crossref_invariants.py --output-json "$invariants_json"
 
-python3 tools/ci/check_contract_profiles.py \
+"$python_bin" tools/ci/check_contract_profiles.py \
   --contract "$contract" \
   --emit-map "$checker_map" \
   --emit-summary "$checker_summary"
 
-python3 tools/at_coverage_report.py \
+"$python_bin" tools/at_coverage_report.py \
   --contract "$contract" \
   --prd "$prd" \
   --emit-map "$report_map" \
   --output-json "$coverage_json" \
   --output-md "$coverage_md"
 
-python3 tools/ci/check_contract_profile_map_parity.py \
+"$python_bin" tools/ci/check_contract_profile_map_parity.py \
   --checker-map "$checker_map" \
   --report-map "$report_map" \
   --out "$parity_json"
 
 audit_cmd=(
-  python3 tools/roadmap_evidence_audit.py
+  "$python_bin" tools/roadmap_evidence_audit.py
   --prd "$prd"
   --inputs "$inputs"
   --global-manual-allowlist "$allowlist"

@@ -8,6 +8,8 @@
 use soldier_core::execution::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
     LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    expected_slippage_bps_samples, liquidity_gate_reject_total, take_execution_metric_lines,
+    with_intent_trace_ids,
 };
 
 /// Helper: build a simple L2 book with given ask/bid levels.
@@ -357,13 +359,25 @@ fn test_partial_fill_from_thin_book_evaluates_available() {
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(
-        result,
+    match result {
         LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
+            reason,
+            wap,
+            slippage_bps,
             ..
+        } => {
+            assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+            assert!(
+                wap.is_some(),
+                "thin-book reject must include WAP diagnostics"
+            );
+            assert!(
+                slippage_bps.is_some(),
+                "thin-book reject must include slippage diagnostics"
+            );
         }
-    ));
+        other => panic!("expected Rejected, got {other:?}"),
+    }
 }
 
 // ─── Multi-level book walk ──────────────────────────────────────────────
@@ -502,10 +516,10 @@ fn test_hedge_clamps_to_fillable_qty() {
 }
 
 #[test]
-fn test_non_marketable_bypasses_depth_gate() {
+fn test_non_marketable_open_still_enforces_depth_budget() {
     let mut m = LiquidityGateMetrics::new();
 
-    // OPEN path with valid L2 bypasses depth-budget clamp when non-marketable.
+    // OPEN path remains fail-closed under §1.3 regardless of marketability.
     let mut input = gate_input(
         3.0,
         true,
@@ -517,8 +531,8 @@ fn test_non_marketable_bypasses_depth_gate() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result,
-        LiquidityGateResult::Allowed {
-            allowed_qty: Some(3.0),
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
             ..
         }
     ));
@@ -600,4 +614,53 @@ fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
             ..
         }
     ));
+}
+
+#[test]
+fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
+    let intent_id = "intent-liquidity-001";
+    let run_id = "run-liquidity-001";
+    let _ = take_execution_metric_lines();
+    let before_reject =
+        liquidity_gate_reject_total(LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+    let before_samples = expected_slippage_bps_samples();
+
+    let snap = book(vec![(100.0, 1.0), (110.0, 1.0)], vec![], 900);
+    let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
+    let mut metrics = LiquidityGateMetrics::new();
+    let result = with_intent_trace_ids(intent_id, run_id, || {
+        evaluate_liquidity_gate(&input, &mut metrics)
+    });
+    assert!(matches!(
+        result,
+        LiquidityGateResult::Rejected {
+            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+            ..
+        }
+    ));
+
+    let after_reject =
+        liquidity_gate_reject_total(LiquidityGateRejectReason::ExpectedSlippageTooHigh);
+    let after_samples = expected_slippage_bps_samples();
+    assert_eq!(after_reject, before_reject + 1);
+    assert_eq!(after_samples, before_samples + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("liquidity_gate_reject_total")
+                && line.contains("reason=ExpectedSlippageTooHigh")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected liquidity gate reject metric line, got {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("expected_slippage_bps")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected slippage sample metric line, got {lines:?}"
+    );
 }

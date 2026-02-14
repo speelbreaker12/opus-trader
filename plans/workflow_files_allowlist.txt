@@ -12,6 +12,8 @@ plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_skip_entrypoint.sh
 plans/checkpoint_dependency_manifest.json
 plans/checkpoint_fingerprint_env_manifest.txt
+plans/ci/requirements-crossref.txt
+plans/ci/requirements-verify.txt
 plans/code_review_expert_logged.sh
 plans/codex_review_digest.sh
 plans/codex_review_let_pass.sh

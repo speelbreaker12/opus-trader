@@ -13,8 +13,9 @@
 //! C3: No side effects (approval) occur before all gates pass.
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    build_order_intent,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
+    GateSequenceResult, GateStep, build_order_intent, gate_sequence_total,
+    take_execution_metric_lines, with_intent_trace_ids,
 };
 use soldier_core::risk::RiskState;
 
@@ -48,6 +49,46 @@ fn test_at501_open_all_gates_pass_trace_order() {
         other => panic!("expected Approved, got {other:?}"),
     }
     assert_eq!(m.approved_total(), 1);
+}
+
+#[test]
+fn test_gate_sequence_emits_structured_reject_metric_line() {
+    let intent_id = "intent-gateseq-001";
+    let run_id = "run-gateseq-001";
+    let _ = take_execution_metric_lines();
+    let before = gate_sequence_total(GateSequenceResult::Rejected);
+
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults::default();
+    let result = with_intent_trace_ids(intent_id, run_id, || {
+        build_order_intent(
+            ChokeIntentClass::Open,
+            RiskState::Degraded,
+            &mut metrics,
+            &gates,
+        )
+    });
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+
+    let after = gate_sequence_total(GateSequenceResult::Rejected);
+    assert_eq!(after, before + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("gate_sequence_total")
+                && line.contains("result=rejected")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected gate sequence metric line, got {lines:?}"
+    );
 }
 
 // ─── AT-502: OPEN intents require all 9 gates ────────────────────────────
