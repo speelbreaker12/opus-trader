@@ -3431,6 +3431,122 @@
       "implementation_tests": [
         "crates/soldier_infra/tests/test_crash_mid_intent.rs"
       ]
+    },
+    {
+      "id": "S1-012",
+      "priority": 84,
+      "phase": 1,
+      "slice": 1,
+      "slice_ref": "Slice 1 — Instrument Units + Dispatcher Invariants",
+      "story_ref": "S1.4 Instrument lifecycle + expiry safety (Expiry Cliff Guard)",
+      "category": "risk",
+      "description": "Implement S1.4 (Instrument lifecycle + expiry safety (Expiry Cliff Guard)) with contract-aligned behavior and deterministic tests.",
+      "contract_refs": [
+        "AT-949",
+        "AT-950",
+        "AT-960",
+        "AT-961",
+        "AT-962",
+        "AT-965",
+        "AT-966"
+      ],
+      "plan_refs": [
+        "Slice 1 — Instrument Units + Dispatcher Invariants",
+        "S1.4 — Instrument lifecycle + expiry safety (Expiry Cliff Guard)"
+      ],
+      "scope": {
+        "touch": [
+          "crates/soldier_core/src/risk",
+          "crates/soldier_core/src/venue",
+          "crates/soldier_core/tests"
+        ],
+        "create": [
+          "crates/soldier_core/tests/test_expiry_guard.rs"
+        ],
+        "avoid": [
+          "plans/**"
+        ]
+      },
+      "acceptance": [
+        "If `expiration_timestamp_ms` is present and now_ms is within `expiry_delist_buffer_s`, reject NEW OPEN with `Rejected(InstrumentExpiredOrDelisted)`; CLOSE/HEDGE/CANCEL remain allowed subject to TradingMode.",
+        "Terminal lifecycle errors for expired/delisted instruments MUST be classified as `Terminal(InstrumentExpiredOrDelisted)`; MUST NOT panic; MUST NOT restart process; reconcile that instrument only and mark `instrument_state=ExpiredOrDelisted`.",
+        "CANCEL on expired/delisted instrument returning terminal error MUST be treated as idempotently successful."
+      ],
+      "steps": [
+        "Map S1.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
+        "Implement S1.4 logic in the smallest practical surface area while preserving fail-closed behavior.",
+        "Add/adjust targeted tests for S1.4: crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_delist_buffer_rejects_open, crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_outside_buffer_allows_open, crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_cancel_idempotent_success.",
+        "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+        "Run verification commands and archive artifact evidence before setting passes=true."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "cargo test --workspace"
+      ],
+      "evidence": [
+        "cargo test -p soldier_core --test test_expiry_guard output",
+        "PRD entry S1-012 records contract AT and test mappings for this story."
+      ],
+      "dependencies": [
+        "S1-003",
+        "S1-011"
+      ],
+      "est_size": "S",
+      "risk": "med",
+      "needs_human_decision": false,
+      "passes": true,
+      "contract_must_evidence": [
+        {
+          "quote": "S1.4 contract tests must pass before enabling OPEN behavior.",
+          "location": "specs/IMPLEMENTATION_PLAN.md:230",
+          "anchor": "AT-949"
+        }
+      ],
+      "enforcing_contract_ats": [
+        "AT-949",
+        "AT-950",
+        "AT-960",
+        "AT-961",
+        "AT-962",
+        "AT-965",
+        "AT-966"
+      ],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "INSTRUMENT_EXPIRED_OR_DELISTED"
+        ]
+      },
+      "enforcement_point": "DispatcherChokepoint",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [
+          {
+            "name": "s1_012_checks_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "result"
+            ]
+          }
+        ],
+        "status_fields": [
+          "trading_mode",
+          "risk_state"
+        ],
+        "status_contract_ats": [
+          "AT-949",
+          "AT-950"
+        ]
+      },
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_delist_buffer_rejects_open",
+        "crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_outside_buffer_allows_open",
+        "crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_cancel_idempotent_success",
+        "crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_non_terminal_cancel_does_not_mark_expired",
+        "crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_reconcile_does_not_halt_other_instruments",
+        "crates/soldier_core/tests/test_expiry_guard.rs::test_expiry_no_retry_loop_after_positions_clear"
+      ]
     }
   ]
 }
