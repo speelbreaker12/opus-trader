@@ -19,9 +19,71 @@ head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
 story_id="WF-001"
 
+setup_story_review_artifacts() {
+  local case_dir="$1"
+  local review_head="$2"
+  local story_root="$case_dir/story_artifacts/$story_id"
+  local self_file="$story_root/self_review/20260214T000000Z_self_review.md"
+  local kimi_file="$story_root/kimi/20260214T000000Z_review.md"
+  local codex_final_file="$story_root/codex/20260214T000001Z_review.md"
+  local codex_second_file="$story_root/codex/20260214T000002Z_review.md"
+  local expert_file="$story_root/code_review_expert/20260214T000003Z_review.md"
+  local resolution_file="$story_root/review_resolution.md"
+
+  mkdir -p \
+    "$story_root/self_review" \
+    "$story_root/kimi" \
+    "$story_root/codex" \
+    "$story_root/code_review_expert"
+
+  cat > "$self_file" <<EOF
+Story: $story_id
+HEAD: $review_head
+Decision: PASS
+- Failure-Mode Review: DONE
+- Strategic Failure Review: DONE
+EOF
+
+  cat > "$kimi_file" <<EOF
+- Story: $story_id
+- HEAD: $review_head
+EOF
+
+  cat > "$codex_final_file" <<EOF
+- Story: $story_id
+- HEAD: $review_head
+EOF
+
+  cat > "$codex_second_file" <<EOF
+- Story: $story_id
+- HEAD: $review_head
+EOF
+
+  cat > "$expert_file" <<EOF
+- Story: $story_id
+- HEAD: $review_head
+- Review Status: COMPLETE
+- Blocking: none
+- Major: none
+- Medium: none
+EOF
+
+  cat > "$resolution_file" <<EOF
+Story: $story_id
+HEAD: $review_head
+Blocking addressed: YES
+Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
+Kimi final review file: $kimi_file
+Codex final review file: $codex_final_file
+Codex second review file: $codex_second_file
+Code-review-expert final review file: $expert_file
+EOF
+}
+
 setup_case() {
   local case_dir="$1"
   local verify_head="$2"
+  local review_head="${3:-$verify_head}"
 
   mkdir -p "$case_dir/artifacts"
   cat > "$case_dir/prd.json" <<EOF
@@ -45,13 +107,7 @@ EOF
   "decision": "PASS"
 }
 EOF
-
-  cat > "$case_dir/fake_story_review_gate.sh" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-echo "$*" > "${STORY_GATE_ARGS_FILE:?missing STORY_GATE_ARGS_FILE}"
-EOF
-  chmod +x "$case_dir/fake_story_review_gate.sh"
+  setup_story_review_artifacts "$case_dir" "$review_head"
 }
 
 success_case="$tmp_dir/success"
@@ -62,27 +118,25 @@ success_output="$(
   cd "$ROOT" && \
   PRD_FILE="$success_case/prd.json" \
   VERIFY_ARTIFACTS_DIR="$success_case/artifacts" \
-  STORY_REVIEW_GATE="$success_case/fake_story_review_gate.sh" \
-  STORY_GATE_ARGS_FILE="$success_case/gate.args" \
+  STORY_ARTIFACTS_ROOT="$success_case/story_artifacts" \
   "$SCRIPT" "$story_id" true \
   --contract-review "$success_case/artifacts/contract_review.json"
 )"
 
 echo "$success_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing success output"
+echo "$success_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "story review gate did not run for current HEAD"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$success_case/prd.json" >/dev/null || fail "passes was not updated to true"
-grep -Fxq "$story_id --head $head_sha" "$success_case/gate.args" || fail "story review gate did not receive current HEAD"
 
 mismatch_case="$tmp_dir/mismatch"
 mkdir -p "$mismatch_case"
-setup_case "$mismatch_case" "deadbeef"
+setup_case "$mismatch_case" "deadbeef" "$head_sha"
 
 set +e
 mismatch_output="$(
   cd "$ROOT" && \
   PRD_FILE="$mismatch_case/prd.json" \
   VERIFY_ARTIFACTS_DIR="$mismatch_case/artifacts" \
-  STORY_REVIEW_GATE="$mismatch_case/fake_story_review_gate.sh" \
-  STORY_GATE_ARGS_FILE="$mismatch_case/gate.args" \
+  STORY_ARTIFACTS_ROOT="$mismatch_case/story_artifacts" \
   "$SCRIPT" "$story_id" true \
   --contract-review "$mismatch_case/artifacts/contract_review.json" 2>&1
 )"
@@ -92,7 +146,6 @@ set -e
 [[ "$mismatch_rc" -ne 0 ]] || fail "expected head mismatch to fail"
 echo "$mismatch_output" | grep -Fq "ERROR: verify metadata HEAD mismatch" || fail "missing head mismatch diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$mismatch_case/prd.json" >/dev/null || fail "passes changed despite head mismatch failure"
-[[ ! -f "$mismatch_case/gate.args" ]] || fail "story review gate should not run on head mismatch"
 
 head_flip_case="$tmp_dir/head_flip"
 mkdir -p "$head_flip_case"
@@ -142,8 +195,7 @@ head_flip_output="$(
   TEST_GIT_HEAD_SECOND="$alt_head" \
   PRD_FILE="$head_flip_case/prd.json" \
   VERIFY_ARTIFACTS_DIR="$head_flip_case/artifacts" \
-  STORY_REVIEW_GATE="$head_flip_case/fake_story_review_gate.sh" \
-  STORY_GATE_ARGS_FILE="$head_flip_case/gate.args" \
+  STORY_ARTIFACTS_ROOT="$head_flip_case/story_artifacts" \
   "$SCRIPT" "$story_id" true \
   --contract-review "$head_flip_case/artifacts/contract_review.json" 2>&1
 )"
@@ -153,6 +205,6 @@ set -e
 [[ "$head_flip_rc" -ne 0 ]] || fail "expected pass flip to fail when HEAD changes mid-run"
 echo "$head_flip_output" | grep -Fq "ERROR: HEAD changed during pass flip validation" || fail "missing mid-run head-change diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$head_flip_case/prd.json" >/dev/null || fail "passes changed despite mid-run head-change failure"
-grep -Fxq "$story_id --head $head_sha" "$head_flip_case/gate.args" || fail "story review gate should run with the initial HEAD before final check"
+echo "$head_flip_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "story review gate should run with the initial HEAD before final check"
 
 echo "PASS: prd_set_pass"

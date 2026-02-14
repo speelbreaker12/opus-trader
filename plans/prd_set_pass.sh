@@ -143,21 +143,24 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
-  REVIEW_GATE="${STORY_REVIEW_GATE:-./plans/story_review_gate.sh}"
+  REVIEW_GATE="./plans/story_review_gate.sh"
   [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
   "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
+fi
 
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+jq --arg id "$ID" --argjson status "$STATUS" '
+  .items = (.items | map(if .id == $id then .passes = $status else . end))
+' "$PRD_FILE" > "$tmp"
+if [[ "$STATUS" == "true" ]]; then
   final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; exit 4; }
   if [[ "$final_head_sha" != "$HEAD_SHA" ]]; then
     echo "ERROR: HEAD changed during pass flip validation (initial=$HEAD_SHA current=$final_head_sha)" >&2
     exit 4
   fi
 fi
-
-tmp="$(mktemp)"
-jq --arg id "$ID" --argjson status "$STATUS" '
-  .items = (.items | map(if .id == $id then .passes = $status else . end))
-' "$PRD_FILE" > "$tmp"
 mv "$tmp" "$PRD_FILE"
+trap - EXIT
 
 echo "Updated task $ID: passes=$STATUS"
