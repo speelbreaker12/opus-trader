@@ -8,11 +8,13 @@ use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState, evaluate_fee_
 use crate::venue::{BotFeatureFlags, VenueCapabilities, evaluate_capabilities};
 
 use super::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, LiquidityGateInput, LiquidityGateMetrics,
-    LiquidityGateResult, NetEdgeInput, NetEdgeMetrics, NetEdgeResult, PreflightInput,
-    PreflightMetrics, PreflightResult, PricerInput, PricerMetrics, PricerResult,
-    QuantizeConstraints, QuantizeMetrics, Side, build_gate_results, build_order_intent,
-    compute_limit_price, evaluate_liquidity_gate, evaluate_net_edge, preflight_intent, quantize,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, LiquidityGateInput,
+    LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult, NetEdgeInput,
+    NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, PreflightInput, PreflightMetrics,
+    PreflightReject, PreflightResult, PricerInput, PricerMetrics, PricerRejectReason, PricerResult,
+    QuantizeConstraints, QuantizeError, QuantizeMetrics, RejectReasonCode, Side,
+    build_gate_results, build_order_intent_with_reject_reason_code, compute_limit_price,
+    evaluate_liquidity_gate, evaluate_net_edge, preflight_intent, quantize,
 };
 
 /// Quantize inputs required by the execution pipeline.
@@ -69,6 +71,7 @@ impl IntentPipelineMetrics {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PipelineResult {
     pub decision: ChokeResult,
+    pub reject_reason_code: Option<RejectReasonCode>,
 }
 
 /// Evaluate the execution pipeline and return the chokepoint decision.
@@ -89,24 +92,55 @@ pub fn evaluate_intent_pipeline(
         || (input.intent_class == ChokeIntentClass::Open && input.risk_state != RiskState::Healthy);
 
     let mut preflight_passed = true;
+    let mut preflight_reject_code = None;
     let mut quantize_passed = true;
+    let mut quantize_reject_code = None;
     let mut fee_cache_passed = true;
 
     if !dispatch_auth_short_circuit {
-        preflight_passed = matches!(
-            preflight_intent(&preflight_input, &mut metrics.preflight),
-            PreflightResult::Allowed
-        );
+        let preflight_result = preflight_intent(&preflight_input, &mut metrics.preflight);
+        (preflight_passed, preflight_reject_code) = match preflight_result {
+            PreflightResult::Allowed => (true, None),
+            PreflightResult::Rejected(reason) => (
+                false,
+                Some(match reason {
+                    PreflightReject::OrderTypeMarketForbidden => {
+                        RejectReasonCode::OrderTypeMarketForbidden
+                    }
+                    PreflightReject::OrderTypeStopForbidden => {
+                        RejectReasonCode::OrderTypeStopForbidden
+                    }
+                    PreflightReject::LinkedOrderTypeForbidden => {
+                        RejectReasonCode::LinkedOrderTypeForbidden
+                    }
+                    PreflightReject::PostOnlyWouldCross => RejectReasonCode::PostOnlyWouldCross,
+                }),
+            ),
+        };
 
         if preflight_passed {
-            quantize_passed = quantize(
+            let quantize_result = quantize(
                 input.quantize.raw_qty,
                 input.quantize.raw_limit_price,
                 input.quantize.side,
                 &input.quantize.constraints,
                 &mut metrics.quantize,
-            )
-            .is_ok();
+            );
+            (quantize_passed, quantize_reject_code) = match quantize_result {
+                Ok(_) => (true, None),
+                Err(reason) => (
+                    false,
+                    Some(match reason {
+                        QuantizeError::TooSmallAfterQuantization { .. } => {
+                            RejectReasonCode::TooSmallAfterQuantization
+                        }
+                        QuantizeError::InstrumentMetadataMissing { .. }
+                        | QuantizeError::InvalidInput { .. } => {
+                            RejectReasonCode::InstrumentMetadataMissing
+                        }
+                    }),
+                ),
+            };
         }
 
         if preflight_passed && quantize_passed && input.dispatch_consistency_passed {
@@ -121,6 +155,9 @@ pub fn evaluate_intent_pipeline(
     let mut liquidity_gate_passed = true;
     let mut net_edge_passed = true;
     let mut pricer_passed = true;
+    let mut liquidity_gate_reject_code = None;
+    let mut net_edge_reject_code = None;
+    let mut pricer_reject_code = None;
 
     let open_path_active = input.intent_class == ChokeIntentClass::Open
         && input.risk_state == RiskState::Healthy
@@ -131,35 +168,91 @@ pub fn evaluate_intent_pipeline(
 
     if open_path_active {
         liquidity_gate_passed = match input.liquidity.as_ref() {
-            Some(liquidity_input) => matches!(
-                evaluate_liquidity_gate(liquidity_input, &mut metrics.liquidity),
-                LiquidityGateResult::Allowed { .. }
-            ),
-            None => false,
+            Some(liquidity_input) => {
+                let liquidity_result =
+                    evaluate_liquidity_gate(liquidity_input, &mut metrics.liquidity);
+                match liquidity_result {
+                    LiquidityGateResult::Allowed { .. } => true,
+                    LiquidityGateResult::Rejected { reason, .. } => {
+                        liquidity_gate_reject_code = Some(match reason {
+                            LiquidityGateRejectReason::LiquidityGateNoL2 => {
+                                RejectReasonCode::LiquidityGateNoL2
+                            }
+                            LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
+                                RejectReasonCode::ExpectedSlippageTooHigh
+                            }
+                            LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
+                                // Depth shortfall is a liquidity rejection without a dedicated
+                                // reject-reason code in the current registry.
+                                RejectReasonCode::ExpectedSlippageTooHigh
+                            }
+                        });
+                        false
+                    }
+                }
+            }
+            None => {
+                liquidity_gate_reject_code = Some(RejectReasonCode::LiquidityGateNoL2);
+                false
+            }
         };
 
         if liquidity_gate_passed {
             net_edge_passed = match input.net_edge.as_ref() {
-                Some(net_edge_input) => matches!(
-                    evaluate_net_edge(net_edge_input, &mut metrics.net_edge),
-                    NetEdgeResult::Allowed { .. }
-                ),
-                None => false,
+                Some(net_edge_input) => {
+                    let net_edge_result = evaluate_net_edge(net_edge_input, &mut metrics.net_edge);
+                    match net_edge_result {
+                        NetEdgeResult::Allowed { .. } => true,
+                        NetEdgeResult::Rejected { reason, .. } => {
+                            net_edge_reject_code = Some(match reason {
+                                NetEdgeRejectReason::NetEdgeTooLow => {
+                                    RejectReasonCode::NetEdgeTooLow
+                                }
+                                NetEdgeRejectReason::NetEdgeInputMissing => {
+                                    RejectReasonCode::NetEdgeInputMissing
+                                }
+                            });
+                            false
+                        }
+                    }
+                }
+                None => {
+                    net_edge_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
+                    false
+                }
             };
         } else {
             net_edge_passed = false;
+            net_edge_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
         }
 
         if net_edge_passed {
             pricer_passed = match input.pricer.as_ref() {
-                Some(pricer_input) => matches!(
-                    compute_limit_price(pricer_input, &mut metrics.pricer),
-                    PricerResult::LimitPrice { .. }
-                ),
-                None => false,
+                Some(pricer_input) => {
+                    let pricer_result = compute_limit_price(pricer_input, &mut metrics.pricer);
+                    match pricer_result {
+                        PricerResult::LimitPrice { .. } => true,
+                        PricerResult::Rejected { reason, .. } => {
+                            pricer_reject_code = Some(match reason {
+                                PricerRejectReason::NetEdgeTooLow => {
+                                    RejectReasonCode::NetEdgeTooLow
+                                }
+                                PricerRejectReason::InvalidInput => {
+                                    RejectReasonCode::NetEdgeInputMissing
+                                }
+                            });
+                            false
+                        }
+                    }
+                }
+                None => {
+                    pricer_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
+                    false
+                }
             };
         } else {
             pricer_passed = false;
+            pricer_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
         }
     }
 
@@ -176,12 +269,24 @@ pub fn evaluate_intent_pipeline(
         input.max_dispatch_qty,
     );
 
+    let gate_reject_codes = GateRejectCodes {
+        preflight: preflight_reject_code,
+        quantize: quantize_reject_code,
+        liquidity_gate: liquidity_gate_reject_code,
+        net_edge_gate: net_edge_reject_code,
+        pricer: pricer_reject_code,
+    };
+
+    let (decision, reject_reason_code) = build_order_intent_with_reject_reason_code(
+        input.intent_class,
+        input.risk_state,
+        &mut metrics.chokepoint,
+        &gate_results,
+        &gate_reject_codes,
+    );
+
     PipelineResult {
-        decision: build_order_intent(
-            input.intent_class,
-            input.risk_state,
-            &mut metrics.chokepoint,
-            &gate_results,
-        ),
+        decision,
+        reject_reason_code,
     }
 }

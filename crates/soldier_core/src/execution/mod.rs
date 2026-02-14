@@ -3,11 +3,14 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
+const MAX_EXECUTION_METRIC_LINES: usize = 4096;
+
 pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
 pub mod gates;
 pub mod label;
+pub mod open_runtime;
 pub mod order_size;
 pub mod pipeline;
 pub mod post_only_guard;
@@ -18,7 +21,8 @@ pub mod tlsm;
 
 pub use build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
-    GateSequenceResult, GateStep, build_gate_results, build_order_intent, gate_sequence_total,
+    GateSequenceResult, GateStep, build_gate_results, build_order_intent,
+    build_order_intent_with_reject_reason_code, gate_sequence_total,
 };
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
@@ -34,6 +38,9 @@ pub use gates::{
 pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
     encode_label,
+};
+pub use open_runtime::{
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use pipeline::{
@@ -63,8 +70,6 @@ thread_local! {
     static EXECUTION_TRACE_IDS: RefCell<Option<ExecutionTraceIds>> = const { RefCell::new(None) };
     static EXECUTION_METRIC_LINES: RefCell<VecDeque<String>> = const { RefCell::new(VecDeque::new()) };
 }
-
-const EXECUTION_METRIC_LINES_MAX: usize = 512;
 
 pub fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
 where
@@ -101,9 +106,29 @@ pub(crate) fn emit_execution_metric_line(metric_name: &str, tail_fields: &str) {
     eprintln!("{line}");
     EXECUTION_METRIC_LINES.with(|cell| {
         let mut lines = cell.borrow_mut();
-        lines.push_back(line);
-        if lines.len() > EXECUTION_METRIC_LINES_MAX {
-            let _ = lines.pop_front();
+        if lines.len() >= MAX_EXECUTION_METRIC_LINES {
+            lines.pop_front();
         }
+        lines.push_back(line);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{emit_execution_metric_line, take_execution_metric_lines};
+
+    #[test]
+    fn execution_metric_buffer_is_bounded() {
+        let _ = take_execution_metric_lines();
+
+        for i in 0..5_000 {
+            emit_execution_metric_line("execution_metric_buffer_test", &format!("i={i}"));
+        }
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.len() <= 4_096,
+            "execution metric buffer should be bounded"
+        );
+    }
 }

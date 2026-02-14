@@ -490,6 +490,90 @@ Commands: python3 (workbook generator) -> /Users/admin/Desktop/todo/TRACEABILITY
 Evidence: /Users/admin/Desktop/todo/TRACEABILITY_MATRIX_REGENERATED_2026-02-13.xlsx; plans/prd.json; artifacts/verify/20260212_185747/contract_review.json; artifacts/story/S1-013/review_resolution.md.
 Notes: `prd_set_pass` passed after adding required review artifacts for current HEAD and a PASS contract-review artifact in the verify run directory.
 Next: commit/push/PR for the pass-flip and workflow-gate fixes.
+Story: workflow-maintenance
+Date: 2026-02-12
+Summary: Implemented crossref validator slices 1-4 end-to-end with shared AT parser, exact map parity, marker-based evidence audit, run-scoped crossref gate wrapper, invariant validator/schema, burn-in checker, and CI/report-mode wiring with strict sentinel opt-in.
+Commands: bash plans/tests/test_contract_profile_parity.sh; bash plans/tests/test_roadmap_evidence_audit.sh; bash plans/tests/test_crossref_invariants.sh; bash plans/tests/test_crossref_gate.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; ./plans/preflight.sh; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: tools/at_parser.py; tools/ci/check_contract_profiles.py; tools/at_coverage_report.py; tools/ci/check_contract_profile_map_parity.py; tools/roadmap_evidence_audit.py; plans/crossref_gate.sh; plans/crossref_burnin_check.sh; plans/crossref_execution_invariants.yaml; plans/schemas/crossref_execution_invariants.schema.json; plans/validate_crossref_invariants.py; docs/PHASE0_CHECKLIST_BLOCK.md; docs/PHASE1_CHECKLIST_BLOCK.md; artifacts/verify/20260212_193318; artifacts/verify/20260212_194009.
+Next: Optional promotion to strict crossref gating by adding plans/crossref_ci_strict after burn-in criteria are met.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Added cross-repo Phase 1 comparison kit (`tools/phase1_compare.py`, wrapper script, and checklist doc) to compare opus-trader vs ralph outcomes with reproducible markdown/json artifacts and per-command logs.
+Commands: chmod +x scripts/compare_phase1_outcomes.sh tools/phase1_compare.py; bash -n scripts/compare_phase1_outcomes.sh; python3 -m py_compile tools/phase1_compare.py; ./scripts/compare_phase1_outcomes.sh --help; ./scripts/compare_phase1_outcomes.sh . <ralph_repo_root>.
+Evidence: tools/phase1_compare.py; scripts/compare_phase1_outcomes.sh; docs/phase1_outcome_compare_checklist.md; artifacts/phase1_compare/20260213_155042/report.md; artifacts/phase1_compare/20260213_155042/report.json.
+Next: Run with `--run-quick-verify` and optionally `--scenario-cmd` after selecting final Phase 1 refs for both repos.
+Story: workflow/at-profile-completeness-and-parity-gates
+Date: 2026-02-13
+Summary: Hardened contract profile parsing to fail-closed on malformed `Profile:` lines (not only missing/conflict/FULL) so malformed tags cannot be silently ignored and inherited. Added regression coverage to enforce rc=5 on malformed tags for both checker and coverage consumer.
+Commands: bash plans/tests/test_contract_profile_parity.sh; python3 tools/ci/check_contract_profiles.py --contract specs/CONTRACT.md.
+Evidence: tools/at_parser.py; plans/tests/test_contract_profile_parity.sh.
+Notes: Focused verification passed; full verify intentionally not run in this step.
+Next: run `./plans/verify.sh quick`/`./plans/verify.sh full` when you want a fresh end-to-end artifact for this delta.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Extended phase1 comparison tool to include verify gate parity, Phase 1 PRD completion parity, traceability parity, and operational readiness signal parity; validated with a frozen-ref quick-verify run.
+Commands: python3 -m py_compile tools/phase1_compare.py; ./scripts/compare_phase1_outcomes.sh . <ralph_repo_root> --skip-meta-test; ./scripts/compare_phase1_outcomes.sh . <ralph_repo_root> --opus-ref 7152fb9fcc186b34391a261c48580f9cd7a37d6e --ralph-ref 9d1be45a6942affca60bf29a23ea1b0077ab27ec --run-quick-verify.
+Evidence: tools/phase1_compare.py; docs/phase1_outcome_compare_checklist.md; artifacts/phase1_compare/20260213_160516/report.md; artifacts/phase1_compare/20260213_160538/report.md; artifacts/phase1_compare/20260213_160538/report.json.
+Next: Optional: add per-gate pass/fail normalization by parsing verify artifact markers (`*.rc`) for cleaner cross-repo gate mapping.
+Story: workflow/at-profile-completeness-and-parity-gates
+Date: 2026-02-13
+Summary: Re-ran full verify after malformed-profile parser hardening and confirmed all gates pass; refreshed contract kernel artifact during run when initial full verify surfaced stale hash from earlier contract doc edit.
+Commands: ./plans/verify.sh full (run_id=20260213_111254); python3 scripts/build_contract_kernel.py --out docs/contract_kernel.json; python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json.
+Evidence: artifacts/verify/20260213_111254; docs/contract_kernel.json.
+Notes: Commit scope for this step remains parser/test/progress hardening files only.
+Next: none.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Expanded phase1 comparison coverage with full-verify support, artifact gate/time parity (`*.rc`/`*.time`), flakiness run analysis, and scenario behavioral-output parity (reason codes/status fields/dispatch counts); updated both repo comparison TODO trackers.
+Commands: python3 -m py_compile tools/phase1_compare.py; ./scripts/compare_phase1_outcomes.sh --help; ./scripts/compare_phase1_outcomes.sh . <ralph_repo_root> --skip-meta-test --scenario-cmd "echo reason_code=RISK_BLOCKED dispatch_count=0 is_trading_allowed" --flaky-runs 2 --flaky-cmd "echo stable".
+Evidence: tools/phase1_compare.py; docs/phase1_outcome_compare_checklist.md; plans/phase1_comparison_todo.md; <ralph_repo_root>/plans/phase1_comparison_todo.md; artifacts/phase1_compare/20260213_173039/report.md; artifacts/phase1_compare/20260213_173039/report.json.
+Next: Run frozen-ref compare with `--run-quick-verify --run-full-verify --opus-base origin/main --ralph-base origin/main --scenario-cmd <golden_cmd> --flaky-runs 3` from clean worktrees/CI.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Ran full cross-repo phase1 comparison using clean detached worktrees at frozen refs with quick+full verify, churn stats, shared scenario command, and 3-run flakiness; captured new issues in both repo comparison TODO trackers.
+Commands: ./scripts/compare_phase1_outcomes.sh /tmp/phase1-compare-full-20260213/opus /tmp/phase1-compare-full-20260213/ralph --opus-ref 7152fb9fcc186b34391a261c48580f9cd7a37d6e --ralph-ref 9d1be45a6942affca60bf29a23ea1b0077ab27ec --run-quick-verify --run-full-verify --opus-base origin/main --ralph-base origin/main --scenario-cmd "cargo test -p soldier_core --test test_phase1_dispatch_auth" --flaky-runs 3 --flaky-cmd "cargo test -p soldier_core --test test_phase1_dispatch_auth".
+Evidence: artifacts/phase1_compare/20260213_173436/report.md; artifacts/phase1_compare/20260213_173436/report.json; plans/phase1_comparison_todo.md; <ralph_repo_root>/plans/phase1_comparison_todo.md.
+Next: Choose a canonical scenario command that exists in both repos; use CI full-verify evidence for ralph full parity where local full is policy-disabled.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Executed next-step #1 by selecting and validating a canonical shared scenario command across both repos (`cargo test -p soldier_core --test test_gate_ordering`); updated checklist and comparison trackers, and closed prior scenario-command mismatch issue.
+Commands: cargo test -p soldier_core --test test_gate_ordering (opus); cargo test -p soldier_core --test test_gate_ordering (ralph); ./scripts/compare_phase1_outcomes.sh . <ralph_repo_root> --skip-meta-test --scenario-cmd "cargo test -p soldier_core --test test_gate_ordering" --flaky-runs 3 --flaky-cmd "cargo test -p soldier_core --test test_gate_ordering".
+Evidence: artifacts/phase1_compare/20260213_181407/report.md; docs/phase1_outcome_compare_checklist.md; plans/phase1_comparison_todo.md; <ralph_repo_root>/plans/phase1_comparison_todo.md.
+Next: Use this canonical scenario command in subsequent full compare runs.
+Story: workflow/at-profile-completeness-and-parity-gates
+Date: 2026-02-13
+Summary: Elevated malformed `Profile:` handling to strict fail-closed semantics in shared parser: detect any profile-like line case-insensitively, allow only exact `Profile: CSP|GOP`, reject `FULL`/spacing/casing variants, and ignore fenced code blocks (` ``` ` / ` ~~~ `). Expanded parity fixture coverage for malformed spacing/casing/FULL and fenced-code false-positive guards.
+Commands: bash plans/tests/test_contract_profile_parity.sh; python3 tools/ci/check_contract_profiles.py --contract specs/CONTRACT.md.
+Evidence: tools/at_parser.py; plans/tests/test_contract_profile_parity.sh.
+Notes: Checker remains wired as a hard verify gate via plans/verify_fork.sh (`contract_profiles`).
+Next: run ./plans/verify.sh quick/full when you want a fresh end-to-end artifact for this delta.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Executed frozen-ref Phase 1 comparison run for all requested dimensions and explicitly stopped a prior run when ralph quick verify entered workflow_acceptance (not desired for story comparison). Re-ran in clean detached worktrees without verify invocation on ralph, with canonical scenario and 5-run flakiness, then added git churn/patch-footprint analysis for weighted decision.
+Commands: /Users/admin/Desktop/opus-trader/scripts/compare_phase1_outcomes.sh <clean opus wt> <clean ralph wt> --opus-ref 684ddc8e324501f8b2ed2d36bc6c088addd135d2 --ralph-ref 9d1be45a6942affca60bf29a23ea1b0077ab27ec --opus-base origin/main --ralph-base origin/main --scenario-cmd "cargo test -p soldier_core --test test_gate_ordering" --flaky-runs 5; cargo test -p soldier_core --test test_missing_config -- --nocapture (both repos); git diff --stat / patch-id footprint extraction (both repos).
+Evidence: artifacts/phase1_compare/20260213_200857/report.md; artifacts/phase1_compare/20260213_200857/report.json; artifacts/phase1_compare/20260213_200857/git_delta_summary.txt; artifacts/phase1_compare/20260213_200857/opus_missing_config.log; artifacts/phase1_compare/20260213_200857/ralph_missing_config.log; plans/phase1_comparison_todo.md; /Users/admin/Desktop/ralph/plans/phase1_comparison_todo.md.
+Notes: Aborted partial run: artifacts/phase1_compare/20260213_194414 (stopped after user clarified ralph workflow_acceptance should not run for story comparisons).
+Next: Add per-repo verify toggles and weighted-score output directly in tools/phase1_compare.py for repeatable decision reports.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Implemented requested comparison hardening: pinned explicit Phase1 refs via tags (`phase1-impl-opus`, `phase1-impl-ralph`), added per-repo verify toggles to phase1 compare tool, and added automated weighted scoring output (60/25/15 default) in report Markdown+JSON. Re-ran clean pinned comparison and validated toggle behavior with opus-only quick verify.
+Commands: git tag -a phase1-impl-opus 7152fb9fcc186b34391a261c48580f9cd7a37d6e; git -C /Users/admin/Desktop/ralph tag -a phase1-impl-ralph 9d1be45a6942affca60bf29a23ea1b0077ab27ec; python3 -m py_compile tools/phase1_compare.py; ./scripts/compare_phase1_outcomes.sh <pinned clean worktrees> --opus-ref phase1-impl-opus --ralph-ref phase1-impl-ralph --opus-base origin/main --ralph-base origin/main --scenario-cmd "cargo test -p soldier_core --test test_gate_ordering" --flaky-runs 5 --weight-correctness 60 --weight-performance 25 --weight-maintainability 15; ./scripts/compare_phase1_outcomes.sh <pinned worktrees> --opus-ref phase1-impl-opus --ralph-ref phase1-impl-ralph --run-quick-verify-opus --flaky-runs 0.
+Evidence: tools/phase1_compare.py; docs/phase1_outcome_compare_checklist.md; artifacts/phase1_compare/20260213_202708/report.md; artifacts/phase1_compare/20260213_202708/report.json; artifacts/phase1_compare/20260213_202314/report.md; plans/phase1_comparison_todo.md; /Users/admin/Desktop/ralph/plans/phase1_comparison_todo.md.
+Notes: Updated ref resolution to peel tags (`ref^{}`) so pinned-tag runs compare commit SHAs and avoid false ref-mismatch warnings.
+Next: Optional: add score component breakdown details to JSON (per-metric sub-scores) for easier dashboarding.
+Story: workflow-maintenance
+Date: 2026-02-13
+Summary: Completed focused cross-repo comparison for execution/gates/tests at pinned refs (`phase1-impl-opus` vs `phase1-impl-ralph`) using clean detached worktrees. Captured architecture deltas, gate telemetry behavior, and test-density deltas with persistent logs/artifacts.
+Commands: git worktree add --detach <tmp>/opus phase1-impl-opus; git worktree add --detach <tmp>/ralph phase1-impl-ralph; diff/rg comparisons over `crates/soldier_core/src/execution/*` and focused test files; cargo test -p soldier_core --test {test_gate_ordering,test_missing_config,test_quantize,test_preflight,test_liquidity_gate} -- --list (both repos); cargo test -p soldier_core --test test_gate_ordering -- --nocapture (both); cargo test -p soldier_core --test test_missing_config -- --nocapture (both); cargo test -p soldier_core --test test_fee_staleness -- --nocapture (opus); cargo test -p soldier_core --test {test_fee_cache,test_phase1_dispatch_auth} -- --nocapture (ralph).
+Evidence: artifacts/phase1_compare/20260213_143551_focused_exec_gates_tests/focused_compare_summary.md; artifacts/phase1_compare/20260213_143551_focused_exec_gates_tests/test_count_table.csv; artifacts/phase1_compare/20260213_143551_focused_exec_gates_tests/logs/*.log; plans/phase1_comparison_todo.md; /Users/admin/Desktop/ralph/plans/phase1_comparison_todo.md.
+Notes: Focused test-case count delta (opus 150 vs ralph 24 in scoped targets) plus stronger structured runtime reject telemetry in ralph were the primary findings.
+Next: Decide whether to prioritize telemetry portability into opus or edge-case matrix expansion in ralph first.
+Story: workflow-maintenance
+Date: 2026-02-13 20:53:07 UTC
+Summary: Completed OPUS-SUG-008 by porting structured execution telemetry into opus execution path: trace-id aware metric-line emission in execution mod, global counters + metric lines for preflight/liquidity/net-edge rejects, and gate-sequence outcome counters in chokepoint; added focused assertions validating metric names/reasons and intent/run IDs.
+Commands: cargo test -p soldier_core --test test_preflight --test test_liquidity_gate --test test_net_edge_gate --test test_gate_ordering.
+Evidence: crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/preflight.rs; crates/soldier_core/src/execution/gate.rs; crates/soldier_core/src/execution/gates.rs; crates/soldier_core/tests/test_preflight.rs; crates/soldier_core/tests/test_liquidity_gate.rs; crates/soldier_core/tests/test_net_edge_gate.rs; crates/soldier_core/tests/test_gate_ordering.rs.
+Next: Rerun focused cross-repo compare artifact refresh when needed.
 Story: S3-000
 Date: 2026-02-13
 Summary: Completed review loop remediation for slice 3 by applying Codex/Kimi findings: bounded execution metric capture buffer to prevent unbounded growth, aligned runtime pipeline with chokepoint short-circuit semantics to avoid downstream side effects on early rejects, and expanded preflight AT-916 coverage (including sell-side crossing). Also aligned PRD scope/steps to the actual implementation footprint.
