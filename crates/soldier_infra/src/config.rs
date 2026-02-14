@@ -435,6 +435,18 @@ pub fn resolve_config_value(
     value: Option<f64>,
 ) -> Result<f64, MissingConfigError> {
     if let Some(v) = value {
+        if !v.is_finite() {
+            return Err(MissingConfigError {
+                param_name: param_name(param),
+                reason: "value is non-finite (NaN or Infinity); fail-closed",
+            });
+        }
+        if v < 0.0 {
+            return Err(MissingConfigError {
+                param_name: param_name(param),
+                reason: "value is negative; all config params must be non-negative",
+            });
+        }
         return Ok(v);
     }
     appendix_a_default(param).ok_or_else(|| MissingConfigError {
