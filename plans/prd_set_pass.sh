@@ -146,6 +146,12 @@ if [[ "$STATUS" == "true" ]]; then
   REVIEW_GATE="${STORY_REVIEW_GATE:-./plans/story_review_gate.sh}"
   [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
   "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
+
+  final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; exit 4; }
+  if [[ "$final_head_sha" != "$HEAD_SHA" ]]; then
+    echo "ERROR: HEAD changed during pass flip validation (initial=$HEAD_SHA current=$final_head_sha)" >&2
+    exit 4
+  fi
 fi
 
 tmp="$(mktemp)"
