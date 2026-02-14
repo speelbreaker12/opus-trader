@@ -68,6 +68,7 @@ Mark that CI job as required in branch protection.
 9. Findings review via code-review-expert skill; save artifact with `./plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE`.
 10. Turn top findings into failing tests first (red), then fix to green.
 11. `./plans/verify.sh quick`
+   - Sequence-bound equivalent: `plans/workflow_quick_step.sh <STORY_ID> <checkpoint>` (must execute `./plans/verify.sh quick`).
 12. Sync with integration branch.
 13. If sync changed code, `./plans/verify.sh quick` again.
 14. Freeze story worktree and run `./plans/verify.sh full`.
