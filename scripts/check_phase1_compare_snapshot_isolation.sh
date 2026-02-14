@@ -95,4 +95,5 @@ PY
 
 if [[ ${phase1_compare_rc} -ne 0 ]]; then
   echo "[snapshot_smoke] WARN: phase1_compare.py exited ${phase1_compare_rc}; isolation assertion passed and was evaluated independently." >&2
+  exit "${phase1_compare_rc}"
 fi

@@ -11,6 +11,7 @@
 //! - `instrument_cache_refresh_errors_total` (counter, optional but recommended)
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::time::Instant;
 
 use crate::risk::RiskState;
@@ -75,7 +76,7 @@ pub struct InstrumentCache {
     /// Most recent cache age observed (for `instrument_cache_age_s` gauge).
     last_age_s: Option<f64>,
     /// Pending TTL breach events for the caller to drain and log.
-    pending_breaches: Vec<CacheTtlBreach>,
+    pending_breaches: VecDeque<CacheTtlBreach>,
 }
 
 impl Default for InstrumentCache {
@@ -93,7 +94,7 @@ impl InstrumentCache {
             stale_total: 0,
             refresh_errors_total: 0,
             last_age_s: None,
-            pending_breaches: Vec::new(),
+            pending_breaches: VecDeque::new(),
         }
     }
 
@@ -162,9 +163,9 @@ impl InstrumentCache {
             self.stale_total += 1;
             if self.pending_breaches.len() >= MAX_PENDING_BREACH_EVENTS {
                 // Keep the newest events while bounding memory growth.
-                self.pending_breaches.remove(0);
+                self.pending_breaches.pop_front();
             }
-            self.pending_breaches.push(CacheTtlBreach {
+            self.pending_breaches.push_back(CacheTtlBreach {
                 instrument_id: instrument_id.to_string(),
                 age_s: cache_age_s,
                 ttl_s,
@@ -239,7 +240,7 @@ impl InstrumentCache {
     /// Callers should log each `CacheTtlBreach` as a structured event
     /// (e.g., via `tracing::warn!`). Draining clears the buffer.
     pub fn drain_breaches(&mut self) -> Vec<CacheTtlBreach> {
-        std::mem::take(&mut self.pending_breaches)
+        Vec::from(std::mem::take(&mut self.pending_breaches))
     }
 
     /// Number of cached instruments.

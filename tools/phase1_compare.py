@@ -441,6 +441,9 @@ def analyze_config_matrix(path: Path) -> Tuple[int, int, int]:
                     statuses.append(status)
 
     if not statuses:
+        # Fallback: walk the full payload tree.  walk() is only invoked when
+        # the structured "results"/"keys" schemas found nothing, so duplicate
+        # counting cannot occur with the primary parsers above.
         statuses = [value.upper() for value in walk(payload)]
 
     if not statuses and isinstance(payload, dict):
@@ -1177,6 +1180,10 @@ def collect_repo_result(
             warnings=warnings,
         )
     finally:
+        # NOTE: cleanup_ref_worktree may append to `warnings`, but RepoResult
+        # was already constructed above.  This is intentional — cleanup warnings
+        # are logged via the list reference but do not affect the result's
+        # blockers/status.  The caller logs all warnings separately.
         if snapshot:
             cleanup_ref_worktree(repo_path, snapshot, warnings)
 

@@ -5,6 +5,7 @@
 //! AT-233: crash after send → no resend on replay.
 //! AT-234: crash after fill → detect fill on replay.
 
+use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
 use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
 
 /// Helper: build a minimal intent record.
@@ -354,6 +355,129 @@ fn test_record_has_all_required_fields() {
     assert_eq!(r.last_trade_id, Some("TR456".to_string()));
 }
 
+// ─── TLSM transition validation ──────────────────────────────────────────
+
+#[test]
+fn test_illegal_transition_filled_to_sent() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r = intent("hash1", "g1", 0, TlsState::Created);
+    ledger.append(r, &mut m).unwrap();
+
+    // Transition Created → Filled (valid)
+    ledger
+        .update_state("hash1", TlsState::Filled, &mut m)
+        .unwrap();
+
+    // Transition Filled → Sent (illegal: Filled is terminal)
+    match ledger.update_state("hash1", TlsState::Sent, &mut m) {
+        Err(LedgerAppendError::IllegalTransition { from, to }) => {
+            assert_eq!(from, TlsState::Filled);
+            assert_eq!(to, TlsState::Sent);
+        }
+        other => panic!("expected IllegalTransition, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_illegal_transition_cancelled_to_acked() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r = intent("hash1", "g1", 0, TlsState::Created);
+    ledger.append(r, &mut m).unwrap();
+
+    // Transition Created → Cancelled (valid)
+    ledger
+        .update_state("hash1", TlsState::Cancelled, &mut m)
+        .unwrap();
+
+    // Transition Cancelled → Acked (illegal: Cancelled is terminal)
+    match ledger.update_state("hash1", TlsState::Acked, &mut m) {
+        Err(LedgerAppendError::IllegalTransition { from, to }) => {
+            assert_eq!(from, TlsState::Cancelled);
+            assert_eq!(to, TlsState::Acked);
+        }
+        other => panic!("expected IllegalTransition, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_valid_transition_created_to_filled() {
+    // Out-of-order but valid per AT-210: exchange can skip intermediate states
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r = intent("hash1", "g1", 0, TlsState::Created);
+    ledger.append(r, &mut m).unwrap();
+
+    assert!(
+        ledger
+            .update_state("hash1", TlsState::Filled, &mut m)
+            .is_ok()
+    );
+    assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Filled);
+}
+
+#[test]
+fn test_valid_transition_partial_fill_to_partial_fill() {
+    // Idempotent: additional partial fill events
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r = intent("hash1", "g1", 0, TlsState::Created);
+    ledger.append(r, &mut m).unwrap();
+
+    ledger
+        .update_state("hash1", TlsState::PartialFill, &mut m)
+        .unwrap();
+    assert!(
+        ledger
+            .update_state("hash1", TlsState::PartialFill, &mut m)
+            .is_ok()
+    );
+    assert_eq!(
+        ledger.get("hash1").unwrap().tls_state,
+        TlsState::PartialFill
+    );
+}
+
+#[test]
+fn test_valid_transition_created_to_sent() {
+    // Normal flow
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r = intent("hash1", "g1", 0, TlsState::Created);
+    ledger.append(r, &mut m).unwrap();
+
+    assert!(
+        ledger
+            .update_state("hash1", TlsState::Sent, &mut m)
+            .is_ok()
+    );
+    assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
+}
+
+#[test]
+fn test_illegal_transition_increments_write_error_counter() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r = intent("hash1", "g1", 0, TlsState::Created);
+    ledger.append(r, &mut m).unwrap();
+
+    ledger
+        .update_state("hash1", TlsState::Filled, &mut m)
+        .unwrap();
+    assert_eq!(m.wal_write_errors(), 0);
+
+    // Illegal transition: should increment wal_write_errors
+    let _ = ledger.update_state("hash1", TlsState::Sent, &mut m);
+    assert_eq!(m.wal_write_errors(), 1);
+}
+
 // ─── HOT-LOOP: queue full returns immediately ───────────────────────────
 
 #[test]
@@ -368,4 +492,145 @@ fn test_queue_full_returns_immediately() {
     let result = ledger.append(r, &mut m);
     assert_eq!(result, Err(LedgerAppendError::QueueFull));
     assert_eq!(m.wal_write_errors(), 1);
+}
+
+// ─── TLSM ↔ WAL whitelist sync ──────────────────────────────────────────
+
+/// Map TlsmState (soldier_core) to TlsState (soldier_infra).
+///
+/// The two enums have slightly different naming (PartiallyFilled vs PartialFill).
+fn map_tlsm_to_tls(s: TlsmState) -> TlsState {
+    match s {
+        TlsmState::Created => TlsState::Created,
+        TlsmState::Sent => TlsState::Sent,
+        TlsmState::Acked => TlsState::Acked,
+        TlsmState::PartiallyFilled => TlsState::PartialFill,
+        TlsmState::Filled => TlsState::Filled,
+        TlsmState::Cancelled => TlsState::Cancelled,
+        // TlsmState has no Rejected variant — rejected events map to
+        // TlsmState::Failed.  WAL's TlsState::Rejected is a WAL-only
+        // state tested directly (see test_rejected_is_terminal and
+        // test_rejected_valid_successors below).
+        TlsmState::Failed => TlsState::Failed,
+    }
+}
+
+/// Drive a TLSM from Created to the target state via the shortest event path.
+/// Returns None if the target state is unreachable (shouldn't happen for valid states).
+fn drive_tlsm_to(target: TlsmState) -> Option<Tlsm> {
+    let mut tlsm = Tlsm::new();
+    if tlsm.state() == target {
+        return Some(tlsm);
+    }
+    // Event sequences to reach each non-Created state:
+    let paths: &[(TlsmState, &[TlsmEvent])] = &[
+        (TlsmState::Sent, &[TlsmEvent::Sent]),
+        (TlsmState::Acked, &[TlsmEvent::Sent, TlsmEvent::Acked]),
+        (
+            TlsmState::PartiallyFilled,
+            &[TlsmEvent::Sent, TlsmEvent::Acked, TlsmEvent::PartialFill],
+        ),
+        (
+            TlsmState::Filled,
+            &[TlsmEvent::Sent, TlsmEvent::Acked, TlsmEvent::Filled],
+        ),
+        (TlsmState::Cancelled, &[TlsmEvent::Cancelled]),
+        (TlsmState::Failed, &[TlsmEvent::Failed]),
+    ];
+    for (state, events) in paths {
+        if *state == target {
+            for event in *events {
+                tlsm.apply(event.clone());
+            }
+            assert_eq!(tlsm.state(), target);
+            return Some(tlsm);
+        }
+    }
+    None
+}
+
+/// Verify that every transition the canonical TLSM produces is allowed by the
+/// WAL ledger's `is_valid_successor()` whitelist.
+///
+/// This test drives the TLSM to each non-terminal state, fires all events,
+/// and checks that every (from, to) pair accepted by Tlsm::apply() is also
+/// accepted by TlsState::is_valid_successor(). Fails if the whitelist
+/// drifts out of sync with the runtime TLSM.
+#[test]
+fn test_tlsm_wal_whitelist_sync() {
+    let non_terminal_states = [
+        TlsmState::Created,
+        TlsmState::Sent,
+        TlsmState::Acked,
+        TlsmState::PartiallyFilled,
+    ];
+    let all_events = [
+        TlsmEvent::Sent,
+        TlsmEvent::Acked,
+        TlsmEvent::PartialFill,
+        TlsmEvent::Filled,
+        TlsmEvent::Cancelled,
+        TlsmEvent::Rejected,
+        TlsmEvent::Failed,
+    ];
+
+    let mut missing = Vec::new();
+
+    for &from_state in &non_terminal_states {
+        for event in &all_events {
+            let mut tlsm = drive_tlsm_to(from_state)
+                .unwrap_or_else(|| panic!("cannot reach {:?}", from_state));
+            let result = tlsm.apply(event.clone());
+
+            // Extract the to-state if the TLSM accepted the transition.
+            let to_state = match &result {
+                TransitionResult::Transitioned { to, .. } => Some(*to),
+                TransitionResult::OutOfOrder { to, .. } => Some(*to),
+                TransitionResult::Ignored { .. } => None,
+            };
+
+            if let Some(to) = to_state {
+                let tls_from = map_tlsm_to_tls(from_state);
+                let tls_to = map_tlsm_to_tls(to);
+                if !tls_from.is_valid_successor(tls_to) {
+                    missing.push(format!(
+                        "TLSM allows {:?}->{:?} but WAL whitelist rejects {:?}->{:?}",
+                        from_state, to, tls_from, tls_to,
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "WAL whitelist out of sync with TLSM:\n{}",
+        missing.join("\n"),
+    );
+}
+
+// ─── WAL-only Rejected state (no TlsmState::Rejected counterpart) ───────
+
+/// TlsState::Rejected is a WAL-only terminal state.  The TLSM maps rejected
+/// events to TlsmState::Failed, but the WAL preserves the distinction.
+/// These tests verify Rejected transitions directly at the WAL level.
+#[test]
+fn test_rejected_is_terminal() {
+    assert!(
+        !TlsState::Rejected.is_valid_successor(TlsState::Sent),
+        "Rejected is terminal — no transitions out"
+    );
+    assert!(!TlsState::Rejected.is_valid_successor(TlsState::Created));
+    assert!(!TlsState::Rejected.is_valid_successor(TlsState::Acked));
+    assert!(!TlsState::Rejected.is_valid_successor(TlsState::Filled));
+}
+
+#[test]
+fn test_rejected_valid_successors() {
+    // Created and Sent can transition to Rejected (exchange rejection before ack).
+    assert!(TlsState::Created.is_valid_successor(TlsState::Rejected));
+    assert!(TlsState::Sent.is_valid_successor(TlsState::Rejected));
+    // Acked cannot transition to Rejected (already acknowledged).
+    assert!(!TlsState::Acked.is_valid_successor(TlsState::Rejected));
+    assert!(!TlsState::PartialFill.is_valid_successor(TlsState::Rejected));
 }

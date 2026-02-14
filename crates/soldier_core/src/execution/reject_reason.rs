@@ -29,6 +29,9 @@ pub enum RejectReasonCode {
     InstrumentExpiredOrDelisted,
     FeedbackLoopGuardActive,
     LabelTooLong,
+    FeeCacheStale,
+    WalAppendFailed,
+    RiskStateDegraded,
 }
 
 /// Typed per-gate rejection codes produced by real gate evaluators.
@@ -74,6 +77,9 @@ impl RejectReasonCode {
             RejectReasonCode::InstrumentExpiredOrDelisted => "InstrumentExpiredOrDelisted",
             RejectReasonCode::FeedbackLoopGuardActive => "FeedbackLoopGuardActive",
             RejectReasonCode::LabelTooLong => "LabelTooLong",
+            RejectReasonCode::FeeCacheStale => "FeeCacheStale",
+            RejectReasonCode::WalAppendFailed => "WalAppendFailed",
+            RejectReasonCode::RiskStateDegraded => "RiskStateDegraded",
         }
     }
 }
@@ -103,6 +109,9 @@ const REGISTRY: &[RejectReasonCode] = &[
     RejectReasonCode::InstrumentExpiredOrDelisted,
     RejectReasonCode::FeedbackLoopGuardActive,
     RejectReasonCode::LabelTooLong,
+    RejectReasonCode::FeeCacheStale,
+    RejectReasonCode::WalAppendFailed,
+    RejectReasonCode::RiskStateDegraded,
 ];
 
 pub fn reject_reason_registry() -> &'static [RejectReasonCode] {
@@ -114,12 +123,21 @@ pub fn reject_reason_registry_contains(code: RejectReasonCode) -> bool {
 }
 
 /// Map chokepoint rejection output to a contract registry token.
+///
+/// **Mapping change log** (for downstream consumers comparing `as_str()` tokens):
+/// - `RiskStateNotHealthy` → `RiskStateDegraded` (was `MarginHeadroomRejectOpens`)
+/// - `FeeCacheCheck` gate → `FeeCacheStale` (was `RateLimitBrownout`)
+/// - `RecordedBeforeDispatch` gate → `WalAppendFailed` (was `RiskIncreasingCancelReplaceForbidden`)
+///
+/// These changes make reject codes semantically accurate. The old variants are
+/// retained in the enum for their original uses (e.g., `MarginHeadroomRejectOpens`
+/// is still used by the `DispatchAuth` gate).
 pub fn reject_reason_from_chokepoint(
     reason: &ChokeRejectReason,
     gate_reject_codes: &GateRejectCodes,
 ) -> RejectReasonCode {
     match reason {
-        ChokeRejectReason::RiskStateNotHealthy => RejectReasonCode::MarginHeadroomRejectOpens,
+        ChokeRejectReason::RiskStateNotHealthy => RejectReasonCode::RiskStateDegraded,
         ChokeRejectReason::GateRejected {
             gate: GateStep::Preflight,
             ..
@@ -139,7 +157,7 @@ pub fn reject_reason_from_chokepoint(
         ChokeRejectReason::GateRejected {
             gate: GateStep::FeeCacheCheck,
             ..
-        } => RejectReasonCode::RateLimitBrownout,
+        } => RejectReasonCode::FeeCacheStale,
         ChokeRejectReason::GateRejected {
             gate: GateStep::LiquidityGate,
             ..
@@ -161,7 +179,7 @@ pub fn reject_reason_from_chokepoint(
         ChokeRejectReason::GateRejected {
             gate: GateStep::RecordedBeforeDispatch,
             ..
-        } => RejectReasonCode::RiskIncreasingCancelReplaceForbidden,
+        } => RejectReasonCode::WalAppendFailed,
         ChokeRejectReason::GateRejected {
             gate: GateStep::DispatchAuth,
             ..

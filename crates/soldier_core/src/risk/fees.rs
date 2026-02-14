@@ -123,13 +123,31 @@ pub fn evaluate_fee_staleness(
     snapshot: &FeeCacheSnapshot,
     config: &FeeStalenessConfig,
 ) -> FeeEvaluation {
+    // Guard: non-finite or negative fee_rate → HardStale + Degraded (fail-closed)
+    // Do NOT propagate bad rate via multiplication — use 0.0 as safe default.
+    if !snapshot.fee_rate.is_finite() || snapshot.fee_rate < 0.0 {
+        return FeeEvaluation {
+            staleness: FeeStaleness::HardStale,
+            fee_rate_effective: 0.0,
+            cache_age_s: None,
+            risk_state: RiskState::Degraded,
+        };
+    }
+
+    // Guard: non-finite or negative buffer → treat as zero buffer (conservative)
+    let safe_buffer = if !config.fee_stale_buffer.is_finite() || config.fee_stale_buffer < 0.0 {
+        0.0
+    } else {
+        config.fee_stale_buffer
+    };
+
     // Missing timestamp → hard-stale (fail-closed, AT-042)
     let cached_at_ms = match snapshot.fee_model_cached_at_ts_ms {
         Some(ts) => ts,
         None => {
             return FeeEvaluation {
                 staleness: FeeStaleness::HardStale,
-                fee_rate_effective: snapshot.fee_rate * (1.0 + config.fee_stale_buffer),
+                fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
                 cache_age_s: None,
                 risk_state: RiskState::Degraded,
             };
@@ -143,7 +161,7 @@ pub fn evaluate_fee_staleness(
         // Clock skew — fail-closed: treat as hard-stale
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
-            fee_rate_effective: snapshot.fee_rate * (1.0 + config.fee_stale_buffer),
+            fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
             cache_age_s: Some(0),
             risk_state: RiskState::Degraded,
         };
@@ -153,7 +171,7 @@ pub fn evaluate_fee_staleness(
         // Hard-stale (AT-033)
         FeeEvaluation {
             staleness: FeeStaleness::HardStale,
-            fee_rate_effective: snapshot.fee_rate * (1.0 + config.fee_stale_buffer),
+            fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
             cache_age_s: Some(age_s),
             risk_state: RiskState::Degraded,
         }
@@ -161,7 +179,7 @@ pub fn evaluate_fee_staleness(
         // Soft-stale (AT-032): apply buffer
         FeeEvaluation {
             staleness: FeeStaleness::SoftStale,
-            fee_rate_effective: snapshot.fee_rate * (1.0 + config.fee_stale_buffer),
+            fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
             cache_age_s: Some(age_s),
             risk_state: RiskState::Healthy,
         }
