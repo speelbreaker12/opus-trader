@@ -214,9 +214,6 @@ pub fn liquidity_gate_reject_total(reason: LiquidityGateRejectReason) -> u64 {
         LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
             LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL.load(Ordering::Relaxed)
         }
-        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
-            LIQUIDITY_GATE_REJECT_DEPTH_SHORTFALL_TOTAL.load(Ordering::Relaxed)
-        }
     }
 }
 
@@ -238,9 +235,6 @@ fn bump_liquidity_gate_reject(
         }
         LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
             LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL.fetch_add(1, Ordering::Relaxed);
-        }
-        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
-            LIQUIDITY_GATE_REJECT_DEPTH_SHORTFALL_TOTAL.fetch_add(1, Ordering::Relaxed);
         }
     }
     let tail = format!("reason={reason:?}");
@@ -431,9 +425,6 @@ fn reject_with_metrics(
             metrics.record_reject_depth_shortfall()
         }
         LiquidityGateRejectReason::ExpectedSlippageTooHigh => metrics.record_reject_slippage(),
-        LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
-            metrics.record_reject_depth_shortfall()
-        }
     }
     bump_liquidity_gate_reject(reason, wap, slippage_bps);
     LiquidityGateResult::Rejected {

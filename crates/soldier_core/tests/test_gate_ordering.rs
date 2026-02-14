@@ -93,7 +93,9 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
         "expected exactly one tagged gate sequence metric line, got {lines:?}"
     );
     assert!(
-        lines.iter().any(|line| line.starts_with("gate_sequence_total")),
+        lines
+            .iter()
+            .any(|line| line.starts_with("gate_sequence_total")),
         "expected gate sequence metric line, got {lines:?}"
     );
 }
