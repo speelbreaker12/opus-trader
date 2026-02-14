@@ -479,6 +479,63 @@ def file_check(repo: Path, rel_path: str) -> FileCheck:
     )
 
 
+def file_check_from_git_ref(repo: Path, resolved_ref_sha: str, rel_path: str) -> FileCheck:
+    object_spec = f"{resolved_ref_sha}:{rel_path}"
+    rc, out, _, _ = run_cmd(
+        ["git", "-C", str(repo), "cat-file", "-t", object_spec],
+        cwd=repo,
+    )
+    if rc != 0 or out.strip() != "blob":
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+
+    digest = hashlib.sha256()
+    size = 0
+    proc = subprocess.Popen(
+        ["git", "-C", str(repo), "cat-file", "blob", object_spec],
+        cwd=str(repo),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert proc.stdout is not None
+    while True:
+        chunk = proc.stdout.read(65536)
+        if not chunk:
+            break
+        size += len(chunk)
+        digest.update(chunk)
+    _, _ = proc.communicate()
+    if proc.returncode != 0:
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+
+    return FileCheck(
+        path=rel_path,
+        exists=True,
+        non_empty=size > 0,
+        size_bytes=size,
+        sha256=digest.hexdigest(),
+    )
+
+
+def file_check_for_result(repo_result: RepoResult, rel_path: str) -> FileCheck:
+    if repo_result.is_ref_head:
+        return file_check(Path(repo_result.path), rel_path)
+    return file_check_from_git_ref(
+        Path(repo_result.path), repo_result.resolved_ref_sha, rel_path
+    )
+
+
 def count_non_empty_lines(path: Path) -> int:
     if not path.exists() or not path.is_file():
         return 0
@@ -1788,9 +1845,9 @@ def build_report_markdown(
         check_a = path_to_a.get(path)
         check_b = path_to_b.get(path)
         if check_a is None:
-            check_a = file_check(Path(a.analysis_path), path)
+            check_a = file_check_for_result(a, path)
         if check_b is None:
-            check_b = file_check(Path(b.analysis_path), path)
+            check_b = file_check_for_result(b, path)
         same_hash = (
             "yes"
             if check_a.exists
