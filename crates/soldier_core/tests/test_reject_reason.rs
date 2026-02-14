@@ -7,10 +7,12 @@ use soldier_core::execution::{
 };
 use soldier_core::risk::RiskState;
 
+mod common;
+
 #[test]
 fn test_reject_reason_present_on_pre_dispatch_reject() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::default();
+    let gates = common::gate_results_all_passing();
 
     let (result, code) = build_order_intent_with_reject_reason_code(
         ChokeIntentClass::Open,
@@ -21,7 +23,7 @@ fn test_reject_reason_present_on_pre_dispatch_reject() {
     );
 
     assert!(matches!(result, ChokeResult::Rejected { .. }));
-    assert_eq!(code, Some(RejectReasonCode::MarginHeadroomRejectOpens));
+    assert_eq!(code, Some(RejectReasonCode::RiskStateDegraded));
 }
 
 #[test]
@@ -29,7 +31,7 @@ fn test_reject_reason_in_registry() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..GateResults::default()
+        ..common::gate_results_all_passing()
     };
 
     let (_, code) = build_order_intent_with_reject_reason_code(
@@ -52,7 +54,7 @@ fn test_typed_preflight_code_wins_over_text_heuristics() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::default()
+        ..common::gate_results_all_passing()
     };
     let gate_reject_codes = GateRejectCodes {
         preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
@@ -101,6 +103,9 @@ fn test_registry_contains_contract_minimum_set() {
         "InstrumentExpiredOrDelisted",
         "FeedbackLoopGuardActive",
         "LabelTooLong",
+        "FeeCacheStale",
+        "WalAppendFailed",
+        "RiskStateDegraded",
     ];
 
     for token in minimum {

@@ -264,7 +264,7 @@ fn test_pipeline_open_degraded_skips_preflight_side_effects() {
 
     assert_eq!(
         result.reject_reason_code,
-        Some(RejectReasonCode::MarginHeadroomRejectOpens)
+        Some(RejectReasonCode::RiskStateDegraded)
     );
     assert_eq!(metrics.preflight.reject_total(), 0);
 }

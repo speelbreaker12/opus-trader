@@ -5,7 +5,13 @@
 //! Hard Rules:
 //! - Never panic on out-of-order WS events.
 //! - "Fill-before-Ack" is valid reality: accept fill, log anomaly, reconcile later.
-//! - Every transition is emitted to a transition sink for WAL append wiring.
+//! - Every transition is appended to WAL immediately through the transition sink.
+//!
+//! **Cross-crate sync:** `soldier_infra::store::ledger::TlsState::is_valid_successor()`
+//! maintains a state-level whitelist derived from this module's `apply()` transitions.
+//! When adding new transitions here, update that whitelist to stay in sync.
+//!
+//! AT-230, AT-210.
 
 // --- States -------------------------------------------------------------
 

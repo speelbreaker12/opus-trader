@@ -15,6 +15,28 @@ on:
     - cron: "0 1 * * *"
 
 jobs:
+  phase1-snapshot-isolation-smoke:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Snapshot isolation smoke check for phase1 compare
+        run: |
+          chmod +x ./scripts/check_phase1_compare_snapshot_isolation_ci.sh
+          ./scripts/check_phase1_compare_snapshot_isolation_ci.sh
+
+      - name: Upload phase1 snapshot smoke artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase1-snapshot-isolation-smoke
+          path: artifacts/phase1_compare/ci_snapshot_isolation/
+          if-no-files-found: ignore
+
   copilot-signal:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

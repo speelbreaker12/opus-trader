@@ -49,6 +49,52 @@ impl TlsState {
             TlsState::Filled | TlsState::Cancelled | TlsState::Rejected | TlsState::Failed
         )
     }
+
+    /// Whether `to` is a valid successor state from `self`.
+    ///
+    /// Valid successors derived from Tlsm::apply() in soldier_core/execution/tlsm.rs — keep in sync.
+    /// This is a state-level whitelist (less restrictive than event-based TLSM).
+    pub fn is_valid_successor(self, to: TlsState) -> bool {
+        match self {
+            TlsState::Created => matches!(
+                to,
+                TlsState::Sent
+                    | TlsState::Acked
+                    | TlsState::PartialFill
+                    | TlsState::Filled
+                    | TlsState::Cancelled
+                    | TlsState::Rejected
+                    | TlsState::Failed
+            ),
+            TlsState::Sent => matches!(
+                to,
+                TlsState::Acked
+                    | TlsState::PartialFill
+                    | TlsState::Filled
+                    | TlsState::Cancelled
+                    | TlsState::Rejected
+                    | TlsState::Failed
+            ),
+            TlsState::Acked => matches!(
+                to,
+                TlsState::PartialFill
+                    | TlsState::Filled
+                    | TlsState::Cancelled
+                    | TlsState::Failed
+            ),
+            TlsState::PartialFill => matches!(
+                to,
+                TlsState::PartialFill
+                    | TlsState::Filled
+                    | TlsState::Cancelled
+                    | TlsState::Failed
+            ),
+            // Terminal states: no valid successors
+            TlsState::Filled | TlsState::Cancelled | TlsState::Rejected | TlsState::Failed => {
+                false
+            }
+        }
+    }
 }
 
 // --- Intent Record ------------------------------------------------------
@@ -119,6 +165,11 @@ pub enum LedgerAppendError {
     QueueFull,
     /// Generic write failure.
     WriteFailed { reason: String },
+    /// Attempted an illegal TLSM state transition.
+    IllegalTransition {
+        from: TlsState,
+        to: TlsState,
+    },
 }
 
 impl std::fmt::Display for LedgerAppendError {
@@ -126,6 +177,9 @@ impl std::fmt::Display for LedgerAppendError {
         match self {
             Self::QueueFull => write!(f, "wal queue full"),
             Self::WriteFailed { reason } => write!(f, "wal write failed: {reason}"),
+            Self::IllegalTransition { from, to } => {
+                write!(f, "illegal tls transition: {from:?} -> {to:?}")
+            }
         }
     }
 }
@@ -285,10 +339,20 @@ impl WalLedger {
         new_state: TlsState,
         metrics: &mut LedgerMetrics,
     ) -> Result<(), LedgerAppendError> {
-        if !self.latest_by_hash.contains_key(intent_hash) {
+        let current_state = if let Some(record) = self.latest_by_hash.get(intent_hash) {
+            record.tls_state
+        } else {
             metrics.record_write_error();
             return Err(LedgerAppendError::WriteFailed {
                 reason: format!("intent_hash not found: {intent_hash}"),
+            });
+        };
+
+        if !current_state.is_valid_successor(new_state) {
+            metrics.record_write_error();
+            return Err(LedgerAppendError::IllegalTransition {
+                from: current_state,
+                to: new_state,
             });
         }
 
