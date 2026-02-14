@@ -149,18 +149,17 @@ if [[ "$STATUS" == "true" ]]; then
 fi
 
 tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
 jq --arg id "$ID" --argjson status "$STATUS" '
   .items = (.items | map(if .id == $id then .passes = $status else . end))
 ' "$PRD_FILE" > "$tmp"
 if [[ "$STATUS" == "true" ]]; then
-  final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; exit 4; }
+  final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; rm -f "$tmp"; exit 4; }
   if [[ "$final_head_sha" != "$HEAD_SHA" ]]; then
     echo "ERROR: HEAD changed during pass flip validation (initial=$HEAD_SHA current=$final_head_sha)" >&2
+    rm -f "$tmp"
     exit 4
   fi
 fi
 mv "$tmp" "$PRD_FILE"
-trap - EXIT
 
 echo "Updated task $ID: passes=$STATUS"

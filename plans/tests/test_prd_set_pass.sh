@@ -207,4 +207,34 @@ echo "$head_flip_output" | grep -Fq "ERROR: HEAD changed during pass flip valida
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$head_flip_case/prd.json" >/dev/null || fail "passes changed despite mid-run head-change failure"
 echo "$head_flip_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "story review gate should run with the initial HEAD before final check"
 
+noflock_case="$tmp_dir/noflock_lock_cleanup"
+mkdir -p "$noflock_case"
+cat > "$noflock_case/prd.json" <<EOF
+{
+  "items": [
+    {"id":"$story_id","passes":true}
+  ]
+}
+EOF
+
+noflock_bin="$tmp_dir/noflock-bin"
+mkdir -p "$noflock_bin"
+for tool in bash jq mkdir rmdir mktemp mv; do
+  tool_path="$(command -v "$tool" || true)"
+  [[ -n "$tool_path" ]] || fail "missing required tool for no-flock case: $tool"
+  ln -s "$tool_path" "$noflock_bin/$tool"
+done
+
+for run in 1 2; do
+  noflock_output="$(
+    cd "$ROOT" && \
+    PATH="$noflock_bin" \
+    PRD_FILE="$noflock_case/prd.json" \
+    VERIFY_ARTIFACTS_DIR="$noflock_case/unused_artifacts" \
+    "$SCRIPT" "$story_id" false 2>&1
+  )"
+  echo "$noflock_output" | grep -Fq "Updated task $story_id: passes=false" || fail "no-flock run $run did not complete successfully"
+  [[ ! -d "$noflock_case/prd.json.lock.d" ]] || fail "no-flock run $run left stale lock dir"
+done
+
 echo "PASS: prd_set_pass"
