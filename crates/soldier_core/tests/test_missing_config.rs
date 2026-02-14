@@ -5,7 +5,7 @@
 //! reason code — never silently default to an unsafe value.
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, build_order_intent,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, build_order_intent,
 };
 use soldier_core::execution::{
     GateIntentClass, LiquidityGateInput, LiquidityGateMetrics, LiquidityGateRejectReason,
@@ -21,8 +21,6 @@ use soldier_core::execution::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, Side, quantize,
 };
 use soldier_core::risk::RiskState;
-
-mod common;
 
 // ─── Missing quantize constraints ────────────────────────────────────────
 
@@ -267,7 +265,7 @@ fn test_zero_qty_pricer_fails_closed() {
 #[test]
 fn test_unhealthy_risk_state_fails_closed() {
     let mut m = ChokeMetrics::new();
-    let gates = common::gate_results_all_passing();
+    let gates = GateResults::all_passed();
 
     // All non-Healthy states must reject OPEN
     for risk_state in [RiskState::Degraded, RiskState::Maintenance, RiskState::Kill] {

@@ -1,0 +1,12 @@
+tracing v0.1.44
+tracing feature "attributes"
+tracing feature "default"
+soldier_core v0.1.0 (/Users/admin/Desktop/opus-trader/crates/soldier_core)
+soldier_core feature "default" (command-line)
+soldier_infra v0.1.0 (/Users/admin/Desktop/opus-trader/crates/soldier_infra)
+soldier_infra feature "default" (command-line)
+tracing feature "default" (*)
+tracing feature "std"
+tracing feature "default" (*)
+tracing feature "tracing-attributes"
+tracing feature "attributes" (*)

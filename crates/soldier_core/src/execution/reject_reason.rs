@@ -12,6 +12,8 @@ pub enum RejectReasonCode {
     EmergencyCloseNoPrice,
     ExpectedSlippageTooHigh,
     InsufficientDepthWithinBudget,
+    FeeCacheStale,
+    RecordedBeforeDispatchFailed,
     NetEdgeTooLow,
     NetEdgeInputMissing,
     InventorySkew,
@@ -29,9 +31,6 @@ pub enum RejectReasonCode {
     InstrumentExpiredOrDelisted,
     FeedbackLoopGuardActive,
     LabelTooLong,
-    FeeCacheStale,
-    WalAppendFailed,
-    RiskStateDegraded,
 }
 
 /// Typed per-gate rejection codes produced by real gate evaluators.
@@ -43,8 +42,10 @@ pub enum RejectReasonCode {
 pub struct GateRejectCodes {
     pub preflight: Option<RejectReasonCode>,
     pub quantize: Option<RejectReasonCode>,
+    pub fee_cache: Option<RejectReasonCode>,
     pub liquidity_gate: Option<RejectReasonCode>,
     pub net_edge_gate: Option<RejectReasonCode>,
+    pub recorded_before_dispatch: Option<RejectReasonCode>,
     pub pricer: Option<RejectReasonCode>,
 }
 
@@ -58,6 +59,8 @@ impl RejectReasonCode {
             RejectReasonCode::EmergencyCloseNoPrice => "EmergencyCloseNoPrice",
             RejectReasonCode::ExpectedSlippageTooHigh => "ExpectedSlippageTooHigh",
             RejectReasonCode::InsufficientDepthWithinBudget => "InsufficientDepthWithinBudget",
+            RejectReasonCode::FeeCacheStale => "FeeCacheStale",
+            RejectReasonCode::RecordedBeforeDispatchFailed => "RecordedBeforeDispatchFailed",
             RejectReasonCode::NetEdgeTooLow => "NetEdgeTooLow",
             RejectReasonCode::NetEdgeInputMissing => "NetEdgeInputMissing",
             RejectReasonCode::InventorySkew => "InventorySkew",
@@ -77,9 +80,6 @@ impl RejectReasonCode {
             RejectReasonCode::InstrumentExpiredOrDelisted => "InstrumentExpiredOrDelisted",
             RejectReasonCode::FeedbackLoopGuardActive => "FeedbackLoopGuardActive",
             RejectReasonCode::LabelTooLong => "LabelTooLong",
-            RejectReasonCode::FeeCacheStale => "FeeCacheStale",
-            RejectReasonCode::WalAppendFailed => "WalAppendFailed",
-            RejectReasonCode::RiskStateDegraded => "RiskStateDegraded",
         }
     }
 }
@@ -92,6 +92,8 @@ const REGISTRY: &[RejectReasonCode] = &[
     RejectReasonCode::EmergencyCloseNoPrice,
     RejectReasonCode::ExpectedSlippageTooHigh,
     RejectReasonCode::InsufficientDepthWithinBudget,
+    RejectReasonCode::FeeCacheStale,
+    RejectReasonCode::RecordedBeforeDispatchFailed,
     RejectReasonCode::NetEdgeTooLow,
     RejectReasonCode::NetEdgeInputMissing,
     RejectReasonCode::InventorySkew,
@@ -109,9 +111,6 @@ const REGISTRY: &[RejectReasonCode] = &[
     RejectReasonCode::InstrumentExpiredOrDelisted,
     RejectReasonCode::FeedbackLoopGuardActive,
     RejectReasonCode::LabelTooLong,
-    RejectReasonCode::FeeCacheStale,
-    RejectReasonCode::WalAppendFailed,
-    RejectReasonCode::RiskStateDegraded,
 ];
 
 pub fn reject_reason_registry() -> &'static [RejectReasonCode] {
@@ -123,21 +122,12 @@ pub fn reject_reason_registry_contains(code: RejectReasonCode) -> bool {
 }
 
 /// Map chokepoint rejection output to a contract registry token.
-///
-/// **Mapping change log** (for downstream consumers comparing `as_str()` tokens):
-/// - `RiskStateNotHealthy` → `RiskStateDegraded` (was `MarginHeadroomRejectOpens`)
-/// - `FeeCacheCheck` gate → `FeeCacheStale` (was `RateLimitBrownout`)
-/// - `RecordedBeforeDispatch` gate → `WalAppendFailed` (was `RiskIncreasingCancelReplaceForbidden`)
-///
-/// These changes make reject codes semantically accurate. The old variants are
-/// retained in the enum for their original uses (e.g., `MarginHeadroomRejectOpens`
-/// is still used by the `DispatchAuth` gate).
 pub fn reject_reason_from_chokepoint(
     reason: &ChokeRejectReason,
     gate_reject_codes: &GateRejectCodes,
 ) -> RejectReasonCode {
     match reason {
-        ChokeRejectReason::RiskStateNotHealthy => RejectReasonCode::RiskStateDegraded,
+        ChokeRejectReason::RiskStateNotHealthy => RejectReasonCode::MarginHeadroomRejectOpens,
         ChokeRejectReason::GateRejected {
             gate: GateStep::Preflight,
             ..
@@ -157,7 +147,9 @@ pub fn reject_reason_from_chokepoint(
         ChokeRejectReason::GateRejected {
             gate: GateStep::FeeCacheCheck,
             ..
-        } => RejectReasonCode::FeeCacheStale,
+        } => gate_reject_codes
+            .fee_cache
+            .unwrap_or(RejectReasonCode::FeeCacheStale),
         ChokeRejectReason::GateRejected {
             gate: GateStep::LiquidityGate,
             ..
@@ -179,7 +171,9 @@ pub fn reject_reason_from_chokepoint(
         ChokeRejectReason::GateRejected {
             gate: GateStep::RecordedBeforeDispatch,
             ..
-        } => RejectReasonCode::WalAppendFailed,
+        } => gate_reject_codes
+            .recorded_before_dispatch
+            .unwrap_or(RejectReasonCode::RecordedBeforeDispatchFailed),
         ChokeRejectReason::GateRejected {
             gate: GateStep::DispatchAuth,
             ..

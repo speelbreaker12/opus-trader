@@ -239,9 +239,11 @@ fn bump_liquidity_gate_reject(
     }
     let tail = format!("reason={reason:?}");
     super::emit_execution_metric_line("liquidity_gate_reject_total", &tail);
-    eprintln!(
+    tracing::debug!(
         "LiquidityGateReject reason={:?} wap={:?} slippage_bps={:?}",
-        reason, wap, slippage_bps
+        reason,
+        wap,
+        slippage_bps
     );
 }
 

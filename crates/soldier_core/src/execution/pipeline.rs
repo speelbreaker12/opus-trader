@@ -96,6 +96,7 @@ pub fn evaluate_intent_pipeline(
     let mut quantize_passed = true;
     let mut quantize_reject_code = None;
     let mut fee_cache_passed = true;
+    let mut fee_cache_reject_code = None;
 
     if !dispatch_auth_short_circuit {
         let preflight_result = preflight_intent(&preflight_input, &mut metrics.preflight);
@@ -148,6 +149,7 @@ pub fn evaluate_intent_pipeline(
             fee_cache_passed = fee_eval.risk_state == RiskState::Healthy;
             if !fee_cache_passed {
                 metrics.fee.record_refresh_fail();
+                fee_cache_reject_code = Some(RejectReasonCode::FeeCacheStale);
             }
         }
     }
@@ -270,8 +272,14 @@ pub fn evaluate_intent_pipeline(
     let gate_reject_codes = GateRejectCodes {
         preflight: preflight_reject_code,
         quantize: quantize_reject_code,
+        fee_cache: fee_cache_reject_code,
         liquidity_gate: liquidity_gate_reject_code,
         net_edge_gate: net_edge_reject_code,
+        recorded_before_dispatch: if input.wal_recorded {
+            None
+        } else {
+            Some(RejectReasonCode::RecordedBeforeDispatchFailed)
+        },
         pricer: pricer_reject_code,
     };
 

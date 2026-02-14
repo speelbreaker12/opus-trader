@@ -115,7 +115,7 @@ pub(crate) fn emit_execution_metric_line(metric_name: &str, tail_fields: &str) {
         line.push(' ');
         line.push_str(tail_fields);
     }
-    eprintln!("{line}");
+    tracing::debug!("{line}");
     EXECUTION_METRIC_LINES.with(|cell| {
         let mut lines = cell.borrow_mut();
         if lines.len() >= MAX_EXECUTION_METRIC_LINES {

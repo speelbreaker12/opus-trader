@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -233,7 +234,7 @@ class BuildReportMarkdownTests(unittest.TestCase):
             self.assertIn(f"- Repo A analysis snapshot: `{a.analysis_path}`", markdown)
             self.assertIn(f"- Repo B analysis snapshot: `{b.analysis_path}`", markdown)
 
-    def test_evidence_fallback_uses_analysis_path(self):
+    def test_evidence_fallback_uses_repo_path_for_head(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
             repo_a = base / "repo_a"
@@ -241,10 +242,10 @@ class BuildReportMarkdownTests(unittest.TestCase):
             analysis_a = base / "analysis_a"
             analysis_b = base / "analysis_b"
 
-            (analysis_a / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
-            (analysis_b / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
-            (analysis_a / "evidence" / "phase1" / "README.md").write_text("alpha", encoding="utf-8")
-            (analysis_b / "evidence" / "phase1" / "README.md").write_text("alpha", encoding="utf-8")
+            (repo_a / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
+            (repo_b / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
+            (repo_a / "evidence" / "phase1" / "README.md").write_text("alpha", encoding="utf-8")
+            (repo_b / "evidence" / "phase1" / "README.md").write_text("alpha", encoding="utf-8")
 
             a = self.make_repo_result("opus", repo_a, analysis_a)
             b = self.make_repo_result("ralph", repo_b, analysis_b)
@@ -395,6 +396,271 @@ class CollectRepoResultTests(unittest.TestCase):
             _, _, ref_arg = gather_mock.call_args.args
             self.assertEqual(ref_arg, result.resolved_ref_sha)
             self.assertNotEqual(ref_arg, "HEAD~1")
+
+
+class EvidenceFallbackTests(unittest.TestCase):
+    def run_git(self, repo: Path, args: list[str]) -> str:
+        rc, out, err, _ = PHASE1_COMPARE.run_cmd(["git", "-C", str(repo), *args], cwd=repo)
+        if rc != 0:
+            raise AssertionError(f"git {' '.join(args)} failed: {err.strip()}")
+        return out.strip()
+
+    def init_repo(self, repo: Path) -> None:
+        repo.mkdir(parents=True, exist_ok=True)
+        self.run_git(repo, ["init", "-q"])
+        self.run_git(repo, ["config", "user.email", "test@example.com"])
+        self.run_git(repo, ["config", "user.name", "Test User"])
+
+    def commit_all(self, repo: Path, message: str) -> None:
+        self.run_git(repo, ["add", "."])
+        self.run_git(repo, ["commit", "-q", "-m", message])
+
+    def test_report_fallback_reads_non_head_ref_from_git(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            repo_a = base / "repo_a"
+            repo_b = base / "repo_b"
+            run_dir = base / "run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            self.init_repo(repo_a)
+            self.init_repo(repo_b)
+
+            for repo in (repo_a, repo_b):
+                (repo / "docs").mkdir(parents=True, exist_ok=True)
+                (repo / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
+                (repo / "evidence" / "phase1" / "README.md").write_text("readme", encoding="utf-8")
+                (repo / "evidence" / "phase1" / "extra.md").write_text(
+                    "shared-extra", encoding="utf-8"
+                )
+
+            (repo_a / "docs" / "PHASE1_CHECKLIST_BLOCK.md").write_text(
+                "<!-- REQUIRED_EVIDENCE: evidence/phase1/README.md -->\n",
+                encoding="utf-8",
+            )
+            (repo_b / "docs" / "PHASE1_CHECKLIST_BLOCK.md").write_text(
+                "\n".join(
+                    [
+                        "<!-- REQUIRED_EVIDENCE: evidence/phase1/README.md -->",
+                        "<!-- REQUIRED_EVIDENCE: evidence/phase1/extra.md -->",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            self.commit_all(repo_a, "base")
+            self.commit_all(repo_b, "base")
+            self.run_git(repo_a, ["tag", "phase1-test-base"])
+            self.run_git(repo_b, ["tag", "phase1-test-base"])
+
+            (repo_a / "evidence" / "phase1" / "extra.md").write_text("head-only", encoding="utf-8")
+            self.commit_all(repo_a, "head")
+            (repo_b / "evidence" / "phase1" / "extra.md").write_text("head-only", encoding="utf-8")
+            self.commit_all(repo_b, "head")
+
+            result_a = PHASE1_COMPARE.collect_repo_result(
+                name="opus",
+                repo_path=repo_a,
+                ref="phase1-test-base",
+                base_ref=None,
+                run_meta_test=False,
+                run_quick_verify=False,
+                run_full_verify=False,
+                scenario_cmd=None,
+                flaky_runs=0,
+                flaky_cmd=None,
+                run_dir=run_dir,
+            )
+            result_b = PHASE1_COMPARE.collect_repo_result(
+                name="ralph",
+                repo_path=repo_b,
+                ref="phase1-test-base",
+                base_ref=None,
+                run_meta_test=False,
+                run_quick_verify=False,
+                run_full_verify=False,
+                scenario_cmd=None,
+                flaky_runs=0,
+                flaky_cmd=None,
+                run_dir=run_dir,
+            )
+
+            self.assertFalse(result_a.is_ref_head)
+            self.assertNotEqual(result_a.path, result_a.analysis_path)
+            self.assertFalse(Path(result_a.analysis_path).exists())
+            self.assertNotIn(
+                "evidence/phase1/extra.md",
+                {check.path for check in result_a.file_checks},
+            )
+
+            markdown = PHASE1_COMPARE.build_report_markdown(result_a, result_b, "test_run")
+            self.assertIn("| `evidence/phase1/extra.md` | `ok` | `ok` | `yes` |", markdown)
+
+    def test_report_fallback_for_head_ref_uses_workspace_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            repo_a = base / "repo_a"
+            repo_b = base / "repo_b"
+            run_dir = base / "run"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            self.init_repo(repo_a)
+            self.init_repo(repo_b)
+
+            (repo_a / "docs").mkdir(parents=True, exist_ok=True)
+            (repo_a / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
+            (repo_a / "docs" / "PHASE1_CHECKLIST_BLOCK.md").write_text(
+                "<!-- REQUIRED_EVIDENCE: evidence/phase1/README.md -->\n",
+                encoding="utf-8",
+            )
+            (repo_a / "evidence" / "phase1" / "README.md").write_text("readme", encoding="utf-8")
+            self.commit_all(repo_a, "base")
+
+            (repo_b / "docs").mkdir(parents=True, exist_ok=True)
+            (repo_b / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
+            (repo_b / "docs" / "PHASE1_CHECKLIST_BLOCK.md").write_text(
+                "\n".join(
+                    [
+                        "<!-- REQUIRED_EVIDENCE: evidence/phase1/README.md -->",
+                        "<!-- REQUIRED_EVIDENCE: evidence/phase1/extra.md -->",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (repo_b / "evidence" / "phase1" / "README.md").write_text("readme", encoding="utf-8")
+            (repo_b / "evidence" / "phase1" / "extra.md").write_text("workspace-extra", encoding="utf-8")
+            self.commit_all(repo_b, "base")
+
+            # Keep this path uncommitted on repo A to prove HEAD fallback uses workspace state.
+            (repo_a / "evidence" / "phase1" / "extra.md").write_text("workspace-extra", encoding="utf-8")
+
+            result_a = PHASE1_COMPARE.collect_repo_result(
+                name="opus",
+                repo_path=repo_a,
+                ref="HEAD",
+                base_ref=None,
+                run_meta_test=False,
+                run_quick_verify=False,
+                run_full_verify=False,
+                scenario_cmd=None,
+                flaky_runs=0,
+                flaky_cmd=None,
+                run_dir=run_dir,
+            )
+            result_b = PHASE1_COMPARE.collect_repo_result(
+                name="ralph",
+                repo_path=repo_b,
+                ref="HEAD",
+                base_ref=None,
+                run_meta_test=False,
+                run_quick_verify=False,
+                run_full_verify=False,
+                scenario_cmd=None,
+                flaky_runs=0,
+                flaky_cmd=None,
+                run_dir=run_dir,
+            )
+
+            self.assertTrue(result_a.is_ref_head)
+            self.assertGreater(result_a.dirty_files, 0)
+            self.assertNotIn(
+                "evidence/phase1/extra.md",
+                {check.path for check in result_a.file_checks},
+            )
+
+            markdown = PHASE1_COMPARE.build_report_markdown(result_a, result_b, "test_run")
+            self.assertIn("| `evidence/phase1/extra.md` | `ok` | `ok` | `yes` |", markdown)
+
+    def test_file_check_from_git_ref_records_unexpected_git_errors(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir) / "repo"
+            self.init_repo(repo)
+            (repo / "tracked.txt").write_text("ok\n", encoding="utf-8")
+            self.commit_all(repo, "base")
+
+            warnings: list[str] = []
+            check = PHASE1_COMPARE.file_check_from_git_ref(
+                repo,
+                "definitely-missing-ref",
+                "tracked.txt",
+                warnings=warnings,
+            )
+
+            self.assertFalse(check.exists)
+            self.assertFalse(check.non_empty)
+            self.assertEqual(check.sha256, "")
+            self.assertTrue(any("cat-file type failed" in warning for warning in warnings))
+
+    def test_file_check_from_git_ref_records_non_blob_type_warning(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = Path(tmpdir) / "repo"
+            self.init_repo(repo)
+            (repo / "nested").mkdir(parents=True, exist_ok=True)
+            (repo / "nested" / "file.txt").write_text("ok\n", encoding="utf-8")
+            self.commit_all(repo, "base")
+
+            warnings: list[str] = []
+            check = PHASE1_COMPARE.file_check_from_git_ref(
+                repo,
+                "HEAD",
+                "nested",
+                warnings=warnings,
+            )
+
+            self.assertFalse(check.exists)
+            self.assertFalse(check.non_empty)
+            self.assertEqual(check.sha256, "")
+            self.assertTrue(any("expected 'blob'" in warning for warning in warnings))
+
+
+class SnapshotIsolationSmokeScriptTests(unittest.TestCase):
+    def test_stale_report_json_is_not_reused_when_phase1_compare_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            output_md = base / "report.md"
+            stale_report = base / "report.json"
+            stale_report.write_text(
+                json.dumps(
+                    {
+                        "opus": {
+                            "is_ref_head": False,
+                            "path": "/tmp/stale-opus",
+                            "analysis_path": "/tmp/stale-opus-snapshot",
+                        },
+                        "ralph": {
+                            "is_ref_head": False,
+                            "path": "/tmp/stale-ralph",
+                            "analysis_path": "/tmp/stale-ralph-snapshot",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            missing_repo = base / "does-not-exist"
+            repo_root = Path(__file__).resolve().parents[2]
+            script = repo_root / "scripts" / "check_phase1_compare_snapshot_isolation.sh"
+
+            result = subprocess.run(
+                [
+                    str(script),
+                    "--opus",
+                    str(missing_repo),
+                    "--ralph",
+                    str(missing_repo),
+                    "--skip-meta-test",
+                    "--output",
+                    str(output_md),
+                ],
+                cwd=repo_root,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("expected report JSON", result.stderr)
 
 
 if __name__ == "__main__":

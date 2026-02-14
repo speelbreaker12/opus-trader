@@ -207,6 +207,8 @@
         "ExpectedSlippageTooHigh",
         "NetEdgeTooLow",
         "NetEdgeInputMissing",
+        "FeeCacheStale",
+        "RecordedBeforeDispatchFailed",
         "InventorySkew",
         "InventorySkewDeltaLimitMissing",
         "PendingExposureBudgetExceeded",

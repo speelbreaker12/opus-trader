@@ -20,8 +20,6 @@ use soldier_core::execution::{QuantizeConstraints, QuantizeMetrics, Side, quanti
 use soldier_core::risk::RiskState;
 use std::collections::HashMap;
 
-mod common;
-
 /// Intent context that must propagate through the entire pipeline.
 /// In production, this would be carried via tracing spans or explicit parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -102,7 +100,7 @@ fn test_intent_id_propagates_through_approved_pipeline() {
 
     // Stage 4: Chokepoint
     let mut cm = ChokeMetrics::new();
-    let gates = common::gate_results_all_passing();
+    let gates = GateResults::all_passed();
     let cr = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut cm, &gates);
     let trace = match cr {
         ChokeResult::Approved { gate_trace } => gate_trace,
@@ -146,7 +144,7 @@ fn test_intent_id_propagates_through_rejected_pipeline() {
 
     // Stage 1: Chokepoint rejects at DispatchAuth
     let mut cm = ChokeMetrics::new();
-    let gates = common::gate_results_all_passing();
+    let gates = GateResults::all_passed();
     let cr = build_order_intent(ChokeIntentClass::Open, RiskState::Degraded, &mut cm, &gates);
 
     let reject_reason = match &cr {
@@ -209,7 +207,7 @@ fn test_metrics_attributable_to_intent() {
     let mut metrics1 = ChokeMetrics::new();
     let mut metrics2 = ChokeMetrics::new();
 
-    let gates = common::gate_results_all_passing();
+    let gates = GateResults::all_passed();
 
     // Intent 1: approved
     let _ = build_order_intent(
@@ -266,7 +264,7 @@ fn test_gate_trace_provides_audit_trail() {
     let mut cm = ChokeMetrics::new();
     let gates = GateResults {
         net_edge_passed: false,
-        ..common::gate_results_all_passing()
+        ..GateResults::all_passed()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut cm, &gates);
@@ -313,7 +311,7 @@ fn test_gate_trace_provides_audit_trail() {
 #[test]
 fn test_gate_trace_ordering_enables_correlation() {
     let mut cm = ChokeMetrics::new();
-    let gates = common::gate_results_all_passing();
+    let gates = GateResults::all_passed();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut cm, &gates);
 

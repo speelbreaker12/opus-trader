@@ -375,7 +375,7 @@ pub fn build_order_intent_with_reject_reason_code(
 ///
 /// Each gate is evaluated independently before calling `build_order_intent`.
 /// The chokepoint enforces ordering and early-exit semantics.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct GateResults {
     pub preflight_passed: bool,
     pub quantize_passed: bool,
@@ -389,6 +389,34 @@ pub struct GateResults {
     pub requested_qty: Option<f64>,
     /// Caller-provided max allowed quantity from upstream liquidity clamp.
     pub max_dispatch_qty: Option<f64>,
+}
+
+impl Default for GateResults {
+    /// Fail-closed default for safety: every gate must be explicitly enabled.
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+impl GateResults {
+    pub const fn all_passed() -> Self {
+        Self::new(true)
+    }
+
+    pub const fn new(pass: bool) -> Self {
+        Self {
+            preflight_passed: pass,
+            quantize_passed: pass,
+            dispatch_consistency_passed: pass,
+            fee_cache_passed: pass,
+            liquidity_gate_passed: pass,
+            net_edge_passed: pass,
+            pricer_passed: pass,
+            wal_recorded: pass,
+            requested_qty: None,
+            max_dispatch_qty: None,
+        }
+    }
 }
 
 /// Construct gate results inside the chokepoint module.

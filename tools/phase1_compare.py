@@ -441,9 +441,6 @@ def analyze_config_matrix(path: Path) -> Tuple[int, int, int]:
                     statuses.append(status)
 
     if not statuses:
-        # Fallback: walk the full payload tree.  walk() is only invoked when
-        # the structured "results"/"keys" schemas found nothing, so duplicate
-        # counting cannot occur with the primary parsers above.
         statuses = [value.upper() for value in walk(payload)]
 
     if not statuses and isinstance(payload, dict):
@@ -479,6 +476,111 @@ def file_check(repo: Path, rel_path: str) -> FileCheck:
         non_empty=size > 0,
         size_bytes=size,
         sha256=sha256_file(full),
+    )
+
+
+def file_check_from_git_ref(
+    repo: Path,
+    resolved_ref_sha: str,
+    rel_path: str,
+    warnings: Optional[List[str]] = None,
+) -> FileCheck:
+    object_spec = f"{resolved_ref_sha}:{rel_path}"
+    rc, out, err, _ = run_cmd(
+        ["git", "-C", str(repo), "cat-file", "-t", object_spec],
+        cwd=repo,
+    )
+    if rc != 0:
+        err_text = err.strip()
+        expected_missing = (
+            "does not exist in" in err_text or "Not a valid object name" in err_text
+        )
+        if warnings is not None and err_text and not expected_missing:
+            warning = f"git cat-file type failed for {object_spec!r}: {err_text}"
+            if warning not in warnings:
+                warnings.append(warning)
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+    if out.strip() != "blob":
+        if warnings is not None:
+            warning = (
+                f"git cat-file type for {object_spec!r} returned {out.strip()!r}, expected 'blob'"
+            )
+            if warning not in warnings:
+                warnings.append(warning)
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+
+    digest = hashlib.sha256()
+    size = 0
+    proc = subprocess.Popen(
+        ["git", "-C", str(repo), "cat-file", "blob", object_spec],
+        cwd=str(repo),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.stdout is None:
+        if warnings is not None:
+            warning = f"git cat-file did not provide stdout for {object_spec!r}"
+            if warning not in warnings:
+                warnings.append(warning)
+        proc.kill()
+        proc.wait()
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+    while True:
+        chunk = proc.stdout.read(65536)
+        if not chunk:
+            break
+        size += len(chunk)
+        digest.update(chunk)
+    _, stderr_bytes = proc.communicate()
+    if proc.returncode != 0:
+        if warnings is not None:
+            err_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+            warning = f"git cat-file blob failed for {object_spec!r}: {err_text}"
+            if warning not in warnings:
+                warnings.append(warning)
+        return FileCheck(
+            path=rel_path,
+            exists=False,
+            non_empty=False,
+            size_bytes=0,
+            sha256="",
+        )
+
+    return FileCheck(
+        path=rel_path,
+        exists=True,
+        non_empty=size > 0,
+        size_bytes=size,
+        sha256=digest.hexdigest(),
+    )
+
+
+def file_check_for_result(repo_result: RepoResult, rel_path: str) -> FileCheck:
+    if repo_result.is_ref_head:
+        return file_check(Path(repo_result.path), rel_path)
+    return file_check_from_git_ref(
+        Path(repo_result.path),
+        repo_result.resolved_ref_sha,
+        rel_path,
+        warnings=repo_result.warnings,
     )
 
 
@@ -1180,10 +1282,6 @@ def collect_repo_result(
             warnings=warnings,
         )
     finally:
-        # NOTE: cleanup_ref_worktree may append to `warnings`, but RepoResult
-        # was already constructed above.  This is intentional — cleanup warnings
-        # are logged via the list reference but do not affect the result's
-        # blockers/status.  The caller logs all warnings separately.
         if snapshot:
             cleanup_ref_worktree(repo_path, snapshot, warnings)
 
@@ -1795,9 +1893,9 @@ def build_report_markdown(
         check_a = path_to_a.get(path)
         check_b = path_to_b.get(path)
         if check_a is None:
-            check_a = file_check(Path(a.analysis_path), path)
+            check_a = file_check_for_result(a, path)
         if check_b is None:
-            check_b = file_check(Path(b.analysis_path), path)
+            check_b = file_check_for_result(b, path)
         same_hash = (
             "yes"
             if check_a.exists

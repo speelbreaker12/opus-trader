@@ -21,8 +21,6 @@ use soldier_core::execution::{QuantizeConstraints, QuantizeMetrics, Side, quanti
 use soldier_core::risk::RiskState;
 use std::collections::HashMap;
 
-mod common;
-
 // ─── Quantize determinism ────────────────────────────────────────────────
 
 #[test]
@@ -75,7 +73,7 @@ fn test_quantize_sell_deterministic() {
 
 #[test]
 fn test_chokepoint_same_inputs_same_trace() {
-    let gates = common::gate_results_all_passing();
+    let gates = GateResults::all_passed();
 
     let mut traces = Vec::new();
     for _ in 0..100 {
@@ -97,7 +95,7 @@ fn test_chokepoint_same_inputs_same_trace() {
 fn test_chokepoint_rejected_deterministic() {
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..common::gate_results_all_passing()
+        ..GateResults::all_passed()
     };
 
     let mut results = Vec::new();
@@ -356,7 +354,7 @@ fn test_full_pipeline_determinism() {
         side: PricerSide::Buy,
     };
 
-    let gate_results = common::gate_results_all_passing();
+    let gate_results = GateResults::all_passed();
 
     #[derive(Debug, PartialEq)]
     struct PipelineSnapshot {
