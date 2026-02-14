@@ -29,7 +29,7 @@ if [[ -z "$story_id" || -z "$checkpoint" ]]; then
   exit 2
 fi
 
-if ! [[ "$story_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)*$ ]]; then
+if ! [[ "$story_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
   die "invalid STORY_ID: $story_id"
 fi
 
@@ -41,7 +41,10 @@ esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-verify_script="${WORKFLOW_QUICK_VERIFY_SCRIPT:-./plans/verify.sh}"
+verify_script="./plans/verify.sh"
+if [[ "${WORKFLOW_QUICK_VERIFY_ALLOW_OVERRIDE:-0}" == "1" ]]; then
+  verify_script="${WORKFLOW_QUICK_VERIFY_SCRIPT:-$verify_script}"
+fi
 [[ -x "$verify_script" ]] || die "missing or non-executable verify script: $verify_script"
 
 "$verify_script" quick

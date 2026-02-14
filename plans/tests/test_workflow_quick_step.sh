@@ -43,6 +43,7 @@ chmod +x "$mock_verify"
 
 ok_output="$(
   cd "$ROOT" && \
+  WORKFLOW_QUICK_VERIFY_ALLOW_OVERRIDE=1 \
   WORKFLOW_QUICK_VERIFY_SCRIPT="$mock_verify" \
   VERIFY_CALL_ARGS="$tmp_dir/verify.args" \
   "$SCRIPT" "WF-002" "post_findings_fixes"
@@ -52,12 +53,14 @@ grep -Fxq "quick" "$tmp_dir/verify.args" || fail "verify script was not called i
 
 expect_fail "missing args" "Usage:" "$SCRIPT"
 expect_fail "invalid story id" "invalid STORY_ID" "$SCRIPT" "../bad" "pre_reviews"
+expect_fail "story id with slash" "invalid STORY_ID" "$SCRIPT" "workflow/maintenance" "pre_reviews"
 expect_fail "invalid checkpoint" "invalid checkpoint" "$SCRIPT" "WF-002" "bad_step"
 
 set +e
 fail_output="$(
   cd "$ROOT" && \
   FORCE_VERIFY_FAIL=1 \
+  WORKFLOW_QUICK_VERIFY_ALLOW_OVERRIDE=1 \
   WORKFLOW_QUICK_VERIFY_SCRIPT="$mock_verify" \
   VERIFY_CALL_ARGS="$tmp_dir/verify_fail.args" \
   "$SCRIPT" "WF-002" "pre_reviews" 2>&1
