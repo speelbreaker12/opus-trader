@@ -25,6 +25,14 @@ grep -Eq 'gtimeout "\$AUDITOR_TIMEOUT" "\$\{auditor_cmd\[@\]\}"' "$script" \
   || fail "gtimeout invocation must execute auditor_cmd array directly"
 grep -Eq '"\$\{auditor_cmd\[@\]\}" > "\$AUDIT_STDOUT_LOG" 2>&1 \|\| auditor_rc=\$\?' "$script" \
   || fail "non-timeout invocation must execute auditor_cmd array directly"
+grep -Eq -- '--arg roadmap_sha "\$roadmap_sha"' "$script" \
+  || fail "cache predicate must include roadmap hash"
+grep -Eq '\.roadmap_sha256 == \$roadmap_sha and' "$script" \
+  || fail "cache predicate must validate roadmap hash"
+grep -Eq '\.audited_scope == \$audit_scope and' "$script" \
+  || fail "cache predicate must match requested scope"
+grep -Eq '\(\$audit_scope != "slice" or \.slice == \$audit_slice\) and' "$script" \
+  || fail "cache predicate must scope slice cache hits to the requested slice"
 grep -Eq 'AUDITOR_TIMEOUT_FALLBACK_PARALLEL="\$\{AUDITOR_TIMEOUT_FALLBACK_PARALLEL:-1\}"' "$script" \
   || fail "missing timeout fallback config"
 grep -Eq '\[\[ "\$AUDIT_SCOPE" == "full" && "\$AUDITOR_TIMEOUT_FALLBACK_PARALLEL" == "1" && -x "\./plans/audit_parallel.sh" \]\]' "$script" \

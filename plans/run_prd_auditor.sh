@@ -188,19 +188,25 @@ audit_cache_matches() {
   if [[ ! -f "$AUDIT_CACHE_FILE" || ! -f "$AUDIT_OUTPUT_JSON" ]]; then
     return 1
   fi
+  local cache_slice="${AUDIT_SLICE:-}"
   if ! jq -e \
     --arg prd_sha "$expected_sha" \
     --arg contract_sha "$contract_sha" \
     --arg plan_sha "$plan_sha" \
     --arg workflow_sha "$workflow_sha" \
+    --arg roadmap_sha "$roadmap_sha" \
     --arg prompt_sha "$prompt_sha" \
+    --arg audit_scope "$AUDIT_SCOPE" \
+    --arg audit_slice "$cache_slice" \
     '
       .prd_sha256 == $prd_sha and
       .contract_sha256 == $contract_sha and
       .impl_plan_sha256 == $plan_sha and
       .workflow_contract_sha256 == $workflow_sha and
+      .roadmap_sha256 == $roadmap_sha and
       .auditor_prompt_sha256 == $prompt_sha and
-      .audited_scope == "full" and
+      .audited_scope == $audit_scope and
+      ($audit_scope != "slice" or .slice == $audit_slice) and
       .decision == "PASS"
     ' "$AUDIT_CACHE_FILE" >/dev/null 2>&1; then
     return 1
