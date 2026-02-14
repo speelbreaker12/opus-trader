@@ -2,6 +2,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -283,6 +284,117 @@ class BuildReportMarkdownTests(unittest.TestCase):
                 warnings: list[str] = []
                 PHASE1_COMPARE.cleanup_ref_worktree(repo, snapshot, warnings)
                 self.assertEqual(warnings, [])
+
+
+class CollectRepoResultTests(unittest.TestCase):
+    def run_git(self, repo: Path, args: list[str]) -> str:
+        rc, out, err, _ = PHASE1_COMPARE.run_cmd(["git", "-C", str(repo), *args], cwd=repo)
+        if rc != 0:
+            raise AssertionError(f"git {' '.join(args)} failed: {err.strip()}")
+        return out.strip()
+
+    def init_repo(self, repo: Path) -> None:
+        repo.mkdir(parents=True, exist_ok=True)
+        self.run_git(repo, ["init", "-q"])
+        self.run_git(repo, ["config", "user.email", "test@example.com"])
+        self.run_git(repo, ["config", "user.name", "Test User"])
+
+    def commit_all(self, repo: Path, message: str) -> None:
+        self.run_git(repo, ["add", "."])
+        self.run_git(repo, ["commit", "-q", "-m", message])
+
+    def test_collect_repo_result_keeps_any_of_checks_after_snapshot_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            repo = base / "repo"
+            run_dir = base / "run"
+            self.init_repo(repo)
+
+            (repo / "docs").mkdir(parents=True, exist_ok=True)
+            (repo / "evidence" / "phase1").mkdir(parents=True, exist_ok=True)
+            (repo / "docs" / "PHASE1_CHECKLIST_BLOCK.md").write_text(
+                "\n".join(
+                    [
+                        "<!-- REQUIRED_EVIDENCE: evidence/phase1/README.md -->",
+                        "<!-- REQUIRED_EVIDENCE_ANY_OF: evidence/phase1/optionA.txt|evidence/phase1/optionB.txt -->",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (repo / "evidence" / "phase1" / "README.md").write_text("readme", encoding="utf-8")
+            (repo / "evidence" / "phase1" / "optionA.txt").write_text("base-only", encoding="utf-8")
+            self.commit_all(repo, "base")
+            self.run_git(repo, ["tag", "phase1-test-base"])
+
+            (repo / "evidence" / "phase1" / "optionA.txt").unlink()
+            (repo / "head.txt").write_text("head", encoding="utf-8")
+            self.commit_all(repo, "head")
+
+            result = PHASE1_COMPARE.collect_repo_result(
+                name="opus",
+                repo_path=repo,
+                ref="phase1-test-base",
+                base_ref=None,
+                run_meta_test=False,
+                run_quick_verify=False,
+                run_full_verify=False,
+                scenario_cmd=None,
+                flaky_runs=0,
+                flaky_cmd=None,
+                run_dir=run_dir,
+            )
+
+            self.assertFalse(result.is_ref_head)
+            self.assertNotEqual(result.path, result.analysis_path)
+            self.assertFalse(Path(result.analysis_path).exists())
+
+            checks_by_path = {check.path: check for check in result.file_checks}
+            self.assertIn("evidence/phase1/optionA.txt", checks_by_path)
+            self.assertTrue(checks_by_path["evidence/phase1/optionA.txt"].exists)
+            self.assertEqual(result.failed_any_of, [])
+
+            markdown = PHASE1_COMPARE.build_report_markdown(result, result, "test_run")
+            self.assertIn(
+                "| `evidence/phase1/optionA.txt` | `ok` | `ok` | `yes` |",
+                markdown,
+            )
+
+    def test_collect_repo_result_uses_resolved_sha_for_diff_stats(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            repo = base / "repo"
+            run_dir = base / "run"
+            self.init_repo(repo)
+
+            (repo / "file.txt").write_text("v1", encoding="utf-8")
+            self.commit_all(repo, "v1")
+            (repo / "file.txt").write_text("v2", encoding="utf-8")
+            self.commit_all(repo, "v2")
+
+            with mock.patch.object(
+                PHASE1_COMPARE,
+                "gather_diff_stats",
+                return_value=("no diff", 0),
+            ) as gather_mock:
+                result = PHASE1_COMPARE.collect_repo_result(
+                    name="opus",
+                    repo_path=repo,
+                    ref="HEAD~1",
+                    base_ref="HEAD",
+                    run_meta_test=False,
+                    run_quick_verify=False,
+                    run_full_verify=False,
+                    scenario_cmd=None,
+                    flaky_runs=0,
+                    flaky_cmd=None,
+                    run_dir=run_dir,
+                )
+
+            self.assertEqual(gather_mock.call_count, 1)
+            _, _, ref_arg = gather_mock.call_args.args
+            self.assertEqual(ref_arg, result.resolved_ref_sha)
+            self.assertNotEqual(ref_arg, "HEAD~1")
 
 
 if __name__ == "__main__":

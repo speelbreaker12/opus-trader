@@ -956,15 +956,25 @@ def collect_repo_result(
         dirty_files = len(status_lines)
 
         required_all, required_any_of, required_source = parse_required_evidence(active_repo)
-        file_checks = [file_check(active_repo, path) for path in required_all]
+        all_required_paths = set(required_all)
+        for group in required_any_of:
+            all_required_paths.update(group)
+        file_checks = [file_check(active_repo, path) for path in sorted(all_required_paths)]
+        file_checks_by_path = {check.path: check for check in file_checks}
         missing_required_all = [
-            check.path for check in file_checks if not (check.exists and check.non_empty)
+            path
+            for path in required_all
+            if not (
+                path in file_checks_by_path
+                and file_checks_by_path[path].exists
+                and file_checks_by_path[path].non_empty
+            )
         ]
         required_all_ok = len(required_all) - len(missing_required_all)
 
         failed_any_of: List[List[str]] = []
         for group in required_any_of:
-            checks = [file_check(active_repo, path) for path in group]
+            checks = [file_checks_by_path[path] for path in group if path in file_checks_by_path]
             if not any(check.exists and check.non_empty for check in checks):
                 failed_any_of.append(group)
 
@@ -1105,7 +1115,9 @@ def collect_repo_result(
         diff_shortstat: Optional[str] = None
         diff_changed_files: Optional[int] = None
         if base_ref:
-            diff_shortstat, diff_changed_files = gather_diff_stats(active_repo, base_ref, ref)
+            diff_shortstat, diff_changed_files = gather_diff_stats(
+                active_repo, base_ref, resolved_ref_sha
+            )
             if diff_shortstat is None:
                 warnings.append(f"diff stats unavailable for base ref {base_ref!r}")
 
