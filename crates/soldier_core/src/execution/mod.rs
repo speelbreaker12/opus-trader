@@ -60,6 +60,31 @@ struct ExecutionTraceIds {
     run_id: String,
 }
 
+#[must_use]
+struct TraceIdsGuard {
+    previous: Option<ExecutionTraceIds>,
+}
+
+impl TraceIdsGuard {
+    fn install(intent_id: &str, run_id: &str) -> Self {
+        let previous = EXECUTION_TRACE_IDS.with(|cell| {
+            cell.borrow_mut().replace(ExecutionTraceIds {
+                intent_id: intent_id.to_string(),
+                run_id: run_id.to_string(),
+            })
+        });
+        Self { previous }
+    }
+}
+
+impl Drop for TraceIdsGuard {
+    fn drop(&mut self) {
+        EXECUTION_TRACE_IDS.with(|cell| {
+            *cell.borrow_mut() = self.previous.take();
+        });
+    }
+}
+
 thread_local! {
     static EXECUTION_TRACE_IDS: RefCell<Option<ExecutionTraceIds>> = const { RefCell::new(None) };
     static EXECUTION_METRIC_LINES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
@@ -69,15 +94,8 @@ pub fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    EXECUTION_TRACE_IDS.with(|cell| {
-        let previous = cell.borrow_mut().replace(ExecutionTraceIds {
-            intent_id: intent_id.to_string(),
-            run_id: run_id.to_string(),
-        });
-        let result = f();
-        *cell.borrow_mut() = previous;
-        result
-    })
+    let _guard = TraceIdsGuard::install(intent_id, run_id);
+    f()
 }
 
 pub fn take_execution_metric_lines() -> Vec<String> {

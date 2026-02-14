@@ -18,6 +18,7 @@ use soldier_core::execution::{
     take_execution_metric_lines, with_intent_trace_ids,
 };
 use soldier_core::risk::RiskState;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 // ─── AT-501: Gate ordering is deterministic ──────────────────────────────
 
@@ -88,6 +89,41 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
                 && line.contains(&format!("run_id={run_id}"))
         }),
         "expected gate sequence metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn test_trace_ids_are_cleared_after_panic() {
+    let leaked_intent_id = "intent-panic-leak-check";
+    let leaked_run_id = "run-panic-leak-check";
+    let _ = take_execution_metric_lines();
+
+    // SAFETY: this closure only triggers a panic and does not cross threads
+    // or mutate shared state that would make unwind behavior ambiguous.
+    let panic_result = catch_unwind(AssertUnwindSafe(|| {
+        with_intent_trace_ids(leaked_intent_id, leaked_run_id, || {
+            panic!("panic while trace ids are installed");
+        });
+    }));
+    assert!(panic_result.is_err());
+
+    let mut metrics = ChokeMetrics::new();
+    let _ = build_order_intent(
+        ChokeIntentClass::CancelOnly,
+        RiskState::Healthy,
+        &mut metrics,
+        &GateResults::default(),
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("gate_sequence_total")
+                && line.contains("result=allowed")
+                && !line.contains(&format!("intent_id={leaked_intent_id}"))
+                && !line.contains(&format!("run_id={leaked_run_id}"))
+        }),
+        "trace IDs leaked across panic boundary: {lines:?}"
     );
 }
 
