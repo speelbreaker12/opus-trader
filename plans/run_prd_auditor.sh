@@ -214,8 +214,15 @@ audit_cache_matches() {
 
   local cache_slice_sha=""
   cache_slice_sha="$(jq -r '.slice_prd_sha256 // empty' "$AUDIT_CACHE_FILE" 2>/dev/null || true)"
-  if [[ "$AUDIT_SCOPE" == "slice" && -z "$cache_slice_sha" ]]; then
-    return 1
+  if [[ "$AUDIT_SCOPE" == "slice" ]]; then
+    if [[ -z "$cache_slice_sha" || ! -f "$AUDIT_PRD_SLICE_FILE" ]]; then
+      return 1
+    fi
+    local current_slice_sha=""
+    current_slice_sha="$(sha256_file "$AUDIT_PRD_SLICE_FILE")"
+    if [[ "$current_slice_sha" != "$cache_slice_sha" ]]; then
+      return 1
+    fi
   fi
 
   if ! jq -e \

@@ -35,6 +35,10 @@ grep -Eq '\(\$audit_scope != "slice" or \.slice == \$audit_slice\) and' "$script
   || fail "cache predicate must scope slice cache hits to the requested slice"
 grep -Eq 'cache_slice_sha="\$\(jq -r '\''\.slice_prd_sha256 // empty'\'' "\$AUDIT_CACHE_FILE"' "$script" \
   || fail "cache predicate must derive slice hash from cache metadata"
+grep -Eq 'current_slice_sha="\$\(sha256_file "\$AUDIT_PRD_SLICE_FILE"\)"' "$script" \
+  || fail "slice cache hits must hash the current prepared slice file"
+grep -Eq '\[\[ "\$current_slice_sha" != "\$cache_slice_sha" \]\]' "$script" \
+  || fail "slice cache hits must fail closed on slice hash drift"
 grep -Eq -- '--arg slice_sha "\$cache_slice_sha"' "$script" \
   || fail "cache predicate must include slice hash argument"
 grep -Eq '\(\.prd_sha256 == \$prd_sha or \(\$audit_scope == "slice" and \$slice_sha != "" and \.prd_sha256 == \$slice_sha\)\) and' "$script" \
