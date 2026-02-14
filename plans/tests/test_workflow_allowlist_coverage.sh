@@ -69,6 +69,7 @@ required=(
   plans/slice_completion_review_guard.sh
   plans/slice_review_gate.sh
   plans/stoic_cli_invariant_check.sh
+  plans/toggle_policy_check.sh
   plans/ssot_lint.sh
   plans/story_postmortem_logged.sh
   plans/story_review_findings_guard.sh
@@ -97,12 +98,15 @@ required=(
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_story_review_gate.sh
   plans/tests/test_thinking_review_logged.sh
+  plans/tests/test_workflow_quick_step.sh
+  plans/tests/test_toggle_policy_check.sh
   plans/thinking_review_logged.sh
   plans/verify.sh
   plans/verify_day.sh
   plans/verify_gate_contract_check.sh
   plans/workflow_contract_gate.sh
   plans/workflow_contract_map.json
+  plans/workflow_quick_step.sh
   plans/workflow_verify.sh
   scripts/build_contract_kernel.py
   scripts/check_arch_flows.py

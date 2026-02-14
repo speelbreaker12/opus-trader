@@ -27,13 +27,25 @@ EOF
 
 WORKFLOW_CONTRACT_FILE="$valid_doc" "$GUARD" >/dev/null
 
+wrapper_valid_doc="$tmp_dir/workflow_contract_wrapper_valid.md"
+cat > "$wrapper_valid_doc" <<'EOF'
+## 6. Story loop (minimal, mandatory)
+Use ~/.agents/skills/code-review-expert/SKILL.md
+Run plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE
+Save artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md
+Turn top findings into failing tests first (red phase).
+Fix until those tests pass (green phase).
+Run plans/workflow_quick_step.sh <STORY_ID> <checkpoint> after fixes.
+EOF
+
+WORKFLOW_CONTRACT_FILE="$wrapper_valid_doc" "$GUARD" >/dev/null
+
 invalid_doc="$tmp_dir/workflow_contract_invalid.md"
 cat > "$invalid_doc" <<'EOF'
 ## 6. Story loop (minimal, mandatory)
 Use ~/.agents/skills/code-review-expert/SKILL.md
 Save artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md
 Fix until those tests pass (green phase).
-Run ./plans/verify.sh quick again after fixes.
 EOF
 
 set +e
