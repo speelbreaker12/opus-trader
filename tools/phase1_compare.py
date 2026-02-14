@@ -507,6 +507,12 @@ def file_check_from_git_ref(
             sha256="",
         )
     if out.strip() != "blob":
+        if warnings is not None:
+            warning = (
+                f"git cat-file type for {object_spec!r} returned {out.strip()!r}, expected 'blob'"
+            )
+            if warning not in warnings:
+                warnings.append(warning)
         return FileCheck(
             path=rel_path,
             exists=False,
