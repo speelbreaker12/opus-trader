@@ -26,9 +26,11 @@ expected_ids=(
   self_review_markers_done
   kimi_review_for_head
   kimi_provenance_attested
+  kimi_command_exit_zero
   kimi_transcript_hash_integrity
   codex_two_reviews
   codex_provenance_attested
+  codex_command_exit_zero
   codex_transcript_hash_integrity
   code_review_expert_complete
   code_review_expert_provenance_attested
