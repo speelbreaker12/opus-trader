@@ -376,4 +376,31 @@ rm -f "$case21/$story/code_review_expert/20260209T000080Z_review.md.bak"
 expect_fail "code-review-expert findings hash mismatch" "code-review-expert findings hash mismatch" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case21"
 
+# Case 22: duplicate transcript start marker is rejected (fail-closed).
+case22="$tmp_dir/case22"
+write_valid_case "$case22" "$story" "$head_sha"
+cat >> "$case22/$story/codex/20260209T000100Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+EOF
+expect_fail "duplicate transcript start marker" "must contain exactly one start marker" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case22"
+
+# Case 23: duplicate transcript end marker is rejected (fail-closed).
+case23="$tmp_dir/case23"
+write_valid_case "$case23" "$story" "$head_sha"
+cat >> "$case23/$story/codex/20260209T000100Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_END>>>
+EOF
+expect_fail "duplicate transcript end marker" "must contain exactly one end marker" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case23"
+
+# Case 24: duplicate transcript SHA marker is rejected (fail-closed).
+case24="$tmp_dir/case24"
+write_valid_case "$case24" "$story" "$head_sha"
+cat >> "$case24/$story/codex/20260209T000100Z_review.md" <<'EOF'
+- Transcript SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+EOF
+expect_fail "duplicate transcript sha marker" "must contain exactly one SHA256 marker" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case24"
+
 echo "PASS: story review gate fixtures"

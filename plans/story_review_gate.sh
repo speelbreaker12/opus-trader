@@ -82,9 +82,11 @@ extract_sha256_field() {
   local field="$2"
   local label="$3"
   local line=""
+  local line_count=0
 
+  line_count="$(grep -Ec "^- ${field}: [0-9a-f]{64}$" "$file" || true)"
+  [[ "$line_count" == "1" ]] || die "${label} must contain exactly one SHA256 marker '- ${field}: <sha256>' ($file)"
   line="$(grep -E "^- ${field}: [0-9a-f]{64}$" "$file" | head -n 1 || true)"
-  [[ -n "$line" ]] || die "missing ${label} SHA256 marker '- ${field}: <sha256>' ($file)"
   printf '%s\n' "${line#- ${field}: }"
 }
 
@@ -106,8 +108,8 @@ verify_hashed_block() {
 
   start_count="$(grep -Fxc -- "$start_marker" "$file" || true)"
   end_count="$(grep -Fxc -- "$end_marker" "$file" || true)"
-  [[ "$start_count" == "1" ]] || die "${label} missing start marker '$start_marker' ($file)"
-  [[ "$end_count" == "1" ]] || die "${label} missing end marker '$end_marker' ($file)"
+  [[ "$start_count" == "1" ]] || die "${label} must contain exactly one start marker '$start_marker' ($file)"
+  [[ "$end_count" == "1" ]] || die "${label} must contain exactly one end marker '$end_marker' ($file)"
 
   start_line="$(grep -Fn -- "$start_marker" "$file" | head -n 1 | cut -d: -f1)"
   end_line="$(grep -Fn -- "$end_marker" "$file" | head -n 1 | cut -d: -f1)"
