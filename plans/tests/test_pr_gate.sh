@@ -92,6 +92,10 @@ fi
 shift
 jq_filter=""
 endpoint=""
+graphql_query=""
+graphql_owner=""
+graphql_repo=""
+graphql_number=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --paginate)
@@ -102,6 +106,16 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -H|--header)
+      shift 2
+      ;;
+    -f|-F)
+      arg="${2:-}"
+      case "$arg" in
+        query=*) graphql_query="${arg#query=}" ;;
+        owner=*) graphql_owner="${arg#owner=}" ;;
+        repo=*) graphql_repo="${arg#repo=}" ;;
+        number=*) graphql_number="${arg#number=}" ;;
+      esac
       shift 2
       ;;
     *)
@@ -117,6 +131,35 @@ done
 
 payload=""
 case "$endpoint" in
+  graphql)
+    if [[ -z "$graphql_query" || -z "$graphql_owner" || -z "$graphql_repo" || -z "$graphql_number" ]]; then
+      echo "missing graphql args" >&2
+      exit 2
+    fi
+    case "$mode" in
+      inline_unaddressed)
+        payload="$(cat <<'EOF_JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"url":"https://example.invalid/pr-comment/1","author":{"login":"copilot-swe-agent","type":"Bot"}}]}}]}}}}}
+EOF_JSON
+)"
+        ;;
+      inline_addressed|bot_comment)
+        payload="$(cat <<'EOF_JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":false,"comments":{"nodes":[{"url":"https://example.invalid/pr-comment/2","author":{"login":"copilot-swe-agent","type":"Bot"}}]}}]}}}}}
+EOF_JSON
+)"
+        ;;
+      inline_resolved_ignored)
+        payload="$(cat <<'EOF_JSON'
+{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":true,"comments":{"nodes":[{"url":"https://example.invalid/pr-comment/1","author":{"login":"copilot-swe-agent","type":"Bot"}}]}}]}}}}}
+EOF_JSON
+)"
+        ;;
+      *)
+        payload='{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}'
+        ;;
+    esac
+    ;;
   repos/acme/demo/pulls/17)
     if [[ "$mode" == "dirty_merge" ]]; then
       payload="$(cat <<EOF_JSON
@@ -230,7 +273,7 @@ EOF_JSON
     ;;
   repos/acme/demo/pulls/17/comments?per_page=100)
     case "$mode" in
-      inline_unaddressed)
+      inline_unaddressed|inline_resolved_ignored)
         payload="$(cat <<EOF_JSON
 [{"created_at":"2026-02-11T00:05:00Z","html_url":"https://example.invalid/pr-comment/1","body":"Automated finding","path":"docs/unchanged.txt","original_commit_id":"$orig_sha","user":{"login":"copilot-swe-agent","type":"Bot"}}]
 EOF_JSON
@@ -396,6 +439,16 @@ expect_fail "invalid slash story id" "invalid --story value: workflow/maintenanc
 # Case 11: inline bot review comments must be backed by file diffs.
 expect_fail "inline bot comment unaddressed" "inline_bot_comments_unaddressed" \
   bash -lc "cd '$repo_dir' && GH_MODE=inline_unaddressed GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
+
+# Case 11b: resolved inline bot threads are ignored (enforce unresolved only).
+set +e
+out_case11b="$(
+  cd "$repo_dir" && GH_MODE=inline_resolved_ignored GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 2>&1
+)"
+rc_case11b=$?
+set -e
+[[ $rc_case11b -eq 0 ]] || fail "expected case11b to pass"
+printf '%s\n' "$out_case11b" | grep -Fq "OK: PR gate passed" || fail "case11b missing pass output"
 
 # Case 12: issue bot comments require head-specific AFTERCARE_ACK.
 expect_fail "missing aftercare ack" "missing_aftercare_ack_for_head" \
