@@ -574,3 +574,26 @@ Summary: Completed OPUS-SUG-008 by porting structured execution telemetry into o
 Commands: cargo test -p soldier_core --test test_preflight --test test_liquidity_gate --test test_net_edge_gate --test test_gate_ordering.
 Evidence: crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/preflight.rs; crates/soldier_core/src/execution/gate.rs; crates/soldier_core/src/execution/gates.rs; crates/soldier_core/tests/test_preflight.rs; crates/soldier_core/tests/test_liquidity_gate.rs; crates/soldier_core/tests/test_net_edge_gate.rs; crates/soldier_core/tests/test_gate_ordering.rs.
 Next: Rerun focused cross-repo compare artifact refresh when needed.
+Story: workflow-maintenance
+Date: 2026-02-14 22:19:47 UTC
+Summary: Hardened story review integrity gates against fabricated multi-model evidence by requiring logger provenance markers plus hash-verified transcript/findings blocks for Codex/Kimi/code-review-expert artifacts. Updated logger scripts, story_review_gate enforcement, equivalence matrix/checks, workflow contract wording, and fixture coverage.
+Commands: bash plans/tests/test_codex_review_logged.sh; bash plans/tests/test_kimi_review_logged.sh; bash plans/tests/test_code_review_expert_logged.sh; bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_pre_pr_review_gate.sh; bash plans/tests/test_prd_set_pass.sh; bash plans/tests/test_story_review_equivalence_check.sh; bash plans/tests/test_story_review_findings_guard.sh; ./plans/workflow_contract_gate.sh; ./plans/verify.sh quick.
+Evidence: plans/codex_review_logged.sh; plans/kimi_review_logged.sh; plans/code_review_expert_logged.sh; plans/story_review_gate.sh; plans/story_review_equivalence_matrix.json; plans/story_review_equivalence_check.sh; specs/WORKFLOW_CONTRACT.md; artifacts/verify/20260214_161658.
+Next: If you want stronger anti-forgery guarantees beyond file-format hardening, wire signed external attestations (e.g., service-issued receipt IDs) into logger scripts and gate validation.
+Story: workflow-maintenance
+Date: 2026-02-14 22:26:54 UTC
+Summary: Additional confidence run `./plans/verify.sh full` failed in `crossref_gate` on pre-existing duplicate normalized evidence path in `docs/PHASE1_CHECKLIST_BLOCK.md` (lines 35 and 44). This is outside the review-artifact hardening changes.
+Commands: ./plans/verify.sh full.
+Evidence: artifacts/verify/20260214_162119 (FAILED_GATE=crossref_gate).
+Story: workflow-maintenance
+Date: 2026-02-14 23:32:39 UTC
+Summary: Removed duplicated REQUIRED_EVIDENCE marker block in docs/PHASE1_CHECKLIST_BLOCK.md (duplicate entries at lines 35-51). Re-ran ./plans/verify.sh full: crossref_gate now passes (duplicate normalized path error resolved), but full verify currently fails later at rust_clippy due unresolved import `soldier_core::execution::net_edge_reject_total` in crates/soldier_core/tests/test_net_edge_gate.rs.
+Commands: ./plans/verify.sh full.
+Evidence: docs/PHASE1_CHECKLIST_BLOCK.md; artifacts/verify/20260214_172232/crossref_gate.log; artifacts/verify/20260214_172232/rust_clippy.log.
+Next: fix the missing execution export used by test_net_edge_gate, then rerun ./plans/verify.sh full.
+Story: workflow-maintenance
+Date: 2026-02-14 23:49:06 UTC
+Summary: Fixed full-verify rust_clippy failure by re-exporting net-edge reject metric accessor from execution module (`net_edge_reject_total`), matching existing tests importing `soldier_core::execution`. Verified with targeted net-edge test and full verify green.
+Commands: cargo test -p soldier_core --test test_net_edge_gate; ./plans/verify.sh full.
+Evidence: crates/soldier_core/src/execution/mod.rs; artifacts/verify/20260214_173751.
+Next: none.

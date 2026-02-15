@@ -221,9 +221,9 @@ A story’s `passes` may be set to `true` only when:
 - verify artifacts show no failing gate (`FAILED_GATE` absent and all `*.rc` are 0), AND
 - review evidence exists for the same `HEAD`:
   - self review is present and marked `Decision: PASS` with failure-mode + strategic reviews marked `DONE`,
-  - Kimi review artifact exists for the same `HEAD`,
-  - at least two Codex review artifacts exist for the same `HEAD`,
-  - code-review-expert review artifact exists for the same `HEAD` and is marked `Review Status: COMPLETE`,
+  - Kimi review artifact exists for the same `HEAD` and includes logger provenance markers plus a valid transcript SHA256 over `<<<REVIEW_TRANSCRIPT_BEGIN/END>>>`,
+  - at least two Codex review artifacts exist for the same `HEAD`, each with logger provenance markers plus a valid transcript SHA256 over `<<<REVIEW_TRANSCRIPT_BEGIN/END>>>`,
+  - code-review-expert review artifact exists for the same `HEAD`, is marked `Review Status: COMPLETE`, and includes logger provenance markers plus a valid findings SHA256 over `<<<FINDINGS_BEGIN/END>>>`,
   - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references Kimi final review + Codex final review + Codex second review + code-review-expert final review files for the same `HEAD`.
 
 ### 8.2 Mechanism (required)

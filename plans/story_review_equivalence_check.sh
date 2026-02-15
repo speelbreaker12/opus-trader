@@ -25,8 +25,14 @@ expected_ids=(
   self_review_pass
   self_review_markers_done
   kimi_review_for_head
+  kimi_provenance_attested
+  kimi_transcript_hash_integrity
   codex_two_reviews
+  codex_provenance_attested
+  codex_transcript_hash_integrity
   code_review_expert_complete
+  code_review_expert_provenance_attested
+  code_review_expert_findings_hash_integrity
   code_review_expert_no_placeholders
   resolution_blocking_cleared
   resolution_reference_consistency

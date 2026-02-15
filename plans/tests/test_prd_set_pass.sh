@@ -12,6 +12,15 @@ fail() {
 [[ -x "$SCRIPT" ]] || fail "missing executable script: $SCRIPT"
 command -v jq >/dev/null 2>&1 || fail "jq is required for this test"
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file" | awk '{print $1}'
+}
+
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
@@ -29,6 +38,14 @@ setup_story_review_artifacts() {
   local codex_second_file="$story_root/codex/20260214T000002Z_review.md"
   local expert_file="$story_root/code_review_expert/20260214T000003Z_review.md"
   local resolution_file="$story_root/review_resolution.md"
+  local codex_one_transcript="$story_root/codex/.codex_one_transcript.txt"
+  local codex_two_transcript="$story_root/codex/.codex_two_transcript.txt"
+  local kimi_transcript="$story_root/kimi/.kimi_transcript.txt"
+  local expert_findings="$story_root/code_review_expert/.expert_findings.txt"
+  local codex_one_hash=""
+  local codex_two_hash=""
+  local kimi_hash=""
+  local expert_findings_hash=""
 
   mkdir -p \
     "$story_root/self_review" \
@@ -44,28 +61,83 @@ Decision: PASS
 - Strategic Failure Review: DONE
 EOF
 
+  cat > "$kimi_transcript" <<'EOF'
+TurnBegin(user_input="prd_set_pass fixture")
+TextPart(text="No blocking findings")
+EOF
+  kimi_hash="$(sha256_file "$kimi_transcript")"
   cat > "$kimi_file" <<EOF
 - Story: $story_id
 - HEAD: $review_head
+- Artifact Provenance: logger-v1
+- Generator Script: plans/kimi_review_logged.sh
+- Command Exit Code: 0
+- Transcript SHA256: $kimi_hash
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+TurnBegin(user_input="prd_set_pass fixture")
+TextPart(text="No blocking findings")
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
+  cat > "$codex_one_transcript" <<'EOF'
+OpenAI Codex vfixture
+session id: prd-set-pass-codex-final
+EOF
+  codex_one_hash="$(sha256_file "$codex_one_transcript")"
   cat > "$codex_final_file" <<EOF
 - Story: $story_id
 - HEAD: $review_head
+- Artifact Provenance: logger-v1
+- Generator Script: plans/codex_review_logged.sh
+- Command Exit Code: 0
+- Transcript SHA256: $codex_one_hash
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+OpenAI Codex vfixture
+session id: prd-set-pass-codex-final
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
+  cat > "$codex_two_transcript" <<'EOF'
+OpenAI Codex vfixture
+session id: prd-set-pass-codex-second
+EOF
+  codex_two_hash="$(sha256_file "$codex_two_transcript")"
   cat > "$codex_second_file" <<EOF
 - Story: $story_id
 - HEAD: $review_head
+- Artifact Provenance: logger-v1
+- Generator Script: plans/codex_review_logged.sh
+- Command Exit Code: 0
+- Transcript SHA256: $codex_two_hash
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+OpenAI Codex vfixture
+session id: prd-set-pass-codex-second
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
+  cat > "$expert_findings" <<'EOF'
+- Blocking: none
+- Major: none
+- Medium: none
+EOF
+  expert_findings_hash="$(sha256_file "$expert_findings")"
   cat > "$expert_file" <<EOF
 - Story: $story_id
 - HEAD: $review_head
 - Review Status: COMPLETE
+- Artifact Provenance: logger-v1
+- Generator Script: plans/code_review_expert_logged.sh
+- Content Source: template
+- Findings SHA256: $expert_findings_hash
+
+<<<FINDINGS_BEGIN>>>
 - Blocking: none
 - Major: none
 - Medium: none
+<<<FINDINGS_END>>>
 EOF
 
   cat > "$resolution_file" <<EOF
@@ -78,6 +150,8 @@ Codex final review file: $codex_final_file
 Codex second review file: $codex_second_file
 Code-review-expert final review file: $expert_file
 EOF
+
+  rm -f "$codex_one_transcript" "$codex_two_transcript" "$kimi_transcript" "$expert_findings"
 }
 
 setup_case() {

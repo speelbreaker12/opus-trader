@@ -28,6 +28,25 @@ expect_fail() {
   fi
 }
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file" | awk '{print $1}'
+}
+
+extract_transcript() {
+  local file="$1"
+  local out="$2"
+  awk '
+    /^<<<REVIEW_TRANSCRIPT_BEGIN>>>$/ {capture=1; next}
+    /^<<<REVIEW_TRANSCRIPT_END>>>$/ {capture=0; exit}
+    capture {print}
+  ' "$file" > "$out"
+}
+
 [[ -x "$SCRIPT" ]] || fail "missing executable script: $SCRIPT"
 
 tmp_dir="$(mktemp -d)"
@@ -55,7 +74,19 @@ review_file="$(find "$out_root/$story/codex" -maxdepth 1 -type f -name '*_review
 
 grep -Fxq -- "- Story: $story" "$review_file" || fail "missing story metadata"
 grep -Fxq -- "- HEAD: $head_sha" "$review_file" || fail "missing HEAD metadata"
+grep -Fxq -- "- Artifact Provenance: logger-v1" "$review_file" || fail "missing provenance metadata"
+grep -Fxq -- "- Generator Script: plans/codex_review_logged.sh" "$review_file" || fail "missing generator metadata"
+grep -Fxq -- "- Command Exit Code: 0" "$review_file" || fail "missing command exit metadata"
+grep -Eq '^- Transcript SHA256: [0-9a-f]{64}$' "$review_file" || fail "missing transcript hash metadata"
+grep -Fxq -- "<<<REVIEW_TRANSCRIPT_BEGIN>>>" "$review_file" || fail "missing transcript begin marker"
+grep -Fxq -- "<<<REVIEW_TRANSCRIPT_END>>>" "$review_file" || fail "missing transcript end marker"
 grep -Fq -- "MOCK_CODEX_REVIEW_OK" "$review_file" || fail "missing mock CLI output in artifact"
+
+expected_hash="$(sed -n 's/^- Transcript SHA256: //p' "$review_file" | head -n 1)"
+transcript_file="$tmp_dir/codex_transcript.txt"
+extract_transcript "$review_file" "$transcript_file"
+actual_hash="$(sha256_file "$transcript_file")"
+[[ "$actual_hash" == "$expected_hash" ]] || fail "transcript hash mismatch (expected=$expected_hash actual=$actual_hash)"
 
 # Extra args path should still execute and be recorded.
 PATH="$mock_bin:$PATH" "$SCRIPT" "$story" --commit HEAD --out-root "$out_root" --title "fixture codex review extra" -- --model o3 >/dev/null

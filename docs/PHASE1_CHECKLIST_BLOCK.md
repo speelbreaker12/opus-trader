@@ -41,15 +41,6 @@ evidence/phase1/
 <!-- REQUIRED_EVIDENCE_ANY_OF: evidence/phase1/crash_mid_intent/auto_test_passed.txt | evidence/phase1/crash_mid_intent/drill.md -->
 <!-- Planned future evidence: evidence/phase1/restart_loop/restart_100_cycles.log -->
 
-<!-- REQUIRED_EVIDENCE: evidence/phase1/README.md -->
-<!-- REQUIRED_EVIDENCE: evidence/phase1/ci_links.md -->
-<!-- REQUIRED_EVIDENCE: evidence/phase1/determinism/intent_hashes.txt -->
-<!-- REQUIRED_EVIDENCE: evidence/phase1/no_side_effects/rejection_cases.md -->
-<!-- REQUIRED_EVIDENCE: evidence/phase1/traceability/sample_rejection_log.txt -->
-<!-- REQUIRED_EVIDENCE: evidence/phase1/config_fail_closed/missing_keys_matrix.json -->
-<!-- REQUIRED_EVIDENCE_ANY_OF: evidence/phase1/crash_mid_intent/auto_test_passed.txt | evidence/phase1/crash_mid_intent/drill.md -->
-<!-- REQUIRED_EVIDENCE: evidence/phase1/restart_loop/restart_100_cycles.log -->
-
 ## P1-A — Single Dispatch Chokepoint Proof (No Bypass Paths)
 
 **MANUAL artifact required:**
