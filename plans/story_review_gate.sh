@@ -110,6 +110,7 @@ verify_hashed_block() {
   end_count="$(grep -Fxc -- "$end_marker" "$file" || true)"
   [[ "$start_count" -ge 1 ]] || die "${label} missing start marker '$start_marker' ($file)"
   [[ "$end_count" -ge 1 ]] || die "${label} missing end marker '$end_marker' ($file)"
+  [[ "$start_count" == "$end_count" ]] || die "${label} marker counts must be balanced (start=$start_count end=$end_count) in $file"
 
   # Log when markers appear multiple times (e.g., in transcript content discussing review format)
   if [[ "$start_count" -gt 1 ]] || [[ "$end_count" -gt 1 ]]; then

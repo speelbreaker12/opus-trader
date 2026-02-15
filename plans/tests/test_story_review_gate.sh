@@ -400,6 +400,24 @@ if ! printf '%s\n' "$case22b_output" | grep -q "INFO.*nested markers"; then
   fail "case 22b: nested markers should trigger INFO log"
 fi
 
+# Case 22c: unbalanced nested markers are rejected (start > end).
+case22c="$tmp_dir/case22c"
+write_valid_case "$case22c" "$story" "$head_sha"
+cat >> "$case22c/$story/codex/20260209T000100Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+EOF
+expect_fail "unbalanced nested start marker" "marker counts must be balanced" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case22c"
+
+# Case 22d: unbalanced nested markers are rejected (end > start).
+case22d="$tmp_dir/case22d"
+write_valid_case "$case22d" "$story" "$head_sha"
+cat >> "$case22d/$story/codex/20260209T000100Z_review.md" <<'EOF'
+<<<REVIEW_TRANSCRIPT_END>>>
+EOF
+expect_fail "unbalanced nested end marker" "marker counts must be balanced" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case22d"
+
 # Case 23: duplicate transcript SHA marker is rejected (fail-closed).
 case23="$tmp_dir/case23"
 write_valid_case "$case23" "$story" "$head_sha"
