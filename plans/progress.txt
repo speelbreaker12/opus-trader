@@ -597,3 +597,9 @@ Summary: Fixed full-verify rust_clippy failure by re-exporting net-edge reject m
 Commands: cargo test -p soldier_core --test test_net_edge_gate; ./plans/verify.sh full.
 Evidence: crates/soldier_core/src/execution/mod.rs; artifacts/verify/20260214_173751.
 Next: none.
+Story: S5-004
+Date: 2026-02-15 18:34:00 UTC
+Summary: Regenerated head-tied multi-review evidence in isolated worktree at HEAD d222585 after branch drift invalidated prior artifacts. Updated review_resolution.md to reference fresh self_review, two Codex reviews, Kimi review, and code-review-expert review. Verified with story_review_gate and pre_pr_review_gate.
+Commands: ./plans/self_review_logged.sh S5-004 --decision PASS --head <HEAD>; ./plans/codex_review_logged.sh S5-004 --uncommitted (x2); ./plans/kimi_review_logged.sh S5-004 --uncommitted; ./plans/code_review_expert_logged.sh S5-004 --status COMPLETE; ./plans/story_review_gate.sh S5-004 --head <HEAD>; ./plans/pre_pr_review_gate.sh S5-004 --head <HEAD>.
+Evidence: artifacts/story/S5-004/self_review/20260215T183232Z_self_review.md; artifacts/story/S5-004/codex/20260215T183232Z_50942_28054_review.md; artifacts/story/S5-004/codex/20260215T183302Z_51290_20012_review.md; artifacts/story/S5-004/kimi/20260215T183302Z_51291_4083_review.md; artifacts/story/S5-004/code_review_expert/20260215T183303Z_51294_21830_review.md; artifacts/story/S5-004/review_resolution.md.
+Next: run PR gate in CI and resolve any new bot-comment deltas if they appear.
