@@ -1,0 +1,5 @@
+clauses:
+  CSP-001:
+    plan: ["IMPL-001"]
+    code: ["src/policy.rs"]
+    tests: ["tests/policy_test.rs"]

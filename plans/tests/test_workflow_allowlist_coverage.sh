@@ -80,6 +80,7 @@ required=(
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh
   plans/story_verify_allowlist_suggest.sh
+  plans/sync_audit.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_profile_parity.sh
@@ -100,6 +101,7 @@ required=(
   plans/tests/test_story_review_equivalence_check.sh
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_story_review_gate.sh
+  plans/tests/test_sync_audit.sh
   plans/tests/test_thinking_review_logged.sh
   plans/tests/test_workflow_quick_step.sh
   plans/tests/test_toggle_policy_check.sh
@@ -144,6 +146,7 @@ required=(
   plans/lib/node_gates.sh
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
+  plans/lib/sync_audit_utils.sh
   plans/lib/verify_checkpoint.sh
   plans/ci/requirements-crossref.txt
   plans/ci/requirements-verify.txt

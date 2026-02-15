@@ -1,0 +1,65 @@
+{
+  "project": "test-project",
+  "source": {
+    "implementation_plan_path": "IMPLEMENTATION_PLAN.md",
+    "contract_path": "CONTRACT.md"
+  },
+  "rules": {
+    "one_commit_per_story": true,
+    "passes_only_flips_after_verify_green": true,
+    "wip_limit": 1,
+    "verify_entrypoint": "./plans/verify.sh"
+  },
+  "items": [
+    {
+      "id": "S1-001",
+      "priority": 1,
+      "phase": "foundation",
+      "slice": "S1",
+      "slice_ref": "§1",
+      "story_ref": "S1-001",
+      "category": "feature",
+      "title": "Test item",
+      "description": "Test description",
+      "contract_refs": ["§99.99"],
+      "plan_refs": ["IMPL-999"],
+      "passes": false,
+      "acceptance": [
+        {"desc": "Test 1"},
+        {"desc": "Test 2"},
+        {"desc": "Test 3"}
+      ],
+      "steps": [
+        {"action": "Step 1"},
+        {"action": "Step 2"},
+        {"action": "Step 3"},
+        {"action": "Step 4"},
+        {"action": "Step 5"}
+      ],
+      "scope": {
+        "touch": ["src/test.rs"],
+        "avoid": [],
+        "skip": []
+      },
+      "verify": ["./plans/verify.sh"],
+      "evidence": ["test_evidence"],
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "test_reason"
+      },
+      "enforcement_point": "PolicyGuard",
+      "failure_mode": ["stall"],
+      "observability": {
+        "metrics": [],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false
+    }
+  ]
+}
