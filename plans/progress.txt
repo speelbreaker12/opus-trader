@@ -574,3 +574,39 @@ Summary: Completed OPUS-SUG-008 by porting structured execution telemetry into o
 Commands: cargo test -p soldier_core --test test_preflight --test test_liquidity_gate --test test_net_edge_gate --test test_gate_ordering.
 Evidence: crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/preflight.rs; crates/soldier_core/src/execution/gate.rs; crates/soldier_core/src/execution/gates.rs; crates/soldier_core/tests/test_preflight.rs; crates/soldier_core/tests/test_liquidity_gate.rs; crates/soldier_core/tests/test_net_edge_gate.rs; crates/soldier_core/tests/test_gate_ordering.rs.
 Next: Rerun focused cross-repo compare artifact refresh when needed.
+Story: workflow-maintenance
+Date: 2026-02-14 22:19:47 UTC
+Summary: Hardened story review integrity gates against fabricated multi-model evidence by requiring logger provenance markers plus hash-verified transcript/findings blocks for Codex/Kimi/code-review-expert artifacts. Updated logger scripts, story_review_gate enforcement, equivalence matrix/checks, workflow contract wording, and fixture coverage.
+Commands: bash plans/tests/test_codex_review_logged.sh; bash plans/tests/test_kimi_review_logged.sh; bash plans/tests/test_code_review_expert_logged.sh; bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_pre_pr_review_gate.sh; bash plans/tests/test_prd_set_pass.sh; bash plans/tests/test_story_review_equivalence_check.sh; bash plans/tests/test_story_review_findings_guard.sh; ./plans/workflow_contract_gate.sh; ./plans/verify.sh quick.
+Evidence: plans/codex_review_logged.sh; plans/kimi_review_logged.sh; plans/code_review_expert_logged.sh; plans/story_review_gate.sh; plans/story_review_equivalence_matrix.json; plans/story_review_equivalence_check.sh; specs/WORKFLOW_CONTRACT.md; artifacts/verify/20260214_161658.
+Next: If you want stronger anti-forgery guarantees beyond file-format hardening, wire signed external attestations (e.g., service-issued receipt IDs) into logger scripts and gate validation.
+Story: workflow-maintenance
+Date: 2026-02-14 22:26:54 UTC
+Summary: Additional confidence run `./plans/verify.sh full` failed in `crossref_gate` on pre-existing duplicate normalized evidence path in `docs/PHASE1_CHECKLIST_BLOCK.md` (lines 35 and 44). This is outside the review-artifact hardening changes.
+Commands: ./plans/verify.sh full.
+Evidence: artifacts/verify/20260214_162119 (FAILED_GATE=crossref_gate).
+Story: workflow-maintenance
+Date: 2026-02-14 23:32:39 UTC
+Summary: Removed duplicated REQUIRED_EVIDENCE marker block in docs/PHASE1_CHECKLIST_BLOCK.md (duplicate entries at lines 35-51). Re-ran ./plans/verify.sh full: crossref_gate now passes (duplicate normalized path error resolved), but full verify currently fails later at rust_clippy due unresolved import `soldier_core::execution::net_edge_reject_total` in crates/soldier_core/tests/test_net_edge_gate.rs.
+Commands: ./plans/verify.sh full.
+Evidence: docs/PHASE1_CHECKLIST_BLOCK.md; artifacts/verify/20260214_172232/crossref_gate.log; artifacts/verify/20260214_172232/rust_clippy.log.
+Next: fix the missing execution export used by test_net_edge_gate, then rerun ./plans/verify.sh full.
+Story: workflow-maintenance
+Date: 2026-02-14 23:49:06 UTC
+Summary: Fixed full-verify rust_clippy failure by re-exporting net-edge reject metric accessor from execution module (`net_edge_reject_total`), matching existing tests importing `soldier_core::execution`. Verified with targeted net-edge test and full verify green.
+Commands: cargo test -p soldier_core --test test_net_edge_gate; ./plans/verify.sh full.
+Evidence: crates/soldier_core/src/execution/mod.rs; artifacts/verify/20260214_173751.
+Next: none.
+Story: S5-004
+Date: 2026-02-15 18:34:00 UTC
+Summary: Regenerated head-tied multi-review evidence in isolated worktree at HEAD d222585 after branch drift invalidated prior artifacts. Updated review_resolution.md to reference fresh self_review, two Codex reviews, Kimi review, and code-review-expert review. Verified with story_review_gate and pre_pr_review_gate.
+Commands: ./plans/self_review_logged.sh S5-004 --decision PASS --head <HEAD>; ./plans/codex_review_logged.sh S5-004 --uncommitted (x2); ./plans/kimi_review_logged.sh S5-004 --uncommitted; ./plans/code_review_expert_logged.sh S5-004 --status COMPLETE; ./plans/story_review_gate.sh S5-004 --head <HEAD>; ./plans/pre_pr_review_gate.sh S5-004 --head <HEAD>.
+Evidence: artifacts/story/S5-004/self_review/20260215T183232Z_self_review.md; artifacts/story/S5-004/codex/20260215T183232Z_50942_28054_review.md; artifacts/story/S5-004/codex/20260215T183302Z_51290_20012_review.md; artifacts/story/S5-004/kimi/20260215T183302Z_51291_4083_review.md; artifacts/story/S5-004/code_review_expert/20260215T183303Z_51294_21830_review.md; artifacts/story/S5-004/review_resolution.md.
+Next: run PR gate in CI and resolve any new bot-comment deltas if they appear.
+Story: PRD promotion (S2-004/S6-007/S6-008/S6-009/S6-010)
+Date: 2026-02-15 02:33:11 UTC
+Summary: Completed promotion-only pass flips for five stories after regenerating SHA-consistent review artifacts and obtaining a full verify green artifact set at current HEAD. Unblocked local full verify by applying rustfmt parity updates and fixing a stale reject-reason enum expectation in `test_intent_pipeline`.
+Commands: rustup update stable; cargo test -p soldier_core --test test_intent_pipeline --locked; ./plans/story_review_gate.sh <story> --head <HEAD>; ./plans/verify.sh full (clean worktree /tmp/opus-trader-clean-SUmrNJ, run_id=20260214_201501); ./plans/prd_set_pass.sh <story> true --artifacts-dir artifacts/verify/20260214_201501 --contract-review artifacts/verify/20260214_201501/contract_review.json.
+Evidence: artifacts/story/S2-004/review_resolution.md; artifacts/story/S6-007/review_resolution.md; artifacts/story/S6-008/review_resolution.md; artifacts/story/S6-009/review_resolution.md; artifacts/story/S6-010/review_resolution.md; artifacts/verify/20260214_201501/verify.meta.json; artifacts/verify/20260214_201501/contract_review.json; plans/prd.json.
+Notes: Story passes flipped true via `plans/prd_set_pass.sh` for S2-004, S6-007, S6-008, S6-009, S6-010.
+Next: None.

@@ -245,6 +245,8 @@ repo="${origin#git@github.com:}"
 repo="${repo#https://github.com/}"
 repo="${repo%.git}"
 [[ "$repo" == */* ]] || die "failed to parse repo from origin: $origin"
+repo_owner="${repo%%/*}"
+repo_name="${repo#*/}"
 
 # Auto-detect PR if not provided.
 if [[ -z "$PR" ]]; then
@@ -272,6 +274,7 @@ REVIEW_DECISION=""
 CHECK_SUMMARY=""
 BOT_COMMENT_SUMMARY=""
 INLINE_BOT_ENFORCEMENT_SUMMARY=""
+INLINE_BOT_SCOPE_SUMMARY=""
 AFTERCARE_ACK_SUMMARY=""
 COPILOT_REVIEW_SUMMARY=""
 PRE_PR_REVIEW_SUMMARY=""
@@ -315,6 +318,7 @@ $CHECK_SUMMARY
 $BOT_COMMENT_SUMMARY
 
 ## Inline bot review comments enforcement
+$INLINE_BOT_SCOPE_SUMMARY
 $INLINE_BOT_ENFORCEMENT_SUMMARY
 
 ## Issue bot comments ack enforcement
@@ -435,6 +439,60 @@ failing=$CHECK_FAIL"
 
   pr_comments="$(gh_api_array "repos/$repo/pulls/$PR/comments?per_page=100")" || die "failed to fetch PR review comments"
   issue_comments="$(gh_api_array "repos/$repo/issues/$PR/comments?per_page=100")" || die "failed to fetch PR issue comments"
+
+  inline_scope_mode="all_bot_comments_fallback"
+  unresolved_inline_bot_comment_urls='[]'
+  inline_threads_query='query($owner:String!, $repo:String!, $number:Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        reviewThreads(first: 100) {
+          nodes {
+            isResolved
+            comments(first: 50) {
+              nodes {
+                url
+              }
+            }
+          }
+        }
+      }
+    }
+  }'
+  set +e
+  inline_threads_json="$(
+    gh api graphql \
+      -f query="$inline_threads_query" \
+      -f owner="$repo_owner" \
+      -f repo="$repo_name" \
+      -F number="$PR" \
+      2>/dev/null
+  )"
+  inline_threads_rc=$?
+  set -e
+  if [[ "$inline_threads_rc" -eq 0 && -n "$inline_threads_json" ]]; then
+    unresolved_inline_bot_comment_urls="$(
+      jq -c '
+        [
+          .data.repository.pullRequest.reviewThreads.nodes[]?
+          | select(.isResolved == false)
+          | .comments.nodes[]?
+          | (.url // empty)
+          | select(. != "")
+        ]
+        | unique
+      ' <<<"$inline_threads_json" 2>/dev/null || true
+    )"
+    if [[ -n "$unresolved_inline_bot_comment_urls" && "$unresolved_inline_bot_comment_urls" != "null" ]]; then
+      inline_scope_mode="unresolved_threads_only"
+    else
+      unresolved_inline_bot_comment_urls='[]'
+    fi
+  fi
+
+  unresolved_inline_bot_count="$(jq -r 'length' <<<"$unresolved_inline_bot_comment_urls" 2>/dev/null || echo 0)"
+  INLINE_BOT_SCOPE_SUMMARY="mode=$inline_scope_mode
+unresolved_bot_inline_comments=$unresolved_inline_bot_count"
+
   copilot_seen=0
   copilot_reason="not_required"
 
@@ -587,10 +645,23 @@ failing=$CHECK_FAIL"
       inline_unfixed_lines="$inline_unfixed_lines- $comment_url ($comment_path): $reason"$'\n'
     fi
   done < <(
-    jq -r '
+    jq -r --arg mode "$inline_scope_mode" --argjson unresolved "$unresolved_inline_bot_comment_urls" '
       def is_bot($u):
         ($u.type == "Bot") or (((($u.login // "") | ascii_downcase) | contains("copilot")));
-      [ .[] | select(is_bot(.user)) | [(.html_url // ""), (.path // ""), (.original_commit_id // "")] | @tsv ] | .[]
+      def should_enforce($c):
+        if $mode == "unresolved_threads_only" then
+          (($unresolved | index(($c.html_url // ""))) != null)
+        else
+          true
+        end;
+      [
+        .[]
+        | select(is_bot(.user))
+        | select(should_enforce(.))
+        | [(.html_url // ""), (.path // ""), (.original_commit_id // "")]
+        | @tsv
+      ]
+      | .[]
     ' <<<"$pr_comments"
   )
   if [[ "$inline_unfixed_count" -gt 0 ]]; then
