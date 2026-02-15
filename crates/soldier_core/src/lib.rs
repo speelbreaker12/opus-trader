@@ -7,7 +7,7 @@ pub mod risk;
 pub mod venue;
 
 #[cfg(test)]
-pub mod test_multicycle_aftercare;
+mod test_multicycle_aftercare;
 
 pub fn crate_bootstrapped() -> bool {
     true
