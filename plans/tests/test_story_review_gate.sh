@@ -376,31 +376,37 @@ rm -f "$case21/$story/code_review_expert/20260209T000080Z_review.md.bak"
 expect_fail "code-review-expert findings hash mismatch" "code-review-expert findings hash mismatch" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case21"
 
-# Case 22: duplicate transcript start marker is rejected (fail-closed).
+# Case 22: marker tokens inside transcript payload are allowed if hash still matches.
 case22="$tmp_dir/case22"
 write_valid_case "$case22" "$story" "$head_sha"
-cat >> "$case22/$story/codex/20260209T000100Z_review.md" <<'EOF'
+case22_codex="$case22/$story/codex/20260209T000100Z_review.md"
+cat >> "$case22_codex" <<'EOF'
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF
-expect_fail "duplicate transcript start marker" "must contain exactly one start marker" \
-  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case22"
+case22_start_line="$(grep -Fn -- "<<<REVIEW_TRANSCRIPT_BEGIN>>>" "$case22_codex" | head -n 1 | cut -d: -f1)"
+case22_end_line="$(grep -Fn -- "<<<REVIEW_TRANSCRIPT_END>>>" "$case22_codex" | tail -n 1 | cut -d: -f1)"
+case22_block="$(mktemp)"
+sed -n "$((case22_start_line + 1)),$((case22_end_line - 1))p" "$case22_codex" > "$case22_block"
+case22_hash="$(sha256_file "$case22_block")"
+rm -f "$case22_block"
+sed -i.bak "s/- Transcript SHA256: .*/- Transcript SHA256: $case22_hash/" "$case22_codex"
+rm -f "$case22_codex.bak"
+"$GATE" "$story" --head "$head_sha" --artifacts-root "$case22" >/dev/null
 
-# Case 23: duplicate transcript end marker is rejected (fail-closed).
+# Case 22b: nested markers trigger INFO logging
+case22b_output=$("$GATE" "$story" --head "$head_sha" --artifacts-root "$case22" 2>&1)
+if ! printf '%s\n' "$case22b_output" | grep -q "INFO.*nested markers"; then
+  fail "case 22b: nested markers should trigger INFO log"
+fi
+
+# Case 23: duplicate transcript SHA marker is rejected (fail-closed).
 case23="$tmp_dir/case23"
 write_valid_case "$case23" "$story" "$head_sha"
 cat >> "$case23/$story/codex/20260209T000100Z_review.md" <<'EOF'
-<<<REVIEW_TRANSCRIPT_END>>>
-EOF
-expect_fail "duplicate transcript end marker" "must contain exactly one end marker" \
-  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case23"
-
-# Case 24: duplicate transcript SHA marker is rejected (fail-closed).
-case24="$tmp_dir/case24"
-write_valid_case "$case24" "$story" "$head_sha"
-cat >> "$case24/$story/codex/20260209T000100Z_review.md" <<'EOF'
 - Transcript SHA256: 0000000000000000000000000000000000000000000000000000000000000000
 EOF
 expect_fail "duplicate transcript sha marker" "must contain exactly one SHA256 marker" \
-  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case24"
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case23"
 
 echo "PASS: story review gate fixtures"

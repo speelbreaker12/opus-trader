@@ -108,11 +108,16 @@ verify_hashed_block() {
 
   start_count="$(grep -Fxc -- "$start_marker" "$file" || true)"
   end_count="$(grep -Fxc -- "$end_marker" "$file" || true)"
-  [[ "$start_count" == "1" ]] || die "${label} must contain exactly one start marker '$start_marker' ($file)"
-  [[ "$end_count" == "1" ]] || die "${label} must contain exactly one end marker '$end_marker' ($file)"
+  [[ "$start_count" -ge 1 ]] || die "${label} missing start marker '$start_marker' ($file)"
+  [[ "$end_count" -ge 1 ]] || die "${label} missing end marker '$end_marker' ($file)"
+
+  # Log when markers appear multiple times (e.g., in transcript content discussing review format)
+  if [[ "$start_count" -gt 1 ]] || [[ "$end_count" -gt 1 ]]; then
+    echo "INFO: ${label} has nested markers (start=$start_count, end=$end_count), using first start and last end" >&2
+  fi
 
   start_line="$(grep -Fn -- "$start_marker" "$file" | head -n 1 | cut -d: -f1)"
-  end_line="$(grep -Fn -- "$end_marker" "$file" | head -n 1 | cut -d: -f1)"
+  end_line="$(grep -Fn -- "$end_marker" "$file" | tail -n 1 | cut -d: -f1)"
   [[ "$end_line" -gt "$start_line" ]] || die "${label} marker order is invalid in $file"
 
   block_tmp="$(mktemp)"

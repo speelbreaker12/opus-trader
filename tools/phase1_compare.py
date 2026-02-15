@@ -193,6 +193,13 @@ class ScenarioBehaviorSummary:
 
 
 @dataclass
+class RequiredEvidenceSpec:
+    required_all: List[str]
+    required_any_of: List[List[str]]
+    source: str
+
+
+@dataclass
 class RepoResult:
     name: str
     path: str
@@ -343,7 +350,31 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def parse_required_evidence(repo: Path) -> Tuple[List[str], List[List[str]], str]:
+def normalize_required_evidence_spec(
+    required_all: List[str],
+    required_any_of: List[List[str]],
+    source: str,
+) -> RequiredEvidenceSpec:
+    # Deterministic unique ordering.
+    normalized_all = sorted(set(required_all))
+    normalized_groups: List[List[str]] = []
+    seen_group_keys = set()
+    for group in required_any_of:
+        key = tuple(sorted(set(group)))
+        if not key:
+            continue
+        if key in seen_group_keys:
+            continue
+        seen_group_keys.add(key)
+        normalized_groups.append(list(key))
+    return RequiredEvidenceSpec(
+        required_all=normalized_all,
+        required_any_of=normalized_groups,
+        source=source,
+    )
+
+
+def parse_required_evidence(repo: Path) -> RequiredEvidenceSpec:
     candidates = [
         repo / "docs" / "PHASE1_CHECKLIST_BLOCK.md",
         repo / "docs" / "ROADMAP.md",
@@ -380,20 +411,33 @@ def parse_required_evidence(repo: Path) -> Tuple[List[str], List[List[str]], str
     if not required_any_of:
         required_any_of = [list(group) for group in DEFAULT_REQUIRED_ANY_OF]
 
-    # Deterministic unique ordering.
-    required_all = sorted(set(required_all))
-    normalized_groups = []
-    seen_group_keys = set()
-    for group in required_any_of:
-        key = tuple(sorted(set(group)))
-        if not key:
-            continue
-        if key in seen_group_keys:
-            continue
-        seen_group_keys.add(key)
-        normalized_groups.append(list(key))
+    return normalize_required_evidence_spec(
+        required_all=required_all,
+        required_any_of=required_any_of,
+        source=source,
+    )
 
-    return required_all, normalized_groups, source
+
+def parse_required_evidence_from_ref(
+    repo_path: Path,
+    ref: str,
+    label: str,
+) -> RequiredEvidenceSpec:
+    warnings: List[str] = []
+    snapshot = checkout_ref_worktree(repo_path, ref)
+    try:
+        parsed = parse_required_evidence(snapshot.path)
+        result = RequiredEvidenceSpec(
+            required_all=list(parsed.required_all),
+            required_any_of=[list(group) for group in parsed.required_any_of],
+            source=f"{parsed.source} (forced from {label}@{ref})",
+        )
+    finally:
+        cleanup_ref_worktree(repo_path, snapshot, warnings)
+        if warnings:
+            for warning in warnings:
+                print(f"WARNING: {warning}", file=sys.stderr)
+    return result
 
 
 def analyze_config_matrix(path: Path) -> Tuple[int, int, int]:
@@ -1045,6 +1089,7 @@ def collect_repo_result(
     flaky_runs: int,
     flaky_cmd: Optional[str],
     run_dir: Path,
+    required_override: Optional[RequiredEvidenceSpec] = None,
 ) -> RepoResult:
     if not repo_path.exists():
         raise RuntimeError(f"repo path does not exist: {repo_path}")
@@ -1060,7 +1105,10 @@ def collect_repo_result(
         status_lines = git_read(active_repo, ["status", "--porcelain"]).splitlines()
         dirty_files = len(status_lines)
 
-        required_all, required_any_of, required_source = parse_required_evidence(active_repo)
+        required_spec = required_override or parse_required_evidence(active_repo)
+        required_all = list(required_spec.required_all)
+        required_any_of = [list(group) for group in required_spec.required_any_of]
+        required_source = required_spec.source
         all_required_paths = set(required_all)
         for group in required_any_of:
             all_required_paths.update(group)
@@ -1585,6 +1633,7 @@ def build_report_markdown(
     lines.append(f"| ref | `{a.ref}` | `{b.ref}` |")
     lines.append(f"| ref sha | `{a.resolved_ref_sha}` | `{b.resolved_ref_sha}` |")
     lines.append(f"| dirty files | `{a.dirty_files}` | `{b.dirty_files}` |")
+    lines.append(f"| required evidence source | `{a.required_source}` | `{b.required_source}` |")
     lines.append(
         f"| required evidence coverage | `{a.required_all_ok}/{a.required_all_total}` | `{b.required_all_ok}/{b.required_all_total}` |"
     )
@@ -2025,6 +2074,18 @@ def parse_args() -> argparse.Namespace:
         help="Optional base ref for churn stats in ralph (e.g. origin/main).",
     )
     parser.add_argument(
+        "--required-evidence-mode",
+        choices=["auto", "opus", "ralph", "fallback-defaults"],
+        default="auto",
+        help=(
+            "How to select required evidence lists. "
+            "'auto' uses per-repo discovery (default); "
+            "'opus' or 'ralph' forces both repos to use the selected repo/ref checklist "
+            "(reads from committed ref, not working tree); "
+            "'fallback-defaults' forces built-in defaults for both repos."
+        ),
+    )
+    parser.add_argument(
         "--run-quick-verify",
         action="store_true",
         help="Run ./plans/verify.sh quick in each repo.",
@@ -2125,6 +2186,26 @@ def main() -> int:
     run_quick_ralph = args.run_quick_verify or args.run_quick_verify_ralph
     run_full_opus = args.run_full_verify or args.run_full_verify_opus
     run_full_ralph = args.run_full_verify or args.run_full_verify_ralph
+    required_override: Optional[RequiredEvidenceSpec] = None
+
+    if args.required_evidence_mode == "fallback-defaults":
+        required_override = normalize_required_evidence_spec(
+            required_all=list(DEFAULT_REQUIRED_EVIDENCE),
+            required_any_of=[list(group) for group in DEFAULT_REQUIRED_ANY_OF],
+            source="fallback defaults (forced)",
+        )
+    elif args.required_evidence_mode == "opus":
+        required_override = parse_required_evidence_from_ref(
+            repo_path=opus_path,
+            ref=args.opus_ref,
+            label="opus",
+        )
+    elif args.required_evidence_mode == "ralph":
+        required_override = parse_required_evidence_from_ref(
+            repo_path=ralph_path,
+            ref=args.ralph_ref,
+            label="ralph",
+        )
 
     try:
         opus = collect_repo_result(
@@ -2139,6 +2220,7 @@ def main() -> int:
             flaky_runs=max(0, args.flaky_runs),
             flaky_cmd=args.flaky_cmd.strip() or None,
             run_dir=run_dir,
+            required_override=required_override,
         )
         ralph = collect_repo_result(
             name="ralph",
@@ -2152,6 +2234,7 @@ def main() -> int:
             flaky_runs=max(0, args.flaky_runs),
             flaky_cmd=args.flaky_cmd.strip() or None,
             run_dir=run_dir,
+            required_override=required_override,
         )
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -2189,6 +2272,10 @@ def main() -> int:
                     "ralph_ref": args.ralph_ref,
                     "opus_base": args.opus_base.strip() or "",
                     "ralph_base": args.ralph_base.strip() or "",
+                    "required_evidence_mode": args.required_evidence_mode,
+                    "required_evidence_override_source": (
+                        required_override.source if required_override else ""
+                    ),
                 },
                 "weighted_decision": weighted_decision,
                 "opus": asdict(opus),
