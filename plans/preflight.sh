@@ -244,6 +244,7 @@ fi
 # Split into fast smoke checks (default) vs full matrix checks (full verify).
 SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_run_prd_auditor_invocation.sh"
+  "plans/tests/test_run_prd_auditor_slice_cache_drift.sh"
   "plans/tests/test_codex_review_logged.sh"
   "plans/tests/test_kimi_review_logged.sh"
   "plans/tests/test_code_review_expert_logged.sh"
