@@ -75,22 +75,14 @@ impl TlsState {
             ),
             TlsState::Acked => matches!(
                 to,
-                TlsState::PartialFill
-                    | TlsState::Filled
-                    | TlsState::Cancelled
-                    | TlsState::Failed
+                TlsState::PartialFill | TlsState::Filled | TlsState::Cancelled | TlsState::Failed
             ),
             TlsState::PartialFill => matches!(
                 to,
-                TlsState::PartialFill
-                    | TlsState::Filled
-                    | TlsState::Cancelled
-                    | TlsState::Failed
+                TlsState::PartialFill | TlsState::Filled | TlsState::Cancelled | TlsState::Failed
             ),
             // Terminal states: no valid successors
-            TlsState::Filled | TlsState::Cancelled | TlsState::Rejected | TlsState::Failed => {
-                false
-            }
+            TlsState::Filled | TlsState::Cancelled | TlsState::Rejected | TlsState::Failed => false,
         }
     }
 }
@@ -146,10 +138,7 @@ pub enum LedgerAppendError {
     /// Generic write failure.
     WriteFailed { reason: String },
     /// Attempted an illegal TLSM state transition.
-    IllegalTransition {
-        from: TlsState,
-        to: TlsState,
-    },
+    IllegalTransition { from: TlsState, to: TlsState },
 }
 
 // ─── Replay outcome ─────────────────────────────────────────────────────
