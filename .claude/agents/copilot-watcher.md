@@ -487,7 +487,7 @@ CRE_FINDINGS=$(mktemp)
 
 # Optional: Save to artifacts
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-mkdir -p "artifacts/adhoc/${TIMESTAMP}/{self_review,cre}"
+mkdir -p artifacts/adhoc/${TIMESTAMP}/{self_review,cre}
 # Save reviews
 
 # Check for blocking findings
@@ -503,7 +503,7 @@ rm -f "$CRE_FINDINGS"
 
 ```bash
 # Discard old review artifacts
-rm -rf "artifacts/story/${STORY_ID}/{self_review,kimi,codex,code_review_expert}/"*
+rm -rf artifacts/story/${STORY_ID}/{self_review,kimi,codex,code_review_expert}/*
 rm -f "artifacts/story/${STORY_ID}/review_resolution.md"
 
 # Regenerate all 5 reviews
@@ -542,6 +542,12 @@ CRE_FILE=$(ls -1 "${STORY_DIR}/code_review_expert/"*_review.md 2>/dev/null | sor
 CODEX_FINAL="${CODEX_FILES[0]}"
 CODEX_SECOND="${CODEX_FILES[1]}"
 
+# Strip STORY_DIR prefix for relative paths in review_resolution.md
+KIMI_REL="${KIMI_FILE#${STORY_DIR}/}"
+CODEX_FINAL_REL="${CODEX_FINAL#${STORY_DIR}/}"
+CODEX_SECOND_REL="${CODEX_SECOND#${STORY_DIR}/}"
+CRE_REL="${CRE_FILE#${STORY_DIR}/}"
+
 cat > "${STORY_DIR}/review_resolution.md" <<EOF
 # Review Resolution
 
@@ -550,10 +556,10 @@ HEAD: ${REVIEW_SHA}
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 
-Kimi final review file: ${KIMI_FILE}
-Codex final review file: ${CODEX_FINAL}
-Codex second review file: ${CODEX_SECOND}
-Code-review-expert final review file: ${CRE_FILE}
+Kimi final review file: ${KIMI_REL}
+Codex final review file: ${CODEX_FINAL_REL}
+Codex second review file: ${CODEX_SECOND_REL}
+Code-review-expert final review file: ${CRE_REL}
 EOF
 ```
 
