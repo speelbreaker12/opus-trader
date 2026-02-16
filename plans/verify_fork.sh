@@ -125,6 +125,7 @@ MYPY_TIMEOUT="${MYPY_TIMEOUT:-10m}"
 NODE_LINT_TIMEOUT="${NODE_LINT_TIMEOUT:-5m}"
 NODE_TYPECHECK_TIMEOUT="${NODE_TYPECHECK_TIMEOUT:-10m}"
 NODE_TEST_TIMEOUT="${NODE_TEST_TIMEOUT:-10m}"
+ADVERSARIAL_GATE_TIMEOUT="${ADVERSARIAL_GATE_TIMEOUT:-2m}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -616,12 +617,25 @@ if [[ "$MODE" == "full" ]]; then
     ./plans/slice_completion_enforce.sh --head "$(git rev-parse HEAD)"
 fi
 
+if [[ "$MODE" == "full" ]]; then
+  log "19) adversarial invariant coverage"
+  run_logged_or_exit "adversarial_invariant_tests" "$ADVERSARIAL_GATE_TIMEOUT" \
+    bash "$ROOT/plans/lib/adversarial_gate.sh"
+fi
+
 log "Timing Summary"
 for f in "$VERIFY_ARTIFACTS_DIR"/*.time; do
   [[ -f "$f" ]] || continue
   name="$(basename "$f" .time)"
   elapsed="$(cat "$f")"
   echo "  $name: ${elapsed}s"
+done
+
+# Show any warn-only gate findings
+for wf in "$VERIFY_ARTIFACTS_DIR"/*.warn; do
+  [[ -f "$wf" ]] || continue
+  name="$(basename "$wf" .warn)"
+  warn "$name: $(cat "$wf")"
 done
 
 log "VERIFY OK (mode=$MODE)"

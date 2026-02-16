@@ -298,6 +298,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(
+  "plans/tests/test_adversarial_gate.sh"
   "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_codex_review_digest.sh"
   "plans/tests/test_run_prd_auditor_timeout_fallback.sh"

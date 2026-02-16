@@ -18,6 +18,7 @@ plans/code_review_expert_logged.sh
 plans/codex_review_digest.sh
 plans/codex_review_let_pass.sh
 plans/codex_review_logged.sh
+plans/config/gate_sunsets.sh
 plans/contract_check.sh
 plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
@@ -33,6 +34,7 @@ plans/global_manual_allowlist.json
 plans/init.sh
 plans/kimi_review_logged.sh
 plans/legacy_layout_guard.sh
+plans/lib/adversarial_gate.sh
 plans/lib/node_gates.sh
 plans/lib/python_gates.sh
 plans/lib/rust_gates.sh
@@ -69,6 +71,7 @@ plans/story_verify_allowlist.txt
 plans/story_verify_allowlist_check.sh
 plans/story_verify_allowlist_lint.sh
 plans/story_verify_allowlist_suggest.sh
+plans/tests/test_adversarial_gate.sh
 plans/tests/test_code_review_expert_logged.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
