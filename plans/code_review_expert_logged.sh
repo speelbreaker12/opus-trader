@@ -16,6 +16,15 @@ Content source (priority):
 USAGE
 }
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file" | awk '{print $1}'
+}
+
 story="${1:-}"
 if [[ -z "$story" || "$story" == "-h" || "$story" == "--help" ]]; then
   usage
@@ -100,29 +109,24 @@ stamp="${ts}_$$_${RANDOM}"
 out_file="$out_dir/${stamp}_review.md"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
-
-{
-  echo "# Code-review-expert findings"
-  echo
-  echo "- Story: $story"
-  echo "- HEAD: $head_sha"
-  echo "- Timestamp (UTC): $ts"
-  echo "- Branch: $branch"
-  echo "- Skill Path: ~/.agents/skills/code-review-expert/SKILL.md"
-  echo "- Review Status: $status"
-  echo "- Title: $title"
-  echo
-  echo "## Findings"
-} > "$out_file"
+content_source="template"
+findings_tmp="$(mktemp)"
+cleanup() {
+  rm -f "$findings_tmp"
+}
+trap cleanup EXIT
 
 if [[ -n "$from_file" ]]; then
   [[ -f "$from_file" ]] || { echo "ERROR: --from-file not found: $from_file" >&2; exit 2; }
-  cat "$from_file" >> "$out_file"
+  content_source="from-file"
+  cat "$from_file" > "$findings_tmp"
 elif [[ "$from_stdin" -eq 1 ]]; then
   [[ ! -t 0 ]] || { echo "ERROR: --from-stdin requires piped input" >&2; exit 2; }
-  cat >> "$out_file"
+  content_source="from-stdin"
+  cat > "$findings_tmp"
 else
-  cat >> "$out_file" <<'TEMPLATE'
+  content_source="template"
+  cat > "$findings_tmp" <<'TEMPLATE'
 - Blocking: <none | summary>
 - Major: <none | summary>
 - Medium: <none | summary>
@@ -135,5 +139,32 @@ else
 - Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 TEMPLATE
 fi
+
+printf '\n' >> "$findings_tmp"
+findings_hash="$(sha256_file "$findings_tmp")"
+findings_bytes="$(wc -c < "$findings_tmp" | tr -d '[:space:]')"
+
+{
+  echo "# Code-review-expert findings"
+  echo
+  echo "- Story: $story"
+  echo "- HEAD: $head_sha"
+  echo "- Timestamp (UTC): $ts"
+  echo "- Branch: $branch"
+  echo "- Skill Path: ~/.agents/skills/code-review-expert/SKILL.md"
+  echo "- Review Status: $status"
+  echo "- Title: $title"
+  echo "- Artifact Provenance: logger-v1"
+  echo "- Generator Script: plans/code_review_expert_logged.sh"
+  echo "- Content Source: $content_source"
+  echo "- Findings SHA256: $findings_hash"
+  echo "- Findings Bytes: $findings_bytes"
+  echo
+  echo "## Findings"
+  echo
+  echo "<<<FINDINGS_BEGIN>>>"
+} > "$out_file"
+cat "$findings_tmp" >> "$out_file"
+echo "<<<FINDINGS_END>>>" >> "$out_file"
 
 echo "Saved code-review-expert artifact: $out_file"

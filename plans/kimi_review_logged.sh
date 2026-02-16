@@ -26,6 +26,15 @@ Examples:
 EOF
 }
 
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+  shasum -a 256 "$file" | awk '{print $1}'
+}
+
 story="${1:-}"
 if [[ -z "$story" || "$story" == "-h" || "$story" == "--help" ]]; then
   usage
@@ -166,6 +175,21 @@ if [[ ${#extra[@]} -gt 0 ]]; then
   cmd+=("${extra[@]}")
 fi
 
+transcript_tmp="$(mktemp)"
+cleanup() {
+  rm -f "$transcript_tmp"
+}
+trap cleanup EXIT
+
+set +e
+"${cmd[@]}" 2>&1 | tee "$transcript_tmp"
+rc="${PIPESTATUS[0]}"
+set -e
+
+printf '\n' >> "$transcript_tmp"
+transcript_hash="$(sha256_file "$transcript_tmp")"
+transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
+
 {
   echo "# Kimi review"
   echo
@@ -185,15 +209,16 @@ fi
     echo "- Base ref: $base"
   fi
   echo "- Command: ${cmd[*]}"
+  echo "- Artifact Provenance: logger-v1"
+  echo "- Generator Script: plans/kimi_review_logged.sh"
+  echo "- Command Exit Code: $rc"
+  echo "- Transcript SHA256: $transcript_hash"
+  echo "- Transcript Bytes: $transcript_bytes"
   echo
-  echo "---"
-  echo
+  echo "<<<REVIEW_TRANSCRIPT_BEGIN>>>"
 } > "$outfile"
-
-set +e
-"${cmd[@]}" 2>&1 | tee -a "$outfile"
-rc="${PIPESTATUS[0]}"
-set -e
+cat "$transcript_tmp" >> "$outfile"
+echo "<<<REVIEW_TRANSCRIPT_END>>>" >> "$outfile"
 
 echo "Saved Kimi review: $outfile" >&2
 exit "$rc"

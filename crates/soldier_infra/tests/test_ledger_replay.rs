@@ -452,11 +452,7 @@ fn test_valid_transition_created_to_sent() {
     let r = intent("hash1", "g1", 0, TlsState::Created);
     ledger.append(r, &mut m).unwrap();
 
-    assert!(
-        ledger
-            .update_state("hash1", TlsState::Sent, &mut m)
-            .is_ok()
-    );
+    assert!(ledger.update_state("hash1", TlsState::Sent, &mut m).is_ok());
     assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
 }
 

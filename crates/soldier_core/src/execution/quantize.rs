@@ -92,7 +92,9 @@ fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> Result<i64, Qua
     }
     // Guard: i64 overflow before cast
     if ratio.abs() > (i64::MAX as f64) {
-        return Err(QuantizeError::InvalidInput { field: "ratio_overflow" });
+        return Err(QuantizeError::InvalidInput {
+            field: "ratio_overflow",
+        });
     }
     let mut steps = if round_up {
         ratio.ceil() as i64
