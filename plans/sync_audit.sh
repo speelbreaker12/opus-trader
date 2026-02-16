@@ -13,13 +13,17 @@
 set -euo pipefail
 
 VERSION="1.0.0"
+CACHE_SCHEMA_VERSION=1  # Increment when cache structure changes
 
 # Defaults
 MODE="${SYNC_AUDIT_MODE:-quick}"
 OUTPUT_JSON=0
 NO_CACHE=0
+SHOW_STATUS=0
+SIMPLE_MODE=0
 PRD_FILE="${PRD_FILE:-plans/prd.json}"
 ARTIFACTS_BASE="${SYNC_AUDIT_ARTIFACTS_DIR:-}"
+ARTIFACTS_RETENTION_DAYS="${ARTIFACTS_RETENTION_DAYS:-30}"  # Cleanup runs older than N days
 
 # Canonical paths (no overrides allowed - prevents split-brain validation)
 CONTRACT_FILE="specs/CONTRACT.md"
@@ -45,15 +49,18 @@ Options:
   --mode quick     Schema + refs + CSP trace (default, <30s)
   --mode full      All checks including PRD audit validation
   --mode smoke     Schema + refs only (fastest, <5s)
+  --simple         Run gates without cache/artifacts (30-line equivalent)
   --json           Output JSON report to stdout
   --no-cache       Force re-run all gates (ignore cache)
+  --status         Show cache status and last run info
   --version        Print version and exit
   -h, --help       Show this help
 
 Environment:
-  SYNC_AUDIT_MODE=quick|full|smoke      (default: quick)
-  PRD_FILE=plans/prd.json               (passed to gates)
-  SYNC_AUDIT_ARTIFACTS_DIR=...          (override artifacts location)
+  SYNC_AUDIT_MODE=quick|full|smoke         (default: quick)
+  PRD_FILE=plans/prd.json                  (passed to gates)
+  SYNC_AUDIT_ARTIFACTS_DIR=...             (override artifacts location)
+  ARTIFACTS_RETENTION_DAYS=30              (cleanup runs older than N days)
 
 Exit codes:
   0  All checks passed
@@ -62,6 +69,13 @@ Exit codes:
   3  Missing PRD file
   4  Invalid PRD JSON
   5  Schema violation
+
+Notes:
+  - Cache keys off input file content (SHA256), not tool versions
+  - Run with --no-cache after Python/jq/system upgrades
+  - Cache is per-working-directory, not per-branch (invalidates on branch switch)
+  - Cache TTL refreshes on each write (continuous use extends lifetime)
+  - For CI/automation, prefer --simple mode (no cache complexity)
 USAGE
 }
 
@@ -80,8 +94,17 @@ while [[ $# -gt 0 ]]; do
       NO_CACHE=1
       shift
       ;;
+    --simple)
+      SIMPLE_MODE=1
+      NO_CACHE=1  # Simple mode implies no cache
+      shift
+      ;;
+    --status)
+      SHOW_STATUS=1
+      shift
+      ;;
     --version)
-      echo "sync_audit.sh version $VERSION"
+      echo "sync_audit.sh version $VERSION (cache schema v$CACHE_SCHEMA_VERSION)"
       exit 0
       ;;
     -h|--help)
@@ -109,6 +132,8 @@ esac
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Convert PRD_FILE to absolute path before changing directories
+# IMPORTANT: This must happen BEFORE "cd $ROOT" to resolve relative paths correctly
+# (M-4: Path resolution timing clarification)
 if [[ -n "$PRD_FILE" && ! "$PRD_FILE" = /* ]]; then
   PRD_FILE="$(cd "$(dirname "$PRD_FILE")" 2>/dev/null && pwd)/$(basename "$PRD_FILE")" || {
     echo "ERROR: Cannot resolve PRD_FILE path: $PRD_FILE" >&2
@@ -137,6 +162,18 @@ if [[ ! -f "$ROOT/plans/lib/sync_audit_utils.sh" ]]; then
 fi
 source "$ROOT/plans/lib/sync_audit_utils.sh"
 
+# Handle --status mode (show cache info and exit)
+if [[ $SHOW_STATUS -eq 1 ]]; then
+  show_cache_status
+  exit 0
+fi
+
+# Handle --simple mode (run gates without cache/artifacts)
+if [[ $SIMPLE_MODE -eq 1 ]]; then
+  run_simple_mode
+  exit $?
+fi
+
 # Setup run ID and artifacts directory
 RUN_ID=$(date -u +"%Y%m%d_%H%M%S")
 if [[ -z "$ARTIFACTS_BASE" ]]; then
@@ -144,6 +181,9 @@ if [[ -z "$ARTIFACTS_BASE" ]]; then
 else
   ARTIFACTS_DIR="$ARTIFACTS_BASE"
 fi
+
+# Cleanup old artifacts (M-7: Unbounded growth mitigation)
+cleanup_old_artifacts "$ROOT/artifacts/sync_audit" "$ARTIFACTS_RETENTION_DAYS"
 
 # Cleanup function - removes temp files on exit
 cleanup_on_exit() {
@@ -205,7 +245,14 @@ check_cache() {
     return 1
   fi
 
-  # Check TTL
+  # Check cache schema version (H-2: Cache schema versioning)
+  local cached_schema_version=$(jq -r '.schema_version // 0' "$CACHE_FILE")
+  if [[ "$cached_schema_version" != "$CACHE_SCHEMA_VERSION" ]]; then
+    echo "WARN: Cache schema version mismatch (expected v$CACHE_SCHEMA_VERSION, got v$cached_schema_version), regenerating" >&2
+    return 1
+  fi
+
+  # Check TTL (M-10: TTL refresh is intentional - cache extends lifetime under continuous use)
   local cached_at=$(jq -r '.cached_at // empty' "$CACHE_FILE")
   if [[ -z "$cached_at" ]]; then
     return 1  # Missing timestamp
@@ -218,6 +265,9 @@ check_cache() {
   fi
 
   # Verify SHA256 fingerprints (invalidate cache if hashing fails)
+  # NOTE (M-3): TOCTOU gap exists between hash validation and gate execution.
+  # This is acceptable - if file is deleted after validation, gate will fail
+  # explicitly with clear "file missing" error rather than silent cache reuse.
   local prd_sha
   local contract_sha
   local plan_sha
@@ -293,8 +343,10 @@ write_cache() {
 
   local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+  # H-2: Cache schema versioning - increment CACHE_SCHEMA_VERSION when structure changes
   cat > "$temp_cache" <<JSON
 {
+  "schema_version": $CACHE_SCHEMA_VERSION,
   "cached_at": "$now",
   "mode": "$MODE",
   "fingerprints": {
@@ -373,11 +425,12 @@ run_or_cache_gate() {
   local cmd=("$@")
 
   # Check if using cached results
+  # NOTE (M-8): Cache hit rate monitoring - TODO: add telemetry if hit rate <50%
   if [[ $use_cache -eq 1 ]]; then
     local cached_rc=$(jq -r ".gate_results.$cache_key // 999" "$CACHE_FILE")
     echo "$cached_rc" > "$ARTIFACTS_DIR/${gate_name}.rc"
     echo "0" > "$ARTIFACTS_DIR/${gate_name}.time"
-    echo "(cached)" > "$ARTIFACTS_DIR/${gate_name}.log"
+    echo "(cached from $(jq -r '.cached_at' "$CACHE_FILE"))" > "$ARTIFACTS_DIR/${gate_name}.log"
     return 0
   fi
 
@@ -444,6 +497,10 @@ main() {
   # Phase 3: Content Validation (only in full mode)
 
   # Gate 4: prd_audit_check (skip in smoke/quick modes)
+  # H-1: Interface verified - prd_audit_check.sh expects:
+  #   - AUDIT_FILE (default: plans/prd_audit.json)
+  #   - AUDIT_STDOUT (default: .context/prd_auditor_stdout.log)
+  #   - AUDIT_META_FILE (optional: .context/prd_audit_meta.json)
   if [[ "$MODE" != "full" ]]; then
     echo "999" > "$ARTIFACTS_DIR/prd_audit_check.rc"
     echo "0" > "$ARTIFACTS_DIR/prd_audit_check.time"

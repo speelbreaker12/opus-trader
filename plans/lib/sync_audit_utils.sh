@@ -347,3 +347,162 @@ alignment_status() {
     echo "$fail_msg"
   fi
 }
+
+# M-11: Show cache status command
+show_cache_status() {
+  local cache_file="${CACHE_FILE:-.context/sync_audit_cache.json}"
+
+  echo "=== Sync Audit Cache Status ==="
+  echo ""
+
+  if [[ ! -f "$cache_file" ]]; then
+    echo "Status: No cache exists"
+    echo "Next run: Will execute all gates fresh"
+    return 0
+  fi
+
+  if ! jq -e . "$cache_file" >/dev/null 2>&1; then
+    echo "Status: Cache corrupted (invalid JSON)"
+    echo "Next run: Will regenerate cache"
+    return 0
+  fi
+
+  local schema_version=$(jq -r '.schema_version // 0' "$cache_file")
+  local cached_at=$(jq -r '.cached_at // "unknown"' "$cache_file")
+  local cache_mode=$(jq -r '.mode // "unknown"' "$cache_file")
+  local cache_age_days=$(get_cache_age_days "$cached_at")
+
+  echo "Status: Cache exists"
+  echo "Schema version: v$schema_version (current: v${CACHE_SCHEMA_VERSION:-1})"
+  echo "Created: $cached_at ($cache_age_days days ago)"
+  echo "Mode: $cache_mode"
+  echo "TTL: ${CACHE_TTL_DAYS:-7} days"
+  echo ""
+
+  # Check validity
+  local valid=1
+  local reasons=()
+
+  if [[ "$schema_version" != "${CACHE_SCHEMA_VERSION:-1}" ]]; then
+    valid=0
+    reasons+=("Schema version mismatch")
+  fi
+
+  if [[ $cache_age_days -gt ${CACHE_TTL_DAYS:-7} ]]; then
+    valid=0
+    reasons+=("Expired (age > TTL)")
+  fi
+
+  # Check fingerprints
+  local prd_file="${PRD_FILE:-plans/prd.json}"
+  local contract_file="${CONTRACT_FILE:-specs/CONTRACT.md}"
+  local plan_file="${PLAN_FILE:-specs/IMPLEMENTATION_PLAN.md}"
+
+  if [[ -f "$prd_file" ]]; then
+    local current_prd_sha=$(hash_file "$prd_file" 2>/dev/null || echo "ERROR")
+    local cached_prd_sha=$(jq -r '.fingerprints.prd_file // "missing"' "$cache_file")
+    if [[ "$current_prd_sha" != "$cached_prd_sha" ]]; then
+      valid=0
+      reasons+=("PRD file changed")
+    fi
+  fi
+
+  if [[ -f "$contract_file" ]]; then
+    local current_contract_sha=$(hash_file "$contract_file" 2>/dev/null || echo "ERROR")
+    local cached_contract_sha=$(jq -r '.fingerprints.contract_file // "missing"' "$cache_file")
+    if [[ "$current_contract_sha" != "$cached_contract_sha" ]]; then
+      valid=0
+      reasons+=("Contract file changed")
+    fi
+  fi
+
+  if [[ $valid -eq 1 ]]; then
+    echo "Validity: ✓ Valid (next run will use cached results)"
+  else
+    echo "Validity: ✗ Invalid"
+    for reason in "${reasons[@]}"; do
+      echo "  - $reason"
+    done
+    echo "Next run: Will execute all gates fresh"
+  fi
+
+  echo ""
+  echo "Cached gate results:"
+  jq -r '.gate_results | to_entries[] | "  \(.key): exit \(.value)"' "$cache_file" 2>/dev/null || echo "  (none)"
+
+  echo ""
+  echo "Notes:"
+  echo "  - Cache is per-working-directory, not per-git-branch"
+  echo "  - Cache does NOT track tool versions (Python, jq, system packages)"
+  echo "  - Run with --no-cache to force fresh execution"
+  echo "  - Run with --no-cache after environment changes (upgrades, installs)"
+}
+
+# M-14: Simple mode - run gates without cache/artifacts (30-line equivalent)
+run_simple_mode() {
+  echo "=== Running sync audit in simple mode (no cache/artifacts) ===" >&2
+
+  local prd_file="${PRD_FILE:-plans/prd.json}"
+  local contract_file="${CONTRACT_FILE:-specs/CONTRACT.md}"
+  local plan_file
+  if [[ -f "specs/IMPLEMENTATION_PLAN.md" ]]; then
+    plan_file="specs/IMPLEMENTATION_PLAN.md"
+  else
+    plan_file="IMPLEMENTATION_PLAN.md"
+  fi
+  local trace_file="${TRACE_FILE:-specs/TRACE.yaml}"
+
+  # Phase 1: Schema & Structure
+  ./plans/prd_schema_check.sh "$prd_file" || return $?
+  ./plans/prd_ref_check.sh "$prd_file" || return $?
+
+  # Phase 2: Contract Traceability (skip in smoke mode)
+  if [[ "${MODE:-quick}" != "smoke" ]]; then
+    python3 ./scripts/check_csp_trace.py --contract "$contract_file" --trace "$trace_file" --json || return $?
+  fi
+
+  # Phase 3: Content Validation (only in full mode)
+  if [[ "${MODE:-quick}" == "full" ]]; then
+    if [[ ! -f "plans/prd_audit.json" || ! -f ".context/prd_auditor_stdout.log" ]]; then
+      echo "ERROR: PRD audit artifacts missing. Run ./plans/run_prd_auditor.sh first." >&2
+      return 2
+    fi
+    ./plans/prd_audit_check.sh || return $?
+  fi
+
+  echo "=== All checks passed ===" >&2
+  return 0
+}
+
+# M-7: Cleanup old artifacts (retention policy)
+cleanup_old_artifacts() {
+  local artifacts_base="$1"
+  local retention_days="$2"
+
+  # Safety checks
+  if [[ -z "$artifacts_base" || ! -d "$artifacts_base" ]]; then
+    return 0  # Nothing to clean
+  fi
+
+  if [[ ! "$retention_days" =~ ^[0-9]+$ ]]; then
+    echo "WARN: Invalid retention days: $retention_days, skipping cleanup" >&2
+    return 0
+  fi
+
+  # Find and remove directories older than retention period
+  # Use mtime (modification time) for age check
+  local count_before=$(find "$artifacts_base" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || echo 0)
+
+  # Portable find command (works on macOS and Linux)
+  # -mtime +N means "modified more than N days ago"
+  if command -v find >/dev/null 2>&1; then
+    find "$artifacts_base" -mindepth 1 -maxdepth 1 -type d -mtime "+$retention_days" -exec rm -rf {} + 2>/dev/null || true
+  fi
+
+  local count_after=$(find "$artifacts_base" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l || echo 0)
+  local count_removed=$((count_before - count_after))
+
+  if [[ $count_removed -gt 0 ]]; then
+    echo "INFO: Cleaned up $count_removed artifact directories older than $retention_days days" >&2
+  fi
+}
