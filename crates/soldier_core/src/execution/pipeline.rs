@@ -5,7 +5,10 @@
 //! finally the chokepoint gate-order evaluator.
 
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState, evaluate_fee_staleness};
-use crate::venue::{BotFeatureFlags, VenueCapabilities, evaluate_capabilities};
+use crate::venue::{
+    BotFeatureFlags, ExpiryGuardInput, ExpiryGuardResult, VenueCapabilities,
+    evaluate_capabilities, evaluate_expiry_guard,
+};
 
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, LiquidityGateInput,
@@ -38,6 +41,7 @@ pub struct IntentPipelineInput<'a> {
     pub dispatch_consistency_passed: bool,
     pub fee_snapshot: FeeCacheSnapshot,
     pub fee_config: FeeStalenessConfig,
+    pub expiry_guard: Option<ExpiryGuardInput>,
     pub liquidity: Option<LiquidityGateInput>,
     pub net_edge: Option<NetEdgeInput>,
     pub pricer: Option<PricerInput>,
@@ -97,6 +101,8 @@ pub fn evaluate_intent_pipeline(
     let mut quantize_reject_code = None;
     let mut fee_cache_passed = true;
     let mut fee_cache_reject_code = None;
+    let mut expiry_guard_passed = true;
+    let mut expiry_guard_reject_code = None;
 
     if !dispatch_auth_short_circuit {
         let preflight_result = preflight_intent(&preflight_input, &mut metrics.preflight);
@@ -152,6 +158,25 @@ pub fn evaluate_intent_pipeline(
                 fee_cache_reject_code = Some(RejectReasonCode::FeeCacheStale);
             }
         }
+
+        // Expiry guard: evaluate after fee cache check
+        if preflight_passed && quantize_passed && input.dispatch_consistency_passed && fee_cache_passed
+        {
+            if let Some(ref expiry_input) = input.expiry_guard {
+                match evaluate_expiry_guard(expiry_input) {
+                    ExpiryGuardResult::Allowed => {}
+                    ExpiryGuardResult::Rejected(_) => {
+                        expiry_guard_passed = false;
+                        expiry_guard_reject_code =
+                            Some(RejectReasonCode::InstrumentExpiredOrDelisted);
+                    }
+                }
+            } else if input.intent_class == ChokeIntentClass::Open {
+                // FAIL-CLOSED: missing expiry data blocks OPEN intents
+                expiry_guard_passed = false;
+                expiry_guard_reject_code = Some(RejectReasonCode::InstrumentExpiredOrDelisted);
+            }
+        }
     }
 
     let mut liquidity_gate_passed = true;
@@ -166,7 +191,8 @@ pub fn evaluate_intent_pipeline(
         && preflight_passed
         && quantize_passed
         && input.dispatch_consistency_passed
-        && fee_cache_passed;
+        && fee_cache_passed
+        && expiry_guard_passed;
 
     if open_path_active {
         liquidity_gate_passed = match input.liquidity.as_ref() {
@@ -261,6 +287,7 @@ pub fn evaluate_intent_pipeline(
         quantize_passed,
         input.dispatch_consistency_passed,
         fee_cache_passed,
+        expiry_guard_passed,
         liquidity_gate_passed,
         net_edge_passed,
         pricer_passed,
@@ -273,6 +300,7 @@ pub fn evaluate_intent_pipeline(
         preflight: preflight_reject_code,
         quantize: quantize_reject_code,
         fee_cache: fee_cache_reject_code,
+        expiry_guard: expiry_guard_reject_code,
         liquidity_gate: liquidity_gate_reject_code,
         net_edge_gate: net_edge_reject_code,
         recorded_before_dispatch: if input.wal_recorded {

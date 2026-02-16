@@ -27,6 +27,7 @@ pub struct OpenRuntimeInput {
     pub quantize_passed: bool,
     pub dispatch_consistency_passed: bool,
     pub fee_cache_passed: bool,
+    pub expiry_guard_passed: bool,
     pub wal_recorded: bool,
     pub current_delta: f64,
     pub delta_impact_est: f64,
@@ -91,6 +92,7 @@ pub fn build_open_order_intent_runtime(
         input.quantize_passed,
         input.dispatch_consistency_passed,
         input.fee_cache_passed,
+        input.expiry_guard_passed,
         true,
         true,
         true,
@@ -108,7 +110,8 @@ pub fn build_open_order_intent_runtime(
         && input.preflight_passed
         && input.quantize_passed
         && input.dispatch_consistency_passed
-        && input.fee_cache_passed;
+        && input.fee_cache_passed
+        && input.expiry_guard_passed;
 
     if pre_dispatch_gates_ready {
         match pending_book.reserve(

@@ -7,7 +7,9 @@ use soldier_core::execution::{
     QuantizeConstraints, QuantizePipelineInput, Side,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
-use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
+use soldier_core::venue::{
+    BotFeatureFlags, ExpiryGuardInput, InstrumentKind, LifecycleIntent, VenueCapabilities,
+};
 
 /// Test helper: returns GateResults with ALL gates passing.
 ///
@@ -20,6 +22,7 @@ pub fn gate_results_all_passing() -> GateResults {
         quantize_passed: true,
         dispatch_consistency_passed: true,
         fee_cache_passed: true,
+        expiry_guard_passed: true,
         liquidity_gate_passed: true,
         net_edge_passed: true,
         pricer_passed: true,
@@ -78,6 +81,12 @@ pub fn base_open_input<'a>() -> IntentPipelineInput<'a> {
             now_ms: 1_010_000,
         },
         fee_config: FeeStalenessConfig::default(),
+        expiry_guard: Some(ExpiryGuardInput {
+            now_ms: 1_000_000,
+            expiration_timestamp_ms: Some(2_000_000),
+            expiry_delist_buffer_s: 60,
+            intent: LifecycleIntent::Open,
+        }),
         liquidity: Some(LiquidityGateInput {
             order_qty: 1.0,
             is_buy: true,

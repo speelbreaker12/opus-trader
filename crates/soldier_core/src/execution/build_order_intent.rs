@@ -3,15 +3,16 @@
 //! CONTRACT.md CSP.5.2: All dispatch must route through `build_order_intent()`.
 //!
 //! **Gate ordering (deterministic):**
-//! 1. Dispatch authorization (RiskState check)
-//! 2. Preflight (order type validation)
-//! 3. Quantize
-//! 4. Dispatch consistency (AT-920 contracts/amount + quantity clamp validation)
-//! 5. Fee cache staleness check
-//! 6. Liquidity Gate (book-walk slippage)
-//! 7. Net Edge Gate (fee + slippage vs min_edge)
-//! 8. Pricer (IOC limit price clamping)
-//! 9. RecordedBeforeDispatch (WAL append)
+//!  1. Dispatch authorization (RiskState check)
+//!  2. Preflight (order type validation)
+//!  3. Quantize
+//!  4. Dispatch consistency (AT-920 contracts/amount + quantity clamp validation)
+//!  5. Fee cache staleness check
+//!  6. Expiry Guard (instrument expiry/delist OPEN block)
+//!  7. Liquidity Gate (book-walk slippage) [OPEN only]
+//!  8. Net Edge Gate (fee + slippage vs min_edge) [OPEN only]
+//!  9. Pricer (IOC limit price clamping) [OPEN only]
+//! 10. RecordedBeforeDispatch (WAL append)
 //!
 //! Only after all gates pass is an `OrderIntent` produced.
 
@@ -30,6 +31,7 @@ const REJECT_REASON_FEE_CACHE_STALE: &str = "fee cache stale";
 const REJECT_REASON_LIQUIDITY_GATE: &str = "liquidity gate rejected";
 const REJECT_REASON_NET_EDGE: &str = "net edge too low";
 const REJECT_REASON_PRICER: &str = "pricer rejected";
+const REJECT_REASON_EXPIRY_GUARD: &str = "instrument expired or near expiry";
 const REJECT_REASON_WAL: &str = "WAL append failed";
 
 // --- Intent class --------------------------------------------------------
@@ -57,6 +59,7 @@ pub enum GateStep {
     Quantize,
     DispatchConsistency,
     FeeCacheCheck,
+    ExpiryGuard,
     LiquidityGate,
     NetEdgeGate,
     Pricer,
@@ -293,9 +296,22 @@ pub fn build_order_intent(
         );
     }
 
-    // Gates 6-8 only for OPEN intents.
+    // Gate 6: Expiry Guard
+    trace.push(GateStep::ExpiryGuard);
+    if !gate_results.expiry_guard_passed {
+        return finish_rejected(
+            metrics,
+            ChokeRejectReason::GateRejected {
+                gate: GateStep::ExpiryGuard,
+                reason: REJECT_REASON_EXPIRY_GUARD.to_string(),
+            },
+            trace,
+        );
+    }
+
+    // Gates 7-9 only for OPEN intents.
     if intent_class == ChokeIntentClass::Open {
-        // Gate 6: Liquidity Gate
+        // Gate 7: Liquidity Gate
         trace.push(GateStep::LiquidityGate);
         if !gate_results.liquidity_gate_passed {
             return finish_rejected(
@@ -308,7 +324,7 @@ pub fn build_order_intent(
             );
         }
 
-        // Gate 7: Net Edge Gate
+        // Gate 8: Net Edge Gate
         trace.push(GateStep::NetEdgeGate);
         if !gate_results.net_edge_passed {
             return finish_rejected(
@@ -321,7 +337,7 @@ pub fn build_order_intent(
             );
         }
 
-        // Gate 8: Pricer
+        // Gate 9: Pricer
         trace.push(GateStep::Pricer);
         if !gate_results.pricer_passed {
             return finish_rejected(
@@ -335,7 +351,7 @@ pub fn build_order_intent(
         }
     }
 
-    // Gate 9: RecordedBeforeDispatch
+    // Gate 10: RecordedBeforeDispatch
     trace.push(GateStep::RecordedBeforeDispatch);
     if !gate_results.wal_recorded {
         return finish_rejected(
@@ -381,6 +397,7 @@ pub struct GateResults {
     pub quantize_passed: bool,
     pub dispatch_consistency_passed: bool,
     pub fee_cache_passed: bool,
+    pub expiry_guard_passed: bool,
     pub liquidity_gate_passed: bool,
     pub net_edge_passed: bool,
     pub pricer_passed: bool,
@@ -409,6 +426,7 @@ impl GateResults {
             quantize_passed: pass,
             dispatch_consistency_passed: pass,
             fee_cache_passed: pass,
+            expiry_guard_passed: pass,
             liquidity_gate_passed: pass,
             net_edge_passed: pass,
             pricer_passed: pass,
@@ -429,6 +447,7 @@ pub fn build_gate_results(
     quantize_passed: bool,
     dispatch_consistency_passed: bool,
     fee_cache_passed: bool,
+    expiry_guard_passed: bool,
     liquidity_gate_passed: bool,
     net_edge_passed: bool,
     pricer_passed: bool,
@@ -441,6 +460,7 @@ pub fn build_gate_results(
         quantize_passed,
         dispatch_consistency_passed,
         fee_cache_passed,
+        expiry_guard_passed,
         liquidity_gate_passed,
         net_edge_passed,
         pricer_passed,

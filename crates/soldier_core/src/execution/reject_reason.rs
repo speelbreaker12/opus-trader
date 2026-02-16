@@ -44,6 +44,7 @@ pub struct GateRejectCodes {
     pub preflight: Option<RejectReasonCode>,
     pub quantize: Option<RejectReasonCode>,
     pub fee_cache: Option<RejectReasonCode>,
+    pub expiry_guard: Option<RejectReasonCode>,
     pub liquidity_gate: Option<RejectReasonCode>,
     pub net_edge_gate: Option<RejectReasonCode>,
     pub recorded_before_dispatch: Option<RejectReasonCode>,
@@ -162,6 +163,12 @@ pub fn reject_reason_from_chokepoint(
         } => gate_reject_codes
             .fee_cache
             .unwrap_or(RejectReasonCode::FeeCacheStale),
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::ExpiryGuard,
+            ..
+        } => gate_reject_codes
+            .expiry_guard
+            .unwrap_or(RejectReasonCode::InstrumentExpiredOrDelisted),
         ChokeRejectReason::GateRejected {
             gate: GateStep::LiquidityGate,
             ..

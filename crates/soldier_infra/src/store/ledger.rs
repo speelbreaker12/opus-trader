@@ -139,6 +139,8 @@ pub enum LedgerAppendError {
     WriteFailed { reason: String },
     /// Attempted an illegal TLSM state transition.
     IllegalTransition { from: TlsState, to: TlsState },
+    /// Duplicate intent_hash — CSP-002 idempotency requires rejection.
+    DuplicateIntentHash,
 }
 
 // ─── Replay outcome ─────────────────────────────────────────────────────
@@ -243,9 +245,17 @@ impl WalLedger {
         record: IntentRecord,
         metrics: &mut LedgerMetrics,
     ) -> Result<(), LedgerAppendError> {
-        if self.records.len() >= self.capacity {
+        // Capacity check uses index.len() (unique intents), not records.len()
+        // (total log entries including state-transition appends).
+        if self.index.len() >= self.capacity {
             metrics.record_write_error();
             return Err(LedgerAppendError::QueueFull);
+        }
+
+        // CSP-002: reject duplicate intent_hash
+        if self.index.contains_key(&record.intent_hash) {
+            metrics.record_write_error();
+            return Err(LedgerAppendError::DuplicateIntentHash);
         }
 
         let idx = self.records.len();
@@ -259,9 +269,8 @@ impl WalLedger {
     ///
     /// CONTRACT.md §2.4: "Write every TLSM transition immediately."
     ///
-    /// In a real implementation, this would append a new WAL entry.
-    /// Here we update in-place for simplicity (the append-only log
-    /// would store the transition as a separate entry).
+    /// Appends a new log entry with the updated state (append-only).
+    /// No capacity check — state transitions must never be lost.
     pub fn update_state(
         &mut self,
         intent_hash: &str,
@@ -277,7 +286,13 @@ impl WalLedger {
                     to: new_state,
                 });
             }
-            self.records[idx].tls_state = new_state;
+            // Append-only: clone record with new state, append to log,
+            // update index to point at the latest version.
+            let mut updated = self.records[idx].clone();
+            updated.tls_state = new_state;
+            let new_idx = self.records.len();
+            self.records.push(updated);
+            self.index.insert(intent_hash.to_string(), new_idx);
             metrics.record_append();
             Ok(())
         } else {
@@ -296,15 +311,22 @@ impl WalLedger {
     /// In-flight intents are those in non-terminal states (need reconciliation).
     pub fn replay(&self) -> ReplayOutcome {
         let mut in_flight_hashes = Vec::new();
+        let mut seen = std::collections::HashSet::new();
 
-        for record in &self.records {
-            if !record.tls_state.is_terminal() {
+        // Iterate records in log order; only consider the latest version
+        // of each intent (the one the index points to). This gives
+        // deterministic ordering unlike iterating the HashMap index.
+        for (i, record) in self.records.iter().enumerate() {
+            if self.index.get(&record.intent_hash) == Some(&i)
+                && seen.insert(record.intent_hash.clone())
+                && !record.tls_state.is_terminal()
+            {
                 in_flight_hashes.push(record.intent_hash.clone());
             }
         }
 
         ReplayOutcome {
-            records_replayed: self.records.len(),
+            records_replayed: self.index.len(),
             in_flight_count: in_flight_hashes.len(),
             in_flight_hashes,
         }
@@ -315,8 +337,16 @@ impl WalLedger {
         self.index.get(intent_hash).map(|&idx| &self.records[idx])
     }
 
-    /// Current queue depth.
+    /// Current queue depth (unique intents, not total log entries).
+    ///
+    /// Includes terminal intents (Filled, Cancelled, etc.) — slots are
+    /// never reclaimed. Size capacity for the maximum session lifetime.
     pub fn queue_depth(&self) -> usize {
+        self.index.len()
+    }
+
+    /// Total number of log entries (including state-transition appends).
+    pub fn log_entry_count(&self) -> usize {
         self.records.len()
     }
 
