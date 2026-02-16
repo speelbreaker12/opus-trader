@@ -1,4 +1,9 @@
-//! Risk assessment types.
+//! Risk assessment types and risk gate evaluation functions.
+//!
+//! This module provides the core risk assessment infrastructure for the trading system,
+//! including exposure budgets, fee staleness checks, margin headroom gates, and pending
+//! exposure tracking.
+//!
 //! Module exports are intentionally centralized for deterministic gate wiring.
 
 pub mod exposure_budget;
