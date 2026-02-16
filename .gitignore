@@ -23,3 +23,7 @@ proxy.log
 proxy_bridge.py
 plans/prd.json.bak
 .worktrees/
+
+# Allow agent definitions to be committed
+!.claude/agents/
+!.claude/agents/*.md
