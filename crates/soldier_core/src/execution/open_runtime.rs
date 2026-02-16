@@ -11,7 +11,7 @@ use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
     LiquidityGateInput, LiquidityGateMetrics, LiquidityGateResult, NetEdgeInput, NetEdgeMetrics,
-    NetEdgeResult, PricerInput, PricerMetrics, PricerResult, build_gate_results,
+    NetEdgeResult, PricerInput, PricerMetrics, PricerResult, Tlsm, build_gate_results,
     build_order_intent, compute_limit_price, evaluate_inventory_skew, evaluate_liquidity_gate,
     evaluate_net_edge,
 };
@@ -172,9 +172,9 @@ pub fn build_open_order_intent_runtime(
                     matches!(first_net_edge, NetEdgeResult::Allowed { .. });
 
                 let mut inventory_skew_input = input.inventory_skew_input.clone();
-                if input.current_delta != 0.0 {
-                    inventory_skew_input.current_delta = input.current_delta;
-                }
+                // Always override with the authoritative current_delta from the runtime input,
+                // including when zero (a legitimate flat position, not a sentinel).
+                inventory_skew_input.current_delta = input.current_delta;
                 if let Some(min_edge_usd) = input.net_edge_input.min_edge_usd {
                     inventory_skew_input.min_edge_usd = min_edge_usd;
                 }
@@ -268,11 +268,17 @@ pub fn build_open_order_intent_runtime(
     if matches!(choke_result, ChokeResult::Rejected { .. })
         && let Some(reservation_id) = pending_reservation_id.take()
     {
-        let _ = pending_book.settle(
+        let released = pending_book.settle(
             reservation_id,
             PendingExposureTerminalOutcome::Rejected,
             &mut runtime_metrics.pending_exposure,
         );
+        if !released {
+            tracing::error!(
+                reservation_id,
+                "pre-dispatch reservation settle failed — TLSM/book desync"
+            );
+        }
     }
 
     OpenRuntimeOutput {
@@ -282,5 +288,50 @@ pub fn build_open_order_intent_runtime(
         mode_hint,
         effective_risk_state,
         adjusted_min_edge_usd,
+    }
+}
+
+/// Complete lifecycle: settle pending exposure on TLSM terminal state (S6-008).
+///
+/// # Safety / concurrency
+///
+/// This function requires `&mut Tlsm` and `&mut PendingExposureBook`, which
+/// Rust's borrow checker guarantees are exclusive. Callers sharing these across
+/// threads must use `Mutex` or equivalent synchronisation.
+///
+/// Settlement is intentionally **one-shot**: `take_pending_reservation_on_terminal()`
+/// consumes the reservation ID, so repeated calls after the first terminal event
+/// are safe no-ops. This prevents double-settlement on duplicate WS events.
+pub fn settle_pending_on_tlsm_terminal(
+    tlsm: &mut Tlsm,
+    pending_book: &mut PendingExposureBook,
+    metrics: &mut PendingExposureMetrics,
+) {
+    if let Some(reservation_id) = tlsm.take_pending_reservation_on_terminal() {
+        let outcome = match tlsm.state() {
+            crate::execution::TlsmState::Filled => PendingExposureTerminalOutcome::Filled,
+            crate::execution::TlsmState::Cancelled | crate::execution::TlsmState::Failed => {
+                PendingExposureTerminalOutcome::Rejected
+            }
+            // Defensive: take_pending_reservation_on_terminal() only returns Some on terminal
+            // states. If this arm fires, a TLSM contract violation occurred. Treat as failure
+            // (fail-closed) rather than panicking in production.
+            _ => {
+                tracing::error!(
+                    state = ?tlsm.state(),
+                    reservation_id,
+                    "take_pending_reservation_on_terminal returned Some for non-terminal state"
+                );
+                PendingExposureTerminalOutcome::Rejected
+            }
+        };
+        let released = pending_book.settle(reservation_id, outcome, metrics);
+        if !released {
+            tracing::error!(
+                reservation_id,
+                ?outcome,
+                "pending exposure settlement failed — reservation not found in book (TLSM/book desync)"
+            );
+        }
     }
 }

@@ -150,3 +150,122 @@ fn test_registry_contains_contract_minimum_set() {
         );
     }
 }
+
+/// Verify every enum variant is in REGISTRY and vice versa.
+///
+/// NOTE: If you add a new `RejectReasonCode` variant, add it here too.
+/// The size assertion at the end catches missing entries.
+#[test]
+fn test_registry_contains_all_enum_variants() {
+    let all_variants = [
+        RejectReasonCode::TooSmallAfterQuantization,
+        RejectReasonCode::InstrumentMetadataMissing,
+        RejectReasonCode::ChurnBreakerActive,
+        RejectReasonCode::LiquidityGateNoL2,
+        RejectReasonCode::EmergencyCloseNoPrice,
+        RejectReasonCode::ExpectedSlippageTooHigh,
+        RejectReasonCode::InsufficientDepthWithinBudget,
+        RejectReasonCode::FeeCacheStale,
+        RejectReasonCode::RecordedBeforeDispatchFailed,
+        RejectReasonCode::NetEdgeTooLow,
+        RejectReasonCode::NetEdgeInputMissing,
+        RejectReasonCode::InventorySkew,
+        RejectReasonCode::InventorySkewDeltaLimitMissing,
+        RejectReasonCode::PendingExposureBudgetExceeded,
+        RejectReasonCode::GlobalExposureBudgetExceeded,
+        RejectReasonCode::ContractsAmountMismatch,
+        RejectReasonCode::MarginHeadroomRejectOpens,
+        RejectReasonCode::OrderTypeMarketForbidden,
+        RejectReasonCode::OrderTypeStopForbidden,
+        RejectReasonCode::LinkedOrderTypeForbidden,
+        RejectReasonCode::PostOnlyWouldCross,
+        RejectReasonCode::RiskIncreasingCancelReplaceForbidden,
+        RejectReasonCode::RateLimitBrownout,
+        RejectReasonCode::InstrumentExpiredOrDelisted,
+        RejectReasonCode::FeedbackLoopGuardActive,
+        RejectReasonCode::LabelTooLong,
+    ];
+
+    let registry = reject_reason_registry();
+
+    for variant in &all_variants {
+        assert!(
+            registry.contains(variant),
+            "REGISTRY missing enum variant: {:?}",
+            variant
+        );
+    }
+
+    assert_eq!(
+        registry.len(),
+        all_variants.len(),
+        "REGISTRY size mismatch: registry has {} entries but enum has {} variants",
+        registry.len(),
+        all_variants.len()
+    );
+}
+
+#[test]
+fn test_reject_reason_serde_round_trip() {
+    let code = RejectReasonCode::NetEdgeTooLow;
+    let json = serde_json::to_string(&code).expect("serialization failed");
+    assert_eq!(json, r#""NET_EDGE_TOO_LOW""#);
+
+    let deserialized: RejectReasonCode =
+        serde_json::from_str(&json).expect("deserialization failed");
+    assert_eq!(deserialized, code);
+
+    let code2 = RejectReasonCode::InsufficientDepthWithinBudget;
+    let json2 = serde_json::to_string(&code2).expect("serialization failed");
+    assert_eq!(json2, r#""INSUFFICIENT_DEPTH_WITHIN_BUDGET""#);
+    let deserialized2: RejectReasonCode =
+        serde_json::from_str(&json2).expect("deserialization failed");
+    assert_eq!(deserialized2, code2);
+}
+
+#[test]
+fn test_as_str_matches_serde_output_for_all_variants() {
+    let all_variants = [
+        RejectReasonCode::TooSmallAfterQuantization,
+        RejectReasonCode::InstrumentMetadataMissing,
+        RejectReasonCode::ChurnBreakerActive,
+        RejectReasonCode::LiquidityGateNoL2,
+        RejectReasonCode::EmergencyCloseNoPrice,
+        RejectReasonCode::ExpectedSlippageTooHigh,
+        RejectReasonCode::InsufficientDepthWithinBudget,
+        RejectReasonCode::FeeCacheStale,
+        RejectReasonCode::RecordedBeforeDispatchFailed,
+        RejectReasonCode::NetEdgeTooLow,
+        RejectReasonCode::NetEdgeInputMissing,
+        RejectReasonCode::InventorySkew,
+        RejectReasonCode::InventorySkewDeltaLimitMissing,
+        RejectReasonCode::PendingExposureBudgetExceeded,
+        RejectReasonCode::GlobalExposureBudgetExceeded,
+        RejectReasonCode::ContractsAmountMismatch,
+        RejectReasonCode::MarginHeadroomRejectOpens,
+        RejectReasonCode::OrderTypeMarketForbidden,
+        RejectReasonCode::OrderTypeStopForbidden,
+        RejectReasonCode::LinkedOrderTypeForbidden,
+        RejectReasonCode::PostOnlyWouldCross,
+        RejectReasonCode::RiskIncreasingCancelReplaceForbidden,
+        RejectReasonCode::RateLimitBrownout,
+        RejectReasonCode::InstrumentExpiredOrDelisted,
+        RejectReasonCode::FeedbackLoopGuardActive,
+        RejectReasonCode::LabelTooLong,
+    ];
+
+    for code in &all_variants {
+        let as_str = code.as_str();
+        assert!(!as_str.is_empty(), "as_str() returned empty for {:?}", code);
+
+        let json = serde_json::to_string(code)
+            .unwrap_or_else(|e| panic!("serde serialization failed for {:?}: {}", code, e));
+        let deserialized: RejectReasonCode = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("serde deserialization failed for {:?}: {}", code, e));
+        assert_eq!(
+            *code, deserialized,
+            "serde round-trip mismatch for {:?}",
+            code
+        );
+    }
+}

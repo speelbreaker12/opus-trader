@@ -3,7 +3,8 @@
 use super::build_order_intent::{ChokeRejectReason, GateStep};
 
 /// Contract token for pre-dispatch rejection causes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RejectReasonCode {
     TooSmallAfterQuantization,
     InstrumentMetadataMissing,
@@ -50,6 +51,12 @@ pub struct GateRejectCodes {
 }
 
 impl RejectReasonCode {
+    /// PascalCase variant name for log messages and registry lookups.
+    ///
+    /// NOTE: serde serializes as SCREAMING_SNAKE_CASE (`NET_EDGE_TOO_LOW`), while
+    /// `as_str()` returns PascalCase (`NetEdgeTooLow`). These are intentionally
+    /// different formats for different audiences. `as_str()` is used only in tests
+    /// and internal diagnostics; serde is the sole wire-format serialization path.
     pub fn as_str(self) -> &'static str {
         match self {
             RejectReasonCode::TooSmallAfterQuantization => "TooSmallAfterQuantization",
@@ -122,6 +129,11 @@ pub fn reject_reason_registry_contains(code: RejectReasonCode) -> bool {
 }
 
 /// Map chokepoint rejection output to a contract registry token.
+///
+/// Fallback codes (`.unwrap_or(...)`) are safety nets for direct callers that
+/// bypass `evaluate_intent_pipeline`. The production pipeline always populates
+/// `GateRejectCodes` from typed gate results, making the fallbacks dead code
+/// in the normal execution path.
 pub fn reject_reason_from_chokepoint(
     reason: &ChokeRejectReason,
     gate_reject_codes: &GateRejectCodes,
@@ -167,7 +179,7 @@ pub fn reject_reason_from_chokepoint(
             ..
         } => gate_reject_codes
             .pricer
-            .unwrap_or(RejectReasonCode::NetEdgeTooLow),
+            .unwrap_or(RejectReasonCode::EmergencyCloseNoPrice),
         ChokeRejectReason::GateRejected {
             gate: GateStep::RecordedBeforeDispatch,
             ..

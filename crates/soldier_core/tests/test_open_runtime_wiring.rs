@@ -311,3 +311,132 @@ fn test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first
         other => panic!("expected risk-state rejection, got {other:?}"),
     }
 }
+
+/// Helper: Set up TLSM settlement test with pending exposure reservation.
+fn setup_tlsm_settlement_test() -> (
+    soldier_core::execution::Tlsm,
+    PendingExposureBook,
+    soldier_core::risk::PendingExposureMetrics,
+) {
+    use soldier_core::execution::Tlsm;
+    use soldier_core::risk::PendingExposureMetrics;
+
+    let input = base_open_input();
+    let mut pending_book = PendingExposureBook::new(Some(100.0));
+    let mut choke_metrics = ChokeMetrics::new();
+    let mut runtime_metrics = OpenRuntimeMetrics::default();
+
+    let out = build_open_order_intent_runtime(
+        &input,
+        &mut pending_book,
+        &mut choke_metrics,
+        &mut runtime_metrics,
+    );
+
+    assert!(matches!(out.choke_result, ChokeResult::Approved { .. }));
+    let reservation_id = out
+        .pending_reservation_id
+        .expect("approved order should have reservation");
+
+    assert_eq!(pending_book.active_reservations(), 1);
+    assert!(pending_book.pending_total() > 0.0);
+
+    let tlsm = Tlsm::with_pending_reservation(reservation_id);
+    let pending_metrics = PendingExposureMetrics::new();
+
+    (tlsm, pending_book, pending_metrics)
+}
+
+#[test]
+fn test_tlsm_settles_pending_exposure_on_filled() {
+    use soldier_core::execution::{TlsmEvent, settle_pending_on_tlsm_terminal};
+
+    let (mut tlsm, mut pending_book, mut pending_metrics) = setup_tlsm_settlement_test();
+
+    tlsm.apply(TlsmEvent::Sent);
+    tlsm.apply(TlsmEvent::Acked);
+    tlsm.apply(TlsmEvent::Filled);
+
+    assert_eq!(pending_book.active_reservations(), 1);
+
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+
+    assert_eq!(pending_book.active_reservations(), 0);
+    assert!((pending_book.pending_total() - 0.0).abs() < 1e-9);
+    assert_eq!(pending_metrics.release_total(), 1);
+}
+
+#[test]
+fn test_tlsm_settles_pending_exposure_on_cancelled() {
+    use soldier_core::execution::{TlsmEvent, settle_pending_on_tlsm_terminal};
+
+    let (mut tlsm, mut pending_book, mut pending_metrics) = setup_tlsm_settlement_test();
+
+    tlsm.apply(TlsmEvent::Sent);
+    tlsm.apply(TlsmEvent::Cancelled);
+
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+
+    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_metrics.release_total(), 1);
+}
+
+#[test]
+fn test_tlsm_settles_pending_exposure_on_failed() {
+    use soldier_core::execution::{TlsmEvent, settle_pending_on_tlsm_terminal};
+
+    let (mut tlsm, mut pending_book, mut pending_metrics) = setup_tlsm_settlement_test();
+
+    tlsm.apply(TlsmEvent::Sent);
+    tlsm.apply(TlsmEvent::Failed);
+
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+
+    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_metrics.release_total(), 1);
+}
+
+#[test]
+fn test_tlsm_settlement_noop_on_non_terminal_state() {
+    use soldier_core::execution::{TlsmEvent, settle_pending_on_tlsm_terminal};
+
+    let (mut tlsm, mut pending_book, mut pending_metrics) = setup_tlsm_settlement_test();
+
+    tlsm.apply(TlsmEvent::Sent);
+    tlsm.apply(TlsmEvent::Acked);
+
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+
+    assert_eq!(pending_book.active_reservations(), 1);
+    assert_eq!(pending_metrics.release_total(), 0);
+
+    tlsm.apply(TlsmEvent::Filled);
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+
+    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_metrics.release_total(), 1);
+}
+
+#[test]
+fn test_tlsm_settlement_is_idempotent_on_duplicate_terminal_events() {
+    use soldier_core::execution::{TlsmEvent, settle_pending_on_tlsm_terminal};
+
+    let (mut tlsm, mut pending_book, mut pending_metrics) = setup_tlsm_settlement_test();
+
+    tlsm.apply(TlsmEvent::Sent);
+    tlsm.apply(TlsmEvent::Cancelled);
+
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_metrics.release_total(), 1);
+
+    let result = tlsm.apply(TlsmEvent::Filled);
+    assert!(matches!(
+        result,
+        soldier_core::execution::TransitionResult::Ignored { .. }
+    ));
+
+    settle_pending_on_tlsm_terminal(&mut tlsm, &mut pending_book, &mut pending_metrics);
+    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_metrics.release_total(), 1);
+}

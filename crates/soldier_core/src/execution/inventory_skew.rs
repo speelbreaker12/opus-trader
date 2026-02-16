@@ -94,6 +94,8 @@ impl InventorySkewMetrics {
         self.reject_total += 1;
     }
 
+    /// Record a delta-limit-missing rejection.
+    /// Increments both `reject_total` (superset) and `reject_delta_limit_missing` (subset).
     fn record_reject_delta_limit_missing(&mut self) {
         self.reject_total += 1;
         self.reject_delta_limit_missing += 1;
@@ -104,11 +106,22 @@ impl InventorySkewMetrics {
     }
 }
 
+/// Clamp inventory bias to [-1.0, 1.0].
+///
+/// This is intentional normalization, NOT a hard limit. When `combined_delta`
+/// exceeds `delta_limit`, the bias saturates at ±1.0 (maximum penalty) but
+/// does not reject the order outright. Hard position limits are enforced by
+/// separate gates (pending exposure budget S6-008, global exposure budget S6-009).
 fn clamp_bias(v: f64) -> f64 {
     v.clamp(-1.0, 1.0)
 }
 
 /// Evaluate inventory skew adjustments and eligibility.
+///
+/// This is a pure function — it operates on the snapshot values provided by the
+/// caller. Freshness of `current_delta` and `pending_delta` is the caller's
+/// responsibility; the runtime wiring (`build_open_order_intent_runtime`) reads
+/// these from the pending exposure book under `&mut` exclusivity.
 ///
 /// Contract mapping:
 /// - AT-043/AT-922: missing `delta_limit` => reject fail-closed
@@ -156,7 +169,6 @@ pub fn evaluate_inventory_skew(
     let inventory_bias = clamp_bias(combined_delta / delta_limit);
     let abs_bias = inventory_bias.abs();
 
-    // Risk-increasing side tightens thresholds; risk-reducing side can loosen them.
     let risk_increasing = match input.side {
         InventorySkewSide::Buy => inventory_bias > 0.0,
         InventorySkewSide::Sell => inventory_bias < 0.0,
@@ -169,8 +181,12 @@ pub fn evaluate_inventory_skew(
     };
 
     let raw_ticks = (abs_bias * f64::from(input.inventory_skew_tick_penalty_max)).ceil();
-    let clamped_ticks = raw_ticks.clamp(0.0, f64::from(u8::MAX));
-    let bias_ticks = clamped_ticks as u8;
+    // SAFETY: abs_bias is clamped to [0.0, 1.0] and tick_penalty_max is u8 (max 255),
+    // so raw_ticks is in [0.0, 255.0] — always fits in u8 without truncation.
+    // Edge case: degenerate delta_limit (e.g., 1e-300) can produce NaN through
+    // clamp_bias → NaN.abs() → (NaN * max).ceil() → NaN. Rust's saturating
+    // float-to-int cast converts NaN to 0u8, yielding zero tick penalty (safe).
+    let bias_ticks = raw_ticks as u8;
     let price_shift = f64::from(bias_ticks) * input.tick_size;
     let adjusted_limit_price = match (input.side, risk_increasing) {
         (InventorySkewSide::Buy, true) => input.limit_price - price_shift,

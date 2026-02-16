@@ -88,6 +88,45 @@ fn test_global_exposure_budget_missing_limit_fails_closed() {
 }
 
 #[test]
+fn test_global_exposure_budget_allowed_returns_portfolio_delta() {
+    let mut metrics = ExposureBudgetMetrics::new();
+    let input = ExposureBudgetInput {
+        current_btc_delta_usd: 40.0,
+        pending_btc_delta_usd: 0.0,
+        current_eth_delta_usd: 30.0,
+        pending_eth_delta_usd: 0.0,
+        current_alts_delta_usd: 0.0,
+        pending_alts_delta_usd: 0.0,
+        candidate_bucket: ExposureBucket::Btc,
+        candidate_delta_usd: 10.0,
+        global_delta_limit_usd: Some(100.0),
+    };
+
+    let out = evaluate_global_exposure_budget(&input, &mut metrics);
+    match out {
+        ExposureBudgetResult::Allowed {
+            portfolio_delta_usd,
+            combined_btc_delta_usd,
+            combined_eth_delta_usd,
+            combined_alts_delta_usd,
+        } => {
+            // combined_btc=50, combined_eth=30, combined_alts=0
+            // variance = 50^2 + 30^2 + 2*0.8*50*30 = 2500 + 900 + 2400 = 5800
+            // sqrt(5800) ≈ 76.16
+            assert!(
+                portfolio_delta_usd > 76.0 && portfolio_delta_usd < 77.0,
+                "expected ~76.16, got {portfolio_delta_usd}"
+            );
+            assert!((combined_btc_delta_usd - 50.0).abs() < 1e-9);
+            assert!((combined_eth_delta_usd - 30.0).abs() < 1e-9);
+            assert!((combined_alts_delta_usd - 0.0).abs() < 1e-9);
+        }
+        other => panic!("expected Allowed with portfolio_delta_usd, got {other:?}"),
+    }
+    assert_eq!(metrics.allowed_total(), 1);
+}
+
+#[test]
 fn test_global_exposure_budget_non_finite_portfolio_fails_closed() {
     let mut metrics = ExposureBudgetMetrics::new();
     let input = ExposureBudgetInput {

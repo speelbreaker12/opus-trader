@@ -6,12 +6,13 @@
 //! - Never panic on out-of-order WS events.
 //! - "Fill-before-Ack" is valid reality: accept fill, log anomaly, reconcile later.
 //! - Every transition is appended to WAL immediately.
+//! - Pending exposure reservations are settled on terminal state (S6-008).
 //!
 //! **Cross-crate sync:** `soldier_infra::store::ledger::TlsState::is_valid_successor()`
 //! maintains a state-level whitelist derived from this module's `apply()` transitions.
 //! When adding new transitions here, update that whitelist to stay in sync.
 //!
-//! AT-230, AT-210.
+//! AT-230, AT-210, AT-225, AT-910.
 
 // ─── States ─────────────────────────────────────────────────────────────
 
@@ -90,6 +91,8 @@ pub struct Tlsm {
     state: TlsmState,
     /// History of transitions for WAL append.
     transitions: Vec<(TlsmEvent, TlsmState, TlsmState)>,
+    /// Pending exposure reservation ID, settled on terminal state.
+    pending_reservation_id: Option<u64>,
 }
 
 impl Tlsm {
@@ -98,6 +101,16 @@ impl Tlsm {
         Self {
             state: TlsmState::Created,
             transitions: Vec::new(),
+            pending_reservation_id: None,
+        }
+    }
+
+    /// Create a new TLSM with a pending exposure reservation (S6-008).
+    pub fn with_pending_reservation(reservation_id: u64) -> Self {
+        Self {
+            state: TlsmState::Created,
+            transitions: Vec::new(),
+            pending_reservation_id: Some(reservation_id),
         }
     }
 
@@ -109,6 +122,16 @@ impl Tlsm {
     /// Number of transitions recorded.
     pub fn transition_count(&self) -> usize {
         self.transitions.len()
+    }
+
+    /// Get and clear the pending reservation ID if reaching terminal state.
+    /// Returns Some(reservation_id) when transitioning to terminal state, None otherwise.
+    pub fn take_pending_reservation_on_terminal(&mut self) -> Option<u64> {
+        if self.state.is_terminal() {
+            self.pending_reservation_id.take()
+        } else {
+            None
+        }
     }
 
     /// Apply an event to the TLSM.

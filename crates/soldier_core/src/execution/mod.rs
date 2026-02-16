@@ -49,6 +49,7 @@ pub use label::{
 };
 pub use open_runtime::{
     OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
+    settle_pending_on_tlsm_terminal,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use pipeline::{

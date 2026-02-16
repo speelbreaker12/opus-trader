@@ -172,6 +172,12 @@ fn conservative_corr_magnitude(btc: f64, eth: f64, alts: f64) -> f64 {
         + (2.0 * 0.6 * e * a);
 
     // Fail-closed on numerically unexpected materially negative variance.
+    //
+    // EPS = 1e-12 covers IEEE 754 f64 rounding errors for typical USD-denominated
+    // exposures (up to ~1e6 magnitude, where ε_mach ≈ 1e-10). Variance is
+    // mathematically non-negative for real inputs; a tiny negative value indicates
+    // harmless floating-point drift. Values below -EPS indicate a real bug
+    // (e.g., corrupted inputs), so we fail-closed with INFINITY.
     const EPS: f64 = 1e-12;
     if variance >= 0.0 {
         variance.sqrt()

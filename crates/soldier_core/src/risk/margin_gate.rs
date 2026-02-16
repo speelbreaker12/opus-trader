@@ -73,6 +73,13 @@ impl MarginGateMetrics {
 }
 
 /// Evaluate margin headroom gate for NEW OPEN intents.
+///
+/// CONTRACT.md §1.4.3 specifies `mm_util = maintenance_margin / max(equity, epsilon)`.
+/// This implementation uses `equity_usd > 0.0` as a precondition instead of epsilon-clamping.
+/// This is strictly more conservative: tiny positive equity produces a huge `mm_util` that
+/// triggers rejection, whereas epsilon-clamping would cap it at a large but bounded value.
+/// Both approaches lead to the same outcome (reject/Kill) — raw division just does so
+/// with a larger computed `mm_util`, which is cosmetically odd in logs but never dangerous.
 pub fn evaluate_margin_headroom_gate(
     input: &MarginGateInput,
     metrics: &mut MarginGateMetrics,
