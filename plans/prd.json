@@ -65,9 +65,7 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [
-        "AT-905"
-      ],
+      "enforcing_contract_ats": [],
       "reason_codes": {
         "type": "",
         "values": []
@@ -135,9 +133,7 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [
-        "AT-905"
-      ],
+      "enforcing_contract_ats": [],
       "reason_codes": {
         "type": "",
         "values": []
@@ -204,9 +200,7 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [
-        "AT-905"
-      ],
+      "enforcing_contract_ats": [],
       "reason_codes": {
         "type": "",
         "values": []
@@ -298,10 +292,7 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [
-        "AT-341",
-        "AT-040"
-      ],
+      "enforcing_contract_ats": [],
       "reason_codes": {
         "type": "",
         "values": []
@@ -346,10 +337,10 @@
       "slice_ref": "Slice 0 \u2014 Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-E Health Endpoint",
       "category": "infra",
-      "description": "Implement health endpoint returning ok/build_id/contract_version.",
+      "description": "Implement minimal Phase-0 health and owner status output (ok/build_id/contract_version/trading_mode/is_trading_allowed).",
       "contract_refs": [
-        "Anchor-021",
-        "VR-024"
+        "P0-E Health + Owner Status Scaffolding",
+        "\u00a77.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)"
       ],
       "plan_refs": [
         "Global Non\u2011Negotiables (apply to ALL stories)"
@@ -363,25 +354,25 @@
         "avoid": []
       },
       "acceptance": [
-        "GIVEN health endpoint called WHEN system healthy THEN returns ok=true, build_id, contract_version.",
-        "GIVEN health command WHEN system healthy THEN exits 0.",
-        "GIVEN docs/health_endpoint.md WHEN reviewed THEN documents command and format."
+        "GIVEN the service is running WHEN GET /api/v1/health is called THEN HTTP 200 payload includes ok=true, build_id, and contract_version.",
+        "GIVEN Phase-0 owner status is requested WHEN status command runs THEN payload includes trading_mode and is_trading_allowed.",
+        "GIVEN TradingMode is Active WHEN owner status is emitted THEN is_trading_allowed=true.",
+        "GIVEN TradingMode is ReduceOnly or Kill WHEN owner status is emitted THEN is_trading_allowed=false."
       ],
       "steps": [
-        "Create docs/health_endpoint.md documenting the health command.",
-        "Define expected output format (ok, build_id, contract_version).",
-        "Implement health endpoint in soldier_infra.",
-        "Wire health endpoint to CLI command.",
-        "Implement test_health_endpoint_returns_required_fields.",
-        "Implement test_health_command_exits_zero_when_healthy.",
-        "Run tests and verify all pass."
+        "Update docs/health_endpoint.md with the minimal Phase-0 payload fields and examples.",
+        "Implement GET /api/v1/health payload keys: ok, build_id, contract_version.",
+        "Implement owner status output keys: trading_mode and is_trading_allowed.",
+        "Wire status command behavior so is_trading_allowed derives from TradingMode deterministically.",
+        "Add/adjust runtime tests to assert healthy and unhealthy payload semantics.",
+        "Run targeted tests and verify outputs."
       ],
       "verify": [
         "./plans/verify.sh",
-        "cargo test -p soldier_infra --test test_health"
+        "cargo test -p soldier_infra --test test_phase0_runtime test_status_command_behavior_runtime -- --exact"
       ],
       "evidence": [
-        "cargo test output",
+        "cargo test -p soldier_infra --test test_phase0_runtime output",
         "docs/health_endpoint.md",
         "evidence/phase0/health/health_endpoint_snapshot.md"
       ],
@@ -392,7 +383,7 @@
       "passes": true,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [
-        "AT-333"
+        "AT-022"
       ],
       "reason_codes": {
         "type": "",
@@ -405,42 +396,95 @@
         "status_fields": [
           "ok",
           "build_id",
-          "contract_version"
+          "contract_version",
+          "trading_mode",
+          "is_trading_allowed"
         ],
         "status_contract_ats": [
-          "AT-012"
+          "AT-022"
         ]
       },
-      "implementation_tests": []
+      "implementation_tests": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs::test_status_command_behavior_runtime"
+      ]
     },
     {
       "id": "S0-005",
       "priority": 195,
       "phase": 0,
       "slice": 0,
+      "slice_ref": "Slice 0 \u2014 Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-F Machine Policy Loader Baseline",
       "category": "policy",
+      "description": "Bind a machine-readable policy path and strict loader validation so runtime policy checks are fail-closed and not doc-only.",
       "passes": false,
-      "enforcing_contract_ats": [],
       "contract_refs": [
+        "P0-F Machine Policy Loader Baseline",
         "\u00a72.2 PolicyGuard",
-        "Appendix A"
+        "Appendix A: Configuration Defaults (Safety-Critical Thresholds)"
       ],
-      "enforcement_point": "",
-      "contract_must_evidence": [
-        "Policy JSON loaded and validated before first tick"
+      "plan_refs": [
+        "Global Non\u2011Negotiables (apply to ALL stories)"
       ],
-      "reason_codes": [],
       "scope": {
         "touch": [
           "config/policy.json",
-          "tools/policy_loader.py"
-        ]
+          "tools/policy_loader.py",
+          "tools/phase0_meta_test.py",
+          "tests/phase0/test_machine_policy_loader_and_config.md"
+        ],
+        "create": [],
+        "avoid": []
+      },
+      "acceptance": [
+        "GIVEN config/policy.json exists WHEN strict loader runs THEN policy parses and validates with exit code 0.",
+        "GIVEN a malformed policy file WHEN strict loader runs THEN validation fails closed with non-zero exit code.",
+        "GIVEN Phase-0 meta test runs WHEN machine policy loader checks execute THEN policy path binding and strict validation pass."
+      ],
+      "steps": [
+        "Confirm config/policy.json is machine-readable JSON with required fail-closed keys.",
+        "Enforce strict validation path in tools/policy_loader.py using --policy and --strict inputs.",
+        "Ensure loader failures return deterministic non-zero exit codes with diagnostics.",
+        "Add/adjust phase0 meta checks that validate loader strict mode against config/policy.json.",
+        "Run targeted checks and store evidence for policy loader baseline."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "python3 tools/policy_loader.py --policy config/policy.json --strict",
+        "python3 tools/phase0_meta_test.py --root ."
+      ],
+      "evidence": [
+        "config/policy.json",
+        "tools/policy_loader.py",
+        "tests/phase0/test_machine_policy_loader_and_config.md",
+        "evidence/phase0/policy/policy_config_snapshot.json"
+      ],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "contract_must_evidence": [
+        {
+          "quote": "Policy JSON loaded and validated before first tick",
+          "location": "specs/CONTRACT.md:131",
+          "anchor": "P0-F Machine Policy Loader Baseline"
+        }
+      ],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "",
+        "values": []
+      },
+      "enforcement_point": "",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [],
+        "status_fields": [],
+        "status_contract_ats": []
       },
       "implementation_tests": [
-        "test_policy_loader_validates_schema",
-        "test_policy_loader_rejects_malformed",
-        "test_policy_loader_applies_defaults"
+        "tools/phase0_meta_test.py::test_machine_policy_loader_and_config",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs::test_policy_is_required_and_bound_runtime"
       ]
     },
     {
@@ -1436,9 +1480,7 @@
           "crates/soldier_core/src/venue",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_expiry_guard.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -2010,9 +2052,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_reject_reason.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -3865,9 +3905,7 @@
           "crates/soldier_core/src/execution",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_inventory_skew.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -3960,9 +3998,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_pending_exposure.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -4048,9 +4084,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_exposure_budget.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -4137,9 +4171,7 @@
           "crates/soldier_core/src/risk",
           "crates/soldier_core/tests"
         ],
-        "create": [
-          "crates/soldier_core/tests/test_margin_gate.rs"
-        ],
+        "create": [],
         "avoid": [
           "plans/**"
         ]
@@ -5551,9 +5583,9 @@
         ]
       },
       "acceptance": [
-        "HTTP 200 JSON includes keys (contract \u00a77.0):",
-        "status_schema_version (int; current=1)",
-        "supported_profiles (string[]; MUST include CSP)"
+        "GIVEN service is running WHEN GET /api/v1/status is called THEN HTTP 200 response includes all required CSP minimum keys from contract \u00a77.0 and AT-023.",
+        "GIVEN certification artifact is present and fresh WHEN GET /api/v1/status is called THEN certification state and expiration timestamp satisfy AT-003 deterministic value checks.",
+        "GIVEN non-GET method (POST) is sent to /api/v1/status WHEN evaluated THEN request is rejected with 4xx/405 and TradingMode/RiskState remain unchanged."
       ],
       "steps": [
         "Map S8.8 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -5671,9 +5703,9 @@
         ]
       },
       "acceptance": [
-        "HTTP 200 JSON includes keys (contract \u00a77.0):",
-        "ok (bool; MUST be true when process is up)",
-        "build_id (string)"
+        "GIVEN service is running WHEN GET /api/v1/health is called THEN HTTP 200 and ok == true.",
+        "GIVEN GET /api/v1/health succeeds WHEN payload is inspected THEN build_id and contract_version exist as non-empty strings.",
+        "GIVEN /api/v1/health payload is inspected WHEN contract AT-022 is evaluated THEN required keys are exactly present and deterministic."
       ],
       "steps": [
         "Map S8.9 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7391,9 +7423,9 @@
         ]
       },
       "acceptance": [
-        "80% disk: pause full tick/L2 archives only; Decision Snapshots continue; does NOT force Degraded by itself.",
-        "85% disk: force ReduceOnly (Degraded).",
-        "92% disk: Kill."
+        "GIVEN disk_used_pct reaches 0.80 WHEN retention gate evaluates THEN full tick/L2 archive writes pause, Decision Snapshot writes continue, and mode is not forced to Degraded by this threshold alone.",
+        "GIVEN disk_used_pct reaches 0.85 WHEN retention gate evaluates THEN TradingMode transitions to ReduceOnly with risk_state=Degraded.",
+        "GIVEN disk_used_pct reaches 0.92 WHEN retention gate evaluates THEN TradingMode transitions to Kill and OPEN paths are blocked."
       ],
       "steps": [
         "Map S13.2 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7438,7 +7470,16 @@
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "disk_watermark_mode_transition_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "threshold"
+            ]
+          }
+        ],
         "status_fields": [
           "trading_mode",
           "risk_state"
@@ -7731,9 +7772,64 @@
       "priority": 1400,
       "phase": 2,
       "slice": 14,
+      "slice_ref": "Slice 14 \u2014 Release Gates + Certification",
       "story_ref": "S14.1 \u2014 Release gates (measurable metrics + test suite + certification)",
       "category": "release",
+      "description": "Implement contract-bound release gates so promotion is blocked unless metrics, test suite, and certification artifact requirements are satisfied deterministically.",
       "passes": false,
+      "contract_refs": [
+        "\u00a78.1 Measurable Metrics (PASS/FAIL)",
+        "\u00a78.2 Minimum Test Suite (The Torture Chamber)",
+        "\u00a78.4 Certification Artifact (Hard Gate Implementation)"
+      ],
+      "plan_refs": [
+        "Phase 4 \u2014 Live Fire Controls (Governance + Release Gates)",
+        "S13.5 \u2014 F1 cert generation + CI gate"
+      ],
+      "scope": {
+        "touch": [
+          "specs/CONTRACT.md"
+        ],
+        "create": [
+          "tools/release_gate.py"
+        ],
+        "avoid": []
+      },
+      "acceptance": [
+        "GIVEN Time-to-DeltaNeutral is >=2s in an incident WHEN promotion evaluation runs THEN scaling is blocked (AT-264).",
+        "GIVEN Fee Drag Ratio exceeds contract threshold WHEN release gate evaluates THEN policy response is triggered (auto-raise min_edge_usd or block opens) (AT-265).",
+        "GIVEN atomic_naked_events is non-zero during certification WHEN cert generation runs THEN certification artifact status is FAIL and deployment is blocked (AT-266).",
+        "GIVEN containment chaos scenarios run WHEN release checks evaluate THEN AT-328/AT-329/AT-330 outcomes are enforced before promotion.",
+        "GIVEN historical-simulation and realism checks run WHEN gatekeeper evaluates THEN AT-331/AT-332 outcomes are enforced before promotion."
+      ],
+      "steps": [
+        "Define release gate input schema for metrics, chaos outcomes, replay outcomes, and certification artifact status.",
+        "Implement deterministic pass/fail evaluation in tools/release_gate.py with explicit reject reasons.",
+        "Wire release gate to consume artifacts/F1_CERT.json and block promotion unless status == PASS.",
+        "Encode contract thresholds and acceptance test bindings for AT-264/265/266/328/329/330/331/332.",
+        "Add targeted tests and execute verification commands with artifact-backed evidence."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "test -f tools/release_gate.py",
+        "cargo test --workspace"
+      ],
+      "evidence": [
+        "tools/release_gate.py",
+        "artifacts/F1_CERT.json",
+        "artifacts/F1_CERT.md"
+      ],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "med",
+      "needs_human_decision": false,
+      "contract_must_evidence": [
+        {
+          "quote": "Release blocked unless F1_CERT status == PASS with all metrics green",
+          "location": "specs/CONTRACT.md:4691-4693,4844-4847",
+          "anchor": "AT-266"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-264",
         "AT-265",
@@ -7744,24 +7840,28 @@
         "AT-331",
         "AT-332"
       ],
-      "contract_refs": [
-        "\u00a78.1 Measurable Metrics (PASS/FAIL)",
-        "\u00a78.2 Minimum Test Suite (The Torture Chamber)",
-        "\u00a78.4 Certification Artifact (Hard Gate Implementation)"
-      ],
-      "enforcement_point": "EvidenceGuard",
-      "contract_must_evidence": [
-        "Release blocked unless F1_CERT status == PASS with all metrics green"
-      ],
-      "reason_codes": [
-        "CertificationArtifactMissing",
-        "MetricBelowThreshold"
-      ],
-      "scope": {
-        "touch": [
-          "tools/release_gate.py",
-          "specs/CONTRACT.md \u00a78"
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "CertificationArtifactMissing",
+          "MetricBelowThreshold"
         ]
+      },
+      "enforcement_point": "EvidenceGuard",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [
+          {
+            "name": "release_gate_block_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "reason_code"
+            ]
+          }
+        ],
+        "status_fields": [],
+        "status_contract_ats": []
       },
       "implementation_tests": [
         "test_replay_profit_penalized_gate",

@@ -551,9 +551,35 @@ set -e
 [[ $rc_case21 -eq 0 ]] || fail "expected case21 to pass"
 printf '%s\n' "$out_case21" | grep -Fq "OK: PR gate passed" || fail "case21 missing pass output"
 
-# Case 0: --story is required.
-expect_fail "story required" "story is required" \
-  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+# Case 0 (UPDATED): --story is optional; omitting it runs in copilot-only mode.
+set +e
+out_case0="$(
+  cd "$repo_dir" && GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case0=$?
+set -e
+[[ $rc_case0 -eq 0 ]] || fail "expected case0 (no --story) to pass"
+printf '%s\n' "$out_case0" | grep -Fq "OK: PR gate passed" || fail "case0 missing pass output"
+
+# Case 0b: story-less mode with non-story branch passes.
+set +e
+out_case0b="$(
+  cd "$repo_dir" && GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_HEAD_REF='fix/something' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case0b=$?
+set -e
+[[ $rc_case0b -eq 0 ]] || fail "expected case0b (no --story, non-story branch) to pass"
+printf '%s\n' "$out_case0b" | grep -Fq "OK: PR gate passed" || fail "case0b missing pass output"
+
+# Case 0c: story-less mode skips pre_pr_review_gate even when PRE_PR_MODE=fail.
+set +e
+out_case0c="$(
+  cd "$repo_dir" && PRE_PR_MODE=fail GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_HEAD_REF='fix/whatever' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case0c=$?
+set -e
+[[ $rc_case0c -eq 0 ]] || fail "expected case0c (no --story, pre_pr skip) to pass"
+printf '%s\n' "$out_case0c" | grep -Fq "OK: PR gate passed" || fail "case0c missing pass output"
 
 # Case 23: explicit changes requested is always blocking.
 expect_fail "changes requested blocking" "changes_requested" \
