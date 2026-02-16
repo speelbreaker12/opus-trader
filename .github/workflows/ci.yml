@@ -106,10 +106,26 @@ jobs:
             exit 1
           fi
 
+          pre_pr_review_mode="required"
+          aftercare_ack_mode="required"
+          story_in_prd="unknown"
+          if [[ -f plans/prd.json ]]; then
+            if jq -e --arg id "$story_id" 'any(.items[]?; .id == $id)' plans/prd.json >/dev/null; then
+              story_in_prd="yes"
+            else
+              story_in_prd="no"
+              pre_pr_review_mode="skip"
+              aftercare_ack_mode="off"
+            fi
+          fi
+          echo "PR gate classification: story_id=${story_id}, story_in_prd=${story_in_prd}, pre_pr_review_mode=${pre_pr_review_mode}, aftercare_ack_mode=${aftercare_ack_mode}"
+
           chmod +x ./plans/pr_gate.sh
           ./plans/pr_gate.sh \
             --pr "${PR_NUMBER}" \
             --story "${story_id}" \
+            --pre-pr-review-mode "${pre_pr_review_mode}" \
+            --aftercare-ack-mode "${aftercare_ack_mode}" \
             --wait \
             --timeout-secs 1800 \
             --poll-secs 20 \

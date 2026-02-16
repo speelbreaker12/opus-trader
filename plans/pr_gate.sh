@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ./plans/pr_gate.sh --story <ID> [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--ignore-check-run-regex <regex>]
+  ./plans/pr_gate.sh --story <ID> [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--aftercare-ack-mode <required|auto|off>] [--ignore-check-run-regex <regex>] [--pre-pr-review-mode <required|skip>]
 
 What it checks (blocking):
   - PR mergeability is not blocked by conflicts (`mergeable=false` or blocked/dirty state)
@@ -38,7 +38,17 @@ Story binding (required):
   - --story is mandatory.
   - Story ID must be slash-free (`[A-Za-z0-9][A-Za-z0-9._-]*`).
   - PR head branch must match: story/<STORY_ID>[/<slug>] or story/<PRD_STORY_ID>-<slug> (legacy slug token cannot contain `-`).
-  - This gate runs ./plans/pre_pr_review_gate.sh against PR HEAD and branch before pass.
+  - This gate runs ./plans/pre_pr_review_gate.sh against PR HEAD and branch before pass when pre-pr mode is `required`.
+
+Pre-PR review mode:
+  - `required` (default): enforce full story review evidence via pre_pr_review_gate.
+  - `skip`: bypass pre_pr_review_gate for lightweight non-PRD edits.
+
+Aftercare ACK mode:
+  - `required`: require `AFTERCARE_ACK: <HEAD_SHA>` for every head.
+  - `auto` (default): require ACK only when bot issue comments exist.
+  - `off`: disable ACK requirement.
+  - `--require-aftercare-ack` is equivalent to `--aftercare-ack-mode required`.
 
 Artifacts:
   - Writes a report under artifacts/story/<ID>/pr_gate/<ts>_pr_gate.md
@@ -145,7 +155,10 @@ COPILOT_LOGIN_REGEX="${COPILOT_LOGIN_REGEX:-copilot}"
 COPILOT_WAIT_SECS="${COPILOT_WAIT_SECS:-600}"
 REQUIRE_KNOWN_REVIEW_DECISION="${REQUIRE_KNOWN_REVIEW_DECISION:-0}"
 REQUIRE_AFTERCARE_ACK="${REQUIRE_AFTERCARE_ACK:-0}"
+AFTERCARE_ACK_MODE="${AFTERCARE_ACK_MODE:-auto}"
+AFTERCARE_ACK_MODE_EXPLICIT=0
 IGNORE_CHECK_RUN_REGEX="${PR_GATE_IGNORE_CHECK_RUN_REGEX:-}"
+PRE_PR_REVIEW_MODE="${PRE_PR_REVIEW_MODE:-required}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -195,10 +208,20 @@ while [[ $# -gt 0 ]]; do
       ;;
     --require-aftercare-ack)
       REQUIRE_AFTERCARE_ACK=1
+      AFTERCARE_ACK_MODE="required"
       shift
+      ;;
+    --aftercare-ack-mode)
+      AFTERCARE_ACK_MODE="${2:?missing mode}"
+      AFTERCARE_ACK_MODE_EXPLICIT=1
+      shift 2
       ;;
     --ignore-check-run-regex)
       IGNORE_CHECK_RUN_REGEX="${2:?missing regex}"
+      shift 2
+      ;;
+    --pre-pr-review-mode)
+      PRE_PR_REVIEW_MODE="${2:?missing mode}"
       shift 2
       ;;
     -h|--help)
@@ -227,10 +250,23 @@ case "$REQUIRE_AFTERCARE_ACK" in
   0|1) ;;
   *) die "invalid REQUIRE_AFTERCARE_ACK: $REQUIRE_AFTERCARE_ACK (expected 0|1)" ;;
 esac
+case "$AFTERCARE_ACK_MODE" in
+  required|auto|off) ;;
+  *) die "invalid --aftercare-ack-mode: $AFTERCARE_ACK_MODE (expected required|auto|off)" ;;
+esac
+if [[ "$REQUIRE_AFTERCARE_ACK" == "1" ]]; then
+  if [[ "$AFTERCARE_ACK_MODE_EXPLICIT" != "1" ]]; then
+    AFTERCARE_ACK_MODE="required"
+  fi
+fi
 [[ "$COPILOT_WAIT_SECS" =~ ^[0-9]+$ ]] || die "invalid COPILOT_WAIT_SECS: $COPILOT_WAIT_SECS (expected integer seconds)"
 if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
   jq -n --arg re "$IGNORE_CHECK_RUN_REGEX" '"" | test($re)' >/dev/null 2>&1 || die "invalid --ignore-check-run-regex: $IGNORE_CHECK_RUN_REGEX"
 fi
+case "$PRE_PR_REVIEW_MODE" in
+  required|skip) ;;
+  *) die "invalid --pre-pr-review-mode: $PRE_PR_REVIEW_MODE (expected required|skip)" ;;
+esac
 
 [[ -n "$STORY_ID" ]] || die "--story is required"
 validate_story_id "$STORY_ID"
@@ -309,7 +345,9 @@ reviewDecision: $REVIEW_DECISION
 bot_comments_mode: $BOT_COMMENTS_MODE
 require_known_review_decision: $REQUIRE_KNOWN_REVIEW_DECISION
 require_aftercare_ack: $REQUIRE_AFTERCARE_ACK
+aftercare_ack_mode: $AFTERCARE_ACK_MODE
 ignore_check_run_regex: ${IGNORE_CHECK_RUN_REGEX:-<none>}
+pre_pr_review_mode: $PRE_PR_REVIEW_MODE
 
 ## Check-runs
 $CHECK_SUMMARY
@@ -506,7 +544,11 @@ unresolved_bot_inline_comments=$unresolved_inline_bot_count"
     branch_story_match=0
   fi
 
-  if [[ "$HEAD_SHA" == "$PRE_PR_CACHE_HEAD" && "$HEAD_REF" == "$PRE_PR_CACHE_REF" && "$PRE_PR_CACHE_RC" == "0" ]]; then
+  if [[ "$PRE_PR_REVIEW_MODE" == "skip" ]]; then
+    pre_pr_rc=0
+    pre_pr_output="SKIP: pre_pr_review_gate disabled (pre_pr_review_mode=skip)"
+    PRE_PR_REVIEW_SUMMARY="skip (mode=skip)"
+  elif [[ "$HEAD_SHA" == "$PRE_PR_CACHE_HEAD" && "$HEAD_REF" == "$PRE_PR_CACHE_REF" && "$PRE_PR_CACHE_RC" == "0" ]]; then
     pre_pr_rc="$PRE_PR_CACHE_RC"
     pre_pr_output="$PRE_PR_CACHE_OUTPUT"
     PRE_PR_REVIEW_SUMMARY="$PRE_PR_CACHE_SUMMARY"
@@ -687,13 +729,23 @@ $inline_unfixed_lines"
   ' <<<"$issue_comments")"
   ack_required=0
   ack_required_reason="not_required"
-  if [[ "$REQUIRE_AFTERCARE_ACK" == "1" ]]; then
-    ack_required=1
-    ack_required_reason="strict_mode"
-  elif [[ "$bot_issue_count" -gt 0 ]]; then
-    ack_required=1
-    ack_required_reason="bot_issue_comments_present"
-  fi
+  case "$AFTERCARE_ACK_MODE" in
+    required)
+      ack_required=1
+      ack_required_reason="mode_required"
+      ;;
+    auto)
+      if [[ "$bot_issue_count" -gt 0 ]]; then
+        ack_required=1
+        ack_required_reason="bot_issue_comments_present"
+      else
+        ack_required_reason="mode_auto_no_bot_issue_comments"
+      fi
+      ;;
+    off)
+      ack_required_reason="mode_off"
+      ;;
+  esac
   if [[ "$ack_required" -eq 1 ]]; then
     AFTERCARE_ACK_SUMMARY="required=yes
 reason=$ack_required_reason
@@ -703,7 +755,9 @@ bot_issue_comments=$bot_issue_count
 bot_issue_urls:
 ${issue_bot_urls:-none}"
   else
-    AFTERCARE_ACK_SUMMARY="required=no (no bot issue comments and strict mode disabled)"
+    AFTERCARE_ACK_SUMMARY="required=no
+reason=$ack_required_reason
+mode=$AFTERCARE_ACK_MODE"
   fi
 
   if [[ "$REQUIRE_COPILOT_REVIEW" == "1" ]]; then
