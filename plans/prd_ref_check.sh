@@ -192,5 +192,41 @@ if unresolved:
         print(f'[prd_ref_check] ERROR: unresolved {kind}_ref for {item_id}: {ref}', file=sys.stderr)
     raise SystemExit(1)
 
+# ── AT-reference integrity ──────────────────────────────────────────
+# Every AT-* in PRD enforcing_contract_ats must exist in CONTRACT.md.
+# ATs listed in specs/contract_deferred_ats.yml are exempt.
+
+at_re = re.compile(r'AT-\d+')
+contract_ats = set(at_re.findall(contract_text))
+
+prd_ats: dict[str, list[str]] = {}  # AT -> [item_ids]
+for item in items:
+    item_id = item.get('id', 'unknown')
+    for ref in item.get('enforcing_contract_ats', []):
+        for m in at_re.findall(str(ref)):
+            prd_ats.setdefault(m, []).append(item_id)
+
+# Load deferred allowlist (optional)
+deferred_ats: set[str] = set()
+deferred_path = os.path.join(os.path.dirname(contract_path), 'contract_deferred_ats.yml')
+if os.path.isfile(deferred_path):
+    # Minimal YAML-free parsing: top-level keys matching AT-\d+
+    with open(deferred_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            m = re.match(r'^(AT-\d+)\s*:', line)
+            if m:
+                deferred_ats.add(m.group(1))
+
+dangling = sorted(set(prd_ats) - contract_ats, key=lambda x: int(x.split('-')[1]))
+if dangling:
+    for at in dangling:
+        stories = ', '.join(prd_ats[at])
+        print(f'[prd_ref_check] ERROR: PRD references {at} (stories: {stories}) but it does not exist in CONTRACT.md', file=sys.stderr)
+    raise SystemExit(1)
+
+uncovered = sorted(contract_ats - set(prd_ats) - deferred_ats, key=lambda x: int(x.split('-')[1]))
+if uncovered:
+    print(f'[prd_ref_check] WARN: {len(uncovered)} contract AT(s) not covered by PRD and not deferred: {", ".join(uncovered[:10])}{"..." if len(uncovered) > 10 else ""}', file=sys.stderr)
+
 raise SystemExit(0)
 PY
