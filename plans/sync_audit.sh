@@ -344,24 +344,34 @@ write_cache() {
   local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
   # H-2: Cache schema versioning - increment CACHE_SCHEMA_VERSION when structure changes
-  cat > "$temp_cache" <<JSON
-{
-  "schema_version": $CACHE_SCHEMA_VERSION,
-  "cached_at": "$now",
-  "mode": "$MODE",
-  "fingerprints": {
-    "prd_file": "$prd_sha",
-    "contract_file": "$contract_sha",
-    "plan_file": "$plan_sha",
-    "trace_file": "$trace_sha"
-  },
-  "gate_results": {
-    "prd_schema_check": $1,
-    "prd_ref_check": $2,
-    "check_csp_trace": $3
-  }
-}
-JSON
+  # Use jq -n for safe JSON construction (no shell-interpolation injection risk)
+  jq -n \
+    --argjson schema_version "$CACHE_SCHEMA_VERSION" \
+    --arg cached_at "$now" \
+    --arg mode "$MODE" \
+    --arg prd_sha "$prd_sha" \
+    --arg contract_sha "$contract_sha" \
+    --arg plan_sha "$plan_sha" \
+    --arg trace_sha "$trace_sha" \
+    --argjson schema_rc "$1" \
+    --argjson ref_rc "$2" \
+    --argjson trace_rc "$3" \
+    '{
+      schema_version: $schema_version,
+      cached_at: $cached_at,
+      mode: $mode,
+      fingerprints: {
+        prd_file: $prd_sha,
+        contract_file: $contract_sha,
+        plan_file: $plan_sha,
+        trace_file: $trace_sha
+      },
+      gate_results: {
+        prd_schema_check: $schema_rc,
+        prd_ref_check: $ref_rc,
+        check_csp_trace: $trace_rc
+      }
+    }' > "$temp_cache"
 
   # Atomic rename
   mv "$temp_cache" "$CACHE_FILE"
@@ -381,17 +391,17 @@ run_gate() {
   local gate_start=$(date +%s)
 
   # Determine timeout command (portable: Linux/macOS)
-  local timeout_cmd=""
+  local timeout_cmd=()
   if command -v timeout >/dev/null 2>&1; then
-    timeout_cmd="timeout ${timeout_seconds}s"
+    timeout_cmd=(timeout "${timeout_seconds}s")
   elif command -v gtimeout >/dev/null 2>&1; then
-    timeout_cmd="gtimeout ${timeout_seconds}s"
+    timeout_cmd=(gtimeout "${timeout_seconds}s")
   fi
 
   # Run gate with timeout
   local rc=0
-  if [[ -n "$timeout_cmd" ]]; then
-    $timeout_cmd "${cmd[@]}" >"$gate_log" 2>&1 || rc=$?
+  if [[ ${#timeout_cmd[@]} -gt 0 ]]; then
+    "${timeout_cmd[@]}" "${cmd[@]}" >"$gate_log" 2>&1 || rc=$?
   else
     "${cmd[@]}" >"$gate_log" 2>&1 || rc=$?
   fi
@@ -416,7 +426,10 @@ run_gate() {
   return $rc
 }
 
-# Run gate with cache support (reduces duplication)
+# Run gate with cache support (reduces duplication).
+# NOTE: Reads caller-scoped locals `use_cache`, `first_failed_gate`, `exit_code`
+# from main(). This is intentional — bash functions share their caller's local
+# scope. These variables are declared in main() and mutated here on failure.
 run_or_cache_gate() {
   local gate_name="$1"
   local cache_key="$2"

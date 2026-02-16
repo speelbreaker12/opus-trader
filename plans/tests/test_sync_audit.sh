@@ -514,27 +514,22 @@ test_cache_invalidation() {
   run_test "Cache invalidation when input file changes"
   cleanup_test
 
-  # First run
+  # First run (uses real prd.json to populate cache)
   run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke >/dev/null 2>&1 || {
     fail "First run failed" "Cannot test cache invalidation"
     return
   }
 
-  # Save original PRD hash
-  local original_hash=$(sha256sum plans/prd.json 2>/dev/null | awk '{print $1}' || shasum -a 256 plans/prd.json | awk '{print $1}')
+  # Create a modified copy (never mutate the real prd.json)
+  local tmp_prd
+  tmp_prd=$(mktemp "${TMPDIR:-/tmp}/prd_cache_test.XXXXXX")
+  cp plans/prd.json "$tmp_prd"
+  echo "# Test comment for cache invalidation" >> "$tmp_prd"
 
-  # Modify PRD file (add a comment)
-  echo "# Test comment for cache invalidation" >> plans/prd.json
+  # Second run with modified PRD (should NOT use cache)
+  local output=$(PRD_FILE="$tmp_prd" run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>&1 || true)
 
-  # Second run (should NOT use cache)
-  local output=$(run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>&1 || true)
-
-  # Restore original by removing the added line
-  if [[ "$(uname)" == "Darwin" ]]; then
-    sed -i '' '$d' plans/prd.json
-  else
-    sed -i '$d' plans/prd.json
-  fi
+  rm -f "$tmp_prd"
 
   if echo "$output" | grep -q "Using cached results"; then
     fail "Cache used after file change" "Cache should be invalidated"
@@ -655,13 +650,14 @@ test_fail_fast() {
 
 # Test: Cleanup trap on SIGTERM (H-15)
 test_cleanup_trap() {
-  local test_name="cleanup_trap"
-  start_test "$test_name"
+  run_test "Cleanup trap on SIGTERM"
+  cleanup_test
 
-  cd "$REPO_DIR"
+  local tmp_log
+  tmp_log=$(mktemp "${TMPDIR:-/tmp}/sync_audit_trap_test.XXXXXX")
 
   # Start sync_audit in background
-  timeout 10s ./plans/sync_audit.sh --mode smoke >"$TEST_OUTPUT_DIR/trap_test.log" 2>&1 &
+  timeout 10s ./plans/sync_audit.sh --mode smoke >"$tmp_log" 2>&1 &
   local pid=$!
 
   # Give it a moment to start
@@ -673,26 +669,30 @@ test_cleanup_trap() {
   # Wait for process to exit
   wait $pid 2>/dev/null || true
 
+  rm -f "$tmp_log"
+
   # Check that temp cache file is cleaned up
   if [[ -f .context/sync_audit_cache.json.tmp ]]; then
-    fail "$test_name" "Temp cache file not cleaned up after SIGTERM"
+    fail "Temp cache file not cleaned up" "Expected cleanup_on_exit trap to remove .tmp"
   else
-    pass "$test_name"
+    pass "Temp cache file cleaned up after SIGTERM"
   fi
 }
 
 # Test: Concurrent execution safety (H-15)
 test_concurrent_execution() {
-  local test_name="concurrent_execution"
-  start_test "$test_name"
+  run_test "Concurrent execution safety"
+  cleanup_test
 
-  cd "$REPO_DIR"
+  local tmp_log_a tmp_log_b
+  tmp_log_a=$(mktemp "${TMPDIR:-/tmp}/sync_audit_conc_a.XXXXXX")
+  tmp_log_b=$(mktemp "${TMPDIR:-/tmp}/sync_audit_conc_b.XXXXXX")
 
   # Start two instances in parallel
-  timeout 15s ./plans/sync_audit.sh --mode smoke >"$TEST_OUTPUT_DIR/concurrent_a.log" 2>&1 &
+  timeout 15s ./plans/sync_audit.sh --mode smoke >"$tmp_log_a" 2>&1 &
   local pid_a=$!
 
-  timeout 15s ./plans/sync_audit.sh --mode smoke >"$TEST_OUTPUT_DIR/concurrent_b.log" 2>&1 &
+  timeout 15s ./plans/sync_audit.sh --mode smoke >"$tmp_log_b" 2>&1 &
   local pid_b=$!
 
   # Wait for both
@@ -701,27 +701,27 @@ test_concurrent_execution() {
   wait $pid_a || rc_a=$?
   wait $pid_b || rc_b=$?
 
+  rm -f "$tmp_log_a" "$tmp_log_b"
+
   # Both should succeed (exit 0 or 124 for timeout)
   if [[ $rc_a -ne 0 && $rc_a -ne 124 ]] || [[ $rc_b -ne 0 && $rc_b -ne 124 ]]; then
-    fail "$test_name" "Concurrent execution caused failures (rc_a=$rc_a, rc_b=$rc_b)"
+    fail "Concurrent execution caused failures" "rc_a=$rc_a, rc_b=$rc_b"
     return
   fi
 
   # Temp files should be cleaned up
   local temp_count=$(find .context -name "sync_audit_cache.json.tmp*" 2>/dev/null | wc -l || echo 0)
   if [[ $temp_count -gt 0 ]]; then
-    fail "$test_name" "Temp cache files leaked after concurrent execution"
+    fail "Temp cache files leaked" "Found $temp_count leftover .tmp files"
   else
-    pass "$test_name"
+    pass "No temp cache files leaked after concurrent execution"
   fi
 }
 
 # Test: Cache schema versioning (H-2)
 test_cache_schema_version() {
-  local test_name="cache_schema_version"
-  start_test "$test_name"
-
-  cd "$REPO_DIR"
+  run_test "Cache schema versioning"
+  cleanup_test
 
   # Create cache with old schema version
   mkdir -p .context
@@ -748,7 +748,7 @@ JSON
   local output=$(timeout 30s ./plans/sync_audit.sh --mode smoke 2>&1 || true)
 
   if ! echo "$output" | grep -q "schema version mismatch"; then
-    fail "$test_name" "Cache schema version mismatch not detected"
+    fail "Schema version mismatch not detected" "Expected WARN about schema version"
     return
   fi
 
@@ -756,20 +756,18 @@ JSON
   if [[ -f .context/sync_audit_cache.json ]]; then
     local new_version=$(jq -r '.schema_version // 0' .context/sync_audit_cache.json)
     if [[ "$new_version" != "1" ]]; then
-      fail "$test_name" "Cache not regenerated with correct schema version (got v$new_version)"
+      fail "Cache not regenerated correctly" "Expected schema v1, got v$new_version"
       return
     fi
   fi
 
-  pass "$test_name"
+  pass "Cache regenerated with correct schema version"
 }
 
 # Test: --status command (M-11)
 test_status_command() {
-  local test_name="status_command"
-  start_test "$test_name"
-
-  cd "$REPO_DIR"
+  run_test "--status command"
+  cleanup_test
 
   # Create a cache first
   timeout 30s ./plans/sync_audit.sh --mode smoke >/dev/null 2>&1 || true
@@ -778,42 +776,38 @@ test_status_command() {
   local output=$(./plans/sync_audit.sh --status 2>&1 || true)
 
   if ! echo "$output" | grep -q "Cache Status"; then
-    fail "$test_name" "--status output missing expected header"
+    fail "--status missing header" "Expected 'Cache Status' in output"
     return
   fi
 
   if ! echo "$output" | grep -q "Schema version"; then
-    fail "$test_name" "--status output missing schema version"
+    fail "--status missing schema version" "Expected 'Schema version' in output"
     return
   fi
 
-  pass "$test_name"
+  pass "--status output contains expected fields"
 }
 
 # Test: --simple mode (M-14)
 test_simple_mode() {
-  local test_name="simple_mode"
-  start_test "$test_name"
-
-  cd "$REPO_DIR"
+  run_test "--simple mode"
+  cleanup_test
 
   # Run simple mode
   local rc=0
   timeout 30s ./plans/sync_audit.sh --simple --mode smoke 2>&1 || rc=$?
 
   if [[ $rc -ne 0 && $rc -ne 124 ]]; then
-    fail "$test_name" "--simple mode failed with exit code $rc"
+    fail "--simple mode failed" "Expected exit 0, got $rc"
   else
-    pass "$test_name"
+    pass "--simple mode completed successfully"
   fi
 }
 
 # Test: Artifacts cleanup invocation (M-7)
 test_artifacts_cleanup() {
-  local test_name="artifacts_cleanup"
-  start_test "$test_name"
-
-  cd "$REPO_DIR"
+  run_test "Artifacts cleanup invocation"
+  cleanup_test
 
   # Create some artifact directories
   mkdir -p artifacts/sync_audit/test_old_1
@@ -824,7 +818,7 @@ test_artifacts_cleanup() {
 
   # Cleanup function was invoked (actual cleanup is time-dependent)
   # Just verify sync_audit ran without errors due to cleanup
-  pass "$test_name"
+  pass "Sync audit ran without cleanup errors"
 }
 
 # Main test runner
