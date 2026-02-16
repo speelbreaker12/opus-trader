@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "run_id": "20260216_011810",
+  "mode": "smoke",
+  "status": "pass",
+  "duration_seconds": 2,
+  "gates": [
+    {"name": "prd_schema_check", "status": "pass", "rc": 0, "duration_seconds": 0},
+    {"name": "prd_ref_check", "status": "pass", "rc": 0, "duration_seconds": 0},
+    {"name": "check_csp_trace", "status": "skip", "rc": 999, "duration_seconds": 0},
+    {"name": "prd_audit_check", "status": "skip", "rc": 999, "duration_seconds": 0}
+  ],
+  "coverage": {
+    "csp_trace": {"total":0,"mapped":0,"partial":0,"unmapped":0,"pct":0.0},
+    "prd_audit": {
+  "total_items": 83,
+  "pass_items": 83,
+  "fail_items": 0,
+  "blocked_items": 0
+}
+  },
+  "drift_detected": {
+    "contract_unmapped_csp_clauses": 0,
+    "prd_schema_valid": true,
+    "refs_valid": true
+  }
+}

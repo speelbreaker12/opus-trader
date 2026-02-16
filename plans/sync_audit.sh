@@ -145,11 +145,11 @@ else
   ARTIFACTS_DIR="$ARTIFACTS_BASE"
 fi
 
-# Cleanup function
+# Cleanup function - removes temp files on exit
 cleanup_on_exit() {
   local exit_code=$?
-  # Preserve artifacts on failure for debugging
-  # Only clean up temp files (if any were created)
+  # Remove temp cache file if it exists
+  rm -f "$CACHE_FILE.tmp" 2>/dev/null || true
   return $exit_code
 }
 trap cleanup_on_exit EXIT ERR
@@ -352,10 +352,45 @@ run_gate() {
   local gate_end=$(date +%s)
   local gate_duration=$((gate_end - gate_start))
 
+  # Handle clock skew (negative duration)
+  if [[ $gate_duration -lt 0 ]]; then
+    echo "WARN: Clock skew detected (negative duration), using 0" >&2
+    gate_duration=0
+  fi
+
   echo "$rc" > "$gate_rc"
   echo "$gate_duration" > "$gate_time"
 
   return $rc
+}
+
+# Run gate with cache support (reduces duplication)
+run_or_cache_gate() {
+  local gate_name="$1"
+  local cache_key="$2"
+  local timeout_seconds="$3"
+  shift 3
+  local cmd=("$@")
+
+  # Check if using cached results
+  if [[ $use_cache -eq 1 ]]; then
+    local cached_rc=$(jq -r ".gate_results.$cache_key // 999" "$CACHE_FILE")
+    echo "$cached_rc" > "$ARTIFACTS_DIR/${gate_name}.rc"
+    echo "0" > "$ARTIFACTS_DIR/${gate_name}.time"
+    echo "(cached)" > "$ARTIFACTS_DIR/${gate_name}.log"
+    return 0
+  fi
+
+  # Run gate fresh
+  if ! run_gate "$gate_name" "$timeout_seconds" "${cmd[@]}"; then
+    local rc=$(cat "$ARTIFACTS_DIR/${gate_name}.rc")
+    first_failed_gate="$gate_name"
+    exit_code=$rc
+    echo "$first_failed_gate" > "$ARTIFACTS_DIR/FAILED_GATE"
+    return $rc
+  fi
+
+  return 0
 }
 
 # Main execution flow
@@ -377,41 +412,14 @@ main() {
   # Phase 1: Schema & Structure (fast validation)
 
   # Gate 1: prd_schema_check
-  if [[ $use_cache -eq 1 ]]; then
-    local cached_schema_rc=$(jq -r '.gate_results.prd_schema_check // 999' "$CACHE_FILE")
-    echo "$cached_schema_rc" > "$ARTIFACTS_DIR/prd_schema_check.rc"
-    echo "0" > "$ARTIFACTS_DIR/prd_schema_check.time"
-    echo "(cached)" > "$ARTIFACTS_DIR/prd_schema_check.log"
-  else
-    if ! run_gate "prd_schema_check" 30 ./plans/prd_schema_check.sh "$PRD_FILE"; then
-      local rc=$(cat "$ARTIFACTS_DIR/prd_schema_check.rc")
-      first_failed_gate="prd_schema_check"
-      exit_code=$rc
-      echo "$first_failed_gate" > "$ARTIFACTS_DIR/FAILED_GATE"
-    fi
-  fi
-
+  run_or_cache_gate "prd_schema_check" "prd_schema_check" 30 ./plans/prd_schema_check.sh "$PRD_FILE"
   if [[ -n "$first_failed_gate" ]]; then
-    # Fail fast - skip remaining gates
     write_report
     exit $exit_code
   fi
 
   # Gate 2: prd_ref_check
-  if [[ $use_cache -eq 1 ]]; then
-    local cached_ref_rc=$(jq -r '.gate_results.prd_ref_check // 999' "$CACHE_FILE")
-    echo "$cached_ref_rc" > "$ARTIFACTS_DIR/prd_ref_check.rc"
-    echo "0" > "$ARTIFACTS_DIR/prd_ref_check.time"
-    echo "(cached)" > "$ARTIFACTS_DIR/prd_ref_check.log"
-  else
-    if ! run_gate "prd_ref_check" 60 ./plans/prd_ref_check.sh "$PRD_FILE"; then
-      local rc=$(cat "$ARTIFACTS_DIR/prd_ref_check.rc")
-      first_failed_gate="prd_ref_check"
-      exit_code=$rc
-      echo "$first_failed_gate" > "$ARTIFACTS_DIR/FAILED_GATE"
-    fi
-  fi
-
+  run_or_cache_gate "prd_ref_check" "prd_ref_check" 60 ./plans/prd_ref_check.sh "$PRD_FILE"
   if [[ -n "$first_failed_gate" ]]; then
     write_report
     exit $exit_code
@@ -424,19 +432,8 @@ main() {
     echo "999" > "$ARTIFACTS_DIR/check_csp_trace.rc"
     echo "0" > "$ARTIFACTS_DIR/check_csp_trace.time"
     echo "(skipped in smoke mode)" > "$ARTIFACTS_DIR/check_csp_trace.log"
-  elif [[ $use_cache -eq 1 ]]; then
-    local cached_trace_rc=$(jq -r '.gate_results.check_csp_trace // 999' "$CACHE_FILE")
-    echo "$cached_trace_rc" > "$ARTIFACTS_DIR/check_csp_trace.rc"
-    echo "0" > "$ARTIFACTS_DIR/check_csp_trace.time"
-    echo "(cached)" > "$ARTIFACTS_DIR/check_csp_trace.log"
   else
-    # Run check_csp_trace.py with --json flag for structured output
-    if ! run_gate "check_csp_trace" 120 python3 ./scripts/check_csp_trace.py --contract "$CONTRACT_FILE" --trace "$TRACE_FILE" --json; then
-      local rc=$(cat "$ARTIFACTS_DIR/check_csp_trace.rc")
-      first_failed_gate="check_csp_trace"
-      exit_code=$rc
-      echo "$first_failed_gate" > "$ARTIFACTS_DIR/FAILED_GATE"
-    fi
+    run_or_cache_gate "check_csp_trace" "check_csp_trace" 120 python3 ./scripts/check_csp_trace.py --contract "$CONTRACT_FILE" --trace "$TRACE_FILE" --json
   fi
 
   if [[ -n "$first_failed_gate" ]]; then

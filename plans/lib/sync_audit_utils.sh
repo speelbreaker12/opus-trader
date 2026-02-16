@@ -67,17 +67,29 @@ check_disk_space() {
   # Create dir if needed to check parent space
   mkdir -p "$dir" 2>/dev/null || true
 
-  local available_kb
   if command -v df >/dev/null 2>&1; then
-    # Use df -k for portability (macOS/Linux)
-    available_kb=$(df -k "$dir" | awk 'NR==2 {print $4}')
+    # Use POSIX-compliant df with explicit format (-P for portability)
+    local available_kb
+    available_kb=$(df -Pk "$dir" 2>/dev/null | awk 'NR==2 {print $4}')
+
+    # Validate we got a number
+    if [[ -z "$available_kb" || ! "$available_kb" =~ ^[0-9]+$ ]]; then
+      echo "WARN: Could not determine disk space, skipping check" >&2
+      return 0  # Fail open (don't block on measurement failure)
+    fi
+
     local available_mb=$((available_kb / 1024))
 
     if [[ $available_mb -lt $required_mb ]]; then
       echo "ERROR: Insufficient disk space in $dir (need ${required_mb}MB, have ${available_mb}MB)" >&2
       return 1
     fi
+  else
+    # df not available, skip check
+    echo "WARN: df command not available, skipping disk space check" >&2
+    return 0
   fi
+
   return 0
 }
 
@@ -132,7 +144,12 @@ extract_csp_coverage() {
   # Calculate percentage (avoid division by zero)
   local pct=0.0
   if [[ $total -gt 0 ]]; then
-    pct=$(echo "scale=1; ($mapped * 100.0) / $total" | bc 2>/dev/null || echo "0.0")
+    if command -v bc >/dev/null 2>&1; then
+      pct=$(echo "scale=1; ($mapped * 100.0) / $total" | bc 2>/dev/null || echo "0.0")
+    else
+      # Fallback to integer math if bc not available
+      pct=$((mapped * 100 / total))
+    fi
   fi
 
   cat <<JSON

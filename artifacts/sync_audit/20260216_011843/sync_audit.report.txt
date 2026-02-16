@@ -1,11 +1,11 @@
 === Sync Audit Report ===
-Run ID: 20260215_225110
+Run ID: 20260216_011843
 Mode: smoke
-Duration: 4s
+Duration: 2s
 
 GATE RESULTS:
-  [PASS] prd_schema_check (1s)
-  [PASS] prd_ref_check (1s)
+  [PASS] prd_schema_check (0s)
+  [PASS] prd_ref_check (0s)
   [SKIP] check_csp_trace (0s)
   [SKIP] prd_audit_check (0s)
 
@@ -15,4 +15,4 @@ CONTRACT ALIGNMENT STATUS:
   ○ CSP Trace Coverage: 0.0% (0/0 clauses mapped)
 
 OVERALL STATUS: pass
-Artifacts: /Users/admin/Desktop/wt_sync_audit/artifacts/sync_audit/20260215_225110
+Artifacts: /Users/admin/Desktop/wt_sync_audit/artifacts/sync_audit/20260216_011843

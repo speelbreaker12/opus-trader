@@ -1,0 +1,11 @@
+{
+  "coverage": {
+    "total": 9,
+    "mapped": 1,
+    "partial": 8,
+    "unmapped": 0,
+    "pct": 100.0
+  },
+  "errors": [],
+  "warnings": []
+}
