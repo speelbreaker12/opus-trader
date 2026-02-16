@@ -73,6 +73,12 @@ jobs:
             exit 1
           fi
 
+          # Skip pr-gate for deployment branches
+          if [[ "$head_ref" =~ ^deploy/ ]]; then
+            echo "ℹ️  Skipping pr-gate for deployment branch: $head_ref"
+            exit 0
+          fi
+
           if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)/([A-Za-z0-9._-]+)$ ]]; then
             story_id="${BASH_REMATCH[1]}"
           elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)$ ]]; then
@@ -133,7 +139,14 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
           PR_TEMPLATE_LINT_DRAFT_MODE: warn
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
+          # Skip template lint for deployment branches
+          if [[ "${PR_HEAD_REF}" =~ ^deploy/ ]]; then
+            echo "ℹ️  Skipping PR template lint for deployment branch: ${PR_HEAD_REF}"
+            exit 0
+          fi
+
           mode="strict"
           if [[ "${PR_DRAFT}" == "true" && "${PR_TEMPLATE_LINT_DRAFT_MODE}" != "strict" ]]; then
             mode="warn"
