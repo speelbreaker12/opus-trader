@@ -344,7 +344,7 @@ chmod +x "$case17_repo/plans/story_review_gate.sh"
   "$case17_repo/plans/story_review_gate.sh" "$story" --head "$child_sha" --artifacts-root "$case17_repo/artifacts/story" >/dev/null
 )
 
-# Case 18: codex provenance marker must be present.
+# Case 18: codex generator marker must be present.
 case18="$tmp_dir/case18"
 write_valid_case "$case18" "$story" "$head_sha"
 sed -i.bak "/- Generator Script: plans\\/codex_review_logged.sh/d" "$case18/$story/codex/20260209T000100Z_review.md"
@@ -426,5 +426,37 @@ cat >> "$case23/$story/codex/20260209T000100Z_review.md" <<'EOF'
 EOF
 expect_fail "duplicate transcript sha marker" "must contain exactly one SHA256 marker" \
   "$GATE" "$story" --head "$head_sha" --artifacts-root "$case23"
+
+# Case 24: codex provenance marker must be present.
+case24="$tmp_dir/case24"
+write_valid_case "$case24" "$story" "$head_sha"
+sed -i.bak "/- Artifact Provenance: logger-v1/d" "$case24/$story/codex/20260209T000100Z_review.md"
+rm -f "$case24/$story/codex/20260209T000100Z_review.md.bak"
+expect_fail "codex provenance marker required" "missing Codex provenance marker" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case24"
+
+# Case 25: kimi provenance marker must be present.
+case25="$tmp_dir/case25"
+write_valid_case "$case25" "$story" "$head_sha"
+sed -i.bak "/- Artifact Provenance: logger-v1/d" "$case25/$story/kimi/20260209T000050Z_review.md"
+rm -f "$case25/$story/kimi/20260209T000050Z_review.md.bak"
+expect_fail "kimi provenance marker required" "missing Kimi provenance marker" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case25"
+
+# Case 26: codex exit code must be zero.
+case26="$tmp_dir/case26"
+write_valid_case "$case26" "$story" "$head_sha"
+sed -i.bak "s/- Command Exit Code: 0/- Command Exit Code: 1/" "$case26/$story/codex/20260209T000100Z_review.md"
+rm -f "$case26/$story/codex/20260209T000100Z_review.md.bak"
+expect_fail "codex exit code must be zero" "Codex review command did not exit 0" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case26"
+
+# Case 27: kimi exit code must be zero.
+case27="$tmp_dir/case27"
+write_valid_case "$case27" "$story" "$head_sha"
+sed -i.bak "s/- Command Exit Code: 0/- Command Exit Code: 1/" "$case27/$story/kimi/20260209T000050Z_review.md"
+rm -f "$case27/$story/kimi/20260209T000050Z_review.md.bak"
+expect_fail "kimi exit code must be zero" "Kimi review command did not exit 0" \
+  "$GATE" "$story" --head "$head_sha" --artifacts-root "$case27"
 
 echo "PASS: story review gate fixtures"
