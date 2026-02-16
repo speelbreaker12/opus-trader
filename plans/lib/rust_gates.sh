@@ -26,6 +26,16 @@ fi
 
 log "2c) Rust tests"
 if [[ "${MODE:-}" == "full" ]]; then
+  # Property tests (proptest) run more cases in full mode
+  PROPTEST_CASES="${PROPTEST_CASES:-1000}"
+  if [[ ! "$PROPTEST_CASES" =~ ^[0-9]+$ ]]; then
+    warn "PROPTEST_CASES=$PROPTEST_CASES is not numeric, defaulting to 256"
+    PROPTEST_CASES=256
+  elif [[ "$PROPTEST_CASES" -gt 10000 ]]; then
+    warn "PROPTEST_CASES=$PROPTEST_CASES exceeds recommended max (10000), capping"
+    PROPTEST_CASES=10000
+  fi
+  export PROPTEST_CASES
   run_logged_or_exit "rust_tests_full" "$RUST_TEST_TIMEOUT" cargo test --workspace --all-features --locked
 else
   run_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo test --workspace --lib --locked

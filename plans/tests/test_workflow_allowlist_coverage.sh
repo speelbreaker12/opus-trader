@@ -42,6 +42,7 @@ required=(
   plans/codex_review_digest.sh
   plans/codex_review_let_pass.sh
   plans/codex_review_logged.sh
+  plans/config/gate_sunsets.sh
   plans/contract_check.sh
   plans/contract_coverage_matrix.py
   plans/contract_coverage_promote.sh
@@ -51,6 +52,7 @@ required=(
   plans/init.sh
   plans/kimi_review_logged.sh
   plans/legacy_layout_guard.sh
+  plans/lib/adversarial_gate.sh
   plans/pr_gate.sh
   plans/prd_audit_check.sh
   plans/prd_audit_merge.py
@@ -83,6 +85,7 @@ required=(
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_profile_parity.sh
+  plans/tests/test_adversarial_gate.sh
   plans/tests/test_code_review_expert_logged.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh

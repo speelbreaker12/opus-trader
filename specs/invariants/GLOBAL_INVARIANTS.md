@@ -28,6 +28,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 ## Invariants (20)
 
 ### GI-001 - OPEN dispatch requires Active
+<!--
+reject_reason_code: MarginHeadroomRejectOpens
+enforcement_point: EP-001
+test_level: pipeline
+-->
 - **Name:** OPEN dispatch requires Active
 - **Scope:** Global
 - **Forbidden states:** OPEN dispatch when TradingMode != Active
@@ -38,6 +43,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-201, AT-416, AT-417, AT-931
 
 ### GI-002 - Intent classification fail-closed
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-002
+test_level: module
+-->
 - **Name:** Intent classification fail-closed
 - **Scope:** Global
 - **Forbidden states:** Unknown or unparseable intent classified as CLOSE/HEDGE/CANCEL
@@ -48,6 +58,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-201
 
 ### GI-003 - Evidence gate blocks opens
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-003
+test_level: deferred
+-->
 - **Name:** Evidence gate blocks opens
 - **Scope:** Global
 - **Forbidden states:** OPEN dispatch while EvidenceChainState != GREEN
@@ -58,6 +73,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-107, AT-334, AT-214, AT-215, AT-415
 
 ### GI-004 - WAL enqueue required for OPEN
+<!--
+reject_reason_code: RecordedBeforeDispatchFailed
+enforcement_point: EP-004
+test_level: pipeline
+-->
 - **Name:** WAL enqueue required for OPEN
 - **Scope:** Global
 - **Forbidden states:** OPEN dispatch without RecordedBeforeDispatch WAL entry
@@ -68,6 +88,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-906
 
 ### GI-005 - TruthCapsule before first leg
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-005
+test_level: deferred
+-->
 - **Name:** TruthCapsule before first leg
 - **Scope:** Global
 - **Forbidden states:** First leg dispatch without TruthCapsule
@@ -78,6 +103,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-046
 
 ### GI-006 - Decision snapshot retention
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-006
+test_level: deferred
+-->
 - **Name:** Decision snapshot retention
 - **Scope:** Global
 - **Forbidden states:** Replay window lacks required Decision Snapshots
@@ -88,6 +118,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-257, AT-258
 
 ### GI-007 - Policy staleness forces ReduceOnly
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-007
+test_level: deferred
+-->
 - **Name:** Policy staleness forces ReduceOnly
 - **Scope:** Global
 - **Forbidden states:** TradingMode Active when policy stale
@@ -98,6 +133,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-336
 
 ### GI-008 - F1_CERT binding gate
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-008
+test_level: deferred
+-->
 - **Name:** F1_CERT binding gate
 - **Scope:** Global
 - **Forbidden states:** TradingMode Active when F1_CERT missing, stale, or invalid
@@ -108,6 +148,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-020, AT-021, AT-423
 
 ### GI-009 - Critical input freshness gate
+<!--
+reject_reason_code: FeeCacheStale
+enforcement_point: EP-009
+test_level: pipeline
+-->
 - **Name:** Critical input freshness gate
 - **Scope:** Global
 - **Forbidden states:** TradingMode Active when a critical input is missing or stale
@@ -118,6 +163,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-001, AT-112, AT-349, AT-350, AT-413
 
 ### GI-010 - OpenPermission latch semantics
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-010
+test_level: deferred
+-->
 - **Name:** OpenPermission latch semantics
 - **Scope:** Global
 - **Forbidden states:** OPEN dispatch while latch true; latch true with empty reason_codes; requires_reconcile != latch
@@ -128,6 +178,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-010, AT-011, AT-027
 
 ### GI-011 - Latch blocks risk-increasing replace
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-011
+test_level: deferred
+-->
 - **Name:** Latch blocks risk-increasing replace
 - **Scope:** Global
 - **Forbidden states:** Risk-increasing cancel/replace while latch true
@@ -138,6 +193,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-402, AT-917
 
 ### GI-012 - Evidence gate blocks risk-increasing replace
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-011
+test_level: deferred
+-->
 - **Name:** Evidence gate blocks risk-increasing replace
 - **Scope:** Global
 - **Forbidden states:** Risk-increasing cancel/replace while EvidenceChainState != GREEN
@@ -148,6 +208,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-404, AT-917
 
 ### GI-013 - Kill hard-stop forbids dispatch
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-012
+test_level: deferred
+-->
 - **Name:** Kill hard-stop forbids dispatch
 - **Scope:** Global
 - **Forbidden states:** Any dispatch when TradingMode == KillHardStop
@@ -158,6 +223,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-339, AT-346, AT-347
 
 ### GI-014 - Kill containment eligibility
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-012
+test_level: deferred
+-->
 - **Name:** Kill containment eligibility
 - **Scope:** Global
 - **Forbidden states:** Containment dispatch when eligibility predicates are not all true
@@ -168,6 +238,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-338, AT-340
 
 ### GI-015 - MixedFailed seed immutable
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-013
+test_level: deferred
+-->
 - **Name:** MixedFailed seed immutable
 - **Scope:** Global
 - **Forbidden states:** First failure seed overwritten; GroupState marked Complete before seed
@@ -178,6 +253,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-220
 
 ### GI-016 - Bounded rescue attempts
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-014
+test_level: deferred
+-->
 - **Name:** Bounded rescue attempts
 - **Scope:** Global
 - **Forbidden states:** Unbounded rescue attempts; MixedFailed without emergency close
@@ -188,6 +268,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-117, AT-118
 
 ### GI-017 - Emergency close bypasses profitability gates
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-015
+test_level: module
+-->
 - **Name:** Emergency close bypasses profitability gates
 - **Scope:** Global
 - **Forbidden states:** Emergency close blocked by LiquidityGate or NetEdge
@@ -198,6 +283,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-236, AT-327, AT-938
 
 ### GI-018 - Cortex override aggregation
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-016
+test_level: deferred
+-->
 - **Name:** Cortex override aggregation
 - **Scope:** Global
 - **Forbidden states:** Override less severe than max producer; missing producer input allows Active
@@ -208,6 +298,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-418
 
 ### GI-019 - Bunker mode fail-closed
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-017
+test_level: deferred
+-->
 - **Name:** Bunker mode fail-closed
 - **Scope:** Global
 - **Forbidden states:** TradingMode Active when required network metrics missing
@@ -218,6 +313,11 @@ Scope note: Only numbered sections, Definitions, and Appendix A are normative.
 - **AT coverage:** AT-205
 
 ### GI-020 - Intent idempotency
+<!--
+reject_reason_code: N/A
+enforcement_point: EP-018
+test_level: module
+-->
 - **Name:** Intent idempotency
 - **Scope:** Global
 - **Forbidden states:** Intent resend without WAL unsent flag
