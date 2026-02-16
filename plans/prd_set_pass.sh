@@ -14,6 +14,7 @@ Rules for passes=true:
   - all *.rc files in artifacts dir must be 0
   - contract review file must exist and contain decision=PASS
   - story review gate must pass for current HEAD (self/Kimi/Codex/code-review-expert/resolution evidence)
+  - if Phase-0 stories exist in PRD, non-Phase-0 stories cannot flip true until all Phase-0 stories are passes=true
 USAGE
 }
 
@@ -103,6 +104,22 @@ if [[ "$exists" != "true" ]]; then
 fi
 
 if [[ "$STATUS" == "true" ]]; then
+  target_phase="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.phase // -1)' "$PRD_FILE")"
+  phase0_count="$(jq -r '[.items[] | select((.phase // -1) == 0)] | length' "$PRD_FILE")"
+  if [[ "$target_phase" =~ ^[0-9]+$ ]] && [[ "$phase0_count" =~ ^[0-9]+$ ]]; then
+    if (( target_phase > 0 && phase0_count > 0 )); then
+      incomplete_phase0="$(
+        jq -r '.items[]
+          | select((.phase // -1) == 0 and (.passes != true))
+          | .id' "$PRD_FILE"
+      )"
+      if [[ -n "$incomplete_phase0" ]]; then
+        echo "ERROR: cannot set passes=true for $ID while Phase-0 stories are incomplete: ${incomplete_phase0//$'\n'/, }" >&2
+        exit 4
+      fi
+    fi
+  fi
+
   [[ -d "$ARTIFACTS_DIR" ]] || { echo "ERROR: missing artifacts dir: $ARTIFACTS_DIR" >&2; exit 4; }
 
   meta_file="$ARTIFACTS_DIR/verify.meta.json"

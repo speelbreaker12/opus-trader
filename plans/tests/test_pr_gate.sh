@@ -478,6 +478,26 @@ set -e
 [[ $rc_case15 -eq 0 ]] || fail "expected case15 to pass"
 printf '%s\n' "$out_case15" | grep -Fq "OK: PR gate passed" || fail "case15 missing pass output"
 
+# Case 15b: ACK mode off allows bot issue comments without AFTERCARE_ACK.
+set +e
+out_case15b="$(
+  cd "$repo_dir" && GH_MODE=issue_bot_no_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --aftercare-ack-mode off 2>&1
+)"
+rc_case15b=$?
+set -e
+[[ $rc_case15b -eq 0 ]] || fail "expected case15b to pass"
+printf '%s\n' "$out_case15b" | grep -Fq "OK: PR gate passed" || fail "case15b missing pass output"
+
+# Case 15c: explicit ACK mode off overrides --require-aftercare-ack.
+set +e
+out_case15c="$(
+  cd "$repo_dir" && GH_MODE=issue_bot_no_ack GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --require-aftercare-ack --aftercare-ack-mode off 2>&1
+)"
+rc_case15c=$?
+set -e
+[[ $rc_case15c -eq 0 ]] || fail "expected case15c to pass"
+printf '%s\n' "$out_case15c" | grep -Fq "OK: PR gate passed" || fail "case15c missing pass output"
+
 # Case 16: self check-run pending can be ignored by name to avoid CI deadlocks.
 set +e
 out_case16="$(
@@ -531,9 +551,35 @@ set -e
 [[ $rc_case21 -eq 0 ]] || fail "expected case21 to pass"
 printf '%s\n' "$out_case21" | grep -Fq "OK: PR gate passed" || fail "case21 missing pass output"
 
-# Case 0: --story is required.
-expect_fail "story required" "story is required" \
-  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17"
+# Case 0 (UPDATED): --story is optional; omitting it runs in copilot-only mode.
+set +e
+out_case0="$(
+  cd "$repo_dir" && GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case0=$?
+set -e
+[[ $rc_case0 -eq 0 ]] || fail "expected case0 (no --story) to pass"
+printf '%s\n' "$out_case0" | grep -Fq "OK: PR gate passed" || fail "case0 missing pass output"
+
+# Case 0b: story-less mode with non-story branch passes.
+set +e
+out_case0b="$(
+  cd "$repo_dir" && GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_HEAD_REF='fix/something' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case0b=$?
+set -e
+[[ $rc_case0b -eq 0 ]] || fail "expected case0b (no --story, non-story branch) to pass"
+printf '%s\n' "$out_case0b" | grep -Fq "OK: PR gate passed" || fail "case0b missing pass output"
+
+# Case 0c: story-less mode skips pre_pr_review_gate even when PRE_PR_MODE=fail.
+set +e
+out_case0c="$(
+  cd "$repo_dir" && PRE_PR_MODE=fail GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_HEAD_REF='fix/whatever' GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 2>&1
+)"
+rc_case0c=$?
+set -e
+[[ $rc_case0c -eq 0 ]] || fail "expected case0c (no --story, pre_pr skip) to pass"
+printf '%s\n' "$out_case0c" | grep -Fq "OK: PR gate passed" || fail "case0c missing pass output"
 
 # Case 23: explicit changes requested is always blocking.
 expect_fail "changes requested blocking" "changes_requested" \
@@ -550,5 +596,23 @@ expect_fail "invalid branch naming" "invalid_story_branch_name" \
 # Case 26: failing pre-pr gate blocks.
 expect_fail "pre-pr gate failure" "pre_pr_review_gate_failed" \
   bash -lc "cd '$repo_dir' && PRE_PR_MODE=fail GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1"
+
+# Case 27: pre-pr gate can be skipped for lightweight non-PRD edit path.
+set +e
+out_case27="$(
+  cd "$repo_dir" && PRE_PR_MODE=fail GH_MODE=clean GH_HEAD_SHA="$head_sha" GH_ORIG_SHA="$orig_sha" PATH="$fake_bin:$PATH" ./plans/pr_gate.sh --pr 17 --story S1 --pre-pr-review-mode skip 2>&1
+)"
+rc_case27=$?
+set -e
+[[ $rc_case27 -eq 0 ]] || fail "expected case27 to pass"
+printf '%s\n' "$out_case27" | grep -Fq "OK: PR gate passed" || fail "case27 missing pass output"
+
+# Case 28: invalid pre-pr review mode fails fast.
+expect_fail "invalid pre-pr review mode" "invalid --pre-pr-review-mode: maybe" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --pre-pr-review-mode maybe"
+
+# Case 29: invalid aftercare mode fails fast.
+expect_fail "invalid aftercare mode" "invalid --aftercare-ack-mode: maybe" \
+  bash -lc "cd '$repo_dir' && GH_MODE=clean GH_HEAD_SHA='$head_sha' GH_ORIG_SHA='$orig_sha' PATH='$fake_bin:$PATH' ./plans/pr_gate.sh --pr 17 --story S1 --aftercare-ack-mode maybe"
 
 echo "PASS: pr_gate fixtures"

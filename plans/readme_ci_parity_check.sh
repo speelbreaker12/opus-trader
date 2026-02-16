@@ -86,45 +86,45 @@ require_file_token "$CI_WORKFLOW" "pull_request_review:"
 require_file_token "$CI_WORKFLOW" "pull_request_review_comment:"
 require_file_token "$CI_WORKFLOW" "issue_comment:"
 
-pr_gate_section="$(
+copilot_gate_section="$(
   awk '
-    /^  pr-gate-enforced:/ {in_gate=1}
-    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  pr-gate-enforced:/ {exit}
+    /^  copilot-gate:/ {in_gate=1}
+    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  copilot-gate:/ {exit}
     in_gate {print}
   ' "$CI_WORKFLOW"
 )"
 
-[[ -n "$pr_gate_section" ]] || fail "unable to parse pr-gate-enforced job from $CI_WORKFLOW"
+[[ -n "$copilot_gate_section" ]] || fail "unable to parse copilot-gate job from $CI_WORKFLOW"
 
-require_pr_gate_token() {
+require_copilot_gate_token() {
   local token="$1"
-  if ! printf '%s\n' "$pr_gate_section" | grep -Fq -- "$token"; then
-    fail "$CI_WORKFLOW pr-gate-enforced job missing required token: $token"
+  if ! printf '%s\n' "$copilot_gate_section" | grep -Fq -- "$token"; then
+    fail "$CI_WORKFLOW copilot-gate job missing required token: $token"
   fi
 }
 
-forbid_pr_gate_regex() {
+forbid_copilot_gate_regex() {
   local pattern="$1"
   local reason="$2"
-  if printf '%s\n' "$pr_gate_section" | grep -Eq "$pattern"; then
-    fail "$CI_WORKFLOW pr-gate-enforced job contains forbidden reference ($reason): $pattern"
+  if printf '%s\n' "$copilot_gate_section" | grep -Eq -- "$pattern"; then
+    fail "$CI_WORKFLOW copilot-gate job contains forbidden reference ($reason): $pattern"
   fi
 }
 
-require_pr_gate_token "github.event_name == 'pull_request_review'"
-require_pr_gate_token "github.event_name == 'pull_request_review_comment'"
-require_pr_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
-require_pr_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}'
-require_pr_gate_token 'pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
-require_pr_gate_token "head_ref=\"\$(jq -r '.head.ref // empty' <<<\"\$pr_json\")\""
-require_pr_gate_token 'story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>'
-require_pr_gate_token '--pr "${PR_NUMBER}"'
-require_pr_gate_token '--story "${story_id}"'
-require_pr_gate_token "--bot-comments-mode block"
-require_pr_gate_token "--require-aftercare-ack"
-require_pr_gate_token "--require-copilot-review"
+require_copilot_gate_token "github.event_name == 'pull_request_review'"
+require_copilot_gate_token "github.event_name == 'pull_request_review_comment'"
+require_copilot_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
+require_copilot_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}'
+require_copilot_gate_token '--pr "${PR_NUMBER}"'
+require_copilot_gate_token "--bot-comments-mode block"
+require_copilot_gate_token "--require-copilot-review"
+require_copilot_gate_token "--aftercare-ack-mode auto"
+
+# copilot-gate must NOT contain story-specific logic.
+forbid_copilot_gate_regex '--story' "copilot-gate must not use --story flag"
+forbid_copilot_gate_regex '--require-aftercare-ack' "copilot-gate uses --aftercare-ack-mode auto instead"
 
 # needs can skip this job on comment/review events when upstream jobs are pull_request-only.
-forbid_pr_gate_regex '^[[:space:]]+needs:' "pr-gate must not depend on pull_request-only jobs"
+forbid_copilot_gate_regex '^[[:space:]]+needs:' "copilot-gate must not depend on pull_request-only jobs"
 
 echo "PASS: README/CI verify parity check"

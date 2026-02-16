@@ -36,6 +36,7 @@ cargo test -p soldier_infra --test test_trade_id_registry
 cargo test -p soldier_infra --test test_dispatch_durability
 cargo test -p soldier_infra --test test_config_defaults
 cargo test -p soldier_infra --test test_crash_mid_intent
+cargo test -p soldier_infra --test test_phase0_runtime test_status_command_behavior_runtime -- --exact
 rg -n "cargo test --workspace" plans/verify.sh
 rg -n "check_vq_evidence.py" plans/verify.sh
 test -f docs/order_size_discovery.md
@@ -56,3 +57,6 @@ test -s evidence/phase0/break_glass/log_excerpt.txt
 test -s docs/health_endpoint.md
 cargo test -p soldier_infra --test test_health
 python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.json'))"
+python3 tools/phase0_meta_test.py --root .
+python3 tools/policy_loader.py --policy config/policy.json --strict
+test -f tools/release_gate.py

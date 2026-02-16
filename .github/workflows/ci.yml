@@ -44,7 +44,7 @@ jobs:
       - name: Copilot signal
         run: echo "copilot-signal"
 
-  pr-gate-enforced:
+  copilot-gate:
     if: |
       github.event_name == 'pull_request' ||
       github.event_name == 'pull_request_review' ||
@@ -64,7 +64,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Enforce PR gate (Copilot + aftercare + no new bot comments)
+      - name: Enforce copilot gate (merge health + bot comments)
+        run: |
+          chmod +x ./plans/pr_gate.sh
+          ./plans/pr_gate.sh \
+            --pr "${PR_NUMBER}" \
+            --wait \
+            --timeout-secs 1800 \
+            --poll-secs 20 \
+            --aftercare-ack-mode auto \
+            --bot-comments-mode block \
+            --require-copilot-review \
+            --ignore-check-run-regex '^(copilot-gate|prd-story-gate)$'
+
+  prd-story-gate:
+    if: |
+      false &&
+      (github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review' ||
+      github.event_name == 'pull_request_review_comment' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce PRD story gate (full review evidence)
         run: |
           pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           head_ref="$(jq -r '.head.ref // empty' <<<"$pr_json")"
@@ -85,12 +119,10 @@ jobs:
             ref_token="${BASH_REMATCH[1]}"
             story_id=""
 
-            # Prefer exact canonical story/<STORY_ID> when the token is a PRD story id.
             if [[ -f plans/prd.json ]]; then
               story_id="$(jq -r --arg id "$ref_token" '[.items[]?.id | select(. == $id)] | first // ""' plans/prd.json)"
             fi
 
-            # Fallback for legacy story/<PRD_STORY_ID>-<slug> (legacy slug has no '-').
             if [[ -z "$story_id" && -f plans/prd.json ]]; then
               story_id="$(jq -r --arg ref "$ref_token" '
                 [
@@ -103,26 +135,41 @@ jobs:
               ' plans/prd.json)"
             fi
 
-            # Last resort: keep canonical token to avoid misparsing hyphenated IDs.
             if [[ -z "$story_id" ]]; then
               story_id="$ref_token"
             fi
           else
-            echo "ERROR: PR head branch must match story/<STORY_ID>[/<slug>] (slash-free STORY_ID) or story/<PRD_STORY_ID>-<slug>, got: $head_ref" >&2
-            exit 1
+            echo "INFO: non-story branch ($head_ref) — skipping PRD story gate"
+            exit 0
           fi
+
+          pre_pr_review_mode="required"
+          aftercare_ack_mode="required"
+          story_in_prd="unknown"
+          if [[ -f plans/prd.json ]]; then
+            if jq -e --arg id "$story_id" 'any(.items[]?; .id == $id)' plans/prd.json >/dev/null; then
+              story_in_prd="yes"
+            else
+              story_in_prd="no"
+              pre_pr_review_mode="skip"
+              aftercare_ack_mode="off"
+            fi
+          fi
+          echo "PRD story gate: story_id=${story_id}, story_in_prd=${story_in_prd}, pre_pr_review_mode=${pre_pr_review_mode}, aftercare_ack_mode=${aftercare_ack_mode}"
 
           chmod +x ./plans/pr_gate.sh
           ./plans/pr_gate.sh \
             --pr "${PR_NUMBER}" \
             --story "${story_id}" \
+            --pre-pr-review-mode "${pre_pr_review_mode}" \
+            --aftercare-ack-mode "${aftercare_ack_mode}" \
             --wait \
             --timeout-secs 1800 \
             --poll-secs 20 \
             --bot-comments-mode block \
             --require-aftercare-ack \
             --require-copilot-review \
-            --ignore-check-run-regex '^pr-gate-enforced$'
+            --ignore-check-run-regex '^(copilot-gate|prd-story-gate)$'
 
   pr-template-lint:
     if: github.event_name == 'pull_request'

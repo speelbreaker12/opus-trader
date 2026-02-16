@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ./plans/pr_gate.sh --story <ID> [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--ignore-check-run-regex <regex>]
+  ./plans/pr_gate.sh [--story <ID>] [--pr <number>] [--wait] [--timeout-secs <n>] [--poll-secs <n>] [--artifacts-root <path>] [--bot-comments-mode <warn|block>] [--require-copilot-review] [--copilot-login-regex <regex>] [--copilot-wait-secs <n>] [--require-known-review-decision] [--require-aftercare-ack] [--aftercare-ack-mode <required|auto|off>] [--check-runs-mode <required|skip>] [--ignore-check-run-regex <regex>] [--pre-pr-review-mode <required|skip>]
 
 What it checks (blocking):
   - PR mergeability is not blocked by conflicts (`mergeable=false` or blocked/dirty state)
@@ -34,14 +34,28 @@ Check-run filtering:
 No PR link required:
   - If --pr omitted, auto-detects PR for current branch via `gh pr view`.
 
-Story binding (required):
-  - --story is mandatory.
+Story binding (optional):
+  - --story is optional. When omitted, story-branch validation and pre-pr review gate are skipped (copilot-only mode).
   - Story ID must be slash-free (`[A-Za-z0-9][A-Za-z0-9._-]*`).
   - PR head branch must match: story/<STORY_ID>[/<slug>] or story/<PRD_STORY_ID>-<slug> (legacy slug token cannot contain `-`).
-  - This gate runs ./plans/pre_pr_review_gate.sh against PR HEAD and branch before pass.
+  - This gate runs ./plans/pre_pr_review_gate.sh against PR HEAD and branch before pass when pre-pr mode is `required`.
+
+Pre-PR review mode:
+  - `required` (default): enforce full story review evidence via pre_pr_review_gate.
+  - `skip`: bypass pre_pr_review_gate for lightweight non-PRD edits.
+
+Aftercare ACK mode:
+  - `required`: require `AFTERCARE_ACK: <HEAD_SHA>` for every head.
+  - `auto` (default): require ACK only when bot issue comments exist.
+  - `off`: disable ACK requirement.
+  - `--require-aftercare-ack` is equivalent to `--aftercare-ack-mode required`.
+
+Check-runs mode:
+  - `required` (default): fail on pending/failing check-runs for the PR head.
+  - `skip`: do not block on check-run readiness.
 
 Artifacts:
-  - Writes a report under artifacts/story/<ID>/pr_gate/<ts>_pr_gate.md
+  - Writes a report under artifacts/story/<ID>/pr_gate/<ts>_pr_gate.md (or _copilot/ when no story)
 USAGE
 }
 
@@ -145,7 +159,11 @@ COPILOT_LOGIN_REGEX="${COPILOT_LOGIN_REGEX:-copilot}"
 COPILOT_WAIT_SECS="${COPILOT_WAIT_SECS:-600}"
 REQUIRE_KNOWN_REVIEW_DECISION="${REQUIRE_KNOWN_REVIEW_DECISION:-0}"
 REQUIRE_AFTERCARE_ACK="${REQUIRE_AFTERCARE_ACK:-0}"
+AFTERCARE_ACK_MODE="${AFTERCARE_ACK_MODE:-auto}"
+AFTERCARE_ACK_MODE_EXPLICIT=0
+CHECK_RUNS_MODE="${CHECK_RUNS_MODE:-required}"
 IGNORE_CHECK_RUN_REGEX="${PR_GATE_IGNORE_CHECK_RUN_REGEX:-}"
+PRE_PR_REVIEW_MODE="${PRE_PR_REVIEW_MODE:-required}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -195,10 +213,24 @@ while [[ $# -gt 0 ]]; do
       ;;
     --require-aftercare-ack)
       REQUIRE_AFTERCARE_ACK=1
+      AFTERCARE_ACK_MODE="required"
       shift
+      ;;
+    --aftercare-ack-mode)
+      AFTERCARE_ACK_MODE="${2:?missing mode}"
+      AFTERCARE_ACK_MODE_EXPLICIT=1
+      shift 2
+      ;;
+    --check-runs-mode)
+      CHECK_RUNS_MODE="${2:?missing mode}"
+      shift 2
       ;;
     --ignore-check-run-regex)
       IGNORE_CHECK_RUN_REGEX="${2:?missing regex}"
+      shift 2
+      ;;
+    --pre-pr-review-mode)
+      PRE_PR_REVIEW_MODE="${2:?missing mode}"
       shift 2
       ;;
     -h|--help)
@@ -227,13 +259,31 @@ case "$REQUIRE_AFTERCARE_ACK" in
   0|1) ;;
   *) die "invalid REQUIRE_AFTERCARE_ACK: $REQUIRE_AFTERCARE_ACK (expected 0|1)" ;;
 esac
+case "$AFTERCARE_ACK_MODE" in
+  required|auto|off) ;;
+  *) die "invalid --aftercare-ack-mode: $AFTERCARE_ACK_MODE (expected required|auto|off)" ;;
+esac
+case "$CHECK_RUNS_MODE" in
+  required|skip) ;;
+  *) die "invalid --check-runs-mode: $CHECK_RUNS_MODE (expected required|skip)" ;;
+esac
+if [[ "$REQUIRE_AFTERCARE_ACK" == "1" ]]; then
+  if [[ "$AFTERCARE_ACK_MODE_EXPLICIT" != "1" ]]; then
+    AFTERCARE_ACK_MODE="required"
+  fi
+fi
 [[ "$COPILOT_WAIT_SECS" =~ ^[0-9]+$ ]] || die "invalid COPILOT_WAIT_SECS: $COPILOT_WAIT_SECS (expected integer seconds)"
 if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
   jq -n --arg re "$IGNORE_CHECK_RUN_REGEX" '"" | test($re)' >/dev/null 2>&1 || die "invalid --ignore-check-run-regex: $IGNORE_CHECK_RUN_REGEX"
 fi
+case "$PRE_PR_REVIEW_MODE" in
+  required|skip) ;;
+  *) die "invalid --pre-pr-review-mode: $PRE_PR_REVIEW_MODE (expected required|skip)" ;;
+esac
 
-[[ -n "$STORY_ID" ]] || die "--story is required"
-validate_story_id "$STORY_ID"
+if [[ -n "$STORY_ID" ]]; then
+  validate_story_id "$STORY_ID"
+fi
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$repo_root"
@@ -260,7 +310,11 @@ fi
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 root="${ART_ROOT:-${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}}"
 [[ "$root" == /* ]] || root="$repo_root/$root"
-outdir="$root/$STORY_ID/pr_gate"
+if [[ -n "$STORY_ID" ]]; then
+  outdir="$root/$STORY_ID/pr_gate"
+else
+  outdir="$root/_copilot/pr_gate"
+fi
 mkdir -p "$outdir"
 report_path="$outdir/${ts}_pr_gate.md"
 
@@ -309,7 +363,10 @@ reviewDecision: $REVIEW_DECISION
 bot_comments_mode: $BOT_COMMENTS_MODE
 require_known_review_decision: $REQUIRE_KNOWN_REVIEW_DECISION
 require_aftercare_ack: $REQUIRE_AFTERCARE_ACK
+aftercare_ack_mode: $AFTERCARE_ACK_MODE
+check_runs_mode: $CHECK_RUNS_MODE
 ignore_check_run_regex: ${IGNORE_CHECK_RUN_REGEX:-<none>}
+pre_pr_review_mode: $PRE_PR_REVIEW_MODE
 
 ## Check-runs
 $CHECK_SUMMARY
@@ -357,84 +414,93 @@ while true; do
   HEAD_COMMIT_TIME="$(jq -r '.commit.committer.date // ""' <<<"$commit_json")"
   [[ -n "$HEAD_COMMIT_TIME" ]] || die "missing head commit timestamp"
 
-  set +e
-  checks_json="$(gh_api_check_runs "repos/$repo/commits/$HEAD_SHA/check-runs?per_page=100")"
-  checks_rc=$?
-  set -e
-  IGNORED_PENDING_CHECKS=0
-  if [[ $checks_rc -ne 0 || -z "$checks_json" ]]; then
-    status_json="$(gh api "repos/$repo/commits/$HEAD_SHA/status")" || die "failed to fetch commit status"
-    CHECK_PENDING="$(jq '[.statuses[] | select(.state=="pending")] | length' <<<"$status_json")"
-    CHECK_FAIL="$(jq '[.statuses[] | select(.state=="failure" or .state=="error")] | length' <<<"$status_json")"
-    status_state="$(jq -r '.state // ""' <<<"$status_json")"
-    if [[ "$status_state" == "pending" ]]; then
-      CHECK_PENDING="$((CHECK_PENDING + 1))"
-    fi
-    if [[ "$status_state" == "failure" || "$status_state" == "error" ]]; then
-      CHECK_FAIL="$((CHECK_FAIL + 1))"
-    fi
-    CHECK_SUMMARY="(fallback status API)
+  if [[ "$CHECK_RUNS_MODE" == "skip" ]]; then
+    checks_rc=0
+    checks_json='{"check_runs":[]}'
+    CHECK_PENDING=0
+    CHECK_FAIL=0
+    IGNORED_PENDING_CHECKS=0
+    CHECK_SUMMARY="skipped (check_runs_mode=skip)"
+  else
+    set +e
+    checks_json="$(gh_api_check_runs "repos/$repo/commits/$HEAD_SHA/check-runs?per_page=100")"
+    checks_rc=$?
+    set -e
+    IGNORED_PENDING_CHECKS=0
+    if [[ $checks_rc -ne 0 || -z "$checks_json" ]]; then
+      status_json="$(gh api "repos/$repo/commits/$HEAD_SHA/status")" || die "failed to fetch commit status"
+      CHECK_PENDING="$(jq '[.statuses[] | select(.state=="pending")] | length' <<<"$status_json")"
+      CHECK_FAIL="$(jq '[.statuses[] | select(.state=="failure" or .state=="error")] | length' <<<"$status_json")"
+      status_state="$(jq -r '.state // ""' <<<"$status_json")"
+      if [[ "$status_state" == "pending" ]]; then
+        CHECK_PENDING="$((CHECK_PENDING + 1))"
+      fi
+      if [[ "$status_state" == "failure" || "$status_state" == "error" ]]; then
+        CHECK_FAIL="$((CHECK_FAIL + 1))"
+      fi
+      CHECK_SUMMARY="(fallback status API)
 state=${status_state:-<missing>}
 pending=$CHECK_PENDING
 failing=$CHECK_FAIL"
-  else
-    if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
-      IGNORED_PENDING_CHECKS="$(
-        jq --arg re "$IGNORE_CHECK_RUN_REGEX" '
-          [
-            (.check_runs // [])
-            | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
-            | group_by(.name // "")
-            | map(last)[]
-            | select(((.name // "") | test($re)) and (.status != "completed"))
-          ] | length
-        ' <<<"$checks_json"
-      )"
-    fi
-
-    if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
-      checks_latest_json="$(
-        jq --arg re "$IGNORE_CHECK_RUN_REGEX" '{
-          check_runs: (
-            (.check_runs // [])
-            | map(select((((.name // "") | test($re)) | not)))
-            | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
-            | group_by(.name // "")
-            | map(last)
-          )
-        }' <<<"$checks_json"
-      )"
     else
-      checks_latest_json="$(
-        jq '{
-          check_runs: (
-            (.check_runs // [])
-            | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
-            | group_by(.name // "")
-            | map(last)
-          )
-        }' <<<"$checks_json"
+      if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+        IGNORED_PENDING_CHECKS="$(
+          jq --arg re "$IGNORE_CHECK_RUN_REGEX" '
+            [
+              (.check_runs // [])
+              | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+              | group_by(.name // "")
+              | map(last)[]
+              | select(((.name // "") | test($re)) and (.status != "completed"))
+            ] | length
+          ' <<<"$checks_json"
+        )"
+      fi
+
+      if [[ -n "$IGNORE_CHECK_RUN_REGEX" ]]; then
+        checks_latest_json="$(
+          jq --arg re "$IGNORE_CHECK_RUN_REGEX" '{
+            check_runs: (
+              (.check_runs // [])
+              | map(select((((.name // "") | test($re)) | not)))
+              | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+              | group_by(.name // "")
+              | map(last)
+            )
+          }' <<<"$checks_json"
+        )"
+      else
+        checks_latest_json="$(
+          jq '{
+            check_runs: (
+              (.check_runs // [])
+              | sort_by((.name // ""), (.completed_at // .started_at // ""), (.id // 0))
+              | group_by(.name // "")
+              | map(last)
+            )
+          }' <<<"$checks_json"
+        )"
+      fi
+      CHECK_PENDING="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks_latest_json")"
+      CHECK_FAIL="$(jq '[.check_runs[] | select(.status=="completed") | select(.conclusion != null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")] | length' <<<"$checks_latest_json")"
+      CHECK_SUMMARY="$(
+        jq -r '
+          (.check_runs // []) as $r
+          | "total_unique_check_names=" + ([ $r[] ] | length | tostring)
+          + "\npending=" + ([ $r[] | select(.status!="completed") ] | length | tostring)
+          + "\nfailing=" + ([ $r[] | select(.status=="completed") | select(.conclusion!=null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped") ] | length | tostring)
+          + "\n"
+          + (
+              [ $r[]
+                | select(.status=="completed")
+                | select(.conclusion!=null)
+                | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")
+                | "- " + (.name // "unknown") + " (" + (.conclusion // "unknown") + "): " + (.html_url // "")
+              ] | join("\n")
+            )
+        ' <<<"$checks_latest_json"
       )"
     fi
-    CHECK_PENDING="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks_latest_json")"
-    CHECK_FAIL="$(jq '[.check_runs[] | select(.status=="completed") | select(.conclusion != null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")] | length' <<<"$checks_latest_json")"
-    CHECK_SUMMARY="$(
-      jq -r '
-        (.check_runs // []) as $r
-        | "total_unique_check_names=" + ([ $r[] ] | length | tostring)
-        + "\npending=" + ([ $r[] | select(.status!="completed") ] | length | tostring)
-        + "\nfailing=" + ([ $r[] | select(.status=="completed") | select(.conclusion!=null) | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped") ] | length | tostring)
-        + "\n"
-        + (
-            [ $r[]
-              | select(.status=="completed")
-              | select(.conclusion!=null)
-              | select(.conclusion!="success" and .conclusion!="neutral" and .conclusion!="skipped")
-              | "- " + (.name // "unknown") + " (" + (.conclusion // "unknown") + "): " + (.html_url // "")
-            ] | join("\n")
-          )
-      ' <<<"$checks_latest_json"
-    )"
   fi
 
   pr_comments="$(gh_api_array "repos/$repo/pulls/$PR/comments?per_page=100")" || die "failed to fetch PR review comments"
@@ -496,17 +562,30 @@ unresolved_bot_inline_comments=$unresolved_inline_bot_count"
   copilot_seen=0
   copilot_reason="not_required"
 
-  branch_story_id="$(extract_story_from_head_ref "$HEAD_REF" || true)"
-  if [[ -n "$branch_story_id" ]]; then
-    branch_story_match=1
-    if head_ref_matches_story "$HEAD_REF" "$STORY_ID"; then
-      branch_story_id="$STORY_ID"
+  if [[ -n "$STORY_ID" ]]; then
+    branch_story_id="$(extract_story_from_head_ref "$HEAD_REF" || true)"
+    if [[ -n "$branch_story_id" ]]; then
+      branch_story_match=1
+      if head_ref_matches_story "$HEAD_REF" "$STORY_ID"; then
+        branch_story_id="$STORY_ID"
+      fi
+    else
+      branch_story_match=0
     fi
   else
-    branch_story_match=0
+    branch_story_match=1
+    branch_story_id=""
   fi
 
-  if [[ "$HEAD_SHA" == "$PRE_PR_CACHE_HEAD" && "$HEAD_REF" == "$PRE_PR_CACHE_REF" && "$PRE_PR_CACHE_RC" == "0" ]]; then
+  if [[ -z "$STORY_ID" ]]; then
+    pre_pr_rc=0
+    pre_pr_output="SKIP: no story ID provided"
+    PRE_PR_REVIEW_SUMMARY="skip (no story)"
+  elif [[ "$PRE_PR_REVIEW_MODE" == "skip" ]]; then
+    pre_pr_rc=0
+    pre_pr_output="SKIP: pre_pr_review_gate disabled (pre_pr_review_mode=skip)"
+    PRE_PR_REVIEW_SUMMARY="skip (mode=skip)"
+  elif [[ "$HEAD_SHA" == "$PRE_PR_CACHE_HEAD" && "$HEAD_REF" == "$PRE_PR_CACHE_REF" && "$PRE_PR_CACHE_RC" == "0" ]]; then
     pre_pr_rc="$PRE_PR_CACHE_RC"
     pre_pr_output="$PRE_PR_CACHE_OUTPUT"
     PRE_PR_REVIEW_SUMMARY="$PRE_PR_CACHE_SUMMARY"
@@ -687,13 +766,23 @@ $inline_unfixed_lines"
   ' <<<"$issue_comments")"
   ack_required=0
   ack_required_reason="not_required"
-  if [[ "$REQUIRE_AFTERCARE_ACK" == "1" ]]; then
-    ack_required=1
-    ack_required_reason="strict_mode"
-  elif [[ "$bot_issue_count" -gt 0 ]]; then
-    ack_required=1
-    ack_required_reason="bot_issue_comments_present"
-  fi
+  case "$AFTERCARE_ACK_MODE" in
+    required)
+      ack_required=1
+      ack_required_reason="mode_required"
+      ;;
+    auto)
+      if [[ "$bot_issue_count" -gt 0 ]]; then
+        ack_required=1
+        ack_required_reason="bot_issue_comments_present"
+      else
+        ack_required_reason="mode_auto_no_bot_issue_comments"
+      fi
+      ;;
+    off)
+      ack_required_reason="mode_off"
+      ;;
+  esac
   if [[ "$ack_required" -eq 1 ]]; then
     AFTERCARE_ACK_SUMMARY="required=yes
 reason=$ack_required_reason
@@ -703,7 +792,9 @@ bot_issue_comments=$bot_issue_count
 bot_issue_urls:
 ${issue_bot_urls:-none}"
   else
-    AFTERCARE_ACK_SUMMARY="required=no (no bot issue comments and strict mode disabled)"
+    AFTERCARE_ACK_SUMMARY="required=no
+reason=$ack_required_reason
+mode=$AFTERCARE_ACK_MODE"
   fi
 
   if [[ "$REQUIRE_COPILOT_REVIEW" == "1" ]]; then
@@ -769,10 +860,12 @@ wait_timeout_secs=$COPILOT_WAIT_SECS"
     problems+=("copilot_review_pending")
   fi
 
-  if [[ "$branch_story_match" -ne 1 ]]; then
-    problems+=("invalid_story_branch_name:$HEAD_REF")
-  elif [[ "$branch_story_id" != "$STORY_ID" ]]; then
-    problems+=("story_branch_mismatch:expected=$STORY_ID actual=$branch_story_id")
+  if [[ -n "$STORY_ID" ]]; then
+    if [[ "$branch_story_match" -ne 1 ]]; then
+      problems+=("invalid_story_branch_name:$HEAD_REF")
+    elif [[ "$branch_story_id" != "$STORY_ID" ]]; then
+      problems+=("story_branch_mismatch:expected=$STORY_ID actual=$branch_story_id")
+    fi
   fi
 
   if [[ "$pre_pr_rc" -ne 0 ]]; then

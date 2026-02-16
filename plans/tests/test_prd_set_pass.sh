@@ -311,4 +311,33 @@ for run in 1 2; do
   [[ ! -d "$noflock_case/prd.json.lock.d" ]] || fail "no-flock run $run left stale lock dir"
 done
 
+# Phase-0 prerequisite guard: non-phase0 pass flip is blocked until all phase0 items pass.
+phase0_guard_case="$tmp_dir/phase0_guard"
+mkdir -p "$phase0_guard_case"
+setup_case "$phase0_guard_case" "$head_sha"
+cat > "$phase0_guard_case/prd.json" <<EOF
+{
+  "items": [
+    {"id":"S0-000","phase":0,"passes":false},
+    {"id":"$story_id","phase":1,"passes":false}
+  ]
+}
+EOF
+
+set +e
+phase0_guard_output="$(
+  cd "$ROOT" && \
+  PRD_FILE="$phase0_guard_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$phase0_guard_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$phase0_guard_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$phase0_guard_case/artifacts/contract_review.json" 2>&1
+)"
+phase0_guard_rc=$?
+set -e
+
+[[ "$phase0_guard_rc" -ne 0 ]] || fail "expected non-phase0 pass flip to fail when phase0 stories are incomplete"
+echo "$phase0_guard_output" | grep -Fq "Phase-0 stories are incomplete: S0-000" || fail "missing phase0 guard diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$phase0_guard_case/prd.json" >/dev/null || fail "passes changed despite phase0 guard failure"
+
 echo "PASS: prd_set_pass"

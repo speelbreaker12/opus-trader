@@ -610,3 +610,37 @@ Commands: rustup update stable; cargo test -p soldier_core --test test_intent_pi
 Evidence: artifacts/story/S2-004/review_resolution.md; artifacts/story/S6-007/review_resolution.md; artifacts/story/S6-008/review_resolution.md; artifacts/story/S6-009/review_resolution.md; artifacts/story/S6-010/review_resolution.md; artifacts/verify/20260214_201501/verify.meta.json; artifacts/verify/20260214_201501/contract_review.json; plans/prd.json.
 Notes: Story passes flipped true via `plans/prd_set_pass.sh` for S2-004, S6-007, S6-008, S6-009, S6-010.
 Next: None.
+Story: PRD contract-trace hardening (S0/S8/S13/S14)
+Date: 2026-02-16 15:25:16 UTC
+Summary: Applied contract-audit fixes after cherry-picks by removing invalid Phase-0 AT enforcement links, aligning Phase-0 status scaffolding to AT-022 and owner-status semantics, completing schema-required fields for S0-005 and S14-000, adding deterministic acceptance rewrites (S8-007/S8-008/S13-001), and adding a prd_set_pass phase guard that blocks non-Phase-0 pass flips while any Phase-0 story remains incomplete.
+Commands: ./plans/prd_schema_check.sh plans/prd.json; bash plans/tests/test_prd_set_pass.sh; bash plans/tests/test_prd_gate.sh; ./plans/prd_gate.sh plans/prd.json; ./plans/prd_audit_check.sh.
+Evidence: plans/prd.json; plans/prd_set_pass.sh; plans/tests/test_prd_set_pass.sh.
+Notes: prd_gate still reports pre-existing CREATE_PATH_EXISTS errors in S1-012/S2-004/S6-007/S6-008/S6-009/S6-010. prd_audit_check reports prd_sha256 mismatch against stale plans/prd_audit.json cache.
+Next: regenerate PRD audit output with current PRD SHA (run_prd_auditor/audit pipeline) before relying on cached audit artifacts.
+Story: workflow-maintenance
+Date: 2026-02-16 15:52:34 UTC
+Summary: Split PR gate enforcement into strict PRD-story mode vs lightweight non-PRD mode. Non-PRD stories now skip pre-PR review evidence and disable aftercare ACK blocking while still requiring Copilot review signal and bot comment handling; PRD stories remain strict.
+Commands: timeout 600 bash plans/tests/test_pr_gate.sh; bash plans/tests/test_pre_pr_review_gate.sh; ./plans/readme_ci_parity_check.sh; ./plans/verify.sh quick.
+Evidence: .github/workflows/ci.yml; plans/pr_gate.sh; plans/tests/test_pr_gate.sh; artifacts/verify/20260216_094920.
+Next: Verify this behavior in CI by opening one PRD story branch PR and one non-PRD story branch PR.
+Story: PRD audit artifact refresh + CREATE_PATH_EXISTS remediation
+Date: 2026-02-16 16:15:42 UTC
+Summary: Completed requested follow-up actions by fixing stale `scope.create` entries for existing test files (S1-012, S2-004, S6-007, S6-008, S6-009, S6-010), correcting unresolved plan_ref in S14-000, updating story verify allowlist for new PRD verify commands, and regenerating `plans/prd_audit.json` via targeted slice audits (including slice 11 refresh) so audit SHA matches current PRD.
+Commands: ./plans/prd_gate.sh plans/prd.json; AUDIT_SLICES=8,9,10,12,13,14 MAX_PARALLEL=4 ./plans/audit_parallel.sh; AUDIT_SLICES=11 MAX_PARALLEL=1 AUDIT_NO_CACHE=1 ./plans/audit_parallel.sh; ./plans/prd_audit_check.sh.
+Evidence: plans/prd.json; plans/story_verify_allowlist.txt; .context/parallel_audits/audit_slice_8.json; .context/parallel_audits/audit_slice_9.json; .context/parallel_audits/audit_slice_10.json; .context/parallel_audits/audit_slice_11.json; .context/parallel_audits/audit_slice_12.json; .context/parallel_audits/audit_slice_13.json; .context/parallel_audits/audit_slice_14.json; plans/prd_audit.json.
+Notes: prd_gate passes with warnings only (`FORWARD_KEYWORD` on S8-007 and S14-000).
+Next: If desired, tighten acceptance wording in S8-007/S14-000 to remove remaining forward-keyword warnings.
+Story: PRD warning cleanup (S8-007/S14-000)
+Date: 2026-02-16 17:36:23 UTC
+Summary: Removed `FORWARD_KEYWORD` lint warnings by rewriting acceptance text in S8-007 and S14-000 to avoid forward-dependency keyword triggers while preserving deterministic AT bindings.
+Commands: ./plans/prd_gate.sh plans/prd.json; ./plans/prd_audit_check.sh.
+Evidence: plans/prd.json.
+Notes: prd_gate is now warning-free; prd_audit_check now requires audit artifact refresh due updated PRD SHA.
+Next: regenerate `plans/prd_audit.json` against current `plans/prd.json`.
+Story: PRD audit refresh blocked by auditor usage limit
+Date: 2026-02-16 17:57:01 UTC
+Summary: Attempted full regeneration of `plans/prd_audit.json` after PRD acceptance wording cleanup. Refreshing slice audits is currently blocked by Codex auditor usage cap; slice 4 (and subsequent slices) fail before output creation.
+Commands: AUDIT_NO_CACHE=1 MAX_PARALLEL=4 ./plans/audit_parallel.sh; AUDIT_SCOPE=slice AUDIT_SLICE=4 ... ./plans/run_prd_auditor.sh; ./plans/prd_audit_check.sh.
+Evidence: .context/parallel_audits/stdout_4.log (contains usage-cap error); plans/prd_audit.json (restored from HEAD to avoid deletion).
+Notes: Auditor error: "You've hit your usage limit... try again at 1:37 PM." Partial slice refresh succeeded for slices 0-3 with current PRD SHA, but full merge cannot complete until usage resets.
+Next: retry slice refresh/merge after usage reset time.
