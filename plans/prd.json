@@ -3494,7 +3494,7 @@
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
-      "passes": true,
+      "passes": false,
       "contract_must_evidence": [
         {
           "quote": "S1.4 contract tests must pass before enabling OPEN behavior.",
