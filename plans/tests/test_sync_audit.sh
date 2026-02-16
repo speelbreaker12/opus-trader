@@ -3,6 +3,9 @@
 
 set -euo pipefail
 
+# Test timeout (prevent hangs)
+TEST_TIMEOUT=30
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT"
@@ -38,6 +41,21 @@ run_test() {
   ((TESTS_RUN++))
   echo ""
   echo -e "${YELLOW}=== Test: $test_name ===${NC}"
+}
+
+# Run command with timeout
+run_with_timeout() {
+  local timeout_sec="$1"
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$timeout_sec" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$timeout_sec" "$@"
+  else
+    # No timeout available, run directly
+    "$@"
+  fi
 }
 
 cleanup_test() {
@@ -325,22 +343,22 @@ test_smoke_pass() {
   run_test "Smoke mode with valid inputs"
   cleanup_test
 
-  if ./plans/sync_audit.sh --mode smoke 2>/dev/null; then
+  if run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>/dev/null; then
     pass "Exit code 0 (all gates passed)"
 
-    if [[ -f "$ROOT/artifacts/sync_audit/"*/sync_audit.meta.json ]]; then
+    # Find metadata file
+    local meta_file=$(find "$ROOT/artifacts/sync_audit" -name sync_audit.meta.json 2>/dev/null | head -1)
+    if [[ -n "$meta_file" && -f "$meta_file" ]]; then
       pass "Metadata file created"
-    else
-      fail "Metadata file not created" "Expected artifacts/sync_audit/*/sync_audit.meta.json"
-      return
-    fi
 
-    local meta_file=$(find "$ROOT/artifacts/sync_audit" -name sync_audit.meta.json | head -1)
-    local status=$(jq -r '.status' "$meta_file")
-    if [[ "$status" == "pass" ]]; then
-      pass "Overall status: pass"
+      local status=$(jq -r '.status' "$meta_file" 2>/dev/null || echo "error")
+      if [[ "$status" == "pass" ]]; then
+        pass "Overall status: pass"
+      else
+        fail "Overall status incorrect" "Expected 'pass', got '$status'"
+      fi
     else
-      fail "Overall status incorrect" "Expected 'pass', got '$status'"
+      fail "Metadata file not found" "Expected sync_audit.meta.json in artifacts"
     fi
   else
     local exit_code=$?
@@ -353,9 +371,8 @@ test_schema_fail() {
   run_test "Schema validation failure"
   cleanup_test
 
-  cd "$FIXTURES_DIR/invalid_schema"
   local exit_code=0
-  PRD_FILE=prd.json ./../../../../plans/sync_audit.sh --mode smoke 2>/dev/null || exit_code=$?
+  PRD_FILE="$FIXTURES_DIR/invalid_schema/prd.json" run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>/dev/null || exit_code=$?
 
   if [[ $exit_code -eq 5 ]]; then
     pass "Exit code 5 (schema violation)"
@@ -364,17 +381,15 @@ test_schema_fail() {
   fi
 
   if [[ -f "$ROOT/artifacts/sync_audit/"*/FAILED_GATE ]]; then
-    local failed_gate=$(cat "$ROOT/artifacts/sync_audit/"*/FAILED_GATE)
+    local failed_gate=$(cat "$ROOT/artifacts/sync_audit/"*/FAILED_GATE 2>/dev/null || echo "")
     if [[ "$failed_gate" == "prd_schema_check" ]]; then
       pass "FAILED_GATE correctly set to prd_schema_check"
     else
-      fail "FAILED_GATE incorrect" "Expected prd_schema_check, got $failed_gate"
+      fail "FAILED_GATE incorrect" "Expected prd_schema_check, got '$failed_gate'"
     fi
   else
     fail "FAILED_GATE not created" "Expected artifacts/sync_audit/*/FAILED_GATE"
   fi
-
-  cd "$ROOT"
 }
 
 # Test 3: Ref fail
@@ -382,17 +397,14 @@ test_ref_fail() {
   run_test "Reference validation failure"
   cleanup_test
 
-  cd "$FIXTURES_DIR/invalid_refs"
   local exit_code=0
-  PRD_FILE=prd.json ./../../../../plans/sync_audit.sh --mode smoke 2>/dev/null || exit_code=$?
+  PRD_FILE="$FIXTURES_DIR/invalid_refs/prd.json" run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>/dev/null || exit_code=$?
 
   if [[ $exit_code -eq 1 ]]; then
     pass "Exit code 1 (unresolved refs)"
   else
     fail "Exit code incorrect" "Expected 1, got $exit_code"
   fi
-
-  cd "$ROOT"
 }
 
 # Test 4: Trace fail (quick mode)
@@ -400,9 +412,8 @@ test_trace_fail() {
   run_test "CSP trace validation failure"
   cleanup_test
 
-  cd "$FIXTURES_DIR/invalid_trace"
   local exit_code=0
-  PRD_FILE=prd.json ./../../../../plans/sync_audit.sh --mode quick 2>/dev/null || exit_code=$?
+  PRD_FILE="$FIXTURES_DIR/invalid_trace/prd.json" run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode quick 2>/dev/null || exit_code=$?
 
   if [[ $exit_code -eq 2 ]]; then
     pass "Exit code 2 (trace validation error)"
@@ -411,17 +422,15 @@ test_trace_fail() {
   fi
 
   if [[ -f "$ROOT/artifacts/sync_audit/"*/FAILED_GATE ]]; then
-    local failed_gate=$(cat "$ROOT/artifacts/sync_audit/"*/FAILED_GATE)
+    local failed_gate=$(cat "$ROOT/artifacts/sync_audit/"*/FAILED_GATE 2>/dev/null || echo "")
     if [[ "$failed_gate" == "check_csp_trace" ]]; then
       pass "FAILED_GATE correctly set to check_csp_trace"
     else
-      fail "FAILED_GATE incorrect" "Expected check_csp_trace, got $failed_gate"
+      fail "FAILED_GATE incorrect" "Expected check_csp_trace, got '$failed_gate'"
     fi
   else
     fail "FAILED_GATE not created" "Expected artifacts/sync_audit/*/FAILED_GATE"
   fi
-
-  cd "$ROOT"
 }
 
 # Test 5: JSON output (happy path)
@@ -458,25 +467,21 @@ test_json_output_fail() {
   run_test "JSON output with schema failure"
   cleanup_test
 
-  cd "$FIXTURES_DIR/invalid_schema"
-  local json_output=$(PRD_FILE=prd.json ./../../../../plans/sync_audit.sh --mode smoke --json 2>/dev/null || true)
+  local json_output=$(PRD_FILE="$FIXTURES_DIR/invalid_schema/prd.json" run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke --json 2>/dev/null || true)
 
   if echo "$json_output" | jq -e . >/dev/null 2>&1; then
     pass "Valid JSON output on failure"
   else
     fail "Invalid JSON output on failure" "Output is not valid JSON"
-    cd "$ROOT"
     return
   fi
 
-  local status=$(echo "$json_output" | jq -r '.status')
+  local status=$(echo "$json_output" | jq -r '.status' 2>/dev/null || echo "error")
   if [[ "$status" == "fail" ]]; then
     pass "Status is fail"
   else
-    fail "Status incorrect" "Expected fail, got $status"
+    fail "Status incorrect" "Expected fail, got '$status'"
   fi
-
-  cd "$ROOT"
 }
 
 # Test 7: Cache hit
@@ -510,16 +515,26 @@ test_cache_invalidation() {
   cleanup_test
 
   # First run
-  ./plans/sync_audit.sh --mode smoke >/dev/null 2>&1
+  run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke >/dev/null 2>&1 || {
+    fail "First run failed" "Cannot test cache invalidation"
+    return
+  }
+
+  # Save original PRD hash
+  local original_hash=$(sha256sum plans/prd.json 2>/dev/null | awk '{print $1}' || shasum -a 256 plans/prd.json | awk '{print $1}')
 
   # Modify PRD file (add a comment)
-  echo "# Test comment" >> plans/prd.json
+  echo "# Test comment for cache invalidation" >> plans/prd.json
 
   # Second run (should NOT use cache)
-  local output=$(./plans/sync_audit.sh --mode smoke 2>&1 || true)
+  local output=$(run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>&1 || true)
 
-  # Restore original
-  git checkout plans/prd.json 2>/dev/null || true
+  # Restore original by removing the added line
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' '$d' plans/prd.json
+  else
+    sed -i '$d' plans/prd.json
+  fi
 
   if echo "$output" | grep -q "Using cached results"; then
     fail "Cache used after file change" "Cache should be invalidated"
@@ -619,23 +634,23 @@ test_fail_fast() {
   run_test "Fail-fast on first gate failure"
   cleanup_test
 
-  cd "$FIXTURES_DIR/invalid_schema"
-  PRD_FILE=prd.json ./../../../../plans/sync_audit.sh --mode smoke 2>/dev/null || true
+  PRD_FILE="$FIXTURES_DIR/invalid_schema/prd.json" run_with_timeout $TEST_TIMEOUT ./plans/sync_audit.sh --mode smoke 2>/dev/null || true
 
-  # Check that subsequent gates were skipped (no .rc files)
-  local artifacts_dir=$(find "$ROOT/artifacts/sync_audit" -type d -name "20*" | head -1)
+  # Check that failed gate created artifacts
+  local artifacts_dir=$(find "$ROOT/artifacts/sync_audit" -type d -name "20*" | sort | tail -1)
 
-  if [[ -f "$artifacts_dir/prd_schema_check.rc" ]]; then
+  if [[ -n "$artifacts_dir" && -f "$artifacts_dir/prd_schema_check.rc" ]]; then
     pass "Failed gate .rc file exists"
   else
-    fail "Failed gate .rc file missing" "Expected prd_schema_check.rc"
+    fail "Failed gate .rc file missing" "Expected prd_schema_check.rc in $artifacts_dir"
   fi
 
-  # Ref check should not have run (fail-fast)
-  # Note: In our implementation, we might still create stub files, so this test is informational
-  pass "Fail-fast behavior implemented (verified via code review)"
-
-  cd "$ROOT"
+  # Verify FAILED_GATE was set
+  if [[ -f "$artifacts_dir/FAILED_GATE" ]]; then
+    pass "FAILED_GATE marker created"
+  else
+    fail "FAILED_GATE marker missing" "Expected fail-fast to create FAILED_GATE"
+  fi
 }
 
 # Main test runner

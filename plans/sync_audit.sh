@@ -105,13 +105,29 @@ case "$MODE" in
     ;;
 esac
 
+# Find repository root first
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # Convert PRD_FILE to absolute path before changing directories
 if [[ -n "$PRD_FILE" && ! "$PRD_FILE" = /* ]]; then
-  PRD_FILE="$(pwd)/$PRD_FILE"
+  PRD_FILE="$(cd "$(dirname "$PRD_FILE")" 2>/dev/null && pwd)/$(basename "$PRD_FILE")" || {
+    echo "ERROR: Cannot resolve PRD_FILE path: $PRD_FILE" >&2
+    exit 2
+  }
 fi
 
-# Find repository root
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Validate PRD_FILE is within repository (prevent path traversal)
+case "$PRD_FILE" in
+  "$ROOT"*)
+    # Path is within repository, OK
+    ;;
+  *)
+    echo "ERROR: PRD_FILE must be within repository root: $ROOT" >&2
+    echo "ERROR: Provided path: $PRD_FILE" >&2
+    exit 2
+    ;;
+esac
+
 cd "$ROOT"
 
 # Source utilities
@@ -201,10 +217,23 @@ check_cache() {
     return 1
   fi
 
-  # Verify SHA256 fingerprints
-  local prd_sha=$(hash_file "$PRD_FILE")
-  local contract_sha=$(hash_file "$CONTRACT_FILE")
-  local plan_sha=$(hash_file "$PLAN_FILE")
+  # Verify SHA256 fingerprints (invalidate cache if hashing fails)
+  local prd_sha
+  local contract_sha
+  local plan_sha
+
+  prd_sha=$(hash_file "$PRD_FILE") || {
+    echo "WARN: Failed to hash PRD file, invalidating cache" >&2
+    return 1
+  }
+  contract_sha=$(hash_file "$CONTRACT_FILE") || {
+    echo "WARN: Failed to hash contract file, invalidating cache" >&2
+    return 1
+  }
+  plan_sha=$(hash_file "$PLAN_FILE") || {
+    echo "WARN: Failed to hash plan file, invalidating cache" >&2
+    return 1
+  }
 
   local cached_prd_sha=$(jq -r '.fingerprints.prd_file // empty' "$CACHE_FILE")
   local cached_contract_sha=$(jq -r '.fingerprints.contract_file // empty' "$CACHE_FILE")
@@ -216,7 +245,11 @@ check_cache() {
 
   # Check TRACE file for quick/full modes
   if [[ "$MODE" == "quick" || "$MODE" == "full" ]]; then
-    local trace_sha=$(hash_file "$TRACE_FILE")
+    local trace_sha
+    trace_sha=$(hash_file "$TRACE_FILE") || {
+      echo "WARN: Failed to hash trace file, invalidating cache" >&2
+      return 1
+    }
     local cached_trace_sha=$(jq -r '.fingerprints.trace_file // empty' "$CACHE_FILE")
     if [[ "$trace_sha" != "$cached_trace_sha" ]]; then
       return 1
@@ -232,12 +265,30 @@ write_cache() {
 
   mkdir -p "$(dirname "$CACHE_FILE")"
 
-  local prd_sha=$(hash_file "$PRD_FILE")
-  local contract_sha=$(hash_file "$CONTRACT_FILE")
-  local plan_sha=$(hash_file "$PLAN_FILE")
+  local prd_sha
+  local contract_sha
+  local plan_sha
   local trace_sha=""
+
+  # Hash all input files (skip cache write if any fail)
+  prd_sha=$(hash_file "$PRD_FILE") || {
+    echo "WARN: Failed to hash PRD file, skipping cache write" >&2
+    return 1
+  }
+  contract_sha=$(hash_file "$CONTRACT_FILE") || {
+    echo "WARN: Failed to hash contract file, skipping cache write" >&2
+    return 1
+  }
+  plan_sha=$(hash_file "$PLAN_FILE") || {
+    echo "WARN: Failed to hash plan file, skipping cache write" >&2
+    return 1
+  }
+
   if [[ -f "$TRACE_FILE" ]]; then
-    trace_sha=$(hash_file "$TRACE_FILE")
+    trace_sha=$(hash_file "$TRACE_FILE") || {
+      echo "WARN: Failed to hash trace file, skipping cache write" >&2
+      return 1
+    }
   fi
 
   local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -431,7 +482,8 @@ main() {
     local schema_rc=$(cat "$ARTIFACTS_DIR/prd_schema_check.rc")
     local ref_rc=$(cat "$ARTIFACTS_DIR/prd_ref_check.rc")
     local trace_rc=$(cat "$ARTIFACTS_DIR/check_csp_trace.rc")
-    write_cache "$schema_rc" "$ref_rc" "$trace_rc"
+    # Attempt to write cache, but don't fail if it doesn't work
+    write_cache "$schema_rc" "$ref_rc" "$trace_rc" || true
   fi
 
   # Generate reports

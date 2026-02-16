@@ -10,17 +10,26 @@ __SYNC_AUDIT_UTILS_SOURCED=1
 hash_file() {
   local file="$1"
   if [[ ! -f "$file" ]]; then
-    echo "" >&2
+    echo "ERROR: File not found for hashing: $file" >&2
     return 1
   fi
+
+  local hash_output
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file" | awk '{print $1}'
+    hash_output=$(sha256sum "$file" 2>/dev/null | awk '{print $1}')
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$file" | awk '{print $1}'
+    hash_output=$(shasum -a 256 "$file" 2>/dev/null | awk '{print $1}')
   else
     echo "ERROR: neither sha256sum nor shasum available" >&2
     return 1
   fi
+
+  if [[ -z "$hash_output" ]]; then
+    echo "ERROR: Hash computation failed for $file" >&2
+    return 1
+  fi
+
+  echo "$hash_output"
 }
 
 # Tool validation (mode-aware)
