@@ -4283,7 +4283,7 @@
         ]
       },
       "acceptance": [
-        "cannot mark Complete until safe; first failure seeds MixedFailed.",
+        "GIVEN AtomicGroup legs are executing and all fills have completed. WHEN group state is finalized. THEN GroupState cannot be marked Complete until all fills are confirmed safe; first failure seeds MixedFailed and triggers containment.",
         "GIVEN AtomicGroup with Leg A filled and Leg B rejected. WHEN group result is evaluated. THEN `GroupState::MixedFailed` is recorded, containment runs, and no new OPENs are dispatched until exposure is neutral. (AT-116).",
         "GIVEN leg events arrive out of order (A fills fast, B rejects late). WHEN GroupState serialization is evaluated. THEN the group is never recorded `Complete` before B reaches terminal, and the first failure deterministically triggers co... (AT-220).",
         "GIVEN the group-level lock is held longer than `group_lock_max_wait_ms`. WHEN AtomicGroupExecutor attempts to acquire the lock in the hot loop. THEN the hot loop does not block and TradingMode is forced to ReduceOnly until the lock clears. (AT-924).",
@@ -4384,7 +4384,7 @@
         ]
       },
       "acceptance": [
-        "max 2 rescue IOC attempts; then flatten.",
+        "GIVEN a mixed-state group where one leg is filled and the other is rejected. WHEN rescue IOC attempts execute. THEN at most 2 rescue IOC attempts are made; if mismatch persists after 2 attempts, deterministic flatten via emergency close runs.",
         "GIVEN Leg A fills `0.6`, Leg B fills `0.0`. WHEN rescue IOC attempts execute. THEN at most **2** rescue IOC attempts occur; if mismatch persists, deterministic flatten executes. (AT-117).",
         "GIVEN mixed-state where one leg is filled and another is rejected. WHEN containment path executes. THEN \u00a73.1 emergency close runs with bounded attempts, then reduce-only delta hedge if still not neutral, and TradingMode i... (AT-118).",
         "GIVEN a mixed-state rescue attempt. WHEN rescue IOC limit price is computed. THEN limit price is 2 ticks past best bid/ask (BUY crosses ask upward; SELL crosses bid downward). (AT-283)."
@@ -4545,9 +4545,9 @@
         "AT-938"
       ],
       "reason_codes": {
-        "type": "ModeReasonCode",
+        "type": "RejectReason",
         "values": [
-          "REDUCEONLY_INPUT_MISSING_OR_STALE"
+          "EmergencyCloseNoPrice"
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
@@ -4615,9 +4615,9 @@
         ]
       },
       "acceptance": [
-        "close\u2192confirm\u2192hedge.",
-        "Repair path: flatten filled legs first via emergency_close_algorithm; hedge only after flatten retries fail and exposure remains above limit.",
-        "Never increase exposure while RiskState != Healthy (includes Degraded/Maintenance/Kill)."
+        "GIVEN a mixed-state group requiring containment. WHEN the containment sequencer runs. THEN it follows strict ordering: close filled legs first, confirm closure, then hedge only if close retries exhausted and exposure remains.",
+        "GIVEN a mixed-state group in containment. WHEN the repair path executes. THEN it flattens filled legs first via emergency_close_algorithm; hedge is dispatched only after flatten retries fail and residual exposure remains above the configured limit.",
+        "GIVEN RiskState is not Healthy (Degraded, Maintenance, or Kill). WHEN any containment or sequencer action is evaluated. THEN no action that increases net exposure is permitted; only risk-reducing actions (close, hedge, cancel risk-increasing) are allowed."
       ],
       "steps": [
         "Map S7.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -4694,9 +4694,9 @@
         ]
       },
       "acceptance": [
-        ">2 flattens/5m => 15m blacklist blocks opens for that key.",
+        "GIVEN EmergencyFlattenGroup triggers more than 2 times within 5 minutes for the same {strategy_id, structure_fingerprint} key. WHEN a subsequent OPEN intent for that key is evaluated. THEN the key is blacklisted for 15 minutes, OPEN is blocked with Rejected(ChurnBreakerActive), and CLOSE/HEDGE remain allowed.",
         "GIVEN 3 EmergencyFlattenGroup triggers for the same key within 5 minutes. WHEN a 4th attempt is evaluated. THEN the 4th attempt is rejected and logged (`ChurnBreakerTrip`), with blacklist TTL enforced. (AT-221).",
-        "GIVEN guard inputs for S7-004 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN churn breaker rolling counter data is unavailable or stale. WHEN the churn breaker evaluates. THEN fail-closed: OPEN intents for the affected key are blocked and ChurnBreakerActive rejection is recorded."
       ],
       "steps": [
         "Map S7.5 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -4723,13 +4723,25 @@
         "AT-221"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "ChurnBreakerActive"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "churn_breaker_blacklist_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "strategy_id"
+            ],
+            "note": "Incremented when a key is blacklisted by churn breaker"
+          }
+        ],
         "status_fields": [
           "trading_mode",
           "risk_state"
@@ -4775,7 +4787,7 @@
         ]
       },
       "acceptance": [
-        "If public trade feed is stale/missing: MUST NOT compute self_fraction; set RiskState::Degraded; set Open Permission Latch `WS_TRADES_GAP_RECONCILE_REQUIRED`; block OPENs until reconcile clears.",
+        "GIVEN public trade feed is stale (age > public_trade_feed_max_age_ms) or missing. WHEN Self-Impact guard evaluates a new OPEN intent. THEN self_fraction MUST NOT be computed; RiskState is set to Degraded and Open Permission Latch is set with reason WS_TRADES_GAP_RECONCILE_REQUIRED.",
         "GIVEN `public_trades_last_update_ts_ms` is stale beyond `public_trade_feed_max_age_ms`... WHEN the Self-Impact guard evaluates a new OPEN intent.... THEN it does NOT compute `self_fraction`; it sets `RiskState::Degraded` and sets Open... (AT-953).",
         "GIVEN `feedback_loop_window_s = 10` trade feed is fresh: `public_trades_last_update_ts_ms = now_ms - 1000` and `public_trad... WHEN an OPEN intent is evaluated. THEN the intent is rejected with `Rejected(FeedbackLoopGuardActive)` and no dispatch occurs. (AT-955).",
         "GIVEN trade feed is fresh (as above) `self_trade_notional_trip_usd = 150_000` `public_notional_usd = 10_000_000` and `self_... WHEN an OPEN intent is evaluated. THEN the intent is rejected with `Rejected(FeedbackLoopGuardActive)` via the notional-trip rule. (AT-956).",
@@ -4815,8 +4827,10 @@
         "AT-957"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "FeedbackLoopGuardActive"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
@@ -4891,11 +4905,11 @@
         ]
       },
       "acceptance": [
-        "recompute each tick; stale policy => ReduceOnly.",
-        "Freshness defaults (contract): `mm_util_max_age_ms = 30_000`, `disk_used_max_age_ms = 30_000`.",
-        "Timebase: now_ms and all *_ts_ms used for staleness/Kill decisions are monotonic\u2011epoch per contract \u00a70.Z.2.2.H; do not use raw system clock for interval comparisons.",
-        "27-state axis-resolver is exhaustively enumerable (AT-1048); axis isolation holds (AT-1050/1051/1052); monotonicity: Kill >= ReduceOnly >= Active (AT-1053).",
-        "Atomic snapshot coherency: all inputs read within one tick boundary; memory ordering prevents torn reads (AT-1054)."
+        "GIVEN trading-mode resolver inputs are available for a new tick. WHEN the axis resolver computes TradingMode. THEN all three axes (CapitalRisk, MarketIntegrity, SystemIntegrity) are recomputed every tick; stale policy (age > max_policy_age_sec) forces ReduceOnly with REDUCEONLY_POLICY_STALE.",
+        "GIVEN freshness defaults are applied. WHEN staleness is evaluated. THEN mm_util_max_age_ms defaults to 30000 and disk_used_max_age_ms defaults to 30000 per CONTRACT \u00a72.2.3.",
+        "GIVEN the system uses timestamps for staleness and Kill decisions. WHEN now_ms and all *_ts_ms values are compared. THEN all timestamps use monotonic-epoch per CONTRACT \u00a70.Z.2.2.H; raw system clock is never used for interval arithmetic.",
+        "GIVEN all 27 axis combinations are tested. WHEN the axis resolver computes TradingMode. THEN every combination maps to exactly one TradingMode per the truth table (AT-1048); axis isolation holds for each axis independently (AT-1050/1051/1052); monotonicity is maintained: Kill >= ReduceOnly >= Active (AT-1053).",
+        "GIVEN multiple resolver inputs are read within one tick. WHEN the axis resolver reads its input snapshot. THEN all inputs are read atomically within one tick boundary; memory ordering prevents torn reads across input fields (AT-1054)."
       ],
       "steps": [
         "Map S8.1 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -4956,7 +4970,27 @@
       "reason_codes": {
         "type": "ModeReasonCode",
         "values": [
-          "REDUCEONLY_INPUT_MISSING_OR_STALE"
+          "KILL_WATCHDOG_HEARTBEAT_STALE",
+          "KILL_RISKSTATE_KILL",
+          "KILL_MARGIN_MM_UTIL_CRITICAL",
+          "KILL_RATE_LIMIT_SESSION_TERMINATION",
+          "KILL_DISK_WATERMARK_KILL",
+          "KILL_CORTEX_FORCE_KILL",
+          "REDUCEONLY_RISKSTATE_MAINTENANCE",
+          "REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE",
+          "REDUCEONLY_OPEN_PERMISSION_LATCHED",
+          "REDUCEONLY_BUNKER_MODE_ACTIVE",
+          "REDUCEONLY_F1_CERT_INVALID",
+          "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN",
+          "REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY",
+          "REDUCEONLY_FEE_MODEL_HARD_STALE",
+          "REDUCEONLY_RISKSTATE_DEGRADED",
+          "REDUCEONLY_POLICY_STALE",
+          "REDUCEONLY_MARGIN_MM_UTIL_HIGH",
+          "REDUCEONLY_INPUT_MISSING_OR_STALE",
+          "REDUCEONLY_WATCHDOG_UNCONFIRMED",
+          "REDUCEONLY_DISK_KILL_UNCONFIRMED",
+          "REDUCEONLY_SESSION_KILL_UNCONFIRMED"
         ]
       },
       "enforcement_point": "PolicyGuard",
@@ -5086,7 +5120,7 @@
           "REDUCEONLY_F1_CERT_INVALID"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [
@@ -5149,8 +5183,8 @@
         ]
       },
       "acceptance": [
-        "evidence chain not GREEN => ReduceOnly; CLOSE/HEDGE/CANCEL allowed; cooldown after recovery.",
-        "EvidenceChainState GREEN must be computed over chain_guard_window_s (default 60s) rolling window and requires all of:",
+        "GIVEN EvidenceChainState is not GREEN (e.g., DEGRADED or RED). WHEN TradingMode is computed by the axis resolver. THEN TradingMode is ReduceOnly with REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN; CLOSE/HEDGE/CANCEL remain allowed; after recovery to GREEN, cooldown of chain_guard_window_s must elapse before Active is restored.",
+        "GIVEN EvidenceChainState is evaluated for GREEN status. WHEN the rolling window of chain_guard_window_s (default 60s) is checked. THEN GREEN requires all of: truth capsule writes succeeding, parquet queue depth within bounds, and no evidence write errors in the window.",
         "GIVEN the evidence-chain guard is in GREEN state WHEN truth capsule write is attempted THEN truth_capsule_write_errors remains at zero and no ReduceOnly escalation occurs."
       ],
       "steps": [
@@ -5206,7 +5240,9 @@
         ]
       },
       "enforcement_point": "EvidenceGuard",
-      "failure_mode": [],
+      "failure_mode": [
+        "stale"
+      ],
       "observability": {
         "metrics": [
           {
@@ -5268,7 +5304,7 @@
         ]
       },
       "acceptance": [
-        "jitter thresholds => ReduceOnly; stable cooldown required to exit.",
+        "GIVEN network jitter metrics (ws_event_lag_ms, deribit_http_p95_ms) exceed bunker mode thresholds. WHEN the Network Jitter Monitor evaluates. THEN bunker_mode_active is set to true, forcing ReduceOnly; a stable cooldown period (bunker_exit_stable_s) below thresholds is required before exiting.",
         "GIVEN Bunker Mode entered due to `ws_event_lag_ms` above threshold. WHEN all bunker metrics remain below thresholds continuously for `bunker_exit_stable_s`. THEN TradingMode may exit ReduceOnly only after the full stable period elapses. (AT-115).",
         "GIVEN `ws_event_lag_ms` metric is missing/uncomputable (e.g., no WS messages received yet). WHEN Network Jitter Monitor evaluates bunker mode. THEN `bunker_mode_active = true` and OPEN intents are blocked. (AT-205).",
         "GIVEN bunker metrics remain below thresholds for `bunker_exit_stable_s`. WHEN exit conditions are evaluated. THEN Bunker Mode exits only after the full stable period. (AT-298).",
@@ -5313,7 +5349,7 @@
           "REDUCEONLY_INPUT_MISSING_OR_STALE"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [
@@ -5373,7 +5409,7 @@
         ]
       },
       "acceptance": [
-        "DVOL/spread/depth shocks => ReduceOnly; WS gap blocks risk-increasing cancel/replace.",
+        "GIVEN DVOL/spread/depth shock conditions are detected by Reflexive Cortex. WHEN Cortex evaluates MarketData. THEN appropriate ForceReduceOnly or ForceKill signals are emitted with cooldowns; WS gap blocks risk-increasing cancel/replace.",
         "GIVEN `spread_bps >= spread_kill_bps` for at least `cortex_kill_window_s` (or `depth_t... WHEN Cortex evaluates `MarketData` and trading-mode resolver computes Tradi... THEN `cortex_override == ForceKill`, `TradingMode == Kill`, and `mode_reasons` includ... (AT-045).",
         "GIVEN `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing `WS_BOOK_GAP_RECONCILE_REQUIRE... WHEN the cancel/replace is submitted. THEN the cancel/replace is rejected and exposure does not increase. (AT-119).",
         "GIVEN `MarketData` where DVOL jumps by +10% within one minute. WHEN Cortex evaluates `MarketData` and trading-mode resolver computes TradingMode. THEN opens are blocked and mode flips to `ReduceOnly` within one loop tick. (AT-231).",
@@ -5438,7 +5474,7 @@
           "REDUCEONLY_INPUT_MISSING_OR_STALE"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [
@@ -5497,7 +5533,7 @@
         ]
       },
       "acceptance": [
-        "maint within 60m => set RiskState::Maintenance; mode resolver forces ReduceOnly; /api/v1/status reports risk_state=Maintenance; opens blocked.",
+        "GIVEN exchange maintenance is announced within 60 minutes via /public/get_announcements. WHEN Exchange Health Monitor evaluates. THEN RiskState is set to Maintenance, mode resolver forces ReduceOnly, /api/v1/status reports risk_state=Maintenance, and OPEN intents are blocked.",
         "GIVEN `/public/get_announcements` endpoint is unreachable for >= `exchange_health_stale_s`. WHEN Exchange Health Monitor evaluates status. THEN `cortex_override = ForceReduceOnly` and OPEN intents are blocked. (AT-204).",
         "GIVEN `ws_event_lag_ms > bunker_jitter_threshold_ms` (or any other bunker entry condition from \u00a72.3.2 rules). WHEN Network Jitter Monitor evaluates bunker mode. THEN `bunker_mode_active = true`, trading-mode resolver computes `TradingMode = ReduceOnly`, OPEN intents are blocked, CLOSE/HEDGE/C... (AT-209).",
         "GIVEN `/public/get_announcements` indicates maintenance starting in 30 minutes. WHEN Exchange Health Monitor evaluates announcements. THEN opens are blocked and closes allowed. (AT-232).",
@@ -5548,7 +5584,7 @@
           "REDUCEONLY_INPUT_MISSING_OR_STALE"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [
@@ -5604,7 +5640,7 @@
         ]
       },
       "acceptance": [
-        "flips to ReduceOnly; cancels only non-reduce-only opens; preserves closes/hedges.",
+        "GIVEN POST /api/v1/emergency/reduce_only is called. WHEN emergency_reduceonly_active is set to true. THEN TradingMode flips to ReduceOnly with REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE; only non-reduce-only opens are cancelled; existing closes/hedges are preserved.",
         "GIVEN `emergency_reduceonly_active == true` and the cooldown timer has not expired. WHEN TradingMode is computed by the Axis Resolver. THEN `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`. (AT-132).",
         "GIVEN guard inputs for S8-006 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
       ],
@@ -5638,7 +5674,7 @@
           "REDUCEONLY_INPUT_MISSING_OR_STALE"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -5758,7 +5794,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "StatusEndpoint",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -5856,7 +5892,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "StatusEndpoint",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -5904,9 +5940,9 @@
         ]
       },
       "acceptance": [
-        "If any required price is missing/unparseable OR stale beyond basis_price_max_age_ms, emit ForceReduceOnly{cooldown_s=basis_reduceonly_cooldown_s}.",
-        "If max(basis_mark_last_bps, basis_mark_index_bps) >= basis_kill_bps for basis_kill_window_s \u21d2 ForceKill.",
-        "Else if >= basis_reduceonly_bps for basis_reduceonly_window_s \u21d2 ForceReduceOnly{cooldown_s=basis_reduceonly_cooldown_s}."
+        "GIVEN any required basis price input is missing, unparseable, or stale beyond basis_price_max_age_ms. WHEN the Basis Monitor evaluates. THEN it emits ForceReduceOnly with cooldown_s=basis_reduceonly_cooldown_s.",
+        "GIVEN max(basis_mark_last_bps, basis_mark_index_bps) >= basis_kill_bps persists for basis_kill_window_s. WHEN the Basis Monitor evaluates. THEN it emits ForceKill.",
+        "GIVEN basis values are above basis_reduceonly_bps but below basis_kill_bps for basis_reduceonly_window_s. WHEN the Basis Monitor evaluates. THEN it emits ForceReduceOnly with cooldown_s=basis_reduceonly_cooldown_s."
       ],
       "steps": [
         "Map S8.10 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -5949,7 +5985,7 @@
           "REDUCEONLY_INPUT_MISSING_OR_STALE"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [
@@ -6008,7 +6044,7 @@
         ]
       },
       "acceptance": [
-        "priority EMERGENCY_CLOSE>CANCEL>HEDGE>OPEN>DATA; shed DATA first; block OPEN under pressure.",
+        "GIVEN the rate limiter receives mixed priority requests. WHEN token budget is constrained. THEN priority ordering is EMERGENCY_CLOSE > CANCEL > HEDGE > OPEN > DATA; DATA is shed first; OPEN is blocked under pressure before higher-priority actions.",
         "GIVEN `limits_fetch_failures_trip_count=3` and `limits_fetch_failure_window_s=300`. WHEN three consecutive `/private/get_account_summary` limit reads fail within 300s. THEN `RiskState==Degraded` and opens are blocked via ReduceOnly. (AT-106).",
         "GIVEN `limits_fetch_failures_trip_count=3` and `limits_fetch_failure_window_s=300`.... WHEN three `/private/get_account_summary` limit reads fail, but n... THEN `RiskState` MUST NOT become `Degraded` due solely to these failures.... (AT-133).",
         "GIVEN token bucket configured at `T tokens/sec` and `burst=B`. WHEN 100 mixed requests (data refresh + hedges + cancels) are fired. THEN aggregate throughput never exceeds `T`/`B`, and hedges/cancels preempt data refresh under contention. (AT-238).",
@@ -6110,7 +6146,7 @@
         ]
       },
       "acceptance": [
-        "10028 triggers rate_limit_session_kill_active == true, TradingMode == Kill, RiskState == Degraded immediately; backoff; reconcile before resume.",
+        "GIVEN API returns too_many_requests (code 10028). WHEN rate limit handling evaluates. THEN rate_limit_session_kill_active is set to true, TradingMode is set to Kill, RiskState is set to Degraded immediately; exponential backoff begins; reconciliation must pass before trading resumes.",
         "GIVEN API returns `too_many_requests` (`code 10028`) mid-run. WHEN rate limit handling evaluates. THEN `OPEN` blocked immediately; `TradingMode = Kill` + Degraded immediately; reconnect with backoff \u2192 full reconcile \u2192 re... (AT-240).",
         "GIVEN ledger vs exchange position differ by \u2264 epsilon, then by > epsilon. WHEN reconciliation runs. THEN pass at \u2264 epsilon; `INVENTORY_MISMATCH_RECONCILE_REQUIRED` when > epsilon. (AT-305).",
         "GIVEN reconciliation runs. WHEN trade lookback is applied. THEN it queries `/get_user_trades` for last 300s and matches against ledger trade registry. (AT-306).",
@@ -6144,8 +6180,10 @@
         "AT-306"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "RateLimitBrownout"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
@@ -6192,7 +6230,7 @@
         ]
       },
       "acceptance": [
-        "per-channel continuity rules; gap => Degraded + resubscribe + snapshot rebuild.",
+        "GIVEN a WS channel detects a sequence gap (non-monotonic trade_seq or mismatched prevChangeId). WHEN continuity handling runs. THEN RiskState is set to Degraded, resubscribe is triggered, and a full snapshot rebuild is initiated.",
         "GIVEN a WS trades stream gap is detected (trade_seq non-monotonic). WHEN the system evaluates permissions for an OPEN intent. THEN OPEN is blocked and `/status.open_permission_reason_codes` includes `WS_TRADES_GAP_RECONCILE_REQUIRED`. (AT-202).",
         "GIVEN an incremental book update where `prevChangeId != last_changeId`. WHEN WS continuity handling runs. THEN immediate Degraded \u2192 resubscribe + full snapshot rebuild \u2192 opens remain paused until rebuild completes. (AT-271).",
         "GIVEN trades feed where `trade_seq` jumps (gap) for an instrument. WHEN WS continuity handling runs. THEN Degraded \u2192 REST trade pull + reconcile \u2192 no duplicate processing; only then resume. (AT-272).",
@@ -6280,11 +6318,11 @@
         ]
       },
       "acceptance": [
-        "On startup: `open_permission_blocked_latch = true` with reason code `RESTART_RECONCILE_REQUIRED`.",
-        "When latch is true: OPEN intents are blocked; CLOSE/HEDGE/CANCEL remain allowed.",
-        "`open_permission_reason_codes == []` iff `open_permission_blocked_latch == false`.",
-        "Reconciliation clears latch iff: ledger intents match exchange orders by label; positions match within epsilon; no missing trades in lookback window.",
-        "certification-artifact and EvidenceChain failures MUST NOT appear in open_permission_reason_codes (AT-411)."
+        "GIVEN the system starts up with no persisted latch state. WHEN initialization completes before reconciliation runs. THEN open_permission_blocked_latch is true with reason code RESTART_RECONCILE_REQUIRED. (AT-430)",
+        "GIVEN open_permission_blocked_latch is true. WHEN an OPEN intent is evaluated for dispatch. THEN the OPEN is blocked; CLOSE/HEDGE/CANCEL intents remain dispatchable (subject to cancel/replace permission rules \u00a72.2.5). (AT-010)",
+        "GIVEN open_permission_blocked_latch state is queried. WHEN the latch is false. THEN open_permission_reason_codes MUST be empty ([]); when the latch is true, reason_codes MUST be non-empty. (AT-917)",
+        "GIVEN open_permission_blocked_latch is true for a reconcile-class reason. WHEN reconciliation succeeds (ledger matches exchange by label, positions within epsilon, no missing trades in lookback). THEN the latch clears and opens may proceed if TradingMode is Active. (AT-011)",
+        "GIVEN a condition that would set F1_CERT or EvidenceChain failure reasons. WHEN open_permission_reason_codes is evaluated. THEN F1_CERT and EvidenceChain failures MUST NOT appear in open_permission_reason_codes; they are cleared by cert/evidence recovery, not reconciliation. (AT-411)"
       ],
       "steps": [
         "Map S9.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -6337,7 +6375,7 @@
           "INVENTORY_MISMATCH_RECONCILE_REQUIRED"
         ]
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "PolicyGuard",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -6394,7 +6432,7 @@
         ]
       },
       "acceptance": [
-        "cancel ghost s4: orders lacking ledger; reconcile orphan fills via REST; no duplicates via trade-id registry.",
+        "GIVEN exchange has open orders with s4: label prefix but no matching ledger intent exists. WHEN zombie sweeper reconciles via REST. THEN ghost orders are cancelled, orphan fills are reconciled, and no duplicate processing occurs via trade-id registry.",
         "Ghost order rule (AT-122): if exchange open order has label `s4:` and no matching ledger intent, issue `CancelStaleOrder` and log `GhostOrderCanceled`.",
         "Orphan fill rule (AT-121): REST trade reconcile updates TLSM and later WS trade is ignored via `processed_trade_ids`."
       ],
@@ -6500,7 +6538,7 @@
         ]
       },
       "acceptance": [
-        "Track last_marketdata_event_ts_ms from application marketdata payloads only.",
+        "GIVEN the system is receiving WS marketdata events. WHEN liveness is tracked. THEN last_marketdata_event_ts_ms is updated only from application-level marketdata payloads (not transport-level pings/pongs).",
         "Trip `WS_DATA_STALE_RECONCILE_REQUIRED` only when `ws_marketdata_event_lag_ms > ws_zombie_silence_ms` AND (has_open_exposure OR had_recent_marketdata_activity).",
         "On trip: set RiskState::Degraded, set open_permission_blocked_latch with WS_DATA_STALE_RECONCILE_REQUIRED, force reconnect/resubscribe, REST snapshots + reconcile; opens blocked until reconcile clears."
       ],
@@ -6601,7 +6639,7 @@
         ]
       },
       "acceptance": [
-        "Evidence commit barrier (when `enforced_profile != CSP`) is satisfied before any risk-increasing dispatch; enqueue/write failure flips EvidenceChainState RED.",
+        "GIVEN enforced_profile != CSP and a risk-increasing intent is ready for dispatch. WHEN the evidence commit barrier is evaluated. THEN the TruthCapsule must be committed before dispatch proceeds; enqueue/write failure flips EvidenceChainState to not-GREEN.",
         "Hot loop MUST enqueue to a bounded queue; dedicated writer thread/process drains writes (no hot-loop stall).",
         "Any dispatched order MUST already have a truth_capsule_id linked by `(group_id, leg_idx, intent_hash)` and a joinable `decision_snapshot_id`; no dispatch without linkage."
       ],
@@ -6698,9 +6736,9 @@
         ]
       },
       "acceptance": [
-        "L2 top\u2011N snapshot persisted; `decision_snapshot_id` stored in TruthCapsule; every dispatched intent MUST reference `decision_snapshot_id` and `SnapshotRecordedBeforeDispatch` MUST be true immediately before dispatch; `record_decision_snapshot()` returns Ok only after crash-safe persistence; `l2_snapshot_id` MUST NOT be emitted; failure treated as evidence failure (opens blocked, `decision_snapshot_write_errors` increments).",
+        "GIVEN an intent is being prepared for dispatch. WHEN a Decision Snapshot is created. THEN the L2 top-N snapshot is persisted, decision_snapshot_id is stored in the TruthCapsule, and every dispatched intent references decision_snapshot_id. SnapshotAge = now_ms - snapshot_ts_ms must be computed and exposed.",
         "GIVEN a Decision Snapshot is emitted. WHEN the Truth Capsule is recorded. THEN `decision_snapshot_id` exists and `l2_snapshot_id` does not exist. (AT-044).",
-        "GIVEN guard inputs for S10-001 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN Decision Snapshot inputs (L2 data, pricing state) are unavailable. WHEN a snapshot is requested for an intent. THEN fail-closed: the intent cannot proceed to dispatch without a valid decision_snapshot_id."
       ],
       "steps": [
         "Map S10.2 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -6741,14 +6779,23 @@
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "decision_snapshot_write_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "result"
+            ],
+            "note": "Tracks snapshot write success/failure"
+          }
+        ],
         "status_fields": [
           "trading_mode",
           "risk_state"
         ],
         "status_contract_ats": [
-          "AT-044",
-          "AT-943"
+          "AT-044"
         ]
       },
       "implementation_tests": [
@@ -6789,7 +6836,7 @@
         ]
       },
       "acceptance": [
-        "for each fill, one attribution row with truth_capsule_id and friction fields.",
+        "GIVEN a fill event occurs for a dispatched intent. WHEN the attribution row is written. THEN exactly one attribution row is created per fill with truth_capsule_id join key and friction fields (fees, slippage, edge).",
         "GIVEN an attribution row is written for a filled leg. WHEN the row joins to TruthCapsule. THEN it reproduces `limit_price_sent`, `gross_edge_usd_est`, `predicted_slippage_bps_sim`. (AT-253).",
         "GIVEN `drift_ms > time_drift_threshold_ms`. WHEN time drift gate evaluates. THEN opens are blocked (ReduceOnly) until drift is restored. (AT-273).",
         "GIVEN an OPEN intent fills and the attribution row is missing or fails to write. WHEN evidence-chain gate evaluates EvidenceChainState. THEN EvidenceChainState MUST be not GREEN (fail-closed); OPEN intents blocked. (AT-414)."
@@ -6879,7 +6926,7 @@
         ]
       },
       "acceptance": [
-        "theta/day, vega/1pct; raw+normalized stored.",
+        "GIVEN PnL decomposition is computed for a position. WHEN theta and vega components are calculated. THEN theta is expressed as per-day units and vega as per-1-percent units; both raw and normalized values are stored.",
         "GIVEN `S_fill == S_signal` and `IV_fill == IV_signal`. WHEN PnL decomposition runs. THEN `delta_pnl\u22480` and `vega_pnl\u22480`; residual must not explode. (AT-247).",
         "GIVEN `theta_per_day = -0.04` and `dt_seconds = 43200` (12h). WHEN theta PnL is computed. THEN `theta_pnl \u2248 -0.02` (all else equal). (AT-248)."
       ],
@@ -6960,7 +7007,7 @@
         ]
       },
       "acceptance": [
-        "if drift_ms > time_drift_threshold_ms then set RiskState::Degraded and mode resolver forces ReduceOnly; exposed in /status.",
+        "GIVEN drift_ms exceeds time_drift_threshold_ms. WHEN the time drift gate evaluates. THEN RiskState is set to Degraded, mode resolver forces ReduceOnly, and /api/v1/status exposes the drift violation.",
         "GIVEN `drift_ms > time_drift_threshold_ms`. WHEN trading-mode resolver computes TradingMode with RiskState reflecting the drift violation. THEN `trading_mode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_RISKSTATE_DEGRADED`. (AT-108).",
         "GIVEN `drift_ms > 50ms`. WHEN time drift gate evaluates. THEN trading-mode resolver forces ReduceOnly until time sync restored. (AT-314)."
       ],
@@ -7056,9 +7103,9 @@
         ]
       },
       "acceptance": [
-        "Gate 0 (liquidity-aware thresholds): if depth_topN < depth_min, set rmse_max = 0.08 and drift_max = 0.40; otherwise rmse_max = 0.05 and drift_max = 0.20.",
-        "Explicit identifiers: `depth_topn` (top-N depth) and `depth_min` (minimum depth).",
-        "Gate 1 (RMSE): rmse > rmse_max \u21d2 reject new fit."
+        "GIVEN depth_topN is below depth_min. WHEN the liquidity-aware threshold gate evaluates SVI fit quality. THEN rmse_max is relaxed to 0.08 and drift_max to 0.40; otherwise rmse_max is 0.05 and drift_max is 0.25.",
+        "GIVEN the SVI fit quality gate uses depth-dependent thresholds. WHEN configuration is referenced. THEN depth_topn refers to top-N aggregate depth and depth_min refers to the minimum depth threshold for relaxed limits.",
+        "GIVEN an SVI fit produces rmse > rmse_max (depth-adjusted). WHEN the RMSE gate evaluates. THEN the new fit is rejected and the previous valid fit is retained."
       ],
       "steps": [
         "Map S11.1 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7137,9 +7184,9 @@
         ]
       },
       "acceptance": [
-        "On any arb-guard failure: invalidate fit, hold last valid, increment svi_arb_guard_trips.",
+        "GIVEN an SVI fit passes RMSE checks but fails any arb-guard validation (e.g., convexity violation). WHEN arb-guards evaluate. THEN the fit is invalidated, the last valid fit is held, and svi_arb_guard_trips counter is incremented.",
         "GIVEN a deliberately wavy fit that passes RMSE but violates convexity. WHEN arb-guards validate the fit. THEN the fit is rejected and the previous fit is held. (AT-241).",
-        "GIVEN guard inputs for S11-001 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN SVI calibration input data (option chain quotes) is unavailable or stale beyond svi_input_max_age_ms. WHEN the arb-guard evaluates a new fit. THEN fail-closed: the previous valid fit is retained and new calibration is skipped until fresh data arrives."
       ],
       "steps": [
         "Map S11.2 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7172,7 +7219,17 @@
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "svi_arb_guard_trips",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "instrument"
+            ],
+            "note": "Incremented on each arb-guard rejection of a new SVI fit"
+          }
+        ],
         "status_fields": [
           "trading_mode",
           "risk_state"
@@ -7218,7 +7275,7 @@
       "acceptance": [
         "GIVEN a last valid SVI fit exists and a new fit attempt includes at least one non-fini... WHEN the SVI Math Guard evaluates the new fit.... THEN the new fit is rejected (`None`), the last valid fit is retained unchanged, no n... (AT-1071).",
         "GIVEN guard inputs for S11-002 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded.",
-        "GIVEN guard inputs for S11-002 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN a new SVI fit candidate passes RMSE and arb-guard checks but contains at least one parameter outside safe bounds (e.g., rho outside [-1,1] or sigma < 0). WHEN the Math Guard evaluates the fit. THEN the candidate is rejected and the previous valid fit is retained."
       ],
       "steps": [
         "Map S11.3 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7293,9 +7350,9 @@
         ]
       },
       "acceptance": [
-        "given fixed L2 snapshot + size, simulator outputs deterministic WAP and `slippage_bps`.",
+        "GIVEN a fixed L2 snapshot and order size. WHEN the fill simulator runs. THEN it outputs deterministic WAP and slippage_bps; results are reproducible for identical inputs.",
         "GIVEN a fixed L2 snapshot and order size. WHEN the fill simulator runs. THEN it outputs deterministic WAP + `slippage_bps`, and `slippage_bps(size=2x) > slippage_bps(size=1x)` on a thin book. (AT-254).",
-        "GIVEN guard inputs for S12-000 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN fill simulator L2 snapshot input is unavailable or stale beyond l2_snapshot_max_age_ms. WHEN the simulator is invoked. THEN fail-closed: simulation returns an error/unavailable status and no slippage estimate is produced."
       ],
       "steps": [
         "Map S12.1 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7328,7 +7385,17 @@
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
       "observability": {
-        "metrics": [],
+        "metrics": [
+          {
+            "name": "fill_sim_slippage_bps",
+            "type": "gauge",
+            "unit": "pct",
+            "labels": [
+              "instrument"
+            ],
+            "note": "Last computed slippage estimate from fill simulator"
+          }
+        ],
         "status_fields": [
           "trading_mode",
           "risk_state"
@@ -7374,7 +7441,7 @@
       "acceptance": [
         "GIVEN 50 synthetic fills where `realized = sim * 1.2`. WHEN slippage calibration runs. THEN `realism_penalty_factor \u2192 ~1.2` and stable (\u00b10.05); if missing/uninitialized, default factor = 1.3 and tighten opens. (AT-255).",
         "GIVEN guard inputs for S12-001 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded.",
-        "GIVEN guard inputs for S12-001 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN calibration data contains fewer than the minimum required fills (e.g., < 10 samples). WHEN slippage calibration runs. THEN calibration uses default penalty factor and logs insufficient data warning."
       ],
       "steps": [
         "Map S12.2 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7458,7 +7525,7 @@
         ]
       },
       "acceptance": [
-        "Decision Snapshots required; QualityState/ApplyMode computed; tighten-only classifier enforced; haircut enforced by dispatch size; `dd_limit` explicit (missing \u21d2 fail-closed).",
+        "GIVEN the Replay Gatekeeper is invoked for a policy patch. WHEN it evaluates the 48h replay window. THEN Decision Snapshots are required, QualityState and ApplyMode are computed from coverage, tighten-only classifier is enforced, haircut is applied to dispatch size, and dd_limit must be explicitly provided.",
         "GIVEN `snapshot_coverage_pct == 95%` and Decision Snapshots are readable. WHEN Replay Gatekeeper runs. THEN `ReplayQuality == GOOD` and `ReplayApplyMode == APPLY`. (AT-002).",
         "GIVEN Replay Gatekeeper is invoked and `dd_limit` is missing or unparseable. WHEN the gate evaluates `replay_max_drawdown_usd`. THEN the gate HARD FAILS and the patch remains blocked (last stable policy stays active). (AT-034).",
         "GIVEN a safety-critical gate references a required parameter that has no Appendix A default (e.g., `dd_limit` in \u00a75.2). WHEN that parameter is missing or unparseable at runtime. THEN the gate MUST fail-closed (block policy application / rollout) and surface a deterministic reason. (AT-040).",
