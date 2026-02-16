@@ -790,3 +790,26 @@ fn test_duplicate_append_rejected_after_state_transition() {
         Err(LedgerAppendError::DuplicateIntentHash)
     );
 }
+
+/// Regression: duplicate on a full queue must return DuplicateIntentHash,
+/// not QueueFull. The intent is already recorded and doesn't consume capacity.
+#[test]
+fn test_duplicate_on_full_queue_returns_duplicate_not_queue_full() {
+    let mut ledger = WalLedger::new(2);
+    let mut m = LedgerMetrics::new();
+
+    ledger
+        .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+        .unwrap();
+    ledger
+        .append(intent("hash2", "g2", 0, TlsState::Created), &mut m)
+        .unwrap();
+    assert_eq!(ledger.queue_depth(), 2);
+
+    // Queue is full — but hash1 is already there, so the error must be
+    // DuplicateIntentHash, not QueueFull.
+    assert_eq!(
+        ledger.append(intent("hash1", "g3", 1, TlsState::Created), &mut m),
+        Err(LedgerAppendError::DuplicateIntentHash)
+    );
+}

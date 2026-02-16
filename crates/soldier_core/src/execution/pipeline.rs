@@ -6,7 +6,7 @@
 
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState, evaluate_fee_staleness};
 use crate::venue::{
-    BotFeatureFlags, ExpiryGuardInput, ExpiryGuardResult, VenueCapabilities,
+    BotFeatureFlags, ExpiryGuardInput, ExpiryGuardResult, LifecycleIntent, VenueCapabilities,
     evaluate_capabilities, evaluate_expiry_guard,
 };
 
@@ -159,11 +159,27 @@ pub fn evaluate_intent_pipeline(
             }
         }
 
-        // Expiry guard: evaluate after fee cache check
+        // Expiry guard: evaluate after fee cache check.
+        // Derive LifecycleIntent from intent_class to prevent drift between
+        // the pipeline's intent classification and the guard's input.
         if preflight_passed && quantize_passed && input.dispatch_consistency_passed && fee_cache_passed
         {
+            let lifecycle_intent = match input.intent_class {
+                ChokeIntentClass::Open => LifecycleIntent::Open,
+                ChokeIntentClass::Close => LifecycleIntent::Close,
+                ChokeIntentClass::Hedge => LifecycleIntent::Hedge,
+                // CancelOnly is short-circuited by dispatch_auth above;
+                // mapped here for exhaustiveness.
+                ChokeIntentClass::CancelOnly => LifecycleIntent::Cancel,
+            };
+
             if let Some(ref expiry_input) = input.expiry_guard {
-                match evaluate_expiry_guard(expiry_input) {
+                // Override the caller-provided intent with the authoritative one
+                let corrected_input = ExpiryGuardInput {
+                    intent: lifecycle_intent,
+                    ..*expiry_input
+                };
+                match evaluate_expiry_guard(&corrected_input) {
                     ExpiryGuardResult::Allowed => {}
                     ExpiryGuardResult::Rejected(_) => {
                         expiry_guard_passed = false;
@@ -171,7 +187,7 @@ pub fn evaluate_intent_pipeline(
                             Some(RejectReasonCode::InstrumentExpiredOrDelisted);
                     }
                 }
-            } else if input.intent_class == ChokeIntentClass::Open {
+            } else if lifecycle_intent == LifecycleIntent::Open {
                 // FAIL-CLOSED: missing expiry data blocks OPEN intents
                 expiry_guard_passed = false;
                 expiry_guard_reject_code = Some(RejectReasonCode::InstrumentExpiredOrDelisted);

@@ -245,17 +245,18 @@ impl WalLedger {
         record: IntentRecord,
         metrics: &mut LedgerMetrics,
     ) -> Result<(), LedgerAppendError> {
+        // CSP-002: reject duplicate intent_hash first — a duplicate doesn't
+        // consume capacity, so callers should see DuplicateIntentHash, not QueueFull.
+        if self.index.contains_key(&record.intent_hash) {
+            metrics.record_write_error();
+            return Err(LedgerAppendError::DuplicateIntentHash);
+        }
+
         // Capacity check uses index.len() (unique intents), not records.len()
         // (total log entries including state-transition appends).
         if self.index.len() >= self.capacity {
             metrics.record_write_error();
             return Err(LedgerAppendError::QueueFull);
-        }
-
-        // CSP-002: reject duplicate intent_hash
-        if self.index.contains_key(&record.intent_hash) {
-            metrics.record_write_error();
-            return Err(LedgerAppendError::DuplicateIntentHash);
         }
 
         let idx = self.records.len();
@@ -311,14 +312,14 @@ impl WalLedger {
     /// In-flight intents are those in non-terminal states (need reconciliation).
     pub fn replay(&self) -> ReplayOutcome {
         let mut in_flight_hashes = Vec::new();
-        let mut seen = std::collections::HashSet::new();
 
         // Iterate records in log order; only consider the latest version
         // of each intent (the one the index points to). This gives
         // deterministic ordering unlike iterating the HashMap index.
+        // No `seen` set needed: the index maps each intent_hash to exactly
+        // one log position, so the equality check can match at most once.
         for (i, record) in self.records.iter().enumerate() {
             if self.index.get(&record.intent_hash) == Some(&i)
-                && seen.insert(record.intent_hash.clone())
                 && !record.tls_state.is_terminal()
             {
                 in_flight_hashes.push(record.intent_hash.clone());

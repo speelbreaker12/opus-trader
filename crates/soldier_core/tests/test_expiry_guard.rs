@@ -246,6 +246,33 @@ fn test_pipeline_open_rejected_when_expiry_input_none() {
     );
 }
 
+/// Regression: intent_class=Close with expiry_guard.intent=Open must still be
+/// approved. The pipeline derives LifecycleIntent from intent_class, overriding
+/// the caller-provided ExpiryGuardInput.intent. Without this override, the guard
+/// would incorrectly reject CLOSE/HEDGE intents when the input drifts.
+#[test]
+fn test_intent_drift_close_with_open_expiry_input_allowed() {
+    let mut input = common::base_open_input();
+    input.intent_class = soldier_core::execution::ChokeIntentClass::Close;
+    // Deliberately set expiry input to Open — simulates caller drift
+    input.expiry_guard = Some(ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_030_000), // within buffer
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open, // WRONG — but pipeline must override
+    });
+
+    let mut metrics = IntentPipelineMetrics::new();
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "CLOSE must be approved even when ExpiryGuardInput.intent drifts to Open, got {:?}",
+        result.decision
+    );
+    assert_eq!(result.reject_reason_code, None);
+}
+
 /// CLOSE intent with None expiry input is allowed (fail-closed only applies to OPEN).
 #[test]
 fn test_pipeline_close_allowed_when_expiry_input_none() {
