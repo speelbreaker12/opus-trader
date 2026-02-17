@@ -1,6 +1,6 @@
 # Contract Coverage Matrix
 
-Generated: 2026-01-31 01:42:54Z
+Generated: 2026-02-17 22:20:30Z
 
 ## Anchors
 
@@ -24,7 +24,7 @@ Generated: 2026-01-31 01:42:54Z
 - ✅ **Anchor-018** — Pending Exposure Reservation Prevents Double-Spend → S5-002
 - ✅ **Anchor-019** — WS Continuity Breaks Trigger Degraded + Snapshot Rebuild → S2-003
 - ✅ **Anchor-020** — Rate Limit Session Kill Triggers Immediate Kill Mode → S1-010
-- ✅ **Anchor-021** — Status Endpoint Required Fields → S0-004, S1-008, S1-009
+- ✅ **Anchor-021** — Status Endpoint Required Fields → S1-008, S1-009
 - ✅ **Anchor-022** — Cortex WS Gap Blocks Risk-Increasing Actions → S1-010
 - ✅ **Anchor-023** — Order-Type Preflight Guards (Artifact-Backed) → S3-000, S3-002
 
@@ -54,7 +54,7 @@ Generated: 2026-01-31 01:42:54Z
 - ✅ **VR-021** — Orderbook Continuity Gate → S2-003
 - ✅ **VR-022** — Trades Continuity Gate → S2-003, S4-002
 - ✅ **VR-023** — Rate Limit Brownout Gate → S1-010
-- ✅ **VR-024** — Status Endpoint Response Gate → S0-004, S1-008, S1-009
+- ✅ **VR-024** — Status Endpoint Response Gate → S1-008, S1-009
 - ✅ **VR-025** — No Market Orders Gate → S3-000
 - ✅ **VR-026** — Options Stop Orders Forbidden Gate → S3-000, S3-002
 - ✅ **VR-027** — Stop Orders Require Trigger Gate → S3-000, S3-002

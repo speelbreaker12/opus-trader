@@ -420,7 +420,7 @@
       "story_ref": "P0-F Machine Policy Loader Baseline",
       "category": "policy",
       "description": "Bind a machine-readable policy path and strict loader validation so runtime policy checks are fail-closed and not doc-only.",
-      "passes": false,
+      "passes": true,
       "contract_refs": [
         "P0-F Machine Policy Loader Baseline",
         "§2.2 PolicyGuard",
