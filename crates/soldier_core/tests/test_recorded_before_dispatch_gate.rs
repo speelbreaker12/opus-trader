@@ -146,7 +146,6 @@ fn test_wal_gate_not_called_when_preflight_rejects_early() {
     assert_eq!(wal_gate.call_count, 0);
 }
 
-
 // ─── CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE intents ────────
 
 #[test]
