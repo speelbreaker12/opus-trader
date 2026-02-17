@@ -126,6 +126,7 @@ NODE_LINT_TIMEOUT="${NODE_LINT_TIMEOUT:-5m}"
 NODE_TYPECHECK_TIMEOUT="${NODE_TYPECHECK_TIMEOUT:-10m}"
 NODE_TEST_TIMEOUT="${NODE_TEST_TIMEOUT:-10m}"
 ADVERSARIAL_GATE_TIMEOUT="${ADVERSARIAL_GATE_TIMEOUT:-2m}"
+GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -584,6 +585,14 @@ fi
 log "14b) phase0 meta-test"
 run_logged_or_exit "phase0_meta_test" "$SPEC_LINT_TIMEOUT" \
   "$PYTHON_BIN" tools/phase0_meta_test.py --root "$ROOT"
+
+if [[ -f scripts/check_gate_integrity.py ]]; then
+  log "14c) gate integrity lint"
+  run_logged_or_exit "gate_integrity" "$GATE_INTEGRITY_TIMEOUT" \
+    "$PYTHON_BIN" scripts/check_gate_integrity.py --root "$ROOT"
+else
+  warn "gate_integrity skipped (missing scripts/check_gate_integrity.py)"
+fi
 
 export ROOT MODE VERIFY_ARTIFACTS_DIR VERIFY_CONSOLE VERIFY_LOG_CAPTURE
 export TIMEOUT_BIN ENABLE_TIMEOUTS VERIFY_FAIL_TAIL_LINES VERIFY_FAIL_SUMMARY_LINES TIMEOUT_WARNED

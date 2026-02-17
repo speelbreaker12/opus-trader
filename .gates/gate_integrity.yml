@@ -1,0 +1,40 @@
+# Gate integrity linter configuration.
+# Scans Rust/Python source for order-entrypoint calls that lack nearby
+# gate/guard signals within `lookback_lines` preceding lines.
+#
+# NOTE: This is a heuristic, defense-in-depth lint. The canonical gate
+# enforcement is the 8-gate pipeline in build_order_intent(). This lint
+# catches code that bypasses the chokepoint entirely.
+# If CONTRACT.md format drifts, extraction may return empty sets —
+# the linter logs INFO and passes (fail-open by design).
+
+lookback_lines: 60
+
+order_call_patterns:
+  - '\bplace_order\b'
+  - '\bsubmit_order\b'
+  - '\bdispatch_order\b'
+  # build_order_intent is NOT listed here — calling the chokepoint IS using it.
+  # Only functions that could bypass the chokepoint should be listed.
+
+gate_patterns:
+  - '\bPolicyGuard\b'
+  - '\bEvidenceGuard\b'
+  - '\bReduceOnly\b'
+  - '\btrading_mode\b'
+  - '\bopen_permission'         # left \b only — must match open_permission_blocked_latch etc.
+  - '\bbuild_order_intent\b'   # chokepoint presence proves pipeline is used
+
+ignore_path_regexes:
+  - '/tests?/'
+  - '/docs?/'
+  - '/examples?/'
+  - '(^|/)tools?/'
+  - '/target/'
+  - '/node_modules/'
+  - '/\.git/'
+  - '/\.venv/'
+  - '\.md$'
+  - '\.json$'
+  - '\.yml$'
+  - '\.yaml$'
