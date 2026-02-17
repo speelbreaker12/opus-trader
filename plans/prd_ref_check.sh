@@ -194,10 +194,15 @@ if unresolved:
 
 # ── AT-reference integrity ──────────────────────────────────────────
 # Every AT-* in PRD enforcing_contract_ats must exist in CONTRACT.md.
-# ATs listed in specs/contract_deferred_ats.yml are exempt.
+# ATs listed in specs/contract_deferred_ats.yml are exempt from the
+# uncovered-contract-AT warning, but they still must exist in CONTRACT.md.
 
 at_re = re.compile(r'AT-\d+')
-contract_ats = set(at_re.findall(contract_text))
+# Extract ATs from CONTRACT.md only — extra files are used for reference
+# resolution but must not inflate the contract AT inventory.
+with open(contract_path, 'r', encoding='utf-8') as f:
+    contract_md_text = f.read()
+contract_ats = set(at_re.findall(contract_md_text))
 
 prd_ats: dict[str, list[str]] = {}  # AT -> [item_ids]
 for item in items:
@@ -208,14 +213,37 @@ for item in items:
 
 # Load deferred allowlist (optional)
 deferred_ats: set[str] = set()
+deferred_meta: dict[str, set[str]] = {}
+required_meta_fields = ('owner', 'reason', 'target_phase')
 deferred_path = os.path.join(os.path.dirname(contract_path), 'contract_deferred_ats.yml')
 if os.path.isfile(deferred_path):
     # Minimal YAML-free parsing: top-level keys matching AT-\d+
+    # and required metadata fields (owner, reason, target_phase).
+    current_at: str | None = None
     with open(deferred_path, 'r', encoding='utf-8') as f:
         for line in f:
-            m = re.match(r'^(AT-\d+)\s*:', line)
-            if m:
-                deferred_ats.add(m.group(1))
+            at_match = re.match(r'^(AT-\d+)\s*:', line)
+            if at_match:
+                current_at = at_match.group(1)
+                deferred_ats.add(current_at)
+                deferred_meta.setdefault(current_at, set())
+                continue
+            # Indented metadata under the current AT
+            if current_at and re.match(r'^\s+\S', line):
+                meta_match = re.match(r'^\s+(owner|reason|target_phase)\s*:', line)
+                if meta_match:
+                    deferred_meta[current_at].add(meta_match.group(1))
+
+    # Validate that each deferred AT has all required metadata fields.
+    for at in sorted(deferred_ats, key=lambda x: int(x.split('-')[1])):
+        present = deferred_meta.get(at, set())
+        missing = [f for f in required_meta_fields if f not in present]
+        if missing:
+            print(
+                f'[prd_ref_check] ERROR: deferred AT {at} is missing required metadata field(s): {", ".join(missing)}',
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
 
 dangling = sorted(set(prd_ats) - contract_ats, key=lambda x: int(x.split('-')[1]))
 if dangling:
