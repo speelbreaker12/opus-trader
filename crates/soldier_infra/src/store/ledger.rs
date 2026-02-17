@@ -663,21 +663,24 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
         std::fs::create_dir_all(parent)?;
     }
 
-    // Open read-only for replay. The write handle is opened separately in
+    // Open for replay. The write handle is opened separately in
     // with_storage_path() after this function returns and the read handle
     // is dropped, ensuring no overlapping file descriptors.
+    // Note: .append(true) is needed alongside .create(true) to satisfy
+    // OpenOptions requirements (create requires a write mode).
     let file = OpenOptions::new()
         .create(true)
         .read(true)
-        .write(true) // needed with create(true) on some platforms
+        .append(true)
         .open(path)?;
     let reader = BufReader::new(file);
 
     let mut events = Vec::new();
     let mut trailing_corrupt: Vec<usize> = Vec::new();
-    let lines: Vec<_> = reader.lines().collect::<io::Result<_>>()?;
-    let _total = lines.len();
-    for (index, line) in lines.into_iter().enumerate() {
+    // Stream lines instead of collecting into Vec to bound memory usage
+    // (WAL JSONL is unbounded — no compaction in Phase 1).
+    for (index, line_result) in reader.lines().enumerate() {
+        let line = line_result?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;

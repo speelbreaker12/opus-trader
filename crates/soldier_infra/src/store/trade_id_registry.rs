@@ -13,7 +13,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -130,6 +130,8 @@ pub struct TradeIdRegistry {
     state: Mutex<RegistryState>,
     /// Maximum registry capacity.
     capacity: usize,
+    /// Whether we've already logged a mutex-poison error (log at most once).
+    poison_logged: AtomicBool,
 }
 
 impl TradeIdRegistry {
@@ -141,6 +143,7 @@ impl TradeIdRegistry {
                 storage_file: None,
             }),
             capacity,
+            poison_logged: AtomicBool::new(false),
         }
     }
 
@@ -168,6 +171,7 @@ impl TradeIdRegistry {
                 storage_file: Some(storage_file),
             }),
             capacity,
+            poison_logged: AtomicBool::new(false),
         })
     }
 
@@ -204,6 +208,13 @@ impl TradeIdRegistry {
         Ok(InsertResult::Inserted)
     }
 
+    /// Log mutex poison at most once to avoid stderr spam in a degraded runtime.
+    fn log_poison_once(&self, method: &str) {
+        if !self.poison_logged.swap(true, Ordering::Relaxed) {
+            eprintln!("ERROR: trade id registry mutex poisoned in {method}() — suppressing future logs");
+        }
+    }
+
     /// Check if a trade_id has been processed.
     ///
     /// Returns `true` if the mutex is poisoned (fail-closed for dedup: treats
@@ -214,7 +225,7 @@ impl TradeIdRegistry {
         match self.state.lock() {
             Ok(state) => state.records.contains_key(trade_id),
             Err(_) => {
-                eprintln!("ERROR: trade id registry mutex poisoned in contains()");
+                self.log_poison_once("contains");
                 true
             }
         }
@@ -227,7 +238,7 @@ impl TradeIdRegistry {
         match self.state.lock() {
             Ok(state) => state.records.get(trade_id).cloned(),
             Err(_) => {
-                eprintln!("ERROR: trade id registry mutex poisoned in get()");
+                self.log_poison_once("get");
                 None
             }
         }
@@ -240,7 +251,7 @@ impl TradeIdRegistry {
         match self.state.lock() {
             Ok(state) => state.records.len(),
             Err(_) => {
-                eprintln!("ERROR: trade id registry mutex poisoned in len()");
+                self.log_poison_once("len");
                 0
             }
         }
@@ -266,8 +277,9 @@ fn load_records(path: &Path) -> io::Result<HashMap<String, TradeRecord>> {
     let reader = BufReader::new(file);
     let mut records = HashMap::new();
     let mut trailing_corrupt: Vec<usize> = Vec::new();
-    let lines: Vec<_> = reader.lines().collect::<io::Result<_>>()?;
-    for (index, line) in lines.into_iter().enumerate() {
+    // Stream lines instead of collecting into Vec to bound memory usage.
+    for (index, line_result) in reader.lines().enumerate() {
+        let line = line_result?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;

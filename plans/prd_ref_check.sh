@@ -321,11 +321,12 @@ if not status_keys:
 for item in items:
     sid = item.get('id', 'unknown')
     acc_blob = ' '.join(str(x) for x in (item.get('acceptance', []) + item.get('verify', []))).lower()
-    if '/api/v1/health' in acc_blob or '/health' in str(item.get('story_ref', '')).lower():
+    story_ref_lower = str(item.get('story_ref', '')).lower()
+    if '/health' in acc_blob or '/api/v1/health' in acc_blob or '/health' in story_ref_lower:
         for k in health_keys:
             if k.lower() not in acc_blob:
                 print(f'[prd_ref_check] WARN: {sid} references /health but acceptance missing required key "{k}"', file=sys.stderr)
-    if '/api/v1/status' in acc_blob or '/status' in str(item.get('story_ref', '')).lower():
+    if '/status' in acc_blob or '/api/v1/status' in acc_blob or '/status' in story_ref_lower:
         for k in status_keys:
             if k.lower() not in acc_blob:
                 print(f'[prd_ref_check] WARN: {sid} references /status but acceptance missing required CSP key "{k}"', file=sys.stderr)

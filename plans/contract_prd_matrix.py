@@ -482,10 +482,15 @@ def main() -> int:
         fields: list[str] = []
         for sid in stories:
             p = story_passes(story_by_id[sid])
-            passes_vals.append(f"{sid}={'true' if p else 'false'}")
-            fields.append(f"{sid}:{'|'.join(sorted(inv_map[a][sid]))}")
             if p is True:
+                status = "true"
                 blocker_count += 1
+            elif p is False:
+                status = "false"
+            else:
+                status = "unknown"
+            passes_vals.append(f"{sid}={status}")
+            fields.append(f"{sid}:{'|'.join(sorted(inv_map[a][sid]))}")
         inv_lines.append(f"{a}\t{','.join(stories)}\t{','.join(passes_vals)}\t{';'.join(fields)}")
     out_invalid.write_text("\n".join(inv_lines) + "\n", encoding="utf-8")
 
