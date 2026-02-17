@@ -182,10 +182,10 @@ for sid in sorted(all_referenced):
         referencing = ', '.join(prd_story_refs[sid])
         errors.append(f'PRD items ({referencing}) reference IMPL_PLAN story {sid} which does not exist')
 
-# Staleness check: warn if a known gap now has PRD coverage (gap closed)
+# Staleness check: error if a known gap now has PRD coverage (gap closed)
 for sid in sorted(known_impl_plan_gaps):
     if sid in prd_story_refs:
-        print(f'{TAG} WARN: known gap {sid} now has PRD coverage — remove from doc_sync_known_gaps in prd.json', file=sys.stderr)
+        errors.append(f'known gap {sid} now has PRD coverage — remove from doc_sync_known_gaps in prd.json')
 
 # ── Check B: Evidence file existence (passes=true only) ────────────
 for item in items:

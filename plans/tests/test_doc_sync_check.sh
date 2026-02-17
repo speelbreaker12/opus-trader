@@ -75,7 +75,16 @@ run_test "missing evidence file" "$FIXTURES_DIR/invalid_evidence_missing" 1 "non
 # ── Test 4: Missing test file triggers failure ────────────────────
 run_test "missing test file" "$FIXTURES_DIR/invalid_test_missing" 1 "missing_test.rs"
 
-# ── Test 5: Kill switch DOC_SYNC_GATE=0 skips gate ───────────────
+# ── Test 5: Path traversal evidence triggers failure ──────────────
+run_test "path traversal evidence" "$FIXTURES_DIR/invalid_path_traversal" 1 "escapes repo root"
+
+# ── Test 6: Prose and template evidence entries are silently filtered ─
+# The valid fixture now includes prose ("This is a prose description")
+# and template ("<template_placeholder>") evidence entries alongside a
+# real path. The gate should pass — is_path_like filters non-paths.
+# (Test 1 already covers this via the valid fixture.)
+
+# ── Test 7: Kill switch DOC_SYNC_GATE=0 skips gate ───────────────
 run_kill_switch_test() {
   total=$((total + 1))
   local tmpdir
