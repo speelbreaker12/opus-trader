@@ -191,15 +191,15 @@ pub fn durable_append(
 
 /// Simulate an fsync barrier.
 ///
-/// **Phase 1 note:** This is a no-op. The actual durability guarantee comes
-/// from `write_event_to_file()` in `ledger.rs` which calls `sync_all()` on
-/// every event write unconditionally. The `require_wal_fsync_before_dispatch`
-/// config flag currently only adds timing measurement around this no-op.
+/// This is currently a no-op placeholder used to model the latency of a
+/// durability barrier when `require_wal_fsync_before_dispatch` is enabled.
+/// The real durability is provided by `write_event_to_file()` in `ledger.rs`,
+/// which calls `sync_all()` on every event write unconditionally.
 ///
-/// In a production async WAL writer, this would be replaced by a real fsync
-/// barrier that waits for the async writer to flush to disk before allowing
-/// dispatch. At that point, the config flag would control whether `sync_all()`
-/// is called (durable) or only `flush()` is called (non-durable but faster).
+/// In a future production async WAL writer, this would be replaced by a real
+/// fsync barrier that waits for the async writer to flush to disk before
+/// allowing dispatch. The config flag would then control whether `sync_all()`
+/// is invoked (durable) or a lighter `flush()` is used (non-durable but faster).
 fn simulate_fsync_barrier() {
     // No-op for Phase 1. Production async WAL writer would fsync here.
 }
