@@ -98,10 +98,12 @@ def build_profile_map(lines: list[str], at_positions: dict[str, int]) -> dict[st
         #   Profile: GOP
         #   AT-992: ...
         explicit = None
+        best_dist = 3  # sentinel > max allowed distance
         for decl_line, prof in profile_decls:
-            if 0 <= (at_line - decl_line) <= 2:
+            dist = at_line - decl_line
+            if 0 <= dist <= 2 and dist < best_dist:
                 explicit = prof
-                break  # First match within 2 lines wins
+                best_dist = dist
 
         result[at] = explicit if explicit else inherited
 
@@ -253,7 +255,7 @@ def main() -> int:
     for idx, line in enumerate(lines):
         for at in AT_RE.findall(line):
             at_first.setdefault(at, idx)
-            stripped = line.strip().lstrip("-* ")
+            stripped = re.sub(r"^[\-\*\d.\s>]+", "", line.strip())
             if stripped.startswith(at):
                 at_def.setdefault(at, idx)
     at_positions: dict[str, int] = {}
@@ -314,6 +316,20 @@ def main() -> int:
         for at, fields in field_map.items():
             at_to_story_fields[at].setdefault(sid, set()).update(fields)
 
+    # ── Step 3b: Validate primary_owner_for consistency ──
+    for sid, it in story_by_id.items():
+        pof = it.get("primary_owner_for")
+        if not isinstance(pof, list):
+            continue
+        story_ats, _ = extract_story_ats(it)
+        for at in pof:
+            if at not in story_ats:
+                print(
+                    f"[matrix] WARNING: {sid} declares primary_owner_for {at} "
+                    f"but does not reference it in any AT field",
+                    file=sys.stderr,
+                )
+
     # ── Step 4: Emit matrix rows ──
     out_rows: list[MappingRow] = []
     for at in contract_ats:
@@ -357,6 +373,8 @@ def main() -> int:
                     status = "COVERED"
                 else:
                     status = "CLAIMED"
+            elif len(primary) > 1:
+                status = "AMBIGUOUS"
             else:
                 status = "AMBIGUOUS"
         else:
@@ -371,6 +389,16 @@ def main() -> int:
                 status = "CLAIMED"
 
         notes_parts: list[str] = []
+        # Warn if multiple stories claim primary_owner_for the same AT.
+        if owners_count > 1:
+            primary = [
+                sid for sid in owners
+                if at in story_by_id[sid].get("primary_owner_for", [])
+            ]
+            if len(primary) > 1:
+                notes_parts.append(
+                    f"Multiple primary_owner_for claims: {','.join(primary)}"
+                )
         if owners_count > 0 and not any_proof:
             notes_parts.append("No implementation_tests/verify arrays found in owning stories.")
         if owners_count > 0 and not any_enf:

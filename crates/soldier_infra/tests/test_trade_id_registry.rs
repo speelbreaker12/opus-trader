@@ -3,8 +3,6 @@
 //! AT-269: REST sweeper then WS duplicate ignored.
 //! AT-270: Duplicate WS trade is NOOP.
 
-extern crate serde_json;
-
 use soldier_infra::store::{
     InsertResult, RegistryError, RegistryMetrics, TradeIdRegistry, TradeRecord,
 };
@@ -371,10 +369,33 @@ fn test_all_lines_corrupt_returns_empty() {
     let content = "GARBAGE LINE 1\nGARBAGE LINE 2\n{\"bad\":true}\n";
     std::fs::write(&path, content).unwrap();
 
+    // Sanity: file is non-empty (rules out "reader ignored the file").
+    let file_len = std::fs::metadata(&path).unwrap().len();
+    assert!(file_len > 0, "test file must be non-empty to prove reader processed it");
+
     let reg = TradeIdRegistry::with_storage_path(10, &path)
         .expect("all-corrupt file should be tolerated (all trailing)");
     assert_eq!(reg.len(), 0);
     assert!(reg.is_empty());
+
+    remove_if_exists(&path);
+}
+
+/// Round-trip: verify that trade_line() output is parseable by the production reader.
+#[test]
+fn test_trade_line_round_trip() {
+    let path = temp_registry_path("roundtrip");
+    let content = format!("{}\n", trade_line("rt1", "g1"));
+    std::fs::write(&path, &content).unwrap();
+
+    let reg = TradeIdRegistry::with_storage_path(10, &path)
+        .expect("trade_line output must be parseable by production reader");
+    assert_eq!(
+        reg.len(),
+        1,
+        "round-trip: registry reader must parse trade_line output as a valid record"
+    );
+    assert!(reg.contains("rt1"));
 
     remove_if_exists(&path);
 }

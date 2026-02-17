@@ -12,8 +12,6 @@ use soldier_infra::store::{
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-extern crate serde_json;
-
 /// Helper: build a minimal intent record.
 fn intent(hash: &str, group_id: &str, leg_idx: u32, state: TlsState) -> IntentRecord {
     IntentRecord {
@@ -1017,8 +1015,31 @@ fn test_all_lines_corrupt_returns_empty() {
     let content = "GARBAGE LINE 1\nGARBAGE LINE 2\n{\"bad\":true}\n";
     std::fs::write(&path, content).unwrap();
 
+    // Sanity: file is non-empty (rules out "reader ignored the file").
+    let file_len = std::fs::metadata(&path).unwrap().len();
+    assert!(file_len > 0, "test file must be non-empty to prove reader processed it");
+
     let ledger = WalLedger::with_storage_path(10, &path).expect("all-corrupt file should be tolerated (all trailing)");
     assert_eq!(ledger.queue_depth(), 0);
+
+    remove_if_exists(&path);
+}
+
+/// Round-trip: verify that wal_intent_line() output is parseable by the production reader.
+#[test]
+fn test_wal_intent_line_round_trip() {
+    let path = temp_wal_path("roundtrip");
+    let content = format!("{}\n", wal_intent_line("rt1", "g1"));
+    std::fs::write(&path, &content).unwrap();
+
+    let ledger = WalLedger::with_storage_path(10, &path)
+        .expect("wal_intent_line output must be parseable by production reader");
+    assert_eq!(
+        ledger.queue_depth(),
+        1,
+        "round-trip: WAL reader must parse wal_intent_line output as a valid event"
+    );
+    assert!(ledger.get("rt1").is_some());
 
     remove_if_exists(&path);
 }
