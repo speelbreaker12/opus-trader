@@ -521,6 +521,33 @@ def main() -> int:
     if blocker_count > 0:
         print(f"[matrix] WARNING: {blocker_count} invalid AT ref(s) in stories with passes=true (BLOCKER)")
 
+    # ── H-2: Generic-refs lint (non-blocking warnings) ──
+    SECTION_RE = re.compile(r"§\d")
+    warn_count = 0
+    for sid, it in sorted(story_by_id.items()):
+        passes = story_passes(it)
+        refs = list_str(it, "contract_refs")
+        eca = list_str(it, "enforcing_contract_ats")
+
+        if passes is True and refs:
+            has_specific = any(SECTION_RE.search(r) or AT_RE.search(r) for r in refs)
+            if not has_specific:
+                print(
+                    f"[matrix] WARN: {sid} (passes=true) has only generic contract_refs "
+                    f"(no § anchor or AT-### ID): {refs}",
+                    file=sys.stderr,
+                )
+                warn_count += 1
+
+        if passes is False and not eca:
+            print(
+                f"[matrix] WARN: {sid} (passes=false) has zero enforcing_contract_ats (floating story)",
+                file=sys.stderr,
+            )
+            warn_count += 1
+
+    if warn_count > 0:
+        print(f"[matrix] Generic-refs lint: {warn_count} warning(s)", file=sys.stderr)
     return 0
 
 
