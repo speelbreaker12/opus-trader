@@ -548,7 +548,6 @@ def main() -> int:
 
     if warn_count > 0:
         print(f"[matrix] Generic-refs lint: {warn_count} warning(s)", file=sys.stderr)
-
     return 0
 
 

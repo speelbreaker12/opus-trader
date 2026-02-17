@@ -45,7 +45,7 @@ class TestHappyPath:
     def test_cli_strict_default_exits_zero(self) -> None:
         """CLI defaults to strict mode and exits 0 on valid policy."""
         result = subprocess.run(
-            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH)],
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH), "--allow-absolute"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -63,22 +63,116 @@ class TestFailClosedDefault:
         p = tmp_path / "bad.json"
         p.write_text(json.dumps(bad), encoding="utf-8")
         result = subprocess.run(
-            [sys.executable, str(LOADER_SCRIPT), "--policy", str(p)],
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(p), "--allow-absolute"],
             capture_output=True, text=True,
         )
         assert result.returncode == 1
-        assert "POLICY VALIDATION FAILED" in result.stdout
+        assert "POLICY VALIDATION FAILED" in result.stderr
 
     def test_cli_lenient_exits_zero_on_bad_policy(self, tmp_path: Path) -> None:
-        """With --lenient, bad policy exits 0."""
+        """With --lenient, bad policy exits 0 but still prints failure message."""
         bad = {"policy_id": "X"}
         p = tmp_path / "bad.json"
         p.write_text(json.dumps(bad), encoding="utf-8")
         result = subprocess.run(
-            [sys.executable, str(LOADER_SCRIPT), "--policy", str(p), "--lenient"],
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(p), "--lenient", "--allow-absolute"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
+        assert "POLICY VALIDATION FAILED" in result.stderr
+
+    def test_cli_lenient_emits_stderr_warning(self, tmp_path: Path) -> None:
+        """--lenient must emit a loud WARNING to stderr."""
+        bad = {"policy_id": "X"}
+        p = tmp_path / "bad.json"
+        p.write_text(json.dumps(bad), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(p), "--lenient", "--allow-absolute"],
+            capture_output=True, text=True,
+        )
+        assert "WARNING" in result.stderr
+        assert "--lenient" in result.stderr
+
+    def test_cli_absolute_path_rejected_without_flag(self) -> None:
+        """Absolute --policy path requires --allow-absolute."""
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 1
+        assert "absolute path requires --allow-absolute" in result.stderr
+
+    def test_cli_absolute_path_accepted_with_flag(self) -> None:
+        """Absolute --policy path works with --allow-absolute."""
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH), "--allow-absolute"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "POLICY VALIDATION OK" in result.stdout
+
+    def test_cli_lenient_warning_on_valid_policy(self) -> None:
+        """--lenient WARNING must fire even when policy is valid."""
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH), "--lenient", "--allow-absolute"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "POLICY VALIDATION OK" in result.stdout
+        assert "WARNING" in result.stderr
+        assert "--lenient" in result.stderr
+
+    def test_cli_relative_path_traversal_rejected(self, tmp_path: Path) -> None:
+        """Relative path traversal (../) must be rejected without --allow-absolute."""
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", "../../etc/passwd"],
+            capture_output=True, text=True,
+            cwd=str(tmp_path),
+        )
+        assert result.returncode == 1
+        assert "escapes working directory" in result.stderr
+
+    def test_cli_allow_absolute_lenient_bad_policy(self, tmp_path: Path) -> None:
+        """--allow-absolute + --lenient on bad policy: exit 0, FAILED on stderr, no OK on stdout."""
+        bad = {"policy_id": "X"}
+        p = tmp_path / "bad.json"
+        p.write_text(json.dumps(bad), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(p), "--allow-absolute", "--lenient"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "POLICY VALIDATION OK" not in result.stdout
+        assert "POLICY VALIDATION FAILED" in result.stderr
+        assert "WARNING" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Happy path (--print flag)
+# ---------------------------------------------------------------------------
+
+class TestPrintFlag:
+    def test_cli_print_produces_valid_json(self) -> None:
+        """--print must output parseable JSON to stdout after OK line."""
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH), "--allow-absolute", "--print"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        lines = result.stdout.strip().split("\n", 1)
+        assert lines[0] == "POLICY VALIDATION OK"
+        parsed = json.loads(lines[1])
+        assert parsed["policy_id"] == "LP-001"
+        assert parsed["fail_closed"] is True
+
+    def test_cli_no_print_omits_json(self) -> None:
+        """Without --print, stdout is only the OK line."""
+        result = subprocess.run(
+            [sys.executable, str(LOADER_SCRIPT), "--policy", str(POLICY_PATH), "--allow-absolute"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "POLICY VALIDATION OK"
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +208,21 @@ class TestFailClosedField:
 
     def test_fail_closed_string_rejected(self, valid_policy: dict) -> None:
         valid_policy["fail_closed"] = "yes"
+        errors = validate_policy(valid_policy)
+        assert any("fail_closed must be true" in e for e in errors)
+
+    def test_fail_closed_zero_rejected(self, valid_policy: dict) -> None:
+        valid_policy["fail_closed"] = 0
+        errors = validate_policy(valid_policy)
+        assert any("fail_closed must be true" in e for e in errors)
+
+    def test_fail_closed_none_rejected(self, valid_policy: dict) -> None:
+        valid_policy["fail_closed"] = None
+        errors = validate_policy(valid_policy)
+        assert any("fail_closed must be true" in e for e in errors)
+
+    def test_fail_closed_int_one_rejected(self, valid_policy: dict) -> None:
+        valid_policy["fail_closed"] = 1
         errors = validate_policy(valid_policy)
         assert any("fail_closed must be true" in e for e in errors)
 
@@ -153,6 +262,10 @@ class TestBoolAsInt:
         assert _is_strict_numeric(3.14) is True
         assert _is_strict_numeric(0) is True
 
+    def test_strict_numeric_rejects_string(self) -> None:
+        assert _is_strict_numeric("") is False
+        assert _is_strict_numeric("42") is False
+
     def test_strict_numeric_rejects_none(self) -> None:
         assert _is_strict_numeric(None) is False
 
@@ -187,16 +300,54 @@ class TestEnvironmentConstraints:
         errors = validate_policy(valid_policy)
         assert any("LIVE must be trade_capable" in e for e in errors)
 
+    def test_staging_trade_capable_unconstrained(self, valid_policy: dict) -> None:
+        """STAGING trade_capable is intentionally unconstrained (testnet integration)."""
+        valid_policy["environments"]["STAGING"]["trade_capable"] = True
+        errors = validate_policy(valid_policy)
+        assert not any("STAGING" in e and "trade_capable" in e for e in errors)
+
+        valid_policy["environments"]["STAGING"]["trade_capable"] = False
+        errors = validate_policy(valid_policy)
+        assert not any("STAGING" in e and "trade_capable" in e for e in errors)
+
+    def test_unknown_environment_entry_flagged(self, valid_policy: dict) -> None:
+        """Unknown environment keys (typos, extras) must be flagged."""
+        valid_policy["environments"]["PROD"] = {"trade_capable": True, "purpose": "oops"}
+        errors = validate_policy(valid_policy)
+        assert any("unknown entries" in e and "PROD" in e for e in errors)
+
 
 # ---------------------------------------------------------------------------
 # Allowed/forbidden overlap
 # ---------------------------------------------------------------------------
 
-class TestOrderTypeOverlap:
+class TestOrderTypeValidation:
     def test_overlap_detected(self, valid_policy: dict) -> None:
         valid_policy["allowed_order_types"].append("MARKET")
         errors = validate_policy(valid_policy)
         assert any("overlap" in e for e in errors)
+
+    def test_empty_allowed_order_types_rejected(self, valid_policy: dict) -> None:
+        valid_policy["allowed_order_types"] = []
+        errors = validate_policy(valid_policy)
+        assert any("allowed_order_types must be a non-empty string list" in e for e in errors)
+
+    def test_empty_forbidden_order_types_rejected(self, valid_policy: dict) -> None:
+        valid_policy["forbidden_order_types"] = []
+        errors = validate_policy(valid_policy)
+        assert any("forbidden_order_types must be a non-empty string list" in e for e in errors)
+
+    def test_case_insensitive_overlap_detected(self, valid_policy: dict) -> None:
+        """'market' in allowed overlaps with 'MARKET' in forbidden (case-insensitive)."""
+        valid_policy["allowed_order_types"].append("market")
+        errors = validate_policy(valid_policy)
+        assert any("overlap" in e for e in errors)
+
+    def test_case_insensitive_market_forbidden(self, valid_policy: dict) -> None:
+        """'market' (lowercase) in forbidden satisfies the MARKET requirement."""
+        valid_policy["forbidden_order_types"] = ["market", "STOP"]
+        errors = validate_policy(valid_policy)
+        assert not any("must include MARKET" in e for e in errors)
 
 
 # ---------------------------------------------------------------------------
@@ -218,10 +369,33 @@ class TestRiskLimitBoundaries:
         errors = validate_policy(valid_policy)
         assert not any("must be > 0" in e for e in errors)
 
+    def test_unknown_risk_limit_key_flagged(self, valid_policy: dict) -> None:
+        """Typos or extra keys in risk_limits must be flagged."""
+        valid_policy["risk_limits"]["max_daily_los_usd"] = 5000
+        errors = validate_policy(valid_policy)
+        assert any("unknown keys" in e and "max_daily_los_usd" in e for e in errors)
+
+    def test_missing_risk_limit_key_clear_message(self, valid_policy: dict) -> None:
+        """Missing risk_limits key says 'missing', not 'not bool'."""
+        del valid_policy["risk_limits"]["max_orders_per_minute"]
+        errors = validate_policy(valid_policy)
+        assert any("max_orders_per_minute" in e and "missing" in e for e in errors)
+        assert not any("max_orders_per_minute" in e and "not bool" in e for e in errors)
+
 
 # ---------------------------------------------------------------------------
 # Missing environment entry (P2)
 # ---------------------------------------------------------------------------
+
+class TestEnvironmentTypeValidation:
+    def test_environments_not_dict_rejected(self, valid_policy: dict) -> None:
+        for bad_value in [None, "string", [1, 2], 42]:
+            p = {**valid_policy, "environments": bad_value}
+            errors = validate_policy(p)
+            assert any("environments must be an object" in e for e in errors), (
+                f"expected error for environments={bad_value!r}"
+            )
+
 
 class TestMissingEnvironment:
     def test_missing_staging_detected(self, valid_policy: dict) -> None:
@@ -268,4 +442,10 @@ class TestLoadErrors:
         p = tmp_path / "array.json"
         p.write_text("[1,2,3]", encoding="utf-8")
         with pytest.raises(ValueError, match="policy root must be an object"):
+            load_policy(p)
+
+    def test_invalid_utf8(self, tmp_path: Path) -> None:
+        p = tmp_path / "binary.json"
+        p.write_bytes(b"\xff\xfe{}")
+        with pytest.raises(ValueError, match="cannot decode policy file"):
             load_policy(p)
