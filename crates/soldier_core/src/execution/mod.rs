@@ -21,6 +21,7 @@ pub mod quantize;
 pub mod reject_reason;
 pub mod tlsm;
 
+#[allow(deprecated)]
 pub use build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
     GateSequenceResult, GateStep, RecordedBeforeDispatchGate, build_gate_results,

@@ -5,6 +5,8 @@
 //!
 //! No HashMap iteration order dependency, no clock dependency, no randomness.
 
+#![allow(deprecated)]
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateResults, GateStep, build_order_intent,
 };

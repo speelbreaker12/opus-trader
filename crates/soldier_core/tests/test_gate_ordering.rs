@@ -12,6 +12,8 @@
 //! C2: RecordedBeforeDispatch (WAL) is the last gate before dispatch.
 //! C3: No side effects (approval) occur before all gates pass.
 
+#![allow(deprecated)]
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
     GateSequenceResult, GateStep, build_order_intent, gate_sequence_total,

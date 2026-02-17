@@ -265,8 +265,8 @@ fn load_records(path: &Path) -> io::Result<HashMap<String, TradeRecord>> {
         .open(path)?;
     let reader = BufReader::new(file);
     let mut records = HashMap::new();
+    let mut trailing_corrupt: Vec<usize> = Vec::new();
     let lines: Vec<_> = reader.lines().collect::<io::Result<_>>()?;
-    let total = lines.len();
     for (index, line) in lines.into_iter().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -274,6 +274,19 @@ fn load_records(path: &Path) -> io::Result<HashMap<String, TradeRecord>> {
         }
         match serde_json::from_str::<TradeRecord>(trimmed) {
             Ok(record) => {
+                if !trailing_corrupt.is_empty() {
+                    // Valid line after corrupt lines = mid-file corruption.
+                    let first_corrupt = trailing_corrupt[0];
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "invalid trade-id record at line {} in {} (followed by valid line {})",
+                            first_corrupt + 1,
+                            path.display(),
+                            index + 1,
+                        ),
+                    ));
+                }
                 // Tolerate duplicate trade_id lines (last-writer-wins).
                 // This can happen if the process crashes after persist_record
                 // writes to disk but before the in-memory HashMap insert
@@ -281,24 +294,14 @@ fn load_records(path: &Path) -> io::Result<HashMap<String, TradeRecord>> {
                 records.insert(record.trade_id.clone(), record);
             }
             Err(e) => {
-                // Tolerate a malformed final line — expected after a crash
-                // during write. All earlier lines must be valid.
-                if index + 1 == total {
-                    eprintln!(
-                        "WARNING: skipping malformed trailing trade-id line {} in {}: {e}",
-                        index + 1,
-                        path.display()
-                    );
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!(
-                            "invalid trade-id record at line {} in {}: {e}",
-                            index + 1,
-                            path.display()
-                        ),
-                    ));
-                }
+                // Accumulate trailing corrupt lines — crash artifacts from
+                // partial writes. Tolerated as long as no valid line follows.
+                trailing_corrupt.push(index);
+                eprintln!(
+                    "WARNING: skipping malformed trailing trade-id line {} in {}: {e}",
+                    index + 1,
+                    path.display()
+                );
             }
         }
     }

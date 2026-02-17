@@ -10,6 +10,8 @@
 //! 3. An IntentContext carrying intent_id + run_id can be threaded through
 //!    the entire pipeline without loss.
 
+#![allow(deprecated)]
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     build_order_intent,

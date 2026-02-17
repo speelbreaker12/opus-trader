@@ -635,12 +635,17 @@ fn reduce_events(events: &[WalEvent]) -> Result<HashMap<String, IntentRecord>, S
 
 /// Write a WAL event to an already-open file handle.
 ///
-/// **Note:** `sync_all()` is called unconditionally. The
-/// `WalBarrierConfig::require_wal_fsync_before_dispatch` flag in `wal.rs`
-/// controls an *additional* barrier point after enqueue. Since `sync_all()`
-/// is already called here, the barrier flag currently only adds timing
-/// measurement. This is a Phase 1 simplification — a production async WAL
-/// writer would decouple enqueue from fsync.
+/// **Phase 1 limitation — sync_all() on every write:**
+/// This calls `sync_all()` (fsync) unconditionally, which blocks the calling
+/// thread for 0.2-2ms on SSD. Under burst conditions this serializes all
+/// intent processing and creates a latency cliff. This tension with
+/// CONTRACT.md §2.4.1 ("Hot loop MUST NOT block on disk I/O") is acknowledged:
+/// Phase 1 satisfies the non-blocking contract at the queue abstraction level
+/// (callers enqueue into `WalLedger`), not at the file I/O level.
+///
+/// A production async WAL writer would decouple enqueue from fsync, with the
+/// `WalBarrierConfig::require_wal_fsync_before_dispatch` flag controlling
+/// whether dispatch waits for the fsync to complete.
 fn write_event_to_file(file: &mut File, event: &WalEvent) -> Result<(), String> {
     let mut line =
         serde_json::to_string(event).map_err(|e| format!("failed to encode wal event: {e}"))?;
@@ -664,34 +669,48 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
     let reader = BufReader::new(file);
 
     let mut events = Vec::new();
+    let mut trailing_corrupt: Vec<usize> = Vec::new();
     let lines: Vec<_> = reader.lines().collect::<io::Result<_>>()?;
-    let total = lines.len();
+    let _total = lines.len();
     for (index, line) in lines.into_iter().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
         match serde_json::from_str::<WalEvent>(trimmed) {
-            Ok(event) => events.push(event),
-            Err(e) => {
-                // Tolerate a malformed final line — expected after a crash
-                // during write. All earlier lines must be valid.
-                if index + 1 == total {
-                    eprintln!(
-                        "WARNING: skipping malformed trailing wal line {} in {}: {e}",
-                        index + 1,
-                        path.display()
-                    );
-                } else {
+            Ok(event) => {
+                if !trailing_corrupt.is_empty() {
+                    // A valid line after corrupt lines means the corrupt lines
+                    // are mid-file corruption — not trailing crash artifacts.
+                    let first_corrupt = trailing_corrupt[0];
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!(
-                            "invalid wal event at line {} in {}: {e}",
+                            "invalid wal event at line {} in {} (followed by valid line {})",
+                            first_corrupt + 1,
+                            path.display(),
                             index + 1,
-                            path.display()
                         ),
                     ));
                 }
+                events.push(event);
+            }
+            Err(e) => {
+                // Accumulate trailing corrupt lines. If all remaining lines
+                // are corrupt, they are crash artifacts (tolerated). If a valid
+                // line follows, the first corrupt line is mid-file corruption
+                // and we fail hard.
+                //
+                // This handles double-crash: crash #1 leaves a partial trailing
+                // line; restart appends new events then crash #2 leaves another
+                // partial line. On the third restart both trailing lines are
+                // corrupt and should be tolerated.
+                trailing_corrupt.push(index);
+                eprintln!(
+                    "WARNING: skipping malformed trailing wal line {} in {}: {e}",
+                    index + 1,
+                    path.display()
+                );
             }
         }
     }
