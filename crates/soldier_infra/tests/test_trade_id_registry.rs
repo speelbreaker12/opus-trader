@@ -3,6 +3,8 @@
 //! AT-269: REST sweeper then WS duplicate ignored.
 //! AT-270: Duplicate WS trade is NOOP.
 
+extern crate serde_json;
+
 use soldier_infra::store::{
     InsertResult, RegistryError, RegistryMetrics, TradeIdRegistry, TradeRecord,
 };
@@ -252,4 +254,127 @@ fn test_metrics_default() {
     let m = RegistryMetrics::default();
     assert_eq!(m.trade_id_duplicates_total(), 0);
     assert_eq!(m.inserts_total(), 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Trailing corruption tolerance (TRIP / NON-TRIP pairs per §0.Z.2.2 item A)
+// ═══════════════════════════════════════════════════════════════════════════
+
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+fn temp_registry_path(tag: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock before unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "soldier_registry_{tag}_{}_{}.jsonl",
+        std::process::id(),
+        nanos
+    ))
+}
+
+fn remove_if_exists(path: &Path) {
+    let _ = std::fs::remove_file(path);
+}
+
+/// Helper: serialize a TradeRecord as a JSONL line (no trailing newline).
+fn trade_line(trade_id: &str, group_id: &str) -> String {
+    let record = trade(trade_id, group_id, 0);
+    serde_json::to_string(&record).unwrap()
+}
+
+/// NON-TRIP: Single trailing corrupt line is tolerated.
+/// Valid records before the corruption are loaded.
+#[test]
+fn test_trailing_corruption_single_line_tolerated() {
+    let path = temp_registry_path("trail_single");
+
+    let content = format!(
+        "{}\n{}\n{}\n",
+        trade_line("t1", "g1"),
+        trade_line("t2", "g2"),
+        "THIS IS CORRUPT GARBAGE",
+    );
+    std::fs::write(&path, &content).unwrap();
+
+    let reg = TradeIdRegistry::with_storage_path(10, &path)
+        .expect("should tolerate trailing corruption");
+    assert_eq!(reg.len(), 2);
+    assert!(reg.contains("t1"));
+    assert!(reg.contains("t2"));
+
+    remove_if_exists(&path);
+}
+
+/// NON-TRIP: Multiple trailing corrupt lines (double-crash) are tolerated.
+/// Valid records before the corruption are loaded.
+#[test]
+fn test_trailing_corruption_multiple_lines_tolerated() {
+    let path = temp_registry_path("trail_multi");
+
+    let content = format!(
+        "{}\n{}\n{}\n{}\n{}\n",
+        trade_line("t1", "g1"),
+        trade_line("t2", "g2"),
+        "CORRUPT LINE FROM CRASH 1",
+        "CORRUPT LINE FROM CRASH 2",
+        "{\"bad_field\":true}",  // also corrupt (missing required fields)
+    );
+    std::fs::write(&path, &content).unwrap();
+
+    let reg = TradeIdRegistry::with_storage_path(10, &path)
+        .expect("should tolerate multiple trailing corrupt lines");
+    assert_eq!(reg.len(), 2);
+    assert!(reg.contains("t1"));
+    assert!(reg.contains("t2"));
+
+    remove_if_exists(&path);
+}
+
+/// TRIP: Mid-file corrupt line followed by a valid line → hard error.
+/// This proves mid-file corruption is detected and rejected.
+#[test]
+fn test_midfile_corruption_returns_error() {
+    let path = temp_registry_path("midfile_corrupt");
+
+    let content = format!(
+        "{}\nCORRUPT MID-FILE LINE\n{}\n",
+        trade_line("t1", "g1"),
+        trade_line("t2", "g2"),
+    );
+    std::fs::write(&path, &content).unwrap();
+
+    let result = TradeIdRegistry::with_storage_path(10, &path);
+    assert!(result.is_err(), "mid-file corruption must cause a hard error");
+    let err = result.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    let msg = err.to_string();
+    assert!(
+        msg.contains("invalid trade-id record at line 2"),
+        "error should identify the corrupt line number, got: {msg}"
+    );
+    assert!(
+        msg.contains("followed by valid line 3"),
+        "error should mention the valid line that proves mid-file corruption, got: {msg}"
+    );
+
+    remove_if_exists(&path);
+}
+
+/// Edge case: All lines corrupt → empty registry (no valid records, all treated as trailing).
+#[test]
+fn test_all_lines_corrupt_returns_empty() {
+    let path = temp_registry_path("all_corrupt");
+
+    let content = "GARBAGE LINE 1\nGARBAGE LINE 2\n{\"bad\":true}\n";
+    std::fs::write(&path, content).unwrap();
+
+    let reg = TradeIdRegistry::with_storage_path(10, &path)
+        .expect("all-corrupt file should be tolerated (all trailing)");
+    assert_eq!(reg.len(), 0);
+    assert!(reg.is_empty());
+
+    remove_if_exists(&path);
 }

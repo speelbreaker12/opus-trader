@@ -406,6 +406,9 @@
       },
       "implementation_tests": [
         "crates/soldier_infra/tests/test_phase0_runtime.rs::test_status_command_behavior_runtime"
+      ],
+      "primary_owner_for": [
+        "AT-022"
       ]
     },
     {
@@ -647,6 +650,9 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_instrument_kind_mapping.rs"
+      ],
+      "primary_owner_for": [
+        "AT-333"
       ]
     },
     {
@@ -751,6 +757,9 @@
         "RiskState::Degraded",
         "RiskState::Healthy",
         "crates/soldier_core/tests/test_instrument_cache_ttl.rs"
+      ],
+      "primary_owner_for": [
+        "AT-104"
       ]
     },
     {
@@ -845,6 +854,9 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_order_size.rs"
+      ],
+      "primary_owner_for": [
+        "AT-277"
       ]
     },
     {
@@ -1134,6 +1146,9 @@
         "RiskState::Degraded",
         "crates/soldier_core/tests/test_dispatch_map.rs",
         "crates/soldier_core/tests/test_order_size.rs"
+      ],
+      "primary_owner_for": [
+        "AT-920"
       ]
     },
     {
@@ -1383,7 +1398,11 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [],
+      "primary_owner_for": [
+        "AT-040",
+        "AT-341"
+      ]
     },
     {
       "id": "S1-011",
@@ -1646,6 +1665,10 @@
       },
       "implementation_tests": [
         "plans/tests/test_pr_gate.sh"
+      ],
+      "primary_owner_for": [
+        "AT-1056",
+        "AT-1057"
       ]
     },
     {
@@ -1741,6 +1764,12 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_quantize.rs"
+      ],
+      "primary_owner_for": [
+        "AT-020",
+        "AT-021",
+        "AT-219",
+        "AT-926"
       ]
     },
     {
@@ -1833,6 +1862,11 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_idempotency.rs"
+      ],
+      "primary_owner_for": [
+        "AT-201",
+        "AT-218",
+        "AT-343"
       ]
     },
     {
@@ -1927,6 +1961,10 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_label.rs"
+      ],
+      "primary_owner_for": [
+        "AT-216",
+        "AT-217"
       ]
     },
     {
@@ -2251,6 +2289,11 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_preflight.rs"
+      ],
+      "primary_owner_for": [
+        "AT-004",
+        "AT-013",
+        "AT-915"
       ]
     },
     {
@@ -2540,6 +2583,13 @@
       },
       "implementation_tests": [
         "crates/soldier_infra/tests/test_ledger_replay.rs"
+      ],
+      "primary_owner_for": [
+        "AT-233",
+        "AT-234",
+        "AT-906",
+        "AT-925",
+        "AT-935"
       ]
     },
     {
@@ -3165,6 +3215,9 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_net_edge_gate.rs"
+      ],
+      "primary_owner_for": [
+        "AT-015"
       ]
     },
     {
@@ -3657,6 +3710,9 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_intent_id_propagation.rs"
+      ],
+      "primary_owner_for": [
+        "AT-902"
       ]
     },
     {
@@ -3733,6 +3789,11 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_gate_ordering.rs"
+      ],
+      "primary_owner_for": [
+        "AT-010",
+        "AT-1055",
+        "AT-338"
       ]
     },
     {
@@ -3982,6 +4043,9 @@
       "implementation_tests": [
         "crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_rejects_risk_increasing_near_limit",
         "crates/soldier_core/tests/test_inventory_skew.rs::test_inventory_skew_tick_penalty_max_is_exactly_3_ticks_at_bias_1_0"
+      ],
+      "primary_owner_for": [
+        "AT-043"
       ]
     },
     {
@@ -4256,6 +4320,9 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_margin_gate.rs::test_margin_gate_thresholds_block_reduceonly_kill"
+      ],
+      "primary_owner_for": [
+        "AT-001"
       ]
     },
     {
@@ -8191,6 +8258,9 @@
         "crates/soldier_infra/tests/test_http_status.rs::test_status_wal_queue_invariants",
         "crates/soldier_infra/tests/test_http_status.rs::test_status_gop_keys_present_when_gop",
         "crates/soldier_core/tests/test_status_endpoint.rs::test_status_endpoint_f1_cert_expires_at_matches_generated_plus_window"
+      ],
+      "primary_owner_for": [
+        "AT-023"
       ]
     },
     {
@@ -8313,6 +8383,12 @@
         "crates/soldier_infra/tests/test_http_status.rs::test_status_snapshot_coverage_pct_uses_replay_window_hours",
         "crates/soldier_infra/tests/test_http_status.rs::test_status_atomic_naked_events_non_negative",
         "crates/soldier_infra/tests/test_http_status.rs::test_status_rejects_non_get"
+      ],
+      "primary_owner_for": [
+        "AT-025",
+        "AT-026",
+        "AT-027",
+        "AT-028"
       ]
     },
     {

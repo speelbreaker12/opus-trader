@@ -12,6 +12,8 @@ use soldier_infra::store::{
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+extern crate serde_json;
+
 /// Helper: build a minimal intent record.
 fn intent(hash: &str, group_id: &str, leg_idx: u32, state: TlsState) -> IntentRecord {
     IntentRecord {
@@ -911,4 +913,112 @@ fn test_replay_round_trip_from_durable_storage() {
     }
 
     remove_if_exists(&wal_path);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Trailing corruption tolerance (TRIP / NON-TRIP pairs per §0.Z.2.2 item A)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Helper: serialize an IntentRecorded WAL event as a JSONL line (no newline).
+fn wal_intent_line(hash: &str, group_id: &str) -> String {
+    let record = intent(hash, group_id, 0, TlsState::Created);
+    // Build the same JSON that write_event_to_file would produce.
+    // WalEvent is private, so we construct the JSON manually matching
+    // the serde(tag = "kind", rename_all = "snake_case") format.
+    let record_json = serde_json::to_value(&record).unwrap();
+    let event = serde_json::json!({
+        "kind": "intent_recorded",
+        "record": record_json
+    });
+    serde_json::to_string(&event).unwrap()
+}
+
+/// NON-TRIP: Single trailing corrupt line is tolerated.
+/// Valid events before the corruption are returned.
+#[test]
+fn test_trailing_corruption_single_line_tolerated() {
+    let path = temp_wal_path("trail_single");
+
+    let content = format!(
+        "{}\n{}\n{}\n",
+        wal_intent_line("h1", "g1"),
+        wal_intent_line("h2", "g2"),
+        "THIS IS CORRUPT GARBAGE",
+    );
+    std::fs::write(&path, &content).unwrap();
+
+    let ledger = WalLedger::with_storage_path(10, &path).expect("should tolerate trailing corruption");
+    assert_eq!(ledger.queue_depth(), 2);
+    assert!(ledger.get("h1").is_some());
+    assert!(ledger.get("h2").is_some());
+
+    remove_if_exists(&path);
+}
+
+/// NON-TRIP: Multiple trailing corrupt lines (double-crash) are tolerated.
+/// Valid events before the corruption are returned.
+#[test]
+fn test_trailing_corruption_multiple_lines_tolerated() {
+    let path = temp_wal_path("trail_multi");
+
+    let content = format!(
+        "{}\n{}\n{}\n{}\n{}\n",
+        wal_intent_line("h1", "g1"),
+        wal_intent_line("h2", "g2"),
+        "CORRUPT LINE FROM CRASH 1",
+        "CORRUPT LINE FROM CRASH 2",
+        "{\"kind\":\"bogus\"}",  // also corrupt (unknown variant)
+    );
+    std::fs::write(&path, &content).unwrap();
+
+    let ledger = WalLedger::with_storage_path(10, &path).expect("should tolerate multiple trailing corrupt lines");
+    assert_eq!(ledger.queue_depth(), 2);
+    assert!(ledger.get("h1").is_some());
+    assert!(ledger.get("h2").is_some());
+
+    remove_if_exists(&path);
+}
+
+/// TRIP: Mid-file corrupt line followed by a valid line → hard error.
+/// This proves mid-file corruption is detected and rejected.
+#[test]
+fn test_midfile_corruption_returns_error() {
+    let path = temp_wal_path("midfile_corrupt");
+
+    let content = format!(
+        "{}\nCORRUPT MID-FILE LINE\n{}\n",
+        wal_intent_line("h1", "g1"),
+        wal_intent_line("h2", "g2"),
+    );
+    std::fs::write(&path, &content).unwrap();
+
+    let result = WalLedger::with_storage_path(10, &path);
+    assert!(result.is_err(), "mid-file corruption must cause a hard error");
+    let err = result.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    let msg = err.to_string();
+    assert!(
+        msg.contains("invalid wal event at line 2"),
+        "error should identify the corrupt line number, got: {msg}"
+    );
+    assert!(
+        msg.contains("followed by valid line 3"),
+        "error should mention the valid line that proves mid-file corruption, got: {msg}"
+    );
+
+    remove_if_exists(&path);
+}
+
+/// Edge case: All lines corrupt → empty ledger (no valid events, all treated as trailing).
+#[test]
+fn test_all_lines_corrupt_returns_empty() {
+    let path = temp_wal_path("all_corrupt");
+
+    let content = "GARBAGE LINE 1\nGARBAGE LINE 2\n{\"bad\":true}\n";
+    std::fs::write(&path, content).unwrap();
+
+    let ledger = WalLedger::with_storage_path(10, &path).expect("all-corrupt file should be tolerated (all trailing)");
+    assert_eq!(ledger.queue_depth(), 0);
+
+    remove_if_exists(&path);
 }

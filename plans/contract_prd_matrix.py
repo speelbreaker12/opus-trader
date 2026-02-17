@@ -46,7 +46,11 @@ from pathlib import Path
 from typing import Any
 
 AT_RE = re.compile(r"\bAT-\d{3,}\b")
-PROFILE_RE = re.compile(r"\bProfile\s*:\s*(CSP|GOP|FULL)\b", re.IGNORECASE)
+
+# Matches standalone profile declaration lines (bare or in backticks).
+# Excludes prose like "Run all `Profile: CSP` acceptance tests".
+# Per CONTRACT.md §0.Z.5 line 417: "ATs inherit the most recent Profile: tag above them."
+PROFILE_DECL_RE = re.compile(r"^\s*`?Profile\s*:\s*(CSP|GOP|FULL)`?\s*$", re.IGNORECASE)
 
 
 def read_text(p: Path) -> str:
@@ -61,20 +65,47 @@ def ensure_parent(p: Path) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
 
 
-def infer_profile(lines: list[str], at_line_idx: int, window: int = 25) -> str:
-    """Infer profile by scanning +/-window lines for a 'Profile: CSP|GOP|FULL' marker."""
-    best: tuple[int, str] | None = None
-    start = max(0, at_line_idx - window)
-    end = min(len(lines), at_line_idx + window + 1)
-    for i in range(start, end):
-        m = PROFILE_RE.search(lines[i])
-        if not m:
-            continue
-        prof = m.group(1).upper()
-        dist = abs(i - at_line_idx)
-        if best is None or dist < best[0]:
-            best = (dist, prof)
-    return best[1] if best else "UNKNOWN"
+def build_profile_map(lines: list[str], at_positions: dict[str, int]) -> dict[str, str]:
+    """Build AT -> profile mapping using top-down inheritance.
+
+    Per CONTRACT.md §0.Z.5: "ATs inherit the most recent Profile: tag above them."
+    If both an explicit per-AT Profile: line and a section-level tag exist,
+    the explicit line wins (checked by proximity: within 2 lines of the AT).
+    """
+    # Step 1: Collect all profile declaration line numbers and their values.
+    profile_decls: list[tuple[int, str]] = []
+    for idx, line in enumerate(lines):
+        m = PROFILE_DECL_RE.match(line)
+        if m:
+            profile_decls.append((idx, m.group(1).upper()))
+
+    if not profile_decls:
+        return {at: "UNKNOWN" for at in at_positions}
+
+    # Step 2: For each AT, find the most recent Profile: declaration at or above it.
+    # Then check if there's an explicit per-AT declaration within 2 lines (wins over inheritance).
+    result: dict[str, str] = {}
+    for at, at_line in at_positions.items():
+        # Find inherited profile: most recent declaration at or above the AT line.
+        inherited = "UNKNOWN"
+        for decl_line, prof in reversed(profile_decls):
+            if decl_line <= at_line:
+                inherited = prof
+                break
+
+        # Check for explicit per-AT profile: a declaration within 2 lines above the AT.
+        # This handles cases like:
+        #   Profile: GOP
+        #   AT-992: ...
+        explicit = None
+        for decl_line, prof in profile_decls:
+            if 0 <= (at_line - decl_line) <= 2:
+                explicit = prof
+                break  # First match within 2 lines wins
+
+        result[at] = explicit if explicit else inherited
+
+    return result
 
 
 def stringify(x: Any) -> str:
@@ -214,17 +245,25 @@ def main() -> int:
     contract_text = read_text(contract_path)
     lines = contract_text.splitlines()
 
-    at_positions: dict[str, int] = {}
+    # Collect AT positions. Prefer the "definition line" (AT at start of line)
+    # over first-mention (which may be in a summary/reference far from the
+    # Profile: declaration). Falls back to first occurrence if no def-like line.
+    at_first: dict[str, int] = {}
+    at_def: dict[str, int] = {}
     for idx, line in enumerate(lines):
         for at in AT_RE.findall(line):
-            at_positions.setdefault(at, idx)
+            at_first.setdefault(at, idx)
+            stripped = line.strip().lstrip("-* ")
+            if stripped.startswith(at):
+                at_def.setdefault(at, idx)
+    at_positions: dict[str, int] = {}
+    for at in at_first:
+        at_positions[at] = at_def.get(at, at_first[at])
 
     contract_ats = sorted(at_positions.keys())
     contract_set = set(contract_ats)
 
-    at_profile: dict[str, str] = {}
-    for at in contract_ats:
-        at_profile[at] = infer_profile(lines, at_positions[at])
+    at_profile = build_profile_map(lines, at_positions)
 
     # ── Step 2: Parse PRD items ──
     prd = load_json(prd_path)
@@ -302,8 +341,24 @@ def main() -> int:
         if owners_count == 0:
             status = "MISSING"
         elif owners_count > 1:
-            # Multiple owners — ambiguous unless auditor resolves manually
-            status = "AMBIGUOUS"
+            # Check if primary_owner_for resolves ambiguity.
+            primary = [
+                sid for sid in owners
+                if at in story_by_id[sid].get("primary_owner_for", [])
+            ]
+            if len(primary) == 1:
+                # Resolved: treat as single-owner using the primary.
+                sid = primary[0]
+                it = story_by_id[sid]
+                passes = story_passes(it)
+                proof = story_proof_present(it)
+                enf = story_enforcement_present(it)
+                if passes is True and proof and enf:
+                    status = "COVERED"
+                else:
+                    status = "CLAIMED"
+            else:
+                status = "AMBIGUOUS"
         else:
             sid = owners[0]
             it = story_by_id[sid]
