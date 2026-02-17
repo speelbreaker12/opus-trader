@@ -211,7 +211,9 @@ impl TradeIdRegistry {
     /// Log mutex poison at most once to avoid stderr spam in a degraded runtime.
     fn log_poison_once(&self, method: &str) {
         if !self.poison_logged.swap(true, Ordering::Relaxed) {
-            eprintln!("ERROR: trade id registry mutex poisoned in {method}() — suppressing future logs");
+            eprintln!(
+                "ERROR: trade id registry mutex poisoned in {method}() — suppressing future logs"
+            );
         }
     }
 
