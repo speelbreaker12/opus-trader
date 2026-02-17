@@ -297,8 +297,8 @@ fn test_trailing_corruption_single_line_tolerated() {
     );
     std::fs::write(&path, &content).unwrap();
 
-    let reg = TradeIdRegistry::with_storage_path(10, &path)
-        .expect("should tolerate trailing corruption");
+    let reg =
+        TradeIdRegistry::with_storage_path(10, &path).expect("should tolerate trailing corruption");
     assert_eq!(reg.len(), 2);
     assert!(reg.contains("t1"));
     assert!(reg.contains("t2"));
@@ -318,7 +318,7 @@ fn test_trailing_corruption_multiple_lines_tolerated() {
         trade_line("t2", "g2"),
         "CORRUPT LINE FROM CRASH 1",
         "CORRUPT LINE FROM CRASH 2",
-        "{\"bad_field\":true}",  // also corrupt (missing required fields)
+        "{\"bad_field\":true}", // also corrupt (missing required fields)
     );
     std::fs::write(&path, &content).unwrap();
 
@@ -345,7 +345,10 @@ fn test_midfile_corruption_returns_error() {
     std::fs::write(&path, &content).unwrap();
 
     let result = TradeIdRegistry::with_storage_path(10, &path);
-    assert!(result.is_err(), "mid-file corruption must cause a hard error");
+    assert!(
+        result.is_err(),
+        "mid-file corruption must cause a hard error"
+    );
     let err = result.unwrap_err();
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     let msg = err.to_string();
@@ -371,7 +374,10 @@ fn test_all_lines_corrupt_returns_empty() {
 
     // Sanity: file is non-empty (rules out "reader ignored the file").
     let file_len = std::fs::metadata(&path).unwrap().len();
-    assert!(file_len > 0, "test file must be non-empty to prove reader processed it");
+    assert!(
+        file_len > 0,
+        "test file must be non-empty to prove reader processed it"
+    );
 
     let reg = TradeIdRegistry::with_storage_path(10, &path)
         .expect("all-corrupt file should be tolerated (all trailing)");

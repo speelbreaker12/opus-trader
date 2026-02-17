@@ -446,14 +446,14 @@
       ],
       "steps": [
         "Confirm config/policy.json is machine-readable JSON with required fail-closed keys.",
-        "Enforce strict validation path in tools/policy_loader.py using --policy and --strict inputs.",
+        "Enforce strict validation path in tools/policy_loader.py (strict is default; --lenient to relax).",
         "Ensure loader failures return deterministic non-zero exit codes with diagnostics.",
         "Add/adjust phase0 meta checks that validate loader strict mode against config/policy.json.",
         "Run targeted checks and store evidence for policy loader baseline."
       ],
       "verify": [
         "./plans/verify.sh",
-        "python3 tools/policy_loader.py --policy config/policy.json --strict",
+        "python3 tools/policy_loader.py --policy config/policy.json",
         "python3 tools/phase0_meta_test.py --root ."
       ],
       "evidence": [
