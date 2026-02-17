@@ -169,15 +169,27 @@ impl Tlsm {
     /// Apply an event with the default no-op persistence sink.
     ///
     /// CONTRACT.md §2.1: "Never panic on out-of-order WS events."
-    /// Returns the transition result — never panics.
-    ///
-    /// Safety: `NoopTransitionSink` never returns `Err`, so the `.expect()`
-    /// below cannot fire. The `Result` wrapper exists solely for
-    /// `apply_with_sink()` callers that supply a real, fallible sink.
+    /// Returns the transition result — structurally cannot panic.
     pub fn apply(&mut self, event: TlsmEvent) -> TransitionResult {
         let mut sink = NoopTransitionSink;
-        self.apply_with_sink(event, &mut sink)
-            .expect("noop transition sink should never fail")
+        let fallback_event = event.clone();
+        let fallback_state = self.state;
+        match self.apply_with_sink(event, &mut sink) {
+            Ok(result) => result,
+            Err(_) => {
+                // NoopTransitionSink always returns Ok(()). If this branch
+                // ever executes, something is deeply wrong. We log and
+                // debug_assert to catch it in testing, but maintain the
+                // structural no-panic guarantee per CONTRACT.md §2.1.
+                debug_assert!(false, "unreachable: NoopTransitionSink returned Err");
+                eprintln!("BUG: NoopTransitionSink returned Err — this should be unreachable");
+                TransitionResult::Ignored {
+                    current: fallback_state,
+                    event: fallback_event,
+                    reason: "unreachable: noop sink failure".to_string(),
+                }
+            }
+        }
     }
 
     /// Apply an event and emit accepted transitions to `sink`.

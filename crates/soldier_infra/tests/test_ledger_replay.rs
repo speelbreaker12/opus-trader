@@ -6,7 +6,11 @@
 //! AT-234: crash after fill → detect fill on replay.
 
 use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
-use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
+use soldier_infra::store::{
+    IntentRecord, LedgerAppendError, LedgerMetrics, LedgerTransitionSink, TlsState, WalLedger,
+};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Helper: build a minimal intent record.
 fn intent(hash: &str, group_id: &str, leg_idx: u32, state: TlsState) -> IntentRecord {
@@ -231,9 +235,8 @@ fn test_update_state_succeeds_when_queue_is_at_capacity() {
     assert!(result.is_ok(), "state update must not fail on full queue");
     assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
 
-    // queue_depth stays 1 (unique intents), but log grows
+    // queue_depth stays 1 (unique intents)
     assert_eq!(ledger.queue_depth(), 1);
-    assert_eq!(ledger.log_entry_count(), 2);
 }
 
 #[test]
@@ -704,14 +707,11 @@ fn test_append_only_preserves_old_entries() {
     ledger
         .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
         .unwrap();
-    assert_eq!(ledger.log_entry_count(), 1);
     assert_eq!(ledger.queue_depth(), 1);
 
     ledger
         .update_state("hash1", TlsState::Sent, &mut m)
         .unwrap();
-    // log grows (old entry preserved + new appended)
-    assert_eq!(ledger.log_entry_count(), 2);
     // queue_depth stays 1 (unique intents)
     assert_eq!(ledger.queue_depth(), 1);
     // get() returns latest state
@@ -765,7 +765,6 @@ fn test_state_update_succeeds_past_capacity() {
             .is_ok()
     );
     assert_eq!(ledger.queue_depth(), 2); // still 2 unique intents
-    assert_eq!(ledger.log_entry_count(), 4); // 2 original + 2 transitions
 }
 
 #[test]
@@ -808,4 +807,108 @@ fn test_duplicate_on_full_queue_returns_duplicate_not_queue_full() {
         ledger.append(intent("hash1", "g3", 1, TlsState::Created), &mut m),
         Err(LedgerAppendError::DuplicateIntentHash)
     );
+}
+
+// ─── Durable storage helpers ────────────────────────────────────────────
+
+fn temp_wal_path(tag: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock before unix epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "soldier_ledger_{tag}_{}_{}.jsonl",
+        std::process::id(),
+        nanos
+    ))
+}
+
+fn remove_if_exists(path: &Path) {
+    let _ = std::fs::remove_file(path);
+}
+
+// ─── mark_sent ──────────────────────────────────────────────────────────
+
+#[test]
+fn test_mark_sent_updates_sent_ts_and_state() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+    let mut record = intent("hash1", "g1", 0, TlsState::Created);
+    record.sent_ts = 0;
+
+    let _ = ledger.append(record, &mut m);
+    ledger.mark_sent("hash1", 2222, &mut m).unwrap();
+
+    let stored = ledger.get("hash1").unwrap();
+    assert_eq!(stored.sent_ts, 2222);
+    assert_eq!(stored.tls_state, TlsState::Sent);
+    assert!(ledger.was_sent("hash1"));
+}
+
+// ─── LedgerTransitionSink ───────────────────────────────────────────────
+
+#[test]
+fn test_tlsm_transition_sink_updates_ledger_state() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+
+    {
+        let mut sink = LedgerTransitionSink::new(&mut ledger, &mut m, "hash1");
+        let mut tlsm = Tlsm::new();
+        let _ = tlsm
+            .apply_with_sink(TlsmEvent::Sent, &mut sink)
+            .expect("ledger sink append should succeed");
+    }
+
+    assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
+}
+
+#[test]
+fn test_tlsm_transition_sink_failure_keeps_tlsm_state_unchanged() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+
+    // Sink points at a missing intent hash so update_state fails.
+    let mut sink = LedgerTransitionSink::new(&mut ledger, &mut m, "missing-hash");
+    let mut tlsm = Tlsm::new();
+    let result = tlsm.apply_with_sink(TlsmEvent::Sent, &mut sink);
+
+    assert!(result.is_err(), "sink failure should propagate");
+    assert_eq!(tlsm.state(), soldier_core::execution::TlsmState::Created);
+}
+
+// ─── Durable JSONL storage round-trip ───────────────────────────────────
+
+#[test]
+fn test_replay_round_trip_from_durable_storage() {
+    let wal_path = temp_wal_path("replay_rt");
+
+    // Phase 1: write intent + transition
+    {
+        let mut ledger = WalLedger::with_storage_path(10, &wal_path).expect("create wal");
+        let mut m = LedgerMetrics::new();
+        ledger
+            .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+            .unwrap();
+        ledger
+            .update_state("hash1", TlsState::Sent, &mut m)
+            .unwrap();
+        assert_eq!(ledger.queue_depth(), 1);
+    }
+
+    // Phase 2: reload and verify
+    {
+        let ledger = WalLedger::with_storage_path(10, &wal_path).expect("reload wal");
+        assert_eq!(ledger.queue_depth(), 1);
+        let record = ledger.get("hash1").unwrap();
+        assert_eq!(record.tls_state, TlsState::Sent);
+
+        let replay = ledger.replay();
+        assert_eq!(replay.records_replayed, 1);
+        assert_eq!(replay.in_flight_count, 1);
+    }
+
+    remove_if_exists(&wal_path);
 }

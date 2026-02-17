@@ -108,6 +108,7 @@ pub fn build_order_intent_with_optional_wal_gate(
         Some(gate) => {
             build_order_intent_internal(intent_class, risk_state, metrics, gate_results, Some(gate))
         }
+        // Fail-closed: missing adapter forces wal_recorded = false.
         None => {
             let mut merged = gate_results.clone();
             merged.wal_recorded = false;
@@ -239,7 +240,12 @@ fn finish_rejected(
 
 /// Build an order intent through the single chokepoint.
 ///
-/// This is the ONLY entry point for OrderIntent construction.
+/// **Note:** This entry point accepts a precomputed `wal_recorded` boolean via
+/// `GateResults`. Prefer `build_order_intent_with_wal_gate()` or
+/// `build_order_intent_with_optional_wal_gate()` for new callsites — those
+/// variants derive gate 10 from the actual WAL append attempt and cannot be
+/// bypassed by a precomputed boolean.
+///
 /// All gates run in deterministic order. OPEN intents require all gates;
 /// CLOSE/HEDGE/CANCEL skip some gates but still flow through the chokepoint.
 ///

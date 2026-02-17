@@ -389,7 +389,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "",
+      "enforcement_point": "StatusEndpoint",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -470,7 +470,10 @@
           "anchor": "P0-F Machine Policy Loader Baseline"
         }
       ],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-040",
+        "AT-341"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -1634,7 +1637,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "",
+      "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -5409,7 +5412,7 @@
         ]
       },
       "acceptance": [
-        "GIVEN DVOL/spread/depth shock conditions are detected by Reflexive Cortex. WHEN Cortex evaluates MarketData. THEN appropriate ForceReduceOnly or ForceKill signals are emitted with cooldowns; WS gap blocks risk-increasing cancel/replace.",
+        "GIVEN DVOL/spread/depth shock conditions are detected by Reflexive Cortex. WHEN Cortex evaluates MarketData AND a configured threshold is breached. THEN a ForceReduceOnly signal is emitted for warning-tier breaches and a ForceKill signal is emitted for critical-tier breaches, each with the specific ModeReasonCode per CONTRACT.md §2.2.1.3; cooldowns apply per cortex_cooldown_s; WS gap blocks risk-increasing cancel/replace.",
         "GIVEN `spread_bps >= spread_kill_bps` for at least `cortex_kill_window_s` (or `depth_t... WHEN Cortex evaluates `MarketData` and trading-mode resolver computes Tradi... THEN `cortex_override == ForceKill`, `TradingMode == Kill`, and `mode_reasons` includ... (AT-045).",
         "GIVEN `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing `WS_BOOK_GAP_RECONCILE_REQUIRE... WHEN the cancel/replace is submitted. THEN the cancel/replace is rejected and exposure does not increase. (AT-119).",
         "GIVEN `MarketData` where DVOL jumps by +10% within one minute. WHEN Cortex evaluates `MarketData` and trading-mode resolver computes TradingMode. THEN opens are blocked and mode flips to `ReduceOnly` within one loop tick. (AT-231).",
