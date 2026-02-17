@@ -256,5 +256,80 @@ uncovered = sorted(contract_ats - set(prd_ats) - deferred_ats, key=lambda x: int
 if uncovered:
     print(f'[prd_ref_check] WARN: {len(uncovered)} contract AT(s) not covered by PRD and not deferred: {", ".join(uncovered[:10])}{"..." if len(uncovered) > 10 else ""}', file=sys.stderr)
 
+# ── P0 prerequisite check ──────────────────────────────────────────
+p0_re = re.compile(r'\bP0-[A-F]\b')
+contract_p0 = sorted(set(p0_re.findall(contract_md_text)))
+
+if not contract_p0:
+    print('[prd_ref_check] INFO: no P0-[A-F] anchors found in CONTRACT.md (P0 prereq check skipped)', file=sys.stderr)
+else:
+    prd_p0: set[str] = set()
+    for item in items:
+        sr = item.get('story_ref')
+        if isinstance(sr, str):
+            m = re.match(r'^(P0-[A-F])\b', sr.strip())
+            if m:
+                prd_p0.add(m.group(1))
+    missing_p0 = sorted(set(contract_p0) - prd_p0)
+    if missing_p0:
+        for p in missing_p0:
+            print(f'[prd_ref_check] ERROR: Phase-0 prereq {p} required by CONTRACT.md but missing from PRD story_refs', file=sys.stderr)
+        raise SystemExit(1)
+
+# ── Endpoint required-key validation (warn-only) ────────────────────
+def extract_health_keys(text: str) -> list[str]:
+    # Searches for AT-022 block and extracts required /health keys from
+    # the "Then:" line (800-char window assumes AT-022 block is compact).
+    idx = text.find('AT-022')
+    if idx == -1:
+        return []
+    window = text[idx:idx+800]
+    for line in window.splitlines():
+        if 'Then:' in line and 'keys' in line:
+            return [t for t in re.findall(r'`([a-zA-Z0-9_]+)`', line)
+                    if not t.isupper() and '|' not in t and not t.isdigit()]
+    return []
+
+def extract_status_csp_keys(text: str) -> list[str]:
+    # Marker must match CONTRACT.md verbatim (including ** bold syntax).
+    # If the contract reformats this header, extraction returns [] and
+    # the caller logs INFO (fail-open, warn-only check).
+    marker = '**/status response MUST include (CSP minimum):**'
+    idx = text.find(marker)
+    if idx == -1:
+        return []
+    keys = []
+    for line in text[idx:idx+2000].splitlines()[1:]:
+        if not line.strip():
+            break
+        if line.lstrip().startswith('-'):
+            for t in re.findall(r'`([a-zA-Z0-9_]+)`', line):
+                if not t.isupper() and '|' not in t and not t.isdigit() and t not in keys:
+                    keys.append(t)
+        if line.startswith('AT-') or line.startswith('####') or line.startswith('**'):
+            break
+    return keys
+
+health_keys = extract_health_keys(contract_md_text)
+status_keys = extract_status_csp_keys(contract_md_text)
+
+if not health_keys:
+    print('[prd_ref_check] INFO: no /health required keys extracted from contract (AT-022)', file=sys.stderr)
+if not status_keys:
+    print('[prd_ref_check] INFO: no /status CSP required keys extracted from contract', file=sys.stderr)
+
+for item in items:
+    sid = item.get('id', 'unknown')
+    acc_blob = ' '.join(str(x) for x in (item.get('acceptance', []) + item.get('verify', []))).lower()
+    story_ref_lower = str(item.get('story_ref', '')).lower()
+    if '/health' in acc_blob or '/api/v1/health' in acc_blob or '/health' in story_ref_lower:
+        for k in health_keys:
+            if k.lower() not in acc_blob:
+                print(f'[prd_ref_check] WARN: {sid} references /health but acceptance missing required key "{k}"', file=sys.stderr)
+    if '/status' in acc_blob or '/api/v1/status' in acc_blob or '/status' in story_ref_lower:
+        for k in status_keys:
+            if k.lower() not in acc_blob:
+                print(f'[prd_ref_check] WARN: {sid} references /status but acceptance missing required CSP key "{k}"', file=sys.stderr)
+
 raise SystemExit(0)
 PY

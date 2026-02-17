@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -26,17 +27,28 @@ REQUIRED_TOP_LEVEL = [
 
 REQUIRED_ENVS = ["DEV", "STAGING", "PAPER", "LIVE"]
 
+REQUIRED_FORBIDDEN_ORDER_TYPES = ["MARKET"]
+
 
 def load_policy(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        raise ValueError(f"missing policy file: {path}")
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
+    except FileNotFoundError:
+        raise ValueError(f"missing policy file: {path}")
+    except (json.JSONDecodeError, OSError) as exc:
         raise ValueError(f"invalid JSON in {path}: {exc}") from exc
     if not isinstance(obj, dict):
         raise ValueError("policy root must be an object")
     return obj
+
+
+def _is_strict_numeric(value: object) -> bool:
+    """Return True if value is a finite int or float but NOT bool."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return False
+    return True
 
 
 def validate_policy(policy: Dict[str, Any]) -> List[str]:
@@ -48,6 +60,10 @@ def validate_policy(policy: Dict[str, Any]) -> List[str]:
 
     if errors:
         return errors
+
+    unknown_keys = set(policy.keys()) - set(REQUIRED_TOP_LEVEL)
+    if unknown_keys:
+        errors.append(f"unknown top-level keys: {sorted(unknown_keys)}")
 
     if not isinstance(policy["policy_id"], str) or not policy["policy_id"].strip():
         errors.append("policy_id must be a non-empty string")
@@ -75,6 +91,11 @@ def validate_policy(policy: Dict[str, Any]) -> List[str]:
             if "purpose" not in entry or not isinstance(entry["purpose"], str) or not entry["purpose"].strip():
                 errors.append(f"environment {env} must define non-empty purpose")
 
+        dev_entry = envs.get("DEV")
+        if isinstance(dev_entry, dict) and dev_entry.get("trade_capable") is not False:
+            errors.append("DEV must not be trade_capable")
+        # STAGING: intentionally unconstrained — testnet integration may need
+        # trade_capable=true or false depending on deployment target.
         paper_entry = envs.get("PAPER")
         if isinstance(paper_entry, dict) and paper_entry.get("trade_capable") is not False:
             errors.append("PAPER must not be trade_capable")
@@ -101,6 +122,11 @@ def validate_policy(policy: Dict[str, Any]) -> List[str]:
         if overlap:
             errors.append(f"allowed/forbidden order type overlap: {sorted(overlap)}")
 
+    if isinstance(forbidden, list):
+        for required in REQUIRED_FORBIDDEN_ORDER_TYPES:
+            if required not in forbidden:
+                errors.append(f"forbidden_order_types must include {required}")
+
     risk_limits = policy["risk_limits"]
     if not isinstance(risk_limits, dict):
         errors.append("risk_limits must be an object")
@@ -112,8 +138,8 @@ def validate_policy(policy: Dict[str, Any]) -> List[str]:
         ]
         for key in required_numeric_limits:
             value = risk_limits.get(key)
-            if not isinstance(value, (int, float)):
-                errors.append(f"risk_limits.{key} must be numeric")
+            if not _is_strict_numeric(value):
+                errors.append(f"risk_limits.{key} must be numeric (not bool)")
             elif value <= 0:
                 errors.append(f"risk_limits.{key} must be > 0")
 
@@ -124,9 +150,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate machine-readable trading policy.")
     parser.add_argument("--policy", default="config/policy.json", help="Path to machine policy JSON")
     parser.add_argument(
-        "--strict",
+        "--lenient",
         action="store_true",
-        help="Fail (non-zero) when validation errors are present",
+        help="Exit 0 even when validation errors are present (default: strict/fail-closed)",
     )
     parser.add_argument(
         "--print",
@@ -139,7 +165,7 @@ def main() -> int:
     policy_path = Path(args.policy).resolve()
     try:
         policy = load_policy(policy_path)
-    except Exception as exc:
+    except ValueError as exc:
         print(f"POLICY LOADER FAILED: {exc}")
         return 1
 
@@ -148,7 +174,7 @@ def main() -> int:
         print("POLICY VALIDATION FAILED")
         for err in errors:
             print(f"- {err}")
-        return 1 if args.strict else 0
+        return 0 if args.lenient else 1
 
     print("POLICY VALIDATION OK")
     if args.should_print:

@@ -10,6 +10,7 @@ use crate::venue::{
     evaluate_capabilities, evaluate_expiry_guard,
 };
 
+#[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, LiquidityGateInput,
     LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult, NetEdgeInput,
@@ -330,6 +331,8 @@ pub fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
+    // TODO: migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
+    #[allow(deprecated)]
     let (decision, reject_reason_code) = build_order_intent_with_reject_reason_code(
         input.intent_class,
         input.risk_state,

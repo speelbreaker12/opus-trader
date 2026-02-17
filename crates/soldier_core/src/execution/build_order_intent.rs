@@ -66,6 +66,57 @@ pub enum GateStep {
     RecordedBeforeDispatch,
 }
 
+/// Runtime adapter for the final RecordedBeforeDispatch gate.
+///
+/// Implementations perform the concrete WAL append attempt and return an
+/// error when recording fails.
+pub trait RecordedBeforeDispatchGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String>;
+}
+
+/// Evaluate the chokepoint with a runtime WAL gate adapter.
+///
+/// This helper prevents callsites from passing precomputed `wal_recorded`
+/// values and instead derives gate 10 from the actual append attempt.
+pub fn build_order_intent_with_wal_gate(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: &mut dyn RecordedBeforeDispatchGate,
+) -> ChokeResult {
+    build_order_intent_internal(
+        intent_class,
+        risk_state,
+        metrics,
+        gate_results,
+        Some(wal_gate),
+    )
+}
+
+/// Evaluate the chokepoint with an optional runtime WAL gate adapter.
+///
+/// Missing adapter is fail-closed and treated as `wal_recorded = false`.
+pub fn build_order_intent_with_optional_wal_gate(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
+) -> ChokeResult {
+    match wal_gate {
+        Some(gate) => {
+            build_order_intent_internal(intent_class, risk_state, metrics, gate_results, Some(gate))
+        }
+        // Fail-closed: missing adapter forces wal_recorded = false.
+        None => {
+            let mut merged = gate_results.clone();
+            merged.wal_recorded = false;
+            build_order_intent_internal(intent_class, risk_state, metrics, &merged, None)
+        }
+    }
+}
+
 // --- Chokepoint result ---------------------------------------------------
 
 /// Reject reason from the chokepoint.
@@ -189,17 +240,38 @@ fn finish_rejected(
 
 /// Build an order intent through the single chokepoint.
 ///
-/// This is the ONLY entry point for OrderIntent construction.
+/// # Deprecated
+///
+/// This entry point accepts a precomputed `wal_recorded` boolean via
+/// `GateResults`, which can be set to `true` without an actual WAL append —
+/// bypassing the RecordedBeforeDispatch guarantee. Use
+/// [`build_order_intent_with_wal_gate()`] or
+/// [`build_order_intent_with_optional_wal_gate()`] instead. Those variants
+/// derive gate 10 from the actual WAL append attempt and cannot be bypassed.
+///
 /// All gates run in deterministic order. OPEN intents require all gates;
 /// CLOSE/HEDGE/CANCEL skip some gates but still flow through the chokepoint.
 ///
 /// Returns `ChokeResult::Approved` with the gate trace if all pass,
 /// or `ChokeResult::Rejected` with the failing gate.
+#[deprecated(
+    note = "Use build_order_intent_with_wal_gate() or build_order_intent_with_optional_wal_gate() to prevent WAL bypass"
+)]
 pub fn build_order_intent(
     intent_class: ChokeIntentClass,
     risk_state: RiskState,
     metrics: &mut ChokeMetrics,
     gate_results: &GateResults,
+) -> ChokeResult {
+    build_order_intent_internal(intent_class, risk_state, metrics, gate_results, None)
+}
+
+fn build_order_intent_internal(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    metrics: &mut ChokeMetrics,
+    gate_results: &GateResults,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
 ) -> ChokeResult {
     let mut trace = Vec::new();
 
@@ -352,15 +424,38 @@ pub fn build_order_intent(
     }
 
     // Gate 10: RecordedBeforeDispatch
+    //
+    // CONTRACT.md CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE/CANCEL intents.
+    // CancelOnly already exited at line 279. For Close/Hedge, we attempt WAL
+    // recording but never reject on failure — only Open intents are blocked.
     trace.push(GateStep::RecordedBeforeDispatch);
-    if !gate_results.wal_recorded {
-        return finish_rejected(
-            metrics,
-            ChokeRejectReason::GateRejected {
-                gate: GateStep::RecordedBeforeDispatch,
-                reason: REJECT_REASON_WAL.to_string(),
-            },
-            trace,
+    let mut wal_error: Option<String> = None;
+    let wal_recorded = match wal_gate {
+        Some(gate) => match gate.record_before_dispatch() {
+            Ok(()) => true,
+            Err(reason) => {
+                wal_error = Some(reason);
+                false
+            }
+        },
+        None => gate_results.wal_recorded,
+    };
+    if !wal_recorded {
+        if intent_class == ChokeIntentClass::Open {
+            return finish_rejected(
+                metrics,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::RecordedBeforeDispatch,
+                    reason: wal_error.unwrap_or_else(|| REJECT_REASON_WAL.to_string()),
+                },
+                trace,
+            );
+        }
+        // CSP.3.2: WAL failure does not block Close/Hedge, but log for visibility.
+        tracing::warn!(
+            intent_class = ?intent_class,
+            wal_error = wal_error.as_deref().unwrap_or("precomputed false"),
+            "WAL recording failed for non-OPEN intent — allowing per CSP.3.2"
         );
     }
 
@@ -368,6 +463,15 @@ pub fn build_order_intent(
 }
 
 /// Build an order intent and attach a contract registry reject reason code.
+///
+/// # Deprecated
+///
+/// Wraps the deprecated [`build_order_intent()`]. Prefer wiring the WAL gate
+/// adapter via [`build_order_intent_with_wal_gate()`] and attaching reject
+/// codes separately.
+#[deprecated(
+    note = "Wraps deprecated build_order_intent(); use build_order_intent_with_wal_gate() instead"
+)]
 pub fn build_order_intent_with_reject_reason_code(
     intent_class: ChokeIntentClass,
     risk_state: RiskState,
@@ -375,6 +479,7 @@ pub fn build_order_intent_with_reject_reason_code(
     gate_results: &GateResults,
     gate_reject_codes: &GateRejectCodes,
 ) -> (ChokeResult, Option<RejectReasonCode>) {
+    #[allow(deprecated)]
     let result = build_order_intent(intent_class, risk_state, metrics, gate_results);
     let code = match &result {
         ChokeResult::Approved { .. } => None,

@@ -12,6 +12,7 @@
 //! AT-935, AT-906.
 
 use crate::store::{IntentRecord, LedgerAppendError, LedgerMetrics, WalLedger};
+use soldier_core::execution::RecordedBeforeDispatchGate;
 use std::time::Instant;
 
 // ─── Configuration ──────────────────────────────────────────────────────
@@ -79,6 +80,70 @@ impl Default for BarrierMetrics {
     }
 }
 
+// ─── Core gate adapter ──────────────────────────────────────────────────
+
+/// Adapter that lets core chokepoint gate 10 call into infra durable append.
+///
+/// The adapter is single-use by default: one append attempt consumes
+/// `record_to_append`. Callers can provide a new record via `set_record`.
+pub struct DurableWalGate<'a> {
+    ledger: &'a mut WalLedger,
+    config: &'a WalBarrierConfig,
+    ledger_metrics: &'a mut LedgerMetrics,
+    barrier_metrics: &'a mut BarrierMetrics,
+    record_to_append: Option<IntentRecord>,
+}
+
+impl<'a> DurableWalGate<'a> {
+    pub fn new(
+        ledger: &'a mut WalLedger,
+        config: &'a WalBarrierConfig,
+        ledger_metrics: &'a mut LedgerMetrics,
+        barrier_metrics: &'a mut BarrierMetrics,
+        record_to_append: IntentRecord,
+    ) -> Self {
+        Self {
+            ledger,
+            config,
+            ledger_metrics,
+            barrier_metrics,
+            record_to_append: Some(record_to_append),
+        }
+    }
+
+    pub fn set_record(&mut self, record: IntentRecord) {
+        self.record_to_append = Some(record);
+    }
+
+    /// Access the underlying ledger (read-only).
+    pub fn ledger(&self) -> &WalLedger {
+        self.ledger
+    }
+
+    /// Access the barrier metrics (read-only).
+    pub fn barrier_metrics(&self) -> &BarrierMetrics {
+        self.barrier_metrics
+    }
+}
+
+impl RecordedBeforeDispatchGate for DurableWalGate<'_> {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        let record = self
+            .record_to_append
+            .take()
+            .ok_or_else(|| "durable wal gate missing record".to_string())?;
+        durable_append(
+            self.ledger,
+            record,
+            self.config,
+            self.ledger_metrics,
+            self.barrier_metrics,
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    }
+}
+
 // ─── Durable append ─────────────────────────────────────────────────────
 
 /// Append an intent record with optional durability barrier.
@@ -126,8 +191,15 @@ pub fn durable_append(
 
 /// Simulate an fsync barrier.
 ///
-/// In production, this would call `File::sync_all()` or equivalent.
-/// In the in-memory implementation, this is intentionally a no-op.
+/// This is currently a no-op placeholder used to model the latency of a
+/// durability barrier when `require_wal_fsync_before_dispatch` is enabled.
+/// The real durability is provided by `write_event_to_file()` in `ledger.rs`,
+/// which calls `sync_all()` on every event write unconditionally.
+///
+/// In a future production async WAL writer, this would be replaced by a real
+/// fsync barrier that waits for the async writer to flush to disk before
+/// allowing dispatch. The config flag would then control whether `sync_all()`
+/// is invoked (durable) or a lighter `flush()` is used (non-durable but faster).
 fn simulate_fsync_barrier() {
-    // No-op for in-memory WAL. Production would fsync here.
+    // No-op for Phase 1. Production async WAL writer would fsync here.
 }

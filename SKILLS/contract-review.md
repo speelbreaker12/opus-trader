@@ -1,136 +1,129 @@
-# SKILL: /contract-review (Contract Compliance Review)
+# SKILL: /contract-review (Fast Safety Filter)
 
-Purpose
-- Identify HIGH-CONFIDENCE contract violations in code changes
-- Focus on safety-critical patterns that could cause fail-open behavior
-- Minimize false positives by requiring CONTRACT.md citation
+## Purpose
+Identify **HIGH-CONFIDENCE** contract violations in **code changes** that could cause **fail-open** behavior (unintended trades / capital loss).
+This is a *surgical* review: minimal false positives, only actionable findings.
 
-When to use
-- Before merging PRs that touch `crates/soldier_core/` or `crates/soldier_infra/`
-- After implementing CONTRACT.md requirements
-- When reviewing code from other contributors
+## Related skills
+- Use **/contract-audit-full** when you need exhaustive coverage analysis:
+  - "Does PRD cover the contract for CSP/GOP/FULL?"
+  - "Are there conflicts/ambiguities between PRD and contract?"
 
-## Vulnerability Categories (Safety-Critical)
+## What this skill does NOT do
+- Does **not** prove full contract compliance.
+- Does **not** build a full AT-* coverage matrix.
+- Does **not** validate docs/tooling/roadmap synchronization.
+- Does **not** flag purely theoretical issues without an exploitation path.
 
-### 1. Fail-Open Patterns
-- `unwrap()` or `expect()` in production paths
-- Default to `TradingMode::Active` when uncertain
-- Missing staleness checks on critical inputs
-- Silent error swallowing (`let _ =`, `.ok()`)
+Use **/contract-audit-full** when you need completeness/coverage.
 
-### 2. TradingMode/PolicyGuard Violations
-- Bypassing PolicyGuard for dispatch decisions
-- Incorrect mode resolution logic
-- Missing mode_reasons in /status
-- Latch not set on required events (WS gap, restart, etc.)
+## When to use
+- Before merging PRs touching `crates/soldier_core/` or `crates/soldier_infra/`
+- When any change touches: PolicyGuard, TradingMode, intent classification, WAL/RecordedBeforeDispatch, reconciliation, order dispatch, or owner endpoints
 
-### 3. Intent Classification Errors
-- OPEN classified as CLOSE (allows risky trades)
-- Missing fail-closed default for unknown intents
-- reduce_only flag not checked correctly
+## Inputs
+- `git diff main...HEAD` (or PR diff)
+- `CONTRACT.md` (canonical)
+- Optional: PRD story for the change (if it exists)
 
-### 4. Execution Layer Violations
-- Dispatch without TradingMode check
-- Missing reject reason codes
-- Acceptance test not proving causality
+## Confidence rule (hard)
+Only report a finding if **all** are true:
+1) You cite a specific Contract section or Acceptance Test (AT-*).
+2) There is a concrete path to unsafe behavior.
+3) The fix is precise and implementable.
 
-### 5. Observability Gaps
-- /status missing required fields (§7.0)
-- Decision snapshots not retained
-- Missing structured logging context
+## Categories (safety-critical only)
 
-## Exclusions (Do NOT Flag)
+### 1) Fail-open patterns
+Flag when in production paths:
+- `unwrap()` / `expect()`
+- silent error swallowing: `let _ = ...`, `.ok()`, `unwrap_or_default()` on safety-critical values
+- fallbacks that default to permissive behavior (e.g., `TradingMode::Active` on error)
 
-- Test files (`*_test.rs`, `tests/`)
+### 2) TradingMode / PolicyGuard enforcement violations
+Flag when:
+- Any dispatch authorization bypasses PolicyGuard
+- Mode is computed in multiple places ("split brain")
+- Staleness/freshness checks required by contract are missing or use wall-clock incorrectly
+- Open Permission Latch semantics are not enforced where required
+- /status omits mode reasons / latch fields in a change that touches them
+
+### 3) Intent classification errors
+Flag when:
+- UNKNOWN intent is treated as CLOSE/HEDGE/CANCEL
+- `reduce_only` is not used correctly to classify OPEN vs CLOSE/HEDGE
+- "Replace" is not treated as cancel + new order placement (OPEN gates apply)
+
+### 4) Execution layer violations
+Flag when:
+- Any OPEN dispatch can occur without explicit "OPEN allowed" check
+- Reject reason codes are missing / non-deterministic
+- A new guard is added without TRIP + NON-TRIP acceptance coverage that proves causality
+
+### 5) Owner endpoint hazards (read-only contract)
+Flag when:
+- Any endpoint allows risk mutation or "set Active"
+- `/health` or `/status` payloads regress required keys/semantics in the touched code
+
+## Exclusions (do NOT flag)
+- Test files (`*_test.rs`, `tests/`) unless the test itself creates a fail-open illusion (e.g., asserting success while bypassing gating)
 - Documentation and comments
-- Python tooling scripts (unless safety-critical)
-- Theoretical issues without exploitation path
-- Style preferences not in CLAUDE.md
+- Python tooling scripts unless they are part of a safety gate used by CI/verify
+- Style preferences not codified in CLAUDE.md / contract
 
-## Analysis Methodology
+## Method (3 phases)
 
-### Phase 1: Context Research
+### Phase 1 — Context research
 ```bash
-# Understand what changed
 git diff main...HEAD --name-only
 git log --oneline main...HEAD
 
-# Read relevant CONTRACT.md sections
-contract_lookup("2.2")  # PolicyGuard
-contract_lookup("3.0")  # Execution layer
+# Pull the exact contract anchors touched by the change (search by keywords or AT ids)
+rg -n "PolicyGuard|TradingMode|Open Permission|RecordedBeforeDispatch|WAL|reconcile|/api/v1/status|/api/v1/health|AT-" CONTRACT.md
 ```
 
-### Phase 2: Pattern Matching
-For each changed file in `crates/`:
-1. Search for `unwrap()`, `expect()`, `let _ =`
-2. Check TradingMode handling against §2.2
-3. Verify intent classification follows §Definitions
-4. Confirm error handling matches contract requirements
+### Phase 2 — Pattern scan
+```bash
+git diff main...HEAD -- '*.rs' | rg -n "\.unwrap\(|\.expect\(|let _ =|\.ok\(\)|unwrap_or_default"
+```
+Then inspect touched files for:
+- Where is dispatch authorization enforced?
+- Where is intent classified?
+- Where is reduce_only injected?
+- Where are latches / staleness checks applied?
 
-### Phase 3: Causality Verification
-For new guards/rules:
-- [ ] TRIP acceptance test exists
-- [ ] NON-TRIP acceptance test exists
-- [ ] Tests prove causality (dispatch count OR reason code)
+### Phase 3 — Causality check
+For each NEW or MODIFIED guard/latch/gate:
+- Must have TRIP + NON-TRIP coverage
+- Must prove causality via dispatch count OR reason code OR latch reason OR override field
 
-## Output Format
-
+## Output format (strict)
 ```markdown
 ## Contract Review Findings
 
-### [SEVERITY] Finding Title
-**File:** `path/to/file.rs:123`
-**Contract Ref:** §X.Y.Z
-**Category:** Fail-Open Pattern | TradingMode Violation | ...
+### [CRITICAL|HIGH|MEDIUM|LOW] <title>
+**File:** path/to/file.rs:123
+**Contract Ref:** §X.Y.Z or AT-###
+**Category:** Fail-Open | PolicyGuard | Intent | Execution | Endpoint
 
-**Description:**
-What the code does wrong.
+**What changed:**
+<one sentence>
 
 **Violation:**
-Specific CONTRACT.md requirement that is violated.
+<exact contract rule being violated>
 
-**Exploit Scenario:**
-How this could cause unsafe behavior in production.
+**Exploit scenario:**
+<how this can cause unintended trades / unsafe behavior>
 
-**Fix:**
-Concrete remediation steps.
+**Fix (actionable):**
+<exact remediation steps>
 
----
+**Evidence:**
+<diff hunk or function name>
 ```
 
-## Confidence Threshold
-
-Only report findings where:
-- You can cite a specific CONTRACT.md section
-- There is a concrete path to unsafe behavior
-- The fix is actionable and clear
-
-Do NOT report:
-- "This looks suspicious" without contract citation
-- Style issues or preferences
-- Theoretical concerns without exploitation path
-
-## Severity Levels
-
-| Severity | Criteria |
-|----------|----------|
-| **CRITICAL** | Could cause unintended trades or capital loss |
-| **HIGH** | Bypasses safety guards, missing fail-closed |
-| **MEDIUM** | Observability gap, missing acceptance test |
-| **LOW** | Minor contract drift, documentation mismatch |
-
-## Quick Commands
-
-```bash
-# Check for unwrap in changes
-git diff main...HEAD -- '*.rs' | grep -n "\.unwrap()"
-
-# Check for silent error ignoring
-git diff main...HEAD -- '*.rs' | grep -n "let _ ="
-
-# Validate contract crossrefs
-python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict
-
-# List touched sections
-git diff main...HEAD -- specs/CONTRACT.md | grep "^+.*§"
-```
+## Severity
+- **CRITICAL**: Could cause unintended trades / exposure increase / capital loss
+- **HIGH**: Bypasses safety gates, can fail-open under error or staleness
+- **MEDIUM**: Observability or test causality gaps that can mask unsafe behavior
+- **LOW**: Minor contract drift that is safe but will cause future failures

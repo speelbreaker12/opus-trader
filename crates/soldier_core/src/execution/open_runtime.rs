@@ -7,6 +7,7 @@ use crate::risk::{
     evaluate_global_exposure_budget, evaluate_margin_headroom_gate,
 };
 
+#[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
@@ -239,6 +240,8 @@ pub fn build_open_order_intent_runtime(
     }
 
     gate_results.max_dispatch_qty = max_dispatch_qty;
+    // TODO: migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
+    #[allow(deprecated)]
     let mut choke_result = build_order_intent(
         ChokeIntentClass::Open,
         effective_risk_state,

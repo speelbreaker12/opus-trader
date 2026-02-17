@@ -1,25 +1,29 @@
 //! Durable Intent Ledger (WAL Truth Source) per CONTRACT.md §2.4.
 //!
-//! All intents + state transitions are persisted to a crash-safe
-//! append-only ledger. On startup, replay reconstructs in-memory state.
+//! All intents and state transitions are captured as append-only WAL events.
+//! On startup, replay reduces the event stream into the latest per-intent view.
 //!
 //! **Persistence levels:**
-//! - `RecordedBeforeDispatch`: intent recorded (in-memory queue) before dispatch.
-//! - `DurableBeforeDispatch`: durability barrier (fsync) before dispatch.
+//! - `RecordedBeforeDispatch`: intent is enqueued/appended before dispatch.
+//! - `DurableBeforeDispatch`: durability barrier (fsync marker) before dispatch.
 //!
 //! **WAL Writer Isolation (§2.4.1):**
-//! - Appends go through a bounded in-memory queue.
+//! - Appends go through a bounded in-memory queue model.
 //! - If queue is full → fail-closed for OPEN intents, increment wal_write_errors.
 //! - Hot loop MUST NOT block on disk I/O.
 //!
 //! AT-935, AT-906, AT-233, AT-234.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 
 // ─── TLSM State ─────────────────────────────────────────────────────────
 
 /// Trade Lifecycle State Machine states per CONTRACT.md §2.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TlsState {
     /// Intent created, not yet sent to exchange.
     Created,
@@ -34,6 +38,12 @@ pub enum TlsState {
     /// Cancelled (by us or exchange).
     Cancelled,
     /// Rejected by exchange.
+    ///
+    /// **WAL-only state:** The core TLSM maps `TlsmEvent::Rejected` to
+    /// `TlsmState::Failed`, so `map_core_tlsm_state` never produces this
+    /// variant. `TlsState::Rejected` can only be set via direct
+    /// `update_state()` calls on the WAL, preserving the exchange-level
+    /// distinction between rejection and internal failure.
     Rejected,
     /// Failed (internal error).
     Failed,
@@ -95,7 +105,7 @@ impl TlsState {
 /// intent_hash, group_id, leg_idx, instrument, side, qty, limit_price,
 /// tls_state, created_ts, sent_ts, ack_ts, last_fill_ts,
 /// exchange_order_id (if known), last_trade_id (if known).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IntentRecord {
     /// xxhash64 intent hash (hex string).
     pub intent_hash: String,
@@ -127,6 +137,25 @@ pub struct IntentRecord {
     pub last_trade_id: Option<String>,
 }
 
+// ─── WAL Event ──────────────────────────────────────────────────────────
+
+/// Append-only WAL event.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum WalEvent {
+    IntentRecorded {
+        record: IntentRecord,
+    },
+    StateTransition {
+        intent_hash: String,
+        new_state: TlsState,
+    },
+    SentMarked {
+        intent_hash: String,
+        sent_ts: u64,
+    },
+}
+
 // ─── Append error ───────────────────────────────────────────────────────
 
 /// Error returned when WAL append fails.
@@ -143,12 +172,27 @@ pub enum LedgerAppendError {
     DuplicateIntentHash,
 }
 
+impl std::fmt::Display for LedgerAppendError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::QueueFull => write!(f, "wal queue full"),
+            Self::WriteFailed { reason } => write!(f, "wal write failed: {reason}"),
+            Self::IllegalTransition { from, to } => {
+                write!(f, "illegal tls transition: {from:?} -> {to:?}")
+            }
+            Self::DuplicateIntentHash => write!(f, "duplicate intent_hash"),
+        }
+    }
+}
+
+impl std::error::Error for LedgerAppendError {}
+
 // ─── Replay outcome ─────────────────────────────────────────────────────
 
 /// Outcome of replaying the ledger on startup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayOutcome {
-    /// Number of records replayed.
+    /// Number of intent records reconstructed.
     pub records_replayed: usize,
     /// Number of in-flight intents (non-terminal state) reconstructed.
     pub in_flight_count: usize,
@@ -163,6 +207,8 @@ pub struct ReplayOutcome {
 pub struct LedgerMetrics {
     /// `wal_write_errors` counter — increments on any append failure.
     wal_write_errors: u64,
+    /// `wal_queue_enqueue_failures` counter.
+    wal_queue_enqueue_failures: u64,
     /// Total successful appends.
     appends_total: u64,
 }
@@ -172,6 +218,7 @@ impl LedgerMetrics {
     pub fn new() -> Self {
         Self {
             wal_write_errors: 0,
+            wal_queue_enqueue_failures: 0,
             appends_total: 0,
         }
     }
@@ -179,6 +226,11 @@ impl LedgerMetrics {
     /// Record a write error.
     pub fn record_write_error(&mut self) {
         self.wal_write_errors += 1;
+    }
+
+    /// Record a queue enqueue failure.
+    pub fn record_enqueue_failure(&mut self) {
+        self.wal_queue_enqueue_failures += 1;
     }
 
     /// Record a successful append.
@@ -189,6 +241,11 @@ impl LedgerMetrics {
     /// Current value of `wal_write_errors`.
     pub fn wal_write_errors(&self) -> u64 {
         self.wal_write_errors
+    }
+
+    /// Current value of `wal_queue_enqueue_failures`.
+    pub fn wal_queue_enqueue_failures(&self) -> u64 {
+        self.wal_queue_enqueue_failures
     }
 
     /// Current value of total appends.
@@ -205,127 +262,199 @@ impl Default for LedgerMetrics {
 
 // ─── WAL Ledger ─────────────────────────────────────────────────────────
 
-/// In-memory WAL ledger with bounded queue semantics.
-///
-/// This is a simplified in-memory implementation that models the WAL
-/// contract. A production implementation would back this with Sled/SQLite.
+/// WAL ledger with append-only events and optional durable JSONL storage path.
 ///
 /// **Invariants:**
 /// - Append-only: records are never modified after append.
 /// - Bounded queue: capacity enforced, QueueFull on overflow.
 /// - RecordedBeforeDispatch: append must succeed before dispatch.
+/// - Dedup: duplicate intent_hash is rejected.
+///
+/// **Threading model:** `WalLedger` is NOT behind a `Mutex` — it relies on
+/// exclusive `&mut` borrows enforced by the Rust borrow checker. Single-threaded
+/// access only. If multi-threaded access is needed, wrap in a `Mutex`.
+///
+/// **Known limitations (Phase 1):**
+/// - No WAL compaction: JSONL file grows without bound. Production deployments
+///   should implement periodic snapshot + truncate.
+/// - Capacity counts all intents (including terminal). Long-running processes
+///   should drain terminal intents or set capacity high enough.
+/// - File I/O is synchronous. The hot-loop non-blocking I/O contract (§2.4.1)
+///   is satisfied at the queue abstraction level, not at the file I/O level.
 #[derive(Debug)]
 pub struct WalLedger {
-    /// Append-only log of intent records.
-    records: Vec<IntentRecord>,
-    /// Index by intent_hash for O(1) lookup.
-    index: HashMap<String, usize>,
-    /// Maximum queue capacity.
+    /// Reconstructed latest state per intent hash.
+    latest_by_hash: HashMap<String, IntentRecord>,
+    /// Maximum queue capacity (intent records only).
     capacity: usize,
+    /// Optional JSONL storage path (kept for `storage_path()` accessor).
+    storage_path_value: Option<PathBuf>,
+    /// Open file handle for append-only writes (kept open to avoid per-event reopen).
+    storage_file: Option<File>,
 }
 
 impl WalLedger {
-    /// Create a new WAL ledger with the given capacity.
+    /// Create a new in-memory WAL ledger with the given capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
-            records: Vec::with_capacity(capacity),
-            index: HashMap::new(),
+            latest_by_hash: HashMap::new(),
             capacity,
+            storage_path_value: None,
+            storage_file: None,
         }
+    }
+
+    /// Create/load a WAL ledger backed by a JSONL file.
+    ///
+    /// Opens the file once and keeps the handle for the lifetime of the ledger,
+    /// avoiding per-event file open/close overhead.
+    pub fn with_storage_path(capacity: usize, storage_path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = storage_path.as_ref().to_path_buf();
+        let events = read_events_from_path(&path)?;
+        let latest_by_hash = reduce_events(&events)
+            .map_err(|reason| io::Error::new(io::ErrorKind::InvalidData, reason))?;
+        if latest_by_hash.len() > capacity {
+            let reason = format!(
+                "wal contains {} intents but capacity is {}",
+                latest_by_hash.len(),
+                capacity
+            );
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, reason));
+        }
+
+        let file = OpenOptions::new().create(true).append(true).open(&path)?;
+
+        Ok(Self {
+            latest_by_hash,
+            capacity,
+            storage_path_value: Some(path),
+            storage_file: Some(file),
+        })
+    }
+
+    /// Storage path if this ledger is durable.
+    pub fn storage_path(&self) -> Option<&Path> {
+        self.storage_path_value.as_deref()
     }
 
     /// Append an intent record to the ledger (RecordedBeforeDispatch).
     ///
     /// CONTRACT.md §2.4: "Write intent record BEFORE network dispatch."
     /// CONTRACT.md §2.4.1: "If WAL queue is full → fail-closed."
-    ///
-    /// Returns Ok(()) if recorded successfully, Err if queue is full.
     pub fn append(
         &mut self,
         record: IntentRecord,
         metrics: &mut LedgerMetrics,
     ) -> Result<(), LedgerAppendError> {
-        // CSP-002: reject duplicate intent_hash first — a duplicate doesn't
-        // consume capacity, so callers should see DuplicateIntentHash, not QueueFull.
-        if self.index.contains_key(&record.intent_hash) {
+        if self.latest_by_hash.contains_key(&record.intent_hash) {
             metrics.record_write_error();
             return Err(LedgerAppendError::DuplicateIntentHash);
         }
 
-        // Capacity check uses index.len() (unique intents), not records.len()
-        // (total log entries including state-transition appends).
-        if self.index.len() >= self.capacity {
+        if self.latest_by_hash.len() >= self.capacity {
             metrics.record_write_error();
+            metrics.record_enqueue_failure();
             return Err(LedgerAppendError::QueueFull);
         }
 
-        let idx = self.records.len();
-        self.index.insert(record.intent_hash.clone(), idx);
-        self.records.push(record);
-        metrics.record_append();
+        let event = WalEvent::IntentRecorded { record };
+        self.persist_and_apply(event, metrics)?;
         Ok(())
     }
 
     /// Update the TLS state for an existing record (TLSM transition append).
     ///
     /// CONTRACT.md §2.4: "Write every TLSM transition immediately."
-    ///
-    /// Appends a new log entry with the updated state (append-only).
-    /// No capacity check — state transitions must never be lost.
     pub fn update_state(
         &mut self,
         intent_hash: &str,
         new_state: TlsState,
         metrics: &mut LedgerMetrics,
     ) -> Result<(), LedgerAppendError> {
-        if let Some(&idx) = self.index.get(intent_hash) {
-            let current_state = self.records[idx].tls_state;
-            if !current_state.is_valid_successor(new_state) {
-                metrics.record_write_error();
-                return Err(LedgerAppendError::IllegalTransition {
-                    from: current_state,
-                    to: new_state,
-                });
-            }
-            // Append-only: clone record with new state, append to log,
-            // update index to point at the latest version.
-            let mut updated = self.records[idx].clone();
-            updated.tls_state = new_state;
-            let new_idx = self.records.len();
-            self.records.push(updated);
-            self.index.insert(intent_hash.to_string(), new_idx);
-            metrics.record_append();
-            Ok(())
+        let current_state = if let Some(record) = self.latest_by_hash.get(intent_hash) {
+            record.tls_state
         } else {
-            let reason = format!("intent_hash not found: {intent_hash}");
             metrics.record_write_error();
-            Err(LedgerAppendError::WriteFailed { reason })
+            return Err(LedgerAppendError::WriteFailed {
+                reason: format!("intent_hash not found: {intent_hash}"),
+            });
+        };
+
+        if !current_state.is_valid_successor(new_state) {
+            metrics.record_write_error();
+            return Err(LedgerAppendError::IllegalTransition {
+                from: current_state,
+                to: new_state,
+            });
         }
+
+        let event = WalEvent::StateTransition {
+            intent_hash: intent_hash.to_string(),
+            new_state,
+        };
+        self.persist_and_apply(event, metrics)?;
+        Ok(())
+    }
+
+    /// Mark an intent as sent at `sent_ts`.
+    ///
+    /// This is a **WAL-level operation** that intentionally operates outside
+    /// the core TLSM state machine's `is_valid_successor` checks. It handles
+    /// the common case where `sent_ts` needs to be recorded even when the
+    /// TLSM has already advanced past `Created` (e.g., fill-before-ack).
+    ///
+    /// Behavior:
+    /// - `Created` → transitions to `Sent` and records `sent_ts`.
+    /// - Non-terminal, non-Created → only updates `sent_ts` (no state change).
+    /// - Terminal → rejected with `IllegalTransition`.
+    pub fn mark_sent(
+        &mut self,
+        intent_hash: &str,
+        sent_ts: u64,
+        metrics: &mut LedgerMetrics,
+    ) -> Result<(), LedgerAppendError> {
+        let current_state = if let Some(record) = self.latest_by_hash.get(intent_hash) {
+            record.tls_state
+        } else {
+            metrics.record_write_error();
+            return Err(LedgerAppendError::WriteFailed {
+                reason: format!("intent_hash not found: {intent_hash}"),
+            });
+        };
+
+        // Reject mark_sent on terminal states — no further mutations allowed.
+        if current_state.is_terminal() {
+            metrics.record_write_error();
+            return Err(LedgerAppendError::IllegalTransition {
+                from: current_state,
+                to: TlsState::Sent,
+            });
+        }
+
+        let event = WalEvent::SentMarked {
+            intent_hash: intent_hash.to_string(),
+            sent_ts,
+        };
+        self.persist_and_apply(event, metrics)?;
+        Ok(())
     }
 
     /// Replay the ledger on startup — reconstruct in-memory state.
     ///
     /// CONTRACT.md §2.4: "On startup, replay ledger into in-memory state
     /// and reconcile with exchange."
-    ///
-    /// Returns the replay outcome with counts and in-flight intent hashes.
-    /// In-flight intents are those in non-terminal states (need reconciliation).
     pub fn replay(&self) -> ReplayOutcome {
-        let mut in_flight_hashes = Vec::new();
-
-        // Iterate records in log order; only consider the latest version
-        // of each intent (the one the index points to). This gives
-        // deterministic ordering unlike iterating the HashMap index.
-        // No `seen` set needed: the index maps each intent_hash to exactly
-        // one log position, so the equality check can match at most once.
-        for (i, record) in self.records.iter().enumerate() {
-            if self.index.get(&record.intent_hash) == Some(&i) && !record.tls_state.is_terminal() {
-                in_flight_hashes.push(record.intent_hash.clone());
-            }
-        }
+        let mut in_flight_hashes: Vec<_> = self
+            .latest_by_hash
+            .values()
+            .filter(|r| !r.tls_state.is_terminal())
+            .map(|r| r.intent_hash.clone())
+            .collect();
+        // Deterministic ordering independent of HashMap iteration order.
+        in_flight_hashes.sort();
 
         ReplayOutcome {
-            records_replayed: self.index.len(),
+            records_replayed: self.latest_by_hash.len(),
             in_flight_count: in_flight_hashes.len(),
             in_flight_hashes,
         }
@@ -333,20 +462,12 @@ impl WalLedger {
 
     /// Look up an intent by its hash.
     pub fn get(&self, intent_hash: &str) -> Option<&IntentRecord> {
-        self.index.get(intent_hash).map(|&idx| &self.records[idx])
+        self.latest_by_hash.get(intent_hash)
     }
 
-    /// Current queue depth (unique intents, not total log entries).
-    ///
-    /// Includes terminal intents (Filled, Cancelled, etc.) — slots are
-    /// never reclaimed. Size capacity for the maximum session lifetime.
+    /// Current queue depth (unique intents).
     pub fn queue_depth(&self) -> usize {
-        self.index.len()
-    }
-
-    /// Total number of log entries (including state-transition appends).
-    pub fn log_entry_count(&self) -> usize {
-        self.records.len()
+        self.latest_by_hash.len()
     }
 
     /// Queue capacity.
@@ -362,4 +483,245 @@ impl WalLedger {
             .map(|r| r.sent_ts > 0 || r.tls_state != TlsState::Created)
             .unwrap_or(false)
     }
+
+    /// Persist a WAL event to disk (if durable), then apply to in-memory state.
+    ///
+    /// **Invariant:** Callers (`append`, `update_state`, `mark_sent`) MUST
+    /// pre-validate that `apply_event` will succeed before calling this method.
+    /// Specifically:
+    /// - `append` creates an `IntentRecorded` event → `apply_event` does a
+    ///   HashMap::insert which is infallible.
+    /// - `update_state` and `mark_sent` verify the intent_hash exists in
+    ///   `latest_by_hash` before calling → the `.ok_or_else()` in `apply_event`
+    ///   cannot fail.
+    ///
+    /// **Convergence property:** If `apply_event` were to fail after a
+    /// successful disk write, the JSONL file would be ahead of in-memory state.
+    /// On restart, `with_storage_path` replays the full event log, converging
+    /// in-memory state to match the disk. The disk is the source of truth.
+    fn persist_and_apply(
+        &mut self,
+        event: WalEvent,
+        metrics: &mut LedgerMetrics,
+    ) -> Result<(), LedgerAppendError> {
+        if let Some(file) = &mut self.storage_file {
+            write_event_to_file(file, &event).map_err(|reason| {
+                metrics.record_write_error();
+                LedgerAppendError::WriteFailed { reason }
+            })?;
+        }
+
+        // Safety: callers pre-validate that the intent_hash exists (for
+        // StateTransition/SentMarked) or create a new entry (IntentRecorded).
+        // apply_event should never fail here. If it does, the disk is ahead
+        // of memory — restart will converge via replay.
+        let apply_result = apply_event(&mut self.latest_by_hash, &event);
+        debug_assert!(
+            apply_result.is_ok(),
+            "apply_event failed after successful persist — callers must pre-validate: {:?}",
+            apply_result
+        );
+        apply_result.map_err(|reason| {
+            metrics.record_write_error();
+            LedgerAppendError::WriteFailed { reason }
+        })?;
+
+        metrics.record_append();
+        Ok(())
+    }
+}
+
+// ─── LedgerTransitionSink ───────────────────────────────────────────────
+
+/// Adapter that routes core TLSM transitions into this ledger.
+pub struct LedgerTransitionSink<'a> {
+    ledger: &'a mut WalLedger,
+    metrics: &'a mut LedgerMetrics,
+    intent_hash: String,
+}
+
+impl<'a> LedgerTransitionSink<'a> {
+    pub fn new(
+        ledger: &'a mut WalLedger,
+        metrics: &'a mut LedgerMetrics,
+        intent_hash: impl Into<String>,
+    ) -> Self {
+        Self {
+            ledger,
+            metrics,
+            intent_hash: intent_hash.into(),
+        }
+    }
+}
+
+impl soldier_core::execution::TlsmTransitionSink for LedgerTransitionSink<'_> {
+    fn append_transition(
+        &mut self,
+        transition: soldier_core::execution::PersistedTransition,
+    ) -> Result<(), String> {
+        // Cross-check: verify the TLSM's view of the current state matches
+        // the ledger's current state for this intent. The ledger is the source
+        // of truth, but divergence indicates a bug in the calling code.
+        if let Some(record) = self.ledger.get(&self.intent_hash) {
+            let expected_from = map_core_tlsm_state(transition.from);
+            debug_assert_eq!(
+                record.tls_state, expected_from,
+                "TLSM/ledger state divergence for {}: ledger={:?}, tlsm.from={:?}",
+                self.intent_hash, record.tls_state, expected_from
+            );
+        }
+
+        let mapped_state = map_core_tlsm_state(transition.to);
+        self.ledger
+            .update_state(&self.intent_hash, mapped_state, self.metrics)
+            .map_err(|e| e.to_string())
+    }
+}
+
+fn map_core_tlsm_state(state: soldier_core::execution::TlsmState) -> TlsState {
+    match state {
+        soldier_core::execution::TlsmState::Created => TlsState::Created,
+        soldier_core::execution::TlsmState::Sent => TlsState::Sent,
+        soldier_core::execution::TlsmState::Acked => TlsState::Acked,
+        soldier_core::execution::TlsmState::PartiallyFilled => TlsState::PartialFill,
+        soldier_core::execution::TlsmState::Filled => TlsState::Filled,
+        soldier_core::execution::TlsmState::Cancelled => TlsState::Cancelled,
+        soldier_core::execution::TlsmState::Failed => TlsState::Failed,
+    }
+}
+
+// ─── Event helpers ──────────────────────────────────────────────────────
+
+fn apply_event(
+    latest_by_hash: &mut HashMap<String, IntentRecord>,
+    event: &WalEvent,
+) -> Result<(), String> {
+    match event {
+        WalEvent::IntentRecorded { record } => {
+            latest_by_hash.insert(record.intent_hash.clone(), record.clone());
+            Ok(())
+        }
+        WalEvent::StateTransition {
+            intent_hash,
+            new_state,
+        } => {
+            let record = latest_by_hash
+                .get_mut(intent_hash)
+                .ok_or_else(|| format!("transition missing intent_hash: {intent_hash}"))?;
+            record.tls_state = *new_state;
+            Ok(())
+        }
+        WalEvent::SentMarked {
+            intent_hash,
+            sent_ts,
+        } => {
+            let record = latest_by_hash
+                .get_mut(intent_hash)
+                .ok_or_else(|| format!("sent marker missing intent_hash: {intent_hash}"))?;
+            record.sent_ts = record.sent_ts.max(*sent_ts);
+            if record.tls_state == TlsState::Created {
+                record.tls_state = TlsState::Sent;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn reduce_events(events: &[WalEvent]) -> Result<HashMap<String, IntentRecord>, String> {
+    let mut latest_by_hash = HashMap::new();
+    for event in events {
+        apply_event(&mut latest_by_hash, event)?;
+    }
+    Ok(latest_by_hash)
+}
+
+/// Write a WAL event to an already-open file handle.
+///
+/// **Phase 1 limitation — sync_all() on every write:**
+/// This calls `sync_all()` (fsync) unconditionally, which blocks the calling
+/// thread for 0.2-2ms on SSD. Under burst conditions this serializes all
+/// intent processing and creates a latency cliff. This tension with
+/// CONTRACT.md §2.4.1 ("Hot loop MUST NOT block on disk I/O") is acknowledged:
+/// Phase 1 satisfies the non-blocking contract at the queue abstraction level
+/// (callers enqueue into `WalLedger`), not at the file I/O level.
+///
+/// A production async WAL writer would decouple enqueue from fsync, with the
+/// `WalBarrierConfig::require_wal_fsync_before_dispatch` flag controlling
+/// whether dispatch waits for the fsync to complete.
+fn write_event_to_file(file: &mut File, event: &WalEvent) -> Result<(), String> {
+    let mut line =
+        serde_json::to_string(event).map_err(|e| format!("failed to encode wal event: {e}"))?;
+    line.push('\n');
+    file.write_all(line.as_bytes())
+        .map_err(|e| format!("failed to write wal event: {e}"))?;
+    file.sync_all()
+        .map_err(|e| format!("failed to sync wal: {e}"))
+}
+
+fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Open for replay. The write handle is opened separately in
+    // with_storage_path() after this function returns and the read handle
+    // is dropped, ensuring no overlapping file descriptors.
+    // Note: .append(true) is needed alongside .create(true) to satisfy
+    // OpenOptions requirements (create requires a write mode).
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .append(true)
+        .open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut events = Vec::new();
+    let mut trailing_corrupt: Vec<usize> = Vec::new();
+    // Stream lines instead of collecting into Vec to bound memory usage
+    // (WAL JSONL is unbounded — no compaction in Phase 1).
+    for (index, line_result) in reader.lines().enumerate() {
+        let line = line_result?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<WalEvent>(trimmed) {
+            Ok(event) => {
+                if !trailing_corrupt.is_empty() {
+                    // A valid line after corrupt lines means the corrupt lines
+                    // are mid-file corruption — not trailing crash artifacts.
+                    let first_corrupt = trailing_corrupt[0];
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "invalid wal event at line {} in {} (followed by valid line {})",
+                            first_corrupt + 1,
+                            path.display(),
+                            index + 1,
+                        ),
+                    ));
+                }
+                events.push(event);
+            }
+            Err(e) => {
+                // Accumulate trailing corrupt lines. If all remaining lines
+                // are corrupt, they are crash artifacts (tolerated). If a valid
+                // line follows, the first corrupt line is mid-file corruption
+                // and we fail hard.
+                //
+                // This handles double-crash: crash #1 leaves a partial trailing
+                // line; restart appends new events then crash #2 leaves another
+                // partial line. On the third restart both trailing lines are
+                // corrupt and should be tolerated.
+                trailing_corrupt.push(index);
+                eprintln!(
+                    "WARNING: skipping malformed trailing wal line {} in {}: {e}",
+                    index + 1,
+                    path.display()
+                );
+            }
+        }
+    }
+
+    Ok(events)
 }

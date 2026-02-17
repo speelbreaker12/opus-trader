@@ -58,5 +58,5 @@ test -s docs/health_endpoint.md
 cargo test -p soldier_infra --test test_health
 python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.json'))"
 python3 tools/phase0_meta_test.py --root .
-python3 tools/policy_loader.py --policy config/policy.json --strict
+python3 tools/policy_loader.py --policy config/policy.json
 test -f tools/release_gate.py
