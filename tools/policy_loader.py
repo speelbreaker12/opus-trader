@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -31,10 +30,10 @@ REQUIRED_FORBIDDEN_ORDER_TYPES = ["MARKET"]
 
 
 def load_policy(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        raise ValueError(f"missing policy file: {path}")
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        raise ValueError(f"missing policy file: {path}")
     except (json.JSONDecodeError, OSError) as exc:
         raise ValueError(f"invalid JSON in {path}: {exc}") from exc
     if not isinstance(obj, dict):
@@ -43,12 +42,8 @@ def load_policy(path: Path) -> Dict[str, Any]:
 
 
 def _is_strict_numeric(value: object) -> bool:
-    """Return True if value is a finite int or float but NOT bool."""
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        return False
-    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-        return False
-    return True
+    """Return True if value is int or float but NOT bool."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def validate_policy(policy: Dict[str, Any]) -> List[str]:
@@ -94,8 +89,6 @@ def validate_policy(policy: Dict[str, Any]) -> List[str]:
         dev_entry = envs.get("DEV")
         if isinstance(dev_entry, dict) and dev_entry.get("trade_capable") is not False:
             errors.append("DEV must not be trade_capable")
-        # STAGING: intentionally unconstrained — testnet integration may need
-        # trade_capable=true or false depending on deployment target.
         paper_entry = envs.get("PAPER")
         if isinstance(paper_entry, dict) and paper_entry.get("trade_capable") is not False:
             errors.append("PAPER must not be trade_capable")
