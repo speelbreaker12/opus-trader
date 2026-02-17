@@ -3,10 +3,8 @@
 mod common;
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep,
-    IntentPipelineMetrics, LiquidityGateInput,
-    OrderType, PostOnlyInput,
-    RejectReasonCode, Side, evaluate_intent_pipeline,
+    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep, IntentPipelineMetrics,
+    LiquidityGateInput, OrderType, PostOnlyInput, RejectReasonCode, Side, evaluate_intent_pipeline,
 };
 use soldier_core::risk::RiskState;
 use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};

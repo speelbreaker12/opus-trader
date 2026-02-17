@@ -162,7 +162,10 @@ pub fn evaluate_intent_pipeline(
         // Expiry guard: evaluate after fee cache check.
         // Derive LifecycleIntent from intent_class to prevent drift between
         // the pipeline's intent classification and the guard's input.
-        if preflight_passed && quantize_passed && input.dispatch_consistency_passed && fee_cache_passed
+        if preflight_passed
+            && quantize_passed
+            && input.dispatch_consistency_passed
+            && fee_cache_passed
         {
             let lifecycle_intent = match input.intent_class {
                 ChokeIntentClass::Open => LifecycleIntent::Open,

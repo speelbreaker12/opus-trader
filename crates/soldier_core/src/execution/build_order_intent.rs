@@ -31,7 +31,7 @@ const REJECT_REASON_FEE_CACHE_STALE: &str = "fee cache stale";
 const REJECT_REASON_LIQUIDITY_GATE: &str = "liquidity gate rejected";
 const REJECT_REASON_NET_EDGE: &str = "net edge too low";
 const REJECT_REASON_PRICER: &str = "pricer rejected";
-const REJECT_REASON_EXPIRY_GUARD: &str = "instrument expired or near expiry";
+const REJECT_REASON_EXPIRY_GUARD: &str = "expiry guard rejected";
 const REJECT_REASON_WAL: &str = "WAL append failed";
 
 // --- Intent class --------------------------------------------------------

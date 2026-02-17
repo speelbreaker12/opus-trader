@@ -758,11 +758,7 @@ fn test_state_update_succeeds_past_capacity() {
     );
 
     // But state transitions always succeed
-    assert!(
-        ledger
-            .update_state("hash1", TlsState::Sent, &mut m)
-            .is_ok()
-    );
+    assert!(ledger.update_state("hash1", TlsState::Sent, &mut m).is_ok());
     assert!(
         ledger
             .update_state("hash2", TlsState::Filled, &mut m)

@@ -319,9 +319,7 @@ impl WalLedger {
         // No `seen` set needed: the index maps each intent_hash to exactly
         // one log position, so the equality check can match at most once.
         for (i, record) in self.records.iter().enumerate() {
-            if self.index.get(&record.intent_hash) == Some(&i)
-                && !record.tls_state.is_terminal()
-            {
+            if self.index.get(&record.intent_hash) == Some(&i) && !record.tls_state.is_terminal() {
                 in_flight_hashes.push(record.intent_hash.clone());
             }
         }
