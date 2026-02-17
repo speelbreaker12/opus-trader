@@ -72,7 +72,16 @@ def load_config(root: Path) -> dict:
 
     if HAS_YAML:
         with open(config_path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            loaded = yaml.safe_load(f)
+        if not loaded:
+            return {}
+        if not isinstance(loaded, dict):
+            print(
+                "[gate_integrity] ERROR: gate_integrity.yml must contain a mapping at the top level",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return loaded
 
     # Fallback: minimal parser
     return {
@@ -160,7 +169,17 @@ def main() -> int:
         config_path = Path(args.config)
         if HAS_YAML:
             with open(config_path, encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
+                loaded = yaml.safe_load(f)
+            if not loaded:
+                config = {}
+            elif not isinstance(loaded, dict):
+                print(
+                    "[gate_integrity] ERROR: config file must contain a mapping at the top level",
+                    file=sys.stderr,
+                )
+                return 1
+            else:
+                config = loaded
         else:
             raw = config_path.read_text(encoding="utf-8")
             config = {
