@@ -354,7 +354,7 @@
         "avoid": []
       },
       "acceptance": [
-        "GIVEN the service is running WHEN GET /api/v1/health is called THEN HTTP 200 payload includes ok=true, build_id, and contract_version.",
+        "GIVEN the service is running WHEN GET /api/v1/health is called THEN HTTP 200 payload includes ok=true, build_id, and contract_version. (scaffolding — full AT-022 enforcement in S8-008)",
         "GIVEN Phase-0 owner status is requested WHEN status command runs THEN payload includes trading_mode and is_trading_allowed.",
         "GIVEN TradingMode is Active WHEN owner status is emitted THEN is_trading_allowed=true.",
         "GIVEN TradingMode is ReduceOnly or Kill WHEN owner status is emitted THEN is_trading_allowed=false."
@@ -4550,24 +4550,29 @@
       },
       "acceptance": [
         "3 tries IOC close; then reduce-only delta hedge; logs AtomicNakedEvent; TradingMode is ReduceOnly during exposure.",
-        "GIVEN `bunker_mode_active == true`, a Kill-tier trigger is active (e.g., `mm_util >= mm_util_kill`), and open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-013).",
-        "GIVEN `TradingMode in {ReduceOnly, Kill}` and net exposure ≠ 0. WHEN the system proposes a risk-reducing intent (`CLOSE`, reduce-only hedge, or emergency flatten). THEN at least one such intent is permitted to dispatch (subject to venue reachability), and OPEN remains blocked. (AT-1049).",
-        "GIVEN `emergency_reduceonly_active == true` and there exists (a) an open order with `reduce_only == false` and (b) a closin... WHEN Watchdog reduce-only behavior runs. THEN (a) is canceled and (b) is NOT canceled. (AT-203).",
-        "GIVEN an atomic group enters mixed state (one leg filled, another rejected or none) an... WHEN emergency close completes (including optional hedge fallback... THEN exactly one AtomicNakedEvent is emitted with required schema fields present and ... (AT-211).",
-        "GIVEN an atomic group enters mixed state (one leg filled, another rejected or none), `enforced_profile != CSP`, and emergen... WHEN AtomicNakedEvent is recorded. THEN the event includes `strategy_id`, `cause`, `trading_mode_at_event`, and `evidence_chain_state_at_event` with valid va... (AT-213).",
-        "GIVEN one leg filled and the book thins. WHEN emergency close runs. THEN close attempts run and fallback hedge executes if still exposed; exposure goes to ~0. (AT-235).",
-        "GIVEN Liquidity Gate reject conditions are present. WHEN emergency close runs. THEN emergency close still submits IOC close attempts (Liquidity Gate does NOT block it). (AT-236).",
-        "GIVEN a network hiccup mid-hedge. WHEN Watchdog triggers reduce-only. THEN the hedge stays alive. (AT-237).",
-        "GIVEN two legs filled at nominally equal quantities differing only by ≤ `atomic_qty_epsilon` (no partials). WHEN group completion is evaluated. THEN the group is eligible for `Complete`. (AT-278).",
-        "GIVEN emergency close attempts 1, 2, 3. WHEN close prices are computed. THEN attempt 1 uses `best ± 5 ticks`; retry 2 uses ~10 ticks; retry 3 uses ~20 ticks. (AT-316).",
+        "[GROUP-A: Kill Containment] AT-338, AT-339, AT-340",
         "GIVEN `TradingMode == Kill` (e.g., `mm_util >= mm_util_kill`) and open exposure exists. WHEN the execution loop ticks under Kill. THEN containment actions (cancel risk-increasing orders; §3.1 emergency close; hedge fallback) are attempted and no OPENs ... (AT-338).",
         "GIVEN `disk_used_pct >= disk_kill_pct` **and** `disk_used_pct_secondary >= disk_kill_pct`, and open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-339).",
         "GIVEN `TradingMode == Kill` due to a kill-tier trigger AND (`EvidenceChainState != GREEN` OR write-ahead ledger is degraded), with open ex... WHEN Kill containment runs. THEN containment actions are still permitted/attempted; OPEN remains blocked. (AT-340).",
+        "[GROUP-B: Emergency Close IOC] AT-316, AT-203",
+        "GIVEN emergency close attempts 1, 2, 3. WHEN close prices are computed. THEN attempt 1 uses `best ± 5 ticks`; retry 2 uses ~10 ticks; retry 3 uses ~20 ticks. (AT-316).",
+        "GIVEN `emergency_reduceonly_active == true` and there exists (a) an open order with `reduce_only == false` and (b) a closin... WHEN Watchdog reduce-only behavior runs. THEN (a) is canceled and (b) is NOT canceled. (AT-203).",
+        "[GROUP-C: Session/Watchdog Kill] AT-346, AT-347, AT-1049",
         "GIVEN `rate_limit_session_kill_active == true`, `10028_count_5m >= rate_limit_kill_min_10028`, and open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-346).",
         "GIVEN watchdog heartbeat **and** loop tick are stale beyond `watchdog_kill_s` AND open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-347).",
+        "GIVEN `TradingMode in {ReduceOnly, Kill}` and net exposure ≠ 0. WHEN the system proposes a risk-reducing intent (`CLOSE`, reduce-only hedge, or emergency flatten). THEN at least one such intent is permitted to dispatch (subject to venue reachability), and OPEN remains blocked. (AT-1049).",
+        "[GROUP-D: Self-Impact Guard] AT-937, AT-938, AT-939, AT-235, AT-236, AT-237",
         "GIVEN `L2BookSnapshot` is missing/unparseable/stale and a fresh `L1TickerSnapshot` is available. WHEN emergency close runs. THEN IOC close attempts are submitted using the L1 best bid/ask as the `best` price. (AT-937).",
         "GIVEN `L2BookSnapshot` is missing/unparseable/stale and no fresh `L1TickerSnapshot` is available. WHEN emergency close runs. THEN no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`. (AT-938).",
-        "GIVEN `append_group_intent` fails to persist the group intent. WHEN AtomicGroupExecutor attempts to dispatch legs. THEN no leg orders are submitted and the failure is surfaced. (AT-939)."
+        "GIVEN `append_group_intent` fails to persist the group intent. WHEN AtomicGroupExecutor attempts to dispatch legs. THEN no leg orders are submitted and the failure is surfaced. (AT-939).",
+        "GIVEN one leg filled and the book thins. WHEN emergency close runs. THEN close attempts run and fallback hedge executes if still exposed; exposure goes to ~0. (AT-235).",
+        "GIVEN Liquidity Gate reject conditions are present. WHEN emergency close runs. THEN emergency close still submits IOC close attempts (Liquidity Gate does NOT block it). (AT-236).",
+        "GIVEN a network hiccup mid-hedge. WHEN Watchdog triggers reduce-only. THEN the hedge stays alive. (AT-237).",
+        "[GROUP-E: Delta Hedge + Atomic] AT-278, AT-013, AT-211, AT-213",
+        "GIVEN two legs filled at nominally equal quantities differing only by ≤ `atomic_qty_epsilon` (no partials). WHEN group completion is evaluated. THEN the group is eligible for `Complete`. (AT-278).",
+        "GIVEN `bunker_mode_active == true`, a Kill-tier trigger is active (e.g., `mm_util >= mm_util_kill`), and open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-013).",
+        "GIVEN an atomic group enters mixed state (one leg filled, another rejected or none) an... WHEN emergency close completes (including optional hedge fallback... THEN exactly one AtomicNakedEvent is emitted with required schema fields present and ... (AT-211).",
+        "GIVEN an atomic group enters mixed state (one leg filled, another rejected or none), `enforced_profile != CSP`, and emergen... WHEN AtomicNakedEvent is recorded. THEN the event includes `strategy_id`, `cause`, `trading_mode_at_event`, and `evidence_chain_state_at_event` with valid va... (AT-213)."
       ],
       "steps": [
         "Map S7.3 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -5127,7 +5132,6 @@
         "AT-335",
         "AT-404",
         "AT-415",
-        "AT-417",
         "AT-422",
         "AT-923"
       ],
@@ -6629,8 +6633,7 @@
       "contract_must_evidence": [],
       "enforcing_contract_ats": [
         "AT-253",
-        "AT-414",
-        "AT-273"
+        "AT-414"
       ],
       "reason_codes": {
         "type": "",
@@ -6804,7 +6807,8 @@
       ],
       "enforcing_contract_ats": [
         "AT-108",
-        "AT-314"
+        "AT-314",
+        "AT-273"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -7703,7 +7707,7 @@
       ],
       "scope": {
         "touch": [
-          "specs/CONTRACT.md"
+          "plans/verify.sh"
         ],
         "create": [
           "tools/release_gate.py"
@@ -7853,6 +7857,7 @@
         }
       ],
       "enforcing_contract_ats": [
+        "AT-417",
         "AT-1048",
         "AT-1053",
         "AT-1050",
