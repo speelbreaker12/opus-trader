@@ -53,5 +53,6 @@ run_case "workflow_touches_crates_touch.json" 2 "WORKFLOW_TOUCHES_CRATES" skip
 run_case "workflow_touches_crates_create.json" 2 "WORKFLOW_TOUCHES_CRATES" skip
 run_case "execution_touches_plans.json" 2 "EXECUTION_TOUCHES_PLANS" skip
 run_case "unresolved_contract_ref.json" 1 "unresolved contract_ref"
+run_case "dangling_at_ref.json" 1 "AT-9999"
 
 echo "test_prd_gate.sh: ok"
