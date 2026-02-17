@@ -1,8 +1,8 @@
 //! Tests for single chokepoint gate ordering per CONTRACT.md CSP.5.2.
 //!
 //! AT-501: Gate ordering is deterministic — trace must match spec order.
-//! AT-502: OPEN intents run all 9 gates.
-//! AT-503: CLOSE/HEDGE skip liquidity/net-edge/pricer gates (6-8).
+//! AT-502: OPEN intents run all 10 gates.
+//! AT-503: CLOSE/HEDGE skip liquidity/net-edge/pricer gates (7-9).
 //! AT-504: CANCEL-only skips all gates after DispatchAuth.
 //! AT-505: RiskState != Healthy blocks OPEN intents at gate 1.
 //! AT-506: Each gate rejection stops evaluation (early-exit).
@@ -38,12 +38,13 @@ fn test_at501_open_all_gates_pass_trace_order() {
                     GateStep::Quantize,
                     GateStep::DispatchConsistency,
                     GateStep::FeeCacheCheck,
+                    GateStep::ExpiryGuard,
                     GateStep::LiquidityGate,
                     GateStep::NetEdgeGate,
                     GateStep::Pricer,
                     GateStep::RecordedBeforeDispatch,
                 ],
-                "OPEN intent gate trace must match spec ordering 1-9"
+                "OPEN intent gate trace must match spec ordering 1-10"
             );
         }
         other => panic!("expected Approved, got {other:?}"),
@@ -100,7 +101,7 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
     );
 }
 
-// ─── AT-502: OPEN intents require all 9 gates ────────────────────────────
+// ─── AT-502: OPEN intents require all 10 gates ───────────────────────────
 
 #[test]
 fn test_at502_open_gate_count() {
@@ -111,7 +112,7 @@ fn test_at502_open_gate_count() {
 
     match result {
         ChokeResult::Approved { gate_trace } => {
-            assert_eq!(gate_trace.len(), 9, "OPEN must traverse all 9 gates");
+            assert_eq!(gate_trace.len(), 10, "OPEN must traverse all 10 gates");
         }
         other => panic!("expected Approved, got {other:?}"),
     }
@@ -136,6 +137,7 @@ fn test_at503_close_skips_liquidity_edge_pricer() {
                     GateStep::Quantize,
                     GateStep::DispatchConsistency,
                     GateStep::FeeCacheCheck,
+                    GateStep::ExpiryGuard,
                     GateStep::RecordedBeforeDispatch,
                 ],
                 "CLOSE must skip LiquidityGate, NetEdgeGate, Pricer"
@@ -160,7 +162,7 @@ fn test_at503_hedge_skips_liquidity_edge_pricer() {
             assert!(!gate_trace.contains(&GateStep::LiquidityGate));
             assert!(!gate_trace.contains(&GateStep::NetEdgeGate));
             assert!(!gate_trace.contains(&GateStep::Pricer));
-            assert_eq!(gate_trace.len(), 6, "HEDGE must have 6 gates (skip 6-8)");
+            assert_eq!(gate_trace.len(), 7, "HEDGE must have 7 gates (skip 7-9)");
         }
         other => panic!("expected Approved, got {other:?}"),
     }
@@ -177,6 +179,7 @@ fn test_at504_cancel_only_dispatch_auth_only() {
         quantize_passed: false,
         dispatch_consistency_passed: false,
         fee_cache_passed: false,
+        expiry_guard_passed: false,
         liquidity_gate_passed: false,
         net_edge_passed: false,
         pricer_passed: false,
@@ -409,7 +412,7 @@ fn test_at506_fee_cache_reject_stops_at_gate5() {
 }
 
 #[test]
-fn test_at506_liquidity_reject_stops_at_gate6() {
+fn test_at506_liquidity_reject_stops_at_gate7() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         liquidity_gate_passed: false,
@@ -427,14 +430,14 @@ fn test_at506_liquidity_reject_stops_at_gate6() {
                     ..
                 }
             ));
-            assert_eq!(gate_trace.len(), 6);
+            assert_eq!(gate_trace.len(), 7);
         }
         other => panic!("expected Rejected at LiquidityGate, got {other:?}"),
     }
 }
 
 #[test]
-fn test_at506_net_edge_reject_stops_at_gate7() {
+fn test_at506_net_edge_reject_stops_at_gate8() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         net_edge_passed: false,
@@ -452,14 +455,14 @@ fn test_at506_net_edge_reject_stops_at_gate7() {
                     ..
                 }
             ));
-            assert_eq!(gate_trace.len(), 7);
+            assert_eq!(gate_trace.len(), 8);
         }
         other => panic!("expected Rejected at NetEdgeGate, got {other:?}"),
     }
 }
 
 #[test]
-fn test_at506_pricer_reject_stops_at_gate8() {
+fn test_at506_pricer_reject_stops_at_gate9() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         pricer_passed: false,
@@ -477,14 +480,14 @@ fn test_at506_pricer_reject_stops_at_gate8() {
                     ..
                 }
             ));
-            assert_eq!(gate_trace.len(), 8);
+            assert_eq!(gate_trace.len(), 9);
         }
         other => panic!("expected Rejected at Pricer, got {other:?}"),
     }
 }
 
 #[test]
-fn test_at506_wal_reject_stops_at_gate9() {
+fn test_at506_wal_reject_stops_at_gate10() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         wal_recorded: false,
@@ -502,7 +505,7 @@ fn test_at506_wal_reject_stops_at_gate9() {
                     ..
                 }
             ));
-            assert_eq!(gate_trace.len(), 9);
+            assert_eq!(gate_trace.len(), 10);
         }
         other => panic!("expected Rejected at WAL, got {other:?}"),
     }
@@ -610,6 +613,7 @@ fn test_constraint_reject_gates_before_persist() {
                 GateStep::Quantize,
                 GateStep::DispatchConsistency,
                 GateStep::FeeCacheCheck,
+                GateStep::ExpiryGuard,
                 GateStep::LiquidityGate,
                 GateStep::NetEdgeGate,
                 GateStep::Pricer,
@@ -724,6 +728,13 @@ fn test_constraint_no_approval_with_any_gate_failed() {
             },
         ),
         (
+            "expiry_guard",
+            GateResults {
+                expiry_guard_passed: false,
+                ..GateResults::all_passed()
+            },
+        ),
+        (
             "liquidity",
             GateResults {
                 liquidity_gate_passed: false,
@@ -800,6 +811,7 @@ fn test_constraint_rejected_trace_stops_at_failure() {
                 GateStep::Quantize,
                 GateStep::DispatchConsistency,
                 GateStep::FeeCacheCheck,
+                GateStep::ExpiryGuard,
                 GateStep::LiquidityGate,
                 GateStep::NetEdgeGate,
                 GateStep::Pricer,
@@ -932,4 +944,31 @@ fn test_dispatch_consistency_rejects_when_clamp_max_dispatch_qty_missing() {
             ..
         }
     ));
+}
+
+// ─── AT-506: ExpiryGuard rejection ──────────────────────────────────────
+
+#[test]
+fn test_at506_expiry_guard_reject_stops_at_gate6() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        expiry_guard_passed: false,
+        ..GateResults::all_passed()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+
+    match result {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(matches!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::ExpiryGuard,
+                    ..
+                }
+            ));
+            assert_eq!(gate_trace.len(), 6);
+        }
+        other => panic!("expected Rejected at ExpiryGuard, got {other:?}"),
+    }
 }

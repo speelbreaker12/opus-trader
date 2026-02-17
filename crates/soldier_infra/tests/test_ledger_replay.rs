@@ -230,6 +230,10 @@ fn test_update_state_succeeds_when_queue_is_at_capacity() {
     let result = ledger.update_state("hash1", TlsState::Sent, &mut m);
     assert!(result.is_ok(), "state update must not fail on full queue");
     assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
+
+    // queue_depth stays 1 (unique intents), but log grows
+    assert_eq!(ledger.queue_depth(), 1);
+    assert_eq!(ledger.log_entry_count(), 2);
 }
 
 #[test]
@@ -629,4 +633,179 @@ fn test_rejected_valid_successors() {
     // Acked cannot transition to Rejected (already acknowledged).
     assert!(!TlsState::Acked.is_valid_successor(TlsState::Rejected));
     assert!(!TlsState::PartialFill.is_valid_successor(TlsState::Rejected));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fix 3: CSP-002 Duplicate intent_hash rejection
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_duplicate_intent_hash_rejected() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let r1 = intent("hash1", "g1", 0, TlsState::Created);
+    assert!(ledger.append(r1, &mut m).is_ok());
+
+    // Second append with same hash must be rejected
+    let r2 = intent("hash1", "g2", 1, TlsState::Created);
+    assert_eq!(
+        ledger.append(r2, &mut m),
+        Err(LedgerAppendError::DuplicateIntentHash)
+    );
+
+    // Original record preserved
+    let found = ledger.get("hash1").unwrap();
+    assert_eq!(found.group_id, "g1");
+    assert_eq!(found.leg_idx, 0);
+}
+
+#[test]
+fn test_duplicate_intent_hash_increments_write_error() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    let _ = ledger.append(intent("hash1", "g1", 0, TlsState::Created), &mut m);
+    assert_eq!(m.wal_write_errors(), 0);
+
+    let _ = ledger.append(intent("hash1", "g2", 1, TlsState::Created), &mut m);
+    assert_eq!(m.wal_write_errors(), 1);
+}
+
+#[test]
+fn test_different_intent_hashes_accepted() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    assert!(
+        ledger
+            .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+            .is_ok()
+    );
+    assert!(
+        ledger
+            .append(intent("hash2", "g2", 0, TlsState::Created), &mut m)
+            .is_ok()
+    );
+    assert_eq!(ledger.queue_depth(), 2);
+    assert!(ledger.get("hash1").is_some());
+    assert!(ledger.get("hash2").is_some());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fix 2: WAL append-only update_state
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_append_only_preserves_old_entries() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    ledger
+        .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+        .unwrap();
+    assert_eq!(ledger.log_entry_count(), 1);
+    assert_eq!(ledger.queue_depth(), 1);
+
+    ledger
+        .update_state("hash1", TlsState::Sent, &mut m)
+        .unwrap();
+    // log grows (old entry preserved + new appended)
+    assert_eq!(ledger.log_entry_count(), 2);
+    // queue_depth stays 1 (unique intents)
+    assert_eq!(ledger.queue_depth(), 1);
+    // get() returns latest state
+    assert_eq!(ledger.get("hash1").unwrap().tls_state, TlsState::Sent);
+}
+
+#[test]
+fn test_replay_after_state_update_uses_latest_state() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    ledger
+        .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+        .unwrap();
+    ledger
+        .update_state("hash1", TlsState::Filled, &mut m)
+        .unwrap();
+
+    let outcome = ledger.replay();
+    // Filled is terminal — not in-flight
+    assert_eq!(outcome.in_flight_count, 0);
+    // records_replayed = unique intents
+    assert_eq!(outcome.records_replayed, 1);
+    assert!(outcome.in_flight_hashes.is_empty());
+}
+
+#[test]
+fn test_state_update_succeeds_past_capacity() {
+    let mut ledger = WalLedger::new(2);
+    let mut m = LedgerMetrics::new();
+
+    ledger
+        .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+        .unwrap();
+    ledger
+        .append(intent("hash2", "g2", 0, TlsState::Created), &mut m)
+        .unwrap();
+    assert_eq!(ledger.queue_depth(), 2);
+
+    // New append rejected — queue full
+    assert_eq!(
+        ledger.append(intent("hash3", "g3", 0, TlsState::Created), &mut m),
+        Err(LedgerAppendError::QueueFull)
+    );
+
+    // But state transitions always succeed
+    assert!(ledger.update_state("hash1", TlsState::Sent, &mut m).is_ok());
+    assert!(
+        ledger
+            .update_state("hash2", TlsState::Filled, &mut m)
+            .is_ok()
+    );
+    assert_eq!(ledger.queue_depth(), 2); // still 2 unique intents
+    assert_eq!(ledger.log_entry_count(), 4); // 2 original + 2 transitions
+}
+
+#[test]
+fn test_duplicate_append_rejected_after_state_transition() {
+    let mut ledger = WalLedger::new(10);
+    let mut m = LedgerMetrics::new();
+
+    ledger
+        .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+        .unwrap();
+    ledger
+        .update_state("hash1", TlsState::Filled, &mut m)
+        .unwrap();
+
+    // Re-appending same hash after state transition must still be rejected
+    assert_eq!(
+        ledger.append(intent("hash1", "g2", 1, TlsState::Created), &mut m),
+        Err(LedgerAppendError::DuplicateIntentHash)
+    );
+}
+
+/// Regression: duplicate on a full queue must return DuplicateIntentHash,
+/// not QueueFull. The intent is already recorded and doesn't consume capacity.
+#[test]
+fn test_duplicate_on_full_queue_returns_duplicate_not_queue_full() {
+    let mut ledger = WalLedger::new(2);
+    let mut m = LedgerMetrics::new();
+
+    ledger
+        .append(intent("hash1", "g1", 0, TlsState::Created), &mut m)
+        .unwrap();
+    ledger
+        .append(intent("hash2", "g2", 0, TlsState::Created), &mut m)
+        .unwrap();
+    assert_eq!(ledger.queue_depth(), 2);
+
+    // Queue is full — but hash1 is already there, so the error must be
+    // DuplicateIntentHash, not QueueFull.
+    assert_eq!(
+        ledger.append(intent("hash1", "g3", 1, TlsState::Created), &mut m),
+        Err(LedgerAppendError::DuplicateIntentHash)
+    );
 }

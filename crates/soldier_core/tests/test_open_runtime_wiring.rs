@@ -31,6 +31,7 @@ fn base_open_input() -> OpenRuntimeInput {
         quantize_passed: true,
         dispatch_consistency_passed: true,
         fee_cache_passed: true,
+        expiry_guard_passed: true,
         wal_recorded: true,
         current_delta: 0.0,
         delta_impact_est: 10.0,
