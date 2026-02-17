@@ -562,26 +562,17 @@ fn test_metrics_default() {
 // ─── Close intent WAL rejection ─────────────────────────────────────────
 
 #[test]
-fn test_close_wal_failure_rejected() {
+fn test_close_wal_failure_not_blocked() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         wal_recorded: false,
         ..GateResults::all_passed()
     };
 
-    // Even CLOSE intents must pass WAL gate
+    // CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE intents.
     let result = build_order_intent(ChokeIntentClass::Close, RiskState::Healthy, &mut m, &gates);
 
-    assert!(matches!(
-        result,
-        ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
-                gate: GateStep::RecordedBeforeDispatch,
-                ..
-            },
-            ..
-        }
-    ));
+    assert!(matches!(result, ChokeResult::Approved { .. }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

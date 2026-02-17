@@ -418,6 +418,10 @@ fn build_order_intent_internal(
     }
 
     // Gate 10: RecordedBeforeDispatch
+    //
+    // CONTRACT.md CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE/CANCEL intents.
+    // CancelOnly already exited at line 279. For Close/Hedge, we attempt WAL
+    // recording but never reject on failure — only Open intents are blocked.
     trace.push(GateStep::RecordedBeforeDispatch);
     let mut wal_error: Option<String> = None;
     let wal_recorded = match wal_gate {
@@ -430,7 +434,7 @@ fn build_order_intent_internal(
         },
         None => gate_results.wal_recorded,
     };
-    if !wal_recorded {
+    if !wal_recorded && intent_class == ChokeIntentClass::Open {
         return finish_rejected(
             metrics,
             ChokeRejectReason::GateRejected {

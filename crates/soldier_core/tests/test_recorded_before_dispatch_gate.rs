@@ -145,3 +145,65 @@ fn test_wal_gate_not_called_when_preflight_rejects_early() {
     ));
     assert_eq!(wal_gate.call_count, 0);
 }
+
+// ─── CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE intents ────────
+
+#[test]
+fn test_close_intent_approved_despite_wal_failure() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults::all_passed();
+    let mut wal_gate = StubWalGate {
+        should_succeed: false,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Close,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_gate.call_count, 1); // Attempted but failure not blocking
+}
+
+#[test]
+fn test_hedge_intent_approved_despite_wal_failure() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults::all_passed();
+    let mut wal_gate = StubWalGate {
+        should_succeed: false,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Hedge,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_gate.call_count, 1);
+}
+
+#[test]
+fn test_close_intent_approved_when_optional_wal_gate_missing() {
+    let mut metrics = ChokeMetrics::new();
+    let mut gates = GateResults::all_passed();
+    gates.wal_recorded = false; // WAL not recorded
+
+    let result = build_order_intent_with_optional_wal_gate(
+        ChokeIntentClass::Close,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        None,
+    );
+
+    // Close intent must not be blocked by WAL failure (CSP.3.2)
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+}
