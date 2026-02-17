@@ -663,10 +663,13 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
         std::fs::create_dir_all(parent)?;
     }
 
+    // Open read-only for replay. The write handle is opened separately in
+    // with_storage_path() after this function returns and the read handle
+    // is dropped, ensuring no overlapping file descriptors.
     let file = OpenOptions::new()
         .create(true)
         .read(true)
-        .append(true)
+        .write(true) // needed with create(true) on some platforms
         .open(path)?;
     let reader = BufReader::new(file);
 
