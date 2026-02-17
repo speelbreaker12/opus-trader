@@ -225,7 +225,7 @@ def main() -> int:
         # after walk); both are needed — pruning avoids descending at all.
         dirnames[:] = [
             d for d in dirnames
-            if d not in {"target", ".git", "node_modules", ".venv", "__pycache__"}
+            if d not in {"target", ".git", "node_modules", ".venv", "__pycache__", ".worktrees", "artifacts"}
         ]
 
         for fname in filenames:

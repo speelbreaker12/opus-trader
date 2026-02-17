@@ -5,8 +5,8 @@
 # NOTE: This is a heuristic, defense-in-depth lint. The canonical gate
 # enforcement is the 8-gate pipeline in build_order_intent(). This lint
 # catches code that bypasses the chokepoint entirely.
-# If CONTRACT.md format drifts, extraction may return empty sets —
-# the linter logs INFO and passes (fail-open by design).
+# If this config cannot be loaded (e.g. missing PyYAML), or the patterns
+# here are empty/invalid, the linter logs INFO and passes (fail-open by design).
 
 lookback_lines: 60
 

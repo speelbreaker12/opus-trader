@@ -444,12 +444,14 @@ impl WalLedger {
     /// CONTRACT.md §2.4: "On startup, replay ledger into in-memory state
     /// and reconcile with exchange."
     pub fn replay(&self) -> ReplayOutcome {
-        let mut in_flight_hashes = Vec::new();
-        for record in self.latest_by_hash.values() {
-            if !record.tls_state.is_terminal() {
-                in_flight_hashes.push(record.intent_hash.clone());
-            }
-        }
+        let mut in_flight_hashes: Vec<_> = self
+            .latest_by_hash
+            .values()
+            .filter(|r| !r.tls_state.is_terminal())
+            .map(|r| r.intent_hash.clone())
+            .collect();
+        // Deterministic ordering independent of HashMap iteration order.
+        in_flight_hashes.sort();
 
         ReplayOutcome {
             records_replayed: self.latest_by_hash.len(),

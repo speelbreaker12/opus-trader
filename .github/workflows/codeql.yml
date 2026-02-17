@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         language: [python]
-        # Rust is not yet supported by CodeQL; use clippy for Rust linting.
+        # Rust analysis is not enabled in this workflow; use clippy for Rust linting.
 
     steps:
       - name: Checkout repository

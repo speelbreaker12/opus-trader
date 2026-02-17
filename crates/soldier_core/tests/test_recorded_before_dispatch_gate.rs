@@ -1,7 +1,7 @@
 //! Tests for runtime RecordedBeforeDispatch gate helpers.
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     RecordedBeforeDispatchGate, build_order_intent_with_optional_wal_gate,
     build_order_intent_with_wal_gate,
 };
@@ -39,7 +39,7 @@ fn test_optional_wal_gate_missing_is_fail_closed() {
     match result {
         ChokeResult::Rejected { reason, .. } => match reason {
             ChokeRejectReason::GateRejected { gate, .. } => {
-                assert_eq!(format!("{gate:?}"), "RecordedBeforeDispatch")
+                assert_eq!(gate, GateStep::RecordedBeforeDispatch)
             }
             other => panic!("unexpected reject reason: {other:?}"),
         },
