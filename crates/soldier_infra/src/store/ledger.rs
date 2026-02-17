@@ -598,6 +598,10 @@ fn apply_event(
 ) -> Result<(), String> {
     match event {
         WalEvent::IntentRecorded { record } => {
+            // Last-writer-wins: if a duplicate intent_hash appears in the WAL
+            // (e.g. crash-replay), the latest record overwrites the earlier one.
+            // This is intentional — the WAL is append-only, so the last event
+            // for a given hash is always the most recent state.
             latest_by_hash.insert(record.intent_hash.clone(), record.clone());
             Ok(())
         }

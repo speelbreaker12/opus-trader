@@ -72,7 +72,8 @@ with open(impl_plan_path, 'r', encoding='utf-8') as f:
 # These exist in IMPL_PLAN but have no PRD items (future Phase 2+ stories).
 # Only TRUE gaps belong here — stories covered by variants (S8.1a, S8.1b)
 # are matched by the regex and should NOT be listed.
-known_impl_plan_gaps = {"S8.11", "S8.12", "S14.2"}
+# Known gaps loaded from prd.json (configurable, not hardcoded).
+known_impl_plan_gaps = set(prd.get('doc_sync_known_gaps', []))
 
 # ── Path-like heuristic ────────────────────────────────────────────
 KNOWN_EXTENSIONS = {'.md', '.json', '.rs', '.py', '.sh', '.yaml', '.yml', '.toml', '.txt'}
@@ -184,7 +185,7 @@ for sid in sorted(all_referenced):
 # Staleness check: warn if a known gap now has PRD coverage (gap closed)
 for sid in sorted(known_impl_plan_gaps):
     if sid in prd_story_refs:
-        print(f'{TAG} WARN: known gap {sid} now has PRD coverage — remove from known_impl_plan_gaps', file=sys.stderr)
+        print(f'{TAG} WARN: known gap {sid} now has PRD coverage — remove from doc_sync_known_gaps in prd.json', file=sys.stderr)
 
 # ── Check B: Evidence file existence (passes=true only) ────────────
 for item in items:
