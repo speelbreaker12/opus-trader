@@ -163,7 +163,7 @@ setup_case() {
   cat > "$case_dir/prd.json" <<EOF
 {
   "items": [
-    {"id":"$story_id","passes":false}
+    {"id":"$story_id","passes":false,"enforcing_contract_ats":["AT-001"],"enforcement_point":"WAL"}
   ]
 }
 EOF
@@ -318,8 +318,8 @@ setup_case "$phase0_guard_case" "$head_sha"
 cat > "$phase0_guard_case/prd.json" <<EOF
 {
   "items": [
-    {"id":"S0-000","phase":0,"passes":false},
-    {"id":"$story_id","phase":1,"passes":false}
+    {"id":"S0-000","phase":0,"passes":false,"enforcing_contract_ats":["AT-001"],"enforcement_point":"WAL"},
+    {"id":"$story_id","phase":1,"passes":false,"enforcing_contract_ats":["AT-001"],"enforcement_point":"WAL"}
   ]
 }
 EOF
