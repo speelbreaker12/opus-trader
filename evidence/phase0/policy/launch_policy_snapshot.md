@@ -5,7 +5,7 @@
 
 ## Metadata
 - policy_id: LP-001
-- policy_version: 1.2
+- policy_version: 1.1
 - contract_version_target: 5.2
 - effective_date_utc: 2026-01-27
 - owner: [FILL]
