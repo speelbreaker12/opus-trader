@@ -82,7 +82,7 @@ impl Default for BarrierMetrics {
 
 // ─── Core gate adapter ──────────────────────────────────────────────────
 
-/// Adapter that lets core chokepoint gate 9 call into infra durable append.
+/// Adapter that lets core chokepoint gate 10 call into infra durable append.
 ///
 /// The adapter is single-use by default: one append attempt consumes
 /// `record_to_append`. Callers can provide a new record via `set_record`.

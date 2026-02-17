@@ -77,7 +77,7 @@ pub trait RecordedBeforeDispatchGate {
 /// Evaluate the chokepoint with a runtime WAL gate adapter.
 ///
 /// This helper prevents callsites from passing precomputed `wal_recorded`
-/// values and instead derives gate 9 from the actual append attempt.
+/// values and instead derives gate 10 from the actual append attempt.
 pub fn build_order_intent_with_wal_gate(
     intent_class: ChokeIntentClass,
     risk_state: RiskState,
