@@ -77,9 +77,7 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": [
-        "crates/soldier_core/tests/test_trading_policy.rs"
-      ]
+      "implementation_tests": []
     },
     {
       "id": "S0-001",

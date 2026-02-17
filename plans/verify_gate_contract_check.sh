@@ -70,6 +70,7 @@ quick_tokens=(
   reconciliation_matrix
   csp_trace
   status_fixture_*
+  doc_sync_check
   rust_fmt
   rust_tests_quick
   python_ruff_check
@@ -116,6 +117,7 @@ verify_tokens=(
   'run_logged_or_exit "reconciliation_matrix"'
   'run_logged_or_exit "csp_trace"'
   'status_fixture_'
+  'run_logged_or_exit "doc_sync_check"'
 )
 
 for token in "${verify_tokens[@]}"; do
