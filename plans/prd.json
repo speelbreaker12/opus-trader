@@ -211,7 +211,10 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": [],
+      "implementation_tests": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs::test_api_keys_are_least_privilege_runtime",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs::test_api_keys_transfer_privilege_rejected_runtime"
+      ],
       "human_blocker": {
         "why": "Key scope probes require access to exchange APIs",
         "question": "Has key scope probe been executed and recorded as JSON?",
@@ -311,7 +314,10 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": [],
+      "implementation_tests": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs::test_break_glass_kill_blocks_open_allows_reduce_runtime",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs::test_break_glass_command_path_runtime"
+      ],
       "human_blocker": {
         "why": "Drill requires human execution and observation",
         "question": "Has the break-glass drill been executed with witnesses?",
@@ -336,7 +342,7 @@
       "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-E Health Endpoint",
       "category": "infra",
-      "description": "Implement minimal Phase-0 health and owner status output (ok/build_id/contract_version/trading_mode/is_trading_allowed).",
+      "description": "Implement minimal Phase-0 health and owner status output (ok/build_id/contract_version/trading_mode/is_trading_allowed). Scaffolding only — provides CLI status data model, not HTTP endpoint. Full AT-022 enforcement in S8-008.",
       "contract_refs": [
         "P0-E Health + Owner Status Scaffolding",
         "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)"
@@ -406,9 +412,7 @@
       "implementation_tests": [
         "crates/soldier_infra/tests/test_phase0_runtime.rs::test_status_command_behavior_runtime"
       ],
-      "primary_owner_for": [
-        "AT-022"
-      ]
+      "primary_owner_for": []
     },
     {
       "id": "S0-005",
@@ -472,15 +476,12 @@
           "anchor": "P0-F Machine Policy Loader Baseline"
         }
       ],
-      "enforcing_contract_ats": [
-        "AT-040",
-        "AT-341"
-      ],
+      "enforcing_contract_ats": [],
       "reason_codes": {
         "type": "",
         "values": []
       },
-      "enforcement_point": "PolicyGuard",
+      "enforcement_point": "",
       "failure_mode": [],
       "observability": {
         "metrics": [],
