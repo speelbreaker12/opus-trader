@@ -256,6 +256,25 @@ uncovered = sorted(contract_ats - set(prd_ats) - deferred_ats, key=lambda x: int
 if uncovered:
     print(f'[prd_ref_check] WARN: {len(uncovered)} contract AT(s) not covered by PRD and not deferred: {", ".join(uncovered[:10])}{"..." if len(uncovered) > 10 else ""}', file=sys.stderr)
 
+# ── Partial coverage notes check ───────────────────────────────────
+# Warn when an AT is in enforcing_contract_ats AND partial_coverage_notes.
+# This is not an error — it's a traceability signal that the AT is only
+# partially proven by this story. The authoritative tracker is
+# docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table.
+for item in items:
+    item_id = item.get('id', 'unknown')
+    partial = item.get('partial_coverage_notes', {})
+    if not isinstance(partial, dict):
+        continue
+    enforcing = set(item.get('enforcing_contract_ats', []))
+    primary = set(item.get('primary_owner_for', []))
+    for at_key in sorted(partial.keys()):
+        if at_key in enforcing:
+            if at_key in primary:
+                print(f'[prd_ref_check] WARN: {item_id} has {at_key} in BOTH primary_owner_for AND partial_coverage_notes — remove from primary_owner_for or resolve the partial coverage', file=sys.stderr)
+            else:
+                print(f'[prd_ref_check] INFO: {item_id} has {at_key} partially covered (see partial_coverage_notes)', file=sys.stderr)
+
 # ── P0 prerequisite check ──────────────────────────────────────────
 p0_re = re.compile(r'\bP0-[A-F]\b')
 contract_p0 = sorted(set(p0_re.findall(contract_md_text)))

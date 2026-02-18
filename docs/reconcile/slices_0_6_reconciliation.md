@@ -83,7 +83,9 @@ _None remaining._ S1-007 downgraded to YELLOW after pipeline-level test added (s
 - S2-004: AT-201 closed-enum compile-time guarantee — informational
 - S5-000: Naming discrepancy `InsufficientDepthWithinBudget` vs `ExpectedSlippageTooHigh` — informational
 
-### Deferred ATs (machine-auditable)
+### Deferred ATs (machine-auditable, AUTHORITATIVE)
+
+> **Single source of truth** for deferred/partial AT coverage. PRD `partial_coverage_notes` fields cross-reference this table. `prd_ref_check.sh` warns when an AT appears in both `enforcing_contract_ats` and `partial_coverage_notes`.
 
 | AT | Contract Section | Owner Story | Status | Target | Rationale |
 |----|-----------------|-------------|--------|--------|-----------|
