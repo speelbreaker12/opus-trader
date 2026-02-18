@@ -88,12 +88,15 @@ _None remaining._ S1-007 downgraded to YELLOW after pipeline-level test added (s
 | AT | Contract Section | Owner Story | Status | Target | Rationale |
 |----|-----------------|-------------|--------|--------|-----------|
 | AT-327 | §1.4.1 Net Edge Gate — emergency close exemption | S5-002 | DEFERRED | Phase 2 / Deterministic Emergency Close (§3.1) | Emergency close not implemented in Phase 1. Contract §1.4.1 scope note explicitly excludes §3.1 from NetEdge gate. |
+| AT-925 | §2.4.1 WAL Writer Isolation — hot-loop backpressure → ReduceOnly | S4-000 (partial), S6-000 (partial), **S8.1c** (integration) | PARTIAL | S8.1c (PolicyGuard integration) | S4 proves queue-full detection + WAL error counter. PolicyGuard mode-forcing (TradingMode::ReduceOnly under backpressure) requires PolicyGuard implementation. Integration test: `test_at925_queue_full_forces_reduce_only_via_policyguard`. |
+| AT-969 | §2.4.1 WAL Writer Isolation — EvidenceChainState under WAL backpressure | S4-003 (listed) | GOP-DEFERRED | EvidenceGuard integration slice | GOP-only AT (`enforced_profile != CSP`). EvidenceGuard not implemented in Phase 1. S4 scope is CSP-only. |
 
 ### Cross-slice proof chains
 
 | AT | Claim | Unit Proof (this slice) | Integration Proof (other slice) | Chain |
 |----|-------|------------------------|--------------------------------|-------|
 | AT-245 | Hard-stale fee cache → RiskState::Degraded → TradingMode::ReduceOnly → OPEN blocked | `test_fee_staleness.rs`: `evaluate_fee_staleness()` returns `RiskState::Degraded` on hard-stale | `test_intent_pipeline.rs::test_at104_degraded_blocks_open_at_chokepoint`: Degraded → OPEN rejected at DispatchAuth, dispatch=0 | fees.rs → Degraded → build_order_intent → RiskStateNotHealthy → reject |
+| AT-925 | WAL queue full → ReduceOnly → OPEN blocked | `test_ledger_replay.rs::test_queue_full_returns_immediately`: queue-full returns error (non-blocking); `test_at906_write_error_counter_increments`: wal_write_errors counter | **MISSING** — `test_at925_queue_full_forces_reduce_only_via_policyguard` (S8.1c) | ledger.rs → QueueFull → (gap) → PolicyGuard → ReduceOnly → OPEN blocked |
 
 ---
 
