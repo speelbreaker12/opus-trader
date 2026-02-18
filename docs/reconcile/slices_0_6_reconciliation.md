@@ -65,7 +65,7 @@ _None remaining._ S1-007 downgraded to YELLOW after pipeline-level test added (s
 ### DONE — S1-007: AT-920 pipeline test added
 - Added `test_at920_pipeline_dispatch_consistency_failure_rejected` in `test_intent_pipeline.rs`
 - Proves: dispatch_consistency_passed=false → rejected at DispatchConsistency gate, ContractsAmountMismatch reason, dispatch count=0
-- Combined with existing `test_at920_mismatch_caller_sets_degraded_and_blocks_open` in dispatch_map.rs, all 3 AT-920 criteria are covered
+- Combined with newly added `test_at920_mismatch_caller_sets_degraded_and_blocks_open` in test_dispatch_map.rs, all 3 AT-920 criteria are covered
 - Verdict downgraded: RED → YELLOW (production wiring of `validate_and_dispatch()` deferred)
 
 ### DONE — S1-003: AT-104 dispatch count already proven
