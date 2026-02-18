@@ -343,7 +343,7 @@
       "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-E Health Endpoint",
       "category": "infra",
-      "description": "Implement minimal Phase-0 health and owner status output (ok/build_id/contract_version/trading_mode/is_trading_allowed).",
+      "description": "Implement minimal Phase-0 health and owner status output (ok/build_id/contract_version/trading_mode/is_trading_allowed). Scaffolding only — provides CLI status data model, not HTTP endpoint. Full AT-022 enforcement in S8-008.",
       "contract_refs": [
         "P0-E Health + Owner Status Scaffolding",
         "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)"
@@ -413,8 +413,7 @@
       "implementation_tests": [
         "crates/soldier_infra/tests/test_phase0_runtime.rs::test_status_command_behavior_runtime"
       ],
-      "primary_owner_for": [],
-      "at_coverage_note": "scaffolding only — provides CLI status data model, not HTTP endpoint. Full AT-022 enforcement in S8-008."
+      "primary_owner_for": []
     },
     {
       "id": "S0-005",
