@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "S1-000",
+      "story_ref": "S1.0 Story With Path Traversal Evidence",
+      "passes": true,
+      "evidence": ["../../../etc/passwd"],
+      "implementation_tests": [],
+      "contract_refs": ["§1"],
+      "plan_refs": ["S1.0"]
+    }
+  ]
+}

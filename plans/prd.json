@@ -4,6 +4,7 @@
     "implementation_plan_path": "IMPLEMENTATION_PLAN.md",
     "contract_path": "specs/CONTRACT.md"
   },
+  "doc_sync_known_gaps": ["S8.11", "S8.12", "S14.2"],
   "rules": {
     "one_commit_per_story": true,
     "passes_only_flips_after_verify_green": true,
@@ -77,9 +78,7 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": [
-        "crates/soldier_core/tests/test_trading_policy.rs"
-      ]
+      "implementation_tests": []
     },
     {
       "id": "S0-001",

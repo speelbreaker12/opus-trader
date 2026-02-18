@@ -185,7 +185,8 @@ QUICK must run:
    - reconciliation_matrix
    - csp_trace
 3) Status fixtures validation (if `tests/fixtures/status/**` exists): `status_fixture_*`
-4) Stack tests (language-gated by repo contents):
+4) Doc sync validation: `doc_sync_check`
+5) Stack tests (language-gated by repo contents):
    - Rust: `rust_fmt`, `rust_tests_quick`
    - Python: `python_ruff_check`, `python_pytest_quick`
    - Node: `node_lint`, `node_typecheck`, `node_test`

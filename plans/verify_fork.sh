@@ -127,6 +127,7 @@ NODE_TYPECHECK_TIMEOUT="${NODE_TYPECHECK_TIMEOUT:-10m}"
 NODE_TEST_TIMEOUT="${NODE_TEST_TIMEOUT:-10m}"
 ADVERSARIAL_GATE_TIMEOUT="${ADVERSARIAL_GATE_TIMEOUT:-2m}"
 GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
+DOC_SYNC_TIMEOUT="${DOC_SYNC_TIMEOUT:-30s}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -592,6 +593,14 @@ if [[ -f scripts/check_gate_integrity.py ]]; then
     "$PYTHON_BIN" scripts/check_gate_integrity.py --root "$ROOT"
 else
   warn "gate_integrity skipped (missing scripts/check_gate_integrity.py)"
+fi
+
+if [[ "${DOC_SYNC_GATE:-1}" != "0" ]]; then
+  log "14d) doc sync check"
+  run_logged_or_exit "doc_sync_check" "$DOC_SYNC_TIMEOUT" \
+    bash plans/doc_sync_check.sh
+else
+  warn "doc_sync_check skipped (DOC_SYNC_GATE=0)"
 fi
 
 export ROOT MODE VERIFY_ARTIFACTS_DIR VERIFY_CONSOLE VERIFY_LOG_CAPTURE

@@ -109,10 +109,10 @@ def is_fn_definition(line: str, match_start: int) -> bool:
     """
     prefix = line[:match_start].rstrip()
     # Rust: `fn place_order(`, `pub fn place_order(`, `pub(crate) fn place_order(`
-    if re.search(r'\bfn\s*$', prefix):
+    if re.search(r'\bfn$', prefix):
         return True
     # Python: `def place_order(`, `async def place_order(`
-    if re.search(r'\bdef\s*$', prefix):
+    if re.search(r'\bdef$', prefix):
         return True
     return False
 

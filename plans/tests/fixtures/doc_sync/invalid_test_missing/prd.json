@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "S1-000",
+      "story_ref": "S1.0 Story With Missing Test",
+      "passes": true,
+      "evidence": [],
+      "implementation_tests": ["crates/foo/tests/missing_test.rs"],
+      "contract_refs": ["§1"],
+      "plan_refs": ["S1.0"]
+    }
+  ]
+}
