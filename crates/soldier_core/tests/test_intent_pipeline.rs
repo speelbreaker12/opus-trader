@@ -317,3 +317,36 @@ fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
         Some(RejectReasonCode::ContractsAmountMismatch)
     );
 }
+
+/// AT-920 supplement: dispatch_consistency_passed=false rejects CLOSE too.
+/// Gate 4 is intent-class-agnostic (only CancelOnly short-circuits before it).
+/// This test guards against a future refactor that accidentally excludes CLOSE.
+#[test]
+fn test_at920_pipeline_dispatch_consistency_rejects_close() {
+    let mut input = base_open_input();
+    input.intent_class = ChokeIntentClass::Close;
+    input.dispatch_consistency_passed = false;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::DispatchConsistency,
+                        ..
+                    }
+                ),
+                "CLOSE must also be rejected when dispatch consistency fails, got {reason:?}"
+            );
+        }
+        other => panic!("expected Rejected for CLOSE, got {other:?}"),
+    }
+    assert_eq!(metrics.chokepoint.approved_total(), 0);
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::ContractsAmountMismatch)
+    );
+}
