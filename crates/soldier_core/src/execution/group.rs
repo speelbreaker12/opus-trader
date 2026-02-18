@@ -35,10 +35,7 @@ pub enum GroupState {
 impl GroupState {
     /// Whether this state is terminal (no further transitions expected).
     pub fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            GroupState::Complete | GroupState::Flattened
-        )
+        matches!(self, GroupState::Complete | GroupState::Flattened)
     }
 }
 
@@ -104,8 +101,7 @@ impl GroupPersistence for InMemoryGroupPersistence {
     }
 
     fn mark_group_state(&mut self, group_id: &str, state: GroupState) -> Result<(), String> {
-        self.state_transitions
-            .push((group_id.to_string(), state));
+        self.state_transitions.push((group_id.to_string(), state));
         Ok(())
     }
 }
@@ -235,11 +231,13 @@ impl AtomicGroup {
         self.leg_results.push(result.clone());
 
         // Check for failure condition on this leg
-        let is_failure = result.rejected || result.unfilled
+        let is_failure = result.rejected
+            || result.unfilled
             || (result.filled_qty > 0.0 && result.filled_qty < result.requested_qty);
 
         // First-fail invariant: seed MixedFailed on first failure, never overwrite
-        if is_failure && self.state != GroupState::MixedFailed
+        if is_failure
+            && self.state != GroupState::MixedFailed
             && self.state != GroupState::Flattening
             && self.state != GroupState::Flattened
         {
@@ -304,17 +302,16 @@ impl AtomicGroup {
             .iter()
             .copied()
             .fold(f64::NEG_INFINITY, f64::max);
-        let min_f = filled_qtys
-            .iter()
-            .copied()
-            .fold(f64::INFINITY, f64::min);
+        let min_f = filled_qtys.iter().copied().fold(f64::INFINITY, f64::min);
         let any_partial = self
             .leg_results
             .iter()
             .any(|r| r.filled_qty > 0.0 && r.filled_qty < r.requested_qty);
         let any_rejected = self.leg_results.iter().any(|r| r.rejected);
 
-        !any_partial && !any_rejected && (max_f - min_f) <= config.atomic_qty_epsilon
+        !any_partial
+            && !any_rejected
+            && (max_f - min_f) <= config.atomic_qty_epsilon
             && !self.containment_pending
     }
 
@@ -391,10 +388,7 @@ pub enum GroupError {
 /// CONTRACT.md §1.2.1: "Lock acquisition MUST be bounded (try_lock/timeout)
 /// with group_lock_max_wait_ms. If not acquired within the bound, the hot loop
 /// MUST NOT block and MUST force ReduceOnly until the lock clears."
-pub fn try_acquire_group_lock(
-    lock: &mut GroupLock,
-    config: &GroupConfig,
-) -> LockAcquisitionResult {
+pub fn try_acquire_group_lock(lock: &mut GroupLock, config: &GroupConfig) -> LockAcquisitionResult {
     let max_wait = Duration::from_millis(config.group_lock_max_wait_ms);
 
     // If lock is already held and expired, force ReduceOnly
@@ -520,10 +514,7 @@ mod tests {
         assert_eq!(group.state, GroupState::MixedFailed);
 
         // First failure reason MUST NOT be overwritten
-        assert_eq!(
-            group.first_failure_reason().map(String::from),
-            first_reason
-        );
+        assert_eq!(group.first_failure_reason().map(String::from), first_reason);
     }
 
     // ─── AT-220: Out-of-order leg events ────────────────────────────────
@@ -778,20 +769,23 @@ mod tests {
 
             match case.expected_first_failure_contains {
                 Some(expected) => {
-                    let reason = group
-                        .first_failure_reason()
-                        .unwrap_or_else(|| panic!("case '{}': expected first failure reason", case.name));
+                    let reason = group.first_failure_reason().unwrap_or_else(|| {
+                        panic!("case '{}': expected first failure reason", case.name)
+                    });
                     assert!(
                         reason.contains(expected),
                         "case '{}': expected reason to contain '{}', got '{}'",
-                        case.name, expected, reason
+                        case.name,
+                        expected,
+                        reason
                     );
                 }
                 None => {
                     assert!(
                         group.first_failure_reason().is_none(),
                         "case '{}': expected no failure reason, got {:?}",
-                        case.name, group.first_failure_reason()
+                        case.name,
+                        group.first_failure_reason()
                     );
                 }
             }
