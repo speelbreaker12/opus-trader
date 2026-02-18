@@ -6,7 +6,7 @@
   },
   "doc_sync_known_gaps": ["S8.11", "S8.12", "S14.2"],
   "rules": {
-    "one_commit_per_story": true,
+    "one_commit_per_slice": true,
     "passes_only_flips_after_verify_green": true,
     "wip_limit": 2,
     "verify_entrypoint": "./plans/verify.sh"
