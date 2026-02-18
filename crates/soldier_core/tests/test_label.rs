@@ -3,6 +3,7 @@
 //! AT-216: s4 label format, length <= 64, parse correctness.
 //! AT-217: disambiguation uses ih16 (tested structurally here).
 
+#[allow(deprecated)]
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateResults, LABEL_MAX_LEN, LabelError,
     LabelInput, build_order_intent, decode_label, derive_gid12, derive_sid8, encode_label,
