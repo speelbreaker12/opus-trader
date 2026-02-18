@@ -24,6 +24,7 @@ plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
 plans/contract_review_validate.sh
 plans/crossref_burnin_check.sh
+plans/doc_sync_check.sh
 plans/crossref_ci_strict
 plans/crossref_execution_invariants.yaml
 plans/crossref_gate.sh
@@ -78,6 +79,7 @@ plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
+plans/tests/test_doc_sync_check.sh
 plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh

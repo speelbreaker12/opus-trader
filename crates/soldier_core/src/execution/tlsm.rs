@@ -182,7 +182,9 @@ impl Tlsm {
                 // debug_assert to catch it in testing, but maintain the
                 // structural no-panic guarantee per CONTRACT.md §2.1.
                 debug_assert!(false, "unreachable: NoopTransitionSink returned Err");
-                eprintln!("BUG: NoopTransitionSink returned Err — this should be unreachable");
+                tracing::error!(
+                    "BUG: NoopTransitionSink returned Err — this should be unreachable"
+                );
                 TransitionResult::Ignored {
                     current: fallback_state,
                     event: fallback_event,
