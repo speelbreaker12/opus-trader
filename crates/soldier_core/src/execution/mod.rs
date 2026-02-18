@@ -8,6 +8,7 @@ const MAX_EXECUTION_METRIC_LINES: usize = 4096;
 pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
+pub mod group;
 pub mod gates;
 pub mod inventory_skew;
 pub mod label;
@@ -69,6 +70,11 @@ pub use pricer::{
 };
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
+};
+pub use group::{
+    AtomicGroup, GroupConfig, GroupError, GroupLock, GroupPersistence, GroupState,
+    GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
+    persist_before_dispatch, try_acquire_group_lock,
 };
 pub use reject_reason::{
     GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
