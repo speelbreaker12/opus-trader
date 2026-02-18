@@ -59,6 +59,38 @@ pub enum TlsmEvent {
     Failed,
 }
 
+// ─── Transition sink ────────────────────────────────────────────────────
+
+/// Persistable TLSM transition emitted for WAL append.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersistedTransition {
+    pub event: TlsmEvent,
+    pub from: TlsmState,
+    pub to: TlsmState,
+    pub anomaly: Option<String>,
+}
+
+/// Consumer of persisted transitions.
+pub trait TlsmTransitionSink {
+    fn append_transition(&mut self, transition: PersistedTransition) -> Result<(), String>;
+}
+
+/// Default sink used by `Tlsm::apply` when no external sink is provided.
+#[derive(Debug, Default)]
+pub struct NoopTransitionSink;
+
+impl TlsmTransitionSink for NoopTransitionSink {
+    fn append_transition(&mut self, _transition: PersistedTransition) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// TLSM apply error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TlsmError {
+    PersistFailed { reason: String },
+}
+
 // ─── Transition result ──────────────────────────────────────────────────
 
 /// Result of applying an event to the TLSM.
@@ -134,59 +166,94 @@ impl Tlsm {
         }
     }
 
-    /// Apply an event to the TLSM.
+    /// Apply an event with the default no-op persistence sink.
     ///
     /// CONTRACT.md §2.1: "Never panic on out-of-order WS events."
-    /// Returns the transition result — never panics.
+    /// Returns the transition result — structurally cannot panic.
     pub fn apply(&mut self, event: TlsmEvent) -> TransitionResult {
+        let mut sink = NoopTransitionSink;
+        let fallback_event = event.clone();
+        let fallback_state = self.state;
+        match self.apply_with_sink(event, &mut sink) {
+            Ok(result) => result,
+            Err(_) => {
+                // NoopTransitionSink always returns Ok(()). If this branch
+                // ever executes, something is deeply wrong. We log and
+                // debug_assert to catch it in testing, but maintain the
+                // structural no-panic guarantee per CONTRACT.md §2.1.
+                debug_assert!(false, "unreachable: NoopTransitionSink returned Err");
+                tracing::error!(
+                    "BUG: NoopTransitionSink returned Err — this should be unreachable"
+                );
+                TransitionResult::Ignored {
+                    current: fallback_state,
+                    event: fallback_event,
+                    reason: "unreachable: noop sink failure".to_string(),
+                }
+            }
+        }
+    }
+
+    /// Apply an event and emit accepted transitions to `sink`.
+    ///
+    /// If the sink returns an error, the TLSM state is **not** mutated
+    /// (persist-before-state-change atomicity).
+    pub fn apply_with_sink(
+        &mut self,
+        event: TlsmEvent,
+        sink: &mut dyn TlsmTransitionSink,
+    ) -> Result<TransitionResult, TlsmError> {
         let from = self.state;
 
         // Terminal states: ignore all further events.
         if from.is_terminal() {
-            return TransitionResult::Ignored {
+            return Ok(TransitionResult::Ignored {
                 current: from,
                 event,
                 reason: "already in terminal state".to_string(),
-            };
+            });
         }
 
         match (&from, &event) {
             // ─── Normal transitions ─────────────────────────────────
-            (TlsmState::Created, TlsmEvent::Sent) => self.transition(from, TlsmState::Sent, event),
+            (TlsmState::Created, TlsmEvent::Sent) => {
+                self.transition(from, TlsmState::Sent, event, sink)
+            }
 
-            (TlsmState::Sent, TlsmEvent::Acked) => self.transition(from, TlsmState::Acked, event),
+            (TlsmState::Sent, TlsmEvent::Acked) => {
+                self.transition(from, TlsmState::Acked, event, sink)
+            }
 
             (TlsmState::Acked, TlsmEvent::PartialFill) => {
-                self.transition(from, TlsmState::PartiallyFilled, event)
+                self.transition(from, TlsmState::PartiallyFilled, event, sink)
             }
 
             (TlsmState::Acked, TlsmEvent::Filled) => {
-                self.transition(from, TlsmState::Filled, event)
+                self.transition(from, TlsmState::Filled, event, sink)
             }
 
             (TlsmState::PartiallyFilled, TlsmEvent::PartialFill) => {
-                self.transition(from, TlsmState::PartiallyFilled, event)
+                self.transition(from, TlsmState::PartiallyFilled, event, sink)
             }
 
             (TlsmState::PartiallyFilled, TlsmEvent::Filled) => {
-                self.transition(from, TlsmState::Filled, event)
+                self.transition(from, TlsmState::Filled, event, sink)
             }
 
             // Cancel from any non-terminal state
-            (_, TlsmEvent::Cancelled) => self.transition(from, TlsmState::Cancelled, event),
+            (_, TlsmEvent::Cancelled) => self.transition(from, TlsmState::Cancelled, event, sink),
 
             // Reject from Sent or Created
             (TlsmState::Created | TlsmState::Sent, TlsmEvent::Rejected) => {
-                // Rejected maps to Failed state
-                self.transition(from, TlsmState::Failed, event)
+                self.transition(from, TlsmState::Failed, event, sink)
             }
 
             // Failed from any non-terminal state
-            (_, TlsmEvent::Failed) => self.transition(from, TlsmState::Failed, event),
+            (_, TlsmEvent::Failed) => self.transition(from, TlsmState::Failed, event, sink),
 
             // ─── Out-of-order: Fill before Ack (AT-230) ─────────────
             (TlsmState::Sent, TlsmEvent::Filled) => {
-                self.out_of_order(from, TlsmState::Filled, event, "fill-before-ack")
+                self.out_of_order(from, TlsmState::Filled, event, "fill-before-ack", sink)
             }
 
             (TlsmState::Sent, TlsmEvent::PartialFill) => self.out_of_order(
@@ -194,6 +261,7 @@ impl Tlsm {
                 TlsmState::PartiallyFilled,
                 event,
                 "partial-fill-before-ack",
+                sink,
             ),
 
             // ─── Out-of-order: Fill from Created (AT-210) ───────────
@@ -202,6 +270,7 @@ impl Tlsm {
                 TlsmState::Filled,
                 event,
                 "fill-before-send (orphan fill)",
+                sink,
             ),
 
             (TlsmState::Created, TlsmEvent::PartialFill) => self.out_of_order(
@@ -209,54 +278,75 @@ impl Tlsm {
                 TlsmState::PartiallyFilled,
                 event,
                 "partial-fill-before-send",
+                sink,
             ),
 
             (TlsmState::Created, TlsmEvent::Acked) => {
-                self.out_of_order(from, TlsmState::Acked, event, "ack-before-send")
+                self.out_of_order(from, TlsmState::Acked, event, "ack-before-send", sink)
             }
 
             // ─── Out-of-order: Ack after fills ──────────────────────
             (TlsmState::PartiallyFilled, TlsmEvent::Acked) => {
                 // Already partially filled, ack arrives late — ignore
-                // (state is already past Acked)
-                TransitionResult::Ignored {
+                Ok(TransitionResult::Ignored {
                     current: from,
                     event,
                     reason: "ack after partial fill — already past Acked".to_string(),
-                }
+                })
             }
 
             // ─── Anything else: ignore ──────────────────────────────
-            _ => TransitionResult::Ignored {
+            _ => Ok(TransitionResult::Ignored {
                 current: from,
                 event,
                 reason: "no valid transition".to_string(),
-            },
+            }),
         }
     }
 
-    /// Record a normal transition.
-    fn transition(&mut self, from: TlsmState, to: TlsmState, event: TlsmEvent) -> TransitionResult {
+    /// Record a normal transition. Persist via sink BEFORE mutating state.
+    fn transition(
+        &mut self,
+        from: TlsmState,
+        to: TlsmState,
+        event: TlsmEvent,
+        sink: &mut dyn TlsmTransitionSink,
+    ) -> Result<TransitionResult, TlsmError> {
+        sink.append_transition(PersistedTransition {
+            event: event.clone(),
+            from,
+            to,
+            anomaly: None,
+        })
+        .map_err(|reason| TlsmError::PersistFailed { reason })?;
         self.state = to;
         self.transitions.push((event, from, to));
-        TransitionResult::Transitioned { from, to }
+        Ok(TransitionResult::Transitioned { from, to })
     }
 
-    /// Record an out-of-order transition.
+    /// Record an out-of-order transition. Persist via sink BEFORE mutating state.
     fn out_of_order(
         &mut self,
         from: TlsmState,
         to: TlsmState,
         event: TlsmEvent,
         anomaly: &str,
-    ) -> TransitionResult {
+        sink: &mut dyn TlsmTransitionSink,
+    ) -> Result<TransitionResult, TlsmError> {
+        sink.append_transition(PersistedTransition {
+            event: event.clone(),
+            from,
+            to,
+            anomaly: Some(anomaly.to_string()),
+        })
+        .map_err(|reason| TlsmError::PersistFailed { reason })?;
         self.state = to;
         self.transitions.push((event, from, to));
-        TransitionResult::OutOfOrder {
+        Ok(TransitionResult::OutOfOrder {
             from,
             to,
             anomaly: anomaly.to_string(),
-        }
+        })
     }
 }
 

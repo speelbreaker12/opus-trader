@@ -21,10 +21,13 @@ pub mod quantize;
 pub mod reject_reason;
 pub mod tlsm;
 
+#[allow(deprecated)]
 pub use build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
-    GateSequenceResult, GateStep, build_gate_results, build_order_intent,
-    build_order_intent_with_reject_reason_code, gate_sequence_total,
+    GateSequenceResult, GateStep, RecordedBeforeDispatchGate, build_gate_results,
+    build_order_intent, build_order_intent_with_optional_wal_gate,
+    build_order_intent_with_reject_reason_code, build_order_intent_with_wal_gate,
+    gate_sequence_total,
 };
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
@@ -71,7 +74,10 @@ pub use reject_reason::{
     GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
     reject_reason_registry_contains,
 };
-pub use tlsm::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
+pub use tlsm::{
+    NoopTransitionSink, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
+    TlsmTransitionSink, TransitionResult,
+};
 
 #[derive(Debug, Clone)]
 struct ExecutionTraceIds {

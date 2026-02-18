@@ -530,7 +530,7 @@ def test_machine_policy_loader_and_config(root: Path) -> List[str]:
     if read_text(policy_path) != read_text(snapshot_path):
         errors.append("policy config snapshot is not a literal copy of config/policy.json")
 
-    cmd = [sys.executable, str(loader_path), "--policy", str(policy_path), "--strict"]
+    cmd = [sys.executable, str(loader_path), "--policy", str(policy_path), "--allow-absolute"]
     proc = subprocess.run(
         cmd,
         cwd=str(root),

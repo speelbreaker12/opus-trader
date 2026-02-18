@@ -15,6 +15,8 @@ Rules for passes=true:
   - contract review file must exist and contain decision=PASS
   - story review gate must pass for current HEAD (self/Kimi/Codex/code-review-expert/resolution evidence)
   - if Phase-0 stories exist in PRD, non-Phase-0 stories cannot flip true until all Phase-0 stories are passes=true
+  - enforcing_contract_ats must be non-empty (exit 6) — exempt: policy/certification categories
+  - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
 USAGE
 }
 
@@ -117,6 +119,22 @@ if [[ "$STATUS" == "true" ]]; then
         echo "ERROR: cannot set passes=true for $ID while Phase-0 stories are incomplete: ${incomplete_phase0//$'\n'/, }" >&2
         exit 4
       fi
+    fi
+  fi
+
+  # H-1: "PASS implies precision" — enforcing_contract_ats and enforcement_point must be non-empty
+  # Exempt: policy/certification categories (no AT ownership required, matching prd_lint.sh)
+  story_category="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.category // "")' "$PRD_FILE")"
+  if [[ "$story_category" != "policy" && "$story_category" != "certification" ]]; then
+    eca_count="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcing_contract_ats // []) | if type == "array" then length else 0 end' "$PRD_FILE")"
+    if [[ "$eca_count" -eq 0 ]]; then
+      echo "ERROR: cannot set passes=true for $ID: enforcing_contract_ats is empty (PASS requires AT ownership)" >&2
+      exit 6
+    fi
+    enf_point="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcement_point // "")' "$PRD_FILE")"
+    if [[ -z "$enf_point" ]]; then
+      echo "ERROR: cannot set passes=true for $ID: enforcement_point is missing/empty (PASS requires a named enforcement point)" >&2
+      exit 6
     fi
   fi
 

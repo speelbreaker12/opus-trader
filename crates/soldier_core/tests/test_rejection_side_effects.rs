@@ -7,6 +7,8 @@
 //! This validates the "no partial side effects on rejection" invariant
 //! across multiple rejection cases.
 
+#![allow(deprecated)]
+
 use soldier_core::execution::preflight_intent;
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,

@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Tests use deprecated build_order_intent_with_reject_reason_code; TODO: migrate to WAL gate API
 use std::collections::HashSet;
 
 use soldier_core::execution::{

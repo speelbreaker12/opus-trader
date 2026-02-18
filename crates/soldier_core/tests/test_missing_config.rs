@@ -4,6 +4,8 @@
 //! Missing or invalid config MUST cause rejection with an enumerated
 //! reason code — never silently default to an unsafe value.
 
+#![allow(deprecated)]
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, build_order_intent,
 };

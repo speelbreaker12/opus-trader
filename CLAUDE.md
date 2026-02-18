@@ -212,7 +212,8 @@ except ValidationError as e:
 | Review architecture/ops | `/strategic-failure-review` | Systemic risks, hidden assumptions, operational/human factors |
 | Implement PRD story | `/ralph-loop` | Enforces WIP=1, verification gates |
 | Write acceptance test | `/acceptance-test` | Contract alignment |
-| Check contracts | `/contract-check` | Cross-reference validation |
+| Check contracts (fast) | `/contract-review` | Fail-open hazard filter on code diffs |
+| Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
 
 **Process:**
 ```
