@@ -5,12 +5,12 @@
 //! AT-924: Lock held > group_lock_max_wait_ms → hot loop doesn't block, ReduceOnly forced.
 //! AT-936: MixedFailed + gate rejects rescue → no rescue submitted, emergency close runs.
 
+use soldier_core::execution::TlsmState;
 use soldier_core::execution::{
     AtomicGroup, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition,
     InMemoryGroupPersistence, LegResult, LockAcquisitionResult, persist_before_dispatch,
     try_acquire_group_lock,
 };
-use soldier_core::execution::TlsmState;
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -73,13 +73,22 @@ fn at_116_leg_a_filled_leg_b_rejected_mixed_failed_and_containment() {
         "AT-116: expected MixedFailed, got {t:?}"
     );
     assert_eq!(group.state, GroupState::MixedFailed);
-    assert!(group.containment_pending, "AT-116: containment should be pending");
+    assert!(
+        group.containment_pending,
+        "AT-116: containment should be pending"
+    );
 
     // No new OPENs dispatched (dispatch_count stays 0)
-    assert_eq!(group.dispatch_count, 0, "AT-116: no OPEN dispatch while non-neutral");
+    assert_eq!(
+        group.dispatch_count, 0,
+        "AT-116: no OPEN dispatch while non-neutral"
+    );
 
     // Verify: group cannot be marked Complete
-    assert!(!group.can_complete(&config), "AT-116: MixedFailed group must not complete");
+    assert!(
+        !group.can_complete(&config),
+        "AT-116: MixedFailed group must not complete"
+    );
 }
 
 #[test]
@@ -127,7 +136,10 @@ fn at_220_never_complete_before_b_terminal() {
         matches!(t, GroupStateTransition::EnteredMixedFailed { .. }),
         "AT-220: first failure must trigger containment"
     );
-    assert!(group.containment_pending, "AT-220: containment must be pending");
+    assert!(
+        group.containment_pending,
+        "AT-220: containment must be pending"
+    );
 }
 
 #[test]
@@ -223,7 +235,10 @@ fn at_936_rescue_rejected_no_rescue_dispatch_emergency_close() {
 
     group.mark_flattened().expect("flattened ok");
     assert_eq!(group.state, GroupState::Flattened);
-    assert!(!group.containment_pending, "AT-936: containment resolved after flatten");
+    assert!(
+        !group.containment_pending,
+        "AT-936: containment resolved after flatten"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -268,7 +283,10 @@ fn flattening_only_from_mixed_failed() {
     let result = group.mark_flattening();
     assert!(matches!(
         result,
-        Err(GroupError::InvalidTransition { from: GroupState::Dispatched, .. })
+        Err(GroupError::InvalidTransition {
+            from: GroupState::Dispatched,
+            ..
+        })
     ));
 }
 
@@ -284,7 +302,10 @@ fn flattened_only_from_flattening() {
     let result = group.mark_flattened();
     assert!(matches!(
         result,
-        Err(GroupError::InvalidTransition { from: GroupState::MixedFailed, .. })
+        Err(GroupError::InvalidTransition {
+            from: GroupState::MixedFailed,
+            ..
+        })
     ));
 }
 
@@ -300,5 +321,10 @@ fn partial_fill_triggers_mixed_failed() {
         matches!(t, GroupStateTransition::EnteredMixedFailed { .. }),
         "partial fill must trigger MixedFailed"
     );
-    assert!(group.first_failure_reason().expect("reason").contains("partial fill"));
+    assert!(
+        group
+            .first_failure_reason()
+            .expect("reason")
+            .contains("partial fill")
+    );
 }
