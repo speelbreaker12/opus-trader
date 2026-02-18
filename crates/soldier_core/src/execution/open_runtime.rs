@@ -3,8 +3,8 @@
 use crate::risk::{
     ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult, MarginGateInput,
     MarginGateMetrics, MarginGateMode, MarginGateResult, PendingExposureBook,
-    PendingExposureMetrics, PendingExposureResult, PendingExposureTerminalOutcome, RiskState,
-    evaluate_global_exposure_budget, evaluate_margin_headroom_gate,
+    PendingExposureMetrics, PendingExposureResult, PendingExposureTerminalOutcome, ReservationId,
+    RiskState, evaluate_global_exposure_budget, evaluate_margin_headroom_gate,
 };
 
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
@@ -38,6 +38,10 @@ pub struct OpenRuntimeInput {
     pub pricer_input: PricerInput,
     pub exposure_budget_input: ExposureBudgetInput,
     pub margin_gate_input: MarginGateInput,
+    /// Caller-provided idempotency key for pending exposure reservation.
+    /// Typically derived from intent_hash: `ReservationId::new(format!("pe-{}", intent.intent_hash))`.
+    // TODO(PX-2): When per-instrument isolation is added, scope reservation IDs per instrument book.
+    pub reservation_id: ReservationId,
 }
 
 /// Runtime metrics aggregated by subsystem for OPEN wiring.
@@ -58,7 +62,7 @@ pub struct OpenRuntimeMetrics {
 pub struct OpenRuntimeOutput {
     pub choke_result: ChokeResult,
     pub gate_results: GateResults,
-    pub pending_reservation_id: Option<u64>,
+    pub pending_reservation_id: Option<ReservationId>,
     pub mode_hint: MarginGateMode,
     pub effective_risk_state: RiskState,
     pub adjusted_min_edge_usd: Option<f64>,
@@ -67,7 +71,7 @@ pub struct OpenRuntimeOutput {
 /// Build an OPEN intent decision by wiring runtime gates before chokepoint.
 pub fn build_open_order_intent_runtime(
     input: &OpenRuntimeInput,
-    pending_book: &mut PendingExposureBook,
+    pending_book: &PendingExposureBook,
     choke_metrics: &mut ChokeMetrics,
     runtime_metrics: &mut OpenRuntimeMetrics,
 ) -> OpenRuntimeOutput {
@@ -116,12 +120,16 @@ pub fn build_open_order_intent_runtime(
 
     if pre_dispatch_gates_ready {
         match pending_book.reserve(
+            &input.reservation_id,
             input.current_delta,
             input.delta_impact_est,
             &mut runtime_metrics.pending_exposure,
         ) {
-            PendingExposureResult::Reserved { reservation_id, .. } => {
-                pending_reservation_id = Some(reservation_id);
+            PendingExposureResult::Reserved {
+                reservation_id: rid,
+                ..
+            } => {
+                pending_reservation_id = Some(rid);
             }
             PendingExposureResult::Rejected { .. } => {
                 gate_results.liquidity_gate_passed = false;
@@ -272,7 +280,7 @@ pub fn build_open_order_intent_runtime(
     }
 
     if matches!(choke_result, ChokeResult::Rejected { .. })
-        && let Some(reservation_id) = pending_reservation_id.take()
+        && let Some(ref reservation_id) = pending_reservation_id
     {
         let released = pending_book.settle(
             reservation_id,
@@ -281,10 +289,11 @@ pub fn build_open_order_intent_runtime(
         );
         if !released {
             tracing::error!(
-                reservation_id,
+                %reservation_id,
                 "pre-dispatch reservation settle failed — TLSM/book desync"
             );
         }
+        pending_reservation_id = None;
     }
 
     OpenRuntimeOutput {
@@ -301,16 +310,16 @@ pub fn build_open_order_intent_runtime(
 ///
 /// # Safety / concurrency
 ///
-/// This function requires `&mut Tlsm` and `&mut PendingExposureBook`, which
-/// Rust's borrow checker guarantees are exclusive. Callers sharing these across
-/// threads must use `Mutex` or equivalent synchronisation.
+/// This function requires `&mut Tlsm` and `&PendingExposureBook` (interior
+/// mutability via RefCell). Callers sharing these across threads must use
+/// `Mutex` or equivalent synchronisation.
 ///
 /// Settlement is intentionally **one-shot**: `take_pending_reservation_on_terminal()`
 /// consumes the reservation ID, so repeated calls after the first terminal event
 /// are safe no-ops. This prevents double-settlement on duplicate WS events.
 pub fn settle_pending_on_tlsm_terminal(
     tlsm: &mut Tlsm,
-    pending_book: &mut PendingExposureBook,
+    pending_book: &PendingExposureBook,
     metrics: &mut PendingExposureMetrics,
 ) {
     if let Some(reservation_id) = tlsm.take_pending_reservation_on_terminal() {
@@ -325,16 +334,16 @@ pub fn settle_pending_on_tlsm_terminal(
             _ => {
                 tracing::error!(
                     state = ?tlsm.state(),
-                    reservation_id,
+                    %reservation_id,
                     "take_pending_reservation_on_terminal returned Some for non-terminal state"
                 );
                 PendingExposureTerminalOutcome::Rejected
             }
         };
-        let released = pending_book.settle(reservation_id, outcome, metrics);
+        let released = pending_book.settle(&reservation_id, outcome, metrics);
         if !released {
             tracing::error!(
-                reservation_id,
+                %reservation_id,
                 ?outcome,
                 "pending exposure settlement failed — reservation not found in book (TLSM/book desync)"
             );

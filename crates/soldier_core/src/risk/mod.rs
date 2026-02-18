@@ -28,6 +28,6 @@ pub use margin_gate::{
 };
 pub use pending_exposure::{
     PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
-    PendingExposureResult, PendingExposureTerminalOutcome,
+    PendingExposureResult, PendingExposureTerminalOutcome, ReservationId,
 };
 pub use state::RiskState;

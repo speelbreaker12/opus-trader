@@ -14,6 +14,8 @@
 //!
 //! AT-230, AT-210, AT-225, AT-910.
 
+use crate::risk::ReservationId;
+
 // ─── States ─────────────────────────────────────────────────────────────
 
 /// TLSM states per CONTRACT.md §2.1.
@@ -124,7 +126,7 @@ pub struct Tlsm {
     /// History of transitions for WAL append.
     transitions: Vec<(TlsmEvent, TlsmState, TlsmState)>,
     /// Pending exposure reservation ID, settled on terminal state.
-    pending_reservation_id: Option<u64>,
+    pending_reservation_id: Option<ReservationId>,
 }
 
 impl Tlsm {
@@ -138,7 +140,7 @@ impl Tlsm {
     }
 
     /// Create a new TLSM with a pending exposure reservation (S6-008).
-    pub fn with_pending_reservation(reservation_id: u64) -> Self {
+    pub fn with_pending_reservation(reservation_id: ReservationId) -> Self {
         Self {
             state: TlsmState::Created,
             transitions: Vec::new(),
@@ -158,7 +160,7 @@ impl Tlsm {
 
     /// Get and clear the pending reservation ID if reaching terminal state.
     /// Returns Some(reservation_id) when transitioning to terminal state, None otherwise.
-    pub fn take_pending_reservation_on_terminal(&mut self) -> Option<u64> {
+    pub fn take_pending_reservation_on_terminal(&mut self) -> Option<ReservationId> {
         if self.state.is_terminal() {
             self.pending_reservation_id.take()
         } else {
