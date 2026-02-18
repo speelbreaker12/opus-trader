@@ -100,6 +100,7 @@ _None remaining._ S1-007 downgraded to YELLOW after pipeline-level test added (s
 | AT-245 | Hard-stale fee cache → RiskState::Degraded → TradingMode::ReduceOnly → OPEN blocked | `test_fee_staleness.rs`: `evaluate_fee_staleness()` returns `RiskState::Degraded` on hard-stale | `test_intent_pipeline.rs::test_at104_degraded_blocks_open_at_chokepoint`: Degraded → OPEN rejected at DispatchAuth, dispatch=0 | fees.rs → Degraded → build_order_intent → RiskStateNotHealthy → reject |
 | AT-925 | WAL queue full → ReduceOnly → OPEN blocked | `test_ledger_replay.rs::test_queue_full_returns_immediately`: queue-full returns error (non-blocking); `test_at906_write_error_counter_increments`: wal_write_errors counter | **MISSING** — `test_at925_queue_full_forces_reduce_only_via_policyguard` (S8.1c) | ledger.rs → QueueFull → (gap) → PolicyGuard → ReduceOnly → OPEN blocked |
 
+
 ---
 
 ## E) Systemic Patterns Observed
