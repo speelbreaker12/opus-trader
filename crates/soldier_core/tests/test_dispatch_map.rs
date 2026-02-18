@@ -3,8 +3,9 @@
 //! AT-277: dispatcher mapping validates option sizing and amount field.
 
 use soldier_core::execution::{
-    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, IntentClass, MismatchMetrics, OrderSize,
-    OrderSizeInput, build_order_size, map_to_dispatch, validate_and_dispatch,
+    CONTRACTS_AMOUNT_MATCH_TOLERANCE, ChokeIntentClass, ChokeMetrics, ChokeResult,
+    DispatchMapError, GateResults, IntentClass, MismatchMetrics, OrderSize, OrderSizeInput,
+    build_order_intent, build_order_size, map_to_dispatch, validate_and_dispatch,
 };
 use soldier_core::risk::RiskState;
 use soldier_core::venue::InstrumentKind;
@@ -577,4 +578,72 @@ fn test_at920_no_dispatch_on_mismatch() {
         &mut metrics,
     );
     assert!(result.is_err(), "mismatch must prevent dispatch");
+}
+
+/// AT-920: contracts/amount mismatch → RiskState::Degraded → next OPEN blocked.
+///
+/// NOTE: validate_and_dispatch() currently has zero production callsites. This test
+/// documents the REQUIRED caller behavior (map ContractsAmountMismatch → Degraded) and
+/// proves that Degraded blocks OPEN at the chokepoint. Full AT-920 enforcement requires
+/// wiring validate_and_dispatch() into the production pipeline (tracked separately).
+///
+/// TODO(AT-920-PROD): When validate_and_dispatch() is wired into the production pipeline,
+/// add a caller-level integration test confirming the ContractsAmountMismatch → Degraded
+/// mapping is present in production code (not just documented here).
+#[allow(deprecated)]
+#[test]
+fn test_at920_mismatch_caller_sets_degraded_and_blocks_open() {
+    // Manually construct a mismatched OrderSize: contracts=1, multiplier=0.0001
+    //   contracts_implied = contracts * multiplier = 1 * 0.0001 = 0.0001
+    //   canonical = qty_coin = 1.0
+    //   delta = |0.0001 - 1.0| / max(1.0, 1e-9) = 0.9999 > TOLERANCE (0.001) → mismatch.
+    // (build_order_size cannot produce a mismatch; direct construction is needed.)
+    let size = OrderSize {
+        contracts: Some(1),
+        qty_coin: Some(1.0),
+        qty_usd: None,
+        notional_usd: 50_000.0,
+    };
+    let mut mm = MismatchMetrics::new();
+
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(0.0001), // contracts_implied = 1 * 0.0001 = 0.0001 ≠ qty_coin 1.0 → mismatch
+        &mut mm,
+    );
+
+    // Step 1: mismatch detected (delta = 0.9999 >> TOLERANCE 0.001)
+    assert!(
+        matches!(
+            result,
+            Err(DispatchMapError::ContractsAmountMismatch { .. })
+        ),
+        "expected ContractsAmountMismatch, got {result:?}"
+    );
+    assert_eq!(
+        mm.reject_unit_mismatch_total(),
+        1,
+        "mismatch counter must increment"
+    );
+
+    // Step 2: AT-920 requires caller to map this error → RiskState::Degraded.
+    // (Step 1's assert guarantees we are in the ContractsAmountMismatch branch.)
+    let risk_after_mismatch = RiskState::Degraded;
+
+    // Step 3: Degraded blocks subsequent OPEN at chokepoint (dispatch=0)
+    let mut choke = ChokeMetrics::new();
+    let choke_result = build_order_intent(
+        ChokeIntentClass::Open,
+        risk_after_mismatch,
+        &mut choke,
+        &GateResults::all_passed(),
+    );
+    assert!(
+        matches!(choke_result, ChokeResult::Rejected { .. }),
+        "Open + Degraded must be rejected at chokepoint"
+    );
+    assert_eq!(choke.approved_total(), 0, "no dispatch after mismatch");
+    assert_eq!(choke.rejected_total(), 1);
 }

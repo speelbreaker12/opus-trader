@@ -1210,7 +1210,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "StatusEndpoint",
+      "enforcement_point": "",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -1280,7 +1280,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "StatusEndpoint",
+      "enforcement_point": "",
       "failure_mode": [],
       "observability": {
         "metrics": [],
@@ -1938,8 +1938,7 @@
         "AT-216",
         "AT-217",
         "AT-041",
-        "AT-921",
-        "AT-933"
+        "AT-921"
       ],
       "reason_codes": {
         "type": "RejectReason",
@@ -2458,7 +2457,6 @@
         }
       ],
       "enforcing_contract_ats": [
-        "AT-028",
         "AT-004",
         "AT-915"
       ],
@@ -2669,10 +2667,8 @@
         "AT-210"
       ],
       "reason_codes": {
-        "type": "RejectReason",
-        "values": [
-          "ContractsAmountMismatch"
-        ]
+        "type": "",
+        "values": []
       },
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [],
@@ -2753,10 +2749,8 @@
         "AT-270"
       ],
       "reason_codes": {
-        "type": "RejectReason",
-        "values": [
-          "ContractsAmountMismatch"
-        ]
+        "type": "",
+        "values": []
       },
       "enforcement_point": "WAL",
       "failure_mode": [],

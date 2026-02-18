@@ -224,6 +224,56 @@ fn test_reject_reason_serde_round_trip() {
     assert_eq!(deserialized2, code2);
 }
 
+/// AT-201: unknown external actions MUST be classified as Open at the intake boundary.
+/// This test proves the gate side of AT-201: Open-classified intents are blocked by OPEN gates.
+///
+/// NOTE: The "unknown action → Open classification" step happens at the external API /
+/// deserialization boundary (before soldier_core). That boundary is responsible for
+/// defaulting unknown action strings to ChokeIntentClass::Open (fail-closed). This test
+/// proves that if that classification is correct, the downstream gates enforce correctly.
+/// The reason code is MarginHeadroomRejectOpens (RiskStateNotHealthy path).
+#[test]
+fn test_at201_open_classified_intent_blocked_by_open_gates() {
+    // Open classification (assigned to unknown actions at the intake boundary) + Degraded → blocked
+    let mut m_open = ChokeMetrics::new();
+    let (result_open, code_open) = build_order_intent_with_reject_reason_code(
+        ChokeIntentClass::Open,
+        RiskState::Degraded,
+        &mut m_open,
+        &GateResults::all_passed(),
+        &GateRejectCodes::default(),
+    );
+    assert!(
+        matches!(result_open, ChokeResult::Rejected { .. }),
+        "Open (default for unknown actions) + Degraded must be rejected"
+    );
+    assert_eq!(m_open.approved_total(), 0, "OPEN dispatch count must be 0");
+    assert_eq!(
+        code_open,
+        Some(RejectReasonCode::MarginHeadroomRejectOpens),
+        "OPEN + Degraded must produce MarginHeadroomRejectOpens reason code"
+    );
+
+    // Contrast: Close (explicitly risk-reducing) is NOT blocked by Degraded
+    let mut m_close = ChokeMetrics::new();
+    let (result_close, _) = build_order_intent_with_reject_reason_code(
+        ChokeIntentClass::Close,
+        RiskState::Degraded,
+        &mut m_close,
+        &GateResults::all_passed(),
+        &GateRejectCodes::default(),
+    );
+    assert!(
+        matches!(result_close, ChokeResult::Approved { .. }),
+        "Close (known risk-reducing) must NOT be blocked when Degraded"
+    );
+    assert_eq!(
+        m_close.approved_total(),
+        1,
+        "CLOSE dispatch count must be 1"
+    );
+}
+
 #[test]
 fn test_as_str_matches_serde_output_for_all_variants() {
     let all_variants = [
