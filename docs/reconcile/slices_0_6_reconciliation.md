@@ -83,6 +83,18 @@ _None remaining._ S1-007 downgraded to YELLOW after pipeline-level test added (s
 - S2-004: AT-201 closed-enum compile-time guarantee — informational
 - S5-000: Naming discrepancy `InsufficientDepthWithinBudget` vs `ExpectedSlippageTooHigh` — informational
 
+### Deferred ATs (machine-auditable)
+
+| AT | Contract Section | Owner Story | Status | Target | Rationale |
+|----|-----------------|-------------|--------|--------|-----------|
+| AT-327 | §1.4.1 Net Edge Gate — emergency close exemption | S5-002 | DEFERRED | Phase 2 / Deterministic Emergency Close (§3.1) | Emergency close not implemented in Phase 1. Contract §1.4.1 scope note explicitly excludes §3.1 from NetEdge gate. |
+
+### Cross-slice proof chains
+
+| AT | Claim | Unit Proof (this slice) | Integration Proof (other slice) | Chain |
+|----|-------|------------------------|--------------------------------|-------|
+| AT-245 | Hard-stale fee cache → RiskState::Degraded → TradingMode::ReduceOnly → OPEN blocked | `test_fee_staleness.rs`: `evaluate_fee_staleness()` returns `RiskState::Degraded` on hard-stale | `test_intent_pipeline.rs::test_at104_degraded_blocks_open_at_chokepoint`: Degraded → OPEN rejected at DispatchAuth, dispatch=0 | fees.rs → Degraded → build_order_intent → RiskStateNotHealthy → reject |
+
 ---
 
 ## E) Systemic Patterns Observed

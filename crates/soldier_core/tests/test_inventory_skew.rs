@@ -163,3 +163,56 @@ fn test_inventory_skew_tick_penalty_large_value_clamps_safely() {
         other => panic!("expected Allowed with large tick penalty max, got {other:?}"),
     }
 }
+
+#[test]
+fn test_at281_risk_increasing_buy_tightens_min_edge_by_45_pct() {
+    // AT-281: inventory_bias=0.9 for risk-increasing BUY tightens min_edge_usd.
+    // Formula: adjusted = 2.0 * (1.0 + 0.5 * 0.9) = 2.0 * 1.45 = 2.9 (~45% increase).
+    // net_edge(2.5) > baseline(2.0) but net_edge(2.5) < adjusted(2.9) — tightening is sole cause.
+    let mut metrics = InventorySkewMetrics::new();
+    let input = InventorySkewInput {
+        current_delta: 90.0,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 2.5,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let out = evaluate_inventory_skew(&input, &mut metrics);
+    match out {
+        InventorySkewResult::Rejected {
+            reason: InventorySkewRejectReason::InventorySkewReject,
+            inventory_bias,
+            adjusted_min_edge_usd,
+            ..
+        } => {
+            // Causality: net_edge(2.5) passes baseline(2.0) but fails adjusted(2.9)
+            assert!(
+                input.net_edge_usd > input.min_edge_usd,
+                "net_edge must exceed baseline — proves tightening is sole cause"
+            );
+            let bias = inventory_bias.expect("bias must be populated on InventorySkewReject");
+            assert!(
+                (bias - 0.9).abs() < 1e-9,
+                "expected inventory_bias=0.9, got {bias}"
+            );
+            let adjusted = adjusted_min_edge_usd
+                .expect("adjusted_min_edge must be populated on InventorySkewReject");
+            assert!(
+                (adjusted - 2.9).abs() < 1e-9,
+                "expected adjusted_min_edge=2.9, got {adjusted}"
+            );
+            assert!(
+                input.net_edge_usd < adjusted,
+                "net_edge must be below adjusted — confirms rejection"
+            );
+        }
+        other => panic!("expected InventorySkewReject, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_total(), 1);
+}
