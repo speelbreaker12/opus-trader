@@ -8,9 +8,8 @@ const MAX_EXECUTION_METRIC_LINES: usize = 4096;
 pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
-pub mod gate_outcome;
-pub mod gates;
 pub mod group;
+pub mod gates;
 pub mod inventory_skew;
 pub mod label;
 pub mod open_runtime;
@@ -40,15 +39,9 @@ pub use gate::{
     LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
     expected_slippage_bps_samples, liquidity_gate_reject_total,
 };
-pub use gate_outcome::GateOutcome;
 pub use gates::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
     net_edge_reject_total,
-};
-pub use group::{
-    AtomicGroup, GroupConfig, GroupError, GroupLock, GroupPersistence, GroupState,
-    GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
-    persist_before_dispatch, try_acquire_group_lock,
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
@@ -78,13 +71,18 @@ pub use pricer::{
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
 };
+pub use group::{
+    AtomicGroup, GroupConfig, GroupError, GroupLock, GroupPersistence, GroupState,
+    GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
+    persist_before_dispatch, try_acquire_group_lock,
+};
 pub use reject_reason::{
     GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
     reject_reason_registry_contains,
 };
 pub use tlsm::{
-    NoopTransitionSink, OooCategory, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
-    TlsmTransitionSink, TransitionResult, ooo_count, ooo_total,
+    NoopTransitionSink, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
+    TlsmTransitionSink, TransitionResult,
 };
 
 #[derive(Debug, Clone)]
