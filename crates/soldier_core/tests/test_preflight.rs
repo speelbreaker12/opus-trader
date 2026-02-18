@@ -82,6 +82,36 @@ fn test_at017_market_order_perpetual_rejected() {
     );
 }
 
+// ─── AT-017: Market order on linear future → reject ────────────────────
+
+#[test]
+fn test_at017_market_order_linear_future_rejected() {
+    let input = PreflightInput {
+        order_type: OrderType::Market,
+        ..limit_input(InstrumentKind::LinearFuture)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(
+        preflight_intent(&input, &mut m),
+        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+    );
+}
+
+// ─── AT-017: Market order on inverse future → reject ───────────────────
+
+#[test]
+fn test_at017_market_order_inverse_future_rejected() {
+    let input = PreflightInput {
+        order_type: OrderType::Market,
+        ..limit_input(InstrumentKind::InverseFuture)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(
+        preflight_intent(&input, &mut m),
+        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+    );
+}
+
 // ─── AT-913: Market order rejected with correct reason ──────────────────
 
 #[test]

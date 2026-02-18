@@ -78,6 +78,10 @@ impl Default for PostOnlyMetrics {
 /// - A sell crosses if `limit_price <= best_bid`.
 /// - If the relevant side of the book is empty (None), the order cannot
 ///   cross, so it is allowed.
+///
+/// NOTE: `limit_price`, `best_ask`, and `best_bid` are assumed to be
+/// pre-quantized (tick-aligned) by the upstream quantizer, so f64
+/// equality comparisons (`>=`, `<=`) are exact for crossing detection.
 pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> PostOnlyResult {
     // If not post_only, no check needed.
     if !input.post_only {

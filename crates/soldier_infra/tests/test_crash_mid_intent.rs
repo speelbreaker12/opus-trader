@@ -409,3 +409,77 @@ fn test_at233_sent_intent_not_resent_on_durable_restart() {
 
     remove_if_exists(&wal_path);
 }
+
+// ─── AT-234: fill detected on restart updates TLSM ─────────────────────
+
+#[test]
+fn test_at234_fill_detected_on_restart_updates_tlsm() {
+    // AT-234: after crash, reconciliation detects exchange fill and updates
+    // TLSM state. Filled is terminal → resolves in-flight.
+    // Contrast: PartialFill is NOT terminal → remains in-flight.
+
+    let mut ledger = WalLedger::new(100);
+    let mut lm = LedgerMetrics::new();
+    let mut bm = BarrierMetrics::new();
+    let config = WalBarrierConfig::default();
+
+    // Phase 1: Append intent in Sent state (simulates pre-crash state)
+    durable_append(
+        &mut ledger,
+        test_intent("intent-fill-234", TlsState::Sent, 2000),
+        &config,
+        &mut lm,
+        &mut bm,
+    )
+    .unwrap();
+
+    // Phase 2: Replay shows 1 in-flight (Sent is non-terminal)
+    let replay = ledger.replay();
+    assert_eq!(replay.in_flight_count, 1, "Sent intent must be in-flight");
+
+    // Phase 3: Reconciliation detects exchange fill → update state to Filled
+    ledger
+        .update_state("intent-fill-234", TlsState::Filled, &mut lm)
+        .expect("Sent→Filled is a valid transition");
+
+    // Phase 4: Second replay shows 0 in-flight (Filled is terminal)
+    let replay2 = ledger.replay();
+    assert_eq!(
+        replay2.in_flight_count, 0,
+        "Filled is terminal — must NOT be in-flight"
+    );
+    let record = ledger.get("intent-fill-234").expect("record must exist");
+    assert_eq!(record.tls_state, TlsState::Filled);
+    assert!(
+        TlsState::Filled.is_terminal(),
+        "Filled must be terminal state"
+    );
+
+    // ── Contrast: PartialFill is NOT terminal ──
+    // Use a separate intent to avoid invalid Filled→PartialFill transition.
+    durable_append(
+        &mut ledger,
+        test_intent("intent-partial-234", TlsState::Sent, 2000),
+        &config,
+        &mut lm,
+        &mut bm,
+    )
+    .unwrap();
+
+    ledger
+        .update_state("intent-partial-234", TlsState::PartialFill, &mut lm)
+        .expect("Sent→PartialFill is a valid transition");
+
+    let replay3 = ledger.replay();
+    // intent-partial-234 is in PartialFill (non-terminal) → still in-flight
+    assert!(
+        replay3
+            .in_flight_hashes
+            .contains(&"intent-partial-234".to_string()),
+        "PartialFill is NOT terminal — must remain in-flight (proves Filled specifically resolves)"
+    );
+    assert!(
+        !TlsState::PartialFill.is_terminal(),
+        "PartialFill must NOT be terminal"
+    );
+}
