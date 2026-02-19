@@ -184,10 +184,10 @@ impl TradeIdRegistry {
         record: TradeRecord,
         metrics: &RegistryMetrics,
     ) -> Result<InsertResult, RegistryError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| RegistryError::MutexPoisoned)?;
+        let mut state = self.state.lock().map_err(|_| {
+            self.log_poison_once("insert_if_absent");
+            RegistryError::MutexPoisoned
+        })?;
 
         if state.records.contains_key(&record.trade_id) {
             metrics.record_duplicate();

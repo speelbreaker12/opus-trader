@@ -83,6 +83,15 @@ const CAPACITY_WARN_PCT: usize = 70;
 /// exist on disk but is append-only and replay-converging — a subsequent
 /// successful bootstrap will correctly replay it.
 pub fn bootstrap_storage(config: &StorageConfig) -> io::Result<BootstrapResult> {
+    if !config.data_dir.is_absolute() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "data_dir must be an absolute path (got {:?})",
+                config.data_dir
+            ),
+        ));
+    }
     if config.wal_capacity < MIN_CAPACITY {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -197,7 +206,8 @@ mod tests {
             // Test-only: system clock should always be after epoch.
             .expect("system clock before UNIX epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("bootstrap_test_{test_name}_{ts}"))
+        let tid = std::thread::current().id();
+        std::env::temp_dir().join(format!("bootstrap_test_{test_name}_{ts}_{tid:?}"))
     }
 
     /// RAII guard for test temp directories — cleans up even on panic.
@@ -309,6 +319,31 @@ mod tests {
     }
 
     #[test]
+    fn bootstrap_accepts_exact_min_capacity() {
+        let data_dir = unique_temp_dir("exact_min_cap");
+        let _guard = TempDirGuard(data_dir.clone());
+        let config = StorageConfig {
+            data_dir,
+            wal_capacity: 10,
+            trade_id_capacity: 10,
+        };
+        let result = bootstrap_storage(&config).expect("exact MIN_CAPACITY should succeed");
+        assert_eq!(result.ledger.queue_capacity(), 10);
+    }
+
+    #[test]
+    fn bootstrap_rejects_relative_data_dir() {
+        let config = StorageConfig {
+            data_dir: PathBuf::from("relative/path/data"),
+            wal_capacity: 100,
+            trade_id_capacity: 50,
+        };
+        let err = bootstrap_storage(&config).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("absolute path"));
+    }
+
+    #[test]
     fn bootstrap_fails_on_unwritable_dir() {
         // Use a path that cannot exist on any OS
         let config = StorageConfig {
@@ -394,5 +429,54 @@ mod tests {
             assert_eq!(result.replay_outcome.records_replayed, 1);
             assert!(result.ledger.get("partial-test-001").is_some());
         }
+    }
+
+    #[test]
+    fn bootstrap_fails_when_capacity_reduced_below_existing_records() {
+        let data_dir = unique_temp_dir("cap_reduce");
+        let _guard = TempDirGuard(data_dir.clone());
+
+        // First bootstrap with large capacity, write 15 intents
+        {
+            let config = StorageConfig {
+                data_dir: data_dir.clone(),
+                wal_capacity: 100,
+                trade_id_capacity: 50,
+            };
+            let mut result = bootstrap_storage(&config).expect("first bootstrap");
+            use crate::store::ledger::{IntentRecord, TlsState};
+            for i in 0..15 {
+                let record = IntentRecord {
+                    intent_hash: format!("cap-reduce-{i:03}"),
+                    group_id: "g1".to_string(),
+                    leg_idx: 0,
+                    instrument: "BTC-PERPETUAL".to_string(),
+                    side: "buy".to_string(),
+                    qty_q: 1.0,
+                    limit_price_q: 100.0,
+                    tls_state: TlsState::Created,
+                    created_ts: 1_000_000 + i as u64,
+                    sent_ts: 0,
+                    ack_ts: 0,
+                    last_fill_ts: 0,
+                    exchange_order_id: None,
+                    last_trade_id: None,
+                };
+                result
+                    .ledger
+                    .append(record, &mut result.ledger_metrics)
+                    .expect("append");
+            }
+            assert_eq!(result.ledger.queue_depth(), 15);
+        }
+
+        // Second bootstrap with capacity=10 — should fail because 15 > 10
+        let config = StorageConfig {
+            data_dir,
+            wal_capacity: 10,
+            trade_id_capacity: 50,
+        };
+        let err = bootstrap_storage(&config).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
     }
 }
