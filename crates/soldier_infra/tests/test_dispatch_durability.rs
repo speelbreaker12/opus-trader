@@ -1,3 +1,4 @@
+#![allow(deprecated)] // WalBarrierConfig is deprecated; tests exercise legacy API
 //! Tests for WAL durability barrier per CONTRACT.md §2.4 / §2.4.1.
 //!
 //! AT-935: RecordedBeforeDispatch + restart → dispatch exactly once.
@@ -67,10 +68,10 @@ fn test_barrier_disabled_no_fsync() {
     assert!(!result.fsync_applied);
 }
 
-// ─── Barrier enabled: fsync applied ─────────────────────────────────────
+// ─── Barrier: in-memory ledger has no fsync ──────────────────────────────
 
 #[test]
-fn test_barrier_enabled_fsync_applied() {
+fn test_in_memory_ledger_no_fsync_applied() {
     let mut ledger = WalLedger::new(10);
     let mut lm = LedgerMetrics::new();
     let mut bm = BarrierMetrics::new();
@@ -78,18 +79,20 @@ fn test_barrier_enabled_fsync_applied() {
         require_wal_fsync_before_dispatch: true,
     };
 
+    // In-memory ledger: no durable storage → fsync_applied is false
+    // regardless of config flag.
     let result = durable_append(&mut ledger, intent("h1"), &config, &mut lm, &mut bm).unwrap();
 
-    assert!(result.fsync_applied);
-    // Record was appended
+    assert!(!result.fsync_applied);
+    // Record was still appended (RecordedBeforeDispatch)
     assert!(ledger.get("h1").is_some());
     assert_eq!(lm.appends_total(), 1);
-    // Barrier wait was recorded
-    assert_eq!(bm.barrier_wait_count(), 1);
+    // No barrier wait for in-memory
+    assert_eq!(bm.barrier_wait_count(), 0);
 }
 
 #[test]
-fn test_barrier_enabled_records_wait_time() {
+fn test_in_memory_ledger_no_barrier_wait_time() {
     let mut ledger = WalLedger::new(10);
     let mut lm = LedgerMetrics::new();
     let mut bm = BarrierMetrics::new();
@@ -97,16 +100,14 @@ fn test_barrier_enabled_records_wait_time() {
         require_wal_fsync_before_dispatch: true,
     };
 
-    // Multiple durable appends
+    // Multiple durable appends — in-memory, no barrier waits
     for i in 0..3 {
         let hash = format!("h{i}");
         let _ = durable_append(&mut ledger, intent(&hash), &config, &mut lm, &mut bm);
     }
 
-    assert_eq!(bm.barrier_wait_count(), 3);
-    // barrier_wait_ms_total is >= 0 (in-memory fsync is instant)
-    // Just verify it's tracked
-    assert!(bm.barrier_wait_ms_total() < 1000); // sanity check
+    assert_eq!(bm.barrier_wait_count(), 0);
+    assert_eq!(bm.barrier_wait_ms_total(), 0);
 }
 
 // ─── Append failure: error, no block ────────────────────────────────────
@@ -203,30 +204,29 @@ fn test_barrier_metrics_default() {
     assert_eq!(m.barrier_wait_count(), 0);
 }
 
-// ─── Multiple appends with mixed configs ─────────────────────────────────
+// ─── Multiple appends with mixed configs (in-memory) ─────────────────────
 
 #[test]
-fn test_mixed_barrier_configs() {
+fn test_mixed_barrier_configs_in_memory() {
     let mut ledger = WalLedger::new(10);
     let mut lm = LedgerMetrics::new();
     let mut bm = BarrierMetrics::new();
 
-    // First: no barrier
+    // In-memory ledger: fsync_applied is false regardless of config
     let config_off = WalBarrierConfig {
         require_wal_fsync_before_dispatch: false,
     };
     let r1 = durable_append(&mut ledger, intent("h1"), &config_off, &mut lm, &mut bm).unwrap();
     assert!(!r1.fsync_applied);
 
-    // Second: with barrier
     let config_on = WalBarrierConfig {
         require_wal_fsync_before_dispatch: true,
     };
     let r2 = durable_append(&mut ledger, intent("h2"), &config_on, &mut lm, &mut bm).unwrap();
-    assert!(r2.fsync_applied);
+    assert!(!r2.fsync_applied); // no storage → no fsync
 
     assert_eq!(lm.appends_total(), 2);
-    assert_eq!(bm.barrier_wait_count(), 1); // only the second had barrier
+    assert_eq!(bm.barrier_wait_count(), 0); // no storage → no barrier waits
 }
 
 // ─── DurableWalGate adapter ─────────────────────────────────────────────
@@ -246,10 +246,11 @@ fn test_core_wal_gate_adapter_calls_durable_append() {
     let result = gate.record_before_dispatch();
     assert!(result.is_ok(), "gate adapter must succeed");
 
-    // Verify side effects: record appended, barrier applied
+    // Verify side effects: record appended
     assert!(gate.ledger().get("gate-h1").is_some());
     assert_eq!(gate.ledger().queue_depth(), 1);
-    assert_eq!(gate.barrier_metrics().barrier_wait_count(), 1);
+    // In-memory ledger → no barrier wait
+    assert_eq!(gate.barrier_metrics().barrier_wait_count(), 0);
 }
 
 #[test]

@@ -83,8 +83,8 @@ pub use reject_reason::{
     reject_reason_registry_contains,
 };
 pub use tlsm::{
-    NoopTransitionSink, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
-    TlsmTransitionSink, TransitionResult,
+    NoopTransitionSink, OooCategory, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
+    TlsmTransitionSink, TransitionResult, ooo_count, ooo_total,
 };
 
 #[derive(Debug, Clone)]

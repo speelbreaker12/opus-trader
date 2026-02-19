@@ -19,6 +19,10 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, mpsc};
+use std::thread;
+use std::time::Duration;
 
 // ─── TLSM State ─────────────────────────────────────────────────────────
 
@@ -260,6 +264,55 @@ impl Default for LedgerMetrics {
     }
 }
 
+// ─── WAL Writer Config ──────────────────────────────────────────────────
+
+/// Configuration for the async WAL writer thread.
+#[derive(Debug, Clone)]
+pub struct WalWriterConfig {
+    /// Bounded channel capacity for the writer thread.
+    /// Larger = more burst tolerance but wider state-transition-loss window on crash.
+    pub channel_capacity: usize,
+    /// Maximum time to wait for the writer thread to confirm fsync on barrier
+    /// appends (OPEN intents). If exceeded, append returns `WriteFailed`.
+    /// Default: 5 seconds. Typical SSD fsync: 0.2-2ms; this is deliberately
+    /// conservative to avoid false failures under load.
+    pub barrier_timeout: Duration,
+}
+
+impl Default for WalWriterConfig {
+    fn default() -> Self {
+        Self {
+            channel_capacity: 1024,
+            barrier_timeout: Duration::from_secs(5),
+        }
+    }
+}
+
+/// Internal message sent to the WAL writer thread.
+enum WalWrite {
+    Event {
+        serialized: String,
+        barrier: Option<mpsc::Sender<Result<(), String>>>,
+    },
+    Shutdown,
+}
+
+impl std::fmt::Debug for WalWrite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Event {
+                serialized,
+                barrier,
+            } => f
+                .debug_struct("Event")
+                .field("serialized_len", &serialized.len())
+                .field("has_barrier", &barrier.is_some())
+                .finish(),
+            Self::Shutdown => write!(f, "Shutdown"),
+        }
+    }
+}
+
 // ─── WAL Ledger ─────────────────────────────────────────────────────────
 
 /// WAL ledger with append-only events and optional durable JSONL storage path.
@@ -274,14 +327,15 @@ impl Default for LedgerMetrics {
 /// exclusive `&mut` borrows enforced by the Rust borrow checker. Single-threaded
 /// access only. If multi-threaded access is needed, wrap in a `Mutex`.
 ///
-/// **Known limitations (Phase 1):**
-/// - No WAL compaction: JSONL file grows without bound. Production deployments
-///   should implement periodic snapshot + truncate.
-/// - Capacity counts all intents (including terminal). Long-running processes
-///   should drain terminal intents or set capacity high enough.
-/// - File I/O is synchronous. The hot-loop non-blocking I/O contract (§2.4.1)
-///   is satisfied at the queue abstraction level, not at the file I/O level.
-#[derive(Debug)]
+/// **Async Writer (§2.4.1):**
+/// When backed by durable storage, a dedicated writer thread handles disk I/O.
+/// `append()` waits for fsync confirmation (barrier) to preserve AT-935 durability.
+/// `update_state()`/`mark_sent()` are non-blocking (no barrier) — state
+/// transitions are recoverable via exchange reconciliation.
+///
+/// **Known limitations:**
+/// - No WAL compaction: JSONL file grows without bound.
+/// - Capacity counts all intents (including terminal).
 pub struct WalLedger {
     /// Reconstructed latest state per intent hash.
     latest_by_hash: HashMap<String, IntentRecord>,
@@ -289,8 +343,45 @@ pub struct WalLedger {
     capacity: usize,
     /// Optional JSONL storage path (kept for `storage_path()` accessor).
     storage_path_value: Option<PathBuf>,
-    /// Open file handle for append-only writes (kept open to avoid per-event reopen).
-    storage_file: Option<File>,
+    /// Sender to the writer thread (replaces `storage_file` for durable ledgers).
+    writer_tx: Option<mpsc::SyncSender<WalWrite>>,
+    /// Writer thread handle (for graceful shutdown).
+    writer_handle: Option<thread::JoinHandle<()>>,
+    /// Pause flag: when true, writer thread sleeps between events.
+    writer_paused: Arc<AtomicBool>,
+    /// Degraded flag: set on disk write failure, blocks subsequent barrier appends.
+    /// Uses `Relaxed` ordering — acceptable because:
+    /// 1. The flag is monotonic (only false→true, never cleared).
+    /// 2. The writer thread sets it after a disk error; the dispatch thread reads it
+    ///    before the next `persist_and_apply`. A stale `false` read means one extra
+    ///    attempt that will also fail and set the flag, so convergence is guaranteed.
+    /// 3. `Acquire/Release` would add unnecessary overhead on the hot path for a
+    ///    flag that is only set on an already-catastrophic I/O failure.
+    writer_degraded: Arc<AtomicBool>,
+    /// Shared write error counter between caller and writer threads.
+    wal_write_errors: Arc<AtomicU64>,
+    /// Barrier timeout for durable appends (OPEN intents).
+    barrier_timeout: Duration,
+}
+
+impl std::fmt::Debug for WalLedger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WalLedger")
+            .field("capacity", &self.capacity)
+            .field("queue_depth", &self.latest_by_hash.len())
+            .field("storage_path", &self.storage_path_value)
+            .field("has_writer", &self.writer_tx.is_some())
+            .field(
+                "writer_degraded",
+                &self.writer_degraded.load(Ordering::Relaxed),
+            )
+            .field("barrier_timeout", &self.barrier_timeout)
+            .field(
+                "wal_write_errors",
+                &self.wal_write_errors.load(Ordering::Relaxed),
+            )
+            .finish()
+    }
 }
 
 impl WalLedger {
@@ -300,15 +391,36 @@ impl WalLedger {
             latest_by_hash: HashMap::new(),
             capacity,
             storage_path_value: None,
-            storage_file: None,
+            writer_tx: None,
+            writer_handle: None,
+            writer_paused: Arc::new(AtomicBool::new(false)),
+            writer_degraded: Arc::new(AtomicBool::new(false)),
+            wal_write_errors: Arc::new(AtomicU64::new(0)),
+            barrier_timeout: Duration::from_secs(5),
         }
     }
 
-    /// Create/load a WAL ledger backed by a JSONL file.
-    ///
-    /// Opens the file once and keeps the handle for the lifetime of the ledger,
-    /// avoiding per-event file open/close overhead.
+    /// Create/load a WAL ledger backed by a JSONL file with default writer config.
     pub fn with_storage_path(capacity: usize, storage_path: impl AsRef<Path>) -> io::Result<Self> {
+        Self::with_storage_path_configured(capacity, storage_path, WalWriterConfig::default())
+    }
+
+    /// Create/load a WAL ledger backed by a JSONL file with custom writer config.
+    ///
+    /// Spawns a dedicated writer thread that owns the file handle and performs
+    /// all disk I/O. The writer thread fsyncs (sync_data) per event.
+    pub fn with_storage_path_configured(
+        capacity: usize,
+        storage_path: impl AsRef<Path>,
+        config: WalWriterConfig,
+    ) -> io::Result<Self> {
+        if config.channel_capacity == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "WalWriterConfig.channel_capacity must be >= 1 (0 creates a rendezvous channel that serializes all writes)",
+            ));
+        }
+
         let path = storage_path.as_ref().to_path_buf();
         let events = read_events_from_path(&path)?;
         let latest_by_hash = reduce_events(&events)
@@ -323,12 +435,38 @@ impl WalLedger {
         }
 
         let file = OpenOptions::new().create(true).append(true).open(&path)?;
+        // Flush the directory entry once at file creation so that
+        // subsequent appends only need sync_data() (metadata already stable).
+        file.sync_all()?;
+
+        let writer_degraded = Arc::new(AtomicBool::new(false));
+        let writer_paused = Arc::new(AtomicBool::new(false));
+        let wal_write_errors = Arc::new(AtomicU64::new(0));
+
+        let barrier_timeout = config.barrier_timeout;
+        let (tx, rx) = mpsc::sync_channel(config.channel_capacity);
+
+        let degraded_clone = writer_degraded.clone();
+        let paused_clone = writer_paused.clone();
+        let errors_clone = wal_write_errors.clone();
+
+        let handle = thread::Builder::new()
+            .name("wal-writer".into())
+            .spawn(move || {
+                writer_loop(rx, file, errors_clone, paused_clone, degraded_clone);
+            })
+            .map_err(|e| io::Error::other(format!("failed to spawn wal writer: {e}")))?;
 
         Ok(Self {
             latest_by_hash,
             capacity,
             storage_path_value: Some(path),
-            storage_file: Some(file),
+            writer_tx: Some(tx),
+            writer_handle: Some(handle),
+            writer_paused,
+            writer_degraded,
+            wal_write_errors,
+            barrier_timeout,
         })
     }
 
@@ -358,13 +496,15 @@ impl WalLedger {
         }
 
         let event = WalEvent::IntentRecorded { record };
-        self.persist_and_apply(event, metrics)?;
+        // OPEN intents require durable persistence (barrier) before dispatch.
+        self.persist_and_apply(event, metrics, true)?;
         Ok(())
     }
 
     /// Update the TLS state for an existing record (TLSM transition append).
     ///
     /// CONTRACT.md §2.4: "Write every TLSM transition immediately."
+    /// State transitions are async (no barrier) — recoverable via reconciliation.
     pub fn update_state(
         &mut self,
         intent_hash: &str,
@@ -392,7 +532,8 @@ impl WalLedger {
             intent_hash: intent_hash.to_string(),
             new_state,
         };
-        self.persist_and_apply(event, metrics)?;
+        // State transitions are async — no barrier needed.
+        self.persist_and_apply(event, metrics, false)?;
         Ok(())
     }
 
@@ -435,7 +576,8 @@ impl WalLedger {
             intent_hash: intent_hash.to_string(),
             sent_ts,
         };
-        self.persist_and_apply(event, metrics)?;
+        // mark_sent is async — no barrier needed.
+        self.persist_and_apply(event, metrics, false)?;
         Ok(())
     }
 
@@ -443,6 +585,20 @@ impl WalLedger {
     ///
     /// CONTRACT.md §2.4: "On startup, replay ledger into in-memory state
     /// and reconcile with exchange."
+    ///
+    /// **Phantom intent handling:** If a barrier timeout occurred before
+    /// shutdown, the enqueued event may have been written to disk by the
+    /// writer thread. On restart, replay will reconstruct this "phantom"
+    /// intent in `Created` state. Callers MUST reconcile `in_flight_hashes`
+    /// against the exchange to determine whether these intents were
+    /// dispatched. Un-dispatched phantom intents should be cancelled.
+    ///
+    /// **Replay vs live dedup asymmetry:** During replay, `apply_event`
+    /// uses last-writer-wins for `IntentRecorded` events (tolerates
+    /// duplicates from crash-replay). During live operation, `append()`
+    /// rejects duplicate `intent_hash` with `DuplicateIntentHash`. This
+    /// asymmetry is intentional — live dedup prevents double-dispatch
+    /// (CSP-002), while replay dedup handles crash artifacts.
     pub fn replay(&self) -> ReplayOutcome {
         let mut in_flight_hashes: Vec<_> = self
             .latest_by_hash
@@ -484,37 +640,179 @@ impl WalLedger {
             .unwrap_or(false)
     }
 
+    /// Pause the WAL writer thread (for testing / controlled shutdown).
+    #[doc(hidden)]
+    pub fn pause_writer(&self) {
+        self.writer_paused.store(true, Ordering::Relaxed);
+    }
+
+    /// Resume the WAL writer thread.
+    #[doc(hidden)]
+    pub fn resume_writer(&self) {
+        self.writer_paused.store(false, Ordering::Relaxed);
+    }
+
+    /// Whether the writer thread has entered degraded mode (disk write failure).
+    pub fn is_writer_degraded(&self) -> bool {
+        self.writer_degraded.load(Ordering::Relaxed)
+    }
+
+    /// Shared write error counter (readable from any thread).
+    pub fn wal_write_errors_shared(&self) -> u64 {
+        self.wal_write_errors.load(Ordering::Relaxed)
+    }
+
+    /// Force-set the degraded flag (for testing fail-closed behavior).
+    #[doc(hidden)]
+    pub fn force_set_degraded(&self, degraded: bool) {
+        self.writer_degraded.store(degraded, Ordering::Relaxed);
+    }
+
+    /// Shut down the writer thread and disconnect the channel.
+    /// Subsequent writes will get `WriteFailed("wal writer thread died")`.
+    #[doc(hidden)]
+    pub fn kill_writer(&mut self) {
+        self.writer_paused.store(false, Ordering::Relaxed);
+        if let Some(tx) = self.writer_tx.take() {
+            let _ = tx.send(WalWrite::Shutdown);
+        }
+        if let Some(handle) = self.writer_handle.take() {
+            let _ = handle.join();
+        }
+    }
+
     /// Persist a WAL event to disk (if durable), then apply to in-memory state.
     ///
-    /// **Invariant:** Callers (`append`, `update_state`, `mark_sent`) MUST
-    /// pre-validate that `apply_event` will succeed before calling this method.
-    /// Specifically:
-    /// - `append` creates an `IntentRecorded` event → `apply_event` does a
-    ///   HashMap::insert which is infallible.
-    /// - `update_state` and `mark_sent` verify the intent_hash exists in
-    ///   `latest_by_hash` before calling → the `.ok_or_else()` in `apply_event`
-    ///   cannot fail.
+    /// **Barrier semantics:**
+    /// - `need_barrier=true` (used by `append`): dispatch thread blocks until
+    ///   the writer thread confirms fsync. Preserves AT-935 durability for
+    ///   OPEN intents.
+    /// - `need_barrier=false` (used by `update_state`/`mark_sent`): event is
+    ///   enqueued without waiting. HashMap may be ahead of disk — acceptable
+    ///   because state transitions are recoverable via exchange reconciliation.
     ///
-    /// **Convergence property:** If `apply_event` were to fail after a
-    /// successful disk write, the JSONL file would be ahead of in-memory state.
-    /// On restart, `with_storage_path` replays the full event log, converging
-    /// in-memory state to match the disk. The disk is the source of truth.
+    /// **In-memory mode:** When no writer thread exists (no durable storage),
+    /// events are applied directly to the HashMap without disk I/O.
+    ///
+    /// **Convergence property:** On restart, `with_storage_path` replays the
+    /// full event log from disk, converging in-memory state. Disk is truth.
     fn persist_and_apply(
         &mut self,
         event: WalEvent,
         metrics: &mut LedgerMetrics,
+        need_barrier: bool,
     ) -> Result<(), LedgerAppendError> {
-        if let Some(file) = &mut self.storage_file {
-            write_event_to_file(file, &event).map_err(|reason| {
-                metrics.record_write_error();
-                LedgerAppendError::WriteFailed { reason }
-            })?;
+        // Detect dead writer: durable storage configured but writer channel gone.
+        // This means the writer thread was killed or panicked after construction.
+        if self.storage_path_value.is_some() && self.writer_tx.is_none() {
+            self.wal_write_errors.fetch_add(1, Ordering::Relaxed);
+            metrics.record_write_error();
+            return Err(LedgerAppendError::WriteFailed {
+                reason: "wal writer channel already closed (kill_writer or prior disconnect)"
+                    .into(),
+            });
         }
 
-        // Safety: callers pre-validate that the intent_hash exists (for
-        // StateTransition/SentMarked) or create a new entry (IntentRecorded).
-        // apply_event should never fail here. If it does, the disk is ahead
-        // of memory — restart will converge via replay.
+        if let Some(writer_tx) = &self.writer_tx {
+            // Check degraded flag.
+            // - Barrier path (OPEN intents): fail-closed — cannot guarantee durability.
+            // - Non-barrier path (state transitions): skip channel, apply to HashMap
+            //   only. State transitions are recoverable via reconciliation, and
+            //   blocking them when degraded would prevent in-memory tracking of
+            //   in-flight intents that already have orders on the exchange.
+            if self.writer_degraded.load(Ordering::Relaxed) {
+                if need_barrier {
+                    metrics.record_write_error();
+                    return Err(LedgerAppendError::WriteFailed {
+                        reason: "wal writer degraded".into(),
+                    });
+                }
+                // Non-barrier: skip channel, fall through to HashMap apply.
+            } else {
+                let serialized = serde_json::to_string(&event).map_err(|e| {
+                    metrics.record_write_error();
+                    LedgerAppendError::WriteFailed {
+                        reason: e.to_string(),
+                    }
+                })?;
+
+                // Build barrier channel if needed — destructure to avoid clone.
+                let (barrier_tx, barrier_rx) = if need_barrier {
+                    let (tx, rx) = mpsc::channel();
+                    (Some(tx), Some(rx))
+                } else {
+                    (None, None)
+                };
+
+                match writer_tx.try_send(WalWrite::Event {
+                    serialized,
+                    barrier: barrier_tx,
+                }) {
+                    Ok(()) => {}
+                    Err(mpsc::TrySendError::Full(_)) => {
+                        self.wal_write_errors.fetch_add(1, Ordering::Relaxed);
+                        metrics.record_write_error();
+                        metrics.record_enqueue_failure();
+                        if need_barrier {
+                            return Err(LedgerAppendError::QueueFull);
+                        }
+                        // Non-barrier QueueFull: skip channel, fall through to
+                        // HashMap-only apply. Consistent with degraded behavior —
+                        // state transitions are recoverable via reconciliation.
+                    }
+                    Err(mpsc::TrySendError::Disconnected(_)) => {
+                        self.wal_write_errors.fetch_add(1, Ordering::Relaxed);
+                        metrics.record_write_error();
+                        // Set degraded so subsequent calls skip the channel entirely
+                        // rather than re-hitting try_send → Disconnected every time.
+                        self.writer_degraded.store(true, Ordering::Relaxed);
+                        if need_barrier {
+                            return Err(LedgerAppendError::WriteFailed {
+                                reason:
+                                    "wal writer channel disconnected (writer thread panicked or exited)"
+                                        .into(),
+                            });
+                        }
+                        // Non-barrier Disconnected: fall through to HashMap-only apply.
+                        // Consistent with QueueFull and degraded — state transitions
+                        // are recoverable via reconciliation.
+                    }
+                }
+
+                // Wait for barrier if needed (OPEN intents).
+                if let Some(rx) = barrier_rx {
+                    match rx.recv_timeout(self.barrier_timeout) {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => {
+                            metrics.record_write_error();
+                            return Err(LedgerAppendError::WriteFailed { reason: e });
+                        }
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            // Event is enqueued — writer will eventually process it.
+                            // Set degraded to prevent further barrier appends that
+                            // would also likely time out. On restart, replay
+                            // converges (the phantom intent in Created state is
+                            // handled by reconciliation — AT-935).
+                            self.writer_degraded.store(true, Ordering::Relaxed);
+                            metrics.record_write_error();
+                            return Err(LedgerAppendError::WriteFailed {
+                                reason: "wal barrier timeout — writer degraded".into(),
+                            });
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            metrics.record_write_error();
+                            return Err(LedgerAppendError::WriteFailed {
+                                reason: "wal barrier reply channel disconnected (writer exited before confirming)".into(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply to HashMap.
+        // For barrier path: disk write confirmed, HashMap update is safe.
+        // For non-barrier path: HashMap ahead of disk is acceptable.
         let apply_result = apply_event(&mut self.latest_by_hash, &event);
         debug_assert!(
             apply_result.is_ok(),
@@ -528,6 +826,32 @@ impl WalLedger {
 
         metrics.record_append();
         Ok(())
+    }
+}
+
+// ─── Graceful shutdown ──────────────────────────────────────────────────
+
+impl Drop for WalLedger {
+    fn drop(&mut self) {
+        // Unpause writer so shutdown message can be processed.
+        self.writer_paused.store(false, Ordering::Relaxed);
+        if let Some(tx) = self.writer_tx.take() {
+            // Drop the sender to disconnect the channel. The writer thread will
+            // see Err on rx.recv() and exit after draining queued events.
+            // We do NOT use tx.send(Shutdown) because that blocks when the
+            // channel is full, risking deadlock during panic unwind if the
+            // writer is paused. Dropping tx is always non-blocking and
+            // provides the same FIFO drain guarantee.
+            drop(tx);
+        }
+        if let Some(handle) = self.writer_handle.take()
+            && let Err(panic_payload) = handle.join()
+        {
+            tracing::error!(
+                panic = ?panic_payload,
+                "wal writer thread panicked during shutdown"
+            );
+        }
     }
 }
 
@@ -639,27 +963,70 @@ fn reduce_events(events: &[WalEvent]) -> Result<HashMap<String, IntentRecord>, S
     Ok(latest_by_hash)
 }
 
-/// Write a WAL event to an already-open file handle.
+/// WAL writer thread loop.
 ///
-/// **Phase 1 limitation — sync_all() on every write:**
-/// This calls `sync_all()` (fsync) unconditionally, which blocks the calling
-/// thread for 0.2-2ms on SSD. Under burst conditions this serializes all
-/// intent processing and creates a latency cliff. This tension with
-/// CONTRACT.md §2.4.1 ("Hot loop MUST NOT block on disk I/O") is acknowledged:
-/// Phase 1 satisfies the non-blocking contract at the queue abstraction level
-/// (callers enqueue into `WalLedger`), not at the file I/O level.
+/// Owns the file handle and performs all disk I/O. Uses `sync_data()`
+/// (fdatasync) per event — the directory entry is flushed once at file
+/// creation in `with_storage_path()`, so only data sync is needed.
 ///
-/// A production async WAL writer would decouple enqueue from fsync, with the
-/// `WalBarrierConfig::require_wal_fsync_before_dispatch` flag controlling
-/// whether dispatch waits for the fsync to complete.
-fn write_event_to_file(file: &mut File, event: &WalEvent) -> Result<(), String> {
-    let mut line =
-        serde_json::to_string(event).map_err(|e| format!("failed to encode wal event: {e}"))?;
-    line.push('\n');
-    file.write_all(line.as_bytes())
-        .map_err(|e| format!("failed to write wal event: {e}"))?;
-    file.sync_all()
-        .map_err(|e| format!("failed to sync wal: {e}"))
+/// **`sync_data()` safety:** After the initial `sync_all()` at file creation
+/// ensures the directory entry is stable, `sync_data()` (fdatasync) is
+/// sufficient for durability on modern filesystems (ext4 `data=ordered`,
+/// XFS, APFS). On ext3 `data=writeback`, fdatasync may not flush file size
+/// updates — this is a known limitation. Production deployments should use
+/// ext4 or XFS.
+///
+/// On write failure: sets `writer_degraded`, increments `write_errors`,
+/// and replies `Err` on the barrier (if present). **The degraded flag is
+/// never cleared** — once set, the process must be restarted to recover
+/// disk durability. This is intentional: a single transient I/O error
+/// indicates an unreliable disk, and continuing barrier appends risks
+/// further timeouts. Operators should monitor `writer_degraded` and
+/// restart when the underlying issue resolves.
+fn writer_loop(
+    rx: mpsc::Receiver<WalWrite>,
+    mut file: File,
+    write_errors: Arc<AtomicU64>,
+    writer_paused: Arc<AtomicBool>,
+    writer_degraded: Arc<AtomicBool>,
+) {
+    loop {
+        // Check pause BEFORE consuming from channel — when paused, events
+        // accumulate in the channel allowing callers to observe QueueFull.
+        while writer_paused.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        match rx.recv() {
+            Ok(WalWrite::Event {
+                serialized,
+                barrier,
+            }) => {
+                // Single write_all with newline appended — avoids partial-write
+                // window between data and delimiter that two separate calls create.
+                let mut line = serialized;
+                line.push('\n');
+                let write_result = (|| -> Result<(), String> {
+                    file.write_all(line.as_bytes())
+                        .map_err(|e| format!("write failed: {e}"))?;
+                    file.sync_data().map_err(|e| format!("sync failed: {e}"))
+                })();
+
+                if let Err(ref e) = write_result {
+                    write_errors.fetch_add(1, Ordering::Relaxed);
+                    writer_degraded.store(true, Ordering::Relaxed);
+                    tracing::error!(error = %e, "wal writer disk I/O failure — entering degraded mode");
+                }
+
+                if let Some(reply) = barrier
+                    && reply.send(write_result).is_err()
+                {
+                    tracing::debug!("wal barrier reply dropped (caller timed out)");
+                }
+            }
+            Ok(WalWrite::Shutdown) | Err(_) => break,
+        }
+    }
 }
 
 fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
@@ -718,10 +1085,11 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
                 // partial line. On the third restart both trailing lines are
                 // corrupt and should be tolerated.
                 trailing_corrupt.push(index);
-                eprintln!(
-                    "WARNING: skipping malformed trailing wal line {} in {}: {e}",
-                    index + 1,
-                    path.display()
+                tracing::warn!(
+                    line = index + 1,
+                    path = %path.display(),
+                    error = %e,
+                    "skipping malformed trailing wal line"
                 );
             }
         }

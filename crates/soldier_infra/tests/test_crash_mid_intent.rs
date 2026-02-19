@@ -1,3 +1,4 @@
+#![allow(deprecated)] // WalBarrierConfig is deprecated; tests exercise legacy API
 //! CI test proving crash mid-intent before dispatch causes no duplicate dispatch.
 //!
 //! CONTRACT.md AT-935, AT-233, §2.4: RecordedBeforeDispatch.
@@ -288,7 +289,7 @@ fn test_wal_append_failure_prevents_dispatch() {
 // ─── Durability barrier with fsync ───────────────────────────────────────
 
 #[test]
-fn test_durable_append_with_fsync_barrier() {
+fn test_durable_append_with_in_memory_ledger() {
     let mut ledger = WalLedger::new(100);
     let mut lm = LedgerMetrics::new();
     let mut bm = BarrierMetrics::new();
@@ -299,8 +300,9 @@ fn test_durable_append_with_fsync_barrier() {
     let intent = test_intent("fsync-test", TlsState::Created, 0);
     let result = durable_append(&mut ledger, intent, &config, &mut lm, &mut bm).unwrap();
 
-    assert!(result.fsync_applied, "Fsync barrier must be applied");
-    assert_eq!(bm.barrier_wait_count(), 1);
+    // In-memory ledger: no durable storage → no fsync applied
+    assert!(!result.fsync_applied, "In-memory ledger has no fsync");
+    assert_eq!(bm.barrier_wait_count(), 0);
     assert_eq!(ledger.queue_depth(), 1);
 }
 
