@@ -6,8 +6,7 @@
   },
   "doc_sync_known_gaps": [
     "S8.11",
-    "S8.12",
-    "S14.2"
+    "S8.12"
   ],
   "schema_notes": {
     "partial_coverage_notes": "Per-story dict mapping AT-### to a rationale string. Used when an AT is in enforcing_contract_ats but only partially proven by this story. The authoritative deferred-AT tracker is docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table. prd_ref_check.sh warns when an AT appears in both enforcing_contract_ats and partial_coverage_notes."

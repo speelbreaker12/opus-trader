@@ -547,7 +547,10 @@ fn test_failed_from_created_transitions() {
     let mut sm = Tlsm::new();
     let r = sm.apply(TlsmEvent::Failed);
     match r {
-        TransitionResult::Transitioned { from: TlsmState::Created, to: TlsmState::Failed } => {}
+        TransitionResult::Transitioned {
+            from: TlsmState::Created,
+            to: TlsmState::Failed,
+        } => {}
         other => panic!("Created + Failed must Transition (not Ignore), got {other:?}"),
     }
     assert!(sm.state().is_terminal());
@@ -562,7 +565,10 @@ fn test_failed_from_partially_filled_transitions() {
     sm.apply(TlsmEvent::PartialFill);
     let r = sm.apply(TlsmEvent::Failed);
     match r {
-        TransitionResult::Transitioned { from: TlsmState::PartiallyFilled, to: TlsmState::Failed } => {}
+        TransitionResult::Transitioned {
+            from: TlsmState::PartiallyFilled,
+            to: TlsmState::Failed,
+        } => {}
         other => panic!("PartiallyFilled + Failed must Transition (not Ignore), got {other:?}"),
     }
     assert!(sm.state().is_terminal());
@@ -576,17 +582,29 @@ fn test_take_pending_reservation_only_on_terminal() {
     let mut sm = Tlsm::with_pending_reservation(rid.clone());
 
     // Non-terminal states must NOT release
-    assert!(sm.take_pending_reservation_on_terminal().is_none(), "Created must NOT release");
+    assert!(
+        sm.take_pending_reservation_on_terminal().is_none(),
+        "Created must NOT release"
+    );
     sm.apply(TlsmEvent::Sent);
-    assert!(sm.take_pending_reservation_on_terminal().is_none(), "Sent must NOT release");
+    assert!(
+        sm.take_pending_reservation_on_terminal().is_none(),
+        "Sent must NOT release"
+    );
 
     // Terminal state must release
     sm.apply(TlsmEvent::Filled);
     assert!(sm.state().is_terminal());
     let taken = sm.take_pending_reservation_on_terminal();
     assert!(taken.is_some(), "Filled must release reservation");
-    assert_eq!(taken.expect("reservation must be returned on terminal"), rid);
+    assert_eq!(
+        taken.expect("reservation must be returned on terminal"),
+        rid
+    );
 
     // Already consumed
-    assert!(sm.take_pending_reservation_on_terminal().is_none(), "consumed on first take");
+    assert!(
+        sm.take_pending_reservation_on_terminal().is_none(),
+        "consumed on first take"
+    );
 }

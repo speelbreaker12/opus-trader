@@ -718,10 +718,11 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
                 // partial line. On the third restart both trailing lines are
                 // corrupt and should be tolerated.
                 trailing_corrupt.push(index);
-                eprintln!(
-                    "WARNING: skipping malformed trailing wal line {} in {}: {e}",
-                    index + 1,
-                    path.display()
+                tracing::warn!(
+                    line = index + 1,
+                    path = %path.display(),
+                    error = %e,
+                    "skipping malformed trailing wal line (crash artifact)"
                 );
             }
         }
