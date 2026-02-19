@@ -5571,7 +5571,13 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Intent unit purity: no coin/USD mixing within a single intent",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1097"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-1097",
         "AT-1099"
@@ -10513,11 +10519,16 @@
         "AT-239"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "RateLimitBrownout",
+          "RateLimitPriorityShed"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "backpressure"
+      ],
       "observability": {
         "metrics": [
           {
@@ -10601,7 +10612,13 @@
       "risk": "med",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "10028 rate limit kill: reconnect with position reconciliation before resuming",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-240"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-240",
         "AT-919",
@@ -10615,7 +10632,10 @@
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stall",
+        "missing"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -10685,7 +10705,13 @@
       "risk": "med",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "WS gap detection triggers reconcile-required latch on book or trade stream gaps",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-271"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-271",
         "AT-272",
@@ -10693,11 +10719,17 @@
         "AT-202"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "OpenPermissionReasonCode",
+        "values": [
+          "WS_BOOK_GAP_RECONCILE_REQUIRED",
+          "WS_TRADES_GAP_RECONCILE_REQUIRED"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stale",
+        "missing"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -10805,7 +10837,10 @@
         ]
       },
       "enforcement_point": "PolicyGuard",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -10901,11 +10936,17 @@
         "AT-303"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "CancelStaleOrder",
+          "ReconcileOrphanFill"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
       "observability": {
         "metrics": [
           {
@@ -11004,11 +11045,15 @@
         "AT-948"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "OpenPermissionReasonCode",
+        "values": [
+          "WS_DATA_STALE_RECONCILE_REQUIRED"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stale"
+      ],
       "observability": {
         "metrics": [
           {
@@ -11264,7 +11309,7 @@
       "reason_codes": {
         "type": "RejectReason",
         "values": [
-          "UNREGISTERED_REASON_CODE"
+          "REJECT_REASON_AUDIT_COMPLETENESS"
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
@@ -11349,8 +11394,11 @@
         "AT-1113"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "CorrectiveActionCancelStale",
+          "CorrectiveActionReconcile"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [
@@ -11440,7 +11488,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "PolicyGuard",
+      "enforcement_point": "StatusEndpoint",
       "failure_mode": [
         "missing"
       ],
@@ -11539,8 +11587,10 @@
         "AT-252"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "ModeReasonCode",
+        "values": [
+          "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
       "failure_mode": [
@@ -11636,7 +11686,9 @@
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing"
+      ],
       "observability": {
         "metrics": [
           {
@@ -11727,11 +11779,15 @@
         "AT-414"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "ModeReasonCode",
+        "values": [
+          "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing"
+      ],
       "observability": {
         "metrics": [
           {
@@ -11908,7 +11964,9 @@
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stale"
+      ],
       "observability": {
         "metrics": [
           {
@@ -12014,7 +12072,10 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_fee_model.rs::test_fee_model_epoch_ms_required_at_1106",
+        "crates/soldier_core/tests/test_fee_model.rs::test_fee_poll_cadence_60s_at_1114"
+      ]
     },
     {
       "id": "S10-007",
@@ -12097,7 +12158,10 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_announcement_poller.rs::test_announcement_poll_cadence_60s_at_1111",
+        "crates/soldier_core/tests/test_ntp_prerequisite.rs::test_ntp_absence_fails_closed_at_1123"
+      ]
     },
     {
       "id": "S10-008",
@@ -12177,7 +12241,9 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_memory_ordering.rs::test_no_relaxed_ordering_safety_critical_at_1118"
+      ]
     },
     {
       "id": "S11-000",
@@ -12189,9 +12255,8 @@
       "category": "hardening",
       "description": "Implement S11.1 (RMSE/drift gates (liquidity-aware)) with contract-aligned behavior and deterministic tests.",
       "contract_refs": [
-        "TradingMode",
-        "ReduceOnly",
-        "Open Permission Latch"
+        "SVI Math Guard (Hard NaN / Blow-Up Shield)",
+        "Acceptance Test (REQUIRED)"
       ],
       "plan_refs": [
         "Slice 11 \u2014 SVI Stability Gates + Arb Guards",
@@ -12232,7 +12297,13 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "SVI fit RMSE exceeds threshold: reject fit, retain previous good surface",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-242"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-287",
         "AT-242",
@@ -12240,11 +12311,17 @@
         "AT-322"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "SVI_RMSE_EXCEEDED",
+          "SVI_DRIFT_EXCEEDED"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -12270,9 +12347,8 @@
       "category": "hardening",
       "description": "Implement S11.2 (Arb guards (convexity/calendar/density)) with contract-aligned behavior and deterministic tests.",
       "contract_refs": [
-        "TradingMode",
-        "ReduceOnly",
-        "Open Permission Latch"
+        "SVI Math Guard (Hard NaN / Blow-Up Shield)",
+        "Acceptance Test (REQUIRED)"
       ],
       "plan_refs": [
         "Slice 11 \u2014 SVI Stability Gates + Arb Guards",
@@ -12313,16 +12389,28 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "SVI arbitrage guard: convexity/butterfly spread violations reject the fit",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-241"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-241"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "SVI_ARB_CONVEXITY_VIOLATED",
+          "SVI_INPUT_STALE"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
       "observability": {
         "metrics": [
           {
@@ -12359,9 +12447,7 @@
       "category": "hardening",
       "description": "Implement S11.3 (NaN/Inf guard holds last fit) with contract-aligned behavior and deterministic tests.",
       "contract_refs": [
-        "TradingMode",
-        "ReduceOnly",
-        "Open Permission Latch"
+        "SVI Math Guard (Hard NaN / Blow-Up Shield)"
       ],
       "plan_refs": [
         "Slice 11 \u2014 SVI Stability Gates + Arb Guards",
@@ -12402,16 +12488,27 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Hard NaN/Inf guard: any NaN or Inf in SVI parameters rejects the surface update",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1071"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-1071"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "SVI_NAN_INF_REJECTED",
+          "SVI_PARAM_OUT_OF_BOUNDS"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -12436,8 +12533,8 @@
       "category": "hardening",
       "description": "Enforce SVI drift rejection (hold previous fit), calendar spread monotonicity, and negative density guards.",
       "contract_refs": [
-        "AT-1104",
-        "AT-1105"
+        "SVI Math Guard (Hard NaN / Blow-Up Shield)",
+        "Acceptance Test (REQUIRED)"
       ],
       "plan_refs": [
         "Slice 11 \u2014 SVI Stability Gates + Arb Guards",
@@ -12479,7 +12576,18 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "SVI drift rejection: surface drift exceeds calibrated threshold",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1104"
+        },
+        {
+          "quote": "Calendar monotonicity: total variance must be non-decreasing in expiry",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1105"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-1104",
         "AT-1105"
@@ -12511,7 +12619,11 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_svi.rs::test_svi_drift_rejection_at_1104",
+        "crates/soldier_core/tests/test_svi.rs::test_svi_calendar_monotonicity_at_1105",
+        "crates/soldier_core/tests/test_svi.rs::test_svi_negative_density_guard"
+      ]
     },
     {
       "id": "S12-000",
@@ -12566,16 +12678,28 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Fill simulation requires fresh L2 snapshot; stale/missing data fails closed",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-254"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-254"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "FILL_SIM_L2_STALE",
+          "FILL_SIM_L2_MISSING"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stale",
+        "missing"
+      ],
       "observability": {
         "metrics": [
           {
@@ -12655,16 +12779,28 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Slippage calibration fail-closed: absent or stale guard inputs reject with recorded reason",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-255"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-255"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "CALIBRATION_DATA_STALE",
+          "CALIBRATION_DATA_MISSING"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stale",
+        "missing"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -12694,8 +12830,7 @@
         "AT-1109"
       ],
       "plan_refs": [
-        "Slice 12 \u2014 Fill Simulator + Slippage Calibration",
-        "S12.2 \u2014 Slippage calibration + safe default (1.3)"
+        "Slice 12 \u2014 Fill Simulator + Slippage Calibration"
       ],
       "scope": {
         "touch": [
@@ -12733,7 +12868,18 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Lifecycle and policy events persisted durably before acknowledgment",
+          "location": "specs/CONTRACT.md \u00a77.1.1",
+          "anchor": "AT-1108"
+        },
+        {
+          "quote": "No incident triggers in the last 24h required for promotion eligibility",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1109"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-1108",
         "AT-1109"
@@ -12763,7 +12909,10 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [
+        "crates/soldier_core/tests/test_lifecycle_persistence.rs::test_event_persistence_at_1108",
+        "crates/soldier_core/tests/test_incident_blocking.rs::test_24h_incident_block_at_1109"
+      ]
     },
     {
       "id": "S13-000",
@@ -12861,11 +13010,21 @@
         "AT-432"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "ModeReasonCode",
+        "values": [
+          "REPLAY_QUALITY_BROKEN",
+          "REPLAY_DD_LIMIT_MISSING",
+          "REPLAY_PENALIZED_PNL_NEGATIVE",
+          "REPLAY_NAKED_EVENTS",
+          "REPLAY_DEGRADED_LOOSEN_BLOCKED"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "stale",
+        "parse_error"
+      ],
       "observability": {
         "metrics": [
           {
@@ -12979,11 +13138,22 @@
         "AT-436"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "ModeReasonCode",
+        "values": [
+          "CANARY_ABORT_SLIPPAGE",
+          "CANARY_ABORT_FILL_RATE",
+          "CANARY_ABORT_PNL",
+          "CANARY_ABORT_EVIDENCE_CHAIN",
+          "CANARY_ABORT_NAKED_EVENTS",
+          "CANARY_PREFLIGHT_MISSING_PARAMS",
+          "CANARY_EVIDENCE_ABORT_MISCALIBRATED"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "stall",
+        "missing"
+      ],
       "observability": {
         "metrics": [
           {
@@ -13071,7 +13241,13 @@
       "risk": "med",
       "needs_human_decision": false,
       "passes": false,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Aggressive parameter patch requires explicit human approval before application",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-275"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-274",
         "AT-275",
@@ -13081,11 +13257,19 @@
         "AT-904"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "AGGRESSIVE_PATCH_NO_HUMAN_APPROVAL",
+          "INCIDENT_NAKED_EVENTS",
+          "INCIDENT_429_RATE",
+          "INCIDENT_10028_RATE"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
@@ -13173,11 +13357,18 @@
         "AT-1057"
       ],
       "reason_codes": {
-        "type": "",
-        "values": []
+        "type": "RejectReason",
+        "values": [
+          "F1_CERT_ATOMIC_NAKED_EVENT",
+          "F1_CERT_CONFIG_HASH_MISMATCH",
+          "CSP_ONLY_BUILD_FAIL"
+        ]
       },
       "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [],
+      "failure_mode": [
+        "missing",
+        "parse_error"
+      ],
       "observability": {
         "metrics": [],
         "status_fields": [
