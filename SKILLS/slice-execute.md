@@ -10,7 +10,6 @@ Fail-closed: missing inputs → STOP, not guess.
 
 ## Inputs (must open)
 - **Premortem**: `reviews/premortems/<STORY-ID>_premortem.md` — if missing, run `./plans/scaffold_premortem.sh <ID>` and fill it first
-- **Prior postmortems**: `reviews/postmortems/<prior-story>_postmortem.md` for stories in the same slice/crate (if any)
 - `specs/CONTRACT.md`
 - `specs/DESIGN_PATTERNS.md` §0 (Principles — apply throughout)
 - `plans/prd.json` — the target story
