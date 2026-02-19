@@ -417,6 +417,50 @@ clauses:
     prd:
       - "plans/prd.json#S10-007"
 
+  CSP-058:
+    status: pending
+    name: "Canary Stage 0 min duration + no live orders"
+    contract_ref: "§5.3"
+    plan: []
+    code: []
+    tests:
+      - "AT-1107"
+    prd:
+      - "plans/prd.json#S13-008"
+
+  CSP-059:
+    status: pending
+    name: "Lifecycle/policy events persisted"
+    contract_ref: "§7.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1108"
+    prd:
+      - "plans/prd.json#S12-002"
+
+  CSP-060:
+    status: pending
+    name: "Auto-apply blocked on 24h incident"
+    contract_ref: "§7.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1109"
+    prd:
+      - "plans/prd.json#S12-002"
+
+  CSP-061:
+    status: pending
+    name: "Decision Snapshots day/hour partitioned"
+    contract_ref: "§7.2"
+    plan: []
+    code: []
+    tests:
+      - "AT-1110"
+    prd:
+      - "plans/prd.json#S13-008"
+
 # GOP Clause Traceability
 # Tracks mapping from GOP (General Operating Profile) clauses to implementation artifacts
 
