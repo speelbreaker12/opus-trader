@@ -42,20 +42,66 @@ pub struct StorageConfig {
 
 /// Result of bootstrapping durable storage.
 ///
+/// Fields are private to enforce the startup latch contract (AT-430, AT-935):
+/// callers MUST call [`acknowledge()`](BootstrapResult::acknowledge) to extract
+/// components, which returns the `ReplayOutcome` in the same tuple — forcing
+/// the caller to receive it. This makes it a compile-time error to access the
+/// ledger or registry without going through the latch-acknowledgement path.
+///
 /// To wire into `/status` (CONTRACT.md §2.4.1, §7.0):
 /// - `wal_queue_depth`: `ledger.queue_depth()`
 /// - `wal_queue_capacity`: `ledger.queue_capacity()`
 /// - `wal_queue_enqueue_failures`: `ledger_metrics.wal_queue_enqueue_failures()`
 #[derive(Debug)]
-#[must_use = "BootstrapResult contains replay_outcome needed for startup latch decisions (AT-430)"]
+#[must_use = "BootstrapResult contains replay_outcome needed for startup latch decisions (AT-430) — call .acknowledge()"]
 pub struct BootstrapResult {
+    ledger: WalLedger,
+    ledger_metrics: LedgerMetrics,
+    trade_id_registry: TradeIdRegistry,
+    trade_id_metrics: RegistryMetrics,
+    replay_outcome: ReplayOutcome,
+}
+
+impl BootstrapResult {
+    /// Inspect the replay outcome without consuming the result.
+    ///
+    /// Use this to log or make decisions before acknowledging.
+    pub fn replay_outcome(&self) -> &ReplayOutcome {
+        &self.replay_outcome
+    }
+
+    /// Acknowledge the bootstrap result and extract components.
+    ///
+    /// Returns `(ReplayOutcome, AcknowledgedBootstrap)`. The tuple forces
+    /// the caller to receive the replay outcome — the compiler prevents
+    /// accessing ledger/registry without going through this path.
+    ///
+    /// **Caller contract (AT-430, AT-935):** After calling this, set
+    /// `open_permission_blocked_latch = true` with reason
+    /// `RESTART_RECONCILE_REQUIRED` if `replay_outcome.in_flight_count > 0`.
+    pub fn acknowledge(self) -> (ReplayOutcome, AcknowledgedBootstrap) {
+        (
+            self.replay_outcome,
+            AcknowledgedBootstrap {
+                ledger: self.ledger,
+                ledger_metrics: self.ledger_metrics,
+                trade_id_registry: self.trade_id_registry,
+                trade_id_metrics: self.trade_id_metrics,
+            },
+        )
+    }
+}
+
+/// Components extracted from [`BootstrapResult::acknowledge()`].
+///
+/// Only obtainable by going through the acknowledgement path, which
+/// ensures the caller has received the `ReplayOutcome` for latch decisions.
+#[derive(Debug)]
+pub struct AcknowledgedBootstrap {
     pub ledger: WalLedger,
     pub ledger_metrics: LedgerMetrics,
     pub trade_id_registry: TradeIdRegistry,
     pub trade_id_metrics: RegistryMetrics,
-    /// Replay outcome from WAL initialization. Use this to determine
-    /// whether reconciliation is needed before permitting dispatch.
-    pub replay_outcome: ReplayOutcome,
 }
 
 const MIN_CAPACITY: usize = 10;
@@ -227,8 +273,14 @@ mod tests {
     struct TempDirGuard(PathBuf);
     impl Drop for TempDirGuard {
         fn drop(&mut self) {
-            if let Err(e) = std::fs::remove_dir_all(&self.0) {
-                eprintln!("test cleanup failed for {}: {e}", self.0.display());
+            if self.0.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&self.0) {
+                    tracing::warn!(
+                        path = %self.0.display(),
+                        error = %e,
+                        "test cleanup failed"
+                    );
+                }
             }
         }
     }
@@ -249,14 +301,17 @@ mod tests {
         assert!(data_dir.join("wal/intents.jsonl").exists());
         assert!(data_dir.join("wal/trade_ids.jsonl").exists());
 
+        // Acknowledge and extract components (typestate enforcement)
+        let (outcome, boot) = result.acknowledge();
+
         // Verify replay is empty (fresh storage)
-        assert_eq!(result.replay_outcome.records_replayed, 0);
-        assert_eq!(result.replay_outcome.in_flight_count, 0);
-        assert!(result.trade_id_registry.is_empty());
+        assert_eq!(outcome.records_replayed, 0);
+        assert_eq!(outcome.in_flight_count, 0);
+        assert!(boot.trade_id_registry.is_empty());
 
         // Verify metrics are freshly initialized
-        assert_eq!(result.ledger.queue_depth(), 0);
-        assert_eq!(result.ledger.queue_capacity(), 100);
+        assert_eq!(boot.ledger.queue_depth(), 0);
+        assert_eq!(boot.ledger.queue_capacity(), 100);
     }
 
     #[test]
@@ -271,7 +326,9 @@ mod tests {
 
         // First bootstrap: append an intent
         {
-            let mut result = bootstrap_storage(&config).expect("first bootstrap");
+            let (_, mut boot) = bootstrap_storage(&config)
+                .expect("first bootstrap")
+                .acknowledge();
             use crate::store::ledger::{IntentRecord, TlsState};
             let record = IntentRecord {
                 intent_hash: "test-hash-001".to_string(),
@@ -289,19 +346,20 @@ mod tests {
                 exchange_order_id: None,
                 last_trade_id: None,
             };
-            result
-                .ledger
-                .append(record, &mut result.ledger_metrics)
+            boot.ledger
+                .append(record, &mut boot.ledger_metrics)
                 .expect("append should succeed");
-            assert_eq!(result.ledger.queue_depth(), 1);
+            assert_eq!(boot.ledger.queue_depth(), 1);
         }
 
         // Second bootstrap: should replay the appended intent
         {
-            let result = bootstrap_storage(&config).expect("second bootstrap");
-            assert_eq!(result.replay_outcome.records_replayed, 1);
-            assert_eq!(result.replay_outcome.in_flight_count, 1);
-            assert!(result.ledger.get("test-hash-001").is_some());
+            let (outcome, boot) = bootstrap_storage(&config)
+                .expect("second bootstrap")
+                .acknowledge();
+            assert_eq!(outcome.records_replayed, 1);
+            assert_eq!(outcome.in_flight_count, 1);
+            assert!(boot.ledger.get("test-hash-001").is_some());
         }
     }
 
@@ -340,8 +398,10 @@ mod tests {
             wal_capacity: 10,
             trade_id_capacity: 10,
         };
-        let result = bootstrap_storage(&config).expect("exact MIN_CAPACITY should succeed");
-        assert_eq!(result.ledger.queue_capacity(), 10);
+        let (_, boot) = bootstrap_storage(&config)
+            .expect("exact MIN_CAPACITY should succeed")
+            .acknowledge();
+        assert_eq!(boot.ledger.queue_capacity(), 10);
     }
 
     #[test]
@@ -386,7 +446,9 @@ mod tests {
                 wal_capacity: 100,
                 trade_id_capacity: 50,
             };
-            let mut result = bootstrap_storage(&config).expect("first bootstrap");
+            let (_, mut boot) = bootstrap_storage(&config)
+                .expect("first bootstrap")
+                .acknowledge();
             use crate::store::ledger::{IntentRecord, TlsState};
             let record = IntentRecord {
                 intent_hash: "partial-test-001".to_string(),
@@ -404,9 +466,8 @@ mod tests {
                 exchange_order_id: None,
                 last_trade_id: None,
             };
-            result
-                .ledger
-                .append(record, &mut result.ledger_metrics)
+            boot.ledger
+                .append(record, &mut boot.ledger_metrics)
                 .expect("append");
         }
 
@@ -438,9 +499,11 @@ mod tests {
                 wal_capacity: 100,
                 trade_id_capacity: 50,
             };
-            let result = bootstrap_storage(&config).expect("recovery bootstrap");
-            assert_eq!(result.replay_outcome.records_replayed, 1);
-            assert!(result.ledger.get("partial-test-001").is_some());
+            let (outcome, boot) = bootstrap_storage(&config)
+                .expect("recovery bootstrap")
+                .acknowledge();
+            assert_eq!(outcome.records_replayed, 1);
+            assert!(boot.ledger.get("partial-test-001").is_some());
         }
     }
 
@@ -456,7 +519,9 @@ mod tests {
                 wal_capacity: 100,
                 trade_id_capacity: 50,
             };
-            let mut result = bootstrap_storage(&config).expect("first bootstrap");
+            let (_, mut boot) = bootstrap_storage(&config)
+                .expect("first bootstrap")
+                .acknowledge();
             use crate::store::ledger::{IntentRecord, TlsState};
             for i in 0..15 {
                 let record = IntentRecord {
@@ -475,12 +540,11 @@ mod tests {
                     exchange_order_id: None,
                     last_trade_id: None,
                 };
-                result
-                    .ledger
-                    .append(record, &mut result.ledger_metrics)
+                boot.ledger
+                    .append(record, &mut boot.ledger_metrics)
                     .expect("append");
             }
-            assert_eq!(result.ledger.queue_depth(), 15);
+            assert_eq!(boot.ledger.queue_depth(), 15);
         }
 
         // Second bootstrap with capacity=10 — should fail because 15 > 10
@@ -505,9 +569,11 @@ mod tests {
                 wal_capacity: 100,
                 trade_id_capacity: 50,
             };
-            let result = bootstrap_storage(&config).expect("first bootstrap");
+            let (_, boot) = bootstrap_storage(&config)
+                .expect("first bootstrap")
+                .acknowledge();
             use crate::store::trade_id_registry::TradeRecord;
-            let metrics = &result.trade_id_metrics;
+            let metrics = &boot.trade_id_metrics;
             for i in 0..12 {
                 let record = TradeRecord {
                     trade_id: format!("tid-reduce-{i:03}"),
@@ -517,12 +583,11 @@ mod tests {
                     qty: 1.0,
                     price: 100.0,
                 };
-                result
-                    .trade_id_registry
+                boot.trade_id_registry
                     .insert_if_absent(record, metrics)
                     .expect("insert");
             }
-            assert_eq!(result.trade_id_registry.len(), 12);
+            assert_eq!(boot.trade_id_registry.len(), 12);
         }
 
         // Second bootstrap with trade_id_capacity=10 — should fail (12 > 10)
@@ -550,7 +615,9 @@ mod tests {
                 wal_capacity: 10,
                 trade_id_capacity: 10,
             };
-            let mut result = bootstrap_storage(&config).expect("first bootstrap");
+            let (_, mut boot) = bootstrap_storage(&config)
+                .expect("first bootstrap")
+                .acknowledge();
             use crate::store::ledger::{IntentRecord, TlsState};
             for i in 0..8 {
                 let record = IntentRecord {
@@ -569,9 +636,8 @@ mod tests {
                     exchange_order_id: None,
                     last_trade_id: None,
                 };
-                result
-                    .ledger
-                    .append(record, &mut result.ledger_metrics)
+                boot.ledger
+                    .append(record, &mut boot.ledger_metrics)
                     .expect("append");
             }
         }
@@ -583,10 +649,17 @@ mod tests {
             trade_id_capacity: 10,
         };
         let result = bootstrap_storage(&config).expect("should succeed despite high capacity");
-        assert_eq!(result.replay_outcome.in_flight_count, 8);
+        // Verify via replay_outcome before acknowledging
+        assert_eq!(result.replay_outcome().in_flight_count, 8);
+
+        let (outcome, boot) = result.acknowledge();
         // Verify the capacity warning branch is reachable and doesn't panic.
-        // The tracing::warn! fires but we verify correctness via the outcome.
-        let depth_pct = result.replay_outcome.in_flight_count * 100 / 10;
+        // Use queue_depth (the actual metric used in bootstrap_storage) rather
+        // than in_flight_count as proxy.
+        let depth = boot.ledger.queue_depth();
+        let capacity = boot.ledger.queue_capacity();
+        let depth_pct = depth * 100 / capacity;
+        assert_eq!(outcome.in_flight_count, 8);
         assert!(
             depth_pct >= CAPACITY_WARN_PCT,
             "test setup error: depth_pct={depth_pct} should be >= {CAPACITY_WARN_PCT}"
