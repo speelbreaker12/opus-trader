@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod bootstrap;
 pub mod config;
 pub mod deribit;
 pub mod store;

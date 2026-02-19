@@ -683,7 +683,9 @@ fn test_slippage_at_exact_max_allowed() {
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
     let result = evaluate_liquidity_gate(&input, &mut m);
     match result {
-        LiquidityGateResult::Allowed { slippage_bps, wap, .. } => {
+        LiquidityGateResult::Allowed {
+            slippage_bps, wap, ..
+        } => {
             assert!((slippage_bps.unwrap() - 10.0).abs() < 1e-6);
             assert!((wap.unwrap() - 100.10).abs() < 1e-6);
         }
