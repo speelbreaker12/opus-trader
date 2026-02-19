@@ -11,7 +11,7 @@
 | Architecture decisions | `opus` | Complex tradeoffs |
 | State machine changes | `opus` | Correctness-critical |
 | Debugging complex issues | `opus` | Needs careful analysis |
-| PRD implementation (ralph loop) | `sonnet` | Balanced speed/quality |
+| PRD implementation | `sonnet` | Balanced speed/quality |
 
 **Switch models:**
 ```bash
@@ -211,7 +211,10 @@ except ValidationError as e:
 | Review a PR | `/pr-review` | Systematic checklist prevents omissions |
 | Review risky code | `/failure-mode-review` | Traces implementation failure paths, not just happy paths |
 | Review architecture/ops | `/strategic-failure-review` | Systemic risks, hidden assumptions, operational/human factors |
-| Implement PRD story | `/ralph-loop` | Enforces WIP=1, verification gates |
+| Pre-implementation risk analysis | premortem | Forces failure modes, wrong impls, decisions before coding |
+| Implement PRD story | premortem → `/slice-execute` → `/post-impl-audit` | Premortem gate, fail-closed implementation, breaker audit |
+| Implement single story | `/slice-execute` | Premortem gate → preflight → implement → golden vectors |
+| Audit after implementation | `/post-impl-audit` | Breaker audit: AT proof, fail-closed, wrong-impl, paper compliance |
 | Write acceptance test | `/acceptance-test` | Contract alignment |
 | Check contracts (fast) | `/contract-review` | Fail-open hazard filter on code diffs |
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
@@ -243,29 +246,19 @@ User: "review this plan"
 Agent: [checks SKILLS/, finds plan-review.md, reads it, follows checklist]  # RIGHT
 ```
 
-### PRD Story Implementation (MANDATORY: Ralph Loop Only)
+### PRD Story Implementation (MANDATORY: Premortem → Execute → Audit)
 
-**CRITICAL: Pending PRD stories (`passes=false`) in `plans/prd.json` MUST be implemented via the Ralph harness.**
+**CRITICAL: Pending PRD stories (`passes=false`) in `plans/prd.json` MUST follow this workflow:**
 
-Do NOT manually implement pending PRD stories. Ralph enforces:
-- WIP=1 (one story, one commit per iteration)
-- Contract alignment review (mandatory)
-- Scope gating (prevents out-of-scope edits)
-- Verification gates (tests must pass)
-- Audit trail (state + artifacts)
+1. **Premortem** — `./plans/scaffold_premortem.sh <ID>` → fill all sections (§0-§10) → STOPLIGHT must be GREEN/YELLOW
+2. **Implement** — `/slice-execute` (reads premortem, implements enforcement + tests + golden vectors)
+3. **Audit** — `/post-impl-audit` (breaker role: AT proof, fail-closed, wrong-impl, paper compliance)
+4. **Verify** — `./plans/verify.sh quick` then `./plans/verify.sh full`
+5. **Gate** — `./plans/prd_set_pass.sh <ID> true`
 
-**How to run Ralph:**
-```bash
-# Thorough mode (recommended)
-RPH_PROFILE=thorough ./plans/ralph.sh 10
+Do NOT skip the premortem. Do NOT mark `passes=true` without proving tests.
 
-# Fast iteration
-RPH_PROFILE=fast ./plans/ralph.sh 5
-
-# See SKILLS/ralph-loop.md for full guide
-```
-
-**Exceptions allowed without Ralph:**
+**Exceptions:**
 - Post-implementation fixes: Stories with `passes=true` can be manually corrected/improved
 - Read-only operations: Review, status checks, scope analysis
 - Non-PRD work: Workflow maintenance, bug fixes, documentation
@@ -298,7 +291,7 @@ use context7 for serde_json error handling patterns
 
 Use before implementing with any external crate to avoid hallucinated APIs.
 
-### Ralph Contract Tools (Auto-Use)
+### Contract Validation Tools (Auto-Use)
 The `ralph` MCP server provides contract validation tools. **Use automatically** during PRD work:
 
 | When | Use This Tool |
