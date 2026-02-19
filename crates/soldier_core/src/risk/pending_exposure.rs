@@ -474,7 +474,6 @@ impl PendingExposureBook {
         let worst_case_long = current_delta + projected_positive;
         let worst_case_short = current_delta + projected_negative;
         if worst_case_long.abs() > limit || worst_case_short.abs() > limit {
-            // Fail-closed: on reject, old reservation stays intact.
             metrics.record_reserve_reject();
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
