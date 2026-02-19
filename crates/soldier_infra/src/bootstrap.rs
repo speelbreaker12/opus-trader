@@ -47,6 +47,7 @@ pub struct StorageConfig {
 /// - `wal_queue_capacity`: `ledger.queue_capacity()`
 /// - `wal_queue_enqueue_failures`: `ledger_metrics.wal_queue_enqueue_failures()`
 #[derive(Debug)]
+#[must_use = "BootstrapResult contains replay_outcome needed for startup latch decisions (AT-430)"]
 pub struct BootstrapResult {
     pub ledger: WalLedger,
     pub ledger_metrics: LedgerMetrics,
@@ -62,6 +63,10 @@ const CAPACITY_WARN_PCT: usize = 70;
 
 /// Initialize durable WAL ledger and trade-ID registry.
 ///
+/// **This function performs blocking I/O** (directory creation, file open,
+/// WAL replay). Call at startup, not from an async runtime without
+/// `spawn_blocking`.
+///
 /// Derived paths:
 /// - `{data_dir}/wal/intents.jsonl`
 /// - `{data_dir}/wal/trade_ids.jsonl`
@@ -71,9 +76,17 @@ const CAPACITY_WARN_PCT: usize = 70;
 /// but we create the root early to surface permission errors before touching
 /// either store.
 ///
+/// # Capacity enforcement
+///
+/// Capacity overflow (existing records > configured capacity) is enforced by
+/// `WalLedger::with_storage_path` and `TradeIdRegistry::with_storage_path`
+/// during construction. This function delegates to those constructors and
+/// does not perform a redundant post-replay check.
+///
 /// # Errors
 ///
 /// Returns `Err` if:
+/// - `data_dir` is not an absolute path
 /// - Capacity is below minimum (10)
 /// - Directory creation fails (permissions, disk full)
 /// - WAL or registry file open/replay fails
@@ -478,5 +491,105 @@ mod tests {
         };
         let err = bootstrap_storage(&config).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn bootstrap_fails_when_trade_id_capacity_reduced_below_existing() {
+        let data_dir = unique_temp_dir("tid_cap_reduce");
+        let _guard = TempDirGuard(data_dir.clone());
+
+        // First bootstrap: insert 12 trade IDs
+        {
+            let config = StorageConfig {
+                data_dir: data_dir.clone(),
+                wal_capacity: 100,
+                trade_id_capacity: 50,
+            };
+            let result = bootstrap_storage(&config).expect("first bootstrap");
+            use crate::store::trade_id_registry::TradeRecord;
+            let metrics = &result.trade_id_metrics;
+            for i in 0..12 {
+                let record = TradeRecord {
+                    trade_id: format!("tid-reduce-{i:03}"),
+                    group_id: "g1".to_string(),
+                    leg_idx: 0,
+                    ts: 1_000_000 + i as u64,
+                    qty: 1.0,
+                    price: 100.0,
+                };
+                result
+                    .trade_id_registry
+                    .insert_if_absent(record, metrics)
+                    .expect("insert");
+            }
+            assert_eq!(result.trade_id_registry.len(), 12);
+        }
+
+        // Second bootstrap with trade_id_capacity=10 — should fail (12 > 10)
+        let config = StorageConfig {
+            data_dir,
+            wal_capacity: 100,
+            trade_id_capacity: 10,
+        };
+        let err = bootstrap_storage(&config).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("trade-id registry"));
+    }
+
+    #[test]
+    fn bootstrap_high_capacity_does_not_panic() {
+        // Exercises the 70% capacity warning code path.
+        // With capacity=10 and 8 intents, depth_pct = 80% >= 70%.
+        let data_dir = unique_temp_dir("high_cap_warn");
+        let _guard = TempDirGuard(data_dir.clone());
+
+        // First bootstrap: write 8 intents into capacity=10
+        {
+            let config = StorageConfig {
+                data_dir: data_dir.clone(),
+                wal_capacity: 10,
+                trade_id_capacity: 10,
+            };
+            let mut result = bootstrap_storage(&config).expect("first bootstrap");
+            use crate::store::ledger::{IntentRecord, TlsState};
+            for i in 0..8 {
+                let record = IntentRecord {
+                    intent_hash: format!("warn-test-{i:03}"),
+                    group_id: "g1".to_string(),
+                    leg_idx: 0,
+                    instrument: "BTC-PERPETUAL".to_string(),
+                    side: "buy".to_string(),
+                    qty_q: 1.0,
+                    limit_price_q: 100.0,
+                    tls_state: TlsState::Created,
+                    created_ts: 1_000_000 + i as u64,
+                    sent_ts: 0,
+                    ack_ts: 0,
+                    last_fill_ts: 0,
+                    exchange_order_id: None,
+                    last_trade_id: None,
+                };
+                result
+                    .ledger
+                    .append(record, &mut result.ledger_metrics)
+                    .expect("append");
+            }
+        }
+
+        // Second bootstrap: replay triggers depth_pct = 80% >= CAPACITY_WARN_PCT
+        let config = StorageConfig {
+            data_dir,
+            wal_capacity: 10,
+            trade_id_capacity: 10,
+        };
+        let result = bootstrap_storage(&config).expect("should succeed despite high capacity");
+        assert_eq!(result.replay_outcome.in_flight_count, 8);
+        // Verify the capacity warning branch is reachable and doesn't panic.
+        // The tracing::warn! fires but we verify correctness via the outcome.
+        let depth_pct = result.replay_outcome.in_flight_count * 100 / 10;
+        assert!(
+            depth_pct >= CAPACITY_WARN_PCT,
+            "test setup error: depth_pct={depth_pct} should be >= {CAPACITY_WARN_PCT}"
+        );
     }
 }
