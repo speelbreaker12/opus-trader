@@ -17,6 +17,7 @@ Rules for passes=true:
   - if Phase-0 stories exist in PRD, non-Phase-0 stories cannot flip true until all Phase-0 stories are passes=true
   - enforcing_contract_ats must be non-empty (exit 6) — exempt: policy/certification categories
   - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
+  - loss_mode.worst_case, .fail_closed_cap, .drift_metric must all be non-empty (exit 9) — exempt: policy/certification
 USAGE
 }
 
@@ -135,6 +136,21 @@ if [[ "$STATUS" == "true" ]]; then
     if [[ -z "$enf_point" ]]; then
       echo "ERROR: cannot set passes=true for $ID: enforcement_point is missing/empty (PASS requires a named enforcement point)" >&2
       exit 6
+    fi
+  fi
+
+  # ── loss_mode gate ──
+  if [[ "$story_category" != "policy" && "$story_category" != "certification" ]]; then
+    loss_ok=$(jq -r --arg id "$ID" '
+      .items[] | select(.id == $id) |
+      (.loss_mode // {}) | if type == "object" then . else {} end |
+      ((.worst_case // "") | length > 0) and
+      ((.fail_closed_cap // "") | length > 0) and
+      ((.drift_metric // "") | length > 0)
+    ' "$PRD_FILE")
+    if [[ "$loss_ok" != "true" ]]; then
+      echo "ERROR: loss_mode incomplete for $ID (worst_case, fail_closed_cap, drift_metric required)" >&2
+      exit 9
     fi
   fi
 
