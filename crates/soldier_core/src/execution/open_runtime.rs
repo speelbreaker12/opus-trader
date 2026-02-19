@@ -18,6 +18,8 @@ use super::{
 };
 
 const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
+const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
+    "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED";
 const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGET_REJECT";
 
 /// OPEN runtime inputs assembled before chokepoint evaluation.
@@ -40,8 +42,11 @@ pub struct OpenRuntimeInput {
     pub margin_gate_input: MarginGateInput,
     /// Caller-provided idempotency key for pending exposure reservation.
     /// Typically derived from intent_hash: `ReservationId::new(format!("pe-{}", intent.intent_hash))`.
-    // TODO(PX-2): When per-instrument isolation is added, scope reservation IDs per instrument book.
+    /// ReservationIds are globally unique across instruments — the reservation book uses a
+    /// reverse lookup to route settlements to the correct instrument.
     pub reservation_id: ReservationId,
+    /// Instrument for per-instrument pending exposure isolation (PX-2, §1.4.2.1).
+    pub instrument_id: String,
 }
 
 /// Runtime metrics aggregated by subsystem for OPEN wiring.
@@ -121,6 +126,7 @@ pub fn build_open_order_intent_runtime(
     if pre_dispatch_gates_ready {
         match pending_book.reserve(
             &input.reservation_id,
+            &input.instrument_id,
             input.current_delta,
             input.delta_impact_est,
             &mut runtime_metrics.pending_exposure,
@@ -130,6 +136,16 @@ pub fn build_open_order_intent_runtime(
                 ..
             } => {
                 pending_reservation_id = Some(rid);
+            }
+            PendingExposureResult::Rejected {
+                reason: crate::risk::PendingExposureRejectReason::InstrumentNotRegistered,
+                ..
+            } => {
+                gate_results.liquidity_gate_passed = false;
+                gate_results.net_edge_passed = false;
+                gate_results.pricer_passed = false;
+                liquidity_override_reason =
+                    Some(REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED);
             }
             PendingExposureResult::Rejected { .. } => {
                 gate_results.liquidity_gate_passed = false;
@@ -284,6 +300,7 @@ pub fn build_open_order_intent_runtime(
     {
         let released = pending_book.settle(
             reservation_id,
+            &input.instrument_id,
             PendingExposureTerminalOutcome::Rejected,
             &mut runtime_metrics.pending_exposure,
         );
@@ -322,7 +339,7 @@ pub fn settle_pending_on_tlsm_terminal(
     pending_book: &PendingExposureBook,
     metrics: &mut PendingExposureMetrics,
 ) {
-    if let Some(reservation_id) = tlsm.take_pending_reservation_on_terminal() {
+    if let Some((reservation_id, instrument_id)) = tlsm.take_pending_reservation_on_terminal() {
         let outcome = match tlsm.state() {
             crate::execution::TlsmState::Filled => PendingExposureTerminalOutcome::Filled,
             crate::execution::TlsmState::Cancelled | crate::execution::TlsmState::Failed => {
@@ -334,16 +351,16 @@ pub fn settle_pending_on_tlsm_terminal(
             _ => {
                 tracing::error!(
                     state = ?tlsm.state(),
-                    %reservation_id,
+                    %reservation_id, %instrument_id,
                     "take_pending_reservation_on_terminal returned Some for non-terminal state"
                 );
                 PendingExposureTerminalOutcome::Rejected
             }
         };
-        let released = pending_book.settle(&reservation_id, outcome, metrics);
+        let released = pending_book.settle(&reservation_id, &instrument_id, outcome, metrics);
         if !released {
             tracing::error!(
-                %reservation_id,
+                %reservation_id, %instrument_id,
                 ?outcome,
                 "pending exposure settlement failed — reservation not found in book (TLSM/book desync)"
             );

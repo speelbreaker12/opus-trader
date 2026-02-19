@@ -90,7 +90,17 @@ fn base_open_input() -> OpenRuntimeInput {
             mm_util_kill: 0.95,
         },
         reservation_id: ReservationId::new("test-intent-0000").unwrap(),
+        instrument_id: "BTC-PERPETUAL".to_string(),
     }
+}
+
+const INST: &str = "BTC-PERPETUAL";
+
+/// Helper: create a PendingExposureBook with BTC-PERPETUAL registered.
+fn make_pending_book(limit: f64) -> PendingExposureBook {
+    let book = PendingExposureBook::new(None);
+    book.register_instrument(INST, Some(limit));
+    book
 }
 
 #[test]
@@ -98,7 +108,7 @@ fn test_runtime_wiring_releases_pending_reservation_on_reject() {
     let mut input = base_open_input();
     input.exposure_budget_input.global_delta_limit_usd = Some(5.0);
 
-    let pending_book = PendingExposureBook::new(Some(100.0));
+    let pending_book = make_pending_book(100.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -127,7 +137,7 @@ fn test_runtime_wiring_releases_pending_reservation_on_reject() {
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
     assert!(out.pending_reservation_id.is_none());
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.pending_exposure.release_total(), 1);
     assert_eq!(runtime_metrics.reject_override_mismatch_total, 0);
 }
@@ -138,7 +148,7 @@ fn test_runtime_wiring_pending_reject_takes_precedence_over_global_budget_reject
     input.exposure_budget_input.global_delta_limit_usd = Some(5.0);
     input.delta_impact_est = 10.0;
 
-    let pending_book = PendingExposureBook::new(Some(5.0));
+    let pending_book = make_pending_book(5.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -167,7 +177,7 @@ fn test_runtime_wiring_pending_reject_takes_precedence_over_global_budget_reject
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
     assert!(out.pending_reservation_id.is_none());
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.global_exposure.reject_total(), 0);
     assert_eq!(runtime_metrics.reject_override_mismatch_total, 0);
 }
@@ -177,7 +187,7 @@ fn test_runtime_wiring_inventory_skew_forces_net_edge_recheck_before_pricer() {
     let mut input = base_open_input();
     input.inventory_skew_input.current_delta = 100.0;
 
-    let pending_book = PendingExposureBook::new(Some(200.0));
+    let pending_book = make_pending_book(200.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -199,7 +209,7 @@ fn test_runtime_wiring_margin_kill_rejects_before_open_dispatch() {
     input.margin_gate_input.maintenance_margin_usd = 96.0;
     input.margin_gate_input.equity_usd = 100.0;
 
-    let pending_book = PendingExposureBook::new(Some(200.0));
+    let pending_book = make_pending_book(200.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -212,7 +222,7 @@ fn test_runtime_wiring_margin_kill_rejects_before_open_dispatch() {
 
     assert_eq!(out.mode_hint, MarginGateMode::Kill);
     assert!(out.pending_reservation_id.is_none());
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.pending_exposure.reserve_attempt_total(), 0);
 
     match out.choke_result {
@@ -230,7 +240,7 @@ fn test_runtime_wiring_margin_reject_preserves_stricter_incoming_risk_state() {
     input.margin_gate_input.maintenance_margin_usd = 80.0;
     input.margin_gate_input.equity_usd = 100.0;
 
-    let pending_book = PendingExposureBook::new(Some(200.0));
+    let pending_book = make_pending_book(200.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -264,7 +274,7 @@ fn test_runtime_wiring_inventory_skew_can_recover_initial_net_edge_reject() {
     input.pricer_input.side = PricerSide::Sell;
     input.pricer_input.min_edge_usd = 11.0;
 
-    let pending_book = PendingExposureBook::new(Some(200.0));
+    let pending_book = make_pending_book(200.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -288,7 +298,7 @@ fn test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first
     input.net_edge_input.min_edge_usd = Some(50.0);
     input.inventory_skew_input.delta_limit = None;
 
-    let pending_book = PendingExposureBook::new(Some(200.0));
+    let pending_book = make_pending_book(200.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -324,7 +334,7 @@ fn setup_tlsm_settlement_test() -> (
     use soldier_core::risk::PendingExposureMetrics;
 
     let input = base_open_input();
-    let pending_book = PendingExposureBook::new(Some(100.0));
+    let pending_book = make_pending_book(100.0);
     let mut choke_metrics = ChokeMetrics::new();
     let mut runtime_metrics = OpenRuntimeMetrics::default();
 
@@ -340,10 +350,10 @@ fn setup_tlsm_settlement_test() -> (
         .pending_reservation_id
         .expect("approved order should have reservation");
 
-    assert_eq!(pending_book.active_reservations(), 1);
-    assert!(pending_book.pending_total() > 0.0);
+    assert_eq!(pending_book.active_reservations(INST), 1);
+    assert!(pending_book.pending_total(INST) > 0.0);
 
-    let tlsm = Tlsm::with_pending_reservation(reservation_id);
+    let tlsm = Tlsm::with_pending_reservation(reservation_id, INST.to_string());
     let pending_metrics = PendingExposureMetrics::new();
 
     (tlsm, pending_book, pending_metrics)
@@ -359,12 +369,12 @@ fn test_tlsm_settles_pending_exposure_on_filled() {
     tlsm.apply(TlsmEvent::Acked);
     tlsm.apply(TlsmEvent::Filled);
 
-    assert_eq!(pending_book.active_reservations(), 1);
+    assert_eq!(pending_book.active_reservations(INST), 1);
 
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
 
-    assert_eq!(pending_book.active_reservations(), 0);
-    assert!((pending_book.pending_total() - 0.0).abs() < 1e-9);
+    assert_eq!(pending_book.active_reservations(INST), 0);
+    assert!((pending_book.pending_total(INST) - 0.0).abs() < 1e-9);
     assert_eq!(pending_metrics.release_total(), 1);
 }
 
@@ -379,7 +389,7 @@ fn test_tlsm_settles_pending_exposure_on_cancelled() {
 
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
 
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(pending_metrics.release_total(), 1);
 }
 
@@ -394,7 +404,7 @@ fn test_tlsm_settles_pending_exposure_on_failed() {
 
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
 
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(pending_metrics.release_total(), 1);
 }
 
@@ -409,13 +419,13 @@ fn test_tlsm_settlement_noop_on_non_terminal_state() {
 
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
 
-    assert_eq!(pending_book.active_reservations(), 1);
+    assert_eq!(pending_book.active_reservations(INST), 1);
     assert_eq!(pending_metrics.release_total(), 0);
 
     tlsm.apply(TlsmEvent::Filled);
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
 
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(pending_metrics.release_total(), 1);
 }
 
@@ -429,7 +439,7 @@ fn test_tlsm_settlement_is_idempotent_on_duplicate_terminal_events() {
     tlsm.apply(TlsmEvent::Cancelled);
 
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(pending_metrics.release_total(), 1);
 
     let result = tlsm.apply(TlsmEvent::Filled);
@@ -439,6 +449,38 @@ fn test_tlsm_settlement_is_idempotent_on_duplicate_terminal_events() {
     ));
 
     settle_pending_on_tlsm_terminal(&mut tlsm, &pending_book, &mut pending_metrics);
-    assert_eq!(pending_book.active_reservations(), 0);
+    assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(pending_metrics.release_total(), 1);
+}
+
+#[test]
+fn test_unregistered_instrument_rejected_through_runtime() {
+    // P1 #3: Register a DIFFERENT instrument than what base_open_input uses ("BTC-PERPETUAL").
+    // The runtime should reject with PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED.
+    let input = base_open_input();
+    let book = PendingExposureBook::new(None);
+    // Register ETH-PERPETUAL only — BTC-PERPETUAL is NOT registered.
+    book.register_instrument("ETH-PERPETUAL", Some(500.0));
+
+    let mut choke_metrics = ChokeMetrics::new();
+    let mut runtime_metrics = OpenRuntimeMetrics::default();
+
+    let out =
+        build_open_order_intent_runtime(&input, &book, &mut choke_metrics, &mut runtime_metrics);
+
+    assert!(
+        matches!(out.choke_result, ChokeResult::Rejected { .. }),
+        "should reject when instrument not registered"
+    );
+    assert!(
+        out.pending_reservation_id.is_none(),
+        "no reservation should be created for unregistered instrument"
+    );
+    assert_eq!(
+        runtime_metrics
+            .pending_exposure
+            .reserve_instrument_not_registered_total(),
+        1,
+        "instrument_not_registered metric should fire"
+    );
 }
