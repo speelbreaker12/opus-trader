@@ -579,7 +579,7 @@ fn test_failed_from_partially_filled_transitions() {
 fn test_take_pending_reservation_only_on_terminal() {
     use soldier_core::risk::ReservationId;
     let rid = ReservationId::new("test-reservation-001").expect("valid ID");
-    let mut sm = Tlsm::with_pending_reservation(rid.clone());
+    let mut sm = Tlsm::with_pending_reservation(rid.clone(), "TEST".to_string());
 
     // Non-terminal states must NOT release
     assert!(
@@ -597,10 +597,9 @@ fn test_take_pending_reservation_only_on_terminal() {
     assert!(sm.state().is_terminal());
     let taken = sm.take_pending_reservation_on_terminal();
     assert!(taken.is_some(), "Filled must release reservation");
-    assert_eq!(
-        taken.expect("reservation must be returned on terminal"),
-        rid
-    );
+    let (taken_rid, taken_inst) = taken.expect("reservation must be returned on terminal");
+    assert_eq!(taken_rid, rid);
+    assert_eq!(taken_inst, "TEST");
 
     // Already consumed
     assert!(

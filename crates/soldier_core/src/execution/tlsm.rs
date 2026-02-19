@@ -127,6 +127,8 @@ pub struct Tlsm {
     transitions: Vec<(TlsmEvent, TlsmState, TlsmState)>,
     /// Pending exposure reservation ID, settled on terminal state.
     pending_reservation_id: Option<ReservationId>,
+    /// Instrument associated with the pending reservation (PX-2).
+    pending_instrument_id: Option<String>,
 }
 
 impl Tlsm {
@@ -136,15 +138,17 @@ impl Tlsm {
             state: TlsmState::Created,
             transitions: Vec::new(),
             pending_reservation_id: None,
+            pending_instrument_id: None,
         }
     }
 
-    /// Create a new TLSM with a pending exposure reservation (S6-008).
-    pub fn with_pending_reservation(reservation_id: ReservationId) -> Self {
+    /// Create a new TLSM with a pending exposure reservation (S6-008, PX-2).
+    pub fn with_pending_reservation(reservation_id: ReservationId, instrument_id: String) -> Self {
         Self {
             state: TlsmState::Created,
             transitions: Vec::new(),
             pending_reservation_id: Some(reservation_id),
+            pending_instrument_id: Some(instrument_id),
         }
     }
 
@@ -158,11 +162,31 @@ impl Tlsm {
         self.transitions.len()
     }
 
-    /// Get and clear the pending reservation ID if reaching terminal state.
-    /// Returns Some(reservation_id) when transitioning to terminal state, None otherwise.
-    pub fn take_pending_reservation_on_terminal(&mut self) -> Option<ReservationId> {
+    /// Get and clear the pending reservation ID + instrument if reaching terminal state.
+    /// Returns `Some((reservation_id, instrument_id))` on terminal, `None` otherwise.
+    ///
+    /// Settlement is one-shot: calling twice after terminal returns `None` on the second call,
+    /// preventing double-settlement on duplicate WS events.
+    pub fn take_pending_reservation_on_terminal(&mut self) -> Option<(ReservationId, String)> {
         if self.state.is_terminal() {
-            self.pending_reservation_id.take()
+            match (
+                self.pending_reservation_id.take(),
+                self.pending_instrument_id.take(),
+            ) {
+                (Some(rid), Some(iid)) => Some((rid, iid)),
+                (Some(rid), None) => {
+                    // Defensive: reservation without instrument means TLSM was
+                    // constructed with old API or data corruption. Log and drop.
+                    tracing::error!(
+                        %rid,
+                        "pending_reservation_id present but pending_instrument_id missing — \
+                         cannot settle without instrument (budget leak)"
+                    );
+                    debug_assert!(false, "TLSM has reservation but no instrument");
+                    None
+                }
+                _ => None,
+            }
         } else {
             None
         }
