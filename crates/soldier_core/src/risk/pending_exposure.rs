@@ -258,9 +258,12 @@ impl PendingExposureBook {
     /// - `delta_limit: None` or `delta_limit: Some(0.0)` rejects all reserves (fail-closed)
     pub fn register_instrument(&self, instrument_id: impl Into<String>, delta_limit: Option<f64>) {
         let id = instrument_id.into();
+        // Normalize at registration: NaN, Infinity, negative, zero → None (fail-closed).
+        let normalized = normalized_limit(delta_limit);
         let mut inner = self.inner.borrow_mut();
         if let Some(existing) = inner.instruments.get_mut(&id) {
-            if let Some(new_limit) = normalized_limit(delta_limit) {
+            let has_active = !existing.reservations.is_empty();
+            if let Some(new_limit) = normalized {
                 // Check worst-case exposure (positive and negative buckets independently),
                 // not just the algebraic pending_total which can hide a large one-sided position.
                 if existing.pending_positive > new_limit
@@ -274,13 +277,20 @@ impl PendingExposureBook {
                          new reserves blocked until existing reservations settle"
                     );
                 }
+            } else if has_active {
+                tracing::warn!(
+                    %id,
+                    active_reservations = existing.reservations.len(),
+                    "config reload: instrument delta_limit set to None — \
+                     all new reserves blocked until existing reservations settle"
+                );
             }
-            existing.delta_limit = delta_limit;
+            existing.delta_limit = normalized;
         } else {
             inner.instruments.insert(
                 id,
                 InstrumentBook {
-                    delta_limit,
+                    delta_limit: normalized,
                     pending_positive: 0.0,
                     pending_negative: 0.0,
                     pending_total: 0.0,
@@ -456,8 +466,8 @@ impl PendingExposureBook {
         // NOTE: Uses algebraic sum (net across all instruments), not worst-case.
         // Per-instrument worst-case (long/short buckets) is the primary safety gate;
         // the global check is a secondary ceiling preventing aggregate over-extension.
+        let old_global_delta = old_delta.unwrap_or(0.0);
         if let Some(global_limit) = normalized_limit(self.global_delta_limit) {
-            let old_global_delta = old_delta.unwrap_or(0.0);
             let trial_global = inner.global_total - old_global_delta + delta_impact_est;
             if trial_global.abs() > global_limit {
                 metrics.record_reserve_reject();
@@ -482,7 +492,6 @@ impl PendingExposureBook {
         let new_positive = snap_to_zero(new_positive);
         let new_negative = snap_to_zero(new_negative);
         let new_total = snap_to_zero(new_positive + new_negative);
-        let old_global_delta = old_delta.unwrap_or(0.0);
         let new_global_total =
             snap_to_zero(inner.global_total - old_global_delta + delta_impact_est);
 

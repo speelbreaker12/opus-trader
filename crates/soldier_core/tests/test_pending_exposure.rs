@@ -723,9 +723,14 @@ fn test_register_instrument_nan_and_infinity_limits_are_fail_closed() {
     // P2 #5: NaN and Infinity delta_limits are treated as invalid (fail-closed at reserve time).
     let mut metrics = PendingExposureMetrics::new();
 
-    // NaN limit
+    // NaN limit — normalized to None at registration
     let book_nan = PendingExposureBook::new(None);
     book_nan.register_instrument(INST, Some(f64::NAN));
+    assert_eq!(
+        book_nan.instrument_delta_limit(INST),
+        Some(None),
+        "NaN should be normalized to None at registration"
+    );
     let r1 = ReservationId::new("r1").unwrap();
     match book_nan.reserve(&r1, INST, 0.0, 1.0, &mut metrics) {
         PendingExposureResult::Rejected {
@@ -735,9 +740,14 @@ fn test_register_instrument_nan_and_infinity_limits_are_fail_closed() {
         other => panic!("NaN limit should fail-closed, got {other:?}"),
     }
 
-    // Infinity limit
+    // Infinity limit — normalized to None at registration
     let book_inf = PendingExposureBook::new(None);
     book_inf.register_instrument(INST, Some(f64::INFINITY));
+    assert_eq!(
+        book_inf.instrument_delta_limit(INST),
+        Some(None),
+        "Infinity should be normalized to None at registration"
+    );
     let r2 = ReservationId::new("r2").unwrap();
     match book_inf.reserve(&r2, INST, 0.0, 1.0, &mut metrics) {
         PendingExposureResult::Rejected {
@@ -750,6 +760,11 @@ fn test_register_instrument_nan_and_infinity_limits_are_fail_closed() {
     // None limit (explicit None)
     let book_none = PendingExposureBook::new(None);
     book_none.register_instrument(INST, None);
+    assert_eq!(
+        book_none.instrument_delta_limit(INST),
+        Some(None),
+        "None stays None"
+    );
     let r3 = ReservationId::new("r3").unwrap();
     match book_none.reserve(&r3, INST, 0.0, 1.0, &mut metrics) {
         PendingExposureResult::Rejected {
@@ -759,9 +774,14 @@ fn test_register_instrument_nan_and_infinity_limits_are_fail_closed() {
         other => panic!("None limit should fail-closed, got {other:?}"),
     }
 
-    // Zero limit
+    // Zero limit — normalized to None at registration
     let book_zero = PendingExposureBook::new(None);
     book_zero.register_instrument(INST, Some(0.0));
+    assert_eq!(
+        book_zero.instrument_delta_limit(INST),
+        Some(None),
+        "zero should be normalized to None at registration"
+    );
     let r4 = ReservationId::new("r4").unwrap();
     match book_zero.reserve(&r4, INST, 0.0, 1.0, &mut metrics) {
         PendingExposureResult::Rejected {
