@@ -339,15 +339,8 @@ fn test_custom_config_thresholds_respected() {
         now_ms: 1_059_000, // age = 59s
     };
     let eval = evaluate_fee_staleness(&fresh, &config);
-    assert_eq!(
-        eval.staleness,
-        FeeStaleness::Fresh,
-        "59s should be Fresh with soft=60"
-    );
-    assert!(
-        (eval.fee_rate_effective - 0.001).abs() < 1e-12,
-        "Fresh uses actual rate"
-    );
+    assert_eq!(eval.staleness, FeeStaleness::Fresh, "59s should be Fresh with soft=60");
+    assert!((eval.fee_rate_effective - 0.001).abs() < 1e-12, "Fresh uses actual rate");
 
     // age = 61s → SoftStale (between custom soft=60 and hard=120)
     let soft = FeeCacheSnapshot {
@@ -356,15 +349,8 @@ fn test_custom_config_thresholds_respected() {
         now_ms: 1_061_000, // age = 61s
     };
     let eval = evaluate_fee_staleness(&soft, &config);
-    assert_eq!(
-        eval.staleness,
-        FeeStaleness::SoftStale,
-        "61s should be SoftStale with soft=60"
-    );
-    assert!(
-        (eval.fee_rate_effective - 0.0011).abs() < 1e-12,
-        "SoftStale applies 10% buffer"
-    );
+    assert_eq!(eval.staleness, FeeStaleness::SoftStale, "61s should be SoftStale with soft=60");
+    assert!((eval.fee_rate_effective - 0.0011).abs() < 1e-12, "SoftStale applies 10% buffer");
     assert_eq!(eval.risk_state, RiskState::Healthy);
 
     // age = 121s → HardStale (above custom hard=120)
@@ -374,11 +360,7 @@ fn test_custom_config_thresholds_respected() {
         now_ms: 1_121_000, // age = 121s
     };
     let eval = evaluate_fee_staleness(&hard, &config);
-    assert_eq!(
-        eval.staleness,
-        FeeStaleness::HardStale,
-        "121s should be HardStale with hard=120"
-    );
+    assert_eq!(eval.staleness, FeeStaleness::HardStale, "121s should be HardStale with hard=120");
     assert_eq!(eval.risk_state, RiskState::Degraded);
 
     // Control: with default config, 61s and 121s would both be Fresh.

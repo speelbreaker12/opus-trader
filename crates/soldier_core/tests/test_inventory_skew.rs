@@ -216,3 +216,111 @@ fn test_at281_risk_increasing_buy_tightens_min_edge_by_45_pct() {
     }
     assert_eq!(metrics.reject_total(), 1);
 }
+
+// ─── Devils-advocate: boundary mutations ─────────────────────────────
+
+/// Catches mutation: `<` flipped to `<=` on net_edge < adjusted_min_edge check.
+/// net_edge == adjusted_min_edge must ALLOW.
+#[test]
+fn test_inventory_skew_at_exact_adjusted_threshold_allowed() {
+    let mut metrics = InventorySkewMetrics::new();
+    // Zero inventory → bias=0 → adjusted_min_edge == min_edge == 2.0
+    // net_edge=2.0 == adjusted_min_edge=2.0 → must ALLOW (< not <=)
+    let input = InventorySkewInput {
+        current_delta: 0.0,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 2.0,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let out = evaluate_inventory_skew(&input, &mut metrics);
+    assert!(
+        matches!(out, InventorySkewResult::Allowed { .. }),
+        "net_edge == adjusted_min_edge must ALLOW (< not <=), got {out:?}"
+    );
+}
+
+/// Catches mutation: pending_delta ignored (only current_delta used).
+/// Combined delta (current + pending) must determine inventory bias.
+#[test]
+fn test_inventory_skew_pending_delta_contribution() {
+    let mut metrics = InventorySkewMetrics::new();
+    // current_delta=50, pending_delta=40 → combined=90 → bias=0.9
+    // This should tighten min_edge and potentially reject.
+    let input_with_pending = InventorySkewInput {
+        current_delta: 50.0,
+        pending_delta: 40.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 2.5,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let out = evaluate_inventory_skew(&input_with_pending, &mut metrics);
+    assert!(
+        matches!(
+            out,
+            InventorySkewResult::Rejected {
+                reason: InventorySkewRejectReason::InventorySkewReject,
+                ..
+            }
+        ),
+        "pending_delta must contribute to bias — combined=90 should reject, got {out:?}"
+    );
+
+    // Prove it's specifically the pending_delta that causes the rejection:
+    // same test but pending=0 → combined=50 → bias=0.5 → adjusted=2.5 → net==adjusted → ALLOW
+    let mut metrics2 = InventorySkewMetrics::new();
+    let input_without_pending = InventorySkewInput {
+        current_delta: 50.0,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 2.5,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let out2 = evaluate_inventory_skew(&input_without_pending, &mut metrics2);
+    assert!(
+        matches!(out2, InventorySkewResult::Allowed { .. }),
+        "without pending_delta, combined=50 should ALLOW, got {out2:?}"
+    );
+}
+
+/// Catches mutation: NaN current_delta accepted silently.
+#[test]
+fn test_inventory_skew_nan_input_fails_closed() {
+    let mut metrics = InventorySkewMetrics::new();
+    let input = InventorySkewInput {
+        current_delta: f64::NAN,
+        pending_delta: 0.0,
+        delta_limit: Some(100.0),
+        side: InventorySkewSide::Buy,
+        min_edge_usd: 2.0,
+        net_edge_usd: 10.0,
+        limit_price: 100.0,
+        tick_size: 0.5,
+        inventory_skew_k: 0.5,
+        inventory_skew_tick_penalty_max: 3,
+    };
+
+    let out = evaluate_inventory_skew(&input, &mut metrics);
+    assert!(
+        matches!(out, InventorySkewResult::Rejected { .. }),
+        "NaN current_delta must fail-closed to REJECT, got {out:?}"
+    );
+}
