@@ -251,10 +251,11 @@ Agent: [checks SKILLS/, finds plan-review.md, reads it, follows checklist]  # RI
 **CRITICAL: Pending PRD stories (`passes=false`) in `plans/prd.json` MUST follow this workflow:**
 
 1. **Premortem** — `./plans/scaffold_premortem.sh <ID>` → fill all sections (§0-§10) → STOPLIGHT must be GREEN/YELLOW
-2. **Implement** — `/slice-execute` (reads premortem, implements enforcement + tests + golden vectors)
+2. **Implement** — `/slice-execute` (reads premortem + prior postmortems, implements enforcement + tests + golden vectors)
 3. **Audit** — `/post-impl-audit` (breaker role: AT proof, fail-closed, wrong-impl, paper compliance)
 4. **Verify** — `./plans/verify.sh quick` then `./plans/verify.sh full`
 5. **Gate** — `./plans/prd_set_pass.sh <ID> true`
+6. **Postmortem** — fill `reviews/postmortems/<ID>_postmortem.md` (what surprised you, what the premortem missed, what the next story should watch for)
 
 Do NOT skip the premortem. Do NOT mark `passes=true` without proving tests.
 

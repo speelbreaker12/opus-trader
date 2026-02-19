@@ -107,6 +107,10 @@ If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined A
 - State machine transitions affected:
 
 ## 9) Constraint I expect to hit
+
+> Before filling this section, read `reviews/postmortems/<prior-story>_postmortem.md` for stories in the same slice/crate. Prior pain becomes current prevention.
+
+- Lessons from prior story postmortems:
 - What will slow me down:
 - Exploit (workaround for this story):
 - Smallest fix that prevents it next time:
