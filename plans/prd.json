@@ -10,7 +10,7 @@
     "S14.2"
   ],
   "schema_notes": {
-    "partial_coverage_notes": "Per-story dict mapping AT-### to a rationale string. Used when an AT is in enforcing_contract_ats but only partially proven by this story. The authoritative deferred-AT tracker is docs/reconcile/slices_0_6_reconciliation.md \u00a7 Deferred ATs table. prd_ref_check.sh warns when an AT appears in both enforcing_contract_ats and partial_coverage_notes."
+    "partial_coverage_notes": "Per-story dict mapping AT-### to a rationale string. Used when an AT is in enforcing_contract_ats but only partially proven by this story. The authoritative deferred-AT tracker is docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table. prd_ref_check.sh warns when an AT appears in both enforcing_contract_ats and partial_coverage_notes."
   },
   "rules": {
     "one_commit_per_story": true,
@@ -2608,8 +2608,8 @@
         "AT-935"
       ],
       "partial_coverage_notes": {
-        "AT-925": "partial: queue-full detection + WAL error counter proven (test_at935_queue_full_returns_error, test_queue_full_returns_immediately). Mode forcing (TradingMode::ReduceOnly under backpressure) deferred to PolicyGuard integration slice S8.1c. See docs/reconcile/slices_0_6_reconciliation.md \u00a7 Deferred ATs table.",
-        "AT-940": "WAL crash-recovery half proven. Full reconciliation flow (exchange REST + TLSM update) is an integration concern. See docs/reconcile/slices_0_6_reconciliation.md \u00a7 Deferred ATs table."
+        "AT-925": "partial: queue-full detection + WAL error counter proven (test_at935_queue_full_returns_error, test_queue_full_returns_immediately). Mode forcing (TradingMode::ReduceOnly under backpressure) deferred to PolicyGuard integration slice S8.1c. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table.",
+        "AT-940": "WAL crash-recovery half proven. Full reconciliation flow (exchange REST + TLSM update) is an integration concern. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
       }
     },
     {
@@ -2904,7 +2904,7 @@
         "crates/soldier_infra/tests/test_dispatch_durability.rs"
       ],
       "partial_coverage_notes": {
-        "AT-969": "GOP-only AT. Requires EvidenceGuard (enforced_profile != CSP). S4 scope is CSP profile only. Deferred to EvidenceGuard integration slice. See docs/reconcile/slices_0_6_reconciliation.md \u00a7 Deferred ATs table."
+        "AT-969": "GOP-only AT. Requires EvidenceGuard (enforced_profile != CSP). S4 scope is CSP profile only. Deferred to EvidenceGuard integration slice. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
       }
     },
     {
@@ -3507,7 +3507,7 @@
         "crates/soldier_core/tests/test_dispatch_chokepoint.rs"
       ],
       "partial_coverage_notes": {
-        "AT-925": "partial: architectural chokepoint proof (exchange client visibility restriction). PolicyGuard ReduceOnly forcing under WAL backpressure deferred to S8.1c. See docs/reconcile/slices_0_6_reconciliation.md \u00a7 Deferred ATs table."
+        "AT-925": "partial: architectural chokepoint proof (exchange client visibility restriction). PolicyGuard ReduceOnly forcing under WAL backpressure deferred to S8.1c. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
       }
     },
     {
@@ -9764,11 +9764,16 @@
       "passes": false,
       "contract_must_evidence": [],
       "enforcing_contract_ats": [
-        "AT-262",
-        "AT-311",
-        "AT-312",
-        "AT-313",
-        "AT-942"
+        "AT-992",
+        "AT-416",
+        "AT-1069",
+        "AT-991",
+        "AT-1054",
+        "AT-1065",
+        "AT-931",
+        "AT-337",
+        "AT-918",
+        "AT-925"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
