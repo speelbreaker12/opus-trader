@@ -247,11 +247,25 @@ An implementation claiming CSP compliance MUST enforce all of the following inva
 - Idempotency keys MUST be derived solely from deterministic intent identity fields (e.g., `group_id`, `leg_idx`, `intent_hash`, strategy/policy identifiers where applicable).
 - Idempotency keys MUST NOT depend on wall-clock time, RNG, or process-local counters.
 
+AT-1095
+- Given: an idempotency key generation codepath.
+- When: the key derivation inputs are inspected.
+- Then: the key MUST be derived solely from deterministic intent identity fields (e.g., `group_id`, `leg_idx`, `intent_hash`); no RNG seed, process-local counter, or wall-clock timestamp appears in the derivation.
+- Pass criteria: key is identical across process restarts and across machines for the same intent identity fields.
+- Fail criteria: key changes across restarts, differs across machines, or includes RNG/counter/wall-clock input.
+
 **B) RecordedBeforeDispatch for Risk-Increasing Actions** <!-- CSP-003 -->
 <!-- Anchors: wal, recorded, dispatch, intent -->
 - Every OPEN intent MUST satisfy RecordedBeforeDispatch before any network dispatch attempt.
 - Failure to satisfy RecordedBeforeDispatch MUST fail-closed (OPEN blocked).
-- “RecordedBeforeDispatch” MUST use the contract’s WAL semantics (Append-only, crash-safe intent log), as defined elsewhere in this contract.
+- "RecordedBeforeDispatch" MUST use the contract's WAL semantics (Append-only, crash-safe intent log), as defined elsewhere in this contract.
+
+AT-1096
+- Given: a WAL with N committed entries and a simulated crash (SIGKILL) injected between WAL write stages (e.g., after data write but before fsync, or after fsync but before index update).
+- When: the process restarts and the WAL is recovered.
+- Then: the WAL MUST be recoverable with no partial entries; it contains exactly the N entries committed before the crash; no uncommitted partial writes are visible.
+- Pass criteria: WAL recovery succeeds; entry count equals N; no partial or corrupted entries; append-only property holds.
+- Fail criteria: partial entry visible, entry count differs from N, or WAL is unrecoverable after crash.
 
 **C) Restart & Reconciliation Correctness** <!-- CSP-004 -->
 <!-- Anchors: restart, reconcile, latch, recovery -->
@@ -312,6 +326,13 @@ The following are NOT REQUIRED for CSP compliance:
 
 Failure or absence of the above MUST NOT, by itself, violate CSP invariants.
 If any such subsystem is implemented, it MUST NOT be used to negate CSP guarantees (e.g., MUST NOT strand exposure or remove containment legality).
+
+AT-1119
+- Given: a GOP subsystem is implemented (e.g., TruthCapsule writer, Decision Snapshot writer, Replay Gatekeeper) and `enforced_profile == CSP`.
+- When: the GOP subsystem fails, panics, or enters a degraded state.
+- Then: no CSP guarantee is negated — TradingMode is unchanged, OpenPermissionLatch is unchanged, containment actions remain legal, and idempotency/reconciliation behavior is unaffected.
+- Pass criteria: CSP safety decisions remain identical with and without the GOP subsystem failure.
+- Fail criteria: any CSP guarantee (TradingMode, latch, containment legality, idempotency) changes due to a GOP subsystem failure.
 
 #### **0.Z.2.4 CSP Acceptance Tests**
 
@@ -427,6 +448,20 @@ CI systems MUST enforce profile-specific behavior:
 - CSP test failure → deployment blocked
 - GOP test failure → governance features disabled (trading may continue under CSP)
 
+AT-1120
+- Given: the full set of acceptance tests defined in this contract.
+- When: each AT's profile assignment is resolved (explicit `Profile:` line or inherited from nearest enclosing section).
+- Then: every AT MUST resolve to exactly one profile (`CSP` or `GOP`); no AT is untagged and no AT resolves to both profiles.
+- Pass criteria: a lint/script confirms 100% of ATs have exactly one profile assignment.
+- Fail criteria: any AT has zero or more than one profile assignment.
+
+AT-1121
+- Given: CI runs the `test:gop` pipeline and one or more GOP-tagged tests fail.
+- When: CI evaluates deployment eligibility.
+- Then: GOP features MUST be disabled in the deployment artifact; CSP deployment MUST NOT be blocked by the GOP failure.
+- Pass criteria: GOP features are disabled; CSP deployment proceeds.
+- Fail criteria: CSP deployment is blocked by GOP test failure, or GOP features remain enabled despite test failure.
+
 ### **0.Z.6 Declaration of Compliance**
 
 Any deployment MUST declare:
@@ -434,6 +469,13 @@ Any deployment MUST declare:
 - the highest profile enforced at runtime.
 
 Claiming a profile without enforcing all of its invariants is a contract violation.
+
+AT-1122
+- Given: a deployment declares `enforced_profile == CSP` via `/api/v1/status`.
+- When: the runtime is inspected for CSP invariant enforcement.
+- Then: every CSP mandatory invariant (§0.Z.2.2 A–H) MUST be actively enforced; claiming CSP without enforcing all invariants is a contract violation.
+- Pass criteria: all CSP invariants are provably enforced at runtime and `/status.enforced_profile` matches the declared profile.
+- Fail criteria: any CSP invariant is unenforced while `enforced_profile == CSP`, or `/status.enforced_profile` is absent/mismatched.
 
 ### **0.Z.7 Profile Isolation (Normative)**
 Profile: CSP
@@ -484,6 +526,13 @@ When `enforced_profile == CSP`, `/api/v1/status` MUST NOT claim GOP enforcement.
 Any GOP-related health fields, if reported, MUST be clearly labeled as:
 - `NOT_ENFORCED`, or
 - omitted entirely.
+
+AT-1115
+- Given: `enforced_profile == CSP` and `/api/v1/status` is queried.
+- When: the response is inspected for GOP enforcement claims.
+- Then: `/status` MUST NOT claim GOP enforcement; `enforced_profile` MUST be `CSP`; any GOP-related health fields MUST be `NOT_ENFORCED` or omitted.
+- Pass criteria: no GOP enforcement claim; GOP fields absent or `NOT_ENFORCED`.
+- Fail criteria: `enforced_profile` reports GOP/FULL, or any GOP health field is reported as enforced/active under CSP.
 
 #### **0.Z.7.5 Acceptance Tests (New)**
 
@@ -618,6 +667,13 @@ Profile: CSP
 
 **Acceptance Tests (References):**
 - AT-277 (dispatcher mapping validates option sizing and `qty_usd` unset)
+
+AT-1097
+- Given: a single order intent that specifies both `qty_coin` and `qty_usd` as canonical sizing fields (i.e., the intent mixes coin sizing and USD sizing).
+- When: the intent is evaluated for dispatch.
+- Then: the intent MUST be rejected before dispatch with `Rejected(ContractsAmountMismatch)` and `RiskState::Degraded` is set; no order is sent to the exchange.
+- Pass criteria: intent rejected; dispatch count remains 0; `RiskState::Degraded` set.
+- Fail criteria: intent dispatched with mixed sizing, or rejection reason is missing/wrong.
 
 #### **1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement**
 
@@ -959,7 +1015,14 @@ AT-928
 1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
 2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by `group_id`.
 3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
-4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute “atomic slippage” per group.
+4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute "atomic slippage" per group.
+
+AT-1098
+- Given: a multi-leg atomic group is dispatched and one or more fills arrive (via WS or REST trade reconciliation).
+- When: fill attribution is performed.
+- Then: every fill MUST map to exactly one `group_id` + `leg_idx` pair; no fill is unattributed (orphan) and no fill maps to multiple groups.
+- Pass criteria: all fills have a valid `group_id` + `leg_idx`; atomic slippage per group is computable from the attributed fills.
+- Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
 
 
 ### **1.2 Atomic Group Executor**
@@ -1578,6 +1641,13 @@ AT-208
 - `linked_orders_supported` (bool): MUST be `false` for v5.1 (see Deribit Venue Facts Addendum F-08: VERIFIED (NOT SUPPORTED)).
 - `ENABLE_LINKED_ORDERS_FOR_BOT` (bool): runtime config feature flag; default `false` (fail-closed if missing/unset).
 
+AT-1099
+- Given: runtime configuration does not include `ENABLE_LINKED_ORDERS_FOR_BOT` (key missing or unset).
+- When: the linked-orders feature flag is resolved.
+- Then: `ENABLE_LINKED_ORDERS_FOR_BOT` MUST default to `false` (fail-closed); any intent with non-null `linked_order_type` MUST be rejected with `Rejected(LinkedOrderTypeForbidden)`.
+- Pass criteria: missing config key defaults to `false`; linked order intent rejected.
+- Fail criteria: missing config key defaults to `true`, or linked order intent is dispatched.
+
 **Acceptance Test (REQUIRED):**
 AT-004
 - Given: an intent with `linked_order_type` set (non-null).
@@ -1770,6 +1840,13 @@ Profile: CSP
    - Writers MUST publish with **Release** semantics.
    - PolicyGuard MUST read with **Acquire** semantics.
    - Using **Relaxed** loads/stores for safety-critical publication/consumption is non-compliant.
+
+AT-1118
+- Given: the codebase is searched for all atomic operations (`Ordering::Relaxed`) on fields that can influence TradingMode (safety-critical inputs as defined by §2.2.0).
+- When: a code-audit scan (grep/lint) is performed.
+- Then: no `Ordering::Relaxed` load or store is found on any safety-critical atomic that feeds into PolicyGuard's `get_effective_mode()` computation; all such atomics use `Acquire` (loads) or `Release` (stores) or stronger.
+- Pass criteria: zero instances of `Ordering::Relaxed` on safety-critical publication/consumption atomics.
+- Fail criteria: any `Ordering::Relaxed` found on a safety-critical atomic field.
 
 4) **Fail-closed acquisition:** If a coherent snapshot cannot be acquired (contention, corruption, or any other reason), PolicyGuard MUST fail-closed for that tick:
    - return `TradingMode::ReduceOnly`, and
@@ -2554,6 +2631,13 @@ Profile: CSP
 - No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query.
 - All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).
 
+AT-1100
+- Given: reconciliation runs and REST `/get_user_trades` over the last `reconcile_trade_lookback_sec` returns trades that are not present in the local ledger (missing trades).
+- When: reconciliation success criteria are evaluated.
+- Then: reconciliation MUST fail; `open_permission_blocked_latch` MUST remain `true`; OPEN intents MUST remain blocked until the missing trades are resolved and a subsequent reconciliation pass succeeds.
+- Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
+- Fail criteria: reconciliation succeeds despite missing trades, or latch clears prematurely.
+
 **Allowed values (reconcile-only):** `OpenPermissionReasonCode[]`
 - `RESTART_RECONCILE_REQUIRED`
 - `WS_BOOK_GAP_RECONCILE_REQUIRED`
@@ -2677,6 +2761,13 @@ AT-930
 - Pass criteria: all sampled rejections include a registry value.
 - Fail criteria: any rejection has a missing or non-registry reason.
 
+AT-1101
+- Given: the full set of `Rejected(...)` tokens referenced anywhere in this contract.
+- When: a completeness check is performed against the `RejectReasonCode` registry enum in code.
+- Then: every rejection token referenced in the contract MUST have a corresponding variant in the `RejectReasonCode` enum; no contract-referenced token is missing from the registry.
+- Pass criteria: 1:1 correspondence between contract rejection tokens and code enum variants.
+- Fail criteria: any contract-referenced rejection token is absent from the `RejectReasonCode` enum.
+
 
 ### 2.3 Reflexive Cortex (Hot-Loop Safety Override)
 
@@ -2778,6 +2869,13 @@ AT-204
 - Then: `cortex_override = ForceReduceOnly` and OPEN intents are blocked.
 - Pass criteria: ReduceOnly entered; opens blocked.
 - Fail criteria: Active mode while announcements are stale/unreachable.
+
+AT-1111
+- Given: the Exchange Health Monitor is running and `/public/get_announcements` is reachable.
+- When: the polling cadence is observed over a 5-minute window (measured via telemetry counter or mock clock injection).
+- Then: `/public/get_announcements` MUST be polled approximately every 60s (within reasonable jitter tolerance).
+- Pass criteria: poll count over 5 minutes is between 4 and 6 (inclusive); telemetry counter increments at ~60s intervals.
+- Fail criteria: poll interval consistently deviates from 60s, or no polls occur within the window.
 
 
 #### **2.3.2 Network Jitter Monitor (Bunker Mode Override)**
@@ -3066,6 +3164,13 @@ Profile: CSP
 - `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
 - `evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
+
+AT-1102
+- Given: an AtomicNakedEvent is emitted by the emergency close path.
+- When: the event's `cause` field is inspected.
+- Then: `cause` MUST be a non-empty string; empty string, null, or missing `cause` field is non-compliant.
+- Pass criteria: every emitted AtomicNakedEvent has a non-empty `cause` value (e.g., `atomic_legging_failure`, `emergency_close_exhausted`, `hedge_fallback`).
+- Fail criteria: any AtomicNakedEvent has an empty, null, or missing `cause` field.
 
 AT-211
 - Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs.
@@ -3392,11 +3497,25 @@ AT-941
 - WS gap event
 - orphan fill event (fill/trade seen with no local Sent/Ack)
 
+AT-1112
+- Given: the reconciliation timer is running under normal operation.
+- When: the timer cadence is observed over a 60-second window (measured via telemetry counter or mock clock injection).
+- Then: reconciliation MUST be triggered at least once every 5–10 seconds.
+- Pass criteria: timer fires 6–12 times in a 60-second window; telemetry counter confirms cadence within 5–10s bounds.
+- Fail criteria: timer fires fewer than 6 times or more than 12 times in 60 seconds, or cadence consistently falls outside the 5–10s range.
+
 **CorrectiveActions (must enumerate):**
 - CancelStaleOrder(order_id)
 - ReplaceIOC(intent_hash, new_limit_price)
 - EmergencyFlattenGroup(group_id)
 - ReduceOnlyDeltaHedge(target_delta=0, max_size=cap)
+
+AT-1103
+- Given: the reconciliation engine detects a corrective action is needed.
+- When: a corrective action is selected and dispatched.
+- Then: the action MUST be one of the four enumerated types: `CancelStaleOrder(order_id)`, `ReplaceIOC(intent_hash, new_limit_price)`, `EmergencyFlattenGroup(group_id)`, or `ReduceOnlyDeltaHedge(target_delta=0, max_size=cap)`; no ad-hoc or unenumerated corrective action is permitted.
+- Pass criteria: every corrective action dispatched by reconciliation is one of the four enumerated types; each type has at least one test scenario exercising it.
+- Fail criteria: a corrective action is dispatched that is not in the enumerated set, or any enumerated type lacks test coverage.
 
 AT-210
 - Given: local TLSM state is Sent (or equivalent inflight), but exchange trades show Filled and ACK is missing.
@@ -3414,8 +3533,15 @@ AT-210
 
 ### **3.5 Zombie Sweeper (Ghost Orders & Forgotten Intents)**
 
-**Cadence:** Every 10s (independent of WS)  
+**Cadence:** Every 10s (independent of WS)
 **Inputs (authoritative):** `REST get_open_orders`, `REST get_user_trades`, `ledger inflight intents`
+
+AT-1113
+- Given: the Zombie Sweeper is running under normal operation.
+- When: the sweep cadence is observed over a 60-second window (measured via telemetry counter or mock clock injection).
+- Then: the sweeper MUST execute approximately every 10 seconds, independent of WS state.
+- Pass criteria: sweep count over 60 seconds is between 5 and 7 (inclusive); telemetry counter confirms ~10s cadence.
+- Fail criteria: sweep interval consistently deviates from 10s, or sweeper does not run when WS is disconnected.
 
 **Corrective rules (deterministic):**
 - If an exchange open order has label `s4:` but **no matching ledger intent** → `CancelStaleOrder` + log `GhostOrderCanceled`.
@@ -3490,6 +3616,13 @@ AT-1071
 - Pass criteria: last valid fit remains active with no persistence side effects from the invalid fit.
 - Fail criteria: invalid fit is accepted/persisted or last valid fit is lost.
 
+AT-1104
+- Given: a last valid SVI fit exists and a new calibration tick produces parameters that exceed `drift_max` vs the last valid fit in a single tick.
+- When: Gate 2 (Parameter Drift) evaluates the new fit.
+- Then: the new fit MUST be rejected and the previous valid SVI params MUST be held (no update); `svi_guard_trips` increments.
+- Pass criteria: previous SVI params remain active; new drifted params are not applied; trip counter increments.
+- Fail criteria: drifted params are accepted, or previous valid fit is lost.
+
 #### **4.1.1 SVI Arb-Guards (No-Arb Validity)**
 
 **Why this exists:** RMSE/drift gates can pass while the curve is financially nonsense. We must reject **arbitrageable** surfaces.
@@ -3514,6 +3647,18 @@ AT-241
 - Then: the fit is rejected and the previous fit is held.
 - Pass criteria: fit rejected; last valid retained.
 - Fail criteria: invalid fit accepted.
+
+AT-1105
+- Given (sub-scenario A): two SVI surfaces for adjacent maturities where total variance at the same log-moneyness `k` is decreasing with maturity (calendar monotonicity violation beyond tolerance `ε`).
+- When: the calendar monotonicity arb-guard evaluates the fit.
+- Then: the fit MUST be invalidated; previous valid fit MUST be held; `svi_arb_guard_trips` increments.
+- Pass criteria: fit rejected; last valid retained; trip counter increments.
+- Fail criteria: calendar-violating fit accepted.
+- Given (sub-scenario B): an SVI fit where the implied density proxy is negative at one or more grid points (beyond tolerance).
+- When: the negative density arb-guard evaluates the fit.
+- Then: the fit MUST be invalidated; previous valid fit MUST be held; `svi_arb_guard_trips` increments. If count exceeds `svi_guard_trip_count` within `svi_guard_trip_window_s`, `RiskState::Degraded` and opens paused.
+- Pass criteria: fit rejected; last valid retained; Degraded triggered after threshold breaches.
+- Fail criteria: negative-density fit accepted, or Degraded not triggered after repeated violations.
 
 #### **4.1.2 Liquidity-Aware Acceptance (Avoid Stale-Fit Paralysis)**
 
@@ -3551,6 +3696,14 @@ AT-243
 - Track `fee_model_cache_age_s` (derived from epoch ms timestamp).
 - Timestamp requirement: `fee_model_cached_at_ts` MUST be epoch milliseconds (not monotonic ms) to ensure staleness is computed correctly across restarts and between components.
 - If `fee_model_cached_at_ts` is missing or unparseable, treat the fee cache as hard-stale (`RiskState::Degraded`) and PolicyGuard MUST force `TradingMode::ReduceOnly` until refresh succeeds.
+
+AT-1106
+- Given: `fee_model_cached_at_ts` is stored and read back.
+- When: the timestamp format is inspected.
+- Then: `fee_model_cached_at_ts` MUST be epoch milliseconds (wall-clock, not monotonic); staleness MUST be computed as `now_epoch_ms - fee_model_cached_at_ts` and MUST survive process restarts without underflow or reset.
+- Pass criteria: after a simulated restart, `fee_model_cache_age_s` is computed correctly from the epoch-ms timestamp; no monotonic-clock reset causes the age to appear artificially fresh.
+- Fail criteria: `fee_model_cached_at_ts` uses monotonic ms, or age underflows/resets after restart.
+
 - Soft stale (age > `fee_cache_soft_s`, default 300s; see Appendix A): apply conservative fee buffer using `fee_stale_buffer` (default 0.20): `fee_rate_effective = fee_rate * (1 + fee_stale_buffer)`.
 - Hard stale (age > `fee_cache_hard_s`, default 900s; see Appendix A): set `RiskState::Degraded` and PolicyGuard MUST force `TradingMode::ReduceOnly` until refresh succeeds.
 
@@ -3625,6 +3778,13 @@ AT-246
 - Pass criteria: updated fee tier applied within one cycle.
 - Fail criteria: NetEdge remains based on old tier.
 
+AT-1114
+- Given: the fee model poller is running and `/private/get_account_summary` is reachable.
+- When: the polling cadence is observed over a 5-minute window (measured via telemetry counter or mock clock injection).
+- Then: the fee model MUST be polled approximately every 60 seconds.
+- Pass criteria: poll count over 5 minutes is between 4 and 6 (inclusive); telemetry counter increments at ~60s intervals.
+- Fail criteria: poll interval consistently deviates from 60s, or no polls occur within the window.
+
 
 ### **4.3 Trade Attribution Schema (Realized Friction Truth)**
 Profile: CSP
@@ -3635,6 +3795,13 @@ Profile: CSP
 * Require **chrony/NTP** running as an operational prerequisite.
 * Time drift monitoring is a RiskState input; PolicyGuard enforces the mode consequence via its canonical axis resolver.
 * **Alignment**: Default aligns with §8.1 Time Drift gate (p99_clock_drift ≤ 50ms).
+
+AT-1123
+- Given: the system starts up on a host.
+- When: the startup NTP/chrony sync check is performed.
+- Then: if NTP/chrony is not running or sync status indicates unsynchronized (e.g., `chronyc tracking` reports "Not synchronised"), the system MUST refuse to enter `TradingMode::Active` and MUST remain in `ReduceOnly` until NTP sync is confirmed.
+- Pass criteria: system stays in ReduceOnly when NTP is unsynchronized; transitions to Active only after NTP sync is confirmed (subject to other gates).
+- Fail criteria: system enters Active without NTP sync confirmation, or NTP check is absent at startup.
 
 **Acceptance Test (REQUIRED):**
 AT-273
@@ -4113,6 +4280,13 @@ Profile: GOP
 - Stage 1: Live Canary (tiny size, e.g., 10–20% of normal). Duration: 2–6h or N fills.
 - Stage 2: Full Live.
 
+AT-1107
+- Given: a new policy enters Canary Stage 0 (Shadow Only).
+- When: Stage 0 execution is monitored.
+- Then: (a) Stage 0 MUST run for at least the configured minimum duration (6h minimum) before promotion to Stage 1; premature promotion is forbidden. (b) During Stage 0, no live orders MUST be placed to the exchange; all signals are shadow-only (logged but not dispatched).
+- Pass criteria: Stage 0 duration meets minimum; zero live order dispatches during Stage 0; promotion only after minimum duration elapsed.
+- Fail criteria: Stage 0 promoted before minimum duration, or any live order dispatched during Stage 0.
+
 **Abort Conditions (Immediate rollback to previous policy + ReduceOnly cooldown):**
 - `atomic_naked_events > 0`
 - `p95_slippage_bps > slippage_limit`
@@ -4288,6 +4462,13 @@ AT-022
 **When `enforced_profile == CSP`:**
 - GOP extension keys MUST be omitted OR clearly marked `NOT_ENFORCED`.
 
+AT-1116
+- Given: `enforced_profile == CSP` and `/api/v1/status` is queried.
+- When: the response is inspected for GOP extension keys (`evidence_chain_state`, `snapshot_coverage_pct`, `replay_quality`, `replay_apply_mode`, `open_haircut_mult`).
+- Then: each GOP extension key MUST either be absent from the response OR present with value `NOT_ENFORCED`; no GOP key may report an active/enforced value.
+- Pass criteria: all GOP keys are absent or `NOT_ENFORCED` under CSP.
+- Fail criteria: any GOP key reports an active value (e.g., `GREEN`, `GOOD`, `APPLY`, numeric coverage) while `enforced_profile == CSP`.
+
 **WAL queue invariants:**
 - `wal_queue_depth` MUST be integer >= 0.
 - `wal_queue_capacity` MUST be integer > 0.
@@ -4297,6 +4478,13 @@ AT-022
 - `429_count_5m` and `10028_count_5m` are the canonical rate-limit counters used for alerts, incident triggers, and release gates.
 - `429_count` and `10028_count` MUST NOT be used.
 - `atomic_naked_events_24h` MUST be an integer counter (rolling 24h count) with valid range >= 0.
+
+AT-1117
+- Given: `/api/v1/status` is queried.
+- When: the response is inspected for rate-limit counter keys.
+- Then: the response MUST contain `429_count_5m` and `10028_count_5m` (5-minute windowed counters); the response MUST NOT contain `429_count` or `10028_count` (non-5m variants). Non-windowed rate-limit counters are non-compliant.
+- Pass criteria: `429_count_5m` and `10028_count_5m` present; `429_count` and `10028_count` absent.
+- Fail criteria: non-5m counter keys present, or 5m counter keys absent.
 
 
 
@@ -4499,6 +4687,13 @@ The system MUST persist enough to reconstruct every action and policy change:
 - **Execution decisions:** order intents, gates evaluated, chosen action (place/cancel/flatten), and reason codes.
 - **Lifecycle events:** TLSM transitions for every order/leg.
 - **Policy events:** proposed patch, replay result, canary stage result, and final applied/rejected decision.
+
+AT-1108
+- Given: a TLSM lifecycle transition occurs (e.g., Sent → Acked → Filled) and a policy change is applied (e.g., patch promoted from canary).
+- When: the audit trail is inspected.
+- Then: both the lifecycle event and the policy event MUST be persisted in the audit trail (`artifacts/decision_log.jsonl` and/or `artifacts/policy_patches/`); no lifecycle or policy event is silently dropped.
+- Pass criteria: lifecycle event and policy event both exist in their respective artifact stores with required fields.
+- Fail criteria: any lifecycle event or policy event is missing from the persisted audit trail.
 - **Incidents:** any entry into ReduceOnly/Kill, and why.
 
 **Artifacts (append-only, reviewable):**
@@ -4534,6 +4729,13 @@ AutoReviewer may **only** auto-apply a patch if ALL are true:
 1) Patch is classified as **SAFE** (tightens gates / reduces risk; never increases exposure).
 2) Replay Gatekeeper PASS (§5.2) and Canary staging PASS (§5.3).
 3) No incident triggers in the last 24h.
+
+AT-1109
+- Given: an incident trigger occurred within the last 24 hours (e.g., `atomic_naked_events > 0` or `429_count_5m > 0` or `10028_count_5m > 0`), and a SAFE patch passes Replay Gatekeeper and Canary.
+- When: the AutoReviewer evaluates the patch for auto-application.
+- Then: auto-apply MUST be blocked; the patch MUST require `REQUIRE_HUMAN_APPROVAL` regardless of SAFE classification, because condition (3) is not met.
+- Pass criteria: patch is not auto-applied; AutoReviewer returns `REQUIRE_HUMAN_APPROVAL`.
+- Fail criteria: patch is auto-applied despite an incident trigger within the last 24h.
 
 Patch classification MUST be embedded in the patch:
 `patch_meta.impact = SAFE | NEUTRAL | AGGRESSIVE`
@@ -4613,6 +4815,13 @@ Profile: GOP
   - Safety invariant: retention MUST NOT delete any Decision Snapshots that fall within the window used to compute `snapshot_coverage_pct`.
   - Storage model requirement: Decision Snapshots MUST be partitioned by day (or hour) so retention deletes only cold partitions (never hot writer partitions).
 - WAL / intent ledger: keep **indefinitely** (small, critical).
+
+AT-1110
+- Given: Decision Snapshots are written over a multi-day period.
+- When: the storage layout is inspected.
+- Then: Decision Snapshots MUST be partitioned by day (or hour); each partition corresponds to a discrete time range; retention reclaim can delete cold partitions without affecting the hot writer partition.
+- Pass criteria: snapshot files/directories are organized by day or hour partition keys; deleting a cold partition does not corrupt or affect the current writer partition.
+- Fail criteria: snapshots are stored in a flat/unsegmented layout, or deleting old data requires modifying the active writer's files.
 
 **Disk watermarks (hard rules):**
 - `disk_used_pct` is a ratio in [0.0, 1.0] (e.g., 0.80 == 80%).

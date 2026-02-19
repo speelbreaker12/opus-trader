@@ -141,3 +141,326 @@ clauses:
     tests:
       - "AT-297"  # watchdog kill timing
     prd: []
+
+  CSP-033:
+    status: pending
+    name: "Idempotency keys no RNG"
+    contract_ref: "§0.Z.2.2"
+    plan: []
+    code: []
+    tests:
+      - "AT-1095"
+    prd:
+      - "plans/prd.json#S9-009"
+
+  CSP-034:
+    status: pending
+    name: "WAL append-only crash-safe"
+    contract_ref: "§0.Z.2.2(B)"
+    plan: []
+    code: []
+    tests:
+      - "AT-1096"
+    prd:
+      - "plans/prd.json#S9-009"
+
+  CSP-035:
+    status: pending
+    name: "No coin/USD mixing"
+    contract_ref: "§1.0"
+    plan: []
+    code: []
+    tests:
+      - "AT-1097"
+    prd:
+      - "plans/prd.json#S7-011"
+
+  CSP-036:
+    status: pending
+    name: "Fill→group_id+leg_idx"
+    contract_ref: "§1.1.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1098"
+    prd:
+      - "plans/prd.json#S9-010"
+
+  CSP-037:
+    status: pending
+    name: "ENABLE_LINKED_ORDERS default false"
+    contract_ref: "§1.4.4"
+    plan: []
+    code: []
+    tests:
+      - "AT-1099"
+    prd:
+      - "plans/prd.json#S7-011"
+
+  CSP-038:
+    status: pending
+    name: "Missing trades block reconciliation"
+    contract_ref: "§2.2.4"
+    plan: []
+    code: []
+    tests:
+      - "AT-1100"
+    prd:
+      - "plans/prd.json#S9-010"
+
+  CSP-039:
+    status: pending
+    name: "RejectReasonCode registry complete"
+    contract_ref: "§2.2.6"
+    plan: []
+    code: []
+    tests:
+      - "AT-1101"
+    prd:
+      - "plans/prd.json#S9-011"
+
+  CSP-040:
+    status: pending
+    name: "AtomicNakedEvent cause non-empty"
+    contract_ref: "§3.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1102"
+    prd:
+      - "plans/prd.json#S9-011"
+
+  CSP-041:
+    status: pending
+    name: "Corrective actions enumerate all four"
+    contract_ref: "§3.4"
+    plan: []
+    code: []
+    tests:
+      - "AT-1103"
+    prd:
+      - "plans/prd.json#S9-012"
+
+  CSP-042:
+    status: pending
+    name: "SVI drift rejection"
+    contract_ref: "§4.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1104"
+    prd:
+      - "plans/prd.json#S11-003"
+
+  CSP-043:
+    status: pending
+    name: "Calendar monotonicity + density"
+    contract_ref: "§4.1.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1105"
+    prd:
+      - "plans/prd.json#S11-003"
+
+  CSP-044:
+    status: pending
+    name: "fee_model_cached_at_ts epoch ms"
+    contract_ref: "§4.2"
+    plan: []
+    code: []
+    tests:
+      - "AT-1106"
+    prd:
+      - "plans/prd.json#S10-006"
+
+  CSP-045:
+    status: pending
+    name: "Announcement polling 60s"
+    contract_ref: "§2.3.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1111"
+    prd:
+      - "plans/prd.json#S10-007"
+
+  CSP-046:
+    status: pending
+    name: "Reconciliation timer 5-10s"
+    contract_ref: "§3.4"
+    plan: []
+    code: []
+    tests:
+      - "AT-1112"
+    prd:
+      - "plans/prd.json#S9-012"
+
+  CSP-047:
+    status: pending
+    name: "Zombie sweeper 10s"
+    contract_ref: "§3.5"
+    plan: []
+    code: []
+    tests:
+      - "AT-1113"
+    prd:
+      - "plans/prd.json#S9-012"
+
+  CSP-048:
+    status: pending
+    name: "Fee polling 60s"
+    contract_ref: "§4.2"
+    plan: []
+    code: []
+    tests:
+      - "AT-1114"
+    prd:
+      - "plans/prd.json#S10-006"
+
+  CSP-049:
+    status: pending
+    name: "/status no false GOP claims"
+    contract_ref: "§0.Z.7.4"
+    plan: []
+    code: []
+    tests:
+      - "AT-1115"
+    prd:
+      - "plans/prd.json#S8-019"
+
+  CSP-050:
+    status: pending
+    name: "GOP keys omitted under CSP"
+    contract_ref: "§7.0"
+    plan: []
+    code: []
+    tests:
+      - "AT-1116"
+    prd:
+      - "plans/prd.json#S8-019"
+
+  CSP-051:
+    status: pending
+    name: "No non-5m rate limit counters"
+    contract_ref: "§7.0"
+    plan: []
+    code: []
+    tests:
+      - "AT-1117"
+    prd:
+      - "plans/prd.json#S9-013"
+
+  CSP-052:
+    status: pending
+    name: "No relaxed memory ordering"
+    contract_ref: "§2.2.0"
+    plan: []
+    code: []
+    tests:
+      - "AT-1118"
+    prd:
+      - "plans/prd.json#S10-008"
+
+  CSP-053:
+    status: pending
+    name: "GOP MUST NOT negate CSP"
+    contract_ref: "§0.Z.2.3"
+    plan: []
+    code: []
+    tests:
+      - "AT-1119"
+    prd:
+      - "plans/prd.json#S14-001"
+
+  CSP-054:
+    status: pending
+    name: "AT tagged to one profile"
+    contract_ref: "§0.Z.5"
+    plan: []
+    code: []
+    tests:
+      - "AT-1120"
+    prd:
+      - "plans/prd.json#S14-002"
+
+  CSP-055:
+    status: pending
+    name: "GOP failure disables features"
+    contract_ref: "§0.Z.5"
+    plan: []
+    code: []
+    tests:
+      - "AT-1121"
+    prd:
+      - "plans/prd.json#S14-002"
+
+  CSP-056:
+    status: pending
+    name: "Deployment profile enforcement"
+    contract_ref: "§0.Z.6"
+    plan: []
+    code: []
+    tests:
+      - "AT-1122"
+    prd:
+      - "plans/prd.json#S14-001"
+
+  CSP-057:
+    status: pending
+    name: "NTP operational prerequisite"
+    contract_ref: "§4.3"
+    plan: []
+    code: []
+    tests:
+      - "AT-1123"
+    prd:
+      - "plans/prd.json#S10-007"
+
+# GOP Clause Traceability
+# Tracks mapping from GOP (General Operating Profile) clauses to implementation artifacts
+
+gop_clauses:
+  GOP-001:
+    status: pending
+    name: "Canary Stage 0 constraints"
+    contract_ref: "§5.3"
+    plan: []
+    code: []
+    tests:
+      - "AT-1107"
+    prd:
+      - "plans/prd.json#S13-008"
+
+  GOP-002:
+    status: pending
+    name: "Lifecycle event persistence"
+    contract_ref: "§7.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1108"
+    prd:
+      - "plans/prd.json#S12-002"
+
+  GOP-003:
+    status: pending
+    name: "Auto-apply 24h incident block"
+    contract_ref: "§7.1"
+    plan: []
+    code: []
+    tests:
+      - "AT-1109"
+    prd:
+      - "plans/prd.json#S12-002"
+
+  GOP-004:
+    status: pending
+    name: "Decision Snapshot partitioning"
+    contract_ref: "§7.2"
+    plan: []
+    code: []
+    tests:
+      - "AT-1110"
+    prd:
+      - "plans/prd.json#S13-008"
