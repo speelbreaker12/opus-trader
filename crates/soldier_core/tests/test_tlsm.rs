@@ -585,7 +585,7 @@ fn test_take_pending_reservation_only_on_terminal() {
     assert!(sm.state().is_terminal());
     let taken = sm.take_pending_reservation_on_terminal();
     assert!(taken.is_some(), "Filled must release reservation");
-    assert_eq!(taken.unwrap(), rid);
+    assert_eq!(taken.expect("reservation must be returned on terminal"), rid);
 
     // Already consumed
     assert!(sm.take_pending_reservation_on_terminal().is_none(), "consumed on first take");

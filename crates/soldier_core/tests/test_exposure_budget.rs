@@ -209,7 +209,7 @@ fn test_global_exposure_budget_correlation_non_trivial() {
             ..
         } => {
             assert!(
-                (portfolio_delta_usd - 94.868).abs() < 1.0,
+                (portfolio_delta_usd - 94.868).abs() < 0.5,
                 "expected ~94.87 (correlation-adjusted), got {portfolio_delta_usd}"
             );
             assert!(
