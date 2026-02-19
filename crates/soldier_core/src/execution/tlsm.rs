@@ -15,6 +15,79 @@
 //! AT-230, AT-210, AT-225, AT-910.
 
 use crate::risk::ReservationId;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// ─── OOO Metrics ────────────────────────────────────────────────────────
+
+/// Categories of out-of-order TLSM transitions for observability.
+///
+/// **`#[repr(usize)]`** ensures discriminants are sequential starting at 0,
+/// which is required for indexing into the `OooMetrics::counts` array.
+/// Adding a variant in the middle shifts subsequent discriminants — always
+/// append new variants at the end.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(usize)]
+pub enum OooCategory {
+    FillBeforeAck = 0,
+    PartialFillBeforeAck = 1,
+    OrphanFill = 2,
+    AckBeforeSend = 3,
+    PartialFillBeforeSend = 4,
+}
+
+const OOO_CATEGORY_COUNT: usize = 5;
+
+// Compile-time check: OOO_CATEGORY_COUNT must match enum variant count.
+// If a variant is added to OooCategory without updating the constant, this
+// assertion fires. The last variant's discriminant must be COUNT - 1.
+const _: () = assert!(OooCategory::PartialFillBeforeSend as usize == OOO_CATEGORY_COUNT - 1);
+
+struct OooMetrics {
+    counts: [AtomicU64; OOO_CATEGORY_COUNT],
+}
+
+impl OooMetrics {
+    const fn new() -> Self {
+        Self {
+            counts: [
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+                AtomicU64::new(0),
+            ],
+        }
+    }
+
+    fn increment(&self, category: OooCategory) {
+        // Relaxed ordering is sufficient: counters are monotonic and not used
+        // for synchronization or ordering decisions — observability only.
+        self.counts[category as usize].fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn get(&self, category: OooCategory) -> u64 {
+        self.counts[category as usize].load(Ordering::Relaxed)
+    }
+
+    /// Sum of all category counters. Not atomic — under concurrent modification,
+    /// the returned value may not correspond to any point-in-time snapshot.
+    /// Acceptable for observability (Prometheus-style monotonic counters).
+    fn total(&self) -> u64 {
+        self.counts.iter().map(|c| c.load(Ordering::Relaxed)).sum()
+    }
+}
+
+static OOO_METRICS: OooMetrics = OooMetrics::new();
+
+/// Total out-of-order transitions across all categories.
+pub fn ooo_total() -> u64 {
+    OOO_METRICS.total()
+}
+
+/// Out-of-order count for a specific category.
+pub fn ooo_count(category: OooCategory) -> u64 {
+    OOO_METRICS.get(category)
+}
 
 // ─── States ─────────────────────────────────────────────────────────────
 
@@ -278,15 +351,21 @@ impl Tlsm {
             (_, TlsmEvent::Failed) => self.transition(from, TlsmState::Failed, event, sink),
 
             // ─── Out-of-order: Fill before Ack (AT-230) ─────────────
-            (TlsmState::Sent, TlsmEvent::Filled) => {
-                self.out_of_order(from, TlsmState::Filled, event, "fill-before-ack", sink)
-            }
+            (TlsmState::Sent, TlsmEvent::Filled) => self.out_of_order(
+                from,
+                TlsmState::Filled,
+                event,
+                "fill-before-ack",
+                OooCategory::FillBeforeAck,
+                sink,
+            ),
 
             (TlsmState::Sent, TlsmEvent::PartialFill) => self.out_of_order(
                 from,
                 TlsmState::PartiallyFilled,
                 event,
                 "partial-fill-before-ack",
+                OooCategory::PartialFillBeforeAck,
                 sink,
             ),
 
@@ -296,6 +375,7 @@ impl Tlsm {
                 TlsmState::Filled,
                 event,
                 "fill-before-send (orphan fill)",
+                OooCategory::OrphanFill,
                 sink,
             ),
 
@@ -304,12 +384,18 @@ impl Tlsm {
                 TlsmState::PartiallyFilled,
                 event,
                 "partial-fill-before-send",
+                OooCategory::PartialFillBeforeSend,
                 sink,
             ),
 
-            (TlsmState::Created, TlsmEvent::Acked) => {
-                self.out_of_order(from, TlsmState::Acked, event, "ack-before-send", sink)
-            }
+            (TlsmState::Created, TlsmEvent::Acked) => self.out_of_order(
+                from,
+                TlsmState::Acked,
+                event,
+                "ack-before-send",
+                OooCategory::AckBeforeSend,
+                sink,
+            ),
 
             // ─── Out-of-order: Ack after fills ──────────────────────
             (TlsmState::PartiallyFilled, TlsmEvent::Acked) => {
@@ -351,12 +437,14 @@ impl Tlsm {
     }
 
     /// Record an out-of-order transition. Persist via sink BEFORE mutating state.
+    /// Increments the global OOO counter for the given category.
     fn out_of_order(
         &mut self,
         from: TlsmState,
         to: TlsmState,
         event: TlsmEvent,
         anomaly: &str,
+        category: OooCategory,
         sink: &mut dyn TlsmTransitionSink,
     ) -> Result<TransitionResult, TlsmError> {
         sink.append_transition(PersistedTransition {
@@ -366,6 +454,7 @@ impl Tlsm {
             anomaly: Some(anomaly.to_string()),
         })
         .map_err(|reason| TlsmError::PersistFailed { reason })?;
+        OOO_METRICS.increment(category);
         self.state = to;
         self.transitions.push((event, from, to));
         Ok(TransitionResult::OutOfOrder {

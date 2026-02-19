@@ -18,6 +18,11 @@ pub struct ReservationId(String);
 
 const MAX_RESERVATION_ID_LEN: usize = 128;
 
+/// Floating-point epsilon for snap-to-zero and invariant checks.
+/// Shared between `snap_to_zero()` and `assert_invariants()` to ensure
+/// the snap threshold and invariant tolerance are always coupled.
+const FP_EPSILON: f64 = 1e-12;
+
 impl ReservationId {
     /// Create a validated reservation ID.
     ///
@@ -722,15 +727,16 @@ impl PendingExposureBook {
     }
 }
 
+/// Snap to zero if within FP epsilon to prevent drift accumulation.
+fn snap_to_zero(v: f64) -> f64 {
+    if v.abs() < FP_EPSILON { 0.0 } else { v }
+}
+
 fn normalized_limit(delta_limit: Option<f64>) -> Option<f64> {
     match delta_limit {
         Some(v) if v.is_finite() && v > 0.0 => Some(v),
         _ => None,
     }
-}
-
-fn snap_to_zero(v: f64) -> f64 {
-    if v.abs() < 1e-12 { 0.0 } else { v }
 }
 
 /// Debug-only per-instrument invariant checker.
@@ -748,14 +754,14 @@ fn assert_invariants(book: &InstrumentBook) {
     );
     let sum = book.pending_positive + book.pending_negative;
     debug_assert!(
-        (book.pending_total - sum).abs() < 1e-12,
+        (book.pending_total - sum).abs() < FP_EPSILON,
         "pending_total drift: total={}, sum={}",
         book.pending_total,
         sum
     );
     let map_sum: f64 = book.reservations.values().sum();
     debug_assert!(
-        (map_sum - book.pending_total).abs() < 1e-12,
+        (map_sum - book.pending_total).abs() < FP_EPSILON,
         "reservation map vs total drift: map_sum={}, total={}",
         map_sum,
         book.pending_total
@@ -767,7 +773,7 @@ fn assert_invariants(book: &InstrumentBook) {
 fn assert_global_consistency(inner: &BookInner) {
     let computed_global: f64 = inner.instruments.values().map(|b| b.pending_total).sum();
     debug_assert!(
-        (inner.global_total - computed_global).abs() < 1e-12,
+        (inner.global_total - computed_global).abs() < FP_EPSILON,
         "global_total cache drift: cached={}, computed={}",
         inner.global_total,
         computed_global
