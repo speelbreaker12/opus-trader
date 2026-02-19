@@ -155,6 +155,10 @@ impl TradeIdRegistry {
         }
 
         let records = load_records(path)?;
+        // Note: `>` (not `>=`) — a registry at exactly `capacity` replays
+        // successfully but cannot accept new inserts (insert_if_absent uses
+        // `>=` to reject). This is correct: existing data is preserved, new
+        // writes are rejected until compaction frees slots.
         if records.len() > capacity {
             let reason = format!(
                 "trade-id registry contains {} IDs but capacity is {}",
