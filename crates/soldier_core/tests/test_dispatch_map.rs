@@ -2,6 +2,7 @@
 //!
 //! AT-277: dispatcher mapping validates option sizing and amount field.
 
+#[allow(deprecated)]
 use soldier_core::execution::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, ChokeIntentClass, ChokeMetrics, ChokeResult,
     DispatchMapError, GateResults, IntentClass, MismatchMetrics, OrderSize, OrderSizeInput,

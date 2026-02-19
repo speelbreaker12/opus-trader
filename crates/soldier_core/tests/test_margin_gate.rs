@@ -182,3 +182,62 @@ fn test_margin_gate_tiny_positive_equity_uses_actual_ratio() {
     assert_eq!(metrics.reject_total(), 1);
     assert_eq!(metrics.allowed_total(), 0);
 }
+
+// ─── Devils-advocate: boundary mutations ─────────────────────────────
+
+/// Catches mutation: `>=` flipped to `>` on mm_util threshold check.
+/// At exactly reject_opens threshold, mm_util == reject_opens must REJECT (>= not >).
+#[test]
+fn test_margin_at_exact_reject_opens_threshold_rejected() {
+    let mut metrics = MarginGateMetrics::new();
+    // mm_util = 70_000 / 100_000 = 0.70 == reject_opens threshold
+    let input = MarginGateInput {
+        maintenance_margin_usd: 70_000.0,
+        equity_usd: 100_000.0,
+        mm_util_reject_opens: 0.70,
+        mm_util_reduceonly: 0.85,
+        mm_util_kill: 0.95,
+    };
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    assert!(
+        matches!(out, MarginGateResult::Rejected { .. }),
+        "mm_util == reject_opens must REJECT (>= not >), got {out:?}"
+    );
+}
+
+/// Catches mutation: one tick below threshold must ALLOW.
+#[test]
+fn test_margin_one_tick_below_reject_opens_allowed() {
+    let mut metrics = MarginGateMetrics::new();
+    // mm_util = 69_999 / 100_000 = 0.69999 < 0.70 threshold
+    let input = MarginGateInput {
+        maintenance_margin_usd: 69_999.0,
+        equity_usd: 100_000.0,
+        mm_util_reject_opens: 0.70,
+        mm_util_reduceonly: 0.85,
+        mm_util_kill: 0.95,
+    };
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    assert!(
+        matches!(out, MarginGateResult::Allowed { .. }),
+        "mm_util < reject_opens by 0.00001 must ALLOW, got {out:?}"
+    );
+}
+
+/// Catches mutation: NaN equity accepted silently.
+#[test]
+fn test_margin_nan_equity_fails_closed() {
+    let mut metrics = MarginGateMetrics::new();
+    let input = MarginGateInput {
+        maintenance_margin_usd: 10_000.0,
+        equity_usd: f64::NAN,
+        mm_util_reject_opens: 0.70,
+        mm_util_reduceonly: 0.85,
+        mm_util_kill: 0.95,
+    };
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    assert!(
+        matches!(out, MarginGateResult::Rejected { .. }),
+        "NaN equity must fail-closed to REJECT, got {out:?}"
+    );
+}

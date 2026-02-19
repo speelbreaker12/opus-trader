@@ -152,3 +152,100 @@ fn test_global_exposure_budget_non_finite_portfolio_fails_closed() {
     }
     assert_eq!(metrics.reject_total(), 1);
 }
+
+// ─── Devils-advocate: boundary mutations ─────────────────────────────
+
+/// Catches mutation: `>` flipped to `>=` on portfolio vs limit check.
+/// Portfolio delta exactly at limit must be Allowed.
+#[test]
+fn test_global_exposure_budget_at_exact_limit_allowed() {
+    let mut metrics = ExposureBudgetMetrics::new();
+    // Use a single bucket so portfolio_delta == abs(combined_btc).
+    // With only BTC, portfolio = sqrt(btc^2) = abs(btc).
+    // current=90, candidate=10 → combined_btc=100, portfolio=100, limit=100.
+    let input = ExposureBudgetInput {
+        current_btc_delta_usd: 90.0,
+        pending_btc_delta_usd: 0.0,
+        current_eth_delta_usd: 0.0,
+        pending_eth_delta_usd: 0.0,
+        current_alts_delta_usd: 0.0,
+        pending_alts_delta_usd: 0.0,
+        candidate_bucket: ExposureBucket::Btc,
+        candidate_delta_usd: 10.0,
+        global_delta_limit_usd: Some(100.0),
+    };
+
+    let out = evaluate_global_exposure_budget(&input, &mut metrics);
+    assert!(
+        matches!(out, ExposureBudgetResult::Allowed { .. }),
+        "portfolio == limit must ALLOW (> not >=), got {out:?}"
+    );
+}
+
+/// Catches mutation: correlation multiplier hardcoded to 1.0.
+/// With two correlated buckets, portfolio_delta must be less than simple sum.
+#[test]
+fn test_global_exposure_budget_correlation_non_trivial() {
+    let mut metrics = ExposureBudgetMetrics::new();
+    // BTC=50, ETH=50, corr=0.8
+    // variance = 50^2 + 50^2 + 2*0.8*50*50 = 2500+2500+4000 = 9000
+    // portfolio = sqrt(9000) ≈ 94.87 (not 100 which would be simple sum)
+    let input = ExposureBudgetInput {
+        current_btc_delta_usd: 50.0,
+        pending_btc_delta_usd: 0.0,
+        current_eth_delta_usd: 50.0,
+        pending_eth_delta_usd: 0.0,
+        current_alts_delta_usd: 0.0,
+        pending_alts_delta_usd: 0.0,
+        candidate_bucket: ExposureBucket::Btc,
+        candidate_delta_usd: 0.0,
+        global_delta_limit_usd: Some(100.0),
+    };
+
+    let out = evaluate_global_exposure_budget(&input, &mut metrics);
+    match out {
+        ExposureBudgetResult::Allowed {
+            portfolio_delta_usd,
+            ..
+        } => {
+            assert!(
+                (portfolio_delta_usd - 94.868).abs() < 0.5,
+                "expected ~94.87 (correlation-adjusted), got {portfolio_delta_usd}"
+            );
+            assert!(
+                portfolio_delta_usd < 100.0,
+                "correlation-adjusted portfolio must be < simple sum (100)"
+            );
+        }
+        other => panic!("expected Allowed with correlation adjustment, got {other:?}"),
+    }
+}
+
+/// Catches mutation: NaN limit accepted silently.
+#[test]
+fn test_global_exposure_budget_nan_limit_fails_closed() {
+    let mut metrics = ExposureBudgetMetrics::new();
+    let input = ExposureBudgetInput {
+        current_btc_delta_usd: 5.0,
+        pending_btc_delta_usd: 0.0,
+        current_eth_delta_usd: 0.0,
+        pending_eth_delta_usd: 0.0,
+        current_alts_delta_usd: 0.0,
+        pending_alts_delta_usd: 0.0,
+        candidate_bucket: ExposureBucket::Btc,
+        candidate_delta_usd: 1.0,
+        global_delta_limit_usd: Some(f64::NAN),
+    };
+
+    let out = evaluate_global_exposure_budget(&input, &mut metrics);
+    assert!(
+        matches!(
+            out,
+            ExposureBudgetResult::Rejected {
+                reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
+                ..
+            }
+        ),
+        "NaN limit must fail-closed to REJECT, got {out:?}"
+    );
+}

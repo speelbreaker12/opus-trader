@@ -511,3 +511,25 @@ fn test_preflight_emits_structured_reject_metric_line() {
         "expected structured preflight metric line, got {lines:?}"
     );
 }
+
+// ─── Devils-advocate: InverseFuture linked order allow path ──────────
+
+/// Catches mutation: remove InverseFuture from the allowed-when-capable arm
+/// in Rule 3 (e.g., change `InverseFuture => input.linked_orders_allowed` to
+/// `InverseFuture => false`). Without this test, that mutation passes because
+/// only Option, Perpetual, and LinearFuture are tested with linked orders.
+#[test]
+fn test_linked_order_inverse_future_both_flags_allowed() {
+    let input = PreflightInput {
+        linked_order_type: Some("oco"),
+        linked_orders_allowed: true,
+        ..limit_input(InstrumentKind::InverseFuture)
+    };
+    let mut m = PreflightMetrics::new();
+    assert_eq!(
+        preflight_intent(&input, &mut m),
+        PreflightResult::Allowed,
+        "InverseFuture with linked_orders_allowed=true must be Allowed"
+    );
+    assert_eq!(m.reject_total(), 0);
+}

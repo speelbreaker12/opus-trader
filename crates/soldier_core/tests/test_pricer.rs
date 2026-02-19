@@ -320,3 +320,19 @@ fn test_infinite_gross_edge_rejected() {
         }
     ));
 }
+
+// ─── Devils-advocate: boundary mutations ─────────────────────────────
+
+/// Catches mutation: `<` flipped to `<=` on net_edge < min_edge check.
+/// net_edge == min_edge must ALLOW (< not <=).
+#[test]
+fn test_pricer_at_exact_min_edge_boundary() {
+    let mut m = PricerMetrics::new();
+    // gross=8, fee=3 → net=5. min_edge=5 → net==min → should ALLOW.
+    let inp = input(100.0, 8.0, 5.0, 3.0, 1.0, PricerSide::Buy);
+    let result = compute_limit_price(&inp, &mut m);
+    assert!(
+        matches!(result, PricerResult::LimitPrice { .. }),
+        "net_edge == min_edge must ALLOW (< not <=), got {result:?}"
+    );
+}
