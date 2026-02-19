@@ -23,8 +23,8 @@ pub use fees::{
 };
 pub use instrument_state::InstrumentState;
 pub use margin_gate::{
-    MarginGateInput, MarginGateMetrics, MarginGateMode, MarginGateRejectReason, MarginGateResult,
-    evaluate_margin_headroom_gate,
+    MarginGateDecision, MarginGateInput, MarginGateMetrics, MarginGateMode, MarginGateRejectReason,
+    compute_margin_mode_hint, evaluate_margin_headroom_gate,
 };
 pub use pending_exposure::{
     PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,

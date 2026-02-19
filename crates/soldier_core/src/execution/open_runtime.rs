@@ -1,10 +1,11 @@
 //! OPEN runtime wiring for Slice 6 gate composition.
 
 use crate::risk::{
-    ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult, MarginGateInput,
-    MarginGateMetrics, MarginGateMode, MarginGateResult, PendingExposureBook,
+    ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult, MarginGateDecision,
+    MarginGateInput, MarginGateMetrics, MarginGateMode, PendingExposureBook,
     PendingExposureMetrics, PendingExposureResult, PendingExposureTerminalOutcome, ReservationId,
-    RiskState, evaluate_global_exposure_budget, evaluate_margin_headroom_gate,
+    RiskState, compute_margin_mode_hint, evaluate_global_exposure_budget,
+    evaluate_margin_headroom_gate,
 };
 
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
@@ -80,15 +81,12 @@ pub fn build_open_order_intent_runtime(
     choke_metrics: &mut ChokeMetrics,
     runtime_metrics: &mut OpenRuntimeMetrics,
 ) -> OpenRuntimeOutput {
-    let margin_gate_result =
+    let margin_decision =
         evaluate_margin_headroom_gate(&input.margin_gate_input, &mut runtime_metrics.margin_gate);
-    let mode_hint = match margin_gate_result {
-        MarginGateResult::Allowed { mode_hint, .. } => mode_hint,
-        MarginGateResult::Rejected { mode_hint, .. } => mode_hint,
-    };
+    let mode_hint = compute_margin_mode_hint(&input.margin_gate_input);
 
     let mut effective_risk_state = input.risk_state;
-    if matches!(margin_gate_result, MarginGateResult::Rejected { .. })
+    if matches!(margin_decision, MarginGateDecision::Rejected { .. })
         && effective_risk_state == RiskState::Healthy
     {
         effective_risk_state = match mode_hint {
