@@ -232,13 +232,12 @@ impl PendingExposureBook {
     /// `global_delta_limit` enforces a cross-instrument budget ceiling per §1.4.2.1.
     /// `None` skips the global check (per-instrument limits still enforced).
     ///
-    /// `global_delta_limit` must be finite and positive to be effective. Non-finite
-    /// values (NaN, Infinity) or non-positive values (0.0, negative) are treated
-    /// as `None` at reserve() time via `normalized_limit()` (fail-closed: no global
-    /// cap means only per-instrument limits apply).
+    /// `global_delta_limit` is normalized at construction: NaN, Infinity, negative,
+    /// and zero values become `None` (fail-closed: no global cap means only
+    /// per-instrument limits apply). This matches `register_instrument()` behavior.
     pub fn new(global_delta_limit: Option<f64>) -> Self {
         Self {
-            global_delta_limit,
+            global_delta_limit: normalized_limit(global_delta_limit),
             inner: RefCell::new(BookInner {
                 instruments: HashMap::new(),
                 global_total: 0.0,
@@ -534,6 +533,10 @@ impl PendingExposureBook {
     /// The caller's `instrument_id` is a cross-check only — if it doesn't match
     /// the canonical instrument, a warning is logged but settlement proceeds on
     /// the canonical instrument to prevent budget leaks.
+    ///
+    /// `outcome` is currently unused but retained in the API contract for PX-3:
+    /// different terminal outcomes (Filled vs Rejected/Canceled/Failed) will
+    /// drive distinct settlement accounting (realized vs unrealized exposure).
     ///
     /// Returns true when a reservation existed and was released.
     pub fn settle(

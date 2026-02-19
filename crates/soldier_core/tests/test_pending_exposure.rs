@@ -520,6 +520,61 @@ fn test_global_budget_enforced_across_instruments() {
 }
 
 #[test]
+fn test_global_delta_limit_none_allows_unlimited_cross_instrument() {
+    // Explicit coverage: global_delta_limit: None means no cross-instrument ceiling.
+    // Two instruments each at 90% of their per-instrument limit = global total 180,
+    // which would exceed any reasonable global limit — but passes because there is none.
+    let mut metrics = PendingExposureMetrics::new();
+    let book = PendingExposureBook::new(None); // no global limit
+    book.register_instrument("BTC", Some(100.0));
+    book.register_instrument("ETH", Some(100.0));
+
+    let r1 = ReservationId::new("btc-1").unwrap();
+    let r2 = ReservationId::new("eth-1").unwrap();
+
+    // BTC +90 — within per-instrument limit
+    match book.reserve(&r1, "BTC", 0.0, 90.0, &mut metrics) {
+        PendingExposureResult::Reserved { .. } => {}
+        other => panic!("BTC reserve should pass, got {other:?}"),
+    }
+
+    // ETH +90 — within per-instrument limit, no global cap to block it
+    match book.reserve(&r2, "ETH", 0.0, 90.0, &mut metrics) {
+        PendingExposureResult::Reserved { .. } => {}
+        other => panic!("ETH reserve should pass without global cap, got {other:?}"),
+    }
+
+    assert!((book.global_pending_total() - 180.0).abs() < 1e-9);
+    assert_eq!(book.global_active_reservations(), 2);
+    assert_eq!(metrics.reserve_success_total(), 2);
+    assert_eq!(metrics.reserve_reject_total(), 0);
+}
+
+#[test]
+fn test_global_delta_limit_nan_normalized_to_none() {
+    // global_delta_limit is normalized at construction — NaN becomes None.
+    let book = PendingExposureBook::new(Some(f64::NAN));
+    let mut metrics = PendingExposureMetrics::new();
+    book.register_instrument("BTC", Some(100.0));
+    book.register_instrument("ETH", Some(100.0));
+
+    let r1 = ReservationId::new("btc-1").unwrap();
+    let r2 = ReservationId::new("eth-1").unwrap();
+
+    // Both should pass — NaN global limit is normalized to None (no global cap)
+    match book.reserve(&r1, "BTC", 0.0, 90.0, &mut metrics) {
+        PendingExposureResult::Reserved { .. } => {}
+        other => panic!("BTC should pass with NaN global (normalized to None), got {other:?}"),
+    }
+    match book.reserve(&r2, "ETH", 0.0, 90.0, &mut metrics) {
+        PendingExposureResult::Reserved { .. } => {}
+        other => panic!("ETH should pass with NaN global (normalized to None), got {other:?}"),
+    }
+
+    assert!((book.global_pending_total() - 180.0).abs() < 1e-9);
+}
+
+#[test]
 fn test_unregistered_instrument_rejected() {
     let mut metrics = PendingExposureMetrics::new();
     let book = PendingExposureBook::new(None);
