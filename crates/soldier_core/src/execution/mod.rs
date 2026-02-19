@@ -8,6 +8,7 @@ const MAX_EXECUTION_METRIC_LINES: usize = 4096;
 pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
+pub mod gate_outcome;
 pub mod gates;
 pub mod group;
 pub mod inventory_skew;
@@ -39,6 +40,7 @@ pub use gate::{
     LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
     expected_slippage_bps_samples, liquidity_gate_reject_total,
 };
+pub use gate_outcome::GateOutcome;
 pub use gates::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
     net_edge_reject_total,

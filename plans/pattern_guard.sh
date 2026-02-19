@@ -153,9 +153,8 @@ scan_pattern "1" '\.unwrap(_unchecked)?[[:space:]]*\(|\.expect[[:space:]]*\(' "B
 scan_pattern "2" 'warn!.*missing|warn!.*not found' "Advisory" "warn-missing-config"
 
 # Pattern 3: Direct state assignment outside authority modules (BLOCK)
-# Matches single `=` (assignment) but not `==` (comparison) or `=>` (match arm).
 # Exclude authority modules: policy_guard, build_order_intent, state.rs, risk/mod.rs
-scan_pattern "3" 'risk_state[[:space:]]*=[^=>\!]|trading_mode[[:space:]]*=[^=>\!]' "BLOCK" "direct-state-assign" \
+scan_pattern "3" 'risk_state[[:space:]]*=|trading_mode[[:space:]]*=' "BLOCK" "direct-state-assign" \
   'policy_guard|build_order_intent|state\.rs|risk/mod\.rs'
 
 # Pattern 4: Fail-open defaults (BLOCK)
