@@ -93,3 +93,10 @@ cargo test at_1117
 cargo test at_1118
 cargo test AT_1119 AT_1122
 cargo test AT_1120 AT_1121
+
+# Targeted story verify commands (added by audit fix)
+cargo test -p soldier_core --test test_exposure_budget
+cargo test -p soldier_core --test test_inventory_skew
+cargo test -p soldier_core --test test_margin_gate
+cargo test -p soldier_core --test test_pending_exposure
+cargo test -p soldier_core --test test_reject_reason
