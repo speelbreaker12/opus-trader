@@ -60,3 +60,36 @@ python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.jso
 python3 tools/phase0_meta_test.py --root .
 python3 tools/policy_loader.py --policy config/policy.json
 test -f tools/release_gate.py
+
+# Phase 2 gap-closure ATs (first batch: critical+high)
+cargo test at_1072 at_1073
+cargo test at_1074 at_1075
+cargo test at_1076
+cargo test at_1077 at_1079 at_1080
+cargo test at_1078 at_1081
+cargo test at_1082
+cargo test at_1083 at_1084
+cargo test at_1085
+cargo test at_1086
+cargo test at_1087
+cargo test at_1088
+cargo test at_1089 at_1091
+cargo test at_1090 at_1094
+cargo test at_1092 at_1093
+
+# Phase 2 gap-closure ATs (second batch: moderate)
+cargo test at_1095 at_1096
+cargo test at_1097 at_1099
+cargo test at_1098 at_1100
+cargo test at_1101 at_1102
+cargo test at_1103 at_1112 at_1113
+cargo test at_1104 at_1105
+cargo test at_1106 at_1114
+cargo test at_1107 at_1110
+cargo test at_1108 at_1109
+cargo test at_1111 at_1123
+cargo test AT_1115 AT_1116
+cargo test at_1117
+cargo test at_1118
+cargo test AT_1119 AT_1122
+cargo test AT_1120 AT_1121
