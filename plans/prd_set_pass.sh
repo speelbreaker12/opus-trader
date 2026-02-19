@@ -195,6 +195,13 @@ if [[ "$STATUS" == "true" ]]; then
   REVIEW_GATE="./plans/story_review_gate.sh"
   [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
   "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
+
+  if [[ -x "./plans/fail_closed_coverage.sh" ]]; then
+    if ! ./plans/fail_closed_coverage.sh; then
+      echo "ERROR: fail-closed test coverage minimum not met" >&2
+      exit 8
+    fi
+  fi
 fi
 
 tmp="$(mktemp)"

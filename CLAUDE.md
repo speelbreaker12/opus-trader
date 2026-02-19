@@ -110,6 +110,7 @@ except ValueError as e:  # GOOD
 - Unit test the happy path
 - Unit test at least one error path
 - For safety-critical code: test the fail-closed behavior
+- **Fail-closed test naming**: tests for safety gates must include pattern keywords (nan, missing, stale, fail_closed, invalid, expired, forbidden, degraded) for automated coverage checks via `plans/fail_closed_coverage.sh`
 
 **Table-Driven Tests (Preferred)**
 ```rust

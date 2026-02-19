@@ -603,6 +603,24 @@ else
   warn "doc_sync_check skipped (DOC_SYNC_GATE=0)"
 fi
 
+if [[ -x "$ROOT/plans/pattern_guard.sh" ]]; then
+  log "14e) pattern guard"
+  run_logged_or_exit "pattern_guard" "$GATE_INTEGRITY_TIMEOUT" \
+    bash "$ROOT/plans/pattern_guard.sh"
+fi
+
+FAIL_CLOSED_COVERAGE_TIMEOUT="${FAIL_CLOSED_COVERAGE_TIMEOUT:-120s}"
+if [[ -x "$ROOT/plans/fail_closed_coverage.sh" ]]; then
+  log "14f) fail-closed coverage"
+  if [[ "$MODE" == "full" ]]; then
+    run_logged_or_exit "fail_closed_coverage" "$FAIL_CLOSED_COVERAGE_TIMEOUT" \
+      bash "$ROOT/plans/fail_closed_coverage.sh"
+  else
+    run_logged "fail_closed_coverage" "$FAIL_CLOSED_COVERAGE_TIMEOUT" \
+      bash "$ROOT/plans/fail_closed_coverage.sh" || true
+  fi
+fi
+
 export ROOT MODE VERIFY_ARTIFACTS_DIR VERIFY_CONSOLE VERIFY_LOG_CAPTURE
 export TIMEOUT_BIN ENABLE_TIMEOUTS VERIFY_FAIL_TAIL_LINES VERIFY_FAIL_SUMMARY_LINES TIMEOUT_WARNED
 export RUST_FMT_TIMEOUT RUST_CLIPPY_TIMEOUT RUST_TEST_TIMEOUT

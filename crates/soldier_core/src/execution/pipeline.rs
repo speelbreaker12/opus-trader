@@ -6,17 +6,16 @@
 
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState, evaluate_fee_staleness};
 use crate::venue::{
-    BotFeatureFlags, ExpiryGuardInput, ExpiryGuardResult, LifecycleIntent, VenueCapabilities,
-    evaluate_capabilities, evaluate_expiry_guard,
+    BotFeatureFlags, ExpiryGuardInput, LifecycleIntent, VenueCapabilities, evaluate_capabilities,
+    evaluate_expiry_guard,
 };
 
+use super::gate_outcome::GateOutcome;
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, LiquidityGateInput,
-    LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult, NetEdgeInput,
-    NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, PreflightInput, PreflightMetrics,
-    PreflightReject, PreflightResult, PricerInput, PricerMetrics, PricerRejectReason, PricerResult,
-    QuantizeConstraints, QuantizeError, QuantizeMetrics, RejectReasonCode, Side,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateStep, LiquidityGateInput,
+    LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PreflightInput, PreflightMetrics,
+    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, RejectReasonCode, Side,
     build_gate_results, build_order_intent_with_reject_reason_code, compute_limit_price,
     evaluate_liquidity_gate, evaluate_net_edge, preflight_intent, quantize,
 };
@@ -107,24 +106,8 @@ pub fn evaluate_intent_pipeline(
 
     if !dispatch_auth_short_circuit {
         let preflight_result = preflight_intent(&preflight_input, &mut metrics.preflight);
-        (preflight_passed, preflight_reject_code) = match preflight_result {
-            PreflightResult::Allowed => (true, None),
-            PreflightResult::Rejected(reason) => (
-                false,
-                Some(match reason {
-                    PreflightReject::OrderTypeMarketForbidden => {
-                        RejectReasonCode::OrderTypeMarketForbidden
-                    }
-                    PreflightReject::OrderTypeStopForbidden => {
-                        RejectReasonCode::OrderTypeStopForbidden
-                    }
-                    PreflightReject::LinkedOrderTypeForbidden => {
-                        RejectReasonCode::LinkedOrderTypeForbidden
-                    }
-                    PreflightReject::PostOnlyWouldCross => RejectReasonCode::PostOnlyWouldCross,
-                }),
-            ),
-        };
+        let preflight_outcome = GateOutcome::from_preflight(GateStep::Preflight, &preflight_result);
+        (preflight_passed, preflight_reject_code) = preflight_outcome.to_legacy();
 
         if preflight_passed {
             let quantize_result = quantize(
@@ -134,29 +117,16 @@ pub fn evaluate_intent_pipeline(
                 &input.quantize.constraints,
                 &mut metrics.quantize,
             );
-            (quantize_passed, quantize_reject_code) = match quantize_result {
-                Ok(_) => (true, None),
-                Err(reason) => (
-                    false,
-                    Some(match reason {
-                        QuantizeError::TooSmallAfterQuantization { .. } => {
-                            RejectReasonCode::TooSmallAfterQuantization
-                        }
-                        QuantizeError::InstrumentMetadataMissing { .. }
-                        | QuantizeError::InvalidInput { .. } => {
-                            RejectReasonCode::InstrumentMetadataMissing
-                        }
-                    }),
-                ),
-            };
+            let quantize_outcome = GateOutcome::from_quantize(GateStep::Quantize, &quantize_result);
+            (quantize_passed, quantize_reject_code) = quantize_outcome.to_legacy();
         }
 
         if preflight_passed && quantize_passed && input.dispatch_consistency_passed {
             let fee_eval = evaluate_fee_staleness(&input.fee_snapshot, &input.fee_config);
-            fee_cache_passed = fee_eval.risk_state == RiskState::Healthy;
+            let fee_outcome = GateOutcome::from_fee_eval(GateStep::FeeCacheCheck, &fee_eval);
+            (fee_cache_passed, fee_cache_reject_code) = fee_outcome.to_legacy();
             if !fee_cache_passed {
                 metrics.fee.record_refresh_fail();
-                fee_cache_reject_code = Some(RejectReasonCode::FeeCacheStale);
             }
         }
 
@@ -183,14 +153,10 @@ pub fn evaluate_intent_pipeline(
                     intent: lifecycle_intent,
                     ..*expiry_input
                 };
-                match evaluate_expiry_guard(&corrected_input) {
-                    ExpiryGuardResult::Allowed => {}
-                    ExpiryGuardResult::Rejected(_) => {
-                        expiry_guard_passed = false;
-                        expiry_guard_reject_code =
-                            Some(RejectReasonCode::InstrumentExpiredOrDelisted);
-                    }
-                }
+                let expiry_result = evaluate_expiry_guard(&corrected_input);
+                let expiry_outcome =
+                    GateOutcome::from_expiry_guard(GateStep::ExpiryGuard, &expiry_result);
+                (expiry_guard_passed, expiry_guard_reject_code) = expiry_outcome.to_legacy();
             } else if lifecycle_intent == LifecycleIntent::Open {
                 // FAIL-CLOSED: missing expiry data blocks OPEN intents
                 expiry_guard_passed = false;
@@ -219,23 +185,11 @@ pub fn evaluate_intent_pipeline(
             Some(liquidity_input) => {
                 let liquidity_result =
                     evaluate_liquidity_gate(liquidity_input, &mut metrics.liquidity);
-                match liquidity_result {
-                    LiquidityGateResult::Allowed { .. } => true,
-                    LiquidityGateResult::Rejected { reason, .. } => {
-                        liquidity_gate_reject_code = Some(match reason {
-                            LiquidityGateRejectReason::LiquidityGateNoL2 => {
-                                RejectReasonCode::LiquidityGateNoL2
-                            }
-                            LiquidityGateRejectReason::ExpectedSlippageTooHigh => {
-                                RejectReasonCode::ExpectedSlippageTooHigh
-                            }
-                            LiquidityGateRejectReason::InsufficientDepthWithinBudget => {
-                                RejectReasonCode::InsufficientDepthWithinBudget
-                            }
-                        });
-                        false
-                    }
-                }
+                let liquidity_outcome =
+                    GateOutcome::from_liquidity(GateStep::LiquidityGate, &liquidity_result);
+                let (passed, code) = liquidity_outcome.to_legacy();
+                liquidity_gate_reject_code = code;
+                passed
             }
             None => {
                 liquidity_gate_reject_code = Some(RejectReasonCode::LiquidityGateNoL2);
@@ -247,20 +201,11 @@ pub fn evaluate_intent_pipeline(
             net_edge_passed = match input.net_edge.as_ref() {
                 Some(net_edge_input) => {
                     let net_edge_result = evaluate_net_edge(net_edge_input, &mut metrics.net_edge);
-                    match net_edge_result {
-                        NetEdgeResult::Allowed { .. } => true,
-                        NetEdgeResult::Rejected { reason, .. } => {
-                            net_edge_reject_code = Some(match reason {
-                                NetEdgeRejectReason::NetEdgeTooLow => {
-                                    RejectReasonCode::NetEdgeTooLow
-                                }
-                                NetEdgeRejectReason::NetEdgeInputMissing => {
-                                    RejectReasonCode::NetEdgeInputMissing
-                                }
-                            });
-                            false
-                        }
-                    }
+                    let net_edge_outcome =
+                        GateOutcome::from_net_edge(GateStep::NetEdgeGate, &net_edge_result);
+                    let (passed, code) = net_edge_outcome.to_legacy();
+                    net_edge_reject_code = code;
+                    passed
                 }
                 None => {
                     net_edge_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
@@ -276,20 +221,10 @@ pub fn evaluate_intent_pipeline(
             pricer_passed = match input.pricer.as_ref() {
                 Some(pricer_input) => {
                     let pricer_result = compute_limit_price(pricer_input, &mut metrics.pricer);
-                    match pricer_result {
-                        PricerResult::LimitPrice { .. } => true,
-                        PricerResult::Rejected { reason, .. } => {
-                            pricer_reject_code = Some(match reason {
-                                PricerRejectReason::NetEdgeTooLow => {
-                                    RejectReasonCode::NetEdgeTooLow
-                                }
-                                PricerRejectReason::InvalidInput => {
-                                    RejectReasonCode::NetEdgeInputMissing
-                                }
-                            });
-                            false
-                        }
-                    }
+                    let pricer_outcome = GateOutcome::from_pricer(GateStep::Pricer, &pricer_result);
+                    let (passed, code) = pricer_outcome.to_legacy();
+                    pricer_reject_code = code;
+                    passed
                 }
                 None => {
                     pricer_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
@@ -331,7 +266,8 @@ pub fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
-    // TODO: migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
+    // TODO(Phase 2): migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
+    // TODO(Phase 2): migrate open_runtime.rs GateResults construction to use GateOutcome converters.
     #[allow(deprecated)]
     let (decision, reject_reason_code) = build_order_intent_with_reject_reason_code(
         input.intent_class,

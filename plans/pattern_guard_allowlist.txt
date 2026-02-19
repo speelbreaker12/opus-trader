@@ -1,0 +1,3 @@
+# pattern_guard allowlist — one file:pattern_number per line.
+# Lines starting with # are comments.
+# Example: crates/soldier_core/src/execution/pipeline.rs:1
