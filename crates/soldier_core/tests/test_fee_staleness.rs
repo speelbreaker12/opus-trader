@@ -318,3 +318,58 @@ fn test_infinity_buffer_uses_zero_buffer() {
     assert_eq!(result.staleness, FeeStaleness::SoftStale);
     assert!((result.fee_rate_effective - 0.001).abs() < 1e-12);
 }
+
+// ─── Devils-advocate: custom config thresholds ──────────────────────
+
+/// Catches mutation: hardcode fee_cache_soft_s=300 and fee_cache_hard_s=900.
+/// All existing tests use default config (300/900). This test uses 60/120 to
+/// prove the config values are actually read and respected.
+#[test]
+fn test_custom_config_thresholds_respected() {
+    let config = FeeStalenessConfig {
+        fee_cache_soft_s: 60,
+        fee_cache_hard_s: 120,
+        fee_stale_buffer: 0.10,
+    };
+
+    // age = 59s → Fresh (under custom soft=60)
+    let fresh = FeeCacheSnapshot {
+        fee_rate: 0.001,
+        fee_model_cached_at_ts_ms: Some(1_000_000),
+        now_ms: 1_059_000, // age = 59s
+    };
+    let eval = evaluate_fee_staleness(&fresh, &config);
+    assert_eq!(eval.staleness, FeeStaleness::Fresh, "59s should be Fresh with soft=60");
+    assert!((eval.fee_rate_effective - 0.001).abs() < 1e-12, "Fresh uses actual rate");
+
+    // age = 61s → SoftStale (between custom soft=60 and hard=120)
+    let soft = FeeCacheSnapshot {
+        fee_rate: 0.001,
+        fee_model_cached_at_ts_ms: Some(1_000_000),
+        now_ms: 1_061_000, // age = 61s
+    };
+    let eval = evaluate_fee_staleness(&soft, &config);
+    assert_eq!(eval.staleness, FeeStaleness::SoftStale, "61s should be SoftStale with soft=60");
+    assert!((eval.fee_rate_effective - 0.0011).abs() < 1e-12, "SoftStale applies 10% buffer");
+    assert_eq!(eval.risk_state, RiskState::Healthy);
+
+    // age = 121s → HardStale (above custom hard=120)
+    let hard = FeeCacheSnapshot {
+        fee_rate: 0.001,
+        fee_model_cached_at_ts_ms: Some(1_000_000),
+        now_ms: 1_121_000, // age = 121s
+    };
+    let eval = evaluate_fee_staleness(&hard, &config);
+    assert_eq!(eval.staleness, FeeStaleness::HardStale, "121s should be HardStale with hard=120");
+    assert_eq!(eval.risk_state, RiskState::Degraded);
+
+    // Control: with default config, 61s and 121s would both be Fresh.
+    // This proves custom thresholds are the sole cause of SoftStale/HardStale above.
+    let default = FeeStalenessConfig::default();
+    let eval_default = evaluate_fee_staleness(&soft, &default);
+    assert_eq!(
+        eval_default.staleness,
+        FeeStaleness::Fresh,
+        "61s is Fresh under default config — proves custom threshold is sole cause"
+    );
+}

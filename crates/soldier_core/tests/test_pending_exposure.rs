@@ -370,6 +370,29 @@ fn test_reserve_fails_closed_on_non_finite_inputs() {
     assert_eq!(metrics.reserve_reject_total(), 4);
 }
 
+// ─── Devils-advocate: boundary mutations ─────────────────────────────
+
+/// Catches mutation: `>` flipped to `>=` on budget check.
+/// Exposure exactly at budget limit must be Allowed.
+#[test]
+fn test_pending_exposure_at_exact_budget_allowed() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = PendingExposureBook::new(Some(100.0));
+    let rid = ReservationId::new("exact-budget").unwrap();
+
+    // Reserve exactly 100.0 against a 100.0 budget — must be Allowed
+    match book.reserve(&rid, 0.0, 100.0, &mut metrics) {
+        PendingExposureResult::Reserved { pending_total, .. } => {
+            assert!(
+                (pending_total - 100.0).abs() < 1e-9,
+                "pending_total should be 100.0, got {pending_total}"
+            );
+        }
+        other => panic!("exposure == budget must ALLOW, got {other:?}"),
+    }
+    assert_eq!(metrics.reserve_success_total(), 1);
+}
+
 #[test]
 fn test_negative_and_nan_budget_fails_closed() {
     let mut metrics = PendingExposureMetrics::new();

@@ -667,3 +667,43 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
         "expected slippage sample metric line, got {lines:?}"
     );
 }
+
+// ─── Devils-advocate: boundary mutations ─────────────────────────────
+
+/// Catches mutation: `>` flipped to `>=` on slippage check.
+/// slippage_bps == max_slippage_bps must ALLOW.
+#[test]
+fn test_slippage_at_exact_max_allowed() {
+    let mut m = LiquidityGateMetrics::new();
+    // Build a book where slippage is exactly 10bps = max_slippage_bps
+    // Asks: 100.0 x 5.0, 100.20 x 5.0
+    // Buy 10: WAP = (100*5 + 100.20*5)/10 = 100.10
+    // slippage_bps = (100.10 - 100)/100 * 10000 = 10.0 exactly = max
+    let snap = book(vec![(100.0, 5.0), (100.20, 5.0)], vec![], 900);
+    let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed { slippage_bps, wap, .. } => {
+            assert!((slippage_bps.unwrap() - 10.0).abs() < 1e-6);
+            assert!((wap.unwrap() - 100.10).abs() < 1e-6);
+        }
+        other => panic!("slippage == max_slippage_bps must ALLOW (> not >=), got {other:?}"),
+    }
+    assert_eq!(m.allowed_total(), 1);
+}
+
+/// Catches mutation: `>` flipped to `>=` on staleness check.
+/// age == max_age must ALLOW.
+#[test]
+fn test_staleness_at_exact_max_age_allowed() {
+    let mut m = LiquidityGateMetrics::new();
+    // Snapshot at ts=500, now=1000, max_age=500 → age=500 == max_age exactly
+    let snap = book(vec![(100.0, 10.0)], vec![], 500);
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    match result {
+        LiquidityGateResult::Allowed { .. } => {}
+        other => panic!("age == max_age must ALLOW (> not >=), got {other:?}"),
+    }
+    assert_eq!(m.allowed_total(), 1);
+}

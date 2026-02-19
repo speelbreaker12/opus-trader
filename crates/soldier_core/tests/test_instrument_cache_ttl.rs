@@ -452,3 +452,32 @@ fn test_breach_struct_fields() {
     assert!(debug_str.contains("4500"));
     assert!(debug_str.contains("3600"));
 }
+
+/// Catches mutation: hardcode TTL to default value (all tests use 3600s).
+/// Uses a custom TTL (60s) to prove the config value is actually read.
+#[test]
+fn test_different_ttl_config_respected() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let custom_ttl_s = 60.0;
+
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // age = 59s → Fresh under custom 60s TTL
+    let fresh_time = t0 + Duration::from_secs(59);
+    let result = cache.get_at("BTC-PERPETUAL", custom_ttl_s, fresh_time).unwrap();
+    assert_eq!(
+        result.risk_state,
+        RiskState::Healthy,
+        "59s must be Fresh under ttl_s=60"
+    );
+
+    // age = 61s → Stale under custom 60s TTL (but would be Fresh under default 3600s)
+    let stale_time = t0 + Duration::from_secs(61);
+    let result = cache.get_at("BTC-PERPETUAL", custom_ttl_s, stale_time).unwrap();
+    assert_eq!(
+        result.risk_state,
+        RiskState::Degraded,
+        "61s must be stale under ttl_s=60 — proves TTL is not hardcoded to 3600"
+    );
+}
