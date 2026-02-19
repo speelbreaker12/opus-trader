@@ -67,7 +67,12 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": []
+      "implementation_tests": [],
+      "loss_mode": {
+        "worst_case": "test worst case",
+        "fail_closed_cap": "test cap",
+        "drift_metric": "test metric"
+      }
     }
   ]
 }
