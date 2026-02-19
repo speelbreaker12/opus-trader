@@ -328,3 +328,62 @@ fn partial_fill_triggers_mixed_failed() {
             .contains("partial fill")
     );
 }
+
+// ─── Devils-advocate: no MixedFailed re-entry from Flattening/Flattened ──
+
+/// Catches mutation: remove Flattening/Flattened guard from failure re-entry
+/// in apply_leg_result. A failure leg applied AFTER entering Flattening must
+/// NOT re-enter MixedFailed — the containment path is already in progress.
+#[test]
+fn failure_leg_during_flattening_does_not_reenter_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("guard-flatten".to_string(), 3);
+    group.mark_dispatched().expect("ok");
+
+    // Leg A rejected → MixedFailed
+    group.apply_leg_result(rejected_leg(0, 1.0), &config);
+    assert_eq!(group.state, GroupState::MixedFailed);
+
+    // Enter Flattening (emergency close in progress)
+    group.mark_flattening().expect("ok");
+    assert_eq!(group.state, GroupState::Flattening);
+
+    // Leg B arrives rejected AFTER flattening started — must NOT re-enter MixedFailed
+    let t = group.apply_leg_result(rejected_leg(1, 1.0), &config);
+    assert_eq!(
+        t,
+        GroupStateTransition::NoChange,
+        "failure during Flattening must be NoChange, not re-enter MixedFailed"
+    );
+    assert_eq!(
+        group.state,
+        GroupState::Flattening,
+        "state must remain Flattening"
+    );
+}
+
+#[test]
+fn failure_leg_during_flattened_does_not_reenter_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("guard-flattened".to_string(), 3);
+    group.mark_dispatched().expect("ok");
+
+    // Leg A rejected → MixedFailed → Flattening → Flattened
+    group.apply_leg_result(rejected_leg(0, 1.0), &config);
+    group.mark_flattening().expect("ok");
+    group.mark_flattened().expect("ok");
+    assert_eq!(group.state, GroupState::Flattened);
+
+    // Late leg B arrives rejected AFTER fully flattened — must NOT re-enter MixedFailed
+    let t = group.apply_leg_result(rejected_leg(1, 1.0), &config);
+    assert_eq!(
+        t,
+        GroupStateTransition::NoChange,
+        "failure during Flattened must be NoChange, not re-enter MixedFailed"
+    );
+    assert_eq!(
+        group.state,
+        GroupState::Flattened,
+        "state must remain Flattened"
+    );
+}

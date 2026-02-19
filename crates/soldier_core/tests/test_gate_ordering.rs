@@ -965,3 +965,84 @@ fn test_at506_expiry_guard_reject_stops_at_gate6() {
         other => panic!("expected Rejected at ExpiryGuard, got {other:?}"),
     }
 }
+
+// ─── Devils-advocate: dispatch consistency clamp boundary mutations ───
+
+/// Catches mutation: epsilon tolerance removed (exact equality must ALLOW).
+#[test]
+fn test_dispatch_consistency_clamp_at_exact_equality_allowed() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        requested_qty: Some(2.0),
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::all_passed()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+    assert!(
+        matches!(result, ChokeResult::Approved { .. }),
+        "requested == max must ALLOW, got {result:?}"
+    );
+}
+
+/// Catches mutation: epsilon boundary — requested within epsilon tolerance ALLOWS.
+#[test]
+fn test_dispatch_consistency_clamp_within_epsilon_allowed() {
+    let mut m = ChokeMetrics::new();
+    // requested = max + 1e-13 (within 1e-12 epsilon)
+    let gates = GateResults {
+        requested_qty: Some(2.0 + 1e-13),
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::all_passed()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+    assert!(
+        matches!(result, ChokeResult::Approved { .. }),
+        "requested within epsilon of max must ALLOW, got {result:?}"
+    );
+}
+
+/// Catches mutation: requested below max must ALLOW.
+#[test]
+fn test_dispatch_consistency_clamp_below_max_allowed() {
+    let mut m = ChokeMetrics::new();
+    let gates = GateResults {
+        requested_qty: Some(1.5),
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::all_passed()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+    assert!(
+        matches!(result, ChokeResult::Approved { .. }),
+        "requested < max must ALLOW, got {result:?}"
+    );
+}
+
+/// Catches mutation: requested clearly above max + epsilon must REJECT.
+#[test]
+fn test_dispatch_consistency_clamp_above_epsilon_rejected() {
+    let mut m = ChokeMetrics::new();
+    // requested = max + 1e-11 (beyond 1e-12 epsilon)
+    let gates = GateResults {
+        requested_qty: Some(2.0 + 1e-11),
+        max_dispatch_qty: Some(2.0),
+        ..GateResults::all_passed()
+    };
+
+    let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
+    assert!(
+        matches!(
+            result,
+            ChokeResult::Rejected {
+                reason: ChokeRejectReason::GateRejected {
+                    gate: GateStep::DispatchConsistency,
+                    ..
+                },
+                ..
+            }
+        ),
+        "requested beyond epsilon above max must REJECT, got {result:?}"
+    );
+}

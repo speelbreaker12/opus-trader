@@ -39,6 +39,43 @@ fn test_expiry_outside_buffer_allows_open() {
     assert_eq!(evaluate_expiry_guard(&input), ExpiryGuardResult::Allowed);
 }
 
+/// Catches mutation: `expiration_timestamp_ms: None` → Rejected instead of Allowed.
+/// Perpetual instruments have no expiry; they must always be Allowed for OPEN.
+#[test]
+fn test_no_expiration_timestamp_allows_open() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: None,
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Allowed,
+        "None expiration_timestamp_ms (perpetual) must be Allowed"
+    );
+}
+
+/// Catches mutation: `>=` flipped to `>` on `now_ms >= opens_blocked_from_ms`.
+/// At exact boundary (now == expiry - buffer), OPEN must be Rejected.
+#[test]
+fn test_expiry_at_exact_boundary_rejects_open() {
+    // expiry = 1_700_000_060_000, buffer = 60s = 60_000ms
+    // opens_blocked_from = 1_700_000_060_000 - 60_000 = 1_700_000_000_000
+    // now == opens_blocked_from exactly
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_060_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "now_ms == opens_blocked_from_ms must be Rejected (>= not >)"
+    );
+}
+
 #[test]
 fn test_expiry_cancel_idempotent_success() {
     let decision = classify_lifecycle_error(
