@@ -18,6 +18,9 @@ evals/
 .obsidian/
 .code/
 
+# Build/tool caches
+.cache/
+
 # Local temp files
 proxy.log
 proxy_bridge.py
