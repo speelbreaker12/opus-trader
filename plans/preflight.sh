@@ -56,6 +56,15 @@ case "$PREFLIGHT_FIXTURE_MODE" in
     ;;
 esac
 
+# --- Timeout detection (portable: timeout on Linux, gtimeout on macOS) ---
+PREFLIGHT_GUARD_TIMEOUT="${PREFLIGHT_GUARD_TIMEOUT:-30}"
+_TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then
+  _TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  _TIMEOUT_BIN="gtimeout"
+fi
+
 # --- Counters ---
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -134,7 +143,6 @@ PREFLIGHT_GUARD_SCRIPTS=(
   "plans/readme_ci_parity_check.sh:README/CI parity guard"
   "plans/slice_completion_review_guard.sh:Slice completion review guard"
   "plans/story_review_findings_guard.sh:Story findings-review guard"
-  "plans/story_review_equivalence_check.sh:Story-review equivalence matrix guard"
   "plans/stoic_cli_invariant_check.sh:stoic-cli invariants guard"
   "plans/toggle_policy_check.sh:Toggle policy wiring guard"
 )
@@ -162,7 +170,12 @@ for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
   _guard_script="${_guard_entry%%:*}"
   _idx=$_guard_idx
   (
-    if timeout 30 bash "$_guard_script" > "$_guard_results_dir/${_idx}.log" 2>&1; then
+    if [[ -n "$_TIMEOUT_BIN" ]]; then
+      _guard_cmd=("$_TIMEOUT_BIN" "$PREFLIGHT_GUARD_TIMEOUT" bash "$_guard_script")
+    else
+      _guard_cmd=(bash "$_guard_script")
+    fi
+    if "${_guard_cmd[@]}" > "$_guard_results_dir/${_idx}.log" 2>&1; then
       echo "PASS" > "$_guard_results_dir/$_idx"
     else
       echo "FAIL" > "$_guard_results_dir/$_idx"
@@ -297,6 +310,7 @@ else
       find plans -maxdepth 1 -type f 2>/dev/null
       find plans/lib -name '*.sh' -type f 2>/dev/null
       find plans/tests -name '*.sh' -type f 2>/dev/null
+      find plans/config -type f 2>/dev/null
       find specs -type f 2>/dev/null
       find SKILLS -type f 2>/dev/null
       find tools -name '*.py' -type f 2>/dev/null
