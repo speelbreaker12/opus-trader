@@ -223,7 +223,12 @@ fn test_missing_l2_book_fails_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
 
     assert!(
-        matches!(result.decision, LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }),
+        matches!(
+            result.decision,
+            LiquidityGateDecision::Rejected {
+                reason: LiquidityGateRejectReason::LiquidityGateNoL2
+            }
+        ),
         "Missing L2 book must fail-closed with LiquidityGateNoL2"
     );
 }

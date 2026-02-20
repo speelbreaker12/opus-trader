@@ -85,7 +85,9 @@ fn test_at222_no_order_intent_on_rejection() {
     // Rejected — no OrderIntent should be emitted (caller responsibility)
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
+        }
     ));
 }
 
@@ -184,7 +186,9 @@ fn test_at344_missing_l2_rejects_open() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
     assert_eq!(m.reject_no_l2(), 1);
 }
@@ -213,7 +217,9 @@ fn test_at344_stale_l2_rejects_open() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -240,7 +246,9 @@ fn test_future_dated_l2_rejected_fail_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -266,7 +274,9 @@ fn test_at421_close_rejected_without_l2() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -295,7 +305,9 @@ fn test_empty_asks_for_buy_rejects() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -309,7 +321,9 @@ fn test_empty_bids_for_sell_rejects() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -401,7 +415,9 @@ fn test_overflowed_slippage_budget_fails_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
     assert_eq!(m.reject_no_l2(), 1);
 }
@@ -485,7 +501,9 @@ fn test_non_marketable_open_still_enforces_depth_budget() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
+        }
     ));
 }
 
@@ -499,7 +517,9 @@ fn test_non_marketable_open_without_l2_still_rejected_fail_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -513,7 +533,9 @@ fn test_non_marketable_close_without_l2_still_rejected_fail_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -532,7 +554,9 @@ fn test_non_marketable_hedge_with_stale_l2_still_rejected_fail_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -551,7 +575,9 @@ fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
     ));
 }
 
@@ -572,7 +598,9 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
     });
     assert!(matches!(
         result.decision,
-        LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget }
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
+        }
     ));
 
     let after_reject =
