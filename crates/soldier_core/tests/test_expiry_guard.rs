@@ -6,8 +6,8 @@ use soldier_core::execution::{
 };
 use soldier_core::risk::InstrumentState;
 use soldier_core::venue::{
-    CancelOutcome, ExpiryGuardInput, ExpiryGuardResult, LifecycleErrorClass, LifecycleIntent,
-    LifecycleTerminalReason, ReconcileScope, RetryDirective, VenueLifecycleError,
+    CancelOutcome, ExpiryGuardInput, ExpiryGuardResult, InstrumentKind, LifecycleErrorClass,
+    LifecycleIntent, LifecycleTerminalReason, ReconcileScope, RetryDirective, VenueLifecycleError,
     classify_lifecycle_error, evaluate_expiry_guard,
 };
 
@@ -18,6 +18,7 @@ fn test_expiry_delist_buffer_rejects_open() {
         expiration_timestamp_ms: Some(1_700_000_030_000),
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     };
 
     let result = evaluate_expiry_guard(&input);
@@ -34,12 +35,12 @@ fn test_expiry_outside_buffer_allows_open() {
         expiration_timestamp_ms: Some(1_700_000_090_000),
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     };
 
     assert_eq!(evaluate_expiry_guard(&input), ExpiryGuardResult::Allowed);
 }
 
-/// Catches mutation: `expiration_timestamp_ms: None` → Rejected instead of Allowed.
 /// Perpetual instruments have no expiry; they must always be Allowed for OPEN.
 #[test]
 fn test_no_expiration_timestamp_allows_open() {
@@ -48,6 +49,7 @@ fn test_no_expiration_timestamp_allows_open() {
         expiration_timestamp_ms: None,
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::Perpetual),
     };
     assert_eq!(
         evaluate_expiry_guard(&input),
@@ -68,6 +70,7 @@ fn test_expiry_at_exact_boundary_rejects_open() {
         expiration_timestamp_ms: Some(1_700_000_060_000),
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
         evaluate_expiry_guard(&input),
@@ -155,6 +158,7 @@ fn test_at950_pipeline_rejects_open_within_expiry_buffer() {
         expiration_timestamp_ms: Some(1_700_000_030_000),
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     });
 
     let mut metrics = IntentPipelineMetrics::new();
@@ -205,6 +209,7 @@ fn test_at965_pipeline_allows_open_outside_expiry_buffer() {
         expiration_timestamp_ms: Some(1_700_000_090_000),
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     });
 
     let mut metrics = IntentPipelineMetrics::new();
@@ -232,6 +237,7 @@ fn test_pipeline_close_passes_through_expired_instrument() {
         expiration_timestamp_ms: Some(1_700_000_030_000),
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Close,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     });
 
     let mut metrics = IntentPipelineMetrics::new();
@@ -297,6 +303,7 @@ fn test_intent_drift_close_with_open_expiry_input_allowed() {
         expiration_timestamp_ms: Some(1_700_000_030_000), // within buffer
         expiry_delist_buffer_s: 60,
         intent: LifecycleIntent::Open, // WRONG — but pipeline must override
+        instrument_kind: Some(InstrumentKind::LinearFuture),
     });
 
     let mut metrics = IntentPipelineMetrics::new();
@@ -324,5 +331,145 @@ fn test_pipeline_close_allowed_when_expiry_input_none() {
         matches!(result.decision, ChokeResult::Approved { .. }),
         "CLOSE with None expiry must be allowed, got {:?}",
         result.decision
+    );
+}
+
+// ─── Q7 retrofit: ExpiryGuard fail-closed for expirable instruments ──────────
+
+/// TRIP: LinearFuture with missing timestamp must be rejected (fail-closed).
+#[test]
+fn test_expiry_guard_missing_timestamp_linear_future_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: None,
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "LinearFuture with missing timestamp must be rejected (fail-closed)"
+    );
+}
+
+/// TRIP: InverseFuture with missing timestamp must be rejected (fail-closed).
+#[test]
+fn test_expiry_guard_missing_timestamp_inverse_future_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: None,
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::InverseFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "InverseFuture with missing timestamp must be rejected (fail-closed)"
+    );
+}
+
+/// TRIP: Option with missing timestamp must be rejected (fail-closed).
+#[test]
+fn test_expiry_guard_missing_timestamp_option_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: None,
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::Option),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "Option with missing timestamp must be rejected (fail-closed)"
+    );
+}
+
+/// TRIP: Unknown instrument kind (None) with missing timestamp must be rejected (fail-closed).
+#[test]
+fn test_expiry_guard_missing_timestamp_unknown_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: None,
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: None,
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "Unknown instrument kind with missing timestamp must be rejected (fail-closed)"
+    );
+}
+
+/// TRIP: LinearFuture inside expiry buffer must be rejected.
+#[test]
+fn test_expiry_guard_future_inside_buffer_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_030_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "LinearFuture inside buffer must be rejected"
+    );
+}
+
+/// NON-TRIP: Perpetual with missing timestamp must be allowed.
+/// Catches always-reject mutation (guard must not fire for perpetuals).
+#[test]
+fn test_expiry_guard_missing_timestamp_perpetual_allowed() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: None,
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::Perpetual),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Allowed,
+        "Perpetual with missing timestamp must be allowed"
+    );
+}
+
+/// NON-TRIP: LinearFuture with valid timestamp outside buffer must be allowed.
+#[test]
+fn test_expiry_guard_future_with_valid_timestamp_allowed() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_090_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Allowed,
+        "LinearFuture outside buffer must be allowed"
+    );
+}
+
+/// NON-TRIP: Unknown kind with valid timestamp outside buffer must be allowed.
+/// When timestamp is present, the buffer check applies regardless of kind.
+#[test]
+fn test_expiry_guard_unknown_kind_with_valid_timestamp_allowed() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_090_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: None,
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Allowed,
+        "Unknown kind with valid timestamp outside buffer must be allowed"
     );
 }
