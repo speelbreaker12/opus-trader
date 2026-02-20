@@ -7,7 +7,7 @@
 
 use soldier_core::execution::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
-    LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    LiquidityGateMetrics, LiquidityGateRejectReason, evaluate_liquidity_gate,
     expected_slippage_bps_samples, liquidity_gate_reject_total, take_execution_metric_lines,
     with_intent_trace_ids,
 };
