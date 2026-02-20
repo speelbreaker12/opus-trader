@@ -44,6 +44,10 @@ These files must exist in the fork and remain functional:
 - `plans/codex_review_logged.sh` (Codex review artifact logger)
 - `plans/kimi_review_logged.sh` (Kimi review artifact logger)
 - `plans/code_review_expert_logged.sh` (findings review artifact logger)
+- `plans/wf_step.sh` (Receipt-chain workflow step executor — enforces step ordering, HMAC signing)
+- `plans/wf_ci_guard.sh` (CI guard — blocks passes=true flips without valid receipt chains)
+- `plans/opus_review_logged.sh` (Opus review artifact logger — fallback when Codex unavailable)
+- `plans/supervisor_check.sh` (Sonnet-based supervisor agent — verifies builder work at 3 checkpoints)
 - `plans/thinking_review_logged.sh` (slice-close thinking review artifact logger)
 - `plans/slice_completion_enforce.sh` (verify-full slice-close enforcement bridge)
 - `plans/slice_review_gate.sh` (slice-close thinking review evidence gate)
@@ -113,8 +117,10 @@ This is the only approved execution loop.
    - `SKILLS/strategic-failure-review.md`
 3) Run `./plans/verify.sh quick`.
 4) Codex review for `REVIEW_SHA` (`codex review --commit "$REVIEW_SHA" ...`), fix all blocking.
+4.1) **Supervisor checkpoint**: `plans/supervisor_check.sh <STORY_ID> post-cycle1` — Sonnet verifies cycle 1 findings are real and match actual code. If FAIL → redo cycle 1 review.
 5) Kimi K2.5 review for `REVIEW_SHA` (`kimi ...` via `plans/kimi_review_logged.sh --commit "$REVIEW_SHA"`), fix all blocking.
-6) Run `./plans/verify.sh quick` again (after review fixes).
+6) Fix all cycle 1 findings (P0/P1/P2). Run `./plans/verify.sh quick` again (after review fixes).
+6.0) **Supervisor checkpoint**: `plans/supervisor_check.sh <STORY_ID> post-fix` — Sonnet verifies the fix diff actually addresses cycle 1 findings. If FAIL → builder must re-fix.
 6.1) Second Codex review for `REVIEW_SHA` (`codex review --commit "$REVIEW_SHA" ...`), fix all blocking.
 6.2) Run `./plans/verify.sh quick` again (after second Codex fixes).
 6.3) Run findings review using `~/.agents/skills/code-review-expert/SKILL.md` for `REVIEW_SHA`.
@@ -123,6 +129,7 @@ This is the only approved execution loop.
 6.4) Turn top findings into failing tests first (red phase).
 6.5) Fix until those tests pass (green phase).
 6.6) Run `./plans/verify.sh quick` again after fixes.
+6.7) **Supervisor checkpoint**: `plans/supervisor_check.sh <STORY_ID> post-cycle2` — Sonnet verifies cycle 2 is a legitimate re-review and findings are genuinely resolved. If FAIL → builder must redo cycle 2.
   - Sequence-bound equivalent is `plans/workflow_quick_step.sh <STORY_ID> <checkpoint>`; it must execute `./plans/verify.sh quick`.
 7) Sync with integration branch (merge/rebase `run/slice1-clean` into story branch).
    - If this changed anything, run `./plans/verify.sh quick` again.
@@ -135,10 +142,131 @@ Notes:
 - Never edit a worktree while it is running `full`.
 - Story review evidence MUST be SHA-consistent: self review, Kimi review, both Codex reviews, code-review-expert review, resolution file, and `story_review_gate` must all target the same `REVIEW_SHA`.
 - If `HEAD` changes after review starts, discard partial review artifacts for the old/new mix and regenerate the full review set for the chosen SHA.
+- **Supervisor enforcement**: The 3 supervisor checkpoints (steps 4.1, 6.0, 6.7) use an independent Sonnet agent to verify the builder's work semantically. Supervisor artifacts are required by `story_review_gate.sh` at pass-flip time. Set `REQUIRE_SUPERVISOR=0` to disable (not recommended for production).
 
 ### Recommended (non-blocking)
 - Keep a single commit per story (use `--amend` until full is green) to keep review/merge simple.
 - Write a 60-second "Story Brief" (contract refs + acceptance criteria summary) before coding.
+
+---
+
+## 6.1 Receipt chain (progressive chokepoints)
+
+The receipt chain prevents out-of-order execution and provides tamper-evident step tracking.
+
+### 6.1.1 Receipt system
+
+Each workflow step produces a JSON receipt in `.wf/receipts/<STORY_ID>/`:
+
+```
+00_preflight.json
+01_implement.json
+02_self_review.json
+03_cycle1.json
+04_fix.json
+05_cycle2.json
+06_resolution.json
+07_verify_full.json
+```
+
+Each receipt contains:
+- `story_id`, `step_name`, `step_index`
+- `head_sha` — git HEAD at time of receipt
+- `timestamp_utc`
+- `inputs_hash` — SHA256 of step-specific evidence files
+- `prev_receipt_hash` — SHA256 of the previous receipt (or `GENESIS` for the first)
+- `receipt_hash` — SHA256 of the receipt content itself
+- `tainted` — true if `--force` was used (skipped prerequisites)
+
+### 6.1.2 Ordering enforcement
+
+Each step validates:
+1. All previous receipts exist (progressive chokepoint)
+2. The hash chain is valid (`prev_receipt_hash` matches actual hash of previous receipt)
+3. Step-specific inputs are ready (e.g., review artifacts exist, resolution has required fields)
+
+If any check fails, the step is **blocked immediately** — not deferred to pass-flip time.
+
+### 6.1.3 Step input validation
+
+| Step | Validates |
+|------|-----------|
+| `preflight` | First step, no prerequisites |
+| `implement` | Code changed since preflight |
+| `self_review` | Self-review artifacts exist in `artifacts/story/<ID>/self_review/` |
+| `cycle1` | At least 1 review artifact in `codex/` or `opus/` |
+| `fix` | Code changed since cycle1 receipt |
+| `cycle2` | At least 2 review artifacts (cycle 1 + cycle 2) |
+| `resolution` | `review_resolution.md` exists with `Blocking addressed: YES` and `BLOCKING=0` |
+| `verify_full` | `verify.meta.json` exists with `mode=full` and matching HEAD |
+| `pass` | Full chain valid, no tainted receipts |
+
+### 6.1.4 Usage
+
+```bash
+# Execute a step (validates prerequisites, writes receipt)
+plans/wf_step.sh <STORY_ID> <step>
+
+# Check chain status
+plans/wf_step.sh <STORY_ID> --status
+
+# Reset chain (start over)
+plans/wf_step.sh <STORY_ID> --reset
+
+# Dry run (validate without writing)
+plans/wf_step.sh <STORY_ID> <step> --dry-run
+
+# Force (skip prereqs, taints receipt — recovery only)
+plans/wf_step.sh <STORY_ID> <step> --force
+
+# Sign receipts with HMAC (set key in CI only)
+WF_HMAC_KEY="<secret>" plans/wf_step.sh <STORY_ID> <step>
+
+# Verify HMAC signatures on all receipts
+WF_HMAC_KEY="<secret>" plans/wf_step.sh <STORY_ID> --verify-sigs
+```
+
+### 6.1.5 Tamper detection
+
+- Modifying any receipt breaks the hash chain — all subsequent steps are blocked
+- Tainted receipts (from `--force`) are rejected at pass-flip time by `prd_set_pass.sh`
+- The chain must be rebuilt from the tampered/tainted point onward
+
+### 6.1.6 HMAC signing (optional, recommended for CI)
+
+If `WF_HMAC_KEY` is set, each receipt includes an HMAC-SHA256 signature computed over the canonical (sorted, unsigned) receipt JSON. This prevents agents from forging receipts — only processes with the key can produce valid signatures.
+
+- Set `WF_HMAC_KEY` in CI environment only (not in agent environment)
+- `prd_set_pass.sh` validates signatures when `WF_HMAC_KEY` is set
+- `--verify-sigs` mode checks all receipts in a story's chain
+- Unsigned receipts are flagged but not rejected (allows gradual adoption)
+
+### 6.1.7 CI guard
+
+`plans/wf_ci_guard.sh` detects `passes=true` flips in `prd.json` diffs and validates receipt chains. This catches direct PRD edits that bypass `prd_set_pass.sh`.
+
+```bash
+# Basic CI guard
+plans/wf_ci_guard.sh
+
+# With HMAC signature verification
+WF_HMAC_KEY="$SECRET" plans/wf_ci_guard.sh --require-sigs
+```
+
+Environment:
+- `WF_BASE_REF` — base ref to diff against (default: `origin/main`)
+- `WF_HMAC_KEY` — required with `--require-sigs`
+
+### 6.1.8 Integration with prd_set_pass.sh
+
+`prd_set_pass.sh` requires the full receipt chain before allowing `passes=true`:
+- All steps must have receipts (preflight through verify_full)
+- Hash chain must be intact
+- No tainted receipts
+- verify_full receipt HEAD must match current HEAD
+- HMAC signatures validated when `WF_HMAC_KEY` is set
+
+Controlled by `REQUIRE_RECEIPT_CHAIN` env var (default=1, set to 0 to skip).
 
 ---
 
@@ -225,7 +353,9 @@ A story’s `passes` may be set to `true` only when:
   - Kimi review artifact exists for the same `HEAD`, includes required metadata (`Artifact Provenance`, `Generator Script`, `Command Exit Code: 0`), and has a valid transcript SHA256 over content between `<<<REVIEW_TRANSCRIPT_BEGIN>>>` and `<<<REVIEW_TRANSCRIPT_END>>>`,
   - at least two Codex review artifacts exist for the same `HEAD`; each includes required metadata (`Artifact Provenance`, `Generator Script`, `Command Exit Code: 0`) and has a valid transcript SHA256 over content between `<<<REVIEW_TRANSCRIPT_BEGIN>>>` and `<<<REVIEW_TRANSCRIPT_END>>>`,
   - code-review-expert review artifact exists for the same `HEAD`, is marked `Review Status: COMPLETE`, includes required metadata (`Artifact Provenance`, `Generator Script`, `Content Source`), and has a valid findings SHA256 over content between `<<<FINDINGS_BEGIN>>>` and `<<<FINDINGS_END>>>`,
-  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references Kimi final review + Codex final review + Codex second review + code-review-expert final review files for the same `HEAD`.
+  - review resolution file asserts `Blocking addressed: YES` and `Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0`, and references Kimi final review + Codex final review + Codex second review + code-review-expert final review files for the same `HEAD`,
+  - supervisor evidence: all three supervisor checkpoints (`post-cycle1`, `post-fix`, `post-cycle2`) have PASS verdicts for the same `HEAD`, with artifacts in `artifacts/story/<STORY_ID>/supervisor/` (controlled by `REQUIRE_SUPERVISOR` env var, default=1),
+  - receipt chain: all workflow steps (preflight through verify_full) have valid receipts in `.wf/receipts/<STORY_ID>/`, hash chain is intact, no tainted receipts (controlled by `REQUIRE_RECEIPT_CHAIN` env var, default=1).
 
 ### 8.2 Mechanism (required)
 Create and use a single script to change PRD passes:

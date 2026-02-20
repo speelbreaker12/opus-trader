@@ -1,4 +1,5 @@
 .ralph/
+.wf/
 target/
 plans/logs/
 plans/progress_archive.txt

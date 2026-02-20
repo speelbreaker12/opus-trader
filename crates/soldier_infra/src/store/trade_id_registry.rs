@@ -155,6 +155,10 @@ impl TradeIdRegistry {
         }
 
         let records = load_records(path)?;
+        // Note: `>` (not `>=`) — a registry at exactly `capacity` replays
+        // successfully but cannot accept new inserts (insert_if_absent uses
+        // `>=` to reject). This is correct: existing data is preserved, new
+        // writes are rejected until compaction frees slots.
         if records.len() > capacity {
             let reason = format!(
                 "trade-id registry contains {} IDs but capacity is {}",
@@ -184,10 +188,10 @@ impl TradeIdRegistry {
         record: TradeRecord,
         metrics: &RegistryMetrics,
     ) -> Result<InsertResult, RegistryError> {
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| RegistryError::MutexPoisoned)?;
+        let mut state = self.state.lock().map_err(|_| {
+            self.log_poison_once("insert_if_absent");
+            RegistryError::MutexPoisoned
+        })?;
 
         if state.records.contains_key(&record.trade_id) {
             metrics.record_duplicate();
@@ -211,8 +215,9 @@ impl TradeIdRegistry {
     /// Log mutex poison at most once to avoid stderr spam in a degraded runtime.
     fn log_poison_once(&self, method: &str) {
         if !self.poison_logged.swap(true, Ordering::Relaxed) {
-            eprintln!(
-                "ERROR: trade id registry mutex poisoned in {method}() — suppressing future logs"
+            tracing::error!(
+                method,
+                "trade-id registry mutex poisoned — suppressing future logs"
             );
         }
     }
@@ -311,10 +316,11 @@ fn load_records(path: &Path) -> io::Result<HashMap<String, TradeRecord>> {
                 // Accumulate trailing corrupt lines — crash artifacts from
                 // partial writes. Tolerated as long as no valid line follows.
                 trailing_corrupt.push(index);
-                eprintln!(
-                    "WARNING: skipping malformed trailing trade-id line {} in {}: {e}",
-                    index + 1,
-                    path.display()
+                tracing::warn!(
+                    line = index + 1,
+                    path = %path.display(),
+                    error = %e,
+                    "skipping malformed trailing trade-id line (crash artifact)"
                 );
             }
         }
