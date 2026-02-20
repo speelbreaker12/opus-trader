@@ -181,10 +181,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+start_epoch="$(date +%s)"
 set +e
 "${cmd[@]}" 2>&1 | tee "$transcript_tmp"
 rc="${PIPESTATUS[0]}"
 set -e
+end_epoch="$(date +%s)"
+duration_seconds="$((end_epoch - start_epoch))"
 
 printf '\n' >> "$transcript_tmp"
 transcript_hash="$(sha256_file "$transcript_tmp")"
@@ -214,6 +217,7 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
   echo "- Command Exit Code: $rc"
   echo "- Transcript SHA256: $transcript_hash"
   echo "- Transcript Bytes: $transcript_bytes"
+  echo "- Duration Seconds: $duration_seconds"
   echo
   echo "<<<REVIEW_TRANSCRIPT_BEGIN>>>"
 } > "$outfile"

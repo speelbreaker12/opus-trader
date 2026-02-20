@@ -317,16 +317,70 @@ fi
 
 pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
 
+# Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
+# Each test is isolated (own tmpdir) so parallel execution is safe.
+# Results collected via temp files to preserve pass()/fail() counter semantics.
+PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+fixture_results_dir="$(mktemp -d)"
+trap 'rm -rf "$fixture_results_dir"' EXIT
+fixture_pids=()
+fixture_idx=0
+
 for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
-  if [[ -f "$fixture_test" ]]; then
-    if bash "$fixture_test" >/dev/null 2>&1; then
-      pass "Fixture test: $(basename "$fixture_test")"
-    else
-      fail "Fixture test failed: $fixture_test (run 'bash $fixture_test' for details)"
-    fi
-  else
-    setup_fail "Missing fixture test: $fixture_test"
+  if [[ ! -f "$fixture_test" ]]; then
+    echo "MISSING" > "$fixture_results_dir/$fixture_idx"
+    ((fixture_idx++)) || true
+    continue
   fi
+  # Run in background, write result to index-keyed file.
+  # idx captured by value in the subshell fork.
+  idx=$fixture_idx
+  (
+    if bash "$fixture_test" >/dev/null 2>&1; then
+      echo "PASS" > "$fixture_results_dir/$idx"
+    else
+      echo "FAIL" > "$fixture_results_dir/$idx"
+    fi
+  ) &
+  fixture_pids+=($!)
+  ((fixture_idx++)) || true
+  # Throttle: wait for a slot if at concurrency limit
+  # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
+  if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
+    # Poll until at least one slot opens
+    while true; do
+      alive=()
+      for pid in "${fixture_pids[@]}"; do
+        if kill -0 "$pid" 2>/dev/null; then
+          alive+=("$pid")
+        fi
+      done
+      if [[ ${#alive[@]} -gt 0 ]]; then
+        fixture_pids=("${alive[@]}")
+      else
+        fixture_pids=()
+      fi
+      if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
+        break
+      fi
+      sleep 0.2
+    done
+  fi
+done
+
+# Wait for all remaining
+wait
+
+# Collect results in original order (deterministic output, counters in parent shell)
+fixture_idx=0
+for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
+  result="$(cat "$fixture_results_dir/$fixture_idx" 2>/dev/null || echo "MISSING")"
+  case "$result" in
+    PASS) pass "Fixture test: $(basename "$fixture_test")" ;;
+    FAIL) fail "Fixture test failed: $fixture_test (run 'bash $fixture_test' for details)" ;;
+    MISSING) setup_fail "Missing fixture test: $fixture_test" ;;
+  esac
+  ((fixture_idx++)) || true
 done
 
 # 7. Postmortem check: plans/postmortem_check.sh

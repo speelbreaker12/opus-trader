@@ -1,13 +1,14 @@
 //! WAL durability barrier per CONTRACT.md §2.4 / §2.4.1.
 //!
 //! **Persistence levels:**
-//! - `RecordedBeforeDispatch`: intent recorded (in-memory queue) before dispatch.
-//!   Always satisfied when `WalLedger::append()` returns `Ok(())`.
-//! - `DurableBeforeDispatch`: durability barrier (fsync) before dispatch.
-//!   Only enforced when `require_wal_fsync_before_dispatch` config flag is enabled.
+//! - `RecordedBeforeDispatch`: intent recorded before dispatch. For durable
+//!   storage, `WalLedger::append()` waits for fsync confirmation (barrier)
+//!   before returning — OPEN intents are crash-safe.
+//! - `DurableBeforeDispatch`: guaranteed by the barrier in `append()`.
 //!
 //! **WAL Writer Isolation (§2.4.1):**
 //! - Append failure → return error, increment wal_write_errors, never block.
+//! - State transitions (update_state/mark_sent) are async — no barrier.
 //!
 //! AT-935, AT-906.
 
@@ -18,10 +19,21 @@ use std::time::Instant;
 // ─── Configuration ──────────────────────────────────────────────────────
 
 /// WAL durability barrier configuration.
+///
+/// **Deprecated:** With the async writer, barrier semantics are now handled by
+/// `WalLedger::append()` directly — `append()` always waits for fsync when
+/// durable storage is configured. This struct is retained only for API
+/// stability; its fields are ignored by `durable_append()`.
+/// Use `WalWriterConfig` in `store::ledger` to configure barrier timeout
+/// and channel capacity.
+#[deprecated(
+    since = "0.2.0",
+    note = "Barrier is now always applied by WalLedger::append(). Use WalWriterConfig instead."
+)]
 #[derive(Debug, Clone, Default)]
 pub struct WalBarrierConfig {
-    /// If true, `durable_append` simulates an fsync barrier after enqueue.
-    /// If false, `durable_append` returns immediately after enqueue.
+    /// **Ignored.** Barrier is always applied for `append()` when durable
+    /// storage is configured. This field has no effect.
     pub require_wal_fsync_before_dispatch: bool,
 }
 
@@ -86,6 +98,7 @@ impl Default for BarrierMetrics {
 ///
 /// The adapter is single-use by default: one append attempt consumes
 /// `record_to_append`. Callers can provide a new record via `set_record`.
+#[allow(deprecated)]
 pub struct DurableWalGate<'a> {
     ledger: &'a mut WalLedger,
     config: &'a WalBarrierConfig,
@@ -94,6 +107,7 @@ pub struct DurableWalGate<'a> {
     record_to_append: Option<IntentRecord>,
 }
 
+#[allow(deprecated)]
 impl<'a> DurableWalGate<'a> {
     pub fn new(
         ledger: &'a mut WalLedger,
@@ -126,6 +140,7 @@ impl<'a> DurableWalGate<'a> {
     }
 }
 
+#[allow(deprecated)]
 impl RecordedBeforeDispatchGate for DurableWalGate<'_> {
     fn record_before_dispatch(&mut self) -> Result<(), String> {
         let record = self
@@ -146,60 +161,39 @@ impl RecordedBeforeDispatchGate for DurableWalGate<'_> {
 
 // ─── Durable append ─────────────────────────────────────────────────────
 
-/// Append an intent record with optional durability barrier.
+/// Append an intent record with durability barrier.
 ///
-/// CONTRACT.md §2.4: "RecordedBeforeDispatch is mandatory.
-/// DurableBeforeDispatch is required when the durability barrier flag is enabled."
+/// CONTRACT.md §2.4: "RecordedBeforeDispatch is mandatory."
 ///
-/// 1. Appends the record to the WAL (RecordedBeforeDispatch).
-/// 2. If `config.require_wal_fsync_before_dispatch` is true, simulates an
-///    fsync barrier (DurableBeforeDispatch).
-/// 3. If append fails, returns error — never blocks.
+/// The barrier is now handled inside `WalLedger::append()` — when durable
+/// storage is configured, append waits for the async writer thread to confirm
+/// fsync before returning. For in-memory ledgers, there is no disk I/O.
 ///
 /// Returns `DurableAppendResult` with barrier timing for observability.
+#[allow(deprecated)]
 pub fn durable_append(
     ledger: &mut WalLedger,
     record: IntentRecord,
-    config: &WalBarrierConfig,
+    _config: &WalBarrierConfig,
     ledger_metrics: &mut LedgerMetrics,
     barrier_metrics: &mut BarrierMetrics,
 ) -> Result<DurableAppendResult, LedgerAppendError> {
-    // Step 1: RecordedBeforeDispatch — enqueue to WAL
+    let has_storage = ledger.storage_path().is_some();
+    let start = Instant::now();
+
+    // append() handles barrier internally for durable storage.
     ledger.append(record, ledger_metrics)?;
 
-    // Step 2: DurableBeforeDispatch — fsync barrier if configured
-    if config.require_wal_fsync_before_dispatch {
-        let start = Instant::now();
-        // In a real implementation, this would call fsync() on the WAL file.
-        // For the in-memory implementation, the "barrier" is a no-op
-        // but we still measure timing for observability.
-        simulate_fsync_barrier();
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        barrier_metrics.record_barrier_wait(elapsed_ms);
-
-        Ok(DurableAppendResult {
-            fsync_applied: true,
-            barrier_wait_ms: elapsed_ms,
-        })
+    let elapsed_ms = if has_storage {
+        let ms = start.elapsed().as_millis() as u64;
+        barrier_metrics.record_barrier_wait(ms);
+        ms
     } else {
-        Ok(DurableAppendResult {
-            fsync_applied: false,
-            barrier_wait_ms: 0,
-        })
-    }
-}
+        0
+    };
 
-/// Simulate an fsync barrier.
-///
-/// This is currently a no-op placeholder used to model the latency of a
-/// durability barrier when `require_wal_fsync_before_dispatch` is enabled.
-/// The real durability is provided by `write_event_to_file()` in `ledger.rs`,
-/// which calls `sync_all()` on every event write unconditionally.
-///
-/// In a future production async WAL writer, this would be replaced by a real
-/// fsync barrier that waits for the async writer to flush to disk before
-/// allowing dispatch. The config flag would then control whether `sync_all()`
-/// is invoked (durable) or a lighter `flush()` is used (non-durable but faster).
-fn simulate_fsync_barrier() {
-    // No-op for Phase 1. Production async WAL writer would fsync here.
+    Ok(DurableAppendResult {
+        fsync_applied: has_storage,
+        barrier_wait_ms: elapsed_ms,
+    })
 }

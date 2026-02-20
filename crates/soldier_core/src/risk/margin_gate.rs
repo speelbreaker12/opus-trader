@@ -29,17 +29,15 @@ pub enum MarginGateRejectReason {
     MarginHeadroomRejectOpens,
 }
 
-/// Margin gate decision.
+/// Margin gate decision (binary allow/reject, decoupled from mode hint).
 #[derive(Debug, Clone, PartialEq)]
-pub enum MarginGateResult {
+pub enum MarginGateDecision {
     Allowed {
         mm_util: f64,
-        mode_hint: MarginGateMode,
     },
     Rejected {
         reason: MarginGateRejectReason,
         mm_util: Option<f64>,
-        mode_hint: MarginGateMode,
     },
 }
 
@@ -83,7 +81,7 @@ impl MarginGateMetrics {
 pub fn evaluate_margin_headroom_gate(
     input: &MarginGateInput,
     metrics: &mut MarginGateMetrics,
-) -> MarginGateResult {
+) -> MarginGateDecision {
     if !thresholds_valid(
         input.mm_util_reject_opens,
         input.mm_util_reduceonly,
@@ -94,27 +92,46 @@ pub fn evaluate_margin_headroom_gate(
         || input.equity_usd <= 0.0
     {
         metrics.record_reject();
-        return MarginGateResult::Rejected {
+        return MarginGateDecision::Rejected {
             reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
             mm_util: None,
-            mode_hint: MarginGateMode::Kill,
         };
     }
 
     let mm_util = input.maintenance_margin_usd / input.equity_usd;
-    let mode_hint = compute_mode_hint(mm_util, input.mm_util_reduceonly, input.mm_util_kill);
 
     if mm_util >= input.mm_util_reject_opens {
         metrics.record_reject();
-        return MarginGateResult::Rejected {
+        return MarginGateDecision::Rejected {
             reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
             mm_util: Some(mm_util),
-            mode_hint,
         };
     }
 
     metrics.record_allowed();
-    MarginGateResult::Allowed { mm_util, mode_hint }
+    MarginGateDecision::Allowed { mm_util }
+}
+
+/// Compute margin mode hint independently of the allow/reject decision.
+///
+/// Takes `&MarginGateInput` for ergonomics — recomputes mm_util internally (cheap f64 division).
+/// Fails closed to `Kill` on invalid inputs.
+pub fn compute_margin_mode_hint(input: &MarginGateInput) -> MarginGateMode {
+    // Intentionally re-validates: standalone function must be self-contained.
+    if !input.equity_usd.is_finite()
+        || !input.maintenance_margin_usd.is_finite()
+        || input.equity_usd <= 0.0
+        || input.maintenance_margin_usd < 0.0
+        || !thresholds_valid(
+            input.mm_util_reject_opens,
+            input.mm_util_reduceonly,
+            input.mm_util_kill,
+        )
+    {
+        return MarginGateMode::Kill;
+    }
+    let mm_util = input.maintenance_margin_usd / input.equity_usd;
+    compute_mode_hint(mm_util, input.mm_util_reduceonly, input.mm_util_kill)
 }
 
 fn compute_mode_hint(mm_util: f64, reduceonly: f64, kill: f64) -> MarginGateMode {
