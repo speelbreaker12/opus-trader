@@ -88,15 +88,47 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
         return PostOnlyResult::Allowed;
     }
 
+    // Fail-closed: reject non-finite limit_price (NaN, ±Inf).
+    // IEEE 754: NaN comparisons always return false, so NaN >= ask would
+    // silently pass the crossing check. is_finite() catches both NaN and Inf.
+    if !input.limit_price.is_finite() {
+        tracing::warn!(
+            limit_price = input.limit_price,
+            "post_only: non-finite limit_price, rejecting (fail-closed)"
+        );
+        metrics.record_reject();
+        return PostOnlyResult::Rejected;
+    }
+
     let would_cross = match input.side {
         // A buy order crosses if its price >= the best ask (it would take liquidity).
         Side::Buy => match input.best_ask {
-            Some(ask) => input.limit_price >= ask,
+            Some(ask) => {
+                if !ask.is_finite() {
+                    tracing::warn!(
+                        best_ask = ask,
+                        "post_only: non-finite best_ask, rejecting (fail-closed)"
+                    );
+                    metrics.record_reject();
+                    return PostOnlyResult::Rejected;
+                }
+                input.limit_price >= ask
+            }
             None => false, // No asks → cannot cross
         },
         // A sell order crosses if its price <= the best bid (it would take liquidity).
         Side::Sell => match input.best_bid {
-            Some(bid) => input.limit_price <= bid,
+            Some(bid) => {
+                if !bid.is_finite() {
+                    tracing::warn!(
+                        best_bid = bid,
+                        "post_only: non-finite best_bid, rejecting (fail-closed)"
+                    );
+                    metrics.record_reject();
+                    return PostOnlyResult::Rejected;
+                }
+                input.limit_price <= bid
+            }
             None => false, // No bids → cannot cross
         },
     };
