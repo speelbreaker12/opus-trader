@@ -6,6 +6,9 @@
 
 #![allow(deprecated)]
 
+mod common;
+use common::assert_no_dispatch_no_wal;
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, build_order_intent,
 };
@@ -265,13 +268,18 @@ fn test_zero_qty_pricer_fails_closed() {
 
 #[test]
 fn test_unhealthy_risk_state_fails_closed() {
-    let mut m = ChokeMetrics::new();
     let gates = GateResults::all_passed();
 
     // All non-Healthy states must reject OPEN
     for risk_state in [RiskState::Degraded, RiskState::Maintenance, RiskState::Kill] {
+        let mut m = ChokeMetrics::new();
         let result = build_order_intent(ChokeIntentClass::Open, risk_state, &mut m, &gates);
 
+        assert_no_dispatch_no_wal(
+            &result,
+            &m,
+            &format!("RiskState::{risk_state:?} fail-closed"),
+        );
         assert!(
             matches!(
                 result,
