@@ -461,6 +461,22 @@ clauses:
     prd:
       - "plans/prd.json#S13-008"
 
+  CSP-062:
+    status: implemented
+    name: "Emergency drain_all for kill-switch recovery"
+    contract_ref: "§1.4.2.1"
+    plan: []
+    code:
+      - "crates/soldier_core/src/risk/pending_exposure.rs#drain_all"
+    tests:
+      - "test_drain_all_clears_single_instrument"
+      - "test_drain_all_clears_multi_instrument"
+      - "test_drain_all_idempotent"
+      - "test_drain_all_allows_fresh_reserves_after"
+      - "test_drain_all_rejected_outside_kill_state"
+      - "test_drain_all_post_drain_settle_returns_false"
+    prd: []
+
 # GOP Clause Traceability
 # Tracks mapping from GOP (General Operating Profile) clauses to implementation artifacts
 
