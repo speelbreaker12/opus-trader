@@ -1,0 +1,20 @@
+crates/soldier_core/src/execution/dispatch_map.rs:103:9: replace MismatchMetrics::record_mismatch_rejection with ()
+crates/soldier_core/src/execution/dispatch_map.rs:103:41: replace += with -= in MismatchMetrics::record_mismatch_rejection
+crates/soldier_core/src/execution/dispatch_map.rs:103:41: replace += with *= in MismatchMetrics::record_mismatch_rejection
+crates/soldier_core/src/execution/dispatch_map.rs:108:9: replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 0
+crates/soldier_core/src/execution/dispatch_map.rs:108:9: replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 1
+crates/soldier_core/src/execution/dispatch_map.rs:199:42: replace || with && in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:199:12: delete ! in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:199:45: delete ! in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:206:50: replace * with + in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:206:50: replace * with / in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:208:66: replace / with % in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:208:66: replace / with * in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:208:40: replace - with + in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:208:40: replace - with / in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:212:13: replace || with && in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:210:12: delete ! in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:211:16: delete ! in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with == in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with < in validate_and_dispatch
+crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with >= in validate_and_dispatch
