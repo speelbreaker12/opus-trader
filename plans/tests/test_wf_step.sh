@@ -423,6 +423,142 @@ else
 fi
 
 echo ""
+echo "=== PART 8: Reconciliation mode ==="
+
+# ── Test 15: Invalid WF_RECON_MODE rejected ──────────────────────────
+echo "--- Test 15: Invalid WF_RECON_MODE rejected ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+set +e
+WF_RECON_MODE=banana bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "invalid WF_RECON_MODE rejected" 2 "$rc"
+
+# ── Test 16: Recon mode: implement passes without code change ────────
+echo "--- Test 16: Recon implement bypasses diff check ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+
+# Create a PRD file with passes=true for TEST-001
+mkdir -p plans
+cat > plans/prd.json <<PRDEOF
+{"items":[{"id":"TEST-001","passes":true}]}
+PRDEOF
+
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon preflight succeeds" 0 "$rc"
+
+# No code change, but recon mode should bypass
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon implement passes without code change" 0 "$rc"
+
+# ── Test 17: Normal mode implement still requires code change ────────
+echo "--- Test 17: Normal implement still requires code change ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+set +e
+bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "normal implement blocked without code change" 3 "$rc"
+
+# ── Test 18: Recon receipt contains recon_mode field ─────────────────
+echo "--- Test 18: Recon receipt has recon_mode=true ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+assert_json_field "recon receipt has recon_mode=true" "$RECEIPT_DIR/00_preflight.json" ".recon_mode" "true"
+
+# ── Test 19: Normal receipt contains recon_mode=false ────────────────
+echo "--- Test 19: Normal receipt has recon_mode=false ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+assert_json_field "normal receipt has recon_mode=false" "$RECEIPT_DIR/00_preflight.json" ".recon_mode" "false"
+
+# ── Test 20: Recon implement receipt has recon_relaxation ────────────
+echo "--- Test 20: Recon implement receipt has relaxation note ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+assert_json_field "recon implement has relaxation" "$RECEIPT_DIR/01_implement.json" ".recon_relaxation" "implement_diff_check_skipped"
+
+# ── Test 21: Recon mode blocked for passes=false story ───────────────
+echo "--- Test 21: Recon blocked for passes=false ---"
+bash plans/wf_step.sh TEST-002 --reset --yes > /dev/null 2>&1 || true
+# Create PRD with passes=false for TEST-002
+cat > plans/prd.json <<PRDEOF2
+{"items":[{"id":"TEST-001","passes":true},{"id":"TEST-002","passes":false}]}
+PRDEOF2
+
+WF_RECEIPT_DIR="$TMPDIR/.wf/receipts/TEST-002" \
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-002 preflight > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon blocked for passes=false story" 3 "$rc"
+
+# ── Test 22: Recon GREEN cycle2 with 1 review artifact ───────────────
+echo "--- Test 22: Recon GREEN cycle2 needs only 1 review ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+
+# Build chain through cycle1 with 0-findings review
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+mkdir -p artifacts/story/TEST-001/self_review
+echo "Recon self-review" > artifacts/story/TEST-001/self_review/review.md
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
+
+# Clean review dirs and add 0-findings review
+rm -f artifacts/story/TEST-001/codex/*.md artifacts/story/TEST-001/opus/*.md 2>/dev/null || true
+mkdir -p artifacts/story/TEST-001/codex
+cat > artifacts/story/TEST-001/codex/20260220_recon_review.md <<RECONREV
+- HEAD: $(git rev-parse HEAD)
+0 findings. No issues detected.
+RECONREV
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
+
+# Only 1 review artifact — GREEN recon should pass, normal would fail
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon GREEN cycle2 passes with 1 review" 0 "$rc"
+
+# ── Test 23: Normal cycle2 still needs 2 reviews ────────────────────
+echo "--- Test 23: Normal cycle2 still needs 2 reviews ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+echo "test23 code" > test23.rs
+git add test23.rs && git commit -q -m "test23 code"
+bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+mkdir -p artifacts/story/TEST-001/self_review
+echo "Self-review" > artifacts/story/TEST-001/self_review/review.md
+bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
+
+rm -f artifacts/story/TEST-001/codex/*.md artifacts/story/TEST-001/opus/*.md 2>/dev/null || true
+mkdir -p artifacts/story/TEST-001/codex
+cat > artifacts/story/TEST-001/codex/20260220_c1_review.md <<C1REV
+- HEAD: $(git rev-parse HEAD)
+P1 - Missing error handling
+C1REV
+bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
+echo "test23 fix" >> test23.rs
+git add test23.rs && git commit -q -m "test23 fix"
+bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
+
+# Only 1 review — normal mode should fail
+set +e
+bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "normal cycle2 blocked with 1 review" 3 "$rc"
+
+echo ""
 echo "============================================"
 echo "Results: PASS=$PASS FAIL=$FAIL"
 if [[ "$FAIL" -eq 0 ]]; then

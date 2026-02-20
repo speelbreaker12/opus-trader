@@ -13,6 +13,11 @@ TASK
   - Risks introduced + mitigations
   - Where the proof lives (test files + test names)
   - Any intentional deferrals (explicit)
+- LSP verification (for Rust code in scope.touch):
+  - findReferences on enforcement functions — verify they're actually called, not dead code
+  - incomingCalls on chokepoint functions (e.g., build_order_intent) — verify call chain
+  - goToImplementation on trait bounds — verify implementations exist
+  - hover on safety-critical parameters — verify types match expectations
 
 OUTPUT
 - Provide the path(s) written.

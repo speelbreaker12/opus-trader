@@ -486,3 +486,100 @@ plans/prd_set_pass.sh <ID> true
 **No Paper Compliance**: `passes=true` requires enforcement in code, proving tests, evidence artifacts, and valid receipts. If a wrong implementation would pass the tests, the tests are insufficient.
 
 **Postmortem Chain**: Story N postmortem feeds story N+1 premortem §9. Prior pain becomes current prevention.
+
+---
+
+## Reconciliation Mode
+
+Reconciliation mode uses the **same 9-step workflow** to retroactively audit stories that already have `passes=true`. Same receipts, same gates, different prompts (reframed for audit rather than fresh implementation).
+
+### Activation
+
+```bash
+# Via step_supervisor.sh
+plans/step_supervisor.sh <STORY_ID> prompt --recon
+plans/step_supervisor.sh <STORY_ID> run --recon
+
+# Via wf_step.sh directly
+WF_RECON_MODE=1 plans/wf_step.sh <STORY_ID> <step>
+```
+
+### Guards
+
+- **Recon only for `passes=true` stories** — preflight in recon mode verifies the story already passes in `plans/prd.json`. Stories with `passes=false` are blocked (exit 3).
+- **`WF_RECON_MODE` must be `0` or `1`** — any other value is rejected (exit 2).
+
+### Step Differences
+
+| Step | Normal Mode | Reconciliation Mode |
+|------|------------|-------------------|
+| **Preflight** | Write premortem + cargo check | **Blind premortem** from PRD+CONTRACT only (no code reading) |
+| **Implement** | Code must change since BASE_HEAD | **Compare premortem vs reality** (diff check bypassed) |
+| **Self-Review** | 5-skill stack on new code | 5-skill stack as **retroactive audit** + LSP verification |
+| **Cycle 1** | Diff-based external review | **scope.touch file review** (not diff-based) |
+| **Fix** | Address findings | Same (or 0-findings pass) |
+| **Cycle 2** | ≥2 review artifacts required | GREEN: ≥1 artifact / YELLOW: ≥2 artifacts |
+| **Resolution** | Standard | Standard + reconciliation context |
+| **Verify Full** | Standard | Standard |
+| **Pass** | Flip `passes=true` | GREEN: no flip needed / YELLOW: re-run `prd_set_pass.sh` |
+
+### GREEN vs YELLOW Escalation
+
+After Cycle 1 review, reconciliation stories are classified:
+
+- **GREEN** (0 findings, no code changes needed): Lighter requirements for remaining steps. Cycle 2 only needs 1 review artifact. No `prd_set_pass.sh` re-run needed. Receipt chain + resolution + postmortem = proof.
+
+- **YELLOW/RED** (findings exist, code changes made): Automatically escalates to full normal workflow requirements. Cycle 2 needs 2 review artifacts. Must re-run `prd_set_pass.sh` at new HEAD.
+
+The escalation is **automatic** — the supervisor detects HEAD changes since the cycle1 receipt.
+
+### Receipt Schema
+
+Reconciliation receipts include extra fields for audit trail:
+
+```json
+{
+  "story_id": "S1-001",
+  "step_name": "implement",
+  "step_index": 1,
+  "head_sha": "abc123...",
+  "timestamp_utc": "2026-02-20T10:00:00Z",
+  "recon_mode": true,
+  "recon_relaxation": "implement_diff_check_skipped"
+}
+```
+
+- `recon_mode`: `true` for reconciliation, `false` for normal workflow
+- `recon_relaxation`: describes which check was relaxed (only present when a relaxation was applied)
+
+### Recommended Queue Order
+
+Reconcile in **risk-first** order, not chronological:
+
+1. Stories affecting allow/reject/block (PolicyGuard, intent classification)
+2. Stories affecting TradingMode / RiskState transitions
+3. Stories affecting WAL / restart / idempotency
+4. Stories affecting dispatch chokepoint / execution pipeline
+5. Everything else (docs, metadata, low-risk infra)
+
+### Step Counting
+
+The standard workflow has 9 receipt-tracked steps (Steps 1-9). Reconciliation adds a Step 0 preamble (convention — no receipt) for reading prior postmortems and creating the worktree. Total: 10 steps (0-9), with 8 producing receipts (Steps 1-8).
+
+### Worktree Convention
+
+```bash
+# Configurable base path (default: sibling directory)
+RECON_WORKTREE_BASE="${RECON_WORKTREE_BASE:-$(dirname "$(git rev-parse --show-toplevel)")/recon_worktrees}"
+mkdir -p "$RECON_WORKTREE_BASE"
+
+# Create reconciliation worktree
+git worktree add "$RECON_WORKTREE_BASE/wt_<STORY_ID>" -b recon/<STORY_ID> <integration_branch>
+
+# After reconciliation, merge back
+# Note: --ff-only will fail if integration branch advanced.
+# Rebase first if needed (then re-run verify.sh full for HEAD consistency).
+git checkout <integration_branch>
+git merge --no-ff recon/<STORY_ID> -m "recon(<STORY_ID>): reconciliation audit"
+git worktree remove "$RECON_WORKTREE_BASE/wt_<STORY_ID>"
+```

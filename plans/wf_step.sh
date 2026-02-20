@@ -98,6 +98,12 @@ fi
 # Close stdin to prevent any commands from blocking on input
 exec < /dev/null
 
+# ── Reconciliation mode ──────────────────────────────────────────────
+WF_RECON_MODE="${WF_RECON_MODE:-0}"
+if [[ "$WF_RECON_MODE" != "0" && "$WF_RECON_MODE" != "1" ]]; then
+  die "WF_RECON_MODE must be 0 or 1, got: $WF_RECON_MODE"
+fi
+
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$ROOT"
 
@@ -204,17 +210,56 @@ get_base_head() {
   jq -r '.head_sha' "$pf" 2>/dev/null || die "cannot read head_sha from preflight receipt"
 }
 
+require_code_change_since_base() {
+  local base_head="$1"
+  local diff_output
+  diff_output="$(git diff --name-only "$base_head"..HEAD 2>/dev/null || true)"
+  [[ -n "$diff_output" ]]
+}
+
+cycle1_had_zero_findings() {
+  # Shared detection: returns 0 if cycle1 review had 0 high-severity findings.
+  # Used by both fix and cycle2 steps. Do NOT duplicate this logic.
+  local art_dir="$1"
+  for d in "$art_dir/codex" "$art_dir/opus"; do
+    if [[ -d "$d" ]]; then
+      while IFS= read -r rf; do
+        [[ -f "$rf" ]] || continue
+        if grep -qiE '(\b0 findings|no findings|no issues|\b0 P0.*\b0 P1|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
+          return 0
+        fi
+      done < <(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | LC_ALL=C sort)
+    fi
+  done
+  return 1
+}
+
 case "$STEP" in
   preflight)
     # First step — record HEAD as BASE_HEAD.
+    if [[ "$WF_RECON_MODE" -eq 1 ]]; then
+      # Recon mode: verify story already has passes=true in PRD
+      prd_file="${PRD_FILE:-$ROOT/plans/prd.json}"
+      if [[ -f "$prd_file" ]]; then
+        story_passes="$(jq -r --arg id "$STORY" '.items[] | select(.id==$id) | .passes // false' "$prd_file" 2>/dev/null || echo "false")"
+        if [[ "$story_passes" != "true" ]]; then
+          echo "WF_STEP: recon mode blocked — story $STORY does not have passes=true" >&2
+          echo "  Reconciliation is only for already-passing stories" >&2
+          exit 3
+        fi
+      fi
+    fi
     ;;
 
   implement)
-    base_head="$(get_base_head)"
-    diff_output="$(git diff --name-only "$base_head"..HEAD 2>/dev/null || true)"
-    if [[ -z "$diff_output" ]]; then
-      echo "WF_STEP: no code changes since preflight base ($base_head)" >&2
-      exit 3
+    if [[ "$WF_RECON_MODE" -eq 1 ]]; then
+      echo "WF_STEP: reconciliation mode — bypassing diff requirement" >&2
+    else
+      base_head="$(get_base_head)"
+      if ! require_code_change_since_base "$base_head"; then
+        echo "WF_STEP: no code changes since preflight base ($base_head)" >&2
+        exit 3
+      fi
     fi
     ;;
 
@@ -252,40 +297,35 @@ case "$STEP" in
       die "cannot read head_sha from cycle1 receipt"
     fi
 
-    # Check if cycle1 was a "perfect" review (0 findings → no fixes needed).
-    cycle1_perfect=0
-    for d in "$story_art/codex" "$story_art/opus"; do
-      if [[ -d "$d" ]]; then
-        while IFS= read -r rf; do
-          [[ -f "$rf" ]] || continue
-          if grep -qiE '(\b0 findings|no findings|no issues|\b0 P0.*\b0 P1|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
-            cycle1_perfect=1
-            break
-          fi
-        done < <(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | LC_ALL=C sort)
+    # Determine code_changed for receipt (deterministic, used by cycle2 escalation)
+    FIX_CODE_CHANGED="false"
+    if cycle1_had_zero_findings "$story_art"; then
+      echo "WF_STEP: cycle1 had 0 findings — fix step passes with no code changes" >&2
+    else
+      changed_files="$(git diff --name-only "$cycle1_head"..HEAD 2>/dev/null || true)"
+      if [[ -z "$changed_files" ]]; then
+        changed_files="$(git diff --name-only 2>/dev/null || true)"
+        changed_files+="$(git diff --cached --name-only 2>/dev/null || true)"
       fi
-      [[ "$cycle1_perfect" -eq 1 ]] && break
-    done
+      non_artifact_changes="$(echo "$changed_files" | grep -vE '^(artifacts/|\.wf/|plans/prd\.json$|plans/progress)' || true)"
 
-    changed_files="$(git diff --name-only "$cycle1_head"..HEAD 2>/dev/null || true)"
-    if [[ -z "$changed_files" ]]; then
-      changed_files="$(git diff --name-only 2>/dev/null || true)"
-      changed_files+="$(git diff --cached --name-only 2>/dev/null || true)"
-    fi
-    non_artifact_changes="$(echo "$changed_files" | grep -vE '^(artifacts/|\.wf/|plans/prd\.json$|plans/progress)' || true)"
-
-    if [[ -z "$non_artifact_changes" ]]; then
-      if [[ "$cycle1_perfect" -eq 1 ]]; then
-        echo "WF_STEP: cycle1 had 0 findings — fix step passes with no code changes" >&2
-      else
+      if [[ -z "$non_artifact_changes" ]]; then
         echo "WF_STEP: no non-artifact code changes since cycle1 receipt (HEAD=$cycle1_head)" >&2
         echo "  Only artifact/metadata files changed. Fix the actual code." >&2
         exit 3
       fi
+      FIX_CODE_CHANGED="true"
     fi
     ;;
 
   cycle2)
+    min_reviews=2
+    # GREEN path: recon mode + cycle1 clean → abbreviated Cycle 2 (1 review sufficient)
+    # YELLOW/RED path: recon mode + fixes made → full Cycle 2 (same as normal)
+    if [[ "$WF_RECON_MODE" -eq 1 ]] && cycle1_had_zero_findings "$story_art"; then
+      min_reviews=1
+      echo "WF_STEP: recon GREEN path — abbreviated cycle2 (min_reviews=1)" >&2
+    fi
     review_count=0
     for d in "$story_art/codex" "$story_art/opus"; do
       if [[ -d "$d" ]]; then
@@ -293,8 +333,8 @@ case "$STEP" in
         review_count=$((review_count + c))
       fi
     done
-    if [[ "$review_count" -lt 2 ]]; then
-      echo "WF_STEP: need at least 2 review artifacts (cycle 1 + cycle 2) in $story_art/codex/ or $story_art/opus/" >&2
+    if [[ "$review_count" -lt "$min_reviews" ]]; then
+      echo "WF_STEP: need at least $min_reviews review artifacts in $story_art/codex/ or $story_art/opus/" >&2
       exit 3
     fi
     ;;
@@ -370,19 +410,38 @@ fi
 receipt_path="$(receipt_file "$STEP")"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# Build relaxation note for recon mode (empty string for normal mode)
+recon_note=""
+if [[ "$WF_RECON_MODE" -eq 1 ]]; then
+  case "$STEP" in
+    implement) recon_note="implement_diff_check_skipped" ;;
+    cycle2)    recon_note="min_reviews_relaxed_to_1" ;;
+    *)         recon_note="" ;;
+  esac
+fi
+
+# Build step-specific extra fields
+fix_code_changed="${FIX_CODE_CHANGED:-}"
+
 jq -n \
   --arg story_id "$STORY" \
   --arg step_name "$STEP" \
   --argjson step_index "$STEP_IDX" \
   --arg head_sha "$HEAD_SHA" \
   --arg timestamp_utc "$ts" \
+  --argjson recon_mode "$WF_RECON_MODE" \
+  --arg recon_relaxation "$recon_note" \
+  --arg fix_code_changed "$fix_code_changed" \
   '{
     story_id: $story_id,
     step_name: $step_name,
     step_index: $step_index,
     head_sha: $head_sha,
-    timestamp_utc: $timestamp_utc
-  }' > "$receipt_path"
+    timestamp_utc: $timestamp_utc,
+    recon_mode: ($recon_mode == 1)
+  }
+  + (if $recon_relaxation != "" then {recon_relaxation: $recon_relaxation} else {} end)
+  + (if $fix_code_changed != "" then {code_changed: ($fix_code_changed == "true")} else {} end)' > "$receipt_path"
 
 echo "WF_STEP: [$STEP] receipt written → $receipt_path"
 echo "  HEAD: $HEAD_SHA"
