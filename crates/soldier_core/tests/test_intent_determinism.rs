@@ -16,9 +16,7 @@ use soldier_core::execution::{
 };
 use soldier_core::execution::{LabelInput, derive_gid12, derive_sid8, encode_label};
 use soldier_core::execution::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
-use soldier_core::execution::{
-    PricerInput, PricerMetrics, PricerResult, compute_limit_price,
-};
+use soldier_core::execution::{PricerInput, PricerMetrics, PricerResult, compute_limit_price};
 use soldier_core::execution::{QuantizeConstraints, QuantizeMetrics, Side, quantize};
 use soldier_core::risk::RiskState;
 use std::collections::HashMap;

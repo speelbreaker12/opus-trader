@@ -7,14 +7,7 @@ use soldier_core::execution::{
 };
 
 /// Helper: build a pricer input.
-fn input(
-    fair: f64,
-    gross: f64,
-    min_edge: f64,
-    fee: f64,
-    qty: f64,
-    side: Side,
-) -> PricerInput {
+fn input(fair: f64, gross: f64, min_edge: f64, fee: f64, qty: f64, side: Side) -> PricerInput {
     PricerInput {
         fair_price: fair,
         gross_edge_usd: gross,
