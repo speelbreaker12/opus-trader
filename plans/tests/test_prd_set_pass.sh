@@ -347,4 +347,90 @@ set -e
 echo "$no_review_output" | grep -Fq "no review artifact for HEAD=" || fail "missing inline review check diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$no_review_case/prd.json" >/dev/null || fail "passes changed despite missing review artifacts"
 
+# loss_mode gate: incomplete drift_metric blocks pass flip (exit 9)
+loss_mode_case="$tmp_dir/loss_mode_gate"
+mkdir -p "$loss_mode_case"
+setup_case "$loss_mode_case" "$head_sha"
+# Override prd.json with empty drift_metric
+cat > "$loss_mode_case/prd.json" <<EOF
+{
+  "items": [
+    {"id":"$story_id","passes":false,"category":"hardening","enforcing_contract_ats":["AT-001"],"enforcement_point":"WAL","loss_mode":{"worst_case":"wc","fail_closed_cap":"cap","drift_metric":""}}
+  ]
+}
+EOF
+
+set +e
+loss_mode_output="$(
+  cd "$ROOT" && \
+  PRD_FILE="$loss_mode_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$loss_mode_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$loss_mode_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$loss_mode_case/artifacts/contract_review.json" 2>&1
+)"
+loss_mode_rc=$?
+set -e
+
+[[ "$loss_mode_rc" -eq 9 ]] || fail "expected exit 9 for incomplete loss_mode, got $loss_mode_rc"
+echo "$loss_mode_output" | grep -Fq "loss_mode incomplete for $story_id" || fail "missing loss_mode gate diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$loss_mode_case/prd.json" >/dev/null || fail "passes changed despite loss_mode gate failure"
+
+# loss_mode gate: malformed loss_mode (non-object) blocks pass flip (exit 9)
+malformed_loss_case="$tmp_dir/malformed_loss"
+mkdir -p "$malformed_loss_case"
+setup_case "$malformed_loss_case" "$head_sha"
+cat > "$malformed_loss_case/prd.json" <<EOF
+{
+  "items": [
+    {"id":"$story_id","passes":false,"category":"hardening","enforcing_contract_ats":["AT-001"],"enforcement_point":"WAL","loss_mode":"not-an-object"}
+  ]
+}
+EOF
+
+set +e
+malformed_loss_output="$(
+  cd "$ROOT" && \
+  PRD_FILE="$malformed_loss_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$malformed_loss_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$malformed_loss_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$malformed_loss_case/artifacts/contract_review.json" 2>&1
+)"
+malformed_loss_rc=$?
+set -e
+
+[[ "$malformed_loss_rc" -ne 0 ]] || fail "expected failure for malformed loss_mode"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$malformed_loss_case/prd.json" >/dev/null || fail "passes changed despite malformed loss_mode"
+
+# loss_mode gate: policy stories are exempt (should not check loss_mode)
+policy_exempt_case="$tmp_dir/policy_exempt"
+mkdir -p "$policy_exempt_case"
+setup_case "$policy_exempt_case" "$head_sha"
+cat > "$policy_exempt_case/prd.json" <<EOF
+{
+  "items": [
+    {"id":"$story_id","passes":false,"category":"policy","enforcing_contract_ats":[],"enforcement_point":"","loss_mode":{"worst_case":"N/A","fail_closed_cap":"N/A","drift_metric":"N/A"}}
+  ]
+}
+EOF
+
+# Policy stories skip AT ownership + loss_mode gates but still need artifacts
+# This should fail at artifacts/verify check (exit 4), NOT at loss_mode (exit 9) or AT ownership (exit 6)
+set +e
+policy_exempt_output="$(
+  cd "$ROOT" && \
+  PRD_FILE="$policy_exempt_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$policy_exempt_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$policy_exempt_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$policy_exempt_case/artifacts/contract_review.json" 2>&1
+)"
+policy_exempt_rc=$?
+set -e
+
+# Should NOT exit 9 (loss_mode) or 6 (AT ownership) — policy is exempt from both
+[[ "$policy_exempt_rc" -ne 9 ]] || fail "policy story should be exempt from loss_mode gate"
+[[ "$policy_exempt_rc" -ne 6 ]] || fail "policy story should be exempt from AT ownership gate"
+
 echo "PASS: prd_set_pass"
