@@ -1,18 +1,13 @@
 //! Runtime wiring tests for Slice 6 gate integration at the OPEN chokepoint.
 
 use soldier_core::execution::{
-    BaseGatesInput, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult,
-    GateIntentClass, GateStep, InventorySkewInput, InventorySkewSide, L2BookSnapshot, L2Level,
-    LiquidityGateInput, NetEdgeInput, OpenRuntimeInput, OpenRuntimeMetrics, OrderType,
-    PreflightInput, PricerInput, PricerSide, QuantizePipelineInput, Side,
-    build_open_order_intent_runtime,
+    ChokeMetrics, ChokeRejectReason, ChokeResult, GateIntentClass, GateStep, InventorySkewInput,
+    L2BookSnapshot, L2Level, LiquidityGateInput, NetEdgeInput, OpenRuntimeInput,
+    OpenRuntimeMetrics, PricerInput, Side, build_open_order_intent_runtime,
 };
 use soldier_core::risk::{
-    ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
-    MarginGateMode, PendingExposureBook, ReservationId, RiskState,
-};
-use soldier_core::venue::{
-    BotFeatureFlags, ExpiryGuardInput, InstrumentKind, LifecycleIntent, VenueCapabilities,
+    ExposureBucket, ExposureBudgetInput, MarginGateInput, MarginGateMode, PendingExposureBook,
+    ReservationId, RiskState,
 };
 
 fn open_l2_snapshot() -> L2BookSnapshot {
@@ -29,46 +24,14 @@ fn open_l2_snapshot() -> L2BookSnapshot {
     }
 }
 
-fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
+fn base_open_input() -> OpenRuntimeInput {
     OpenRuntimeInput {
-        base_gates: BaseGatesInput {
-            intent_class: ChokeIntentClass::Open,
-            risk_state: RiskState::Healthy,
-            preflight: PreflightInput {
-                instrument_kind: InstrumentKind::Option,
-                order_type: OrderType::Limit,
-                has_trigger: false,
-                linked_order_type: None,
-                linked_orders_allowed: false,
-                post_only_input: None,
-            },
-            venue_capabilities: VenueCapabilities::default(),
-            bot_feature_flags: BotFeatureFlags::default(),
-            quantize: QuantizePipelineInput {
-                raw_qty: 1.0,
-                raw_limit_price: 100.0,
-                side: Side::Buy,
-                constraints: soldier_core::execution::QuantizeConstraints {
-                    tick_size: 0.1,
-                    amount_step: 0.1,
-                    min_amount: 0.1,
-                },
-            },
-            dispatch_consistency_passed: true,
-            fee_snapshot: FeeCacheSnapshot {
-                fee_rate: 0.0005,
-                fee_model_cached_at_ts_ms: Some(1_000_000),
-                now_ms: 1_010_000,
-            },
-            fee_config: FeeStalenessConfig::default(),
-            expiry_guard: Some(ExpiryGuardInput {
-                now_ms: 1_000_000,
-                expiration_timestamp_ms: Some(2_000_000),
-                expiry_delist_buffer_s: 60,
-                intent: LifecycleIntent::Open,
-                instrument_kind: Some(InstrumentKind::LinearFuture),
-            }),
-        },
+        risk_state: soldier_core::risk::RiskState::Healthy,
+        preflight_passed: true,
+        quantize_passed: true,
+        dispatch_consistency_passed: true,
+        fee_cache_passed: true,
+        expiry_guard_passed: true,
         wal_recorded: true,
         current_delta: 0.0,
         delta_impact_est: 10.0,
@@ -92,7 +55,7 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
             current_delta: 0.0,
             pending_delta: 0.0,
             delta_limit: Some(100.0),
-            side: InventorySkewSide::Buy,
+            side: Side::Buy,
             min_edge_usd: 9.0,
             net_edge_usd: 10.0,
             limit_price: 100.0,
@@ -106,7 +69,7 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
             min_edge_usd: 9.0,
             fee_estimate_usd: 2.0,
             qty: 1.0,
-            side: PricerSide::Buy,
+            side: Side::Buy,
         },
         exposure_budget_input: ExposureBudgetInput {
             current_btc_delta_usd: 0.0,
@@ -273,7 +236,7 @@ fn test_runtime_wiring_margin_kill_rejects_before_open_dispatch() {
 #[test]
 fn test_runtime_wiring_margin_reject_preserves_stricter_incoming_risk_state() {
     let mut input = base_open_input();
-    input.base_gates.risk_state = RiskState::Maintenance;
+    input.risk_state = RiskState::Maintenance;
     input.margin_gate_input.maintenance_margin_usd = 80.0;
     input.margin_gate_input.equity_usd = 100.0;
 
@@ -306,9 +269,9 @@ fn test_runtime_wiring_inventory_skew_can_recover_initial_net_edge_reject() {
     let mut input = base_open_input();
     input.current_delta = 100.0;
     input.liquidity_input.is_buy = false;
-    input.inventory_skew_input.side = InventorySkewSide::Sell;
+    input.inventory_skew_input.side = Side::Sell;
     input.net_edge_input.min_edge_usd = Some(11.0);
-    input.pricer_input.side = PricerSide::Sell;
+    input.pricer_input.side = Side::Sell;
     input.pricer_input.min_edge_usd = 11.0;
 
     let pending_book = make_pending_book(200.0);
