@@ -7,39 +7,60 @@
 
 ## Overview
 
-Every PRD story follows 9 receipt-gated steps. No shortcuts.
+Every PRD story follows 9 receipt-tracked steps. No shortcuts.
 
-**Receipt chain (`plans/wf_step.sh`)**: Each step validates that prior steps completed, checks step-specific inputs, and writes a hash-chained JSON receipt to `.wf/receipts/<STORY_ID>/`. An agent can't skip to Step 7 and backfill — each step refuses to start without its prerequisites AND a valid hash chain.
+**Receipt tracking (`plans/wf_step.sh`)**: Each step validates that prior steps completed, checks step-specific inputs, and writes a JSON receipt to `.wf/receipts/<STORY_ID>/`. An agent can't skip to Step 7 and backfill — each step refuses to start without its prerequisites.
 
-**3-layer enforcement**:
-1. **Layer 1 — Receipt chain** (`wf_step.sh`): Ordering + structural integrity + BASE_HEAD diffs
-2. **Layer 2 — Anti-fabrication gates** (`story_review_gate.sh`): Transcript quality, timing, diff cross-reference, provenance hashing
-3. **Layer 3 — Final chokepoint** (`prd_set_pass.sh`): Everything from layers 1+2 plus contract review, verify artifacts, HMAC signatures
+**Enforcement**:
+1. **Receipt tracking** (`wf_step.sh`): Ordering + step-specific input validation
+2. **Final chokepoint** (`prd_set_pass.sh`): Receipts + verify artifacts + review evidence + contract review
 
 ```
-Step 1: PREFLIGHT (premortem + verify quick)
-  ↓ receipt: 00_preflight.json (records BASE_HEAD)
-Step 2: IMPLEMENT (/slice-execute)
-  ↓ receipt: 01_implement.json (validates code changed since BASE_HEAD)
-Step 3: SELF-REVIEW (/pr-review → /failure-mode-review → /contract-review)
-  ↓ receipt: 02_self_review.json
-Step 4: CYCLE 1 REVIEW (external reviewer)
-  ↓ receipt: 03_cycle1.json (hashes ALL review artifacts)
-Step 5: FIX (address review findings)
-  ↓ receipt: 04_fix.json (requires non-artifact code changes, or 0-finding cycle1)
-Step 6: CYCLE 2 REVIEW (adversarial, on fixed code)
-  ↓ receipt: 05_cycle2.json (hashes ALL review artifacts)
-Step 7: RESOLUTION (review_resolution.md with disposition table)
-  ↓ receipt: 06_resolution.json
-Step 8: VERIFY FULL (verify.sh full → artifacts)
-  ↓ receipt: 07_verify_full.json (validates mode=full + HEAD match)
-Step 9: PASS (prd_set_pass.sh — full chain validation)
-  ↓ no receipt — flips passes=true in prd.json
+Step 1: PREFLIGHT
+  Premortem (§0-§10) + verify.sh quick
+  ↓ receipt: 00_preflight.json (records BASE_HEAD as diff baseline)
+
+Step 2: IMPLEMENT
+  /slice-execute — enforcement code + TRIP/NON-TRIP tests + golden vectors
+  ↓ receipt: 01_implement.json (code must change since BASE_HEAD)
+
+Step 3: SELF-REVIEW
+  5-skill review stack: /pr-review → /failure-mode-review →
+    /strategic-failure-review → /contract-review → /devils-advocate
+  3.1: Fix issues and rerun reviews
+  ↓ receipt: 02_self_review.json (artifacts in self_review/)
+
+Step 4: CYCLE 1 REVIEW
+  External review via review_logged.sh --tool codex --base <branch>
+  ↓ receipt: 03_cycle1.json (at least 1 review artifact in codex/ or opus/)
+
+Step 5: FIX
+  Address P0/P1/P2 findings + verify.sh quick
+  ↓ receipt: 04_fix.json (non-artifact code changed, or 0 findings)
+
+Step 6: CYCLE 2 REVIEW
+  Adversarial review on fixed code (sequential, not parallel)
+  6.1: Code review expert + thinking expert comprehensive audit
+  ↓ receipt: 05_cycle2.json (at least 2 review artifacts total)
+
+Step 7: RESOLUTION
+  review_resolution.md with finding disposition table
+  7.1: Postmortem — constraint, follow-up, rules (plans/postmortem_template.md)
+  ↓ receipt: 06_resolution.json (BLOCKING=0, all findings dispositioned)
+
+Step 8: VERIFY FULL
+  verify.sh full
+  ↓ receipt: 07_verify_full.json (mode=full + HEAD match in verify.meta.json)
+
+Step 9: PASS
+  prd_set_pass.sh flips passes=true
+  ↓ no receipt — all 8 receipts + verify artifacts + review for HEAD
+    + contract review PASS + fail-closed coverage + loss_mode fields
 ```
 
 ---
 
-## Receipt Chain Architecture
+## Receipt Tracking
 
 ### Receipt format
 
@@ -51,12 +72,7 @@ Each receipt is a JSON file in `.wf/receipts/<STORY_ID>/`:
   "step_name": "implement",
   "step_index": 1,
   "head_sha": "abc123...",
-  "timestamp_utc": "2026-02-19T16:00:00Z",
-  "inputs_hash": "sha256-of-step-specific-evidence",
-  "prev_receipt_hash": "sha256-of-previous-receipt-or-GENESIS",
-  "receipt_hash": "sha256-of-this-receipt",
-  "tainted": false,
-  "signature": "hmac-sha256-if-WF_HMAC_KEY-set"
+  "timestamp_utc": "2026-02-19T16:00:00Z"
 }
 ```
 
@@ -68,21 +84,25 @@ The `preflight` step records HEAD as the baseline for all subsequent diffs. Ever
 
 Each step validates:
 1. All previous receipts exist (progressive chokepoint)
-2. The hash chain is valid (`prev_receipt_hash` matches actual hash of previous receipt)
-3. Step-specific inputs are ready
+2. Step-specific inputs are ready
 
 If any check fails, the step is **blocked immediately** — not deferred to pass-flip time.
 
-### HMAC signing (optional, recommended for CI)
+### Commands
 
-If `WF_HMAC_KEY` is set, each receipt includes an HMAC-SHA256 signature. Only processes with the key can produce valid signatures — agents can't forge receipts.
+```bash
+# Execute a step (validates prerequisites, writes receipt)
+plans/wf_step.sh <STORY_ID> <step>
 
-### Safety controls
+# Check chain status
+plans/wf_step.sh <STORY_ID> --status
 
-- `--force` skips prerequisites but **taints** the receipt → `pass` step hard-fails (exit 4)
-- `--reset` requires `--yes` confirmation (prevents accidental chain deletion)
-- `--dry-run` validates without writing
-- `--verify-sigs` checks HMAC signatures on all receipts
+# Reset chain (start over — requires confirmation)
+plans/wf_step.sh <STORY_ID> --reset --yes
+
+# Dry run (validate without writing)
+plans/wf_step.sh <STORY_ID> <step> --dry-run
+```
 
 ---
 
@@ -212,22 +232,30 @@ Debt Register (required if YELLOW):
 
 ---
 
-## Step 3: Self-Review
+## Step 3: Self-Review (5-skill review stack)
 
 **Receipt:** `02_self_review.json`
 **Command:** `plans/wf_step.sh <STORY-ID> self_review`
 **Validates:** Self-review artifacts exist in `artifacts/story/<ID>/self_review/`
 
-**Skills (always):** `/pr-review` → `/failure-mode-review` → `/contract-review`
-**Skills (conditional):** + `/strategic-failure-review` for multi-crate or infrastructure changes
+Run the full 5-skill review stack on your implementation:
+
+1. `/pr-review` — SOLID, architecture, removal candidates, security
+2. `/failure-mode-review` — interface crossings, state transitions, what-if analysis
+3. `/strategic-failure-review` — hidden assumptions, complexity-to-benefit, simpler alternatives
+4. `/contract-review` — fail-open hazard filter, CONTRACT.md alignment
+5. `/devils-advocate` — mutation testing, simpler-than-correct gate
 
 **Artifacts:**
 - `artifacts/story/<STORY-ID>/self_review/pr_review.md`
 - `artifacts/story/<STORY-ID>/self_review/failure_mode_review.md`
+- `artifacts/story/<STORY-ID>/self_review/strategic_failure_review.md`
 - `artifacts/story/<STORY-ID>/self_review/contract_review.md`
-- `artifacts/story/<STORY-ID>/self_review/strategic_failure_review.md` (if applicable)
+- `artifacts/story/<STORY-ID>/self_review/devils_advocate.md`
 
-Fix any P0/P1 findings before proceeding.
+### Step 3.1: Fix issues and rerun reviews
+
+Address all P0/P1/P2 findings from the 5-skill stack, then rerun reviews on the fixed code to confirm resolution. Iterate until clean.
 
 ---
 
@@ -235,19 +263,17 @@ Fix any P0/P1 findings before proceeding.
 
 **Receipt:** `03_cycle1.json`
 **Command:** `plans/wf_step.sh <STORY-ID> cycle1`
-**Validates:** At least 1 review artifact in `codex/` or `opus/`; hashes ALL artifacts (sorted)
+**Validates:** At least 1 review artifact in `codex/` or `opus/`
 
 External review of current code. Use `--base` against integration branch for diffs, not `--commit HEAD`.
 
-**Artifact:** `artifacts/story/<STORY-ID>/codex/<timestamp>_cycle1_review.md`
+**Commands:**
+```bash
+plans/review_logged.sh <STORY-ID> --tool codex --base <integration_branch>
+plans/codex_review_logged.sh <STORY-ID> --base <integration_branch>
+```
 
-### Anti-fabrication checks enforced by `story_review_gate.sh`:
-- `Duration Seconds` field **required** (missing = hard fail)
-- Transcript minimum byte threshold (≥500 bytes default)
-- File path references (≥2 required)
-- Severity markers present
-- Diff cross-reference: transcript must mention files from BASE_HEAD..HEAD diff
-- Transcript SHA256 hash integrity
+**Artifact:** `artifacts/story/<STORY-ID>/codex/<timestamp>_review.md`
 
 ---
 
@@ -270,13 +296,15 @@ Address all actionable findings (P0/P1/P2) from cycle 1 review.
 
 **Receipt:** `05_cycle2.json`
 **Command:** `plans/wf_step.sh <STORY-ID> cycle2`
-**Validates:** At least 2 review artifacts total; hashes ALL artifacts (sorted)
+**Validates:** At least 2 review artifacts total
 
 Adversarial review of FIXED code — stress/edge cases. Must be sequential (not parallel with cycle 1).
 
-**Artifact:** `artifacts/story/<STORY-ID>/codex/<timestamp>_cycle2_review.md`
+**Artifact:** `artifacts/story/<STORY-ID>/codex/<timestamp>_review.md`
 
-Same anti-fabrication checks as cycle 1.
+### Step 6.1: Code review expert + thinking expert audit
+
+After the external adversarial review, run a comprehensive audit using the code review expert and thinking expert skills on the implementation. This catches structural and reasoning-level issues that tool-based reviews may miss.
 
 ---
 
@@ -294,10 +322,6 @@ Story: <ID>
 HEAD: <sha>
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-Kimi final review file: <path>
-Codex final review file: <path>
-Codex second review file: <path>
-Code-review-expert final review file: <path>
 ```
 
 ### Finding Disposition Table
@@ -308,10 +332,20 @@ Code-review-expert final review file: <path>
 | F-1 | P1 | file.rs:42 | Description | FIXED | commit sha |
 ```
 
-- Whitespace-tolerant regex matching (handles LLM formatting inconsistencies)
-- P0 findings cannot be DEFERRED
-- DEFERRED dispositions must reference a debt item with owner + target slice
-- Disposition count must match cycle1 high-severity finding count
+### Step 7.1: Write postmortem
+
+Constraint-first postmortem while the story is fresh. The next story's premortem §9 reads this. Use the template at `plans/postmortem_template.md`.
+
+**Artifact:** `reviews/postmortems/<STORY-ID>_postmortem.md`
+
+**Sections:**
+
+| # | Section | Purpose |
+|---|---------|---------|
+| 0 | What shipped | One-line outcome + value declaration |
+| 1 | Constraint | THE bottleneck: symptoms, exploit, subordinate, elevate |
+| 2 | Follow-up | Best next story + 1-3 upgrades with validation |
+| 3 | Rules | 1-3 enforceable rules so next agent doesn't repeat the pain |
 
 ---
 
@@ -338,43 +372,13 @@ Must produce `VERIFY OK (mode=full)`. Run after all reviews and fixes are comple
 
 | Gate | What it checks | Exit code |
 |------|---------------|-----------|
-| **Receipt chain** | All 8 receipts exist, hash chain intact, no tainted receipts | 4 |
-| **Tainted receipts** | Any `tainted=true` → hard fail | 4 |
-| **HMAC signatures** | If `WF_HMAC_KEY` set, all signatures valid | 4 |
+| **Receipts** | All 8 receipts exist | 4 |
 | **Verify output** | `verify.sh full` passed, HEAD match | 4 |
 | **Contract review** | `contract_review.json` with `decision=PASS` | 4 |
-| **Story review gate** | Self-review + Kimi + 2 Codex + code-review-expert + resolution (all matching HEAD, provenance hashed, timing enforced) | 4 |
-| **Self-review artifacts** | `pr_review.md` + `failure_mode_review.md` exist | 5 |
-| **Codex reviews** | 2 review cycles exist | 5 |
+| **Review evidence** | At least one review artifact for current HEAD | 4 |
 | **AT ownership** | `enforcing_contract_ats` non-empty | 6 |
 | **Fail-closed coverage** | TRIP + NON-TRIP name patterns in test files | 8 |
-
-### CI guard (`plans/wf_ci_guard.sh`)
-
-Detects `passes=true` flips in `prd.json` diffs and validates receipt chains. Catches direct PRD edits that bypass `prd_set_pass.sh`.
-
-```bash
-# In CI pipeline
-plans/wf_ci_guard.sh
-
-# With HMAC verification
-WF_HMAC_KEY="$SECRET" plans/wf_ci_guard.sh --require-sigs
-```
-
----
-
-## Postmortem (after story passes)
-
-5-10 bullets. The next story's premortem §9 reads this.
-
-**Artifact:** `reviews/postmortems/<STORY-ID>_postmortem.md`
-
-```
-## What surprised me
-## What the premortem got wrong
-## What slowed me down
-## What the next story should watch for
-```
+| **Loss mode** | `worst_case`, `fail_closed_cap`, `drift_metric` populated | 9 |
 
 ---
 
@@ -393,15 +397,6 @@ plans/wf_step.sh <ID> --reset --yes
 # Dry run (validate without writing)
 plans/wf_step.sh <ID> <step> --dry-run
 
-# Force (skip prereqs, taints receipt — recovery only)
-plans/wf_step.sh <ID> <step> --force
-
-# Sign receipts with HMAC
-WF_HMAC_KEY="<secret>" plans/wf_step.sh <ID> <step>
-
-# Verify HMAC signatures
-WF_HMAC_KEY="<secret>" plans/wf_step.sh <ID> --verify-sigs
-
 # Final pass-flip
 plans/prd_set_pass.sh <ID> true
 ```
@@ -413,7 +408,7 @@ plans/prd_set_pass.sh <ID> true
 | Document | Purpose | When to read |
 |----------|---------|-------------|
 | `specs/CONTRACT.md` | Source of truth for behavioral invariants | Every step |
-| `specs/WORKFLOW_CONTRACT.md` | Full workflow contract + receipt chain spec | Steps 1, 9 |
+| `specs/WORKFLOW_CONTRACT.md` | Full workflow contract + receipt tracking spec | Steps 1, 9 |
 | `specs/DESIGN_PATTERNS.md` | How to build (gate shape, fail-closed, naming) | Step 2 |
 | `specs/QUALITY_GATES.md` | How to prove (scorecard, AT taxonomy, golden vectors) | Steps 1, 3 |
 | `plans/prd.json` | PRD with story metadata, ATs, test mappings | Steps 1-9 |
@@ -434,6 +429,6 @@ plans/prd_set_pass.sh <ID> true
 
 **Idempotency**: Anything that can be retried must be safe to run twice. Use stable IDs and replace semantics.
 
-**No Paper Compliance**: `passes=true` requires enforcement in code, proving tests, evidence artifacts, and a valid receipt chain. If a wrong implementation would pass the tests, the tests are insufficient.
+**No Paper Compliance**: `passes=true` requires enforcement in code, proving tests, evidence artifacts, and valid receipts. If a wrong implementation would pass the tests, the tests are insufficient.
 
 **Postmortem Chain**: Story N postmortem feeds story N+1 premortem §9. Prior pain becomes current prevention.

@@ -6,10 +6,8 @@ Story: <STORY_ID>
 HEAD: <HEAD_SHA>
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-Kimi final review file: kimi/<TIMESTAMP>_review.md
-Codex final review file: codex/<TIMESTAMP>_review.md
-Codex second review file: codex/<TIMESTAMP>_review.md
-Code-review-expert final review file: code_review_expert/<TIMESTAMP>_review.md
+Cycle 1 review file: codex/<TIMESTAMP>_review.md
+Cycle 2 review file: codex/<TIMESTAMP>_review.md
 
 ## Finding Disposition
 
