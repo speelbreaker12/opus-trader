@@ -6,7 +6,7 @@
 //! metadata fields to this type.
 
 use super::build_order_intent::GateStep;
-use super::gate::{LiquidityGateRejectReason, LiquidityGateResult};
+use super::gate::{LiquidityGateDecision, LiquidityGateRejectReason, LiquidityGateResult};
 use super::gates::{NetEdgeRejectReason, NetEdgeResult};
 use super::preflight::{PreflightReject, PreflightResult};
 use super::pricer::{PricerRejectReason, PricerResult};
@@ -142,9 +142,9 @@ impl GateOutcome {
     ///
     /// Exhaustive match — compiler forces update when `LiquidityGateRejectReason` adds a variant.
     pub fn from_liquidity(gate: GateStep, result: &LiquidityGateResult) -> Self {
-        match result {
-            LiquidityGateResult::Allowed { .. } => GateOutcome::Allow { gate },
-            LiquidityGateResult::Rejected { reason, .. } => {
+        match &result.decision {
+            LiquidityGateDecision::Allowed => GateOutcome::Allow { gate },
+            LiquidityGateDecision::Rejected { reason } => {
                 let code = match reason {
                     LiquidityGateRejectReason::LiquidityGateNoL2 => {
                         RejectReasonCode::LiquidityGateNoL2

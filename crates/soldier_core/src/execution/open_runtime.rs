@@ -12,7 +12,7 @@ use crate::risk::{
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    LiquidityGateInput, LiquidityGateMetrics, LiquidityGateResult, NetEdgeInput, NetEdgeMetrics,
+    LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics,
     NetEdgeResult, PricerInput, PricerMetrics, PricerResult, Tlsm, build_gate_results,
     build_order_intent, compute_limit_price, evaluate_inventory_skew, evaluate_liquidity_gate,
     evaluate_net_edge,
@@ -169,23 +169,17 @@ pub fn build_open_order_intent_runtime(
         }
 
         if liquidity_override_reason.is_none() {
-            gate_results.liquidity_gate_passed = match evaluate_liquidity_gate(
-                &input.liquidity_input,
-                &mut runtime_metrics.liquidity,
-            ) {
-                LiquidityGateResult::Allowed { allowed_qty, .. } => {
-                    if let Some(qty) = allowed_qty {
-                        max_dispatch_qty = Some(qty);
-                    }
-                    true
-                }
-                LiquidityGateResult::Rejected { allowed_qty, .. } => {
-                    if let Some(qty) = allowed_qty {
-                        max_dispatch_qty = Some(qty);
-                    }
-                    false
-                }
-            };
+            let liquidity_result =
+                evaluate_liquidity_gate(&input.liquidity_input, &mut runtime_metrics.liquidity);
+            gate_results.liquidity_gate_passed =
+                matches!(liquidity_result.decision, LiquidityGateDecision::Allowed);
+            // allowed_qty is extracted regardless of decision: on reject the gate
+            // is still the authority on how much qty was fillable, and the value
+            // is used for observability. Dispatch is gated by liquidity_gate_passed
+            // downstream, so setting max_dispatch_qty on a rejection is harmless.
+            if let Some(qty) = liquidity_result.metadata.allowed_qty {
+                max_dispatch_qty = Some(qty);
+            }
 
             if gate_results.liquidity_gate_passed {
                 let first_net_edge =

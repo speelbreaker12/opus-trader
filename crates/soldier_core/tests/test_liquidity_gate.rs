@@ -6,8 +6,8 @@
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
 
 use soldier_core::execution::{
-    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
-    LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
+    LiquidityGateMetrics, LiquidityGateRejectReason, evaluate_liquidity_gate,
     expected_slippage_bps_samples, liquidity_gate_reject_total, take_execution_metric_lines,
     with_intent_trace_ids,
 };
@@ -59,22 +59,17 @@ fn test_at222_slippage_exceeds_max_rejected() {
     let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Rejected {
-            reason,
-            wap,
-            slippage_bps,
-            ..
-        } => {
-            assert_eq!(
-                reason,
-                LiquidityGateRejectReason::InsufficientDepthWithinBudget
-            );
-            assert!((wap.unwrap() - 105.0).abs() < 1e-9);
-            assert!(slippage_bps.unwrap() > 10.0);
-        }
-        other => panic!("expected Rejected, got {other:?}"),
-    }
+    let LiquidityGateDecision::Rejected { reason } = result.decision else {
+        panic!("expected Rejected, got {:?}", result)
+    };
+    let wap = result.metadata.wap;
+    let slippage_bps = result.metadata.slippage_bps;
+    assert_eq!(
+        reason,
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget
+    );
+    assert!((wap.unwrap() - 105.0).abs() < 1e-9);
+    assert!(slippage_bps.unwrap() > 10.0);
     assert_eq!(m.reject_depth_shortfall(), 1);
     assert_eq!(m.reject_slippage(), 0);
 }
@@ -89,10 +84,9 @@ fn test_at222_no_order_intent_on_rejection() {
     let result = evaluate_liquidity_gate(&input, &mut m);
     // Rejected — no OrderIntent should be emitted (caller responsibility)
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
         }
     ));
 }
@@ -105,19 +99,17 @@ fn test_at222_reject_log_includes_wap_and_slippage() {
     let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Rejected {
-            wap, slippage_bps, ..
-        } => {
-            // LiquidityGateReject log would include these values
-            assert!(wap.is_some(), "WAP must be present for logging");
-            assert!(
-                slippage_bps.is_some(),
-                "slippage_bps must be present for logging"
-            );
-        }
-        other => panic!("expected Rejected, got {other:?}"),
-    }
+    let LiquidityGateDecision::Rejected { .. } = result.decision else {
+        panic!("expected Rejected, got {:?}", result)
+    };
+    let wap = result.metadata.wap;
+    let slippage_bps = result.metadata.slippage_bps;
+    // LiquidityGateReject log would include these values
+    assert!(wap.is_some(), "WAP must be present for logging");
+    assert!(
+        slippage_bps.is_some(),
+        "slippage_bps must be present for logging"
+    );
 }
 
 // ─── Slippage within limit → allowed ─────────────────────────────────────
@@ -131,15 +123,15 @@ fn test_slippage_within_limit_allowed() {
     let input = gate_input(5.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed {
-            wap, slippage_bps, ..
-        } => {
-            assert!((wap.unwrap() - 100.0).abs() < 1e-9);
-            assert!(slippage_bps.unwrap() < 1e-9); // zero slippage
-        }
-        other => panic!("expected Allowed, got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "expected Allowed, got {:?}",
+        result,
+    );
+    let wap = result.metadata.wap;
+    let slippage_bps = result.metadata.slippage_bps;
+    assert!((wap.unwrap() - 100.0).abs() < 1e-9);
+    assert!(slippage_bps.unwrap() < 1e-9); // zero slippage
     assert_eq!(m.allowed_total(), 1);
 }
 
@@ -154,7 +146,7 @@ fn test_slippage_at_boundary_allowed() {
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
 }
 
 // ─── Sell side ──────────────────────────────────────────────────────────
@@ -170,22 +162,17 @@ fn test_sell_walks_bids() {
     let input = gate_input(2.0, false, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Rejected {
-            reason,
-            wap,
-            slippage_bps,
-            ..
-        } => {
-            assert_eq!(
-                reason,
-                LiquidityGateRejectReason::InsufficientDepthWithinBudget
-            );
-            assert!((wap.unwrap() - 95.0).abs() < 1e-9);
-            assert!(slippage_bps.unwrap() > 10.0);
-        }
-        other => panic!("expected Rejected, got {other:?}"),
-    }
+    let LiquidityGateDecision::Rejected { reason } = result.decision else {
+        panic!("expected Rejected, got {:?}", result)
+    };
+    let wap = result.metadata.wap;
+    let slippage_bps = result.metadata.slippage_bps;
+    assert_eq!(
+        reason,
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget
+    );
+    assert!((wap.unwrap() - 95.0).abs() < 1e-9);
+    assert!(slippage_bps.unwrap() > 10.0);
 }
 
 // ─── AT-344 / AT-909: Missing/stale L2 → LiquidityGateNoL2 ─────────────
@@ -198,10 +185,9 @@ fn test_at344_missing_l2_rejects_open() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
     assert_eq!(m.reject_no_l2(), 1);
@@ -214,12 +200,10 @@ fn test_at909_missing_l2_reason_is_no_l2() {
     let input = gate_input(1.0, true, GateIntentClass::Open, None);
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Rejected { reason, .. } => {
-            assert_eq!(reason, LiquidityGateRejectReason::LiquidityGateNoL2);
-        }
-        other => panic!("expected Rejected(LiquidityGateNoL2), got {other:?}"),
-    }
+    let LiquidityGateDecision::Rejected { reason } = result.decision else {
+        panic!("expected Rejected(LiquidityGateNoL2), got {:?}", result)
+    };
+    assert_eq!(reason, LiquidityGateRejectReason::LiquidityGateNoL2);
 }
 
 #[test]
@@ -232,10 +216,9 @@ fn test_at344_stale_l2_rejects_open() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -249,7 +232,7 @@ fn test_stale_l2_fresh_enough_passes() {
     let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
 }
 
 #[test]
@@ -262,10 +245,9 @@ fn test_future_dated_l2_rejected_fail_closed() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -279,7 +261,7 @@ fn test_at421_cancel_only_allowed_without_l2() {
     let input = gate_input(1.0, true, GateIntentClass::CancelOnly, None);
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
     assert_eq!(m.allowed_total(), 1);
 }
 
@@ -291,10 +273,9 @@ fn test_at421_close_rejected_without_l2() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -308,7 +289,7 @@ fn test_at421_cancel_allowed_with_stale_l2() {
     let input = gate_input(1.0, true, GateIntentClass::CancelOnly, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
 }
 
 // ─── Empty book side → NoL2 ─────────────────────────────────────────────
@@ -323,10 +304,9 @@ fn test_empty_asks_for_buy_rejects() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -340,10 +320,9 @@ fn test_empty_bids_for_sell_rejects() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -359,28 +338,23 @@ fn test_partial_fill_from_thin_book_evaluates_available() {
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Rejected {
-            reason,
-            wap,
-            slippage_bps,
-            ..
-        } => {
-            assert_eq!(
-                reason,
-                LiquidityGateRejectReason::InsufficientDepthWithinBudget
-            );
-            assert!(
-                wap.is_some(),
-                "thin-book reject must include WAP diagnostics"
-            );
-            assert!(
-                slippage_bps.is_some(),
-                "thin-book reject must include slippage diagnostics"
-            );
-        }
-        other => panic!("expected Rejected, got {other:?}"),
-    }
+    let LiquidityGateDecision::Rejected { reason } = result.decision else {
+        panic!("expected Rejected, got {:?}", result)
+    };
+    let wap = result.metadata.wap;
+    let slippage_bps = result.metadata.slippage_bps;
+    assert_eq!(
+        reason,
+        LiquidityGateRejectReason::InsufficientDepthWithinBudget
+    );
+    assert!(
+        wap.is_some(),
+        "thin-book reject must include WAP diagnostics"
+    );
+    assert!(
+        slippage_bps.is_some(),
+        "thin-book reject must include slippage diagnostics"
+    );
 }
 
 // ─── Multi-level book walk ──────────────────────────────────────────────
@@ -400,15 +374,15 @@ fn test_multi_level_wap_computation() {
     let input = gate_input(15.0, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed {
-            wap, slippage_bps, ..
-        } => {
-            assert!((wap.unwrap() - 100.05).abs() < 1e-6);
-            assert!(slippage_bps.unwrap() < 10.0);
-        }
-        other => panic!("expected Allowed, got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "expected Allowed, got {:?}",
+        result,
+    );
+    let wap = result.metadata.wap;
+    let slippage_bps = result.metadata.slippage_bps;
+    assert!((wap.unwrap() - 100.05).abs() < 1e-6);
+    assert!(slippage_bps.unwrap() < 10.0);
 }
 
 #[test]
@@ -420,17 +394,15 @@ fn test_open_wap_budget_allows_small_tail_beyond_level_cap() {
     let input = gate_input(10.01, true, GateIntentClass::Open, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed {
-            allowed_qty,
-            slippage_bps,
-            ..
-        } => {
-            assert!((allowed_qty.unwrap() - 10.01).abs() < 1e-9);
-            assert!(slippage_bps.unwrap() <= 10.0 + 1e-9);
-        }
-        other => panic!("expected Allowed, got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "expected Allowed, got {:?}",
+        result,
+    );
+    let allowed_qty = result.metadata.allowed_qty;
+    let slippage_bps = result.metadata.slippage_bps;
+    assert!((allowed_qty.unwrap() - 10.01).abs() < 1e-9);
+    assert!(slippage_bps.unwrap() <= 10.0 + 1e-9);
 }
 
 #[test]
@@ -442,10 +414,9 @@ fn test_overflowed_slippage_budget_fails_closed() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
     assert_eq!(m.reject_no_l2(), 1);
@@ -472,7 +443,7 @@ fn test_close_allowed_with_valid_l2() {
     let input = gate_input(1.0, true, GateIntentClass::Close, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    assert!(matches!(result, LiquidityGateResult::Allowed { .. }));
+    assert!(matches!(result.decision, LiquidityGateDecision::Allowed));
 }
 
 #[test]
@@ -484,17 +455,15 @@ fn test_close_clamps_to_fillable_qty() {
     let input = gate_input(10.0, true, GateIntentClass::Close, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed {
-            fillable_qty,
-            allowed_qty,
-            ..
-        } => {
-            assert_eq!(fillable_qty, Some(2.0));
-            assert_eq!(allowed_qty, Some(2.0));
-        }
-        other => panic!("expected Allowed for CLOSE clamp, got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "expected Allowed for CLOSE clamp, got {:?}",
+        result,
+    );
+    let fillable_qty = result.metadata.fillable_qty;
+    let allowed_qty = result.metadata.allowed_qty;
+    assert_eq!(fillable_qty, Some(2.0));
+    assert_eq!(allowed_qty, Some(2.0));
 }
 
 #[test]
@@ -505,17 +474,15 @@ fn test_hedge_clamps_to_fillable_qty() {
     let input = gate_input(5.0, true, GateIntentClass::Hedge, Some(snap));
 
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed {
-            fillable_qty,
-            allowed_qty,
-            ..
-        } => {
-            assert_eq!(fillable_qty, Some(1.5));
-            assert_eq!(allowed_qty, Some(1.5));
-        }
-        other => panic!("expected Allowed for HEDGE clamp, got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "expected Allowed for HEDGE clamp, got {:?}",
+        result,
+    );
+    let fillable_qty = result.metadata.fillable_qty;
+    let allowed_qty = result.metadata.allowed_qty;
+    assert_eq!(fillable_qty, Some(1.5));
+    assert_eq!(allowed_qty, Some(1.5));
 }
 
 #[test]
@@ -533,10 +500,9 @@ fn test_non_marketable_open_still_enforces_depth_budget() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
         }
     ));
 }
@@ -550,10 +516,9 @@ fn test_non_marketable_open_without_l2_still_rejected_fail_closed() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -567,10 +532,9 @@ fn test_non_marketable_close_without_l2_still_rejected_fail_closed() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -589,10 +553,9 @@ fn test_non_marketable_hedge_with_stale_l2_still_rejected_fail_closed() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -611,10 +574,9 @@ fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
         }
     ));
 }
@@ -635,10 +597,9 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
         evaluate_liquidity_gate(&input, &mut metrics)
     });
     assert!(matches!(
-        result,
-        LiquidityGateResult::Rejected {
-            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
-            ..
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget
         }
     ));
 
@@ -682,15 +643,15 @@ fn test_slippage_at_exact_max_allowed() {
     let snap = book(vec![(100.0, 5.0), (100.20, 5.0)], vec![], 900);
     let input = gate_input(10.0, true, GateIntentClass::Open, Some(snap));
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed {
-            slippage_bps, wap, ..
-        } => {
-            assert!((slippage_bps.unwrap() - 10.0).abs() < 1e-6);
-            assert!((wap.unwrap() - 100.10).abs() < 1e-6);
-        }
-        other => panic!("slippage == max_slippage_bps must ALLOW (> not >=), got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "slippage == max_slippage_bps must ALLOW (> not >=), got {:?}",
+        result,
+    );
+    let slippage_bps = result.metadata.slippage_bps;
+    let wap = result.metadata.wap;
+    assert!((slippage_bps.unwrap() - 10.0).abs() < 1e-6);
+    assert!((wap.unwrap() - 100.10).abs() < 1e-6);
     assert_eq!(m.allowed_total(), 1);
 }
 
@@ -703,9 +664,10 @@ fn test_staleness_at_exact_max_age_allowed() {
     let snap = book(vec![(100.0, 10.0)], vec![], 500);
     let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
     let result = evaluate_liquidity_gate(&input, &mut m);
-    match result {
-        LiquidityGateResult::Allowed { .. } => {}
-        other => panic!("age == max_age must ALLOW (> not >=), got {other:?}"),
-    }
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Allowed),
+        "age == max_age must ALLOW (> not >=), got {:?}",
+        result,
+    );
     assert_eq!(m.allowed_total(), 1);
 }
