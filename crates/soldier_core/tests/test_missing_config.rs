@@ -10,8 +10,8 @@ use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, build_order_intent,
 };
 use soldier_core::execution::{
-    GateIntentClass, LiquidityGateInput, LiquidityGateMetrics, LiquidityGateRejectReason,
-    LiquidityGateResult, evaluate_liquidity_gate,
+    GateIntentClass, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
+    LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
 };
 use soldier_core::execution::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
@@ -223,13 +223,7 @@ fn test_missing_l2_book_fails_closed() {
     let result = evaluate_liquidity_gate(&input, &mut m);
 
     assert!(
-        matches!(
-            result,
-            LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-                ..
-            }
-        ),
+        matches!(result.decision, LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }),
         "Missing L2 book must fail-closed with LiquidityGateNoL2"
     );
 }
