@@ -172,13 +172,13 @@ crates/soldier_core/tests/test_gate_ordering.rs:15 missing error tests. $PAD"
 
 # Cycle 2 content with fewer findings (P1 count decreased to 0)
 CYCLE2_IMPROVED="## P2 - Medium
-**crates/soldier_core/src/execution/pipeline.rs:42** - Style in handler.
+$_DIFF_MENTION
 specs/TRACE.yaml consistent. crates/soldier_core/src/execution/mod.rs good.
 crates/soldier_core/src/venue/cache.rs TTL correct. $PAD"
 
 # Cycle 2 content with MORE findings (regression)
 CYCLE2_REGRESSION="## P1 - High
-**crates/soldier_core/src/execution/pipeline.rs:42** - Error still missing.
+$_DIFF_MENTION
 crates/soldier_core/src/execution/mod.rs drops errors.
 ## P1 - High
 **crates/soldier_core/src/venue/cache.rs:88** - Clock skew unhandled.
@@ -188,7 +188,7 @@ specs/TRACE.yaml inconsistent. $PAD"
 
 # CRE content (always valid)
 CRE_CONTENT="## P2 - Medium
-**crates/soldier_core/src/execution/pipeline.rs:42** - Style.
+$_DIFF_MENTION
 specs/TRACE.yaml fine. crates/soldier_core/src/execution/mod.rs ok.
 crates/soldier_core/src/venue/cache.rs:88 clean.
 - Blocking: none
@@ -324,7 +324,7 @@ echo "--- Test 10: P0 finding cannot be DEFERRED ---"
 setup
 # Use content with P0
 CYCLE1_P0="## P0 - Critical
-**crates/soldier_core/src/execution/pipeline.rs:42** - Security vulnerability.
+$_DIFF_MENTION
 crates/soldier_core/src/execution/mod.rs injection. specs/TRACE.yaml §4.1.
 crates/soldier_core/src/venue/cache.rs fine. $PAD"
 
