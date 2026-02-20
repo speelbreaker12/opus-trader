@@ -74,8 +74,20 @@ assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_pr_gate.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
+# Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
+assert_list_absent "$full_only_list" "plans/tests/test_story_review_gate.sh"
+assert_list_absent "$full_only_list" "plans/tests/test_pr_gate.sh"
+assert_list_absent "$smoke_list" "plans/tests/test_story_review_gate.sh"
 assert_list_absent "$smoke_list" "plans/tests/test_pr_gate.sh"
 assert_list_absent "$full_only_list" "plans/tests/test_preflight_fixture_profiles.sh"
+
+# Verify moved tests are actually present in verify_fork.sh gate 14g
+VERIFY_FORK="$ROOT/plans/verify_fork.sh"
+[[ -f "$VERIFY_FORK" ]] || fail "missing verify_fork.sh: $VERIFY_FORK"
+grep -q 'start_parallel_gate "wf_test_story_review_gate"' "$VERIFY_FORK" \
+  || fail "test_story_review_gate.sh not found in verify_fork.sh gate 14g"
+grep -q 'start_parallel_gate "wf_test_pr_gate"' "$VERIFY_FORK" \
+  || fail "test_pr_gate.sh not found in verify_fork.sh gate 14g"
 
 overlap="$(
   comm -12 \
