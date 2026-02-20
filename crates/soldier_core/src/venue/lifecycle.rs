@@ -1,6 +1,7 @@
 //! Instrument lifecycle guardrails for expiry/delist behavior.
 
 use crate::risk::InstrumentState;
+use crate::venue::types::InstrumentKind;
 
 /// Intent type for lifecycle gating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +19,11 @@ pub struct ExpiryGuardInput {
     pub expiration_timestamp_ms: Option<u64>,
     pub expiry_delist_buffer_s: u64,
     pub intent: LifecycleIntent,
+    /// Instrument kind for lifecycle semantics.
+    /// - `Some(Perpetual)` → no expiration needed.
+    /// - `Some(Option | LinearFuture | InverseFuture)` → expiration required (fail-closed if missing).
+    /// - `None` → unknown instrument → fail-closed (reject OPEN if timestamp missing).
+    pub instrument_kind: Option<InstrumentKind>,
 }
 
 /// Terminal lifecycle reason recognized by this guard.
@@ -81,6 +87,11 @@ pub struct LifecycleDecision {
 }
 
 /// Reject OPEN intents inside the expiry/delist buffer.
+///
+/// Fail-closed behavior for missing `expiration_timestamp_ms`:
+/// - `Perpetual` → Allowed (perpetuals have no expiration)
+/// - `Option | LinearFuture | InverseFuture` → Rejected (expiration mandatory)
+/// - `None` (unknown kind) → Rejected (fail-closed)
 pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
     if input.intent != LifecycleIntent::Open {
         return ExpiryGuardResult::Allowed;
@@ -88,12 +99,49 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
 
     let expiration_ms = match input.expiration_timestamp_ms {
         Some(value) => value,
-        None => return ExpiryGuardResult::Allowed,
+        None => {
+            return match input.instrument_kind {
+                Some(InstrumentKind::Perpetual) => {
+                    tracing::debug!(
+                        intent = ?input.intent,
+                        "expiry guard: perpetual instrument, no expiry check needed"
+                    );
+                    ExpiryGuardResult::Allowed
+                }
+                Some(kind) => {
+                    // Options, futures — expiration is mandatory
+                    tracing::warn!(
+                        intent = ?input.intent,
+                        instrument_kind = ?Some(kind),
+                        "expiry guard: missing expiration for expirable instrument, rejecting OPEN (fail-closed)"
+                    );
+                    ExpiryGuardResult::Rejected(
+                        LifecycleTerminalReason::InstrumentExpiredOrDelisted,
+                    )
+                }
+                None => {
+                    // Unknown instrument — fail-closed
+                    tracing::warn!(
+                        intent = ?input.intent,
+                        "expiry guard: unknown instrument kind + missing expiration, rejecting OPEN (fail-closed)"
+                    );
+                    ExpiryGuardResult::Rejected(
+                        LifecycleTerminalReason::InstrumentExpiredOrDelisted,
+                    )
+                }
+            };
+        }
     };
 
     let buffer_ms = input.expiry_delist_buffer_s.saturating_mul(1000);
     let opens_blocked_from_ms = expiration_ms.saturating_sub(buffer_ms);
     if input.now_ms >= opens_blocked_from_ms {
+        tracing::info!(
+            now_ms = input.now_ms,
+            expiration_ms,
+            buffer_ms,
+            "expiry guard: rejecting OPEN inside expiry/delist buffer"
+        );
         return ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted);
     }
 

@@ -136,6 +136,10 @@ pub fn evaluate_fee_staleness(
 
     // Guard: non-finite or negative buffer → treat as zero buffer (conservative)
     let safe_buffer = if !config.fee_stale_buffer.is_finite() || config.fee_stale_buffer < 0.0 {
+        tracing::warn!(
+            buffer = config.fee_stale_buffer,
+            "fee staleness: non-finite/negative buffer, clamping to 0.0 (conservative)"
+        );
         0.0
     } else {
         config.fee_stale_buffer

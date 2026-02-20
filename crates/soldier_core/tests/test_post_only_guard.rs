@@ -167,3 +167,81 @@ fn test_sell_just_above_bid_allowed() {
     let mut m = PostOnlyMetrics::new();
     assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Allowed);
 }
+
+// ─── NaN/Inf fail-closed (Q3 retrofit) ─────────────────────────────────
+
+/// NaN limit_price must be rejected (fail-closed).
+/// IEEE 754: NaN >= ask returns false, so without the guard NaN would pass.
+#[test]
+fn test_post_only_nan_limit_price_rejected() {
+    let input = post_only_buy(f64::NAN, Some(100.0));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// NaN best_ask with finite limit_price must be rejected (fail-closed).
+/// Catches guard-only-limit-price mutation (must also guard book prices).
+#[test]
+fn test_post_only_nan_best_ask_rejected() {
+    let input = post_only_buy(99.0, Some(f64::NAN));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// NaN best_bid with finite limit_price must be rejected (fail-closed).
+#[test]
+fn test_post_only_nan_best_bid_rejected() {
+    let input = post_only_sell(101.0, Some(f64::NAN));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// +Inf limit_price must be rejected (fail-closed).
+/// Catches is_nan-only mutation (must use is_finite, not is_nan).
+#[test]
+fn test_post_only_inf_limit_price_rejected() {
+    let input = post_only_buy(f64::INFINITY, Some(100.0));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// +Inf best_ask with finite limit_price must be rejected (fail-closed).
+#[test]
+fn test_post_only_inf_best_ask_rejected() {
+    let input = post_only_buy(99.0, Some(f64::INFINITY));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// +Inf best_bid with finite limit_price must be rejected (fail-closed).
+#[test]
+fn test_post_only_inf_best_bid_rejected() {
+    let input = post_only_sell(101.0, Some(f64::INFINITY));
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// NaN limit_price + empty book (None) must still be rejected.
+/// Catches check-after-comparison mutation (guard must fire before book check).
+#[test]
+fn test_post_only_nan_limit_price_empty_book_rejected() {
+    let input = post_only_buy(f64::NAN, None);
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}
+
+/// +Inf limit_price + empty book (None) must still be rejected.
+#[test]
+fn test_post_only_inf_limit_price_empty_book_rejected() {
+    let input = post_only_sell(f64::INFINITY, None);
+    let mut m = PostOnlyMetrics::new();
+    assert_eq!(check_post_only(&input, &mut m), PostOnlyResult::Rejected);
+    assert_eq!(m.reject_total(), 1);
+}

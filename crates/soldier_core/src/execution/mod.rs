@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 
 const MAX_EXECUTION_METRIC_LINES: usize = 4096;
 
+pub mod base_gates;
 pub mod build_order_intent;
 pub mod dispatch_map;
 pub mod gate;
@@ -23,6 +24,10 @@ pub mod quantize;
 pub mod reject_reason;
 pub mod tlsm;
 
+pub use base_gates::{
+    BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, BaseGatesPassed, BaseGatesRejection,
+    evaluate_base_gates,
+};
 #[allow(deprecated)]
 pub use build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,

@@ -1,4 +1,7 @@
 //! OPEN runtime wiring for Slice 6 gate composition.
+//!
+//! Gates 1-6 are evaluated via the shared `evaluate_base_gates()` to
+//! eliminate dual-orchestration drift risk with `pipeline.rs` (Q1).
 
 use crate::risk::{
     ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult, MarginGateDecision,
@@ -8,6 +11,7 @@ use crate::risk::{
     evaluate_margin_headroom_gate,
 };
 
+use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
@@ -24,14 +28,16 @@ const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
 const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGET_REJECT";
 
 /// OPEN runtime inputs assembled before chokepoint evaluation.
+///
+/// Gates 1-6 are evaluated from `base_gates` via the shared evaluator.
+/// Previous bool fields (`preflight_passed`, `quantize_passed`, etc.)
+/// are no longer needed — the evaluator computes them from raw inputs.
 #[derive(Debug, Clone)]
-pub struct OpenRuntimeInput {
-    pub risk_state: RiskState,
-    pub preflight_passed: bool,
-    pub quantize_passed: bool,
-    pub dispatch_consistency_passed: bool,
-    pub fee_cache_passed: bool,
-    pub expiry_guard_passed: bool,
+pub struct OpenRuntimeInput<'a> {
+    /// Base gates input (gates 1-6). The shared evaluator computes
+    /// preflight_passed, quantize_passed, dispatch_consistency_passed,
+    /// fee_cache_passed, and expiry_guard_passed from these inputs.
+    pub base_gates: BaseGatesInput<'a>,
     pub wal_recorded: bool,
     pub current_delta: f64,
     pub delta_impact_est: f64,
@@ -53,6 +59,7 @@ pub struct OpenRuntimeInput {
 /// Runtime metrics aggregated by subsystem for OPEN wiring.
 #[derive(Debug, Default)]
 pub struct OpenRuntimeMetrics {
+    pub base_gates: BaseGatesMetrics,
     pub pending_exposure: PendingExposureMetrics,
     pub global_exposure: ExposureBudgetMetrics,
     pub inventory_skew: InventorySkewMetrics,
@@ -76,16 +83,24 @@ pub struct OpenRuntimeOutput {
 
 /// Build an OPEN intent decision by wiring runtime gates before chokepoint.
 pub fn build_open_order_intent_runtime(
-    input: &OpenRuntimeInput,
+    input: &OpenRuntimeInput<'_>,
     pending_book: &PendingExposureBook,
     choke_metrics: &mut ChokeMetrics,
     runtime_metrics: &mut OpenRuntimeMetrics,
 ) -> OpenRuntimeOutput {
+    // ── Gates 1-6: shared base gate evaluator ───────────────────────────
+    let base_result = evaluate_base_gates(&input.base_gates, &mut runtime_metrics.base_gates);
+
+    let legacy = match &base_result {
+        Ok(proof) => BaseGatesLegacy::from(proof),
+        Err(rejection) => BaseGatesLegacy::from(rejection),
+    };
+
     let margin_decision =
         evaluate_margin_headroom_gate(&input.margin_gate_input, &mut runtime_metrics.margin_gate);
     let mode_hint = compute_margin_mode_hint(&input.margin_gate_input);
 
-    let mut effective_risk_state = input.risk_state;
+    let mut effective_risk_state = input.base_gates.risk_state;
     if matches!(margin_decision, MarginGateDecision::Rejected { .. })
         && effective_risk_state == RiskState::Healthy
     {
@@ -96,11 +111,11 @@ pub fn build_open_order_intent_runtime(
     }
 
     let mut gate_results = build_gate_results(
-        input.preflight_passed,
-        input.quantize_passed,
-        input.dispatch_consistency_passed,
-        input.fee_cache_passed,
-        input.expiry_guard_passed,
+        legacy.preflight_passed,
+        legacy.quantize_passed,
+        legacy.dispatch_consistency_passed,
+        legacy.fee_cache_passed,
+        legacy.expiry_guard_passed,
         true,
         true,
         true,
@@ -115,11 +130,11 @@ pub fn build_open_order_intent_runtime(
     let mut liquidity_override_reason: Option<&'static str> = None;
 
     let pre_dispatch_gates_ready = effective_risk_state == RiskState::Healthy
-        && input.preflight_passed
-        && input.quantize_passed
-        && input.dispatch_consistency_passed
-        && input.fee_cache_passed
-        && input.expiry_guard_passed;
+        && legacy.preflight_passed
+        && legacy.quantize_passed
+        && legacy.dispatch_consistency_passed
+        && legacy.fee_cache_passed
+        && legacy.expiry_guard_passed;
 
     if pre_dispatch_gates_ready {
         match pending_book.reserve(

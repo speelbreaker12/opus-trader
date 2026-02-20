@@ -123,6 +123,7 @@ pub fn base_open_input<'a>() -> IntentPipelineInput<'a> {
             expiration_timestamp_ms: Some(2_000_000),
             expiry_delist_buffer_s: 60,
             intent: LifecycleIntent::Open,
+            instrument_kind: Some(InstrumentKind::LinearFuture),
         }),
         liquidity: Some(LiquidityGateInput {
             order_qty: 1.0,
