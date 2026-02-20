@@ -191,15 +191,23 @@ If any check fails, the step is **blocked immediately** — not deferred to pass
 
 | Step | Validates |
 |------|-----------|
-| `preflight` | First step, no prerequisites |
-| `implement` | Code changed since preflight |
+| `preflight` | First step, records HEAD as BASE_HEAD for all subsequent diffs |
+| `implement` | Code changed since preflight BASE_HEAD (full story diff, not single commit) |
 | `self_review` | Self-review artifacts exist in `artifacts/story/<ID>/self_review/` |
-| `cycle1` | At least 1 review artifact in `codex/` or `opus/` |
-| `fix` | Code changed since cycle1 receipt |
-| `cycle2` | At least 2 review artifacts (cycle 1 + cycle 2) |
+| `cycle1` | At least 1 review artifact in `codex/` or `opus/`; hashes ALL artifacts (sorted) |
+| `fix` | Non-artifact code changed since cycle1 receipt (or cycle1 had 0 findings) |
+| `cycle2` | At least 2 review artifacts (cycle 1 + cycle 2); hashes ALL artifacts (sorted) |
 | `resolution` | `review_resolution.md` exists with `Blocking addressed: YES` and `BLOCKING=0` |
 | `verify_full` | `verify.meta.json` exists with `mode=full` and matching HEAD |
-| `pass` | Full chain valid, no tainted receipts |
+| `pass` | Full chain valid; tainted receipts → **hard fail (exit 4)** |
+
+**BASE_HEAD principle**: The `preflight` step records HEAD as the baseline. All subsequent diffs use `BASE_HEAD..HEAD` (the full story change), never `HEAD~1..HEAD` (single commit). This prevents hiding changes behind cosmetic follow-up commits.
+
+**Fix step safeguards**:
+- Must change at least one non-artifact file (excludes `artifacts/`, `.wf/`, `plans/prd.json`, `plans/progress*`)
+- Exception: if cycle1 review had 0 findings, fix step passes with an empty diff (no deadlock on perfect reviews)
+
+**Review artifact hashing**: `cycle1` and `cycle2` hash ALL matching review artifacts (sorted), not just the first/last. This prevents swapping reviews.
 
 ### 6.1.4 Usage
 
@@ -210,8 +218,8 @@ plans/wf_step.sh <STORY_ID> <step>
 # Check chain status
 plans/wf_step.sh <STORY_ID> --status
 
-# Reset chain (start over)
-plans/wf_step.sh <STORY_ID> --reset
+# Reset chain (start over — requires confirmation)
+plans/wf_step.sh <STORY_ID> --reset --yes
 
 # Dry run (validate without writing)
 plans/wf_step.sh <STORY_ID> <step> --dry-run
@@ -226,11 +234,13 @@ WF_HMAC_KEY="<secret>" plans/wf_step.sh <STORY_ID> <step>
 WF_HMAC_KEY="<secret>" plans/wf_step.sh <STORY_ID> --verify-sigs
 ```
 
-### 6.1.5 Tamper detection
+### 6.1.5 Tamper detection and safety
 
 - Modifying any receipt breaks the hash chain — all subsequent steps are blocked
-- Tainted receipts (from `--force`) are rejected at pass-flip time by `prd_set_pass.sh`
+- Tainted receipts (from `--force`) cause the `pass` step to **hard fail (exit 4)** — not just warn
+- `prd_set_pass.sh` independently rejects tainted receipts (defense in depth)
 - The chain must be rebuilt from the tampered/tainted point onward
+- `--reset` requires `--yes` confirmation (prevents accidental chain deletion)
 
 ### 6.1.6 HMAC signing (optional, recommended for CI)
 
@@ -267,6 +277,15 @@ Environment:
 - HMAC signatures validated when `WF_HMAC_KEY` is set
 
 Controlled by `REQUIRE_RECEIPT_CHAIN` env var (default=1, set to 0 to skip).
+
+### 6.1.9 Anti-fabrication hardening (story_review_gate.sh)
+
+`story_review_gate.sh` enforces review quality beyond structural checks:
+
+- **Duration Seconds**: Required field in review artifacts. Missing this field is a **hard fail** (not skippable). Prevents 1-second fabricated reviews.
+- **Diff cross-reference**: Review transcripts must mention at least one file from the BASE_HEAD..HEAD diff (full story diff, using preflight receipt if available). Prevents rubber-stamp reviews that don't engage with actual code changes.
+- **Disposition whitespace tolerance**: Finding disposition rows (`| F-N | PN |`) use a whitespace-tolerant regex to handle LLM formatting inconsistencies.
+- **Transcript quality**: Minimum byte threshold, file path references, severity markers all enforced with `die()` (not `warn()`).
 
 ---
 
