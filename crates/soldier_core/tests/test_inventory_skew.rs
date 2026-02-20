@@ -6,8 +6,8 @@
 //! - AT-224 intent: near-limit risk-increasing OPEN may be rejected after skew tightening.
 
 use soldier_core::execution::{
-    InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    Side, evaluate_inventory_skew,
+    InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult, Side,
+    evaluate_inventory_skew,
 };
 
 #[test]

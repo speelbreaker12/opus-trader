@@ -3,8 +3,8 @@
 
 use soldier_core::execution::{
     ChokeIntentClass, GateIntentClass, GateResults, IntentPipelineInput, L2BookSnapshot, L2Level,
-    LiquidityGateInput, NetEdgeInput, OrderType, PreflightInput, PricerInput,
-    QuantizeConstraints, QuantizePipelineInput, Side,
+    LiquidityGateInput, NetEdgeInput, OrderType, PreflightInput, PricerInput, QuantizeConstraints,
+    QuantizePipelineInput, Side,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use soldier_core::venue::{
