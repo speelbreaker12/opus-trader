@@ -41,9 +41,9 @@ pub use dispatch_map::{
     MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
 };
 pub use gate::{
-    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
-    LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
-    expected_slippage_bps_samples, liquidity_gate_reject_total,
+    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
+    LiquidityGateMetadata, LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult,
+    evaluate_liquidity_gate, expected_slippage_bps_samples, liquidity_gate_reject_total,
 };
 pub use gate_outcome::GateOutcome;
 pub use gates::{

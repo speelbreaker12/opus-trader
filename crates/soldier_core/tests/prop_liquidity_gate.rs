@@ -9,8 +9,8 @@
 
 use proptest::prelude::*;
 use soldier_core::execution::{
-    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
-    LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
+    LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
 };
 
 fn intent_class_strategy() -> impl Strategy<Value = GateIntentClass> {
@@ -67,7 +67,7 @@ proptest! {
         let result = evaluate_liquidity_gate(&input, &mut metrics);
 
         prop_assert!(
-            matches!(result, LiquidityGateResult::Allowed { .. }),
+            matches!(result.decision, LiquidityGateDecision::Allowed),
             "CancelOnly should always be Allowed, got {:?}", result
         );
     }
@@ -93,9 +93,7 @@ proptest! {
         let result = evaluate_liquidity_gate(&input, &mut metrics);
 
         prop_assert!(
-            matches!(result, LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2, ..
-            }),
+            matches!(result.decision, LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }),
             "missing L2 should reject with LiquidityGateNoL2, got {:?}", result
         );
     }
@@ -135,9 +133,7 @@ proptest! {
         let result = evaluate_liquidity_gate(&input, &mut metrics);
 
         prop_assert!(
-            matches!(result, LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2, ..
-            }),
+            matches!(result.decision, LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }),
             "empty book side should reject with LiquidityGateNoL2, got {:?}", result
         );
     }
@@ -170,9 +166,7 @@ proptest! {
         let result = evaluate_liquidity_gate(&input, &mut metrics);
 
         prop_assert!(
-            matches!(result, LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2, ..
-            }),
+            matches!(result.decision, LiquidityGateDecision::Rejected { reason: LiquidityGateRejectReason::LiquidityGateNoL2 }),
             "stale snapshot ({}ms old) should reject with LiquidityGateNoL2, got {:?}",
             staleness_ms, result
         );
