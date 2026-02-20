@@ -8,7 +8,7 @@
 
 use soldier_core::risk::{
     PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
-    PendingExposureResult, PendingExposureTerminalOutcome, ReservationId,
+    PendingExposureResult, PendingExposureTerminalOutcome, ReservationId, RiskState,
 };
 
 /// Helper: create a book with one registered instrument.
@@ -845,4 +845,208 @@ fn test_register_instrument_nan_and_infinity_limits_are_fail_closed() {
         } => {}
         other => panic!("zero limit should fail-closed, got {other:?}"),
     }
+}
+
+// ─── PX-4 drain_all tests ────────────────────────────────────────────
+
+#[test]
+fn test_drain_all_clears_single_instrument() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = make_book(INST, 1000.0);
+
+    let r1 = ReservationId::new("r1").unwrap();
+    let r2 = ReservationId::new("r2").unwrap();
+    let r3 = ReservationId::new("r3").unwrap();
+
+    book.reserve(&r1, INST, 0.0, 10.0, &mut metrics);
+    book.reserve(&r2, INST, 0.0, 20.0, &mut metrics);
+    book.reserve(&r3, INST, 0.0, -5.0, &mut metrics);
+
+    let cleared = book.drain_all(RiskState::Kill, &mut metrics);
+    assert_eq!(cleared, 3, "should clear all 3 reservations");
+    assert!(
+        (book.pending_total(INST)).abs() < 1e-12,
+        "pending must be zero"
+    );
+    assert_eq!(book.active_reservations(INST), 0);
+    assert!(
+        (book.global_pending_total()).abs() < 1e-12,
+        "global must be zero"
+    );
+    assert_eq!(metrics.drain_call_total(), 1);
+    assert_eq!(metrics.drain_reservations_cleared_total(), 3);
+}
+
+#[test]
+fn test_drain_all_clears_multi_instrument() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = PendingExposureBook::new(None);
+    book.register_instrument("BTC", Some(500.0));
+    book.register_instrument("ETH", Some(500.0));
+    book.register_instrument("SOL", Some(500.0));
+
+    let r1 = ReservationId::new("btc-1").unwrap();
+    let r2 = ReservationId::new("btc-2").unwrap();
+    let r3 = ReservationId::new("eth-1").unwrap();
+    let r4 = ReservationId::new("sol-1").unwrap();
+    let r5 = ReservationId::new("sol-2").unwrap();
+
+    book.reserve(&r1, "BTC", 0.0, 50.0, &mut metrics);
+    book.reserve(&r2, "BTC", 0.0, -20.0, &mut metrics);
+    book.reserve(&r3, "ETH", 0.0, 30.0, &mut metrics);
+    book.reserve(&r4, "SOL", 0.0, 10.0, &mut metrics);
+    book.reserve(&r5, "SOL", 0.0, 15.0, &mut metrics);
+
+    let cleared = book.drain_all(RiskState::Kill, &mut metrics);
+    assert_eq!(
+        cleared, 5,
+        "should clear all 5 reservations across 3 instruments"
+    );
+    assert!((book.pending_total("BTC")).abs() < 1e-12);
+    assert!((book.pending_total("ETH")).abs() < 1e-12);
+    assert!((book.pending_total("SOL")).abs() < 1e-12);
+    assert_eq!(book.active_reservations("BTC"), 0);
+    assert_eq!(book.active_reservations("ETH"), 0);
+    assert_eq!(book.active_reservations("SOL"), 0);
+    assert!((book.global_pending_total()).abs() < 1e-12);
+    assert_eq!(book.global_active_reservations(), 0);
+    assert_eq!(metrics.drain_call_total(), 1);
+    assert_eq!(metrics.drain_reservations_cleared_total(), 5);
+}
+
+#[test]
+fn test_drain_all_idempotent() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = make_book(INST, 1000.0);
+
+    let r1 = ReservationId::new("r1").unwrap();
+    book.reserve(&r1, INST, 0.0, 42.0, &mut metrics);
+
+    let first = book.drain_all(RiskState::Kill, &mut metrics);
+    assert_eq!(first, 1);
+
+    let second = book.drain_all(RiskState::Kill, &mut metrics);
+    assert_eq!(second, 0, "second drain should return 0 — nothing left");
+
+    assert_eq!(metrics.drain_call_total(), 2, "both calls counted");
+    assert_eq!(
+        metrics.drain_reservations_cleared_total(),
+        1,
+        "only first drain cleared anything"
+    );
+}
+
+#[test]
+fn test_drain_all_allows_fresh_reserves_after() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = make_book(INST, 1000.0);
+
+    let r1 = ReservationId::new("r1").unwrap();
+    book.reserve(&r1, INST, 0.0, 100.0, &mut metrics);
+
+    book.drain_all(RiskState::Kill, &mut metrics);
+    assert_eq!(book.active_reservations(INST), 0);
+
+    // Fresh reserve after drain should work
+    let r2 = ReservationId::new("r2").unwrap();
+    match book.reserve(&r2, INST, 0.0, 50.0, &mut metrics) {
+        PendingExposureResult::Reserved { pending_total, .. } => {
+            assert!((pending_total - 50.0).abs() < 1e-9);
+        }
+        other => panic!("fresh reserve after drain should succeed, got {other:?}"),
+    }
+    assert_eq!(book.active_reservations(INST), 1);
+    assert!((book.global_pending_total() - 50.0).abs() < 1e-9);
+}
+
+#[test]
+fn test_drain_all_rejected_outside_kill_state() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = make_book(INST, 1000.0);
+
+    let r1 = ReservationId::new("r1").unwrap();
+    let r2 = ReservationId::new("r2").unwrap();
+    book.reserve(&r1, INST, 0.0, 50.0, &mut metrics);
+    book.reserve(&r2, INST, 0.0, 30.0, &mut metrics);
+
+    // Drain with Healthy state — must be rejected
+    let cleared = book.drain_all(RiskState::Healthy, &mut metrics);
+    assert_eq!(cleared, 0, "drain outside Kill must return 0");
+    assert_eq!(
+        book.active_reservations(INST),
+        2,
+        "reservations must be intact"
+    );
+    assert!(
+        (book.pending_total(INST) - 80.0).abs() < 1e-9,
+        "pending must be unchanged"
+    );
+    assert!((book.global_pending_total() - 80.0).abs() < 1e-9);
+
+    // Also check Degraded and Maintenance
+    assert_eq!(book.drain_all(RiskState::Degraded, &mut metrics), 0);
+    assert_eq!(book.drain_all(RiskState::Maintenance, &mut metrics), 0);
+    assert_eq!(
+        book.active_reservations(INST),
+        2,
+        "still intact after Degraded/Maintenance"
+    );
+
+    // Metrics: all 3 rejected calls counted, zero reservations cleared
+    assert_eq!(
+        metrics.drain_call_total(),
+        3,
+        "all rejected drain calls must be counted"
+    );
+    assert_eq!(
+        metrics.drain_reservations_cleared_total(),
+        0,
+        "no reservations cleared on rejected drains"
+    );
+}
+
+#[test]
+fn test_drain_all_post_drain_settle_returns_false() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = make_book(INST, 1000.0);
+
+    let r1 = ReservationId::new("r1").unwrap();
+    let r2 = ReservationId::new("r2").unwrap();
+
+    book.reserve(&r1, INST, 0.0, 50.0, &mut metrics);
+    book.reserve(&r2, INST, 0.0, 30.0, &mut metrics);
+
+    book.drain_all(RiskState::Kill, &mut metrics);
+
+    // Post-drain settle: reservation no longer exists — returns false (benign)
+    let settled = book.settle(
+        &r1,
+        INST,
+        PendingExposureTerminalOutcome::Failed,
+        &mut metrics,
+    );
+    assert!(!settled, "settle after drain must return false");
+
+    let settled2 = book.settle(
+        &r2,
+        INST,
+        PendingExposureTerminalOutcome::Canceled,
+        &mut metrics,
+    );
+    assert!(!settled2, "settle after drain must return false");
+
+    // Budget stays at zero — failed settles are budget-neutral
+    assert!(
+        (book.pending_total(INST)).abs() < 1e-12,
+        "pending must remain zero after failed settles"
+    );
+    assert!(
+        (book.global_pending_total()).abs() < 1e-12,
+        "global must remain zero after failed settles"
+    );
+    assert_eq!(
+        metrics.release_total(),
+        0,
+        "failed settles do not increment release_total"
+    );
 }

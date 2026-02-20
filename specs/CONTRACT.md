@@ -1499,6 +1499,13 @@ AT-934
 
 **Hard Rule:** Reservation must occur **before** any network dispatch; release must be triggered from TLSM terminal transitions.
 
+**Emergency Drain (PX-4):** <!-- CSP-062 -->
+<!-- Anchors: drain_all, kill, emergency, pending_exposure, recovery -->
+- A `drain_all()` method MUST exist for kill-switch recovery. It clears ALL reservations across ALL instruments.
+- `drain_all()` MUST refuse to execute unless `RiskState::Kill` is active (fail-closed).
+- Post-drain, `settle()` calls for drained reservation IDs return `false` (benign — budget already zeroed).
+- After drain, normal trading (Healthy) MUST NOT resume until all pre-drain TLSMs have reached terminal state.
+
 **Acceptance Test (REQUIRED):**
 AT-225
 - Given: 5 concurrent opens with identical pre-trade `current_delta=0`.

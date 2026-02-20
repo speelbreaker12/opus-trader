@@ -9,6 +9,8 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::risk::RiskState;
+
 /// Stable idempotency key for pending exposure reservations.
 /// Typically derived from intent_hash. Prevents double-counting on retry.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -87,6 +89,8 @@ pub struct PendingExposureMetrics {
     reserve_idempotent_hit_total: u64,
     reserve_instrument_not_registered_total: u64,
     release_total: u64,
+    drain_call_total: u64,
+    drain_reservations_cleared_total: u64,
 }
 
 impl PendingExposureMetrics {
@@ -118,6 +122,14 @@ impl PendingExposureMetrics {
         self.release_total
     }
 
+    pub fn drain_call_total(&self) -> u64 {
+        self.drain_call_total
+    }
+
+    pub fn drain_reservations_cleared_total(&self) -> u64 {
+        self.drain_reservations_cleared_total
+    }
+
     fn record_reserve_success(&mut self) {
         self.reserve_attempt_total += 1;
         self.reserve_success_total += 1;
@@ -140,6 +152,14 @@ impl PendingExposureMetrics {
 
     fn record_release(&mut self) {
         self.release_total += 1;
+    }
+
+    fn record_drain_call(&mut self) {
+        self.drain_call_total += 1;
+    }
+
+    fn record_drain_cleared(&mut self, count: usize) {
+        self.drain_reservations_cleared_total += count as u64;
     }
 }
 
@@ -181,12 +201,7 @@ struct BookInner {
 /// If `reserve()` is called for an ID that was previously settled (e.g., due to
 /// a signal pipeline ordering violation where cancel races ahead of amend), the
 /// reservation is created with no TLSM to drive its settlement. This budget is
-/// leaked until process restart.
-///
-/// Mitigation options (PX-4):
-/// 1. Track settled IDs in a bounded tombstone set. Reject reserve for tombstoned IDs.
-/// 2. Add `drain_all()` for kill-switch recovery.
-/// 3. Add reservation TTL with automatic expiry.
+/// leaked until `drain_all()` is called (requires Kill state) or process restart.
 ///
 /// Current risk: Low — signal pipeline ordering guarantees cancel-after-reserve.
 ///
@@ -636,6 +651,74 @@ impl PendingExposureBook {
         }
 
         true
+    }
+
+    /// Emergency drain: clear ALL reservations across ALL instruments.
+    ///
+    /// Returns the number of reservations cleared.
+    ///
+    /// # Preconditions
+    ///
+    /// Callers MUST ensure `RiskState::Kill` is active before calling.
+    /// Kill blocks new reserves via `pre_dispatch_gates_ready` in
+    /// `build_open_order_intent_runtime()`, preventing new reservations
+    /// from racing with the drain.
+    ///
+    /// # Post-drain settle behavior
+    ///
+    /// TLSMs that reach terminal state after a drain will call `settle()`
+    /// for reservation IDs that no longer exist. `settle()` returns `false`
+    /// and logs an error — this is benign after a drain. The budget is
+    /// already zeroed, so the failed settle is budget-neutral.
+    ///
+    /// # Safety
+    ///
+    /// This is destructive — all pending exposure tracking is lost.
+    /// After drain, all in-flight TLSMs should be driven to terminal
+    /// state (Kill triggers containment, which eventually terminates them).
+    /// Do NOT resume normal trading (Healthy) until all pre-drain TLSMs
+    /// have settled or been force-failed.
+    pub fn drain_all(&self, risk_state: RiskState, metrics: &mut PendingExposureMetrics) -> usize {
+        metrics.record_drain_call();
+
+        if risk_state != RiskState::Kill {
+            tracing::error!(
+                ?risk_state,
+                "drain_all() called outside Kill state — refusing to drain"
+            );
+            return 0;
+        }
+
+        let mut inner = self.inner.borrow_mut();
+        let mut total_cleared = 0usize;
+
+        for book in inner.instruments.values_mut() {
+            total_cleared += book.reservations.len();
+            book.reservations.clear();
+            book.pending_positive = 0.0;
+            book.pending_negative = 0.0;
+            book.pending_total = 0.0;
+        }
+
+        inner.global_total = 0.0;
+        inner.reservation_instrument.clear();
+
+        tracing::warn!(
+            total_cleared,
+            "drain_all: emergency drain completed — all pending exposure cleared"
+        );
+
+        metrics.record_drain_cleared(total_cleared);
+
+        #[cfg(debug_assertions)]
+        {
+            for book in inner.instruments.values() {
+                assert_invariants(book);
+            }
+            assert_global_consistency(&inner);
+        }
+
+        total_cleared
     }
 }
 
