@@ -63,6 +63,7 @@ Update `plans/prd.json` for the story:
 - `implementation_tests[]` — add all new test functions
 - `enforcing_contract_ats[]` — verify completeness
 - `partial_coverage_notes` — update if any gaps remain
+- `loss_mode.drift_metric` — copy from premortem §7; verify `worst_case` and `fail_closed_cap` still accurate post-implementation and update if not
 
 ### 4) Golden Vectors for Critical Gates
 
