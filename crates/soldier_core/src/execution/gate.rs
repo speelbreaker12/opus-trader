@@ -96,33 +96,40 @@ pub enum LiquidityGateRejectReason {
     ExpectedSlippageTooHigh,
 }
 
+/// Operational data from the book walk — present on both allow and reject.
+///
+/// Named `Metadata` (not `Metrics`) to distinguish from `LiquidityGateMetrics`
+/// which tracks counters. Always use explicit field syntax when constructing;
+/// `Default` is not derived so the compiler enforces exhaustive field coverage
+/// when new fields are added.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiquidityGateMetadata {
+    /// Computed WAP (if book walk was performed).
+    pub wap: Option<f64>,
+    /// Computed slippage in bps (if book walk was performed).
+    pub slippage_bps: Option<f64>,
+    /// Total visible depth within the slippage budget.
+    pub fillable_qty: Option<f64>,
+    /// Maximum quantity allowed by the gate (for risk-reducing clamps).
+    pub allowed_qty: Option<f64>,
+}
+
+/// Decision from the Liquidity Gate (allow or reject with reason).
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiquidityGateDecision {
+    /// Intent is allowed to proceed.
+    Allowed,
+    /// Intent is rejected.
+    Rejected { reason: LiquidityGateRejectReason },
+}
+
 /// Result of the Liquidity Gate evaluation.
 #[derive(Debug, Clone, PartialEq)]
-pub enum LiquidityGateResult {
-    /// Intent is allowed to proceed.
-    Allowed {
-        /// Computed WAP (if book walk was performed).
-        wap: Option<f64>,
-        /// Computed slippage in bps (if book walk was performed).
-        slippage_bps: Option<f64>,
-        /// Total visible depth within the slippage budget.
-        fillable_qty: Option<f64>,
-        /// Maximum quantity allowed by the gate (for risk-reducing clamps).
-        allowed_qty: Option<f64>,
-    },
-    /// Intent is rejected.
-    Rejected {
-        /// Rejection reason.
-        reason: LiquidityGateRejectReason,
-        /// Computed WAP (if available).
-        wap: Option<f64>,
-        /// Computed slippage in bps (if available).
-        slippage_bps: Option<f64>,
-        /// Total visible depth within the slippage budget.
-        fillable_qty: Option<f64>,
-        /// Maximum quantity allowed by the gate, when computable.
-        allowed_qty: Option<f64>,
-    },
+pub struct LiquidityGateResult {
+    /// Allow/reject decision.
+    pub decision: LiquidityGateDecision,
+    /// Operational data from the book walk.
+    pub metadata: LiquidityGateMetadata,
 }
 
 // --- Metrics -------------------------------------------------------------
@@ -429,12 +436,14 @@ fn reject_with_metrics(
         }
     }
     bump_liquidity_gate_reject(reason, wap, slippage_bps);
-    LiquidityGateResult::Rejected {
-        reason,
-        wap,
-        slippage_bps,
-        fillable_qty,
-        allowed_qty,
+    LiquidityGateResult {
+        decision: LiquidityGateDecision::Rejected { reason },
+        metadata: LiquidityGateMetadata {
+            wap,
+            slippage_bps,
+            fillable_qty,
+            allowed_qty,
+        },
     }
 }
 
@@ -456,11 +465,14 @@ pub fn evaluate_liquidity_gate(
     // CANCEL-only intents are always allowed (AT-421)
     if input.intent_class == GateIntentClass::CancelOnly {
         metrics.record_allowed();
-        return LiquidityGateResult::Allowed {
-            wap: None,
-            slippage_bps: None,
-            fillable_qty: None,
-            allowed_qty: None,
+        return LiquidityGateResult {
+            decision: LiquidityGateDecision::Allowed,
+            metadata: LiquidityGateMetadata {
+                wap: None,
+                slippage_bps: None,
+                fillable_qty: None,
+                allowed_qty: None,
+            },
         };
     }
 
@@ -665,10 +677,13 @@ pub fn evaluate_liquidity_gate(
     }
 
     metrics.record_allowed();
-    LiquidityGateResult::Allowed {
-        wap: Some(wap),
-        slippage_bps: Some(slippage_bps),
-        fillable_qty: Some(fillable_qty),
-        allowed_qty: Some(allowed_qty),
+    LiquidityGateResult {
+        decision: LiquidityGateDecision::Allowed,
+        metadata: LiquidityGateMetadata {
+            wap: Some(wap),
+            slippage_bps: Some(slippage_bps),
+            fillable_qty: Some(fillable_qty),
+            allowed_qty: Some(allowed_qty),
+        },
     }
 }

@@ -4584,6 +4584,177 @@
       }
     },
     {
+      "id": "S6-011",
+      "priority": 100,
+      "phase": 2,
+      "slice": 6,
+      "slice_ref": "Slice 6 — Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "story_ref": "S6.11 — Consolidate duplicate Side enums (PX-3b-side)",
+      "category": "refactor",
+      "description": "Replace InventorySkewSide and PricerSide with the canonical quantize::Side enum. Three identical Buy/Sell enums exist across the execution pipeline; consolidate to one.",
+      "contract_refs": [
+        "§1.3",
+        "§1.4",
+        "§1.4.2"
+      ],
+      "plan_refs": [
+        "Slice 5 S5.1/S5.4",
+        "Slice 6 S6.1"
+      ],
+      "scope": {
+        "touch": [
+          "crates/soldier_core/src/execution/inventory_skew.rs",
+          "crates/soldier_core/src/execution/pricer.rs",
+          "crates/soldier_core/src/execution/mod.rs",
+          "crates/soldier_core/tests/test_inventory_skew.rs",
+          "crates/soldier_core/tests/test_pricer.rs",
+          "crates/soldier_core/tests/test_open_runtime_wiring.rs",
+          "crates/soldier_core/tests/common/mod.rs",
+          "crates/soldier_core/tests/test_rejection_side_effects.rs",
+          "crates/soldier_core/tests/test_intent_determinism.rs",
+          "crates/soldier_core/tests/test_missing_config.rs",
+          "crates/soldier_core/tests/test_intent_id_propagation.rs"
+        ],
+        "create": [],
+        "avoid": []
+      },
+      "acceptance": [
+        "GIVEN InventorySkewSide existed WHEN build completes THEN InventorySkewSide is removed and all references use quantize::Side.",
+        "GIVEN PricerSide existed WHEN build completes THEN PricerSide is removed and all references use quantize::Side.",
+        "GIVEN all existing tests WHEN cargo test runs THEN all pass unchanged (behavioral equivalence)."
+      ],
+      "steps": [
+        "Remove InventorySkewSide enum from inventory_skew.rs; import Side from quantize.",
+        "Update InventorySkewInput.side type to Side.",
+        "Remove PricerSide enum from pricer.rs; import Side from quantize.",
+        "Update PricerInput.side type to Side.",
+        "Update mod.rs re-exports: remove InventorySkewSide and PricerSide.",
+        "Update all test files to use Side instead of InventorySkewSide/PricerSide.",
+        "Run cargo test, clippy, fmt."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "cargo test -p soldier_core"
+      ],
+      "evidence": [
+        "cargo test output showing all tests pass"
+      ],
+      "dependencies": [],
+      "est_size": "XS",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": true,
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [
+        "AT-030",
+        "AT-043",
+        "AT-223",
+        "AT-224"
+      ],
+      "reason_codes": {
+        "type": "",
+        "values": []
+      },
+      "enforcement_point": "DispatcherChokepoint",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [],
+      "loss_mode": {
+        "worst_case": "missed type migration → wrong Buy/Sell direction used in order → incorrect hedge side",
+        "fail_closed_cap": "Rust type system enforces exhaustive match; any missed usage is a compile error caught at build time",
+        "drift_metric": "no new metrics; existing inventory_skew_reject_total and pricer outcome counters cover directional integrity"
+      }
+    },
+    {
+      "id": "S6-012",
+      "priority": 101,
+      "phase": 2,
+      "slice": 6,
+      "slice_ref": "Slice 6 — Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
+      "story_ref": "S6.12 — Decouple LiquidityGateResult decision from metadata (PX-3a)",
+      "category": "refactor",
+      "description": "Split LiquidityGateResult from a flat enum with duplicated fields into struct { decision: LiquidityGateDecision, metadata: LiquidityGateMetadata }. Same pattern as PX-3c MarginGate split.",
+      "contract_refs": [
+        "§1.3"
+      ],
+      "plan_refs": [
+        "Slice 5 S5.1"
+      ],
+      "scope": {
+        "touch": [
+          "crates/soldier_core/src/execution/gate.rs",
+          "crates/soldier_core/src/execution/gate_outcome.rs",
+          "crates/soldier_core/src/execution/open_runtime.rs",
+          "crates/soldier_core/src/execution/mod.rs",
+          "crates/soldier_core/tests/test_liquidity_gate.rs",
+          "crates/soldier_core/tests/test_gate_outcome.rs",
+          "crates/soldier_core/tests/prop_liquidity_gate.rs",
+          "crates/soldier_core/tests/test_missing_config.rs"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/soldier_core/src/execution/pipeline.rs — callsite confirmed no-touch (passes &liquidity_result to from_liquidity, no direct enum matching)"
+        ]
+      },
+      "acceptance": [
+        "GIVEN LiquidityGateResult was a flat enum WHEN refactor completes THEN it is a struct with decision + metadata fields.",
+        "GIVEN gate_outcome.rs only reads reason WHEN it consumes LiquidityGateResult THEN it matches on result.decision only.",
+        "GIVEN open_runtime.rs only reads allowed_qty WHEN it consumes LiquidityGateResult THEN it reads result.metadata.allowed_qty.",
+        "GIVEN all existing tests WHEN cargo test runs THEN all pass (behavioral equivalence)."
+      ],
+      "steps": [
+        "Add LiquidityGateMetadata struct (wap, slippage_bps, fillable_qty, allowed_qty).",
+        "Add LiquidityGateDecision enum (Allowed, Rejected { reason }).",
+        "Change LiquidityGateResult from enum to struct { decision, metadata }.",
+        "Update evaluate_liquidity_gate + reject_with_metrics to construct new types.",
+        "Update gate_outcome.rs::from_liquidity to match on result.decision.",
+        "Update open_runtime.rs to read result.decision + result.metadata.allowed_qty.",
+        "Update mod.rs re-exports.",
+        "Update all test files (test_liquidity_gate.rs, test_gate_outcome.rs, prop_liquidity_gate.rs, test_missing_config.rs).",
+        "Run cargo test, clippy, fmt."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "cargo test -p soldier_core"
+      ],
+      "evidence": [
+        "cargo test output showing all tests pass"
+      ],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": true,
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [
+        "AT-421",
+        "AT-222",
+        "AT-344",
+        "AT-909"
+      ],
+      "reason_codes": {
+        "type": "",
+        "values": []
+      },
+      "enforcement_point": "DispatcherChokepoint",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [],
+      "loss_mode": {
+        "worst_case": "struct split introduces field access bug → liquidity gate decision or metadata lost → wrong dispatch gate outcome",
+        "fail_closed_cap": "exhaustive match on LiquidityGateDecision (Allowed/Rejected); compiler enforces all arms; existing AT suite trips on wrong decision",
+        "drift_metric": "liquidity_gate_reject_total and allowed_qty observability unchanged; metric continuity verified by test suite"
+      }
+    },
+    {
       "id": "S7-000",
       "priority": 100,
       "phase": 2,

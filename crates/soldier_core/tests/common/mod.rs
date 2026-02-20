@@ -5,6 +5,9 @@ use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateIntentClass, GateResults, GateStep,
     IntentPipelineInput, L2BookSnapshot, L2Level, LiquidityGateInput, NetEdgeInput, OrderType,
     PreflightInput, PricerInput, PricerSide, QuantizeConstraints, QuantizePipelineInput, Side,
+    ChokeIntentClass, GateIntentClass, GateResults, IntentPipelineInput, L2BookSnapshot, L2Level,
+    LiquidityGateInput, NetEdgeInput, OrderType, PreflightInput, PricerInput, QuantizeConstraints,
+    QuantizePipelineInput, Side,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use soldier_core::venue::{
@@ -143,7 +146,7 @@ pub fn base_open_input<'a>() -> IntentPipelineInput<'a> {
             min_edge_usd: 2.0,
             fee_estimate_usd: 2.0,
             qty: 1.0,
-            side: PricerSide::Buy,
+            side: Side::Buy,
         }),
         wal_recorded: true,
         requested_qty: Some(1.0),

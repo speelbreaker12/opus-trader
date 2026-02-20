@@ -36,9 +36,9 @@ pub use dispatch_map::{
     MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
 };
 pub use gate::{
-    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput, LiquidityGateMetrics,
-    LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
-    expected_slippage_bps_samples, liquidity_gate_reject_total,
+    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
+    LiquidityGateMetadata, LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult,
+    evaluate_liquidity_gate, expected_slippage_bps_samples, liquidity_gate_reject_total,
 };
 pub use gate_outcome::GateOutcome;
 pub use gates::{
@@ -52,7 +52,7 @@ pub use group::{
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    InventorySkewSide, evaluate_inventory_skew,
+    evaluate_inventory_skew,
 };
 pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
@@ -73,7 +73,7 @@ pub use preflight::{
     preflight_intent, preflight_reject_total,
 };
 pub use pricer::{
-    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, PricerSide, compute_limit_price,
+    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, compute_limit_price,
 };
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,

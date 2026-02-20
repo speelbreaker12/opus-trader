@@ -2,8 +2,8 @@
 
 use soldier_core::execution::{
     ChokeMetrics, ChokeRejectReason, ChokeResult, GateIntentClass, GateStep, InventorySkewInput,
-    InventorySkewSide, L2BookSnapshot, L2Level, LiquidityGateInput, NetEdgeInput, OpenRuntimeInput,
-    OpenRuntimeMetrics, PricerInput, PricerSide, build_open_order_intent_runtime,
+    L2BookSnapshot, L2Level, LiquidityGateInput, NetEdgeInput, OpenRuntimeInput,
+    OpenRuntimeMetrics, PricerInput, Side, build_open_order_intent_runtime,
 };
 use soldier_core::risk::{
     ExposureBucket, ExposureBudgetInput, MarginGateInput, MarginGateMode, PendingExposureBook,
@@ -55,7 +55,7 @@ fn base_open_input() -> OpenRuntimeInput {
             current_delta: 0.0,
             pending_delta: 0.0,
             delta_limit: Some(100.0),
-            side: InventorySkewSide::Buy,
+            side: Side::Buy,
             min_edge_usd: 9.0,
             net_edge_usd: 10.0,
             limit_price: 100.0,
@@ -69,7 +69,7 @@ fn base_open_input() -> OpenRuntimeInput {
             min_edge_usd: 9.0,
             fee_estimate_usd: 2.0,
             qty: 1.0,
-            side: PricerSide::Buy,
+            side: Side::Buy,
         },
         exposure_budget_input: ExposureBudgetInput {
             current_btc_delta_usd: 0.0,
@@ -269,9 +269,9 @@ fn test_runtime_wiring_inventory_skew_can_recover_initial_net_edge_reject() {
     let mut input = base_open_input();
     input.current_delta = 100.0;
     input.liquidity_input.is_buy = false;
-    input.inventory_skew_input.side = InventorySkewSide::Sell;
+    input.inventory_skew_input.side = Side::Sell;
     input.net_edge_input.min_edge_usd = Some(11.0);
-    input.pricer_input.side = PricerSide::Sell;
+    input.pricer_input.side = Side::Sell;
     input.pricer_input.min_edge_usd = 11.0;
 
     let pending_book = make_pending_book(200.0);

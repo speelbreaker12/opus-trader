@@ -13,14 +13,14 @@ use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, build_order_intent,
 };
 use soldier_core::execution::{
-    GateIntentClass, LiquidityGateInput, LiquidityGateMetrics, LiquidityGateRejectReason,
-    LiquidityGateResult, evaluate_liquidity_gate,
+    GateIntentClass, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
+    LiquidityGateRejectReason, evaluate_liquidity_gate,
 };
 use soldier_core::execution::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
 };
 use soldier_core::execution::{
-    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, PricerSide, compute_limit_price,
+    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, compute_limit_price,
 };
 use soldier_core::execution::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, Side, quantize,
@@ -227,10 +227,9 @@ fn test_missing_l2_book_fails_closed() {
 
     assert!(
         matches!(
-            result,
-            LiquidityGateResult::Rejected {
-                reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-                ..
+            result.decision,
+            LiquidityGateDecision::Rejected {
+                reason: LiquidityGateRejectReason::LiquidityGateNoL2
             }
         ),
         "Missing L2 book must fail-closed with LiquidityGateNoL2"
@@ -248,7 +247,7 @@ fn test_zero_qty_pricer_fails_closed() {
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
         qty: 0.0, // invalid
-        side: PricerSide::Buy,
+        side: Side::Buy,
     };
 
     let result = compute_limit_price(&input, &mut m);

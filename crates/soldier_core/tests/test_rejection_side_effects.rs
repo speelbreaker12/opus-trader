@@ -22,7 +22,7 @@ use soldier_core::execution::{
 };
 use soldier_core::execution::{OrderType, PreflightInput, PreflightMetrics, PreflightResult};
 use soldier_core::execution::{
-    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, PricerSide, compute_limit_price,
+    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, compute_limit_price,
 };
 use soldier_core::execution::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, Side, quantize,
@@ -243,7 +243,7 @@ fn test_rejected_pricer_no_side_effects() {
         min_edge_usd: 5.0,
         fee_estimate_usd: 2.0,
         qty: 1.0,
-        side: PricerSide::Buy,
+        side: Side::Buy,
     };
     // net = 3 - 2 = 1 < min_edge=5 → reject
 
