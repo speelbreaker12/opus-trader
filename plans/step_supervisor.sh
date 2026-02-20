@@ -27,6 +27,7 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ARTIFACTS_ROOT="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
 WF_STEP="$ROOT/plans/wf_step.sh"
 PRD_SET_PASS="$ROOT/plans/prd_set_pass.sh"
+RECON_MODE=0
 
 usage() {
   cat >&2 <<'EOF'
@@ -38,6 +39,9 @@ Commands:
   run       Validate the next step and write receipt via wf_step.sh.
   status    Show receipt chain for story.
   reset     Delete all receipts for story.
+
+Options:
+  --recon   Reconciliation mode (audit already-passing stories)
 
 Environment:
   STEP_SUPERVISOR_BASE_BRANCH  Base branch for review diffs (required for prompt)
@@ -63,6 +67,7 @@ shift 2
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --recon) RECON_MODE=1; shift ;;
     --root) ROOT="$2"; shift 2 ;;
     --artifacts-root) ARTIFACTS_ROOT="$2"; shift 2 ;;
     --wf-step) WF_STEP="$2"; shift 2 ;;
@@ -156,9 +161,43 @@ print_next() {
 
 prompt_file_for_step() {
   local step="$1"
-  local f="$PROMPTS_DIR/$step.md"
+  local f
+  if [[ "$RECON_MODE" -eq 1 ]]; then
+    f="$PROMPTS_DIR/recon/$step.md"
+  else
+    f="$PROMPTS_DIR/$step.md"
+  fi
   [[ -f "$f" ]] || die "missing prompt file: $f"
   echo "$f"
+}
+
+# Detect whether recon should stay GREEN or escalate to YELLOW (full requirements).
+# GREEN: no code changes since cycle1 → recon prompts + relaxed validation
+# YELLOW: code changed after cycle1 → normal prompts + full validation
+should_use_recon_mode() {
+  local step="$1" story="$2"
+  # Only relevant for recon mode
+  [[ "$RECON_MODE" -eq 1 ]] || return 1
+
+  # Steps before fix: always use recon mode
+  case "$step" in
+    preflight|implement|self_review|cycle1|fix) return 0 ;;
+  esac
+
+  # Steps after fix: check if HEAD changed since cycle1
+  local cycle1_receipt="$RECEIPT_DIR/$story/03_cycle1.json"
+  if [[ -f "$cycle1_receipt" ]]; then
+    local cycle1_head
+    cycle1_head="$(jq -r '.head_sha // ""' "$cycle1_receipt" 2>/dev/null)"
+    local current_head
+    current_head="$(git rev-parse HEAD 2>/dev/null)"
+    if [[ -n "$cycle1_head" && "$cycle1_head" != "$current_head" ]]; then
+      echo "SUPERVISOR: HEAD changed since cycle1 ($cycle1_head → $current_head)" >&2
+      echo "SUPERVISOR: escalating to full review requirements (YELLOW path)" >&2
+      return 1  # Don't use recon mode → full requirements
+    fi
+  fi
+  return 0  # GREEN path → use recon mode
 }
 
 substitute_vars() {
@@ -170,6 +209,7 @@ substitute_vars() {
   text="${text//\$\{STORY_ID\}/$STORY}"
   text="${text//\$\{BASE_BRANCH\}/$base_branch}"
   text="${text//\$\{HEAD\}/$head_sha}"
+  text="${text//\$\{RECON_MODE\}/$RECON_MODE}"
   echo "$text"
 }
 
@@ -198,7 +238,11 @@ run_step() {
   # Run wf_step.sh (mechanical validation + receipt write)
   echo "STEP_SUPERVISOR: validating step '$step' for $STORY..."
   local rc=0
-  "$WF_STEP" "$STORY" "$step" || rc=$?
+  if should_use_recon_mode "$step" "$STORY"; then
+    WF_RECON_MODE=1 "$WF_STEP" "$STORY" "$step" || rc=$?
+  else
+    "$WF_STEP" "$STORY" "$step" || rc=$?
+  fi
 
   case "$rc" in
     0) ;;  # Success
@@ -266,6 +310,7 @@ case "$CMD" in
     f="$(prompt_file_for_step "$step")"
     echo "# NEXT STEP: $step"
     echo "# PROMPT FILE: $f"
+    [[ "$RECON_MODE" -eq 1 ]] && echo "# MODE: reconciliation"
     echo
     content="$(cat "$f")"
     substitute_vars "$content"

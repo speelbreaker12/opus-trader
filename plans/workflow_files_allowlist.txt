@@ -103,6 +103,14 @@ plans/verify_gate_contract_check.sh
 plans/wf_step.sh
 plans/workflow_contract_gate.sh
 plans/workflow_contract_map.json
+plans/step_prompts/recon/cycle1.md
+plans/step_prompts/recon/cycle2.md
+plans/step_prompts/recon/fix.md
+plans/step_prompts/recon/implement.md
+plans/step_prompts/recon/preflight.md
+plans/step_prompts/recon/resolution.md
+plans/step_prompts/recon/self_review.md
+plans/step_prompts/recon/verify_full.md
 plans/workflow_files_allowlist.txt
 plans/workflow_quick_step.sh
 plans/workflow_verify.sh

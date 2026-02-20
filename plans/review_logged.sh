@@ -20,6 +20,7 @@ Options:
   --commit REF     Review a specific commit (default: HEAD)
   --base REF       Review diff from base to HEAD
   --uncommitted    Review uncommitted changes
+  --files LIST     Review specific files (space/comma-separated paths; for recon audits)
   --title TITLE    Review title (default: "<STORY_ID>: <TOOL> review")
   --out-root PATH  Override artifact root (default: artifacts/story)
 
@@ -30,6 +31,7 @@ Examples:
   plans/review_logged.sh S1-004 --tool codex --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool opus --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
+  plans/review_logged.sh S1-004 --tool opus --files "crates/soldier_core/src/gate.rs crates/soldier_core/src/risk.rs"
 EOF
 }
 
@@ -53,6 +55,7 @@ tool=""
 mode="commit"
 commit="HEAD"
 base=""
+files_list=""
 title=""
 out_root="${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}"
 extra=()
@@ -76,6 +79,11 @@ while [[ $# -gt 0 ]]; do
     --uncommitted)
       mode="uncommitted"
       shift 1
+      ;;
+    --files)
+      mode="files"
+      files_list="${2:?missing files list}"
+      shift 2
       ;;
     --title)
       title="${2:?missing title}"
@@ -144,6 +152,25 @@ head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
 cmd=()
 prompt_tmp=""
 
+# ── Build file contents for --files mode ────────────────────────────
+files_context=""
+if [[ "$mode" == "files" && -n "$files_list" ]]; then
+  # Normalize: replace commas with spaces
+  normalized_files="${files_list//,/ }"
+  for f in $normalized_files; do
+    if [[ -f "$f" ]]; then
+      files_context+="
+=== FILE: $f ===
+$(cat "$f")
+"
+    else
+      files_context+="
+=== FILE: $f === (NOT FOUND)
+"
+    fi
+  done
+fi
+
 case "$tool" in
   codex)
     cmd=("codex" "review" "--title" "$title")
@@ -151,6 +178,13 @@ case "$tool" in
       commit)      cmd+=("--commit" "$commit") ;;
       base)        cmd+=("--base" "$base") ;;
       uncommitted) cmd+=("--uncommitted") ;;
+      files)
+        # codex doesn't natively support --files; use --uncommitted with file context
+        # Build a temp file containing file contents as pseudo-diff for codex
+        files_tmp="$(mktemp)"
+        printf '%s' "$files_context" > "$files_tmp"
+        cmd+=("--uncommitted")
+        ;;
     esac
     if [[ ${#extra[@]} -gt 0 ]]; then
       cmd+=("${extra[@]}")
@@ -178,11 +212,17 @@ case "$tool" in
       uncommitted)
         diff_context="$(git diff HEAD 2>/dev/null || true)"
         ;;
+      files)
+        diff_context="$files_context"
+        ;;
     esac
+
+    review_context_label="Diff"
+    [[ "$mode" == "files" ]] && review_context_label="Files to review"
 
     review_prompt="You are a senior code reviewer for story $story on branch $branch (HEAD: $head_sha).
 
-Review the following diff and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
+Review the following ${review_context_label,,} and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
 
 Focus on:
 - Correctness bugs and logic errors
@@ -200,9 +240,9 @@ For each finding, include:
 
 Title: $title
 
-Diff:
+${review_context_label}:
 \`\`\`
-${diff_context:-(no diff available)}
+${diff_context:-(no content available)}
 \`\`\`"
 
     prompt_tmp="$(mktemp)"
@@ -219,7 +259,7 @@ esac
 
 transcript_tmp="$(mktemp)"
 cleanup() {
-  rm -f "$transcript_tmp" ${prompt_tmp:+"$prompt_tmp"}
+  rm -f "$transcript_tmp" ${prompt_tmp:+"$prompt_tmp"} ${files_tmp:+"$files_tmp"}
 }
 trap cleanup EXIT
 
@@ -254,6 +294,9 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
   fi
   if [[ "$mode" == "base" ]]; then
     echo "- Base ref: $base"
+  fi
+  if [[ "$mode" == "files" ]]; then
+    echo "- Files: $files_list"
   fi
   if [[ "$tool" == "opus" ]]; then
     echo "- Model: claude-opus-4-6"

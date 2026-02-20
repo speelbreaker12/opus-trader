@@ -129,6 +129,7 @@ Notes:
 - Never edit a worktree while it is running `full`.
 - Story review evidence MUST be SHA-consistent: self review, both external reviews, and resolution file must all target the same `REVIEW_SHA`.
 - If `HEAD` changes after review starts, discard partial review artifacts and regenerate the full review set for the chosen SHA.
+- **Reconciliation mode**: For already-passing stories (`passes=true`), the same receipt chain runs with relaxed `implement` (no diff required) and `cycle2` (1 review artifact sufficient on GREEN path) checks. Activate via `WF_RECON_MODE=1` or `step_supervisor.sh --recon`. See `docs/PRD_STORY_WORKFLOW.md` § Reconciliation Mode for full details.
 
 ### Recommended (non-blocking)
 - Keep a single commit per story (use `--amend` until full is green) to keep review/merge simple.
