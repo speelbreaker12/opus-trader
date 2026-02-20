@@ -99,10 +99,10 @@ pub enum LiquidityGateRejectReason {
 /// Operational data from the book walk — present on both allow and reject.
 ///
 /// Named `Metadata` (not `Metrics`) to distinguish from `LiquidityGateMetrics`
-/// which tracks counters. All fields are `Option<f64>`; use explicit field
-/// syntax when constructing — do not rely on `Default::default()` to avoid
-/// silently dropping computed values.
-#[derive(Debug, Clone, PartialEq, Default)]
+/// which tracks counters. Always use explicit field syntax when constructing;
+/// `Default` is not derived so the compiler enforces exhaustive field coverage
+/// when new fields are added.
+#[derive(Debug, Clone, PartialEq)]
 pub struct LiquidityGateMetadata {
     /// Computed WAP (if book walk was performed).
     pub wap: Option<f64>,
@@ -462,7 +462,12 @@ pub fn evaluate_liquidity_gate(
         metrics.record_allowed();
         return LiquidityGateResult {
             decision: LiquidityGateDecision::Allowed,
-            metadata: LiquidityGateMetadata::default(),
+            metadata: LiquidityGateMetadata {
+                wap: None,
+                slippage_bps: None,
+                fillable_qty: None,
+                allowed_qty: None,
+            },
         };
     }
 

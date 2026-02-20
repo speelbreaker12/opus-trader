@@ -188,6 +188,10 @@ pub fn build_open_order_intent_runtime(
                 evaluate_liquidity_gate(&input.liquidity_input, &mut runtime_metrics.liquidity);
             gate_results.liquidity_gate_passed =
                 matches!(liquidity_result.decision, LiquidityGateDecision::Allowed);
+            // allowed_qty is extracted regardless of decision: on reject the gate
+            // is still the authority on how much qty was fillable, and the value
+            // is used for observability. Dispatch is gated by liquidity_gate_passed
+            // downstream, so setting max_dispatch_qty on a rejection is harmless.
             if let Some(qty) = liquidity_result.metadata.allowed_qty {
                 max_dispatch_qty = Some(qty);
             }
