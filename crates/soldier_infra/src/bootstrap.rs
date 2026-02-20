@@ -273,6 +273,7 @@ mod tests {
     struct TempDirGuard(PathBuf);
     impl Drop for TempDirGuard {
         fn drop(&mut self) {
+            #[allow(clippy::collapsible_if)]
             if self.0.exists() {
                 if let Err(e) = std::fs::remove_dir_all(&self.0) {
                     tracing::warn!(
