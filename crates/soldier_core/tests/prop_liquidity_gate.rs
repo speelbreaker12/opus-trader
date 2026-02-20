@@ -10,7 +10,7 @@
 use proptest::prelude::*;
 use soldier_core::execution::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
-    LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    LiquidityGateMetrics, LiquidityGateRejectReason, evaluate_liquidity_gate,
 };
 
 fn intent_class_strategy() -> impl Strategy<Value = GateIntentClass> {
