@@ -7,13 +7,15 @@
 
 ## Overview
 
-Every PRD story follows 9 receipt-tracked steps. No shortcuts.
+Every PRD story follows 9 steps, enforced by 8 progressive receipts and 1 final pass gate. No shortcuts.
 
-**Receipt tracking (`plans/wf_step.sh`)**: Each step validates that prior steps completed, checks step-specific inputs, and writes a JSON receipt to `.wf/receipts/<STORY_ID>/`. An agent can't skip to Step 7 and backfill — each step refuses to start without its prerequisites.
+**Receipt tracking (`plans/wf_step.sh`)**: Steps 1-8 each validate prerequisites and write a JSON receipt to `.wf/receipts/<STORY_ID>/`. Step 9 is validation-only (no receipt). An agent can't skip to Step 7 and backfill — each step refuses to start without its prerequisites.
 
 **Enforcement**:
 1. **Receipt tracking** (`wf_step.sh`): Ordering + step-specific input validation
 2. **Final chokepoint** (`prd_set_pass.sh`): Receipts + verify artifacts + review evidence + contract review
+
+**Step numbering**: Human-readable steps are 1-indexed (Step 1 to 9). Receipt filenames are 0-indexed (`00_preflight.json` to `07_verify_full.json`). The `step_index` field in receipt JSON matches the 0-based filename prefix.
 
 ```
 Step 1: PREFLIGHT
@@ -27,7 +29,7 @@ Step 2: IMPLEMENT
 Step 3: SELF-REVIEW
   5-skill review stack: /pr-review → /failure-mode-review →
     /strategic-failure-review → /contract-review → /devils-advocate
-  3.1: Fix issues and rerun reviews
+  3.1: Fix issues and rerun reviews (convention — no separate receipt)
   ↓ receipt: 02_self_review.json (artifacts in self_review/)
 
 Step 4: CYCLE 1 REVIEW
@@ -36,11 +38,11 @@ Step 4: CYCLE 1 REVIEW
 
 Step 5: FIX
   Address P0/P1/P2 findings + verify.sh quick
-  ↓ receipt: 04_fix.json (non-artifact code changed, or 0 findings)
+  ↓ receipt: 04_fix.json (non-artifact code changed, or 0 findings detected)
 
 Step 6: CYCLE 2 REVIEW
   Adversarial review on fixed code (sequential, not parallel)
-  6.1: Code review expert + thinking expert comprehensive audit
+  6.1: Code review expert + thinking expert audit (convention — no separate receipt)
   ↓ receipt: 05_cycle2.json (at least 2 review artifacts total)
 
 Step 7: RESOLUTION
@@ -49,12 +51,12 @@ Step 7: RESOLUTION
   ↓ receipt: 06_resolution.json (BLOCKING=0, all findings dispositioned)
 
 Step 8: VERIFY FULL
-  verify.sh full
+  verify.sh full (generates verify.meta.json automatically)
   ↓ receipt: 07_verify_full.json (mode=full + HEAD match in verify.meta.json)
 
-Step 9: PASS
+Step 9: PASS (no receipt — final gate only)
   prd_set_pass.sh flips passes=true
-  ↓ no receipt — all 8 receipts + verify artifacts + review for HEAD
+  ↓ validates: all 8 receipts + verify artifacts + review for HEAD
     + contract review PASS + fail-closed coverage + loss_mode fields
 ```
 
@@ -76,15 +78,13 @@ Each receipt is a JSON file in `.wf/receipts/<STORY_ID>/`:
 }
 ```
 
-### BASE_HEAD principle
-
-The `preflight` step records HEAD as the baseline for all subsequent diffs. Every diff uses `BASE_HEAD..HEAD` (the full story change), never `HEAD~1..HEAD` (single commit). This prevents hiding risky changes behind cosmetic follow-up commits.
+**Note on BASE_HEAD**: The preflight receipt's `head_sha` field serves as `BASE_HEAD` — the baseline for all subsequent diffs. The code reads it via `get_base_head()` which extracts `head_sha` from `00_preflight.json`. No separate `base_head` field is needed because only the preflight step records the baseline; all other steps record their own HEAD at completion time.
 
 ### Ordering enforcement
 
 Each step validates:
 1. All previous receipts exist (progressive chokepoint)
-2. Step-specific inputs are ready
+2. Step-specific inputs are ready (artifact existence, code changes, etc.)
 
 If any check fails, the step is **blocked immediately** — not deferred to pass-flip time.
 
@@ -97,12 +97,39 @@ plans/wf_step.sh <STORY_ID> <step>
 # Check chain status
 plans/wf_step.sh <STORY_ID> --status
 
-# Reset chain (start over — requires confirmation)
+# Reset chain (deletes receipts only — does NOT touch artifacts or prd.json)
 plans/wf_step.sh <STORY_ID> --reset --yes
 
 # Dry run (validate without writing)
 plans/wf_step.sh <STORY_ID> <step> --dry-run
 ```
+
+**Failure recovery**: If a step fails mid-execution, fix the issue and re-run the same step. `--reset --yes` deletes all receipt files in `.wf/receipts/<STORY_ID>/` — it does NOT delete review artifacts, verify artifacts, or modify `prd.json`. After reset, you must re-run all steps from preflight.
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|-----------|
+| **TRIP test** | Test where the safety gate fires (rejects/blocks). Proves the gate catches the bad case. |
+| **NON-TRIP test** | Test where the safety gate allows passage. Proves the gate doesn't over-block. |
+| **Fail-closed** | Default to the safe/restrictive state when uncertain. Unknown TradingMode → ReduceOnly. Missing config → reject. NaN/Inf → reject. |
+| **STOPLIGHT** | Premortem readiness signal. GREEN = ready to implement. YELLOW = proceed with debt register. RED = stop, resolve blockers first. |
+| **Golden vectors** | Table-driven tests with 10-30 input rows. Each row catches a specific wrong implementation. |
+| **BASE_HEAD** | The HEAD SHA recorded during preflight. All diffs use `BASE_HEAD..HEAD` to show the full story change. |
+| **Skills** (`/pr-review`, `/failure-mode-review`, etc.) | Claude Code skill commands defined in the `SKILLS/` directory. Invoked by typing the slash command in a Claude Code session. |
+
+### Severity mapping
+
+Review skills output P0-P3 severity. The resolution template uses BLOCKING/MAJOR/MEDIUM. The mapping:
+
+| Review severity | Resolution severity | Rule |
+|----------------|-------------------|------|
+| **P0** (Critical) | **BLOCKING** | Must fix before Step 5 (Fix). Blocks merge. |
+| **P1** (High) | **MAJOR** | Must fix before Step 7 (Resolution). |
+| **P2** (Medium) | **MEDIUM** | Must fix or defer to Debt Register with justification. |
+| **P3** (Low) | **MINOR** | Informational. Fix optional. |
 
 ---
 
@@ -238,7 +265,7 @@ Debt Register (required if YELLOW):
 **Command:** `plans/wf_step.sh <STORY-ID> self_review`
 **Validates:** Self-review artifacts exist in `artifacts/story/<ID>/self_review/`
 
-Run the full 5-skill review stack on your implementation:
+Run the full 5-skill review stack on your implementation (these are Claude Code slash commands defined in `SKILLS/`):
 
 1. `/pr-review` — SOLID, architecture, removal candidates, security
 2. `/failure-mode-review` — interface crossings, state transitions, what-if analysis
@@ -257,6 +284,8 @@ Run the full 5-skill review stack on your implementation:
 
 Address all P0/P1/P2 findings from the 5-skill stack, then rerun reviews on the fixed code to confirm resolution. Iterate until clean.
 
+**Note:** Step 3.1 is convention-based guidance, not a separate receipt-tracked step. The receipt for Step 3 validates that self-review artifacts exist; the fix-and-rerun loop is the builder's responsibility.
+
 ---
 
 ## Step 4: Cycle 1 Review
@@ -267,10 +296,9 @@ Address all P0/P1/P2 findings from the 5-skill stack, then rerun reviews on the 
 
 External review of current code. Use `--base` against integration branch for diffs, not `--commit HEAD`.
 
-**Commands:**
+**Command:**
 ```bash
 plans/review_logged.sh <STORY-ID> --tool codex --base <integration_branch>
-plans/codex_review_logged.sh <STORY-ID> --base <integration_branch>
 ```
 
 **Artifact:** `artifacts/story/<STORY-ID>/codex/<timestamp>_review.md`
@@ -287,7 +315,7 @@ Address all actionable findings (P0/P1/P2) from cycle 1 review.
 
 **Safeguards:**
 - Must change at least one non-artifact file (excludes `artifacts/`, `.wf/`, `plans/prd.json`, `plans/progress*`)
-- Exception: if cycle1 had 0 findings, fix step passes with empty diff (no deadlock on perfect reviews)
+- Exception: if cycle1 had 0 findings, fix step passes with empty diff (no deadlock on perfect reviews). This is **programmatically enforced** — `wf_step.sh` scans review artifacts for patterns like "0 findings", "no issues", "P0: 0.*P1: 0" using word-boundary-aware regex.
 - Run `verify.sh quick` after fixes
 
 ---
@@ -305,6 +333,8 @@ Adversarial review of FIXED code — stress/edge cases. Must be sequential (not 
 ### Step 6.1: Code review expert + thinking expert audit
 
 After the external adversarial review, run a comprehensive audit using the code review expert and thinking expert skills on the implementation. This catches structural and reasoning-level issues that tool-based reviews may miss.
+
+**Note:** Step 6.1 is convention-based guidance, not a separate receipt-tracked step. The receipt for Step 6 validates artifact count; the expert audit is the builder's responsibility.
 
 ---
 
@@ -329,7 +359,7 @@ Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 ```
 | ID | Severity | Location | Description | Disposition | Evidence |
 |----|----------|----------|-------------|-------------|----------|
-| F-1 | P1 | file.rs:42 | Description | FIXED | commit sha |
+| F-1 | P1/MAJOR | file.rs:42 | Description | FIXED | commit sha |
 ```
 
 ### Step 7.1: Write postmortem
@@ -337,6 +367,8 @@ Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 Constraint-first postmortem while the story is fresh. The next story's premortem §9 reads this. Use the template at `plans/postmortem_template.md`.
 
 **Artifact:** `reviews/postmortems/<STORY-ID>_postmortem.md`
+
+**Note:** Postmortems live in `reviews/postmortems/` (not `artifacts/story/`) because they are cross-story reference documents read by future premortems, not story-scoped artifacts.
 
 **Sections:**
 
@@ -361,24 +393,46 @@ Constraint-first postmortem while the story is fresh. The next story's premortem
 
 Must produce `VERIFY OK (mode=full)`. Run after all reviews and fixes are complete.
 
+`verify.sh` automatically generates `verify.meta.json` in `artifacts/verify/<run_id>/`:
+
+```json
+{
+  "mode": "full",
+  "head_sha": "abc123...",
+  "timestamp_utc": "2026-02-19T17:00:00Z"
+}
+```
+
 ---
 
 ## Step 9: Pass (final gate)
 
 **Command:** `plans/wf_step.sh <STORY-ID> pass` → `plans/prd_set_pass.sh <STORY-ID> true`
-**No receipt written** — flips `passes=true` in `plans/prd.json`
+**No receipt written** — validation-only step that flips `passes=true` in `plans/prd.json`
+
+### Required artifact: `contract_review.json`
+
+Generated during or after verify.sh full, placed in the verify artifacts directory:
+`artifacts/verify/<run_id>/contract_review.json`
+
+```json
+{ "decision": "PASS" }
+```
+
+This is a human/supervisor judgment artifact — not auto-generated. Create it after confirming contract alignment.
 
 ### Gate checks (all must pass)
 
-| Gate | What it checks | Exit code |
-|------|---------------|-----------|
-| **Receipts** | All 8 receipts exist | 4 |
-| **Verify output** | `verify.sh full` passed, HEAD match | 4 |
-| **Contract review** | `contract_review.json` with `decision=PASS` | 4 |
-| **Review evidence** | At least one review artifact for current HEAD | 4 |
-| **AT ownership** | `enforcing_contract_ats` non-empty | 6 |
-| **Fail-closed coverage** | TRIP + NON-TRIP name patterns in test files | 8 |
-| **Loss mode** | `worst_case`, `fail_closed_cap`, `drift_metric` populated | 9 |
+| Gate | What it checks | Exit code | Meaning |
+|------|---------------|-----------|---------|
+| **Receipts** | All 8 receipts exist (steps 1-8) | 4 | Process incomplete — missing workflow step |
+| **Verify output** | `verify.sh full` passed, HEAD match | 4 | Code quality gate failed or HEAD drifted |
+| **Contract review** | `contract_review.json` with `decision=PASS` | 4 | Contract alignment not confirmed |
+| **Review evidence** | At least one review artifact for current HEAD | 4 | No review covers the final code |
+| **AT ownership** | `enforcing_contract_ats` non-empty | 6 | Story metadata incomplete — no AT claims |
+| **Enforcement point** | `enforcement_point` populated | 6 | Story metadata incomplete — no enforcement point |
+| **Fail-closed coverage** | TRIP + NON-TRIP name patterns in test files | 8 | Test naming conventions not met |
+| **Loss mode** | `worst_case`, `fail_closed_cap`, `drift_metric` populated | 9 | Risk fields unpopulated in PRD |
 
 ---
 
@@ -391,7 +445,7 @@ plans/wf_step.sh <ID> <step>
 # Check chain status
 plans/wf_step.sh <ID> --status
 
-# Reset chain (requires confirmation)
+# Reset chain (deletes receipts only, requires confirmation)
 plans/wf_step.sh <ID> --reset --yes
 
 # Dry run (validate without writing)
