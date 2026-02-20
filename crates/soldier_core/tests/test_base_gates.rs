@@ -67,8 +67,8 @@ fn test_base_gates_all_pass_returns_proof() {
     assert!(result.is_ok(), "all gates should pass: {result:?}");
 
     let proof = result.unwrap();
-    assert!(!proof.dispatch_auth_short_circuit);
-    assert_eq!(proof.lifecycle_intent, LifecycleIntent::Open);
+    assert!(!proof.dispatch_auth_short_circuit());
+    assert_eq!(proof.lifecycle_intent(), LifecycleIntent::Open);
 
     // Legacy bools: all true
     let legacy = BaseGatesLegacy::from(&proof);
@@ -96,7 +96,16 @@ fn test_base_gates_gate1_dispatch_auth_open_degraded_short_circuits() {
         "dispatch auth short-circuit returns Ok: {result:?}"
     );
     let proof = result.unwrap();
-    assert!(proof.dispatch_auth_short_circuit);
+    assert!(proof.dispatch_auth_short_circuit());
+    // Short-circuit accessors return None for placeholder values
+    assert!(
+        proof.quantized().is_none(),
+        "short-circuit proof should not expose placeholder quantized values"
+    );
+    assert!(
+        proof.fee_evaluation().is_none(),
+        "short-circuit proof should not expose placeholder fee evaluation"
+    );
 }
 
 #[test]
@@ -112,8 +121,8 @@ fn test_base_gates_gate1_cancel_only_short_circuits() {
         "CancelOnly short-circuit returns Ok: {result:?}"
     );
     let proof = result.unwrap();
-    assert!(proof.dispatch_auth_short_circuit);
-    assert_eq!(proof.lifecycle_intent, LifecycleIntent::Cancel);
+    assert!(proof.dispatch_auth_short_circuit());
+    assert_eq!(proof.lifecycle_intent(), LifecycleIntent::Cancel);
 }
 
 // ─── TRIP: Gate 2 — Preflight ────────────────────────────────────────────
@@ -310,12 +319,10 @@ fn test_base_gates_proof_quantized_values_present() {
     let proof = evaluate_base_gates(&input, &mut metrics).unwrap();
 
     // Quantized qty should be >= min_amount (0.1) since raw_qty is 1.0
+    let quantized = proof.quantized().expect("non-short-circuit proof has quantized values");
+    assert!(quantized.qty_q > 0.0, "quantized qty should be positive");
     assert!(
-        proof.quantized.qty_q > 0.0,
-        "quantized qty should be positive"
-    );
-    assert!(
-        proof.quantized.limit_price_q > 0.0,
+        quantized.limit_price_q > 0.0,
         "quantized price should be positive"
     );
 }
@@ -327,10 +334,10 @@ fn test_base_gates_proof_fee_evaluation_present() {
     let proof = evaluate_base_gates(&input, &mut metrics).unwrap();
 
     // Fee eval should show Fresh staleness since cache is recent
-    assert_eq!(
-        proof.fee_evaluation.staleness,
-        soldier_core::risk::FeeStaleness::Fresh
-    );
+    let fee_eval = proof
+        .fee_evaluation()
+        .expect("non-short-circuit proof has fee evaluation");
+    assert_eq!(fee_eval.staleness, soldier_core::risk::FeeStaleness::Fresh);
 }
 
 // ─── Rejection reason code fidelity ──────────────────────────────────────
@@ -417,7 +424,7 @@ fn test_base_gates_close_no_expiry_passes() {
         result.is_ok(),
         "CLOSE without expiry should pass: {result:?}"
     );
-    assert_eq!(result.unwrap().lifecycle_intent, LifecycleIntent::Close);
+    assert_eq!(result.unwrap().lifecycle_intent(), LifecycleIntent::Close);
 }
 
 #[test]
@@ -432,7 +439,7 @@ fn test_base_gates_hedge_no_expiry_passes() {
         result.is_ok(),
         "HEDGE without expiry should pass: {result:?}"
     );
-    assert_eq!(result.unwrap().lifecycle_intent, LifecycleIntent::Hedge);
+    assert_eq!(result.unwrap().lifecycle_intent(), LifecycleIntent::Hedge);
 }
 
 /// CLOSE + Degraded runs all 6 gates (no dispatch_auth short-circuit).
@@ -453,13 +460,13 @@ fn test_base_gates_close_degraded_evaluates_all_gates() {
     let proof = result.unwrap();
     // Must NOT short-circuit — gates were actually evaluated
     assert!(
-        !proof.dispatch_auth_short_circuit,
+        !proof.dispatch_auth_short_circuit(),
         "CLOSE + Degraded must not short-circuit dispatch auth"
     );
-    assert_eq!(proof.lifecycle_intent, LifecycleIntent::Close);
+    assert_eq!(proof.lifecycle_intent(), LifecycleIntent::Close);
     // gate_outcomes should contain actual evaluations (Preflight, Quantize, etc.)
     assert!(
-        !proof.gate_outcomes.is_empty(),
+        !proof.gate_outcomes().is_empty(),
         "gates should have been evaluated, not short-circuited"
     );
 }
@@ -516,7 +523,7 @@ fn test_base_gates_lifecycle_intent_derivation() {
             "intent_class {intent_class:?} should pass: {result:?}"
         );
         assert_eq!(
-            result.unwrap().lifecycle_intent,
+            result.unwrap().lifecycle_intent(),
             expected_lifecycle,
             "intent_class {intent_class:?} should map to {expected_lifecycle:?}"
         );

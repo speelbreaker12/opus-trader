@@ -104,7 +104,10 @@ pub fn evaluate_intent_pipeline(
     let mut base_metrics = BaseGatesMetrics::new();
     let base_result = evaluate_base_gates(&base_input, &mut base_metrics);
 
-    // Transfer metrics from base gates to pipeline metrics
+    // Transfer metrics from base gates to pipeline metrics.
+    // This is an intentional overwrite, not a merge: IntentPipelineMetrics is created
+    // fresh per call (single-use). Callers must not reuse a metrics instance across
+    // evaluations — each call to evaluate_intent_pipeline() expects a clean metrics struct.
     metrics.preflight = base_metrics.preflight;
     metrics.quantize = base_metrics.quantize;
     metrics.fee = base_metrics.fee;
