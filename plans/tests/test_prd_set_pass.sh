@@ -27,6 +27,20 @@ trap 'rm -rf "$tmp_dir"' EXIT
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
 story_id="WF-001"
+export REQUIRE_RECEIPT_CHAIN=0  # this test validates review + contract gates, not receipt chain
+
+# Compute dynamic diff file references for anti-fabrication cross-reference checks
+_diff_mention=""
+_diff_files_for_expert=""
+if git -C "$ROOT" rev-parse --verify "${head_sha}^" >/dev/null 2>&1; then
+  while IFS= read -r _df; do
+    [[ -n "$_df" ]] || continue
+    _diff_mention+="Reviewed $_df for correctness. "
+    _diff_files_for_expert+="$_df, "
+  done < <(git -C "$ROOT" diff --name-only "${head_sha}^..${head_sha}" 2>/dev/null | head -3)
+fi
+[[ -n "$_diff_mention" ]] || _diff_mention="Reviewed crates/soldier_core/src/execution/pipeline.rs for correctness. "
+[[ -n "$_diff_files_for_expert" ]] || _diff_files_for_expert="crates/soldier_core/src/execution/pipeline.rs, "
 
 setup_story_review_artifacts() {
   local case_dir="$1"
@@ -47,11 +61,16 @@ setup_story_review_artifacts() {
   local kimi_hash=""
   local expert_findings_hash=""
 
+  local opus_dir="$story_root/opus"
+  local supervisor_dir="$story_root/supervisor"
+
   mkdir -p \
     "$story_root/self_review" \
     "$story_root/kimi" \
     "$story_root/codex" \
-    "$story_root/code_review_expert"
+    "$story_root/opus" \
+    "$story_root/code_review_expert" \
+    "$supervisor_dir"
 
   cat > "$self_file" <<EOF
 Story: $story_id
@@ -61,9 +80,16 @@ Decision: PASS
 - Strategic Failure Review: DONE
 EOF
 
-  cat > "$kimi_transcript" <<'EOF'
-TurnBegin(user_input="prd_set_pass fixture")
-TextPart(text="No blocking findings")
+  cat > "$kimi_transcript" <<EOF
+TurnBegin(user_input="prd_set_pass fixture review of story changes")
+ToolCall(name="Shell", input="cargo clippy -- -D warnings")
+TextPart(text="${_diff_mention}")
+TextPart(text="Verified crates/soldier_core/src/execution/pipeline.rs for correctness.")
+TextPart(text="Checked crates/soldier_core/tests/test_gate_ordering.rs assertions.")
+TextPart(text="P2: Minor — consider extracting the fee lookup into a helper for readability.")
+TextPart(text="P3: Low — unused import in test file can be removed.")
+TextPart(text="No P0 or P1 findings. All critical paths are covered by existing acceptance tests.")
+TextPart(text="Overall assessment: code is correct and safe to merge. No blocking issues found.")
 EOF
   kimi_hash="$(sha256_file "$kimi_transcript")"
   cat > "$kimi_file" <<EOF
@@ -72,17 +98,24 @@ EOF
 - Artifact Provenance: logger-v1
 - Generator Script: plans/kimi_review_logged.sh
 - Command Exit Code: 0
+- Duration Seconds: 60
 - Transcript SHA256: $kimi_hash
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
-TurnBegin(user_input="prd_set_pass fixture")
-TextPart(text="No blocking findings")
+$(cat "$kimi_transcript")
 <<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
-  cat > "$codex_one_transcript" <<'EOF'
+  cat > "$codex_one_transcript" <<EOF
 OpenAI Codex vfixture
 session id: prd-set-pass-codex-final
+${_diff_mention}
+Verified crates/soldier_core/src/execution/pipeline.rs for safety gate correctness.
+Checked crates/soldier_core/tests/test_gate_ordering.rs gate ordering invariants.
+P2: Minor — the fee lookup in net_edge could be extracted for clarity.
+P3: Low — unused import on line 14 of test file.
+No P0 or P1 findings. All critical fail-closed paths verified against CONTRACT.md.
+Overall: code is safe to merge. No blocking issues detected in this review cycle.
 EOF
   codex_one_hash="$(sha256_file "$codex_one_transcript")"
   cat > "$codex_final_file" <<EOF
@@ -91,17 +124,24 @@ EOF
 - Artifact Provenance: logger-v1
 - Generator Script: plans/codex_review_logged.sh
 - Command Exit Code: 0
+- Duration Seconds: 120
 - Transcript SHA256: $codex_one_hash
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
-OpenAI Codex vfixture
-session id: prd-set-pass-codex-final
+$(cat "$codex_one_transcript")
 <<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
-  cat > "$codex_two_transcript" <<'EOF'
+  cat > "$codex_two_transcript" <<EOF
 OpenAI Codex vfixture
 session id: prd-set-pass-codex-second
+Adversarial review after cycle 1 fixes. ${_diff_mention}
+Stress-tested crates/soldier_core/src/execution/pipeline.rs with edge cases.
+Verified crates/soldier_core/tests/test_gate_ordering.rs assertions hold.
+P3: Low — consider adding a comment explaining the quantizer rounding strategy.
+No P0, P1, or P2 findings in this second pass. Cycle 1 fixes addressed all raised concerns.
+Risk assessment: fail-closed behavior verified under NaN/Inf inputs and missing config.
+Second pass complete. No regressions found.
 EOF
   codex_two_hash="$(sha256_file "$codex_two_transcript")"
   cat > "$codex_second_file" <<EOF
@@ -110,18 +150,37 @@ EOF
 - Artifact Provenance: logger-v1
 - Generator Script: plans/codex_review_logged.sh
 - Command Exit Code: 0
+- Duration Seconds: 90
 - Transcript SHA256: $codex_two_hash
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
-OpenAI Codex vfixture
-session id: prd-set-pass-codex-second
+$(cat "$codex_two_transcript")
 <<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
-  cat > "$expert_findings" <<'EOF'
+  cat > "$expert_findings" <<EOF
+## Code Review Summary
+Files reviewed: ${_diff_files_for_expert}crates/soldier_core/tests/test_gate_ordering.rs
+Overall assessment: APPROVE — no blocking or major findings
+
+### P0 - Critical
+(none found)
+
+### P1 - High
+(none found)
+
+### P2 - Medium
+- crates/soldier_core/src/execution/pipeline.rs:42 — fee lookup could be extracted into a helper for testability and reuse across multiple gate stages
+
+### P3 - Low
+- crates/soldier_core/tests/test_gate_ordering.rs:14 — unused import can be removed to satisfy clippy warnings
+
+## Additional Notes
+All safety-critical paths verified against CONTRACT.md. Fail-closed behavior confirmed for degraded and kill risk states.
+
 - Blocking: none
 - Major: none
-- Medium: none
+- Medium: 1 (P2 — fee lookup extraction, non-blocking)
 EOF
   expert_findings_hash="$(sha256_file "$expert_findings")"
   cat > "$expert_file" <<EOF
@@ -130,13 +189,12 @@ EOF
 - Review Status: COMPLETE
 - Artifact Provenance: logger-v1
 - Generator Script: plans/code_review_expert_logged.sh
+- Duration Seconds: 45
 - Content Source: template
 - Findings SHA256: $expert_findings_hash
 
 <<<FINDINGS_BEGIN>>>
-- Blocking: none
-- Major: none
-- Medium: none
+$(cat "$expert_findings")
 <<<FINDINGS_END>>>
 EOF
 
@@ -150,6 +208,19 @@ Codex final review file: $codex_final_file
 Codex second review file: $codex_second_file
 Code-review-expert final review file: $expert_file
 EOF
+
+  for checkpoint in post-cycle1 post-fix post-cycle2; do
+    cat > "$supervisor_dir/${checkpoint}_20260214T000090Z.md" <<EOF
+# Supervisor checkpoint
+- Story: $story_id
+- HEAD: $review_head
+- Checkpoint: $checkpoint
+- Verdict: PASS
+- Reason: All checks passed
+- Artifact Provenance: supervisor-v1
+- Generator Script: plans/supervisor_check.sh
+EOF
+  done
 
   rm -f "$codex_one_transcript" "$codex_two_transcript" "$kimi_transcript" "$expert_findings"
 }
