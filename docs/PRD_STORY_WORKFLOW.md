@@ -17,6 +17,8 @@ Every PRD story follows 9 steps, enforced by 8 progressive receipts and 1 final 
 
 **Step numbering**: Human-readable steps are 1-indexed (Step 1 to 9). Receipt filenames are 0-indexed (`00_preflight.json` to `07_verify_full.json`). The `step_index` field in receipt JSON matches the 0-based filename prefix.
 
+**Step numbering**: Human-readable steps are 1-indexed (Step 1 to 9). Receipt filenames are 0-indexed (`00_preflight.json` to `07_verify_full.json`). The `step_index` field in receipt JSON matches the 0-based filename prefix.
+
 ```
 Step 1: PREFLIGHT
   Premortem (§0-§10) + verify.sh quick
