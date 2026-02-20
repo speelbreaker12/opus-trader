@@ -64,5 +64,5 @@ Phase 1 support docs for test intent:
 - `plans/verify_fork.sh` (canonical verify gate implementation)
 - `plans/test_verify_fork_smoke.sh` (verify smoke coverage)
 - `plans/prd_set_pass.sh` (pass flip gate)
-- `plans/story_review_gate.sh` (review evidence gate)
+- `plans/prd_set_pass.sh` (pass flip + inline review evidence gate)
 - `plans/progress.txt` (execution/evidence traceability)

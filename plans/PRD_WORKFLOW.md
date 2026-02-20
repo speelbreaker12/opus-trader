@@ -37,7 +37,7 @@ This repository uses manual PRD story execution with verify and review/PR gates.
 - `./plans/verify.sh quick` during iteration
 - `./plans/verify.sh full` before merge-grade/pass flip
 3. Push branch and open/update PR.
-4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating (this now enforces full `story_review_gate` evidence + story/branch binding).
+4. Run `./plans/pre_pr_review_gate.sh <STORY_ID>` before PR merge gating (enforces review evidence + story/branch binding).
 5. Run `./plans/pr_gate.sh --wait --story <STORY_ID>` until it passes (story is mandatory; PR head ref must be `story/<STORY_ID>[/<slug>]` or `story/<PRD_STORY_ID>-<slug>`; legacy slug cannot contain `-`).
 6. Optional automation: `./plans/pr_aftercare_codex.sh` may be used for iterative fix/push loops, but it is not required.
 7. Merge via PR after gates are green.
@@ -82,13 +82,11 @@ Mark that CI job as required in branch protection.
 1. Implement in story worktree (single Story ID).
 2. Capture `REVIEW_SHA="$(git rev-parse HEAD)"`, then write self-review for that SHA.
 3. `./plans/verify.sh quick`
-4. Codex review for `REVIEW_SHA` (`./plans/codex_review_let_pass.sh <STORY_ID> --commit "$REVIEW_SHA"`), then fix blocking issues.
-5. Kimi review for `REVIEW_SHA` (`./plans/kimi_review_logged.sh <STORY_ID> --commit "$REVIEW_SHA"`), then fix blocking issues.
-6. `./plans/verify.sh quick`
-7. Second Codex review for `REVIEW_SHA`, then fix blocking issues.
-8. `./plans/verify.sh quick`
-9. Findings review via code-review-expert skill; save artifact with `./plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE`.
-10. Turn top findings into failing tests first (red), then fix to green.
+4. Codex or Opus review for `REVIEW_SHA` (`./plans/review_logged.sh <STORY_ID> --tool codex --base <integration_branch>`), then fix blocking issues.
+5. `./plans/verify.sh quick`
+6. Second review for `REVIEW_SHA` (adversarial), then fix blocking issues.
+7. `./plans/verify.sh quick`
+8. Turn top findings into failing tests first (red), then fix to green.
 11. `./plans/verify.sh quick`
    - Sequence-bound equivalent: `plans/workflow_quick_step.sh <STORY_ID> <checkpoint>` (must execute `./plans/verify.sh quick`).
 12. Sync with integration branch.
@@ -101,8 +99,7 @@ Mark that CI job as required in branch protection.
 
 - `passes=true` requires full-verify artifacts and review evidence for the same `HEAD`.
 - `verify.meta.json.head_sha` must equal the current branch `HEAD` at pass-flip time.
-- `./plans/prd_set_pass.sh` enforces evidence checks via `./plans/story_review_gate.sh`.
-- `./plans/story_review_equivalence_check.sh` enforces anti-drift parity between required review invariants and tracked matrix rows.
+- `./plans/prd_set_pass.sh` enforces evidence checks (inline review check for HEAD SHA in codex/opus artifacts).
 - If `HEAD` changes after review starts, regenerate the complete review set for the chosen SHA.
 
 ## References
