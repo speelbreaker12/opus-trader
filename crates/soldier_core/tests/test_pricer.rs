@@ -3,7 +3,7 @@
 //! AT-223: IOC limit guarantees min edge at limit price.
 
 use soldier_core::execution::{
-    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, PricerSide, compute_limit_price,
+    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, Side, compute_limit_price,
 };
 
 /// Helper: build a pricer input.
@@ -13,7 +13,7 @@ fn input(
     min_edge: f64,
     fee: f64,
     qty: f64,
-    side: PricerSide,
+    side: Side,
 ) -> PricerInput {
     PricerInput {
         fair_price: fair,
@@ -39,7 +39,7 @@ fn test_at223_buy_limit_clamped_to_min_edge() {
     // max_price_for_min_edge (buy) = 100 - (2+3) = 95
     // proposed_limit (buy) = 100 - 0.5*7 = 96.5
     // clamp: min(96.5, 95) = 95
-    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -65,7 +65,7 @@ fn test_at223_sell_limit_clamped_to_min_edge() {
     // max_price_for_min_edge (sell) = 100 + (2+3) = 105
     // proposed_limit (sell) = 100 + 0.5*7 = 103.5
     // clamp: max(103.5, 105) = 105
-    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, PricerSide::Sell);
+    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, Side::Sell);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -88,7 +88,7 @@ fn test_at223_realized_edge_at_limit_ge_min_edge() {
     // For a buy at limit_price:
     // realized_edge = (fair_price - limit_price) * qty - fee
     // Must be >= min_edge_usd
-    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -112,7 +112,7 @@ fn test_at223_realized_edge_at_limit_ge_min_edge() {
 fn test_at223_sell_realized_edge_at_limit_ge_min_edge() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, PricerSide::Sell);
+    let inp = input(100.0, 10.0, 2.0, 3.0, 1.0, Side::Sell);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -136,7 +136,7 @@ fn test_net_edge_too_low_rejected() {
     let mut m = PricerMetrics::new();
 
     // gross=5, fee=4, min_edge=2 → net=1 < 2 → reject
-    let inp = input(100.0, 5.0, 2.0, 4.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 5.0, 2.0, 4.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -157,7 +157,7 @@ fn test_negative_net_edge_rejected() {
     let mut m = PricerMetrics::new();
 
     // gross=3, fee=5 → net=-2 < 0 → reject
-    let inp = input(100.0, 3.0, 0.0, 5.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 3.0, 0.0, 5.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -175,7 +175,7 @@ fn test_negative_net_edge_rejected() {
 fn test_zero_qty_rejected() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(100.0, 10.0, 2.0, 3.0, 0.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, 2.0, 3.0, 0.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -191,7 +191,7 @@ fn test_zero_qty_rejected() {
 fn test_negative_qty_rejected() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(100.0, 10.0, 2.0, 3.0, -1.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, 2.0, 3.0, -1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -215,7 +215,7 @@ fn test_multi_unit_buy() {
     // max_price_buy = 100 - (2+3) = 95
     // proposed = 100 - 0.5*7 = 96.5
     // clamp: min(96.5, 95) = 95
-    let inp = input(100.0, 20.0, 4.0, 6.0, 2.0, PricerSide::Buy);
+    let inp = input(100.0, 20.0, 4.0, 6.0, 2.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -237,7 +237,7 @@ fn test_buy_proposed_within_bound_no_clamp() {
     // max_price_buy = 100 - (1+1) = 98
     // proposed = 100 - 0.5*9 = 95.5
     // clamp: min(95.5, 98) = 95.5 (no clamp)
-    let inp = input(100.0, 10.0, 1.0, 1.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, 1.0, 1.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     match result {
@@ -261,7 +261,7 @@ fn test_metrics_default() {
 fn test_nan_fair_price_rejected() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(f64::NAN, 10.0, 2.0, 3.0, 1.0, PricerSide::Buy);
+    let inp = input(f64::NAN, 10.0, 2.0, 3.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -277,7 +277,7 @@ fn test_nan_fair_price_rejected() {
 fn test_negative_fee_rejected() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(100.0, 10.0, 2.0, -0.1, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, 2.0, -0.1, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -293,7 +293,7 @@ fn test_negative_fee_rejected() {
 fn test_negative_min_edge_rejected() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(100.0, 10.0, -1.0, 1.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 10.0, -1.0, 1.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -309,7 +309,7 @@ fn test_negative_min_edge_rejected() {
 fn test_infinite_gross_edge_rejected() {
     let mut m = PricerMetrics::new();
 
-    let inp = input(100.0, f64::INFINITY, 2.0, 3.0, 1.0, PricerSide::Sell);
+    let inp = input(100.0, f64::INFINITY, 2.0, 3.0, 1.0, Side::Sell);
     let result = compute_limit_price(&inp, &mut m);
 
     assert!(matches!(
@@ -329,7 +329,7 @@ fn test_infinite_gross_edge_rejected() {
 fn test_pricer_at_exact_min_edge_boundary() {
     let mut m = PricerMetrics::new();
     // gross=8, fee=3 → net=5. min_edge=5 → net==min → should ALLOW.
-    let inp = input(100.0, 8.0, 5.0, 3.0, 1.0, PricerSide::Buy);
+    let inp = input(100.0, 8.0, 5.0, 3.0, 1.0, Side::Buy);
     let result = compute_limit_price(&inp, &mut m);
     assert!(
         matches!(result, PricerResult::LimitPrice { .. }),

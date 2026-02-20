@@ -17,7 +17,7 @@ use soldier_core::execution::{
     build_order_intent,
 };
 use soldier_core::execution::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
-use soldier_core::execution::{PricerInput, PricerMetrics, PricerSide, compute_limit_price};
+use soldier_core::execution::{PricerInput, PricerMetrics, compute_limit_price};
 use soldier_core::execution::{QuantizeConstraints, QuantizeMetrics, Side, quantize};
 use soldier_core::risk::RiskState;
 use std::collections::HashMap;
@@ -74,7 +74,7 @@ fn test_intent_id_propagates_through_approved_pipeline() {
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
         qty: 1.0,
-        side: PricerSide::Buy,
+        side: Side::Buy,
     };
     let pr = compute_limit_price(&pricer_input, &mut pm);
     log_entries.push(LogEntry {
