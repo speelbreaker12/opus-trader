@@ -438,7 +438,12 @@ fn reject_with_metrics(
     bump_liquidity_gate_reject(reason, wap, slippage_bps);
     LiquidityGateResult {
         decision: LiquidityGateDecision::Rejected { reason },
-        metadata: LiquidityGateMetadata { wap, slippage_bps, fillable_qty, allowed_qty },
+        metadata: LiquidityGateMetadata {
+            wap,
+            slippage_bps,
+            fillable_qty,
+            allowed_qty,
+        },
     }
 }
 
