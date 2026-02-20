@@ -11,9 +11,12 @@
 #   ./plans/preflight.sh --strict # Fail on warnings (e.g., missing BASE_REF)
 #
 # Environment:
-#   PREFLIGHT_FIXTURE_MODE=smoke|full|quick
-#     smoke/quick: fast fixture subset (default)
+#   PREFLIGHT_FIXTURE_MODE=smoke|full|quick|none
+#     smoke: fast fixture subset (default)
+#     quick: alias for smoke (fast fixture subset)
 #     full: full fixture matrix (used by verify full)
+#     none: skip fixtures entirely
+#   PREFLIGHT_NO_CACHE=1  Force re-run of fixture tests (ignore cache)
 #
 # Exit codes:
 #   0 = all checks passed
@@ -45,9 +48,10 @@ done
 PREFLIGHT_FIXTURE_MODE="${PREFLIGHT_FIXTURE_MODE:-smoke}"
 case "$PREFLIGHT_FIXTURE_MODE" in
   quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;
+  none) ;;
   smoke|full) ;;
   *)
-    echo "[FAIL] Invalid PREFLIGHT_FIXTURE_MODE='$PREFLIGHT_FIXTURE_MODE' (expected smoke|full|quick)" >&2
+    echo "[FAIL] Invalid PREFLIGHT_FIXTURE_MODE='$PREFLIGHT_FIXTURE_MODE' (expected smoke|full|quick|none)" >&2
     exit 2
     ;;
 esac
@@ -122,117 +126,71 @@ check_file "plans/prd.json" "PRD file"
 CONTRACT_FILE="${CONTRACT_FILE:-specs/CONTRACT.md}"
 check_file "$CONTRACT_FILE" "Contract spec"
 
-# 3b. Legacy workflow/docs layout guard (fail-closed)
-LEGACY_LAYOUT_GUARD="plans/legacy_layout_guard.sh"
-if [[ -x "$LEGACY_LAYOUT_GUARD" ]]; then
-  if "$LEGACY_LAYOUT_GUARD"; then
-    pass "Legacy layout guard"
-  else
-    fail "Legacy layout guard failed"
-  fi
-elif [[ -f "$LEGACY_LAYOUT_GUARD" ]]; then
-  echo "[FAIL] Legacy layout guard not executable: $LEGACY_LAYOUT_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing legacy layout guard: $LEGACY_LAYOUT_GUARD (setup error)" >&2
-  exit 2
-fi
+# 3b-3g. Fail-closed guards (parallel)
+# These guards are independent — run them concurrently to reduce wall-clock time.
+# Pre-check ensures all scripts exist and are executable before backgrounding (fail-closed).
+PREFLIGHT_GUARD_SCRIPTS=(
+  "plans/legacy_layout_guard.sh:Legacy layout guard"
+  "plans/readme_ci_parity_check.sh:README/CI parity guard"
+  "plans/slice_completion_review_guard.sh:Slice completion review guard"
+  "plans/story_review_findings_guard.sh:Story findings-review guard"
+  "plans/story_review_equivalence_check.sh:Story-review equivalence matrix guard"
+  "plans/stoic_cli_invariant_check.sh:stoic-cli invariants guard"
+  "plans/toggle_policy_check.sh:Toggle policy wiring guard"
+)
 
-# 3c. README/CI parity guard (fail-closed)
-README_CI_PARITY_GUARD="plans/readme_ci_parity_check.sh"
-if [[ -x "$README_CI_PARITY_GUARD" ]]; then
-  if "$README_CI_PARITY_GUARD"; then
-    pass "README/CI parity guard"
-  else
-    fail "README/CI parity guard failed"
+# Pre-check: all scripts must exist and be executable (fail-closed)
+for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
+  _guard_script="${_guard_entry%%:*}"
+  if [[ ! -f "$_guard_script" ]]; then
+    echo "[FAIL] Missing guard: $_guard_script (setup error)" >&2
+    exit 2
   fi
-elif [[ -f "$README_CI_PARITY_GUARD" ]]; then
-  echo "[FAIL] README/CI parity guard not executable: $README_CI_PARITY_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing README/CI parity guard: $README_CI_PARITY_GUARD (setup error)" >&2
-  exit 2
-fi
+  if [[ ! -x "$_guard_script" ]]; then
+    echo "[FAIL] Guard not executable: $_guard_script (setup error)" >&2
+    exit 2
+  fi
+done
 
-# 3d. Slice completion review guard (fail-closed)
-SLICE_COMPLETION_REVIEW_GUARD="plans/slice_completion_review_guard.sh"
-if [[ -x "$SLICE_COMPLETION_REVIEW_GUARD" ]]; then
-  if "$SLICE_COMPLETION_REVIEW_GUARD"; then
-    pass "Slice completion review guard"
-  else
-    fail "Slice completion review guard failed"
-  fi
-elif [[ -f "$SLICE_COMPLETION_REVIEW_GUARD" ]]; then
-  echo "[FAIL] Slice completion review guard not executable: $SLICE_COMPLETION_REVIEW_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing slice completion review guard: $SLICE_COMPLETION_REVIEW_GUARD (setup error)" >&2
-  exit 2
-fi
+# Run guards in parallel, capturing output to per-guard log files for debuggability.
+_guard_results_dir="$(mktemp -d)"
+_preflight_cleanup_dirs=("$_guard_results_dir")
+trap 'rm -rf "${_preflight_cleanup_dirs[@]}"' EXIT
+_guard_pids=()
+_guard_idx=0
+for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
+  _guard_script="${_guard_entry%%:*}"
+  _idx=$_guard_idx
+  (
+    if timeout 30 bash "$_guard_script" > "$_guard_results_dir/${_idx}.log" 2>&1; then
+      echo "PASS" > "$_guard_results_dir/$_idx"
+    else
+      echo "FAIL" > "$_guard_results_dir/$_idx"
+    fi
+  ) &
+  _guard_pids+=($!)
+  ((_guard_idx++)) || true
+done
+wait "${_guard_pids[@]}" 2>/dev/null || true
 
-# 3e. Story findings-review guard (fail-closed)
-STORY_REVIEW_FINDINGS_GUARD="plans/story_review_findings_guard.sh"
-if [[ -x "$STORY_REVIEW_FINDINGS_GUARD" ]]; then
-  if "$STORY_REVIEW_FINDINGS_GUARD"; then
-    pass "Story findings-review guard"
+# Collect results in original order; on failure, emit the guard's captured log
+_guard_idx=0
+for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
+  _guard_desc="${_guard_entry#*:}"
+  _guard_result="$(cat "$_guard_results_dir/$_guard_idx" 2>/dev/null || echo "FAIL")"
+  if [[ "$_guard_result" == "PASS" ]]; then
+    pass "$_guard_desc"
   else
-    fail "Story findings-review guard failed"
+    fail "$_guard_desc failed"
+    # Emit captured output so the developer can see why the guard failed
+    if [[ -s "$_guard_results_dir/${_guard_idx}.log" ]]; then
+      echo "--- guard output (${_guard_entry%%:*}) ---" >&2
+      cat "$_guard_results_dir/${_guard_idx}.log" >&2
+      echo "--- end guard output ---" >&2
+    fi
   fi
-elif [[ -f "$STORY_REVIEW_FINDINGS_GUARD" ]]; then
-  echo "[FAIL] Story findings-review guard not executable: $STORY_REVIEW_FINDINGS_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing story findings-review guard: $STORY_REVIEW_FINDINGS_GUARD (setup error)" >&2
-  exit 2
-fi
-
-# 3ea. Story-review equivalence matrix guard (fail-closed)
-STORY_REVIEW_EQUIVALENCE_GUARD="plans/story_review_equivalence_check.sh"
-if [[ -x "$STORY_REVIEW_EQUIVALENCE_GUARD" ]]; then
-  if "$STORY_REVIEW_EQUIVALENCE_GUARD"; then
-    pass "Story-review equivalence matrix guard"
-  else
-    fail "Story-review equivalence matrix guard failed"
-  fi
-elif [[ -f "$STORY_REVIEW_EQUIVALENCE_GUARD" ]]; then
-  echo "[FAIL] Story-review equivalence guard not executable: $STORY_REVIEW_EQUIVALENCE_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing story-review equivalence guard: $STORY_REVIEW_EQUIVALENCE_GUARD (setup error)" >&2
-  exit 2
-fi
-
-# 3f. stoic-cli critical invariants guard (fail-closed)
-STOIC_CLI_INVARIANT_GUARD="plans/stoic_cli_invariant_check.sh"
-if [[ -x "$STOIC_CLI_INVARIANT_GUARD" ]]; then
-  if "$STOIC_CLI_INVARIANT_GUARD"; then
-    pass "stoic-cli invariants guard"
-  else
-    fail "stoic-cli invariants guard failed"
-  fi
-elif [[ -f "$STOIC_CLI_INVARIANT_GUARD" ]]; then
-  echo "[FAIL] stoic-cli invariants guard not executable: $STOIC_CLI_INVARIANT_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing stoic-cli invariants guard: $STOIC_CLI_INVARIANT_GUARD (setup error)" >&2
-  exit 2
-fi
-
-# 3g. rollout toggle policy wiring guard (fail-closed)
-TOGGLE_POLICY_GUARD="plans/toggle_policy_check.sh"
-if [[ -x "$TOGGLE_POLICY_GUARD" ]]; then
-  if "$TOGGLE_POLICY_GUARD" >/dev/null; then
-    pass "Toggle policy wiring guard"
-  else
-    fail "Toggle policy wiring guard failed"
-  fi
-elif [[ -f "$TOGGLE_POLICY_GUARD" ]]; then
-  echo "[FAIL] Toggle policy guard not executable: $TOGGLE_POLICY_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing toggle policy guard: $TOGGLE_POLICY_GUARD (setup error)" >&2
-  exit 2
-fi
+  ((_guard_idx++)) || true
+done
 
 # =============================================================================
 # Tier 2: Fast checks (<30s)
@@ -299,89 +257,164 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_adversarial_gate.sh"
-  "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_codex_review_digest.sh"
   "plans/tests/test_run_prd_auditor_timeout_fallback.sh"
   "plans/tests/test_audit_parallel_empty_cache_arrays.sh"
   "plans/tests/test_slice_completion_review_guard.sh"
   "plans/tests/test_slice_completion_enforce.sh"
-  "plans/tests/test_pr_gate.sh"
   "plans/tests/test_prd_set_pass.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
 )
+# NOTE: test_story_review_gate.sh and test_pr_gate.sh moved to verify_fork.sh
+# gate 14g (overlaps with rust compilation for better wall-clock performance).
 
 REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
   REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
 fi
 
-pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
+if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
+  pass "Fixture tests skipped (mode=none)"
+else
+  pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
 
-# Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
-# Each test is isolated (own tmpdir) so parallel execution is safe.
-# Results collected via temp files to preserve pass()/fail() counter semantics.
-PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
-fixture_results_dir="$(mktemp -d)"
-trap 'rm -rf "$fixture_results_dir"' EXIT
-fixture_pids=()
-fixture_idx=0
-
-for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
-  if [[ ! -f "$fixture_test" ]]; then
-    echo "MISSING" > "$fixture_results_dir/$fixture_idx"
-    ((fixture_idx++)) || true
-    continue
+  # --- Fixture cache ---
+  # Cache key = SHA256 of all workflow/tool/spec files that fixture tests depend on.
+  # Broad scope prevents stale cache from missed dependencies.
+  PREFLIGHT_NO_CACHE="${PREFLIGHT_NO_CACHE:-0}"
+  # --strict implies thoroughness: disable cache to ensure all tests actually run
+  if [[ "$STRICT_MODE" == "1" ]]; then
+    PREFLIGHT_NO_CACHE=1
   fi
-  # Run in background, write result to index-keyed file.
-  # idx captured by value in the subshell fork.
-  idx=$fixture_idx
-  (
-    if bash "$fixture_test" >/dev/null 2>&1; then
-      echo "PASS" > "$fixture_results_dir/$idx"
-    else
-      echo "FAIL" > "$fixture_results_dir/$idx"
+  _cache_dir="$ROOT/.cache"
+  _cache_file="$_cache_dir/preflight_fixtures_${PREFLIGHT_FIXTURE_MODE}.hash"
+  _cache_hit=0
+
+  _compute_fixture_hash() {
+    # Deterministic: sorted file list, content-addressed.
+    # Uses xargs to batch shasum calls (avoids per-file process spawn).
+    # Broad scope: includes all files that fixture tests may depend on —
+    #   plans/ (all file types: .sh, .json, .txt, .md), specs/, SKILLS/,
+    #   tools/, scripts/. This prevents stale cache when non-code config
+    #   files (allowlists, evidence sources, workflow contract, etc.) change.
+    {
+      find plans -maxdepth 1 -type f 2>/dev/null
+      find plans/lib -name '*.sh' -type f 2>/dev/null
+      find plans/tests -name '*.sh' -type f 2>/dev/null
+      find specs -type f 2>/dev/null
+      find SKILLS -type f 2>/dev/null
+      find tools -name '*.py' -type f 2>/dev/null
+      find scripts -name '*.py' -type f 2>/dev/null
+    } | LC_ALL=C sort -u | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1
+  }
+
+  # Validate shasum is available (fail-closed: if missing, skip cache entirely)
+  if ! command -v shasum >/dev/null 2>&1; then
+    PREFLIGHT_NO_CACHE=1
+  fi
+
+  if [[ "$PREFLIGHT_NO_CACHE" != "1" && -f "$_cache_file" ]]; then
+    _cached_hash="$(cat "$_cache_file" 2>/dev/null || true)"
+    _current_hash="$(_compute_fixture_hash)"
+    # Guard against degenerate hash (empty or all-zeros from broken shasum)
+    if [[ -n "$_current_hash" && ${#_current_hash} -ge 60 && -n "$_cached_hash" && "$_cached_hash" == "$_current_hash" ]]; then
+      _cache_hit=1
+      pass "Fixture tests (cached, ${#REVIEW_FIXTURE_TESTS[@]} tests)"
     fi
-  ) &
-  fixture_pids+=($!)
-  ((fixture_idx++)) || true
-  # Throttle: wait for a slot if at concurrency limit
-  # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
-  if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
-    # Poll until at least one slot opens
-    while true; do
-      alive=()
-      for pid in "${fixture_pids[@]}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-          alive+=("$pid")
-        fi
-      done
-      if [[ ${#alive[@]} -gt 0 ]]; then
-        fixture_pids=("${alive[@]}")
-      else
-        fixture_pids=()
-      fi
-      if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
-        break
-      fi
-      sleep 0.2
-    done
   fi
-done
 
-# Wait for all remaining
-wait
+  if [[ "$_cache_hit" == "0" ]]; then
+    # Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
+    # Each test is isolated (own tmpdir) so parallel execution is safe.
+    # Results collected via temp files to preserve pass()/fail() counter semantics.
+    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+    fixture_results_dir="$(mktemp -d)"
+    _preflight_cleanup_dirs+=("$fixture_results_dir")
+    fixture_pids=()
+    fixture_idx=0
 
-# Collect results in original order (deterministic output, counters in parent shell)
-fixture_idx=0
-for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
-  result="$(cat "$fixture_results_dir/$fixture_idx" 2>/dev/null || echo "MISSING")"
-  case "$result" in
-    PASS) pass "Fixture test: $(basename "$fixture_test")" ;;
-    FAIL) fail "Fixture test failed: $fixture_test (run 'bash $fixture_test' for details)" ;;
-    MISSING) setup_fail "Missing fixture test: $fixture_test" ;;
-  esac
-  ((fixture_idx++)) || true
-done
+    for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
+      if [[ ! -f "$fixture_test" ]]; then
+        echo "MISSING" > "$fixture_results_dir/$fixture_idx"
+        ((fixture_idx++)) || true
+        continue
+      fi
+      # Run in background, write result to index-keyed file.
+      # idx captured by value in the subshell fork.
+      idx=$fixture_idx
+      (
+        if bash "$fixture_test" >/dev/null 2>&1; then
+          echo "PASS" > "$fixture_results_dir/$idx"
+        else
+          echo "FAIL" > "$fixture_results_dir/$idx"
+        fi
+      ) &
+      fixture_pids+=($!)
+      ((fixture_idx++)) || true
+      # Throttle: wait for a slot if at concurrency limit
+      # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
+      if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
+        # Poll until at least one slot opens
+        while true; do
+          alive=()
+          for pid in "${fixture_pids[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+              alive+=("$pid")
+            fi
+          done
+          if [[ ${#alive[@]} -gt 0 ]]; then
+            fixture_pids=("${alive[@]}")
+          else
+            fixture_pids=()
+          fi
+          if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
+            break
+          fi
+          sleep 0.2
+        done
+      fi
+    done
+
+    # Wait for all remaining
+    wait
+
+    # Collect results in original order (deterministic output, counters in parent shell)
+    _fixture_all_passed=1
+    fixture_idx=0
+    for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
+      result="$(cat "$fixture_results_dir/$fixture_idx" 2>/dev/null || echo "MISSING")"
+      case "$result" in
+        PASS) pass "Fixture test: $(basename "$fixture_test")" ;;
+        FAIL)
+          fail "Fixture test failed: $fixture_test (run 'bash $fixture_test' for details)"
+          _fixture_all_passed=0
+          ;;
+        MISSING)
+          setup_fail "Missing fixture test: $fixture_test"
+          _fixture_all_passed=0
+          ;;
+      esac
+      ((fixture_idx++)) || true
+    done
+
+    # Update cache: write on success, invalidate on failure.
+    # Cache write is best-effort — failure must not kill a passing preflight run.
+    if [[ "$_fixture_all_passed" == "1" && "$PREFLIGHT_NO_CACHE" != "1" ]]; then
+      if mkdir -p "$_cache_dir" 2>/dev/null; then
+        _current_hash="${_current_hash:-$(_compute_fixture_hash)}"
+        if [[ -n "$_current_hash" && ${#_current_hash} -ge 60 ]]; then
+          _tmp_cache="$(mktemp "$_cache_dir/preflight_cache.XXXXXX" 2>/dev/null)" || true
+          if [[ -n "${_tmp_cache:-}" ]]; then
+            echo "$_current_hash" > "$_tmp_cache"
+            mv "$_tmp_cache" "$_cache_file" 2>/dev/null || rm -f "$_tmp_cache" 2>/dev/null
+          fi
+        fi
+      fi
+    else
+      rm -f "$_cache_file" 2>/dev/null || true
+    fi
+  fi
+fi
 
 # 7. Postmortem check: plans/postmortem_check.sh
 POSTMORTEM_CHECK="plans/postmortem_check.sh"

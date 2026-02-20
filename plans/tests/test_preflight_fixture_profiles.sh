@@ -72,12 +72,22 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
-assert_list_contains "$full_only_list" "plans/tests/test_story_review_gate.sh"
-assert_list_contains "$full_only_list" "plans/tests/test_pr_gate.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
+# Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
+assert_list_absent "$full_only_list" "plans/tests/test_story_review_gate.sh"
+assert_list_absent "$full_only_list" "plans/tests/test_pr_gate.sh"
+assert_list_absent "$smoke_list" "plans/tests/test_story_review_gate.sh"
 assert_list_absent "$smoke_list" "plans/tests/test_pr_gate.sh"
 assert_list_absent "$full_only_list" "plans/tests/test_preflight_fixture_profiles.sh"
+
+# Verify moved tests are actually present in verify_fork.sh gate 14g
+VERIFY_FORK="$ROOT/plans/verify_fork.sh"
+[[ -f "$VERIFY_FORK" ]] || fail "missing verify_fork.sh: $VERIFY_FORK"
+grep -q 'start_parallel_gate "wf_test_story_review_gate"' "$VERIFY_FORK" \
+  || fail "test_story_review_gate.sh not found in verify_fork.sh gate 14g"
+grep -q 'start_parallel_gate "wf_test_pr_gate"' "$VERIFY_FORK" \
+  || fail "test_pr_gate.sh not found in verify_fork.sh gate 14g"
 
 overlap="$(
   comm -12 \
@@ -89,6 +99,6 @@ overlap="$(
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 [[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
-[[ "$full_only_count" == "10" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 10)"
+[[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"
