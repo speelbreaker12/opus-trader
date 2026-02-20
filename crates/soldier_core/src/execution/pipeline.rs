@@ -1,15 +1,13 @@
 //! Intent pipeline wiring for the execution chokepoint.
 //!
 //! This module provides a production-path orchestration function that calls
-//! preflight, quantization, fee staleness, liquidity, net-edge, pricer, and
-//! finally the chokepoint gate-order evaluator.
+//! the shared base gate evaluator (gates 1-6) then OPEN-specific gates (7-10),
+//! and finally the chokepoint gate-order evaluator.
 
-use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState, evaluate_fee_staleness};
-use crate::venue::{
-    BotFeatureFlags, ExpiryGuardInput, LifecycleIntent, VenueCapabilities, evaluate_capabilities,
-    evaluate_expiry_guard,
-};
+use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
+use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
+use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 use super::gate_outcome::GateOutcome;
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
@@ -17,7 +15,7 @@ use super::{
     LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PreflightInput, PreflightMetrics,
     PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, RejectReasonCode, Side,
     build_gate_results, build_order_intent_with_reject_reason_code, compute_limit_price,
-    evaluate_liquidity_gate, evaluate_net_edge, preflight_intent, quantize,
+    evaluate_liquidity_gate, evaluate_net_edge,
 };
 
 /// Quantize inputs required by the execution pipeline.
@@ -82,89 +80,78 @@ pub struct PipelineResult {
 ///
 /// The function remains fail-closed: any missing OPEN-path input marks that
 /// gate as failed before chokepoint evaluation.
+///
+/// Gates 1-6 are evaluated via the shared `evaluate_base_gates()` to
+/// eliminate dual-orchestration drift risk with `open_runtime.rs`.
 pub fn evaluate_intent_pipeline(
     input: &IntentPipelineInput<'_>,
     metrics: &mut IntentPipelineMetrics,
 ) -> PipelineResult {
-    let evaluated_caps = evaluate_capabilities(&input.venue_capabilities, &input.bot_feature_flags);
-    let mut preflight_input = input.preflight.clone();
-    preflight_input.linked_orders_allowed = evaluated_caps.linked_orders_allowed;
+    // ── Gates 1-6: shared base gate evaluator ───────────────────────────
+    let base_input = BaseGatesInput {
+        intent_class: input.intent_class,
+        risk_state: input.risk_state,
+        preflight: input.preflight.clone(),
+        venue_capabilities: input.venue_capabilities.clone(),
+        bot_feature_flags: input.bot_feature_flags.clone(),
+        quantize: input.quantize.clone(),
+        dispatch_consistency_passed: input.dispatch_consistency_passed,
+        fee_snapshot: input.fee_snapshot.clone(),
+        fee_config: input.fee_config.clone(),
+        expiry_guard: input.expiry_guard,
+    };
 
-    // Mirror chokepoint early-exit behavior so downstream gate metrics are not
-    // emitted for intents that never reach those gates.
-    let dispatch_auth_short_circuit = input.intent_class == ChokeIntentClass::CancelOnly
-        || (input.intent_class == ChokeIntentClass::Open && input.risk_state != RiskState::Healthy);
+    let mut base_metrics = BaseGatesMetrics::new();
+    let base_result = evaluate_base_gates(&base_input, &mut base_metrics);
 
-    let mut preflight_passed = true;
-    let mut preflight_reject_code = None;
-    let mut quantize_passed = true;
-    let mut quantize_reject_code = None;
-    let mut fee_cache_passed = true;
-    let mut fee_cache_reject_code = None;
-    let mut expiry_guard_passed = true;
-    let mut expiry_guard_reject_code = None;
+    // Transfer metrics from base gates to pipeline metrics
+    metrics.preflight = base_metrics.preflight;
+    metrics.quantize = base_metrics.quantize;
+    metrics.fee = base_metrics.fee;
 
-    if !dispatch_auth_short_circuit {
-        let preflight_result = preflight_intent(&preflight_input, &mut metrics.preflight);
-        let preflight_outcome = GateOutcome::from_preflight(GateStep::Preflight, &preflight_result);
-        (preflight_passed, preflight_reject_code) = preflight_outcome.to_legacy();
-
-        if preflight_passed {
-            let quantize_result = quantize(
-                input.quantize.raw_qty,
-                input.quantize.raw_limit_price,
-                input.quantize.side,
-                &input.quantize.constraints,
-                &mut metrics.quantize,
-            );
-            let quantize_outcome = GateOutcome::from_quantize(GateStep::Quantize, &quantize_result);
-            (quantize_passed, quantize_reject_code) = quantize_outcome.to_legacy();
+    // Extract legacy gate bools and reject codes
+    let (
+        preflight_passed,
+        quantize_passed,
+        dispatch_consistency_passed,
+        fee_cache_passed,
+        expiry_guard_passed,
+        preflight_reject_code,
+        quantize_reject_code,
+        fee_cache_reject_code,
+        expiry_guard_reject_code,
+    ) = match &base_result {
+        Ok(proof) => {
+            let legacy = BaseGatesLegacy::from(proof);
+            (
+                legacy.preflight_passed,
+                legacy.quantize_passed,
+                legacy.dispatch_consistency_passed,
+                legacy.fee_cache_passed,
+                legacy.expiry_guard_passed,
+                legacy.preflight_reject_code,
+                legacy.quantize_reject_code,
+                legacy.fee_cache_reject_code,
+                legacy.expiry_guard_reject_code,
+            )
         }
-
-        if preflight_passed && quantize_passed && input.dispatch_consistency_passed {
-            let fee_eval = evaluate_fee_staleness(&input.fee_snapshot, &input.fee_config);
-            let fee_outcome = GateOutcome::from_fee_eval(GateStep::FeeCacheCheck, &fee_eval);
-            (fee_cache_passed, fee_cache_reject_code) = fee_outcome.to_legacy();
-            if !fee_cache_passed {
-                metrics.fee.record_refresh_fail();
-            }
+        Err(rejection) => {
+            let legacy = BaseGatesLegacy::from(rejection);
+            (
+                legacy.preflight_passed,
+                legacy.quantize_passed,
+                legacy.dispatch_consistency_passed,
+                legacy.fee_cache_passed,
+                legacy.expiry_guard_passed,
+                legacy.preflight_reject_code,
+                legacy.quantize_reject_code,
+                legacy.fee_cache_reject_code,
+                legacy.expiry_guard_reject_code,
+            )
         }
+    };
 
-        // Expiry guard: evaluate after fee cache check.
-        // Derive LifecycleIntent from intent_class to prevent drift between
-        // the pipeline's intent classification and the guard's input.
-        if preflight_passed
-            && quantize_passed
-            && input.dispatch_consistency_passed
-            && fee_cache_passed
-        {
-            let lifecycle_intent = match input.intent_class {
-                ChokeIntentClass::Open => LifecycleIntent::Open,
-                ChokeIntentClass::Close => LifecycleIntent::Close,
-                ChokeIntentClass::Hedge => LifecycleIntent::Hedge,
-                // CancelOnly is short-circuited by dispatch_auth above;
-                // mapped here for exhaustiveness.
-                ChokeIntentClass::CancelOnly => LifecycleIntent::Cancel,
-            };
-
-            if let Some(ref expiry_input) = input.expiry_guard {
-                // Override the caller-provided intent with the authoritative one
-                let corrected_input = ExpiryGuardInput {
-                    intent: lifecycle_intent,
-                    ..*expiry_input
-                };
-                let expiry_result = evaluate_expiry_guard(&corrected_input);
-                let expiry_outcome =
-                    GateOutcome::from_expiry_guard(GateStep::ExpiryGuard, &expiry_result);
-                (expiry_guard_passed, expiry_guard_reject_code) = expiry_outcome.to_legacy();
-            } else if lifecycle_intent == LifecycleIntent::Open {
-                // FAIL-CLOSED: missing expiry data blocks OPEN intents
-                expiry_guard_passed = false;
-                expiry_guard_reject_code = Some(RejectReasonCode::InstrumentExpiredOrDelisted);
-            }
-        }
-    }
-
+    // ── Gates 7-9: OPEN-specific gates ──────────────────────────────────
     let mut liquidity_gate_passed = true;
     let mut net_edge_passed = true;
     let mut pricer_passed = true;
@@ -176,7 +163,7 @@ pub fn evaluate_intent_pipeline(
         && input.risk_state == RiskState::Healthy
         && preflight_passed
         && quantize_passed
-        && input.dispatch_consistency_passed
+        && dispatch_consistency_passed
         && fee_cache_passed
         && expiry_guard_passed;
 
@@ -237,10 +224,11 @@ pub fn evaluate_intent_pipeline(
         }
     }
 
+    // ── Build chokepoint input ──────────────────────────────────────────
     let gate_results = build_gate_results(
         preflight_passed,
         quantize_passed,
-        input.dispatch_consistency_passed,
+        dispatch_consistency_passed,
         fee_cache_passed,
         expiry_guard_passed,
         liquidity_gate_passed,
