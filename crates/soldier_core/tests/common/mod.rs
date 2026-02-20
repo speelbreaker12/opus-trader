@@ -2,9 +2,12 @@
 #![allow(dead_code)]
 
 use soldier_core::execution::{
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateIntentClass, GateResults, GateStep,
+    IntentPipelineInput, L2BookSnapshot, L2Level, LiquidityGateInput, NetEdgeInput, OrderType,
+    PreflightInput, PricerInput, PricerSide, QuantizeConstraints, QuantizePipelineInput, Side,
     ChokeIntentClass, GateIntentClass, GateResults, IntentPipelineInput, L2BookSnapshot, L2Level,
-    LiquidityGateInput, NetEdgeInput, OrderType, PreflightInput, PricerInput, PricerSide,
-    QuantizeConstraints, QuantizePipelineInput, Side,
+    LiquidityGateInput, NetEdgeInput, OrderType, PreflightInput, PricerInput, QuantizeConstraints,
+    QuantizePipelineInput, Side,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use soldier_core::venue::{
@@ -44,6 +47,40 @@ pub fn book(asks: Vec<(f64, f64)>, bids: Vec<(f64, f64)>, ts: u64) -> L2BookSnap
             .collect(),
         timestamp_ms: ts,
     }
+}
+
+/// Assert that a `build_order_intent` call produced a rejection with zero dispatches.
+///
+/// Use for ALL rejection tests, including WAL-gate failures where
+/// `RecordedBeforeDispatch` appears in the gate trace before the check fails.
+pub fn assert_no_dispatch(result: &ChokeResult, metrics: &ChokeMetrics, context: &str) {
+    assert!(
+        matches!(result, ChokeResult::Rejected { .. }),
+        "{context}: expected ChokeResult::Rejected"
+    );
+    assert_eq!(
+        metrics.approved_total(),
+        0,
+        "{context}: approved_total must be 0 after rejection"
+    );
+}
+
+/// Assert rejection with zero dispatches AND confirm that
+/// `RecordedBeforeDispatch` is NOT in the gate trace.
+///
+/// Use for rejections that stop before gate 10 (WAL gate). Do NOT use for
+/// WAL-gate failures — the WAL gate pushes `RecordedBeforeDispatch` to the
+/// trace before checking `wal_recorded`.
+pub fn assert_no_dispatch_no_wal(result: &ChokeResult, metrics: &ChokeMetrics, context: &str) {
+    assert_no_dispatch(result, metrics, context);
+    let ChokeResult::Rejected { gate_trace, .. } = result else {
+        // assert_no_dispatch already verified Rejected; this satisfies the compiler.
+        return;
+    };
+    assert!(
+        !gate_trace.contains(&GateStep::RecordedBeforeDispatch),
+        "{context}: gate_trace must not contain RecordedBeforeDispatch for pre-WAL rejections"
+    );
 }
 
 /// Known-passing baseline: all gates pass, risk_state Healthy, all feeds fresh.
@@ -110,7 +147,7 @@ pub fn base_open_input<'a>() -> IntentPipelineInput<'a> {
             min_edge_usd: 2.0,
             fee_estimate_usd: 2.0,
             qty: 1.0,
-            side: PricerSide::Buy,
+            side: Side::Buy,
         }),
         wal_recorded: true,
         requested_qty: Some(1.0),

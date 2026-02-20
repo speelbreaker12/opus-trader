@@ -6,12 +6,7 @@
 //!
 //! Missing `delta_limit` is fail-closed.
 
-/// Side under evaluation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InventorySkewSide {
-    Buy,
-    Sell,
-}
+use super::quantize::Side;
 
 /// Inventory Skew input.
 #[derive(Debug, Clone)]
@@ -23,7 +18,7 @@ pub struct InventorySkewInput {
     /// Absolute delta limit from policy/config. Missing => fail-closed.
     pub delta_limit: Option<f64>,
     /// Order side.
-    pub side: InventorySkewSide,
+    pub side: Side,
     /// Baseline minimum edge (USD).
     pub min_edge_usd: f64,
     /// Net edge (USD) from upstream net-edge computation.
@@ -170,8 +165,8 @@ pub fn evaluate_inventory_skew(
     let abs_bias = inventory_bias.abs();
 
     let risk_increasing = match input.side {
-        InventorySkewSide::Buy => inventory_bias > 0.0,
-        InventorySkewSide::Sell => inventory_bias < 0.0,
+        Side::Buy => inventory_bias > 0.0,
+        Side::Sell => inventory_bias < 0.0,
     };
 
     let adjusted_min_edge_usd = if risk_increasing {
@@ -189,10 +184,10 @@ pub fn evaluate_inventory_skew(
     let bias_ticks = raw_ticks as u8;
     let price_shift = f64::from(bias_ticks) * input.tick_size;
     let adjusted_limit_price = match (input.side, risk_increasing) {
-        (InventorySkewSide::Buy, true) => input.limit_price - price_shift,
-        (InventorySkewSide::Buy, false) => input.limit_price + price_shift,
-        (InventorySkewSide::Sell, true) => input.limit_price + price_shift,
-        (InventorySkewSide::Sell, false) => input.limit_price - price_shift,
+        (Side::Buy, true) => input.limit_price - price_shift,
+        (Side::Buy, false) => input.limit_price + price_shift,
+        (Side::Sell, true) => input.limit_price + price_shift,
+        (Side::Sell, false) => input.limit_price - price_shift,
     };
 
     if input.net_edge_usd < adjusted_min_edge_usd {
