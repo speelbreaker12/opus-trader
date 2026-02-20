@@ -179,9 +179,15 @@ on_exit() {
   # Guard: PARALLEL_ACTIVE_PIDS may be unset if we exit before line ~256.
   if [[ -n "${PARALLEL_ACTIVE_PIDS+x}" && "${#PARALLEL_ACTIVE_PIDS[@]}" -gt 0 ]]; then
     for _exit_pid in "${PARALLEL_ACTIVE_PIDS[@]}"; do
+      # Kill the subshell and its child processes (timeout wrapper + test command).
+      # pkill -P kills children of the subshell PID; the outer kill gets the subshell itself.
+      pkill -P "$_exit_pid" 2>/dev/null || true
       kill "$_exit_pid" 2>/dev/null || true
     done
-    wait 2>/dev/null || true
+    # Bounded wait: reap zombies but don't hang forever on stubborn processes.
+    for _exit_pid in "${PARALLEL_ACTIVE_PIDS[@]}"; do
+      wait "$_exit_pid" 2>/dev/null || true
+    done
   fi
 
   if [[ "$rc" -ne 0 ]]; then
