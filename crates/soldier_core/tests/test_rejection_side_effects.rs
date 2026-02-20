@@ -9,6 +9,9 @@
 
 #![allow(deprecated)]
 
+mod common;
+use common::{assert_no_dispatch, assert_no_dispatch_no_wal};
+
 use soldier_core::execution::preflight_intent;
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
@@ -48,24 +51,10 @@ impl PersistentState {
     }
 }
 
-fn assert_rejection_preserves_state(
-    result: &ChokeResult,
-    state_before: &PersistentState,
-    state_after: &PersistentState,
-    msg: &str,
-) {
-    assert!(
-        matches!(result, ChokeResult::Rejected { .. }),
-        "expected rejection result"
-    );
-    assert_eq!(state_before, state_after, "{msg}");
-}
-
 // ─── Canonical P1-C proof: rejected intent has no side effects ──────────
 
 #[test]
 fn test_rejected_intent_has_no_side_effects() {
-    let state_before = PersistentState::empty();
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults::all_passed();
 
@@ -76,22 +65,14 @@ fn test_rejected_intent_has_no_side_effects() {
         &gates,
     );
 
-    assert_rejection_preserves_state(
-        &result,
-        &state_before,
-        &PersistentState::empty(),
-        "Canonical P1-C rejection must not modify persistent state",
-    );
-
+    assert_no_dispatch_no_wal(&result, &metrics, "Canonical P1-C rejection");
     assert_eq!(metrics.rejected_total(), 1);
-    assert_eq!(metrics.approved_total(), 0);
 }
 
 // ─── Case 1: RiskState rejection (OPEN + Degraded) ──────────────────────
 
 #[test]
 fn test_rejected_risk_state_no_side_effects() {
-    let state_before = PersistentState::empty();
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults::all_passed();
 
@@ -102,7 +83,7 @@ fn test_rejected_risk_state_no_side_effects() {
         &gates,
     );
 
-    // Verify rejection
+    assert_no_dispatch_no_wal(&result, &metrics, "RiskState rejection");
     assert!(matches!(
         result,
         ChokeResult::Rejected {
@@ -110,18 +91,8 @@ fn test_rejected_risk_state_no_side_effects() {
             ..
         }
     ));
-
-    // Verify no persistent state changes
-    let state_after = PersistentState::empty();
-    assert_eq!(
-        state_before, state_after,
-        "RiskState rejection must not modify persistent state"
-    );
-
-    // Only metrics should change
     assert_eq!(metrics.rejected_total(), 1);
     assert_eq!(metrics.rejected_risk_state(), 1);
-    assert_eq!(metrics.approved_total(), 0);
 }
 
 // ─── Case 2: Preflight rejection (market order forbidden) ────────────────
@@ -300,7 +271,6 @@ fn test_rejected_pricer_no_side_effects() {
 
 #[test]
 fn test_rejected_wal_gate_no_side_effects() {
-    let state_before = PersistentState::empty();
     let mut metrics = ChokeMetrics::new();
 
     let gates = GateResults {
@@ -315,6 +285,9 @@ fn test_rejected_wal_gate_no_side_effects() {
         &gates,
     );
 
+    // WAL gate pushes RecordedBeforeDispatch to trace before checking — use
+    // assert_no_dispatch (NOT _no_wal).
+    assert_no_dispatch(&result, &metrics, "WAL gate rejection");
     assert!(matches!(
         result,
         ChokeResult::Rejected {
@@ -325,15 +298,7 @@ fn test_rejected_wal_gate_no_side_effects() {
             ..
         }
     ));
-
-    let state_after = PersistentState::empty();
-    assert_eq!(
-        state_before, state_after,
-        "WAL gate rejection must not modify persistent state"
-    );
-
     assert_eq!(metrics.rejected_total(), 1);
-    assert_eq!(metrics.approved_total(), 0);
 }
 
 // ─── Case 8: Invalid instrument metadata rejection ───────────────────────
