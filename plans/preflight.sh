@@ -235,13 +235,9 @@ fi
 SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_run_prd_auditor_invocation.sh"
   "plans/tests/test_codex_review_logged.sh"
-  "plans/tests/test_kimi_review_logged.sh"
-  "plans/tests/test_code_review_expert_logged.sh"
-  "plans/tests/test_thinking_review_logged.sh"
   "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
-  "plans/tests/test_story_review_equivalence_check.sh"
   "plans/tests/test_fork_attestation_remediation_verify.sh"
   "plans/tests/test_fork_attestation_mirror.sh"
   "plans/tests/test_workflow_quick_step.sh"

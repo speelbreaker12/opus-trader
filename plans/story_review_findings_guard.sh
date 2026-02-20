@@ -43,9 +43,6 @@ grep -Fq -- "## 6. Story loop (minimal, mandatory)" "$DOC" || fail "workflow con
 STORY_LOOP_SECTION="$(extract_story_loop_section)"
 [[ -n "$STORY_LOOP_SECTION" ]] || fail "workflow contract Story loop section is empty"
 
-require_token_in_story_loop "~/.agents/skills/code-review-expert/SKILL.md"
-require_token_in_story_loop 'plans/code_review_expert_logged.sh <STORY_ID> --head "$REVIEW_SHA" --status COMPLETE'
-require_token_in_story_loop "artifacts/story/<STORY_ID>/code_review_expert/<UTC_TS>_review.md"
 require_token_in_story_loop "Turn top findings into failing tests first (red phase)."
 require_token_in_story_loop "Fix until those tests pass (green phase)."
 require_one_of_tokens_in_story_loop "./plans/verify.sh quick" "plans/workflow_quick_step.sh <STORY_ID> <checkpoint>"

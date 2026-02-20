@@ -189,9 +189,9 @@ gh pr merge --squash --delete-branch
 
 | Feature | Tier 1 (this skill) | Tier 2 | Tier 3 (PRD) |
 |---------|---------------------|--------|--------------|
-| **Reviews regenerated** | Self-review only | Self + CRE | Self + Codex×2 + Kimi + CRE |
+| **Reviews regenerated** | Self-review only | Self + Codex | Self + Codex×2 |
 | **Verify level** | quick | full | full |
-| **Gate check** | None | None | story_review_gate.sh |
+| **Gate check** | None | None | prd_set_pass.sh |
 | **Artifact commit** | Standard | Standard | Artifact-only protocol |
 | **Artifacts required** | Optional | Optional | Mandatory |
 | **Use case** | Simple fixes | Complex features | PRD stories |

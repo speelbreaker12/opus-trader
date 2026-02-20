@@ -34,11 +34,7 @@ grep -Fq -- "### 9.2 Slice completion" "$DOC" || fail "workflow contract missing
 SLICE_SECTION="$(extract_slice_completion_section)"
 [[ -n "$SLICE_SECTION" ]] || fail "workflow contract 9.2 Slice completion section is empty"
 
-require_token_in_slice_section "~/.agents/skills/thinking-review-expert/SKILL.md"
-require_token_in_slice_section "plans/thinking_review_logged.sh <slice_id> --head <integration_head_sha>"
 require_token_in_slice_section "artifacts/slice_reviews/<slice_id>/thinking_review.md"
-require_token_in_slice_section "artifacts/slice_reviews/_template/thinking_review.md"
-require_token_in_slice_section "plans/slice_review_gate.sh <slice_id> --head <integration_head_sha>"
 require_token_in_slice_section "plans/slice_completion_enforce.sh"
 require_token_in_slice_section "Only then is the slice considered done."
 

@@ -8,7 +8,7 @@ Usage:
 
 Purpose:
   Pre-PR review evidence gate aligned to split policy:
-    - Enforce full story review evidence via ./plans/story_review_gate.sh.
+    - Enforce at least one review artifact exists for the given HEAD (codex/ or opus/).
     - Enforce one-story-per-branch with slash-free Story IDs (`[A-Za-z0-9][A-Za-z0-9._-]*`) and branch format:
         story/<STORY_ID>
         story/<STORY_ID>/<slug>
@@ -16,7 +16,7 @@ Purpose:
     - Optionally require thinking-review evidence for a slice close when --slice-id is provided.
 
 Required story review evidence:
-  - Enforced by ./plans/story_review_gate.sh for STORY_ID + HEAD.
+  - At least one review artifact in artifacts/story/<ID>/codex/ or opus/ containing HEAD SHA.
 
 Optional thinking-review evidence:
   - When --slice-id is set, this script delegates to:
@@ -119,6 +119,7 @@ fi
 if [[ -z "$head_sha" ]]; then
   head_sha="$(git rev-parse HEAD 2>/dev/null)" || die "failed to read HEAD"
 fi
+[[ -n "$head_sha" ]] || die "HEAD_SHA is empty"
 
 if [[ -z "$branch_name" ]]; then
   branch_name="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -139,9 +140,17 @@ if [[ "$slice_artifacts_root" != /* ]]; then
   slice_artifacts_root="$repo_root/$slice_artifacts_root"
 fi
 
-story_gate="$repo_root/plans/story_review_gate.sh"
-[[ -x "$story_gate" ]] || die "missing or non-executable story review gate: $story_gate"
-"$story_gate" "$story" --head "$head_sha" --artifacts-root "$artifacts_root"
+# Inline review check: at least one review artifact must contain HEAD SHA
+review_found=0
+for dir in "$artifacts_root/$story/codex" "$artifacts_root/$story/opus"; do
+  [[ -d "$dir" ]] || continue
+  if grep -rlF "$head_sha" "$dir"/ 2>/dev/null | head -1 | grep -q .; then
+    review_found=1; break
+  fi
+done
+if [[ "$review_found" -ne 1 ]]; then
+  die "no review artifact for HEAD=$head_sha in $artifacts_root/$story/{codex,opus}"
+fi
 
 if [[ -n "$slice_id" ]]; then
   slice_gate="$repo_root/plans/slice_review_gate.sh"

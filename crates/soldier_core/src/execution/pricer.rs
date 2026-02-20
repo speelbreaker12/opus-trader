@@ -14,14 +14,7 @@
 //!
 //! AT-223.
 
-// --- Pricer side ---------------------------------------------------------
-
-/// Order side for the pricer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PricerSide {
-    Buy,
-    Sell,
-}
+use super::quantize::Side;
 
 // --- Pricer input --------------------------------------------------------
 
@@ -39,7 +32,7 @@ pub struct PricerInput {
     /// Order quantity.
     pub qty: f64,
     /// Order side.
-    pub side: PricerSide,
+    pub side: Side,
 }
 
 // --- Pricer result -------------------------------------------------------
@@ -176,14 +169,14 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
 
     // max_price_for_min_edge (guarantees min edge at fill)
     let max_price_for_min_edge = match input.side {
-        PricerSide::Buy => input.fair_price - (min_edge_per_unit + fee_per_unit),
-        PricerSide::Sell => input.fair_price + (min_edge_per_unit + fee_per_unit),
+        Side::Buy => input.fair_price - (min_edge_per_unit + fee_per_unit),
+        Side::Sell => input.fair_price + (min_edge_per_unit + fee_per_unit),
     };
 
     // proposed_limit from fill aggressiveness
     let proposed_limit = match input.side {
-        PricerSide::Buy => input.fair_price - 0.5 * net_edge_per_unit,
-        PricerSide::Sell => input.fair_price + 0.5 * net_edge_per_unit,
+        Side::Buy => input.fair_price - 0.5 * net_edge_per_unit,
+        Side::Sell => input.fair_price + 0.5 * net_edge_per_unit,
     };
 
     if !max_price_for_min_edge.is_finite() || !proposed_limit.is_finite() {
@@ -192,8 +185,8 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
 
     // Clamp to guarantee min edge
     let limit_price = match input.side {
-        PricerSide::Buy => proposed_limit.min(max_price_for_min_edge),
-        PricerSide::Sell => proposed_limit.max(max_price_for_min_edge),
+        Side::Buy => proposed_limit.min(max_price_for_min_edge),
+        Side::Sell => proposed_limit.max(max_price_for_min_edge),
     };
 
     if !limit_price.is_finite() || limit_price <= 0.0 {
