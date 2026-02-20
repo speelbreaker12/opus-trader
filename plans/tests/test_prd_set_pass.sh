@@ -18,11 +18,28 @@ trap 'rm -rf "$tmp_dir"' EXIT
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
 story_id="WF-001"
+export REQUIRE_RECEIPT_CHAIN=0  # this test validates review + contract gates, not receipt chain
+
+# Compute dynamic diff file references for anti-fabrication cross-reference checks
+_diff_mention=""
+_diff_files_for_expert=""
+if git -C "$ROOT" rev-parse --verify "${head_sha}^" >/dev/null 2>&1; then
+  while IFS= read -r _df; do
+    [[ -n "$_df" ]] || continue
+    _diff_mention+="Reviewed $_df for correctness. "
+    _diff_files_for_expert+="$_df, "
+  done < <(git -C "$ROOT" diff --name-only "${head_sha}^..${head_sha}" 2>/dev/null | head -3)
+fi
+[[ -n "$_diff_mention" ]] || _diff_mention="Reviewed crates/soldier_core/src/execution/pipeline.rs for correctness. "
+[[ -n "$_diff_files_for_expert" ]] || _diff_files_for_expert="crates/soldier_core/src/execution/pipeline.rs, "
 
 setup_story_review_artifacts() {
   local case_dir="$1"
   local review_head="$2"
   local story_root="$case_dir/story_artifacts/$story_id"
+
+  local opus_dir="$story_root/opus"
+  local supervisor_dir="$story_root/supervisor"
 
   mkdir -p \
     "$story_root/self_review" \
