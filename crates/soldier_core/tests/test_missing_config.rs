@@ -14,7 +14,7 @@ use soldier_core::execution::{
 };
 use soldier_core::execution::{
     GateIntentClass, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
-    LiquidityGateRejectReason, LiquidityGateResult, evaluate_liquidity_gate,
+    LiquidityGateRejectReason, evaluate_liquidity_gate,
 };
 use soldier_core::execution::{
     NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
