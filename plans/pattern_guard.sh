@@ -154,9 +154,10 @@ scan_pattern "2" 'warn!.*missing|warn!.*not found' "Advisory" "warn-missing-conf
 
 # Pattern 3: Direct state assignment outside authority modules (BLOCK)
 # Matches single `=` (assignment) but not `==` (comparison) or `=>` (match arm).
-# Exclude authority modules: policy_guard, build_order_intent, state.rs, risk/mod.rs
+# Exclude authority modules: policy_guard, build_order_intent, state.rs, risk/mod.rs, open_runtime.rs
+# open_runtime.rs computes effective_risk_state from the authoritative risk_state + margin gate.
 scan_pattern "3" 'risk_state[[:space:]]*=[^=>\!]|trading_mode[[:space:]]*=[^=>\!]' "BLOCK" "direct-state-assign" \
-  'policy_guard|build_order_intent|state\.rs|risk/mod\.rs'
+  'policy_guard|build_order_intent|state\.rs|risk/mod\.rs|open_runtime\.rs'
 
 # Pattern 4: Fail-open defaults (BLOCK)
 scan_pattern "4" 'unwrap_or\(0\.0\)|unwrap_or\(f64::INFINITY\)|unwrap_or\(f64::MAX\)|unwrap_or\(Active\)|unwrap_or\(Healthy\)|unwrap_or\(RiskState::Healthy\)|unwrap_or\(TradingMode::Active\)|unwrap_or_default\(\)' "BLOCK" "fail-open-default"

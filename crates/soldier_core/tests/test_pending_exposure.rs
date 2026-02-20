@@ -985,7 +985,9 @@ fn test_drain_all_with_global_delta_limit_reclaims_budget() {
         PendingExposureResult::Reserved { pending_total, .. } => {
             assert!((pending_total - 250.0).abs() < 1e-9);
         }
-        other => panic!("reserve after drain should succeed with reclaimed global budget, got {other:?}"),
+        other => {
+            panic!("reserve after drain should succeed with reclaimed global budget, got {other:?}")
+        }
     }
 }
 
