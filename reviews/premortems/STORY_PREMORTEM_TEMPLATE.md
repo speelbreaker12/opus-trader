@@ -120,8 +120,16 @@ If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined A
 **STOPLIGHT**: GREEN / YELLOW / RED
 
 - **GREEN**: All gates pass, proof plan complete, no unresolved ambiguities
-- **YELLOW**: All gaps explicitly deferred with owner + target slice
+- **YELLOW**: All gaps explicitly deferred in Debt Register below
 - **RED**: Unresolved gates — do not implement
+
+**Debt Register** (required if YELLOW):
+
+| Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
+|------|----------|-------------|-------|-------------|-----------------|
+|      |          |             |       |             |                 |
+
+YELLOW with untracked debt (no target slice) = RED.
 
 **Exit criteria (definition of done, before I start):**
 - [ ] §1 clause audit: every AT traced to normative clause

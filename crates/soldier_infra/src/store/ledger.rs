@@ -1089,7 +1089,7 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
                     line = index + 1,
                     path = %path.display(),
                     error = %e,
-                    "skipping malformed trailing wal line"
+                    "skipping malformed trailing wal line (crash artifact)"
                 );
             }
         }
