@@ -275,6 +275,17 @@ fn test_barrier_timeout() {
         );
     }
 
+    // P2-1 fix: verify HashMap was NOT updated on barrier timeout.
+    // The event may be on disk (phantom intent) but must not be in memory.
+    assert!(
+        ledger.get("h1").is_none(),
+        "barrier timeout must NOT apply event to HashMap — prevents disk/memory divergence"
+    );
+    assert!(
+        ledger.get("h2").is_none(),
+        "degraded append must NOT apply event to HashMap"
+    );
+
     ledger.resume_writer();
     drop(ledger);
     remove_if_exists(&path);

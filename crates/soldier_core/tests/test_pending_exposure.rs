@@ -960,6 +960,36 @@ fn test_drain_all_allows_fresh_reserves_after() {
 }
 
 #[test]
+fn test_drain_all_with_global_delta_limit_reclaims_budget() {
+    let mut metrics = PendingExposureMetrics::new();
+    let book = PendingExposureBook::new(Some(500.0));
+    book.register_instrument("BTC", Some(300.0));
+    book.register_instrument("ETH", Some(300.0));
+
+    let r1 = ReservationId::new("btc-1").unwrap();
+    let r2 = ReservationId::new("eth-1").unwrap();
+
+    // Fill near global limit
+    book.reserve(&r1, "BTC", 0.0, 250.0, &mut metrics);
+    book.reserve(&r2, "ETH", 0.0, 200.0, &mut metrics);
+    assert!((book.global_pending_total() - 450.0).abs() < 1e-9);
+
+    // Drain clears everything
+    let cleared = book.drain_all(RiskState::Kill, &mut metrics);
+    assert_eq!(cleared, 2);
+    assert!((book.global_pending_total()).abs() < 1e-12);
+
+    // Fresh reserve succeeds — global budget fully reclaimed
+    let r3 = ReservationId::new("btc-2").unwrap();
+    match book.reserve(&r3, "BTC", 0.0, 250.0, &mut metrics) {
+        PendingExposureResult::Reserved { pending_total, .. } => {
+            assert!((pending_total - 250.0).abs() < 1e-9);
+        }
+        other => panic!("reserve after drain should succeed with reclaimed global budget, got {other:?}"),
+    }
+}
+
+#[test]
 fn test_drain_all_rejected_outside_kill_state() {
     let mut metrics = PendingExposureMetrics::new();
     let book = make_book(INST, 1000.0);
