@@ -63,22 +63,56 @@ impl BaseGatesMetrics {
 /// Proof that gates 1-6 passed. Cannot be constructed outside this module.
 ///
 /// Carries intermediate results needed by downstream gates (7-10).
+/// Fields are private to prevent forgery — only `evaluate_base_gates()` creates this.
 ///
-/// DO NOT derive Default or provide any public constructor.
-/// Only `evaluate_base_gates()` creates this.
+/// When `dispatch_auth_short_circuit` is true (CancelOnly or OPEN + !Healthy),
+/// `quantized()` and `fee_evaluation()` return `None` because the chokepoint
+/// will short-circuit before using them.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct BaseGatesPassed {
+    quantized: QuantizedValues,
+    fee_evaluation: FeeEvaluation,
+    gate_outcomes: Vec<GateOutcome>,
+    dispatch_auth_short_circuit: bool,
+    lifecycle_intent: LifecycleIntent,
+}
+
+impl BaseGatesPassed {
     /// Quantized order quantity from gate 3.
-    pub quantized: QuantizedValues,
+    /// Returns `None` when dispatch auth short-circuited (placeholder values).
+    pub fn quantized(&self) -> Option<&QuantizedValues> {
+        if self.dispatch_auth_short_circuit {
+            None
+        } else {
+            Some(&self.quantized)
+        }
+    }
+
     /// Fee evaluation from gate 5.
-    pub fee_evaluation: FeeEvaluation,
+    /// Returns `None` when dispatch auth short-circuited (placeholder values).
+    pub fn fee_evaluation(&self) -> Option<&FeeEvaluation> {
+        if self.dispatch_auth_short_circuit {
+            None
+        } else {
+            Some(&self.fee_evaluation)
+        }
+    }
+
     /// Gate outcomes (all Allow) for gates that were evaluated.
-    pub gate_outcomes: Vec<GateOutcome>,
-    /// Whether dispatch auth short-circuited (CancelOnly or CLOSE/HEDGE with any risk state).
-    pub dispatch_auth_short_circuit: bool,
+    pub fn gate_outcomes(&self) -> &[GateOutcome] {
+        &self.gate_outcomes
+    }
+
+    /// Whether dispatch auth short-circuited (CancelOnly or OPEN + !Healthy).
+    pub fn dispatch_auth_short_circuit(&self) -> bool {
+        self.dispatch_auth_short_circuit
+    }
+
     /// The lifecycle intent derived from intent_class (authoritative).
-    pub lifecycle_intent: LifecycleIntent,
+    pub fn lifecycle_intent(&self) -> LifecycleIntent {
+        self.lifecycle_intent
+    }
 }
 
 // ─── Rejection ──────────────────────────────────────────────────────────
@@ -140,7 +174,8 @@ impl From<&BaseGatesRejection> for BaseGatesLegacy {
             fee_cache_reject_code: None,
             expiry_guard_reject_code: None,
         };
-        // Mark the failed gate and all subsequent gates as failed
+        // Legacy semantics are non-cascading: mark only the failed gate as failed,
+        // leaving later gate bools as-is. Tests rely on this behavior.
         match rejection.gate {
             GateStep::DispatchAuth => {
                 // DispatchAuth failure is handled by the chokepoint, not by gate bools.
