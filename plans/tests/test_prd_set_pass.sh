@@ -18,20 +18,6 @@ trap 'rm -rf "$tmp_dir"' EXIT
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
 story_id="WF-001"
-export REQUIRE_RECEIPT_CHAIN=0  # this test validates review + contract gates, not receipt chain
-
-# Compute dynamic diff file references for anti-fabrication cross-reference checks
-_diff_mention=""
-_diff_files_for_expert=""
-if git -C "$ROOT" rev-parse --verify "${head_sha}^" >/dev/null 2>&1; then
-  while IFS= read -r _df; do
-    [[ -n "$_df" ]] || continue
-    _diff_mention+="Reviewed $_df for correctness. "
-    _diff_files_for_expert+="$_df, "
-  done < <(git -C "$ROOT" diff --name-only "${head_sha}^..${head_sha}" 2>/dev/null | head -3)
-fi
-[[ -n "$_diff_mention" ]] || _diff_mention="Reviewed crates/soldier_core/src/execution/pipeline.rs for correctness. "
-[[ -n "$_diff_files_for_expert" ]] || _diff_files_for_expert="crates/soldier_core/src/execution/pipeline.rs, "
 
 setup_story_review_artifacts() {
   local case_dir="$1"
@@ -380,6 +366,7 @@ EOF
 set +e
 loss_mode_output="$(
   cd "$ROOT" && \
+  WF_STEP=/bin/true \
   PRD_FILE="$loss_mode_case/prd.json" \
   VERIFY_ARTIFACTS_DIR="$loss_mode_case/artifacts" \
   STORY_ARTIFACTS_ROOT="$loss_mode_case/story_artifacts" \
@@ -393,7 +380,7 @@ set -e
 echo "$loss_mode_output" | grep -Fq "loss_mode incomplete for $story_id" || fail "missing loss_mode gate diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$loss_mode_case/prd.json" >/dev/null || fail "passes changed despite loss_mode gate failure"
 
-# loss_mode gate: malformed loss_mode (non-object) blocks pass flip (exit 9)
+# ── Test 6: loss_mode gate — malformed loss_mode (non-object) blocks pass flip ──
 malformed_loss_case="$tmp_dir/malformed_loss"
 mkdir -p "$malformed_loss_case"
 setup_case "$malformed_loss_case" "$head_sha"
@@ -408,6 +395,7 @@ EOF
 set +e
 malformed_loss_output="$(
   cd "$ROOT" && \
+  WF_STEP=/bin/true \
   PRD_FILE="$malformed_loss_case/prd.json" \
   VERIFY_ARTIFACTS_DIR="$malformed_loss_case/artifacts" \
   STORY_ARTIFACTS_ROOT="$malformed_loss_case/story_artifacts" \
@@ -420,7 +408,7 @@ set -e
 [[ "$malformed_loss_rc" -ne 0 ]] || fail "expected failure for malformed loss_mode"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$malformed_loss_case/prd.json" >/dev/null || fail "passes changed despite malformed loss_mode"
 
-# loss_mode gate: policy stories are exempt (should not check loss_mode)
+# ── Test 7: loss_mode gate — policy stories are exempt ──────────────
 policy_exempt_case="$tmp_dir/policy_exempt"
 mkdir -p "$policy_exempt_case"
 setup_case "$policy_exempt_case" "$head_sha"
@@ -437,6 +425,7 @@ EOF
 set +e
 policy_exempt_output="$(
   cd "$ROOT" && \
+  WF_STEP=/bin/true \
   PRD_FILE="$policy_exempt_case/prd.json" \
   VERIFY_ARTIFACTS_DIR="$policy_exempt_case/artifacts" \
   STORY_ARTIFACTS_ROOT="$policy_exempt_case/story_artifacts" \
@@ -449,5 +438,30 @@ set -e
 # Should NOT exit 9 (loss_mode) or 6 (AT ownership) — policy is exempt from both
 [[ "$policy_exempt_rc" -ne 9 ]] || fail "policy story should be exempt from loss_mode gate"
 [[ "$policy_exempt_rc" -ne 6 ]] || fail "policy story should be exempt from AT ownership gate"
+
+# ── Test 8: Inline review check — no review artifact fails ──────────
+no_review_case="$tmp_dir/no_review"
+mkdir -p "$no_review_case"
+setup_case "$no_review_case" "$head_sha"
+# Remove all review artifacts
+rm -rf "$no_review_case/story_artifacts/$story_id/codex"
+rm -rf "$no_review_case/story_artifacts/$story_id/opus"
+
+set +e
+no_review_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$no_review_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$no_review_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$no_review_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$no_review_case/artifacts/contract_review.json" 2>&1
+)"
+no_review_rc=$?
+set -e
+
+[[ "$no_review_rc" -eq 4 ]] || fail "expected exit 4 for missing review artifacts, got $no_review_rc"
+echo "$no_review_output" | grep -Fq "no review artifact for HEAD=" || fail "missing inline review check diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$no_review_case/prd.json" >/dev/null || fail "passes changed despite missing review artifacts"
 
 echo "PASS: prd_set_pass"
