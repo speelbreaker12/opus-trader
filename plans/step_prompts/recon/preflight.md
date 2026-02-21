@@ -1,40 +1,34 @@
 ROLE
-You are the Auditor performing a BLIND premortem. Do ONLY this step. Do not skip ahead.
-This is RECONCILIATION mode — the story already has passes=true. You are auditing retroactively.
+You are the Builder performing RECONCILIATION PREFLIGHT for ${STORY_ID}.
+This is an audit step. Do NOT write production code in this step.
 
-STORY: ${STORY_ID}
+STORY
+- Story ID: ${STORY_ID}
+- Base branch: ${BASE_BRANCH}
+- Current HEAD: ${HEAD}
 
-TASK — BLIND PREMORTEM (do NOT read implementation code)
-- Read the PRD story entry from plans/prd.json for ${STORY_ID}.
-- Read the referenced CONTRACT.md sections (enforcing_contract_ats, enforcement_point).
-- Do NOT read any crate source code or test files. Do NOT run cargo check.
-- Write a premortem using standard §0-§10 format (same as scaffold_premortem.sh output):
-  - §0: What we're building (story ref, contract clauses, ATs, scope, risk rating)
-  - §1: Clause audit — what each AT requires (MUST/SHOULD/MAY classification)
-  - §2: Assumptions — each must become a test or get killed
-  - §3: Top 5 failure modes — what should fail-closed
-  - §4: Open decisions — resolve before coding
-  - §5: Wrong implementation gate — what wrong impl would pass
-  - §6: Proof plan — what tests must exist and what they prove (AT → enforcement → tests)
-  - §7: Economic risk (loss_mode)
-  - §8: Conflict scan & hot zones
-  - §9: Constraint I expect to hit (include lessons from prior postmortems if available)
-  - §10: STOPLIGHT + Exit criteria
-- Save to artifacts/story/${STORY_ID}/premortem.md
-- Do NOT create any production code changes.
+TASK
+1) Read the PRD entry for ${STORY_ID} in plans/prd.json.
+2) Read the referenced contract clauses / ATs in specs/CONTRACT.md.
+3) Read the prior postmortem: ${PRIOR_POSTMORTEM_PATH}
+   - If not NONE: read section "## 8) Next-Story Startup Note" for carry-forward constraints.
+   - If NONE: no prior postmortem exists.
+4) For each AT in enforcing_contract_ats:
+   - identify the proving test file and test function (or mark missing)
+   - check if proof is CAUSAL (reject reason, dispatch_count, latch/mode/result), not just existence
+   - note proof quality: PROVEN / WEAK / MISSING / DEFERRED
+5) Verify all scope.touch files exist.
+6) Run: cargo check --workspace
+7) Produce an AT proof audit table and a STOPLIGHT verdict for this story.
 
 OUTPUT
-- Reply with:
-  - Current HEAD SHA
-  - PRD story summary (1-2 lines)
-  - Premortem STOPLIGHT color
-  - "READY FOR IMPLEMENT"
+- AT Proof Audit table: | AT | Test file:line | Causal? | Status | Notes |
+- scope.touch file existence summary
+- Contract alignment notes (including any paper-compliance risk)
+- STOPLIGHT: GREEN / YELLOW / RED
+- End with exact line: READY FOR IMPLEMENT
 
-PROHIBITED (applies to ALL steps)
-- Do NOT read implementation source code (crates/, src/) — premortem must be blind
-- Do NOT run cargo check or cargo test
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
-- Do NOT edit .wf/receipts/ or any workflow state files
-- Do NOT modify plans/prd.json passes field
-- Do NOT proceed to any step beyond the one assigned
-- Do NOT claim the step is "done" — only the supervisor validates completion
+PROHIBITED
+- Do NOT edit production code
+- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
+- Do NOT hand-wave missing tests as "covered elsewhere" without naming exact test files

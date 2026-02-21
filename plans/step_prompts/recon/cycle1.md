@@ -78,11 +78,9 @@ OUTPUT
 - If clean: include explicit statement: "No blocking findings; reconciliation proof is causal and sufficient."
 - End with: "READY FOR FIX".
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
-- Do NOT edit .wf/receipts/ or any workflow state files
-- Do NOT modify plans/prd.json passes field
-- Do NOT proceed to any step beyond the one assigned
+PROHIBITED
+- Do NOT hand-write review artifacts
+- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
 - Do NOT edit any source code — review only
 - Do NOT write review markdown by hand — use review_logged.sh
 - Do NOT review only the git diff if no code changed yet

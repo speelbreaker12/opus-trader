@@ -1,25 +1,25 @@
 ROLE
-You are the Builder. Final verification only.
-This is RECONCILIATION mode — the story already has passes=true.
+You are the Builder running full verification for ${STORY_ID}.
+This is the final proof step before any pass-flip.
 
-STORY: ${STORY_ID}
+STORY
+- Story ID: ${STORY_ID}
+- Base branch: ${BASE_BRANCH}
+- Current HEAD: ${HEAD}
 
 TASK
-- Ensure the working tree is clean (no uncommitted changes).
-- Run `./plans/verify.sh quick` first to catch obvious issues.
-- Then run `./plans/verify.sh full` for the complete verification suite.
-- If verify fails, fix the issues and re-run until it passes.
-- Ensure artifacts/verify/<run>/verify.meta.json exists and has mode=full and head_sha == current HEAD.
-- Do NOT flip passes=true (story already passes).
+1) Run full verification: ./plans/verify.sh full
+2) Confirm the run completed successfully.
+3) Confirm the verification artifact (verify.meta.json) has mode=full and head_sha == current HEAD.
+4) Summarize any warnings and whether they are informational or blocking.
 
 OUTPUT
-- Provide verify run path.
-- Provide summary of gates (all .rc files must be 0).
-- End with: "READY TO PASS".
+- Verification command result (PASS/FAIL)
+- Path to verify metadata artifact
+- Current HEAD used for verification
+- End with exact line: READY FOR PASS_FLIP
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run prd_set_pass.sh or flip passes=true
-- Do NOT edit .wf/receipts/ or any workflow state files
-- Do NOT modify plans/prd.json passes field
-- Do NOT proceed to any step beyond the one assigned
-- Do NOT claim the step is "done" — only the supervisor validates completion
+PROHIBITED
+- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
+- Do NOT claim PASS if full verify failed
+- Do NOT skip reporting the HEAD used for verification

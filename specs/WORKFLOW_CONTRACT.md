@@ -62,6 +62,7 @@ These files must exist in the fork and remain functional:
 
 Optional but recommended:
 - `plans/preflight.sh` (cheap early failure detector)
+- `plans/postmortem_gate.sh` (TOC postmortem artifact validator)
 - `plans/story_postmortem_logged.sh` (story-level postmortem artifact logger)
 - `plans/codex_review_digest.sh` (concise Codex digest artifact generator)
 - `reviews/REVIEW_CHECKLIST.md`
@@ -361,7 +362,6 @@ No other process requirements are imposed.
 
 - Ralph loop, `.ralph/**` artifacts
 - workflow acceptance (and any CI-forced workflow acceptance routing)
-- postmortem gate
 - "CI mirrors local behavior" heuristics beyond running `./plans/verify.sh full`
 
 This fork optimizes for: **clarity → throughput → correctness**.

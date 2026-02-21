@@ -5,19 +5,21 @@ STORY: ${STORY_ID}
 BASE_BRANCH: ${BASE_BRANCH}
 
 TASK
-- Run at least 1 additional external review against the full diff (--base ${BASE_BRANCH}):
-  - `./plans/codex_review_logged.sh --base ${BASE_BRANCH}` or `./plans/opus_review_logged.sh --base ${BASE_BRANCH}`
-- Re-review only the delta since cycle1.
-- Confirm BLOCKING=0.
-- Confirm no new bypasses introduced by fixes.
+Run the logged review script again to produce cycle 2 review on the fixed code:
+- `./plans/review_logged.sh ${STORY_ID} --tool codex --base ${BASE_BRANCH}`
+  (or: `./plans/codex_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH}`)
+
+This must generate a second logged review artifact (with logger provenance / transcript hashes).
 
 OUTPUT
-- Write review file to artifacts/story/${STORY_ID}/codex/ (or opus/).
-- Include STOPLIGHT + finding table.
-- End with: "READY FOR RESOLUTION".
+- New cycle 2 review file path
+- Count of BLOCKING/MAJOR/MEDIUM findings (should be 0)
+- End exactly with: READY FOR CYCLE2 GATE
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
+PROHIBITED
+- Do NOT write the review file by hand
+- Do NOT edit code in this step
+- Do NOT run wf_step.sh, story_review_gate.sh, prd_set_pass.sh, or verify.sh
 - Do NOT edit .wf/receipts/ or any workflow state files
 - Do NOT modify plans/prd.json passes field
 - Do NOT proceed to any step beyond the one assigned

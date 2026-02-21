@@ -1,26 +1,30 @@
 ROLE
-You are the Reviewer. Audit only. No code edits.
+You are the Reviewer. Audit request only. No code edits.
 
 STORY: ${STORY_ID}
 BASE_BRANCH: ${BASE_BRANCH}
 
 TASK
-- Run external reviews against the full story diff (--base ${BASE_BRANCH}):
-  - At least 1 Codex or Opus review: `./plans/review_logged.sh ${STORY_ID} --tool codex --base ${BASE_BRANCH}` or `./plans/review_logged.sh ${STORY_ID} --tool opus --base ${BASE_BRANCH}`
-- Review the diff and the self-review artifacts.
-- Classify findings: BLOCKING / MEDIUM / LOW.
-- Flag any paper compliance: AT claimed but no causal proof.
-- Flag any fail-open patterns.
+Run the logged review scripts (do NOT hand-write review files):
+1) `./plans/review_logged.sh ${STORY_ID} --tool codex --base ${BASE_BRANCH}`
+   (or: `./plans/codex_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH}`)
+2) Optionally also: `./plans/review_logged.sh ${STORY_ID} --tool opus --base ${BASE_BRANCH}`
+   (or: `./plans/opus_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH}`)
+
+Wait for scripts to generate artifacts under:
+- artifacts/story/${STORY_ID}/codex/
+- artifacts/story/${STORY_ID}/opus/ (if run)
 
 OUTPUT
-- Write review file(s) to artifacts/story/${STORY_ID}/codex/ (or opus/).
-- Include STOPLIGHT + finding table.
-- End with: "READY FOR FIX".
+- List all generated review file paths
+- Count of BLOCKING/MAJOR/MEDIUM findings across cycle 1
+- End exactly with: READY FOR CYCLE1 GATE
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
+PROHIBITED
+- Do NOT write review markdown by hand
+- Do NOT edit code in this step
+- Do NOT run wf_step.sh, story_review_gate.sh, prd_set_pass.sh, or verify.sh
 - Do NOT edit .wf/receipts/ or any workflow state files
 - Do NOT modify plans/prd.json passes field
 - Do NOT proceed to any step beyond the one assigned
-- Do NOT edit any source code — review only
 - Do NOT claim the step is "done" — only the supervisor validates completion

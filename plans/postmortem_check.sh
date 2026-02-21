@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Postmortem check: verifies at least one postmortem artifact was changed.
+# Checks both legacy (reviews/postmortems/) and current (artifacts/story/*/postmortem.md) paths.
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 BASE_REF="${BASE_REF:-origin/main}"
-POSTMORTEM_DIR="${POSTMORTEM_DIR:-reviews/postmortems}"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -15,13 +17,6 @@ fail() {
 warn() {
   echo "WARN: $*" >&2
 }
-
-require_dir() {
-  local path="$1"
-  [[ -d "$path" ]] || fail "Missing required directory: $path"
-}
-
-require_dir "$POSTMORTEM_DIR"
 
 if ! command -v git >/dev/null 2>&1; then
   fail "git is required for postmortem check"
@@ -42,9 +37,14 @@ if [[ -z "$changed_files" ]]; then
   exit 0
 fi
 
-postmortem_changed="$(echo "$changed_files" | grep -E "^${POSTMORTEM_DIR}/.*\.md$" | grep -vE "(README|PR_POSTMORTEM_TEMPLATE)\.md$" || true)"
-if [[ -z "$postmortem_changed" ]]; then
-  fail "No postmortem entry changed under ${POSTMORTEM_DIR} (required for every PR)"
+# Check current path: artifacts/story/*/postmortem.md
+current_pm="$(echo "$changed_files" | grep -E '^artifacts/story/.+/postmortem\.md$' || true)"
+
+# Check legacy path: reviews/postmortems/*.md (excluding README/templates)
+legacy_pm="$(echo "$changed_files" | grep -E '^reviews/postmortems/.*\.md$' | grep -vE '(README|TEMPLATE)\.md$' || true)"
+
+if [[ -z "$current_pm" && -z "$legacy_pm" ]]; then
+  fail "No postmortem entry changed (expected artifacts/story/<ID>/postmortem.md or reviews/postmortems/*.md)"
 fi
 
 echo "postmortem check: OK"

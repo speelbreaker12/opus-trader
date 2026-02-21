@@ -4,10 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ./plans/story_postmortem_logged.sh <STORY_ID> [--head <sha>] [--out-root <path>] [--verify-artifacts <dir>]
+  ./plans/story_postmortem_logged.sh <STORY_ID> [--head <sha>] [--out-root <path>]
 
-Writes:
-  artifacts/story/<ID>/postmortem/<UTC_TS>_postmortem.md
+Scaffolds a TOC-style postmortem from plans/postmortem_template.md.
+Writes: artifacts/story/<ID>/postmortem.md
+
+Use plans/postmortem_gate.sh to validate the filled artifact.
 USAGE
 }
 
@@ -16,8 +18,7 @@ story="${1:-}"
 shift
 
 head_sha=""
-out_root="${STORY_ARTIFACTS_ROOT:-${CODEX_ARTIFACTS_ROOT:-artifacts/story}}"
-verify_dir=""
+out_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,10 +28,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --out-root)
       out_root="${2:?missing path}"
-      shift 2
-      ;;
-    --verify-artifacts)
-      verify_dir="${2:?missing dir}"
       shift 2
       ;;
     -h|--help)
@@ -55,50 +52,26 @@ if [[ "$out_root" != /* ]]; then
   out_root="$repo_root/$out_root"
 fi
 
-dir="$out_root/$story/postmortem"
+dir="$out_root/$story"
 mkdir -p "$dir"
 
-ts="$(date -u +%Y%m%dT%H%M%SZ)"
-file="$dir/${ts}_postmortem.md"
+file="$dir/postmortem.md"
 
-cat > "$file" <<EOF
-# Story Postmortem
+if [[ -f "$file" ]]; then
+  echo "Already exists: $file" >&2
+  echo "$file"
+  exit 0
+fi
 
-Story: $story
-HEAD: $head_sha
-Timestamp (UTC): $ts
+template="$repo_root/plans/postmortem_template.md"
+if [[ ! -f "$template" ]]; then
+  echo "ERROR: template missing: $template" >&2
+  exit 1
+fi
 
-## What shipped
-- (1-3 bullets)
+sed -e "s/\${STORY_ID}/${story}/g" \
+    -e "s/\${HEAD}/${head_sha}/g" \
+    "$template" > "$file"
 
-## Where it hurt (friction)
-- (what was confusing, slow, error-prone)
-
-## Codex findings -> fixes
-- Codex review artifacts:
-  - (paste paths to artifacts/story/$story/codex/*_review.md and/or *_digest.md)
-- Blocking/major issues and how they were fixed:
-  - Issue:
-    Fix:
-    Root cause:
-
-## Verify failures -> fixes
-- Verify artifacts dir: ${verify_dir:-<fill>}
-- FAILED_GATE (if any):
-- Fix applied:
-- Root cause:
-
-## Root cause analysis (why did I make the mistakes?)
-Choose all that apply:
-- [ ] Misread contract (cite section)
-- [ ] Skipped a self-review step
-- [ ] Incomplete concrete walkthrough
-- [ ] Tests did not cover the failure mode
-- [ ] Tooling / environment issue
-- [ ] Other:
-
-## Process improvement (one change)
-- What I will change next story to prevent repeat:
-EOF
-
-echo "Saved postmortem: $file"
+echo "Scaffolded postmortem: $file"
+echo "Validate with: ./plans/postmortem_gate.sh $story --head $head_sha"

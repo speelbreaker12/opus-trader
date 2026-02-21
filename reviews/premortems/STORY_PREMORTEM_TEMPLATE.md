@@ -113,9 +113,12 @@ If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined A
 
 ## 9) Constraint I expect to hit
 
-> Before filling this section, read `reviews/postmortems/<prior-story>_postmortem.md` for stories in the same slice/crate. Prior pain becomes current prevention.
+> The supervisor injects the prior postmortem path. Read section 8 (Next-Story Startup Note).
 
-- Lessons from prior story postmortems:
+Prior Postmortem: <path or NONE>
+Reused Guardrail: <one concrete rule carried forward, or NONE if no prior postmortem>
+
+- Carry-forward from prior postmortem (paste startup note):
 - What will slow me down:
 - Exploit (workaround for this story):
 - Smallest fix that prevents it next time:

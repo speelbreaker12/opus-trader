@@ -1,17 +1,17 @@
 # PR Postmortems
 
-Purpose
-- Each PR must add a filled postmortem entry based on `PR_POSTMORTEM_TEMPLATE.md`.
-- Entries are structured for parsing and enforcement.
+## Current Location
 
-Naming
-- Use `YYYY-MM-DD_<short-description>.md`.
+Story postmortems now live at `artifacts/story/<STORY-ID>/postmortem.md` using the TOC template at `plans/postmortem_template.md`.
 
-Rules
-- Every PR must include at least one entry file in this folder.
-- Entries must follow `PR_POSTMORTEM_TEMPLATE.md` and include all required sections.
-- If a recurring issue is identified in the postmortem, update `WORKFLOW_FRICTION.md` with the next elevation action.
+Validate with: `./plans/postmortem_gate.sh <STORY-ID> [--head <sha>]`
 
-Historical note
-- Older entries may reference legacy Ralph/workflow-acceptance files.
-- Treat those references as archival context, not current workflow contract.
+Scaffold with: `./plans/scaffold_postmortem.sh <STORY-ID>`
+
+## Legacy Entries
+
+Older entries in this folder used the previous postmortem format. Treat those as archival context, not current workflow contract.
+
+## Naming (legacy)
+
+Legacy entries used `YYYY-MM-DD_<short-description>.md`.
