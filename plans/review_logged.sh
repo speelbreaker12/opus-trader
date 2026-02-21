@@ -13,10 +13,10 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  plans/review_logged.sh STORY_ID --tool <codex|opus> [options] [-- <extra tool args>]
+  plans/review_logged.sh STORY_ID --tool <codex|opus|kimi> [options] [-- <extra tool args>]
 
 Options:
-  --tool TOOL      Required: codex or opus
+  --tool TOOL      Required: codex, opus, or kimi
   --commit REF     Review a specific commit (default: HEAD)
   --base REF       Review diff from base to HEAD
   --uncommitted    Review uncommitted changes
@@ -30,6 +30,7 @@ Artifacts:
 Examples:
   plans/review_logged.sh S1-004 --tool codex --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool opus --base run/slice1-clean
+  plans/review_logged.sh S1-004 --tool kimi --base main
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
   plans/review_logged.sh S1-004 --tool opus --files "crates/soldier_core/src/gate.rs crates/soldier_core/src/risk.rs"
 EOF
@@ -43,6 +44,12 @@ sha256_file() {
   fi
   shasum -a 256 "$file" | awk '{print $1}'
 }
+
+# Portable uppercase-first (zsh lacks ${var^})
+ucfirst() { echo "$1" | awk '{print toupper(substr($0,1,1)) substr($0,2)}'; }
+
+# Portable lowercase (zsh lacks ${var,,})
+lcase() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 
 story="${1:-}"
 if [[ -z "$story" || "$story" == "-h" || "$story" == "--help" ]]; then
@@ -105,14 +112,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$tool" ]] || { echo "ERROR: --tool is required (codex or opus)" >&2; exit 2; }
+[[ -n "$tool" ]] || { echo "ERROR: --tool is required (codex, opus, or kimi)" >&2; exit 2; }
 case "$tool" in
-  codex|opus) ;;
-  *) echo "ERROR: unknown tool '$tool' (expected: codex or opus)" >&2; exit 2 ;;
+  codex|opus|kimi) ;;
+  *) echo "ERROR: unknown tool '$tool' (expected: codex, opus, or kimi)" >&2; exit 2 ;;
 esac
 
 if [[ -z "$title" ]]; then
-  title="$story: ${tool^} review"
+  title="$story: $(ucfirst "$tool") review"
 fi
 
 if [[ "$mode" == "base" && -z "$base" ]]; then
@@ -130,6 +137,9 @@ case "$tool" in
     ;;
   opus)
     command -v claude >/dev/null 2>&1 || { echo "ERROR: claude CLI not found in PATH" >&2; exit 2; }
+    ;;
+  kimi)
+    command -v kimi >/dev/null 2>&1 || { echo "ERROR: kimi CLI not found in PATH" >&2; exit 2; }
     ;;
 esac
 
@@ -179,11 +189,8 @@ case "$tool" in
       base)        cmd+=("--base" "$base") ;;
       uncommitted) cmd+=("--uncommitted") ;;
       files)
-        # codex doesn't natively support --files; use --uncommitted with file context
-        # Build a temp file containing file contents as pseudo-diff for codex
-        files_tmp="$(mktemp)"
-        printf '%s' "$files_context" > "$files_tmp"
-        cmd+=("--uncommitted")
+        echo "ERROR: --files mode is not supported with codex (use --tool opus instead)" >&2
+        exit 2
         ;;
     esac
     if [[ ${#extra[@]} -gt 0 ]]; then
@@ -222,7 +229,7 @@ case "$tool" in
 
     review_prompt="You are a senior code reviewer for story $story on branch $branch (HEAD: $head_sha).
 
-Review the following ${review_context_label,,} and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
+Review the following $(lcase "$review_context_label") and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
 
 Focus on:
 - Correctness bugs and logic errors
@@ -253,6 +260,68 @@ ${diff_context:-(no content available)}
       cmd+=("${extra[@]}")
     fi
     ;;
+
+  kimi)
+    # Build diff/files context (same as opus)
+    diff_context=""
+    case "$mode" in
+      commit)
+        resolved="$(git rev-parse "${commit}^{commit}" 2>/dev/null || true)"
+        if [[ -n "$resolved" ]]; then
+          if git rev-parse "${resolved}^" >/dev/null 2>&1; then
+            diff_context="$(git diff "${resolved}^..${resolved}" 2>/dev/null || true)"
+          else
+            diff_context="$(git show --format= "${resolved}" 2>/dev/null || true)"
+          fi
+        fi
+        ;;
+      base)
+        diff_context="$(git diff "${base}...HEAD" 2>/dev/null || true)"
+        ;;
+      uncommitted)
+        diff_context="$(git diff HEAD 2>/dev/null || true)"
+        ;;
+      files)
+        diff_context="$files_context"
+        ;;
+    esac
+
+    review_context_label="Diff"
+    [[ "$mode" == "files" ]] && review_context_label="Files to review"
+
+    review_prompt="You are a senior code reviewer for story $story on branch $branch (HEAD: $head_sha).
+
+Review the following $(lcase "$review_context_label") and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
+
+Focus on:
+- Correctness bugs and logic errors
+- Safety violations (unwrap in production, silent error drops, fail-open paths)
+- Missing or inadequate tests
+- Contract violations (specs/CONTRACT.md)
+- Security issues (injection, auth gaps, race conditions)
+- Performance regressions
+
+For each finding, include:
+- File path and line number
+- Severity level (P0-P3)
+- Description of the issue
+- Suggested fix
+
+Title: $title
+
+${review_context_label}:
+\`\`\`
+${diff_context:-(no content available)}
+\`\`\`"
+
+    prompt_tmp="$(mktemp)"
+    printf '%s' "$review_prompt" > "$prompt_tmp"
+
+    cmd=("kimi" "--print" "--final-message-only" "--model" "k2.5")
+    if [[ ${#extra[@]} -gt 0 ]]; then
+      cmd+=("${extra[@]}")
+    fi
+    ;;
 esac
 
 # ── Run review command ──────────────────────────────────────────────
@@ -265,7 +334,7 @@ trap cleanup EXIT
 
 start_epoch="$(date +%s)"
 set +e
-if [[ "$tool" == "opus" && -n "$prompt_tmp" ]]; then
+if [[ ("$tool" == "kimi" || "$tool" == "opus") && -n "$prompt_tmp" ]]; then
   "${cmd[@]}" < "$prompt_tmp" 2>&1 | tee "$transcript_tmp"
 else
   "${cmd[@]}" 2>&1 | tee "$transcript_tmp"
@@ -282,7 +351,7 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 # ── Write artifact with provenance header ───────────────────────────
 
 {
-  echo "# ${tool^} review"
+  echo "# $(ucfirst "$tool") review"
   echo
   echo "- Story: $story"
   echo "- Timestamp (UTC): $ts"
@@ -300,6 +369,8 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
   fi
   if [[ "$tool" == "opus" ]]; then
     echo "- Model: claude-opus-4-6"
+  elif [[ "$tool" == "kimi" ]]; then
+    echo "- Model: kimi-k2.5"
   fi
   echo "- Command: ${cmd[*]}"
   echo "- Artifact Provenance: logger-v1"
@@ -324,5 +395,5 @@ if [[ "$tool" == "codex" ]]; then
   fi
 fi
 
-echo "Saved ${tool^} review: $outfile" >&2
+echo "Saved $(ucfirst "$tool") review: $outfile" >&2
 exit "$rc"

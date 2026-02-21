@@ -173,3 +173,63 @@ fn test_pub_reexport() {
     let _kind: DeribitInstrumentKind = DeribitInstrumentKind::Future;
     let _period: SettlementPeriod = SettlementPeriod::Perpetual;
 }
+
+// ─── GAP-011-1: empty JSON deserialization failure ───────────────────────
+
+/// GAP-011-1: Empty JSON object must fail to deserialize into DeribitInstrument.
+///
+/// Proves that required fields (instrument_name, kind, is_active,
+/// settlement_period, settlement_currency, quote_currency, base_currency,
+/// tick_size, min_trade_amount, contract_size, creation_timestamp)
+/// are NOT all Option or serde(default). If this test ever passes,
+/// it means a required field was made optional — a contract violation.
+#[test]
+fn test_empty_json_fails_deserialization() {
+    let result = serde_json::from_str::<DeribitInstrument>("{}");
+    assert!(
+        result.is_err(),
+        "empty JSON must fail deserialization — required fields are not all Option/default"
+    );
+}
+
+// DA-006: Per-field omission tests for safety-critical required fields.
+// Each test removes exactly one field from a valid payload and asserts
+// deserialization fails. This catches a single field becoming optional
+// via #[serde(default)] — something the empty-JSON test above cannot detect.
+
+/// Baseline: the full payload minus one field must fail for each required field.
+fn btc_perpetual_without(field: &str) -> String {
+    let mut value: serde_json::Value =
+        serde_json::from_str(BTC_PERPETUAL_JSON).expect("baseline JSON must parse");
+    let obj = value.as_object_mut().unwrap();
+    assert!(
+        obj.remove(field).is_some(),
+        "field '{field}' not found in baseline JSON"
+    );
+    serde_json::to_string(&value).unwrap()
+}
+
+#[test]
+fn test_required_fields_individually_enforced() {
+    let required_fields = [
+        "instrument_name",
+        "kind",
+        "is_active",
+        "settlement_period",
+        "settlement_currency",
+        "quote_currency",
+        "base_currency",
+        "tick_size",
+        "min_trade_amount",
+        "contract_size",
+        "creation_timestamp",
+    ];
+    for field in required_fields {
+        let json = btc_perpetual_without(field);
+        let result = serde_json::from_str::<DeribitInstrument>(&json);
+        assert!(
+            result.is_err(),
+            "removing '{field}' must cause deserialization failure — field must not be Option/default"
+        );
+    }
+}

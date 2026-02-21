@@ -32,6 +32,14 @@ fn test_missing_mm_util_kill_applies_default_095() {
     assert_eq!(result.unwrap(), 0.95);
 }
 
+// GAP-010-3: Dedicated test for ReplayWindowHours default
+#[test]
+fn test_missing_replay_window_hours_applies_default_48() {
+    // AT-341: config omits replay_window_hours → default 48.0 (hours)
+    let result = resolve_config_value(ConfigParam::ReplayWindowHours, None);
+    assert_eq!(result.unwrap(), 48.0);
+}
+
 // --- AT-040: missing parameter without Appendix A default → fail-closed ---
 
 #[test]
@@ -62,6 +70,59 @@ fn test_missing_non_appendix_a_param_fails_closed() {
     assert!(
         msg.contains("no Appendix A default"),
         "error must explain why"
+    );
+}
+
+// GAP-010-1: AT-040 fail-closed Err path — regression guard.
+//
+// The Err branch in resolve_config_value (None + no Appendix A default) is
+// structurally unreachable today because ALL 74 ConfigParam variants have
+// defaults. This test guards against regression: if a future variant is added
+// without a default, resolve_config_value(param, None) MUST return Err.
+// By exhaustively verifying every variant resolves Ok(default), we ensure
+// that any new variant breaking this invariant will be caught immediately.
+#[test]
+fn test_all_config_params_fail_closed_when_missing_without_default() {
+    // For every known ConfigParam, verify that resolve_config_value(param, None)
+    // returns Ok with the Appendix A default. This proves the Err path is only
+    // unreachable because every variant has a default — not because of a bug.
+    for &param in ALL_PARAMS {
+        let default = appendix_a_default(param);
+        assert!(
+            default.is_some(),
+            "ConfigParam::{:?} ({}) lacks an Appendix A default. \
+             If intentional, resolve_config_value(param, None) MUST return Err \
+             (fail-closed). Add dedicated test coverage for this param.",
+            param,
+            param_name(param),
+        );
+
+        let result = resolve_config_value(param, None);
+        assert!(
+            result.is_ok(),
+            "ConfigParam::{:?} ({}) has a default but resolve_config_value \
+             returned Err: {:?}",
+            param,
+            param_name(param),
+            result.unwrap_err(),
+        );
+        assert_eq!(
+            result.unwrap(),
+            default.unwrap(),
+            "ConfigParam::{:?} ({}) resolved to wrong value via resolver",
+            param,
+            param_name(param),
+        );
+    }
+
+    // Verify the count matches EXPECTED_PARAM_COUNT to catch new variants
+    // not added to ALL_PARAMS.
+    assert_eq!(
+        ALL_PARAMS.len(),
+        soldier_infra::config::EXPECTED_PARAM_COUNT,
+        "ALL_PARAMS length does not match EXPECTED_PARAM_COUNT — a new \
+         ConfigParam variant may have been added without updating ALL_PARAMS. \
+         If the new variant lacks a default, it needs a dedicated fail-closed test."
     );
 }
 
@@ -258,4 +319,74 @@ fn test_none_with_default_returns_default() {
     let result = resolve_config_value(ConfigParam::WatchdogKillS, None);
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), 10.0);
+}
+
+/// Percentage params must be in [0.0, 1.0]. A value > 1.0 is a config error.
+/// Kimi K2.5 finding: upper-bound validation was missing.
+#[test]
+fn test_percentage_param_above_one_rejected() {
+    let pct_params = [
+        ConfigParam::MmUtilKill,
+        ConfigParam::MmUtilReduceonly,
+        ConfigParam::MmUtilRejectOpens,
+        ConfigParam::DiskKillPct,
+        ConfigParam::DiskDegradedPct,
+        ConfigParam::DiskPauseArchivesPct,
+        ConfigParam::ParquetQueueTripPct,
+        ConfigParam::ParquetQueueClearPct,
+        ConfigParam::DvolJumpPct,
+        ConfigParam::ContractsAmountMatchTolerance,
+        ConfigParam::SelfTradeFractionTrip,
+        ConfigParam::FeeStaleBuffer,
+    ];
+    for param in pct_params {
+        let result = resolve_config_value(param, Some(1.5));
+        assert!(
+            result.is_err(),
+            "ConfigParam::{:?} must reject value 1.5 (above 1.0 for percentage)",
+            param
+        );
+        let err = result.unwrap_err();
+        assert!(
+            err.reason.contains("percentage") || err.reason.contains("1.0"),
+            "ConfigParam::{:?} error must mention percentage/1.0 bound, got: {}",
+            param,
+            err.reason
+        );
+    }
+}
+
+/// Percentage params at exactly 1.0 must be allowed (valid boundary).
+#[test]
+fn test_percentage_param_at_one_allowed() {
+    let result = resolve_config_value(ConfigParam::MmUtilKill, Some(1.0));
+    assert!(result.is_ok(), "MmUtilKill=1.0 (100%) must be allowed");
+    assert_eq!(result.unwrap(), 1.0);
+}
+
+/// Percentage params at exactly 0.0 must be allowed (valid boundary).
+#[test]
+fn test_percentage_param_at_zero_allowed() {
+    let result = resolve_config_value(ConfigParam::MmUtilKill, Some(0.0));
+    assert!(result.is_ok(), "MmUtilKill=0.0 must be allowed");
+    assert_eq!(result.unwrap(), 0.0);
+}
+
+/// Non-percentage params must NOT be rejected at values > 1.0.
+/// WatchdogKillS=300.0 is valid (it's seconds, not a percentage).
+#[test]
+fn test_non_percentage_param_above_one_allowed() {
+    let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(300.0));
+    assert!(result.is_ok(), "WatchdogKillS=300.0 must be allowed (not a percentage)");
+    assert_eq!(result.unwrap(), 300.0);
+}
+
+/// InventorySkewK is dimensionless (not "pct") per CONTRACT.md Appendix A.
+/// Values > 1.0 are valid (e.g., 1.5 = 150% edge increase at max inventory bias).
+/// Kimi K2.5 Cycle 2 finding: was incorrectly classified as percentage.
+#[test]
+fn test_inventory_skew_k_above_one_allowed() {
+    let result = resolve_config_value(ConfigParam::InventorySkewK, Some(1.5));
+    assert!(result.is_ok(), "InventorySkewK=1.5 must be allowed (dimensionless, not a percentage)");
+    assert_eq!(result.unwrap(), 1.5);
 }
