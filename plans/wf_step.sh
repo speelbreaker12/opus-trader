@@ -19,6 +19,7 @@ set -euo pipefail
 #   pass           — final gate (all 8 preceding receipts must exist)
 #
 # Options:
+#   --check-only   Exit 0 if step receipt exists, non-zero if not (no validation, no writing)
 #   --dry-run      Validate prerequisites but don't write receipt
 #   --status       Show current receipt chain status
 #   --reset        Delete all receipts for this story (requires --yes)
@@ -50,6 +51,7 @@ Steps (in order):
   pass           Final gate (all 8 receipts required)
 
 Options:
+  --check-only   Check if step receipt exists (exit 0=yes, 1=no)
   --dry-run      Validate only, don't write receipt
   --status       Show receipt chain status
   --reset        Delete all receipts for story (requires --yes)
@@ -62,6 +64,7 @@ fail() { echo "WF_STEP BLOCKED: $*" >&2; exit 1; }
 # ── Parse args ──────────────────────────────────────────────────────
 
 STORY="${1:-}"
+CHECK_ONLY=0
 DRY_RUN=0
 STATUS_MODE=0
 RESET_MODE=0
@@ -71,6 +74,7 @@ STEP=""
 shift $(( $# >= 1 ? 1 : 0 ))
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --check-only)   CHECK_ONLY=1 ;;
     --dry-run)      DRY_RUN=1 ;;
     --status)       STATUS_MODE=1 ;;
     --reset)        RESET_MODE=1 ;;
@@ -177,6 +181,19 @@ if [[ "$RESET_MODE" -eq 1 ]]; then
   exit 0
 fi
 
+# ── Check-only mode (receipt probe, no validation/writing) ─────────
+
+if [[ "$CHECK_ONLY" -eq 1 ]]; then
+  [[ -n "$STEP" ]] || { usage >&2; exit 2; }
+  step_is_valid "$STEP" || die "unknown step: $STEP (valid: ${STEPS[*]})"
+  f="$(receipt_file "$STEP")"
+  if [[ -f "$f" ]]; then
+    exit 0
+  else
+    exit 1
+  fi
+fi
+
 # ── Validate step name (not required for --status/--reset) ──────────
 
 if [[ "$STATUS_MODE" -eq 0 && "$RESET_MODE" -eq 0 ]]; then
@@ -220,17 +237,39 @@ require_code_change_since_base() {
 cycle1_had_zero_findings() {
   # Shared detection: returns 0 if cycle1 review had 0 high-severity findings.
   # Used by both fix and cycle2 steps. Do NOT duplicate this logic.
+  #
+  # Prefers the structured FINDINGS_SUMMARY line emitted by review_logged.sh.
+  # Falls back to free-text regex for legacy review artifacts.
+  # Fail-closed: if no review artifacts exist, returns 1 (findings assumed).
   local art_dir="$1"
+  local review_found=0
   for d in "$art_dir/codex" "$art_dir/opus"; do
-    if [[ -d "$d" ]]; then
-      while IFS= read -r rf; do
-        [[ -f "$rf" ]] || continue
-        if grep -qiE '(\b0 findings|no findings|no issues|\b0 P0.*\b0 P1|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
+    [[ -d "$d" ]] || continue
+    while IFS= read -r rf; do
+      [[ -f "$rf" ]] || continue
+      review_found=1
+
+      # Prefer structured line: FINDINGS_SUMMARY: P0=N P1=N P2=N
+      local summary_line
+      summary_line="$(grep -m1 '^FINDINGS_SUMMARY:' "$rf" 2>/dev/null || true)"
+      if [[ -n "$summary_line" ]]; then
+        local p0 p1
+        p0="$(echo "$summary_line" | sed -n 's/.*P0=\([0-9]*\).*/\1/p')"
+        p1="$(echo "$summary_line" | sed -n 's/.*P1=\([0-9]*\).*/\1/p')"
+        p0="${p0:-999}"; p1="${p1:-999}"
+        if [[ "$p0" -eq 0 && "$p1" -eq 0 ]]; then
           return 0
         fi
-      done < <(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | LC_ALL=C sort)
-    fi
+        return 1
+      fi
+
+      # Legacy fallback: free-text regex (less reliable)
+      if grep -qiE '(\b0 findings|no findings|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
+        return 0
+      fi
+    done < <(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | LC_ALL=C sort)
   done
+  # Fail-closed: no reviews found → assume findings exist
   return 1
 }
 
@@ -238,15 +277,37 @@ case "$STEP" in
   preflight)
     # First step — record HEAD as BASE_HEAD.
     if [[ "$WF_RECON_MODE" -eq 1 ]]; then
-      # Recon mode: verify story already has passes=true in PRD
+      # Recon mode: verify story already has passes=true in PRD (fail-closed)
       prd_file="${PRD_FILE:-$ROOT/plans/prd.json}"
-      if [[ -f "$prd_file" ]]; then
-        story_passes="$(jq -r --arg id "$STORY" '.items[] | select(.id==$id) | .passes // false' "$prd_file" 2>/dev/null || echo "false")"
-        if [[ "$story_passes" != "true" ]]; then
-          echo "WF_STEP: recon mode blocked — story $STORY does not have passes=true" >&2
-          echo "  Reconciliation is only for already-passing stories" >&2
-          exit 3
-        fi
+      if [[ ! -f "$prd_file" ]]; then
+        echo "WF_STEP: recon mode blocked — PRD file not found at $prd_file" >&2
+        exit 3
+      fi
+      story_passes="$(jq -r --arg id "$STORY" '.items[] | select(.id==$id) | .passes // false' "$prd_file" 2>/dev/null || echo "false")"
+      if [[ "$story_passes" != "true" ]]; then
+        echo "WF_STEP: recon mode blocked — story $STORY does not have passes=true" >&2
+        echo "  Reconciliation is only for already-passing stories" >&2
+        exit 3
+      fi
+    fi
+
+    # Validate premortem via gate script (content depth, not just existence)
+    premortem_file="$ROOT/reviews/premortems/${STORY}_premortem.md"
+    premortem_gate="$ROOT/plans/premortem_gate.sh"
+    if [[ -f "$premortem_file" && -x "$premortem_gate" ]]; then
+      if ! "$premortem_gate" "$STORY" 2>&1; then
+        echo "WF_STEP: premortem gate failed — fix premortem before proceeding" >&2
+        exit 3
+      fi
+    elif [[ -f "$premortem_file" ]]; then
+      # Fallback: minimal carry-forward check if gate script missing
+      if ! grep -q '^Prior Postmortem: ' "$premortem_file"; then
+        echo "WF_STEP: premortem missing required line: 'Prior Postmortem: <path or NONE>'" >&2
+        exit 3
+      fi
+      if ! grep -q '^Reused Guardrail: ' "$premortem_file"; then
+        echo "WF_STEP: premortem missing required line: 'Reused Guardrail: <rule or NONE>'" >&2
+        exit 3
       fi
     fi
     ;;
@@ -304,8 +365,11 @@ case "$STEP" in
     else
       changed_files="$(git diff --name-only "$cycle1_head"..HEAD 2>/dev/null || true)"
       if [[ -z "$changed_files" ]]; then
-        changed_files="$(git diff --name-only 2>/dev/null || true)"
-        changed_files+="$(git diff --cached --name-only 2>/dev/null || true)"
+        # Fallback: check working tree + staged separately with newline separator
+        local wt_changes staged_changes
+        wt_changes="$(git diff --name-only 2>/dev/null || true)"
+        staged_changes="$(git diff --cached --name-only 2>/dev/null || true)"
+        changed_files="${wt_changes}${wt_changes:+$'\n'}${staged_changes}"
       fi
       non_artifact_changes="$(echo "$changed_files" | grep -vE '^(artifacts/|\.wf/|plans/prd\.json$|plans/progress)' || true)"
 
@@ -320,11 +384,17 @@ case "$STEP" in
 
   cycle2)
     min_reviews=2
-    # GREEN path: recon mode + cycle1 clean → abbreviated Cycle 2 (1 review sufficient)
-    # YELLOW/RED path: recon mode + fixes made → full Cycle 2 (same as normal)
-    if [[ "$WF_RECON_MODE" -eq 1 ]] && cycle1_had_zero_findings "$story_art"; then
-      min_reviews=1
-      echo "WF_STEP: recon GREEN path — abbreviated cycle2 (min_reviews=1)" >&2
+    # GREEN path: recon + cycle1 clean + fix didn't change code → abbreviated (1 review)
+    # YELLOW/RED path: findings exist OR fix changed code → full (2 reviews)
+    if [[ "$WF_RECON_MODE" -eq 1 ]]; then
+      fix_receipt="$(receipt_file fix)"
+      fix_code_changed="$(jq -r '.code_changed // "false"' "$fix_receipt" 2>/dev/null || echo "false")"
+      if cycle1_had_zero_findings "$story_art" && [[ "$fix_code_changed" != "true" ]]; then
+        min_reviews=1
+        echo "WF_STEP: recon GREEN path — abbreviated cycle2 (min_reviews=1)" >&2
+      elif [[ "$fix_code_changed" == "true" ]]; then
+        echo "WF_STEP: fix step changed code — full cycle2 required (min_reviews=2)" >&2
+      fi
     fi
     review_count=0
     for d in "$story_art/codex" "$story_art/opus"; do
@@ -410,7 +480,10 @@ fi
 receipt_path="$(receipt_file "$STEP")"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# Build relaxation note for recon mode (empty string for normal mode)
+# Build relaxation note for recon mode (empty string for normal mode).
+# Note: YELLOW-escalated steps run WITHOUT WF_RECON_MODE (supervisor drops it),
+# so their receipts have recon_mode=false by design. The fix receipt's
+# code_changed=true serves as the audit trail for escalation.
 recon_note=""
 if [[ "$WF_RECON_MODE" -eq 1 ]]; then
   case "$STEP" in

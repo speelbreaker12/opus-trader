@@ -1,36 +1,29 @@
 ROLE
-You are the Reviewer. Verify the reconciliation audit. No code edits.
-This is RECONCILIATION mode — the story already has passes=true.
+You are the Reviewer running cycle-2 review for ${STORY_ID} (adversarial re-check).
+This step proves the fixes, not just the intent.
 
-STORY: ${STORY_ID}
-BASE_BRANCH: ${BASE_BRANCH}
+STORY
+- Story ID: ${STORY_ID}
+- Base branch: ${BASE_BRANCH}
+- Current HEAD: ${HEAD}
 
 TASK
-
 GREEN PATH (no code changes in fix step):
-- Perform abbreviated validation of the reconciliation audit.
-- Review the scope.touch files and confirm the audit found no issues.
+- Abbreviated validation of the reconciliation audit.
 - Produce at least 1 review artifact confirming audit completeness.
 
 YELLOW/RED PATH (code changed in fix step):
-- Full adversarial review of the fix diff (--base ${BASE_BRANCH}).
-- Re-review only the delta since cycle1.
-- Confirm BLOCKING=0.
-- Confirm no new bypasses introduced by fixes.
-- Produce review artifact(s) with full finding table.
-
-For both paths:
-- Run at least 1 review: `./plans/review_logged.sh ${STORY_ID} --tool codex --base ${BASE_BRANCH}` or `--tool opus`
+- Full adversarial review of the fixed code.
+- Run: ./plans/review_logged.sh ${STORY_ID} --tool codex --base ${BASE_BRANCH}
+  (or: ./plans/codex_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH})
+- Confirm BLOCKING=0 and no new bypasses introduced by fixes.
 
 OUTPUT
-- Write review file to artifacts/story/${STORY_ID}/codex/ (or opus/).
-- Include STOPLIGHT + finding table.
-- End with: "READY FOR RESOLUTION".
+- Path(s) to cycle-2 review artifact(s)
+- New BLOCKING/MAJOR/MEDIUM findings count (should be 0)
+- End with exact line: READY FOR RESOLUTION
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
-- Do NOT edit .wf/receipts/ or any workflow state files
-- Do NOT modify plans/prd.json passes field
-- Do NOT proceed to any step beyond the one assigned
+PROHIBITED
+- Do NOT hand-write review artifacts
+- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
 - Do NOT edit any source code — review only
-- Do NOT claim the step is "done" — only the supervisor validates completion

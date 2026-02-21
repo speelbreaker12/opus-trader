@@ -44,6 +44,12 @@ sha256_file() {
   shasum -a 256 "$file" | awk '{print $1}'
 }
 
+# Portable uppercase-first (zsh lacks ${var^})
+ucfirst() { echo "$1" | awk '{print toupper(substr($0,1,1)) substr($0,2)}'; }
+
+# Portable lowercase (zsh lacks ${var,,})
+lcase() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
+
 story="${1:-}"
 if [[ -z "$story" || "$story" == "-h" || "$story" == "--help" ]]; then
   usage
@@ -112,7 +118,7 @@ case "$tool" in
 esac
 
 if [[ -z "$title" ]]; then
-  title="$story: ${tool^} review"
+  title="$story: $(ucfirst "$tool") review"
 fi
 
 if [[ "$mode" == "base" && -z "$base" ]]; then
@@ -179,11 +185,8 @@ case "$tool" in
       base)        cmd+=("--base" "$base") ;;
       uncommitted) cmd+=("--uncommitted") ;;
       files)
-        # codex doesn't natively support --files; use --uncommitted with file context
-        # Build a temp file containing file contents as pseudo-diff for codex
-        files_tmp="$(mktemp)"
-        printf '%s' "$files_context" > "$files_tmp"
-        cmd+=("--uncommitted")
+        echo "ERROR: --files mode is not supported with codex (use --tool opus instead)" >&2
+        exit 2
         ;;
     esac
     if [[ ${#extra[@]} -gt 0 ]]; then
@@ -222,7 +225,7 @@ case "$tool" in
 
     review_prompt="You are a senior code reviewer for story $story on branch $branch (HEAD: $head_sha).
 
-Review the following ${review_context_label,,} and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
+Review the following $(lcase "$review_context_label") and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
 
 Focus on:
 - Correctness bugs and logic errors
@@ -282,7 +285,7 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 # ── Write artifact with provenance header ───────────────────────────
 
 {
-  echo "# ${tool^} review"
+  echo "# $(ucfirst "$tool") review"
   echo
   echo "- Story: $story"
   echo "- Timestamp (UTC): $ts"
@@ -314,6 +317,14 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 cat "$transcript_tmp" >> "$outfile"
 echo "<<<REVIEW_TRANSCRIPT_END>>>" >> "$outfile"
 
+# Emit structured findings summary for deterministic gate parsing.
+# Counts P0-P3 by matching "| P<N>" or "P<N>:" or "**P<N>**" patterns in transcript.
+# Falls back to 999 if counting fails (fail-closed: assume findings exist).
+p0="$(grep -coE '\bP0\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+p1="$(grep -coE '\bP1\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+p2="$(grep -coE '\bP2\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
+
 # Run codex digest if available (codex only)
 if [[ "$tool" == "codex" ]]; then
   digest_script="$root/plans/codex_review_digest.sh"
@@ -324,5 +335,5 @@ if [[ "$tool" == "codex" ]]; then
   fi
 fi
 
-echo "Saved ${tool^} review: $outfile" >&2
+echo "Saved $(ucfirst "$tool") review: $outfile" >&2
 exit "$rc"
