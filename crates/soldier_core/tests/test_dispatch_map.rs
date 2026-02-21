@@ -438,7 +438,12 @@ fn test_at920_epsilon_denominator_allows_small_amount_within_tolerance() {
     assert_eq!(metrics.reject_unit_mismatch_total(), 0);
 }
 
-/// AT-920: non-finite multiplier must fail closed and reject dispatch.
+/// AT-920: non-finite multiplier must fail closed at the EARLY guard (line 199)
+/// with delta = INFINITY, not at the late guard (line 210) with delta = NaN.
+///
+/// Tightened assertion: `delta.is_infinite()` (not `!delta.is_finite()`) to
+/// distinguish the early guard (produces INFINITY) from the late guard (produces NaN).
+/// Kills cargo-mutants mutation: dispatch_map.rs:199 `||` → `&&`.
 #[test]
 fn test_at920_non_finite_multiplier_rejected() {
     let size = OrderSize {
@@ -459,8 +464,76 @@ fn test_at920_non_finite_multiplier_rejected() {
     match result {
         Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
             assert!(
-                !delta.is_finite(),
-                "non-finite multiplier should produce non-finite mismatch delta"
+                delta.is_infinite(),
+                "NaN multiplier must produce delta = INFINITY (early guard), got {delta}"
+            );
+        }
+        other => panic!("expected ContractsAmountMismatch, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_unit_mismatch_total(), 1);
+}
+
+/// AT-920: NaN canonical amount (qty_coin) must fail closed at the EARLY guard
+/// with delta = INFINITY. This is the complement of the NaN multiplier test:
+/// - NaN multiplier + finite canonical → early guard (tested above)
+/// - Finite multiplier + NaN canonical → early guard (tested here)
+///
+/// Together they kill cargo-mutants mutation: dispatch_map.rs:199 `||` → `&&`.
+/// The `&&` mutant requires BOTH inputs to be non-finite; these tests prove
+/// that a SINGLE non-finite input triggers rejection.
+#[test]
+fn test_at920_nan_canonical_amount_rejected_with_infinity_delta() {
+    let size = OrderSize {
+        contracts: Some(3),
+        qty_coin: Some(f64::NAN), // NaN canonical amount
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0), // finite multiplier
+        &mut metrics,
+    );
+    match result {
+        Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
+            assert!(
+                delta.is_infinite(),
+                "NaN canonical amount must produce delta = INFINITY (early guard), got {delta}"
+            );
+        }
+        other => panic!("expected ContractsAmountMismatch, got {other:?}"),
+    }
+    assert_eq!(metrics.reject_unit_mismatch_total(), 1);
+}
+
+/// AT-920: Inf canonical amount must also fail closed at the EARLY guard.
+/// Covers the Inf branch of the non-finite check (NaN covered above).
+#[test]
+fn test_at920_inf_canonical_amount_rejected_with_infinity_delta() {
+    let size = OrderSize {
+        contracts: Some(3),
+        qty_coin: Some(f64::INFINITY), // Inf canonical amount
+        qty_usd: None,
+        notional_usd: 300_000.0,
+    };
+
+    let mut metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Option,
+        IntentClass::Open,
+        Some(1.0), // finite multiplier
+        &mut metrics,
+    );
+    match result {
+        Err(DispatchMapError::ContractsAmountMismatch { delta }) => {
+            assert!(
+                delta.is_infinite(),
+                "Inf canonical amount must produce delta = INFINITY (early guard), got {delta}"
             );
         }
         other => panic!("expected ContractsAmountMismatch, got {other:?}"),

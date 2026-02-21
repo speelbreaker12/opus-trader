@@ -3,7 +3,7 @@
 > Multi-agent workflows for (A) producing high-quality story premortems and (B) retroactively auditing existing code against those premortems.
 > Designed and validated during Slice 1 (13 stories, 4 agent teams, 3 review rounds).
 >
-> **Version**: 1.5 (2026-02-21) — v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers. v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards.
+> **Version**: 1.6 (2026-02-21) — v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
 
 ## Glossary (Normative)
 
@@ -24,7 +24,7 @@
 | Review Basis | An explicit label every reviewer must include in their output: `STORY_SCOPE (Cycle 1)` or `FIX_DIFF + AT_REGRESSION (Cycle 2)`. Removes ambiguity about what was actually reviewed. |
 
 **Verdict systems**: This document uses three verdict levels that operate at different scopes:
-- **Per-AT verdicts** (used in evidence ledgers, Phase R1): `PROVEN`, `WEAK_PROOF`, `CLAIMED_NOT_PROVEN`, `UNTESTED_ENFORCEMENT`, `WRONG_IMPL_UNBLOCKED`, `DEFERRED`
+- **Per-AT verdicts** (used in evidence ledgers, Phase R1): `PROVEN`, `WEAK_PROOF`, `CLAIMED_NOT_PROVEN`, `UNTESTED_ENFORCEMENT`, `WRONG_IMPL_UNBLOCKED`, `DEFERRED`. **Safety-critical escalation (v1.5)**: `WEAK_PROOF` on a MED/HIGH `loss_mode` AT is treated as `CLAIMED_NOT_PROVEN` and blocks `RECONCILED`. Asserting `result.is_err()` without verifying which guard caused the rejection is insufficient for safety-critical ATs. **PROVEN requires cause-specific assertions**: at least one of `reject_reason`, `dispatch_count`, `latch_reason`, or `mode_transition` — plus `PROVEN-INTEGRATED` wiring status for safety-critical ATs (see runtime-enforcement gate). **LOW risk tolerance (v1.6)**: `WEAK_PROOF` on a LOW `loss_mode` AT may be accepted as `RECONCILED-WITH-DEBT` — but only with a debt register entry (`DEBT_REGISTER.json`) specifying `owner` and `target_slice` for the proof upgrade. `WEAK_PROOF` without a debt entry is treated as `CLAIMED_NOT_PROVEN` regardless of risk level.
 - **Evidence ledger intermediate verdict** (used in Phase R1-R4, before final assignment): `PARTIAL` — at least one AT has gaps requiring remediation. Replaced by a final verdict in Phase R6.
 - **Story-level verdicts** (used in Phase R6 final summary): `RECONCILED`, `RECONCILED-WITH-DEBT`, `NOT RECONCILED`
 - **Wiring qualifiers** (added in Phase R7c): `PROVEN-INTEGRATED` (function works AND has production callers), `PROVEN-UNIT` (function works but has zero production callers — island guard)
@@ -377,6 +377,14 @@ For **LOW risk** single stories: 1 writer + lead evaluation is sufficient. Skip 
 
 11. **Treating saturating/checked arithmetic as sufficient input validation** — `saturating_sub` and `checked_mul` protect computation from overflow but do not validate that inputs are sane. In Slice 1, reviewers saw `saturating_sub` in the expiry guard and concluded "overflow-safe" without asking "what if `expiration_ms = u64::MAX` from a corrupt feed?" Saturating arithmetic is a defense layer, not input validation. Always ask: "Are the inputs themselves bounded?"
 
+12. **Fake citation pass-through** — Agent cites a real file:line but the line is blank, a comment, or a helper function — not the actual enforcement gate. Spot-checks in Phase R3 catch some cases, but probabilistic spot-checking is insufficient for safety-critical ATs. **Fix**: (a) Automated AST/grep validation of all file:line citations — verify the cited line contains a function call or guard expression, not whitespace. (b) Introduce **Codebase Audit Anchors** (see below) — `#[audit_anchor(AT-920)]` attributes in Rust code that CI validates against `prd.json` AT lists. A citation that references a function without an audit anchor on a safety-critical AT produces a `CITATION_UNANCHORED` warning.
+
+13. **Diff-only review gaming in Cycle 1** — Agent ignores the "Story Proof Scope" directive, reviews only the git diff (which may be empty for retro-audits), and marks PROVEN. Anti-pattern #8 warns against this in prose, but prose warnings are not enforceable. **Fix**: Require Cycle 1 reviewers to cite at least one observation from pre-existing code (not the recon diff). If every cited file:line in the review artifact also appears in `git diff`, the review is auto-rejected with `DIFF_ONLY_REVIEW_REJECTED`. This is enforced by `review_logged.sh` post-validation.
+
+14. **DECISION_DIVERGENCE escape hatch** — Agent finds code doesn't match the premortem §4 decision. To avoid the work of writing a gap ticket + remediation plan, they mark it `INFO: Code is better` without evidence. **Fix**: Any divergence toward a **previously rejected option** in the premortem is automatically P1. The premortem already evaluated and dismissed that option — silently re-adopting it is suspicious, not "better." Only the lead can downgrade a rejected-option divergence from P1 to INFO, and the downgrade must include a written justification recorded in the evidence ledger.
+
+15. **Silent debt deferral** — Agent marks a gap `DEFERRED` without creating a debt register entry, or sets `target_slice` to "TBD." The gap effectively disappears. **Fix**: Debt register must follow a strict JSON schema (see Phase R4). Phase R7f validation script checks that every `DEFERRED` gap in the evidence ledgers has a corresponding entry in the debt register with a valid `target_slice` (not "TBD"), `owner`, and `created_at`. Overdue debt (target_slice already passed) blocks the current slice's `prd_set_pass.sh`.
+
 ---
 ---
 
@@ -407,9 +415,10 @@ Phase R7:  Post-Reconciliation      (Cycle 2: fix-diff + AT regression)
   R7c:  Production Wiring Audit     (WIRED vs NOT-WIRED classification)
   R7d:  Code Review Expert          (SOLID, security, quality on full diff)
   R7e:  Devils Advocate             (mutation analysis on new/modified tests)
+  R7f:  Debt Register Validation   (schema check on all DEFERRED gaps)
 ```
 
-Total: 12 phases across Part B. R7a-R7c run in parallel; R7d-R7e run after R7a-R7c fixes are applied.
+Total: 13 phases across Part B. R7a-R7c run in parallel; R7d-R7e run after R7a-R7c fixes are applied; R7f runs last (validates debt register completeness).
 
 ---
 
@@ -478,6 +487,16 @@ Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)
 This removes ambiguity and prevents agents from silently doing a shallow diff review when they should be auditing the full implementation.
 
 **Enforcement**: Review artifact validation scripts (e.g., `review_logged.sh`, `postmortem_gate.sh`) should grep for the Review Basis line and warn if absent. A missing Review Basis line does not block the review but produces a `REVIEW_BASIS_MISSING` warning that the lead must acknowledge.
+
+### Pre-Existing Code Citation Gate (Cycle 1 — Hard Rule)
+
+Cycle 1 reviews must demonstrate engagement with the existing codebase, not just the reconciliation diff. This prevents the diff-only review gaming described in Anti-pattern #13.
+
+**Rule**: A Cycle 1 review artifact must cite at least one file:line observation that is **not** in the `git diff` output. If every cited line in the review also appears in the diff, the review is auto-rejected with `DIFF_ONLY_REVIEW_REJECTED`.
+
+**Enforcement**: `review_logged.sh` post-validation extracts all file:line citations from the review artifact, compares against `git diff --unified=0`, and rejects if the intersection equals the full citation set. The reviewer must re-submit with story-scope observations.
+
+**Why this matters**: In reconciliation mode, the diff may be empty (zero code changes). A diff-only reviewer would review nothing and mark PROVEN. This gate forces engagement with the pre-existing implementation.
 
 ---
 
@@ -722,6 +741,33 @@ Each reviewer writes `RECONCILE_REVIEW_by_<X>.md` with:
 
 ### What the lead produces
 
+**Aggregation method (v1.5)**: Do not rely on a single LLM agent to synthesize gaps across all stories — context window dilution causes silent finding drops. Instead:
+1. Each Phase R3 cross-reviewer outputs structured gap findings in JSON format (one JSON array per story reviewed).
+2. A deterministic script (`plans/aggregate_gaps.py` or equivalent) merges all JSON gap arrays into a unified list, deduplicating by AT + gap description.
+3. The lead resolves conflicts (disagreements on priority, overlapping gap descriptions) and assigns final priorities — but does not perform the initial aggregation.
+
+This separates mechanical aggregation (must be lossless) from judgment calls (appropriate for the lead).
+
+**Structured "no gaps found" declarations (v1.6)**: "No findings" is also a claim that must be proven. When a cross-reviewer reports zero gaps for a story, they must output a structured checklist proving they checked all dimensions — not just an empty gap array:
+
+```json
+{
+  "story_id": "S1-007",
+  "reviewer": "reviewer-B",
+  "gaps": [],
+  "coverage_proof": {
+    "at_causality_checked": true,
+    "fail_closed_checked": true,
+    "section_4_decisions_checked": true,
+    "section_5_wrong_impls_checked": true,
+    "observability_checked": true,
+    "citation_spot_checks": ["dispatch_map.rs:142", "test_dispatch_map.rs:89"]
+  }
+}
+```
+
+The aggregation script validates that every story reviewed has either gaps or a complete `coverage_proof`. A story with an empty gap array and no coverage proof produces `UNCHECKED_CLEAN_REVIEW` — the lead must investigate whether the reviewer actually engaged with the story or skipped it.
+
 A unified gap list across all stories, prioritized by severity. Cross-story systemic gaps (the same issue appearing in multiple stories) get a `GAP-SYSTEMIC-<N>` ID.
 
 **Gap ID Format**:
@@ -733,6 +779,35 @@ A unified gap list across all stories, prioritized by severity. Cross-story syst
 | **P0 — Blocker** | Safety-critical AT has no enforcement or no TRIP test | Must fix before story can be marked reconciled |
 | **P1 — Gap** | Enforcement exists but wrong-impl tightening is missing, or observability absent | Should fix in current slice |
 | **P2 — Debt** | Minor: test naming doesn't match premortem, enforcement point is in a slightly different location than predicted | Track in debt register, fix opportunistically |
+
+### Debt Register Schema (Normative)
+
+Every `DEFERRED` gap must have a corresponding entry in `reviews/reconciliations/<slice>/DEBT_REGISTER.json`. Entries without valid `target_slice` or `owner` block the current slice via Phase R7f validation.
+
+```json
+{
+  "debt_items": [
+    {
+      "gap_id": "GAP-007-3",
+      "story_id": "S1-007",
+      "at_id": "AT-920",
+      "description": "Observability: structured log on rejection path",
+      "priority": "P2",
+      "owner": "reconcile-dispatch",
+      "target_slice": "S2",
+      "created_at": "2026-02-21T15:00:00Z",
+      "status": "open"
+    }
+  ]
+}
+```
+
+**Required fields**: `gap_id`, `story_id`, `description`, `priority`, `owner` (not empty), `target_slice` (valid slice ID — not "TBD"), `created_at`, `status` (`open` | `resolved`).
+
+**Phase R7f validation**: A deterministic script validates the debt register after Phase R7e:
+1. Every `DEFERRED` gap in evidence ledgers has a matching `gap_id` in the debt register.
+2. No entry has `target_slice: "TBD"` or empty `owner`.
+3. Any debt item whose `target_slice` has already passed (i.e., that slice is complete) produces `OVERDUE_DEBT` — this blocks `prd_set_pass.sh` for the current slice until the item is re-targeted or resolved.
 
 ### Gap Entry Format
 
@@ -929,9 +1004,22 @@ This artifact makes Phase R6 and Cycle 2 external review stronger — reviewers 
 
 1. **All P0 gaps closed** — no safety-critical AT without enforcement + TRIP test
 2. **All P1 gaps closed or explicitly deferred** — with debt register entry if deferred
-3. **Tests pass** — `cargo test` / `./plans/verify.sh quick` green
-4. **Evidence ledgers updated** — GAP entries now show FIXED status with citations
-5. **No regressions** — diff review confirms fixes are additive, not destructive
+3. **No WEAK_PROOF on MED/HIGH loss_mode ATs** — escalated to CLAIMED_NOT_PROVEN if still present
+4. **Tests pass** — `cargo test` / `./plans/verify.sh quick` green
+5. **Evidence ledgers updated** — GAP entries now show FIXED status with citations
+6. **No regressions** — diff review confirms fixes are additive, not destructive
+7. **STOPLIGHT delta recheck (R6.5)** — Remediation is not neutral. Fixes introduce new dependencies, new assumptions, new failure modes, and new observability needs. Re-check premortem STOPLIGHT against the remediation diff by walking these sections:
+
+   | Section | What to check against R5 diff | Downgrade trigger |
+   |---------|-------------------------------|-------------------|
+   | §2 Assumptions | Did R5 introduce new assumptions not in the original premortem? | New untested assumption → YELLOW |
+   | §4 Decisions | Did R5 diverge from the premortem's chosen design option? | Silent divergence toward rejected option → YELLOW (investigate) |
+   | §5 Wrong-impl table | Did R5 create a new bypass path not covered by existing tightening tests? | New unblocked wrong-impl → YELLOW |
+   | Fail-closed behavior | Did any R5 fix introduce warn-and-continue, silent fallback, or unwrap()? | New fail-open path on safety-critical gate → RED (stop) |
+
+   **Rules**: New untested assumption → downgrade to YELLOW. New unresolved safety risk → RED (stop, escalate to lead). If STOPLIGHT changes, all new deferred items must appear in the debt register. A stale GREEN is dishonest — this check prevents post-remediation false confidence.
+
+8. **R5b skill receipts verified** — all 5 receipts exist, `head_commit` matches, timestamps plausible (see Phase R5b)
 
 ### Final Verdicts
 
@@ -1091,17 +1179,22 @@ Run `/strategic-failure-review` (see `SKILLS/strategic-failure-review.md`) on th
 
 ### R7c: Production Wiring Audit (Call Chain Check)
 
-For each enforcement function marked PROVEN in Phase R1, verify it has at least one production caller in `src/` (not just `tests/`).
+For each enforcement function marked PROVEN in Phase R1, verify it is reachable from a known entry point in the production call graph — not just that it has "at least one caller."
 
-**What it catches**: The gap between "function works correctly when called" (PROVEN-UNIT) and "function is actually reachable at runtime" (PROVEN-INTEGRATED). Without this check, a reconciliation can report RECONCILED on a guard that is never executed in production.
+**What it catches**: The gap between "function works correctly when called" (PROVEN-UNIT) and "function is actually reachable at runtime" (PROVEN-INTEGRATED). Without this check, a reconciliation can report RECONCILED on a guard that is never executed in production. A single-caller check is necessary but not sufficient — the caller itself may be dead code (an intermediate function with no callers of its own).
 
 **How to run**:
 1. Extract the list of enforcement functions from all evidence ledgers
-2. For each function, search `crates/*/src/` for callsites (use LSP `findReferences` if available, fall back to grep)
-3. Classify each function as:
-   - **WIRED** — at least one production caller in `src/`
-   - **NOT-WIRED** — only called from `tests/` or not called at all
-   - **PARTIAL** — type/struct exists in production but key methods have no callers
+2. Define **entry points**: the known production entry points for the system (e.g., `main()`, `dispatch()`, `execute()`, `build_order_intent()`). Maintain this list in `specs/ENTRY_POINTS.md` or equivalent.
+3. For each enforcement function, trace the call chain from the function up to an entry point:
+   - **Preferred**: Use LSP `incomingCalls` recursively (up to 10 hops) to build the call tree from the enforcement function to an entry point
+   - **Fallback**: Use `rust-callgraph` or manual grep + LSP `findReferences` to trace callers transitively
+4. Classify each function as:
+   - **WIRED** — reachable from a defined entry point via production code in `src/` (full call chain documented)
+   - **NOT-WIRED** — only called from `tests/` or not reachable from any entry point
+   - **PARTIAL** — type/struct exists in production but key methods have no callers, or caller chain terminates at a non-entry-point function (dead intermediate)
+
+**Call chain evidence**: For WIRED functions, document the call chain: `entry_point() → ... → caller() → enforcement_function()`. This makes the wiring auditable — a reviewer can verify each link.
 
 **Verdict enrichment**: Based on wiring status, split PROVEN verdicts:
 - **PROVEN-INTEGRATED** — function works correctly AND is reachable from production code
@@ -1183,7 +1276,9 @@ Any mutation from either category that passes the full test suite reveals a gap.
      -- --test <test_target_1> --test <test_target_2> --test <test_target_3>
    ```
 
-   Any surviving mutant is a confirmed gap. If `cargo mutants` is not available in the environment, document the gap as `MUTATION_GATE_SKIPPED` — this must be resolved before the story can reach `RECONCILED`.
+   Any surviving mutant is a confirmed gap **unless** it is an **equivalent mutant** — a mutation that is mathematically identical in behavior to the original code and cannot be killed by any test. Example: replacing `||` with `&&` when both operands are always simultaneously true/false (e.g., NaN/Inf propagation through arithmetic). Document equivalent mutants with a justification in the R7e output; they do not block `RECONCILED`.
+
+   If `cargo mutants` is not available in the environment, document the gap as `MUTATION_GATE_SKIPPED` — this must be resolved before the story can reach `RECONCILED`.
 5. Run the **Simpler-Than-Correct Gate** (see Glossary): for each implementation under test, ask "is there any implementation SIMPLER than the correct one that passes all tests?" If yes, the suite has a mutation gap that must be closed.
 6. If gaps found, fix tests, then rerun from step 4
 
@@ -1217,6 +1312,7 @@ If R7 reveals issues:
 - **R7c NOT-WIRED guards on safety-critical ATs**: Story verdict stays `RECONCILED` (proof is valid), but the runtime-enforcement gate in `prd_set_pass.sh` blocks the story from passing. Per-AT verdicts remain `PROVEN`; wiring qualifiers (`PROVEN-INTEGRATED` / `PROVEN-UNIT`) are tracked as a separate column. Create an integration story to wire the guard into the production pipeline. Non-safety-critical NOT-WIRED items (metrics, observability) are tracked as debt, not blockers.
 - **R7d code quality issues**: Fix P0/P1 in place (same branch). P2 items may be deferred to debt register.
 - **R7e mutation gaps**: Fix test gaps immediately, then rerun the analysis to confirm closure. Do not defer mutation gaps — a test that passes for the wrong reason is worse than no test.
+- **R7f debt register violations**: If any DEFERRED gap lacks a valid debt register entry (missing `target_slice`, empty `owner`, or `target_slice: "TBD"`), block `prd_set_pass.sh` until resolved. If overdue debt is found (target_slice already passed), the item must be re-targeted to the current or next slice before the current slice can pass.
 
 Updated final verdict table format:
 
@@ -1261,6 +1357,7 @@ reviews/reconciliations/<slice>/               # One subdirectory per slice
   LSP_CALL_CHAIN_CHECK.md                    # Phase R7c: production wiring audit
   DEVILS_ADVOCATE_R7.md                      # Phase R7e: mutation analysis (initial)
   DEVILS_ADVOCATE_R7_RECHECK.md              # Phase R7e: mutation analysis (recheck after fixes)
+  DEBT_REGISTER.json                         # Phase R7f: structured debt register (strict schema)
   SUMMARY.md                                 # One-page roll-up: verdicts, metrics, links to all files
 
 plans/prompts/
@@ -1304,6 +1401,7 @@ plans/step_prompts/recon/
 - [ ] Phase R3: Citation spot-checks documented
 - [ ] Phase R3: Cycle 1 reviewer checklist applied (AT causal proof, §4/§5/§2, fail-closed, paper compliance)
 - [ ] Phase R4: Lead compiled unified GAP-XXX-Y list with priorities
+- [ ] Phase R4: Gap aggregation uses scripted JSON extraction (not single LLM synthesis across all stories)
 - [ ] Phase R5: Remediation agents fixed all P0 and P1 gaps
 - [ ] Phase R5: Each fix cites gap ID; commit messages reference GAP-XXX-Y
 - [ ] Phase R5b: Self-review run (5-skill stack on story-scope code, not just diff)
@@ -1311,7 +1409,9 @@ plans/step_prompts/recon/
 - [ ] Phase R5b: P0/P1/P2 blockers fixed before Cycle 2 external review
 - [ ] Phase R5b: Gate artifact (`SELF_REVIEW_R5b.md`) written with premortem cross-check + AT proof gaps
 - [ ] Phase R6: All P0 gaps closed, tests pass, no regressions
-- [ ] Phase R6: Skill receipts verified (existence + head_commit + timestamps + artifact_paths) → no `SELF_REVIEW_UNPROVEN` blockers
+- [ ] Phase R6: No WEAK_PROOF verdicts remain on MED/HIGH loss_mode ATs (escalated to CLAIMED_NOT_PROVEN)
+- [ ] Phase R6: STOPLIGHT re-evaluated if remediation introduced new assumptions or changed enforcement boundaries
+- [ ] Phase R6: Skill receipts verified (existence + head_commit + timestamps + exit_status + artifact_paths) → no `SELF_REVIEW_UNPROVEN` blockers
 - [ ] Phase R6: Evidence ledgers updated with FIXED status
 - [ ] Final verdicts assigned: RECONCILED / RECONCILED-WITH-DEBT / NOT RECONCILED
 - [ ] Debt register populated for any RECONCILED-WITH-DEBT stories
@@ -1322,9 +1422,11 @@ plans/step_prompts/recon/
 - [ ] Phase R7c: OPERATIONAL_ESCALATION_REQUIRED flagged if HIGH loss_mode guard is NOT-WIRED on live system
 - [ ] Phase R7d: `code-review-expert` run on full diff (Cycle 2); P0/P1 findings fixed
 - [ ] Phase R7e: `/devils-advocate` run on full proving suite for gapped ATs (Cycle 2); `cargo mutants` executed on enforcement functions; Medium+ gaps fixed; recheck confirms closure
+- [ ] Phase R7f: Debt register validation — all DEFERRED gaps have entries in `DEBT_REGISTER.json` with valid `target_slice`, `owner`, `created_at`; no overdue debt
 - [ ] Phase R7: All Cycle 2 review artifacts include `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)` line
 - [ ] Verdict table updated with R7c wiring + safety-critical columns
 - [ ] Integration story created for PROVEN-UNIT safety-critical ATs (if any)
+- [ ] Audit anchors added to enforcement points and proving tests for safety-critical ATs (if adopting v1.6 anchors)
 - [ ] Minimum evidence pack complete for each story (preflight, self-review, Cycle 1, Cycle 2/RECON-CLEAN, resolution, verify, test output or NO_CODE_CHANGE)
 
 ---
@@ -1501,8 +1603,9 @@ The premortem recorded explicit design decisions with a chosen option and reject
   - Was the chosen option implemented? Cite file:line.
   - If a different option was implemented, flag: **DECISION_DIVERGENCE**
   - Decision divergence is not automatically wrong — but it must be explained.
-    If the code uses a better approach than the premortem chose, note it as INFO.
-    If the code uses a rejected option without justification, note it as P1.
+  - **Auto-escalation rule (v1.6)**: If the code implements an option that was **explicitly rejected** in the premortem §4, the divergence is automatically **P1** (not INFO). The premortem already evaluated and dismissed that option — silently re-adopting it is suspicious, not "better." Only the lead can downgrade a rejected-option divergence from P1 to INFO, and the downgrade must include a written justification recorded in the evidence ledger.
+  - If the code uses a novel approach (not the chosen option, not a rejected option), note it as INFO with a brief explanation of why it's acceptable.
+  - If the code uses the rejected option **with documented justification** (e.g., a code comment explaining why the premortem's choice was wrong), note as P2 for lead review.
 
 ### 6) Verify premortem §2 assumptions
 
@@ -1672,6 +1775,118 @@ A good reconciliation audit:
 - Cites **file:line** for every PASS claim (no "I believe it exists")
 - Flags every §5 wrong impl that lacks a tightening test
 - Distinguishes WEAK_PROOF from PROVEN (a test that checks "something happened" is not proof)
-- Notes DECISION_DIVERGENCE without assuming it's wrong
+- Notes DECISION_DIVERGENCE without assuming it's wrong — but auto-escalates rejected-option divergence to P1
 - Produces a remediation plan that a different agent could execute without further context
 - Never marks PROVEN on a safety-critical AT without verifying both TRIP and NON-TRIP tests
+
+---
+
+# Appendix B: Codebase Audit Anchors
+
+> Added v1.6. Addresses anti-pattern #12 (fake citation pass-through).
+
+## Problem
+
+File:line citations are fragile. Code moves, lines shift, and a citation that was accurate at review time may point to a blank line or comment after a rebase. Worse, an agent can cite a real file and line that contains *some* code but not the *actual enforcement gate* — and spot-checks may miss the difference.
+
+## Solution: `#[audit_anchor]` Attributes
+
+Annotate enforcement points with machine-readable audit anchors:
+
+```rust
+/// Validates that contracts * multiplier ≈ amount within relative tolerance.
+/// Rejects with ContractsAmountMismatch if delta exceeds threshold or is NaN.
+#[audit_anchor(AT-920, TRIP, enforcement)]
+fn validate_contracts_amount_match(
+    contracts: f64,
+    multiplier: f64,
+    amount: f64,
+    tolerance: f64,
+) -> Result<(), RejectReason> {
+    // ...
+}
+```
+
+Annotate proving tests similarly:
+
+```rust
+#[cfg(test)]
+#[audit_anchor(AT-920, TRIP, test)]
+fn test_mismatch_beyond_tolerance_rejects() {
+    // ...
+}
+```
+
+### Anchor Format
+
+```
+#[audit_anchor(AT-ID, TRIP|NON_TRIP|GOLDEN_VECTOR, enforcement|test)]
+```
+
+- `AT-ID`: The acceptance test this code proves (must match `prd.json` `enforcing_contract_ats[]`)
+- `TRIP|NON_TRIP|GOLDEN_VECTOR`: The proof category
+- `enforcement|test`: Whether this is the enforcement point or a proving test
+
+### CI Validation
+
+A CI script (`plans/validate_audit_anchors.sh` or equivalent) checks:
+
+1. **Completeness**: Every AT in `prd.json` with `passes=true` has at least one `enforcement` anchor and one `test` anchor in the codebase.
+2. **Consistency**: No orphaned anchors (AT-IDs in code that don't exist in `prd.json`).
+3. **Connectivity**: Every `enforcement` anchor has a corresponding `test` anchor for the same AT-ID (i.e., the enforcement is tested).
+
+Anchor validation runs as part of `verify.sh full`.
+
+### Adoption Strategy
+
+Introduce incrementally — one story at a time during reconciliation. Phase R5 remediation adds anchors to enforcement points and proving tests. Over time, anchor coverage grows until CI can enforce completeness.
+
+For stories reconciled before v1.6, anchors are added during the next reconciliation pass or dedicated anchor-sweep story.
+
+---
+
+# Appendix C: Future Roadmap
+
+> Items identified during review but too large for v1.6. Tracked here for visibility.
+
+## Machine-Verifiable Proof Graphs (v2.0)
+
+Replace markdown evidence ledger tables with a structured JSON/TOML proof graph:
+
+```json
+{
+  "story_id": "S1-007",
+  "proof_graph": {
+    "AT-920": {
+      "enforcement": { "file": "dispatch_map.rs", "line": 142, "function": "validate_contracts_amount_match", "anchor": "AT-920" },
+      "tests": [
+        { "file": "test_dispatch_map.rs", "line": 89, "function": "test_mismatch_beyond_tolerance_rejects", "category": "TRIP" },
+        { "file": "test_dispatch_map.rs", "line": 112, "function": "test_within_tolerance_passes", "category": "NON_TRIP" }
+      ],
+      "wiring": "PROVEN-INTEGRATED",
+      "call_chain": ["build_order_intent", "run_dispatch_gate", "validate_contracts_amount_match"],
+      "verdict": "PROVEN"
+    }
+  }
+}
+```
+
+**Benefits**:
+- Automated cross-slice regression detection (detect if Slice 3 overwrites Slice 1's AT ownership)
+- Diff-able proof state between reconciliation passes
+- Machine-queryable: "which ATs are PROVEN-UNIT?" becomes a `jq` query
+- Eliminates markdown parsing fragility
+
+**Blockers**: Requires rewriting R1 output format, all cross-review tooling, and the R4 aggregation script. Estimated as a v2.0 structural change.
+
+## Post-Rejection Blast-Radius Audit
+
+Current reconciliation audits "does the guard work?" but not "what happens after the guard fires?" For safety-critical gates, add downstream impact analysis:
+
+- **Idempotency**: If the guard rejects and the system retries, does the retry see the same state? Or does the rejection poison a WAL entry / cache / state machine?
+- **Cascading effects**: Does rejection of one intent affect unrelated intents? (e.g., shared position state, rate limiters)
+- **Recovery path**: After rejection, what is the operator's recovery procedure? Is it documented?
+
+**Proposed implementation**: Add a §9 "Post-Rejection Analysis" section to the premortem template. During reconciliation, Phase R1 audits the downstream effects as Task 8.5 (between design-pattern conformance and remediation list).
+
+**Blockers**: Expands the reconciliation scope significantly (~doubles R1 audit work per AT). Better introduced as a dedicated process for HIGH `loss_mode` stories only, or as a separate Phase R8.
