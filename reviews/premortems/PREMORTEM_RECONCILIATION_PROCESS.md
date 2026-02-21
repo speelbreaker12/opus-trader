@@ -492,11 +492,17 @@ This removes ambiguity and prevents agents from silently doing a shallow diff re
 
 Cycle 1 reviews must demonstrate engagement with the existing codebase, not just the reconciliation diff. This prevents the diff-only review gaming described in Anti-pattern #13.
 
-**Rule**: A Cycle 1 review artifact must cite at least one file:line observation that is **not** in the `git diff` output. If every cited line in the review also appears in the diff, the review is auto-rejected with `DIFF_ONLY_REVIEW_REJECTED`.
+**Rule**: A Cycle 1 review artifact must cite at least one **pre-existing enforcement point** (file:line of a guard/gate function) AND at least one **pre-existing proving test** (file:line of a test function) from the story proof scope — neither of which appears in the `git diff`. If every cited file:line in the review also appears in the diff, the review is auto-rejected with `DIFF_ONLY_REVIEW_REJECTED`.
 
-**Enforcement**: `review_logged.sh` post-validation extracts all file:line citations from the review artifact, compares against `git diff --unified=0`, and rejects if the intersection equals the full citation set. The reviewer must re-submit with story-scope observations.
+This is stricter than "any pre-existing code observation." Citing a random utility function doesn't prove the reviewer engaged with the story's contract proof. Citing the actual enforcement point and its test does.
 
-**Why this matters**: In reconciliation mode, the diff may be empty (zero code changes). A diff-only reviewer would review nothing and mark PROVEN. This gate forces engagement with the pre-existing implementation.
+**Enforcement**: `review_logged.sh` post-validation:
+1. Extracts all file:line citations from the review artifact.
+2. Compares against `git diff --unified=0`.
+3. Checks that at least one citation is tagged `enforcement` and at least one is tagged `test` (reviewers must label their citations).
+4. Rejects if all citations are diff-only, or if enforcement/test citations are missing.
+
+**Why this matters**: In reconciliation mode, the diff may be empty (zero code changes). A diff-only reviewer would review nothing and mark PROVEN. Requiring enforcement + test citations forces the reviewer to actually locate and evaluate the story's contract proof in the existing codebase — even when the result is "no issue found."
 
 ---
 
