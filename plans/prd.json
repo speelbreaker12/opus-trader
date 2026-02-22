@@ -1202,7 +1202,7 @@
       "reason_codes": {
         "type": "RejectReason",
         "values": [
-          "UnitMismatch"
+          "ContractsAmountMismatch"
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
@@ -1427,7 +1427,7 @@
           "crates/soldier_infra/tests"
         ],
         "create": [
-          "crates/soldier_infra/config"
+          "crates/soldier_infra/src/config.rs"
         ],
         "avoid": [
           "plans/**",
@@ -1569,7 +1569,9 @@
         "status_fields": [],
         "status_contract_ats": []
       },
-      "implementation_tests": [],
+      "implementation_tests": [
+        "crates/soldier_infra/tests/test_deribit_instrument.rs"
+      ],
       "loss_mode": {
         "worst_case": "Deribit instrument struct missing kind field → InstrumentKind derivation fails → intent rejected",
         "fail_closed_cap": "DispatcherChokepoint rejects intent; fail-closed to no-dispatch",
@@ -1763,7 +1765,7 @@
         "type": "",
         "values": []
       },
-      "enforcement_point": "DispatcherChokepoint",
+      "enforcement_point": "",
       "failure_mode": [],
       "observability": {
         "metrics": [],

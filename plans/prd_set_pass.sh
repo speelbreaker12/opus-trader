@@ -243,6 +243,7 @@ if [[ "$STATUS" == "true" ]]; then
     exit 10
   fi
 
+
   # ── Receipt chain (all 8 receipts must exist) ─────────────────────
   WF_STEP="${WF_STEP:-./plans/wf_step.sh}"
   if [[ -x "$WF_STEP" ]]; then

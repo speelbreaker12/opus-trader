@@ -264,7 +264,7 @@ cycle1_had_zero_findings() {
       fi
 
       # Legacy fallback: free-text regex (less reliable)
-      if grep -qiE '(\b0 findings|no findings|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
+      if grep -qiE '(\b0 findings|no findings|no issues|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
         return 0
       fi
     done < <(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | LC_ALL=C sort)

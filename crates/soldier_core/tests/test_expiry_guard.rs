@@ -126,6 +126,11 @@ fn test_expiry_reconcile_does_not_halt_other_instruments() {
     assert_eq!(instrument_b.instrument_state, InstrumentState::Active);
 }
 
+// GAP-012-3: AT-962 — assert no retry enqueued after terminal expiry.
+// The §5 wrong impl "mark expired but enqueue retries" is blocked by:
+//   1. DoNotRetry (no retry loop)
+//   2. Terminal class (no reclassification)
+//   3. restart_required == false (no process restart re-enqueues)
 #[test]
 fn test_expiry_no_retry_loop_after_positions_clear() {
     let decision = classify_lifecycle_error(
@@ -138,7 +143,42 @@ fn test_expiry_no_retry_loop_after_positions_clear() {
         LifecycleErrorClass::Terminal(LifecycleTerminalReason::InstrumentExpiredOrDelisted)
     );
     assert_eq!(decision.retry, RetryDirective::DoNotRetry);
+    // GAP-012-3: restart_required must be false to prevent retry re-enqueue via restart
     assert!(!decision.restart_required);
+}
+
+// GAP-012-2 + DA-002: Cancel outcome varies by intent for expired instruments.
+// Cancel intent → IdempotentSuccess (cancel is moot on expired instrument).
+// Close intent  → NotApplicable (close is not a cancel operation).
+// This blocks the §5 wrong impl "ignore intent field, always return IdempotentSuccess".
+#[test]
+fn test_cancel_outcome_varies_by_intent_for_expired() {
+    let cancel_decision = classify_lifecycle_error(
+        LifecycleIntent::Cancel,
+        VenueLifecycleError::InstrumentExpiredOrDelisted,
+    );
+    let close_decision = classify_lifecycle_error(
+        LifecycleIntent::Close,
+        VenueLifecycleError::InstrumentExpiredOrDelisted,
+    );
+
+    // Cancel on expired → IdempotentSuccess (cancel is moot)
+    assert_eq!(
+        cancel_decision.cancel_outcome,
+        CancelOutcome::IdempotentSuccess,
+        "Cancel intent on expired instrument must yield IdempotentSuccess"
+    );
+    // Close on expired → NotApplicable (close is not a cancel)
+    assert_eq!(
+        close_decision.cancel_outcome,
+        CancelOutcome::NotApplicable,
+        "Close intent on expired instrument must yield NotApplicable, not IdempotentSuccess"
+    );
+
+    // Both must agree on terminal classification and no-retry
+    assert_eq!(cancel_decision.class, close_decision.class);
+    assert_eq!(cancel_decision.retry, RetryDirective::DoNotRetry);
+    assert_eq!(close_decision.retry, RetryDirective::DoNotRetry);
 }
 
 // ─── Pipeline integration tests: ExpiryGuard wired into chokepoint ──────────
@@ -457,6 +497,80 @@ fn test_expiry_guard_future_with_valid_timestamp_allowed() {
 }
 
 /// NON-TRIP: Unknown kind with valid timestamp outside buffer must be allowed.
+/// Corrupt feed sending u64::MAX as expiration must be rejected (fail-closed).
+/// Without bounds-checking, saturating_sub would produce a huge opens_blocked_from_ms
+/// that now_ms can never reach, silently allowing OPEN on garbage data.
+/// Kimi K2.5 finding: input-boundary validation gap.
+#[test]
+fn test_expiry_guard_u64_max_timestamp_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(u64::MAX),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "u64::MAX expiration must be rejected as corrupt/out-of-domain input"
+    );
+}
+
+/// An expiration timestamp far in the future but still within the sane range
+/// should be allowed (not a false positive from bounds-checking).
+#[test]
+fn test_expiry_guard_far_future_but_sane_timestamp_allowed() {
+    // Year 2170 — large but valid
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(6_300_000_000_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Allowed,
+        "Far future but sane timestamp must be allowed"
+    );
+}
+
+/// Timestamp just above the sane boundary must be rejected.
+#[test]
+fn test_expiry_guard_just_above_sane_boundary_rejected() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(7_300_000_000_001), // 1ms above MAX_REASONABLE_EXPIRY_MS
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
+        "Timestamp just above sane boundary must be rejected"
+    );
+}
+
+/// Exactly at MAX_REASONABLE_EXPIRY_MS (7_300_000_000_000) — boundary inclusive, must be allowed.
+/// Kimi K2.5 Cycle 2 P3 finding: boundary value was untested.
+#[test]
+fn test_expiry_guard_at_exact_sane_boundary_allowed() {
+    let input = ExpiryGuardInput {
+        now_ms: 1_000_000_000_000,
+        expiration_timestamp_ms: Some(7_300_000_000_000), // exactly at MAX_REASONABLE_EXPIRY_MS
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    assert_eq!(
+        evaluate_expiry_guard(&input),
+        ExpiryGuardResult::Allowed,
+        "Timestamp exactly at sane boundary must be allowed (check is >, not >=)"
+    );
+}
+
 /// When timestamp is present, the buffer check applies regardless of kind.
 #[test]
 fn test_expiry_guard_unknown_kind_with_valid_timestamp_allowed() {

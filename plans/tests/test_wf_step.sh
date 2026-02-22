@@ -494,6 +494,7 @@ cat > plans/prd.json <<PRDEOF2
 {"items":[{"id":"TEST-001","passes":true},{"id":"TEST-002","passes":false}]}
 PRDEOF2
 
+WF_RECEIPT_DIR="$TMPDIR/.wf/receipts/TEST-002" \
 set +e
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-002 preflight > /dev/null 2>&1
 rc=$?
@@ -694,6 +695,7 @@ rc=$?
 set -e
 rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
 assert_exit "supervisor GREEN path passes cycle2 with 1 review" 0 "$rc"
+
 
 echo ""
 echo "============================================"

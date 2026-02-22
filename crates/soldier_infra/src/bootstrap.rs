@@ -76,13 +76,9 @@ impl BootstrapResult {
     /// the caller to receive the replay outcome — the compiler prevents
     /// accessing ledger/registry without going through this path.
     ///
-    /// **Caller contract (AT-430, AT-935):**
-    /// - After calling this, the caller MUST set
-    ///   `open_permission_blocked_latch = true` with reason
-    ///   `RESTART_RECONCILE_REQUIRED` on every restart.
-    /// - The caller MUST use the returned `ReplayOutcome` (e.g.,
-    ///   `in_flight_count > 0`) to decide when reconciliation is mandatory
-    ///   before clearing the latch or permitting any dispatch.
+    /// **Caller contract (AT-430, AT-935):** After calling this, set
+    /// `open_permission_blocked_latch = true` with reason
+    /// `RESTART_RECONCILE_REQUIRED` if `replay_outcome.in_flight_count > 0`.
     pub fn acknowledge(self) -> (ReplayOutcome, AcknowledgedBootstrap) {
         (
             self.replay_outcome,

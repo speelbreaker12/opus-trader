@@ -133,6 +133,21 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
         }
     };
 
+    // Input bounds check: reject unreasonable expiration timestamps.
+    // A corrupt feed could send u64::MAX, which would make
+    // `opens_blocked_from_ms` enormous and silently allow OPEN.
+    // Saturating arithmetic protects computation but not inputs.
+    // Bound: year 2200 in milliseconds (~7.3e15). Anything beyond is garbage.
+    const MAX_REASONABLE_EXPIRY_MS: u64 = 7_300_000_000_000;
+    if expiration_ms > MAX_REASONABLE_EXPIRY_MS {
+        tracing::warn!(
+            expiration_ms,
+            max_reasonable = MAX_REASONABLE_EXPIRY_MS,
+            "expiry guard: expiration timestamp beyond sane range, rejecting OPEN (possible data corruption)"
+        );
+        return ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted);
+    }
+
     let buffer_ms = input.expiry_delist_buffer_s.saturating_mul(1000);
     let opens_blocked_from_ms = expiration_ms.saturating_sub(buffer_ms);
     if input.now_ms >= opens_blocked_from_ms {

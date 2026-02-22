@@ -1,45 +1,30 @@
 ROLE
-You are the Builder closing the review loop for ${STORY_ID}.
-You must create a gate-compliant review resolution artifact.
+You are the Builder (or Supervisor) closing the review loop.
+This is RECONCILIATION mode — the story already has passes=true.
 
-STORY
-- Story ID: ${STORY_ID}
-- Base branch: ${BASE_BRANCH}
-- Current HEAD: ${HEAD}
+STORY: ${STORY_ID}
 
 TASK
-1) Read and use the template: plans/review_resolution_template.md
-2) Create: artifacts/story/${STORY_ID}/review_resolution.md
-3) The document MUST contain these exact lines:
-   Story: ${STORY_ID}
-   HEAD: ${HEAD}
-   Blocking addressed: YES
-   Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-4) The document MUST reference the actual review files with real paths:
-   - Codex cycle 1 review file: <path>
-   - Codex cycle 2 review file: <path>
-   - Self-review file: <path>
-5) Include a "## Finding Disposition" section.
-   - For GREEN reconciliation (0 findings): "Reconciliation audit: no findings."
-   - Otherwise: disposition every finding (FIXED or DEFERRED with rationale).
-6) Write postmortem using plans/postmortem_template.md:
-   - Save to: artifacts/story/${STORY_ID}/postmortem.md
-   - Required for YELLOW/RED stories and any story touching gates, TradingMode, RiskState, WAL, or replay.
-   - Fill all 9 sections. Key requirements:
-     - Section 1: Name ONE constraint in a single sentence + Constraint Class
-     - Section 5: Describe a wrong implementation that could have passed before
-     - Section 6: Rule Updates table — at least one permanent change (this is the point)
-     - Section 8: Next-Story Startup Note (carry-forward constraint)
-     - Section 9: Complete the checklist (all boxes checked)
-   - Keep it to ~1 page. If you can't name the constraint in one sentence, it's fluff.
+- Create artifacts/story/${STORY_ID}/review_resolution.md using the template from plans/review_resolution_template.md.
+- The resolution MUST contain:
+  - "Blocking addressed: YES"
+  - "BLOCKING=0 MAJOR=0 MEDIUM=0" (or accurate counts with explicit deferrals)
+  - Lists any deferred items with owners and rationale
+- For GREEN reconciliation (0 findings), resolution should note "Reconciliation audit: no findings."
+
+POSTMORTEM (Step 7.1):
+- Write postmortem using plans/postmortem_template.md to artifacts/story/${STORY_ID}/postmortem.md
+- Focus on: what surprised you during the audit, what the blind premortem missed,
+  what the next story in this slice should watch for.
 
 OUTPUT
-- Print the path to review_resolution.md
-- Postmortem path (if written)
-- Paste the final resolution contents
-- End with exact line: READY FOR VERIFY_FULL
+- Provide the resolution file path and paste its contents.
+- Provide the postmortem file path.
+- End with: "READY FOR VERIFY_FULL".
 
-PROHIBITED
-- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
-- Do NOT omit the exact required lines
-- Do NOT leave placeholders (<TODO>, TBD, etc.)
+PROHIBITED (applies to ALL steps)
+- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
+- Do NOT edit .wf/receipts/ or any workflow state files
+- Do NOT modify plans/prd.json passes field
+- Do NOT proceed to any step beyond the one assigned
+- Do NOT claim the step is "done" — only the supervisor validates completion

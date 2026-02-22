@@ -453,6 +453,89 @@ fn test_breach_struct_fields() {
     assert!(debug_str.contains("3600"));
 }
 
+// ─── GAP-003-1: default TTL constant ─────────────────────────────────────
+
+/// GAP-003-1: The Appendix A default for instrument_cache_ttl_s is 3600 seconds.
+///
+/// The canonical default lives in soldier_infra::config::appendix_a_default
+/// (ConfigParam::InstrumentCacheTtlS → 3600.0). This test documents the
+/// expected value at the cache layer for traceability. If the contract
+/// default changes, this test must be updated to match.
+#[test]
+fn test_default_instrument_cache_ttl_is_3600() {
+    // CONTRACT.md Appendix A: instrument_cache_ttl_s default = 3600
+    let expected_default_ttl_s: f64 = 3600.0;
+
+    // Verify the cache layer behaves correctly at the default TTL boundary.
+    // age == 3600s → Healthy (not stale until age > ttl)
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    let at_boundary = t0 + Duration::from_secs(expected_default_ttl_s as u64);
+    let result = cache.get_at("BTC-PERPETUAL", expected_default_ttl_s, at_boundary).unwrap();
+    assert_eq!(result.risk_state, RiskState::Healthy, "at boundary (3600s) → Healthy");
+
+    // age == 3601s → Degraded
+    let past_boundary = t0 + Duration::from_secs(expected_default_ttl_s as u64 + 1);
+    let result = cache.get_at("BTC-PERPETUAL", expected_default_ttl_s, past_boundary).unwrap();
+    assert_eq!(result.risk_state, RiskState::Degraded, "past boundary (3601s) → Degraded");
+}
+
+// ─── GAP-006-1: CacheTtlBreach on stale access ──────────────────────────
+
+/// GAP-006-1: When the cache is stale, a CacheTtlBreach event is produced.
+///
+/// The InstrumentCache uses an internal VecDeque (not the tracing crate)
+/// to buffer breach events. This test verifies that a stale access enqueues
+/// a CacheTtlBreach with the correct instrument_id, age_s, and ttl_s.
+#[test]
+fn test_stale_access_produces_cache_ttl_breach_event() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let ttl_s = 3600.0;
+
+    cache.insert_at("ETH-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Fresh access → no breach events
+    cache.get_at("ETH-PERPETUAL", ttl_s, t0);
+    assert!(
+        cache.drain_breaches().is_empty(),
+        "fresh access must not produce a CacheTtlBreach"
+    );
+
+    // Stale access (age=5000 > ttl=3600) → CacheTtlBreach emitted
+    let stale_time = t0 + Duration::from_secs(5000);
+    cache.get_at("ETH-PERPETUAL", ttl_s, stale_time);
+
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), 1, "stale access must produce exactly one CacheTtlBreach");
+    assert_eq!(breaches[0].instrument_id, "ETH-PERPETUAL");
+    assert!((breaches[0].age_s - 5000.0).abs() < 0.01, "age_s must reflect actual cache age");
+    assert!((breaches[0].ttl_s - 3600.0).abs() < 0.01, "ttl_s must reflect configured TTL");
+}
+
+// DA-003: Verify breach event ttl_s reflects the configured TTL, not a hardcoded 3600.
+// Uses a custom TTL of 120s to catch implementations that hardcode ttl_s: 3600.0.
+#[test]
+fn test_breach_event_ttl_reflects_custom_config() {
+    let mut cache = InstrumentCache::new();
+    let t0 = Instant::now();
+    let custom_ttl_s = 120.0;
+
+    cache.insert_at("SOL-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+    // Stale access with custom TTL (age=200 > ttl=120)
+    let stale_time = t0 + Duration::from_secs(200);
+    cache.get_at("SOL-PERPETUAL", custom_ttl_s, stale_time);
+
+    let breaches = cache.drain_breaches();
+    assert_eq!(breaches.len(), 1);
+    assert_eq!(breaches[0].instrument_id, "SOL-PERPETUAL");
+    assert!((breaches[0].ttl_s - 120.0).abs() < 0.01, "ttl_s must reflect custom TTL 120, not hardcoded 3600");
+    assert!((breaches[0].age_s - 200.0).abs() < 0.01);
+}
+
 /// Catches mutation: hardcode TTL to default value (all tests use 3600s).
 /// Uses a custom TTL (60s) to prove the config value is actually read.
 #[test]
