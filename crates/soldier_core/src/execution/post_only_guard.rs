@@ -18,10 +18,11 @@ pub fn post_only_cross_reject_total() -> u64 {
     POST_ONLY_CROSS_REJECT_TOTAL.load(Ordering::Relaxed)
 }
 
-fn bump_post_only_reject() {
+fn bump_post_only_reject(reason: &PostOnlyRejectReason) {
     POST_ONLY_CROSS_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
-    super::emit_execution_metric_line(super::METRIC_POST_ONLY_REJECT, "");
-    tracing::debug!("PostOnlyReject");
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line(super::METRIC_POST_ONLY_REJECT, &tail);
+    tracing::debug!("PostOnlyReject reason={:?}", reason);
 }
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -43,13 +44,24 @@ pub struct PostOnlyInput {
 
 // ─── Result ─────────────────────────────────────────────────────────────
 
+/// Rejection reason for the post-only crossing guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostOnlyRejectReason {
+    /// Limit price would cross the touch.
+    WouldCross,
+    /// Non-finite limit price (NaN/Inf) — fail-closed.
+    NonFinitePrice,
+    /// Non-finite book price (NaN/Inf best_ask or best_bid) — fail-closed.
+    NonFiniteBookPrice,
+}
+
 /// Result of the post-only crossing check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PostOnlyResult {
     /// Order is allowed (not post_only, or would not cross).
     Allowed,
-    /// Order would cross the book — reject before dispatch.
-    Rejected,
+    /// Order rejected — reason explains why.
+    Rejected { reason: PostOnlyRejectReason },
 }
 
 // ─── Metrics ────────────────────────────────────────────────────────────
@@ -108,12 +120,14 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
     // IEEE 754: NaN comparisons always return false, so NaN >= ask would
     // silently pass the crossing check. is_finite() catches both NaN and Inf.
     if !input.limit_price.is_finite() {
+        let reason = PostOnlyRejectReason::NonFinitePrice;
         tracing::warn!(
             limit_price = input.limit_price,
             "post_only: non-finite limit_price, rejecting (fail-closed)"
         );
         metrics.record_reject();
-        return PostOnlyResult::Rejected;
+        bump_post_only_reject(&reason);
+        return PostOnlyResult::Rejected { reason };
     }
 
     let would_cross = match input.side {
@@ -121,12 +135,14 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
         Side::Buy => match input.best_ask {
             Some(ask) => {
                 if !ask.is_finite() {
+                    let reason = PostOnlyRejectReason::NonFiniteBookPrice;
                     tracing::warn!(
                         best_ask = ask,
                         "post_only: non-finite best_ask, rejecting (fail-closed)"
                     );
                     metrics.record_reject();
-                    return PostOnlyResult::Rejected;
+                    bump_post_only_reject(&reason);
+                    return PostOnlyResult::Rejected { reason };
                 }
                 input.limit_price >= ask
             }
@@ -136,12 +152,14 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
         Side::Sell => match input.best_bid {
             Some(bid) => {
                 if !bid.is_finite() {
+                    let reason = PostOnlyRejectReason::NonFiniteBookPrice;
                     tracing::warn!(
                         best_bid = bid,
                         "post_only: non-finite best_bid, rejecting (fail-closed)"
                     );
                     metrics.record_reject();
-                    return PostOnlyResult::Rejected;
+                    bump_post_only_reject(&reason);
+                    return PostOnlyResult::Rejected { reason };
                 }
                 input.limit_price <= bid
             }
@@ -150,8 +168,10 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
     };
 
     if would_cross {
+        let reason = PostOnlyRejectReason::WouldCross;
         metrics.record_reject();
-        PostOnlyResult::Rejected
+        bump_post_only_reject(&reason);
+        PostOnlyResult::Rejected { reason }
     } else {
         PostOnlyResult::Allowed
     }

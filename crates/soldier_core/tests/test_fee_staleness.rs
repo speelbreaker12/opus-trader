@@ -263,14 +263,15 @@ fn test_neg_infinity_fee_rate_returns_hard_stale_degraded() {
     assert_eq!(result.fee_rate_effective, 0.0);
 }
 
-// ─── Invalid fee_stale_buffer → safe fallback ───────────────────────────
+// ─── Invalid fee_stale_buffer → fail-closed (S7-AUD-003) ────────────────
 
 #[test]
-fn test_nan_buffer_uses_zero_buffer() {
+fn test_nan_buffer_fail_closed() {
     let snapshot = FeeCacheSnapshot {
         fee_rate: 0.001,
         fee_model_cached_at_ts_ms: Some(1_000_000),
-        // Age = 500s which is between soft (300) and hard (900) → SoftStale
+        // Age = 500s which is between soft (300) and hard (900).
+        // S7-AUD-003: NaN buffer → HardStale + Degraded (fail-closed).
         now_ms: 1_500_000,
     };
     let config = FeeStalenessConfig {
@@ -279,17 +280,18 @@ fn test_nan_buffer_uses_zero_buffer() {
         fee_stale_buffer: f64::NAN,
     };
     let result = evaluate_fee_staleness(&snapshot, &config);
-    assert_eq!(result.staleness, FeeStaleness::SoftStale);
-    // With NaN buffer replaced by 0.0: fee_rate * (1.0 + 0.0) = fee_rate
-    assert!((result.fee_rate_effective - 0.001).abs() < 1e-12);
+    assert_eq!(result.staleness, FeeStaleness::HardStale);
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert_eq!(result.fee_rate_effective, 0.0);
+    assert_eq!(result.cache_age_s, None);
 }
 
 #[test]
-fn test_negative_buffer_uses_zero_buffer() {
+fn test_negative_buffer_fail_closed() {
     let snapshot = FeeCacheSnapshot {
         fee_rate: 0.001,
         fee_model_cached_at_ts_ms: Some(1_000_000),
-        now_ms: 1_500_000, // age = 500s → SoftStale
+        now_ms: 1_500_000, // age = 500s
     };
     let config = FeeStalenessConfig {
         fee_cache_soft_s: 300,
@@ -297,17 +299,19 @@ fn test_negative_buffer_uses_zero_buffer() {
         fee_stale_buffer: -0.5,
     };
     let result = evaluate_fee_staleness(&snapshot, &config);
-    assert_eq!(result.staleness, FeeStaleness::SoftStale);
-    // Negative buffer replaced by 0.0: fee_rate * (1.0 + 0.0) = fee_rate
-    assert!((result.fee_rate_effective - 0.001).abs() < 1e-12);
+    // S7-AUD-003: negative buffer → HardStale + Degraded (fail-closed).
+    assert_eq!(result.staleness, FeeStaleness::HardStale);
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert_eq!(result.fee_rate_effective, 0.0);
+    assert_eq!(result.cache_age_s, None);
 }
 
 #[test]
-fn test_infinity_buffer_uses_zero_buffer() {
+fn test_infinity_buffer_fail_closed() {
     let snapshot = FeeCacheSnapshot {
         fee_rate: 0.001,
         fee_model_cached_at_ts_ms: Some(1_000_000),
-        now_ms: 1_500_000, // age = 500s → SoftStale
+        now_ms: 1_500_000, // age = 500s
     };
     let config = FeeStalenessConfig {
         fee_cache_soft_s: 300,
@@ -315,8 +319,11 @@ fn test_infinity_buffer_uses_zero_buffer() {
         fee_stale_buffer: f64::INFINITY,
     };
     let result = evaluate_fee_staleness(&snapshot, &config);
-    assert_eq!(result.staleness, FeeStaleness::SoftStale);
-    assert!((result.fee_rate_effective - 0.001).abs() < 1e-12);
+    // S7-AUD-003: Inf buffer → HardStale + Degraded (fail-closed).
+    assert_eq!(result.staleness, FeeStaleness::HardStale);
+    assert_eq!(result.risk_state, RiskState::Degraded);
+    assert_eq!(result.fee_rate_effective, 0.0);
+    assert_eq!(result.cache_age_s, None);
 }
 
 // ─── Devils-advocate: custom config thresholds ──────────────────────

@@ -275,6 +275,35 @@ impl AtomicGroup {
         result: LegResult,
         config: &GroupConfig,
     ) -> GroupStateTransition {
+        // Q4: NaN fail-closed — non-finite quantities cannot be safely compared.
+        if !result.filled_qty.is_finite() || !result.requested_qty.is_finite() {
+            tracing::warn!(
+                leg_idx = result.leg_idx,
+                filled_qty = result.filled_qty,
+                requested_qty = result.requested_qty,
+                "NaN fail-closed: non-finite fill quantity"
+            );
+            self.leg_results.push(result);
+            if self.state != GroupState::MixedFailed
+                && self.state != GroupState::Flattening
+                && self.state != GroupState::Flattened
+            {
+                self.state = GroupState::MixedFailed;
+                self.containment_pending = true;
+                if self.first_failure_reason.is_none() {
+                    self.first_failure_reason = Some(format!(
+                        "non-finite fill quantity on leg {}",
+                        self.leg_results.len() - 1
+                    ));
+                }
+                bump_group_mixed_failed(&self.group_id);
+                return GroupStateTransition::EnteredMixedFailed {
+                    reason: self.first_failure_reason.clone().unwrap_or_default(),
+                };
+            }
+            return GroupStateTransition::StillMixedFailed;
+        }
+
         self.leg_results.push(result.clone());
 
         // Check for failure condition on this leg
@@ -352,6 +381,20 @@ impl AtomicGroup {
             .copied()
             .fold(f64::NEG_INFINITY, f64::max);
         let min_f = filled_qtys.iter().copied().fold(f64::INFINITY, f64::min);
+        // Q4: fail-closed — NaN means we can't verify atomicity
+        if !max_f.is_finite() || !min_f.is_finite() {
+            return false;
+        }
+
+        // Fail-closed: non-finite epsilon makes comparison unpredictable
+        if !config.atomic_qty_epsilon.is_finite() || config.atomic_qty_epsilon < 0.0 {
+            tracing::error!(
+                epsilon = config.atomic_qty_epsilon,
+                "is_atomicity_intact: non-finite or negative atomic_qty_epsilon"
+            );
+            return false;
+        }
+
         let any_partial = self
             .leg_results
             .iter()
@@ -415,6 +458,8 @@ pub enum GroupStateTransition {
     EnteredMixedFailed { reason: String },
     /// Group completed cleanly.
     Completed,
+    /// Group was already MixedFailed and received another leg result.
+    StillMixedFailed,
 }
 
 // ─── GroupError ─────────────────────────────────────────────────────────

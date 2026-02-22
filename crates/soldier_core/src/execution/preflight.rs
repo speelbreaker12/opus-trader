@@ -252,7 +252,7 @@ pub fn preflight_intent(
         let mut post_only_metrics = PostOnlyMetrics::new();
         if matches!(
             check_post_only(post_only_input, &mut post_only_metrics),
-            PostOnlyResult::Rejected
+            PostOnlyResult::Rejected { .. }
         ) {
             let reason = PreflightReject::PostOnlyWouldCross;
             metrics.record_reject(&reason);

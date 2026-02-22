@@ -91,7 +91,8 @@ pub use pipeline::{
     evaluate_intent_pipeline,
 };
 pub use post_only_guard::{
-    PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only, post_only_cross_reject_total,
+    PostOnlyInput, PostOnlyMetrics, PostOnlyRejectReason, PostOnlyResult, check_post_only,
+    post_only_cross_reject_total,
 };
 pub use preflight::{
     OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,

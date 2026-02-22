@@ -158,16 +158,23 @@ pub fn evaluate_fee_staleness(
         };
     }
 
-    // Guard: non-finite or negative buffer → treat as zero buffer (conservative)
-    let safe_buffer = if !config.fee_stale_buffer.is_finite() || config.fee_stale_buffer < 0.0 {
+    // S7-AUD-003: non-finite or negative buffer → fail-closed (HardStale + Degraded).
+    // Previously fell back to 0.0 (fail-OPEN), silently removing the conservative
+    // uplift on soft-stale fees. Now blocks OPEN until buffer is fixed.
+    if !config.fee_stale_buffer.is_finite() || config.fee_stale_buffer < 0.0 {
         tracing::warn!(
             buffer = config.fee_stale_buffer,
-            "fee staleness: non-finite/negative buffer, clamping to 0.0 (conservative)"
+            "fee staleness: non-finite/negative buffer, fail-closed to HardStale+Degraded"
         );
-        0.0
-    } else {
-        config.fee_stale_buffer
-    };
+        bump_fee_staleness_reject(FeeStaleness::HardStale, None);
+        return FeeEvaluation {
+            staleness: FeeStaleness::HardStale,
+            fee_rate_effective: 0.0,
+            cache_age_s: None,
+            risk_state: RiskState::Degraded,
+        };
+    }
+    let safe_buffer = config.fee_stale_buffer;
 
     // Missing timestamp → hard-stale (fail-closed, AT-042)
     let cached_at_ms = match snapshot.fee_model_cached_at_ts_ms {
