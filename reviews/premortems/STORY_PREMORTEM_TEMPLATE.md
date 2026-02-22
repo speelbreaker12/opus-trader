@@ -73,6 +73,11 @@ For EACH AT claimed by this story:
 
 ## 6) Proof plan (AT → enforcement → tests)
 
+> **Proof graph (v1.7)**: This section's data feeds `proof_graph.json`. After implementation, run
+> `python3 python/proof_graph/scaffold.py <STORY_ID>` to generate the skeleton, then fill in
+> verdicts, test names, and wiring status. The validator (`validate.py --strict`) enforces
+> consistency at pass-flip time. See `python/proof_graph/` for schema details.
+
 For each AT, map the full proof chain. Safety-critical ATs MUST have both TRIP and NON-TRIP.
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |

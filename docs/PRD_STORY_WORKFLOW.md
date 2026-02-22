@@ -13,7 +13,7 @@ Every PRD story follows 9 steps, enforced by 8 progressive receipts and 1 final 
 
 **Enforcement**:
 1. **Receipt tracking** (`wf_step.sh`): Ordering + step-specific input validation
-2. **Final chokepoint** (`prd_set_pass.sh`): Receipts + verify artifacts + review evidence + contract review
+2. **Final chokepoint** (`prd_set_pass.sh`): Receipts + verify artifacts + review evidence + contract review + proof graph
 
 **Step numbering**: Human-readable steps are 1-indexed (Step 1 to 9). Receipt filenames are 0-indexed (`00_preflight.json` to `07_verify_full.json`). The `step_index` field in receipt JSON matches the 0-based filename prefix.
 
@@ -58,6 +58,7 @@ Step 9: PASS (no receipt — final gate only)
   prd_set_pass.sh flips passes=true
   ↓ validates: all 8 receipts + verify artifacts + review for HEAD
     + contract review PASS + fail-closed coverage + loss_mode fields
+    + proof_graph.json validation (--strict) or exempt-list bypass
 ```
 
 ---
@@ -440,6 +441,7 @@ This is a human/supervisor judgment artifact — not auto-generated. Create it a
 | **Enforcement point** | `enforcement_point` populated | 6 | Story metadata incomplete — no enforcement point |
 | **Fail-closed coverage** | TRIP + NON-TRIP name patterns in test files | 8 | Test naming conventions not met |
 | **Loss mode** | `worst_case`, `fail_closed_cap`, `drift_metric` populated | 9 | Risk fields unpopulated in PRD |
+| **Proof graph** | `proof_graph.json` validates with `--strict`, or ID in `plans/proof_graph_exempt.txt` | 10 | Proof graph missing/invalid and not legacy-exempt |
 
 ---
 

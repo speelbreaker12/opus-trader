@@ -295,7 +295,7 @@ What the builder does:
 
 **GREEN PATH:** No pass-flip needed. Story already has `passes=true`. The receipt chain + resolution + postmortem = proof of audit.
 
-**YELLOW/RED PATH:** Must re-run `plans/prd_set_pass.sh <ID> true` because HEAD changed during fixes. All 8 receipts + verify artifacts + review evidence + contract review must pass.
+**YELLOW/RED PATH:** Must re-run `plans/prd_set_pass.sh <ID> true` because HEAD changed during fixes. All 8 receipts + verify artifacts + review evidence + contract review + proof graph validation must pass.
 
 ---
 
@@ -412,7 +412,7 @@ Step 9 (Pass) is supervisor-only — never delegated to a builder.
 | Resolution | `wf_step.sh` | `review_resolution.md` with `Blocking addressed: YES`, `BLOCKING=0` |
 | Resolution | `postmortem_gate.sh` | TOC postmortem sections, constraint, rule updates, no placeholders |
 | Verify Full | `wf_step.sh` | `verify.meta.json` with `mode=full` + HEAD match |
-| Pass | `prd_set_pass.sh` | All 8 receipts + verify + review + contract + loss_mode |
+| Pass | `prd_set_pass.sh` | All 8 receipts + verify + review + contract + loss_mode + proof_graph (exit 10) |
 
 ---
 
@@ -472,8 +472,11 @@ plans/prd_set_pass.sh <ID> true
 | `plans/postmortem_gate.sh` | Postmortem artifact validator |
 | `plans/scaffold_postmortem.sh` | Scaffolds postmortem from template |
 | `plans/prd_set_pass.sh` | Final pass-flip gate (YELLOW path only) |
+| `plans/proof_graph_exempt.txt` | Legacy story IDs exempt from proof graph requirement |
+| `python/proof_graph/validate.py` | Proof graph validator (18 rules, `--strict` at pass-flip) |
+| `python/proof_graph/scaffold.py` | Proof graph skeleton generator from prd.json |
 | `.wf/receipts/<ID>/` | Receipt chain (JSON files, 8 steps) |
-| `artifacts/story/<ID>/` | All story artifacts (reviews, resolution, postmortem) |
+| `artifacts/story/<ID>/` | All story artifacts (reviews, resolution, postmortem, proof_graph.json) |
 
 ---
 
