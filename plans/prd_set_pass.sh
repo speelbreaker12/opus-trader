@@ -18,6 +18,7 @@ Rules for passes=true:
   - enforcing_contract_ats must be non-empty (exit 6) — exempt: policy/certification categories
   - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
   - loss_mode.worst_case, .fail_closed_cap, .drift_metric must all be non-empty (exit 9) — exempt: policy/certification
+  - proof_graph.json must exist and validate (exit 10) — exempt: IDs in plans/proof_graph_exempt.txt
 USAGE
 }
 
@@ -217,6 +218,29 @@ if [[ "$STATUS" == "true" ]]; then
       echo "ERROR: fail-closed test coverage minimum not met" >&2
       exit 8
     fi
+  fi
+
+  # ── Proof graph validation ──────────────────────────────────────────
+  proof_graph_file="$art_root/$ID/proof_graph.json"
+  exempt_list="$ROOT/plans/proof_graph_exempt.txt"
+  if [[ -f "$proof_graph_file" ]]; then
+    command -v python3 >/dev/null 2>&1 || {
+      echo "ERROR: python3 required for proof graph validation" >&2
+      exit 10
+    }
+    if ! python3 "$ROOT/python/proof_graph/validate.py" "$proof_graph_file" \
+         --contract-path "$ROOT/specs/CONTRACT.md" \
+         --prd-path "$PRD_FILE" \
+         --strict; then
+      echo "ERROR: proof graph validation failed for $ID" >&2
+      exit 10
+    fi
+  elif [[ -f "$exempt_list" ]] && grep -qxF "$ID" "$exempt_list"; then
+    echo "INFO: $ID is exempt from proof graph requirement (legacy)" >&2
+  else
+    echo "ERROR: proof_graph.json missing for $ID (not in exempt list)" >&2
+    echo "  Generate skeleton: python3 python/proof_graph/scaffold.py $ID" >&2
+    exit 10
   fi
 
   # ── Receipt chain (all 8 receipts must exist) ─────────────────────

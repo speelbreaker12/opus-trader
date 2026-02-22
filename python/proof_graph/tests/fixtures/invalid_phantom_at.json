@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "head_sha": "aabbccddee00112233445566778899aabbccddee",
+  "generated_at": "2026-02-21T10:00:00+00:00",
+  "story_meta": {
+    "story_id": "S1-007",
+    "category": "enforcement",
+    "enforcement_point": "DispatcherChokepoint",
+    "loss_mode": {
+      "worst_case": "Stale metadata",
+      "fail_closed_cap": "Dispatcher rejects",
+      "drift_metric": "metadata_staleness_ms",
+      "level": "LOW"
+    },
+    "safety_critical": false,
+    "scope_touch": ["crates/soldier_core/src/execution/build_order_intent.rs"]
+  },
+  "ats": [
+    {
+      "at_id": "AT-99999",
+      "enforcement": {
+        "status": "FOUND",
+        "evidence": ["some_file.rs:10"]
+      },
+      "tests": [
+        {
+          "test_name": "test_phantom",
+          "kind": "TRIP",
+          "causal_proof": {
+            "mechanism": "dispatch_count_assert",
+            "dispatch_count_assert": "0"
+          },
+          "execution": {
+            "ran_at_head_sha": "aabbccddee00112233445566778899aabbccddee",
+            "pass_result": true
+          }
+        }
+      ],
+      "wiring": {
+        "status": "PROVEN_INTEGRATED",
+        "evidence": "full pipeline"
+      },
+      "observability": {
+        "metric": "some_metric",
+        "alert": "some_alert"
+      },
+      "premortem_checks": {
+        "stoplight": "GREEN",
+        "sections_filled": 10
+      },
+      "at_verdict": {
+        "verdict": "PROVEN_INTEGRATED",
+        "severity": "INFO",
+        "rationale": "Proven"
+      }
+    }
+  ],
+  "story_verdict": {
+    "reconciliation_status": "RECONCILED",
+    "blocking_count": 0,
+    "hardening_count": 0,
+    "summary": "All proven"
+  },
+  "debt_register": []
+}
