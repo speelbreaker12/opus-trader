@@ -425,12 +425,6 @@ pub const ALL_PARAMS: &[ConfigParam] = &[
     ConfigParam::CanaryEvidenceAbortS,
 ];
 
-/// Resolve a configuration value with Appendix A fail-safe semantics.
-///
-/// - If `value` is `Some`, returns that value (explicit config takes precedence).
-/// - If `value` is `None` and the parameter has an Appendix A default, returns the default.
-/// - If `value` is `None` and no Appendix A default exists, returns `Err` (fail-closed).
-
 /// Returns true if the parameter is a percentage/fraction that must be in [0.0, 1.0].
 ///
 /// CONTRACT.md Appendix A marks these as "pct" in the unit column.
@@ -456,6 +450,11 @@ fn is_percentage_param(param: ConfigParam) -> bool {
     )
 }
 
+/// Resolve a configuration value with Appendix A fail-safe semantics.
+///
+/// - If `value` is `Some`, returns that value (explicit config takes precedence).
+/// - If `value` is `None` and the parameter has an Appendix A default, returns the default.
+/// - If `value` is `None` and no Appendix A default exists, returns `Err` (fail-closed).
 pub fn resolve_config_value(
     param: ConfigParam,
     value: Option<f64>,
