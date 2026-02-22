@@ -9,6 +9,8 @@
 //! - SELL: `limit_price_q = ceil(raw_limit_price / tick_size) * tick_size`
 //! - If `qty_q < min_amount` → Reject(TooSmallAfterQuantization)
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 /// Order side — determines price rounding direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Side {
@@ -154,6 +156,44 @@ impl Default for QuantizeMetrics {
     }
 }
 
+// ─── Static counters (Layer 1) ──────────────────────────────────────────
+
+static QUANTIZE_REJECT_TOO_SMALL_TOTAL: AtomicU64 = AtomicU64::new(0);
+static QUANTIZE_REJECT_METADATA_MISSING_TOTAL: AtomicU64 = AtomicU64::new(0);
+static QUANTIZE_REJECT_INVALID_INPUT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Read the static quantize rejection counter for a given error variant.
+pub fn quantize_reject_total(error: &QuantizeError) -> u64 {
+    match error {
+        QuantizeError::TooSmallAfterQuantization { .. } => {
+            QUANTIZE_REJECT_TOO_SMALL_TOTAL.load(Ordering::Relaxed)
+        }
+        QuantizeError::InstrumentMetadataMissing { .. } => {
+            QUANTIZE_REJECT_METADATA_MISSING_TOTAL.load(Ordering::Relaxed)
+        }
+        QuantizeError::InvalidInput { .. } => {
+            QUANTIZE_REJECT_INVALID_INPUT_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_quantize_reject(error: &QuantizeError) {
+    match error {
+        QuantizeError::TooSmallAfterQuantization { .. } => {
+            QUANTIZE_REJECT_TOO_SMALL_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        QuantizeError::InstrumentMetadataMissing { .. } => {
+            QUANTIZE_REJECT_METADATA_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        QuantizeError::InvalidInput { .. } => {
+            QUANTIZE_REJECT_INVALID_INPUT_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("error={error:?}");
+    super::emit_execution_metric_line(super::METRIC_QUANTIZE_REJECT, &tail);
+    tracing::debug!("QuantizeReject error={:?}", error);
+}
+
 /// Validate that quantization constraints are usable.
 ///
 /// CONTRACT.md AT-926: missing/unparseable metadata → reject.
@@ -190,39 +230,59 @@ pub fn quantize(
     constraints: &QuantizeConstraints,
     metrics: &mut QuantizeMetrics,
 ) -> Result<QuantizedValues, QuantizeError> {
-    validate_constraints(constraints)?;
+    if let Err(e) = validate_constraints(constraints) {
+        bump_quantize_reject(&e);
+        return Err(e);
+    }
     if !raw_qty.is_finite() {
-        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
+        let e = QuantizeError::InvalidInput { field: "raw_qty" };
+        bump_quantize_reject(&e);
+        return Err(e);
     }
     if !raw_limit_price.is_finite() {
-        return Err(QuantizeError::InvalidInput {
+        let e = QuantizeError::InvalidInput {
             field: "raw_limit_price",
-        });
+        };
+        bump_quantize_reject(&e);
+        return Err(e);
     }
     if raw_qty < 0.0 {
-        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
+        let e = QuantizeError::InvalidInput { field: "raw_qty" };
+        bump_quantize_reject(&e);
+        return Err(e);
     }
 
     // Quantity: always round down (never round up size)
-    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false)?;
+    let qty_steps = match quantize_ratio_to_i64(raw_qty, constraints.amount_step, false) {
+        Ok(v) => v,
+        Err(e) => {
+            bump_quantize_reject(&e);
+            return Err(e);
+        }
+    };
     let qty_q = qty_steps as f64 * constraints.amount_step;
 
     // AT-908: reject if quantized quantity is below minimum
     if qty_q < constraints.min_amount {
         metrics.record_too_small_rejection();
-        return Err(QuantizeError::TooSmallAfterQuantization {
+        let e = QuantizeError::TooSmallAfterQuantization {
             qty_q,
             min_amount: constraints.min_amount,
-        });
+        };
+        bump_quantize_reject(&e);
+        return Err(e);
     }
 
     // Price: direction-dependent rounding
     let price_ticks = match side {
         // BUY: round down (never pay extra)
-        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false)?,
+        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false),
         // SELL: round up (never sell cheaper)
-        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true)?,
-    };
+        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true),
+    }
+    .inspect_err(|e| {
+        bump_quantize_reject(e);
+    })?;
     let limit_price_q = price_ticks as f64 * constraints.tick_size;
 
     Ok(QuantizedValues {

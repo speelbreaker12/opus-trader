@@ -2,6 +2,7 @@
 
 use crate::risk::InstrumentState;
 use crate::venue::types::InstrumentKind;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Intent type for lifecycle gating.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,14 +87,66 @@ pub struct LifecycleDecision {
     pub cancel_outcome: CancelOutcome,
 }
 
+/// Observability metrics for the expiry guard.
+#[derive(Debug)]
+pub struct ExpiryGuardMetrics {
+    reject_total: u64,
+    allowed_total: u64,
+}
+
+impl ExpiryGuardMetrics {
+    pub fn new() -> Self {
+        Self {
+            reject_total: 0,
+            allowed_total: 0,
+        }
+    }
+    pub fn reject_total(&self) -> u64 {
+        self.reject_total
+    }
+    pub fn allowed_total(&self) -> u64 {
+        self.allowed_total
+    }
+    fn record_reject(&mut self) {
+        self.reject_total += 1;
+    }
+    fn record_allowed(&mut self) {
+        self.allowed_total += 1;
+    }
+}
+
+impl Default for ExpiryGuardMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ─── Static counters (3-layer observability) ───────────────────────────
+
+static EXPIRY_GUARD_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+fn bump_expiry_guard_reject() {
+    EXPIRY_GUARD_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_EXPIRY_GUARD_REJECT,
+        "reason=InstrumentExpiredOrDelisted",
+    );
+    tracing::debug!("ExpiryGuardReject reason=InstrumentExpiredOrDelisted");
+}
+
+pub fn expiry_guard_reject_total() -> u64 {
+    EXPIRY_GUARD_REJECT_TOTAL.load(Ordering::Relaxed)
+}
+
 /// Reject OPEN intents inside the expiry/delist buffer.
 ///
 /// Fail-closed behavior for missing `expiration_timestamp_ms`:
 /// - `Perpetual` → Allowed (perpetuals have no expiration)
 /// - `Option | LinearFuture | InverseFuture` → Rejected (expiration mandatory)
 /// - `None` (unknown kind) → Rejected (fail-closed)
-pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
+pub fn evaluate_expiry_guard(input: &ExpiryGuardInput, metrics: &mut ExpiryGuardMetrics) -> ExpiryGuardResult {
     if input.intent != LifecycleIntent::Open {
+        metrics.record_allowed();
         return ExpiryGuardResult::Allowed;
     }
 
@@ -106,6 +159,7 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
                         intent = ?input.intent,
                         "expiry guard: perpetual instrument, no expiry check needed"
                     );
+                    metrics.record_allowed();
                     ExpiryGuardResult::Allowed
                 }
                 Some(kind) => {
@@ -115,6 +169,8 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
                         instrument_kind = ?Some(kind),
                         "expiry guard: missing expiration for expirable instrument, rejecting OPEN (fail-closed)"
                     );
+                    metrics.record_reject();
+                    bump_expiry_guard_reject();
                     ExpiryGuardResult::Rejected(
                         LifecycleTerminalReason::InstrumentExpiredOrDelisted,
                     )
@@ -125,6 +181,8 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
                         intent = ?input.intent,
                         "expiry guard: unknown instrument kind + missing expiration, rejecting OPEN (fail-closed)"
                     );
+                    metrics.record_reject();
+                    bump_expiry_guard_reject();
                     ExpiryGuardResult::Rejected(
                         LifecycleTerminalReason::InstrumentExpiredOrDelisted,
                     )
@@ -145,6 +203,8 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
             max_reasonable = MAX_REASONABLE_EXPIRY_MS,
             "expiry guard: expiration timestamp beyond sane range, rejecting OPEN (possible data corruption)"
         );
+        metrics.record_reject();
+        bump_expiry_guard_reject();
         return ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted);
     }
 
@@ -157,9 +217,12 @@ pub fn evaluate_expiry_guard(input: &ExpiryGuardInput) -> ExpiryGuardResult {
             buffer_ms,
             "expiry guard: rejecting OPEN inside expiry/delist buffer"
         );
+        metrics.record_reject();
+        bump_expiry_guard_reject();
         return ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted);
     }
 
+    metrics.record_allowed();
     ExpiryGuardResult::Allowed
 }
 

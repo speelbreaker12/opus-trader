@@ -18,8 +18,8 @@ use crate::risk::{
     evaluate_fee_staleness,
 };
 use crate::venue::{
-    BotFeatureFlags, ExpiryGuardInput, LifecycleIntent, VenueCapabilities, evaluate_capabilities,
-    evaluate_expiry_guard,
+    BotFeatureFlags, ExpiryGuardInput, ExpiryGuardMetrics, LifecycleIntent, VenueCapabilities,
+    evaluate_capabilities, evaluate_expiry_guard,
 };
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -50,6 +50,7 @@ pub struct BaseGatesMetrics {
     pub preflight: PreflightMetrics,
     pub quantize: QuantizeMetrics,
     pub fee: FeeMetrics,
+    pub expiry: ExpiryGuardMetrics,
 }
 
 impl BaseGatesMetrics {
@@ -360,7 +361,7 @@ pub fn evaluate_base_gates(
             intent: lifecycle_intent,
             ..*expiry_input
         };
-        let expiry_result = evaluate_expiry_guard(&corrected_input);
+        let expiry_result = evaluate_expiry_guard(&corrected_input, &mut metrics.expiry);
         let expiry_outcome = GateOutcome::from_expiry_guard(GateStep::ExpiryGuard, &expiry_result);
         let expiry_passed = expiry_outcome.is_allowed();
         gate_outcomes.push(expiry_outcome.clone());

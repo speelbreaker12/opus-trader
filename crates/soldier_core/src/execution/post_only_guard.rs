@@ -7,6 +7,22 @@
 //! AT-916.
 
 use crate::execution::quantize::Side;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// ─── Static counters (Layer 1) ──────────────────────────────────────────
+
+static POST_ONLY_CROSS_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Read the static post-only crossing rejection counter.
+pub fn post_only_cross_reject_total() -> u64 {
+    POST_ONLY_CROSS_REJECT_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_post_only_reject() {
+    POST_ONLY_CROSS_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line(super::METRIC_POST_ONLY_REJECT, "");
+    tracing::debug!("PostOnlyReject");
+}
 
 // ─── Input ──────────────────────────────────────────────────────────────
 

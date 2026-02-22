@@ -11,6 +11,25 @@ use std::collections::HashMap;
 
 use crate::risk::RiskState;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static PENDING_EXPOSURE_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Returns the total number of pending exposure reservation rejections (atomic counter).
+pub fn pending_exposure_reject_total() -> u64 {
+    PENDING_EXPOSURE_REJECT_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_pending_exposure_reject(pending_total: f64) {
+    PENDING_EXPOSURE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    let tail = format!("pending_total={pending_total}");
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_PENDING_EXPOSURE_REJECT,
+        &tail,
+    );
+    tracing::debug!("PendingExposureReject pending_total={}", pending_total);
+}
+
 /// Stable idempotency key for pending exposure reservations.
 /// Typically derived from intent_hash. Prevents double-counting on retry.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -398,6 +417,7 @@ impl PendingExposureBook {
         // 1. Check instrument is registered.
         if !inner.instruments.contains_key(instrument_id) {
             metrics.record_reserve_instrument_not_registered();
+            bump_pending_exposure_reject(0.0);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::InstrumentNotRegistered,
                 pending_total: f64::NAN,
@@ -418,6 +438,7 @@ impl PendingExposureBook {
                 .get(instrument_id)
                 .map_or(0.0, |b| b.pending_total);
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(pending);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: pending,
@@ -428,6 +449,7 @@ impl PendingExposureBook {
         let book = inner.instruments.get(instrument_id).unwrap(); // safe: checked above
         let Some(limit) = normalized_limit(book.delta_limit) else {
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(book.pending_total);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: book.pending_total,
@@ -442,6 +464,7 @@ impl PendingExposureBook {
             || !book.pending_negative.is_finite()
         {
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(book.pending_total);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: book.pending_total,
@@ -475,6 +498,7 @@ impl PendingExposureBook {
         let worst_case_short = current_delta + projected_negative;
         if worst_case_long.abs() > limit || worst_case_short.abs() > limit {
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(book.pending_total);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: book.pending_total,
@@ -490,6 +514,7 @@ impl PendingExposureBook {
             let trial_global = inner.global_total - old_global_delta + delta_impact_est;
             if trial_global.abs() > global_limit {
                 metrics.record_reserve_reject();
+                bump_pending_exposure_reject(book.pending_total);
                 return PendingExposureResult::Rejected {
                     reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                     pending_total: book.pending_total,

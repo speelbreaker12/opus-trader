@@ -10,6 +10,29 @@
 
 use crate::risk::RiskState;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static FEE_STALENESS_HARD_STALE_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Returns the total number of fee staleness hard-stale events (atomic counter).
+pub fn fee_staleness_hard_stale_total() -> u64 {
+    FEE_STALENESS_HARD_STALE_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_fee_staleness_reject(staleness: FeeStaleness, cache_age_s: Option<u64>) {
+    FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
+    let tail = format!("staleness={staleness:?} cache_age_s={cache_age_s:?}");
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_FEE_STALENESS_REJECT,
+        &tail,
+    );
+    tracing::debug!(
+        "FeeStalenessReject staleness={:?} cache_age_s={:?}",
+        staleness,
+        cache_age_s
+    );
+}
+
 // ─── Configuration ──────────────────────────────────────────────────────
 
 /// Fee staleness configuration per CONTRACT.md §4.2 / Appendix A.
@@ -126,6 +149,7 @@ pub fn evaluate_fee_staleness(
     // Guard: non-finite or negative fee_rate → HardStale + Degraded (fail-closed)
     // Do NOT propagate bad rate via multiplication — use 0.0 as safe default.
     if !snapshot.fee_rate.is_finite() || snapshot.fee_rate < 0.0 {
+        bump_fee_staleness_reject(FeeStaleness::HardStale, None);
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: 0.0,
@@ -149,6 +173,7 @@ pub fn evaluate_fee_staleness(
     let cached_at_ms = match snapshot.fee_model_cached_at_ts_ms {
         Some(ts) => ts,
         None => {
+            bump_fee_staleness_reject(FeeStaleness::HardStale, None);
             return FeeEvaluation {
                 staleness: FeeStaleness::HardStale,
                 fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -163,6 +188,7 @@ pub fn evaluate_fee_staleness(
         (snapshot.now_ms - cached_at_ms) / 1000
     } else {
         // Clock skew — fail-closed: treat as hard-stale
+        bump_fee_staleness_reject(FeeStaleness::HardStale, Some(0));
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -173,6 +199,7 @@ pub fn evaluate_fee_staleness(
 
     if age_s > config.fee_cache_hard_s {
         // Hard-stale (AT-033)
+        bump_fee_staleness_reject(FeeStaleness::HardStale, Some(age_s));
         FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),

@@ -6,9 +6,9 @@ use soldier_core::execution::{
 };
 use soldier_core::risk::InstrumentState;
 use soldier_core::venue::{
-    CancelOutcome, ExpiryGuardInput, ExpiryGuardResult, InstrumentKind, LifecycleErrorClass,
-    LifecycleIntent, LifecycleTerminalReason, ReconcileScope, RetryDirective, VenueLifecycleError,
-    classify_lifecycle_error, evaluate_expiry_guard,
+    CancelOutcome, ExpiryGuardInput, ExpiryGuardMetrics, ExpiryGuardResult, InstrumentKind,
+    LifecycleErrorClass, LifecycleIntent, LifecycleTerminalReason, ReconcileScope, RetryDirective,
+    VenueLifecycleError, classify_lifecycle_error, evaluate_expiry_guard,
 };
 
 #[test]
@@ -21,7 +21,7 @@ fn test_expiry_delist_buffer_rejects_open() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
 
-    let result = evaluate_expiry_guard(&input);
+    let result = evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default());
     assert_eq!(
         result,
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted)
@@ -38,7 +38,7 @@ fn test_expiry_outside_buffer_allows_open() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
 
-    assert_eq!(evaluate_expiry_guard(&input), ExpiryGuardResult::Allowed);
+    assert_eq!(evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()), ExpiryGuardResult::Allowed);
 }
 
 /// Perpetual instruments have no expiry; they must always be Allowed for OPEN.
@@ -52,7 +52,7 @@ fn test_no_expiration_timestamp_allows_open() {
         instrument_kind: Some(InstrumentKind::Perpetual),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Allowed,
         "None expiration_timestamp_ms (perpetual) must be Allowed"
     );
@@ -73,7 +73,7 @@ fn test_expiry_at_exact_boundary_rejects_open() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "now_ms == opens_blocked_from_ms must be Rejected (>= not >)"
     );
@@ -387,7 +387,7 @@ fn test_expiry_guard_missing_timestamp_linear_future_rejected() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "LinearFuture with missing timestamp must be rejected (fail-closed)"
     );
@@ -404,7 +404,7 @@ fn test_expiry_guard_missing_timestamp_inverse_future_rejected() {
         instrument_kind: Some(InstrumentKind::InverseFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "InverseFuture with missing timestamp must be rejected (fail-closed)"
     );
@@ -421,7 +421,7 @@ fn test_expiry_guard_missing_timestamp_option_rejected() {
         instrument_kind: Some(InstrumentKind::Option),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "Option with missing timestamp must be rejected (fail-closed)"
     );
@@ -438,7 +438,7 @@ fn test_expiry_guard_missing_timestamp_unknown_rejected() {
         instrument_kind: None,
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "Unknown instrument kind with missing timestamp must be rejected (fail-closed)"
     );
@@ -455,7 +455,7 @@ fn test_expiry_guard_future_inside_buffer_rejected() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "LinearFuture inside buffer must be rejected"
     );
@@ -473,7 +473,7 @@ fn test_expiry_guard_missing_timestamp_perpetual_allowed() {
         instrument_kind: Some(InstrumentKind::Perpetual),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Allowed,
         "Perpetual with missing timestamp must be allowed"
     );
@@ -490,7 +490,7 @@ fn test_expiry_guard_future_with_valid_timestamp_allowed() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Allowed,
         "LinearFuture outside buffer must be allowed"
     );
@@ -511,7 +511,7 @@ fn test_expiry_guard_u64_max_timestamp_rejected() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "u64::MAX expiration must be rejected as corrupt/out-of-domain input"
     );
@@ -530,7 +530,7 @@ fn test_expiry_guard_far_future_but_sane_timestamp_allowed() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Allowed,
         "Far future but sane timestamp must be allowed"
     );
@@ -547,7 +547,7 @@ fn test_expiry_guard_just_above_sane_boundary_rejected() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Rejected(LifecycleTerminalReason::InstrumentExpiredOrDelisted),
         "Timestamp just above sane boundary must be rejected"
     );
@@ -565,7 +565,7 @@ fn test_expiry_guard_at_exact_sane_boundary_allowed() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Allowed,
         "Timestamp exactly at sane boundary must be allowed (check is >, not >=)"
     );
@@ -582,7 +582,7 @@ fn test_expiry_guard_unknown_kind_with_valid_timestamp_allowed() {
         instrument_kind: None,
     };
     assert_eq!(
-        evaluate_expiry_guard(&input),
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
         ExpiryGuardResult::Allowed,
         "Unknown kind with valid timestamp outside buffer must be allowed"
     );

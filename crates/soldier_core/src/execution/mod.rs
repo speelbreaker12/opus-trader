@@ -70,11 +70,12 @@ pub use gates::{
 pub use group::{
     AtomicGroup, GroupConfig, GroupError, GroupLock, GroupPersistence, GroupState,
     GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
+    group_lock_timeout_total, group_mixed_failed_total, group_persist_fail_total,
     persist_before_dispatch, try_acquire_group_lock,
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    evaluate_inventory_skew,
+    evaluate_inventory_skew, inventory_skew_reject_total,
 };
 pub use label::{
     LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
@@ -89,16 +90,20 @@ pub use pipeline::{
     IntentPipelineInput, IntentPipelineMetrics, PipelineResult, QuantizePipelineInput,
     evaluate_intent_pipeline,
 };
-pub use post_only_guard::{PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only};
+pub use post_only_guard::{
+    PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only, post_only_cross_reject_total,
+};
 pub use preflight::{
     OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
     preflight_intent, preflight_reject_total,
 };
 pub use pricer::{
     PricerInput, PricerMetrics, PricerRejectReason, PricerResult, compute_limit_price,
+    pricer_reject_total,
 };
 pub use quantize::{
     QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizedValues, Side, quantize,
+    quantize_reject_total,
 };
 pub use reject_reason::{
     GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,

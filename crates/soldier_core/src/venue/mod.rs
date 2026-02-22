@@ -12,8 +12,9 @@ pub use capabilities::{
     BotFeatureFlags, EvaluatedCapabilities, VenueCapabilities, evaluate_capabilities,
 };
 pub use lifecycle::{
-    CancelOutcome, ExpiryGuardInput, ExpiryGuardResult, LifecycleDecision, LifecycleErrorClass,
-    LifecycleIntent, LifecycleTerminalReason, ReconcileScope, RetryDirective, VenueLifecycleError,
-    classify_lifecycle_error, evaluate_expiry_guard,
+    CancelOutcome, ExpiryGuardInput, ExpiryGuardMetrics, ExpiryGuardResult, LifecycleDecision,
+    LifecycleErrorClass, LifecycleIntent, LifecycleTerminalReason, ReconcileScope, RetryDirective,
+    VenueLifecycleError, classify_lifecycle_error, evaluate_expiry_guard,
+    expiry_guard_reject_total,
 };
 pub use types::{InstrumentKind, InstrumentKindInput, derive_instrument_kind};

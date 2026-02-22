@@ -15,19 +15,21 @@ pub mod state;
 
 pub use exposure_budget::{
     ExposureBucket, ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetRejectReason,
-    ExposureBudgetResult, evaluate_global_exposure_budget,
+    ExposureBudgetResult, evaluate_global_exposure_budget, exposure_budget_reject_limit_missing_total,
+    exposure_budget_reject_total,
 };
 pub use fees::{
     FeeCacheSnapshot, FeeEvaluation, FeeMetrics, FeeStaleness, FeeStalenessConfig,
-    evaluate_fee_staleness,
+    evaluate_fee_staleness, fee_staleness_hard_stale_total,
 };
 pub use instrument_state::InstrumentState;
 pub use margin_gate::{
     MarginGateDecision, MarginGateInput, MarginGateMetrics, MarginGateMode, MarginGateRejectReason,
-    compute_margin_mode_hint, evaluate_margin_headroom_gate,
+    compute_margin_mode_hint, evaluate_margin_headroom_gate, margin_gate_reject_total,
 };
 pub use pending_exposure::{
     PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
     PendingExposureResult, PendingExposureTerminalOutcome, ReservationId,
+    pending_exposure_reject_total,
 };
 pub use state::RiskState;
