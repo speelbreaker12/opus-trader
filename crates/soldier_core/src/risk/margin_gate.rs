@@ -122,7 +122,10 @@ pub fn evaluate_margin_headroom_gate(
 
     if mm_util >= input.mm_util_reject_opens {
         metrics.record_reject();
-        bump_margin_gate_reject(MarginGateRejectReason::MarginHeadroomRejectOpens, Some(mm_util));
+        bump_margin_gate_reject(
+            MarginGateRejectReason::MarginHeadroomRejectOpens,
+            Some(mm_util),
+        );
         return MarginGateDecision::Rejected {
             reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
             mm_util: Some(mm_util),

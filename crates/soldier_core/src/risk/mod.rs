@@ -15,8 +15,8 @@ pub mod state;
 
 pub use exposure_budget::{
     ExposureBucket, ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetRejectReason,
-    ExposureBudgetResult, evaluate_global_exposure_budget, exposure_budget_reject_limit_missing_total,
-    exposure_budget_reject_total,
+    ExposureBudgetResult, evaluate_global_exposure_budget,
+    exposure_budget_reject_limit_missing_total, exposure_budget_reject_total,
 };
 pub use fees::{
     FeeCacheSnapshot, FeeEvaluation, FeeMetrics, FeeStaleness, FeeStalenessConfig,

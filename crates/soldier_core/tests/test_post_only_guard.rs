@@ -37,7 +37,9 @@ fn test_at916_buy_crosses_at_ask_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::WouldCross }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::WouldCross
+        }
     ));
 }
 
@@ -48,7 +50,9 @@ fn test_at916_buy_above_ask_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::WouldCross }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::WouldCross
+        }
     ));
 }
 
@@ -59,7 +63,9 @@ fn test_at916_sell_crosses_at_bid_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::WouldCross }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::WouldCross
+        }
     ));
 }
 
@@ -70,7 +76,9 @@ fn test_at916_sell_below_bid_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::WouldCross }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::WouldCross
+        }
     ));
 }
 
@@ -190,7 +198,9 @@ fn test_post_only_nan_limit_price_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFinitePrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFinitePrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -203,7 +213,9 @@ fn test_post_only_nan_best_ask_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFiniteBookPrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFiniteBookPrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -215,7 +227,9 @@ fn test_post_only_nan_best_bid_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFiniteBookPrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFiniteBookPrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -228,7 +242,9 @@ fn test_post_only_inf_limit_price_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFinitePrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFinitePrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -240,7 +256,9 @@ fn test_post_only_inf_best_ask_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFiniteBookPrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFiniteBookPrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -252,7 +270,9 @@ fn test_post_only_inf_best_bid_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFiniteBookPrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFiniteBookPrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -265,7 +285,9 @@ fn test_post_only_nan_limit_price_empty_book_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFinitePrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFinitePrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }
@@ -277,7 +299,9 @@ fn test_post_only_inf_limit_price_empty_book_rejected() {
     let mut m = PostOnlyMetrics::new();
     assert!(matches!(
         check_post_only(&input, &mut m),
-        PostOnlyResult::Rejected { reason: PostOnlyRejectReason::NonFinitePrice }
+        PostOnlyResult::Rejected {
+            reason: PostOnlyRejectReason::NonFinitePrice
+        }
     ));
     assert_eq!(m.reject_total(), 1);
 }

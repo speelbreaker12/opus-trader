@@ -3,8 +3,8 @@ use std::collections::HashSet;
 
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateResults, RejectReasonCode,
-    build_order_intent_with_reject_reason_code, extract_reject_reason_code,
-    reject_reason_registry, reject_reason_registry_contains,
+    build_order_intent_with_reject_reason_code, extract_reject_reason_code, reject_reason_registry,
+    reject_reason_registry_contains,
 };
 use soldier_core::risk::RiskState;
 
@@ -340,26 +340,42 @@ fn test_extract_reject_reason_code_parity_with_deprecated() {
         // Approved → None
         (GateResults::all_passed(), None),
         // RiskState reject
-        (GateResults::all_passed(), Some(RejectReasonCode::MarginHeadroomRejectOpens)),
+        (
+            GateResults::all_passed(),
+            Some(RejectReasonCode::MarginHeadroomRejectOpens),
+        ),
         // Preflight reject
         (
-            GateResults { preflight_passed: false, ..GateResults::all_passed() },
+            GateResults {
+                preflight_passed: false,
+                ..GateResults::all_passed()
+            },
             Some(RejectReasonCode::OrderTypeMarketForbidden),
         ),
         // Fee cache reject
         (
-            GateResults { fee_cache_passed: false, ..GateResults::all_passed() },
+            GateResults {
+                fee_cache_passed: false,
+                ..GateResults::all_passed()
+            },
             Some(RejectReasonCode::FeeCacheStale),
         ),
         // WAL reject
         (
-            GateResults { wal_recorded: false, ..GateResults::all_passed() },
+            GateResults {
+                wal_recorded: false,
+                ..GateResults::all_passed()
+            },
             Some(RejectReasonCode::RecordedBeforeDispatchFailed),
         ),
     ];
 
     for (i, (gates, expected_code)) in test_cases.iter().enumerate() {
-        let risk_state = if i == 1 { RiskState::Degraded } else { RiskState::Healthy };
+        let risk_state = if i == 1 {
+            RiskState::Degraded
+        } else {
+            RiskState::Healthy
+        };
         let mut metrics = ChokeMetrics::new();
 
         // Deprecated path

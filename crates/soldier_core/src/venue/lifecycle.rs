@@ -144,7 +144,10 @@ pub fn expiry_guard_reject_total() -> u64 {
 /// - `Perpetual` → Allowed (perpetuals have no expiration)
 /// - `Option | LinearFuture | InverseFuture` → Rejected (expiration mandatory)
 /// - `None` (unknown kind) → Rejected (fail-closed)
-pub fn evaluate_expiry_guard(input: &ExpiryGuardInput, metrics: &mut ExpiryGuardMetrics) -> ExpiryGuardResult {
+pub fn evaluate_expiry_guard(
+    input: &ExpiryGuardInput,
+    metrics: &mut ExpiryGuardMetrics,
+) -> ExpiryGuardResult {
     if input.intent != LifecycleIntent::Open {
         metrics.record_allowed();
         return ExpiryGuardResult::Allowed;

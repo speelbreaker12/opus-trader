@@ -473,13 +473,25 @@ fn test_default_instrument_cache_ttl_is_3600() {
     cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
 
     let at_boundary = t0 + Duration::from_secs(expected_default_ttl_s as u64);
-    let result = cache.get_at("BTC-PERPETUAL", expected_default_ttl_s, at_boundary).unwrap();
-    assert_eq!(result.risk_state, RiskState::Healthy, "at boundary (3600s) → Healthy");
+    let result = cache
+        .get_at("BTC-PERPETUAL", expected_default_ttl_s, at_boundary)
+        .unwrap();
+    assert_eq!(
+        result.risk_state,
+        RiskState::Healthy,
+        "at boundary (3600s) → Healthy"
+    );
 
     // age == 3601s → Degraded
     let past_boundary = t0 + Duration::from_secs(expected_default_ttl_s as u64 + 1);
-    let result = cache.get_at("BTC-PERPETUAL", expected_default_ttl_s, past_boundary).unwrap();
-    assert_eq!(result.risk_state, RiskState::Degraded, "past boundary (3601s) → Degraded");
+    let result = cache
+        .get_at("BTC-PERPETUAL", expected_default_ttl_s, past_boundary)
+        .unwrap();
+    assert_eq!(
+        result.risk_state,
+        RiskState::Degraded,
+        "past boundary (3601s) → Degraded"
+    );
 }
 
 // ─── GAP-006-1: CacheTtlBreach on stale access ──────────────────────────
@@ -509,10 +521,20 @@ fn test_stale_access_produces_cache_ttl_breach_event() {
     cache.get_at("ETH-PERPETUAL", ttl_s, stale_time);
 
     let breaches = cache.drain_breaches();
-    assert_eq!(breaches.len(), 1, "stale access must produce exactly one CacheTtlBreach");
+    assert_eq!(
+        breaches.len(),
+        1,
+        "stale access must produce exactly one CacheTtlBreach"
+    );
     assert_eq!(breaches[0].instrument_id, "ETH-PERPETUAL");
-    assert!((breaches[0].age_s - 5000.0).abs() < 0.01, "age_s must reflect actual cache age");
-    assert!((breaches[0].ttl_s - 3600.0).abs() < 0.01, "ttl_s must reflect configured TTL");
+    assert!(
+        (breaches[0].age_s - 5000.0).abs() < 0.01,
+        "age_s must reflect actual cache age"
+    );
+    assert!(
+        (breaches[0].ttl_s - 3600.0).abs() < 0.01,
+        "ttl_s must reflect configured TTL"
+    );
 }
 
 // DA-003: Verify breach event ttl_s reflects the configured TTL, not a hardcoded 3600.
@@ -532,7 +554,10 @@ fn test_breach_event_ttl_reflects_custom_config() {
     let breaches = cache.drain_breaches();
     assert_eq!(breaches.len(), 1);
     assert_eq!(breaches[0].instrument_id, "SOL-PERPETUAL");
-    assert!((breaches[0].ttl_s - 120.0).abs() < 0.01, "ttl_s must reflect custom TTL 120, not hardcoded 3600");
+    assert!(
+        (breaches[0].ttl_s - 120.0).abs() < 0.01,
+        "ttl_s must reflect custom TTL 120, not hardcoded 3600"
+    );
     assert!((breaches[0].age_s - 200.0).abs() < 0.01);
 }
 

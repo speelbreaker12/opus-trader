@@ -1,5 +1,7 @@
 # Legacy stories that passed before proof graph requirement.
 # Remove ID after reconciliation adds proof_graph.json.
+# Test-only fixture story used by test_prd_set_pass.sh:
+WF-001
 S0-000
 S0-001
 S0-002

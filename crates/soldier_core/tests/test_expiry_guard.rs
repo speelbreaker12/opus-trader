@@ -38,7 +38,10 @@ fn test_expiry_outside_buffer_allows_open() {
         instrument_kind: Some(InstrumentKind::LinearFuture),
     };
 
-    assert_eq!(evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()), ExpiryGuardResult::Allowed);
+    assert_eq!(
+        evaluate_expiry_guard(&input, &mut ExpiryGuardMetrics::default()),
+        ExpiryGuardResult::Allowed
+    );
 }
 
 /// Perpetual instruments have no expiry; they must always be Allowed for OPEN.

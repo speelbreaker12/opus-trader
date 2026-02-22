@@ -161,7 +161,10 @@ pub fn evaluate_inventory_skew(
         Some(v) if v.is_finite() && v > 0.0 => v,
         _ => {
             metrics.record_reject_delta_limit_missing();
-            bump_inventory_skew_reject(InventorySkewRejectReason::InventorySkewDeltaLimitMissing, None);
+            bump_inventory_skew_reject(
+                InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
+                None,
+            );
             return InventorySkewResult::Rejected {
                 reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
                 inventory_bias: None,
@@ -226,7 +229,10 @@ pub fn evaluate_inventory_skew(
 
     if input.net_edge_usd < adjusted_min_edge_usd {
         metrics.record_reject();
-        bump_inventory_skew_reject(InventorySkewRejectReason::InventorySkewReject, Some(inventory_bias));
+        bump_inventory_skew_reject(
+            InventorySkewRejectReason::InventorySkewReject,
+            Some(inventory_bias),
+        );
         return InventorySkewResult::Rejected {
             reason: InventorySkewRejectReason::InventorySkewReject,
             inventory_bias: Some(inventory_bias),

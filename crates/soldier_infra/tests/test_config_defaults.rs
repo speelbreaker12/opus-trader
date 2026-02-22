@@ -377,7 +377,10 @@ fn test_percentage_param_at_zero_allowed() {
 #[test]
 fn test_non_percentage_param_above_one_allowed() {
     let result = resolve_config_value(ConfigParam::WatchdogKillS, Some(300.0));
-    assert!(result.is_ok(), "WatchdogKillS=300.0 must be allowed (not a percentage)");
+    assert!(
+        result.is_ok(),
+        "WatchdogKillS=300.0 must be allowed (not a percentage)"
+    );
     assert_eq!(result.unwrap(), 300.0);
 }
 
@@ -387,6 +390,9 @@ fn test_non_percentage_param_above_one_allowed() {
 #[test]
 fn test_inventory_skew_k_above_one_allowed() {
     let result = resolve_config_value(ConfigParam::InventorySkewK, Some(1.5));
-    assert!(result.is_ok(), "InventorySkewK=1.5 must be allowed (dimensionless, not a percentage)");
+    assert!(
+        result.is_ok(),
+        "InventorySkewK=1.5 must be allowed (dimensionless, not a percentage)"
+    );
     assert_eq!(result.unwrap(), 1.5);
 }

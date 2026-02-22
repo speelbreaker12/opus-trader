@@ -632,7 +632,11 @@ fn test_late_leg_on_complete_group_returns_no_change() {
 
     // Both legs fill cleanly → Complete
     let t1 = group.apply_leg_result(filled_leg(0, 1.0), &config);
-    assert_eq!(t1, GroupStateTransition::NoChange, "first leg: waiting for second");
+    assert_eq!(
+        t1,
+        GroupStateTransition::NoChange,
+        "first leg: waiting for second"
+    );
     let t2 = group.apply_leg_result(filled_leg(1, 1.0), &config);
     assert_eq!(t2, GroupStateTransition::Completed);
 
@@ -654,7 +658,10 @@ fn test_late_leg_on_flattened_group_returns_no_change() {
 
     // Leg 0 rejects → MixedFailed
     let t1 = group.apply_leg_result(rejected_leg(0, 1.0), &config);
-    assert!(matches!(t1, GroupStateTransition::EnteredMixedFailed { .. }));
+    assert!(matches!(
+        t1,
+        GroupStateTransition::EnteredMixedFailed { .. }
+    ));
 
     // Flatten
     group.mark_flattening().unwrap();

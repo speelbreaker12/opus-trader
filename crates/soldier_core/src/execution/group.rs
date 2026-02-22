@@ -307,18 +307,14 @@ impl AtomicGroup {
                 && self.state != GroupState::Flattening
                 && self.state != GroupState::Flattened
             {
+                let reason = format!("non-finite fill quantity on leg {}", nan_leg_idx);
                 self.state = GroupState::MixedFailed;
                 self.containment_pending = true;
                 if self.first_failure_reason.is_none() {
-                    self.first_failure_reason = Some(format!(
-                        "non-finite fill quantity on leg {}",
-                        nan_leg_idx
-                    ));
+                    self.first_failure_reason = Some(reason.clone());
                 }
                 bump_group_mixed_failed(&self.group_id);
-                return GroupStateTransition::EnteredMixedFailed {
-                    reason: self.first_failure_reason.clone().unwrap_or_default(),
-                };
+                return GroupStateTransition::EnteredMixedFailed { reason };
             }
             return GroupStateTransition::StillMixedFailed;
         }

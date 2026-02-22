@@ -191,10 +191,10 @@ fn test_get_instruments_realistic_payloads() {
         (
             "BTC-PERPETUAL",
             InstrumentKindInput {
-                is_option: false,          // kind="future"
+                is_option: false, // kind="future"
                 is_future: true,
-                is_perpetual: true,        // settlement_period="perpetual"
-                is_linear: false,          // settlement_currency="BTC" != quote="USD"
+                is_perpetual: true, // settlement_period="perpetual"
+                is_linear: false,   // settlement_currency="BTC" != quote="USD"
             },
             Some(InstrumentKind::Perpetual),
         ),
@@ -205,7 +205,7 @@ fn test_get_instruments_realistic_payloads() {
                 is_option: false,
                 is_future: true,
                 is_perpetual: true,
-                is_linear: true,           // settlement_currency="USDC" == quote="USDC"
+                is_linear: true, // settlement_currency="USDC" == quote="USDC"
             },
             Some(InstrumentKind::LinearFuture),
         ),
@@ -213,7 +213,7 @@ fn test_get_instruments_realistic_payloads() {
         (
             "ETH-28MAR25-3000-C",
             InstrumentKindInput {
-                is_option: true,           // kind="option"
+                is_option: true, // kind="option"
                 is_future: false,
                 is_perpetual: false,
                 is_linear: false,
@@ -226,8 +226,8 @@ fn test_get_instruments_realistic_payloads() {
             InstrumentKindInput {
                 is_option: false,
                 is_future: true,
-                is_perpetual: false,       // settlement_period="month"
-                is_linear: false,          // settlement_currency="BTC" != quote="USD"
+                is_perpetual: false, // settlement_period="month"
+                is_linear: false,    // settlement_currency="BTC" != quote="USD"
             },
             Some(InstrumentKind::InverseFuture),
         ),
@@ -236,7 +236,7 @@ fn test_get_instruments_realistic_payloads() {
             "BTC-FS-28MAR25_27JUN25",
             InstrumentKindInput {
                 is_option: false,
-                is_future: false,          // kind="future_combo" → not a simple future
+                is_future: false, // kind="future_combo" → not a simple future
                 is_perpetual: false,
                 is_linear: false,
             },
