@@ -128,6 +128,7 @@ NODE_TEST_TIMEOUT="${NODE_TEST_TIMEOUT:-10m}"
 ADVERSARIAL_GATE_TIMEOUT="${ADVERSARIAL_GATE_TIMEOUT:-2m}"
 GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
 DOC_SYNC_TIMEOUT="${DOC_SYNC_TIMEOUT:-30s}"
+WORKFLOW_TEST_TIMEOUT="${WORKFLOW_TEST_TIMEOUT:-15m}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -172,6 +173,22 @@ on_exit() {
   local failed_gate=""
 
   trap - EXIT
+
+  # Kill any lingering parallel gate processes (e.g., workflow tests
+  # still running when rust gates fail and the script exits early).
+  # Guard: PARALLEL_ACTIVE_PIDS may be unset if we exit before line ~256.
+  if [[ -n "${PARALLEL_ACTIVE_PIDS+x}" && "${#PARALLEL_ACTIVE_PIDS[@]}" -gt 0 ]]; then
+    for _exit_pid in "${PARALLEL_ACTIVE_PIDS[@]}"; do
+      # Kill the subshell and its child processes (timeout wrapper + test command).
+      # pkill -P kills children of the subshell PID; the outer kill gets the subshell itself.
+      pkill -P "$_exit_pid" 2>/dev/null || true
+      kill "$_exit_pid" 2>/dev/null || true
+    done
+    # Bounded wait: reap zombies but don't hang forever on stubborn processes.
+    for _exit_pid in "${PARALLEL_ACTIVE_PIDS[@]}"; do
+      wait "$_exit_pid" 2>/dev/null || true
+    done
+  fi
 
   if [[ "$rc" -ne 0 ]]; then
     status="failed"
@@ -627,9 +644,28 @@ export RUST_FMT_TIMEOUT RUST_CLIPPY_TIMEOUT RUST_TEST_TIMEOUT
 export RUFF_TIMEOUT PYTEST_TIMEOUT MYPY_TIMEOUT
 export NODE_LINT_TIMEOUT NODE_TYPECHECK_TIMEOUT NODE_TEST_TIMEOUT
 
-if [[ -f Cargo.toml ]]; then
-  log "15) rust gates"
-  bash "$ROOT/plans/lib/rust_gates.sh"
+# Gate 14g: Heavy workflow integration tests run in parallel with rust gates.
+# These were moved out of preflight because they take 3-10 min each and
+# dominated the preflight parallel group wall-clock time.
+if [[ "$MODE" == "full" ]]; then
+  log "14g) workflow integration tests (parallel with rust gates)"
+  parallel_group_reset
+  start_parallel_gate "wf_test_story_review_gate" "$WORKFLOW_TEST_TIMEOUT" \
+    bash plans/tests/test_story_review_gate.sh
+  start_parallel_gate "wf_test_pr_gate" "$WORKFLOW_TEST_TIMEOUT" \
+    bash plans/tests/test_pr_gate.sh
+
+  if [[ -f Cargo.toml ]]; then
+    log "15) rust gates"
+    bash "$ROOT/plans/lib/rust_gates.sh"
+  fi
+
+  finish_parallel_group_or_exit
+else
+  if [[ -f Cargo.toml ]]; then
+    log "15) rust gates"
+    bash "$ROOT/plans/lib/rust_gates.sh"
+  fi
 fi
 
 if [[ -f pyproject.toml || -f requirements.txt ]]; then

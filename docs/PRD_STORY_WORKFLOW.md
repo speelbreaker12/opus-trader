@@ -13,7 +13,7 @@ Every PRD story follows 9 steps, enforced by 8 progressive receipts and 1 final 
 
 **Enforcement**:
 1. **Receipt tracking** (`wf_step.sh`): Ordering + step-specific input validation
-2. **Final chokepoint** (`prd_set_pass.sh`): Receipts + verify artifacts + review evidence + contract review
+2. **Final chokepoint** (`prd_set_pass.sh`): Receipts + verify artifacts + review evidence + contract review + proof graph
 
 **Step numbering**: Human-readable steps are 1-indexed (Step 1 to 9). Receipt filenames are 0-indexed (`00_preflight.json` to `07_verify_full.json`). The `step_index` field in receipt JSON matches the 0-based filename prefix.
 
@@ -47,7 +47,7 @@ Step 6: CYCLE 2 REVIEW
 
 Step 7: RESOLUTION
   review_resolution.md with finding disposition table
-  7.1: Postmortem — constraint, follow-up, rules (plans/postmortem_template.md)
+  7.1: Postmortem — TOC constraint analysis (plans/postmortem_template.md)
   ↓ receipt: 06_resolution.json (BLOCKING=0, all findings dispositioned)
 
 Step 8: VERIFY FULL
@@ -58,6 +58,7 @@ Step 9: PASS (no receipt — final gate only)
   prd_set_pass.sh flips passes=true
   ↓ validates: all 8 receipts + verify artifacts + review for HEAD
     + contract review PASS + fail-closed coverage + loss_mode fields
+    + proof_graph.json validation (--strict) or exempt-list bypass
 ```
 
 ---
@@ -364,20 +365,27 @@ Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 
 ### Step 7.1: Write postmortem
 
-Constraint-first postmortem while the story is fresh. The next story's premortem §9 reads this. Use the template at `plans/postmortem_template.md`.
+TOC-style constraint-first postmortem while the story is fresh. The next story's premortem §9 reads the carry-forward note (section 8). Use the template at `plans/postmortem_template.md`.
 
-**Artifact:** `reviews/postmortems/<STORY-ID>_postmortem.md`
+**Artifact:** `artifacts/story/<STORY-ID>/postmortem.md`
 
-**Note:** Postmortems live in `reviews/postmortems/` (not `artifacts/story/`) because they are cross-story reference documents read by future premortems, not story-scoped artifacts.
+**Gate:** `plans/postmortem_gate.sh <STORY-ID> [--head <sha>]`
 
-**Sections:**
+**Sections (9 total — keep to ~1 page):**
 
 | # | Section | Purpose |
 |---|---------|---------|
-| 0 | What shipped | One-line outcome + value declaration |
-| 1 | Constraint | THE bottleneck: symptoms, exploit, subordinate, elevate |
-| 2 | Follow-up | Best next story + 1-3 upgrades with validation |
-| 3 | Rules | 1-3 enforceable rules so next agent doesn't repeat the pain |
+| 1 | Constraint Summary | ONE bottleneck + Constraint Class + loss lens |
+| 2 | TOC Five Focusing Steps | Identify → Exploit → Subordinate → Elevate → Repeat |
+| 3 | Causal Chain | Trigger → Propagation → Outcome → Detection |
+| 4 | Proof and Evidence | Contract/AT refs, test names, artifact paths |
+| 5 | What Was Missing | Missing proofs + Wrong-Implementation Risk |
+| 6 | Rule Updates | **The point** — permanent layer/change/why/owner table |
+| 7 | Residual Risk | YELLOW debt only (YES/NO + containment) |
+| 8 | Next-Story Startup Note | Carry-forward constraint for next premortem §9 |
+| 9 | Completion Checklist | Self-check quality gate |
+
+**Required for:** YELLOW/RED stories and any story touching gates, TradingMode, RiskState, WAL, or replay.
 
 ---
 
@@ -433,6 +441,7 @@ This is a human/supervisor judgment artifact — not auto-generated. Create it a
 | **Enforcement point** | `enforcement_point` populated | 6 | Story metadata incomplete — no enforcement point |
 | **Fail-closed coverage** | TRIP + NON-TRIP name patterns in test files | 8 | Test naming conventions not met |
 | **Loss mode** | `worst_case`, `fail_closed_cap`, `drift_metric` populated | 9 | Risk fields unpopulated in PRD |
+| **Proof graph** | `proof_graph.json` validates with `--strict`, or ID in `plans/proof_graph_exempt.txt` | 10 | Proof graph missing/invalid and not legacy-exempt |
 
 ---
 
@@ -485,7 +494,7 @@ plans/prd_set_pass.sh <ID> true
 
 **No Paper Compliance**: `passes=true` requires enforcement in code, proving tests, evidence artifacts, and valid receipts. If a wrong implementation would pass the tests, the tests are insufficient.
 
-**Postmortem Chain**: Story N postmortem feeds story N+1 premortem §9. Prior pain becomes current prevention.
+**Postmortem Chain**: Story N postmortem section 8 (Next-Story Startup Note) feeds story N+1 premortem §9. Prior constraint becomes current prevention.
 
 ---
 

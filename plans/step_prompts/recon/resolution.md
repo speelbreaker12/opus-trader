@@ -13,7 +13,7 @@ TASK
 - For GREEN reconciliation (0 findings), resolution should note "Reconciliation audit: no findings."
 
 POSTMORTEM (Step 7.1):
-- Write postmortem using plans/postmortem_template.md to reviews/postmortems/${STORY_ID}_postmortem.md
+- Write postmortem using plans/postmortem_template.md to artifacts/story/${STORY_ID}/postmortem.md
 - Focus on: what surprised you during the audit, what the blind premortem missed,
   what the next story in this slice should watch for.
 

@@ -319,7 +319,9 @@ fn test_base_gates_proof_quantized_values_present() {
     let proof = evaluate_base_gates(&input, &mut metrics).unwrap();
 
     // Quantized qty should be >= min_amount (0.1) since raw_qty is 1.0
-    let quantized = proof.quantized().expect("non-short-circuit proof has quantized values");
+    let quantized = proof
+        .quantized()
+        .expect("non-short-circuit proof has quantized values");
     assert!(quantized.qty_q > 0.0, "quantized qty should be positive");
     assert!(
         quantized.limit_price_q > 0.0,

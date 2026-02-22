@@ -185,7 +185,8 @@ should_use_recon_mode() {
   esac
 
   # Steps after fix: check if HEAD changed since cycle1
-  local cycle1_receipt="$RECEIPT_DIR/$story/03_cycle1.json"
+  local cycle1_receipt
+  cycle1_receipt="$(receipt_file cycle1)"
   if [[ -f "$cycle1_receipt" ]]; then
     local cycle1_head
     cycle1_head="$(jq -r '.head_sha // ""' "$cycle1_receipt" 2>/dev/null)"

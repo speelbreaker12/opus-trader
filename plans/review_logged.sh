@@ -385,6 +385,15 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 cat "$transcript_tmp" >> "$outfile"
 echo "<<<REVIEW_TRANSCRIPT_END>>>" >> "$outfile"
 
+# Emit structured findings summary for deterministic gate parsing.
+# Counts P0-P3 by matching "| P<N>" or "P<N>:" or "**P<N>**" patterns in transcript.
+# Falls back to 999 if counting fails (fail-closed: assume findings exist).
+p0="$(grep -coE '\bP0\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+p1="$(grep -coE '\bP1\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+p2="$(grep -coE '\bP2\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
+
+
 # Run codex digest if available (codex only)
 if [[ "$tool" == "codex" ]]; then
   digest_script="$root/plans/codex_review_digest.sh"
