@@ -2481,7 +2481,7 @@
         "Create execution/post_only_guard.rs and wire it into crates/soldier_core/src/execution/mod.rs.",
         "Implement crossing detection using best bid/ask touch prices and reject when post_only would cross.",
         "Integrate the post-only guard into the preflight sequence.",
-        "Add counter post_only_cross_reject_total for reject metrics.",
+        "Add counter post_only_reject_total for reject metrics.",
         "Add unit tests in crates/soldier_core/tests/test_post_only_guard.rs for crossing and non-crossing cases."
       ],
       "verify": [
@@ -2517,7 +2517,7 @@
       "observability": {
         "metrics": [
           {
-            "name": "post_only_cross_reject_total",
+            "name": "post_only_reject_total",
             "type": "counter",
             "unit": "count",
             "labels": []
@@ -2532,7 +2532,7 @@
       "loss_mode": {
         "worst_case": "post-only crossing undetected → immediate fill as taker → unexpected fees and slippage",
         "fail_closed_cap": "DispatcherChokepoint rejects intent; fail-closed to no-dispatch",
-        "drift_metric": "post_only_cross_reject_total rate"
+        "drift_metric": "post_only_reject_total rate"
       }
     },
     {

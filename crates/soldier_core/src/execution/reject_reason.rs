@@ -251,7 +251,6 @@ pub fn extract_reject_reason_code(
         }
         // Wildcard intentional: ChokeResult::Approved must not be named outside
         // build_order_intent.rs (enforced by test_dispatch_chokepoint_no_bypass_approved).
-        // Exhaustiveness is verified by the #[deny(unreachable_patterns)] test below.
         _ => None,
     }
 }

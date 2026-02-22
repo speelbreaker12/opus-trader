@@ -620,3 +620,51 @@ fn try_acquire_at_deterministic_timestamp() {
     );
     assert!(lock.is_held());
 }
+
+// ─── Terminal state guard ────────────────────────────────────────────────
+
+/// Late leg arriving on Complete group must return NoChange (terminal guard).
+#[test]
+fn test_late_leg_on_complete_group_returns_no_change() {
+    let config = GroupConfig::default();
+    let mut group = AtomicGroup::new("test-late-complete".into(), 2);
+    group.mark_dispatched().unwrap();
+
+    // Both legs fill cleanly → Complete
+    let t1 = group.apply_leg_result(filled_leg(0, 1.0), &config);
+    assert_eq!(t1, GroupStateTransition::NoChange, "first leg: waiting for second");
+    let t2 = group.apply_leg_result(filled_leg(1, 1.0), &config);
+    assert_eq!(t2, GroupStateTransition::Completed);
+
+    // Late third leg arrives — terminal guard must absorb it
+    let t3 = group.apply_leg_result(filled_leg(2, 1.0), &config);
+    assert_eq!(
+        t3,
+        GroupStateTransition::NoChange,
+        "late leg on Complete group must be NoChange (terminal guard)"
+    );
+}
+
+/// Late leg arriving on Flattened group must return NoChange (terminal guard).
+#[test]
+fn test_late_leg_on_flattened_group_returns_no_change() {
+    let config = GroupConfig::default();
+    let mut group = AtomicGroup::new("test-late-flattened".into(), 2);
+    group.mark_dispatched().unwrap();
+
+    // Leg 0 rejects → MixedFailed
+    let t1 = group.apply_leg_result(rejected_leg(0, 1.0), &config);
+    assert!(matches!(t1, GroupStateTransition::EnteredMixedFailed { .. }));
+
+    // Flatten
+    group.mark_flattening().unwrap();
+    group.mark_flattened().unwrap();
+
+    // Late leg arrives — terminal guard must absorb it
+    let t2 = group.apply_leg_result(filled_leg(1, 1.0), &config);
+    assert_eq!(
+        t2,
+        GroupStateTransition::NoChange,
+        "late leg on Flattened group must be NoChange (terminal guard)"
+    );
+}

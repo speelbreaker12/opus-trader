@@ -398,3 +398,75 @@ fn test_custom_config_thresholds_respected() {
         "61s is Fresh under default config — proves custom threshold is sole cause"
     );
 }
+
+// ─── FeeStalenessConfig::validate() ──────────────────────────────────────
+
+#[test]
+fn test_validate_default_config_ok() {
+    assert!(
+        FeeStalenessConfig::default().validate().is_ok(),
+        "default config must pass validation"
+    );
+}
+
+#[test]
+fn test_validate_nan_buffer_rejected() {
+    let config = FeeStalenessConfig {
+        fee_stale_buffer: f64::NAN,
+        ..FeeStalenessConfig::default()
+    };
+    let err = config.validate().unwrap_err();
+    assert!(
+        err.contains("finite"),
+        "NaN buffer should be rejected as non-finite: {err}"
+    );
+}
+
+#[test]
+fn test_validate_inf_buffer_rejected() {
+    let config = FeeStalenessConfig {
+        fee_stale_buffer: f64::INFINITY,
+        ..FeeStalenessConfig::default()
+    };
+    assert!(config.validate().is_err(), "Inf buffer must be rejected");
+}
+
+#[test]
+fn test_validate_negative_buffer_rejected() {
+    let config = FeeStalenessConfig {
+        fee_stale_buffer: -0.01,
+        ..FeeStalenessConfig::default()
+    };
+    let err = config.validate().unwrap_err();
+    assert!(
+        err.contains("non-negative"),
+        "negative buffer should mention non-negative: {err}"
+    );
+}
+
+#[test]
+fn test_validate_soft_exceeds_hard_rejected() {
+    let config = FeeStalenessConfig {
+        fee_cache_soft_s: 1000,
+        fee_cache_hard_s: 500,
+        fee_stale_buffer: 0.20,
+    };
+    let err = config.validate().unwrap_err();
+    assert!(
+        err.contains("soft") && err.contains("hard"),
+        "soft > hard should explain threshold ordering: {err}"
+    );
+}
+
+#[test]
+fn test_validate_equal_soft_hard_ok() {
+    let config = FeeStalenessConfig {
+        fee_cache_soft_s: 300,
+        fee_cache_hard_s: 300,
+        fee_stale_buffer: 0.10,
+    };
+    assert!(
+        config.validate().is_ok(),
+        "soft == hard should be valid (degenerate but allowed)"
+    );
+}
