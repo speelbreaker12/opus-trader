@@ -1,9 +1,10 @@
 //! Runtime wiring tests for Slice 6 gate integration at the OPEN chokepoint.
 
 use soldier_core::execution::{
-    ChokeMetrics, ChokeRejectReason, ChokeResult, GateIntentClass, GateStep, InventorySkewInput,
-    L2BookSnapshot, L2Level, LiquidityGateInput, NetEdgeInput, OpenRuntimeInput,
-    OpenRuntimeMetrics, PricerInput, Side, build_open_order_intent_runtime,
+    BaseGatesInput, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult,
+    GateIntentClass, GateStep, InventorySkewInput, L2BookSnapshot, L2Level, LiquidityGateInput,
+    NetEdgeInput, OpenRuntimeInput, OpenRuntimeMetrics, OrderType, PreflightInput, PricerInput,
+    QuantizePipelineInput, Side, build_open_order_intent_runtime,
 };
 use soldier_core::risk::{
     ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,

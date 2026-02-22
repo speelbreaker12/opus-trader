@@ -457,19 +457,6 @@ impl WalLedger {
             })
             .map_err(|e| io::Error::other(format!("failed to spawn wal writer: {e}")))?;
 
-        // Spawn async writer thread
-        let (sender, receiver) = mpsc::sync_channel(config.channel_capacity);
-        let pause_flag = Arc::new(AtomicBool::new(false));
-        let writer_degraded = Arc::new(AtomicBool::new(false));
-        let write_errors = Arc::new(AtomicU64::new(0));
-
-        let pf = Arc::clone(&pause_flag);
-        let wd = Arc::clone(&writer_degraded);
-        let we = Arc::clone(&write_errors);
-        let handle = thread::spawn(move || {
-            writer_loop(receiver, file, pf, wd, we);
-        });
-
         Ok(Self {
             latest_by_hash,
             capacity,
