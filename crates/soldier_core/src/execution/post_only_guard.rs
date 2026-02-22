@@ -13,12 +13,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static POST_ONLY_CROSS_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
 
-/// Read the static post-only crossing rejection counter.
-pub fn post_only_cross_reject_total() -> u64 {
+/// Read the static post-only rejection counter.
+pub fn post_only_reject_total() -> u64 {
     POST_ONLY_CROSS_REJECT_TOTAL.load(Ordering::Relaxed)
 }
 
-fn bump_post_only_reject(reason: &PostOnlyRejectReason) {
+fn bump_post_only_reject(reason: PostOnlyRejectReason) {
     POST_ONLY_CROSS_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
     let tail = format!("reason={reason:?}");
     super::emit_execution_metric_line(super::METRIC_POST_ONLY_REJECT, &tail);
@@ -69,7 +69,7 @@ pub enum PostOnlyResult {
 /// Observability metrics for the post-only crossing guard.
 #[derive(Debug)]
 pub struct PostOnlyMetrics {
-    /// `post_only_cross_reject_total` counter.
+    /// `post_only_reject_total` counter.
     reject_total: u64,
 }
 
@@ -84,7 +84,7 @@ impl PostOnlyMetrics {
         self.reject_total += 1;
     }
 
-    /// Current value of `post_only_cross_reject_total`.
+    /// Current value of `post_only_reject_total`.
     pub fn reject_total(&self) -> u64 {
         self.reject_total
     }
@@ -126,7 +126,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
             "post_only: non-finite limit_price, rejecting (fail-closed)"
         );
         metrics.record_reject();
-        bump_post_only_reject(&reason);
+        bump_post_only_reject(reason);
         return PostOnlyResult::Rejected { reason };
     }
 
@@ -141,7 +141,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
                         "post_only: non-finite best_ask, rejecting (fail-closed)"
                     );
                     metrics.record_reject();
-                    bump_post_only_reject(&reason);
+                    bump_post_only_reject(reason);
                     return PostOnlyResult::Rejected { reason };
                 }
                 input.limit_price >= ask
@@ -158,7 +158,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
                         "post_only: non-finite best_bid, rejecting (fail-closed)"
                     );
                     metrics.record_reject();
-                    bump_post_only_reject(&reason);
+                    bump_post_only_reject(reason);
                     return PostOnlyResult::Rejected { reason };
                 }
                 input.limit_price <= bid
@@ -170,7 +170,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
     if would_cross {
         let reason = PostOnlyRejectReason::WouldCross;
         metrics.record_reject();
-        bump_post_only_reject(&reason);
+        bump_post_only_reject(reason);
         PostOnlyResult::Rejected { reason }
     } else {
         PostOnlyResult::Allowed

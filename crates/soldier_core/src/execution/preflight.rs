@@ -212,9 +212,12 @@ pub fn preflight_intent(
     input: &PreflightInput<'_>,
     metrics: &mut PreflightMetrics,
 ) -> PreflightResult {
+    let mut rules_evaluated: u8 = 0;
+
     // Rule 1: Market orders forbidden for ALL instrument kinds.
     // CONTRACT.md §1.4.4 A: "If type == market → REJECT"
     // CONTRACT.md §1.4.4 B: "If type == market → REJECT"
+    rules_evaluated += 1;
     if input.order_type == OrderType::Market {
         let reason = PreflightReject::OrderTypeMarketForbidden;
         metrics.record_reject(&reason);
@@ -226,6 +229,7 @@ pub fn preflight_intent(
     // CONTRACT.md §1.4.4 A: "Reject any type in {stop_market, stop_limit}
     //   or any presence of trigger / trigger_price"
     // CONTRACT.md §1.4.4 B: Same rule.
+    rules_evaluated += 1;
     if matches!(
         input.order_type,
         OrderType::StopMarket | OrderType::StopLimit
@@ -241,6 +245,7 @@ pub fn preflight_intent(
     // CONTRACT.md §1.4.4 A: "Reject any non-null linked_order_type"
     // CONTRACT.md §1.4.4 B: "Reject ... unless linked_orders_supported == true
     //   AND ENABLE_LINKED_ORDERS_FOR_BOT == true"
+    rules_evaluated += 1;
     if input.linked_order_type.is_some() {
         let allowed = match input.instrument_kind {
             // Options: always forbidden (§1.4.4 A)
@@ -259,6 +264,7 @@ pub fn preflight_intent(
     }
 
     // Rule 4: post_only orders must not cross the touch (AT-916).
+    rules_evaluated += 1;
     if let Some(post_only_input) = input.post_only_input.as_ref() {
         let mut post_only_metrics = PostOnlyMetrics::new();
         if matches!(
@@ -274,7 +280,7 @@ pub fn preflight_intent(
 
     let post_only_checked = input.post_only_input.is_some();
     PreflightResult::Allowed(PreflightDiagnostics {
-        rules_evaluated: 4,
+        rules_evaluated,
         post_only_checked,
     })
 }

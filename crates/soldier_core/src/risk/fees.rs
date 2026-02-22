@@ -19,16 +19,15 @@ pub fn fee_staleness_hard_stale_total() -> u64 {
     FEE_STALENESS_HARD_STALE_TOTAL.load(Ordering::Relaxed)
 }
 
-fn bump_fee_staleness_reject(staleness: FeeStaleness, cache_age_s: Option<u64>) {
+fn bump_fee_staleness_reject(cache_age_s: Option<u64>) {
     FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
-    let tail = format!("staleness={staleness:?} cache_age_s={cache_age_s:?}");
+    let tail = format!("staleness=HardStale cache_age_s={cache_age_s:?}");
     crate::execution::emit_execution_metric_line(
         crate::execution::METRIC_FEE_STALENESS_REJECT,
         &tail,
     );
     tracing::debug!(
-        "FeeStalenessReject staleness={:?} cache_age_s={:?}",
-        staleness,
+        "FeeStalenessReject staleness=HardStale cache_age_s={:?}",
         cache_age_s
     );
 }
@@ -53,6 +52,28 @@ impl Default for FeeStalenessConfig {
             fee_cache_hard_s: 900,
             fee_stale_buffer: 0.20,
         }
+    }
+}
+
+impl FeeStalenessConfig {
+    /// Validate that configuration values are finite and non-negative.
+    ///
+    /// Call at startup to fail-fast on misconfiguration rather than
+    /// discovering bad values at first order dispatch (H1 blast radius).
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.fee_stale_buffer.is_finite() || self.fee_stale_buffer < 0.0 {
+            return Err(format!(
+                "fee_stale_buffer must be finite and non-negative, got {}",
+                self.fee_stale_buffer
+            ));
+        }
+        if self.fee_cache_soft_s > self.fee_cache_hard_s {
+            return Err(format!(
+                "fee_cache_soft_s ({}) must be <= fee_cache_hard_s ({})",
+                self.fee_cache_soft_s, self.fee_cache_hard_s
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -149,7 +170,7 @@ pub fn evaluate_fee_staleness(
     // Guard: non-finite or negative fee_rate → HardStale + Degraded (fail-closed)
     // Do NOT propagate bad rate via multiplication — use 0.0 as safe default.
     if !snapshot.fee_rate.is_finite() || snapshot.fee_rate < 0.0 {
-        bump_fee_staleness_reject(FeeStaleness::HardStale, None);
+        bump_fee_staleness_reject(None);
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: 0.0,
@@ -166,7 +187,7 @@ pub fn evaluate_fee_staleness(
             buffer = config.fee_stale_buffer,
             "fee staleness: non-finite/negative buffer, fail-closed to HardStale+Degraded"
         );
-        bump_fee_staleness_reject(FeeStaleness::HardStale, None);
+        bump_fee_staleness_reject(None);
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: 0.0,
@@ -180,7 +201,7 @@ pub fn evaluate_fee_staleness(
     let cached_at_ms = match snapshot.fee_model_cached_at_ts_ms {
         Some(ts) => ts,
         None => {
-            bump_fee_staleness_reject(FeeStaleness::HardStale, None);
+            bump_fee_staleness_reject(None);
             return FeeEvaluation {
                 staleness: FeeStaleness::HardStale,
                 fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -195,7 +216,7 @@ pub fn evaluate_fee_staleness(
         (snapshot.now_ms - cached_at_ms) / 1000
     } else {
         // Clock skew — fail-closed: treat as hard-stale
-        bump_fee_staleness_reject(FeeStaleness::HardStale, Some(0));
+        bump_fee_staleness_reject(Some(0));
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -206,7 +227,7 @@ pub fn evaluate_fee_staleness(
 
     if age_s > config.fee_cache_hard_s {
         // Hard-stale (AT-033)
-        bump_fee_staleness_reject(FeeStaleness::HardStale, Some(age_s));
+        bump_fee_staleness_reject(Some(age_s));
         FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),

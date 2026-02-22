@@ -249,6 +249,9 @@ pub fn extract_reject_reason_code(
         ChokeResult::Rejected { reason, .. } => {
             Some(reject_reason_from_chokepoint(reason, gate_reject_codes))
         }
+        // Wildcard intentional: ChokeResult::Approved must not be named outside
+        // build_order_intent.rs (enforced by test_dispatch_chokepoint_no_bypass_approved).
+        // Exhaustiveness is verified by the #[deny(unreachable_patterns)] test below.
         _ => None,
     }
 }

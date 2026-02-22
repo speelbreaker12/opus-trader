@@ -13,7 +13,7 @@ pub(crate) const METRIC_EXPECTED_SLIPPAGE_BPS: &str = "expected_slippage_bps";
 pub(crate) const METRIC_QUANTIZE_REJECT: &str = "quantize_reject_total";
 pub(crate) const METRIC_PRICER_REJECT: &str = "pricer_reject_total";
 pub(crate) const METRIC_INVENTORY_SKEW_REJECT: &str = "inventory_skew_reject_total";
-pub(crate) const METRIC_POST_ONLY_REJECT: &str = "post_only_cross_reject_total";
+pub(crate) const METRIC_POST_ONLY_REJECT: &str = "post_only_reject_total";
 pub(crate) const METRIC_FEE_STALENESS_REJECT: &str = "fee_staleness_reject_total";
 pub(crate) const METRIC_MARGIN_GATE_REJECT: &str = "margin_gate_reject_total";
 pub(crate) const METRIC_PENDING_EXPOSURE_REJECT: &str = "pending_exposure_reject_total";
@@ -93,7 +93,7 @@ pub use pipeline::{
 };
 pub use post_only_guard::{
     PostOnlyInput, PostOnlyMetrics, PostOnlyRejectReason, PostOnlyResult, check_post_only,
-    post_only_cross_reject_total,
+    post_only_reject_total,
 };
 pub use preflight::{
     OrderType, PreflightDiagnostics, PreflightInput, PreflightMetrics, PreflightReject,

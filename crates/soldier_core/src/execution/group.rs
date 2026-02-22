@@ -20,10 +20,16 @@ static GROUP_LOCK_TIMEOUT_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GROUP_PERSIST_FAIL_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GROUP_MIXED_FAILED_TOTAL: AtomicU64 = AtomicU64::new(0);
 
-fn bump_group_lock_timeout() {
+fn bump_group_lock_timeout(contention: bool) {
     GROUP_LOCK_TIMEOUT_TOTAL.fetch_add(1, Ordering::Relaxed);
-    super::emit_execution_metric_line(super::METRIC_GROUP_REJECT, "reason=LockTimeout");
-    tracing::debug!("GroupReject reason=LockTimeout");
+    let reason = if contention {
+        "LockContention"
+    } else {
+        "LockTimeout"
+    };
+    let tail = format!("reason={reason}");
+    super::emit_execution_metric_line(super::METRIC_GROUP_REJECT, &tail);
+    tracing::debug!("GroupReject reason={reason}");
 }
 
 fn bump_group_persist_fail(group_id: &str) {
@@ -275,6 +281,18 @@ impl AtomicGroup {
         result: LegResult,
         config: &GroupConfig,
     ) -> GroupStateTransition {
+        // Terminal state guard: Complete and Flattened are terminal — no further
+        // transitions should occur. Log and discard the leg result.
+        if self.state.is_terminal() {
+            tracing::warn!(
+                group_id = %self.group_id,
+                state = ?self.state,
+                leg_idx = result.leg_idx,
+                "apply_leg_result called on terminal group, ignoring"
+            );
+            return GroupStateTransition::NoChange;
+        }
+
         // Q4: NaN fail-closed — non-finite quantities cannot be safely compared.
         if !result.filled_qty.is_finite() || !result.requested_qty.is_finite() {
             tracing::warn!(
@@ -458,7 +476,12 @@ pub enum GroupStateTransition {
     EnteredMixedFailed { reason: String },
     /// Group completed cleanly.
     Completed,
-    /// Group was already MixedFailed and received another leg result.
+    /// Group was already in a failed state (MixedFailed/Flattening/Flattened)
+    /// and received another leg result (e.g., NaN fill on already-failed group).
+    /// NOTE: `GROUP_MIXED_FAILED_TOTAL` tracks *entries* into MixedFailed, not
+    /// total NaN events. StillMixedFailed intentionally does not re-bump the
+    /// counter. Per-event NaN tracking is available via the metric line emitted
+    /// in the NaN guard's tracing::warn.
     StillMixedFailed,
 }
 
@@ -487,14 +510,15 @@ pub fn try_acquire_group_lock(lock: &mut GroupLock, config: &GroupConfig) -> Loc
 
     // If lock is already held and expired, force ReduceOnly
     if lock.is_held() && lock.is_expired(max_wait) {
-        bump_group_lock_timeout();
+        bump_group_lock_timeout(false);
         return LockAcquisitionResult::TimedOut;
     }
 
     if lock.try_acquire() {
         LockAcquisitionResult::Acquired
     } else {
-        bump_group_lock_timeout();
+        // Lock is held but not expired — this is contention, not a timeout.
+        bump_group_lock_timeout(true);
         LockAcquisitionResult::TimedOut
     }
 }

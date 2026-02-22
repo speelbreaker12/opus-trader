@@ -28,6 +28,8 @@ impl RiskState {
     /// Return the more restrictive of two risk states (P3).
     ///
     /// Ordering: Healthy < Degraded < Maintenance < Kill.
+    /// Intended for within-tick aggregation, not cross-tick state persistence.
+    #[must_use]
     pub fn worst(self, other: Self) -> Self {
         let rank = |s: RiskState| match s {
             RiskState::Healthy => 0,
