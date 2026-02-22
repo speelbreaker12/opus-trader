@@ -5,6 +5,23 @@ use std::collections::VecDeque;
 
 const MAX_EXECUTION_METRIC_LINES: usize = 4096;
 
+// ─── Metric name constants (P6: extract string literals) ─────────────
+pub(crate) const METRIC_GATE_SEQUENCE_TOTAL: &str = "gate_sequence_total";
+pub(crate) const METRIC_LIQUIDITY_GATE_REJECT: &str = "liquidity_gate_reject_total";
+pub(crate) const METRIC_NET_EDGE_REJECT: &str = "net_edge_reject_total";
+pub(crate) const METRIC_EXPECTED_SLIPPAGE_BPS: &str = "expected_slippage_bps";
+pub(crate) const METRIC_QUANTIZE_REJECT: &str = "quantize_reject_total";
+pub(crate) const METRIC_PRICER_REJECT: &str = "pricer_reject_total";
+pub(crate) const METRIC_INVENTORY_SKEW_REJECT: &str = "inventory_skew_reject_total";
+pub(crate) const METRIC_POST_ONLY_REJECT: &str = "post_only_cross_reject_total";
+pub(crate) const METRIC_FEE_STALENESS_REJECT: &str = "fee_staleness_reject_total";
+pub(crate) const METRIC_MARGIN_GATE_REJECT: &str = "margin_gate_reject_total";
+pub(crate) const METRIC_PENDING_EXPOSURE_REJECT: &str = "pending_exposure_reject_total";
+pub(crate) const METRIC_EXPOSURE_BUDGET_REJECT: &str = "exposure_budget_reject_total";
+pub(crate) const METRIC_GROUP_REJECT: &str = "group_reject_total";
+pub(crate) const METRIC_EXPIRY_GUARD_REJECT: &str = "expiry_guard_reject_total";
+pub(crate) const METRIC_PREFLIGHT_REJECT: &str = "preflight_reject_total";
+
 pub mod base_gates;
 pub mod build_order_intent;
 pub mod dispatch_map;

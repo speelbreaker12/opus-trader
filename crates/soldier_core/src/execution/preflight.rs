@@ -185,7 +185,7 @@ fn bump_preflight_reject(reason: PreflightReject) {
         }
     }
     let tail = format!("reason={reason:?}");
-    super::emit_execution_metric_line("preflight_reject_total", &tail);
+    super::emit_execution_metric_line(super::METRIC_PREFLIGHT_REJECT, &tail);
 }
 
 // ─── Core preflight function ────────────────────────────────────────────

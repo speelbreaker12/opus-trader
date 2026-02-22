@@ -138,7 +138,7 @@ fn bump_net_edge_reject(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) 
         }
     }
     let tail = format!("reason={reason:?}");
-    super::emit_execution_metric_line("net_edge_reject_total", &tail);
+    super::emit_execution_metric_line(super::METRIC_NET_EDGE_REJECT, &tail);
     tracing::debug!(
         "NetEdgeReject reason={:?} net_edge_usd={:?}",
         reason,

@@ -245,7 +245,7 @@ fn bump_liquidity_gate_reject(
         }
     }
     let tail = format!("reason={reason:?}");
-    super::emit_execution_metric_line("liquidity_gate_reject_total", &tail);
+    super::emit_execution_metric_line(super::METRIC_LIQUIDITY_GATE_REJECT, &tail);
     tracing::debug!(
         "LiquidityGateReject reason={:?} wap={:?} slippage_bps={:?}",
         reason,
@@ -257,7 +257,7 @@ fn bump_liquidity_gate_reject(
 fn record_expected_slippage_sample(slippage_bps: f64) {
     EXPECTED_SLIPPAGE_BPS_SAMPLES.fetch_add(1, Ordering::Relaxed);
     let tail = format!("value={slippage_bps}");
-    super::emit_execution_metric_line("expected_slippage_bps", &tail);
+    super::emit_execution_metric_line(super::METRIC_EXPECTED_SLIPPAGE_BPS, &tail);
 }
 
 // --- Book walk -----------------------------------------------------------
