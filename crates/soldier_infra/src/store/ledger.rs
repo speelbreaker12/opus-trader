@@ -945,6 +945,12 @@ fn apply_event(
             // (e.g. crash-replay), the latest record overwrites the earlier one.
             // This is intentional — the WAL is append-only, so the last event
             // for a given hash is always the most recent state.
+            if latest_by_hash.contains_key(&record.intent_hash) {
+                tracing::warn!(
+                    intent_hash = %record.intent_hash,
+                    "duplicate IntentRecorded — overwriting with latest"
+                );
+            }
             latest_by_hash.insert(record.intent_hash.clone(), record.clone());
             Ok(())
         }
@@ -955,6 +961,15 @@ fn apply_event(
             let record = latest_by_hash
                 .get_mut(intent_hash)
                 .ok_or_else(|| format!("transition missing intent_hash: {intent_hash}"))?;
+            if !record.tls_state.is_valid_successor(*new_state) {
+                tracing::warn!(
+                    intent_hash = %intent_hash,
+                    from = ?record.tls_state,
+                    to = ?new_state,
+                    "illegal state transition — applying anyway \
+                     (WAL is source of truth)"
+                );
+            }
             record.tls_state = *new_state;
             Ok(())
         }

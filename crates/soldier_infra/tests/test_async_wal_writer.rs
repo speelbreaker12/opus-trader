@@ -483,6 +483,179 @@ fn test_queue_full_non_barrier_applies_to_hashmap() {
     remove_if_exists(&path);
 }
 
+// ─── Channel-full non-barrier metrics ────────────────────────────────────
+
+/// When channel is full during non-barrier ops, enqueue_failures metric
+/// must increment (P1 fix: silent drops now have operator visibility).
+#[test]
+fn test_queue_full_nonbarrier_increments_enqueue_failures() {
+    let path = temp_wal_path("qfull_metric");
+    let config = WalWriterConfig {
+        channel_capacity: 1,
+        ..WalWriterConfig::default()
+    };
+    let mut ledger =
+        WalLedger::with_storage_path_configured(100, &path, config).expect("create wal");
+    let mut m = LedgerMetrics::new();
+
+    // Seed a record while writer is running
+    ledger.append(intent("h1"), &mut m).unwrap();
+    let enqueue_failures_before = m.wal_queue_enqueue_failures();
+
+    // Pause writer, fill channel, then trigger non-barrier channel-full
+    ledger.pause_writer();
+    std::thread::sleep(Duration::from_millis(50));
+    // Fill channel slot
+    let _ = ledger.update_state("h1", TlsState::Sent, &mut m);
+    std::thread::sleep(Duration::from_millis(50));
+    let _ = ledger.update_state("h1", TlsState::Acked, &mut m);
+
+    // Next non-barrier op hits channel-full
+    let result = ledger.update_state("h1", TlsState::PartialFill, &mut m);
+    assert!(result.is_ok(), "non-barrier channel-full should still succeed (HashMap updated)");
+
+    // Metric must have incremented
+    assert!(
+        m.wal_queue_enqueue_failures() > enqueue_failures_before,
+        "wal_queue_enqueue_failures must increment on channel-full non-barrier drop: before={}, after={}",
+        enqueue_failures_before,
+        m.wal_queue_enqueue_failures()
+    );
+
+    ledger.resume_writer();
+    drop(ledger);
+    remove_if_exists(&path);
+}
+
+// ─── Replay edge cases ──────────────────────────────────────────────────
+
+/// Replay with duplicate IntentRecorded — should succeed (last-writer-wins)
+/// and the final state should reflect the LAST record.
+#[test]
+fn test_replay_duplicate_intent_recorded_last_writer_wins() {
+    let path = temp_wal_path("replay_dup");
+
+    // Manually write a WAL file with duplicate intent_hash entries.
+    // This simulates a crash-replay scenario where the same intent was
+    // appended twice before the process crashed.
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&path).expect("create wal file");
+        // First record: h1 with qty=1.0
+        writeln!(f, r#"{{"kind":"intent_recorded","record":{{"intent_hash":"h1","group_id":"g1","leg_idx":0,"instrument":"BTC-PERP","side":"buy","qty_q":1.0,"limit_price_q":50000.0,"tls_state":"Created","created_ts":1000,"sent_ts":0,"ack_ts":0,"last_fill_ts":0,"exchange_order_id":null,"last_trade_id":null}}}}"#).unwrap();
+        // Duplicate: h1 with qty=2.0 (different value — last-writer-wins)
+        writeln!(f, r#"{{"kind":"intent_recorded","record":{{"intent_hash":"h1","group_id":"g1","leg_idx":0,"instrument":"BTC-PERP","side":"buy","qty_q":2.0,"limit_price_q":50000.0,"tls_state":"Created","created_ts":1000,"sent_ts":0,"ack_ts":0,"last_fill_ts":0,"exchange_order_id":null,"last_trade_id":null}}}}"#).unwrap();
+        f.sync_all().unwrap();
+    }
+
+    // Load ledger — replay should handle duplicate without error
+    let ledger = WalLedger::with_storage_path(100, &path).expect("replay with dup");
+    assert_eq!(ledger.queue_depth(), 1, "duplicate should not create two entries");
+    // Last-writer-wins: qty should be 2.0 (second record)
+    assert_eq!(ledger.get("h1").unwrap().qty_q, 2.0, "last-writer-wins: second record should prevail");
+
+    drop(ledger);
+    remove_if_exists(&path);
+}
+
+/// Replay with illegal state transition in WAL — should succeed with warning.
+/// The WAL is source of truth even if the transition is invalid, because the
+/// event was already persisted.
+#[test]
+fn test_replay_illegal_state_transition_applies_anyway() {
+    let path = temp_wal_path("replay_illegal_tx");
+
+    // Manually write a WAL file with an illegal transition (Filled → Sent)
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&path).expect("create wal file");
+        // h1 Created
+        writeln!(f, r#"{{"kind":"intent_recorded","record":{{"intent_hash":"h1","group_id":"g1","leg_idx":0,"instrument":"BTC-PERP","side":"buy","qty_q":1.0,"limit_price_q":50000.0,"tls_state":"Created","created_ts":1000,"sent_ts":0,"ack_ts":0,"last_fill_ts":0,"exchange_order_id":null,"last_trade_id":null}}}}"#).unwrap();
+        // h1 → Filled (valid)
+        writeln!(f, r#"{{"kind":"state_transition","intent_hash":"h1","new_state":"Filled"}}"#).unwrap();
+        // h1 Filled → Sent (INVALID — terminal state, no valid successors)
+        writeln!(f, r#"{{"kind":"state_transition","intent_hash":"h1","new_state":"Sent"}}"#).unwrap();
+        f.sync_all().unwrap();
+    }
+
+    // Load ledger — replay must not fail (WAL is source of truth)
+    let ledger = WalLedger::with_storage_path(100, &path).expect("replay with illegal transition");
+    // The illegal transition should have been applied (WAL is truth)
+    assert_eq!(
+        ledger.get("h1").unwrap().tls_state,
+        TlsState::Sent,
+        "WAL replay must apply events as-is, even if transition is illegal"
+    );
+
+    drop(ledger);
+    remove_if_exists(&path);
+}
+
+// ─── Runtime illegal transition rejection ────────────────────────────────
+
+/// update_state must reject illegal state transitions at runtime (TRIP test).
+/// Unlike WAL replay (which applies anyway), the runtime path validates via
+/// is_valid_successor and returns IllegalTransition.
+#[test]
+fn test_update_state_illegal_transition_returns_error() {
+    let path = temp_wal_path("illegal_tx_runtime");
+    let mut ledger = WalLedger::with_storage_path(100, &path).expect("create wal");
+    let mut m = LedgerMetrics::new();
+
+    // Seed: Created → Sent (valid)
+    ledger.append(intent("h1"), &mut m).unwrap();
+    ledger.update_state("h1", TlsState::Sent, &mut m).unwrap();
+    assert_eq!(ledger.get("h1").unwrap().tls_state, TlsState::Sent);
+
+    // Attempt illegal transition: Sent → Created (backwards)
+    let result = ledger.update_state("h1", TlsState::Created, &mut m);
+    assert!(
+        matches!(result, Err(LedgerAppendError::IllegalTransition { .. })),
+        "runtime illegal transition must return IllegalTransition, got {result:?}"
+    );
+
+    // State must not have changed
+    assert_eq!(
+        ledger.get("h1").unwrap().tls_state,
+        TlsState::Sent,
+        "HashMap must remain unchanged after rejected transition"
+    );
+
+    drop(ledger);
+    remove_if_exists(&path);
+}
+
+// ─── Healthy-path non-trip tests ─────────────────────────────────────────
+
+/// On a healthy path (writer alive, channel not full), enqueue_failures must
+/// remain zero. NON-TRIP test: proves the metric does not spuriously fire.
+#[test]
+fn test_healthy_path_zero_enqueue_failures() {
+    let path = temp_wal_path("healthy_notrip");
+    let mut ledger = WalLedger::with_storage_path(100, &path).expect("create wal");
+    let mut m = LedgerMetrics::new();
+
+    // Normal lifecycle: append + state transitions on healthy writer
+    ledger.append(intent("h1"), &mut m).unwrap();
+    ledger.update_state("h1", TlsState::Sent, &mut m).unwrap();
+    ledger.mark_sent("h1", 9999, &mut m).unwrap();
+    ledger.update_state("h1", TlsState::Acked, &mut m).unwrap();
+
+    // No enqueue failures on healthy path
+    assert_eq!(
+        m.wal_queue_enqueue_failures(), 0,
+        "healthy path must have zero enqueue_failures"
+    );
+    // No write errors on healthy path
+    assert_eq!(
+        m.wal_write_errors(), 0,
+        "healthy path must have zero write_errors"
+    );
+
+    drop(ledger);
+    remove_if_exists(&path);
+}
+
 // ─── Channel capacity validation ────────────────────────────────────────
 
 /// channel_capacity=0 must be rejected (creates rendezvous channel).
