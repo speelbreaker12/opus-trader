@@ -3,7 +3,7 @@
 > Multi-agent workflows for (A) producing high-quality story premortems and (B) retroactively auditing existing code against those premortems.
 > Designed and validated during Slice 1 (13 stories, 4 agent teams, 3 review rounds).
 >
-> **Version**: 1.6 (2026-02-21) — v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
+> **Version**: 1.7 (2026-02-21) — v1.7: machine-verifiable proof graphs V1 (`python/proof_graph/`) — per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip), scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`, legacy exemption list (`plans/proof_graph_exempt.txt`), `prd_set_pass.sh` gate integration (exit 10). Appendix C roadmap item marked DONE (V1). v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
 
 ## Glossary (Normative)
 
@@ -20,6 +20,7 @@
 | Golden Vector | A table-driven test with 10-30 input cases covering boundary, NaN/Inf/missing, and §5 wrong-impl scenarios. |
 | Evidence Ledger | Per-story document produced during reconciliation with file:line citations for every audit check. |
 | Simpler-Than-Correct Gate | A meta-check applied to each implementation under test: "Is there any implementation SIMPLER than the correct one that passes the entire test suite?" If yes, the suite has a mutation gap. Applied twice: first in Phase R5b self-review (preliminary, builder catches own gaps) and definitively in Phase R7e devils advocate (independent auditor). The R5b application is defense-in-depth — it reduces the load on R7e but does not replace it. |
+| Proof Graph | Per-story `proof_graph.json` — structured JSON mapping each AT to enforcement point, tests, wiring status, observability, and verdict. Validated by `python/proof_graph/validate.py` with 18 rules. Replaces markdown evidence ledger tables for machine-checkable invariant enforcement at pass-flip time. Schema version 1. |
 | Story Proof Scope | The minimum context needed to audit a story's contract compliance: PRD item, `enforcing_contract_ats[]`, premortem (especially §2/§4/§5), recon preflight, `scope.touch` files, proving test files from `implementation_tests[]`, relevant CONTRACT.md sections, and direct integration surfaces for causality. This is the default review unit — not the diff, not the whole slice. The framing is "contract-proof audit," not "code review." |
 | Review Basis | An explicit label every reviewer must include in their output: `STORY_SCOPE (Cycle 1)` or `FIX_DIFF + AT_REGRESSION (Cycle 2)`. Removes ambiguity about what was actually reviewed. |
 
@@ -1042,6 +1043,7 @@ Each story gets a final reconciliation verdict:
 1. **Proof gate**: Story verdict must be `RECONCILED` or `RECONCILED-WITH-DEBT`. A `NOT RECONCILED` story is always blocked.
 2. **Runtime-enforcement gate**: Every safety-critical AT must be `PROVEN-INTEGRATED` (wired into production). `PROVEN-UNIT` on a safety-critical AT blocks the story — the guard provides zero runtime protection regardless of proof status. `PROVEN-UNIT` on non-safety-critical ATs (observability, metrics) does not block.
 3. **Mechanical checks**: (a) all 8 workflow receipts present, (b) `verify.sh` passed, (c) `contract_review.json` contains `"decision": "PASS"`, (d) `loss_mode` fields are populated, (e) R5b skill receipts verified (see Phase R5b).
+4. **Proof graph gate** (v1.7): `proof_graph.json` must exist at `artifacts/story/<ID>/proof_graph.json` and pass `python/proof_graph/validate.py --strict` (all 18 rules, WARNs promoted to ERRORs). Stories without a proof graph are blocked unless listed in `plans/proof_graph_exempt.txt` (legacy grandfathering). Exit code 10 on failure. Generate skeleton: `python3 python/proof_graph/scaffold.py <ID>`.
 
 See `specs/WORKFLOW_CONTRACT.md` for the full gate checklist.
 
@@ -1132,6 +1134,7 @@ Every reconciled story must produce this set of artifacts. Missing items block t
 | 6 | **Verify output** + `verify.meta.json` | R8 | `verify.sh` passed with correct mode/head; test count matches |
 | 7a | **Test output + diff summary** *(if code changed)* | R5/R5b | Fixes compile, tests pass, diff is additive |
 | 7b | **`NO_CODE_CHANGE_AUDIT_ONLY` section** *(if no code changed)* | R5b | Negative evidence: `git diff → 0`, proof checks still run, no fixes needed |
+| 8 | **`proof_graph.json`** (v1.7) | R6 | Machine-verifiable proof graph: per-AT enforcement, tests, wiring, verdicts; validated by `validate.py --strict` at pass-flip |
 
 **`RECON-CLEAN` exception (item 4)**: If the Cycle 1 review and self-review found zero BLOCKING findings and the story required no code changes, the Cycle 2 review may be replaced by an abbreviated `RECON-CLEAN` note in the resolution artifact. The note must include:
 - Confirmation that preflight + self-review + Cycle 1 found `BLOCKING=0`
@@ -1366,6 +1369,9 @@ reviews/reconciliations/<slice>/               # One subdirectory per slice
   DEBT_REGISTER.json                         # Phase R7f: structured debt register (strict schema)
   SUMMARY.md                                 # One-page roll-up: verdicts, metrics, links to all files
 
+artifacts/story/<ID>/
+  proof_graph.json                           # Per-story proof graph (v1.7): AT→enforcement→tests→wiring→verdict
+
 plans/prompts/
   slice_reconcile_implement.md               # Phase R1 agent prompt (Appendix A source)
 
@@ -1433,7 +1439,8 @@ plans/step_prompts/recon/
 - [ ] Verdict table updated with R7c wiring + safety-critical columns
 - [ ] Integration story created for PROVEN-UNIT safety-critical ATs (if any)
 - [ ] Audit anchors added to enforcement points and proving tests for safety-critical ATs (if adopting v1.6 anchors)
-- [ ] Minimum evidence pack complete for each story (preflight, self-review, Cycle 1, Cycle 2/RECON-CLEAN, resolution, verify, test output or NO_CODE_CHANGE)
+- [ ] Proof graph: `proof_graph.json` generated via `scaffold.py`, filled in, and validates with `validate.py --strict` (or story listed in `plans/proof_graph_exempt.txt`)
+- [ ] Minimum evidence pack complete for each story (preflight, self-review, Cycle 1, Cycle 2/RECON-CLEAN, resolution, verify, test output or NO_CODE_CHANGE, proof_graph.json)
 
 ---
 ---
@@ -1855,35 +1862,25 @@ For stories reconciled before v1.6, anchors are added during the next reconcilia
 
 > Items identified during review but too large for v1.6. Tracked here for visibility.
 
-## Machine-Verifiable Proof Graphs (v2.0)
+## Machine-Verifiable Proof Graphs — ~~v2.0~~ **V1 SHIPPED (v1.7)**
 
-Replace markdown evidence ledger tables with a structured JSON/TOML proof graph:
+> **Status**: V1 implemented. See `python/proof_graph/` for the full package.
 
-```json
-{
-  "story_id": "S1-007",
-  "proof_graph": {
-    "AT-920": {
-      "enforcement": { "file": "dispatch_map.rs", "line": 142, "function": "validate_contracts_amount_match", "anchor": "AT-920" },
-      "tests": [
-        { "file": "test_dispatch_map.rs", "line": 89, "function": "test_mismatch_beyond_tolerance_rejects", "category": "TRIP" },
-        { "file": "test_dispatch_map.rs", "line": 112, "function": "test_within_tolerance_passes", "category": "NON_TRIP" }
-      ],
-      "wiring": "PROVEN-INTEGRATED",
-      "call_chain": ["build_order_intent", "run_dispatch_gate", "validate_contracts_amount_match"],
-      "verdict": "PROVEN"
-    }
-  }
-}
-```
+V1 delivers per-story `proof_graph.json` with:
+- **Schema**: Frozen dataclasses with `from_dict()` + deny-unknown-fields (`schema_version: 1`)
+- **Validator**: 18 rules (`python/proof_graph/validate.py --strict`) — enforcement-critical at pass-flip
+- **Scaffolder**: `python/proof_graph/scaffold.py` generates skeleton from prd.json + CONTRACT.md
+- **Gate integration**: `prd_set_pass.sh` validates with `--strict` (exit 10 on failure)
+- **Legacy exemption**: `plans/proof_graph_exempt.txt` grandfathers existing stories; shrinks via reconciliation
+- **Stdlib-only**: Zero external dependencies
 
-**Benefits**:
-- Automated cross-slice regression detection (detect if Slice 3 overwrites Slice 1's AT ownership)
-- Diff-able proof state between reconciliation passes
-- Machine-queryable: "which ATs are PROVEN-UNIT?" becomes a `jq` query
-- Eliminates markdown parsing fragility
+Key rules: R-001 (RECONCILED + BLOCKING contradiction), R-004 (stale test SHA), R-007 (phantom AT not in CONTRACT.md), R-008 (placeholder detection), R-015 (FAIL_OPEN_RISK), R-016b (safety-critical without TRIP tests).
 
-**Blockers**: Requires rewriting R1 output format, all cross-review tooling, and the R4 aggregation script. Estimated as a v2.0 structural change.
+**V2 roadmap** (remaining from original proposal):
+- Cross-slice regression detection (detect if a later slice overwrites earlier AT ownership)
+- Auto-generation from R1 evidence ledger output
+- R4 aggregation script integration
+- JSON Schema file with sync test (deferred from V1 to avoid dual-source-of-truth)
 
 ## Post-Rejection Blast-Radius Audit
 
