@@ -20,9 +20,16 @@ Options:
   --commit REF     Review a specific commit (default: HEAD)
   --base REF       Review diff from base to HEAD
   --uncommitted    Review uncommitted changes
-  --files LIST     Review specific files (space/comma-separated paths; for recon audits)
+  --files LIST     Review specific files (space/comma-separated paths; codex uses exec mode)
   --title TITLE    Review title (default: "<STORY_ID>: <TOOL> review")
   --out-root PATH  Override artifact root (default: artifacts/story)
+
+Modes:
+  codex --commit/--base/--uncommitted: uses built-in `codex review` (diff-only)
+  codex --files:                       uses `codex exec` with review prompt (stdin)
+  opus  --commit/--base/--uncommitted: uses `claude --print` with review prompt (stdin)
+  opus  --files:                       uses `claude --print` with file contents (stdin)
+  kimi  (all modes):                   uses `kimi --print` with review prompt (stdin)
 
 Artifacts:
   - artifacts/story/<ID>/<tool>/<STAMP>_review.md
@@ -32,6 +39,7 @@ Examples:
   plans/review_logged.sh S1-004 --tool opus --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool kimi --base main
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
+  plans/review_logged.sh S1-004 --tool codex --files "crates/soldier_core/src/gate.rs crates/soldier_core/src/risk.rs"
   plans/review_logged.sh S1-004 --tool opus --files "crates/soldier_core/src/gate.rs crates/soldier_core/src/risk.rs"
 EOF
 }
@@ -183,16 +191,49 @@ fi
 
 case "$tool" in
   codex)
-    cmd=("codex" "review" "--title" "$title")
-    case "$mode" in
-      commit)      cmd+=("--commit" "$commit") ;;
-      base)        cmd+=("--base" "$base") ;;
-      uncommitted) cmd+=("--uncommitted") ;;
-      files)
-        echo "ERROR: --files mode is not supported with codex (use --tool opus instead)" >&2
-        exit 2
-        ;;
-    esac
+    if [[ "$mode" == "files" ]]; then
+      # --files mode: use `codex exec` with a review prompt (stdin)
+      review_context_label="Files to review"
+      review_prompt="You are a senior code reviewer for story $story on branch $branch (HEAD: $head_sha).
+
+Review the following $(lcase "$review_context_label") and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
+
+Focus on:
+- Correctness bugs and logic errors
+- Safety violations (unwrap in production, silent error drops, fail-open paths)
+- Missing or inadequate tests
+- Contract violations (specs/CONTRACT.md)
+- Security issues (injection, auth gaps, race conditions)
+- Performance regressions
+
+For each finding, include:
+- File path and line number
+- Severity level (P0-P3)
+- Description of the issue
+- Suggested fix
+
+Title: $title
+
+${review_context_label}:
+\`\`\`
+${files_context:-(no content available)}
+\`\`\`"
+
+      prompt_tmp="$(mktemp)"
+      printf '%s' "$review_prompt" > "$prompt_tmp"
+
+      cmd=("codex" "exec")
+      codex_exec_mode=true
+    else
+      # Standard diff modes: use built-in `codex review`
+      cmd=("codex" "review" "--title" "$title")
+      case "$mode" in
+        commit)      cmd+=("--commit" "$commit") ;;
+        base)        cmd+=("--base" "$base") ;;
+        uncommitted) cmd+=("--uncommitted") ;;
+      esac
+      codex_exec_mode=false
+    fi
     if [[ ${#extra[@]} -gt 0 ]]; then
       cmd+=("${extra[@]}")
     fi
@@ -334,9 +375,11 @@ trap cleanup EXIT
 
 start_epoch="$(date +%s)"
 set +e
-if [[ ("$tool" == "kimi" || "$tool" == "opus") && -n "$prompt_tmp" ]]; then
+if [[ -n "$prompt_tmp" ]]; then
+  # opus always, kimi always, codex exec (--files mode): pipe prompt via stdin
   "${cmd[@]}" < "$prompt_tmp" 2>&1 | tee "$transcript_tmp"
 else
+  # codex review (built-in diff modes): no stdin
   "${cmd[@]}" 2>&1 | tee "$transcript_tmp"
 fi
 rc="${PIPESTATUS[0]}"
@@ -371,6 +414,9 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
     echo "- Model: claude-opus-4-6"
   elif [[ "$tool" == "kimi" ]]; then
     echo "- Model: kimi-k2.5"
+  fi
+  if [[ "${codex_exec_mode:-false}" == "true" ]]; then
+    echo "- Codex Mode: exec (prompt pass-through)"
   fi
   echo "- Command: ${cmd[*]}"
   echo "- Artifact Provenance: logger-v1"
