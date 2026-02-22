@@ -420,6 +420,17 @@ For shell scripts, check these common silent failures:
 | `jq -r` null string | `.missing` returns literal `"null"` | Use `// empty` or `-e` flag |
 | Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
 
+### 13. Dead Code Detection
+
+Run findReferences on each guard function. Zero callers outside tests = dead enforcement.
+
+```bash
+# For each new guard/gate function:
+rg "fn guard_name" crates/ --glob '*.rs' | grep -v '/tests/' | grep -v '_test.rs'
+```
+
+If the only callers are in test files, the guard is an island — it exists but doesn't protect anything in production. Mark as HIGH finding with recommendation to wire into the dispatch path.
+
 ## Integration with Other Skills
 
 - Run `/pr-review` first for general correctness

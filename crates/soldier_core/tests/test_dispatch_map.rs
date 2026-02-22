@@ -721,3 +721,31 @@ fn test_at920_mismatch_caller_sets_degraded_and_blocks_open() {
     assert_eq!(choke.approved_total(), 0, "no dispatch after mismatch");
     assert_eq!(choke.rejected_total(), 1);
 }
+
+// ─── Fail-closed: InvalidAmount guards ────────────────────────────────
+
+/// Fail-closed: NaN amount returns InvalidAmount error.
+#[test]
+fn test_dispatch_map_nan_amount_returns_err() {
+    let order_size = OrderSize {
+        contracts: None,
+        qty_coin: Some(f64::NAN),
+        qty_usd: None,
+        notional_usd: f64::NAN,
+    };
+    let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
+    assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));
+}
+
+/// Fail-closed: zero amount returns InvalidAmount error.
+#[test]
+fn test_dispatch_map_zero_amount_returns_err() {
+    let order_size = OrderSize {
+        contracts: None,
+        qty_coin: Some(0.0),
+        qty_usd: None,
+        notional_usd: 0.0,
+    };
+    let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
+    assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));
+}

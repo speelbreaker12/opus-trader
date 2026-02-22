@@ -7,4 +7,7 @@ pub mod public;
 
 // Re-export key types for ergonomic imports.
 pub use account_summary::{FeeCache, FeeTierData};
-pub use public::{DeribitInstrument, DeribitInstrumentKind, SettlementPeriod, TickSizeStep};
+pub use public::{
+    DeribitInstrument, DeribitInstrumentKind, SettlementPeriod, TickSizeStep,
+    map_deribit_kind_to_input,
+};

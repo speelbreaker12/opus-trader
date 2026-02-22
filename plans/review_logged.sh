@@ -123,6 +123,40 @@ ${at_text}
     fi
   fi
 
+  # ── 2b. File existence + callsite status for implementation_tests and enforcement_point ──
+  if [[ -f "$prd" ]] && command -v jq >/dev/null 2>&1 && [[ -n "${story_json:-}" ]]; then
+    local test_status=""
+    while IFS= read -r test_entry; do
+      [[ -z "$test_entry" ]] && continue
+      local t_file="${test_entry%%::*}"
+      local t_fn="${test_entry##*::}"
+      if [[ ! -f "$root_dir/$t_file" ]]; then
+        test_status+="  - ✗ $test_entry (FILE MISSING)\n"
+      elif ! grep -q "fn ${t_fn}" "$root_dir/$t_file" 2>/dev/null; then
+        test_status+="  - ✗ $test_entry (FN MISSING)\n"
+      else
+        test_status+="  - ✓ $test_entry\n"
+      fi
+    done < <(echo "$story_json" | jq -r '.implementation_tests[]? // empty' 2>/dev/null)
+    if [[ -n "$test_status" ]]; then
+      enriched+="
+IMPLEMENTATION TEST STATUS
+$(printf '%b' "$test_status")
+"
+    fi
+
+    local ep
+    ep="$(echo "$story_json" | jq -r '.enforcement_point // ""' 2>/dev/null || true)"
+    if [[ -n "$ep" ]]; then
+      local ep_hits
+      ep_hits="$(grep -rl "$ep" --include='*.rs' "$root_dir/crates/" 2>/dev/null | grep -v '/tests/' | grep -v '_test\.rs' | wc -l | tr -d '[:space:]' || echo 0)"
+      enriched+="
+ENFORCEMENT POINT CALLSITES
+- $ep: ${ep_hits} production file(s) reference it
+"
+    fi
+  fi
+
   # ── 3. Extract premortem key sections (§2 assumptions, §4 decisions, §5 wrong-impls) ──
   if [[ -f "$premortem" ]]; then
     enriched+="

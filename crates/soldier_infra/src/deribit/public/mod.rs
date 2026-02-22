@@ -24,6 +24,9 @@ pub enum DeribitInstrumentKind {
     /// Future combo / spread
     #[serde(rename = "future_combo")]
     FutureCombo,
+    /// Unknown instrument kind from venue — forward-compatible.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Settlement period as returned by Deribit.
@@ -35,6 +38,9 @@ pub enum SettlementPeriod {
     Week,
     Month,
     Quarter,
+    /// Unknown settlement period from venue — forward-compatible.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Instrument metadata from Deribit `/public/get_instruments` response.
@@ -109,6 +115,21 @@ impl DeribitInstrument {
     /// This is the CONTRACT.md `contract_multiplier` field.
     pub fn contract_multiplier(&self) -> f64 {
         self.contract_size
+    }
+}
+
+/// Map a DeribitInstrumentKind to internal InstrumentKindInput flags.
+///
+/// Returns None for Unknown kind (logs warning + increments metric).
+pub fn map_deribit_kind_to_input(kind: DeribitInstrumentKind) -> Option<(bool, bool)> {
+    match kind {
+        DeribitInstrumentKind::Option => Some((true, false)),  // (is_option, is_future)
+        DeribitInstrumentKind::Future => Some((false, true)),
+        DeribitInstrumentKind::OptionCombo | DeribitInstrumentKind::FutureCombo => Some((false, false)),
+        DeribitInstrumentKind::Unknown => {
+            tracing::warn!("unknown deribit instrument kind encountered");
+            None
+        }
     }
 }
 

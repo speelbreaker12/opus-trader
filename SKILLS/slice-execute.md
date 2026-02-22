@@ -101,6 +101,10 @@ For every reject/latch/gate path:
 - Reason code in the reject path
 - Diagnostic info for debugging
 
+## Hard Gate: Mechanical Verification (Before Declaring Done)
+
+Before declaring done: `./plans/verify_mechanical.sh` must pass. Any failure = not done.
+
 ## Self-Check (Before Declaring Done)
 
 For every AT claimed by this story:

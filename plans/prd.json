@@ -677,6 +677,7 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
+      "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md instrument_kind: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).",
@@ -773,6 +774,7 @@
       "risk": "med",
       "needs_human_decision": false,
       "passes": true,
+      "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
@@ -884,6 +886,7 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
+      "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md OrderSize struct (MUST implement):",
@@ -985,6 +988,7 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
+      "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
@@ -1078,6 +1082,7 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
+      "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
           "quote": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",

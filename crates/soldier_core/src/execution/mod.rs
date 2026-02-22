@@ -107,14 +107,25 @@ pub fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
 where
     F: FnOnce() -> R,
 {
+    // Manual Drop guard ensures trace IDs are restored even if `f()` panics.
+    struct RestoreGuard {
+        previous: Option<ExecutionTraceIds>,
+    }
+    impl Drop for RestoreGuard {
+        fn drop(&mut self) {
+            EXECUTION_TRACE_IDS.with(|cell| {
+                *cell.borrow_mut() = self.previous.take();
+            });
+        }
+    }
+
     EXECUTION_TRACE_IDS.with(|cell| {
         let previous = cell.borrow_mut().replace(ExecutionTraceIds {
             intent_id: intent_id.to_string(),
             run_id: run_id.to_string(),
         });
-        let result = f();
-        *cell.borrow_mut() = previous;
-        result
+        let _guard = RestoreGuard { previous };
+        f()
     })
 }
 

@@ -58,6 +58,7 @@ PRIORITIES (reviewer must check, in this order)
 5. **Observability** — Reason code / structured log / metric on reject/degrade/latch paths?
 6. **Pattern conformance** — Gates use real quantities, state transitions explicit, small blast radius (including deserialization: strict serde enums in batch-deserialized types must not poison sibling elements), idempotent where retries happen?
 7. **Combinatorial coverage** — For functions with 2+ branching inputs (Option, enum, bool): are cross-cutting input combinations tested? Does one input's presence cause checks on other inputs to be skipped? For constants with magnitude comments, does the comment match the literal value?
+8. **Mechanical verification** — Run `./plans/verify_mechanical.sh`. Any FAIL = P1. Checks: (a) tests compile, (b) enforcement points have production callers, (c) implementation_tests[] entries exist as real test functions.
 
 ESCALATION TO WIDER REVIEW
 

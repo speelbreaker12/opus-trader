@@ -457,6 +457,19 @@ impl WalLedger {
             })
             .map_err(|e| io::Error::other(format!("failed to spawn wal writer: {e}")))?;
 
+        // Spawn async writer thread
+        let (sender, receiver) = mpsc::sync_channel(config.channel_capacity);
+        let pause_flag = Arc::new(AtomicBool::new(false));
+        let writer_degraded = Arc::new(AtomicBool::new(false));
+        let write_errors = Arc::new(AtomicU64::new(0));
+
+        let pf = Arc::clone(&pause_flag);
+        let wd = Arc::clone(&writer_degraded);
+        let we = Arc::clone(&write_errors);
+        let handle = thread::spawn(move || {
+            writer_loop(receiver, file, pf, wd, we);
+        });
+
         Ok(Self {
             latest_by_hash,
             capacity,
@@ -479,6 +492,12 @@ impl WalLedger {
     ///
     /// CONTRACT.md §2.4: "Write intent record BEFORE network dispatch."
     /// CONTRACT.md §2.4.1: "If WAL queue is full → fail-closed."
+    ///
+    /// **Barrier semantics:** When an async writer is active, `append()` sends
+    /// the event to the writer thread and waits for fsync confirmation before
+    /// applying to the in-memory HashMap. On barrier timeout, the degraded flag
+    /// is set and the HashMap is NOT updated (disk may be ahead of memory;
+    /// restart converges via replay).
     pub fn append(
         &mut self,
         record: IntentRecord,

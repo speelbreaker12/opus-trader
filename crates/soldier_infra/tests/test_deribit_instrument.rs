@@ -3,7 +3,9 @@
 //! Validates that `DeribitInstrument` correctly deserializes from
 //! `/public/get_instruments` response payloads (CONTRACT.md AT-333).
 
-use soldier_infra::deribit::{DeribitInstrument, DeribitInstrumentKind, SettlementPeriod};
+use soldier_infra::deribit::{
+    DeribitInstrument, DeribitInstrumentKind, SettlementPeriod, map_deribit_kind_to_input,
+};
 
 /// BTC perpetual — the most common Deribit instrument.
 const BTC_PERPETUAL_JSON: &str = r#"
@@ -232,4 +234,31 @@ fn test_required_fields_individually_enforced() {
             "removing '{field}' must cause deserialization failure — field must not be Option/default"
         );
     }
+}
+
+// ─── serde(other) Unknown variant tests ──────────────────────────────────
+
+/// Unknown DeribitInstrumentKind deserializes via serde(other).
+#[test]
+fn test_unknown_instrument_kind_deserializes() {
+    let json = r#""some_new_kind""#;
+    let kind: DeribitInstrumentKind =
+        serde_json::from_str(json).expect("should deserialize unknown kind");
+    assert_eq!(kind, DeribitInstrumentKind::Unknown);
+}
+
+/// option_combo deserializes correctly.
+#[test]
+fn test_option_combo_deserializes() {
+    let json = r#""option_combo""#;
+    let kind: DeribitInstrumentKind =
+        serde_json::from_str(json).expect("should deserialize option_combo");
+    assert_eq!(kind, DeribitInstrumentKind::OptionCombo);
+}
+
+/// Unknown kind maps to None in mapping function.
+#[test]
+fn test_unknown_kind_maps_to_none() {
+    let result = map_deribit_kind_to_input(DeribitInstrumentKind::Unknown);
+    assert!(result.is_none(), "Unknown kind must map to None");
 }
