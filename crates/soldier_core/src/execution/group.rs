@@ -295,8 +295,9 @@ impl AtomicGroup {
 
         // Q4: NaN fail-closed — non-finite quantities cannot be safely compared.
         if !result.filled_qty.is_finite() || !result.requested_qty.is_finite() {
+            let nan_leg_idx = result.leg_idx;
             tracing::warn!(
-                leg_idx = result.leg_idx,
+                leg_idx = nan_leg_idx,
                 filled_qty = result.filled_qty,
                 requested_qty = result.requested_qty,
                 "NaN fail-closed: non-finite fill quantity"
@@ -311,7 +312,7 @@ impl AtomicGroup {
                 if self.first_failure_reason.is_none() {
                     self.first_failure_reason = Some(format!(
                         "non-finite fill quantity on leg {}",
-                        self.leg_results.len() - 1
+                        nan_leg_idx
                     ));
                 }
                 bump_group_mixed_failed(&self.group_id);

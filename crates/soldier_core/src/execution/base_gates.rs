@@ -374,7 +374,9 @@ pub fn evaluate_base_gates(
             });
         }
     } else if lifecycle_intent == LifecycleIntent::Open {
-        // FAIL-CLOSED: missing expiry data blocks OPEN intents
+        // FAIL-CLOSED: missing expiry data blocks OPEN intents.
+        // Bump metrics so expiry_guard_reject_total counts this path (P2 codex finding).
+        metrics.expiry.record_reject();
         gate_outcomes.push(GateOutcome::Reject {
             gate: GateStep::ExpiryGuard,
             reason_code: RejectReasonCode::InstrumentExpiredOrDelisted,

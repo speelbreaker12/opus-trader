@@ -107,10 +107,10 @@ impl ExpiryGuardMetrics {
     pub fn allowed_total(&self) -> u64 {
         self.allowed_total
     }
-    fn record_reject(&mut self) {
+    pub fn record_reject(&mut self) {
         self.reject_total += 1;
     }
-    fn record_allowed(&mut self) {
+    pub fn record_allowed(&mut self) {
         self.allowed_total += 1;
     }
 }
