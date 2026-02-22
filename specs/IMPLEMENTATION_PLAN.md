@@ -650,7 +650,17 @@ Contract defaults: `mm_util_reduceonly = 0.85` (ReduceOnly allows CLOSE/HEDGE/CA
 Contract detail: if `mm_util >= mm_util_kill` (default 0.95) ⇒ PolicyGuard MUST force Kill and trigger deterministic emergency flatten (per §3.1) when eligible.  
 Tests: crates/soldier\_core/tests/test\_margin\_gate.rs::test\_margin\_gate\_thresholds\_block\_reduceonly\_kill (AT-206, AT-207, AT-208, AT-300, AT-301, AT-302)
 Observability: gauge mm\_util, counter margin\_gate\_trip\_total{level}.  
-Slice 7 — Atomic Group Executor \+ Emergency Close \+ Sequencer \+ Churn Breaker  
+S6.11 — Consolidate duplicate Side enums (PX-3b-side)
+Allowed paths: crates/soldier_core/src/execution/inventory_skew.rs, crates/soldier_core/src/execution/pricer.rs, crates/soldier_core/src/execution/mod.rs
+Acceptance criteria: InventorySkewSide and PricerSide removed; all references use quantize::Side. All existing tests pass (behavioral equivalence).
+Tests: crates/soldier_core/tests/test_inventory_skew.rs, crates/soldier_core/tests/test_pricer.rs
+
+S6.12 — Decouple LiquidityGateResult decision from metadata (PX-3a)
+Allowed paths: crates/soldier_core/src/execution/gate.rs, crates/soldier_core/src/execution/gate_outcome.rs, crates/soldier_core/src/execution/open_runtime.rs
+Acceptance criteria: LiquidityGateResult is struct { decision: LiquidityGateDecision, metadata: LiquidityGateMetadata }. All existing AT-421/AT-222/AT-344/AT-909 tests pass.
+Tests: crates/soldier_core/tests/test_liquidity_gate.rs, crates/soldier_core/tests/test_gate_outcome.rs
+
+Slice 7 — Atomic Group Executor \+ Emergency Close \+ Sequencer \+ Churn Breaker
 Slice intent: runtime atomicity: bounded rescue then deterministic flatten/hedge fallback.
 Contract AT coverage (traceability assignment): AT-227, AT-228, AT-912.
 

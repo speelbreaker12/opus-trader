@@ -4,8 +4,8 @@
 //! AT-210: Orphan fill (fill-before-send).
 
 use soldier_core::execution::{
-    OooCategory, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink,
-    TransitionResult, ooo_count, ooo_total,
+    PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink,
+    TransitionResult,
 };
 
 #[derive(Default)]
@@ -579,7 +579,7 @@ fn test_failed_from_partially_filled_transitions() {
 fn test_take_pending_reservation_only_on_terminal() {
     use soldier_core::risk::ReservationId;
     let rid = ReservationId::new("test-reservation-001").expect("valid ID");
-    let mut sm = Tlsm::with_pending_reservation(rid.clone(), "TEST".to_string());
+    let mut sm = Tlsm::with_pending_reservation(rid.clone());
 
     // Non-terminal states must NOT release
     assert!(
@@ -597,117 +597,14 @@ fn test_take_pending_reservation_only_on_terminal() {
     assert!(sm.state().is_terminal());
     let taken = sm.take_pending_reservation_on_terminal();
     assert!(taken.is_some(), "Filled must release reservation");
-    let (taken_rid, taken_inst) = taken.expect("reservation must be returned on terminal");
-    assert_eq!(taken_rid, rid);
-    assert_eq!(taken_inst, "TEST");
+    assert_eq!(
+        taken.expect("reservation must be returned on terminal"),
+        rid
+    );
 
     // Already consumed
     assert!(
         sm.take_pending_reservation_on_terminal().is_none(),
         "consumed on first take"
     );
-}
-
-// ─── OOO counter metrics ────────────────────────────────────────────────
-// Note: OOO counters are global statics. Tests read baseline before
-// triggering events to avoid cross-test interference.
-
-#[test]
-fn test_ooo_counter_increments_on_fill_before_ack() {
-    let before = ooo_count(OooCategory::FillBeforeAck);
-
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::Sent);
-    sm.apply(TlsmEvent::Filled); // fill-before-ack → OOO
-
-    assert_eq!(
-        ooo_count(OooCategory::FillBeforeAck),
-        before + 1,
-        "FillBeforeAck counter must increment"
-    );
-}
-
-#[test]
-fn test_ooo_per_category_counts() {
-    let before_fill = ooo_count(OooCategory::FillBeforeAck);
-    let before_partial = ooo_count(OooCategory::PartialFillBeforeAck);
-    let before_orphan = ooo_count(OooCategory::OrphanFill);
-    let before_ack = ooo_count(OooCategory::AckBeforeSend);
-    let before_pf_send = ooo_count(OooCategory::PartialFillBeforeSend);
-
-    // FillBeforeAck
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::Sent);
-    sm.apply(TlsmEvent::Filled);
-
-    // PartialFillBeforeAck
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::Sent);
-    sm.apply(TlsmEvent::PartialFill);
-
-    // OrphanFill
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::Filled);
-
-    // AckBeforeSend
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::Acked);
-
-    // PartialFillBeforeSend
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::PartialFill);
-    let _ = sm; // suppress unused warning
-
-    assert_eq!(ooo_count(OooCategory::FillBeforeAck), before_fill + 1);
-    assert_eq!(
-        ooo_count(OooCategory::PartialFillBeforeAck),
-        before_partial + 1
-    );
-    assert_eq!(ooo_count(OooCategory::OrphanFill), before_orphan + 1);
-    assert_eq!(ooo_count(OooCategory::AckBeforeSend), before_ack + 1);
-    assert_eq!(
-        ooo_count(OooCategory::PartialFillBeforeSend),
-        before_pf_send + 1
-    );
-}
-
-#[test]
-fn test_ooo_total_is_sum_of_categories() {
-    let total_before = ooo_total();
-    let cats_before: u64 = [
-        ooo_count(OooCategory::FillBeforeAck),
-        ooo_count(OooCategory::PartialFillBeforeAck),
-        ooo_count(OooCategory::OrphanFill),
-        ooo_count(OooCategory::AckBeforeSend),
-        ooo_count(OooCategory::PartialFillBeforeSend),
-    ]
-    .iter()
-    .sum();
-
-    assert_eq!(
-        total_before, cats_before,
-        "total must equal sum of categories"
-    );
-
-    // Trigger one OOO event
-    let mut sm = Tlsm::new();
-    sm.apply(TlsmEvent::Sent);
-    sm.apply(TlsmEvent::Filled);
-
-    let total_after = ooo_total();
-    let cats_after: u64 = [
-        ooo_count(OooCategory::FillBeforeAck),
-        ooo_count(OooCategory::PartialFillBeforeAck),
-        ooo_count(OooCategory::OrphanFill),
-        ooo_count(OooCategory::AckBeforeSend),
-        ooo_count(OooCategory::PartialFillBeforeSend),
-    ]
-    .iter()
-    .sum();
-
-    assert_eq!(
-        total_after, cats_after,
-        "total must still equal sum after increment"
-    );
-    assert_eq!(total_after, total_before + 1, "total must increment by 1");
 }

@@ -430,6 +430,32 @@ pub const ALL_PARAMS: &[ConfigParam] = &[
 /// - If `value` is `Some`, returns that value (explicit config takes precedence).
 /// - If `value` is `None` and the parameter has an Appendix A default, returns the default.
 /// - If `value` is `None` and no Appendix A default exists, returns `Err` (fail-closed).
+
+/// Returns true if the parameter is a percentage/fraction that must be in [0.0, 1.0].
+///
+/// CONTRACT.md Appendix A marks these as "pct" in the unit column.
+/// A value > 1.0 for a percentage param is a configuration error (e.g., mm_util_kill=2.5
+/// means 250% which is nonsensical for a utilization threshold).
+///
+/// Note: `InventorySkewK` is dimensionless (not "pct") and can exceed 1.0 — excluded.
+fn is_percentage_param(param: ConfigParam) -> bool {
+    matches!(
+        param,
+        ConfigParam::MmUtilRejectOpens
+            | ConfigParam::MmUtilReduceonly
+            | ConfigParam::MmUtilKill
+            | ConfigParam::DiskPauseArchivesPct
+            | ConfigParam::DiskDegradedPct
+            | ConfigParam::DiskKillPct
+            | ConfigParam::ParquetQueueTripPct
+            | ConfigParam::ParquetQueueClearPct
+            | ConfigParam::DvolJumpPct
+            | ConfigParam::ContractsAmountMatchTolerance
+            | ConfigParam::SelfTradeFractionTrip
+            | ConfigParam::FeeStaleBuffer
+    )
+}
+
 pub fn resolve_config_value(
     param: ConfigParam,
     value: Option<f64>,
@@ -445,6 +471,12 @@ pub fn resolve_config_value(
             return Err(MissingConfigError {
                 param_name: param_name(param),
                 reason: "value is negative; all config params must be non-negative",
+            });
+        }
+        if is_percentage_param(param) && v > 1.0 {
+            return Err(MissingConfigError {
+                param_name: param_name(param),
+                reason: "value exceeds 1.0 for a percentage/fraction parameter; must be in [0.0, 1.0]",
             });
         }
         return Ok(v);

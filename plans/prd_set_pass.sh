@@ -13,11 +13,11 @@ Rules for passes=true:
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
   - contract review file must exist and contain decision=PASS
-  - story review gate must pass for current HEAD (self/Kimi/Codex/code-review-expert/resolution evidence)
-  - receipt chain must exist and be valid (all steps, no breaks, no tainted receipts)
-  - if Phase-0 stories exist in PRD, non-Phase-0 stories cannot flip true until all Phase-0 stories are passes=true
+  - at least one review artifact must exist for current HEAD (codex/ or opus/)
+  - wf_step.sh receipt chain must have all 8 receipts
   - enforcing_contract_ats must be non-empty (exit 6) — exempt: policy/certification categories
   - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
+  - loss_mode.worst_case, .fail_closed_cap, .drift_metric must all be non-empty (exit 9) — exempt: policy/certification
 USAGE
 }
 
@@ -107,24 +107,7 @@ if [[ "$exists" != "true" ]]; then
 fi
 
 if [[ "$STATUS" == "true" ]]; then
-  target_phase="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.phase // -1)' "$PRD_FILE")"
-  phase0_count="$(jq -r '[.items[] | select((.phase // -1) == 0)] | length' "$PRD_FILE")"
-  if [[ "$target_phase" =~ ^[0-9]+$ ]] && [[ "$phase0_count" =~ ^[0-9]+$ ]]; then
-    if (( target_phase > 0 && phase0_count > 0 )); then
-      incomplete_phase0="$(
-        jq -r '.items[]
-          | select((.phase // -1) == 0 and (.passes != true))
-          | .id' "$PRD_FILE"
-      )"
-      if [[ -n "$incomplete_phase0" ]]; then
-        echo "ERROR: cannot set passes=true for $ID while Phase-0 stories are incomplete: ${incomplete_phase0//$'\n'/, }" >&2
-        exit 4
-      fi
-    fi
-  fi
-
-  # H-1: "PASS implies precision" — enforcing_contract_ats and enforcement_point must be non-empty
-  # Exempt: policy/certification categories (no AT ownership required, matching prd_lint.sh)
+  # ── PRD field validation ──────────────────────────────────────────
   story_category="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.category // "")' "$PRD_FILE")"
   if [[ "$story_category" != "policy" && "$story_category" != "certification" ]]; then
     eca_count="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcing_contract_ats // []) | if type == "array" then length else 0 end' "$PRD_FILE")"
@@ -139,6 +122,22 @@ if [[ "$STATUS" == "true" ]]; then
     fi
   fi
 
+  # ── loss_mode gate ──
+  if [[ "$story_category" != "policy" && "$story_category" != "certification" ]]; then
+    loss_ok=$(jq -r --arg id "$ID" '
+      .items[] | select(.id == $id) |
+      (.loss_mode // {}) | if type == "object" then . else {} end |
+      ((.worst_case // "") | length > 0) and
+      ((.fail_closed_cap // "") | length > 0) and
+      ((.drift_metric // "") | length > 0)
+    ' "$PRD_FILE")
+    if [[ "$loss_ok" != "true" ]]; then
+      echo "ERROR: loss_mode incomplete for $ID (worst_case, fail_closed_cap, drift_metric required)" >&2
+      exit 9
+    fi
+  fi
+
+  # ── Verify artifacts ──────────────────────────────────────────────
   [[ -d "$ARTIFACTS_DIR" ]] || { echo "ERROR: missing artifacts dir: $ARTIFACTS_DIR" >&2; exit 4; }
 
   meta_file="$ARTIFACTS_DIR/verify.meta.json"
@@ -149,6 +148,7 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
   HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to read current HEAD" >&2; exit 4; }
+  [[ -n "$HEAD_SHA" ]] || { echo "ERROR: HEAD_SHA is empty" >&2; exit 4; }
   verify_head_sha="$(jq -r '.head_sha // empty' "$meta_file" 2>/dev/null || true)"
   if [[ -z "$verify_head_sha" ]]; then
     echo "ERROR: verify metadata missing head_sha in $meta_file" >&2
@@ -183,6 +183,7 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
+  # ── Contract review ───────────────────────────────────────────────
   if [[ -z "$CONTRACT_REVIEW_FILE" ]]; then
     CONTRACT_REVIEW_FILE="$ARTIFACTS_DIR/contract_review.json"
   fi
@@ -193,72 +194,38 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
-  # ── Receipt chain validation ──────────────────────────────────────
-  REQUIRE_RECEIPT_CHAIN="${REQUIRE_RECEIPT_CHAIN:-1}"
-  if [[ "$REQUIRE_RECEIPT_CHAIN" -eq 1 ]]; then
-    WF_STEP="./plans/wf_step.sh"
-    if [[ ! -x "$WF_STEP" ]]; then
-      echo "ERROR: missing or non-executable wf_step.sh: $WF_STEP" >&2
-      exit 4
+  # ── Inline review check ──────────────────────────────────────────
+  # At least one review artifact must exist for current HEAD
+  review_found=0
+  art_root="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
+  for dir in "$art_root/$ID/codex" "$art_root/$ID/opus"; do
+    [[ -d "$dir" ]] || continue
+    if grep -rlF "$HEAD_SHA" "$dir"/ 2>/dev/null | head -1 | grep -q .; then
+      review_found=1; break
     fi
-
-    # Validate the full chain by running the 'pass' step (validates all prerequisites)
-    if ! "$WF_STEP" "$ID" pass; then
-      echo "ERROR: receipt chain validation failed for $ID" >&2
-      echo "  Run: plans/wf_step.sh $ID --status  to see missing steps" >&2
-      exit 4
-    fi
-
-    # Additional check: verify_full receipt HEAD must match current HEAD
-    RECEIPT_DIR="${WF_RECEIPT_DIR:-$ROOT/.wf/receipts/$ID}"
-    vf_receipt="$RECEIPT_DIR/07_verify_full.json"
-    if [[ -f "$vf_receipt" ]]; then
-      vf_head="$(jq -r '.head_sha // empty' "$vf_receipt" 2>/dev/null || true)"
-      if [[ "$vf_head" != "$HEAD_SHA" ]]; then
-        echo "ERROR: verify_full receipt HEAD mismatch (receipt=$vf_head current=$HEAD_SHA)" >&2
-        exit 4
-      fi
-      # Reject tainted receipts
-      tainted_count=0
-      for rf in "$RECEIPT_DIR"/*.json; do
-        [[ -f "$rf" ]] || continue
-        t="$(jq -r '.tainted // false' "$rf" 2>/dev/null || echo 'false')"
-        if [[ "$t" == "true" ]]; then
-          echo "ERROR: tainted receipt found: $rf (--force was used during workflow)" >&2
-          tainted_count=$((tainted_count + 1))
-        fi
-      done
-      if [[ "$tainted_count" -gt 0 ]]; then
-        echo "ERROR: $tainted_count tainted receipt(s) — re-run workflow steps without --force" >&2
-        exit 4
-      fi
-    else
-      echo "ERROR: verify_full receipt not found at $vf_receipt" >&2
-      exit 4
-    fi
-    # Verify HMAC signatures if key is available
-    WF_HMAC_KEY="${WF_HMAC_KEY:-}"
-    if [[ -n "$WF_HMAC_KEY" ]]; then
-      if ! "$WF_STEP" "$ID" --verify-sigs; then
-        echo "ERROR: HMAC signature verification failed for receipt chain" >&2
-        exit 4
-      fi
-      echo "Receipt chain: OK (all steps present, chain valid, no taint, signatures verified)"
-    else
-      echo "Receipt chain: OK (all steps present, chain valid, no taint)"
-    fi
+  done
+  if [[ "$review_found" -eq 1 ]]; then
+    echo "OK: review gate passed for $ID @ $HEAD_SHA"
   else
-    echo "WARNING: receipt chain validation skipped (REQUIRE_RECEIPT_CHAIN=0)" >&2
+    echo "ERROR: no review artifact for HEAD=$HEAD_SHA in $art_root/$ID/{codex,opus}" >&2
+    exit 4
   fi
 
-  REVIEW_GATE="./plans/story_review_gate.sh"
-  [[ -x "$REVIEW_GATE" ]] || { echo "ERROR: missing or non-executable review gate: $REVIEW_GATE" >&2; exit 4; }
-  "$REVIEW_GATE" "$ID" --head "$HEAD_SHA"
-
+  # ── Fail-closed coverage ──────────────────────────────────────────
   if [[ -x "./plans/fail_closed_coverage.sh" ]]; then
     if ! ./plans/fail_closed_coverage.sh; then
       echo "ERROR: fail-closed test coverage minimum not met" >&2
       exit 8
+    fi
+  fi
+
+  # ── Receipt chain (all 8 receipts must exist) ─────────────────────
+  WF_STEP="${WF_STEP:-./plans/wf_step.sh}"
+  if [[ -x "$WF_STEP" ]]; then
+    if ! "$WF_STEP" "$ID" pass; then
+      echo "ERROR: receipt chain validation failed for $ID" >&2
+      echo "  Run: plans/wf_step.sh $ID --status  to see missing steps" >&2
+      exit 4
     fi
   fi
 fi

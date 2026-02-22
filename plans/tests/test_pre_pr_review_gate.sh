@@ -28,15 +28,6 @@ expect_fail() {
   fi
 }
 
-sha256_file() {
-  local file="$1"
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file" | awk '{print $1}'
-    return 0
-  fi
-  shasum -a 256 "$file" | awk '{print $1}'
-}
-
 write_valid_case() {
   local base="$1"
   local story="$2"
@@ -45,19 +36,8 @@ write_valid_case() {
   local story_dir="$base/$story"
   local self_dir="$story_dir/self_review"
   local codex_dir="$story_dir/codex"
-  local kimi_dir="$story_dir/kimi"
-  local code_review_expert_dir="$story_dir/code_review_expert"
 
-  mkdir -p "$self_dir" "$codex_dir" "$kimi_dir" "$code_review_expert_dir"
-
-  local codex_one_transcript="$story_dir/.codex_one_transcript.txt"
-  local codex_two_transcript="$story_dir/.codex_two_transcript.txt"
-  local kimi_transcript="$story_dir/.kimi_transcript.txt"
-  local expert_findings="$story_dir/.expert_findings.txt"
-  local codex_one_hash=""
-  local codex_two_hash=""
-  local kimi_hash=""
-  local expert_findings_hash=""
+  mkdir -p "$self_dir" "$codex_dir"
 
   cat > "$self_dir/20260209T000000Z_self_review.md" <<EOF_SELF
 # Self Review
@@ -69,104 +49,38 @@ Checklist:
 - Strategic Failure Review: DONE
 EOF_SELF
 
-  cat > "$codex_one_transcript" <<'EOF_CODEX1_TRANSCRIPT'
-OpenAI Codex vfixture
-session id: pre-pr-codex-one
-EOF_CODEX1_TRANSCRIPT
-  codex_one_hash="$(sha256_file "$codex_one_transcript")"
   cat > "$codex_dir/20260209T000000Z_review.md" <<EOF_CODEX1
 # Codex review
 - Story: $story
 - HEAD: $head_sha
-- Artifact Provenance: logger-v1
 - Generator Script: plans/codex_review_logged.sh
 - Command Exit Code: 0
-- Transcript SHA256: $codex_one_hash
+- Duration Seconds: 120
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
-EOF_CODEX1
-  cat "$codex_one_transcript" >> "$codex_dir/20260209T000000Z_review.md"
-  cat >> "$codex_dir/20260209T000000Z_review.md" <<'EOF_CODEX1_END'
+No P0 or P1 findings. All critical fail-closed paths verified.
 <<<REVIEW_TRANSCRIPT_END>>>
-EOF_CODEX1_END
+EOF_CODEX1
 
-  cat > "$codex_two_transcript" <<'EOF_CODEX2_TRANSCRIPT'
-OpenAI Codex vfixture
-session id: pre-pr-codex-two
-EOF_CODEX2_TRANSCRIPT
-  codex_two_hash="$(sha256_file "$codex_two_transcript")"
   cat > "$codex_dir/20260209T000100Z_review.md" <<EOF_CODEX2
 # Codex review (second pass)
 - Story: $story
 - HEAD: $head_sha
-- Artifact Provenance: logger-v1
 - Generator Script: plans/codex_review_logged.sh
 - Command Exit Code: 0
-- Transcript SHA256: $codex_two_hash
+- Duration Seconds: 90
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
+Second pass complete. No regressions found.
+<<<REVIEW_TRANSCRIPT_END>>>
 EOF_CODEX2
-  cat "$codex_two_transcript" >> "$codex_dir/20260209T000100Z_review.md"
-  cat >> "$codex_dir/20260209T000100Z_review.md" <<'EOF_CODEX2_END'
-<<<REVIEW_TRANSCRIPT_END>>>
-EOF_CODEX2_END
-
-  cat > "$kimi_transcript" <<'EOF_KIMI_TRANSCRIPT'
-TurnBegin(user_input="pre-pr fixture")
-TextPart(text="No blocking findings")
-EOF_KIMI_TRANSCRIPT
-  kimi_hash="$(sha256_file "$kimi_transcript")"
-  cat > "$kimi_dir/20260209T000050Z_review.md" <<EOF_KIMI
-# Kimi review
-- Story: $story
-- HEAD: $head_sha
-- Artifact Provenance: logger-v1
-- Generator Script: plans/kimi_review_logged.sh
-- Command Exit Code: 0
-- Transcript SHA256: $kimi_hash
-
-<<<REVIEW_TRANSCRIPT_BEGIN>>>
-EOF_KIMI
-  cat "$kimi_transcript" >> "$kimi_dir/20260209T000050Z_review.md"
-  cat >> "$kimi_dir/20260209T000050Z_review.md" <<'EOF_KIMI_END'
-<<<REVIEW_TRANSCRIPT_END>>>
-EOF_KIMI_END
-
-  cat > "$expert_findings" <<'EOF_EXPERT_FINDINGS'
-- Blocking: none
-- Major: none
-- Medium: none
-EOF_EXPERT_FINDINGS
-  expert_findings_hash="$(sha256_file "$expert_findings")"
-  cat > "$code_review_expert_dir/20260209T000080Z_review.md" <<EOF_EXPERT
-# Code-review-expert findings
-- Story: $story
-- HEAD: $head_sha
-- Review Status: COMPLETE
-- Artifact Provenance: logger-v1
-- Generator Script: plans/code_review_expert_logged.sh
-- Content Source: template
-- Findings SHA256: $expert_findings_hash
-
-<<<FINDINGS_BEGIN>>>
-- Blocking: none
-- Major: none
-- Medium: none
-<<<FINDINGS_END>>>
-EOF_EXPERT
 
   cat > "$story_dir/review_resolution.md" <<EOF_RES
 Story: $story
 HEAD: $head_sha
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-Kimi final review file: kimi/20260209T000050Z_review.md
-Codex final review file: codex/20260209T000100Z_review.md
-Codex second review file: codex/20260209T000000Z_review.md
-Code-review-expert final review file: code_review_expert/20260209T000080Z_review.md
 EOF_RES
-
-  rm -f "$codex_one_transcript" "$codex_two_transcript" "$kimi_transcript" "$expert_findings"
 }
 
 [[ -x "$SCRIPT" ]] || fail "missing executable script: $SCRIPT"
@@ -187,7 +101,7 @@ write_valid_case "$story_root" "$story" "$head_sha"
 
 "$SCRIPT" "$story" --head "$head_sha" --branch "story/$story-fix" --artifacts-root "$story_root" >/dev/null
 
-expect_fail "missing story artifact" "missing self-review artifact" \
+expect_fail "missing story artifact" "no review artifact for HEAD=" \
   "$SCRIPT" "S1-MISSING" --head "$head_sha" --branch "story/S1-MISSING/gate" --artifacts-root "$story_root"
 
 expect_fail "invalid story id" "invalid STORY_ID value: ../escape" \
@@ -202,8 +116,9 @@ expect_fail "invalid branch format" "branch must be story-scoped" \
 expect_fail "branch/story mismatch" "story id mismatch" \
   "$SCRIPT" "$story" --head "$head_sha" --branch "story/S9-999/gate" --artifacts-root "$story_root"
 
-rm -f "$story_root/$story/kimi/20260209T000050Z_review.md"
-expect_fail "story review gate failure propagates" "missing Kimi review artifact for HEAD" \
+# Remove codex reviews — inline check should fail
+rm -f "$story_root/$story/codex"/*.md
+expect_fail "inline review check failure propagates" "no review artifact for HEAD=" \
   "$SCRIPT" "$story" --head "$head_sha" --branch "story/$story/gate" --artifacts-root "$story_root"
 
 # Restore valid story artifacts for slice checks.

@@ -108,7 +108,7 @@ errors="$(
           "id","priority","phase","slice","slice_ref","story_ref","category","description",
           "contract_refs","plan_refs","scope","acceptance","steps","verify","evidence",
           "contract_must_evidence","enforcing_contract_ats","reason_codes","enforcement_point",
-          "failure_mode","observability","implementation_tests",
+          "failure_mode","loss_mode","observability","implementation_tests",
           "dependencies","est_size","risk","needs_human_decision","passes"
         ])
         | map(err($id; "missing field " + .)))
@@ -191,6 +191,16 @@ errors="$(
         elif ([ $it.failure_mode[] | select(length==0) ] | length) > 0 then [err($id; "failure_mode entries must be non-empty strings")]
         elif ([ $it.failure_mode[] | select(test("^(stall|hang|backpressure|missing|stale|parse_error)$")|not) ] | length) > 0 then [err($id; "failure_mode entries must be stall|hang|backpressure|missing|stale|parse_error")]
         else [] end
+      )
+      + (
+        if ($it.loss_mode|type)!="object" then [err($id; "loss_mode must be object")]
+        else
+          (missing_fields($it.loss_mode; ["worst_case","fail_closed_cap","drift_metric"])
+            | map(err($id; "missing loss_mode." + .)))
+          + (if (($it.loss_mode.worst_case|type)!="string") then [err($id; "loss_mode.worst_case must be string")] else [] end)
+          + (if (($it.loss_mode.fail_closed_cap|type)!="string") then [err($id; "loss_mode.fail_closed_cap must be string")] else [] end)
+          + (if (($it.loss_mode.drift_metric|type)!="string") then [err($id; "loss_mode.drift_metric must be string")] else [] end)
+        end
       )
       + (
         if ($it.observability|type)!="object" then [err($id; "observability must be object")]

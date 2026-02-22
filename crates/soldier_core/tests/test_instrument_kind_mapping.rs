@@ -175,6 +175,83 @@ fn test_option_priority_over_future_when_both_set() {
     assert_eq!(derive_instrument_kind(&input), Some(InstrumentKind::Option));
 }
 
+// ─── GAP-002-1: get_instruments shape ────────────────────────────────────
+
+/// GAP-002-1: Table-driven test covering realistic get_instruments payloads.
+///
+/// Each row simulates field extraction from a Deribit /public/get_instruments
+/// response, proving the InstrumentKindInput abstraction layer correctly maps
+/// venue-shaped data to InstrumentKind. This covers instruments that the
+/// individual tests above do not: USDC-margined perpetual and ETH option
+/// with realistic field derivation comments.
+#[test]
+fn test_get_instruments_realistic_payloads() {
+    let cases = [
+        // BTC-PERPETUAL: kind=future, settlement_period=perpetual, BTC-settled
+        (
+            "BTC-PERPETUAL",
+            InstrumentKindInput {
+                is_option: false,          // kind="future"
+                is_future: true,
+                is_perpetual: true,        // settlement_period="perpetual"
+                is_linear: false,          // settlement_currency="BTC" != quote="USD"
+            },
+            Some(InstrumentKind::Perpetual),
+        ),
+        // BTCUSDC-PERP: kind=future, settlement_period=perpetual, USDC-settled
+        (
+            "BTCUSDC-PERP",
+            InstrumentKindInput {
+                is_option: false,
+                is_future: true,
+                is_perpetual: true,
+                is_linear: true,           // settlement_currency="USDC" == quote="USDC"
+            },
+            Some(InstrumentKind::LinearFuture),
+        ),
+        // ETH-28MAR25-3000-C: kind=option
+        (
+            "ETH-28MAR25-3000-C",
+            InstrumentKindInput {
+                is_option: true,           // kind="option"
+                is_future: false,
+                is_perpetual: false,
+                is_linear: false,
+            },
+            Some(InstrumentKind::Option),
+        ),
+        // BTC-28MAR25: kind=future, dated, BTC-settled → InverseFuture
+        (
+            "BTC-28MAR25",
+            InstrumentKindInput {
+                is_option: false,
+                is_future: true,
+                is_perpetual: false,       // settlement_period="month"
+                is_linear: false,          // settlement_currency="BTC" != quote="USD"
+            },
+            Some(InstrumentKind::InverseFuture),
+        ),
+        // BTC-FS-28MAR25_27JUN25: combo → None (out of scope)
+        (
+            "BTC-FS-28MAR25_27JUN25",
+            InstrumentKindInput {
+                is_option: false,
+                is_future: false,          // kind="future_combo" → not a simple future
+                is_perpetual: false,
+                is_linear: false,
+            },
+            None,
+        ),
+    ];
+    for (name, input, expected) in cases {
+        assert_eq!(
+            derive_instrument_kind(&input),
+            expected,
+            "get_instruments mapping failed for {name}"
+        );
+    }
+}
+
 // ─── RiskState enum ──────────────────────────────────────────────────────
 
 /// CONTRACT.md: RiskState includes Healthy, Degraded, Maintenance, Kill

@@ -395,5 +395,6 @@ Key questions:
 - Clear `.context/prd_slice.json` and `.context/prd_audit_cache.json` before re-running slice audits after modifying prd.json
 - Valid `enforcement_point` values: `PolicyGuard|EvidenceGuard|DispatcherChokepoint|WAL|AtomicGroupExecutor|StatusEndpoint`
 - Valid `failure_mode` values: `stall|hang|backpressure|missing|stale|parse_error`
+- Valid `loss_mode` subfields: `worst_case` (economic worst case), `fail_closed_cap` (how fail-closed limits damage), `drift_metric` (runtime metric to monitor for drift). All three required non-empty for `passes=true` (exempt: policy/certification)
 - `enforcing_contract_ats` must reference existing AT-XXX anchors in CONTRACT.md (not placeholder AT-000)
 - PRD `scope.touch` should stay within a single subsystem (crate) to keep stories bite-sized

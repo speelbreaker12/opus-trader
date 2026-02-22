@@ -179,15 +179,20 @@ fn expiry_guard_rejected() {
 
 // ── Liquidity Gate ───────────────────────────────────────────────────────
 
-use soldier_core::execution::gate::{LiquidityGateRejectReason, LiquidityGateResult};
+use soldier_core::execution::gate::{
+    LiquidityGateDecision, LiquidityGateMetadata, LiquidityGateRejectReason, LiquidityGateResult,
+};
 
 #[test]
 fn liquidity_allowed() {
-    let result = LiquidityGateResult::Allowed {
-        wap: Some(100.0),
-        slippage_bps: Some(5.0),
-        fillable_qty: Some(10.0),
-        allowed_qty: Some(10.0),
+    let result = LiquidityGateResult {
+        decision: LiquidityGateDecision::Allowed,
+        metadata: LiquidityGateMetadata {
+            wap: Some(100.0),
+            slippage_bps: Some(5.0),
+            fillable_qty: Some(10.0),
+            allowed_qty: Some(10.0),
+        },
     };
     let outcome = GateOutcome::from_liquidity(GateStep::LiquidityGate, &result);
     assert_eq!(outcome.to_legacy(), (true, None));
@@ -195,12 +200,16 @@ fn liquidity_allowed() {
 
 #[test]
 fn liquidity_no_l2() {
-    let result = LiquidityGateResult::Rejected {
-        reason: LiquidityGateRejectReason::LiquidityGateNoL2,
-        wap: None,
-        slippage_bps: None,
-        fillable_qty: None,
-        allowed_qty: None,
+    let result = LiquidityGateResult {
+        decision: LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2,
+        },
+        metadata: LiquidityGateMetadata {
+            wap: None,
+            slippage_bps: None,
+            fillable_qty: None,
+            allowed_qty: None,
+        },
     };
     let outcome = GateOutcome::from_liquidity(GateStep::LiquidityGate, &result);
     assert_eq!(
@@ -211,12 +220,16 @@ fn liquidity_no_l2() {
 
 #[test]
 fn liquidity_slippage_too_high() {
-    let result = LiquidityGateResult::Rejected {
-        reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-        wap: Some(100.5),
-        slippage_bps: Some(50.0),
-        fillable_qty: Some(5.0),
-        allowed_qty: Some(5.0),
+    let result = LiquidityGateResult {
+        decision: LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+        },
+        metadata: LiquidityGateMetadata {
+            wap: Some(100.5),
+            slippage_bps: Some(50.0),
+            fillable_qty: Some(5.0),
+            allowed_qty: Some(5.0),
+        },
     };
     let outcome = GateOutcome::from_liquidity(GateStep::LiquidityGate, &result);
     assert_eq!(
@@ -227,12 +240,16 @@ fn liquidity_slippage_too_high() {
 
 #[test]
 fn liquidity_insufficient_depth() {
-    let result = LiquidityGateResult::Rejected {
-        reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
-        wap: Some(101.0),
-        slippage_bps: Some(20.0),
-        fillable_qty: Some(2.0),
-        allowed_qty: Some(2.0),
+    let result = LiquidityGateResult {
+        decision: LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::InsufficientDepthWithinBudget,
+        },
+        metadata: LiquidityGateMetadata {
+            wap: Some(101.0),
+            slippage_bps: Some(20.0),
+            fillable_qty: Some(2.0),
+            allowed_qty: Some(2.0),
+        },
     };
     let outcome = GateOutcome::from_liquidity(GateStep::LiquidityGate, &result);
     assert_eq!(

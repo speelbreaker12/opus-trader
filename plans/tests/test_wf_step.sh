@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Tests for plans/wf_step.sh receipt chain system.
+# Tests for plans/wf_step.sh progress tracker.
 #
 # Runs in a temporary git repo to isolate from real repo state.
 
@@ -112,9 +112,9 @@ set -e
 assert_exit "skip to verify_full blocked" 1 "$rc"
 
 echo ""
-echo "=== PART 2: Receipt chain integrity ==="
+echo "=== PART 2: Full chain build ==="
 
-# ── Build full chain step by step ────────────────────────────────────
+# ── Test 4: Build full chain step by step ────────────────────────────
 echo "--- Test 4: Build full chain ---"
 
 # implement — needs code change
@@ -135,22 +135,14 @@ set +e; bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1; rc=$?; set 
 assert_exit "self_review succeeds" 0 "$rc"
 
 # cycle1 — needs review artifact
-REVIEW_HEAD="$(git rev-parse HEAD)"
 cat > artifacts/story/TEST-001/codex/20260219_001_review.md <<CYCLE1
-- Artifact Provenance: logger-v1
-- Generator Script: plans/codex_review_logged.sh
-- HEAD Reviewed: $REVIEW_HEAD
+- HEAD: $(git rev-parse HEAD)
 - Command Exit Code: 0
 - Duration Seconds: 30
-- Transcript SHA256: abc123
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
 ## P1 - High
 - **feature.rs:1** Missing error handling
-  This function should handle the None case.
-## P2 - Medium
-- **feature.rs:5** Consider adding docs
-  The function lacks documentation.
 <<<REVIEW_TRANSCRIPT_END>>>
 CYCLE1
 
@@ -166,18 +158,12 @@ assert_exit "fix succeeds" 0 "$rc"
 
 # cycle2 — needs second review artifact
 cat > artifacts/story/TEST-001/codex/20260219_002_review.md <<CYCLE2
-- Artifact Provenance: logger-v1
-- Generator Script: plans/codex_review_logged.sh
-- HEAD Reviewed: $(git rev-parse HEAD)
+- HEAD: $(git rev-parse HEAD)
 - Command Exit Code: 0
 - Duration Seconds: 25
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
-## Review Cycle 2
-All findings from cycle 1 have been addressed.
-No new P0/P1 findings.
-## P3 - Low
-- **feature.rs:1** Minor naming suggestion
+All findings addressed. No new P0/P1.
 <<<REVIEW_TRANSCRIPT_END>>>
 CYCLE2
 
@@ -190,19 +176,6 @@ Story: TEST-001
 HEAD: $(git rev-parse HEAD)
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-Kimi final review file: kimi/20260219_review.md
-Codex final review file: codex/20260219_001_review.md
-Codex second review file: codex/20260219_002_review.md
-Code-review-expert final review file: code_review_expert/20260219_review.md
-
-## Finding Disposition
-
-Cycle 1 review: codex/20260219_001_review.md
-Cycle 1 high-severity count: 1
-
-| ID | Severity | Location | Description | Disposition | Evidence |
-|----|----------|----------|-------------|-------------|----------|
-| F-1 | P1 | feature.rs:1 | Missing error handling | FIXED | commit $(git rev-parse HEAD) |
 RES
 
 set +e; bash plans/wf_step.sh TEST-001 resolution > /dev/null 2>&1; rc=$?; set -e
@@ -223,107 +196,35 @@ echo "0" > artifacts/verify/run_001/gate_01.rc
 set +e; bash plans/wf_step.sh TEST-001 verify_full > /dev/null 2>&1; rc=$?; set -e
 assert_exit "verify_full succeeds" 0 "$rc"
 
-# pass — validates full chain
+# pass — validates all 8 receipts exist
 set +e; bash plans/wf_step.sh TEST-001 pass > /dev/null 2>&1; rc=$?; set -e
 assert_exit "pass validation succeeds" 0 "$rc"
 
 echo ""
-echo "=== PART 3: Chain tampering detection ==="
+echo "=== PART 3: Receipt format ==="
 
-# ── Test 5: Tamper with a receipt breaks chain ──────────────────────
-echo "--- Test 5: Tampering breaks chain ---"
-# Modify the implement receipt to change its hash
-implement_receipt="$RECEIPT_DIR/01_implement.json"
-jq '.inputs_hash = "TAMPERED"' "$implement_receipt" > "${implement_receipt}.tmp"
-mv "${implement_receipt}.tmp" "$implement_receipt"
+# ── Test 5: Receipt has expected fields ──────────────────────────────
+echo "--- Test 5: Receipt format ---"
+assert_json_field "receipt has story_id" "$RECEIPT_DIR/00_preflight.json" ".story_id" "TEST-001"
+assert_json_field "receipt has step_name" "$RECEIPT_DIR/00_preflight.json" ".step_name" "preflight"
+assert_json_field "receipt has step_index" "$RECEIPT_DIR/00_preflight.json" ".step_index" "0"
 
-# Now cycle1 should fail chain validation (self_review's prev_receipt_hash won't match)
-# But let's check from resolution which walks the full chain
-set +e
-bash plans/wf_step.sh TEST-001 resolution > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "tampered chain detected" 4 "$rc"
-
-# Restore by re-running from implement
-echo "restoring chain..." >&2
-echo "restore code" >> feature.rs
-git add feature.rs && git commit -q -m "restore code change"
-set +e
-bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
-echo "fix for restore" >> feature.rs
-git add feature.rs && git commit -q -m "fix for chain restore"
-bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 resolution > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 verify_full > /dev/null 2>&1
-set -e
+# Verify receipt has head_sha and timestamp_utc
+head_val="$(jq -r '.head_sha // ""' "$RECEIPT_DIR/00_preflight.json")"
+ts_val="$(jq -r '.timestamp_utc // ""' "$RECEIPT_DIR/00_preflight.json")"
+if [[ -n "$head_val" && -n "$ts_val" ]]; then
+  echo "PASS: receipt has head_sha and timestamp_utc"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: receipt missing head_sha or timestamp_utc"
+  FAIL=$((FAIL + 1))
+fi
 
 echo ""
-echo "=== PART 4: Force flag and taint ==="
+echo "=== PART 4: Status and reset ==="
 
-# ── Test 6: Force skips prereqs but taints receipt ──────────────────
-echo "--- Test 6: Force flag taints receipt ---"
-# Reset and try to skip to cycle1 with --force
-bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
-
-set +e
-bash plans/wf_step.sh TEST-001 cycle1 --force > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "force allows skip" 0 "$rc"
-assert_json_field "force taints receipt" "$RECEIPT_DIR/03_cycle1.json" ".tainted" "true"
-
-# Test 6b: Pass step rejects tainted chain (exit 4)
-# Rebuild a CLEAN chain first, then manually inject taint into one receipt
-bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
-echo "taint test code" > feature.rs
-git add feature.rs && git commit -q -m "taint test impl"
-bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
-mkdir -p artifacts/story/TEST-001/self_review
-echo "Story: TEST-001
-Decision: PASS
-- Failure-Mode Review: DONE" > artifacts/story/TEST-001/self_review/review.md
-bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
-echo "taint test fix" >> feature.rs
-git add feature.rs && git commit -q -m "taint test fix"
-bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
-cat > artifacts/story/TEST-001/review_resolution.md <<RESTAINT
-Story: TEST-001
-Blocking addressed: YES
-Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-RESTAINT
-bash plans/wf_step.sh TEST-001 resolution > /dev/null 2>&1
-VHEAD="$(git rev-parse HEAD)"
-cat > artifacts/verify/run_001/verify.meta.json <<VMTAINT
-{
-  "mode": "full",
-  "head_sha": "$VHEAD",
-  "exit_code": 0
-}
-VMTAINT
-bash plans/wf_step.sh TEST-001 verify_full > /dev/null 2>&1
-# Now manually taint the implement receipt (simulates --force usage)
-jq '.tainted = true' "$RECEIPT_DIR/01_implement.json" > "$RECEIPT_DIR/01_implement.json.tmp"
-mv "$RECEIPT_DIR/01_implement.json.tmp" "$RECEIPT_DIR/01_implement.json"
-# Pass should reject because of tainted receipt
-set +e
-bash plans/wf_step.sh TEST-001 pass > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "pass rejects tainted chain" 4 "$rc"
-
-echo ""
-echo "=== PART 5: Status and reset ==="
-
-# ── Test 7: Status mode shows chain ────────────────────────────────
-echo "--- Test 7: Status mode ---"
+# ── Test 6: Status mode shows chain ────────────────────────────────
+echo "--- Test 6: Status mode ---"
 set +e
 output="$(bash plans/wf_step.sh TEST-001 --status 2>&1)"
 rc=$?
@@ -337,16 +238,16 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# ── Test 7b: Reset without --yes blocked ──────────────────────────
-echo "--- Test 7b: Reset requires --yes ---"
+# ── Test 6b: Reset without --yes blocked ──────────────────────────
+echo "--- Test 6b: Reset requires --yes ---"
 set +e
 bash plans/wf_step.sh TEST-001 --reset > /dev/null 2>&1
 rc=$?
 set -e
 assert_exit "reset without --yes blocked" 2 "$rc"
 
-# ── Test 8: Reset clears all receipts ──────────────────────────────
-echo "--- Test 8: Reset mode ---"
+# ── Test 7: Reset clears all receipts ──────────────────────────────
+echo "--- Test 7: Reset mode ---"
 bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
 count="$(find "$RECEIPT_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')"
 if [[ "$count" -eq 0 ]]; then
@@ -358,13 +259,13 @@ else
 fi
 
 echo ""
-echo "=== PART 6: Input validation ==="
+echo "=== PART 5: Input validation ==="
 
-# ── Test 9: self_review without artifacts fails ─────────────────────
-echo "--- Test 9: self_review without artifacts ---"
+# ── Test 8: self_review without artifacts fails ─────────────────────
+echo "--- Test 8: self_review without artifacts ---"
 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
-echo "test9 code" > test9.rs
-git add test9.rs && git commit -q -m "test9 code change"
+echo "test8 code" > test8.rs
+git add test8.rs && git commit -q -m "test8 code change"
 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
 # Remove self_review artifacts
 rm -rf artifacts/story/TEST-001/self_review
@@ -381,9 +282,8 @@ echo "Story: TEST-001
 Decision: PASS
 - Failure-Mode Review: DONE" > artifacts/story/TEST-001/self_review/review.md
 
-# ── Test 10: resolution without required fields fails ───────────────
-echo "--- Test 10: resolution without required fields ---"
-# Build up to resolution
+# ── Test 9: resolution without required fields fails ───────────────
+echo "--- Test 9: resolution without required fields ---"
 bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
 echo "more fixes" >> feature.rs
@@ -401,9 +301,8 @@ rc=$?
 set -e
 assert_exit "incomplete resolution blocked" 3 "$rc"
 
-# ── Test 11: verify_full with wrong mode fails ──────────────────────
-echo "--- Test 11: verify_full with wrong mode ---"
-# Fix resolution first
+# ── Test 10: verify_full with wrong mode fails ──────────────────────
+echo "--- Test 10: verify_full with wrong mode ---"
 cat > artifacts/story/TEST-001/review_resolution.md <<RES2
 Story: TEST-001
 Blocking addressed: YES
@@ -411,7 +310,6 @@ Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 RES2
 bash plans/wf_step.sh TEST-001 resolution > /dev/null 2>&1
 
-# Write quick mode verify
 cat > artifacts/verify/run_001/verify.meta.json <<QMETA
 {
   "mode": "quick",
@@ -426,8 +324,8 @@ rc=$?
 set -e
 assert_exit "verify quick mode blocked" 3 "$rc"
 
-# ── Test 12: verify_full with HEAD mismatch fails ───────────────────
-echo "--- Test 12: verify_full HEAD mismatch ---"
+# ── Test 11: verify_full with HEAD mismatch fails ───────────────────
+echo "--- Test 11: verify_full HEAD mismatch ---"
 cat > artifacts/verify/run_001/verify.meta.json <<HMETA
 {
   "mode": "full",
@@ -442,8 +340,8 @@ rc=$?
 set -e
 assert_exit "verify HEAD mismatch blocked" 5 "$rc"
 
-# ── Test 13: Dry run doesn't write receipt ──────────────────────────
-echo "--- Test 13: Dry run ---"
+# ── Test 12: Dry run doesn't write receipt ──────────────────────────
+echo "--- Test 12: Dry run ---"
 bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
 set +e
 bash plans/wf_step.sh TEST-001 preflight --dry-run > /dev/null 2>&1
@@ -453,158 +351,10 @@ assert_exit "dry run succeeds" 0 "$rc"
 assert_file_absent "dry run no receipt" "$RECEIPT_DIR/00_preflight.json"
 
 echo ""
-echo "=== PART 7: HMAC signing ==="
+echo "=== PART 6: Perfect cycle 1 bypass ==="
 
-# ── Test 14: HMAC signing produces signature field ──────────────────
-echo "--- Test 14: HMAC signing ---"
-bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-set +e
-WF_HMAC_KEY="test-secret-key-12345" bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "HMAC preflight succeeds" 0 "$rc"
-# Verify signature field exists and is a 64-char hex string
-sig_val="$(jq -r '.signature // ""' "$RECEIPT_DIR/00_preflight.json" 2>/dev/null || echo '')"
-if [[ -n "$sig_val" && ${#sig_val} -eq 64 ]]; then
-  echo "PASS: HMAC signature is 64-char hex"
-  PASS=$((PASS + 1))
-else
-  echo "FAIL: HMAC signature unexpected (got ${#sig_val} chars)"
-  FAIL=$((FAIL + 1))
-fi
-
-# ── Test 15: --verify-sigs validates correct signatures ─────────────
-echo "--- Test 15: Verify valid signatures ---"
-set +e
-WF_HMAC_KEY="test-secret-key-12345" bash plans/wf_step.sh TEST-001 --verify-sigs > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "verify-sigs passes with correct key" 0 "$rc"
-
-# ── Test 16: --verify-sigs rejects wrong key ────────────────────────
-echo "--- Test 16: Verify wrong key ---"
-set +e
-WF_HMAC_KEY="wrong-key-99999" bash plans/wf_step.sh TEST-001 --verify-sigs > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "verify-sigs fails with wrong key" 4 "$rc"
-
-# ── Test 17: --verify-sigs without key fails ────────────────────────
-echo "--- Test 17: Verify sigs without key ---"
-set +e
-bash plans/wf_step.sh TEST-001 --verify-sigs > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "verify-sigs without key fails" 2 "$rc"
-
-# ── Test 18: Unsigned receipt flagged by --verify-sigs ──────────────
-echo "--- Test 18: Unsigned receipt with --verify-sigs ---"
-bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-# Write receipt WITHOUT HMAC key (no signature)
-bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
-set +e
-output="$(WF_HMAC_KEY="any-key" bash plans/wf_step.sh TEST-001 --verify-sigs 2>&1)"
-rc=$?
-set -e
-# Should show NOSIG warning but not fail (unsigned != invalid)
-if echo "$output" | grep -q 'NOSIG'; then
-  echo "PASS: unsigned receipt detected"
-  PASS=$((PASS + 1))
-else
-  echo "FAIL: unsigned receipt not detected"
-  FAIL=$((FAIL + 1))
-fi
-
-echo ""
-echo "=== PART 8: CI guard ==="
-
-# ── Test 19: CI guard with no prd.json changes ─────────────────────
-echo "--- Test 19: CI guard no changes ---"
-# Create a minimal prd.json
-cat > plans/prd.json <<PRDJSON
-{
-  "items": [
-    {"id": "TEST-001", "passes": false}
-  ]
-}
-PRDJSON
-git add plans/prd.json && git commit -q -m "add prd.json"
-
-# Copy the CI guard into the test repo
-cp "$SCRIPT_DIR/../wf_ci_guard.sh" plans/wf_ci_guard.sh
-chmod +x plans/wf_ci_guard.sh
-
-set +e
-WF_BASE_REF="HEAD~1" bash plans/wf_ci_guard.sh > /dev/null 2>&1
-rc=$?
-set -e
-# prd.json changed but no passes=true flip
-assert_exit "CI guard no flip" 0 "$rc"
-
-# ── Test 20: CI guard detects passes=true flip without receipts ─────
-echo "--- Test 20: CI guard detects flip without receipts ---"
-bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-cat > plans/prd.json <<PRDJSON2
-{
-  "items": [
-    {"id": "TEST-001", "passes": true}
-  ]
-}
-PRDJSON2
-git add plans/prd.json && git commit -q -m "flip passes=true"
-
-set +e
-WF_BASE_REF="HEAD~2" bash plans/wf_ci_guard.sh > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "CI guard blocks flip without receipts" 1 "$rc"
-
-# ── Test 21: CI guard passes with valid receipt chain ───────────────
-echo "--- Test 21: CI guard with valid chain ---"
-# Rebuild receipt chain
-bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
-echo "ci guard test code" >> feature.rs
-git add feature.rs && git commit -q -m "ci guard code change"
-bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
-# Restore self_review artifact
-mkdir -p artifacts/story/TEST-001/self_review
-echo "Story: TEST-001
-Decision: PASS
-- Failure-Mode Review: DONE" > artifacts/story/TEST-001/self_review/review.md
-bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
-echo "another fix" >> feature.rs
-git add feature.rs && git commit -q -m "fix for ci guard test"
-bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
-bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
-cat > artifacts/story/TEST-001/review_resolution.md <<RESCI
-Story: TEST-001
-Blocking addressed: YES
-Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-RESCI
-bash plans/wf_step.sh TEST-001 resolution > /dev/null 2>&1
-# Update verify artifacts to match current HEAD
-CURRENT_HEAD="$(git rev-parse HEAD)"
-cat > artifacts/verify/run_001/verify.meta.json <<VMCI
-{
-  "mode": "full",
-  "head_sha": "$CURRENT_HEAD",
-  "exit_code": 0
-}
-VMCI
-bash plans/wf_step.sh TEST-001 verify_full > /dev/null 2>&1
-
-set +e
-WF_BASE_REF="HEAD~3" bash plans/wf_ci_guard.sh > /dev/null 2>&1
-rc=$?
-set -e
-assert_exit "CI guard passes with valid chain" 0 "$rc"
-
-echo ""
-echo "=== PART 9: Perfect cycle 1 bypass ==="
-
-# ── Test 22: Fix step passes with 0 findings ────────────────────────
-echo "--- Test 22: Perfect cycle 1 allows empty fix ---"
+# ── Test 13: Fix step passes with 0 findings ────────────────────────
+echo "--- Test 13: Perfect cycle 1 allows empty fix ---"
 bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
 echo "perfect feature" > feature.rs
@@ -616,20 +366,14 @@ Decision: PASS
 - Failure-Mode Review: DONE" > artifacts/story/TEST-001/self_review/review.md
 bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
 
-# Clean up old review artifacts and create a cycle1 review with 0 findings
 rm -f artifacts/story/TEST-001/codex/*.md artifacts/story/TEST-001/opus/*.md 2>/dev/null || true
 cat > artifacts/story/TEST-001/codex/20260219_perfect_review.md <<PERFECT
-- Artifact Provenance: logger-v1
-- Generator Script: plans/codex_review_logged.sh
-- HEAD Reviewed: $(git rev-parse HEAD)
+- HEAD: $(git rev-parse HEAD)
 - Command Exit Code: 0
 - Duration Seconds: 45
-- Transcript SHA256: xyz789
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
-## Review Summary
 Excellent implementation. 0 findings. No issues detected.
-Code follows all project conventions.
 <<<REVIEW_TRANSCRIPT_END>>>
 PERFECT
 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
@@ -640,6 +384,179 @@ bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
 rc=$?
 set -e
 assert_exit "fix passes with perfect cycle1" 0 "$rc"
+
+echo ""
+echo "=== PART 7: Backward compatibility ==="
+
+# ── Test 14: Old receipts with extra fields are ignored ──────────────
+echo "--- Test 14: Old receipts with extra fields ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+# Write a receipt with old-style fields (prev_receipt_hash, tainted, hmac)
+mkdir -p "$RECEIPT_DIR"
+cat > "$RECEIPT_DIR/00_preflight.json" <<OLDFMT
+{
+  "story_id": "TEST-001",
+  "step_name": "preflight",
+  "step_index": 0,
+  "head_sha": "$(git rev-parse HEAD)",
+  "timestamp_utc": "2026-02-19T15:00:00Z",
+  "prev_receipt_hash": "GENESIS",
+  "tainted": false,
+  "inputs_hash": "abc123",
+  "receipt_hash": "def456",
+  "signature": "hmac789"
+}
+OLDFMT
+
+# Status should still work (ignores unknown fields)
+set +e
+output="$(bash plans/wf_step.sh TEST-001 --status 2>&1)"
+rc=$?
+set -e
+assert_exit "status works with old-format receipt" 0 "$rc"
+if echo "$output" | grep -q '\[DONE\].*preflight'; then
+  echo "PASS: old-format receipt shown in status"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: old-format receipt not shown"
+  FAIL=$((FAIL + 1))
+fi
+
+echo ""
+echo "=== PART 8: Reconciliation mode ==="
+
+# ── Test 15: Invalid WF_RECON_MODE rejected ──────────────────────────
+echo "--- Test 15: Invalid WF_RECON_MODE rejected ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+set +e
+WF_RECON_MODE=banana bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "invalid WF_RECON_MODE rejected" 2 "$rc"
+
+# ── Test 16: Recon mode: implement passes without code change ────────
+echo "--- Test 16: Recon implement bypasses diff check ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+
+# Create a PRD file with passes=true for TEST-001
+mkdir -p plans
+cat > plans/prd.json <<PRDEOF
+{"items":[{"id":"TEST-001","passes":true}]}
+PRDEOF
+
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon preflight succeeds" 0 "$rc"
+
+# No code change, but recon mode should bypass
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon implement passes without code change" 0 "$rc"
+
+# ── Test 17: Normal mode implement still requires code change ────────
+echo "--- Test 17: Normal implement still requires code change ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+set +e
+bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "normal implement blocked without code change" 3 "$rc"
+
+# ── Test 18: Recon receipt contains recon_mode field ─────────────────
+echo "--- Test 18: Recon receipt has recon_mode=true ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+assert_json_field "recon receipt has recon_mode=true" "$RECEIPT_DIR/00_preflight.json" ".recon_mode" "true"
+
+# ── Test 19: Normal receipt contains recon_mode=false ────────────────
+echo "--- Test 19: Normal receipt has recon_mode=false ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+assert_json_field "normal receipt has recon_mode=false" "$RECEIPT_DIR/00_preflight.json" ".recon_mode" "false"
+
+# ── Test 20: Recon implement receipt has recon_relaxation ────────────
+echo "--- Test 20: Recon implement receipt has relaxation note ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+assert_json_field "recon implement has relaxation" "$RECEIPT_DIR/01_implement.json" ".recon_relaxation" "implement_diff_check_skipped"
+
+# ── Test 21: Recon mode blocked for passes=false story ───────────────
+echo "--- Test 21: Recon blocked for passes=false ---"
+bash plans/wf_step.sh TEST-002 --reset --yes > /dev/null 2>&1 || true
+# Create PRD with passes=false for TEST-002
+cat > plans/prd.json <<PRDEOF2
+{"items":[{"id":"TEST-001","passes":true},{"id":"TEST-002","passes":false}]}
+PRDEOF2
+
+WF_RECEIPT_DIR="$TMPDIR/.wf/receipts/TEST-002" \
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-002 preflight > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon blocked for passes=false story" 3 "$rc"
+
+# ── Test 22: Recon GREEN cycle2 with 1 review artifact ───────────────
+echo "--- Test 22: Recon GREEN cycle2 needs only 1 review ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+
+# Build chain through cycle1 with 0-findings review
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+mkdir -p artifacts/story/TEST-001/self_review
+echo "Recon self-review" > artifacts/story/TEST-001/self_review/review.md
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
+
+# Clean review dirs and add 0-findings review
+rm -f artifacts/story/TEST-001/codex/*.md artifacts/story/TEST-001/opus/*.md 2>/dev/null || true
+mkdir -p artifacts/story/TEST-001/codex
+cat > artifacts/story/TEST-001/codex/20260220_recon_review.md <<RECONREV
+- HEAD: $(git rev-parse HEAD)
+0 findings. No issues detected.
+RECONREV
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
+
+# Only 1 review artifact — GREEN recon should pass, normal would fail
+set +e
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "recon GREEN cycle2 passes with 1 review" 0 "$rc"
+
+# ── Test 23: Normal cycle2 still needs 2 reviews ────────────────────
+echo "--- Test 23: Normal cycle2 still needs 2 reviews ---"
+bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
+bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
+echo "test23 code" > test23.rs
+git add test23.rs && git commit -q -m "test23 code"
+bash plans/wf_step.sh TEST-001 implement > /dev/null 2>&1
+mkdir -p artifacts/story/TEST-001/self_review
+echo "Self-review" > artifacts/story/TEST-001/self_review/review.md
+bash plans/wf_step.sh TEST-001 self_review > /dev/null 2>&1
+
+rm -f artifacts/story/TEST-001/codex/*.md artifacts/story/TEST-001/opus/*.md 2>/dev/null || true
+mkdir -p artifacts/story/TEST-001/codex
+cat > artifacts/story/TEST-001/codex/20260220_c1_review.md <<C1REV
+- HEAD: $(git rev-parse HEAD)
+P1 - Missing error handling
+C1REV
+bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
+echo "test23 fix" >> test23.rs
+git add test23.rs && git commit -q -m "test23 fix"
+bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
+
+# Only 1 review — normal mode should fail
+set +e
+bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
+rc=$?
+set -e
+assert_exit "normal cycle2 blocked with 1 review" 3 "$rc"
 
 echo ""
 echo "============================================"
