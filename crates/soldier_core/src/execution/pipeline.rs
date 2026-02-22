@@ -9,13 +9,12 @@ use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 use super::gate_outcome::GateOutcome;
-#[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateStep, LiquidityGateInput,
-    LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PreflightInput, PreflightMetrics,
-    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, RejectReasonCode, Side,
-    build_gate_results, build_order_intent_with_reject_reason_code, compute_limit_price,
-    evaluate_liquidity_gate, evaluate_net_edge,
+    LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PrecomputedWalGate, PreflightInput,
+    PreflightMetrics, PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics,
+    RejectReasonCode, Side, build_gate_results, build_order_intent_with_optional_wal_gate,
+    compute_limit_price, evaluate_liquidity_gate, evaluate_net_edge, extract_reject_reason_code,
 };
 
 /// Quantize inputs required by the execution pipeline.
@@ -257,16 +256,15 @@ pub fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
-    // TODO(Phase 2): migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
-    // TODO(Phase 2): migrate open_runtime.rs GateResults construction to use GateOutcome converters.
-    #[allow(deprecated)]
-    let (decision, reject_reason_code) = build_order_intent_with_reject_reason_code(
+    let mut wal_gate = PrecomputedWalGate(input.wal_recorded);
+    let decision = build_order_intent_with_optional_wal_gate(
         input.intent_class,
         input.risk_state,
         &mut metrics.chokepoint,
         &gate_results,
-        &gate_reject_codes,
+        Some(&mut wal_gate),
     );
+    let reject_reason_code = extract_reject_reason_code(&decision, &gate_reject_codes);
 
     PipelineResult {
         decision,

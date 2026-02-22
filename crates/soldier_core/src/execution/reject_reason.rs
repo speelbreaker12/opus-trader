@@ -1,6 +1,6 @@
 //! Reject reason registry for pre-dispatch intent rejections.
 
-use super::build_order_intent::{ChokeRejectReason, GateStep};
+use super::build_order_intent::{ChokeRejectReason, ChokeResult, GateStep};
 
 /// Contract token for pre-dispatch rejection causes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -129,12 +129,31 @@ pub fn reject_reason_registry_contains(code: RejectReasonCode) -> bool {
     REGISTRY.contains(&code)
 }
 
+/// Resolve typed gate reject code, warning on fallback (P14).
+fn resolve_or_warn(
+    gate_name: &str,
+    typed: Option<RejectReasonCode>,
+    fallback: RejectReasonCode,
+) -> RejectReasonCode {
+    match typed {
+        Some(code) => code,
+        None => {
+            tracing::warn!(
+                gate = gate_name,
+                fallback = fallback.as_str(),
+                "reject_reason_from_chokepoint: gate reject code missing, using fallback"
+            );
+            fallback
+        }
+    }
+}
+
 /// Map chokepoint rejection output to a contract registry token.
 ///
-/// Fallback codes (`.unwrap_or(...)`) are safety nets for direct callers that
-/// bypass `evaluate_intent_pipeline`. The production pipeline always populates
-/// `GateRejectCodes` from typed gate results, making the fallbacks dead code
-/// in the normal execution path.
+/// Fallback codes (via `resolve_or_warn`) are safety nets for direct callers
+/// that bypass `evaluate_intent_pipeline`. The production pipeline always
+/// populates `GateRejectCodes` from typed gate results, making the fallbacks
+/// dead code in the normal execution path.
 pub fn reject_reason_from_chokepoint(
     reason: &ChokeRejectReason,
     gate_reject_codes: &GateRejectCodes,
@@ -144,15 +163,19 @@ pub fn reject_reason_from_chokepoint(
         ChokeRejectReason::GateRejected {
             gate: GateStep::Preflight,
             ..
-        } => gate_reject_codes
-            .preflight
-            .unwrap_or(RejectReasonCode::OrderTypeStopForbidden),
+        } => resolve_or_warn(
+            "Preflight",
+            gate_reject_codes.preflight,
+            RejectReasonCode::OrderTypeStopForbidden,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::Quantize,
             ..
-        } => gate_reject_codes
-            .quantize
-            .unwrap_or(RejectReasonCode::InstrumentMetadataMissing),
+        } => resolve_or_warn(
+            "Quantize",
+            gate_reject_codes.quantize,
+            RejectReasonCode::InstrumentMetadataMissing,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::DispatchConsistency,
             ..
@@ -160,42 +183,72 @@ pub fn reject_reason_from_chokepoint(
         ChokeRejectReason::GateRejected {
             gate: GateStep::FeeCacheCheck,
             ..
-        } => gate_reject_codes
-            .fee_cache
-            .unwrap_or(RejectReasonCode::FeeCacheStale),
+        } => resolve_or_warn(
+            "FeeCacheCheck",
+            gate_reject_codes.fee_cache,
+            RejectReasonCode::FeeCacheStale,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::ExpiryGuard,
             ..
-        } => gate_reject_codes
-            .expiry_guard
-            .unwrap_or(RejectReasonCode::InstrumentExpiredOrDelisted),
+        } => resolve_or_warn(
+            "ExpiryGuard",
+            gate_reject_codes.expiry_guard,
+            RejectReasonCode::InstrumentExpiredOrDelisted,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::LiquidityGate,
             ..
-        } => gate_reject_codes
-            .liquidity_gate
-            .unwrap_or(RejectReasonCode::ExpectedSlippageTooHigh),
+        } => resolve_or_warn(
+            "LiquidityGate",
+            gate_reject_codes.liquidity_gate,
+            RejectReasonCode::ExpectedSlippageTooHigh,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::NetEdgeGate,
             ..
-        } => gate_reject_codes
-            .net_edge_gate
-            .unwrap_or(RejectReasonCode::NetEdgeTooLow),
+        } => resolve_or_warn(
+            "NetEdgeGate",
+            gate_reject_codes.net_edge_gate,
+            RejectReasonCode::NetEdgeTooLow,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::Pricer,
             ..
-        } => gate_reject_codes
-            .pricer
-            .unwrap_or(RejectReasonCode::EmergencyCloseNoPrice),
+        } => resolve_or_warn(
+            "Pricer",
+            gate_reject_codes.pricer,
+            RejectReasonCode::EmergencyCloseNoPrice,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::RecordedBeforeDispatch,
             ..
-        } => gate_reject_codes
-            .recorded_before_dispatch
-            .unwrap_or(RejectReasonCode::RecordedBeforeDispatchFailed),
+        } => resolve_or_warn(
+            "RecordedBeforeDispatch",
+            gate_reject_codes.recorded_before_dispatch,
+            RejectReasonCode::RecordedBeforeDispatchFailed,
+        ),
         ChokeRejectReason::GateRejected {
             gate: GateStep::DispatchAuth,
             ..
         } => RejectReasonCode::MarginHeadroomRejectOpens,
+    }
+}
+
+/// Extract reject reason code from a chokepoint result.
+///
+/// Returns `None` for approved decisions, or the mapped `RejectReasonCode`
+/// for rejections. This helper avoids mentioning `ChokeResult::Approved`
+/// in caller modules (preserved by the architectural guard in
+/// `test_dispatch_chokepoint_no_bypass_approved`).
+pub fn extract_reject_reason_code(
+    result: &ChokeResult,
+    gate_reject_codes: &GateRejectCodes,
+) -> Option<RejectReasonCode> {
+    match result {
+        ChokeResult::Rejected { reason, .. } => {
+            Some(reject_reason_from_chokepoint(reason, gate_reject_codes))
+        }
+        _ => None,
     }
 }

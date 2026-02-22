@@ -12,14 +12,13 @@ use crate::risk::{
 };
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
-#[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
     LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics,
-    NetEdgeResult, PricerInput, PricerMetrics, PricerResult, Tlsm, build_gate_results,
-    build_order_intent, compute_limit_price, evaluate_inventory_skew, evaluate_liquidity_gate,
-    evaluate_net_edge,
+    NetEdgeResult, PrecomputedWalGate, PricerInput, PricerMetrics, PricerResult, Tlsm,
+    build_gate_results, build_order_intent_with_optional_wal_gate, compute_limit_price,
+    evaluate_inventory_skew, evaluate_liquidity_gate, evaluate_net_edge,
 };
 
 const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
@@ -267,13 +266,13 @@ pub fn build_open_order_intent_runtime(
     }
 
     gate_results.max_dispatch_qty = max_dispatch_qty;
-    // TODO: migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
-    #[allow(deprecated)]
-    let mut choke_result = build_order_intent(
+    let mut wal_gate = PrecomputedWalGate(input.wal_recorded);
+    let mut choke_result = build_order_intent_with_optional_wal_gate(
         ChokeIntentClass::Open,
         effective_risk_state,
         choke_metrics,
         &gate_results,
+        Some(&mut wal_gate),
     );
     if let Some(override_reason) = liquidity_override_reason {
         choke_result = match choke_result {

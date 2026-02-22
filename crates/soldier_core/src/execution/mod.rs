@@ -53,6 +53,7 @@ pub use build_order_intent::{
     build_order_intent_with_reject_reason_code, build_order_intent_with_wal_gate,
     gate_sequence_total,
 };
+pub(crate) use build_order_intent::PrecomputedWalGate;
 pub use dispatch_map::{
     CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
     MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
@@ -107,8 +108,8 @@ pub use quantize::{
     quantize_reject_total,
 };
 pub use reject_reason::{
-    GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
-    reject_reason_registry_contains,
+    GateRejectCodes, RejectReasonCode, extract_reject_reason_code, reject_reason_from_chokepoint,
+    reject_reason_registry, reject_reason_registry_contains,
 };
 pub use tlsm::{
     NoopTransitionSink, OooCategory, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,

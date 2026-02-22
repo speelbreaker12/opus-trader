@@ -74,6 +74,28 @@ pub trait RecordedBeforeDispatchGate {
     fn record_before_dispatch(&mut self) -> Result<(), String>;
 }
 
+/// Adapter that wraps a precomputed bool as a `RecordedBeforeDispatchGate`.
+///
+/// This bridges the gap between callers that still pass precomputed bools
+/// (e.g., via `GateResults.wal_recorded`) and the adapter-based WAL gate API.
+/// Using `PrecomputedWalGate` with `build_order_intent_with_optional_wal_gate()`
+/// is strictly better than calling the deprecated `build_order_intent()` because
+/// the adapter makes the WAL dependency explicit in the type system.
+///
+// DEBT(S7-AUD-007, Slice 8): Remove PrecomputedWalGate once all callers
+// implement RecordedBeforeDispatchGate with real WAL append logic.
+pub(crate) struct PrecomputedWalGate(pub(crate) bool);
+
+impl RecordedBeforeDispatchGate for PrecomputedWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        if self.0 {
+            Ok(())
+        } else {
+            Err("WAL append failed (precomputed)".to_string())
+        }
+    }
+}
+
 /// Evaluate the chokepoint with a runtime WAL gate adapter.
 ///
 /// This helper prevents callsites from passing precomputed `wal_recorded`
