@@ -27,7 +27,7 @@ fn limit_input(kind: InstrumentKind) -> PreflightInput<'static> {
 fn test_limit_order_option_allowed() {
     let input = limit_input(InstrumentKind::Option);
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
     assert_eq!(m.reject_total(), 0);
 }
 
@@ -35,21 +35,21 @@ fn test_limit_order_option_allowed() {
 fn test_limit_order_perpetual_allowed() {
     let input = limit_input(InstrumentKind::Perpetual);
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 #[test]
 fn test_limit_order_linear_future_allowed() {
     let input = limit_input(InstrumentKind::LinearFuture);
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 #[test]
 fn test_limit_order_inverse_future_allowed() {
     let input = limit_input(InstrumentKind::InverseFuture);
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 // ─── AT-016: Market order on options → reject ───────────────────────────
@@ -257,7 +257,7 @@ fn test_linked_order_perp_both_flags_allowed() {
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 #[test]
@@ -298,7 +298,7 @@ fn test_linked_order_linear_future_both_flags_allowed() {
         ..limit_input(InstrumentKind::LinearFuture)
     };
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 // ─── No linked_order_type → no check ────────────────────────────────────
@@ -311,7 +311,7 @@ fn test_no_linked_order_type_passes() {
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 // ─── AT-916: Post-only crossing rejected ───────────────────────────────
@@ -350,7 +350,7 @@ fn test_at916_post_only_non_crossing_allowed() {
         ..limit_input(InstrumentKind::Perpetual)
     };
     let mut m = PreflightMetrics::new();
-    assert_eq!(preflight_intent(&input, &mut m), PreflightResult::Allowed);
+    assert!(matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)));
 }
 
 #[test]
@@ -526,9 +526,8 @@ fn test_linked_order_inverse_future_both_flags_allowed() {
         ..limit_input(InstrumentKind::InverseFuture)
     };
     let mut m = PreflightMetrics::new();
-    assert_eq!(
-        preflight_intent(&input, &mut m),
-        PreflightResult::Allowed,
+    assert!(
+        matches!(preflight_intent(&input, &mut m), PreflightResult::Allowed(_)),
         "InverseFuture with linked_orders_allowed=true must be Allowed"
     );
     assert_eq!(m.reject_total(), 0);

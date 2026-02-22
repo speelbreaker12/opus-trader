@@ -95,8 +95,8 @@ pub use post_only_guard::{
     post_only_cross_reject_total,
 };
 pub use preflight::{
-    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
-    preflight_intent, preflight_reject_total,
+    OrderType, PreflightDiagnostics, PreflightInput, PreflightMetrics, PreflightReject,
+    PreflightResult, preflight_intent, preflight_reject_total,
 };
 pub use pricer::{
     PricerInput, PricerMetrics, PricerRejectReason, PricerResult, compute_limit_price,

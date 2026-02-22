@@ -101,13 +101,11 @@ pub fn build_open_order_intent_runtime(
     let mode_hint = compute_margin_mode_hint(&input.margin_gate_input);
 
     let mut effective_risk_state = input.base_gates.risk_state;
-    if matches!(margin_decision, MarginGateDecision::Rejected { .. })
-        && effective_risk_state == RiskState::Healthy
-    {
-        effective_risk_state = match mode_hint {
+    if matches!(margin_decision, MarginGateDecision::Rejected { .. }) {
+        effective_risk_state = effective_risk_state.worst(match mode_hint {
             MarginGateMode::Kill => RiskState::Kill,
             MarginGateMode::ReduceOnly | MarginGateMode::Active => RiskState::Degraded,
-        };
+        });
     }
 
     let mut gate_results = build_gate_results(
@@ -238,9 +236,7 @@ pub fn build_open_order_intent_runtime(
                         ..
                     } => {
                         gate_results.net_edge_passed = false;
-                        if effective_risk_state == RiskState::Healthy {
-                            effective_risk_state = RiskState::Degraded;
-                        }
+                        effective_risk_state = effective_risk_state.worst(RiskState::Degraded);
                     }
                     InventorySkewResult::Rejected { .. } => {
                         gate_results.net_edge_passed = false;

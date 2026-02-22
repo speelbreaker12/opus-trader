@@ -23,3 +23,22 @@ pub enum RiskState {
     /// PolicyGuard should resolve to `TradingMode::Kill`.
     Kill,
 }
+
+impl RiskState {
+    /// Return the more restrictive of two risk states (P3).
+    ///
+    /// Ordering: Healthy < Degraded < Maintenance < Kill.
+    pub fn worst(self, other: Self) -> Self {
+        let rank = |s: RiskState| match s {
+            RiskState::Healthy => 0,
+            RiskState::Degraded => 1,
+            RiskState::Maintenance => 2,
+            RiskState::Kill => 3,
+        };
+        if rank(other) > rank(self) {
+            other
+        } else {
+            self
+        }
+    }
+}

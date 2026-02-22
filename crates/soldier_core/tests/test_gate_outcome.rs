@@ -14,7 +14,7 @@ use soldier_core::execution::preflight::{PreflightReject, PreflightResult};
 
 #[test]
 fn preflight_allowed() {
-    let result = PreflightResult::Allowed;
+    let result = PreflightResult::Allowed(Default::default());
     let outcome = GateOutcome::from_preflight(GateStep::Preflight, &result);
     assert_eq!(outcome.to_legacy(), (true, None));
     assert!(outcome.is_allowed());

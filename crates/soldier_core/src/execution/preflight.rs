@@ -65,13 +65,24 @@ pub struct PreflightInput<'a> {
     pub post_only_input: Option<PostOnlyInput>,
 }
 
+// ─── Preflight diagnostics (P8) ────────────────────────────────────────
+
+/// Diagnostics emitted on preflight pass for observability.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PreflightDiagnostics {
+    /// Number of preflight rules evaluated.
+    pub rules_evaluated: u8,
+    /// Whether post-only crossing check was evaluated.
+    pub post_only_checked: bool,
+}
+
 // ─── Preflight result ───────────────────────────────────────────────────
 
 /// Result of the preflight check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreflightResult {
     /// Intent passes preflight — proceed to dispatch.
-    Allowed,
+    Allowed(PreflightDiagnostics),
     /// Intent rejected — do NOT dispatch.
     Rejected(PreflightReject),
 }
@@ -261,5 +272,9 @@ pub fn preflight_intent(
         }
     }
 
-    PreflightResult::Allowed
+    let post_only_checked = input.post_only_input.is_some();
+    PreflightResult::Allowed(PreflightDiagnostics {
+        rules_evaluated: 4,
+        post_only_checked,
+    })
 }

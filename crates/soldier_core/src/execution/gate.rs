@@ -56,6 +56,17 @@ pub enum GateIntentClass {
     CancelOnly,
 }
 
+impl From<super::build_order_intent::ChokeIntentClass> for GateIntentClass {
+    fn from(c: super::build_order_intent::ChokeIntentClass) -> Self {
+        match c {
+            super::build_order_intent::ChokeIntentClass::Open => GateIntentClass::Open,
+            super::build_order_intent::ChokeIntentClass::Close => GateIntentClass::Close,
+            super::build_order_intent::ChokeIntentClass::Hedge => GateIntentClass::Hedge,
+            super::build_order_intent::ChokeIntentClass::CancelOnly => GateIntentClass::CancelOnly,
+        }
+    }
+}
+
 // --- Gate input ----------------------------------------------------------
 
 /// Input to the Liquidity Gate evaluator.

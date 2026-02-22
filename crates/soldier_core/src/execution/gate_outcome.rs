@@ -52,7 +52,7 @@ impl GateOutcome {
     /// Exhaustive match — compiler forces update when `PreflightReject` adds a variant.
     pub fn from_preflight(gate: GateStep, result: &PreflightResult) -> Self {
         match result {
-            PreflightResult::Allowed => GateOutcome::Allow { gate },
+            PreflightResult::Allowed(_) => GateOutcome::Allow { gate },
             PreflightResult::Rejected(reason) => {
                 let code = match reason {
                     PreflightReject::OrderTypeMarketForbidden => {

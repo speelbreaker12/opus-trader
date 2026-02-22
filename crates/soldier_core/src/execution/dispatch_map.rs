@@ -38,6 +38,17 @@ pub enum IntentClass {
     Cancel,
 }
 
+impl From<super::build_order_intent::ChokeIntentClass> for IntentClass {
+    fn from(c: super::build_order_intent::ChokeIntentClass) -> Self {
+        match c {
+            super::build_order_intent::ChokeIntentClass::Open => IntentClass::Open,
+            super::build_order_intent::ChokeIntentClass::Close => IntentClass::Close,
+            super::build_order_intent::ChokeIntentClass::Hedge => IntentClass::Hedge,
+            super::build_order_intent::ChokeIntentClass::CancelOnly => IntentClass::Cancel,
+        }
+    }
+}
+
 /// Outbound Deribit order request fields.
 ///
 /// CONTRACT.md: "always send exactly one canonical amount value."
