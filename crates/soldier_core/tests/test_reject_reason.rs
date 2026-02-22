@@ -3,8 +3,8 @@ use std::collections::HashSet;
 
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateResults, RejectReasonCode,
-    build_order_intent_with_reject_reason_code, reject_reason_registry,
-    reject_reason_registry_contains,
+    build_order_intent_with_reject_reason_code, extract_reject_reason_code,
+    reject_reason_registry, reject_reason_registry_contains,
 };
 use soldier_core::risk::RiskState;
 
@@ -317,6 +317,66 @@ fn test_as_str_matches_serde_output_for_all_variants() {
             *code, deserialized,
             "serde round-trip mismatch for {:?}",
             code
+        );
+    }
+}
+
+/// Parity test: extract_reject_reason_code matches deprecated function output.
+#[test]
+fn test_extract_reject_reason_code_parity_with_deprecated() {
+    let gate_codes = GateRejectCodes {
+        preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
+        quantize: Some(RejectReasonCode::TooSmallAfterQuantization),
+        fee_cache: Some(RejectReasonCode::FeeCacheStale),
+        expiry_guard: Some(RejectReasonCode::InstrumentExpiredOrDelisted),
+        liquidity_gate: Some(RejectReasonCode::ExpectedSlippageTooHigh),
+        net_edge_gate: Some(RejectReasonCode::NetEdgeTooLow),
+        recorded_before_dispatch: Some(RejectReasonCode::RecordedBeforeDispatchFailed),
+        pricer: Some(RejectReasonCode::EmergencyCloseNoPrice),
+    };
+
+    // For each gate that can fail, verify parity
+    let test_cases: Vec<(GateResults, Option<RejectReasonCode>)> = vec![
+        // Approved → None
+        (GateResults::all_passed(), None),
+        // RiskState reject
+        (GateResults::all_passed(), Some(RejectReasonCode::MarginHeadroomRejectOpens)),
+        // Preflight reject
+        (
+            GateResults { preflight_passed: false, ..GateResults::all_passed() },
+            Some(RejectReasonCode::OrderTypeMarketForbidden),
+        ),
+        // Fee cache reject
+        (
+            GateResults { fee_cache_passed: false, ..GateResults::all_passed() },
+            Some(RejectReasonCode::FeeCacheStale),
+        ),
+        // WAL reject
+        (
+            GateResults { wal_recorded: false, ..GateResults::all_passed() },
+            Some(RejectReasonCode::RecordedBeforeDispatchFailed),
+        ),
+    ];
+
+    for (i, (gates, expected_code)) in test_cases.iter().enumerate() {
+        let risk_state = if i == 1 { RiskState::Degraded } else { RiskState::Healthy };
+        let mut metrics = ChokeMetrics::new();
+
+        // Deprecated path
+        let (result_deprecated, code_deprecated) = build_order_intent_with_reject_reason_code(
+            ChokeIntentClass::Open,
+            risk_state,
+            &mut metrics,
+            gates,
+            &gate_codes,
+        );
+
+        // New path
+        let code_new = extract_reject_reason_code(&result_deprecated, &gate_codes);
+
+        assert_eq!(
+            code_new, *expected_code,
+            "parity mismatch at case {i}: deprecated={code_deprecated:?}, new={code_new:?}"
         );
     }
 }

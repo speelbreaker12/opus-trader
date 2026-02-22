@@ -721,3 +721,22 @@ fn test_at920_mismatch_caller_sets_degraded_and_blocks_open() {
     assert_eq!(choke.approved_total(), 0, "no dispatch after mismatch");
     assert_eq!(choke.rejected_total(), 1);
 }
+
+// ─── From<ChokeIntentClass> for IntentClass ─────────────────────────────
+
+#[test]
+fn test_from_choke_intent_class_to_intent_class() {
+    assert_eq!(IntentClass::from(ChokeIntentClass::Open), IntentClass::Open);
+    assert_eq!(
+        IntentClass::from(ChokeIntentClass::Close),
+        IntentClass::Close
+    );
+    assert_eq!(
+        IntentClass::from(ChokeIntentClass::Hedge),
+        IntentClass::Hedge
+    );
+    assert_eq!(
+        IntentClass::from(ChokeIntentClass::CancelOnly),
+        IntentClass::Cancel
+    );
+}

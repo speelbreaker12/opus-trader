@@ -387,3 +387,236 @@ fn failure_leg_during_flattened_does_not_reenter_mixed_failed() {
         "state must remain Flattened"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// S7-AUD-005 Q4: NaN fill quantities → fail-closed MixedFailed
+// ═══════════════════════════════════════════════════════════════════════
+
+#[test]
+fn nan_filled_qty_forces_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("nan-fill-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    let result = LegResult {
+        leg_idx: 0,
+        requested_qty: 1.0,
+        filled_qty: f64::NAN,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let transition = group.apply_leg_result(result, &config);
+    assert!(
+        matches!(transition, GroupStateTransition::EnteredMixedFailed { .. }),
+        "NaN filled_qty must force MixedFailed, got {transition:?}"
+    );
+    assert_eq!(group.state, GroupState::MixedFailed);
+    assert!(
+        group.containment_pending,
+        "containment must be pending on NaN"
+    );
+    assert!(
+        group
+            .first_failure_reason()
+            .expect("must have reason")
+            .contains("non-finite"),
+        "reason must mention non-finite"
+    );
+}
+
+#[test]
+fn nan_requested_qty_forces_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("nan-req-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    let result = LegResult {
+        leg_idx: 0,
+        requested_qty: f64::NAN,
+        filled_qty: 1.0,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let transition = group.apply_leg_result(result, &config);
+    assert!(
+        matches!(transition, GroupStateTransition::EnteredMixedFailed { .. }),
+        "NaN requested_qty must force MixedFailed, got {transition:?}"
+    );
+    assert_eq!(group.state, GroupState::MixedFailed);
+    assert!(
+        group
+            .first_failure_reason()
+            .expect("must have reason")
+            .contains("non-finite"),
+        "reason must mention non-finite"
+    );
+}
+
+#[test]
+fn nan_both_legs_second_returns_still_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("nan-both-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    // First NaN leg → EnteredMixedFailed
+    let leg0 = LegResult {
+        leg_idx: 0,
+        requested_qty: 1.0,
+        filled_qty: f64::NAN,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let t0 = group.apply_leg_result(leg0, &config);
+    assert!(
+        matches!(t0, GroupStateTransition::EnteredMixedFailed { .. }),
+        "first NaN leg must enter MixedFailed"
+    );
+
+    // Second NaN leg → StillMixedFailed (already in MixedFailed)
+    let leg1 = LegResult {
+        leg_idx: 1,
+        requested_qty: f64::NAN,
+        filled_qty: f64::NAN,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let t1 = group.apply_leg_result(leg1, &config);
+    assert_eq!(
+        t1,
+        GroupStateTransition::StillMixedFailed,
+        "second NaN leg on already-MixedFailed must return StillMixedFailed"
+    );
+    assert_eq!(group.state, GroupState::MixedFailed);
+}
+
+#[test]
+fn inf_filled_qty_forces_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("inf-fill-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    let result = LegResult {
+        leg_idx: 0,
+        requested_qty: 1.0,
+        filled_qty: f64::INFINITY,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let transition = group.apply_leg_result(result, &config);
+    assert!(
+        matches!(transition, GroupStateTransition::EnteredMixedFailed { .. }),
+        "Inf filled_qty must force MixedFailed, got {transition:?}"
+    );
+    assert_eq!(group.state, GroupState::MixedFailed);
+}
+
+#[test]
+fn inf_requested_qty_forces_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("inf-req-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    let result = LegResult {
+        leg_idx: 0,
+        requested_qty: f64::INFINITY,
+        filled_qty: 1.0,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let transition = group.apply_leg_result(result, &config);
+    assert!(
+        matches!(transition, GroupStateTransition::EnteredMixedFailed { .. }),
+        "Inf requested_qty must force MixedFailed, got {transition:?}"
+    );
+}
+
+#[test]
+fn neg_inf_filled_qty_forces_mixed_failed() {
+    let config = default_config();
+    let mut group = AtomicGroup::new("neginf-fill-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    let result = LegResult {
+        leg_idx: 0,
+        requested_qty: 1.0,
+        filled_qty: f64::NEG_INFINITY,
+        rejected: false,
+        unfilled: false,
+        tlsm_state: TlsmState::Filled,
+    };
+    let transition = group.apply_leg_result(result, &config);
+    assert!(
+        matches!(transition, GroupStateTransition::EnteredMixedFailed { .. }),
+        "-Inf filled_qty must force MixedFailed, got {transition:?}"
+    );
+}
+
+#[test]
+fn nan_atomic_qty_epsilon_prevents_false_complete() {
+    let config = GroupConfig {
+        atomic_qty_epsilon: f64::NAN,
+        ..Default::default()
+    };
+    let mut group = AtomicGroup::new("nan-eps-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    group.apply_leg_result(filled_leg(0, 1.0), &config);
+    group.apply_leg_result(filled_leg(1, 1.0), &config);
+
+    assert!(
+        !group.can_complete(&config),
+        "NaN atomic_qty_epsilon must prevent Complete (fail-closed)"
+    );
+}
+
+#[test]
+fn negative_atomic_qty_epsilon_prevents_false_complete() {
+    let config = GroupConfig {
+        atomic_qty_epsilon: -1.0,
+        ..Default::default()
+    };
+    let mut group = AtomicGroup::new("neg-eps-grp".to_string(), 2);
+    group.mark_dispatched().expect("dispatch ok");
+
+    group.apply_leg_result(filled_leg(0, 1.0), &config);
+    group.apply_leg_result(filled_leg(1, 1.0), &config);
+
+    assert!(
+        !group.can_complete(&config),
+        "Negative atomic_qty_epsilon must prevent Complete (fail-closed)"
+    );
+}
+
+#[test]
+fn try_acquire_at_deterministic_timestamp() {
+    use std::time::{Duration, Instant};
+
+    let mut lock = GroupLock::new();
+    let now = Instant::now();
+
+    assert!(
+        lock.try_acquire_at(now),
+        "lock must be acquirable when free"
+    );
+    assert!(lock.is_held(), "lock must be held after acquire_at");
+
+    let later = now + Duration::from_millis(5);
+    assert!(
+        !lock.try_acquire_at(later),
+        "double acquire_at must fail while held"
+    );
+
+    lock.release();
+    assert!(!lock.is_held());
+    assert!(
+        lock.try_acquire_at(later),
+        "lock must be acquirable after release"
+    );
+    assert!(lock.is_held());
+}

@@ -587,3 +587,40 @@ fn test_expiry_guard_unknown_kind_with_valid_timestamp_allowed() {
         "Unknown kind with valid timestamp outside buffer must be allowed"
     );
 }
+
+// ─── ExpiryGuardMetrics assertions ──────────────────────────────────────
+
+#[test]
+fn test_expiry_guard_metrics_increment_on_reject() {
+    let mut metrics = ExpiryGuardMetrics::default();
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_030_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    let result = evaluate_expiry_guard(&input, &mut metrics);
+    assert!(matches!(result, ExpiryGuardResult::Rejected(_)));
+    assert_eq!(metrics.reject_total(), 1, "reject must increment metrics");
+
+    // Second rejection increments again
+    let _ = evaluate_expiry_guard(&input, &mut metrics);
+    assert_eq!(metrics.reject_total(), 2);
+}
+
+#[test]
+fn test_expiry_guard_metrics_increment_on_allow() {
+    let mut metrics = ExpiryGuardMetrics::default();
+    let input = ExpiryGuardInput {
+        now_ms: 1_700_000_000_000,
+        expiration_timestamp_ms: Some(1_700_000_090_000),
+        expiry_delist_buffer_s: 60,
+        intent: LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    };
+    let result = evaluate_expiry_guard(&input, &mut metrics);
+    assert!(matches!(result, ExpiryGuardResult::Allowed));
+    assert_eq!(metrics.allowed_total(), 1, "allow must increment metrics");
+    assert_eq!(metrics.reject_total(), 0, "no rejection");
+}

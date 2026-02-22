@@ -405,3 +405,119 @@ fn test_negative_min_edge_fails_closed() {
         }
     ));
 }
+
+// ─── Devil's advocate tightening: NaN/Inf on each field individually ──
+
+#[test]
+fn test_nan_fee_usd_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(f64::NAN),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_nan_expected_slippage_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(f64::NAN),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_nan_min_edge_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(f64::NAN),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_inf_gross_edge_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(f64::INFINITY),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_inf_fee_usd_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(f64::INFINITY),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_inf_expected_slippage_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(f64::INFINITY),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}

@@ -532,3 +532,75 @@ fn test_linked_order_inverse_future_both_flags_allowed() {
     );
     assert_eq!(m.reject_total(), 0);
 }
+
+// ─── PreflightDiagnostics assertions (P8) ──────────────────────────────
+
+#[test]
+fn test_diagnostics_rules_evaluated_count() {
+    let mut m = PreflightMetrics::new();
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Option,
+        order_type: OrderType::Limit,
+        has_trigger: false,
+        linked_order_type: None,
+        linked_orders_allowed: false,
+        post_only_input: None,
+    };
+    let result = preflight_intent(&input, &mut m);
+    match result {
+        PreflightResult::Allowed(diag) => {
+            assert_eq!(diag.rules_evaluated, 4, "preflight evaluates 4 rules");
+            assert!(!diag.post_only_checked, "no post_only input → not checked");
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_diagnostics_post_only_checked_when_present() {
+    let mut m = PreflightMetrics::new();
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        order_type: OrderType::Limit,
+        has_trigger: false,
+        linked_order_type: None,
+        linked_orders_allowed: false,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Buy,
+            limit_price: 99.0,
+            best_ask: Some(100.0),
+            best_bid: Some(98.0),
+        }),
+    };
+    let result = preflight_intent(&input, &mut m);
+    match result {
+        PreflightResult::Allowed(diag) => {
+            assert!(
+                diag.post_only_checked,
+                "post_only input present → must be checked"
+            );
+            assert_eq!(diag.rules_evaluated, 4);
+        }
+        other => panic!("expected Allowed (non-crossing), got {other:?}"),
+    }
+}
+
+#[test]
+fn test_diagnostics_not_emitted_on_rejection() {
+    let mut m = PreflightMetrics::new();
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Option,
+        order_type: OrderType::Market,
+        has_trigger: false,
+        linked_order_type: None,
+        linked_orders_allowed: false,
+        post_only_input: None,
+    };
+    let result = preflight_intent(&input, &mut m);
+    assert!(
+        matches!(result, PreflightResult::Rejected(_)),
+        "market order must be rejected"
+    );
+    // Diagnostics only on Allowed — verify we don't get Allowed
+}
