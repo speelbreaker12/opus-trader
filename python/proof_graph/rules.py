@@ -1,4 +1,4 @@
-"""53 validation rules for proof graph (18 V1 + 35 V2)."""
+"""57 validation rules for proof graph (20 V1 + 37 V2)."""
 from __future__ import annotations
 
 import re
@@ -772,9 +772,7 @@ def r_028(ctx: ValidationContext) -> list[Finding]:
 
 
 def r_029(ctx: ValidationContext) -> list[Finding]:
-    """V2: safety_critical + stoplight RED + PROVEN verdict."""
-    if not _is_v2(ctx):
-        return []
+    """V1+V2: safety_critical + stoplight RED + PROVEN verdict."""
     g = ctx.graph
     if not g.story_meta.safety_critical:
         return []
@@ -1150,10 +1148,17 @@ def r_044(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+_RECONCILED_STATUSES = {
+    ReconciliationStatus.RECONCILED,
+    ReconciliationStatus.RECONCILED_WITH_DEBT,
+}
+
+
 def r_045(ctx: ValidationContext) -> list[Finding]:
-    """RECONCILED but AT has non-proven verdict."""
+    """Reconciled-family status but AT has non-proven verdict."""
     g = ctx.graph
-    if g.story_verdict.reconciliation_status != ReconciliationStatus.RECONCILED:
+    status = g.story_verdict.reconciliation_status
+    if status not in _RECONCILED_STATUSES:
         return []
     findings: list[Finding] = []
     for at in g.ats:
@@ -1163,7 +1168,7 @@ def r_045(ctx: ValidationContext) -> list[Finding]:
                 rule="R-045",
                 at_id=at.at_id,
                 message=(
-                    f"story is RECONCILED but AT {at.at_id} "
+                    f"story is {status.value} but AT {at.at_id} "
                     f"has non-proven verdict {at.at_verdict.verdict.value}"
                 ),
             ))
@@ -1308,6 +1313,112 @@ def r_051(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+def r_052(ctx: ValidationContext) -> list[Finding]:
+    """PROVEN_UNIT wiring + PROVEN_INTEGRATED verdict contradiction."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.wiring.status == WiringStatus.PROVEN_UNIT and \
+                at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-052",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} claims PROVEN_INTEGRATED verdict "
+                    f"but wiring is only PROVEN_UNIT"
+                ),
+            ))
+    return findings
+
+
+def r_053(ctx: ValidationContext) -> list[Finding]:
+    """safety_critical + stoplight YELLOW + PROVEN verdict."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.premortem_checks.stoplight == StoplightColor.YELLOW and \
+                at.at_verdict.verdict in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-053",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: stoplight is YELLOW "
+                    f"but verdict is {at.at_verdict.verdict.value}"
+                ),
+            ))
+    return findings
+
+
+# Known story categories (from CONTRACT.md / CLAUDE.md)
+_KNOWN_CATEGORIES = {
+    "enforcement", "policy", "certification",
+    "observability", "infrastructure",
+}
+
+_AT_ID_RE = re.compile(r'^AT-\d+$')
+_STORY_ID_RE = re.compile(r'^S\d+-\d+$')
+
+
+def r_054(ctx: ValidationContext) -> list[Finding]:
+    """Unknown story category."""
+    cat = ctx.graph.story_meta.category
+    if cat not in _KNOWN_CATEGORIES:
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-054",
+            at_id=None,
+            message=(
+                f"category {cat!r} not in known set: "
+                f"{sorted(_KNOWN_CATEGORIES)}"
+            ),
+            field_path="story_meta.category",
+        )]
+    return []
+
+
+def r_055(ctx: ValidationContext) -> list[Finding]:
+    """Empty or malformed at_id / story_id."""
+    findings: list[Finding] = []
+    sid = ctx.graph.story_meta.story_id
+    if not sid.strip():
+        findings.append(Finding(
+            severity=Severity.BLOCKING,
+            rule="R-055",
+            at_id=None,
+            message="story_id is empty",
+            field_path="story_meta.story_id",
+        ))
+    elif not _STORY_ID_RE.match(sid):
+        findings.append(Finding(
+            severity=Severity.HARDENING,
+            rule="R-055",
+            at_id=None,
+            message=f"story_id {sid!r} does not match expected format S<N>-<N>",
+            field_path="story_meta.story_id",
+        ))
+    for at in ctx.graph.ats:
+        if not at.at_id.strip():
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-055",
+                at_id=at.at_id,
+                message="at_id is empty",
+                field_path=f"ats.{at.at_id}.at_id",
+            ))
+        elif not _AT_ID_RE.match(at.at_id):
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-055",
+                at_id=at.at_id,
+                message=f"at_id {at.at_id!r} does not match expected format AT-<N>",
+                field_path=f"ats.{at.at_id}.at_id",
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
@@ -1326,6 +1437,8 @@ ALL_RULES = [
     r_048, r_049,
     # V6 rules (validator-audit round 6)
     r_050, r_051,
+    # V7 rules (validator-audit round 7)
+    r_052, r_053, r_054, r_055,
 ]
 
 

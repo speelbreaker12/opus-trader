@@ -317,5 +317,50 @@ class TestAggregate(unittest.TestCase):
         self.assertNotIn("conflicts", merged["meta"])
 
 
+    def test_reconciliation_status_not_recomputed(self):
+        """F7-007: aggregate does NOT recompute reconciliation_status.
+
+        When a reviewer tightens a verdict to BLOCKING, the merged graph
+        retains the base reconciliation_status. Downstream validate()
+        catches the contradiction via R-001.
+        """
+        base = self._base()
+        r1 = deepcopy(base)
+        # Reviewer upgrades AT-201 to MISSING/BLOCKING
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged = aggregate(base, [r1], review_labels=["codex"])
+
+        # reconciliation_status is NOT recomputed — stays RECONCILED
+        self.assertEqual(merged["story_verdict"]["reconciliation_status"], "RECONCILED")
+        # But blocking_count IS recomputed
+        self.assertGreaterEqual(merged["story_verdict"]["blocking_count"], 1)
+
+    def test_rationale_stale_after_verdict_change(self):
+        """F7-008: aggregate updates verdict+severity but keeps base rationale.
+
+        When the strictest reviewer provides a different verdict, the
+        rationale string remains from the base AT. This is known behavior;
+        downstream consumers should not rely on rationale consistency.
+        """
+        base = self._base()
+        r1 = deepcopy(base)
+        # Base: PROVEN_INTEGRATED with rationale "proven"
+        base_rationale = base["ats"][0]["at_verdict"]["rationale"]
+        # Reviewer: MISSING with different rationale
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        r1["ats"][0]["at_verdict"]["rationale"] = "enforcement not found"
+
+        merged = aggregate(base, [r1], review_labels=["codex"])
+
+        at201 = next(at for at in merged["ats"] if at["at_id"] == "AT-201")
+        # Verdict is from reviewer (strictest)
+        self.assertEqual(at201["at_verdict"]["verdict"], "MISSING")
+        # Rationale is from base (not updated)
+        self.assertEqual(at201["at_verdict"]["rationale"], base_rationale)
+
+
 if __name__ == "__main__":
     unittest.main()
