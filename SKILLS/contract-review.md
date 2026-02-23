@@ -20,6 +20,8 @@ Use **/contract-audit-full** when you need completeness/coverage.
 ## When to use
 - Before merging PRs touching `crates/soldier_core/` or `crates/soldier_infra/`
 - When any change touches: PolicyGuard, TradingMode, intent classification, WAL/RecordedBeforeDispatch, reconciliation, order dispatch, or owner endpoints
+- Before changing workflow/harness files or flipping `passes` (subsumes former `/audit` skill)
+- Before approving a PR that touches contract or workflow alignment
 
 ## Inputs
 - `git diff main...HEAD` (or PR diff)
@@ -71,7 +73,16 @@ Flag when:
 - Python tooling scripts unless they are part of a safety gate used by CI/verify
 - Style preferences not codified in CLAUDE.md / contract
 
-## Method (3 phases)
+## Method (4 phases)
+
+### Phase 0 — Workflow alignment (quick)
+If the change touches workflow/harness files, verify:
+- Read `specs/WORKFLOW_CONTRACT.md` and identify affected clauses
+- Confirm enforcement paths (script, contract, test) exist for each clause
+- Confirm `verify.sh` / preflight / gate coverage where required
+- Record evidence (commands + outputs)
+
+Skip this phase if the change is pure Rust/application code with no workflow surface.
 
 ### Phase 1 — Context research
 ```bash

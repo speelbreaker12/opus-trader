@@ -211,12 +211,13 @@ except ValidationError as e:
 | Review a PR | `/pr-review` | Systematic checklist prevents omissions |
 | Review risky code | `/failure-mode-review` | Traces implementation failure paths, not just happy paths |
 | Review architecture/ops | `/strategic-failure-review` | Systemic risks, hidden assumptions, operational/human factors |
+| Stress-test ATs / prove test sufficiency | `/devils-advocate` | Writes wrong impls that pass — highest-signal test quality check |
 | Pre-implementation risk analysis | premortem | Forces failure modes, wrong impls, decisions before coding |
 | Implement PRD story | premortem → `/slice-execute` → `/post-impl-audit` | Premortem gate, fail-closed implementation, breaker audit |
 | Implement single story | `/slice-execute` | Premortem gate → preflight → implement → golden vectors |
 | Audit after implementation | `/post-impl-audit` | Breaker audit: AT proof, fail-closed, wrong-impl, paper compliance |
 | Write acceptance test | `/acceptance-test` | Contract alignment |
-| Check contracts (fast) | `/contract-review` | Fail-open hazard filter on code diffs |
+| Check contracts (fast) | `/contract-review` | Fail-open hazard filter + workflow alignment (subsumes `/audit`) |
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
 | Git workflow (branches, merges, worktrees) | `/git` | Never commit on main, per-file diff before --theirs, worktree isolation, safety-biased conflict resolution |
 
