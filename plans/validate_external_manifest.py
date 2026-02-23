@@ -315,10 +315,8 @@ def _verify_artifact_file(entry: dict[str, Any], idx: int, manifest_dir: Path) -
     artifact_path_str = entry.get("artifact_path")
     if not artifact_path_str:
         return errors
-    artifact_path = manifest_dir / artifact_path_str
-    if not artifact_path.exists():
-        artifact_path = Path(artifact_path_str)
-    if not artifact_path.exists():
+    artifact_path = _resolve_artifact_path(artifact_path_str, manifest_dir)
+    if artifact_path is None:
         errors.append(f"{ctx}: artifact_path '{artifact_path_str}' not found on disk")
         return errors
     expected_sha = entry.get("artifact_sha256", "")
@@ -329,6 +327,147 @@ def _verify_artifact_file(entry: dict[str, Any], idx: int, manifest_dir: Path) -
                 f"{ctx}: artifact_sha256 mismatch for '{artifact_path_str}': "
                 f"expected {expected_sha}, got {actual_sha}"
             )
+    # Cross-reference review_meta block against manifest checks
+    checks = entry.get("checks", {})
+    if isinstance(checks, dict):
+        errors += _verify_review_meta(artifact_path, checks, ctx)
+    return errors
+
+
+def _resolve_artifact_path(artifact_path_str: str, manifest_dir: Path) -> Path | None:
+    """Resolve artifact path relative to manifest dir or as absolute."""
+    candidate = manifest_dir / artifact_path_str
+    if candidate.exists():
+        return candidate
+    candidate = Path(artifact_path_str)
+    if candidate.exists():
+        return candidate
+    return None
+
+
+REVIEW_META_RE = re.compile(r"^---\s*$")
+REVIEW_META_SECTION_RE = re.compile(r"^review_meta:\s*$")
+
+
+def _parse_review_meta(path: Path) -> dict[str, Any] | None:
+    """Parse the review_meta YAML block from a markdown review artifact.
+
+    Looks for a block bounded by --- markers containing review_meta:.
+    Returns parsed dict or None if not found. Uses simple line parsing
+    to avoid a PyYAML dependency.
+    """
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    lines = content.split("\n")
+    in_meta_block = False
+    meta_start = -1
+
+    # Find the review_meta block (last --- delimited block containing review_meta:)
+    for i, line in enumerate(lines):
+        if REVIEW_META_RE.match(line.strip()):
+            if in_meta_block:
+                # End of block — parse what we collected
+                break
+            # Potential start of block — look ahead for review_meta:
+            for j in range(i + 1, min(i + 5, len(lines))):
+                if REVIEW_META_SECTION_RE.match(lines[j].strip()):
+                    in_meta_block = True
+                    meta_start = i + 1
+                    break
+
+    if not in_meta_block or meta_start < 0:
+        return None
+
+    # Simple parser for the known structure
+    result: dict[str, Any] = {
+        "evidence_citations": {
+            "preexisting_enforcement": [],
+            "preexisting_tests": [],
+        },
+        "checks": {},
+    }
+
+    current_list: list[str] | None = None
+    for line in lines[meta_start:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped == "review_meta:":
+            continue
+        if stripped == "evidence_citations:":
+            continue
+        if stripped.startswith("preexisting_enforcement:"):
+            rest = stripped.split(":", 1)[1].strip()
+            if rest == "[]":
+                current_list = None
+            else:
+                current_list = result["evidence_citations"]["preexisting_enforcement"]
+            continue
+        if stripped.startswith("preexisting_tests:"):
+            rest = stripped.split(":", 1)[1].strip()
+            if rest == "[]":
+                current_list = None
+            else:
+                current_list = result["evidence_citations"]["preexisting_tests"]
+            continue
+        if stripped == "checks:":
+            current_list = None
+            continue
+        if stripped.startswith("diff_only_review_rejected:"):
+            val_str = stripped.split(":", 1)[1].strip()
+            result["checks"]["diff_only_review_rejected"] = val_str == "true"
+            continue
+        if stripped.startswith("- ") and current_list is not None:
+            val = stripped[2:].strip().strip('"')
+            current_list.append(val)
+
+    return result
+
+
+def _verify_review_meta(
+    artifact_path: Path, checks: dict[str, Any], ctx: str
+) -> list[str]:
+    """Cross-reference manifest checks against the artifact's review_meta block."""
+    errors: list[str] = []
+    meta = _parse_review_meta(artifact_path)
+    if meta is None:
+        # No review_meta block — warn but don't fail (older artifacts)
+        return errors
+
+    cites = meta.get("evidence_citations", {})
+    meta_checks = meta.get("checks", {})
+
+    # R3 checks: cross-reference citation presence
+    if "preexisting_enforcement_citation_present" in checks:
+        manifest_val = checks["preexisting_enforcement_citation_present"]
+        actual_has = len(cites.get("preexisting_enforcement", [])) > 0
+        if manifest_val is True and not actual_has:
+            errors.append(
+                f"{ctx}: checks.preexisting_enforcement_citation_present=true "
+                f"but review_meta has no enforcement citations"
+            )
+
+    if "preexisting_test_citation_present" in checks:
+        manifest_val = checks["preexisting_test_citation_present"]
+        actual_has = len(cites.get("preexisting_tests", [])) > 0
+        if manifest_val is True and not actual_has:
+            errors.append(
+                f"{ctx}: checks.preexisting_test_citation_present=true "
+                f"but review_meta has no test citations"
+            )
+
+    if "diff_only_review_rejected" in checks and "diff_only_review_rejected" in meta_checks:
+        manifest_val = checks["diff_only_review_rejected"]
+        meta_val = meta_checks["diff_only_review_rejected"]
+        if manifest_val != meta_val:
+            errors.append(
+                f"{ctx}: checks.diff_only_review_rejected={manifest_val} "
+                f"but review_meta says {meta_val}"
+            )
+
     return errors
 
 
@@ -517,27 +656,62 @@ def validate_r7(data: dict[str, Any], check_files: bool, manifest_dir: Path) -> 
 # CLI
 # ---------------------------------------------------------------------------
 
+def _output_json(
+    status: str,
+    mtype: str | None,
+    manifest_path: Path,
+    errors: list[str],
+) -> None:
+    """Print structured JSON result."""
+    result = {
+        "status": status,
+        "manifest_type": mtype,
+        "manifest_path": str(manifest_path),
+        "error_count": len(errors),
+        "errors": errors,
+    }
+    print(json.dumps(result, indent=2))
+
+
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: validate_external_manifest.py <manifest.json> [--check-files]", file=sys.stderr)
+        print(
+            "Usage: validate_external_manifest.py <manifest.json> "
+            "[--check-files] [--format json]",
+            file=sys.stderr,
+        )
         return 2
 
     manifest_path = Path(sys.argv[1])
     check_files = "--check-files" in sys.argv
+    fmt = "text"
+    if "--format" in sys.argv:
+        idx = sys.argv.index("--format")
+        if idx + 1 < len(sys.argv):
+            fmt = sys.argv[idx + 1]
 
     if not manifest_path.exists():
-        print(f"ERROR: file not found: {manifest_path}", file=sys.stderr)
+        if fmt == "json":
+            _output_json("FAIL", None, manifest_path, [f"file not found: {manifest_path}"])
+        else:
+            print(f"ERROR: file not found: {manifest_path}", file=sys.stderr)
         return 1
 
     try:
         with open(manifest_path) as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"ERROR: invalid JSON: {e}", file=sys.stderr)
+        if fmt == "json":
+            _output_json("FAIL", None, manifest_path, [f"invalid JSON: {e}"])
+        else:
+            print(f"ERROR: invalid JSON: {e}", file=sys.stderr)
         return 1
 
     if not isinstance(data, dict):
-        print("ERROR: manifest must be a JSON object", file=sys.stderr)
+        if fmt == "json":
+            _output_json("FAIL", None, manifest_path, ["manifest must be a JSON object"])
+        else:
+            print("ERROR: manifest must be a JSON object", file=sys.stderr)
         return 1
 
     manifest_dir = manifest_path.parent
@@ -548,17 +722,23 @@ def main() -> int:
         errors = validate_r7(data, check_files, manifest_dir)
     else:
         phase = data.get("phase", "<missing>")
-        print(f"ERROR: cannot detect manifest type from phase='{phase}' (expected 'R3' or 'R7d')", file=sys.stderr)
+        msg = f"cannot detect manifest type from phase='{phase}' (expected 'R3' or 'R7d')"
+        if fmt == "json":
+            _output_json("FAIL", None, manifest_path, [msg])
+        else:
+            print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
-    if errors:
+    if fmt == "json":
+        _output_json("PASS" if not errors else "FAIL", mtype, manifest_path, errors)
+    elif errors:
         print(f"FAIL: {len(errors)} validation error(s) in {mtype.upper()} manifest:")
         for e in errors:
             print(f"  - {e}")
-        return 1
+    else:
+        print(f"PASS: {mtype.upper()} external manifest is valid ({manifest_path.name})")
 
-    print(f"PASS: {mtype.upper()} external manifest is valid ({manifest_path.name})")
-    return 0
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
