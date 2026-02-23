@@ -7,7 +7,7 @@ set -euo pipefail
 #
 # Schema names: gap_list, verify_result, review_receipt, phase_mapping,
 #               premortem_ready, lead_eval_sidecar, self_review_sidecar,
-#               review_artifact_sidecar
+#               review_artifact_sidecar, r3_external_manifest, r7_external_manifest
 #
 # Exit codes:
 #   0 = valid
@@ -31,7 +31,7 @@ Usage: plans/validate_recon_artifact.sh <schema_name> <artifact.json>
 Schema names:
   gap_list, verify_result, review_receipt, phase_mapping,
   premortem_ready, lead_eval_sidecar, self_review_sidecar,
-  review_artifact_sidecar
+  review_artifact_sidecar, r3_external_manifest, r7_external_manifest
 
 Exit codes:
   0 = valid
@@ -52,7 +52,7 @@ if [[ -z "$schema_name" || -z "$artifact_path" ]]; then
 fi
 
 # Validate schema_name is known
-known_schemas="gap_list verify_result review_receipt phase_mapping premortem_ready lead_eval_sidecar self_review_sidecar review_artifact_sidecar"
+known_schemas="gap_list verify_result review_receipt phase_mapping premortem_ready lead_eval_sidecar self_review_sidecar review_artifact_sidecar r3_external_manifest r7_external_manifest"
 schema_valid=false
 for s in $known_schemas; do
   if [[ "$s" == "$schema_name" ]]; then
@@ -176,6 +176,12 @@ case "$schema_name" in
   review_artifact_sidecar)
     required_fields=("story_id" "review_type" "review_basis" "finding_counts" "basis_line_present")
     ;;
+  r3_external_manifest)
+    required_fields=("story_id" "cycle" "review_basis" "tools" "validated_preexisting_enforcement_citation" "validated_preexisting_test_citation" "validation_status")
+    ;;
+  r7_external_manifest)
+    required_fields=("story_id" "cycle" "review_basis" "base_commit" "tools" "validation_status")
+    ;;
 esac
 
 for field in "${required_fields[@]}"; do
@@ -212,6 +218,44 @@ case "$schema_name" in
     unmapped="$(jq -re '.unmapped_p0_p1_count // empty' "$artifact_path" 2>/dev/null || true)"
     if [[ -n "$unmapped" && "$unmapped" != "0" ]]; then
       echo "WARN: unmapped_p0_p1_count=$unmapped (expected 0)" >&2
+    fi
+    ;;
+  r3_external_manifest)
+    # cycle must be C1
+    cycle="$(jq -re '.cycle // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$cycle" && "$cycle" != "C1" ]]; then
+      errors+=("cycle '$cycle' must be 'C1' for r3_external_manifest")
+    fi
+    # citation booleans must be true
+    enf="$(jq -re '.validated_preexisting_enforcement_citation // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ "$enf" != "true" ]]; then
+      errors+=("validated_preexisting_enforcement_citation must be true for C1")
+    fi
+    test_cit="$(jq -re '.validated_preexisting_test_citation // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ "$test_cit" != "true" ]]; then
+      errors+=("validated_preexisting_test_citation must be true for C1")
+    fi
+    # tools must have at least 1 entry
+    tool_count="$(jq -re '.tools | length' "$artifact_path" 2>/dev/null || echo 0)"
+    if [[ "$tool_count" -lt 1 ]]; then
+      errors+=("tools array must have at least 1 entry")
+    fi
+    ;;
+  r7_external_manifest)
+    # cycle must be C2
+    cycle="$(jq -re '.cycle // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$cycle" && "$cycle" != "C2" ]]; then
+      errors+=("cycle '$cycle' must be 'C2' for r7_external_manifest")
+    fi
+    # base_commit length
+    bc_len="$(jq -re '.base_commit | length' "$artifact_path" 2>/dev/null || echo 0)"
+    if [[ "$bc_len" -lt 7 ]]; then
+      errors+=("base_commit too short (length=$bc_len, need >= 7)")
+    fi
+    # tools must have at least 1 entry
+    tool_count="$(jq -re '.tools | length' "$artifact_path" 2>/dev/null || echo 0)"
+    if [[ "$tool_count" -lt 1 ]]; then
+      errors+=("tools array must have at least 1 entry")
     fi
     ;;
 esac

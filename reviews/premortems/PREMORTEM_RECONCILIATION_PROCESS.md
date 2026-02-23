@@ -19,7 +19,7 @@
 | Document | Purpose | Audience | ~Lines |
 |----------|---------|----------|--------|
 | **This file** | Index + Appendix A (R1 prompt, source of truth) | All | ~400 |
-| **RUNBOOK** | Operator instructions, phase-by-phase execution, named gates | Agents executing phases | ~830 |
+| **RUNBOOK** | Operator instructions, phase-by-phase execution, named gates | Agents executing phases | ~1030 |
 | **POLICY** | Normative rules: verdicts, gates, schemas, scope | Anyone needing "what's the rule?" | ~500 |
 | **ANTIPATTERNS** | 26 anti-patterns, cross-ref chains, gate coverage | Reviewers, auditors | ~400 |
 | **METRICS** | Pilot data, lessons, rationale, worked examples, changelog | Process designers, retrospectives | ~630 |
@@ -42,6 +42,8 @@ All phase artifacts are validated against JSON Schema files in `specs/schemas/re
 | `lead_eval_sidecar.schema.json` | R2 | Sidecar | Lead eval gate fields |
 | `self_review_sidecar.schema.json` | R5b | Sidecar | Self-review skill receipts |
 | `review_artifact_sidecar.schema.json` | R7 | Sidecar | Review sub-phase gate fields |
+| `r3_external_manifest.schema.json` | R3B | JSON-primary | C1 external review manifest |
+| `r7_external_manifest.schema.json` | R7d.1 | JSON-primary | C2 external review manifest |
 
 **Guardrail fields** (all artifacts): `schema_version`, `head_commit`, `created_at`.
 **Sidecar extras**: `markdown_sha256`, `markdown_path`.
