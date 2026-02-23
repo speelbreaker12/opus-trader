@@ -3,6 +3,7 @@
 > Normative rules governing verdicts, gates, artifact schemas, and review scope.
 > For execution instructions, see [RUNBOOK](RUNBOOK_PREMORTEM_RECON.md).
 > For anti-patterns and lessons, see [ANTIPATTERNS](PREMORTEM_RECON_ANTIPATTERNS.md).
+> For metrics and rationale, see [METRICS](PREMORTEM_RECON_METRICS.md).
 
 ---
 
@@ -59,8 +60,13 @@
 | **RECONCILED** | All premortem requirements verified in code. All P0/P1 gaps fixed. Unit correctness proven. |
 | **RECONCILED-WITH-DEBT** | Requirements verified but P2 items deferred. Debt register populated. |
 | **NOT RECONCILED** | P0 gaps remain open. Enforcement missing or tests absent. |
+| **RECONCILED_UNIT_ONLY** | Unit correctness proven but at least one safety-critical AT is PROVEN-UNIT (not wired into production). Blocks pass-flip via the runtime-enforcement gate. |
 
-**Derivation rule**: A story's final verdict is derived from its per-AT verdicts. Any `CLAIMED_NOT_PROVEN` or `WRONG_IMPL_UNBLOCKED` on a safety-critical AT produces `NOT RECONCILED`.
+**Derivation rules** (evaluated in order):
+1. Any `CLAIMED_NOT_PROVEN` or `WRONG_IMPL_UNBLOCKED` on a safety-critical AT → `NOT RECONCILED`.
+2. All per-AT verdicts permit reconciliation but R7c wiring audit shows `PROVEN-UNIT` on at least one safety-critical AT → `RECONCILED_UNIT_ONLY`.
+3. All P0/P1 gaps fixed, no debt → `RECONCILED`.
+4. All P0/P1 gaps fixed, P2 items deferred with debt register entries → `RECONCILED-WITH-DEBT`.
 
 ### 2.4 Wiring Qualifiers
 
@@ -175,12 +181,12 @@ Five receipt files must exist at `reviews/reconciliations/<slice>/receipts/`:
 
 ### 3.9 prd_set_pass.sh Gate
 
-Twelve checks, all must pass:
+Fifteen checks, all must pass:
 
 | # | Check | What blocks |
 |---|-------|-------------|
-| 1 | Story verdict is `RECONCILED` or `RECONCILED-WITH-DEBT` | `NOT RECONCILED` blocks |
-| 2 | Every safety-critical AT is `PROVEN-INTEGRATED` | `PROVEN-UNIT` on safety-critical AT blocks |
+| 1 | Story verdict is `RECONCILED` or `RECONCILED-WITH-DEBT` | `NOT RECONCILED` blocks; `RECONCILED_UNIT_ONLY` passes this check but is always blocked by check #2 |
+| 2 | Every safety-critical AT is `PROVEN-INTEGRATED` | `PROVEN-UNIT` on safety-critical AT blocks (this is the gate that blocks `RECONCILED_UNIT_ONLY` stories) |
 | 3 | All 8 workflow receipts present (`.wf/receipts/<ID>/`) | Missing receipt blocks |
 | 4 | `verify.sh` passed | Failed verification blocks |
 | 5 | `contract_review.json` contains `"decision": "PASS"` | Non-PASS decision blocks |
@@ -191,6 +197,9 @@ Twelve checks, all must pass:
 | 10 | No overdue debt (target_slice already passed) | Overdue debt blocks until re-targeted |
 | 11 | `proof_graph.json` exists at `artifacts/story/<ID>/proof_graph.json` | Missing proof graph blocks (unless listed in `plans/proof_graph_exempt.txt`) |
 | 12 | `python/proof_graph/validate.py --strict` passes (60 rules, WARNs promoted to ERRORs) | Exit code 1 on failure blocks; exit code 20 on trading halt |
+| 13 | `R3_EXTERNAL_C1_COMPLETE` passed; all external C1 findings mapped via R4b | Unmapped external finding blocks |
+| 14 | `R7D_EXTERNAL_C2_COMPLETE` passed (or RECON-CLEAN approved with lead sign-off) | Missing Cycle 2 review blocks |
+| 15 | `fail_closed_coverage.sh` passes (test counts + fail-closed keyword patterns) | Insufficient fail-closed test coverage blocks |
 
 ### 3.10 Proof Graph Gate
 
@@ -320,7 +329,7 @@ Every reconciled story must produce this minimum set. Missing items block the `R
 | 3 | **Cycle 1 external review artifact(s)** (logged via `review_logged.sh`) | R3 | Independent auditor confirmed contract compliance on story proof scope |
 | 4 | **Cycle 2 external review artifact(s)** (logged, or `RECON-CLEAN` exception) | R7 | Fix diff verified; Cycle 1 findings closed; no regressions |
 | 5 | **Review resolution artifact** | R6 | All BLOCKING findings closed; verdicts assigned with evidence |
-| 6 | **Verify output** + `verify.meta.json` | R8 | `verify.sh` passed with correct mode/head; test count matches |
+| 6 | **Verify output** + `verify.meta.json` | verify_full | `verify.sh` passed with correct mode/head; test count matches |
 | 7a | **Test output + diff summary** *(if code changed)* | R5/R5b | Fixes compile, tests pass, diff is additive |
 | 7b | **`NO_CODE_CHANGE_AUDIT_ONLY` section** *(if no code changed)* | R5b | Negative evidence: `git diff -> 0`, proof checks still run, no fixes needed |
 | 8 | **`proof_graph.json`** | R6 | Machine-verifiable proof graph: per-AT enforcement, tests, wiring, verdicts; validated by `validate.py --strict` at pass-flip |

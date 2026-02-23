@@ -152,6 +152,10 @@ static PREFLIGHT_STOP_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
 static PREFLIGHT_LINKED_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
 static PREFLIGHT_POST_ONLY_WOULD_CROSS_TOTAL: AtomicU64 = AtomicU64::new(0);
 
+/// Process-lifetime rejection counter for preflight gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `PreflightMetrics` for tick-level debugging.
 pub fn preflight_reject_total(reason: PreflightReject) -> u64 {
     match reason {
         PreflightReject::OrderTypeMarketForbidden => {
@@ -185,7 +189,7 @@ fn bump_preflight_reject(reason: PreflightReject) {
         }
     }
     let tail = format!("reason={reason:?}");
-    super::emit_execution_metric_line("preflight_reject_total", &tail);
+    super::emit_execution_metric_line(super::METRIC_PREFLIGHT_REJECT, &tail);
 }
 
 // ─── Core preflight function ────────────────────────────────────────────

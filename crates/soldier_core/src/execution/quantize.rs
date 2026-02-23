@@ -9,6 +9,8 @@
 //! - SELL: `limit_price_q = ceil(raw_limit_price / tick_size) * tick_size`
 //! - If `qty_q < min_amount` → Reject(TooSmallAfterQuantization)
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 /// Order side — determines price rounding direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Side {
@@ -66,6 +68,17 @@ pub enum QuantizeError {
         /// Which field is invalid.
         field: &'static str,
     },
+}
+
+/// Lightweight reason discriminator for `quantize_reject_total()`.
+///
+/// Avoids forcing callers to construct a full `QuantizeError` with dummy
+/// field values just to query a process-lifetime counter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuantizeStaticRejectReason {
+    TooSmall,
+    InvalidInput,
+    MetadataMissing,
 }
 
 const BOUNDARY_EPS: f64 = 1e-9;
@@ -127,6 +140,10 @@ fn quantize_ratio_to_i64(raw: f64, step: f64, round_up: bool) -> Result<i64, Qua
 pub struct QuantizeMetrics {
     /// `quantization_reject_too_small_total` counter.
     reject_too_small_total: u64,
+    /// `quantization_reject_invalid_input_total` counter.
+    reject_invalid_input_total: u64,
+    /// `quantization_reject_metadata_missing_total` counter.
+    reject_metadata_missing_total: u64,
 }
 
 impl QuantizeMetrics {
@@ -134,6 +151,8 @@ impl QuantizeMetrics {
     pub fn new() -> Self {
         Self {
             reject_too_small_total: 0,
+            reject_invalid_input_total: 0,
+            reject_metadata_missing_total: 0,
         }
     }
 
@@ -142,9 +161,29 @@ impl QuantizeMetrics {
         self.reject_too_small_total += 1;
     }
 
+    /// Increment the invalid-input rejection counter.
+    pub fn record_invalid_input_rejection(&mut self) {
+        self.reject_invalid_input_total += 1;
+    }
+
+    /// Increment the metadata-missing rejection counter.
+    pub fn record_metadata_missing_rejection(&mut self) {
+        self.reject_metadata_missing_total += 1;
+    }
+
     /// Current value of `quantization_reject_too_small_total`.
     pub fn reject_too_small_total(&self) -> u64 {
         self.reject_too_small_total
+    }
+
+    /// Current value of `quantization_reject_invalid_input_total`.
+    pub fn reject_invalid_input_total(&self) -> u64 {
+        self.reject_invalid_input_total
+    }
+
+    /// Current value of `quantization_reject_metadata_missing_total`.
+    pub fn reject_metadata_missing_total(&self) -> u64 {
+        self.reject_metadata_missing_total
     }
 }
 
@@ -152,6 +191,58 @@ impl Default for QuantizeMetrics {
     fn default() -> Self {
         Self::new()
     }
+}
+
+static QUANTIZE_REJECT_TOO_SMALL_TOTAL: AtomicU64 = AtomicU64::new(0);
+static QUANTIZE_REJECT_INVALID_INPUT_TOTAL: AtomicU64 = AtomicU64::new(0);
+static QUANTIZE_REJECT_METADATA_MISSING_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for quantize gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `QuantizeMetrics` for tick-level debugging.
+pub fn quantize_reject_total(reason: QuantizeStaticRejectReason) -> u64 {
+    match reason {
+        QuantizeStaticRejectReason::TooSmall => {
+            QUANTIZE_REJECT_TOO_SMALL_TOTAL.load(Ordering::Relaxed)
+        }
+        QuantizeStaticRejectReason::InvalidInput => {
+            QUANTIZE_REJECT_INVALID_INPUT_TOTAL.load(Ordering::Relaxed)
+        }
+        QuantizeStaticRejectReason::MetadataMissing => {
+            QUANTIZE_REJECT_METADATA_MISSING_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_quantize_reject(error: &QuantizeError) {
+    match error {
+        QuantizeError::TooSmallAfterQuantization { .. } => {
+            QUANTIZE_REJECT_TOO_SMALL_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        QuantizeError::InvalidInput { .. } => {
+            QUANTIZE_REJECT_INVALID_INPUT_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        QuantizeError::InstrumentMetadataMissing { .. } => {
+            QUANTIZE_REJECT_METADATA_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("error={error:?}");
+    super::emit_execution_metric_line(super::METRIC_QUANTIZE_REJECT, &tail);
+    tracing::debug!("QuantizeReject error={:?}", error);
+}
+
+/// Record instance + static metrics for a quantize error, then return it.
+fn reject_quantize_err(e: QuantizeError, metrics: &mut QuantizeMetrics) -> QuantizeError {
+    match &e {
+        QuantizeError::TooSmallAfterQuantization { .. } => metrics.record_too_small_rejection(),
+        QuantizeError::InvalidInput { .. } => metrics.record_invalid_input_rejection(),
+        QuantizeError::InstrumentMetadataMissing { .. } => {
+            metrics.record_metadata_missing_rejection()
+        }
+    }
+    bump_quantize_reject(&e);
+    e
 }
 
 /// Validate that quantization constraints are usable.
@@ -190,38 +281,52 @@ pub fn quantize(
     constraints: &QuantizeConstraints,
     metrics: &mut QuantizeMetrics,
 ) -> Result<QuantizedValues, QuantizeError> {
-    validate_constraints(constraints)?;
+    validate_constraints(constraints).map_err(|e| reject_quantize_err(e, metrics))?;
     if !raw_qty.is_finite() {
-        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
+        return Err(reject_quantize_err(
+            QuantizeError::InvalidInput { field: "raw_qty" },
+            metrics,
+        ));
     }
     if !raw_limit_price.is_finite() {
-        return Err(QuantizeError::InvalidInput {
-            field: "raw_limit_price",
-        });
+        return Err(reject_quantize_err(
+            QuantizeError::InvalidInput {
+                field: "raw_limit_price",
+            },
+            metrics,
+        ));
     }
     if raw_qty < 0.0 {
-        return Err(QuantizeError::InvalidInput { field: "raw_qty" });
+        return Err(reject_quantize_err(
+            QuantizeError::InvalidInput { field: "raw_qty" },
+            metrics,
+        ));
     }
 
     // Quantity: always round down (never round up size)
-    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false)?;
+    let qty_steps = quantize_ratio_to_i64(raw_qty, constraints.amount_step, false)
+        .map_err(|e| reject_quantize_err(e, metrics))?;
     let qty_q = qty_steps as f64 * constraints.amount_step;
 
     // AT-908: reject if quantized quantity is below minimum
     if qty_q < constraints.min_amount {
-        metrics.record_too_small_rejection();
-        return Err(QuantizeError::TooSmallAfterQuantization {
-            qty_q,
-            min_amount: constraints.min_amount,
-        });
+        return Err(reject_quantize_err(
+            QuantizeError::TooSmallAfterQuantization {
+                qty_q,
+                min_amount: constraints.min_amount,
+            },
+            metrics,
+        ));
     }
 
     // Price: direction-dependent rounding
     let price_ticks = match side {
         // BUY: round down (never pay extra)
-        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false)?,
+        Side::Buy => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, false)
+            .map_err(|e| reject_quantize_err(e, metrics))?,
         // SELL: round up (never sell cheaper)
-        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true)?,
+        Side::Sell => quantize_ratio_to_i64(raw_limit_price, constraints.tick_size, true)
+            .map_err(|e| reject_quantize_err(e, metrics))?,
     };
     let limit_price_q = price_ticks as f64 * constraints.tick_size;
 

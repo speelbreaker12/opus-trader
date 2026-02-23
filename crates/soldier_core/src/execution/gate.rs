@@ -210,6 +210,10 @@ static LIQUIDITY_GATE_REJECT_EXPECTED_SLIPPAGE_TOTAL: AtomicU64 = AtomicU64::new
 static LIQUIDITY_GATE_REJECT_DEPTH_SHORTFALL_TOTAL: AtomicU64 = AtomicU64::new(0);
 static EXPECTED_SLIPPAGE_BPS_SAMPLES: AtomicU64 = AtomicU64::new(0);
 
+/// Process-lifetime rejection counter for liquidity gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `LiquidityGateMetrics` for tick-level debugging.
 pub fn liquidity_gate_reject_total(reason: LiquidityGateRejectReason) -> u64 {
     match reason {
         LiquidityGateRejectReason::LiquidityGateNoL2 => {
@@ -245,7 +249,7 @@ fn bump_liquidity_gate_reject(
         }
     }
     let tail = format!("reason={reason:?}");
-    super::emit_execution_metric_line("liquidity_gate_reject_total", &tail);
+    super::emit_execution_metric_line(super::METRIC_LIQUIDITY_GATE_REJECT, &tail);
     tracing::debug!(
         "LiquidityGateReject reason={:?} wap={:?} slippage_bps={:?}",
         reason,
@@ -257,7 +261,7 @@ fn bump_liquidity_gate_reject(
 fn record_expected_slippage_sample(slippage_bps: f64) {
     EXPECTED_SLIPPAGE_BPS_SAMPLES.fetch_add(1, Ordering::Relaxed);
     let tail = format!("value={slippage_bps}");
-    super::emit_execution_metric_line("expected_slippage_bps", &tail);
+    super::emit_execution_metric_line(super::METRIC_EXPECTED_SLIPPAGE_BPS, &tail);
 }
 
 // --- Book walk -----------------------------------------------------------

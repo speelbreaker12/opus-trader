@@ -1,6 +1,6 @@
 # Premortem + Reconciliation Runbook
 
-> Operator instructions only. For verdict definitions and gate rules, see [POLICY](PREMORTEM_RECON_POLICY.md). For anti-patterns and lessons, see [ANTIPATTERNS](PREMORTEM_RECON_ANTIPATTERNS.md).
+> Operator instructions only. For verdict definitions and gate rules, see [POLICY](PREMORTEM_RECON_POLICY.md). For anti-patterns and lessons, see [ANTIPATTERNS](PREMORTEM_RECON_ANTIPATTERNS.md). For metrics and rationale, see [METRICS](PREMORTEM_RECON_METRICS.md).
 
 ---
 
@@ -490,7 +490,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 7. Re-check STOPLIGHT after remediation (R6 delta check)
 8. Verify R5b receipts (hard gate)
 9. Confirm evidence ledgers updated with FIXED citations
-10. Assign story verdict: RECONCILED | RECONCILED-WITH-DEBT | NOT RECONCILED
+10. Assign story verdict: RECONCILED | RECONCILED-WITH-DEBT | RECONCILED_UNIT_ONLY | NOT RECONCILED
 
 **Output**:
 - `R6_VERIFY_SUMMARY.md` (narrative)
@@ -690,9 +690,12 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 | `R7D_EXTERNAL_C2_COMPLETE` | R7d.1 |
 | `R7D_CODE_REVIEW_EXPERT_COMPLETE` | R7d.2 |
 | `R7D_BLOCKERS_RESOLVED` | R7d |
+| `R7E_MUTATION_ANALYSIS_COMPLETE` | R7e |
 | `R7E_SIMPLER_THAN_CORRECT_GATE` | R7e |
+| `R7F_DEBT_SCHEMA_VALID` | R7f |
 | `R7F_ALL_DEFERRED_MAPPED` | R7f |
 | `R7F_NO_INVALID_DEBT_FIELDS` | R7f |
+| `R7F_NO_OVERDUE_DEBT` | R7f |
 | No unresolved P0/P1 findings remain | All |
 
 **Final summary artifact**: `SUMMARY.md` + `SUMMARY.json` (optional sidecar for dashboards) — story verdicts, wiring qualifiers, debt summary, phase artifact index.
@@ -707,7 +710,7 @@ A story is pass-eligible only if ALL conditions are met:
 
 | Gate | Check |
 |------|-------|
-| Proof | Story verdict is RECONCILED or RECONCILED-WITH-DEBT |
+| Proof | Story verdict is RECONCILED or RECONCILED-WITH-DEBT (RECONCILED_UNIT_ONLY passes this check but is blocked by Wiring) |
 | Wiring | Every safety-critical AT is PROVEN-INTEGRATED |
 | Gaps | No unresolved P0/P1 |
 | Debt | DEBT_REGISTER.json valid for all deferred items |
@@ -981,9 +984,13 @@ Validators reject if: `head_commit` mismatch, `markdown_sha256` drift, unsupport
 | PROVEN | Per-AT | Enforcement exists, test proves causality, fail-closed confirmed |
 | WEAK_PROOF | Per-AT | Test exists but only checks "something happened," not which guard |
 | CLAIMED_NOT_PROVEN | Per-AT | No enforcement or no causal test |
+| UNTESTED_ENFORCEMENT | Per-AT | Enforcement and test both exist but are disconnected |
 | WRONG_IMPL_UNBLOCKED | Per-AT | §5 wrong impl has no tightening test |
+| DEFERRED | Per-AT | AT not yet implemented; tracked in debt register |
+| PARTIAL | Intermediate | At least one AT has gaps; replaced by final verdict in R6 |
 | RECONCILED | Story | All P0/P1 closed, unit correctness proven |
 | RECONCILED-WITH-DEBT | Story | P2 items deferred, debt register populated |
+| RECONCILED_UNIT_ONLY | Story | Unit correctness proven but safety-critical AT is PROVEN-UNIT (not wired) |
 | NOT RECONCILED | Story | P0 gaps remain open |
 | PROVEN-INTEGRATED | Wiring | Guard reachable from production entry point |
 | PROVEN-UNIT | Wiring | Guard has zero production callers |

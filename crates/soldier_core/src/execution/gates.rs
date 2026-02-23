@@ -119,6 +119,10 @@ impl Default for NetEdgeMetrics {
 static NET_EDGE_REJECT_TOO_LOW_TOTAL: AtomicU64 = AtomicU64::new(0);
 static NET_EDGE_REJECT_INPUT_MISSING_TOTAL: AtomicU64 = AtomicU64::new(0);
 
+/// Process-lifetime rejection counter for net edge gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `NetEdgeMetrics` for tick-level debugging.
 pub fn net_edge_reject_total(reason: NetEdgeRejectReason) -> u64 {
     match reason {
         NetEdgeRejectReason::NetEdgeTooLow => NET_EDGE_REJECT_TOO_LOW_TOTAL.load(Ordering::Relaxed),
@@ -138,7 +142,7 @@ fn bump_net_edge_reject(reason: NetEdgeRejectReason, net_edge_usd: Option<f64>) 
         }
     }
     let tail = format!("reason={reason:?}");
-    super::emit_execution_metric_line("net_edge_reject_total", &tail);
+    super::emit_execution_metric_line(super::METRIC_NET_EDGE_REJECT, &tail);
     tracing::debug!(
         "NetEdgeReject reason={:?} net_edge_usd={:?}",
         reason,

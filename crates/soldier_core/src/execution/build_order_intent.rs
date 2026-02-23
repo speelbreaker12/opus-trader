@@ -221,7 +221,7 @@ pub fn gate_sequence_total(result: GateSequenceResult) -> u64 {
 fn finish_approved(metrics: &mut ChokeMetrics, gate_trace: Vec<GateStep>) -> ChokeResult {
     metrics.record_approved();
     GATE_SEQUENCE_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
-    super::emit_execution_metric_line("gate_sequence_total", "result=allowed");
+    super::emit_execution_metric_line(super::METRIC_GATE_SEQUENCE_TOTAL, "result=allowed");
     ChokeResult::Approved { gate_trace }
 }
 
@@ -235,7 +235,7 @@ fn finish_rejected(
         metrics.record_rejected_risk_state();
     }
     GATE_SEQUENCE_REJECTED_TOTAL.fetch_add(1, Ordering::Relaxed);
-    super::emit_execution_metric_line("gate_sequence_total", "result=rejected");
+    super::emit_execution_metric_line(super::METRIC_GATE_SEQUENCE_TOTAL, "result=rejected");
     ChokeResult::Rejected { reason, gate_trace }
 }
 
