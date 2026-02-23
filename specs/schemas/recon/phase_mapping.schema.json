@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "phase_mapping.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "head_commit",
+    "created_at",
+    "story_id",
+    "mappings",
+    "unmapped_count",
+    "unmapped_p0_p1_count"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[a-z_]+\\.v[0-9]+$"
+    },
+    "head_commit": { "type": "string", "minLength": 7 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "story_id": { "type": "string", "minLength": 1 },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "finding_id",
+          "tool",
+          "prompt_style",
+          "maps_to",
+          "gap_id",
+          "justification"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "finding_id": { "type": "string", "minLength": 1 },
+          "tool": { "type": "string", "minLength": 1 },
+          "prompt_style": { "type": "string", "minLength": 1 },
+          "maps_to": {
+            "type": "string",
+            "enum": ["gap_id", "false_positive"]
+          },
+          "gap_id": { "type": ["string", "null"] },
+          "justification": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "unmapped_count": { "type": "integer", "minimum": 0 },
+    "unmapped_p0_p1_count": { "type": "integer", "minimum": 0, "maximum": 0 }
+  }
+}

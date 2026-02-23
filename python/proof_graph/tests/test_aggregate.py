@@ -222,6 +222,208 @@ class TestAggregate(unittest.TestCase):
         merged = aggregate(base, [r1, r2])
         self.assertEqual(merged["meta"]["review_sources"], ["reviewer_0", "reviewer_1"])
 
+    def test_severity_tightened_independently(self):
+        """Same verdict, different severity → strictest severity wins."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        # Both agree on PROVEN_INTEGRATED but differ on severity
+        r1["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r1["ats"][0]["at_verdict"]["severity"] = "INFO"
+        r2["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r2["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+
+        at201 = next(at for at in merged["ats"] if at["at_id"] == "AT-201")
+        # Verdict stays PROVEN_INTEGRATED (agreement)
+        self.assertEqual(at201["at_verdict"]["verdict"], "PROVEN_INTEGRATED")
+        # Severity should be BLOCKING (strictest)
+        self.assertEqual(at201["at_verdict"]["severity"], "BLOCKING")
+
+    def test_order_independence(self):
+        """Swapping reviewer order produces identical result."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        r1["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        r1["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        r2["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r2["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged_ab = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+        merged_ba = aggregate(base, [r2, r1], review_labels=["opus", "codex"])
+
+        at_ab = next(at for at in merged_ab["ats"] if at["at_id"] == "AT-201")
+        at_ba = next(at for at in merged_ba["ats"] if at["at_id"] == "AT-201")
+        self.assertEqual(at_ab["at_verdict"]["verdict"], at_ba["at_verdict"]["verdict"])
+        self.assertEqual(at_ab["at_verdict"]["severity"], at_ba["at_verdict"]["severity"])
+
+    def test_stale_conflicts_cleaned_on_reaggregation(self):
+        """Re-aggregation cleans up old conflicts when no longer applicable."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        # First aggregation: disagreement → conflict
+        r1["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r2["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        merged1 = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+        self.assertIn("AT-201", merged1["meta"]["conflicts"])
+
+        # Second aggregation: agreement → no conflict
+        r3 = deepcopy(base)
+        r4 = deepcopy(base)
+        r3["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r4["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        merged2 = aggregate(merged1, [r3, r4], review_labels=["codex2", "opus2"])
+        # Old conflicts should be gone
+        self.assertNotIn("conflicts", merged2["meta"])
+
+    def test_deterministic_tiebreak_new_at(self):
+        """When AT in reviewers but not base, deterministic tie-break picks
+        strictest severity then lowest label."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+
+        # Add AT-300 to both reviewers with same verdict but diff severity
+        new_at_1 = deepcopy(r1["ats"][0])
+        new_at_1["at_id"] = "AT-300"
+        new_at_1["at_verdict"]["verdict"] = "WEAK_PROOF"
+        new_at_1["at_verdict"]["severity"] = "INFO"
+        r1["ats"].append(new_at_1)
+
+        new_at_2 = deepcopy(r2["ats"][0])
+        new_at_2["at_id"] = "AT-300"
+        new_at_2["at_verdict"]["verdict"] = "WEAK_PROOF"
+        new_at_2["at_verdict"]["severity"] = "BLOCKING"
+        r2["ats"].append(new_at_2)
+
+        merged = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+
+        at300 = next(at for at in merged["ats"] if at["at_id"] == "AT-300")
+        # Should pick the BLOCKING severity entry (strictest)
+        self.assertEqual(at300["at_verdict"]["severity"], "BLOCKING")
+
+    def test_zero_reviews_returns_base(self):
+        """Zero reviews → returns base with empty review_sources."""
+        base = self._base()
+        merged = aggregate(base, [], review_labels=[])
+        self.assertEqual(merged["meta"]["review_sources"], [])
+        self.assertEqual(merged["meta"]["review_count"], 0)
+        # ATs unchanged
+        self.assertEqual(len(merged["ats"]), len(base["ats"]))
+        # No conflicts
+        self.assertNotIn("conflicts", merged["meta"])
+
+
+    def test_reconciliation_status_not_recomputed(self):
+        """F7-007: aggregate does NOT recompute reconciliation_status.
+
+        When a reviewer tightens a verdict to BLOCKING, the merged graph
+        retains the base reconciliation_status. Downstream validate()
+        catches the contradiction via R-001.
+        """
+        base = self._base()
+        r1 = deepcopy(base)
+        # Reviewer upgrades AT-201 to MISSING/BLOCKING
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged = aggregate(base, [r1], review_labels=["codex"])
+
+        # reconciliation_status is NOT recomputed — stays RECONCILED
+        self.assertEqual(merged["story_verdict"]["reconciliation_status"], "RECONCILED")
+        # But blocking_count IS recomputed
+        self.assertGreaterEqual(merged["story_verdict"]["blocking_count"], 1)
+
+    def test_rationale_stale_after_verdict_change(self):
+        """F7-008/F-09: aggregate updates verdict+severity but keeps base rationale.
+
+        When the strictest reviewer provides a different verdict, the
+        rationale string remains from the base AT. The AT is tracked in
+        meta.stale_rationales so downstream consumers can detect this state.
+        """
+        base = self._base()
+        r1 = deepcopy(base)
+        # Base: PROVEN_INTEGRATED with rationale "proven"
+        base_rationale = base["ats"][0]["at_verdict"]["rationale"]
+        # Reviewer: MISSING with different rationale
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        r1["ats"][0]["at_verdict"]["rationale"] = "enforcement not found"
+
+        merged = aggregate(base, [r1], review_labels=["codex"])
+
+        at201 = next(at for at in merged["ats"] if at["at_id"] == "AT-201")
+        # Verdict is from reviewer (strictest)
+        self.assertEqual(at201["at_verdict"]["verdict"], "MISSING")
+        # Rationale is from base (not updated)
+        self.assertEqual(at201["at_verdict"]["rationale"], base_rationale)
+        # Stale rationale is tracked in meta
+        self.assertIn("AT-201", merged["meta"]["stale_rationales"])
+
+    def test_no_stale_rationales_when_agreement(self):
+        """When reviewers agree with base, no stale rationales."""
+        base = self._base()
+        r1 = deepcopy(base)
+        merged = aggregate(base, [r1], review_labels=["codex"])
+        self.assertNotIn("stale_rationales", merged["meta"])
+
+    def test_reconciliation_stale_flagged(self):
+        """D2-001: meta.reconciliation_stale set when blocking_count > 0
+        under reconciled status."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged = aggregate(base, [r1], review_labels=["codex"])
+
+        # reconciliation_status is NOT recomputed (stays RECONCILED)
+        self.assertEqual(merged["story_verdict"]["reconciliation_status"], "RECONCILED")
+        # But reconciliation_stale flag IS set
+        self.assertTrue(merged["meta"].get("reconciliation_stale", False))
+
+    def test_reconciliation_not_stale_when_clean(self):
+        """No reconciliation_stale when blocking_count == 0."""
+        base = self._base()
+        r1 = deepcopy(base)
+        merged = aggregate(base, [r1], review_labels=["codex"])
+        self.assertNotIn("reconciliation_stale", merged["meta"])
+
+    def test_reconciliation_stale_cleaned_when_status_changes(self):
+        """reconciliation_stale cleared when reconciliation_status leaves
+        the reconciled family (e.g. operator sets NOT_RECONCILED)."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        merged1 = aggregate(base, [r1], review_labels=["codex"])
+        self.assertTrue(merged1["meta"].get("reconciliation_stale", False))
+
+        # Operator updates reconciliation_status to NOT_RECONCILED
+        merged1["story_verdict"]["reconciliation_status"] = "NOT_RECONCILED"
+        r2 = deepcopy(merged1)
+        merged2 = aggregate(merged1, [r2], review_labels=["codex2"])
+        self.assertNotIn("reconciliation_stale", merged2["meta"])
+
+    def test_unknown_severity_fail_closed(self):
+        """D2-003: unknown severity treated as stricter than BLOCKING."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        # r1 has known BLOCKING severity
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        # r2 has unknown severity — should be treated as strictest
+        r2["ats"][0]["at_verdict"]["severity"] = "ULTRA_CRITICAL"
+
+        merged = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+
+        at201 = next(at for at in merged["ats"] if at["at_id"] == "AT-201")
+        # Unknown severity wins (fail-closed: stricter than BLOCKING)
+        self.assertEqual(at201["at_verdict"]["severity"], "ULTRA_CRITICAL")
+
 
 if __name__ == "__main__":
     unittest.main()

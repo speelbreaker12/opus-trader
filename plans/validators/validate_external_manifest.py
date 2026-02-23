@@ -35,11 +35,9 @@ if str(_VALIDATORS_DIR) not in sys.path:
     sys.path.insert(0, str(_VALIDATORS_DIR))
 
 from validate_review_header import (  # noqa: E402
-    ValidationResult as HeaderValidationResult,
     validate as validate_header,
     extract_provenance_md,
     extract_provenance_json,
-    build_parser as build_header_parser,
 )
 from lib_review_artifacts import (  # noqa: E402
     explain_failure_code,

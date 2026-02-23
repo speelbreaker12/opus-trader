@@ -67,8 +67,30 @@ Default to story-scope. Escalate beyond it only if:
 - Reviewer finds a pattern bug likely repeated elsewhere
 - Modified module is used by multiple stories (blast radius risk)
 
+PROOF GRAPH (when --proof-graph is active)
+
+A proof_graph.json skeleton has been generated at:
+  artifacts/story/${STORY_ID}/<tool>/proof_graph.json
+
+For each AT entry in the `ats[]` array, fill the `at_verdict` block:
+  "at_verdict": {
+    "verdict": "PROVEN_INTEGRATED|PROVEN_UNIT|WEAK_PROOF|CLAIMED_NOT_PROVEN|UNTESTED_ENFORCEMENT|WRONG_IMPL_UNBLOCKED|INVALID_REF|FAIL_OPEN_RISK|MISSING|DEFERRED",
+    "severity": "BLOCKING|HARDENING|INFO",
+    "rationale": "One sentence explaining your verdict"
+  }
+
+Also fill `enforcement.status` and `wiring.status` if you have evidence.
+Leave other fields as-is (they are pre-populated from PRD + premortem).
+
+Rules:
+- DEFERRED = "I cannot evaluate this AT" (not "it's fine")
+- If uncertain, use the MORE RESTRICTIVE verdict (fail-closed)
+- Do NOT modify schema_version, head_sha, or story_meta
+
 OUTPUT
 - Write review file(s) to artifacts/story/${STORY_ID}/codex/ (or opus/ or kimi/).
+- Canonical filenames: `<tool>.enriched.md`, `<tool>.generic.md` (per RUNBOOK §6.1)
+- review_logged.sh emits YAML front matter provenance + `Review basis:` + `Phase equivalent:` lines automatically.
 - Review MUST include: `Review basis: STORY_SCOPE (Cycle 1)`
 - Include:
   - STOPLIGHT verdict

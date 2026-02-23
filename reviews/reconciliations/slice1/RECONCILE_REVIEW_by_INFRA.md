@@ -3,6 +3,7 @@
 **Reviewer domain**: INFRA (scaffolding, config, QA tooling)
 **Date**: 2026-02-20
 **Batches reviewed**: BATCH_INSTRUMENT, BATCH_DISPATCH, BATCH_EXPIRY
+**Review basis**: STORY_SCOPE (Cycle 1)
 
 ## Stories Reviewed
 

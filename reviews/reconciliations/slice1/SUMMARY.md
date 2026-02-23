@@ -93,6 +93,19 @@ NOT RECONCILED:       0
 
 ---
 
+## Operational Escalation
+
+**OPERATIONAL_ESCALATION_REQUIRED**: YES
+
+| Debt ID | Finding | Reason |
+|---------|---------|--------|
+| DEBT-S1-007-01 | `dispatch_consistency_passed` bare bool bypass | P0: AT-920 bypassable by any caller passing `true` without running `validate_and_dispatch`. When wired in production, this is a live dispatch bypass risk. |
+| DEBT-S1-007-02 | Cycle 2 escalation of same root cause | P0: Independent reviewer escalated to Critical. Resolution: `ValidatedDispatch` proof token in Slice 2. |
+
+**Required before production wiring**: Replace `dispatch_consistency_passed: bool` with `ValidatedDispatch` proof token (type exists at `dispatch_map.rs:74`, needs threading through pipeline).
+
+---
+
 ## Detailed Reports
 
 | Phase | File | Description |

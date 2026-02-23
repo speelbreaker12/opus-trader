@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Optional, TypeVar
 
 from .enums import (
     AssumptionStatus,
-    CausalMechanism,
     DecisionMatch,
     EnforcementStatus,
     LossModeLevel,
@@ -50,7 +50,29 @@ def _require(d: dict[str, Any], key: str, path: list[str]) -> Any:
     return d[key]
 
 
-def _enum(cls: type, value: str, path: list[str]) -> Any:
+def _require_bool(d: dict[str, Any], key: str, path: list[str]) -> bool:
+    value = _require(d, key, path)
+    if not isinstance(value, bool):
+        raise ProofGraphParseError(
+            f"'{key}' must be bool, got {type(value).__name__}", path=path + [key]
+        )
+    return value
+
+
+def _require_int(d: dict[str, Any], key: str, path: list[str]) -> int:
+    value = _require(d, key, path)
+    # bool is subclass of int in Python — reject it explicitly
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ProofGraphParseError(
+            f"'{key}' must be int, got {type(value).__name__}", path=path + [key]
+        )
+    return value
+
+
+_E = TypeVar("_E", bound=Enum)
+
+
+def _enum(cls: type[_E], value: str, path: list[str]) -> _E:
     try:
         return cls(value)
     except ValueError:
@@ -78,8 +100,8 @@ class EvidenceEntry:
         _deny_unknown(d, cls._KNOWN, path)
         return cls(
             file=_require(d, "file", path),
-            line_start=_require(d, "line_start", path),
-            line_end=_require(d, "line_end", path),
+            line_start=_require_int(d, "line_start", path),
+            line_end=_require_int(d, "line_end", path),
             symbol=_require(d, "symbol", path),
             snippet=d.get("snippet", ""),
         )
@@ -132,7 +154,7 @@ class StoryMeta:
             loss_mode=LossMode.from_dict(
                 _require(d, "loss_mode", path), path + ["loss_mode"]
             ),
-            safety_critical=_require(d, "safety_critical", path),
+            safety_critical=_require_bool(d, "safety_critical", path),
             scope_touch=_require(d, "scope_touch", path),
         )
 
@@ -177,7 +199,7 @@ class TestExecution:
         _deny_unknown(d, cls._KNOWN, path)
         return cls(
             ran_at_head_sha=_require(d, "ran_at_head_sha", path),
-            pass_result=_require(d, "pass_result", path),
+            pass_result=_require_bool(d, "pass_result", path),
         )
 
 
@@ -313,7 +335,7 @@ class PremortemChecks:
             stoplight=_enum(
                 StoplightColor, _require(d, "stoplight", path), path + ["stoplight"]
             ),
-            sections_filled=_require(d, "sections_filled", path),
+            sections_filled=_require_int(d, "sections_filled", path),
             section5_wrong_impl_blocked=s5,
             section4_decision_match=s4,
             section2_assumptions=s2,
@@ -412,6 +434,14 @@ class ATEntry:
         debt_raw = d.get("debt")
         debt = DebtEntry.from_dict(debt_raw, path + ["debt"]) if debt_raw else None
 
+        extra_discovered_raw = d.get("extra_discovered", False)
+        if not isinstance(extra_discovered_raw, bool):
+            raise ProofGraphParseError(
+                f"'extra_discovered' must be bool, got "
+                f"{type(extra_discovered_raw).__name__}",
+                path=path + ["extra_discovered"],
+            )
+
         return cls(
             at_id=_require(d, "at_id", path),
             enforcement=Enforcement.from_dict(
@@ -435,7 +465,7 @@ class ATEntry:
             ),
             equivalent_mutants=mutants,
             debt=debt,
-            extra_discovered=d.get("extra_discovered", False),
+            extra_discovered=extra_discovered_raw,
         )
 
 
@@ -478,16 +508,24 @@ class StoryVerdict:
                   version: int = 1) -> StoryVerdict:
         known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
         _deny_unknown(d, known, path)
+        trading_halt_raw = d.get("trading_halt_trigger", False)
+        if not isinstance(trading_halt_raw, bool):
+            raise ProofGraphParseError(
+                f"'trading_halt_trigger' must be bool, got "
+                f"{type(trading_halt_raw).__name__}",
+                path=path + ["trading_halt_trigger"],
+            )
+
         return cls(
             reconciliation_status=_enum(
                 ReconciliationStatus,
                 _require(d, "reconciliation_status", path),
                 path + ["reconciliation_status"],
             ),
-            blocking_count=_require(d, "blocking_count", path),
-            hardening_count=_require(d, "hardening_count", path),
+            blocking_count=_require_int(d, "blocking_count", path),
+            hardening_count=_require_int(d, "hardening_count", path),
             summary=_require(d, "summary", path),
-            trading_halt_trigger=d.get("trading_halt_trigger", False),
+            trading_halt_trigger=trading_halt_raw,
         )
 
 

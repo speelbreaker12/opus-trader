@@ -21,6 +21,7 @@ Options:
                      generic  = code-quality focus (SOLID, naming, doc, types)
                      enriched = contract-proof focus (ATs, premortem, fail-closed)
                      Run both for maximum coverage.
+  --proof-graph      Generate per-reviewer proof_graph.json skeleton (requires --prompt enriched)
   --commit REF       Review a specific commit (default: HEAD)
   --base REF         Review diff from base to HEAD
   --uncommitted      Review uncommitted changes
@@ -36,13 +37,15 @@ Modes:
   kimi  (all modes):                   uses `kimi --print` with review prompt (stdin)
 
 Artifacts:
-  - artifacts/story/<ID>/<tool>/<STAMP>_review.md
+  - artifacts/story/<ID>/<tool>/<tool>.<style>.md  (canonical)
+  - artifacts/story/<ID>/<tool>/<STAMP>_review.md  (legacy symlink)
 
 Examples:
   plans/review_logged.sh S1-004 --tool codex --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool codex --files "src/gate.rs src/risk.rs"
-  plans/review_logged.sh S1-004 --tool opus --prompt generic --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool opus --prompt enriched --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool opus --prompt generic --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool opus --proof-graph --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool kimi --base main
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
 EOF
@@ -163,6 +166,7 @@ shift
 
 tool=""
 prompt_style="enriched"
+proof_graph=false
 mode="commit"
 commit="HEAD"
 base=""
@@ -180,6 +184,10 @@ while [[ $# -gt 0 ]]; do
     --prompt)
       prompt_style="${2:?missing prompt style (generic|enriched)}"
       shift 2
+      ;;
+    --proof-graph)
+      proof_graph=true
+      shift 1
       ;;
     --commit)
       mode="commit"
@@ -230,6 +238,18 @@ case "$prompt_style" in
   *) echo "ERROR: unknown --prompt '$prompt_style' (expected: generic or enriched)" >&2; exit 2 ;;
 esac
 
+# --proof-graph guards
+if [[ "$proof_graph" == "true" ]]; then
+  if [[ "$prompt_style" == "generic" ]]; then
+    echo "ERROR: --proof-graph requires --prompt enriched (generic lacks AT/premortem context)" >&2
+    exit 2
+  fi
+  if [[ "$tool" == "codex" && "$mode" != "files" ]]; then
+    echo "ERROR: --proof-graph requires --tool opus|kimi or --tool codex --files (codex diff mode bypasses prompt injection)" >&2
+    exit 2
+  fi
+fi
+
 if [[ -z "$title" ]]; then
   title="$story: $(ucfirst "$tool") review"
 fi
@@ -263,8 +283,15 @@ fi
 mkdir -p "$outdir"
 
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
+ts_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 stamp="${ts}_$$_${RANDOM}"
-outfile="$outdir/${stamp}_review.md"
+
+# Canonical filename: <tool>.<prompt_style>.md (per RUNBOOK §6.1)
+# Legacy timestamped name kept as symlink for backwards compat.
+canonical_name="${tool}.${prompt_style}.md"
+outfile="$outdir/${canonical_name}"
+legacy_name="${stamp}_review.md"
+legacy_file="$outdir/${legacy_name}"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
 head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
@@ -393,7 +420,54 @@ ${diff_ctx:-(no content available)}
 \`\`\`
 PROMPT_EOF
   fi
+
+  # F-11: Inject proof graph skeleton into prompt when --proof-graph is active
+  if [[ "${proof_graph:-}" == "true" && -f "${pg_skeleton:-}" ]]; then
+    cat <<'PG_INSTR_EOF'
+
+--- PROOF GRAPH ---
+A proof_graph.json skeleton has been generated for this story.
+For each AT entry in the `ats[]` array, fill the `at_verdict` block:
+
+  "at_verdict": {
+    "verdict": "<one of: PROVEN_INTEGRATED, PROVEN_UNIT, WEAK_PROOF, CLAIMED_NOT_PROVEN, UNTESTED_ENFORCEMENT, WRONG_IMPL_UNBLOCKED, FAIL_OPEN_RISK, MISSING, DEFERRED>",
+    "severity": "<BLOCKING|HARDENING|INFO>",
+    "rationale": "<one sentence explaining your verdict>"
+  }
+
+Also fill `enforcement.status` and `wiring.status` if you have evidence.
+Leave other fields as-is (they are pre-populated from PRD + premortem).
+
+Rules:
+- DEFERRED = "I cannot evaluate this AT" (not "it's fine")
+- If uncertain, use the MORE RESTRICTIVE verdict (fail-closed)
+- Do NOT modify schema_version, head_sha, or story_meta
+
+Skeleton content follows:
+PG_INSTR_EOF
+    cat "$pg_skeleton"
+  fi
 }
+
+# ── Proof graph skeleton generation (before review) ───────────────
+# NOTE: The flag is named --proof-graph (not --init-proof-graph) for brevity.
+# It both generates the skeleton AND injects fill instructions into the prompt.
+pg_skeleton=""
+if [[ "$proof_graph" == "true" ]]; then
+  pg_outdir="$outdir"  # artifacts/story/<ID>/<tool>/
+  echo "Generating proof graph skeleton for $story (reviewer: $tool)..." >&2
+  python3 "$root/python/proof_graph/init.py" "$story" \
+    --prd-path "$root/plans/prd.json" \
+    --contract-path "$root/specs/CONTRACT.md" \
+    --premortem-dir "$root/artifacts/story/$story/" \
+    --output-dir "$pg_outdir" >&2
+  pg_skeleton="$pg_outdir/proof_graph.json"
+  if [[ ! -f "$pg_skeleton" ]]; then
+    echo "ERROR: proof_graph.json skeleton not created at $pg_skeleton" >&2
+    exit 1
+  fi
+  echo "Proof graph skeleton: $pg_skeleton" >&2
+fi
 
 # ── Build tool-specific command ─────────────────────────────────────
 case "$tool" in
@@ -465,9 +539,58 @@ printf '\n' >> "$transcript_tmp"
 transcript_hash="$(sha256_file "$transcript_tmp")"
 transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 
-# ── Write artifact with provenance header ───────────────────────────
+# ── Determine model name for provenance ───────────────────────────
+model_name="n/a"
+case "$tool" in
+  codex) model_name="${CODEX_MODEL:-gpt-4.1}" ;;
+  opus)  model_name="claude-opus-4-6" ;;
+  kimi)  model_name="kimi-k2.5" ;;
+esac
+
+# ── Determine cycle and phase equivalent from context ─────────────
+# Cycle detection: C2 if reviewing fix diff, C1 if story scope, SELF otherwise.
+# Phase equivalent: R3 for C1, R7d for C2.
+prov_cycle="C1"
+prov_phase="R3"
+prov_basis="STORY_SCOPE (Cycle 1)"
+prov_basis_short="STORY_SCOPE"
+if [[ "$mode" == "base" && -n "$base" ]]; then
+  # Check if this looks like a Cycle 2 review (fix diff after cycle1)
+  cycle1_receipt="$root/.wf/receipts/$story/03_cycle1.json"
+  if [[ -f "$cycle1_receipt" ]]; then
+    prov_cycle="C2"
+    prov_phase="R7d"
+    prov_basis="FIX_DIFF + AT_REGRESSION (Cycle 2)"
+    prov_basis_short="FIX_DIFF_AT_REGRESSION"
+  fi
+fi
+
+# ── Determine slice ID from story ID ─────────────────────────────
+slice_id="$(echo "$story" | sed -n 's/^\([A-Z][A-Za-z0-9]*\)-.*/\1/p')"
+slice_id="${slice_id:-UNKNOWN}"
+
+# ── Write artifact with YAML front matter provenance ──────────────
 
 {
+  echo "---"
+  echo "provenance:"
+  echo "  tool: $tool"
+  echo "  model: $model_name"
+  echo "  prompt_style: $prompt_style"
+  echo "  cycle: $prov_cycle"
+  echo "  phase_equivalent: $prov_phase"
+  echo "  review_basis: \"$prov_basis\""
+  echo "  story_id: $story"
+  echo "  slice_id: $slice_id"
+  echo "  head_commit: \"$head_sha\""
+  if [[ "$prov_cycle" == "C2" && "$mode" == "base" ]]; then
+    echo "  base_commit: \"$base\""
+  fi
+  echo "  generated_at: \"$ts_iso\""
+  echo "  artifact_provenance: \"logger-v2\""
+  echo "  schema_version: \"review_markdown_header.v1\""
+  echo "---"
+  echo
   echo "# $(ucfirst "$tool") review"
   echo
   echo "- Story: $story"
@@ -484,15 +607,16 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
   if [[ "$mode" == "files" ]]; then
     echo "- Files: $files_list"
   fi
-  if [[ "$tool" == "opus" ]]; then
-    echo "- Model: claude-opus-4-6"
-  elif [[ "$tool" == "kimi" ]]; then
-    echo "- Model: kimi-k2.5"
-  fi
+  echo "- Model: $model_name"
   if [[ "${codex_exec_mode}" == "true" ]]; then
     echo "- Codex Mode: exec (prompt pass-through)"
   fi
   echo "- Prompt style: $prompt_style"
+  echo "- Review basis: $prov_basis"
+  echo "- Phase equivalent: $prov_phase"
+  if [[ "$proof_graph" == "true" ]]; then
+    echo "- Proof graph: $pg_skeleton"
+  fi
   echo "- Command: ${cmd[*]}"
   echo "- Artifact Provenance: logger-v2"
   echo "- Generator Script: plans/review_logged.sh"
@@ -569,6 +693,96 @@ fi
   echo "---"
 } >> "$outfile"
 
+# ── Post-validation hard gates (v3.0) ──────────────────────────────
+# These checks validate the generated artifact meets structural requirements.
+# Artifact is still written (for debugging), but exit code is nonzero on failure.
+gate_exit=0
+
+# Gate 1: Missing "Review basis:" line in artifact (exit 3)
+# Checks full artifact (header + transcript). Script injects basis in provenance
+# header; gate validates it survived the write.
+if ! grep -qi 'Review basis:' "$outfile" 2>/dev/null; then
+  echo "HARD_GATE_FAIL: Missing 'Review basis:' line in review artifact" >&2
+  echo "HARD_GATE: MISSING_REVIEW_BASIS (exit 3)" >> "$outfile"
+  gate_exit=3
+fi
+
+# Gate 2: Missing pre-existing enforcement + test citations (Cycle 1 only, exit 4)
+# Cycle 1 reviews MUST cite at least one pre-existing enforcement point or test.
+# Uses authoritative cycle from provenance (not transcript-extracted).
+if [[ "$gate_exit" -eq 0 && "$prov_cycle" == "C1" ]]; then
+  # Require at least one file:line citation in the transcript (pattern: path/file.rs:123)
+  citation_count="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+  if [[ "$citation_count" -eq 0 ]]; then
+    echo "HARD_GATE_FAIL: Cycle 1 review has zero file:line citations (pre-existing enforcement/test)" >&2
+    echo "HARD_GATE: MISSING_PRE_EXISTING_CITATIONS (exit 4)" >> "$outfile"
+    gate_exit=4
+  fi
+fi
+
+# Gate 3: Missing "Phase equivalent:" label in artifact (exit 5)
+# Checks full artifact. Script injects phase_equivalent in provenance header.
+if [[ "$gate_exit" -eq 0 ]]; then
+  if ! grep -qi 'Phase equivalent:' "$outfile" 2>/dev/null; then
+    echo "HARD_GATE_FAIL: Missing 'Phase equivalent:' label in review artifact" >&2
+    echo "HARD_GATE: MISSING_PHASE_EQUIVALENT (exit 5)" >> "$outfile"
+    gate_exit=5
+  fi
+fi
+
+# Gate 4: Sidecar validation (exit 6)
+# If a sidecar schema exists for this review type, generate and validate sidecar.
+if [[ "$gate_exit" -eq 0 ]]; then
+  sidecar_schema="$root/specs/schemas/recon/review_artifact_sidecar.schema.json"
+  validator="$root/plans/validate_recon_artifact.sh"
+  if [[ -f "$sidecar_schema" && -x "$validator" ]]; then
+    sidecar_file="${outfile%.md}.sidecar.json"
+    # Use provenance fields computed earlier (authoritative, not transcript-extracted)
+    citations_ct="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+
+    # Build sidecar JSON with full provenance
+    cat > "$sidecar_file" <<SIDECAR_EOF
+{
+  "schema_version": "review_artifact_sidecar.v1",
+  "head_commit": "$head_sha",
+  "created_at": "$ts_iso",
+  "markdown_sha256": "$(sha256_file "$outfile")",
+  "markdown_path": "$outfile",
+  "story_id": "$story",
+  "review_type": "external",
+  "review_basis": "$prov_basis_short",
+  "phase_equivalent": "$prov_phase",
+  "tool": "$tool",
+  "model": "$model_name",
+  "prompt_style": "$prompt_style",
+  "cycle": "$prov_cycle",
+  "citations_count": $citations_ct,
+  "pre_existing_citations_count": $citations_ct,
+  "basis_line_present": true,
+  "finding_counts": {
+    "P0": $p0,
+    "P1": $p1,
+    "P2": $p2,
+    "INFO": 0
+  }
+}
+SIDECAR_EOF
+
+    if ! "$validator" review_artifact_sidecar "$sidecar_file"; then
+      echo "HARD_GATE_FAIL: Sidecar validation failed for $sidecar_file" >&2
+      echo "HARD_GATE: SIDECAR_VALIDATION_FAILED (exit 6)" >> "$outfile"
+      gate_exit=6
+    else
+      echo "Sidecar validated: $sidecar_file" >&2
+    fi
+  fi
+fi
+
+# Override exit code if any gate failed (artifact still written for debugging)
+if [[ "$gate_exit" -ne 0 ]]; then
+  rc="$gate_exit"
+fi
+
 # Run codex digest if available (codex only)
 if [[ "$tool" == "codex" ]]; then
   digest_script="$root/plans/codex_review_digest.sh"
@@ -590,5 +804,5 @@ canonical_path="$outdir/$canonical_name"
 cp "$outfile" "$canonical_path"
 echo "Normalized: $canonical_path" >&2
 
-echo "Saved $(ucfirst "$tool") review: $outfile" >&2
+echo "Saved $(ucfirst "$tool") review: $outfile (canonical: $canonical_name)" >&2
 exit "$rc"

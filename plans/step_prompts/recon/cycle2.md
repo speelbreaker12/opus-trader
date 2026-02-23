@@ -55,8 +55,24 @@ Frame the review as:
    Re-check impacted AT proofs for regression.
    Run Simpler-Than-Correct Gate on any modified tests."
 
+PROOF GRAPH (when --proof-graph is active)
+
+If a proof_graph.json skeleton exists at:
+  artifacts/story/${STORY_ID}/<tool>/proof_graph.json
+
+Update ONLY the ATs affected by fixes. Re-evaluate their `at_verdict` based on:
+- Whether the fix closes the gap
+- Whether any regressions were introduced
+
+Rules:
+- Only update ATs whose proof chain was impacted by the fix diff
+- If uncertain, use the MORE RESTRICTIVE verdict (fail-closed)
+- Do NOT modify schema_version, head_sha, or story_meta
+
 OUTPUT
 - Write review file to artifacts/story/${STORY_ID}/codex/ (or opus/ or kimi/).
+- Canonical filenames: `<tool>.enriched.md`, `<tool>.generic.md` (per RUNBOOK §6.1)
+- review_logged.sh emits YAML front matter provenance + `Review basis:` + `Phase equivalent:` lines automatically.
 - Review MUST include: `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`
 - Include STOPLIGHT verdict + finding table.
 - Remaining BLOCKING/P1/P2 count.

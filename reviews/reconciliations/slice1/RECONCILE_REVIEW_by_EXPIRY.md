@@ -4,6 +4,7 @@
 **Reviewer wrote**: BATCH_EXPIRY (S1-012, S1-013) -- excluded from this review
 **Date**: 2026-02-20
 **HEAD**: 1b85f2522c3ee0b9e6af2349a26f9c0f40c98976
+**Review basis**: STORY_SCOPE (Cycle 1)
 
 ## Stories Reviewed
 

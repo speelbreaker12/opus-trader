@@ -22,6 +22,16 @@ from pathlib import Path
 from typing import Any
 
 
+# Severity strictness ordering (for deterministic tie-breaking)
+SEVERITY_STRICTNESS: dict[str, int] = {
+    "INFO": 0,
+    "HARDENING": 1,
+    "BLOCKING": 2,
+}
+
+# Unknown severity values get rank 3 (fail-closed: stricter than BLOCKING)
+UNKNOWN_SEVERITY_RANK = 3
+
 # Full verdict strictness ordering (0=least strict, higher=more strict)
 VERDICT_STRICTNESS: dict[str, int] = {
     "PROVEN_INTEGRATED": 0,
@@ -59,20 +69,23 @@ def _strictest_verdict(verdicts: list[str]) -> str:
 
 
 def _compute_trading_halt(graph: dict[str, Any]) -> bool:
-    """Recompute trading halt condition from graph data."""
+    """Recompute trading halt condition from graph data.
+
+    Delegates to rules.should_trigger_trading_halt (single source of truth).
+    """
+    # Lazy import: works via Python 3 namespace packages (python/ has no __init__.py).
+    # Requires repo root on sys.path — set by main() for CLI, by pytest/conftest for tests.
+    from python.proof_graph.rules import should_trigger_trading_halt
+
     story_meta = graph.get("story_meta", {})
-    if not story_meta.get("safety_critical", False):
-        return False
-
-    loss_level = story_meta.get("loss_mode", {}).get("level", "")
-    if loss_level not in ("HIGH", "CRITICAL"):
-        return False
-
-    for at in graph.get("ats", []):
-        v = at.get("at_verdict", {}).get("verdict", "")
-        if v in ("FAIL_OPEN_RISK", "WRONG_IMPL_UNBLOCKED"):
-            return True
-    return False
+    return should_trigger_trading_halt(
+        safety_critical=story_meta.get("safety_critical", False),
+        loss_level=story_meta.get("loss_mode", {}).get("level", ""),
+        verdicts=[
+            at.get("at_verdict", {}).get("verdict", "")
+            for at in graph.get("ats", [])
+        ],
+    )
 
 
 def aggregate(
@@ -115,6 +128,7 @@ def aggregate(
             reviewer_ats[at_id].append((label, at))
 
     conflicts: dict[str, Any] = {}
+    stale_rationales: list[str] = []
 
     # Process each AT
     all_at_ids = set(base_ats.keys()) | set(reviewer_ats.keys())
@@ -136,15 +150,31 @@ def aggregate(
         strictest = _strictest_verdict(verdict_values)
 
         if base_at is None:
-            # AT in reviewer but not base → add to merged
-            # Use the AT entry from the reviewer with the strictest verdict
+            # AT in reviewer but not base → add to merged.
+            # Deterministic tie-break: among reviewers with the strictest
+            # verdict, pick the one with the strictest severity, then
+            # lowest label (alphabetical) for full determinism.
+            # Note: the entire AT is copied wholesale from the selected
+            # reviewer (no field-level merge across reviewers).
+            best_entry = None
+            best_sev = -1
+            best_label = ""
             for label, rat in reviewer_entries:
                 rv = rat.get("at_verdict", {}).get("verdict", "MISSING")
                 if rv == strictest or (strictest == DEFERRED_VERDICT):
-                    merged_at = deepcopy(rat)
-                    merged["ats"].append(merged_at)
-                    base_ats[at_id] = merged_at
-                    break
+                    rsev = SEVERITY_STRICTNESS.get(
+                        rat.get("at_verdict", {}).get("severity", ""),
+                        UNKNOWN_SEVERITY_RANK,
+                    )
+                    if best_entry is None or rsev > best_sev or \
+                            (rsev == best_sev and label < best_label):
+                        best_entry = rat
+                        best_sev = rsev
+                        best_label = label
+            if best_entry is not None:
+                merged_at = deepcopy(best_entry)
+                merged["ats"].append(merged_at)
+                base_ats[at_id] = merged_at
         else:
             # Check for all-DEFERRED
             if strictest == DEFERRED_VERDICT:
@@ -156,20 +186,25 @@ def aggregate(
                 }
                 continue
 
-            # Update verdict to strictest, adopting severity from the
-            # reviewer who provided the winning verdict (fail-closed).
-            base_verdict = base_at.get("at_verdict", {}).get("verdict", "")
-            if strictest != base_verdict:
-                base_at["at_verdict"]["verdict"] = strictest
-                # Find the reviewer entry that provided the strictest verdict
-                # and adopt its severity so counts stay consistent.
-                for _lbl, rat in reviewer_entries:
-                    rv = rat.get("at_verdict", {}).get("verdict", "MISSING")
-                    if rv == strictest:
-                        rsev = rat.get("at_verdict", {}).get("severity", "")
-                        if rsev:
-                            base_at["at_verdict"]["severity"] = rsev
-                        break
+            # Update verdict to strictest; track stale rationale
+            old_verdict = base_at.get("at_verdict", {}).get("verdict", "")
+            base_at["at_verdict"]["verdict"] = strictest
+            if strictest != old_verdict:
+                stale_rationales.append(at_id)
+
+            # Always compute the strictest severity across all reviewers
+            # (independent of whether the verdict changed) for fail-closed
+            # correctness. Tie-break: highest severity rank wins.
+            best_sev_str = base_at.get("at_verdict", {}).get("severity", "")
+            best_sev_rank = SEVERITY_STRICTNESS.get(best_sev_str, UNKNOWN_SEVERITY_RANK)
+            for _lbl, rat in reviewer_entries:
+                rsev = rat.get("at_verdict", {}).get("severity", "")
+                rsev_rank = SEVERITY_STRICTNESS.get(rsev, UNKNOWN_SEVERITY_RANK)
+                if rsev_rank > best_sev_rank:
+                    best_sev_rank = rsev_rank
+                    best_sev_str = rsev
+            if best_sev_str:
+                base_at["at_verdict"]["severity"] = best_sev_str
 
             # Record disagreements
             unique_verdicts = set(verdict_values) - {DEFERRED_VERDICT}
@@ -196,27 +231,35 @@ def aggregate(
     # Recompute trading halt from merged data
     merged["story_verdict"]["trading_halt_trigger"] = _compute_trading_halt(merged)
 
+    # Detect stale reconciliation: blocking_count > 0 under a reconciled-family status
+    # means downstream validate() will catch the contradiction via R-001, but
+    # consumers reading the merged graph without validation need a signal.
+    _RECONCILED_FAMILY = {"RECONCILED", "RECONCILED_WITH_DEBT", "RECONCILED_UNIT_ONLY"}
+    recon_status = merged.get("story_verdict", {}).get("reconciliation_status", "")
+    reconciliation_stale = (
+        blocking_count > 0 and recon_status in _RECONCILED_FAMILY
+    )
+
     # Populate meta
     if "meta" not in merged:
         merged["meta"] = {}
     merged["meta"]["review_sources"] = review_labels
+    merged["meta"]["review_count"] = len(review_labels)
+    # Clear stale fields from prior aggregation, then set new ones
+    merged["meta"].pop("conflicts", None)
+    merged["meta"].pop("stale_rationales", None)
+    merged["meta"].pop("reconciliation_stale", None)
     if conflicts:
         merged["meta"]["conflicts"] = conflicts
+    if stale_rationales:
+        merged["meta"]["stale_rationales"] = sorted(stale_rationales)
+    if reconciliation_stale:
+        merged["meta"]["reconciliation_stale"] = True
 
     return merged
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Allow running as `python3 python/proof_graph/aggregate.py` from repo root
-    if __name__ == "__main__":
-        _this = Path(__file__).resolve()
-        _pkg_parent = str(_this.parent.parent.parent)
-        _script_dir = str(_this.parent)
-        if _script_dir in sys.path:
-            sys.path.remove(_script_dir)
-        if _pkg_parent not in sys.path:
-            sys.path.insert(0, _pkg_parent)
-
     parser = argparse.ArgumentParser(
         description="Merge reviewer proof graphs (fail-closed, strictest-wins)."
     )
@@ -267,4 +310,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Allow running as `python3 python/proof_graph/aggregate.py` from repo root:
+    # ensure the repo root is on sys.path so `from python.proof_graph.rules import ...`
+    # resolves correctly, and remove the script's own directory to avoid shadowing.
+    _this = Path(__file__).resolve()
+    _pkg_parent = str(_this.parent.parent.parent)
+    _script_dir = str(_this.parent)
+    if _script_dir in sys.path:
+        sys.path.remove(_script_dir)
+    if _pkg_parent not in sys.path:
+        sys.path.insert(0, _pkg_parent)
     sys.exit(main())
