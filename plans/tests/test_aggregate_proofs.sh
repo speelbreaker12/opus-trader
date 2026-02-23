@@ -10,6 +10,7 @@
 #   6. Non-reviewer dirs ignored (simpler-than-correct blocker)
 #   7. Validation failure preserves base graph (atomic write invariant)
 #   8. Trading halt (exit 20) → CRITICAL message, merged graph written to base
+#   9. KNOWN_TOOLS sync with review_logged.sh (drift detection)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -25,7 +26,14 @@ pass() {
   echo "PASS: $*"
 }
 
-command -v python3 >/dev/null 2>&1 || fail "python3 required"
+# Detect python binary (same preference order as aggregate_proofs.sh)
+if command -v python3 >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
+  fail "python3 or python required"
+fi
 [[ -x "$SCRIPT" ]] || fail "aggregate_proofs.sh not found or not executable: $SCRIPT"
 [[ -f "$AGGREGATE_PY" ]] || fail "aggregate.py not found: $AGGREGATE_PY"
 
@@ -59,7 +67,7 @@ create_reviewer_graph() {
   local reviewer_dir="$story_dir/$tool"
   mkdir -p "$reviewer_dir"
 
-  python3 -c "
+  "$PY" -c "
 import json
 with open('$FIXTURE_BASE') as f:
     g = json.load(f)
@@ -69,7 +77,7 @@ for at in g.get('ats', []):
 ll = '$loss_level'
 if ll:
     g['story_meta']['loss_mode']['level'] = ll
-    g.get('meta', {}).get('hints', {}).get('AT-201', {})['loss_mode_level'] = ll
+    g.setdefault('meta', {}).setdefault('hints', {}).setdefault('AT-201', {})['loss_mode_level'] = ll
 with open('$reviewer_dir/proof_graph.json', 'w') as f:
     json.dump(g, f, indent=2)
 "
@@ -79,12 +87,12 @@ with open('$reviewer_dir/proof_graph.json', 'w') as f:
 copy_base_with_level() {
   local story_dir="$1"
   local loss_level="$2"
-  python3 -c "
+  "$PY" -c "
 import json
 with open('$FIXTURE_BASE') as f:
     g = json.load(f)
 g['story_meta']['loss_mode']['level'] = '$loss_level'
-g.get('meta', {}).get('hints', {}).get('AT-201', {})['loss_mode_level'] = '$loss_level'
+g.setdefault('meta', {}).setdefault('hints', {}).setdefault('AT-201', {})['loss_mode_level'] = '$loss_level'
 with open('$story_dir/proof_graph.json', 'w') as f:
     json.dump(g, f, indent=2)
 "
@@ -94,7 +102,7 @@ with open('$story_dir/proof_graph.json', 'w') as f:
 read_merged_field() {
   local merged="$1"
   local jq_expr="$2"
-  python3 -c "
+  "$PY" -c "
 import json
 with open('$merged') as f:
     g = json.load(f)
@@ -242,7 +250,7 @@ test_blocking_rejected() {
   rc=$?
   set -e
 
-  [[ $rc -ne 0 ]] || fail "BLOCKING graph should fail validation, got exit 0"
+  [[ $rc -eq 1 ]] || fail "BLOCKING graph should exit 1 (validation failure), got $rc"
   echo "$output" | grep -qE "ERROR.*validation failed|CRITICAL.*Trading halt" \
     || fail "BLOCKING: expected error/critical message. Output: $output"
   pass "BLOCKING aggregation → validate.py rejects (exit $rc) with message"
@@ -311,8 +319,8 @@ test_base_preserved_on_failure() {
   rc=$?
   set -e
 
-  # Must fail validation
-  [[ $rc -ne 0 ]] || fail "preserve: expected non-zero exit, got 0"
+  # Must fail validation (exit 1, not exit 20 — MED loss level doesn't trigger halt)
+  [[ $rc -eq 1 ]] || fail "preserve: expected exit 1 (validation failure), got $rc"
 
   # Base graph must be byte-identical to pre-aggregation state
   local base_after
@@ -362,6 +370,24 @@ test_trading_halt() {
   pass "trading halt → exit 20, CRITICAL message, merged graph written"
 }
 
+# ── Test 9: KNOWN_TOOLS sync with review_logged.sh ────────────────
+# Verifies that the KNOWN_TOOLS list in aggregate_proofs.sh matches
+# the tool case-statement in review_logged.sh, catching drift.
+
+test_known_tools_sync() {
+  local aggregate_tools review_tools
+  # Extract KNOWN_TOOLS value from aggregate_proofs.sh
+  aggregate_tools="$(grep '^KNOWN_TOOLS=' "$SCRIPT" | sed 's/KNOWN_TOOLS="//' | sed 's/"$//' | tr ' ' '\n' | sort | tr '\n' ' ' | xargs)"
+  # Extract tool names from the case-statement in review_logged.sh
+  local review_script="$ROOT/plans/review_logged.sh"
+  [[ -f "$review_script" ]] || fail "known_tools_sync: review_logged.sh not found"
+  review_tools="$(grep -E '^\s+codex\|opus\|kimi\)' "$review_script" | sed 's/[);[:space:]]//g' | tr '|' '\n' | sort | tr '\n' ' ' | xargs)"
+
+  [[ "$aggregate_tools" == "$review_tools" ]] \
+    || fail "known_tools_sync: KNOWN_TOOLS='$aggregate_tools' != review_logged.sh tools='$review_tools'"
+  pass "KNOWN_TOOLS in aggregate_proofs.sh matches review_logged.sh case-statement"
+}
+
 # ── Run all tests ─────────────────────────────────────────────────
 
 echo "=== aggregate_proofs.sh tests ==="
@@ -373,4 +399,5 @@ test_blocking_rejected
 test_non_reviewer_dirs_ignored
 test_base_preserved_on_failure
 test_trading_halt
+test_known_tools_sync
 echo "=== all tests passed ==="

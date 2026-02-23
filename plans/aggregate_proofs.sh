@@ -25,7 +25,7 @@ SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="${AGGREGATE_ROOT:-$SCRIPT_ROOT}"
 BASE="$ROOT/artifacts/story/$STORY_ID/proof_graph.json"
 
-# Detect python binary (same pattern as verify_utils.sh ensure_python)
+# Detect python binary (prefers python3; verify_utils.sh ensure_python prefers python)
 if command -v python3 >/dev/null 2>&1; then
   PY=python3
 elif command -v python >/dev/null 2>&1; then
