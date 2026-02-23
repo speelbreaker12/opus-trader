@@ -650,18 +650,10 @@ export NODE_LINT_TIMEOUT NODE_TYPECHECK_TIMEOUT NODE_TEST_TIMEOUT
 if [[ "$MODE" == "full" ]]; then
   log "14g) workflow integration tests (parallel with rust gates)"
   parallel_group_reset
-  if [[ -f plans/tests/test_story_review_gate.sh ]]; then
-    start_parallel_gate "wf_test_story_review_gate" "$WORKFLOW_TEST_TIMEOUT" \
-      bash plans/tests/test_story_review_gate.sh
-  else
-    log "  skip wf_test_story_review_gate (script not yet created)"
-  fi
-  if [[ -f plans/tests/test_pr_gate.sh ]]; then
-    start_parallel_gate "wf_test_pr_gate" "$WORKFLOW_TEST_TIMEOUT" \
-      bash plans/tests/test_pr_gate.sh
-  else
-    log "  skip wf_test_pr_gate (script not yet created)"
-  fi
+  # NOTE: test_story_review_gate.sh not yet created (story_review_gate.sh
+  # doesn't exist). Re-add gate when both script + test land.
+  start_parallel_gate "wf_test_pr_gate" "$WORKFLOW_TEST_TIMEOUT" \
+    bash plans/tests/test_pr_gate.sh
 
   if [[ -f Cargo.toml ]]; then
     log "15) rust gates"

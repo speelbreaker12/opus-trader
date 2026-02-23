@@ -15,6 +15,6 @@ pub use lifecycle::{
     CancelOutcome, ExpiryGuardInput, ExpiryGuardMetrics, ExpiryGuardResult, LifecycleDecision,
     LifecycleErrorClass, LifecycleIntent, LifecycleTerminalReason, ReconcileScope, RetryDirective,
     VenueLifecycleError, classify_lifecycle_error, evaluate_expiry_guard,
-    expiry_guard_reject_total,
+    bump_expiry_guard_reject, expiry_guard_reject_total,
 };
 pub use types::{InstrumentKind, InstrumentKindInput, derive_instrument_kind};

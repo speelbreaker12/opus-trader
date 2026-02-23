@@ -19,7 +19,7 @@ use crate::risk::{
 };
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, ExpiryGuardMetrics, LifecycleIntent, VenueCapabilities,
-    evaluate_capabilities, evaluate_expiry_guard,
+    bump_expiry_guard_reject, evaluate_capabilities, evaluate_expiry_guard,
 };
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -375,8 +375,9 @@ pub fn evaluate_base_gates(
         }
     } else if lifecycle_intent == LifecycleIntent::Open {
         // FAIL-CLOSED: missing expiry data blocks OPEN intents.
-        // Bump metrics so expiry_guard_reject_total counts this path (P2 codex finding).
+        // Bump both per-request struct counter and global static counter.
         metrics.expiry.record_reject();
+        bump_expiry_guard_reject();
         gate_outcomes.push(GateOutcome::Reject {
             gate: GateStep::ExpiryGuard,
             reason_code: RejectReasonCode::InstrumentExpiredOrDelisted,

@@ -125,7 +125,7 @@ impl Default for ExpiryGuardMetrics {
 
 static EXPIRY_GUARD_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
 
-fn bump_expiry_guard_reject() {
+pub fn bump_expiry_guard_reject() {
     EXPIRY_GUARD_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
     crate::execution::emit_execution_metric_line(
         crate::execution::METRIC_EXPIRY_GUARD_REJECT,

@@ -83,8 +83,7 @@ assert_list_absent "$full_only_list" "plans/tests/test_preflight_fixture_profile
 # Verify moved tests are actually present in verify_fork.sh gate 14g
 VERIFY_FORK="$ROOT/plans/verify_fork.sh"
 [[ -f "$VERIFY_FORK" ]] || fail "missing verify_fork.sh: $VERIFY_FORK"
-grep -q 'start_parallel_gate "wf_test_story_review_gate"' "$VERIFY_FORK" \
-  || fail "test_story_review_gate.sh not found in verify_fork.sh gate 14g"
+# NOTE: wf_test_story_review_gate removed — story_review_gate.sh not yet created.
 grep -q 'start_parallel_gate "wf_test_pr_gate"' "$VERIFY_FORK" \
   || fail "test_pr_gate.sh not found in verify_fork.sh gate 14g"
 
