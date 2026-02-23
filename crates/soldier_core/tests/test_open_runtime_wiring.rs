@@ -2,9 +2,9 @@
 
 use soldier_core::execution::{
     BaseGatesInput, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult,
-    GateIntentClass, GateStep, InventorySkewInput, L2BookSnapshot, L2Level, LiquidityGateInput,
-    NetEdgeInput, OpenRuntimeInput, OpenRuntimeMetrics, OrderType, PreflightInput, PricerInput,
-    QuantizePipelineInput, Side, build_open_order_intent_runtime,
+    DispatchConsistencyProof, GateIntentClass, GateStep, InventorySkewInput, L2BookSnapshot,
+    L2Level, LiquidityGateInput, NetEdgeInput, OpenRuntimeInput, OpenRuntimeMetrics, OrderType,
+    PreflightInput, PricerInput, QuantizePipelineInput, Side, build_open_order_intent_runtime,
 };
 use soldier_core::risk::{
     ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
@@ -53,7 +53,7 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
                     min_amount: 0.1,
                 },
             },
-            dispatch_consistency_passed: true,
+            dispatch_consistency: DispatchConsistencyProof::unchecked(true),
             fee_snapshot: FeeCacheSnapshot {
                 fee_rate: 0.0005,
                 fee_model_cached_at_ts_ms: Some(1_000_000),

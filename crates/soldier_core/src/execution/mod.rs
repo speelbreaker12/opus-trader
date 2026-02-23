@@ -38,8 +38,8 @@ pub use build_order_intent::{
     gate_sequence_total,
 };
 pub use dispatch_map::{
-    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
-    MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
+    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchConsistencyProof, DispatchMapError, DispatchRequest,
+    IntentClass, MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
 };
 pub use gate::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,

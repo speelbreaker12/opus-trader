@@ -67,7 +67,32 @@ fn test_assembly_nan_qty_fails_closed() {
     );
 }
 
-/// Dispatch mismatch: mismatched contracts/amount → dispatch_consistency_passed=false,
+/// Fail-closed: Inf canonical_qty → InvalidOrderSize error.
+/// Inf could theoretically produce different behavior than NaN if intermediate
+/// computations convert Inf to a finite value before the is_finite() check.
+#[test]
+fn test_assembly_inf_qty_fails_closed() {
+    let meta = InstrumentKindInput {
+        is_option: true,
+        is_future: false,
+        is_perpetual: false,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: f64::INFINITY,
+        index_price: 50_000.0,
+        contract_multiplier: None,
+    };
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = assemble_sizing(&meta, &params, IntentClass::Open, &mut mismatch);
+    assert!(
+        matches!(result, Err(AssemblySizingError::InvalidOrderSize(_))),
+        "Inf qty must be rejected as InvalidOrderSize, got {result:?}"
+    );
+}
+
+/// Dispatch mismatch: mismatched contracts/amount → dispatch_consistency fails,
 /// risk_state_degraded=true. When fed into the pipeline, dispatch count must be 0.
 #[test]
 fn test_assembly_mismatch_sets_degraded() {
@@ -98,7 +123,7 @@ fn test_assembly_mismatch_sets_degraded() {
     let assembled = result.expect("sizing should succeed (mismatch is in dispatch, not sizing)");
 
     assert!(
-        !assembled.dispatch_consistency_passed,
+        !assembled.dispatch_consistency.passed(),
         "dispatch consistency must fail on contract/amount mismatch"
     );
     assert!(
@@ -262,6 +287,278 @@ fn test_assembled_pipeline_cancel_only_bypasses_assembly() {
         metrics.chokepoint.approved_total(),
         1,
         "CancelOnly must produce exactly 1 approved dispatch"
+    );
+}
+
+// ─── Close/Hedge through assembled pipeline ─────────────────────────────
+
+/// Close intent with valid assembly → Approved.
+/// Proves Close passes through the full pipeline when metadata is valid.
+#[test]
+fn test_assembled_pipeline_close_valid_assembly_approved() {
+    let meta = InstrumentKindInput {
+        is_option: true,
+        is_future: false,
+        is_perpetual: false,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 1.0,
+        index_price: 50_000.0,
+        contract_multiplier: None,
+    };
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Close,
+        risk_state: RiskState::Healthy,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "Close with valid assembly must be approved, got {:?}",
+        result.decision
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        1,
+        "Close must produce exactly 1 approved dispatch"
+    );
+}
+
+/// Close intent with assembly failure → AssemblyFailed rejection.
+/// Documents current behavior: Close is NOT bypassed on assembly failure
+/// (unlike CancelOnly). This is a design choice that may be revisited.
+#[test]
+fn test_assembled_pipeline_close_assembly_failure_rejects() {
+    let meta = InstrumentKindInput {
+        is_option: false,
+        is_future: false,
+        is_perpetual: false,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 1.0,
+        index_price: 50_000.0,
+        contract_multiplier: None,
+    };
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Close,
+        risk_state: RiskState::Healthy,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Rejected { .. }),
+        "Close with assembly failure currently returns Rejected"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::AssemblyFailed),
+        "reject reason must be AssemblyFailed"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when assembly fails"
+    );
+}
+
+/// Hedge intent with valid assembly → Approved.
+#[test]
+fn test_assembled_pipeline_hedge_valid_assembly_approved() {
+    let meta = InstrumentKindInput {
+        is_option: true,
+        is_future: false,
+        is_perpetual: false,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 1.0,
+        index_price: 50_000.0,
+        contract_multiplier: None,
+    };
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Hedge,
+        risk_state: RiskState::Healthy,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "Hedge with valid assembly must be approved, got {:?}",
+        result.decision
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        1,
+        "Hedge must produce exactly 1 approved dispatch"
+    );
+}
+
+/// Hedge intent with assembly failure → AssemblyFailed rejection.
+#[test]
+fn test_assembled_pipeline_hedge_assembly_failure_rejects() {
+    let meta = InstrumentKindInput {
+        is_option: false,
+        is_future: false,
+        is_perpetual: false,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 1.0,
+        index_price: 50_000.0,
+        contract_multiplier: None,
+    };
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Hedge,
+        risk_state: RiskState::Healthy,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Rejected { .. }),
+        "Hedge with assembly failure currently returns Rejected"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::AssemblyFailed),
+        "reject reason must be AssemblyFailed"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when assembly fails"
+    );
+}
+
+/// Close intent with dispatch mismatch → currently blocked by DispatchConsistency (Gate 4).
+///
+/// NOTE (opus review P1): Gate 4 blocks Close on dispatch mismatch. The opus
+/// contract-proof audit argues this is incorrect — Close is risk-reducing and
+/// should not be blocked by AT-920 dispatch consistency. A future fix should
+/// either skip Gate 4 for Close/Hedge or degrade dispatch_consistency_passed
+/// without rejecting. This test documents the CURRENT behavior.
+#[test]
+fn test_assembled_pipeline_close_mismatch_blocked_by_dispatch_consistency() {
+    let meta = InstrumentKindInput {
+        is_option: false,
+        is_future: true,
+        is_perpetual: true,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 10.0,
+        index_price: 50_000.0,
+        contract_multiplier: Some(3.0),
+    };
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Close,
+        risk_state: RiskState::Healthy,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    // Current behavior: Close IS blocked by dispatch consistency (Gate 4).
+    // This is documented as a P1 finding — risk-reducing intents should
+    // arguably not be blocked by AT-920 contract mismatch.
+    assert!(
+        matches!(result.decision, ChokeResult::Rejected { .. }),
+        "Close is currently blocked by dispatch mismatch (Gate 4), got {:?}",
+        result.decision
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::ContractsAmountMismatch),
+        "rejection must be from DispatchConsistency gate"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when Close is blocked by dispatch consistency"
     );
 }
 

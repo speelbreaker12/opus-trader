@@ -11,6 +11,7 @@ use crate::risk::{
     evaluate_margin_headroom_gate,
 };
 
+use super::DispatchConsistencyProof;
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 use super::intent_assembly::{SizingParams, assemble_sizing};
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
@@ -37,7 +38,7 @@ const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGE
 #[derive(Debug, Clone)]
 pub struct OpenRuntimeInput<'a> {
     /// Base gates input (gates 1-6). The shared evaluator computes
-    /// preflight_passed, quantize_passed, dispatch_consistency_passed,
+    /// preflight_passed, quantize_passed, dispatch_consistency,
     /// fee_cache_passed, and expiry_guard_passed from these inputs.
     pub base_gates: BaseGatesInput<'a>,
     pub wal_recorded: bool,
@@ -379,7 +380,7 @@ pub fn settle_pending_on_tlsm_terminal(
 
 /// Build an OPEN intent with full assembly validation.
 ///
-/// This combines `assemble_sizing()` (deriving `dispatch_consistency_passed`
+/// This combines `assemble_sizing()` (deriving `dispatch_consistency`
 /// and optionally degrading risk state) with the OPEN runtime gate evaluation.
 ///
 /// Use this entry point when raw venue metadata is available. It provides the
@@ -387,8 +388,8 @@ pub fn settle_pending_on_tlsm_terminal(
 /// `validate_and_dispatch` — ensuring the full assembly chain is exercised
 /// before gate evaluation.
 ///
-/// Assembly failure is fail-closed: `dispatch_consistency_passed` is set to
-/// `false` and risk state is degraded.
+/// Assembly failure is fail-closed: `dispatch_consistency` is set to
+/// `unchecked(false)` and risk state is degraded.
 pub fn build_open_intent_with_assembly(
     assembly_meta: &InstrumentKindInput,
     sizing_params: &SizingParams,
@@ -402,8 +403,8 @@ pub fn build_open_intent_with_assembly(
 
     match assemble_sizing(assembly_meta, sizing_params, IntentClass::Open, mismatch_metrics) {
         Ok(assembled) => {
-            adjusted_input.base_gates.dispatch_consistency_passed =
-                assembled.dispatch_consistency_passed;
+            adjusted_input.base_gates.dispatch_consistency =
+                assembled.dispatch_consistency;
             if assembled.risk_state_degraded
                 && adjusted_input.base_gates.risk_state == RiskState::Healthy
             {
@@ -412,7 +413,7 @@ pub fn build_open_intent_with_assembly(
         }
         Err(e) => {
             tracing::warn!(?e, "assembly failed — degrading dispatch_consistency to false");
-            adjusted_input.base_gates.dispatch_consistency_passed = false;
+            adjusted_input.base_gates.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
         }
     }
 

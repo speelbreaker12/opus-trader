@@ -6,7 +6,7 @@
 //! Returns a `BaseGatesPassed` proof token that cannot be constructed externally,
 //! guaranteeing that downstream gates only run after gates 1-6 pass.
 
-use super::ChokeIntentClass;
+use super::{ChokeIntentClass, DispatchConsistencyProof};
 use crate::execution::build_order_intent::GateStep;
 use crate::execution::gate_outcome::GateOutcome;
 use crate::execution::pipeline::QuantizePipelineInput;
@@ -36,7 +36,7 @@ pub struct BaseGatesInput<'a> {
     /// AT-920 dispatch consistency pre-evaluated by the caller.
     /// The actual contracts/amount check happens in dispatch_map.rs
     /// and requires venue-specific data not available at this layer.
-    pub dispatch_consistency_passed: bool,
+    pub dispatch_consistency: DispatchConsistencyProof,
     pub fee_snapshot: FeeCacheSnapshot,
     pub fee_config: FeeStalenessConfig,
     pub expiry_guard: Option<ExpiryGuardInput>,
@@ -319,7 +319,7 @@ pub fn evaluate_base_gates(
     };
 
     // ── Gate 4: DispatchConsistency ─────────────────────────────────────
-    if !input.dispatch_consistency_passed {
+    if !input.dispatch_consistency.passed() {
         gate_outcomes.push(GateOutcome::Reject {
             gate: GateStep::DispatchConsistency,
             reason_code: RejectReasonCode::ContractsAmountMismatch,

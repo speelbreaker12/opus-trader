@@ -7,7 +7,7 @@ mod common;
 
 use soldier_core::execution::reject_reason::RejectReasonCode;
 use soldier_core::execution::{
-    BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, ChokeIntentClass, GateStep, OrderType,
+    BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, ChokeIntentClass, DispatchConsistencyProof, GateStep, OrderType,
     PreflightInput, QuantizeConstraints, QuantizePipelineInput, Side, evaluate_base_gates,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
@@ -40,7 +40,7 @@ fn passing_base_input<'a>() -> BaseGatesInput<'a> {
                 min_amount: 0.1,
             },
         },
-        dispatch_consistency_passed: true,
+        dispatch_consistency: DispatchConsistencyProof::unchecked(true),
         fee_snapshot: FeeCacheSnapshot {
             fee_rate: 0.0005,
             fee_model_cached_at_ts_ms: Some(1_000_000),
@@ -170,7 +170,7 @@ fn test_base_gates_gate3_quantize_rejects_too_small() {
 #[test]
 fn test_base_gates_gate4_dispatch_consistency_rejects_mismatch() {
     let mut input = passing_base_input();
-    input.dispatch_consistency_passed = false;
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
 
     let mut metrics = BaseGatesMetrics::new();
     let result = evaluate_base_gates(&input, &mut metrics);
@@ -293,7 +293,7 @@ fn test_base_gates_gate2_failure_skips_gate3_evaluation() {
 #[test]
 fn test_base_gates_gate_outcomes_stop_at_failure() {
     let mut input = passing_base_input();
-    input.dispatch_consistency_passed = false; // gate 4 fails
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false); // gate 4 fails
 
     let mut metrics = BaseGatesMetrics::new();
     let result = evaluate_base_gates(&input, &mut metrics);
@@ -380,7 +380,7 @@ fn test_base_gates_rejection_gate_step_matches_failure_point() {
         (
             "dispatch_consistency",
             Box::new(|input: &mut BaseGatesInput<'_>| {
-                input.dispatch_consistency_passed = false;
+                input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
             }),
             GateStep::DispatchConsistency,
         ),
@@ -480,7 +480,7 @@ fn test_base_gates_close_degraded_evaluates_all_gates() {
 #[test]
 fn test_base_gates_legacy_dispatch_consistency_rejection() {
     let mut input = passing_base_input();
-    input.dispatch_consistency_passed = false;
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
 
     let mut metrics = BaseGatesMetrics::new();
     let rejection = evaluate_base_gates(&input, &mut metrics).unwrap_err();

@@ -83,6 +83,49 @@ pub struct ValidatedDispatch {
     pub risk_state: RiskState,
 }
 
+/// Proof that AT-920 dispatch consistency was evaluated (or explicitly skipped).
+///
+/// Replaces bare `bool` to prevent callers from passing `true` without validation.
+/// Constructors document the provenance of each `true` value:
+/// - `from_validated()` — real `validate_and_dispatch()` proof
+/// - `no_contracts()` — contracts absent, AT-920 N/A
+/// - `unchecked()` — bypass (TODO(slice-2): eliminate all callsites)
+///
+/// DO NOT implement `From<bool>` or add implicit conversions — the restricted
+/// constructor set is the entire point of this type (5-skill review finding #4).
+///
+/// `PartialEq`/`Eq` derived to satisfy `AssembledSizing`'s `#[derive(PartialEq)]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub struct DispatchConsistencyProof(bool);
+
+impl DispatchConsistencyProof {
+    /// AT-920 validation was performed and passed.
+    ///
+    /// Note: `ValidatedDispatch` currently has pub fields, so this is
+    /// forgeable by constructing a fake `ValidatedDispatch`. Acceptable
+    /// for mechanical guard; full fix in Slice 2 (make ValidatedDispatch opaque).
+    pub fn from_validated(_dispatch: &ValidatedDispatch) -> Self {
+        Self(true)
+    }
+
+    /// No contracts present — AT-920 check is not applicable.
+    pub fn no_contracts() -> Self {
+        Self(true)
+    }
+
+    /// Bypass: caller asserts consistency without structural proof.
+    /// TODO(slice-2): Replace all callsites with from_validated() or no_contracts().
+    pub fn unchecked(passed: bool) -> Self {
+        Self(passed)
+    }
+
+    /// Whether dispatch consistency is satisfied.
+    pub fn passed(&self) -> bool {
+        self.0
+    }
+}
+
 /// Mismatch rejection metrics (AT-920 observability).
 ///
 /// Tracks the count of contract/amount mismatch rejections.

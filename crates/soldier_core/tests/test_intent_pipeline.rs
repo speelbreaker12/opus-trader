@@ -3,8 +3,9 @@
 mod common;
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep, IntentPipelineMetrics,
-    LiquidityGateInput, OrderType, PostOnlyInput, RejectReasonCode, Side, evaluate_intent_pipeline,
+    ChokeIntentClass, ChokeRejectReason, ChokeResult, DispatchConsistencyProof, GateStep,
+    IntentPipelineMetrics, LiquidityGateInput, OrderType, PostOnlyInput, RejectReasonCode, Side,
+    evaluate_intent_pipeline,
 };
 use soldier_core::risk::RiskState;
 use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
@@ -290,7 +291,7 @@ fn test_at104_degraded_blocks_open_at_chokepoint() {
 #[test]
 fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
     let mut input = base_open_input();
-    input.dispatch_consistency_passed = false;
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
@@ -331,7 +332,7 @@ fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
 fn test_at920_pipeline_dispatch_consistency_rejects_close() {
     let mut input = base_open_input();
     input.intent_class = ChokeIntentClass::Close;
-    input.dispatch_consistency_passed = false;
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);

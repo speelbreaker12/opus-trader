@@ -3,7 +3,9 @@
 //! Wires `derive_instrument_kind`, `build_order_size`, and `validate_and_dispatch`
 //! into a single production-path function that feeds `evaluate_intent_pipeline`.
 
-use super::dispatch_map::{IntentClass, MismatchMetrics, validate_and_dispatch};
+use super::dispatch_map::{
+    DispatchConsistencyProof, IntentClass, MismatchMetrics, validate_and_dispatch,
+};
 use super::order_size::{OrderSize, OrderSizeInput, build_order_size};
 use super::pipeline::{IntentPipelineInput, IntentPipelineMetrics, PipelineResult, evaluate_intent_pipeline};
 use super::{
@@ -49,15 +51,15 @@ pub struct AssembledSizing {
     pub instrument_kind: InstrumentKind,
     /// Canonical order sizing.
     pub order_size: OrderSize,
-    /// Whether AT-920 dispatch consistency check passed.
-    pub dispatch_consistency_passed: bool,
+    /// AT-920 dispatch consistency proof.
+    pub dispatch_consistency: DispatchConsistencyProof,
     /// Whether assembly detected a degraded condition (mismatch).
     pub risk_state_degraded: bool,
 }
 
-/// Pipeline parameters excluding `dispatch_consistency_passed` (derived from assembly).
+/// Pipeline parameters excluding `dispatch_consistency` (derived from assembly).
 ///
-/// Contains all `IntentPipelineInput` fields except `dispatch_consistency_passed`,
+/// Contains all `IntentPipelineInput` fields except `dispatch_consistency`,
 /// which is determined by the assembly step.
 #[derive(Debug, Clone)]
 pub struct AssembledPipelineParams<'a> {
@@ -120,16 +122,16 @@ pub fn assemble_sizing(
         .map_err(|e| AssemblySizingError::InvalidOrderSize(format!("{e:?}")))?;
 
     // Step 3: Validate dispatch consistency (AT-920).
-    let (dispatch_consistency_passed, risk_state_degraded) =
+    let (dispatch_consistency, risk_state_degraded) =
         match validate_and_dispatch(&order_size, instrument_kind, intent, params.contract_multiplier, mismatch_metrics) {
-            Ok(_) => (true, false),
-            Err(_) => (false, true),
+            Ok(ref validated) => (DispatchConsistencyProof::from_validated(validated), false),
+            Err(_) => (DispatchConsistencyProof::unchecked(false), true),
         };
 
     Ok(AssembledSizing {
         instrument_kind,
         order_size,
-        dispatch_consistency_passed,
+        dispatch_consistency,
         risk_state_degraded,
     })
 }
@@ -172,7 +174,7 @@ pub fn evaluate_assembled_pipeline(
             venue_capabilities: remaining.venue_capabilities,
             bot_feature_flags: remaining.bot_feature_flags,
             quantize: remaining.quantize,
-            dispatch_consistency_passed: true,
+            dispatch_consistency: DispatchConsistencyProof::no_contracts(),
             fee_snapshot: remaining.fee_snapshot,
             fee_config: remaining.fee_config,
             expiry_guard: remaining.expiry_guard,
@@ -224,7 +226,7 @@ pub fn evaluate_assembled_pipeline(
         venue_capabilities: remaining.venue_capabilities,
         bot_feature_flags: remaining.bot_feature_flags,
         quantize: remaining.quantize,
-        dispatch_consistency_passed: assembled.dispatch_consistency_passed,
+        dispatch_consistency: assembled.dispatch_consistency,
         fee_snapshot: remaining.fee_snapshot,
         fee_config: remaining.fee_config,
         expiry_guard: remaining.expiry_guard,

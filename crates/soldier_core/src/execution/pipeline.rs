@@ -4,6 +4,7 @@
 //! the shared base gate evaluator (gates 1-6) then OPEN-specific gates (7-10),
 //! and finally the chokepoint gate-order evaluator.
 
+use crate::execution::DispatchConsistencyProof;
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
@@ -36,7 +37,7 @@ pub struct IntentPipelineInput<'a> {
     pub venue_capabilities: VenueCapabilities,
     pub bot_feature_flags: BotFeatureFlags,
     pub quantize: QuantizePipelineInput,
-    pub dispatch_consistency_passed: bool,
+    pub dispatch_consistency: DispatchConsistencyProof,
     pub fee_snapshot: FeeCacheSnapshot,
     pub fee_config: FeeStalenessConfig,
     pub expiry_guard: Option<ExpiryGuardInput>,
@@ -95,7 +96,7 @@ pub fn evaluate_intent_pipeline(
         venue_capabilities: input.venue_capabilities.clone(),
         bot_feature_flags: input.bot_feature_flags.clone(),
         quantize: input.quantize.clone(),
-        dispatch_consistency_passed: input.dispatch_consistency_passed,
+        dispatch_consistency: input.dispatch_consistency,
         fee_snapshot: input.fee_snapshot.clone(),
         fee_config: input.fee_config.clone(),
         expiry_guard: input.expiry_guard,
