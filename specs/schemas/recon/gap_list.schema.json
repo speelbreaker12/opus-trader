@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gap_list.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "head_commit",
+    "created_at",
+    "gaps",
+    "systemic_gaps",
+    "priority_summary"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string", "const": "gap_list.v1" },
+    "head_commit": { "type": "string", "minLength": 7 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "gap_id",
+          "story_id",
+          "at_id",
+          "priority",
+          "classification",
+          "description",
+          "proposed_fix"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "gap_id": { "type": "string", "pattern": "^GAP-" },
+          "story_id": { "type": "string" },
+          "at_id": { "type": "string", "pattern": "^AT-" },
+          "priority": { "enum": ["P0", "P1", "P2", "DEFERRED"] },
+          "classification": {
+            "enum": ["CODE_FIX", "TEST_FIX", "PRD_FIX", "DEFERRED", "INFO"]
+          },
+          "description": { "type": "string", "minLength": 10 },
+          "proposed_fix": { "type": "string", "minLength": 5 },
+          "premortem_section": { "type": "string" },
+          "verdict_impact": { "type": "string" }
+        }
+      }
+    },
+    "systemic_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gap_id", "description", "affected_stories"],
+        "additionalProperties": false,
+        "properties": {
+          "gap_id": { "type": "string", "pattern": "^GAP-SYSTEMIC-" },
+          "description": { "type": "string" },
+          "affected_stories": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "priority": { "enum": ["P0", "P1", "P2"] }
+        }
+      }
+    },
+    "priority_summary": {
+      "type": "object",
+      "required": ["p0", "p1", "p2", "deferred"],
+      "additionalProperties": false,
+      "properties": {
+        "p0": { "type": "integer", "minimum": 0 },
+        "p1": { "type": "integer", "minimum": 0 },
+        "p2": { "type": "integer", "minimum": 0 },
+        "deferred": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

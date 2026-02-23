@@ -583,6 +583,96 @@ p1="$(grep -coE '\bP1\b' "$transcript_tmp" 2>/dev/null || echo 999)"
 p2="$(grep -coE '\bP2\b' "$transcript_tmp" 2>/dev/null || echo 999)"
 echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
 
+# ── Post-validation hard gates (v3.0) ──────────────────────────────
+# These checks validate the generated artifact meets structural requirements.
+# Artifact is still written (for debugging), but exit code is nonzero on failure.
+gate_exit=0
+
+# Gate 1: Missing "Review basis:" line in artifact (exit 3)
+if ! grep -qi 'Review basis:' "$transcript_tmp" 2>/dev/null; then
+  echo "HARD_GATE_FAIL: Missing 'Review basis:' line in review artifact" >&2
+  echo "HARD_GATE: MISSING_REVIEW_BASIS (exit 3)" >> "$outfile"
+  gate_exit=3
+fi
+
+# Gate 2: Missing pre-existing enforcement + test citations (Cycle 1 only, exit 4)
+# Cycle 1 reviews MUST cite at least one pre-existing enforcement point or test.
+# Detect Cycle 1 by checking for "STORY_SCOPE" or "Cycle 1" in the review basis.
+if [[ "$gate_exit" -eq 0 ]]; then
+  review_basis_line="$(grep -i 'Review basis:' "$transcript_tmp" 2>/dev/null | head -1 || true)"
+  if echo "$review_basis_line" | grep -qiE 'STORY_SCOPE|Cycle 1'; then
+    # Cycle 1: require at least one file:line citation (pattern: path/file.rs:123 or similar)
+    citation_count="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+    if [[ "$citation_count" -eq 0 ]]; then
+      echo "HARD_GATE_FAIL: Cycle 1 review has zero file:line citations (pre-existing enforcement/test)" >&2
+      echo "HARD_GATE: MISSING_PRE_EXISTING_CITATIONS (exit 4)" >> "$outfile"
+      gate_exit=4
+    fi
+  fi
+fi
+
+# Gate 3: Missing "Phase equivalent:" label for external tool reviews (exit 5)
+# External reviews (codex, kimi) must include phase equivalent labeling.
+if [[ "$gate_exit" -eq 0 ]]; then
+  if ! grep -qi 'Phase equivalent:' "$transcript_tmp" 2>/dev/null; then
+    echo "HARD_GATE_FAIL: Missing 'Phase equivalent:' label in review artifact" >&2
+    echo "HARD_GATE: MISSING_PHASE_EQUIVALENT (exit 5)" >> "$outfile"
+    gate_exit=5
+  fi
+fi
+
+# Gate 4: Sidecar validation (exit 6)
+# If a sidecar schema exists for this review type, generate and validate sidecar.
+if [[ "$gate_exit" -eq 0 ]]; then
+  sidecar_schema="$root/specs/schemas/recon/review_artifact_sidecar.schema.json"
+  validator="$root/plans/validate_recon_artifact.sh"
+  if [[ -f "$sidecar_schema" && -x "$validator" ]]; then
+    sidecar_file="${outfile%.md}.sidecar.json"
+    # Extract structured fields from transcript for sidecar
+    review_basis_val="$(grep -i 'Review basis:' "$transcript_tmp" 2>/dev/null | head -1 | sed 's/.*Review basis:[[:space:]]*//' || true)"
+    phase_eq_val="$(grep -i 'Phase equivalent:' "$transcript_tmp" 2>/dev/null | head -1 | sed 's/.*Phase equivalent:[[:space:]]*//' || true)"
+    citations_ct="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+    basis_present=false
+    [[ -n "$review_basis_val" ]] && basis_present=true
+
+    # Build sidecar JSON
+    cat > "$sidecar_file" <<SIDECAR_EOF
+{
+  "schema_version": "review_artifact_sidecar.v1",
+  "head_commit": "$head_sha",
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "markdown_sha256": "$(sha256_file "$outfile")",
+  "markdown_path": "$outfile",
+  "review_type": "external",
+  "review_basis": "${review_basis_val:-unknown}",
+  "phase_equivalent": "${phase_eq_val:-unknown}",
+  "tool": "$tool",
+  "citations_count": $citations_ct,
+  "pre_existing_citations_count": $citations_ct,
+  "basis_line_present": $basis_present,
+  "finding_counts": {
+    "P0": $p0,
+    "P1": $p1,
+    "P2": $p2
+  }
+}
+SIDECAR_EOF
+
+    if ! "$validator" review_artifact_sidecar "$sidecar_file" 2>/dev/null; then
+      echo "HARD_GATE_FAIL: Sidecar validation failed for $sidecar_file" >&2
+      echo "HARD_GATE: SIDECAR_VALIDATION_FAILED (exit 6)" >> "$outfile"
+      gate_exit=6
+    else
+      echo "Sidecar validated: $sidecar_file" >&2
+    fi
+  fi
+fi
+
+# Override exit code if any gate failed (artifact still written for debugging)
+if [[ "$gate_exit" -ne 0 ]]; then
+  rc="$gate_exit"
+fi
+
 # Run codex digest if available (codex only)
 if [[ "$tool" == "codex" ]]; then
   digest_script="$root/plans/codex_review_digest.sh"

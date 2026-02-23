@@ -310,6 +310,15 @@ case "$STEP" in
         exit 3
       fi
     fi
+
+    # PREMORTEM_READY gate (v3.0): comprehensive readiness check
+    premortem_ready_script="$ROOT/plans/premortem_ready.sh"
+    if [[ -x "$premortem_ready_script" ]]; then
+      if ! "$premortem_ready_script" "$STORY" 2>&1; then
+        echo "WF_STEP: PREMORTEM_READY gate failed — resolve issues before proceeding" >&2
+        exit 3
+      fi
+    fi
     ;;
 
   implement)
@@ -338,6 +347,20 @@ case "$STEP" in
     ;;
 
   cycle1)
+    # Evidence ledger check (v3.0): verify R1 output exists before Cycle 1
+    evidence_ledger="$story_art/evidence_ledger.json"
+    evidence_ledger_md="$story_art/evidence_ledger.md"
+    if [[ ! -f "$evidence_ledger" && ! -f "$evidence_ledger_md" ]]; then
+      # Also check for recon preflight artifacts as evidence equivalent
+      preflight_artifacts="$(find "$story_art" -maxdepth 2 -type f \( -name '*preflight*' -o -name '*recon*' -o -name '*evidence*' \) 2>/dev/null | wc -l | tr -d '[:space:]')"
+      if [[ "$preflight_artifacts" -eq 0 ]]; then
+        echo "WF_STEP: no evidence ledger found for $STORY" >&2
+        echo "  Expected: $evidence_ledger or $evidence_ledger_md or preflight artifact in $story_art/" >&2
+        echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
+        exit 6
+      fi
+    fi
+
     review_count=0
     for d in "$story_art/codex" "$story_art/opus"; do
       if [[ -d "$d" ]]; then
