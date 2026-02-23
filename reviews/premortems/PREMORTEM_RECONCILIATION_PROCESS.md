@@ -3,7 +3,7 @@
 > Multi-agent workflows for (A) producing high-quality story premortems and (B) retroactively auditing existing code against those premortems.
 > Designed and validated during Slice 1 (13 stories, 4 agent teams, 3 review rounds).
 >
-> **Version**: 1.8 (2026-02-22) — v1.8: anti-patterns #16-#19 (batch-deserialization blast radius, early-return branch exhaustiveness, AT attribution trust propagation, input-scope too narrow for intermediate computations), 6-category fail-closed check (adds narrowing casts), AT semantic match check, combinatorial coverage check, constants accuracy check. Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5. v1.7: machine-verifiable proof graphs V1 (`python/proof_graph/`) — per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip), scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`, legacy exemption list (`plans/proof_graph_exempt.txt`), `prd_set_pass.sh` gate integration (exit 10). Appendix C roadmap item marked DONE (V1). v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
+> **Version**: 1.9 (2026-02-22) — v1.9: anti-patterns #23-#25 (consolidated findings without evidence ledgers, multi-tool phase-mapping gap, single-prompt blind spots), dual-prompt review strategy (generic + enriched for each tool), S5-004 lessons learned (multi-tool convergence, mechanical verification, informal R4 risks), debt register for 5 deferred findings. Root cause: S5-004 reconciliation retrospective revealed process gaps despite 68 review artifacts and 39 tracked findings. v1.8: anti-patterns #16-#19 (batch-deserialization blast radius, early-return branch exhaustiveness, AT attribution trust propagation, input-scope too narrow for intermediate computations), 6-category fail-closed check (adds narrowing casts), AT semantic match check, combinatorial coverage check, constants accuracy check. Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5. v1.7: machine-verifiable proof graphs V1 (`python/proof_graph/`) — per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip), scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`, legacy exemption list (`plans/proof_graph_exempt.txt`), `prd_set_pass.sh` gate integration (exit 10). Appendix C roadmap item marked DONE (V1). v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
 
 ## Glossary (Normative)
 
@@ -344,6 +344,56 @@ For **LOW risk** single stories: 1 writer + lead evaluation is sufficient. Skip 
 | Final verdicts | 8 RECONCILED, 5 RECONCILED-WITH-DEBT, 0 NOT RECONCILED |
 | Highest-value finding | R7b+R7c: most guards tested in isolation but not wired into production |
 
+### S5-004 Reconciliation Metrics (Multi-Tool External Review)
+
+| Metric | Value |
+|--------|-------|
+| Stories reconciled | 9 (S1-002 through S1-012, excluding S1-001/008/009/013) |
+| Review tools | 3 (Kimi K2.5, Opus 4.6, Codex gpt-5.3) |
+| Prompt styles per tool | 2 (generic + enriched) |
+| Review cycles | 2 (Cycle 1: pre-fix, Cycle 2: post-fix) |
+| Total review artifacts | 68 (19 Codex C1 + 18 Codex C2 + 17 Opus C1 + 9 Opus C2 + 5 Kimi) |
+| Unique Cycle 1 findings (body-verified) | 36 P1, 0 P0 |
+| New Cycle 2 findings | 2 P1 (WAL), 1 P0 escalation (bare bool) |
+| Resolution: FIXED | 17 (14 in Cycle 1 commit `de81950` + 3 in WAL fix `72d84db`) |
+| Resolution: STRUCTURAL | 17 (blocked on Slice 2+ production wiring) |
+| Resolution: DEFERRED | 5 (bare bool API, academic paths, contract clarification) |
+| Tests before remediation | 890 |
+| Tests after all fixes | 925 (+35 net new) |
+| R7 5-skill stack on WAL fixes | All 5 converged on same root cause (CSP.3.2 violation) |
+| Mechanical verification gates added | 3 (compile, callsite, test existence) |
+| Finding unique % by prompt: Codex enriched | 39% (14 unique) |
+| Finding unique % by prompt: Codex generic | 11% (4 unique) |
+| Finding unique % by prompt: Opus generic | 14% (5 unique) |
+| Finding unique % by prompt: Opus enriched | 8% (3 unique) |
+| Multi-tool overlap | 28% (10 findings found by 2+ tools) |
+
+### Lessons Learned from S5-004
+
+**What worked well:**
+
+1. **Dual-prompt review (generic + enriched)** — Neither prompt alone found more than 60% of findings. Enriched found contract-level gaps (AT attribution, premortem conformance). Generic found code-level issues (NaN/Inf, panic safety, API design). Running both is non-negotiable.
+
+2. **Multi-tool triangulation** — Codex agent-mode explored deeply but produced noisy FINDINGS_SUMMARY counts (P0 inflation). Opus produced more structured, concise findings. Kimi caught batch-level issues. The tools complement rather than duplicate each other.
+
+3. **5-skill stack convergence** — When 3+ of 5 skills (PR review, failure-mode, strategic, contract, devils advocate) converge on the same finding, it's real. In S5-004, all 3 HIGH+ reviews found the same WAL CSP.3.2 violation independently. Convergence = high signal.
+
+4. **Mechanical verification (`verify_mechanical.sh`)** — Catches Themes 3/5/21/22 (non-compiling tests, phantom tests, dead callsites) with zero reviewer attention. Should run as a hard gate before any review cycle begins.
+
+5. **Consolidated findings crosswalk** — The 39-finding table with Resolution/Commit columns (`recon_S5-004_consolidated_findings.md`) was the single most useful artifact for tracking completion. Every finding mapped to FIXED/STRUCTURAL/DEFERRED with evidence.
+
+**What didn't work:**
+
+1. **Informal R4 synthesis** — LLM synthesis of findings produced count contradictions (said "3 fixed" when table showed 11, said "all 9 stories" when data showed 6/9). Scripted JSON aggregation would have prevented this. The cycle2_summary required 5 corrections post-hoc.
+
+2. **Missing per-story evidence ledgers** — Without formal AT-by-AT verdicts per story, there's no structured way to assign RECONCILED/NOT-RECONCILED. The consolidated crosswalk was retroactively added but is a poor substitute.
+
+3. **R5b self-review only on WAL fixes** — The 5-skill stack ran on the WAL fix commit but NOT on the initial 14-finding remediation. This meant the initial fix had no formal self-review gate before Cycle 2.
+
+4. **No debt register** — 5 DEFERRED findings had no `DEBT_REGISTER.json` entries, violating the R7f gate. Added retroactively.
+
+5. **FINDINGS_SUMMARY lines are unreliable** — Codex auto-generated summary lines reported P0=16/P0=34 but only 1 actual P0 existed in review bodies. Always use body-verified counts, not summary aggregates.
+
 ## When to Use This Process
 
 | Scenario | Use which variant? |
@@ -399,6 +449,12 @@ For **LOW risk** single stories: 1 writer + lead evaluation is sufficient. Skip 
 21. **Phantom test: PRD lists test name that doesn't exist as `#[test]` function** — `implementation_tests[]` in prd.json references `path::test_fn_name`, but the file doesn't contain `fn test_fn_name` (or the file doesn't exist at all). In Slice 1, 3 PRD-named tests were phantoms: they were planned but never implemented, yet the story appeared compliant because no one checked. **Fix**: Run `./plans/verify_mechanical.sh` test existence check. For each `implementation_tests[]` entry, verify the file exists AND contains `#[test] fn <name>`. Missing file = FAIL. Missing function = FAIL.
 
 22. **Non-compiling test: test file has broken imports/types but was never run** — The test file exists and contains `#[test]` functions, but `cargo test --no-run --workspace` fails because imports reference types that were renamed or never defined. In Slice 1, `PricerSide` was consolidated into `Side` in commit 9515074 but test imports weren't updated, and `WalWriterConfig` was referenced in re-exports but never defined. Neither compile error was caught because the tests were never built. **Fix**: Run `./plans/verify_mechanical.sh` compile gate as part of `./plans/verify.sh full`. `cargo test --no-run --workspace` must pass before any test verdicts are trusted.
+
+23. **Consolidated findings without per-story evidence ledgers** — Multiple review tools (Kimi, Opus, Codex) produce dozens of review files. The lead consolidates them into a single findings report (e.g., "36 P1 findings across 6 themes"). This is useful for triage but skips the per-story AT-by-AT verdict table required by Phase R1. Without per-story evidence ledgers, there is no formal RECONCILED/NOT-RECONCILED assignment per story, no per-AT proof verdict, and no structured way to track which ATs are PROVEN vs CLAIMED_NOT_PROVEN. In S5-004, 68 review artifacts were produced but no evidence ledgers — the consolidated crosswalk was retroactively added to bridge the gap. **Fix**: Even when using external review tools instead of the R1 agent prompt, produce one evidence ledger per story that maps each AT to its verdict. The consolidated findings report is an additional rollup, not a replacement.
+
+24. **Running multiple review tools without phase-mapping** — External review tools (Kimi, Opus, Codex) produce review artifacts outside the R1-R7 phase structure. Without explicit mapping, it's unclear which review artifacts correspond to which phase, whether Cycle 1 or Cycle 2 scope was used, and whether the full review checklist was applied. In S5-004, Kimi C1/C2 reviews ran as R1-equivalent story-scope audits, Opus generic/enriched ran as R3-equivalent cross-reviews, and Codex C1/C2 ran as R7-equivalent post-remediation reviews — but this mapping was implicit, not documented. **Fix**: When using external tools, explicitly label each review batch with its phase-equivalent and cycle. Add a "Phase Mapping" section to the consolidated findings report: `Kimi C1 = Phase R1 (story-scope audit)`, `Codex C2 enriched = Phase R7 (post-remediation)`, etc.
+
+25. **Single-prompt review where dual-prompt (generic + enriched) catches more** — Running a review tool with only one prompt style (either generic or enriched) leaves systematic blind spots. Generic prompts find **code-level** issues (numeric overflow, panic safety, dead code, API design flaws). Enriched prompts — which include the PRD entry, premortem §4/§5, enforcing ATs, and CONTRACT.md clause text — find **contract-level** issues (AT proof gaps, premortem conformance, missing PRD-named tests, decision divergence). In S5-004, Codex enriched found 14 unique findings (39%) including all 3 phantom-test discoveries and all AT attribution mismatches. Codex generic found 4 unique findings (11%) including the `as i64` saturation and panic-safety issue. Opus generic found 5 unique findings (14%) including the API design flaws. Neither prompt style alone would have found more than ~60% of findings. **Fix**: Always run BOTH generic and enriched prompts for each review tool. The enriched prompt should include: (1) PRD story entry, (2) premortem §2/§4/§5, (3) `enforcing_contract_ats[]` with clause text from CONTRACT.md, (4) `scope.touch` files, (5) `implementation_tests[]` paths. The generic prompt should use only the story ID and code paths. Compare findings to identify prompt-specific blind spots. Track "unique finding %" per prompt style to validate that dual-prompt is worth the cost.
 
 ---
 ---
