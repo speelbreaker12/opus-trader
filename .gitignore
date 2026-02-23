@@ -15,7 +15,14 @@ evals/
 .codex/
 
 # Local IDE/Agent state
-.claude/
+.claude/*
+!.claude/agents/
+!.claude/agents/*.md
+!.claude/scripts/
+!.claude/scripts/*.py
+!.claude/settings.json
+!.claude/commands/
+!.claude/commands/*.md
 .obsidian/
 .code/
 
@@ -27,7 +34,3 @@ proxy.log
 proxy_bridge.py
 plans/prd.json.bak
 .worktrees/
-
-# Allow agent definitions to be committed
-!.claude/agents/
-!.claude/agents/*.md
