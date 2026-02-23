@@ -412,9 +412,38 @@ ${diff_ctx:-(no content available)}
 \`\`\`
 PROMPT_EOF
   fi
+
+  # F-11: Inject proof graph skeleton into prompt when --proof-graph is active
+  if [[ "${proof_graph:-}" == "true" && -f "${pg_skeleton:-}" ]]; then
+    cat <<'PG_INSTR_EOF'
+
+--- PROOF GRAPH ---
+A proof_graph.json skeleton has been generated for this story.
+For each AT entry in the `ats[]` array, fill the `at_verdict` block:
+
+  "at_verdict": {
+    "verdict": "<one of: PROVEN_INTEGRATED, PROVEN_UNIT, WEAK_PROOF, CLAIMED_NOT_PROVEN, UNTESTED_ENFORCEMENT, WRONG_IMPL_UNBLOCKED, FAIL_OPEN_RISK, MISSING, DEFERRED>",
+    "severity": "<BLOCKING|HARDENING|INFO>",
+    "rationale": "<one sentence explaining your verdict>"
+  }
+
+Also fill `enforcement.status` and `wiring.status` if you have evidence.
+Leave other fields as-is (they are pre-populated from PRD + premortem).
+
+Rules:
+- DEFERRED = "I cannot evaluate this AT" (not "it's fine")
+- If uncertain, use the MORE RESTRICTIVE verdict (fail-closed)
+- Do NOT modify schema_version, head_sha, or story_meta
+
+Skeleton content follows:
+PG_INSTR_EOF
+    cat "$pg_skeleton"
+  fi
 }
 
 # ── Proof graph skeleton generation (before review) ───────────────
+# NOTE: The flag is named --proof-graph (not --init-proof-graph) for brevity.
+# It both generates the skeleton AND injects fill instructions into the prompt.
 pg_skeleton=""
 if [[ "$proof_graph" == "true" ]]; then
   pg_outdir="$outdir"  # artifacts/story/<ID>/<tool>/

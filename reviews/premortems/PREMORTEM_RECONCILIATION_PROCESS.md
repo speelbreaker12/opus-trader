@@ -3,7 +3,7 @@
 > Multi-agent workflows for (A) producing high-quality story premortems and (B) retroactively auditing existing code against those premortems.
 > Designed during Slice 1 (13 stories, 4 agent teams, 3 review rounds). Hardened during S5-004 reconciliation (9 stories, 3 review tools, 68 artifacts, 39 findings, dual-prompt strategy).
 >
-> **Version**: 2.0 (2026-02-22) — v2.0: anti-pattern #26 (blanket `--theirs` merge destroys branch-specific tooling), lessons learned #6 (merge loss of enriched prompt + resolution prompt, required manual git-history restoration). Root cause: 8 merge conflicts resolved with `--theirs` without per-file diff inspection; 2/8 had substantial unique work lost. v1.9: anti-patterns #23-#25 (consolidated findings without evidence ledgers, multi-tool phase-mapping gap, single-prompt blind spots), dual-prompt review strategy (generic + enriched for each tool), S5-004 lessons learned (multi-tool convergence, mechanical verification, informal R4 risks), debt register for 5 deferred findings. Root cause: S5-004 reconciliation retrospective revealed process gaps despite 68 review artifacts and 39 tracked findings. v1.8: anti-patterns #16-#19 (batch-deserialization blast radius, early-return branch exhaustiveness, AT attribution trust propagation, input-scope too narrow for intermediate computations), 6-category fail-closed check (adds narrowing casts), AT semantic match check, combinatorial coverage check, constants accuracy check. Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5. v1.7: machine-verifiable proof graphs V1 (`python/proof_graph/`) — per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip), scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`, legacy exemption list (`plans/proof_graph_exempt.txt`), `prd_set_pass.sh` gate integration (exit 10). Appendix C roadmap item marked DONE (V1). v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
+> **Version**: 2.1 (2026-02-23) — v2.1: step-supervisor phase mapping table, R3 gap output JSON schema (worked example with gaps), tiered anti-patterns (Top 5), version history moved to Appendix D, canonicalized entry points location, RECON-CLEAN independent verification gate, Appendix A sync directive. v2.0: anti-pattern #26, lessons learned #6 (merge loss). v1.9: anti-patterns #23-#25, dual-prompt strategy, S5-004 lessons. v1.8: anti-patterns #16-#19, 6-category fail-closed. v1.7: proof graphs V1. v1.6: anti-patterns #12-#15, audit anchors. v1.5: GAP-P0-01 through GAP-P1-03. v1.2-v1.4: review scope, R5b, verdicts, escalation. Full changelog: see [Appendix D](#appendix-d-changelog).
 
 ## Glossary (Normative)
 
@@ -408,6 +408,18 @@ For **LOW risk** single stories: 1 writer + lead evaluation is sufficient. Skip 
 
 ## Anti-Patterns
 
+### Top 5 Most Dangerous (prioritize these in agent context windows)
+
+| Rank | # | Name | Why it's critical |
+|------|---|------|-------------------|
+| 1 | #20 | Paper enforcement (defined + tested, never called) | Creates false RECONCILED verdicts on guards with zero runtime protection. Highest blast radius. |
+| 2 | #6 | Skipping R7c wiring audit | The only check that catches #20. Without it, all other review layers produce false confidence. |
+| 3 | #12 | Fake citation pass-through | Poisons every downstream layer (cross-review, evidence ledger, proof graph) with unverifiable claims. |
+| 4 | #25 | Single-prompt blind spots | Neither generic nor enriched alone finds >60% of findings. Skipping one loses 40%+ of signal. |
+| 5 | #26 | Blanket `--theirs` merge | Destroys branch-specific tooling silently. Unrecoverable without git history forensics. |
+
+All 26 anti-patterns matter, but if context is limited, these five represent the highest-damage failure modes discovered across Slice 1 and S5-004.
+
 1. **Each reviewer only reviews one other batch** — Defeats the purpose. Systemic patterns only emerge when a reviewer sees 9+ documents from different authors. The first attempt at cross-review in Slice 1 used per-batch reviews and had to be restarted.
 
 2. **Reviewer reviews their own work** — Self-review has near-zero marginal value after the writing phase. Assign complements only.
@@ -507,6 +519,26 @@ Phase R7:  Post-Reconciliation      (Cycle 2: fix-diff + AT regression)
 ```
 
 Total: 13 phases across Part B. R7a-R7c run in parallel; R7d-R7e run after R7a-R7c fixes are applied; R7f runs last (validates debt register completeness).
+
+### Step Supervisor Phase Mapping
+
+The `plans/step_supervisor.sh` and `plans/wf_step.sh` use a 9-step receipt chain. This table maps those steps to Part B phases:
+
+| `wf_step.sh` step | Part B phase(s) | Pod | What happens |
+|--------------------|----------------|-----|-------------|
+| `preflight` | R1 (Parallel Reconcile) | A | Read-only audit: locate enforcement, verify fail-closed, build evidence ledger |
+| `implement` | R5 (Remediation) | A | Fix gaps from R4 gap list (only phase that modifies code) |
+| `self_review` | R5b (Self-Review) | B | 5-skill stack on story-scope code, fix blockers, produce gate artifact + skill receipts |
+| `cycle1` | R2 (Lead Eval) + R3 (Cross-Review) + R4 (Synthesis) | B | External story-scope audit, cross-review, gap aggregation |
+| `fix` | R7a-R7c fixes | C | Apply contract review, strategic review, and wiring audit fixes |
+| `cycle2` | R7d (Code Review) + R7e (Devils Advocate) + R7f (Debt Validation) | C | Post-remediation audit on fix diff + AT regression |
+| `resolution` | R6 (Verify) | D | Lead confirms all gaps closed, assigns final verdicts, STOPLIGHT re-eval |
+| `verify_full` | `verify.sh full` | D | Mechanical verification: clippy, tests, preflight gates |
+| `pass` | `prd_set_pass.sh` | supervisor | Proof gate + runtime-enforcement gate + mechanical checks + proof graph gate |
+
+**Note**: The `cycle1` step spans R2-R4 because the receipt tracks the completion of the entire Cycle 1 review round, not individual sub-phases. Similarly, `cycle2` spans R7d-R7f.
+
+**Receipt system distinction**: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track workflow step completion. R5b skill receipts (`reviews/reconciliations/<slice>/receipts/`) track individual skill execution within a step. These are complementary — the workflow receipt proves the step ran, the skill receipts prove *how* it ran.
 
 ---
 
@@ -862,6 +894,49 @@ This separates mechanical aggregation (must be lossless) from judgment calls (ap
   }
 }
 ```
+
+When a cross-reviewer finds gaps, the JSON structure includes full gap entries:
+
+```json
+{
+  "story_id": "S1-007",
+  "reviewer": "reviewer-A",
+  "gaps": [
+    {
+      "gap_id": "GAP-007-1",
+      "at_id": "AT-920",
+      "priority": "P1",
+      "classification": "TEST_FIX",
+      "premortem_section": "§5",
+      "description": "Missing golden vector for absolute-vs-relative tolerance (§5 wrong-impl row 1)",
+      "proposed_fix": "Add test row: contracts=10, multiplier=10_000, amount=100_001",
+      "verdict_impact": "WRONG_IMPL_UNBLOCKED → PROVEN (if fixed)"
+    },
+    {
+      "gap_id": "GAP-007-2",
+      "at_id": "AT-920",
+      "priority": "P1",
+      "classification": "CODE_FIX",
+      "premortem_section": "§7",
+      "description": "Missing structured log on rejection path",
+      "proposed_fix": "Add tracing::warn! with intent_id, computed_delta, tolerance fields",
+      "verdict_impact": "SILENT_REJECT → PROVEN (if fixed)"
+    }
+  ],
+  "coverage_proof": {
+    "at_causality_checked": true,
+    "fail_closed_checked": true,
+    "section_4_decisions_checked": true,
+    "section_5_wrong_impls_checked": true,
+    "observability_checked": true,
+    "citation_spot_checks": ["dispatch_map.rs:142", "test_dispatch_map.rs:89"]
+  }
+}
+```
+
+**Required gap fields**: `gap_id`, `at_id`, `priority` (P0/P1/P2/DEFERRED), `classification` (CODE_FIX/TEST_FIX/PRD_FIX/DEFERRED/INFO), `description`, `proposed_fix`. Optional: `premortem_section`, `verdict_impact`.
+
+**Note**: `coverage_proof` is required even when gaps are found — it proves the reviewer checked all dimensions, not just the ones where they found issues.
 
 The aggregation script validates that every story reviewed has either gaps or a complete `coverage_proof`. A story with an empty gap array and no coverage proof produces `UNCHECKED_CLEAN_REVIEW` — the lead must investigate whether the reviewer actually engaged with the story or skipped it.
 
@@ -1230,6 +1305,14 @@ Every reconciled story must produce this set of artifacts. Missing items block t
 - Confirmation that preflight + self-review + Cycle 1 found `BLOCKING=0`
 - `git diff → 0` proof (no code changed)
 - Explicit statement: "Cycle 2 abbreviated: no fix diff to review"
+- **Lead sign-off** (v2.1): `RECON-CLEAN approved by: <lead name/agent>`
+
+**Independent verification gate (v2.1)**: The lead must independently verify the `BLOCKING=0` claim before approving `RECON-CLEAN`. Specifically:
+1. Read at least one Cycle 1 review artifact for the story and confirm no findings were downgraded from BLOCKING to INFO without justification.
+2. Confirm the R5b self-review artifact exists and its `finding_counts` show `P0: 0, P1: 0`.
+3. Record the verification in the resolution artifact: `RECON-CLEAN verified: reviewed <artifact name>, confirmed BLOCKING=0`.
+
+Without independent verification, the `RECON-CLEAN` path creates an incentive to undercount findings in Cycle 1 / R5b. The lead's sign-off closes this gap.
 
 This exception prevents spending reviewer attention on empty diffs while maintaining traceability.
 
@@ -1284,7 +1367,7 @@ For each enforcement function marked PROVEN in Phase R1, verify it is reachable 
 
 **How to run**:
 1. Extract the list of enforcement functions from all evidence ledgers
-2. Define **entry points**: the known production entry points for the system (e.g., `main()`, `dispatch()`, `execute()`, `build_order_intent()`). Maintain this list in `specs/ENTRY_POINTS.md` or equivalent.
+2. Define **entry points**: the known production entry points for the system (e.g., `main()`, `dispatch()`, `execute()`, `build_order_intent()`). Maintain this list in `specs/ENTRY_POINTS.md` (canonical location — create if absent).
 3. For each enforcement function, trace the call chain from the function up to an entry point:
    - **Preferred**: Use LSP `incomingCalls` recursively (up to 10 hops) to build the call tree from the enforcement function to an entry point
    - **Fallback**: Use `rust-callgraph` or manual grep + LSP `findReferences` to trace callers transitively
@@ -1541,7 +1624,10 @@ plans/step_prompts/recon/
 > Agents executing this prompt must not write or modify any file.
 > Phase R5 (remediation) uses a separate prompt.
 >
-> This appendix is kept in sync with `plans/prompts/slice_reconcile_implement.md`.
+> **Source of truth**: This appendix (within PREMORTEM_RECONCILIATION_PROCESS.md) is the canonical version of the R1 prompt.
+> `plans/prompts/slice_reconcile_implement.md` is a derived copy for agent dispatch convenience.
+> To detect drift, run: `diff <(sed -n '/^## ROLE/,/^# Appendix B/p' reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md) plans/prompts/slice_reconcile_implement.md`
+> When they diverge, this document wins. Regenerate the dispatch copy from here.
 
 ## ROLE
 
@@ -1983,3 +2069,82 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 **Proposed implementation**: Add a §9 "Post-Rejection Analysis" section to the premortem template. During reconciliation, Phase R1 audits the downstream effects as Task 8.5 (between design-pattern conformance and remediation list).
 
 **Blockers**: Expands the reconciliation scope significantly (~doubles R1 audit work per AT). Better introduced as a dedicated process for HIGH `loss_mode` stories only, or as a separate Phase R8.
+
+---
+
+# Appendix D: Changelog
+
+> Full version history. Header shows only current + previous version summary.
+
+### v2.1 (2026-02-23)
+- Step-supervisor phase mapping table: explicit mapping between `wf_step.sh` 9-step receipt chain and Part B phases (R1-R7f), with pod assignments and receipt system distinction
+- R3 gap output JSON schema: worked example for stories with gaps (required fields: `gap_id`, `at_id`, `priority`, `classification`, `description`, `proposed_fix`; `coverage_proof` required even when gaps found)
+- Tiered anti-patterns: Top 5 Most Dangerous callout (#20, #6, #12, #25, #26) for agent context window prioritization
+- Version history moved to Appendix D (header truncated to current + previous)
+- Canonicalized entry points location: `specs/ENTRY_POINTS.md` (removed "or equivalent")
+- RECON-CLEAN independent verification gate: lead must independently verify `BLOCKING=0` before approving Cycle 2 skip (read artifact, confirm finding_counts, record verification)
+- Appendix A sync directive: `plans/prompts/slice_reconcile_implement.md` is canonical source of truth; appendix is reference snapshot with diff command for drift detection
+
+### v2.0 (2026-02-22)
+- Anti-pattern #26 (blanket `--theirs` merge destroys branch-specific tooling)
+- Lessons learned #6 (merge loss of enriched prompt + resolution prompt, required manual git-history restoration)
+- Root cause: 8 merge conflicts resolved with `--theirs` without per-file diff inspection; 2/8 had substantial unique work lost
+
+### v1.9
+- Anti-patterns #23-#25 (consolidated findings without evidence ledgers, multi-tool phase-mapping gap, single-prompt blind spots)
+- Dual-prompt review strategy (generic + enriched for each tool)
+- S5-004 lessons learned (multi-tool convergence, mechanical verification, informal R4 risks)
+- Debt register for 5 deferred findings
+- Root cause: S5-004 reconciliation retrospective revealed process gaps despite 68 review artifacts and 39 tracked findings
+
+### v1.8
+- Anti-patterns #16-#19 (batch-deserialization blast radius, early-return branch exhaustiveness, AT attribution trust propagation, input-scope too narrow for intermediate computations)
+- 6-category fail-closed check (adds narrowing casts)
+- AT semantic match check, combinatorial coverage check, constants accuracy check
+- Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5
+
+### v1.7
+- Machine-verifiable proof graphs V1 (`python/proof_graph/`)
+- Per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip)
+- Scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`
+- Legacy exemption list (`plans/proof_graph_exempt.txt`)
+- `prd_set_pass.sh` gate integration (exit 10)
+- Appendix C roadmap item marked DONE (V1)
+
+### v1.6
+- Anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral)
+- Enforceable Cycle 1 pre-existing-code gate
+- DECISION_DIVERGENCE auto-escalation for rejected options
+- Debt register JSON schema + R7f validation
+- R7c call-graph reachability (entry-point assertion replaces single-caller check)
+- Codebase audit anchors (`#[audit_anchor]`)
+- Future roadmap (proof graphs, post-rejection blast-radius audit)
+
+### v1.5
+- GAP-P0-01: Separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean)
+- GAP-P0-02: Machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs)
+- GAP-P0-03: Structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker)
+- GAP-P0-04: OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards
+- GAP-P1-01: Decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only)
+- GAP-P1-02: WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN
+- GAP-P1-03: STOPLIGHT re-evaluation in Phase R6 verify
+
+### v1.4
+- Expanded fail-closed check (5-category input validation)
+- Input-boundary mutations in R7e
+- Anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation)
+- Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers
+
+### v1.3
+- PARTIAL verdict
+- R7 sub-phase breakdown, R7d-R7e escalation
+- MISSING_ARTIFACT/FALLBACK priority, emergency escalation
+- Review Basis enforcement
+- `prd_set_pass.sh` cross-reference
+- Simpler-Than-Correct Gate dual-application
+
+### v1.2
+- Review scope rules, Phase R5b
+- Story proof scope, Review Basis
+- Evidence Index, minimum evidence pack
+- Positive/negative evidence

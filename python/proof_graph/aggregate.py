@@ -59,20 +59,22 @@ def _strictest_verdict(verdicts: list[str]) -> str:
 
 
 def _compute_trading_halt(graph: dict[str, Any]) -> bool:
-    """Recompute trading halt condition from graph data."""
+    """Recompute trading halt condition from graph data.
+
+    Delegates to rules.should_trigger_trading_halt (single source of truth).
+    """
+    # Lazy import: sys.path is set up by main() before aggregate() is called.
+    from python.proof_graph.rules import should_trigger_trading_halt
+
     story_meta = graph.get("story_meta", {})
-    if not story_meta.get("safety_critical", False):
-        return False
-
-    loss_level = story_meta.get("loss_mode", {}).get("level", "")
-    if loss_level not in ("HIGH", "CRITICAL"):
-        return False
-
-    for at in graph.get("ats", []):
-        v = at.get("at_verdict", {}).get("verdict", "")
-        if v in ("FAIL_OPEN_RISK", "WRONG_IMPL_UNBLOCKED"):
-            return True
-    return False
+    return should_trigger_trading_halt(
+        safety_critical=story_meta.get("safety_critical", False),
+        loss_level=story_meta.get("loss_mode", {}).get("level", ""),
+        verdicts=[
+            at.get("at_verdict", {}).get("verdict", "")
+            for at in graph.get("ats", [])
+        ],
+    )
 
 
 def aggregate(
@@ -200,6 +202,7 @@ def aggregate(
     if "meta" not in merged:
         merged["meta"] = {}
     merged["meta"]["review_sources"] = review_labels
+    merged["meta"]["review_count"] = len(review_labels)
     if conflicts:
         merged["meta"]["conflicts"] = conflicts
 

@@ -378,18 +378,34 @@ def _is_v2(ctx: ValidationContext) -> bool:
     return ctx.graph.schema_version >= 2
 
 
+def should_trigger_trading_halt(
+    safety_critical: bool, loss_level: str, verdicts: list[str]
+) -> bool:
+    """Core trading halt logic (raw types, usable from aggregate.py).
+
+    Args:
+        safety_critical: Whether the story is safety-critical.
+        loss_level: Loss mode level string (e.g. "HIGH", "CRITICAL").
+        verdicts: List of AT verdict strings.
+    """
+    if not safety_critical:
+        return False
+    if loss_level not in (LossModeLevel.HIGH, LossModeLevel.CRITICAL):
+        return False
+    return any(
+        v in (Verdict.FAIL_OPEN_RISK, Verdict.WRONG_IMPL_UNBLOCKED)
+        for v in verdicts
+    )
+
+
 def compute_trading_halt(ctx: ValidationContext) -> bool:
     """Recompute trading halt condition from graph data (authoritative)."""
     g = ctx.graph
-    if not g.story_meta.safety_critical:
-        return False
-    if g.story_meta.loss_mode.level not in (LossModeLevel.HIGH, LossModeLevel.CRITICAL):
-        return False
-    for at in g.ats:
-        v = at.at_verdict.verdict
-        if v in (Verdict.FAIL_OPEN_RISK, Verdict.WRONG_IMPL_UNBLOCKED):
-            return True
-    return False
+    return should_trigger_trading_halt(
+        safety_critical=g.story_meta.safety_critical,
+        loss_level=g.story_meta.loss_mode.level,
+        verdicts=[at.at_verdict.verdict for at in g.ats],
+    )
 
 
 def r_006b(ctx: ValidationContext) -> list[Finding]:

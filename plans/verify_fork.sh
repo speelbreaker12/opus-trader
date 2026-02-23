@@ -646,6 +646,10 @@ if [[ -x "$ROOT/plans/fail_closed_coverage.sh" ]]; then
 fi
 
 # --- Proof graph validation (full mode only, post-aggregation) ---
+# Architectural note: this gate validates PERSISTENT artifacts (proof graphs)
+# that live alongside the code, not ephemeral build outputs. This is intentional:
+# proof graphs are evidence records that must remain valid across commits.
+#
 # Single-level glob: artifacts/story/*/proof_graph.json matches only
 # base/merged graphs (e.g. artifacts/story/S1-007/proof_graph.json).
 # Reviewer sub-directories (codex/, opus/, kimi/) are two levels deep
@@ -655,9 +659,9 @@ if [[ "$MODE" == "full" ]]; then
   for pg in "$ROOT"/artifacts/story/*/proof_graph.json; do
     [[ -f "$pg" ]] || continue
     sid="$(basename "$(dirname "$pg")")"
-    log "14g-pg) proof graph validation: $sid"
+    log "14h) proof graph validation: $sid"
     run_logged_or_exit "proof_graph_${sid}" "$PROOF_GRAPH_TIMEOUT" \
-      python3 "$ROOT/python/proof_graph/validate.py" "$pg" \
+      "$PYTHON_BIN" "$ROOT/python/proof_graph/validate.py" "$pg" \
         --contract-path "$ROOT/specs/CONTRACT.md" \
         --prd-path "$ROOT/plans/prd.json" \
         --strict
