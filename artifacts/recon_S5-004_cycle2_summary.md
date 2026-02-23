@@ -12,8 +12,8 @@
 - **Cycle 1 baseline**: 36 unique P1 findings across 9 stories
 - **Cycle 2 Codex FINDINGS_SUMMARY totals (raw)**: see table below
 - **FINDINGS_SUMMARY line remains unreliable** — P0 counts are inflated by Codex's auto-summary (no actual P0-severity findings in review bodies for most stories)
-- **Key improvement**: 3 of the original 36 P1 findings were fixed by the Cycle 1 commit (PricerSide import, WalWriterConfig, contradictory flag handling, missing PRD-named tests, NaN/Inf guards, panic-safe trace IDs)
-- **Persistent systemic theme**: All 9 stories still have the core "zero production callsites / paper-only AT enforcement" gap — this is structural (deferred wiring) and was not in scope for Cycle 1 fixes
+- **Key improvement**: ~11 of the original 36 P1 findings were fixed by the Cycle 1 commit (PricerSide import, WalWriterConfig, contradictory flag handling, missing PRD-named tests, NaN/Inf guards, panic-safe trace IDs)
+- **Persistent systemic theme**: 6/9 stories have zero production callsites; 8/9 have paper-only AT proof — this is structural (deferred wiring) and was not in scope for Cycle 1 fixes
 
 ## Cycle 2 Review Matrix
 
@@ -239,25 +239,25 @@ The remaining findings fall into two structural categories that were not address
 | S1-010 | 0 | 2 | 2 | 0 | 2 | 3 | 3 |
 | S1-011 | 0 | 1 | 4 | 0 | 0 | 1 | 1 |
 | S1-012 | 0 | 4 | 2 | 0 | 1 | 1 | 4 |
-| **Totals** | **1** | **22** | **24** | **0** | **12** | **14** | **~24 unique** |
+| **Totals** | **1** | **22** | **24** | **0** | **12** | **14** | **~25 unique** |
 
-**Note**: Union Blocking counts are deduplicated across enriched/generic (most P1 findings overlap).
+**Note**: Union Blocking counts are deduplicated P0+P1 across enriched/generic (most findings overlap). This is the single normalized metric used for Cycle 1→2 comparison.
 
 ## Cycle 1 to Cycle 2 Progression
 
 | Metric | Cycle 1 | Cycle 2 | Delta |
 |--------|---------|---------|-------|
-| Total unique P1 findings (body-verified) | 36 | ~25 | **-11 (~31% reduction)** |
+| Total unique blocking findings (P0+P1, body-verified) | 36 | ~25 | **-11 (~31% reduction)** |
 | Actual P0 findings in body | 0 | 1 (S1-007 enriched) | +1 (escalation) |
 | Stories with zero production callsites | 6/9 | 6/9 | No change (structural) |
-| Stories with paper-only AT proof | 8/9 | 9/9 | No change (structural) |
+| Stories with paper-only AT proof | 8/9 | 9/9 | +1 regression (S1-011 newly identified in Cycle 2 enriched review) |
 | Non-runnable proving tests | 3/9 | 0/9 | **All fixed** |
 | Missing PRD-named tests | 3/9 | 0/9 | **All fixed** |
 | Missing fail-closed numeric guards | 3/9 | 0/9 | **All fixed** |
 
 ### What Improved
 
-1. **All compilation blockers resolved** -- PricerSide, WalWriterConfig imports fixed; all test targets now compile and run
+1. **All compilation blockers resolved** -- PricerSide, WalWriterConfig imports fixed; all test targets now compile and run (verified: `cargo test --workspace` — 925 passed, 0 failed at commit `75bb9e7`)
 2. **All PRD-named tests created** -- `test_instrument_metadata_uses_get_instruments`, `test_instrument_cache_ttl_blocks_opens_allows_closes`, `test_expiry_cancel_idempotent_duplicate_noop` exist and pass
 3. **Numeric safety guards added** -- NaN/Inf/overflow rejection in order_size, dispatch_map, instrument kind derivation
 4. **Panic safety** -- Drop-guard trace ID restoration prevents metric leaks on closure panics
