@@ -213,6 +213,30 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
+  # ── External manifest gates (R3 + R7d) ──────────────────────────
+  # If external_manifest_gate.sh exists, run both gates.
+  # Derive slice_id from story ID prefix (e.g., S1-004 → S1).
+  ext_gate="$ROOT/plans/external_manifest_gate.sh"
+  if [[ -x "$ext_gate" ]]; then
+    slice_prefix="${ID%%-*}"  # S1-004 → S1
+    for gate_type in r3 r7; do
+      if "$ext_gate" "$gate_type" "$ID" "$slice_prefix" 2>&1; then
+        echo "OK: ${gate_type^^} external manifest gate passed for $ID"
+      else
+        gate_rc=$?
+        # Gate failure is non-fatal if manifest doesn't exist yet
+        # (not all stories have reconciliation manifests)
+        if [[ "$gate_rc" -eq 1 ]]; then
+          echo "WARN: ${gate_type^^} external manifest gate failed for $ID (exit $gate_rc)" >&2
+          echo "  This is expected if reconciliation has not been run for this story." >&2
+        else
+          echo "ERROR: ${gate_type^^} external manifest gate failed for $ID (exit $gate_rc)" >&2
+          exit 4
+        fi
+      fi
+    done
+  fi
+
   # ── Fail-closed coverage ──────────────────────────────────────────
   if [[ -x "./plans/fail_closed_coverage.sh" ]]; then
     if ! ./plans/fail_closed_coverage.sh; then

@@ -42,6 +42,7 @@ from validate_review_header import (  # noqa: E402
     extract_provenance_json,
     build_parser as build_header_parser,
 )
+from lib_review_artifacts import explain_failure_code  # noqa: E402
 
 # Optional: JSON Schema validation
 try:
@@ -828,7 +829,8 @@ def main() -> int:
         else:
             print(f"FAIL: {phase} external manifest ({manifest_path.name})")
             for code in r.failure_codes:
-                print(f"  - {code}")
+                action = explain_failure_code(code)
+                print(f"  - {code}: {action}")
         for w in r.warnings:
             print(f"  WARN: {w}")
 

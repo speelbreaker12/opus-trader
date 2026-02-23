@@ -175,12 +175,30 @@ fi
 
 py_output=$(python3 "$validator_py" "${py_args[@]}" 2>&1) || true
 py_status=$(echo "$py_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','UNKNOWN'))" 2>/dev/null) || py_status="UNKNOWN"
+# Extract first failure_code for structured gate block message
+first_failure=$(echo "$py_output" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    codes=d.get('failure_codes',[])
+    print(codes[0] if codes else '')
+except: print('')
+" 2>/dev/null) || first_failure=""
 
 echo "  Python validator status: $py_status" >&2
 if [[ "$py_status" != "PASS" ]]; then
   echo "$py_output" >&2
-  die "$gate_name: Python validator returned $py_status"
+  # Block with structured gate name including first failure code
+  incomplete_gate="${gate_name/COMPLETE/INCOMPLETE}"
+  if [[ -n "$first_failure" ]]; then
+    die "$incomplete_gate:$first_failure"
+  else
+    die "$incomplete_gate"
+  fi
 fi
+
+# Extract review count from validator output
+review_count=$(echo "$py_output" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('artifacts',[])))" 2>/dev/null) || review_count="?"
 
 # ── All checks passed ────────────────────────────────────────────────
 
