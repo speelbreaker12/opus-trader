@@ -22,6 +22,13 @@ from pathlib import Path
 from typing import Any
 
 
+# Severity strictness ordering (for deterministic tie-breaking)
+SEVERITY_STRICTNESS: dict[str, int] = {
+    "INFO": 0,
+    "HARDENING": 1,
+    "BLOCKING": 2,
+}
+
 # Full verdict strictness ordering (0=least strict, higher=more strict)
 VERDICT_STRICTNESS: dict[str, int] = {
     "PROVEN_INTEGRATED": 0,
@@ -139,15 +146,28 @@ def aggregate(
         strictest = _strictest_verdict(verdict_values)
 
         if base_at is None:
-            # AT in reviewer but not base → add to merged
-            # Use the AT entry from the reviewer with the strictest verdict
+            # AT in reviewer but not base → add to merged.
+            # Deterministic tie-break: among reviewers with the strictest
+            # verdict, pick the one with the strictest severity, then
+            # lowest label (alphabetical) for full determinism.
+            best_entry = None
+            best_sev = -1
+            best_label = ""
             for label, rat in reviewer_entries:
                 rv = rat.get("at_verdict", {}).get("verdict", "MISSING")
                 if rv == strictest or (strictest == DEFERRED_VERDICT):
-                    merged_at = deepcopy(rat)
-                    merged["ats"].append(merged_at)
-                    base_ats[at_id] = merged_at
-                    break
+                    rsev = SEVERITY_STRICTNESS.get(
+                        rat.get("at_verdict", {}).get("severity", ""), 0
+                    )
+                    if best_entry is None or rsev > best_sev or \
+                            (rsev == best_sev and label < best_label):
+                        best_entry = rat
+                        best_sev = rsev
+                        best_label = label
+            if best_entry is not None:
+                merged_at = deepcopy(best_entry)
+                merged["ats"].append(merged_at)
+                base_ats[at_id] = merged_at
         else:
             # Check for all-DEFERRED
             if strictest == DEFERRED_VERDICT:
@@ -159,20 +179,23 @@ def aggregate(
                 }
                 continue
 
-            # Update verdict to strictest, adopting severity from the
-            # reviewer who provided the winning verdict (fail-closed).
-            base_verdict = base_at.get("at_verdict", {}).get("verdict", "")
-            if strictest != base_verdict:
-                base_at["at_verdict"]["verdict"] = strictest
-                # Find the reviewer entry that provided the strictest verdict
-                # and adopt its severity so counts stay consistent.
-                for _lbl, rat in reviewer_entries:
-                    rv = rat.get("at_verdict", {}).get("verdict", "MISSING")
-                    if rv == strictest:
-                        rsev = rat.get("at_verdict", {}).get("severity", "")
-                        if rsev:
-                            base_at["at_verdict"]["severity"] = rsev
-                        break
+            # Update verdict to strictest
+            base_at["at_verdict"]["verdict"] = strictest
+
+            # Always compute the strictest severity across all reviewers
+            # (independent of whether the verdict changed) for fail-closed
+            # correctness. Deterministic tie-break: highest severity rank,
+            # then lowest label.
+            best_sev_str = base_at.get("at_verdict", {}).get("severity", "")
+            best_sev_rank = SEVERITY_STRICTNESS.get(best_sev_str, 0)
+            for _lbl, rat in reviewer_entries:
+                rsev = rat.get("at_verdict", {}).get("severity", "")
+                rsev_rank = SEVERITY_STRICTNESS.get(rsev, 0)
+                if rsev_rank > best_sev_rank:
+                    best_sev_rank = rsev_rank
+                    best_sev_str = rsev
+            if best_sev_str:
+                base_at["at_verdict"]["severity"] = best_sev_str
 
             # Record disagreements
             unique_verdicts = set(verdict_values) - {DEFERRED_VERDICT}
@@ -204,6 +227,8 @@ def aggregate(
         merged["meta"] = {}
     merged["meta"]["review_sources"] = review_labels
     merged["meta"]["review_count"] = len(review_labels)
+    # Clear stale conflicts from prior aggregation, then set new ones
+    merged["meta"].pop("conflicts", None)
     if conflicts:
         merged["meta"]["conflicts"] = conflicts
 
