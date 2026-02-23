@@ -14,16 +14,16 @@ cmd = data.get("tool_input", {}).get("command", "")
 
 # === LEVEL 1: CATASTROPHIC COMMANDS (ALWAYS BLOCK) ===
 catastrophic_patterns = [
-    (r"\brm\s+.*\s+/\s*$", "rm on root directory"),
-    (r"\brm\s+.*\s+~\s*$", "rm on home directory"),
-    (r"\brm\s+.*\s+\*\s*$", "rm with star wildcard"),
+    (r"\brm\s+.*\s+/(\s|$)", "rm on root directory"),
+    (r"\brm\s+.*\s+~(\s|$)", "rm on home directory"),
+    (r"\brm\s+.*\s+\*(\s|$)", "rm with star wildcard"),
     (r"\brm\s+-[rfRF]*[rfRF]+.*\*", "rm -rf with wildcards"),
     (r"\b(dd\s+if=|dd\s+of=/dev)", "dd disk operations"),
     (r"\b(mkfs\.|mkswap\s|fdisk\s)", "filesystem formatting"),
     (r"\b:(\(\))?\s*\{\s*:\s*\|\s*:\s*&\s*\}", "fork bomb"),
     (r">\s*/dev/sd[a-z]", "direct disk write"),
     (r"\bchmod\s+(-R\s+)?777\s+/", "chmod 777 on root"),
-    (r"\bchown\s+(-R\s+)?.*\s+/$", "chown on root directory"),
+    (r"\bchown\s+(-R\s+)?.*\s+/(\s|$)", "chown on root directory"),
     (r"\bgit\s+push\s+.*--force(?!-with-lease)(\s|$)", "git force push (use --force-with-lease)"),
     (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard"),
 ]
