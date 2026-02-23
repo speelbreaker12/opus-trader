@@ -13,7 +13,7 @@ from python.proof_graph.rules import (
     r_006b, r_018, r_019, r_020, r_021, r_022, r_023, r_024,
     r_024b, r_025, r_026,
     r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
-    r_035, r_036, r_037,
+    r_035, r_036, r_037, r_038, r_039, r_040, r_041,
     validate,
 )
 from python.proof_graph.schema import ProofGraph
@@ -1020,6 +1020,213 @@ class TestR037_ReconciledUnitOnlyContradiction(unittest.TestCase):
     def test_no_fire_on_reconciled(self):
         ctx = _ctx("valid_proof_graph_v2.json")
         self.assertEqual(r_037(ctx), [])
+
+
+class TestR008_PlaceholderMutants(unittest.TestCase):
+    """R-008 extension: placeholders in equivalent_mutants fields."""
+
+    def test_fires_on_tbd_killed_by(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["equivalent_mutants"] = [{
+            "mutant_description": "real mutant",
+            "killed_by": "TBD",
+        }]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_008(ctx)
+        self.assertTrue(any(
+            f.rule == "R-008" and "killed_by" in f.field_path for f in findings
+        ))
+
+    def test_fires_on_fill_me_description(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["equivalent_mutants"] = [{
+            "mutant_description": "<FILL>",
+            "killed_by": "test_something",
+        }]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_008(ctx)
+        self.assertTrue(any(
+            f.rule == "R-008" and "mutant_description" in f.field_path
+            for f in findings
+        ))
+
+    def test_clean_on_no_mutants(self):
+        ctx = _ctx("valid_proof_graph.json")
+        # No mutants → no R-008 from mutants
+        findings = r_008(ctx)
+        self.assertFalse(any("mutant" in f.field_path for f in findings))
+
+
+class TestR038_SectionsFilledMinimum(unittest.TestCase):
+    def test_fires_on_safety_critical_below_5(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["premortem_checks"]["sections_filled"] = 3
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_038(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-038")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+        self.assertIn("minimum 5", findings[0].message)
+
+    def test_fires_on_safety_critical_zero(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["premortem_checks"]["sections_filled"] = 0
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_038(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+
+    def test_fires_on_non_safety_critical_zero(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_meta"]["safety_critical"] = False
+        data["ats"][0]["premortem_checks"]["sections_filled"] = 0
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_038(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-038")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_safety_critical_5(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["premortem_checks"]["sections_filled"] = 5
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_038(ctx), [])
+
+    def test_clean_on_valid(self):
+        """Valid fixture has sections_filled=10 → no finding."""
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_038(ctx), [])
+
+    def test_exempt_on_policy(self):
+        ctx = _ctx("minimal_policy_story.json")
+        self.assertEqual(r_038(ctx), [])
+
+
+class TestR039_PartialEnforcementProvenIntegrated(unittest.TestCase):
+    def test_fires_on_partial_proven_integrated(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["enforcement"]["status"] = "PARTIAL"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_039(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-039")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_found(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_039(ctx), [])
+
+    def test_no_fire_on_partial_weak_proof(self):
+        """PARTIAL + WEAK_PROOF → no contradiction."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["enforcement"]["status"] = "PARTIAL"
+        data["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        data["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        data["story_verdict"]["hardening_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_039(ctx), [])
+
+
+class TestR040_UnmappedMechanismNoAssertions(unittest.TestCase):
+    def test_fires_on_mode_transition_no_asserts(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["tests"][0]["causal_proof"]["mechanism"] = "mode_transition"
+        data["ats"][0]["tests"][0]["causal_proof"].pop("dispatch_count_assert", None)
+        data["ats"][0]["tests"][0]["causal_proof"].pop("reject_reason_assert", None)
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_040(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-040")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_when_has_assert(self):
+        """mode_transition with dispatch_count_assert → no finding."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["tests"][0]["causal_proof"]["mechanism"] = "mode_transition"
+        # Keep dispatch_count_assert="0" from fixture
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_040(ctx), [])
+
+    def test_no_fire_on_mapped_mechanism(self):
+        """dispatch_count is mapped → R-040 skips, R-028 handles it."""
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_040(ctx), [])
+
+
+class TestR041_WiringFieldsEmpty(unittest.TestCase):
+    def test_fires_on_empty_entrypoint(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["wiring"]["entrypoint"] = ""
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_041(ctx)
+        self.assertTrue(any(
+            f.rule == "R-041" and "entrypoint" in f.message for f in findings
+        ))
+        self.assertTrue(all(f.severity == Severity.HARDENING for f in findings))
+
+    def test_fires_on_empty_proof_type(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["wiring"]["proof_type"] = "  "
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_041(ctx)
+        self.assertTrue(any(
+            f.rule == "R-041" and "proof_type" in f.message for f in findings
+        ))
+
+    def test_clean_on_valid(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_041(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_041(ctx), [])
+
+    def test_no_fire_on_non_proven_integrated_wiring(self):
+        """PROVEN_UNIT wiring → not checked by R-041."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["wiring"]["status"] = "PROVEN_UNIT"
+        data["ats"][0]["wiring"]["entrypoint"] = ""
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_041(ctx), [])
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""37 validation rules for proof graph (18 V1 + 19 V2)."""
+"""42 validation rules for proof graph (18 V1 + 24 V2)."""
 from __future__ import annotations
 
 import re
@@ -197,6 +197,17 @@ def r_008(ctx: ValidationContext) -> list[Finding]:
         _check(at.wiring.evidence, f"ats.{at.at_id}.wiring.evidence", at.at_id)
         _check(at.observability.metric, f"ats.{at.at_id}.observability.metric", at.at_id)
         _check(at.observability.alert, f"ats.{at.at_id}.observability.alert", at.at_id)
+        for j, m in enumerate(at.equivalent_mutants):
+            _check(
+                m.mutant_description,
+                f"ats.{at.at_id}.equivalent_mutants[{j}].mutant_description",
+                at.at_id,
+            )
+            _check(
+                m.killed_by,
+                f"ats.{at.at_id}.equivalent_mutants[{j}].killed_by",
+                at.at_id,
+            )
     return findings
 
 
@@ -939,6 +950,127 @@ def r_037(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+# Mechanisms with no dedicated assertion field in CausalProof
+_UNMAPPED_MECHANISMS = {
+    CausalMechanism.MODE_TRANSITION.value,
+    CausalMechanism.REASON_CODE.value,
+    CausalMechanism.CORTEX_OVERRIDE.value,
+}
+
+# All assertion attribute names on CausalProof
+_ALL_ASSERT_ATTRS = ("dispatch_count_assert", "reject_reason_assert", "latch_reason_assert")
+
+
+def r_038(ctx: ValidationContext) -> list[Finding]:
+    """Non-exempt story with sections_filled < 1 (or < 5 if safety_critical)."""
+    g = ctx.graph
+    if g.story_meta.category in ("policy", "certification"):
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        sf = at.premortem_checks.sections_filled
+        if g.story_meta.safety_critical and sf < 5:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-038",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"sections_filled={sf} (minimum 5 for safety_critical)"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.sections_filled",
+            ))
+        elif not g.story_meta.safety_critical and sf < 1:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-038",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id}: sections_filled={sf} "
+                    f"(minimum 1 for non-exempt stories)"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.sections_filled",
+            ))
+    return findings
+
+
+def r_039(ctx: ValidationContext) -> list[Finding]:
+    """PARTIAL enforcement + PROVEN_INTEGRATED verdict contradiction."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.enforcement.status == EnforcementStatus.PARTIAL and \
+                at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-039",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} claims PROVEN_INTEGRATED "
+                    f"but enforcement is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_040(ctx: ValidationContext) -> list[Finding]:
+    """Unmapped CausalMechanism with all assertion fields empty."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        for i, t in enumerate(at.tests):
+            mech = t.causal_proof.mechanism
+            if mech not in _UNMAPPED_MECHANISMS:
+                continue
+            has_any = any(
+                (getattr(t.causal_proof, attr, None) or "").strip()
+                for attr in _ALL_ASSERT_ATTRS
+            )
+            if not has_any:
+                findings.append(Finding(
+                    severity=Severity.HARDENING,
+                    rule="R-040",
+                    at_id=at.at_id,
+                    message=(
+                        f"test '{t.test_name}' mechanism={mech} "
+                        f"but all causal assertion fields are empty"
+                    ),
+                    field_path=f"ats.{at.at_id}.tests[{i}].causal_proof",
+                ))
+    return findings
+
+
+def r_041(ctx: ValidationContext) -> list[Finding]:
+    """V2: wiring PROVEN_INTEGRATED but empty entrypoint or proof_type."""
+    if not _is_v2(ctx):
+        return []
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.wiring.status != WiringStatus.PROVEN_INTEGRATED:
+            continue
+        if not at.wiring.entrypoint.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-041",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} wiring is PROVEN_INTEGRATED "
+                    f"but entrypoint is empty"
+                ),
+                field_path=f"ats.{at.at_id}.wiring.entrypoint",
+            ))
+        if not at.wiring.proof_type.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-041",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} wiring is PROVEN_INTEGRATED "
+                    f"but proof_type is empty"
+                ),
+                field_path=f"ats.{at.at_id}.wiring.proof_type",
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
@@ -946,9 +1078,11 @@ ALL_RULES = [
     # V2 rules
     r_006b, r_018, r_019, r_020, r_021, r_022, r_023, r_024,
     r_024b, r_025, r_026,
-    # V3 rules (validator-audit findings)
+    # V3 rules (validator-audit round 2)
     r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
     r_035, r_036, r_037,
+    # V3 rules (validator-audit round 3)
+    r_038, r_039, r_040, r_041,
 ]
 
 

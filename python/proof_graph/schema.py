@@ -7,7 +7,6 @@ from typing import Any, Optional
 
 from .enums import (
     AssumptionStatus,
-    CausalMechanism,
     DecisionMatch,
     EnforcementStatus,
     LossModeLevel,
