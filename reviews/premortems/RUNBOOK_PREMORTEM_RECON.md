@@ -200,8 +200,8 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 9. Assign story verdict = `PARTIAL` until R6
 
 **Output**:
-- `reviews/reconciliations/<slice>/<STORY_ID>_reconciliation.md` (evidence ledger)
-- `evidence_ledger.json` per story (schema: `specs/schemas/recon/evidence_ledger.schema.json`) [Wave 2]
+- `<STORY_ID>_reconciliation.md` (evidence ledger)
+- `<STORY_ID>_reconciliation.json` (sidecar — gate fields only) [Wave 2: JSON-primary `evidence_ledger.json`]
 - Validate: `plans/validate_recon_artifact.sh evidence_ledger <path>` [Wave 2]
 **Receipt**: `plans/wf_step.sh ${STORY_ID} preflight`
 
@@ -231,7 +231,8 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 6. Flag red flags: PROVEN with no file:line, PROVEN on §5 wrong-impl without tightening test, WEAK_PROOF treated as PROVEN
 7. Produce correction requests for R1 ledgers if needed
 
-**Output**: `R2_LEAD_EVAL.md` + `r2_lead_eval.json` (sidecar schema: `specs/schemas/recon/lead_eval_sidecar.schema.json`)
+**Output**:
+- `R2_LEAD_EVAL.md` + `R2_LEAD_EVAL.json` (sidecar schema: `specs/schemas/recon/lead_eval_sidecar.schema.json`)
 **Format**: Markdown + JSON sidecar
 
 **Gate checks**:
@@ -277,7 +278,9 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 - [ ] Constants accuracy (comment matches literal value)
 - [ ] Paper compliance (PRD claims match reality)
 
-**Output**: `RECONCILE_REVIEW_by_<REVIEWER>.md` per reviewer + `r3_cross_reviews/<REVIEWER>.json` (schema: `specs/schemas/recon/cross_review.schema.json`)
+**Output**:
+- `R3_RECONCILE_REVIEW_by_<REVIEWER>.md` per reviewer
+- `R3_RECONCILE_REVIEW_by_<REVIEWER>.json` (sidecar; schema: `specs/schemas/recon/cross_review.schema.json`)
 
 **Required contents**: Review basis line, per-story verdict agreement/disagreement, citation spot-checks, missed gaps, systemic patterns
 
@@ -291,14 +294,15 @@ plans/review_logged.sh <STORY_ID> --tool codex --prompt generic  --base <BASE_BR
 Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommended 2+.
 
 **Artifact requirements**:
-- `review_logged.sh` outputs preserved (logger-native filenames)
-- `review_receipt.json` per review (schema: `specs/schemas/recon/review_receipt.schema.json`)
-- Per-story manifest: `reviews/reconciliations/<slice>/external/cycle1/<STORY_ID>/external_c1_manifest.json`
+- `review_logged.sh` outputs are normalized into canonical filenames (see [§6 Canonical Directory Layout](#6-artifact-layout--provenance)):
+  - `<tool>.enriched.md` and `<tool>.generic.md` per tool
+- Per-story manifest: `R3_EXTERNAL_MANIFEST.json` (source of truth, gate artifact)
+- Per-story rendered summary: `R3_EXTERNAL_MANIFEST.md` (human-readable companion)
 
-**`external_c1_manifest.json` schema (required fields)**:
+**`R3_EXTERNAL_MANIFEST.json` schema (required fields)**:
 ```json
 {
-  "schema_version": "external_c1_manifest.v1",
+  "schema_version": "r3_external_manifest.v1",
   "head_commit": "<sha>",
   "created_at": "<ISO 8601>",
   "story_id": "<STORY_ID>",
@@ -307,9 +311,10 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
   "tools": [
     {
       "tool": "codex",
+      "model": "gpt-5.3",
       "artifacts": {
-        "enriched": { "path": "<path>", "exists": true },
-        "generic":  { "path": "<path>", "exists": true }
+        "enriched": { "path": "codex.enriched.md", "exists": true },
+        "generic":  { "path": "codex.generic.md",  "exists": true }
       }
     }
   ],
@@ -325,8 +330,8 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 | Gate ID | Check |
 |---------|-------|
-| `R3_INTERNAL_CROSS_REVIEW_COMPLETE` | All expected `RECONCILE_REVIEW_by_<REVIEWER>.md` files exist; all contain `Review basis: STORY_SCOPE (Cycle 1)` |
-| `R3_EXTERNAL_C1_COMPLETE` | One `external_c1_manifest.json` per story; both prompt styles present per tool; review basis present in all artifacts; pre-existing enforcement + test citation checks pass |
+| `R3_INTERNAL_CROSS_REVIEW_COMPLETE` | All expected `R3_RECONCILE_REVIEW_by_<REVIEWER>.md` files exist; all contain `Review basis: STORY_SCOPE (Cycle 1)` |
+| `R3_EXTERNAL_C1_COMPLETE` | One `R3_EXTERNAL_MANIFEST.json` per story; both prompt styles present per tool; review basis present in all artifacts; pre-existing enforcement + test citation checks pass |
 | `R3_DIFF_ONLY_REVIEW_BLOCK` | Any `DIFF_ONLY_REVIEW_REJECTED` → blocks R4 |
 
 ---
@@ -352,16 +357,16 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 7. Draft/update debt register entries for all DEFERRED items
 
 **Output**:
-- `r4_gap_list.json` (schema: `specs/schemas/recon/gap_list.schema.json`) — JSON-primary
+- `GAP_LIST.json` (schema: `specs/schemas/recon/gap_list.schema.json`) — JSON-primary
 - `GAP_LIST.md` (human-readable companion)
 - `DEBT_REGISTER.json` (draft; final validated in R7f)
-**Validate**: `plans/validate_recon_artifact.sh gap_list r4_gap_list.json`
+**Validate**: `plans/validate_recon_artifact.sh gap_list GAP_LIST.json`
 
 **Gate checks**:
 
 | Gate ID | Check |
 |---------|-------|
-| `R4_GAP_LIST_COMPLETE` | `GAP_LIST.md` and `r4_gap_list.json` both exist; every story has either gap entries or `coverage_proof` |
+| `R4_GAP_LIST_COMPLETE` | `GAP_LIST.md` and `GAP_LIST.json` both exist; every story has either gap entries or `coverage_proof` |
 | `R4_NO_UNCHECKED_CLEAN_REVIEW` | No story with empty gaps and missing coverage proof |
 | `R4_DEBT_DRAFT_COMPLETE` | Every DEFERRED gap has a matching debt entry stub (`gap_id` present) |
 
@@ -376,8 +381,10 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 - [ ] No unmapped P0/P1 findings
 - [ ] Disagreements recorded with lead decision
 
-**Output**: `r4b_external_mapping.json` (schema: `specs/schemas/recon/phase_mapping.schema.json`) — JSON-primary
-**Validate**: `plans/validate_recon_artifact.sh phase_mapping r4b_external_mapping.json`
+**Output**:
+- `R4B_EXTERNAL_MAPPING.json` (schema: `specs/schemas/recon/phase_mapping.schema.json`) — JSON-primary
+- `R4B_EXTERNAL_MAPPING.md` (rendered summary)
+**Validate**: `plans/validate_recon_artifact.sh phase_mapping R4B_EXTERNAL_MAPPING.json`
 
 **Gate checks**:
 
@@ -394,7 +401,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 **Mode**: `WRITE_ALLOWED_GAP_REMEDIATION_ONLY`
 
-**Inputs**: `r4_gap_list.json` / `GAP_LIST.md`, story code + tests, R1 evidence ledgers
+**Inputs**: `GAP_LIST.json` / `GAP_LIST.md`, story code + tests, R1 evidence ledgers
 
 **Hard rules**:
 - Fix only listed gaps (no unrelated refactors)
@@ -409,7 +416,10 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 2. Update evidence ledger rows: GAP → FIXED, add new file:line citations
 3. Run verification commands (at least `verify.sh quick` + targeted tests)
 
-**Output**: Code changes + `r5_fix_receipts/`, updated evidence ledgers
+**Output**:
+- Code changes + updated evidence ledgers
+- `R5_REMEDIATION_NOTES.md` (narrative: what was fixed, per gap)
+- `R5_REMEDIATION_NOTES.json` (sidecar: gap_id mappings, touched files)
 **Receipt**: `plans/wf_step.sh ${STORY_ID} implement`
 
 **Gate checks**:
@@ -443,8 +453,8 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 **Output**:
 - `SELF_REVIEW_R5b.md` (narrative)
-- `r5b_self_review_gate.json` (sidecar schema: `specs/schemas/recon/self_review_sidecar.schema.json`)
-- 5 skill receipt JSONs:
+- `R5B_SELF_REVIEW_GATE.json` (sidecar schema: `specs/schemas/recon/self_review_sidecar.schema.json`)
+- 5 skill receipt JSONs in `receipts/`:
   - `r5b_pr_review.json`
   - `r5b_failure_mode_review.json`
   - `r5b_strategic_review.json`
@@ -480,7 +490,9 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 9. Confirm evidence ledgers updated with FIXED citations
 10. Assign story verdict: RECONCILED | RECONCILED-WITH-DEBT | NOT RECONCILED
 
-**Output**: `r6_verify.json` (schema: `specs/schemas/recon/verify_result.schema.json`) — JSON-primary
+**Output**:
+- `R6_VERIFY_SUMMARY.md` (narrative)
+- `R6_VERIFY_SUMMARY.json` (schema: `specs/schemas/recon/verify_result.schema.json`) — JSON-primary (gate artifact)
 **Receipt**: `plans/wf_step.sh ${STORY_ID} resolution`
 
 **Gate checks (hard, pass-flip relevant)**:
@@ -508,7 +520,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 **Command**: `/contract-review` scoped to R5 diff
 **Focus**: Contract-vs-code alignment on remediation changes; fail-open hazards introduced by fixes
 **Required contents**: `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`
-**Output**: `R7a_CONTRACT_REVIEW.md` + `R7a_CONTRACT_REVIEW.json` (decision + findings) + sidecar
+**Output**: `R7A_CONTRACT_REVIEW.md` + `R7A_CONTRACT_REVIEW.json` (decision + findings)
 
 **Gate checks**:
 
@@ -522,7 +534,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 **Command**: `/strategic-failure-review` on full reconciliation output
 **Focus**: Hidden systemic risk, shared primitive blast radius, capital-risk path regressions
 **Escalation**: If HIGH loss_mode guard is NOT-WIRED on live system → `OPERATIONAL_ESCALATION_REQUIRED`
-**Output**: `R7b_STRATEGIC_FAILURE_REVIEW.md` + sidecar
+**Output**: `R7B_STRATEGIC_REVIEW.md` + `R7B_STRATEGIC_REVIEW.json` (sidecar)
 
 **Gate checks**:
 
@@ -539,7 +551,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 - **PROVEN-INTEGRATED** — reachable from production entry point
 - **PROVEN-UNIT** — zero production callers (island guard)
 
-**Output**: `R7c_WIRING_AUDIT.md` + `R7c_WIRING_AUDIT.json` (per-AT wiring_status + caller evidence)
+**Output**: `R7C_WIRING_AUDIT.md` + `R7C_WIRING_AUDIT.json` (per-AT wiring_status + caller evidence)
 
 **Gate checks**:
 
@@ -563,12 +575,15 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 **Required basis line**: `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`
 **Must verify**: gaps actually closed, no regressions, tests real/compiling/non-phantom
 
-**Per-story manifest**: `reviews/reconciliations/<slice>/external/cycle2/<STORY_ID>/external_c2_manifest.json`
+**Artifact requirements**:
+- Normalized filenames: `<tool>.enriched.md`, `<tool>.generic.md` per tool
+- Per-story manifest: `R7_EXTERNAL_MANIFEST.json` (source of truth, gate artifact)
+- Per-story rendered summary: `R7_EXTERNAL_MANIFEST.md` (human-readable companion)
 
-**`external_c2_manifest.json` schema (required fields)**:
+**`R7_EXTERNAL_MANIFEST.json` schema (required fields)**:
 ```json
 {
-  "schema_version": "external_c2_manifest.v1",
+  "schema_version": "r7_external_manifest.v1",
   "head_commit": "<sha>",
   "created_at": "<ISO 8601>",
   "story_id": "<STORY_ID>",
@@ -578,9 +593,10 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
   "tools": [
     {
       "tool": "codex",
+      "model": "gpt-5.3",
       "artifacts": {
-        "enriched": { "path": "<path>", "exists": true },
-        "generic":  { "path": "<path>", "exists": true }
+        "enriched": { "path": "codex.enriched.md", "exists": true },
+        "generic":  { "path": "codex.generic.md",  "exists": true }
       }
     }
   ],
@@ -598,7 +614,7 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 
 **Command**: `code-review-expert` skill on full diff (R5 + R7a-R7c changes)
 **Focus**: SOLID violations, security risks, boundary bugs, code quality
-**Output**: `R7d_CODE_REVIEW_EXPERT.md` + sidecar
+**Output**: `R7D_CODE_REVIEW_EXPERT.md` + `R7D_CODE_REVIEW_EXPERT.json` (sidecar)
 
 **Gate checks**:
 
@@ -622,9 +638,8 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 4. Re-run until no unacceptable survivors remain
 
 **Output**:
-- `R7e_DEVILS_ADVOCATE.md` + `R7e_DEVILS_ADVOCATE_RECHECK.md`
-- `R7e_MUTATION_RESULTS.json`
-- Sidecars
+- `R7E_DEVILS_ADVOCATE.md` + `R7E_DEVILS_ADVOCATE_RECHECK.md`
+- `R7E_MUTATION_RESULTS.json`
 
 **Gate checks**:
 
@@ -635,7 +650,7 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 
 #### R7f — Debt Register Validation (final)
 
-**Inputs**: `r4_gap_list.json`, `DEBT_REGISTER.json`, evidence ledgers
+**Inputs**: `GAP_LIST.json`, `DEBT_REGISTER.json`, evidence ledgers
 
 **Operator steps**:
 1. Validate `DEBT_REGISTER.json` schema
@@ -644,7 +659,7 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 4. Detect overdue debt (OVERDUE_DEBT)
 5. Produce final debt validation report
 
-**Output**: `R7f_DEBT_REGISTER_VALIDATION.md` + `R7f_DEBT_REGISTER_VALIDATION.json`
+**Output**: `R7F_DEBT_REGISTER_VALIDATION.md` + `R7F_DEBT_REGISTER_VALIDATION.json`
 
 **Gate checks (hard)**:
 
@@ -678,7 +693,7 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 | `R7F_NO_INVALID_DEBT_FIELDS` | R7f |
 | No unresolved P0/P1 findings remain | All |
 
-**Final summary artifact**: `reviews/reconciliations/<slice>/SUMMARY.md` — story verdicts, wiring qualifiers, debt summary, phase artifact index.
+**Final summary artifact**: `SUMMARY.md` + `SUMMARY.json` (optional sidecar for dashboards) — story verdicts, wiring qualifiers, debt summary, phase artifact index.
 
 ---
 
@@ -725,43 +740,193 @@ See [ANTIPATTERNS](PREMORTEM_RECON_ANTIPATTERNS.md) for the full catalog with ro
 
 ---
 
-## 6) Artifact Format Summary
+## 6) Artifact Layout + Provenance
 
-| Phase | Artifact | Format | Schema |
-|-------|----------|--------|--------|
-| R1 | evidence_ledger | JSON-primary [Wave 2] | `evidence_ledger.schema.json` |
-| R3A | internal cross-review | JSON-primary | `cross_review.schema.json` |
-| R3B | external C1 manifest | JSON-primary | `external_c1_manifest.v1` (inline) |
-| R3B | external review receipt | JSON-primary | `review_receipt.schema.json` |
-| R2 | lead evaluation | Markdown + sidecar | `lead_eval_sidecar.schema.json` |
-| R4 | gap list | JSON-primary | `gap_list.schema.json` |
-| R4b | finding mapping | JSON-primary | `phase_mapping.schema.json` |
-| R5b | self-review gate | Markdown + sidecar | `self_review_sidecar.schema.json` |
-| R6 | verify result | JSON-primary | `verify_result.schema.json` |
-| R7a | contract review | Markdown + JSON + sidecar | `review_artifact_sidecar.schema.json` |
-| R7b | strategic review | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
-| R7c | wiring audit | Markdown + JSON | `review_artifact_sidecar.schema.json` |
-| R7d.1 | external C2 manifest | JSON-primary | `external_c2_manifest.v1` (inline) |
-| R7d.2 | code review expert | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
-| R7e | mutation results | Markdown + JSON | `review_artifact_sidecar.schema.json` |
-| R7f | debt validation | Markdown + JSON | (inline in DEBT_REGISTER.json) |
-| Gate | premortem ready | JSON-primary | `premortem_ready.schema.json` |
+### 6.1 Canonical Directory Layout
 
-**Rule**: If the artifact directly controls a gate or pass-flip → JSON-primary. If it primarily supports human reasoning → markdown + JSON sidecar.
+All paths are relative to the repository root. Artifacts within `reviews/reconciliations/<SLICE_ID>/` use **deterministic, phase-prefixed names** — no timestamps, no random suffixes. A validator can check file existence without globbing.
 
-### Guardrail Fields (All Artifacts)
+```
+reviews/premortems/
+  STORY_PREMORTEM_TEMPLATE.md
+  PREMORTEM_RECONCILIATION_PROCESS.md         # Index + Appendix A
+  <STORY_ID>_premortem.md
+  CROSS_REVIEW_by_<REVIEWER>.md               # Mode A Phase 4
 
-Every JSON artifact (primary or sidecar) must include:
+reviews/reconciliations/<SLICE_ID>/
+  # ── R1: Evidence Ledgers ──
+  <STORY_ID>_reconciliation.md
+  <STORY_ID>_reconciliation.json              # sidecar (gate fields only)
+
+  # ── R2: Lead Evaluation ──
+  R2_LEAD_EVAL.md
+  R2_LEAD_EVAL.json                           # sidecar
+
+  # ── R3A: Internal Cross-Review ──
+  R3_RECONCILE_REVIEW_by_<REVIEWER>.md
+  R3_RECONCILE_REVIEW_by_<REVIEWER>.json      # sidecar
+
+  # ── R3B: External Reviews (Cycle 1) ──
+  external/
+    cycle1/
+      <STORY_ID>/
+        codex.enriched.md                     # normalized from review_logged.sh output
+        codex.generic.md
+        opus.enriched.md                      # if run
+        opus.generic.md                       # if run
+        kimi.enriched.md                      # if run
+        kimi.generic.md                       # if run
+        R3_EXTERNAL_MANIFEST.json             # source of truth (gate artifact)
+        R3_EXTERNAL_MANIFEST.md               # rendered summary (human-readable)
+
+  # ── R4 / R4b: Gap List + Finding Mapping ──
+  GAP_LIST.md
+  GAP_LIST.json                               # JSON-primary
+  R4B_EXTERNAL_MAPPING.json                   # JSON-primary
+  R4B_EXTERNAL_MAPPING.md                     # rendered summary
+  DEBT_REGISTER.json
+
+  # ── R5: Remediation ──
+  R5_REMEDIATION_NOTES.md
+  R5_REMEDIATION_NOTES.json                   # sidecar (gap_id mappings, touched files)
+
+  # ── R5b: Self-Review ──
+  SELF_REVIEW_R5b.md
+  R5B_SELF_REVIEW_GATE.json                   # sidecar (gate summary)
+  receipts/
+    r5b_pr_review.json
+    r5b_failure_mode_review.json
+    r5b_strategic_review.json
+    r5b_contract_review.json
+    r5b_devils_advocate.json
+
+  # ── R6: Verify ──
+  R6_VERIFY_SUMMARY.md
+  R6_VERIFY_SUMMARY.json                      # JSON-primary (gate artifact)
+
+  # ── R7: Post-Reconciliation ──
+  R7A_CONTRACT_REVIEW.md
+  R7A_CONTRACT_REVIEW.json
+  R7B_STRATEGIC_REVIEW.md
+  R7B_STRATEGIC_REVIEW.json                   # sidecar
+  R7C_WIRING_AUDIT.md
+  R7C_WIRING_AUDIT.json
+  R7D_CODE_REVIEW_EXPERT.md
+  R7D_CODE_REVIEW_EXPERT.json                 # sidecar
+  R7E_DEVILS_ADVOCATE.md
+  R7E_DEVILS_ADVOCATE_RECHECK.md
+  R7E_MUTATION_RESULTS.json
+  R7F_DEBT_REGISTER_VALIDATION.md
+  R7F_DEBT_REGISTER_VALIDATION.json
+
+  # ── R7d.1: External Reviews (Cycle 2) ──
+  external/
+    cycle2/
+      <STORY_ID>/
+        codex.enriched.md
+        codex.generic.md
+        opus.enriched.md                      # if run
+        opus.generic.md                       # if run
+        kimi.enriched.md                      # if run
+        kimi.generic.md                       # if run
+        R7_EXTERNAL_MANIFEST.json             # source of truth (gate artifact)
+        R7_EXTERNAL_MANIFEST.md               # rendered summary (human-readable)
+
+  # ── Final Roll-Up ──
+  SUMMARY.md
+  SUMMARY.json                                # optional sidecar for dashboards
+
+artifacts/story/<STORY_ID>/
+  proof_graph.json
+
+plans/prompts/
+  slice_reconcile_implement.md                # derived copy of Appendix A
+
+plans/step_prompts/recon/
+  self_review.md
+  cycle1.md
+  cycle2.md
+```
+
+### 6.2 Provenance Header (Required on All Review Artifacts)
+
+Every review artifact (`.md` and `.json`) produced in R1–R7 must include a standard provenance header. This applies to internal reviews, external tool reviews, and manifests.
+
+#### 6.2.1 Required Fields (5 mandatory)
+
+| Field | Values |
+|-------|--------|
+| `tool` | `codex` \| `opus` \| `kimi` \| `internal` \| `script` |
+| `model` | String (e.g., `gpt-5.3`, `claude-opus-4-6`, `kimi-k2.5`, `n/a`) |
+| `prompt_style` | `generic` \| `enriched` \| `none` |
+| `cycle` | `C1` \| `C2` \| `SELF` \| `NONE` |
+| `phase_equivalent` | `R1` \| `R2` \| `R3` \| `R4` \| `R4b` \| `R5` \| `R5b` \| `R6` \| `R7a` \| `R7b` \| `R7c` \| `R7d` \| `R7e` \| `R7f` |
+
+#### 6.2.2 Full Provenance Set (recommended for all artifacts)
+
+| Field | Required? | Notes |
+|-------|-----------|-------|
+| `tool` | Yes | |
+| `model` | Yes | `n/a` for internal/script |
+| `prompt_style` | Yes | `none` for internal/script |
+| `cycle` | Yes | |
+| `phase_equivalent` | Yes | |
+| `review_basis` | Yes (review phases) | Exact string, e.g. `STORY_SCOPE (Cycle 1)` |
+| `story_id` | Yes | Or `BATCH-<ID>` for batch artifacts |
+| `slice_id` | Yes | |
+| `head_commit` | Yes | |
+| `base_commit` | C2 required | Required for FIX_DIFF reviews |
+| `generated_at` | Yes | ISO 8601 UTC |
+| `artifact_provenance` | Yes | `logger-v2`, `manual`, `renderer-v1` |
+| `schema_version` | Yes (JSON) | |
+
+#### 6.2.3 Markdown Provenance Format (YAML front matter)
+
+Every `*.md` review artifact must begin with YAML front matter:
+
+```yaml
+---
+provenance:
+  tool: codex
+  model: gpt-5.3
+  prompt_style: enriched
+  cycle: C1
+  phase_equivalent: R3
+  review_basis: "STORY_SCOPE (Cycle 1)"
+  story_id: S1-004
+  slice_id: S1
+  head_commit: "abc1234def5678"
+  base_commit: "main@{2026-02-22}"   # optional for C1; required for C2
+  generated_at: "2026-02-23T18:42:11Z"
+  artifact_provenance: "logger-v2"
+  schema_version: "review_markdown_header.v1"
+---
+```
+
+**Internal/manual review**: `tool: internal`, `model: n/a`, `prompt_style: none`, `artifact_provenance: manual`
+**Script-generated render**: `tool: script`, `model: n/a`, `prompt_style: none`, `artifact_provenance: renderer-v1`
+
+#### 6.2.4 JSON Provenance Format
+
+JSON artifacts include the same fields at the top level (flat, not nested under `provenance`). JSON artifacts additionally include the guardrail fields:
 
 ```json
 {
   "schema_version": "<schema_name>.v1",
-  "head_commit": "<current HEAD sha>",
-  "created_at": "<ISO 8601 UTC>"
+  "head_commit": "<sha>",
+  "created_at": "<ISO 8601>",
+  "tool": "codex",
+  "model": "gpt-5.3",
+  "prompt_style": "enriched",
+  "cycle": "C1",
+  "phase_equivalent": "R3",
+  "review_basis": "STORY_SCOPE (Cycle 1)",
+  "story_id": "S1-004",
+  "slice_id": "S1"
 }
 ```
 
-Sidecar artifacts additionally include:
+Sidecar JSON additionally includes:
 ```json
 {
   "markdown_sha256": "<sha256 of companion .md file>",
@@ -769,7 +934,41 @@ Sidecar artifacts additionally include:
 }
 ```
 
-Validators reject if: `head_commit` mismatch, `markdown_sha256` drift, unsupported `schema_version`.
+Validators reject if: `head_commit` mismatch, `markdown_sha256` drift, unsupported `schema_version`, missing mandatory provenance field.
+
+### 6.3 Artifact Format Summary
+
+| Phase | Artifact | Format | Schema |
+|-------|----------|--------|--------|
+| R1 | `<STORY_ID>_reconciliation` | Markdown + sidecar [Wave 2: JSON-primary] | `evidence_ledger.schema.json` |
+| R2 | `R2_LEAD_EVAL` | Markdown + sidecar | `lead_eval_sidecar.schema.json` |
+| R3A | `R3_RECONCILE_REVIEW_by_<REVIEWER>` | Markdown + sidecar | `cross_review.schema.json` |
+| R3B | `R3_EXTERNAL_MANIFEST` | JSON-primary + rendered .md | `r3_external_manifest.schema.json` |
+| R3B | `<tool>.<style>.md` | Markdown (external review) | `review_receipt.schema.json` |
+| R4 | `GAP_LIST` | JSON-primary + .md companion | `gap_list.schema.json` |
+| R4b | `R4B_EXTERNAL_MAPPING` | JSON-primary + rendered .md | `phase_mapping.schema.json` |
+| R5 | `R5_REMEDIATION_NOTES` | Markdown + sidecar | — |
+| R5b | `SELF_REVIEW_R5b` / `R5B_SELF_REVIEW_GATE` | Markdown + sidecar | `self_review_sidecar.schema.json` |
+| R6 | `R6_VERIFY_SUMMARY` | JSON-primary + .md companion | `verify_result.schema.json` |
+| R7a | `R7A_CONTRACT_REVIEW` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
+| R7b | `R7B_STRATEGIC_REVIEW` | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
+| R7c | `R7C_WIRING_AUDIT` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
+| R7d.1 | `R7_EXTERNAL_MANIFEST` | JSON-primary + rendered .md | `r7_external_manifest.schema.json` |
+| R7d.2 | `R7D_CODE_REVIEW_EXPERT` | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
+| R7e | `R7E_DEVILS_ADVOCATE` / `R7E_MUTATION_RESULTS` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
+| R7f | `R7F_DEBT_REGISTER_VALIDATION` | Markdown + JSON | — |
+| Gate | premortem ready | JSON-primary | `premortem_ready.schema.json` |
+
+**Rule**: If the artifact directly controls a gate or pass-flip → JSON-primary. If it primarily supports human reasoning → markdown + JSON sidecar. Every phase produces both `.md` and `.json`.
+
+### 6.4 Validators
+
+| Script | Purpose |
+|--------|---------|
+| `plans/validate_recon_artifact.sh` | jq-based schema validation for all artifact types |
+| `plans/validate_review_header.py` | Provenance header validation (5 mandatory fields + format) |
+| `plans/validate_external_manifest.py` | External manifest completeness (tools, artifacts, citations) |
+| `plans/render_external_manifest.py` | Generate `.md` companion from manifest JSON |
 
 ---
 
