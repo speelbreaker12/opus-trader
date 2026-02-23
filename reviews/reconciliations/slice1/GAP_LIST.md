@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R4-gap-compilation
+  cycle: recon-v1.x (original)
+  phase_equivalent: R4
+artifact_type: gap_list
+scope: slice 1 (all 13 stories)
+---
+
 # Phase R4: Unified Gap List — Slice 1 Reconciliation
 
 > Compiled from Phase R1 evidence ledgers (4 batches, 13 stories) and Phase R3 cross-reviews (4 reviewers).
@@ -10,8 +21,8 @@
 | Priority | Count | Action Required |
 |----------|-------|-----------------|
 | **P0 — Blocker** | 1 | Must fix before story can be marked reconciled |
-| **P1 — Gap** | 3 | Should fix in current slice |
-| **P2 — Debt** | 12 | Track in debt register, fix opportunistically |
+| **P1 — Gap** | 3 + 1 FE | Should fix in current slice |
+| **P2 — Debt** | 12 + 4 FE | Track in debt register, fix opportunistically |
 | **DEFERRED** | 6 | Future slice, tracked with owner + target |
 | **SYSTEMIC** | 1 | Cross-story pattern, informational |
 
@@ -303,3 +314,75 @@ NOT RECONCILED:       0
 **All 13 Slice 1 stories are RECONCILED.** Zero P0 or P1 gaps remain open. 9 deferred items tracked in debt register for Slice 2+.
 
 Test baseline: 890 → 897 (+7 new tests, 0 regressions).
+
+---
+
+## Phase R8: Fresh-Eyes Audit Findings (v3.1 Cycle)
+
+> Independent re-audit of Slice 1 source code with fresh eyes, bypassing the original evidence ledgers.
+> Methodology: Read all enforcement-point source files directly, grep for anti-patterns (`unwrap()`, `expect()`, `unsafe`, reject-code reuse), trace proof-token forgery paths.
+> Date: 2026-02-23 | Auditor: claude-opus-4-20250514 (claude-code) | Cycle: recon-v3.1-upgrade
+> Test baseline at audit time: 973 tests passing (`cargo test --workspace`)
+
+### [P1][CODE_FIX] GAP-FE-001: NetEdgeInputMissing used as catch-all reject code for 3 different gates
+
+- **Story**: Cross-cutting (S1-007 pipeline path)
+- **ATs affected**: AT-920 (monitoring fidelity)
+- **What's wrong**: `pipeline.rs:208,221,227` and `gate_outcome.rs:200` all map different failure causes (net edge missing, pricer invalid input, cascading gate failure) to the same `RejectReasonCode::NetEdgeInputMissing`. Monitoring/alerting cannot distinguish between a genuine net edge data gap, a pricer input error, and a cascading gate short-circuit.
+- **Evidence**: `gate_outcome.rs:195-200` has explicit comment: *"Phase 2 debt: introduce a dedicated RejectReasonCode for pricer input errors."*
+- **Impact**: Operational blindness — SRE dashboards aggregating `NetEdgeInputMissing` rejects conflate 3 distinct failure modes. Root-cause analysis requires log correlation instead of simple metric filtering.
+- **Proposed fix**: Introduce `RejectReasonCode::PricerInputInvalid` and `RejectReasonCode::CascadingGateSkip` (or similar). Update pipeline.rs and gate_outcome.rs mappings.
+- **Owner**: TBD (Slice 2)
+- **Source**: Fresh-eyes audit (v3.1 cycle)
+
+### [P2][CODE_FIX] GAP-FE-002: Production unwrap() calls in pending_exposure.rs
+
+- **Story**: Cross-cutting (risk module)
+- **What's wrong**: 4 `unwrap()` calls in production code at `pending_exposure.rs:451,545,629,667`. Each is logically guarded by a prior `contains_key()` or `.get()` check, so they won't panic in practice, but they violate CLAUDE.md non-negotiable: "NEVER use unwrap() in production code."
+- **Impact**: Low runtime risk (guards are correct), but establishes a precedent that erodes the no-unwrap policy. Future refactors could invalidate the guard without the compiler catching it.
+- **Proposed fix**: Replace each `unwrap()` with `.expect("key verified present at line N")` or refactor to use `if let`/`match` patterns that thread the value from the guard check.
+- **Owner**: TBD
+- **Source**: Fresh-eyes audit (v3.1 cycle)
+
+### [P2][DESIGN_RISK] GAP-FE-003: GateResults::all_passed() const fn enables full gate bypass
+
+- **Story**: S1-007 (extends DEBT-S1-007-01)
+- **What's wrong**: `build_order_intent.rs:527-529` defines `GateResults::all_passed()` as a `const fn` returning a `GateResults` with all 9 gates set to `true`. Combined with the deprecated `build_order_intent()` pathway (line 260), any caller can construct a fully-passing gate result without running any gates.
+- **Cross-ref**: Amplifies DEBT-S1-007-01 — the bare bool bypass is part of a larger pattern where the secure pathway (`build_order_intent_with_wal_gate`) exists but the insecure pathway remains available.
+- **Impact**: The deprecated pathway is not used in production (pipeline.rs uses the secure path), but the const fn remains callable. Defense-in-depth requires removing the bypass.
+- **Proposed fix**: Delete `GateResults::all_passed()` and deprecate or remove `build_order_intent()`. Ensure all callers use `build_order_intent_with_wal_gate()`.
+- **Owner**: TBD (Slice 2, alongside DEBT-S1-007-01 resolution)
+- **Source**: Fresh-eyes audit (v3.1 cycle)
+
+### [P2][CODE_FIX] GAP-FE-004: Pipeline uses deprecated WAL bypass path
+
+- **Story**: S1-007 (pipeline integrity)
+- **What's wrong**: `pipeline.rs:261-264` calls `build_order_intent_with_reject_reason_code()` which internally uses the deprecated `build_order_intent()` that accepts forged `GateResults`. The secure alternative `build_order_intent_with_wal_gate()` exists (`build_order_intent.rs:82-96`) and enforces WAL gate verification via proof token.
+- **Impact**: Production pipeline bypasses WAL gate enforcement. The WAL gate check still happens at `pipeline.rs:251-258`, but the result is not threaded through the proof-token pathway.
+- **Proposed fix**: Replace `build_order_intent_with_reject_reason_code()` with a call path that uses `build_order_intent_with_wal_gate()`, threading the WAL proof token through.
+- **Owner**: TBD (Slice 2)
+- **Source**: Fresh-eyes audit (v3.1 cycle)
+
+### [P2][DESIGN_RISK] GAP-FE-005: ValidatedDispatch pub fields make proof token forgeable
+
+- **Story**: S1-007 (extends DEBT-S1-007-01)
+- **What's wrong**: `dispatch_map.rs:78-84` defines `ValidatedDispatch` with all `pub` fields. This proof-token type is meant to attest that `validate_and_dispatch()` ran successfully, but any caller can construct it directly without running the validation.
+- **Cross-ref**: DEBT-S1-007-01 proposed replacing `dispatch_consistency_passed: bool` with the `ValidatedDispatch` proof token — but the token itself is forgeable. The fix must also make the token unforgeable.
+- **Impact**: The proposed DEBT-S1-007-01 resolution is necessary but not sufficient. The replacement proof token must be unforgeable for the fix to actually close the bypass.
+- **Proposed fix**: Make all `ValidatedDispatch` fields private. Add `#[non_exhaustive]`. Expose construction only via `validate_and_dispatch()` return value. Pattern: match `BaseGatesPassed` at `base_gates.rs:73` which already does this correctly.
+- **Owner**: TBD (Slice 2, alongside DEBT-S1-007-01 resolution)
+- **Source**: Fresh-eyes audit (v3.1 cycle)
+
+### Fresh-Eyes Audit: Dependency Graph
+
+```
+DEBT-S1-007-01 (P0 ESCALATION: bare bool bypass)
+  ├── GAP-FE-003 (P2): GateResults::all_passed() provides bypass mechanism
+  ├── GAP-FE-004 (P2): Pipeline uses deprecated path that accepts forged gates
+  └── GAP-FE-005 (P2): Proposed fix token is itself forgeable
+
+GAP-FE-001 (P1): Reject code conflation — independent of above cluster
+GAP-FE-002 (P2): unwrap() policy violation — independent of above cluster
+```
+
+> **Note**: GAP-FE-003, FE-004, and FE-005 collectively expand the scope of DEBT-S1-007-01. The Slice 2 resolution must address the entire cluster, not just the original bare-bool finding.
