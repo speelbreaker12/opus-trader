@@ -1,4 +1,4 @@
-"""48 validation rules for proof graph (18 V1 + 30 V2)."""
+"""51 validation rules for proof graph (18 V1 + 33 V2)."""
 from __future__ import annotations
 
 import re
@@ -1081,7 +1081,7 @@ def r_041(ctx: ValidationContext) -> list[Finding]:
 
 
 _ISO8601_RE = re.compile(
-    r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$'
+    r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$'
 )
 
 
@@ -1200,6 +1200,47 @@ def r_047(ctx: ValidationContext) -> list[Finding]:
     return []
 
 
+def r_048(ctx: ValidationContext) -> list[Finding]:
+    """Orphan debt_register entry: at_id not found in ats[]."""
+    at_ids = {at.at_id for at in ctx.graph.ats}
+    findings: list[Finding] = []
+    for i, dr in enumerate(ctx.graph.debt_register):
+        if dr.at_id not in at_ids:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-048",
+                at_id=dr.at_id,
+                message=(
+                    f"debt_register[{i}] references AT {dr.at_id} "
+                    f"which does not exist in ats[]"
+                ),
+                field_path=f"debt_register[{i}].at_id",
+            ))
+    return findings
+
+
+def r_049(ctx: ValidationContext) -> list[Finding]:
+    """V2: extra_discovered=true AT with no visibility flag."""
+    if not _is_v2(ctx):
+        return []
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.extra_discovered and at.at_verdict.severity == Severity.INFO and \
+                at.at_verdict.verdict in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-049",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} is extra_discovered=true but verdict "
+                    f"is {at.at_verdict.verdict.value}/INFO — consider "
+                    f"elevating severity for visibility"
+                ),
+                field_path=f"ats.{at.at_id}.extra_discovered",
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
@@ -1214,6 +1255,8 @@ ALL_RULES = [
     r_038, r_039, r_040, r_041,
     # V4 rules (validator-audit round 4)
     r_042, r_043, r_044, r_045, r_046, r_047,
+    # V5 rules (validator-audit round 5)
+    r_048, r_049,
 ]
 
 

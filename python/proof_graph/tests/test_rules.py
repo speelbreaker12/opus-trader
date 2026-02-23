@@ -15,6 +15,7 @@ from python.proof_graph.rules import (
     r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
     r_035, r_036, r_037, r_038, r_039, r_040, r_041,
     r_042, r_043, r_044, r_045, r_046, r_047,
+    r_048, r_049,
     validate,
 )
 from python.proof_graph.schema import ProofGraph
@@ -1451,6 +1452,133 @@ class TestR047_EmptyScopeTouch(unittest.TestCase):
     def test_exempt_on_policy(self):
         ctx = _ctx("minimal_policy_story.json")
         self.assertEqual(r_047(ctx), [])
+
+
+class TestR046_FractionalSeconds(unittest.TestCase):
+    """F5-001: ISO-8601 with fractional seconds must pass."""
+
+    def test_clean_on_fractional_seconds(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["generated_at"] = "2026-02-21T10:00:00.123Z"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_046(ctx), [])
+
+    def test_clean_on_fractional_seconds_with_offset(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["generated_at"] = "2026-02-21T10:00:00.999999+05:30"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_046(ctx), [])
+
+    def test_fires_on_missing_timezone(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["generated_at"] = "2026-02-21T10:00:00.123"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(len(r_046(ctx)), 1)
+
+
+class TestR048_OrphanDebtRegister(unittest.TestCase):
+    def test_fires_on_orphan(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["debt_register"] = [{
+            "at_id": "AT-999",
+            "description": "ghost debt",
+            "target_slice": "S2",
+        }]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_048(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-048")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+        self.assertIn("AT-999", findings[0].message)
+
+    def test_clean_when_at_exists(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["debt_register"] = [{
+            "at_id": "AT-201",
+            "description": "real debt",
+            "target_slice": "S2",
+        }]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_048(ctx), [])
+
+    def test_clean_on_empty_register(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_048(ctx), [])
+
+    def test_multiple_orphans(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["debt_register"] = [
+            {"at_id": "AT-888", "description": "d1", "target_slice": "S1"},
+            {"at_id": "AT-999", "description": "d2", "target_slice": "S2"},
+        ]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_048(ctx)
+        self.assertEqual(len(findings), 2)
+
+
+class TestR049_ExtraDiscoveredVisibility(unittest.TestCase):
+    def test_fires_on_extra_discovered_info_proven(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["extra_discovered"] = True
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_049(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-049")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+        self.assertIn("extra_discovered", findings[0].message)
+
+    def test_clean_when_not_extra_discovered(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_049(ctx), [])
+
+    def test_no_fire_on_blocking_extra_discovered(self):
+        """extra_discovered + BLOCKING severity → already visible, no R-049."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["extra_discovered"] = True
+        data["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        data["story_verdict"]["blocking_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_049(ctx), [])
+
+    def test_no_fire_on_non_proven_verdict(self):
+        """extra_discovered + WEAK_PROOF → not in _PROVEN_VERDICTS, skip."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["extra_discovered"] = True
+        data["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        data["ats"][0]["at_verdict"]["severity"] = "INFO"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_049(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_049(ctx), [])
 
 
 if __name__ == "__main__":
