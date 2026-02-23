@@ -395,12 +395,10 @@ def should_trigger_trading_halt(
     """
     if not safety_critical:
         return False
-    if loss_level not in (LossModeLevel.HIGH, LossModeLevel.CRITICAL):
+    if loss_level not in (LossModeLevel.HIGH.value, LossModeLevel.CRITICAL.value):
         return False
-    return any(
-        v in (Verdict.FAIL_OPEN_RISK, Verdict.WRONG_IMPL_UNBLOCKED)
-        for v in verdicts
-    )
+    halt_verdicts = (Verdict.FAIL_OPEN_RISK.value, Verdict.WRONG_IMPL_UNBLOCKED.value)
+    return any(v in halt_verdicts for v in verdicts)
 
 
 def compute_trading_halt(ctx: ValidationContext) -> bool:

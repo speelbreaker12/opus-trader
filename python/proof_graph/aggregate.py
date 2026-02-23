@@ -211,16 +211,6 @@ def aggregate(
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Allow running as `python3 python/proof_graph/aggregate.py` from repo root
-    if __name__ == "__main__":
-        _this = Path(__file__).resolve()
-        _pkg_parent = str(_this.parent.parent.parent)
-        _script_dir = str(_this.parent)
-        if _script_dir in sys.path:
-            sys.path.remove(_script_dir)
-        if _pkg_parent not in sys.path:
-            sys.path.insert(0, _pkg_parent)
-
     parser = argparse.ArgumentParser(
         description="Merge reviewer proof graphs (fail-closed, strictest-wins)."
     )
@@ -271,4 +261,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Allow running as `python3 python/proof_graph/aggregate.py` from repo root:
+    # ensure the repo root is on sys.path so `from python.proof_graph.rules import ...`
+    # resolves correctly, and remove the script's own directory to avoid shadowing.
+    _this = Path(__file__).resolve()
+    _pkg_parent = str(_this.parent.parent.parent)
+    _script_dir = str(_this.parent)
+    if _script_dir in sys.path:
+        sys.path.remove(_script_dir)
+    if _pkg_parent not in sys.path:
+        sys.path.insert(0, _pkg_parent)
     sys.exit(main())
