@@ -1,0 +1,21 @@
+--- crates/soldier_core/src/execution/dispatch_map.rs
++++ replace += with *= in MismatchMetrics::record_mismatch_rejection
+@@ -95,17 +95,17 @@
+     pub fn new() -> Self {
+         Self {
+             reject_unit_mismatch_total: 0,
+         }
+     }
+ 
+     /// Increment the mismatch rejection counter.
+     pub fn record_mismatch_rejection(&mut self) {
+-        self.reject_unit_mismatch_total += 1;
++        self.reject_unit_mismatch_total *= /* ~ changed by cargo-mutants ~ */ 1;
+     }
+ 
+     /// Current value of `order_intent_reject_unit_mismatch_total`.
+     pub fn reject_unit_mismatch_total(&self) -> u64 {
+         self.reject_unit_mismatch_total
+     }
+ }
+ 

@@ -1,0 +1,50 @@
+--- crates/soldier_core/src/execution/dispatch_map.rs
++++ replace validate_and_dispatch -> Result<ValidatedDispatch, DispatchMapError> with Ok(Default::default())
+@@ -179,46 +179,10 @@
+ pub fn validate_and_dispatch(
+     order_size: &OrderSize,
+     instrument_kind: InstrumentKind,
+     intent: IntentClass,
+     contract_multiplier: Option<f64>,
+     metrics: &mut MismatchMetrics,
+ ) -> Result<ValidatedDispatch, DispatchMapError> {
+     // AT-920: contracts/amount consistency check
+-    if let Some(contracts) = order_size.contracts {
+-        let multiplier = contract_multiplier.ok_or(DispatchMapError::ContractsRequireValidation)?;
+-        let canonical_amount = match instrument_kind {
+-            InstrumentKind::Option | InstrumentKind::LinearFuture => order_size
+-                .qty_coin
+-                .ok_or(DispatchMapError::MissingQtyCoin)?,
+-            InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {
+-                order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?
+-            }
+-        };
+-
+-        // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.
+-        if !canonical_amount.is_finite() || !multiplier.is_finite() {
+-            metrics.record_mismatch_rejection();
+-            return Err(DispatchMapError::ContractsAmountMismatch {
+-                delta: f64::INFINITY,
+-            });
+-        }
+-
+-        let contracts_implied = contracts as f64 * multiplier;
+-        let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);
+-        let delta = (contracts_implied - canonical_amount).abs() / denominator;
+-
+-        if !contracts_implied.is_finite()
+-            || !delta.is_finite()
+-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE
+-        {
+-            metrics.record_mismatch_rejection();
+-            return Err(DispatchMapError::ContractsAmountMismatch { delta });
+-        }
+-    }
+-
+-    let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;
+-    Ok(ValidatedDispatch {
+-        request,
+-        risk_state: RiskState::Healthy,
+-    })
++    Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+ }

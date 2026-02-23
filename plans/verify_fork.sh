@@ -626,6 +626,13 @@ if [[ -x "$ROOT/plans/pattern_guard.sh" ]]; then
     bash "$ROOT/plans/pattern_guard.sh"
 fi
 
+MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-120s}"
+if [[ -x "$ROOT/plans/verify_mechanical.sh" ]]; then
+  log "14f-mech) mechanical verification"
+  run_logged_or_exit "mechanical_verification" "$MECHANICAL_TIMEOUT" \
+    bash "$ROOT/plans/verify_mechanical.sh"
+fi
+
 FAIL_CLOSED_COVERAGE_TIMEOUT="${FAIL_CLOSED_COVERAGE_TIMEOUT:-120s}"
 if [[ -x "$ROOT/plans/fail_closed_coverage.sh" ]]; then
   log "14f) fail-closed coverage"

@@ -215,6 +215,15 @@ plans/wf_step.sh <STORY_ID> <step> --dry-run
 - Contract review with decision=PASS
 - fail_closed_coverage.sh pass (if available)
 
+### 6.1.9 Anti-fabrication hardening (story_review_gate.sh)
+
+`story_review_gate.sh` enforces review quality beyond structural checks:
+
+- **Duration Seconds**: Required field in review artifacts. Missing this field is a **hard fail** (not skippable). Prevents 1-second fabricated reviews.
+- **Diff cross-reference**: Review transcripts must mention at least one file from the BASE_HEAD..HEAD diff (full story diff, using preflight receipt if available). Prevents rubber-stamp reviews that don't engage with actual code changes.
+- **Disposition whitespace tolerance**: Finding disposition rows (`| F-N | PN |`) use a whitespace-tolerant regex to handle LLM formatting inconsistencies.
+- **Transcript quality**: Minimum byte threshold, file path references, severity markers all enforced with `die()` (not `warn()`).
+
 ---
 
 ## 7. Verify contract (the only gate)

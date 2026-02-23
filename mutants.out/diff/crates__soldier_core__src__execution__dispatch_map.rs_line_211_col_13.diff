@@ -1,0 +1,21 @@
+--- crates/soldier_core/src/execution/dispatch_map.rs
++++ replace || with && in validate_and_dispatch
+@@ -203,17 +203,17 @@
+             });
+         }
+ 
+         let contracts_implied = contracts as f64 * multiplier;
+         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);
+         let delta = (contracts_implied - canonical_amount).abs() / denominator;
+ 
+         if !contracts_implied.is_finite()
+-            || !delta.is_finite()
++            && /* ~ changed by cargo-mutants ~ */ !delta.is_finite()
+             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE
+         {
+             metrics.record_mismatch_rejection();
+             return Err(DispatchMapError::ContractsAmountMismatch { delta });
+         }
+     }
+ 
+     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;

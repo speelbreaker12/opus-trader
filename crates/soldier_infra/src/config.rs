@@ -456,6 +456,7 @@ fn is_percentage_param(param: ConfigParam) -> bool {
     )
 }
 
+// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
 pub fn resolve_config_value(
     param: ConfigParam,
     value: Option<f64>,

@@ -43,6 +43,7 @@ pub struct InstrumentKindInput {
     pub is_linear: bool,
 }
 
+// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
 /// Derives `InstrumentKind` from venue-agnostic input parameters.
 ///
 /// Mapping rules (CONTRACT.md §definitions, §Dispatcher Rules):
@@ -52,6 +53,16 @@ pub struct InstrumentKindInput {
 /// - future + NOT perpetual + NOT linear → `InverseFuture`
 /// - anything else → None (out of scope; callers should reject)
 pub fn derive_instrument_kind(input: &InstrumentKindInput) -> Option<InstrumentKind> {
+    // Fail-closed: contradictory flags (both option and future) are invalid.
+    if input.is_option && input.is_future {
+        tracing::warn!(
+            is_option = input.is_option,
+            is_future = input.is_future,
+            "contradictory instrument flags: both is_option and is_future are true"
+        );
+        return None;
+    }
+
     if input.is_option {
         return Some(InstrumentKind::Option);
     }

@@ -118,7 +118,7 @@ class TestScaffold(unittest.TestCase):
             )
             data = json.loads(result.read_text(encoding="utf-8"))
             self.assertIn("generated_at", data)
-            self.assertTrue(len(data["generated_at"]) > 0)
+            self.assertGreater(len(data["generated_at"]), 0)
 
 
 if __name__ == "__main__":

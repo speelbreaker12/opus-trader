@@ -92,6 +92,15 @@ Then inspect touched files for:
 - Where is reduce_only injected?
 - Where are latches / staleness checks applied?
 
+### Phase 2.5 — Callsite trace
+
+For each enforcement point in the story, verify it's called in the production dispatch path (not just tested):
+```bash
+# For each guard function, find production callers (excluding tests/)
+rg "guard_function_name" crates/ --glob '*.rs' | grep -v '/tests/' | grep -v '_test.rs'
+```
+Zero production callers = dead enforcement = P1 finding.
+
 ### Phase 3 — Causality check
 For each NEW or MODIFIED guard/latch/gate:
 - Must have TRIP + NON-TRIP coverage

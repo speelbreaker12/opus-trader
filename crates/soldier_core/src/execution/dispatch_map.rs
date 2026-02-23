@@ -61,6 +61,8 @@ pub enum DispatchMapError {
     /// `contracts` is populated; caller must run AT-920 validation first.
     /// Use [`validate_and_dispatch`] with `contract_multiplier`.
     ContractsRequireValidation,
+    /// Amount is NaN, infinite, zero, or negative.
+    InvalidAmount { amount: f64 },
     /// CONTRACT.md AT-920: contracts and canonical amount mismatch.
     /// Contains the relative mismatch delta.
     ContractsAmountMismatch {
@@ -151,6 +153,11 @@ fn map_to_dispatch_unchecked(
         }
     };
 
+    // Fail-closed: reject NaN, Inf, zero, or negative amounts before dispatch.
+    if !amount.is_finite() || amount <= 0.0 {
+        return Err(DispatchMapError::InvalidAmount { amount });
+    }
+
     let reduce_only = match intent {
         IntentClass::Open => false,
         IntentClass::Close | IntentClass::Hedge | IntentClass::Cancel => true,
@@ -162,6 +169,7 @@ fn map_to_dispatch_unchecked(
     })
 }
 
+// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
 /// Validate contracts/amount consistency and dispatch (AT-920).
 ///
 /// CONTRACT.md AT-920: If `contracts` and canonical amount are both present,

@@ -48,15 +48,17 @@ When framing the review context, tell the reviewer:
 
 PRIORITIES (reviewer must check, in this order)
 
-1. **Contract alignment (AT-by-AT)** — Does each claimed AT have a real proving test? Does it prove causality (dispatch_count, reject_reason, latch_reason), not just existence?
+1. **Contract alignment (AT-by-AT)** — Does each claimed AT have a real proving test? Does it prove causality (dispatch_count, reject_reason, latch_reason), not just existence? **Re-read the AT anchor text in CONTRACT.md** — does the enforcement point implement the clause's specific requirement, or merely a prerequisite/side-effect?
 2. **Paper compliance detection** — AT claimed in PRD but not causally proven? implementation_tests[] points to real tests? No fake "passes" logic?
-3. **Fail-closed behavior** — For EACH input to enforcement functions: (1) Missing/None → reject? (2) NaN/Inf → reject? (3) Negative where unsigned expected → reject? (4) Out-of-domain (type::MAX, percentage > 1.0, timestamp beyond sane range) → reject? (5) Corrupt/garbage extreme values → reject or degrade? "Invalid" means all five — not just NaN. No warn-and-continue? No silent fallback?
+3. **Fail-closed behavior** — For EACH input AND intermediate computation in enforcement functions: (1) Missing/None → reject? (2) NaN/Inf → reject? (3) Negative where unsigned expected → reject? (4) Out-of-domain (type::MAX, percentage > 1.0, timestamp beyond sane range) → reject? (5) Corrupt/garbage extreme values → reject or degrade? (6) Narrowing type casts (`as i64`, `as u32`) — is the source value bounded before the cast? "Invalid" means all six — not just NaN. No warn-and-continue? No silent fallback?
 4. **Premortem conformance**:
    - §4 decisions — implemented as chosen? If diverged, justified or silent drift?
    - §5 wrong impls — blocked by tightening tests? Would the wrong impl pass the current suite?
    - §2 assumptions — turned into tests? Or explicitly killed with evidence?
 5. **Observability** — Reason code / structured log / metric on reject/degrade/latch paths?
-6. **Pattern conformance** — Gates use real quantities, state transitions explicit, small blast radius, idempotent where retries happen?
+6. **Pattern conformance** — Gates use real quantities, state transitions explicit, small blast radius (including deserialization: strict serde enums in batch-deserialized types must not poison sibling elements), idempotent where retries happen?
+7. **Combinatorial coverage** — For functions with 2+ branching inputs (Option, enum, bool): are cross-cutting input combinations tested? Does one input's presence cause checks on other inputs to be skipped? For constants with magnitude comments, does the comment match the literal value?
+8. **Mechanical verification** — Run `./plans/verify_mechanical.sh`. Any FAIL = P1. Checks: (a) tests compile, (b) enforcement points have production callers, (c) implementation_tests[] entries exist as real test functions.
 
 ESCALATION TO WIDER REVIEW
 
@@ -78,11 +80,9 @@ OUTPUT
 - If clean: include explicit statement: "No blocking findings; reconciliation proof is causal and sufficient."
 - End with: "READY FOR FIX".
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
-- Do NOT edit .wf/receipts/ or any workflow state files
-- Do NOT modify plans/prd.json passes field
-- Do NOT proceed to any step beyond the one assigned
+PROHIBITED
+- Do NOT hand-write review artifacts
+- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
 - Do NOT edit any source code — review only
 - Do NOT write review markdown by hand — use review_logged.sh
 - Do NOT review only the git diff if no code changed yet

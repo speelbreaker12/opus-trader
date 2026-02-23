@@ -66,8 +66,13 @@ pub enum OrderSizeError {
     InvalidCanonicalQty(f64),
     /// Contract multiplier must be positive and finite when provided.
     InvalidContractMultiplier(f64),
+    /// Computed notional_usd is not finite (NaN/Inf output guard).
+    InvalidNotional(f64),
+    /// Computed contracts value overflows i64 range.
+    ContractsOverflow { value: f64 },
 }
 
+// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
 /// Build an `OrderSize` from the given input parameters.
 ///
 /// CONTRACT.md Dispatcher Rules:
@@ -99,9 +104,22 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
             // Canonical = qty_coin
             let qty_coin = input.canonical_qty;
             let notional_usd = qty_coin * input.index_price;
-            let contracts = input
-                .contract_multiplier
-                .map(|mult| (qty_coin / mult).round() as i64);
+
+            // Output guard: reject non-finite notional (NaN/Inf from overflow).
+            if !notional_usd.is_finite() {
+                return Err(OrderSizeError::InvalidNotional(notional_usd));
+            }
+
+            let contracts = match input.contract_multiplier {
+                Some(mult) => {
+                    let rounded = (qty_coin / mult).round();
+                    if rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
+                        return Err(OrderSizeError::ContractsOverflow { value: rounded });
+                    }
+                    Some(rounded as i64)
+                }
+                None => None,
+            };
 
             // CONTRACT.md AT-277: option qty_usd MUST be unset
             // For linear_future, qty_usd is also not the canonical unit,
@@ -118,9 +136,22 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
             let qty_usd = input.canonical_qty;
             let notional_usd = qty_usd;
             let qty_coin = qty_usd / input.index_price;
-            let contracts = input
-                .contract_multiplier
-                .map(|mult| (qty_usd / mult).round() as i64);
+
+            // Output guard: reject non-finite qty_coin (NaN/Inf from overflow).
+            if !qty_coin.is_finite() {
+                return Err(OrderSizeError::InvalidNotional(qty_coin));
+            }
+
+            let contracts = match input.contract_multiplier {
+                Some(mult) => {
+                    let rounded = (qty_usd / mult).round();
+                    if rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
+                        return Err(OrderSizeError::ContractsOverflow { value: rounded });
+                    }
+                    Some(rounded as i64)
+                }
+                None => None,
+            };
 
             Ok(OrderSize {
                 contracts,

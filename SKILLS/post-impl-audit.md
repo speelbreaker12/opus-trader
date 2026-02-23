@@ -82,6 +82,10 @@ If a plausible wrong design would pass, mark the test **TOO-COARSE** and recomme
 - Add property test
 - Split test into isolated assertions
 
+### 5b) Mechanical verification
+
+Run `./plans/verify_mechanical.sh` and paste output. Any FAIL = downgrade STOPLIGHT.
+
 ### 6) Regression + scope check
 
 - Changes are localized to `scope.touch`

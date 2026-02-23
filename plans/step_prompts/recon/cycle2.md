@@ -63,11 +63,9 @@ OUTPUT
 - Closure status for each Cycle 1 finding (CLOSED / OPEN / NEW).
 - End with: "READY FOR RESOLUTION".
 
-PROHIBITED (applies to ALL steps)
-- Do NOT run any plans/*.sh gate scripts (wf_step.sh, verify.sh, prd_set_pass.sh)
-- Do NOT edit .wf/receipts/ or any workflow state files
-- Do NOT modify plans/prd.json passes field
-- Do NOT proceed to any step beyond the one assigned
+PROHIBITED
+- Do NOT hand-write review artifacts
+- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
 - Do NOT edit any source code — review only
 - Do NOT hand-write review artifacts — use review_logged.sh
 - Do NOT skip closure verification of prior findings

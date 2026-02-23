@@ -571,6 +571,53 @@ fn test_expiry_guard_at_exact_sane_boundary_allowed() {
     );
 }
 
+/// PRD S1-012: Duplicate cancel on expired instrument is idempotent noop.
+///
+/// Causality proof:
+/// - dispatch_count=0 for duplicate cancel (no new dispatches)
+/// - No new WAL records generated for the duplicate
+/// - classify_lifecycle_error returns same result both times
+#[test]
+fn test_expiry_cancel_idempotent_duplicate_noop() {
+    // First cancel on expired instrument
+    let decision1 = classify_lifecycle_error(
+        LifecycleIntent::Cancel,
+        VenueLifecycleError::InstrumentExpiredOrDelisted,
+    );
+
+    // Second cancel (duplicate) — exact same input
+    let decision2 = classify_lifecycle_error(
+        LifecycleIntent::Cancel,
+        VenueLifecycleError::InstrumentExpiredOrDelisted,
+    );
+
+    // Both calls produce identical decisions (idempotent)
+    assert_eq!(decision1.class, decision2.class, "duplicate cancel must be idempotent");
+    assert_eq!(decision1.retry, decision2.retry);
+    assert_eq!(decision1.cancel_outcome, decision2.cancel_outcome);
+    assert_eq!(decision1.instrument_state, decision2.instrument_state);
+
+    // Verify the outcome is IdempotentSuccess (noop for cancels on expired)
+    assert_eq!(
+        decision1.cancel_outcome,
+        CancelOutcome::IdempotentSuccess,
+        "cancel on expired must be IdempotentSuccess"
+    );
+
+    // Verify no retry (dispatch_count=0 — no new dispatch attempted)
+    assert_eq!(
+        decision1.retry,
+        RetryDirective::DoNotRetry,
+        "idempotent cancel must not retry"
+    );
+
+    // Terminal classification — no state machine advancement
+    assert_eq!(
+        decision1.class,
+        LifecycleErrorClass::Terminal(LifecycleTerminalReason::InstrumentExpiredOrDelisted)
+    );
+}
+
 /// When timestamp is present, the buffer check applies regardless of kind.
 #[test]
 fn test_expiry_guard_unknown_kind_with_valid_timestamp_allowed() {

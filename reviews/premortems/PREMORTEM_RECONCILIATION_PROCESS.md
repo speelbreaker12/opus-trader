@@ -3,7 +3,7 @@
 > Multi-agent workflows for (A) producing high-quality story premortems and (B) retroactively auditing existing code against those premortems.
 > Designed and validated during Slice 1 (13 stories, 4 agent teams, 3 review rounds).
 >
-> **Version**: 1.6 (2026-02-21) — v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
+> **Version**: 1.8 (2026-02-22) — v1.8: anti-patterns #16-#19 (batch-deserialization blast radius, early-return branch exhaustiveness, AT attribution trust propagation, input-scope too narrow for intermediate computations), 6-category fail-closed check (adds narrowing casts), AT semantic match check, combinatorial coverage check, constants accuracy check. Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5. v1.7: machine-verifiable proof graphs V1 (`python/proof_graph/`) — per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip), scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`, legacy exemption list (`plans/proof_graph_exempt.txt`), `prd_set_pass.sh` gate integration (exit 10). Appendix C roadmap item marked DONE (V1). v1.6: anti-patterns #12-#15 (workflow bypass vectors: fake citation pass-through, diff-only review gaming, DECISION_DIVERGENCE escape hatch, silent debt deferral), enforceable Cycle 1 pre-existing-code gate, DECISION_DIVERGENCE auto-escalation for rejected options, debt register JSON schema + R7f validation, R7c call-graph reachability (entry-point assertion replaces single-caller check), codebase audit anchors (`#[audit_anchor]`), future roadmap (proof graphs, post-rejection blast-radius audit). v1.5: GAP-P0-01 separated proof verdicts from runtime-enforcement gate (PROVEN-INTEGRATED required for pass-eligibility on safety-critical ATs; proof verdict stays clean), GAP-P0-02 machine mutation testing via `cargo mutants` with fast/deep path scoping (mental analysis demoted to pre-filter, scope extended to full proving suite for gapped ATs), GAP-P0-03 structured R5b skill receipts with head_commit validation (replaces mtime checks, SELF_REVIEW_UNPROVEN blocker), GAP-P0-04 OPERATIONAL_ESCALATION_REQUIRED flag for live-system unwired guards. GAP-P1-01 decentralized R4 synthesis (scripted JSON aggregation, lead resolves conflicts only), GAP-P1-02 WEAK_PROOF on MED/HIGH loss_mode ATs escalated to CLAIMED_NOT_PROVEN, GAP-P1-03 STOPLIGHT re-evaluation in Phase R6 verify. v1.2: review scope rules, Phase R5b, story proof scope, Review Basis, Evidence Index, minimum evidence pack, positive/negative evidence. v1.3: PARTIAL verdict, R7 sub-phase breakdown, R7d-R7e escalation, MISSING_ARTIFACT/FALLBACK priority, emergency escalation, Review Basis enforcement, prd_set_pass.sh cross-reference, Simpler-Than-Correct Gate dual-application. v1.4: expanded fail-closed check (5-category input validation), input-boundary mutations in R7e, anti-patterns #10 (recusal blind spot) and #11 (saturating arithmetic ≠ input validation). Root cause: Kimi K2.5 external review surfaced 2 gaps missed by all prior review layers.
 
 ## Glossary (Normative)
 
@@ -20,6 +20,7 @@
 | Golden Vector | A table-driven test with 10-30 input cases covering boundary, NaN/Inf/missing, and §5 wrong-impl scenarios. |
 | Evidence Ledger | Per-story document produced during reconciliation with file:line citations for every audit check. |
 | Simpler-Than-Correct Gate | A meta-check applied to each implementation under test: "Is there any implementation SIMPLER than the correct one that passes the entire test suite?" If yes, the suite has a mutation gap. Applied twice: first in Phase R5b self-review (preliminary, builder catches own gaps) and definitively in Phase R7e devils advocate (independent auditor). The R5b application is defense-in-depth — it reduces the load on R7e but does not replace it. |
+| Proof Graph | Per-story `proof_graph.json` — structured JSON mapping each AT to enforcement point, tests, wiring status, observability, and verdict. Validated by `python/proof_graph/validate.py` with 18 rules. Replaces markdown evidence ledger tables for machine-checkable invariant enforcement at pass-flip time. Schema version 1. |
 | Story Proof Scope | The minimum context needed to audit a story's contract compliance: PRD item, `enforcing_contract_ats[]`, premortem (especially §2/§4/§5), recon preflight, `scope.touch` files, proving test files from `implementation_tests[]`, relevant CONTRACT.md sections, and direct integration surfaces for causality. This is the default review unit — not the diff, not the whole slice. The framing is "contract-proof audit," not "code review." |
 | Review Basis | An explicit label every reviewer must include in their output: `STORY_SCOPE (Cycle 1)` or `FIX_DIFF + AT_REGRESSION (Cycle 2)`. Removes ambiguity about what was actually reviewed. |
 
@@ -385,6 +386,20 @@ For **LOW risk** single stories: 1 writer + lead evaluation is sufficient. Skip 
 
 15. **Silent debt deferral** — Agent marks a gap `DEFERRED` without creating a debt register entry, or sets `target_slice` to "TBD." The gap effectively disappears. **Fix**: Debt register must follow a strict JSON schema (see Phase R4). Phase R7f validation script checks that every `DEFERRED` gap in the evidence ledgers has a corresponding entry in the debt register with a valid `target_slice` (not "TBD"), `owner`, and `created_at`. Overdue debt (target_slice already passed) blocks the current slice's `prd_set_pass.sh`.
 
+16. **Per-element correctness treated as sufficient for batch-deserialized types** — A serde enum has correct variant coverage for all known values, so it passes review. But the enum lacks `#[serde(other)]`, and when the venue adds a new variant, one unknown element in a `Vec<DeribitInstrument>` batch poisons the entire deserialization — all instruments go stale, not just the unknown one. The blast radius is disproportionate. **Fix**: For every serde enum used in a collection/batch context, reviewers must ask: "Does one invalid element fail the entire batch? If so, is the blast radius proportionate?" Add `#[serde(other)]` fallback or deserialize-then-filter pattern for venue-facing enums.
+
+17. **Assuming early-return branches are exhaustive for all input types** — A function handles `input = None` with an early return for type X (e.g., Perpetual → Allowed when timestamp is None). Reviewers see this branch, conclude "type X is handled," and move on. But the fall-through path (input = Some) does not re-check type X, so type X with an unexpected `Some` value takes a code path designed for other types. In Slice 1, a Perpetual instrument with a bogus `Some(near_term_timestamp)` would be rejected by the buffer check — a path no test covers and no reviewer questioned. **Fix**: For each function with early-return branches, verify the fall-through path is correct for ALL input types that reach it, not just the "expected" ones. Check: "If type X takes the fall-through instead of its early-return, is the behavior still correct?"
+
+18. **Trusting AT attribution from upstream without re-reading CONTRACT.md** — Every downstream layer (evidence ledger, cross-review, external review) inherits the premortem's AT mapping without independently verifying that the AT's actual clause text matches what the code enforces. In Slice 1, AT-333 (about quantization parameters) was attributed to instrument kind derivation tests — a prerequisite, not the AT itself. All reviewers agreed the test was "PROVEN for AT-333" because they checked internal consistency (test exercises enforcement point) not external consistency (AT text matches enforcement). **Fix**: At least one review layer must re-read the AT anchor text in CONTRACT.md and verify semantic match, not just structural presence. Add to Cycle 1 reviewer checklist: "For one random AT per story, re-read the clause text. Does the enforcement match the literal requirement?"
+
+19. **Scoping fail-closed checks to function inputs only** — The 5-category input validation framework (Missing/None, NaN/Inf, Negative, Out-of-domain, Corrupt) asks "for EACH input to enforcement functions." This misses: (a) intermediate computations that cross type boundaries (e.g., `(f64).round() as i64` silently saturates), (b) constants with wrong comments (e.g., `~7.3e15` on a `7.3e12` value), (c) input combinations where one input's presence causes checks on other inputs to be skipped. **Fix**: Expand scope to "each input, intermediate type conversion, and output." Add category (6): narrowing casts. Add combinatorial coverage check for functions with multiple Optional/enum inputs.
+
+20. **Paper enforcement: function defined + tested but never called from production dispatch** — A guard function exists, has unit tests, passes all ATs, and receives a `PROVEN` verdict. But `findReferences` shows zero callers in the production dispatch path — the function is an island. In Slice 1, `derive_instrument_kind`, `opens_blocked`, `build_order_size`, `validate_and_dispatch`, and `resolve_config_value` all had this pattern. The reconciliation process marked them RECONCILED because the proof was real — but the guards weren't wired. **Fix**: Run `./plans/verify_mechanical.sh` callsite check. Zero production callers on an enforcement point = P1 finding. The proof is still valid (keep the verdict), but add `PROVEN-UNIT` wiring qualifier and block `prd_set_pass.sh` until an integration story wires it.
+
+21. **Phantom test: PRD lists test name that doesn't exist as `#[test]` function** — `implementation_tests[]` in prd.json references `path::test_fn_name`, but the file doesn't contain `fn test_fn_name` (or the file doesn't exist at all). In Slice 1, 3 PRD-named tests were phantoms: they were planned but never implemented, yet the story appeared compliant because no one checked. **Fix**: Run `./plans/verify_mechanical.sh` test existence check. For each `implementation_tests[]` entry, verify the file exists AND contains `#[test] fn <name>`. Missing file = FAIL. Missing function = FAIL.
+
+22. **Non-compiling test: test file has broken imports/types but was never run** — The test file exists and contains `#[test]` functions, but `cargo test --no-run --workspace` fails because imports reference types that were renamed or never defined. In Slice 1, `PricerSide` was consolidated into `Side` in commit 9515074 but test imports weren't updated, and `WalWriterConfig` was referenced in re-exports but never defined. Neither compile error was caught because the tests were never built. **Fix**: Run `./plans/verify_mechanical.sh` compile gate as part of `./plans/verify.sh full`. `cargo test --no-run --workspace` must pass before any test verdicts are trusted.
+
 ---
 ---
 
@@ -725,11 +740,14 @@ Reviewers must check each story against its story proof scope:
 | Check | What to look for |
 |-------|-----------------|
 | **AT causal proof** | Does each claimed AT have a real proving test? Does it prove causality (dispatch count, reject reason, latch reason), not just existence? |
+| **AT semantic match** | For at least one AT per story, re-read the AT anchor text in CONTRACT.md. Does the enforcement point implement the clause's *specific requirement*, or merely a prerequisite/side-effect? (Anti-pattern #18) |
 | **Premortem §4 decisions** | Implemented as chosen? If diverged, is it justified or a silent drift? |
 | **Premortem §5 wrong impls** | Blocked by tightening tests? Would the wrong impl pass the current suite? |
 | **Premortem §2 assumptions** | Turned into tests? Or explicitly killed with evidence? |
-| **Fail-closed behavior** | For EACH input: (1) Missing/None → reject? (2) NaN/Inf → reject? (3) Negative where unsigned → reject? (4) Out-of-domain (type::MAX, % > 1.0, timestamp beyond sane range) → reject? (5) Corrupt/garbage → reject or degrade? "Invalid" means all five — not just NaN. No warn-and-continue? No silent fallback? |
-| **Pattern conformance** | Gates use real quantities, state transitions explicit, small blast radius, idempotent where retries happen? |
+| **Fail-closed behavior** | For EACH input AND intermediate computation: (1) Missing/None → reject? (2) NaN/Inf → reject? (3) Negative where unsigned → reject? (4) Out-of-domain (type::MAX, % > 1.0, timestamp beyond sane range) → reject? (5) Corrupt/garbage → reject or degrade? (6) Narrowing casts (`as i64`, `as u32`) — source value bounded? "Invalid" means all six — not just NaN. No warn-and-continue? No silent fallback? (Anti-pattern #19) |
+| **Pattern conformance** | Gates use real quantities, state transitions explicit, small blast radius (including deserialization: strict serde enums in batch types — anti-pattern #16), idempotent where retries happen? |
+| **Combinatorial coverage** | For functions with 2+ branching inputs: are cross-cutting combinations tested? Does one input's presence cause checks on other inputs to be skipped? (Anti-pattern #17) |
+| **Constants accuracy** | For constants with magnitude/unit comments, does the comment match the literal value? |
 | **Paper compliance** | PRD claims match reality? `implementation_tests[]` points to real proving tests? No fake "passes" logic? |
 
 ### Output
@@ -1042,6 +1060,7 @@ Each story gets a final reconciliation verdict:
 1. **Proof gate**: Story verdict must be `RECONCILED` or `RECONCILED-WITH-DEBT`. A `NOT RECONCILED` story is always blocked.
 2. **Runtime-enforcement gate**: Every safety-critical AT must be `PROVEN-INTEGRATED` (wired into production). `PROVEN-UNIT` on a safety-critical AT blocks the story — the guard provides zero runtime protection regardless of proof status. `PROVEN-UNIT` on non-safety-critical ATs (observability, metrics) does not block.
 3. **Mechanical checks**: (a) all 8 workflow receipts present, (b) `verify.sh` passed, (c) `contract_review.json` contains `"decision": "PASS"`, (d) `loss_mode` fields are populated, (e) R5b skill receipts verified (see Phase R5b).
+4. **Proof graph gate** (v1.7): `proof_graph.json` must exist at `artifacts/story/<ID>/proof_graph.json` and pass `python/proof_graph/validate.py --strict` (all 18 rules, WARNs promoted to ERRORs). Stories without a proof graph are blocked unless listed in `plans/proof_graph_exempt.txt` (legacy grandfathering). Exit code 10 on failure. Generate skeleton: `python3 python/proof_graph/scaffold.py <ID>`.
 
 See `specs/WORKFLOW_CONTRACT.md` for the full gate checklist.
 
@@ -1132,6 +1151,7 @@ Every reconciled story must produce this set of artifacts. Missing items block t
 | 6 | **Verify output** + `verify.meta.json` | R8 | `verify.sh` passed with correct mode/head; test count matches |
 | 7a | **Test output + diff summary** *(if code changed)* | R5/R5b | Fixes compile, tests pass, diff is additive |
 | 7b | **`NO_CODE_CHANGE_AUDIT_ONLY` section** *(if no code changed)* | R5b | Negative evidence: `git diff → 0`, proof checks still run, no fixes needed |
+| 8 | **`proof_graph.json`** (v1.7) | R6 | Machine-verifiable proof graph: per-AT enforcement, tests, wiring, verdicts; validated by `validate.py --strict` at pass-flip |
 
 **`RECON-CLEAN` exception (item 4)**: If the Cycle 1 review and self-review found zero BLOCKING findings and the story required no code changes, the Cycle 2 review may be replaced by an abbreviated `RECON-CLEAN` note in the resolution artifact. The note must include:
 - Confirmation that preflight + self-review + Cycle 1 found `BLOCKING=0`
@@ -1366,6 +1386,9 @@ reviews/reconciliations/<slice>/               # One subdirectory per slice
   DEBT_REGISTER.json                         # Phase R7f: structured debt register (strict schema)
   SUMMARY.md                                 # One-page roll-up: verdicts, metrics, links to all files
 
+artifacts/story/<ID>/
+  proof_graph.json                           # Per-story proof graph (v1.7): AT→enforcement→tests→wiring→verdict
+
 plans/prompts/
   slice_reconcile_implement.md               # Phase R1 agent prompt (Appendix A source)
 
@@ -1433,7 +1456,8 @@ plans/step_prompts/recon/
 - [ ] Verdict table updated with R7c wiring + safety-critical columns
 - [ ] Integration story created for PROVEN-UNIT safety-critical ATs (if any)
 - [ ] Audit anchors added to enforcement points and proving tests for safety-critical ATs (if adopting v1.6 anchors)
-- [ ] Minimum evidence pack complete for each story (preflight, self-review, Cycle 1, Cycle 2/RECON-CLEAN, resolution, verify, test output or NO_CODE_CHANGE)
+- [ ] Proof graph: `proof_graph.json` generated via `scaffold.py`, filled in, and validates with `validate.py --strict` (or story listed in `plans/proof_graph_exempt.txt`)
+- [ ] Minimum evidence pack complete for each story (preflight, self-review, Cycle 1, Cycle 2/RECON-CLEAN, resolution, verify, test output or NO_CODE_CHANGE, proof_graph.json)
 
 ---
 ---
@@ -1855,35 +1879,25 @@ For stories reconciled before v1.6, anchors are added during the next reconcilia
 
 > Items identified during review but too large for v1.6. Tracked here for visibility.
 
-## Machine-Verifiable Proof Graphs (v2.0)
+## Machine-Verifiable Proof Graphs — ~~v2.0~~ **V1 SHIPPED (v1.7)**
 
-Replace markdown evidence ledger tables with a structured JSON/TOML proof graph:
+> **Status**: V1 implemented. See `python/proof_graph/` for the full package.
 
-```json
-{
-  "story_id": "S1-007",
-  "proof_graph": {
-    "AT-920": {
-      "enforcement": { "file": "dispatch_map.rs", "line": 142, "function": "validate_contracts_amount_match", "anchor": "AT-920" },
-      "tests": [
-        { "file": "test_dispatch_map.rs", "line": 89, "function": "test_mismatch_beyond_tolerance_rejects", "category": "TRIP" },
-        { "file": "test_dispatch_map.rs", "line": 112, "function": "test_within_tolerance_passes", "category": "NON_TRIP" }
-      ],
-      "wiring": "PROVEN-INTEGRATED",
-      "call_chain": ["build_order_intent", "run_dispatch_gate", "validate_contracts_amount_match"],
-      "verdict": "PROVEN"
-    }
-  }
-}
-```
+V1 delivers per-story `proof_graph.json` with:
+- **Schema**: Frozen dataclasses with `from_dict()` + deny-unknown-fields (`schema_version: 1`)
+- **Validator**: 18 rules (`python/proof_graph/validate.py --strict`) — enforcement-critical at pass-flip
+- **Scaffolder**: `python/proof_graph/scaffold.py` generates skeleton from prd.json + CONTRACT.md
+- **Gate integration**: `prd_set_pass.sh` validates with `--strict` (exit 10 on failure)
+- **Legacy exemption**: `plans/proof_graph_exempt.txt` grandfathers existing stories; shrinks via reconciliation
+- **Stdlib-only**: Zero external dependencies
 
-**Benefits**:
-- Automated cross-slice regression detection (detect if Slice 3 overwrites Slice 1's AT ownership)
-- Diff-able proof state between reconciliation passes
-- Machine-queryable: "which ATs are PROVEN-UNIT?" becomes a `jq` query
-- Eliminates markdown parsing fragility
+Key rules: R-001 (RECONCILED + BLOCKING contradiction), R-004 (stale test SHA), R-007 (phantom AT not in CONTRACT.md), R-008 (placeholder detection), R-015 (FAIL_OPEN_RISK), R-016b (safety-critical without TRIP tests).
 
-**Blockers**: Requires rewriting R1 output format, all cross-review tooling, and the R4 aggregation script. Estimated as a v2.0 structural change.
+**V2 roadmap** (remaining from original proposal):
+- Cross-slice regression detection (detect if a later slice overwrites earlier AT ownership)
+- Auto-generation from R1 evidence ledger output
+- R4 aggregation script integration
+- JSON Schema file with sync test (deferred from V1 to avoid dual-source-of-truth)
 
 ## Post-Rejection Blast-Radius Audit
 

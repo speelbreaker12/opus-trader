@@ -1,0 +1,770 @@
+[
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace MismatchMetrics::record_mismatch_rejection with ()\n@@ -95,17 +95,17 @@\n     pub fn new() -> Self {\n         Self {\n             reject_unit_mismatch_total: 0,\n         }\n     }\n \n     /// Increment the mismatch rejection counter.\n     pub fn record_mismatch_rejection(&mut self) {\n-        self.reject_unit_mismatch_total += 1;\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Current value of `order_intent_reject_unit_mismatch_total`.\n     pub fn reject_unit_mismatch_total(&self) -> u64 {\n         self.reject_unit_mismatch_total\n     }\n }\n \n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "MismatchMetrics::record_mismatch_rejection",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 104
+        },
+        "start": {
+          "column": 5,
+          "line": 101
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:103:9: replace MismatchMetrics::record_mismatch_rejection with ()",
+    "package": "soldier_core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 46,
+        "line": 103
+      },
+      "start": {
+        "column": 9,
+        "line": 103
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace += with -= in MismatchMetrics::record_mismatch_rejection\n@@ -95,17 +95,17 @@\n     pub fn new() -> Self {\n         Self {\n             reject_unit_mismatch_total: 0,\n         }\n     }\n \n     /// Increment the mismatch rejection counter.\n     pub fn record_mismatch_rejection(&mut self) {\n-        self.reject_unit_mismatch_total += 1;\n+        self.reject_unit_mismatch_total -= /* ~ changed by cargo-mutants ~ */ 1;\n     }\n \n     /// Current value of `order_intent_reject_unit_mismatch_total`.\n     pub fn reject_unit_mismatch_total(&self) -> u64 {\n         self.reject_unit_mismatch_total\n     }\n }\n \n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "MismatchMetrics::record_mismatch_rejection",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 104
+        },
+        "start": {
+          "column": 5,
+          "line": 101
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:103:41: replace += with -= in MismatchMetrics::record_mismatch_rejection",
+    "package": "soldier_core",
+    "replacement": "-=",
+    "span": {
+      "end": {
+        "column": 43,
+        "line": 103
+      },
+      "start": {
+        "column": 41,
+        "line": 103
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace += with *= in MismatchMetrics::record_mismatch_rejection\n@@ -95,17 +95,17 @@\n     pub fn new() -> Self {\n         Self {\n             reject_unit_mismatch_total: 0,\n         }\n     }\n \n     /// Increment the mismatch rejection counter.\n     pub fn record_mismatch_rejection(&mut self) {\n-        self.reject_unit_mismatch_total += 1;\n+        self.reject_unit_mismatch_total *= /* ~ changed by cargo-mutants ~ */ 1;\n     }\n \n     /// Current value of `order_intent_reject_unit_mismatch_total`.\n     pub fn reject_unit_mismatch_total(&self) -> u64 {\n         self.reject_unit_mismatch_total\n     }\n }\n \n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "MismatchMetrics::record_mismatch_rejection",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 104
+        },
+        "start": {
+          "column": 5,
+          "line": 101
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:103:41: replace += with *= in MismatchMetrics::record_mismatch_rejection",
+    "package": "soldier_core",
+    "replacement": "*=",
+    "span": {
+      "end": {
+        "column": 43,
+        "line": 103
+      },
+      "start": {
+        "column": 41,
+        "line": 103
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 0\n@@ -100,17 +100,17 @@\n \n     /// Increment the mismatch rejection counter.\n     pub fn record_mismatch_rejection(&mut self) {\n         self.reject_unit_mismatch_total += 1;\n     }\n \n     /// Current value of `order_intent_reject_unit_mismatch_total`.\n     pub fn reject_unit_mismatch_total(&self) -> u64 {\n-        self.reject_unit_mismatch_total\n+        0 /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl Default for MismatchMetrics {\n     fn default() -> Self {\n         Self::new()\n     }\n }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "MismatchMetrics::reject_unit_mismatch_total",
+      "return_type": "-> u64",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 109
+        },
+        "start": {
+          "column": 5,
+          "line": 106
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:108:9: replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 0",
+    "package": "soldier_core",
+    "replacement": "0",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 108
+      },
+      "start": {
+        "column": 9,
+        "line": 108
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 1\n@@ -100,17 +100,17 @@\n \n     /// Increment the mismatch rejection counter.\n     pub fn record_mismatch_rejection(&mut self) {\n         self.reject_unit_mismatch_total += 1;\n     }\n \n     /// Current value of `order_intent_reject_unit_mismatch_total`.\n     pub fn reject_unit_mismatch_total(&self) -> u64 {\n-        self.reject_unit_mismatch_total\n+        1 /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl Default for MismatchMetrics {\n     fn default() -> Self {\n         Self::new()\n     }\n }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "MismatchMetrics::reject_unit_mismatch_total",
+      "return_type": "-> u64",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 109
+        },
+        "start": {
+          "column": 5,
+          "line": 106
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:108:9: replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 1",
+    "package": "soldier_core",
+    "replacement": "1",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 108
+      },
+      "start": {
+        "column": 9,
+        "line": 108
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace map_to_dispatch -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())\n@@ -125,21 +125,17 @@\n ///   mismatch checks execute before mapping.\n pub fn map_to_dispatch(\n     order_size: &OrderSize,\n     instrument_kind: InstrumentKind,\n     intent: IntentClass,\n ) -> Result<DispatchRequest, DispatchMapError> {\n     // Fail closed: if contracts are present, callers must route through\n     // validate_and_dispatch so AT-920 mismatch checks run before mapping.\n-    if order_size.contracts.is_some() {\n-        return Err(DispatchMapError::ContractsRequireValidation);\n-    }\n-\n-    map_to_dispatch_unchecked(order_size, instrument_kind, intent)\n+    Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n }\n \n fn map_to_dispatch_unchecked(\n     order_size: &OrderSize,\n     instrument_kind: InstrumentKind,\n     intent: IntentClass,\n ) -> Result<DispatchRequest, DispatchMapError> {\n     let amount = match instrument_kind {\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "map_to_dispatch",
+      "return_type": "-> Result<DispatchRequest, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 138
+        },
+        "start": {
+          "column": 1,
+          "line": 118
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:133:5: replace map_to_dispatch -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())",
+    "package": "soldier_core",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 137
+      },
+      "start": {
+        "column": 5,
+        "line": 133
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace map_to_dispatch_unchecked -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())\n@@ -137,34 +137,17 @@\n     map_to_dispatch_unchecked(order_size, instrument_kind, intent)\n }\n \n fn map_to_dispatch_unchecked(\n     order_size: &OrderSize,\n     instrument_kind: InstrumentKind,\n     intent: IntentClass,\n ) -> Result<DispatchRequest, DispatchMapError> {\n-    let amount = match instrument_kind {\n-        InstrumentKind::Option | InstrumentKind::LinearFuture => order_size\n-            .qty_coin\n-            .ok_or(DispatchMapError::MissingQtyCoin)?,\n-        InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {\n-            order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?\n-        }\n-    };\n-\n-    let reduce_only = match intent {\n-        IntentClass::Open => false,\n-        IntentClass::Close | IntentClass::Hedge | IntentClass::Cancel => true,\n-    };\n-\n-    Ok(DispatchRequest {\n-        amount,\n-        reduce_only,\n-    })\n+    Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate contracts/amount consistency and dispatch (AT-920).\n ///\n /// CONTRACT.md AT-920: If `contracts` and canonical amount are both present,\n /// validates that\n /// `|contracts * contract_multiplier - canonical_amount| /\n /// max(|canonical_amount|, epsilon)` does not exceed\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "map_to_dispatch_unchecked",
+      "return_type": "-> Result<DispatchRequest, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 163
+        },
+        "start": {
+          "column": 1,
+          "line": 140
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:145:5: replace map_to_dispatch_unchecked -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())",
+    "package": "soldier_core",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 7,
+        "line": 162
+      },
+      "start": {
+        "column": 5,
+        "line": 145
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace validate_and_dispatch -> Result<ValidatedDispatch, DispatchMapError> with Ok(Default::default())\n@@ -179,46 +179,10 @@\n pub fn validate_and_dispatch(\n     order_size: &OrderSize,\n     instrument_kind: InstrumentKind,\n     intent: IntentClass,\n     contract_multiplier: Option<f64>,\n     metrics: &mut MismatchMetrics,\n ) -> Result<ValidatedDispatch, DispatchMapError> {\n     // AT-920: contracts/amount consistency check\n-    if let Some(contracts) = order_size.contracts {\n-        let multiplier = contract_multiplier.ok_or(DispatchMapError::ContractsRequireValidation)?;\n-        let canonical_amount = match instrument_kind {\n-            InstrumentKind::Option | InstrumentKind::LinearFuture => order_size\n-                .qty_coin\n-                .ok_or(DispatchMapError::MissingQtyCoin)?,\n-            InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {\n-                order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?\n-            }\n-        };\n-\n-        // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.\n-        if !canonical_amount.is_finite() || !multiplier.is_finite() {\n-            metrics.record_mismatch_rejection();\n-            return Err(DispatchMapError::ContractsAmountMismatch {\n-                delta: f64::INFINITY,\n-            });\n-        }\n-\n-        let contracts_implied = contracts as f64 * multiplier;\n-        let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n-        let delta = (contracts_implied - canonical_amount).abs() / denominator;\n-\n-        if !contracts_implied.is_finite()\n-            || !delta.is_finite()\n-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n-        {\n-            metrics.record_mismatch_rejection();\n-            return Err(DispatchMapError::ContractsAmountMismatch { delta });\n-        }\n-    }\n-\n-    let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n-    Ok(ValidatedDispatch {\n-        request,\n-        risk_state: RiskState::Healthy,\n-    })\n+    Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:187:5: replace validate_and_dispatch -> Result<ValidatedDispatch, DispatchMapError> with Ok(Default::default())",
+    "package": "soldier_core",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 7,
+        "line": 223
+      },
+      "start": {
+        "column": 5,
+        "line": 187
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace || with && in validate_and_dispatch\n@@ -191,17 +191,17 @@\n                 .qty_coin\n                 .ok_or(DispatchMapError::MissingQtyCoin)?,\n             InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {\n                 order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?\n             }\n         };\n \n         // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.\n-        if !canonical_amount.is_finite() || !multiplier.is_finite() {\n+        if !canonical_amount.is_finite() && /* ~ changed by cargo-mutants ~ */ !multiplier.is_finite() {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:199:42: replace || with && in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "&&",
+    "span": {
+      "end": {
+        "column": 44,
+        "line": 199
+      },
+      "start": {
+        "column": 42,
+        "line": 199
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ delete ! in validate_and_dispatch\n@@ -191,17 +191,17 @@\n                 .qty_coin\n                 .ok_or(DispatchMapError::MissingQtyCoin)?,\n             InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {\n                 order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?\n             }\n         };\n \n         // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.\n-        if !canonical_amount.is_finite() || !multiplier.is_finite() {\n+        if  /* ~ changed by cargo-mutants ~ */canonical_amount.is_finite() || !multiplier.is_finite() {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:199:12: delete ! in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 13,
+        "line": 199
+      },
+      "start": {
+        "column": 12,
+        "line": 199
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ delete ! in validate_and_dispatch\n@@ -191,17 +191,17 @@\n                 .qty_coin\n                 .ok_or(DispatchMapError::MissingQtyCoin)?,\n             InstrumentKind::Perpetual | InstrumentKind::InverseFuture => {\n                 order_size.qty_usd.ok_or(DispatchMapError::MissingQtyUsd)?\n             }\n         };\n \n         // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.\n-        if !canonical_amount.is_finite() || !multiplier.is_finite() {\n+        if !canonical_amount.is_finite() ||  /* ~ changed by cargo-mutants ~ */multiplier.is_finite() {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:199:45: delete ! in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 46,
+        "line": 199
+      },
+      "start": {
+        "column": 45,
+        "line": 199
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace * with + in validate_and_dispatch\n@@ -198,17 +198,17 @@\n         // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.\n         if !canonical_amount.is_finite() || !multiplier.is_finite() {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n-        let contracts_implied = contracts as f64 * multiplier;\n+        let contracts_implied = contracts as f64 + /* ~ changed by cargo-mutants ~ */ multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:206:50: replace * with + in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "+",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 206
+      },
+      "start": {
+        "column": 50,
+        "line": 206
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace * with / in validate_and_dispatch\n@@ -198,17 +198,17 @@\n         // Fail closed on invalid numeric inputs to avoid NaN/Inf bypasses.\n         if !canonical_amount.is_finite() || !multiplier.is_finite() {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n-        let contracts_implied = contracts as f64 * multiplier;\n+        let contracts_implied = contracts as f64 / /* ~ changed by cargo-mutants ~ */ multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:206:50: replace * with / in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "/",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 206
+      },
+      "start": {
+        "column": 50,
+        "line": 206
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace / with % in validate_and_dispatch\n@@ -200,17 +200,17 @@\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n-        let delta = (contracts_implied - canonical_amount).abs() / denominator;\n+        let delta = (contracts_implied - canonical_amount).abs() % /* ~ changed by cargo-mutants ~ */ denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:66: replace / with % in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "%",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 208
+      },
+      "start": {
+        "column": 66,
+        "line": 208
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace / with * in validate_and_dispatch\n@@ -200,17 +200,17 @@\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n-        let delta = (contracts_implied - canonical_amount).abs() / denominator;\n+        let delta = (contracts_implied - canonical_amount).abs() * /* ~ changed by cargo-mutants ~ */ denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:66: replace / with * in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "*",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 208
+      },
+      "start": {
+        "column": 66,
+        "line": 208
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace - with + in validate_and_dispatch\n@@ -200,17 +200,17 @@\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n-        let delta = (contracts_implied - canonical_amount).abs() / denominator;\n+        let delta = (contracts_implied + /* ~ changed by cargo-mutants ~ */ canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:40: replace - with + in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "+",
+    "span": {
+      "end": {
+        "column": 41,
+        "line": 208
+      },
+      "start": {
+        "column": 40,
+        "line": 208
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace - with / in validate_and_dispatch\n@@ -200,17 +200,17 @@\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch {\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n-        let delta = (contracts_implied - canonical_amount).abs() / denominator;\n+        let delta = (contracts_implied / /* ~ changed by cargo-mutants ~ */ canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:40: replace - with / in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "/",
+    "span": {
+      "end": {
+        "column": 41,
+        "line": 208
+      },
+      "start": {
+        "column": 40,
+        "line": 208
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace || with && in validate_and_dispatch\n@@ -204,17 +204,17 @@\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n+            && /* ~ changed by cargo-mutants ~ */ delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n     Ok(ValidatedDispatch {\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:13: replace || with && in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "&&",
+    "span": {
+      "end": {
+        "column": 15,
+        "line": 212
+      },
+      "start": {
+        "column": 13,
+        "line": 212
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace || with && in validate_and_dispatch\n@@ -203,17 +203,17 @@\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n-            || !delta.is_finite()\n+            && /* ~ changed by cargo-mutants ~ */ !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:211:13: replace || with && in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "&&",
+    "span": {
+      "end": {
+        "column": 15,
+        "line": 211
+      },
+      "start": {
+        "column": 13,
+        "line": 211
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ delete ! in validate_and_dispatch\n@@ -202,17 +202,17 @@\n                 delta: f64::INFINITY,\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n-        if !contracts_implied.is_finite()\n+        if  /* ~ changed by cargo-mutants ~ */contracts_implied.is_finite()\n             || !delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:210:12: delete ! in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 13,
+        "line": 210
+      },
+      "start": {
+        "column": 12,
+        "line": 210
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ delete ! in validate_and_dispatch\n@@ -203,17 +203,17 @@\n             });\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n-            || !delta.is_finite()\n+            ||  /* ~ changed by cargo-mutants ~ */delta.is_finite()\n             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:211:16: delete ! in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 211
+      },
+      "start": {
+        "column": 16,
+        "line": 211
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace > with == in validate_and_dispatch\n@@ -204,17 +204,17 @@\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n+            || delta == /* ~ changed by cargo-mutants ~ */ CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n     Ok(ValidatedDispatch {\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with == in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 23,
+        "line": 212
+      },
+      "start": {
+        "column": 22,
+        "line": 212
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace > with < in validate_and_dispatch\n@@ -204,17 +204,17 @@\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n+            || delta < /* ~ changed by cargo-mutants ~ */ CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n     Ok(ValidatedDispatch {\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with < in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": "<",
+    "span": {
+      "end": {
+        "column": 23,
+        "line": 212
+      },
+      "start": {
+        "column": 22,
+        "line": 212
+      }
+    }
+  },
+  {
+    "diff": "--- crates/soldier_core/src/execution/dispatch_map.rs\n+++ replace > with >= in validate_and_dispatch\n@@ -204,17 +204,17 @@\n         }\n \n         let contracts_implied = contracts as f64 * multiplier;\n         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);\n         let delta = (contracts_implied - canonical_amount).abs() / denominator;\n \n         if !contracts_implied.is_finite()\n             || !delta.is_finite()\n-            || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE\n+            || delta >= /* ~ changed by cargo-mutants ~ */ CONTRACTS_AMOUNT_MATCH_TOLERANCE\n         {\n             metrics.record_mismatch_rejection();\n             return Err(DispatchMapError::ContractsAmountMismatch { delta });\n         }\n     }\n \n     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;\n     Ok(ValidatedDispatch {\n",
+    "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+    "function": {
+      "function_name": "validate_and_dispatch",
+      "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 224
+        },
+        "start": {
+          "column": 1,
+          "line": 165
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with >= in validate_and_dispatch",
+    "package": "soldier_core",
+    "replacement": ">=",
+    "span": {
+      "end": {
+        "column": 23,
+        "line": 212
+      },
+      "start": {
+        "column": 22,
+        "line": 212
+      }
+    }
+  }
+]

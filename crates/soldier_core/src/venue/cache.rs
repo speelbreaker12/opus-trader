@@ -75,6 +75,9 @@ pub struct InstrumentCache {
     refresh_errors_total: u64,
     /// Most recent cache age observed (for `instrument_cache_age_s` gauge).
     last_age_s: Option<f64>,
+    /// Running count of all cache lookups — hits + misses
+    /// (for `instrument_cache_lookups_total` counter).
+    lookups_total: u64,
     /// Pending TTL breach events for the caller to drain and log.
     pending_breaches: VecDeque<CacheTtlBreach>,
 }
@@ -94,6 +97,7 @@ impl InstrumentCache {
             stale_total: 0,
             refresh_errors_total: 0,
             last_age_s: None,
+            lookups_total: 0,
             pending_breaches: VecDeque::new(),
         }
     }
@@ -139,6 +143,7 @@ impl InstrumentCache {
         ttl_s: f64,
         now: Instant,
     ) -> Option<CacheLookupResult> {
+        self.lookups_total += 1;
         let entry = self.entries.get(instrument_id)?;
 
         self.hits_total += 1;
@@ -235,6 +240,11 @@ impl InstrumentCache {
         self.last_age_s
     }
 
+    /// Total number of cache lookups — hits + misses (for `instrument_cache_lookups_total` counter).
+    pub fn lookups_total(&self) -> u64 {
+        self.lookups_total
+    }
+
     /// Drain pending TTL breach events.
     ///
     /// Callers should log each `CacheTtlBreach` as a structured event
@@ -254,6 +264,7 @@ impl InstrumentCache {
     }
 }
 
+// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
 /// Returns `true` if OPEN intents should be blocked given the current `RiskState`.
 ///
 /// CONTRACT.md §2.2.3: PolicyGuard computes `TradingMode::ReduceOnly` when

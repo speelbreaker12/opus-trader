@@ -247,3 +247,39 @@ fn test_invalid_contract_multiplier_rejected() {
         Err(OrderSizeError::InvalidContractMultiplier(0.0))
     );
 }
+
+// ─── Output validation (fail-closed) ────────────────────────────────────
+
+/// Fail-closed: NaN notional from overflow must return Err.
+#[test]
+fn test_order_size_nan_notional_returns_err() {
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: f64::MAX,
+        index_price: f64::MAX,
+        contract_multiplier: None,
+    };
+    let result = build_order_size(&input);
+    assert!(result.is_err(), "NaN/Inf notional must be rejected");
+    assert!(
+        matches!(result, Err(OrderSizeError::InvalidNotional(_))),
+        "expected InvalidNotional, got {result:?}"
+    );
+}
+
+/// Fail-closed: overflow on contracts cast must return Err.
+#[test]
+fn test_order_size_overflow_contracts_returns_err() {
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: 1e30,
+        index_price: 50000.0,
+        contract_multiplier: Some(1e-20),
+    };
+    let result = build_order_size(&input);
+    assert!(result.is_err(), "i64 overflow must be rejected");
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsOverflow { .. })),
+        "expected ContractsOverflow, got {result:?}"
+    );
+}
