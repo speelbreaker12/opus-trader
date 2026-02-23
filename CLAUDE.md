@@ -208,6 +208,7 @@ except ValidationError as e:
 | Task | Required Skill | Why |
 |------|----------------|-----|
 | Review a plan | `/plan-review` | Ad-hoc reviews miss failure modes |
+| Full PR/change review (all 6 skills) | `/review-stack` (or `/6`) | Runs pr-review → failure-mode → strategic → contract → validator-audit → devils-advocate in one pass |
 | Review a PR | `/pr-review` | Systematic checklist prevents omissions |
 | Review risky code | `/failure-mode-review` | Traces implementation failure paths, not just happy paths |
 | Review architecture/ops | `/strategic-failure-review` | Systemic risks, hidden assumptions, operational/human factors |
@@ -220,6 +221,7 @@ except ValidationError as e:
 | Check contracts (fast) | `/contract-review` | Fail-open hazard filter + workflow alignment (subsumes `/audit`) |
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
 | Git workflow (branches, merges, worktrees) | `/git` | Never commit on main, per-file diff before --theirs, worktree isolation, safety-biased conflict resolution |
+| After completing any task | `/code-review-expert` | SOLID violations, security risks, code quality — run automatically after each implementation task |
 
 **Process:**
 ```

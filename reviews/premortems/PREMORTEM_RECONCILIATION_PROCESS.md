@@ -1,6 +1,6 @@
 # Premortem and Implementation Reconciliation Process
 
-> Version 3.0 (2026-02-23). Restructured into operational layers for agent efficiency.
+> Version 3.1 (2026-02-23). Proof graph V2 pipeline; cross-document consistency fixes.
 >
 > Multi-agent workflows for (A) producing high-quality story premortems and (B) retroactively auditing existing code against those premortems.
 > Designed and validated during Slice 1 (13 stories, 4 agent teams, 3 review rounds).
@@ -14,14 +14,14 @@
 | Review anti-patterns and cross-reference chains | [PREMORTEM_RECON_ANTIPATTERNS.md](PREMORTEM_RECON_ANTIPATTERNS.md) |
 | Review metrics, lessons, rationale, worked examples | [PREMORTEM_RECON_METRICS.md](PREMORTEM_RECON_METRICS.md) |
 
-## Document Structure (v3.0)
+## Document Structure (v3.1)
 
 | Document | Purpose | Audience | ~Lines |
 |----------|---------|----------|--------|
-| **This file** | Index + Appendix A (R1 prompt, source of truth) | All | ~400 |
-| **RUNBOOK** | Operator instructions, phase-by-phase execution, named gates | Agents executing phases | ~1030 |
+| **This file** | Index + Appendix A (R1 prompt, source of truth) | All | ~430 |
+| **RUNBOOK** | Operator instructions, phase-by-phase execution, named gates | Agents executing phases | ~1045 |
 | **POLICY** | Normative rules: verdicts, gates, schemas, scope | Anyone needing "what's the rule?" | ~500 |
-| **ANTIPATTERNS** | 26 anti-patterns, cross-ref chains, gate coverage | Reviewers, auditors | ~400 |
+| **ANTIPATTERNS** | 26 anti-patterns, cross-ref chains, gate coverage | Reviewers, auditors | ~390 |
 | **METRICS** | Pilot data, lessons, rationale, worked examples, changelog | Process designers, retrospectives | ~630 |
 
 **Core rule for format decisions**: If the artifact directly controls a gate or pass-flip → JSON-primary. If it primarily supports human reasoning → markdown + JSON sidecar.
@@ -61,10 +61,11 @@ All phase artifacts are validated against JSON Schema files in `specs/schemas/re
 
 ## Version History
 
-See [PREMORTEM_RECON_METRICS.md § Changelog](PREMORTEM_RECON_METRICS.md#changelog) for detailed version history (v1.2 through v3.0).
+See [PREMORTEM_RECON_METRICS.md § Changelog](PREMORTEM_RECON_METRICS.md#changelog) for detailed version history (v1.2 through v3.1).
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 3.1 | 2026-02-23 | Proof graph V2 (60 rules, 319 tests) + RECONCILED_UNIT_ONLY + cross-doc consistency fixes |
 | 3.0 | 2026-02-23 | 3-layer split + JSON schemas + hard gates + mechanical validators |
 | 2.1 | 2026-02-23 | Step supervisor mapping, tiered anti-patterns, RECON-CLEAN gate |
 | 1.8 | 2026-02-22 | Anti-patterns #16-#19, 6-category fail-closed, AT semantic match |

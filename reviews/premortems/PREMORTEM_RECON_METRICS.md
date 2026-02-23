@@ -503,7 +503,7 @@ V1+V2 delivers per-story `proof_graph.json` with:
 - **Schema**: Frozen dataclasses with `from_dict()` + deny-unknown-fields, type-safe `_require_bool`/`_require_int` helpers (`schema_version: 1` and `2`)
 - **Validator**: 60 rules (`python/proof_graph/validate.py --strict`) -- enforcement-critical at pass-flip
 - **Scaffolder**: `python/proof_graph/scaffold.py` generates skeleton from prd.json + CONTRACT.md
-- **Gate integration**: `prd_set_pass.sh` validates with `--strict` (exit 10 on failure)
+- **Gate integration**: `prd_set_pass.sh` validates with `--strict` (exit 1 on validation failure; exit 20 on trading halt)
 - **Legacy exemption**: `plans/proof_graph_exempt.txt` grandfathers existing stories; shrinks via reconciliation
 - **Stdlib-only**: Zero external dependencies
 
@@ -525,7 +525,7 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 
 **Proposed implementation**: Add a S9 "Post-Rejection Analysis" section to the premortem template. During reconciliation, Phase R1 audits the downstream effects as Task 8.5 (between design-pattern conformance and remediation list).
 
-**Blockers**: Expands the reconciliation scope significantly (~doubles R1 audit work per AT). Better introduced as a dedicated process for HIGH `loss_mode` stories only, or as a separate Phase R8.
+**Blockers**: Expands the reconciliation scope significantly (~doubles R1 audit work per AT). Better introduced as a dedicated process for HIGH `loss_mode` stories only, or as a dedicated post-reconciliation phase.
 
 ---
 
@@ -582,7 +582,7 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 - Per-story `proof_graph.json` with stdlib-only Python validator (18 rules, `--strict` enforcement at pass-flip)
 - Scaffolder (`scaffold.py`), deny-unknown-fields schema, `schema_version: 1`
 - Legacy exemption list (`plans/proof_graph_exempt.txt`)
-- `prd_set_pass.sh` gate integration (exit 10)
+- `prd_set_pass.sh` gate integration (V1: exit 10; V2: exit 1 on failure, exit 20 on trading halt)
 - Appendix C roadmap item marked DONE (V1)
 
 ### v1.6
