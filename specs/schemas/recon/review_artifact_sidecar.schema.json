@@ -35,6 +35,7 @@
     "review_type": {
       "type": "string",
       "enum": [
+        "external",
         "contract_review",
         "strategic_review",
         "wiring_audit",
@@ -48,6 +49,15 @@
       "enum": ["STORY_SCOPE", "FIX_DIFF_AT_REGRESSION"]
     },
     "tool": { "type": ["string", "null"] },
+    "model": { "type": "string", "minLength": 1 },
+    "prompt_style": {
+      "type": "string",
+      "enum": ["generic", "enriched"]
+    },
+    "cycle": {
+      "type": "string",
+      "enum": ["C1", "C2"]
+    },
     "phase_equivalent": { "type": "string", "minLength": 1 },
     "citations_count": { "type": "integer", "minimum": 0 },
     "pre_existing_citations_count": { "type": "integer", "minimum": 0 },

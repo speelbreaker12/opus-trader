@@ -71,7 +71,7 @@ else
 fi
 
 # ---- Check 2: premortem_gate.sh passes ----
-premortem_gate_exit_code=-1
+premortem_gate_exit_code=127
 if [[ -x "plans/premortem_gate.sh" ]]; then
   if plans/premortem_gate.sh "$story_id" >/dev/null 2>&1; then
     premortem_gate_exit_code=0
@@ -88,14 +88,15 @@ elif [[ -f "plans/premortem_gate.sh" ]]; then
     reasons+=("premortem_gate.sh failed with exit code $premortem_gate_exit_code")
   fi
 else
-  # Script doesn't exist — graceful degradation
-  premortem_gate_exit_code=-1
-  echo "WARN: plans/premortem_gate.sh not found, skipping gate check" >&2
+  # Script doesn't exist — fail-closed (missing gate = cannot validate)
+  premortem_gate_exit_code=127
+  reasons+=("premortem_gate.sh not found: cannot validate section quality")
+  echo "FAIL: plans/premortem_gate.sh not found — fail-closed" >&2
 fi
 
 # ---- Check 3: STOPLIGHT != RED ----
-stoplight="UNKNOWN"
-stoplight_is_red=false
+stoplight="RED"
+stoplight_is_red=true
 if [[ "$premortem_exists" == "true" ]]; then
   stoplight_match="$(grep -oE '\*\*STOPLIGHT\*\*:\s*(GREEN|YELLOW|RED)' "$PREMORTEM_PATH" | head -1 || true)"
   if [[ -n "$stoplight_match" ]]; then
@@ -103,11 +104,19 @@ if [[ "$premortem_exists" == "true" ]]; then
     if [[ "$stoplight" == "RED" ]]; then
       stoplight_is_red=true
       reasons+=("STOPLIGHT is RED")
+    else
+      stoplight_is_red=false
     fi
   else
-    stoplight="MISSING"
-    reasons+=("STOPLIGHT line not found in premortem")
+    # Fail-closed: missing stoplight → treat as RED
+    stoplight="RED"
+    stoplight_is_red=true
+    reasons+=("STOPLIGHT line not found in premortem (defaulting to RED — fail-closed)")
   fi
+else
+  # No premortem → RED
+  stoplight="RED"
+  stoplight_is_red=true
 fi
 
 # ---- Check 4: AT ownership conflicts ----
@@ -125,23 +134,33 @@ if [[ "$premortem_exists" == "true" ]]; then
   done < <(echo "$s1_content" | grep -E '^\|' | grep -oE 'AT-[0-9]+' | sort -u)
 
   # Check each AT against other premortems
+  # Build structured conflict details: {at_id, claiming_stories[]}
+  declare -A at_claimants
   if [[ ${#my_ats[@]} -gt 0 ]]; then
     for at_id in "${my_ats[@]}"; do
-      # Search other premortems (not this story's)
+      at_claimants["$at_id"]="$story_id"
       for other_pm in reviews/premortems/*_premortem.md; do
         [[ "$other_pm" == "$PREMORTEM_PATH" ]] && continue
         [[ -f "$other_pm" ]] || continue
 
-        # Extract other story's section 1 content
         other_s1="$(sed -n '/^## 1)/,/^## [0-9]/{/^## [0-9]/!p;}' "$other_pm" 2>/dev/null || true)"
 
-        # Check if this AT appears in the other story's section 1 table rows
         if echo "$other_s1" | grep -E '^\|' | grep -qF "$at_id" 2>/dev/null; then
           other_story="$(basename "$other_pm" _premortem.md)"
-          ownership_conflicts=$((ownership_conflicts + 1))
-          ownership_conflict_details+=("$at_id claimed by both $story_id and $other_story")
+          at_claimants["$at_id"]="${at_claimants[$at_id]},$other_story"
         fi
       done
+    done
+
+    # Build conflict entries for ATs claimed by 2+ stories
+    for at_id in "${!at_claimants[@]}"; do
+      claimants="${at_claimants[$at_id]}"
+      # Count commas to detect multiple claimants
+      comma_count="$(echo "$claimants" | tr -cd ',' | wc -c | tr -d '[:space:]')"
+      if [[ "$comma_count" -gt 0 ]]; then
+        ownership_conflicts=$((ownership_conflicts + 1))
+        ownership_conflict_details+=("{\"at_id\":\"$at_id\",\"claiming_stories\":[$(echo "$claimants" | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')]}")
+      fi
     done
   fi
 
@@ -197,26 +216,14 @@ head_commit="$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"
 created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 if [[ "$json_mode" == "true" ]]; then
-  # Build conflict details JSON array
+  # Build conflict details JSON array (structured objects)
   conflict_json="[]"
   if [[ ${#ownership_conflict_details[@]} -gt 0 ]]; then
+    # Each entry is already a JSON object string from the detection loop
+    conflict_json="[$(IFS=','; echo "${ownership_conflict_details[*]}")]"
+    # Validate via jq if available
     if command -v jq >/dev/null 2>&1; then
-      conflict_json="$(printf '%s\n' "${ownership_conflict_details[@]}" | jq -R . | jq -s .)"
-    else
-      # Fallback: manual JSON array construction
-      conflict_json="["
-      first=true
-      for detail in "${ownership_conflict_details[@]}"; do
-        if [[ "$first" == "true" ]]; then
-          first=false
-        else
-          conflict_json+=","
-        fi
-        # Escape double quotes in the detail string
-        escaped="$(echo "$detail" | sed 's/"/\\"/g')"
-        conflict_json+="\"$escaped\""
-      done
-      conflict_json+="]"
+      conflict_json="$(echo "$conflict_json" | jq '.')"
     fi
   fi
 

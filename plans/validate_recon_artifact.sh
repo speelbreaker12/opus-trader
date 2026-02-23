@@ -174,7 +174,7 @@ case "$schema_name" in
     required_fields=("story_id" "skills_run" "total_blockers" "premortem_crosscheck")
     ;;
   review_artifact_sidecar)
-    required_fields=("story_id" "review_type" "review_basis" "finding_counts" "basis_line_present")
+    required_fields=("story_id" "review_type" "review_basis" "tool" "phase_equivalent" "citations_count" "pre_existing_citations_count" "finding_counts" "basis_line_present")
     ;;
   r3_external_manifest)
     required_fields=("story_id" "cycle" "review_basis" "tools" "validated_preexisting_enforcement_citation" "validated_preexisting_test_citation" "validation_status")
@@ -210,6 +210,46 @@ case "$schema_name" in
       case "$basis" in
         STORY_SCOPE|FIX_DIFF_AT_REGRESSION) ;;
         *) errors+=("review_basis '$basis' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION") ;;
+      esac
+    fi
+    ;;
+  review_artifact_sidecar)
+    # review_type must be one of the allowed values
+    rt="$(jq -re '.review_type // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$rt" ]]; then
+      case "$rt" in
+        external|contract_review|strategic_review|wiring_audit|code_review|devils_advocate|debt_validation) ;;
+        *) errors+=("review_type '$rt' not in allowed values") ;;
+      esac
+    fi
+    # review_basis must be one of the allowed values
+    rb="$(jq -re '.review_basis // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$rb" ]]; then
+      case "$rb" in
+        STORY_SCOPE|FIX_DIFF_AT_REGRESSION) ;;
+        *) errors+=("review_basis '$rb' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION") ;;
+      esac
+    fi
+    # finding_counts must have P0, P1, P2, INFO
+    for key in P0 P1 P2 INFO; do
+      if ! jq -e ".finding_counts.$key != null" "$artifact_path" >/dev/null 2>&1; then
+        errors+=("finding_counts missing required key: $key")
+      fi
+    done
+    # cycle must be C1 or C2 (if present)
+    cyc="$(jq -re '.cycle // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$cyc" ]]; then
+      case "$cyc" in
+        C1|C2) ;;
+        *) errors+=("cycle '$cyc' not in allowed values: C1, C2") ;;
+      esac
+    fi
+    # prompt_style must be generic or enriched (if present)
+    ps="$(jq -re '.prompt_style // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$ps" ]]; then
+      case "$ps" in
+        generic|enriched) ;;
+        *) errors+=("prompt_style '$ps' not in allowed values: generic, enriched") ;;
       esac
     fi
     ;;

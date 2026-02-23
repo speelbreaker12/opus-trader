@@ -361,14 +361,15 @@ case "$STEP" in
       fi
     done
     if [[ "$evidence_found" == "false" ]]; then
-      # Fallback: check for any preflight/recon/evidence artifact
-      preflight_artifacts="$(find "$story_art" -maxdepth 2 -type f \( -name '*preflight*' -o -name '*recon*' -o -name '*evidence*' -o -name '*reconciliation*' \) 2>/dev/null | wc -l | tr -d '[:space:]')"
-      if [[ "$preflight_artifacts" -eq 0 ]]; then
-        echo "WF_STEP: no evidence ledger found for $STORY" >&2
-        echo "  Expected: ${STORY}_reconciliation.md or evidence_ledger.md in $story_art/" >&2
-        echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
-        exit 6
-      fi
+      # No canonical evidence ledger found — fail hard (no wildcard fallback)
+      echo "WF_STEP: no evidence ledger found for $STORY" >&2
+      echo "  Expected one of:" >&2
+      echo "    - $story_art/${STORY}_reconciliation.md" >&2
+      echo "    - $story_art/${STORY}_reconciliation.json" >&2
+      echo "    - $story_art/evidence_ledger.json" >&2
+      echo "    - $story_art/evidence_ledger.md" >&2
+      echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
+      exit 6
     fi
 
     review_count=0
@@ -400,7 +401,6 @@ case "$STEP" in
       changed_files="$(git diff --name-only "$cycle1_head"..HEAD 2>/dev/null || true)"
       if [[ -z "$changed_files" ]]; then
         # Fallback: check working tree + staged separately with newline separator
-        local wt_changes staged_changes
         wt_changes="$(git diff --name-only 2>/dev/null || true)"
         staged_changes="$(git diff --cached --name-only 2>/dev/null || true)"
         changed_files="${wt_changes}${wt_changes:+$'\n'}${staged_changes}"

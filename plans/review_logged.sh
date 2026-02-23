@@ -553,6 +553,7 @@ esac
 prov_cycle="C1"
 prov_phase="R3"
 prov_basis="STORY_SCOPE (Cycle 1)"
+prov_basis_short="STORY_SCOPE"
 if [[ "$mode" == "base" && -n "$base" ]]; then
   # Check if this looks like a Cycle 2 review (fix diff after cycle1)
   cycle1_receipt="$root/.wf/receipts/$story/03_cycle1.json"
@@ -560,6 +561,7 @@ if [[ "$mode" == "base" && -n "$base" ]]; then
     prov_cycle="C2"
     prov_phase="R7d"
     prov_basis="FIX_DIFF + AT_REGRESSION (Cycle 2)"
+    prov_basis_short="FIX_DIFF_AT_REGRESSION"
   fi
 fi
 
@@ -696,7 +698,7 @@ if [[ "$gate_exit" -eq 0 ]]; then
   "markdown_path": "$outfile",
   "story_id": "$story",
   "review_type": "external",
-  "review_basis": "$prov_basis",
+  "review_basis": "$prov_basis_short",
   "phase_equivalent": "$prov_phase",
   "tool": "$tool",
   "model": "$model_name",
@@ -708,12 +710,13 @@ if [[ "$gate_exit" -eq 0 ]]; then
   "finding_counts": {
     "P0": $p0,
     "P1": $p1,
-    "P2": $p2
+    "P2": $p2,
+    "INFO": 0
   }
 }
 SIDECAR_EOF
 
-    if ! "$validator" review_artifact_sidecar "$sidecar_file" 2>/dev/null; then
+    if ! "$validator" review_artifact_sidecar "$sidecar_file"; then
       echo "HARD_GATE_FAIL: Sidecar validation failed for $sidecar_file" >&2
       echo "HARD_GATE: SIDECAR_VALIDATION_FAILED (exit 6)" >> "$outfile"
       gate_exit=6
