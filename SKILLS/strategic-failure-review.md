@@ -456,12 +456,20 @@ Fix: either preserve the invariant (exit 0 = all ran) or update all
      callers to understand the new semantics + document the change
 ```
 
+**Must-list invariants for execution/dispatch code:**
+- "CancelOnly intents must never be blocked by metadata, sizing, or consistency failures"
+- "OPEN intents are the most restrictive — all gates apply"
+- "Close/Hedge bypass OPEN-only gates but still pass through shared gates"
+- "Single chokepoint: all dispatch routes through build_order_intent()"
+- "Metrics counters reflect all paths (no early-return gaps that undercount)"
+
 Checklist:
 - [ ] **List >=5 invariants** from the existing system before reviewing the change
 - [ ] **Trace each invariant** through the change — is it preserved, weakened, or broken?
 - [ ] **New invariants documented?** Does the change introduce invariants that only exist in the author's head?
 - [ ] **New invariants enforced?** Prose invariants ("this should never happen") are worth zero. Only tested/asserted invariants count.
 - [ ] **Caller impact**: If an invariant's meaning changes (e.g., "passed" now includes "skipped"), are all callers updated?
+- [ ] **Intent-class invariant sweep**: For every new function in the dispatch path, verify that each intent class (Open, Close, Hedge, CancelOnly) preserves its expected gate-skip semantics. New code that runs before the intent-class check can violate per-class invariants.
 
 ---
 

@@ -192,6 +192,7 @@ For any counters, lists, or aggregations:
 - [ ] Trace all additions AND removals
 - [ ] Run the math with concrete example values
 - [ ] Check: can the count go negative? Exceed expected max?
+- [ ] **Early-return metric gap**: For each counter, enumerate ALL code paths that should update it. If any early-return or error path bypasses the counter increment, ask: "Is the counter underreporting? Will monitoring dashboards miss this class of event?"
 
 Example trace:
 ```
@@ -205,6 +206,11 @@ valid_slices starts at [0, 1, 2]
 ### 6. Concrete Value Walkthrough (HIGHEST SIGNAL — always do this)
 
 Pick specific concrete values and trace execution step by step. This catches more bugs than any other technique.
+
+**Enum variant sweep (MANDATORY for dispatch/intent code):** If the function takes an enum as input (e.g., `ChokeIntentClass`, `RiskState`, `TradingMode`), you MUST walk at least one scenario per variant — not just the "interesting" ones. The bug you miss is always in the variant you didn't trace. Specifically:
+- List all variants of the primary enum input
+- For each variant, ask: "Does this function do anything special for this variant? What if the input is garbage but the variant is X?"
+- CancelOnly/Close/Hedge intents have different gate-skip semantics than Open — always trace them separately
 
 ```
 Scenario: slice 2, items A and B, roadmap exists then deleted
@@ -419,6 +425,8 @@ For shell scripts, check these common silent failures:
 | Regex over-matching | `startswith("S1-")` matches `S10-` | Use anchored regex with `$` |
 | `jq -r` null string | `.missing` returns literal `"null"` | Use `// empty` or `-e` flag |
 | Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
+| Single-variant walkthrough | Only trace Open through new dispatch function; miss CancelOnly/Close/Hedge | Walk at least one scenario per enum variant of primary input |
+| Early-return metric gap | Error path returns before incrementing rejection counter | For each counter, enumerate all paths; check early-returns bypass |
 
 ### 13. Dead Code Detection
 
