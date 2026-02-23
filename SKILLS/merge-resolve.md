@@ -91,11 +91,39 @@ python3 -m json.tool plans/prd.json > /dev/null
 jq '.tasks[].id' plans/prd.json | sort | uniq -d
 ```
 
+### 3.5) Before blanket `--theirs` or `--ours`: diff each file
+
+**Never blindly accept one side for all conflicts.** In S5-004, blanket `--theirs` on 8 files silently destroyed the enriched prompt infrastructure and detailed resolution prompt (2/8 files had unique branch work).
+
+```bash
+merge_base=$(git merge-base HEAD MERGE_HEAD)
+for f in $(git diff --name-only --diff-filter=U); do
+  ours=$(git diff "$merge_base" HEAD -- "$f" | wc -l | tr -d ' ')
+  theirs=$(git diff "$merge_base" MERGE_HEAD -- "$f" | wc -l | tr -d ' ')
+  if [ "$ours" -eq 0 ]; then
+    echo "SAFE --theirs: $f"
+  elif [ "$ours" -gt 20 ] && [ "$theirs" -lt "$ours" ]; then
+    echo "MANUAL MERGE: $f  (ours=$ours theirs=$theirs — branch has unique work!)"
+  else
+    echo "CHECK FIRST:  $f  (ours=$ours theirs=$theirs)"
+  fi
+done
+```
+
+| Ours diff | Theirs diff | Action |
+|-----------|-------------|--------|
+| 0 | Any | `--theirs` safe |
+| < 20 | Similar | Likely convergent — verify then `--theirs` |
+| > 20, >> theirs | Small | **Branch has unique work — manual merge** |
+| Large | Large | Both changed — manual merge |
+
+See also: `/branch-hygiene` skill for broader workflow discipline.
+
 ## Anti-patterns to Avoid
 
 | Anti-pattern | Why it's dangerous |
 |--------------|-------------------|
-| Blindly accept "ours" or "theirs" | May lose critical safety logic |
+| Blindly accept "ours" or "theirs" | May lose critical safety logic or branch-specific tooling (S5-004: lost enriched prompt infra) |
 | Resolve safety code without reading both | Could introduce fail-open bugs |
 | Skip verification "it's just a merge" | Merges can break invariants |
 | Lose AT references during resolution | Breaks contract traceability |
