@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R1-agent (reconciliation)
+  cycle: recon-v1.x (original)
+  phase_equivalent: R1
+artifact_type: evidence_ledger_batch
+scope: S1-002, S1-011, S1-003, S1-006
+---
+
 # INSTRUMENT BATCH RECONCILIATION AUDIT
 ## Stories: S1-002, S1-011, S1-003, S1-006
 ## Base Branch: main | HEAD: 1b85f2522c3ee0b9e6af2349a26f9c0f40c98976

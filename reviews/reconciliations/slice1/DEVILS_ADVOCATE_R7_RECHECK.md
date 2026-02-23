@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R7e-devils-advocate
+  cycle: recon-v1.x (original)
+  phase_equivalent: R7e
+artifact_type: mutation_analysis_recheck
+scope: slice 1 (recheck — all closed)
+---
+
 # Devils Advocate R7 Recheck: Gap Closure Verification
 
 **Date**: 2026-02-21

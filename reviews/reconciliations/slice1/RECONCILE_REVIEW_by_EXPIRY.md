@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R3-cross-reviewer
+  cycle: recon-v1.x (original)
+  phase_equivalent: R3
+artifact_type: cross_review
+scope: expiry domain
+---
+
 # Phase R3 Cross-Review: EXPIRY Reviewer
 
 **Reviewer domain**: EXPIRY (lifecycle management, CI gates)

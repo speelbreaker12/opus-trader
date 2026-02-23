@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R7c-wiring-audit
+  cycle: recon-v1.x (original)
+  phase_equivalent: R7c
+artifact_type: wiring_audit
+scope: slice 1 production callsites
+---
+
 # LSP Call Chain Check — Slice 1 Production Wiring Audit
 
 **Date**: 2026-02-21
