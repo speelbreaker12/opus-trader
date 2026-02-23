@@ -109,8 +109,8 @@ def scan_file(file_path: str) -> list[dict]:
                         "severity": severity,
                         "match": match.group(0)[:40] + "..." if len(match.group(0)) > 40 else match.group(0),
                     })
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"secret-scanner: failed to scan '{file_path}': {e}", file=sys.stderr)
     return findings
 
 
