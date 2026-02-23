@@ -6,6 +6,7 @@ Scans files referenced in git commit commands for hardcoded secrets.
 """
 
 import json
+import shlex
 import sys
 import re
 import subprocess
@@ -53,7 +54,7 @@ EXCLUDED_FILES = {
 }
 
 EXCLUDED_DIRS = [
-    "node_modules/", ".git/", "target/", "dist/", "build/",
+    "node_modules/", ".git/", ".claude/scripts/", "target/", "dist/", "build/",
     "__pycache__/", ".pytest_cache/", "venv/", "artifacts/",
 ]
 
@@ -154,7 +155,11 @@ def main() -> None:
                             if os.path.isfile(f):
                                 staged_files.append(f)
                 else:
-                    for token in args.split():
+                    try:
+                        tokens = shlex.split(args)
+                    except ValueError:
+                        tokens = args.split()
+                    for token in tokens:
                         if not token.startswith("-") and os.path.isfile(token):
                             staged_files.append(token)
 

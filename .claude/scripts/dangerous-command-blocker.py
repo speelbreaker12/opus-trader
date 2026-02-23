@@ -24,8 +24,8 @@ catastrophic_patterns = [
     (r">\s*/dev/sd[a-z]", "direct disk write"),
     (r"\bchmod\s+(-R\s+)?777\s+/", "chmod 777 on root"),
     (r"\bchown\s+(-R\s+)?.*\s+/$", "chown on root directory"),
-    (r"\bgit\s+push\s+.*--force\s", "git force push (use --force-with-lease)"),
-    (r"\bgit\s+reset\s+--hard\s+origin/main", "git reset --hard origin/main"),
+    (r"\bgit\s+push\s+.*--force(?!-with-lease)(\s|$)", "git force push (use --force-with-lease)"),
+    (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard"),
 ]
 
 for pattern, desc in catastrophic_patterns:
@@ -37,15 +37,15 @@ for pattern, desc in catastrophic_patterns:
 
 # === LEVEL 2: CRITICAL PATH PROTECTION ===
 critical_paths = [
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?\.claude(/|$|\s)", "Claude Code configuration"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?\.git(/|$|\s)", "Git repository"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?[^\s]*\.env\b", "Environment variables"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?[^\s]*Cargo\.toml\b", "Rust manifest"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?[^\s]*Cargo\.lock\b", "Rust lock file"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?\.wf(/|$|\s)", "Workflow receipt state"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?specs(/|$|\s)", "Contract specs directory"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?specs/CONTRACT\.md\b", "CONTRACT.md"),
-    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?plans/prd\.json\b", "PRD state file"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?\.claude['\"]?(/|$|\s)", "Claude Code configuration"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?\.git['\"]?(/|$|\s)", "Git repository"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?[^\s'\"]*\.env['\"]?(\s|$)", "Environment variables"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?[^\s'\"]*Cargo\.toml['\"]?(\s|$)", "Rust manifest"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?[^\s'\"]*Cargo\.lock['\"]?(\s|$)", "Rust lock file"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?\.wf['\"]?(/|$|\s)", "Workflow receipt state"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?specs['\"]?(/|$|\s)", "Contract specs directory"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?specs/CONTRACT\.md['\"]?(\s|$)", "CONTRACT.md"),
+    (r"\b(rm|mv)\s+(-[rfRF]+\s+)?['\"]?plans/prd\.json['\"]?(\s|$)", "PRD state file"),
 ]
 
 for pattern, desc in critical_paths:

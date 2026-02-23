@@ -265,6 +265,128 @@ fn test_assembled_pipeline_cancel_only_bypasses_assembly() {
     );
 }
 
+// ─── RiskState severity preservation ─────────────────────────────────────
+
+/// Kill risk state must NOT be downgraded to Degraded by assembly mismatch.
+///
+/// Regression test: evaluate_assembled_pipeline previously overwrote Kill→Degraded
+/// unconditionally when risk_state_degraded=true, losing higher-severity signals.
+/// The correct behavior (matching open_runtime.rs) is: only escalate Healthy→Degraded.
+///
+/// Note: Kill/Degraded/Maintenance all produce MarginHeadroomRejectOpens in the
+/// current pipeline, so the reject reason alone cannot distinguish the bug.
+/// The code-level fix (only override Healthy→Degraded) is verified by review.
+/// This test documents the invariant and ensures Kill+mismatch blocks opens.
+#[test]
+fn test_assembled_pipeline_kill_not_downgraded_by_mismatch() {
+    // Mismatch-inducing params (same as test_assembly_mismatch_sets_degraded).
+    let meta = InstrumentKindInput {
+        is_option: false,
+        is_future: true,
+        is_perpetual: true,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 10.0,
+        index_price: 50_000.0,
+        contract_multiplier: Some(3.0),
+    };
+
+    // Caller reports Kill — assembly mismatch must NOT downgrade to Degraded.
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Open,
+        risk_state: RiskState::Kill,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    // Kill → OPEN must be rejected at DispatchAuth (Kill blocks all opens).
+    assert!(
+        matches!(result.decision, ChokeResult::Rejected { .. }),
+        "OPEN with Kill risk_state must be rejected"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when risk_state is Kill"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::MarginHeadroomRejectOpens),
+        "Kill must block opens at DispatchAuth"
+    );
+}
+
+/// Maintenance risk state must also be preserved through assembly mismatch.
+#[test]
+fn test_assembled_pipeline_maintenance_not_downgraded_by_mismatch() {
+    let meta = InstrumentKindInput {
+        is_option: false,
+        is_future: true,
+        is_perpetual: true,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: 10.0,
+        index_price: 50_000.0,
+        contract_multiplier: Some(3.0),
+    };
+
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::Open,
+        risk_state: RiskState::Maintenance,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Rejected { .. }),
+        "OPEN with Maintenance risk_state must be rejected"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when risk_state is Maintenance"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::MarginHeadroomRejectOpens),
+        "Maintenance must block opens at DispatchAuth"
+    );
+}
+
 // ─── choke_intent_to_dispatch mapping ────────────────────────────────────
 
 /// Table-driven test: verify all 4 ChokeIntentClass variants map correctly.

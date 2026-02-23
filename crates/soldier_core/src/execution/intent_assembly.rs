@@ -205,8 +205,12 @@ pub fn evaluate_assembled_pipeline(
     };
 
     // Step 3: Determine effective risk state.
-    // If assembly detected a mismatch, override to Degraded (fail-closed).
-    let effective_risk_state = if assembled.risk_state_degraded {
+    // If assembly detected a mismatch AND caller was Healthy, override to Degraded.
+    // If caller was already Kill/Maintenance/Degraded, preserve the higher severity.
+    // Matches the open_runtime.rs pattern: only escalate Healthy → Degraded.
+    let effective_risk_state = if assembled.risk_state_degraded
+        && remaining.risk_state == RiskState::Healthy
+    {
         RiskState::Degraded
     } else {
         remaining.risk_state
