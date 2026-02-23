@@ -19,7 +19,7 @@ use crate::risk::{
 };
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, LifecycleIntent, VenueCapabilities, evaluate_capabilities,
-    evaluate_expiry_guard,
+    evaluate_expiry_guard, opens_blocked,
 };
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -241,7 +241,7 @@ pub fn evaluate_base_gates(
     // Mirror chokepoint early-exit: CancelOnly bypasses all gates.
     // OPEN + !Healthy is rejected by the chokepoint's dispatch_auth gate.
     let dispatch_auth_short_circuit = input.intent_class == ChokeIntentClass::CancelOnly
-        || (input.intent_class == ChokeIntentClass::Open && input.risk_state != RiskState::Healthy);
+        || (input.intent_class == ChokeIntentClass::Open && opens_blocked(input.risk_state));
 
     if dispatch_auth_short_circuit {
         // CancelOnly: all gates pass, chokepoint handles approval.

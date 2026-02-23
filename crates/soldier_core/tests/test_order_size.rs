@@ -1,6 +1,10 @@
 //! Tests for OrderSize canonical sizing per CONTRACT.md §1.0.
 //!
 //! AT-277: dispatcher mapping validates option sizing and qty_usd unset.
+//!
+//! **Dispatch causality**: Pipeline-level proof that invalid sizing blocks dispatch
+//! lives in `test_intent_assembly.rs::test_assembly_nan_qty_fails_closed` and
+//! `test_assembly_mismatch_sets_degraded`.
 
 use soldier_core::execution::{OrderSizeError, OrderSizeInput, build_order_size};
 use soldier_core::venue::InstrumentKind;

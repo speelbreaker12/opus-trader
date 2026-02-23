@@ -12,6 +12,7 @@ pub mod gate;
 pub mod gate_outcome;
 pub mod gates;
 pub mod group;
+pub mod intent_assembly;
 pub mod inventory_skew;
 pub mod label;
 pub mod open_runtime;
@@ -54,6 +55,10 @@ pub use group::{
     AtomicGroup, GroupConfig, GroupError, GroupLock, GroupPersistence, GroupState,
     GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
     persist_before_dispatch, try_acquire_group_lock,
+};
+pub use intent_assembly::{
+    AssembledPipelineParams, AssembledSizing, AssemblySizingError, SizingParams,
+    assemble_sizing, evaluate_assembled_pipeline,
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,

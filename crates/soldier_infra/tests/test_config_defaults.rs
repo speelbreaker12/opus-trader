@@ -3,6 +3,9 @@
 //! CONTRACT.md acceptance tests covered:
 //! - AT-341: missing instrument_cache_ttl_s and mm_util_kill use Appendix A defaults
 //! - AT-040: missing non-Appendix-A parameter fails closed
+//!
+//! **Dispatch causality**: Production callsite for resolve_config_value is tested in
+//! `test_config_init.rs` via `build_gate_config_from_raw()`.
 
 use soldier_infra::config::{
     ALL_PARAMS, ConfigParam, MissingConfigError, appendix_a_default, param_name,

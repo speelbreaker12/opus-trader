@@ -3,6 +3,9 @@
 //! CONTRACT.md §1.0.X (Instrument Metadata Freshness):
 //! - AT-104: stale metadata blocks OPEN, allows CLOSE/HEDGE/CANCEL
 //! - instrument_cache_age_s vs instrument_cache_ttl_s comparison
+//!
+//! **Dispatch causality**: Pipeline-level proof that Degraded blocks OPEN dispatch
+//! lives in `test_intent_pipeline.rs::test_at104_degraded_blocks_open_at_chokepoint`.
 
 use std::time::{Duration, Instant};
 
