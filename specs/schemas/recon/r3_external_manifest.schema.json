@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "specs/schemas/recon/r3_external_manifest.v2.schema.json",
+  "title": "R3 External Manifest (Cycle 1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provenance",
+    "story_id",
+    "slice_id",
+    "phase",
+    "cycle",
+    "required_combinations",
+    "reviews",
+    "validation"
+  ],
+  "properties": {
+    "provenance": { "$ref": "#/$defs/provenance_script_r3" },
+    "story_id": { "type": "string", "minLength": 1 },
+    "slice_id": { "type": "string", "minLength": 1 },
+    "phase": { "const": "R3" },
+    "cycle": { "const": "C1" },
+    "required_combinations": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "$ref": "#/$defs/tool_prompt_combo" }
+    },
+    "reviews": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "$ref": "#/$defs/review_entry_r3" }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "review_basis_check",
+        "preexisting_enforcement_citation_check",
+        "preexisting_test_citation_check",
+        "diff_only_review_check"
+      ],
+      "properties": {
+        "status": { "enum": ["PASS", "FAIL"] },
+        "review_basis_check": { "enum": ["PASS", "FAIL"] },
+        "preexisting_enforcement_citation_check": { "enum": ["PASS", "FAIL"] },
+        "preexisting_test_citation_check": { "enum": ["PASS", "FAIL"] },
+        "diff_only_review_check": { "enum": ["PASS", "FAIL"] },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "properties": {
+        "reviews": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "tool": { "const": "codex" },
+              "prompt_style": { "const": "enriched" }
+            },
+            "required": ["tool", "prompt_style"]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "reviews": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "tool": { "const": "codex" },
+              "prompt_style": { "const": "generic" }
+            },
+            "required": ["tool", "prompt_style"]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "reviews": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "tool": { "const": "opus" },
+              "prompt_style": { "const": "enriched" }
+            },
+            "required": ["tool", "prompt_style"]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "reviews": {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "tool": { "const": "opus" },
+              "prompt_style": { "const": "generic" }
+            },
+            "required": ["tool", "prompt_style"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hexsha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "iso8601z": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "tool_prompt_combo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "prompt_style"],
+      "properties": {
+        "tool": { "enum": ["codex", "opus", "kimi"] },
+        "prompt_style": { "enum": ["generic", "enriched"] }
+      }
+    },
+    "provenance_script_r3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "model",
+        "prompt_style",
+        "cycle",
+        "phase_equivalent",
+        "review_basis",
+        "story_id",
+        "slice_id",
+        "head_commit",
+        "generated_at",
+        "artifact_provenance",
+        "schema_version"
+      ],
+      "properties": {
+        "tool": { "const": "script" },
+        "model": { "type": "string" },
+        "prompt_style": { "const": "none" },
+        "cycle": { "const": "C1" },
+        "phase_equivalent": { "const": "R3" },
+        "review_basis": { "const": "STORY_SCOPE (Cycle 1)" },
+        "story_id": { "type": "string" },
+        "slice_id": { "type": "string" },
+        "head_commit": { "$ref": "#/$defs/hexsha" },
+        "base_commit": { "type": "string" },
+        "generated_at": { "$ref": "#/$defs/iso8601z" },
+        "artifact_provenance": { "type": "string" },
+        "schema_version": { "const": "r3_external_manifest.v2" }
+      }
+    },
+    "provenance_review_r3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "model",
+        "prompt_style",
+        "cycle",
+        "phase_equivalent",
+        "review_basis",
+        "story_id",
+        "slice_id",
+        "head_commit",
+        "generated_at",
+        "artifact_provenance"
+      ],
+      "properties": {
+        "tool": { "enum": ["codex", "opus", "kimi"] },
+        "model": { "type": "string", "minLength": 1 },
+        "prompt_style": { "enum": ["generic", "enriched"] },
+        "cycle": { "const": "C1" },
+        "phase_equivalent": { "enum": ["R1", "R3"] },
+        "review_basis": { "const": "STORY_SCOPE (Cycle 1)" },
+        "story_id": { "type": "string", "minLength": 1 },
+        "slice_id": { "type": "string", "minLength": 1 },
+        "head_commit": { "$ref": "#/$defs/hexsha" },
+        "base_commit": { "type": "string" },
+        "generated_at": { "$ref": "#/$defs/iso8601z" },
+        "artifact_provenance": { "type": "string", "minLength": 1 }
+      }
+    },
+    "review_entry_r3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "model",
+        "prompt_style",
+        "cycle",
+        "phase_equivalent",
+        "artifact_path",
+        "artifact_sha256",
+        "review_basis",
+        "head_commit",
+        "provenance",
+        "checks"
+      ],
+      "properties": {
+        "tool": { "enum": ["codex", "opus", "kimi"] },
+        "model": { "type": "string", "minLength": 1 },
+        "prompt_style": { "enum": ["generic", "enriched"] },
+        "cycle": { "const": "C1" },
+        "phase_equivalent": { "enum": ["R1", "R3"] },
+        "artifact_path": { "type": "string", "minLength": 1 },
+        "artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "review_basis": { "const": "STORY_SCOPE (Cycle 1)" },
+        "head_commit": { "$ref": "#/$defs/hexsha" },
+        "base_commit": { "type": "string" },
+        "provenance": { "$ref": "#/$defs/provenance_review_r3" },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "review_basis_present",
+            "preexisting_enforcement_citation_present",
+            "preexisting_test_citation_present",
+            "diff_only_review_rejected"
+          ],
+          "properties": {
+            "review_basis_present": { "type": "boolean" },
+            "preexisting_enforcement_citation_present": { "type": "boolean" },
+            "preexisting_test_citation_present": { "type": "boolean" },
+            "diff_only_review_rejected": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

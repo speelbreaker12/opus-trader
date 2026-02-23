@@ -1,0 +1,512 @@
+#!/usr/bin/env python3
+"""Validate R3/R7 external manifest JSON against v2 schemas.
+
+Usage:
+    validate_external_manifest.py <manifest.json> [--check-files]
+
+Options:
+    --check-files   Verify artifact_path files exist on disk and sha256 matches
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+ISO8601Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+REQUIRED_COMBOS = [
+    ("codex", "enriched"),
+    ("codex", "generic"),
+    ("opus", "enriched"),
+    ("opus", "generic"),
+]
+
+R3_TOP_REQUIRED = [
+    "provenance", "story_id", "slice_id", "phase", "cycle",
+    "required_combinations", "reviews", "validation",
+]
+R7_TOP_REQUIRED = R3_TOP_REQUIRED + ["regression_scope"]
+
+R3_VALIDATION_CHECKS = [
+    "status", "review_basis_check",
+    "preexisting_enforcement_citation_check",
+    "preexisting_test_citation_check",
+    "diff_only_review_check",
+]
+R7_VALIDATION_CHECKS = [
+    "status", "review_basis_check",
+    "required_combinations_check",
+    "head_commit_alignment_check",
+    "base_commit_alignment_check",
+]
+
+R3_REVIEW_CHECKS = [
+    "review_basis_present",
+    "preexisting_enforcement_citation_present",
+    "preexisting_test_citation_present",
+    "diff_only_review_rejected",
+]
+R7_REVIEW_CHECKS = [
+    "review_basis_present",
+    "head_commit_matches_manifest",
+    "base_commit_matches_manifest",
+]
+
+R3_PROV_REQUIRED = [
+    "tool", "model", "prompt_style", "cycle", "phase_equivalent",
+    "review_basis", "story_id", "slice_id", "head_commit",
+    "generated_at", "artifact_provenance", "schema_version",
+]
+R7_PROV_REQUIRED = R3_PROV_REQUIRED + ["base_commit"]
+
+R3_REVIEW_ENTRY_REQUIRED = [
+    "tool", "model", "prompt_style", "cycle", "phase_equivalent",
+    "artifact_path", "artifact_sha256", "review_basis", "head_commit",
+    "provenance", "checks",
+]
+R7_REVIEW_ENTRY_REQUIRED = R3_REVIEW_ENTRY_REQUIRED + ["base_commit"]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _check_required(obj: dict[str, Any], keys: list[str], ctx: str) -> list[str]:
+    """Return list of error strings for missing required keys."""
+    errors: list[str] = []
+    for k in keys:
+        if k not in obj:
+            errors.append(f"{ctx}: missing required field '{k}'")
+    return errors
+
+
+def _check_enum(obj: dict[str, Any], key: str, allowed: list[str], ctx: str) -> list[str]:
+    val = obj.get(key)
+    if val is not None and val not in allowed:
+        return [f"{ctx}: '{key}' must be one of {allowed}, got '{val}'"]
+    return []
+
+
+def _check_const(obj: dict[str, Any], key: str, expected: str, ctx: str) -> list[str]:
+    val = obj.get(key)
+    if val is not None and val != expected:
+        return [f"{ctx}: '{key}' must be '{expected}', got '{val}'"]
+    return []
+
+
+def _check_pattern(obj: dict[str, Any], key: str, pattern: re.Pattern[str], ctx: str) -> list[str]:
+    val = obj.get(key)
+    if val is not None and isinstance(val, str) and not pattern.match(val):
+        return [f"{ctx}: '{key}' does not match pattern {pattern.pattern}, got '{val}'"]
+    return []
+
+
+def _check_non_empty_string(obj: dict[str, Any], key: str, ctx: str) -> list[str]:
+    val = obj.get(key)
+    if val is not None and (not isinstance(val, str) or len(val) == 0):
+        return [f"{ctx}: '{key}' must be a non-empty string"]
+    return []
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Detect manifest type
+# ---------------------------------------------------------------------------
+
+def detect_type(data: dict[str, Any]) -> str | None:
+    """Return 'r3' or 'r7' based on phase field, or None if unrecognizable."""
+    phase = data.get("phase")
+    if phase == "R3":
+        return "r3"
+    if phase == "R7d":
+        return "r7"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Provenance validation
+# ---------------------------------------------------------------------------
+
+def validate_provenance_r3(prov: Any, ctx: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(prov, dict):
+        return [f"{ctx}: provenance must be an object"]
+    errors += _check_required(prov, R3_PROV_REQUIRED, ctx)
+    errors += _check_const(prov, "tool", "script", ctx)
+    errors += _check_const(prov, "prompt_style", "none", ctx)
+    errors += _check_const(prov, "cycle", "C1", ctx)
+    errors += _check_const(prov, "phase_equivalent", "R3", ctx)
+    errors += _check_const(prov, "review_basis", "STORY_SCOPE (Cycle 1)", ctx)
+    errors += _check_const(prov, "schema_version", "r3_external_manifest.v2", ctx)
+    errors += _check_pattern(prov, "head_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(prov, "generated_at", ISO8601Z_RE, ctx)
+    return errors
+
+
+def validate_provenance_r7(prov: Any, ctx: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(prov, dict):
+        return [f"{ctx}: provenance must be an object"]
+    errors += _check_required(prov, R7_PROV_REQUIRED, ctx)
+    errors += _check_const(prov, "tool", "script", ctx)
+    errors += _check_const(prov, "prompt_style", "none", ctx)
+    errors += _check_const(prov, "cycle", "C2", ctx)
+    errors += _check_const(prov, "phase_equivalent", "R7d", ctx)
+    errors += _check_const(prov, "review_basis", "FIX_DIFF + AT_REGRESSION (Cycle 2)", ctx)
+    errors += _check_const(prov, "schema_version", "r7_external_manifest.v2", ctx)
+    errors += _check_pattern(prov, "head_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(prov, "base_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(prov, "generated_at", ISO8601Z_RE, ctx)
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Review-entry provenance validation
+# ---------------------------------------------------------------------------
+
+def validate_review_provenance_r3(prov: Any, ctx: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(prov, dict):
+        return [f"{ctx}: review provenance must be an object"]
+    req = [
+        "tool", "model", "prompt_style", "cycle", "phase_equivalent",
+        "review_basis", "story_id", "slice_id", "head_commit",
+        "generated_at", "artifact_provenance",
+    ]
+    errors += _check_required(prov, req, ctx)
+    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(prov, "prompt_style", ["generic", "enriched"], ctx)
+    errors += _check_const(prov, "cycle", "C1", ctx)
+    errors += _check_enum(prov, "phase_equivalent", ["R1", "R3"], ctx)
+    errors += _check_const(prov, "review_basis", "STORY_SCOPE (Cycle 1)", ctx)
+    errors += _check_pattern(prov, "head_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(prov, "generated_at", ISO8601Z_RE, ctx)
+    errors += _check_non_empty_string(prov, "model", ctx)
+    errors += _check_non_empty_string(prov, "story_id", ctx)
+    errors += _check_non_empty_string(prov, "slice_id", ctx)
+    errors += _check_non_empty_string(prov, "artifact_provenance", ctx)
+    return errors
+
+
+def validate_review_provenance_r7(prov: Any, ctx: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(prov, dict):
+        return [f"{ctx}: review provenance must be an object"]
+    req = [
+        "tool", "model", "prompt_style", "cycle", "phase_equivalent",
+        "review_basis", "story_id", "slice_id", "head_commit",
+        "base_commit", "generated_at", "artifact_provenance",
+    ]
+    errors += _check_required(prov, req, ctx)
+    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(prov, "prompt_style", ["generic", "enriched"], ctx)
+    errors += _check_const(prov, "cycle", "C2", ctx)
+    errors += _check_const(prov, "phase_equivalent", "R7d", ctx)
+    errors += _check_const(prov, "review_basis", "FIX_DIFF + AT_REGRESSION (Cycle 2)", ctx)
+    errors += _check_pattern(prov, "head_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(prov, "base_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(prov, "generated_at", ISO8601Z_RE, ctx)
+    errors += _check_non_empty_string(prov, "model", ctx)
+    errors += _check_non_empty_string(prov, "story_id", ctx)
+    errors += _check_non_empty_string(prov, "slice_id", ctx)
+    errors += _check_non_empty_string(prov, "artifact_provenance", ctx)
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Review entry validation
+# ---------------------------------------------------------------------------
+
+def validate_review_entry_r3(entry: Any, idx: int, check_files: bool, manifest_dir: Path) -> list[str]:
+    ctx = f"reviews[{idx}]"
+    errors: list[str] = []
+    if not isinstance(entry, dict):
+        return [f"{ctx}: must be an object"]
+    errors += _check_required(entry, R3_REVIEW_ENTRY_REQUIRED, ctx)
+    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(entry, "prompt_style", ["generic", "enriched"], ctx)
+    errors += _check_const(entry, "cycle", "C1", ctx)
+    errors += _check_enum(entry, "phase_equivalent", ["R1", "R3"], ctx)
+    errors += _check_const(entry, "review_basis", "STORY_SCOPE (Cycle 1)", ctx)
+    errors += _check_pattern(entry, "head_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(entry, "artifact_sha256", SHA256_RE, ctx)
+    errors += _check_non_empty_string(entry, "model", ctx)
+    errors += _check_non_empty_string(entry, "artifact_path", ctx)
+
+    # Checks object
+    checks = entry.get("checks")
+    if isinstance(checks, dict):
+        errors += _check_required(checks, R3_REVIEW_CHECKS, f"{ctx}.checks")
+        for ck in R3_REVIEW_CHECKS:
+            if ck in checks and not isinstance(checks[ck], bool):
+                errors.append(f"{ctx}.checks.{ck}: must be boolean")
+    elif checks is not None:
+        errors.append(f"{ctx}.checks: must be an object")
+
+    # Review provenance
+    if "provenance" in entry:
+        errors += validate_review_provenance_r3(entry["provenance"], f"{ctx}.provenance")
+
+    # File checks
+    if check_files:
+        errors += _verify_artifact_file(entry, idx, manifest_dir)
+
+    return errors
+
+
+def validate_review_entry_r7(entry: Any, idx: int, check_files: bool, manifest_dir: Path) -> list[str]:
+    ctx = f"reviews[{idx}]"
+    errors: list[str] = []
+    if not isinstance(entry, dict):
+        return [f"{ctx}: must be an object"]
+    errors += _check_required(entry, R7_REVIEW_ENTRY_REQUIRED, ctx)
+    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(entry, "prompt_style", ["generic", "enriched"], ctx)
+    errors += _check_const(entry, "cycle", "C2", ctx)
+    errors += _check_const(entry, "phase_equivalent", "R7d", ctx)
+    errors += _check_const(entry, "review_basis", "FIX_DIFF + AT_REGRESSION (Cycle 2)", ctx)
+    errors += _check_pattern(entry, "head_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(entry, "base_commit", HEXSHA_RE, ctx)
+    errors += _check_pattern(entry, "artifact_sha256", SHA256_RE, ctx)
+    errors += _check_non_empty_string(entry, "model", ctx)
+    errors += _check_non_empty_string(entry, "artifact_path", ctx)
+
+    # Checks object
+    checks = entry.get("checks")
+    if isinstance(checks, dict):
+        errors += _check_required(checks, R7_REVIEW_CHECKS, f"{ctx}.checks")
+        for ck in R7_REVIEW_CHECKS:
+            if ck in checks and not isinstance(checks[ck], bool):
+                errors.append(f"{ctx}.checks.{ck}: must be boolean")
+    elif checks is not None:
+        errors.append(f"{ctx}.checks: must be an object")
+
+    # Review provenance
+    if "provenance" in entry:
+        errors += validate_review_provenance_r7(entry["provenance"], f"{ctx}.provenance")
+
+    # File checks
+    if check_files:
+        errors += _verify_artifact_file(entry, idx, manifest_dir)
+
+    return errors
+
+
+def _verify_artifact_file(entry: dict[str, Any], idx: int, manifest_dir: Path) -> list[str]:
+    errors: list[str] = []
+    ctx = f"reviews[{idx}]"
+    artifact_path_str = entry.get("artifact_path")
+    if not artifact_path_str:
+        return errors
+    artifact_path = manifest_dir / artifact_path_str
+    if not artifact_path.exists():
+        artifact_path = Path(artifact_path_str)
+    if not artifact_path.exists():
+        errors.append(f"{ctx}: artifact_path '{artifact_path_str}' not found on disk")
+        return errors
+    expected_sha = entry.get("artifact_sha256", "")
+    if SHA256_RE.match(expected_sha):
+        actual_sha = _sha256_file(artifact_path)
+        if actual_sha != expected_sha:
+            errors.append(
+                f"{ctx}: artifact_sha256 mismatch for '{artifact_path_str}': "
+                f"expected {expected_sha}, got {actual_sha}"
+            )
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Required-combo enforcement
+# ---------------------------------------------------------------------------
+
+def check_required_combos(reviews: list[dict[str, Any]]) -> list[str]:
+    """Verify reviews[] contains all 4 mandatory tool x prompt combos."""
+    errors: list[str] = []
+    found = set()
+    for r in reviews:
+        if isinstance(r, dict):
+            tool = r.get("tool")
+            ps = r.get("prompt_style")
+            if tool and ps:
+                found.add((tool, ps))
+    for combo in REQUIRED_COMBOS:
+        if combo not in found:
+            errors.append(
+                f"required_combinations: missing review for tool={combo[0]}, "
+                f"prompt_style={combo[1]}"
+            )
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Top-level validators
+# ---------------------------------------------------------------------------
+
+def validate_r3(data: dict[str, Any], check_files: bool, manifest_dir: Path) -> list[str]:
+    errors: list[str] = []
+    errors += _check_required(data, R3_TOP_REQUIRED, "root")
+    errors += _check_const(data, "phase", "R3", "root")
+    errors += _check_const(data, "cycle", "C1", "root")
+    errors += _check_non_empty_string(data, "story_id", "root")
+    errors += _check_non_empty_string(data, "slice_id", "root")
+
+    # Provenance
+    if "provenance" in data:
+        errors += validate_provenance_r3(data["provenance"], "provenance")
+
+    # Required combinations
+    combos = data.get("required_combinations")
+    if isinstance(combos, list):
+        if len(combos) < 4:
+            errors.append(f"required_combinations: must have >= 4 items, got {len(combos)}")
+    elif combos is not None:
+        errors.append("required_combinations: must be an array")
+
+    # Reviews
+    reviews = data.get("reviews")
+    if isinstance(reviews, list):
+        if len(reviews) < 4:
+            errors.append(f"reviews: must have >= 4 items, got {len(reviews)}")
+        for i, entry in enumerate(reviews):
+            errors += validate_review_entry_r3(entry, i, check_files, manifest_dir)
+        errors += check_required_combos(reviews)
+    elif reviews is not None:
+        errors.append("reviews: must be an array")
+
+    # Validation object
+    val = data.get("validation")
+    if isinstance(val, dict):
+        errors += _check_required(val, R3_VALIDATION_CHECKS, "validation")
+        errors += _check_enum(val, "status", ["PASS", "FAIL"], "validation")
+        for ck in R3_VALIDATION_CHECKS[1:]:
+            errors += _check_enum(val, ck, ["PASS", "FAIL"], "validation")
+    elif val is not None:
+        errors.append("validation: must be an object")
+
+    return errors
+
+
+def validate_r7(data: dict[str, Any], check_files: bool, manifest_dir: Path) -> list[str]:
+    errors: list[str] = []
+    errors += _check_required(data, R7_TOP_REQUIRED, "root")
+    errors += _check_const(data, "phase", "R7d", "root")
+    errors += _check_const(data, "cycle", "C2", "root")
+    errors += _check_non_empty_string(data, "story_id", "root")
+    errors += _check_non_empty_string(data, "slice_id", "root")
+
+    # Provenance
+    if "provenance" in data:
+        errors += validate_provenance_r7(data["provenance"], "provenance")
+
+    # Required combinations
+    combos = data.get("required_combinations")
+    if isinstance(combos, list):
+        if len(combos) < 4:
+            errors.append(f"required_combinations: must have >= 4 items, got {len(combos)}")
+    elif combos is not None:
+        errors.append("required_combinations: must be an array")
+
+    # Reviews
+    reviews = data.get("reviews")
+    if isinstance(reviews, list):
+        if len(reviews) < 4:
+            errors.append(f"reviews: must have >= 4 items, got {len(reviews)}")
+        for i, entry in enumerate(reviews):
+            errors += validate_review_entry_r7(entry, i, check_files, manifest_dir)
+        errors += check_required_combos(reviews)
+    elif reviews is not None:
+        errors.append("reviews: must be an array")
+
+    # Regression scope
+    rs = data.get("regression_scope")
+    if isinstance(rs, dict):
+        errors += _check_required(rs, ["base_commit", "head_commit", "affected_ats", "changed_files"], "regression_scope")
+        errors += _check_pattern(rs, "base_commit", HEXSHA_RE, "regression_scope")
+        errors += _check_pattern(rs, "head_commit", HEXSHA_RE, "regression_scope")
+        for field in ("affected_ats", "changed_files"):
+            arr = rs.get(field)
+            if arr is not None and not isinstance(arr, list):
+                errors.append(f"regression_scope.{field}: must be an array")
+    elif rs is not None:
+        errors.append("regression_scope: must be an object")
+
+    # Validation object
+    val = data.get("validation")
+    if isinstance(val, dict):
+        errors += _check_required(val, R7_VALIDATION_CHECKS, "validation")
+        errors += _check_enum(val, "status", ["PASS", "FAIL"], "validation")
+        for ck in R7_VALIDATION_CHECKS[1:]:
+            errors += _check_enum(val, ck, ["PASS", "FAIL"], "validation")
+    elif val is not None:
+        errors.append("validation: must be an object")
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("Usage: validate_external_manifest.py <manifest.json> [--check-files]", file=sys.stderr)
+        return 2
+
+    manifest_path = Path(sys.argv[1])
+    check_files = "--check-files" in sys.argv
+
+    if not manifest_path.exists():
+        print(f"ERROR: file not found: {manifest_path}", file=sys.stderr)
+        return 1
+
+    try:
+        with open(manifest_path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: invalid JSON: {e}", file=sys.stderr)
+        return 1
+
+    if not isinstance(data, dict):
+        print("ERROR: manifest must be a JSON object", file=sys.stderr)
+        return 1
+
+    manifest_dir = manifest_path.parent
+    mtype = detect_type(data)
+    if mtype == "r3":
+        errors = validate_r3(data, check_files, manifest_dir)
+    elif mtype == "r7":
+        errors = validate_r7(data, check_files, manifest_dir)
+    else:
+        phase = data.get("phase", "<missing>")
+        print(f"ERROR: cannot detect manifest type from phase='{phase}' (expected 'R3' or 'R7d')", file=sys.stderr)
+        return 1
+
+    if errors:
+        print(f"FAIL: {len(errors)} validation error(s) in {mtype.upper()} manifest:")
+        for e in errors:
+            print(f"  - {e}")
+        return 1
+
+    print(f"PASS: {mtype.upper()} external manifest is valid ({manifest_path.name})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
