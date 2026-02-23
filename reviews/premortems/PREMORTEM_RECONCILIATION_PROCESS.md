@@ -30,20 +30,20 @@
 
 All phase artifacts are validated against JSON Schema files in `specs/schemas/recon/`:
 
-| Schema | Phase | Format | Purpose |
-|--------|-------|--------|---------|
-| `gap_list.schema.json` | R4 | JSON-primary | Gap aggregation + remediation assignments |
-| `verify_result.schema.json` | R6 | JSON-primary | Story verdict + pass-flip eligibility |
-| `review_receipt.schema.json` | Cycle 1/2 | JSON-primary | External review receipts |
-| `phase_mapping.schema.json` | R4b | JSON-primary | External tool → phase mapping |
-| `premortem_ready.schema.json` | A→B gate | JSON-primary | PREMORTEM_READY handoff gate |
-| `evidence_ledger.schema.json` | R1 | JSON-primary | R1 output (Wave 2) |
-| `cross_review.schema.json` | R3 | JSON-primary | R3 output (Wave 2) |
-| `lead_eval_sidecar.schema.json` | R2 | Sidecar | Lead eval gate fields |
-| `self_review_sidecar.schema.json` | R5b | Sidecar | Self-review skill receipts |
-| `review_artifact_sidecar.schema.json` | R7 | Sidecar | Review sub-phase gate fields |
-| `r3_external_manifest.schema.json` | R3B | JSON-primary | C1 external review manifest |
-| `r7_external_manifest.schema.json` | R7d.1 | JSON-primary | C2 external review manifest |
+| Schema | Phase | Format | Status | Purpose |
+|--------|-------|--------|--------|---------|
+| `gap_list.schema.json` | R4 | JSON-primary | Active | Gap aggregation + remediation assignments |
+| `verify_result.schema.json` | R6 | JSON-primary | Active | Story verdict + pass-flip eligibility |
+| `review_receipt.schema.json` | Cycle 1/2 | JSON-primary | Active | External review receipts |
+| `phase_mapping.schema.json` | R4b | JSON-primary | Active | External tool → phase mapping |
+| `premortem_ready.schema.json` | A→B gate | JSON-primary | Active | PREMORTEM_READY handoff gate |
+| `evidence_ledger.schema.json` | R1 | JSON-primary | **Wave 2** | R1 output (not yet created) |
+| `cross_review.schema.json` | R3 | JSON-primary | **Wave 2** | R3 output (not yet created) |
+| `lead_eval_sidecar.schema.json` | R2 | Sidecar | Active | Lead eval gate fields |
+| `self_review_sidecar.schema.json` | R5b | Sidecar | Active | Self-review skill receipts |
+| `review_artifact_sidecar.schema.json` | R7 | Sidecar | Active | Review sub-phase gate fields |
+| `r3_external_manifest.schema.json` | R3B | JSON-primary | Active | C1 external review manifest |
+| `r7_external_manifest.schema.json` | R7d.1 | JSON-primary | Active | C2 external review manifest |
 
 **Guardrail fields** (all artifacts): `schema_version`, `head_commit`, `created_at`.
 **Sidecar extras**: `markdown_sha256`, `markdown_path`.

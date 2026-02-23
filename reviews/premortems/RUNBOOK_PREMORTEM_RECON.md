@@ -414,10 +414,12 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 **Operator steps**:
 1. Implement code/test/observability fixes for each gap
 2. Update evidence ledger rows: GAP → FIXED, add new file:line citations
-3. Run verification commands (at least `verify.sh quick` + targeted tests)
+3. Generate proof graph: `python3 python/proof_graph/scaffold.py ${STORY_ID}`, populate from evidence ledger verdicts/citations, validate with `python3 python/proof_graph/validate.py --strict artifacts/story/${STORY_ID}/proof_graph.json`
+4. Run verification commands (at least `verify.sh quick` + targeted tests)
 
 **Output**:
 - Code changes + updated evidence ledgers
+- `artifacts/story/${STORY_ID}/proof_graph.json` (machine-verifiable proof graph)
 - `R5_REMEDIATION_NOTES.md` (narrative: what was fixed, per gap)
 - `R5_REMEDIATION_NOTES.json` (sidecar: gap_id mappings, touched files)
 **Receipt**: `plans/wf_step.sh ${STORY_ID} implement`
@@ -472,7 +474,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 ---
 
-### R6 — Verify (Lead Finalization Before Cycle 2)
+### R6 — Verify (Lead Final Verdict Assignment)
 
 **Mode**: `LEAD_VERIFY_AND_VERDICT_ASSIGNMENT`
 

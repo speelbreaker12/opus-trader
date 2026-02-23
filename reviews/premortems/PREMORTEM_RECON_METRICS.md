@@ -366,6 +366,8 @@ A story with an empty gap array and no coverage proof produces `UNCHECKED_CLEAN_
 
 ## Step Supervisor Phase Mapping
 
+> Core mapping: [RUNBOOK §3](RUNBOOK_PREMORTEM_RECON.md#3-mode-b--reconciliation-r1r7). Extended here with "What happens" commentary.
+
 The `plans/step_supervisor.sh` and `plans/wf_step.sh` use a 9-step receipt chain. This table maps those steps to Part B reconciliation phases:
 
 | `wf_step.sh` step | Part B phase(s) | Pod | What happens |
@@ -388,32 +390,9 @@ The `plans/step_supervisor.sh` and `plans/wf_step.sh` use a 9-step receipt chain
 
 ## Debt Register Schema
 
-Every `DEFERRED` gap must have a corresponding entry in `reviews/reconciliations/<slice>/DEBT_REGISTER.json`. Entries without valid `target_slice` or `owner` block the current slice via Phase R7f validation.
+> Canonical schema and validation rules: [POLICY §7](PREMORTEM_RECON_POLICY.md#7-debt-register-schema).
 
-```json
-{
-  "debt_items": [
-    {
-      "gap_id": "GAP-007-3",
-      "story_id": "S1-007",
-      "at_id": "AT-920",
-      "description": "Observability: structured log on rejection path",
-      "priority": "P2",
-      "owner": "reconcile-dispatch",
-      "target_slice": "S2",
-      "created_at": "2026-02-21T15:00:00Z",
-      "status": "open"
-    }
-  ]
-}
-```
-
-**Required fields**: `gap_id`, `story_id`, `description`, `priority`, `owner` (not empty), `target_slice` (valid slice ID -- not "TBD"), `created_at`, `status` (`open` | `resolved`).
-
-**Phase R7f validation**: A deterministic script validates the debt register after Phase R7e:
-1. Every `DEFERRED` gap in evidence ledgers has a matching `gap_id` in the debt register.
-2. No entry has `target_slice: "TBD"` or empty `owner`.
-3. Any debt item whose `target_slice` has already passed (i.e., that slice is complete) produces `OVERDUE_DEBT` -- this blocks `prd_set_pass.sh` for the current slice until the item is re-targeted or resolved.
+Location: `reviews/reconciliations/<slice>/DEBT_REGISTER.json`. See POLICY §7 for required fields, constraints, and R7f validation rules.
 
 ---
 
@@ -554,6 +533,23 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 
 > Full version history. Header shows only current + previous version summary.
 
+### v3.1
+- Proof graph V2 pipeline: 60 rules (43 V1+V2, 17 V2-only), 319 tests
+- Strictest-wins reviewer merge (`aggregate.py`) with conflict tracking and stale rationale detection
+- Type-safe schema parsing (`_require_bool`/`_require_int`), `schema_version: 2`
+- Trading halt detection (exit code 20), safety-critical rules (R-056, R-057)
+- `RECONCILED_UNIT_ONLY` reconciliation status, `reconciliation_stale` aggregate flag
+- Unknown severity/verdict fail-closed defaults (rank 3/9)
+
+### v3.0 (2026-02-23)
+- 3-layer split: RUNBOOK (operator instructions), POLICY (normative rules), ANTIPATTERNS (failure catalog) + METRICS (reference data)
+- JSON schemas for all gate-driving artifacts (`specs/schemas/recon/`)
+- Hard gates with named Gate IDs at every phase boundary
+- Mechanical validators (`validate_recon_artifact.sh`, `validate_review_header.py`, `validate_external_manifest.py`)
+- Provenance headers (5 mandatory fields) on all review artifacts
+- Canonical directory layout with deterministic, phase-prefixed filenames
+- Wave migration plan for schema promotion (Wave 1 active, Wave 2/3 planned)
+
 ### v2.1 (2026-02-23)
 - Step-supervisor phase mapping table: explicit mapping between `wf_step.sh` 9-step receipt chain and Part B phases (R1-R7f), with pod assignments and receipt system distinction
 - R3 gap output JSON schema: worked example for stories with gaps (required fields: `gap_id`, `at_id`, `priority`, `classification`, `description`, `proposed_fix`; `coverage_proof` required even when gaps found)
@@ -580,14 +576,6 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 - 6-category fail-closed check (adds narrowing casts)
 - AT semantic match check, combinatorial coverage check, constants accuracy check
 - Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5
-
-### v3.1
-- Proof graph V2 pipeline: 60 rules (43 V1+V2, 17 V2-only), 319 tests
-- Strictest-wins reviewer merge (`aggregate.py`) with conflict tracking and stale rationale detection
-- Type-safe schema parsing (`_require_bool`/`_require_int`), `schema_version: 2`
-- Trading halt detection (exit code 20), safety-critical rules (R-056, R-057)
-- `RECONCILED_UNIT_ONLY` reconciliation status, `reconciliation_stale` aggregate flag
-- Unknown severity/verdict fail-closed defaults (rank 3/9)
 
 ### v1.7
 - Machine-verifiable proof graphs V1 (`python/proof_graph/`)

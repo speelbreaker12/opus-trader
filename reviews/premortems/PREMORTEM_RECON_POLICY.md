@@ -276,11 +276,11 @@ Default to story-scope.
 | Debt register | JSON-primary | R7f | `reviews/reconciliations/<slice>/DEBT_REGISTER.json` |
 | Proof graph | JSON-primary | R6 | `artifacts/story/<ID>/proof_graph.json` |
 | Self-review | Markdown (source) | R5b | `reviews/reconciliations/<slice>/SELF_REVIEW_R5b.md` |
-| Contract review | Markdown (source) | R7a | `reviews/reconciliations/<slice>/CONTRACT_REVIEW_R5.md` |
-| Strategic review | Markdown (source) | R7b | `reviews/reconciliations/<slice>/STRATEGIC_REVIEW_R5.md` |
-| Wiring audit | Markdown (source) | R7c | `reviews/reconciliations/<slice>/LSP_CALL_CHAIN_CHECK.md` |
-| Devils advocate | Markdown (source) | R7e | `reviews/reconciliations/<slice>/DEVILS_ADVOCATE_R7.md` |
-| Devils advocate recheck | Markdown (source) | R7e | `reviews/reconciliations/<slice>/DEVILS_ADVOCATE_R7_RECHECK.md` |
+| Contract review | Markdown (source) | R7a | `reviews/reconciliations/<slice>/R7A_CONTRACT_REVIEW.md` |
+| Strategic review | Markdown (source) | R7b | `reviews/reconciliations/<slice>/R7B_STRATEGIC_REVIEW.md` |
+| Wiring audit | Markdown (source) | R7c | `reviews/reconciliations/<slice>/R7C_WIRING_AUDIT.md` |
+| Devils advocate | Markdown (source) | R7e | `reviews/reconciliations/<slice>/R7E_DEVILS_ADVOCATE.md` |
+| Devils advocate recheck | Markdown (source) | R7e | `reviews/reconciliations/<slice>/R7E_DEVILS_ADVOCATE_RECHECK.md` |
 
 ### 5.3 Guardrail Fields
 
