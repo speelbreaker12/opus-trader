@@ -524,5 +524,16 @@ if [[ "$tool" == "codex" ]]; then
   fi
 fi
 
+# ── Normalize: copy to canonical path for deterministic pipeline lookup ──
+# Canonical name: <tool>.<prompt_style>.md  (e.g., codex.enriched.md, opus.generic.md)
+# This keeps review_logged.sh's timestamped filenames while providing a stable
+# path that reconciliation validators and external manifest builders can rely on.
+canonical_name="${tool}.${prompt_style}.md"
+canonical_path="$outdir/$canonical_name"
+
+# Overwrite any previous canonical file for this tool+prompt combo
+cp "$outfile" "$canonical_path"
+echo "Normalized: $canonical_path" >&2
+
 echo "Saved $(ucfirst "$tool") review: $outfile" >&2
 exit "$rc"
