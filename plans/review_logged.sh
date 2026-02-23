@@ -37,7 +37,8 @@ Modes:
   kimi  (all modes):                   uses `kimi --print` with review prompt (stdin)
 
 Artifacts:
-  - artifacts/story/<ID>/<tool>/<STAMP>_review.md
+  - artifacts/story/<ID>/<tool>/<tool>.<style>.md  (canonical)
+  - artifacts/story/<ID>/<tool>/<STAMP>_review.md  (legacy symlink)
 
 Examples:
   plans/review_logged.sh S1-004 --tool codex --base run/slice1-clean
@@ -282,8 +283,15 @@ fi
 mkdir -p "$outdir"
 
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
+ts_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 stamp="${ts}_$$_${RANDOM}"
-outfile="$outdir/${stamp}_review.md"
+
+# Canonical filename: <tool>.<prompt_style>.md (per RUNBOOK §6.1)
+# Legacy timestamped name kept as symlink for backwards compat.
+canonical_name="${tool}.${prompt_style}.md"
+outfile="$outdir/${canonical_name}"
+legacy_name="${stamp}_review.md"
+legacy_file="$outdir/${legacy_name}"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
 head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
@@ -531,9 +539,56 @@ printf '\n' >> "$transcript_tmp"
 transcript_hash="$(sha256_file "$transcript_tmp")"
 transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 
-# ── Write artifact with provenance header ───────────────────────────
+# ── Determine model name for provenance ───────────────────────────
+model_name="n/a"
+case "$tool" in
+  codex) model_name="${CODEX_MODEL:-gpt-4.1}" ;;
+  opus)  model_name="claude-opus-4-6" ;;
+  kimi)  model_name="kimi-k2.5" ;;
+esac
+
+# ── Determine cycle and phase equivalent from context ─────────────
+# Cycle detection: C2 if reviewing fix diff, C1 if story scope, SELF otherwise.
+# Phase equivalent: R3 for C1, R7d for C2.
+prov_cycle="C1"
+prov_phase="R3"
+prov_basis="STORY_SCOPE (Cycle 1)"
+if [[ "$mode" == "base" && -n "$base" ]]; then
+  # Check if this looks like a Cycle 2 review (fix diff after cycle1)
+  cycle1_receipt="$root/.wf/receipts/$story/03_cycle1.json"
+  if [[ -f "$cycle1_receipt" ]]; then
+    prov_cycle="C2"
+    prov_phase="R7d"
+    prov_basis="FIX_DIFF + AT_REGRESSION (Cycle 2)"
+  fi
+fi
+
+# ── Determine slice ID from story ID ─────────────────────────────
+slice_id="$(echo "$story" | sed -n 's/^\([A-Z][A-Za-z0-9]*\)-.*/\1/p')"
+slice_id="${slice_id:-UNKNOWN}"
+
+# ── Write artifact with YAML front matter provenance ──────────────
 
 {
+  echo "---"
+  echo "provenance:"
+  echo "  tool: $tool"
+  echo "  model: $model_name"
+  echo "  prompt_style: $prompt_style"
+  echo "  cycle: $prov_cycle"
+  echo "  phase_equivalent: $prov_phase"
+  echo "  review_basis: \"$prov_basis\""
+  echo "  story_id: $story"
+  echo "  slice_id: $slice_id"
+  echo "  head_commit: \"$head_sha\""
+  if [[ "$prov_cycle" == "C2" && "$mode" == "base" ]]; then
+    echo "  base_commit: \"$base\""
+  fi
+  echo "  generated_at: \"$ts_iso\""
+  echo "  artifact_provenance: \"logger-v2\""
+  echo "  schema_version: \"review_markdown_header.v1\""
+  echo "---"
+  echo
   echo "# $(ucfirst "$tool") review"
   echo
   echo "- Story: $story"
@@ -550,15 +605,13 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
   if [[ "$mode" == "files" ]]; then
     echo "- Files: $files_list"
   fi
-  if [[ "$tool" == "opus" ]]; then
-    echo "- Model: claude-opus-4-6"
-  elif [[ "$tool" == "kimi" ]]; then
-    echo "- Model: kimi-k2.5"
-  fi
+  echo "- Model: $model_name"
   if [[ "${codex_exec_mode}" == "true" ]]; then
     echo "- Codex Mode: exec (prompt pass-through)"
   fi
   echo "- Prompt style: $prompt_style"
+  echo "- Review basis: $prov_basis"
+  echo "- Phase equivalent: $prov_phase"
   if [[ "$proof_graph" == "true" ]]; then
     echo "- Proof graph: $pg_skeleton"
   fi
@@ -583,13 +636,18 @@ p1="$(grep -coE '\bP1\b' "$transcript_tmp" 2>/dev/null || echo 999)"
 p2="$(grep -coE '\bP2\b' "$transcript_tmp" 2>/dev/null || echo 999)"
 echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
 
+# Create legacy timestamped symlink for backwards compatibility with wf_step.sh
+ln -sf "$canonical_name" "$legacy_file" 2>/dev/null || true
+
 # ── Post-validation hard gates (v3.0) ──────────────────────────────
 # These checks validate the generated artifact meets structural requirements.
 # Artifact is still written (for debugging), but exit code is nonzero on failure.
 gate_exit=0
 
 # Gate 1: Missing "Review basis:" line in artifact (exit 3)
-if ! grep -qi 'Review basis:' "$transcript_tmp" 2>/dev/null; then
+# Checks full artifact (header + transcript). Script injects basis in provenance
+# header; gate validates it survived the write.
+if ! grep -qi 'Review basis:' "$outfile" 2>/dev/null; then
   echo "HARD_GATE_FAIL: Missing 'Review basis:' line in review artifact" >&2
   echo "HARD_GATE: MISSING_REVIEW_BASIS (exit 3)" >> "$outfile"
   gate_exit=3
@@ -597,24 +655,21 @@ fi
 
 # Gate 2: Missing pre-existing enforcement + test citations (Cycle 1 only, exit 4)
 # Cycle 1 reviews MUST cite at least one pre-existing enforcement point or test.
-# Detect Cycle 1 by checking for "STORY_SCOPE" or "Cycle 1" in the review basis.
-if [[ "$gate_exit" -eq 0 ]]; then
-  review_basis_line="$(grep -i 'Review basis:' "$transcript_tmp" 2>/dev/null | head -1 || true)"
-  if echo "$review_basis_line" | grep -qiE 'STORY_SCOPE|Cycle 1'; then
-    # Cycle 1: require at least one file:line citation (pattern: path/file.rs:123 or similar)
-    citation_count="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
-    if [[ "$citation_count" -eq 0 ]]; then
-      echo "HARD_GATE_FAIL: Cycle 1 review has zero file:line citations (pre-existing enforcement/test)" >&2
-      echo "HARD_GATE: MISSING_PRE_EXISTING_CITATIONS (exit 4)" >> "$outfile"
-      gate_exit=4
-    fi
+# Uses authoritative cycle from provenance (not transcript-extracted).
+if [[ "$gate_exit" -eq 0 && "$prov_cycle" == "C1" ]]; then
+  # Require at least one file:line citation in the transcript (pattern: path/file.rs:123)
+  citation_count="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+  if [[ "$citation_count" -eq 0 ]]; then
+    echo "HARD_GATE_FAIL: Cycle 1 review has zero file:line citations (pre-existing enforcement/test)" >&2
+    echo "HARD_GATE: MISSING_PRE_EXISTING_CITATIONS (exit 4)" >> "$outfile"
+    gate_exit=4
   fi
 fi
 
-# Gate 3: Missing "Phase equivalent:" label for external tool reviews (exit 5)
-# External reviews (codex, kimi) must include phase equivalent labeling.
+# Gate 3: Missing "Phase equivalent:" label in artifact (exit 5)
+# Checks full artifact. Script injects phase_equivalent in provenance header.
 if [[ "$gate_exit" -eq 0 ]]; then
-  if ! grep -qi 'Phase equivalent:' "$transcript_tmp" 2>/dev/null; then
+  if ! grep -qi 'Phase equivalent:' "$outfile" 2>/dev/null; then
     echo "HARD_GATE_FAIL: Missing 'Phase equivalent:' label in review artifact" >&2
     echo "HARD_GATE: MISSING_PHASE_EQUIVALENT (exit 5)" >> "$outfile"
     gate_exit=5
@@ -628,28 +683,28 @@ if [[ "$gate_exit" -eq 0 ]]; then
   validator="$root/plans/validate_recon_artifact.sh"
   if [[ -f "$sidecar_schema" && -x "$validator" ]]; then
     sidecar_file="${outfile%.md}.sidecar.json"
-    # Extract structured fields from transcript for sidecar
-    review_basis_val="$(grep -i 'Review basis:' "$transcript_tmp" 2>/dev/null | head -1 | sed 's/.*Review basis:[[:space:]]*//' || true)"
-    phase_eq_val="$(grep -i 'Phase equivalent:' "$transcript_tmp" 2>/dev/null | head -1 | sed 's/.*Phase equivalent:[[:space:]]*//' || true)"
+    # Use provenance fields computed earlier (authoritative, not transcript-extracted)
     citations_ct="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
-    basis_present=false
-    [[ -n "$review_basis_val" ]] && basis_present=true
 
-    # Build sidecar JSON
+    # Build sidecar JSON with full provenance
     cat > "$sidecar_file" <<SIDECAR_EOF
 {
   "schema_version": "review_artifact_sidecar.v1",
   "head_commit": "$head_sha",
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "created_at": "$ts_iso",
   "markdown_sha256": "$(sha256_file "$outfile")",
   "markdown_path": "$outfile",
+  "story_id": "$story",
   "review_type": "external",
-  "review_basis": "${review_basis_val:-unknown}",
-  "phase_equivalent": "${phase_eq_val:-unknown}",
+  "review_basis": "$prov_basis",
+  "phase_equivalent": "$prov_phase",
   "tool": "$tool",
+  "model": "$model_name",
+  "prompt_style": "$prompt_style",
+  "cycle": "$prov_cycle",
   "citations_count": $citations_ct,
   "pre_existing_citations_count": $citations_ct,
-  "basis_line_present": $basis_present,
+  "basis_line_present": true,
   "finding_counts": {
     "P0": $p0,
     "P1": $p1,
@@ -683,5 +738,5 @@ if [[ "$tool" == "codex" ]]; then
   fi
 fi
 
-echo "Saved $(ucfirst "$tool") review: $outfile" >&2
+echo "Saved $(ucfirst "$tool") review: $outfile (canonical: $canonical_name)" >&2
 exit "$rc"

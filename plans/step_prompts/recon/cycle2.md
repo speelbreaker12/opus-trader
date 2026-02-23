@@ -71,6 +71,8 @@ Rules:
 
 OUTPUT
 - Write review file to artifacts/story/${STORY_ID}/codex/ (or opus/ or kimi/).
+- Canonical filenames: `<tool>.enriched.md`, `<tool>.generic.md` (per RUNBOOK §6.1)
+- review_logged.sh emits YAML front matter provenance + `Review basis:` + `Phase equivalent:` lines automatically.
 - Review MUST include: `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`
 - Include STOPLIGHT verdict + finding table.
 - Remaining BLOCKING/P1/P2 count.

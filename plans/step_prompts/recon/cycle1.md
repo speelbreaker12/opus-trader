@@ -89,6 +89,8 @@ Rules:
 
 OUTPUT
 - Write review file(s) to artifacts/story/${STORY_ID}/codex/ (or opus/ or kimi/).
+- Canonical filenames: `<tool>.enriched.md`, `<tool>.generic.md` (per RUNBOOK §6.1)
+- review_logged.sh emits YAML front matter provenance + `Review basis:` + `Phase equivalent:` lines automatically.
 - Review MUST include: `Review basis: STORY_SCOPE (Cycle 1)`
 - Include:
   - STOPLIGHT verdict

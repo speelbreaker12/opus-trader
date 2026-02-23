@@ -12,8 +12,11 @@ Run the logged review scripts (do NOT hand-write review files):
    (or: `./plans/opus_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH}`)
 
 Wait for scripts to generate artifacts under:
-- artifacts/story/${STORY_ID}/codex/
-- artifacts/story/${STORY_ID}/opus/ (if run)
+- artifacts/story/${STORY_ID}/codex/  (canonical: codex.enriched.md, codex.generic.md)
+- artifacts/story/${STORY_ID}/opus/   (if run: opus.enriched.md, opus.generic.md)
+- artifacts/story/${STORY_ID}/kimi/   (if run: kimi.enriched.md, kimi.generic.md)
+
+review_logged.sh now emits YAML front matter provenance + Review basis + Phase equivalent lines automatically.
 
 OUTPUT
 - List all generated review file paths
