@@ -19,7 +19,7 @@
 | Document | Purpose | Audience | ~Lines |
 |----------|---------|----------|--------|
 | **This file** | Index + Appendix A (R1 prompt, source of truth) | All | ~400 |
-| **RUNBOOK** | Operator instructions, phase-by-phase execution | Agents executing phases | ~500 |
+| **RUNBOOK** | Operator instructions, phase-by-phase execution, named gates | Agents executing phases | ~830 |
 | **POLICY** | Normative rules: verdicts, gates, schemas, scope | Anyone needing "what's the rule?" | ~500 |
 | **ANTIPATTERNS** | 26 anti-patterns, cross-ref chains, gate coverage | Reviewers, auditors | ~400 |
 | **METRICS** | Pilot data, lessons, rationale, worked examples, changelog | Process designers, retrospectives | ~630 |
