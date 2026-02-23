@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "r3_external_manifest.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "head_commit",
+    "created_at",
+    "story_id",
+    "cycle",
+    "review_basis",
+    "tools",
+    "validated_preexisting_enforcement_citation",
+    "validated_preexisting_test_citation",
+    "validation_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "r3_external_manifest.v1"
+    },
+    "head_commit": { "type": "string", "minLength": 7 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "story_id": { "type": "string", "minLength": 1 },
+    "cycle": {
+      "type": "string",
+      "const": "C1"
+    },
+    "review_basis": {
+      "type": "string",
+      "const": "STORY_SCOPE (Cycle 1)"
+    },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["tool", "model", "artifacts"],
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "type": "string",
+            "enum": ["codex", "opus", "kimi"]
+          },
+          "model": { "type": "string", "minLength": 1 },
+          "artifacts": {
+            "type": "object",
+            "required": ["enriched", "generic"],
+            "additionalProperties": false,
+            "properties": {
+              "enriched": {
+                "type": "object",
+                "required": ["path", "exists"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": { "type": "string", "pattern": "^[a-z]+\\.enriched\\.md$" },
+                  "exists": { "type": "boolean" }
+                }
+              },
+              "generic": {
+                "type": "object",
+                "required": ["path", "exists"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": { "type": "string", "pattern": "^[a-z]+\\.generic\\.md$" },
+                  "exists": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "validated_preexisting_enforcement_citation": { "type": "boolean" },
+    "validated_preexisting_test_citation": { "type": "boolean" },
+    "validation_status": {
+      "type": "string",
+      "enum": ["completed", "partial", "failed"]
+    }
+  }
+}

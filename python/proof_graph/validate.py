@@ -68,7 +68,11 @@ def _compute_exit_code(
     Exit 20 fires when:
       - There are BLOCKING findings (errors > 0), AND
       - schema_version >= 2, AND
-      - The recomputed halt condition is true
+      - The *recomputed* halt condition is true (not the stored value)
+
+    Note: --strict promotes HARDENING to errors, which can trigger exit 20
+    if the halt condition is also met. A graph with trading_halt_trigger=true
+    but no BLOCKING findings exits 0 (the stored flag alone is not enough).
     """
     if errors == 0:
         return 0

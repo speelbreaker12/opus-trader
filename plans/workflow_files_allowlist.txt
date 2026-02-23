@@ -7,6 +7,7 @@ POLICY.md
 docs/contract_anchors.md
 docs/contract_kernel.json
 docs/validation_rules.md
+plans/aggregate_proofs.sh
 plans/autofix.sh
 plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_skip_entrypoint.sh
@@ -39,6 +40,7 @@ plans/lib/python_gates.sh
 plans/lib/rust_gates.sh
 plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
+plans/postmortem_template.md
 plans/pr_gate.sh
 plans/prd_audit_check.sh
 plans/prd_audit_merge.py
@@ -47,7 +49,6 @@ plans/prd_cache_check.py
 plans/prd_cache_update.py
 plans/prd_gate.sh
 plans/prd_preflight.sh
-plans/postmortem_template.md
 plans/prd_set_pass.sh
 plans/pre_pr_review_gate.sh
 plans/preflight.sh
@@ -62,6 +63,14 @@ plans/slice_completion_enforce.sh
 plans/slice_completion_review_guard.sh
 plans/slice_review_gate.sh
 plans/ssot_lint.sh
+plans/step_prompts/recon/cycle1.md
+plans/step_prompts/recon/cycle2.md
+plans/step_prompts/recon/fix.md
+plans/step_prompts/recon/implement.md
+plans/step_prompts/recon/preflight.md
+plans/step_prompts/recon/resolution.md
+plans/step_prompts/recon/self_review.md
+plans/step_prompts/recon/verify_full.md
 plans/step_supervisor.sh
 plans/stoic_cli_invariant_check.sh
 plans/story_postmortem_logged.sh
@@ -71,6 +80,7 @@ plans/story_verify_allowlist_check.sh
 plans/story_verify_allowlist_lint.sh
 plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
+plans/tests/test_aggregate_proofs.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh
@@ -85,6 +95,7 @@ plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
+plans/tests/test_review_logged_proof_graph.sh
 plans/tests/test_roadmap_evidence_audit.sh
 plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh
@@ -103,14 +114,6 @@ plans/verify_gate_contract_check.sh
 plans/wf_step.sh
 plans/workflow_contract_gate.sh
 plans/workflow_contract_map.json
-plans/step_prompts/recon/cycle1.md
-plans/step_prompts/recon/cycle2.md
-plans/step_prompts/recon/fix.md
-plans/step_prompts/recon/implement.md
-plans/step_prompts/recon/preflight.md
-plans/step_prompts/recon/resolution.md
-plans/step_prompts/recon/self_review.md
-plans/step_prompts/recon/verify_full.md
 plans/workflow_files_allowlist.txt
 plans/workflow_quick_step.sh
 plans/workflow_verify.sh

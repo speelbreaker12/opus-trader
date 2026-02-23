@@ -1,11 +1,12 @@
-"""29 validation rules for proof graph (18 V1 + 11 V2)."""
+"""60 validation rules for proof graph (43 V1+V2, 17 V2-only)."""
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Optional
 
-from .schema import ProofGraph, SHA_RE
+from .schema import CausalProof, ProofGraph, SHA_RE
 from .enums import (
     AssumptionStatus,
     CausalMechanism,
@@ -14,6 +15,7 @@ from .enums import (
     LossModeLevel,
     ReconciliationStatus,
     Severity,
+    StoplightColor,
     TestKind,
     Verdict,
     WiringStatus,
@@ -64,7 +66,9 @@ def r_002(ctx: ValidationContext) -> list[Finding]:
     findings: list[Finding] = []
     for at in g.ats:
         if at.at_verdict.verdict == Verdict.WEAK_PROOF and \
-                g.story_meta.loss_mode.level in (LossModeLevel.MED, LossModeLevel.HIGH):
+                g.story_meta.loss_mode.level in (
+                    LossModeLevel.MED, LossModeLevel.HIGH, LossModeLevel.CRITICAL,
+                ):
             findings.append(Finding(
                 severity=Severity.BLOCKING,
                 rule="R-002",
@@ -144,7 +148,11 @@ def r_006(ctx: ValidationContext) -> list[Finding]:
 
 
 def r_007(ctx: ValidationContext) -> list[Finding]:
-    """AT ID not in CONTRACT.md."""
+    """AT ID not in CONTRACT.md.
+
+    Skipped when contract_ats is empty (CLI enforces CONTRACT.md presence;
+    programmatic callers must populate ValidationContext.contract_ats).
+    """
     if not ctx.contract_ats:
         return []
     findings: list[Finding] = []
@@ -184,16 +192,31 @@ def r_008(ctx: ValidationContext) -> list[Finding]:
                 f"ats.{at.at_id}.tests[{i}].causal_proof.mechanism",
                 at.at_id,
             )
-        _check(
-            at.enforcement.status.value,
-            f"ats.{at.at_id}.enforcement.status",
-            at.at_id,
-        )
         for ev in at.enforcement.evidence:
             _check(ev, f"ats.{at.at_id}.enforcement.evidence", at.at_id)
         _check(at.wiring.evidence, f"ats.{at.at_id}.wiring.evidence", at.at_id)
         _check(at.observability.metric, f"ats.{at.at_id}.observability.metric", at.at_id)
         _check(at.observability.alert, f"ats.{at.at_id}.observability.alert", at.at_id)
+        for j, m in enumerate(at.equivalent_mutants):
+            _check(
+                m.mutant_description,
+                f"ats.{at.at_id}.equivalent_mutants[{j}].mutant_description",
+                at.at_id,
+            )
+            _check(
+                m.killed_by,
+                f"ats.{at.at_id}.equivalent_mutants[{j}].killed_by",
+                at.at_id,
+            )
+        if at.debt:
+            _check(
+                at.debt.description,
+                f"ats.{at.at_id}.debt.description",
+                at.at_id,
+            )
+    for k, dr in enumerate(g.debt_register):
+        _check(dr.description, f"debt_register[{k}].description")
+        _check(dr.target_slice, f"debt_register[{k}].target_slice")
     return findings
 
 
@@ -333,7 +356,9 @@ def r_016b(ctx: ValidationContext) -> list[Finding]:
     g = ctx.graph
     if not g.story_meta.safety_critical:
         return []
-    if g.story_meta.loss_mode.level not in (LossModeLevel.MED, LossModeLevel.HIGH):
+    if g.story_meta.loss_mode.level not in (
+        LossModeLevel.MED, LossModeLevel.HIGH, LossModeLevel.CRITICAL,
+    ):
         return []
     findings: list[Finding] = []
     for at in g.ats:
@@ -378,18 +403,37 @@ def _is_v2(ctx: ValidationContext) -> bool:
     return ctx.graph.schema_version >= 2
 
 
+def should_trigger_trading_halt(
+    safety_critical: bool, loss_level: str, verdicts: list[str]
+) -> bool:
+    """Core trading halt logic (raw types, usable from aggregate.py).
+
+    Trading halt is a higher threshold than validation: only HIGH/CRITICAL
+    trigger a halt, whereas validation rules R-002/R-016b fire at MED/HIGH.
+    This is intentional — MED-level stories get BLOCKING validation findings
+    but do NOT trigger the pipeline-halting exit-20 signal.
+
+    Args:
+        safety_critical: Whether the story is safety-critical.
+        loss_level: Loss mode level string (e.g. "HIGH", "CRITICAL").
+        verdicts: List of AT verdict strings.
+    """
+    if not safety_critical:
+        return False
+    if loss_level not in (LossModeLevel.HIGH.value, LossModeLevel.CRITICAL.value):
+        return False
+    halt_verdicts = (Verdict.FAIL_OPEN_RISK.value, Verdict.WRONG_IMPL_UNBLOCKED.value)
+    return any(v in halt_verdicts for v in verdicts)
+
+
 def compute_trading_halt(ctx: ValidationContext) -> bool:
     """Recompute trading halt condition from graph data (authoritative)."""
     g = ctx.graph
-    if not g.story_meta.safety_critical:
-        return False
-    if g.story_meta.loss_mode.level not in (LossModeLevel.HIGH, LossModeLevel.CRITICAL):
-        return False
-    for at in g.ats:
-        v = at.at_verdict.verdict
-        if v in (Verdict.FAIL_OPEN_RISK, Verdict.WRONG_IMPL_UNBLOCKED):
-            return True
-    return False
+    return should_trigger_trading_halt(
+        safety_critical=g.story_meta.safety_critical,
+        loss_level=g.story_meta.loss_mode.level.value,
+        verdicts=[at.at_verdict.verdict.value for at in g.ats],
+    )
 
 
 def r_006b(ctx: ValidationContext) -> list[Finding]:
@@ -661,13 +705,808 @@ def r_026(ctx: ValidationContext) -> list[Finding]:
     return []
 
 
+_PROVEN_VERDICTS = {Verdict.PROVEN_INTEGRATED, Verdict.PROVEN_UNIT}
+
+# Mechanism → required assertion field attribute name
+_MECHANISM_ASSERT_MAP: dict[str, str] = {
+    CausalMechanism.DISPATCH_COUNT.value: "dispatch_count_assert",
+    CausalMechanism.REJECT_REASON.value: "reject_reason_assert",
+    CausalMechanism.LATCH_REASON.value: "latch_reason_assert",
+}
+
+# Verify at import time that all assertion attributes exist on CausalProof
+assert all(
+    hasattr(CausalProof, attr) for attr in _MECHANISM_ASSERT_MAP.values()
+), f"_MECHANISM_ASSERT_MAP references unknown CausalProof attributes"
+
+# Known enforcement_point values (from CLAUDE.md / CONTRACT.md)
+_KNOWN_ENFORCEMENT_POINTS = {
+    "PolicyGuard", "EvidenceGuard", "DispatcherChokepoint",
+    "WAL", "AtomicGroupExecutor", "StatusEndpoint",
+}
+
+
+def r_027(ctx: ValidationContext) -> list[Finding]:
+    """PROVEN verdict but tests have pass_result=false."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.at_verdict.verdict not in _PROVEN_VERDICTS:
+            continue
+        if not at.tests:
+            continue
+        failing = [t for t in at.tests if not t.execution.pass_result]
+        if failing:
+            names = ", ".join(t.test_name for t in failing[:3])
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-027",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} verdict is {at.at_verdict.verdict.value} "
+                    f"but {len(failing)} test(s) have pass_result=false: {names}"
+                ),
+            ))
+    return findings
+
+
+def r_028(ctx: ValidationContext) -> list[Finding]:
+    """Mechanism-specific causal assertion missing."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        for i, t in enumerate(at.tests):
+            mech = t.causal_proof.mechanism
+            assert_attr = _MECHANISM_ASSERT_MAP.get(mech)
+            if assert_attr is None:
+                continue
+            value = getattr(t.causal_proof, assert_attr, None)
+            if not value or not value.strip():
+                findings.append(Finding(
+                    severity=Severity.BLOCKING,
+                    rule="R-028",
+                    at_id=at.at_id,
+                    message=(
+                        f"test '{t.test_name}' mechanism={mech} "
+                        f"but {assert_attr} is empty/null"
+                    ),
+                    field_path=(
+                        f"ats.{at.at_id}.tests[{i}]"
+                        f".causal_proof.{assert_attr}"
+                    ),
+                ))
+    return findings
+
+
+def r_029(ctx: ValidationContext) -> list[Finding]:
+    """V1+V2: safety_critical + stoplight RED + PROVEN verdict."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.premortem_checks.stoplight == StoplightColor.RED and \
+                at.at_verdict.verdict in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-029",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: stoplight is RED "
+                    f"but verdict is {at.at_verdict.verdict.value}"
+                ),
+            ))
+    return findings
+
+
+def r_030(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical + section2_assumptions == NONE."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        s2 = at.premortem_checks.section2_assumptions
+        if s2 == AssumptionStatus.NONE:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-030",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"premortem §2 assumptions status is NONE"
+                ),
+            ))
+    return findings
+
+
+def r_031(ctx: ValidationContext) -> list[Finding]:
+    """RECONCILED_WITH_DEBT but empty debt_register."""
+    g = ctx.graph
+    if g.story_verdict.reconciliation_status != \
+            ReconciliationStatus.RECONCILED_WITH_DEBT:
+        return []
+    if not g.debt_register:
+        return [Finding(
+            severity=Severity.BLOCKING,
+            rule="R-031",
+            at_id=None,
+            message=(
+                "reconciliation_status is RECONCILED_WITH_DEBT "
+                "but debt_register is empty"
+            ),
+        )]
+    return []
+
+
+def r_032(ctx: ValidationContext) -> list[Finding]:
+    """V2: BLOCKED_TRADING_HALT but trading_halt_trigger is false."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if g.story_verdict.reconciliation_status != \
+            ReconciliationStatus.BLOCKED_TRADING_HALT:
+        return []
+    if not g.story_verdict.trading_halt_trigger:
+        return [Finding(
+            severity=Severity.BLOCKING,
+            rule="R-032",
+            at_id=None,
+            message=(
+                "reconciliation_status is BLOCKED_TRADING_HALT "
+                "but trading_halt_trigger is false"
+            ),
+        )]
+    return []
+
+
+def r_033(ctx: ValidationContext) -> list[Finding]:
+    """Enforcement NOT_FOUND + PROVEN_INTEGRATED verdict contradiction.
+
+    NOT_FOUND + PROVEN_UNIT is intentionally allowed: unit tests can exist
+    without locating the enforcement point in source code.
+    """
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.enforcement.status == EnforcementStatus.NOT_FOUND and \
+                at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-033",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} claims PROVEN_INTEGRATED "
+                    f"but enforcement is NOT_FOUND"
+                ),
+            ))
+    return findings
+
+
+def r_034(ctx: ValidationContext) -> list[Finding]:
+    """loss_mode sub-fields empty on non-exempt story."""
+    g = ctx.graph
+    if g.story_meta.category in ("policy", "certification"):
+        return []
+    findings: list[Finding] = []
+    lm = g.story_meta.loss_mode
+    for field_name, value in [
+        ("worst_case", lm.worst_case),
+        ("fail_closed_cap", lm.fail_closed_cap),
+        ("drift_metric", lm.drift_metric),
+    ]:
+        if not value.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-034",
+                at_id=None,
+                message=f"loss_mode.{field_name} is empty",
+                field_path=f"story_meta.loss_mode.{field_name}",
+            ))
+    return findings
+
+
+def r_035(ctx: ValidationContext) -> list[Finding]:
+    """enforcement_point not in known set."""
+    ep = ctx.graph.story_meta.enforcement_point
+    if ep not in _KNOWN_ENFORCEMENT_POINTS:
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-035",
+            at_id=None,
+            message=(
+                f"enforcement_point {ep!r} not in known set: "
+                f"{sorted(_KNOWN_ENFORCEMENT_POINTS)}"
+            ),
+            field_path="story_meta.enforcement_point",
+        )]
+    return []
+
+
+def r_036(ctx: ValidationContext) -> list[Finding]:
+    """Observability metric/alert empty string (beyond placeholder check)."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if not at.observability.metric.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-036",
+                at_id=at.at_id,
+                message=f"AT {at.at_id} observability.metric is empty",
+                field_path=f"ats.{at.at_id}.observability.metric",
+            ))
+        if not at.observability.alert.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-036",
+                at_id=at.at_id,
+                message=f"AT {at.at_id} observability.alert is empty",
+                field_path=f"ats.{at.at_id}.observability.alert",
+            ))
+    return findings
+
+
+def r_037(ctx: ValidationContext) -> list[Finding]:
+    """RECONCILED_UNIT_ONLY but AT has PROVEN_INTEGRATED verdict."""
+    g = ctx.graph
+    if g.story_verdict.reconciliation_status != \
+            ReconciliationStatus.RECONCILED_UNIT_ONLY:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-037",
+                at_id=at.at_id,
+                message=(
+                    f"reconciliation_status is RECONCILED_UNIT_ONLY "
+                    f"but AT {at.at_id} claims PROVEN_INTEGRATED"
+                ),
+            ))
+    return findings
+
+
+# Mechanisms with no dedicated assertion field in CausalProof
+_UNMAPPED_MECHANISMS = {
+    CausalMechanism.MODE_TRANSITION.value,
+    CausalMechanism.REASON_CODE.value,
+    CausalMechanism.CORTEX_OVERRIDE.value,
+}
+
+# All assertion attribute names on CausalProof
+_ALL_ASSERT_ATTRS = ("dispatch_count_assert", "reject_reason_assert", "latch_reason_assert")
+
+
+def r_038(ctx: ValidationContext) -> list[Finding]:
+    """Non-exempt story with sections_filled < 1 (or < 5 if safety_critical)."""
+    g = ctx.graph
+    if g.story_meta.category in ("policy", "certification"):
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        sf = at.premortem_checks.sections_filled
+        if g.story_meta.safety_critical and sf < 5:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-038",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"sections_filled={sf} (minimum 5 for safety_critical)"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.sections_filled",
+            ))
+        elif not g.story_meta.safety_critical and sf < 1:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-038",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id}: sections_filled={sf} "
+                    f"(minimum 1 for non-exempt stories)"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.sections_filled",
+            ))
+    return findings
+
+
+def r_039(ctx: ValidationContext) -> list[Finding]:
+    """PARTIAL enforcement + PROVEN_INTEGRATED verdict contradiction."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.enforcement.status == EnforcementStatus.PARTIAL and \
+                at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-039",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} claims PROVEN_INTEGRATED "
+                    f"but enforcement is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_040(ctx: ValidationContext) -> list[Finding]:
+    """Unmapped CausalMechanism with all assertion fields empty."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        for i, t in enumerate(at.tests):
+            mech = t.causal_proof.mechanism
+            if mech not in _UNMAPPED_MECHANISMS:
+                continue
+            has_any = any(
+                (getattr(t.causal_proof, attr, None) or "").strip()
+                for attr in _ALL_ASSERT_ATTRS
+            )
+            if not has_any:
+                findings.append(Finding(
+                    severity=Severity.HARDENING,
+                    rule="R-040",
+                    at_id=at.at_id,
+                    message=(
+                        f"test '{t.test_name}' mechanism={mech} "
+                        f"but all causal assertion fields are empty"
+                    ),
+                    field_path=f"ats.{at.at_id}.tests[{i}].causal_proof",
+                ))
+    return findings
+
+
+def r_041(ctx: ValidationContext) -> list[Finding]:
+    """V2: wiring PROVEN_INTEGRATED but empty entrypoint or proof_type."""
+    if not _is_v2(ctx):
+        return []
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.wiring.status != WiringStatus.PROVEN_INTEGRATED:
+            continue
+        if not at.wiring.entrypoint.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-041",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} wiring is PROVEN_INTEGRATED "
+                    f"but entrypoint is empty"
+                ),
+                field_path=f"ats.{at.at_id}.wiring.entrypoint",
+            ))
+        if not at.wiring.proof_type.strip():
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-041",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} wiring is PROVEN_INTEGRATED "
+                    f"but proof_type is empty"
+                ),
+                field_path=f"ats.{at.at_id}.wiring.proof_type",
+            ))
+    return findings
+
+
+def r_042(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical + section5_wrong_impl_blocked == PARTIAL."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        s5 = at.premortem_checks.section5_wrong_impl_blocked
+        if s5 == WrongImplStatus.PARTIAL:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-042",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"premortem §5 wrong_impl_blocked is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_043(ctx: ValidationContext) -> list[Finding]:
+    """V2: section4_decision_match == PARTIAL."""
+    if not _is_v2(ctx):
+        return []
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        s4 = at.premortem_checks.section4_decision_match
+        if s4 == DecisionMatch.PARTIAL:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-043",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id}: premortem §4 decision_match is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_044(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical + section2_assumptions == PARTIAL."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        s2 = at.premortem_checks.section2_assumptions
+        if s2 == AssumptionStatus.PARTIAL:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-044",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"premortem §2 assumptions status is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+_RECONCILED_STATUSES = {
+    ReconciliationStatus.RECONCILED,
+    ReconciliationStatus.RECONCILED_WITH_DEBT,
+    ReconciliationStatus.RECONCILED_UNIT_ONLY,
+}
+
+
+def r_045(ctx: ValidationContext) -> list[Finding]:
+    """Reconciled-family status but AT has non-proven verdict."""
+    g = ctx.graph
+    status = g.story_verdict.reconciliation_status
+    if status not in _RECONCILED_STATUSES:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict not in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-045",
+                at_id=at.at_id,
+                message=(
+                    f"story is {status.value} but AT {at.at_id} "
+                    f"has non-proven verdict {at.at_verdict.verdict.value}"
+                ),
+            ))
+    return findings
+
+
+def r_046(ctx: ValidationContext) -> list[Finding]:
+    """generated_at not valid ISO-8601 timestamp with timezone."""
+    ts = ctx.graph.generated_at
+    try:
+        parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return [Finding(
+                severity=Severity.HARDENING,
+                rule="R-046",
+                at_id=None,
+                message=f"generated_at has no timezone: {ts!r}",
+                field_path="generated_at",
+            )]
+    except (ValueError, TypeError):
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-046",
+            at_id=None,
+            message=f"generated_at is not valid ISO-8601: {ts!r}",
+            field_path="generated_at",
+        )]
+    return []
+
+
+def r_047(ctx: ValidationContext) -> list[Finding]:
+    """Non-exempt story with empty scope_touch."""
+    g = ctx.graph
+    if g.story_meta.category in ("policy", "certification"):
+        return []
+    if not g.story_meta.scope_touch:
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-047",
+            at_id=None,
+            message="scope_touch is empty on non-exempt story",
+            field_path="story_meta.scope_touch",
+        )]
+    return []
+
+
+def r_048(ctx: ValidationContext) -> list[Finding]:
+    """Orphan debt_register entry: at_id not found in ats[]."""
+    at_ids = {at.at_id for at in ctx.graph.ats}
+    findings: list[Finding] = []
+    for i, dr in enumerate(ctx.graph.debt_register):
+        if dr.at_id not in at_ids:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-048",
+                at_id=dr.at_id,
+                message=(
+                    f"debt_register[{i}] references AT {dr.at_id} "
+                    f"which does not exist in ats[]"
+                ),
+                field_path=f"debt_register[{i}].at_id",
+            ))
+    return findings
+
+
+def r_049(ctx: ValidationContext) -> list[Finding]:
+    """V2: extra_discovered=true AT with no visibility flag.
+
+    Only flags PROVEN + INFO (the lowest-visibility combination).
+    Non-proven verdicts (WEAK_PROOF etc.) already have elevated attention
+    from other rules (R-045, R-002).
+    """
+    if not _is_v2(ctx):
+        return []
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.extra_discovered and at.at_verdict.severity == Severity.INFO and \
+                at.at_verdict.verdict in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-049",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} is extra_discovered=true but verdict "
+                    f"is {at.at_verdict.verdict.value}/INFO — consider "
+                    f"elevating severity for visibility"
+                ),
+                field_path=f"ats.{at.at_id}.extra_discovered",
+            ))
+    return findings
+
+
+def r_050(ctx: ValidationContext) -> list[Finding]:
+    """Duplicate at_id in ats[]."""
+    seen: dict[str, int] = {}
+    findings: list[Finding] = []
+    for i, at in enumerate(ctx.graph.ats):
+        if at.at_id in seen:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-050",
+                at_id=at.at_id,
+                message=(
+                    f"duplicate at_id {at.at_id!r}: "
+                    f"ats[{seen[at.at_id]}] and ats[{i}]"
+                ),
+                field_path=f"ats[{i}].at_id",
+            ))
+        else:
+            seen[at.at_id] = i
+    return findings
+
+
+def r_051(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical requires V2 premortem fields to be present."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        pc = at.premortem_checks
+        if pc.section5_wrong_impl_blocked is None:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-051",
+                at_id=at.at_id,
+                message=(
+                    f"V2 safety_critical AT {at.at_id}: "
+                    f"section5_wrong_impl_blocked is missing"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.section5_wrong_impl_blocked",
+            ))
+        if pc.section4_decision_match is None:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-051",
+                at_id=at.at_id,
+                message=(
+                    f"V2 safety_critical AT {at.at_id}: "
+                    f"section4_decision_match is missing"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.section4_decision_match",
+            ))
+        if pc.section2_assumptions is None:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-051",
+                at_id=at.at_id,
+                message=(
+                    f"V2 safety_critical AT {at.at_id}: "
+                    f"section2_assumptions is missing"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.section2_assumptions",
+            ))
+    return findings
+
+
+def r_052(ctx: ValidationContext) -> list[Finding]:
+    """PROVEN_UNIT wiring + PROVEN_INTEGRATED verdict contradiction."""
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        if at.wiring.status == WiringStatus.PROVEN_UNIT and \
+                at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-052",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id} claims PROVEN_INTEGRATED verdict "
+                    f"but wiring is only PROVEN_UNIT"
+                ),
+            ))
+    return findings
+
+
+def r_053(ctx: ValidationContext) -> list[Finding]:
+    """safety_critical + stoplight YELLOW + PROVEN verdict."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.premortem_checks.stoplight == StoplightColor.YELLOW and \
+                at.at_verdict.verdict in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-053",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: stoplight is YELLOW "
+                    f"but verdict is {at.at_verdict.verdict.value}"
+                ),
+            ))
+    return findings
+
+
+# Known story categories (from CONTRACT.md / CLAUDE.md)
+_KNOWN_CATEGORIES = {
+    "enforcement", "policy", "certification",
+    "observability", "infrastructure",
+}
+
+_AT_ID_RE = re.compile(r'^AT-\d+$')
+_STORY_ID_RE = re.compile(r'^S\d+-\d+$')
+
+
+def r_054(ctx: ValidationContext) -> list[Finding]:
+    """Unknown story category."""
+    cat = ctx.graph.story_meta.category
+    if cat not in _KNOWN_CATEGORIES:
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-054",
+            at_id=None,
+            message=(
+                f"category {cat!r} not in known set: "
+                f"{sorted(_KNOWN_CATEGORIES)}"
+            ),
+            field_path="story_meta.category",
+        )]
+    return []
+
+
+def r_055(ctx: ValidationContext) -> list[Finding]:
+    """Empty or malformed at_id / story_id."""
+    findings: list[Finding] = []
+    sid = ctx.graph.story_meta.story_id
+    if not sid.strip():
+        findings.append(Finding(
+            severity=Severity.BLOCKING,
+            rule="R-055",
+            at_id=None,
+            message="story_id is empty",
+            field_path="story_meta.story_id",
+        ))
+    elif not _STORY_ID_RE.match(sid):
+        findings.append(Finding(
+            severity=Severity.HARDENING,
+            rule="R-055",
+            at_id=None,
+            message=f"story_id {sid!r} does not match expected format S<N>-<N>",
+            field_path="story_meta.story_id",
+        ))
+    for at in ctx.graph.ats:
+        if not at.at_id.strip():
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-055",
+                at_id=at.at_id,
+                message="at_id is empty",
+                field_path=f"ats.{at.at_id}.at_id",
+            ))
+        elif not _AT_ID_RE.match(at.at_id):
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-055",
+                at_id=at.at_id,
+                message=f"at_id {at.at_id!r} does not match expected format AT-<N>",
+                field_path=f"ats.{at.at_id}.at_id",
+            ))
+    return findings
+
+
+_SAFETY_ESCALATION_VERDICTS = {
+    Verdict.UNTESTED_ENFORCEMENT,
+    Verdict.CLAIMED_NOT_PROVEN,
+}
+
+
+def r_056(ctx: ValidationContext) -> list[Finding]:
+    """DEFERRED verdict on safety_critical AT."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict == Verdict.DEFERRED:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-056",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id} has DEFERRED verdict "
+                    f"(requires explicit resolution)"
+                ),
+            ))
+    return findings
+
+
+def r_057(ctx: ValidationContext) -> list[Finding]:
+    """safety_critical AT with UNTESTED_ENFORCEMENT or CLAIMED_NOT_PROVEN."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict in _SAFETY_ESCALATION_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-057",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id} has "
+                    f"{at.at_verdict.verdict.value} verdict"
+                ),
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
     r_016b, r_017,
-    # V2 rules
+    # V2 schema rules (initial)
     r_006b, r_018, r_019, r_020, r_021, r_022, r_023, r_024,
     r_024b, r_025, r_026,
+    # Batch 3: audit round 2
+    r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
+    r_035, r_036, r_037,
+    # Batch 4: audit round 3
+    r_038, r_039, r_040, r_041,
+    # Batch 5: audit round 4
+    r_042, r_043, r_044, r_045, r_046, r_047,
+    # Batch 6: audit round 5
+    r_048, r_049,
+    # Batch 7: audit round 6
+    r_050, r_051,
+    # Batch 8: audit round 7
+    r_052, r_053, r_054, r_055,
+    # Batch 9: enriched review
+    r_056, r_057,
 ]
 
 

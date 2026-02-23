@@ -243,7 +243,7 @@ cycle1_had_zero_findings() {
   # Fail-closed: if no review artifacts exist, returns 1 (findings assumed).
   local art_dir="$1"
   local review_found=0
-  for d in "$art_dir/codex" "$art_dir/opus"; do
+  for d in "$art_dir/codex" "$art_dir/opus" "$art_dir/kimi"; do
     [[ -d "$d" ]] || continue
     while IFS= read -r rf; do
       [[ -f "$rf" ]] || continue
@@ -267,7 +267,7 @@ cycle1_had_zero_findings() {
       if grep -qiE '(\b0 findings|no findings|no issues|P0: 0.*P1: 0)' "$rf" 2>/dev/null; then
         return 0
       fi
-    done < <(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | LC_ALL=C sort)
+    done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) 2>/dev/null | LC_ALL=C sort)
   done
   # Fail-closed: no reviews found → assume findings exist
   return 1
@@ -310,6 +310,15 @@ case "$STEP" in
         exit 3
       fi
     fi
+
+    # PREMORTEM_READY gate (v3.0): comprehensive readiness check
+    premortem_ready_script="$ROOT/plans/premortem_ready.sh"
+    if [[ -x "$premortem_ready_script" ]]; then
+      if ! "$premortem_ready_script" "$STORY" 2>&1; then
+        echo "WF_STEP: PREMORTEM_READY gate failed — resolve issues before proceeding" >&2
+        exit 3
+      fi
+    fi
     ;;
 
   implement)
@@ -338,15 +347,41 @@ case "$STEP" in
     ;;
 
   cycle1)
+    # Evidence ledger check (v3.0): verify R1 output exists before Cycle 1
+    # Accepts multiple naming patterns: canonical (<ID>_reconciliation.md), legacy (evidence_ledger.*), or preflight artifacts
+    evidence_found=false
+    for candidate in \
+      "$story_art/${STORY}_reconciliation.md" \
+      "$story_art/${STORY}_reconciliation.json" \
+      "$story_art/evidence_ledger.json" \
+      "$story_art/evidence_ledger.md"; do
+      if [[ -f "$candidate" ]]; then
+        evidence_found=true
+        break
+      fi
+    done
+    if [[ "$evidence_found" == "false" ]]; then
+      # No canonical evidence ledger found — fail hard (no wildcard fallback)
+      echo "WF_STEP: no evidence ledger found for $STORY" >&2
+      echo "  Expected one of:" >&2
+      echo "    - $story_art/${STORY}_reconciliation.md" >&2
+      echo "    - $story_art/${STORY}_reconciliation.json" >&2
+      echo "    - $story_art/evidence_ledger.json" >&2
+      echo "    - $story_art/evidence_ledger.md" >&2
+      echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
+      exit 6
+    fi
+
     review_count=0
-    for d in "$story_art/codex" "$story_art/opus"; do
+    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
-        c="$(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | wc -l | tr -d '[:space:]')"
+        # Count both canonical (<tool>.<style>.md) and legacy (<stamp>_review.md) artifacts
+        c="$(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | wc -l | tr -d '[:space:]')"
         review_count=$((review_count + c))
       fi
     done
     if [[ "$review_count" -lt 1 ]]; then
-      echo "WF_STEP: no cycle 1 review artifact found in $story_art/codex/ or $story_art/opus/" >&2
+      echo "WF_STEP: no cycle 1 review artifact found in $story_art/{codex,opus,kimi}/" >&2
       exit 3
     fi
     ;;
@@ -366,7 +401,6 @@ case "$STEP" in
       changed_files="$(git diff --name-only "$cycle1_head"..HEAD 2>/dev/null || true)"
       if [[ -z "$changed_files" ]]; then
         # Fallback: check working tree + staged separately with newline separator
-        local wt_changes staged_changes
         wt_changes="$(git diff --name-only 2>/dev/null || true)"
         staged_changes="$(git diff --cached --name-only 2>/dev/null || true)"
         changed_files="${wt_changes}${wt_changes:+$'\n'}${staged_changes}"
@@ -397,14 +431,15 @@ case "$STEP" in
       fi
     fi
     review_count=0
-    for d in "$story_art/codex" "$story_art/opus"; do
+    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
-        c="$(find "$d" -maxdepth 1 -type f -name '*_review.md' 2>/dev/null | wc -l | tr -d '[:space:]')"
+        # Count both canonical and legacy artifacts, excluding symlinks
+        c="$(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | wc -l | tr -d '[:space:]')"
         review_count=$((review_count + c))
       fi
     done
     if [[ "$review_count" -lt "$min_reviews" ]]; then
-      echo "WF_STEP: need at least $min_reviews review artifacts in $story_art/codex/ or $story_art/opus/" >&2
+      echo "WF_STEP: need at least $min_reviews review artifacts in $story_art/{codex,opus,kimi}/" >&2
       exit 3
     fi
     ;;

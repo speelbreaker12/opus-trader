@@ -4,6 +4,7 @@
 **Reviewed batches**: BATCH_INFRA, BATCH_INSTRUMENT, BATCH_EXPIRY
 **Date**: 2026-02-20
 **HEAD**: 1b85f2522c3ee0b9e6af2349a26f9c0f40c98976
+**Review basis**: STORY_SCOPE (Cycle 1)
 
 ## Stories Reviewed
 
