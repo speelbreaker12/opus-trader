@@ -15,7 +15,7 @@ from python.proof_graph.rules import (
     r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
     r_035, r_036, r_037, r_038, r_039, r_040, r_041,
     r_042, r_043, r_044, r_045, r_046, r_047,
-    r_048, r_049,
+    r_048, r_049, r_050, r_051,
     validate,
 )
 from python.proof_graph.schema import ProofGraph
@@ -1579,6 +1579,104 @@ class TestR049_ExtraDiscoveredVisibility(unittest.TestCase):
     def test_skips_v1(self):
         ctx = _ctx("valid_proof_graph.json")
         self.assertEqual(r_049(ctx), [])
+
+
+class TestR050_DuplicateAtId(unittest.TestCase):
+    def test_fires_on_duplicate(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        # Duplicate AT-201
+        import copy
+        dup = copy.deepcopy(data["ats"][0])
+        dup["at_verdict"]["verdict"] = "WEAK_PROOF"
+        dup["at_verdict"]["severity"] = "HARDENING"
+        data["ats"].append(dup)
+        data["story_verdict"]["hardening_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_050(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-050")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+        self.assertIn("AT-201", findings[0].message)
+
+    def test_clean_on_unique_ids(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_050(ctx), [])
+
+    def test_clean_on_single_at(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_050(ctx), [])
+
+    def test_fires_on_triple_duplicate(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        import copy
+        dup1 = copy.deepcopy(data["ats"][0])
+        dup2 = copy.deepcopy(data["ats"][0])
+        data["ats"].append(dup1)
+        data["ats"].append(dup2)
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_050(ctx)
+        # Two findings: ats[1] duplicates ats[0], ats[2] duplicates ats[0]
+        self.assertEqual(len(findings), 2)
+
+
+class TestR051_V2SafetyCriticalPremortemFields(unittest.TestCase):
+    def test_fires_on_missing_all_three(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        # Remove all V2 premortem fields
+        del data["ats"][0]["premortem_checks"]["section5_wrong_impl_blocked"]
+        del data["ats"][0]["premortem_checks"]["section4_decision_match"]
+        del data["ats"][0]["premortem_checks"]["section2_assumptions"]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_051(ctx)
+        self.assertEqual(len(findings), 3)
+        self.assertTrue(all(f.rule == "R-051" for f in findings))
+        self.assertTrue(all(f.severity == Severity.BLOCKING for f in findings))
+        fields = {f.message.split(": ")[-1].split(" is")[0] for f in findings}
+        self.assertEqual(fields, {
+            "section5_wrong_impl_blocked",
+            "section4_decision_match",
+            "section2_assumptions",
+        })
+
+    def test_fires_on_missing_one(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        del data["ats"][0]["premortem_checks"]["section2_assumptions"]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_051(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("section2_assumptions", findings[0].message)
+
+    def test_clean_on_all_present(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_051(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_051(ctx), [])
+
+    def test_no_fire_when_not_safety_critical(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_meta"]["safety_critical"] = False
+        del data["ats"][0]["premortem_checks"]["section5_wrong_impl_blocked"]
+        del data["ats"][0]["premortem_checks"]["section4_decision_match"]
+        del data["ats"][0]["premortem_checks"]["section2_assumptions"]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_051(ctx), [])
 
 
 if __name__ == "__main__":

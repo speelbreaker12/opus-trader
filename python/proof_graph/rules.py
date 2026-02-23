@@ -1,4 +1,4 @@
-"""51 validation rules for proof graph (18 V1 + 33 V2)."""
+"""53 validation rules for proof graph (18 V1 + 35 V2)."""
 from __future__ import annotations
 
 import re
@@ -1241,6 +1241,73 @@ def r_049(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+def r_050(ctx: ValidationContext) -> list[Finding]:
+    """Duplicate at_id in ats[]."""
+    seen: dict[str, int] = {}
+    findings: list[Finding] = []
+    for i, at in enumerate(ctx.graph.ats):
+        if at.at_id in seen:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-050",
+                at_id=at.at_id,
+                message=(
+                    f"duplicate at_id {at.at_id!r}: "
+                    f"ats[{seen[at.at_id]}] and ats[{i}]"
+                ),
+                field_path=f"ats[{i}].at_id",
+            ))
+        else:
+            seen[at.at_id] = i
+    return findings
+
+
+def r_051(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical requires V2 premortem fields to be present."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        pc = at.premortem_checks
+        if pc.section5_wrong_impl_blocked is None:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-051",
+                at_id=at.at_id,
+                message=(
+                    f"V2 safety_critical AT {at.at_id}: "
+                    f"section5_wrong_impl_blocked is missing"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.section5_wrong_impl_blocked",
+            ))
+        if pc.section4_decision_match is None:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-051",
+                at_id=at.at_id,
+                message=(
+                    f"V2 safety_critical AT {at.at_id}: "
+                    f"section4_decision_match is missing"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.section4_decision_match",
+            ))
+        if pc.section2_assumptions is None:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-051",
+                at_id=at.at_id,
+                message=(
+                    f"V2 safety_critical AT {at.at_id}: "
+                    f"section2_assumptions is missing"
+                ),
+                field_path=f"ats.{at.at_id}.premortem_checks.section2_assumptions",
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
@@ -1257,6 +1324,8 @@ ALL_RULES = [
     r_042, r_043, r_044, r_045, r_046, r_047,
     # V5 rules (validator-audit round 5)
     r_048, r_049,
+    # V6 rules (validator-audit round 6)
+    r_050, r_051,
 ]
 
 
