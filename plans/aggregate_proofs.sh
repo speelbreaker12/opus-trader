@@ -6,7 +6,9 @@ set -euo pipefail
 # Discovers per-reviewer proof_graph.json files under
 # artifacts/story/<STORY_ID>/<tool>/, merges them via aggregate.py
 # (fail-closed, strictest verdict wins), then validates the result.
-# The base graph is overwritten only after successful validation (atomic).
+# The base graph is overwritten only after successful validation (atomic),
+# EXCEPT on trading halt (exit 20) where the merged graph is still written
+# for forensic inspectability — the non-zero exit code is the fail-closed signal.
 #
 # NOTE: head_sha in the base graph is set by init.py at skeleton creation time.
 # If the repo HEAD advances between init and aggregation, the graph's head_sha
@@ -23,7 +25,17 @@ SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="${AGGREGATE_ROOT:-$SCRIPT_ROOT}"
 BASE="$ROOT/artifacts/story/$STORY_ID/proof_graph.json"
 
-# Known reviewer tool names (prevents accidental aggregation of non-reviewer dirs)
+# Detect python binary (same pattern as verify_utils.sh ensure_python)
+if command -v python3 >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
+  echo "ERROR: python3 or python not found" >&2; exit 1
+fi
+
+# Known reviewer tool names (prevents accidental aggregation of non-reviewer dirs).
+# Keep in sync with the tool case-statement in review_logged.sh (~line 232).
 KNOWN_TOOLS="codex opus kimi"
 
 # Guard: base must exist (init.py must have been run)
@@ -68,18 +80,16 @@ fi
 MERGED_TMP="${BASE}.merged.tmp"
 trap 'rm -f "$MERGED_TMP"' EXIT
 
-python3 "$SCRIPT_ROOT/python/proof_graph/aggregate.py" \
+"$PY" "$SCRIPT_ROOT/python/proof_graph/aggregate.py" \
   --base "$BASE" \
   --reviews "${REVIEWS[@]}" \
   --labels "${LABELS[@]}" \
   --output "$MERGED_TMP"
 
-echo "Aggregated ${#REVIEWS[@]} reviewer graphs into $BASE"
-
 # Validate merged result before committing the write
 echo "Running validate.py --strict on merged graph..."
 set +e
-python3 "$SCRIPT_ROOT/python/proof_graph/validate.py" "$MERGED_TMP" \
+"$PY" "$SCRIPT_ROOT/python/proof_graph/validate.py" "$MERGED_TMP" \
   --contract-path "$SCRIPT_ROOT/specs/CONTRACT.md" \
   --prd-path "$SCRIPT_ROOT/plans/prd.json" \
   --strict
@@ -89,10 +99,12 @@ set -e
 if [[ $rc -eq 0 ]]; then
   # Validation passed — atomically replace base with merged result
   mv "$MERGED_TMP" "$BASE"
+  echo "Aggregated ${#REVIEWS[@]} reviewer graphs into $BASE"
 elif [[ $rc -eq 20 ]]; then
   echo "CRITICAL: Trading halt triggered on $STORY_ID" >&2
-  # Still commit the merge so the graph is inspectable
+  # Still commit the merge so the graph is inspectable (exit 20 is the fail signal)
   mv "$MERGED_TMP" "$BASE"
+  echo "Aggregated ${#REVIEWS[@]} reviewer graphs into $BASE (TRADING HALT)"
 else
   echo "ERROR: Proof graph validation failed (exit $rc). Base graph unchanged." >&2
   # MERGED_TMP is cleaned up by trap

@@ -383,6 +383,11 @@ def should_trigger_trading_halt(
 ) -> bool:
     """Core trading halt logic (raw types, usable from aggregate.py).
 
+    Trading halt is a higher threshold than validation: only HIGH/CRITICAL
+    trigger a halt, whereas validation rules R-002/R-016b fire at MED/HIGH.
+    This is intentional — MED-level stories get BLOCKING validation findings
+    but do NOT trigger the pipeline-halting exit-20 signal.
+
     Args:
         safety_critical: Whether the story is safety-critical.
         loss_level: Loss mode level string (e.g. "HIGH", "CRITICAL").

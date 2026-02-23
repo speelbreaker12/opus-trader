@@ -63,7 +63,8 @@ def _compute_trading_halt(graph: dict[str, Any]) -> bool:
 
     Delegates to rules.should_trigger_trading_halt (single source of truth).
     """
-    # Lazy import: sys.path is set up by main() before aggregate() is called.
+    # Lazy import: works via Python 3 namespace packages (python/ has no __init__.py).
+    # Requires repo root on sys.path — set by main() for CLI, by pytest/conftest for tests.
     from python.proof_graph.rules import should_trigger_trading_halt
 
     story_meta = graph.get("story_meta", {})

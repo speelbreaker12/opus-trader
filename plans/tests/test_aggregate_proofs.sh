@@ -8,6 +8,8 @@
 #   4. Base graph + 2 reviewer graphs → strictest verdict wins (PROVEN_UNIT > PROVEN_INTEGRATED), both sources in meta
 #   5. Aggregated graph with BLOCKING → validate.py rejects with error message
 #   6. Non-reviewer dirs ignored (simpler-than-correct blocker)
+#   7. Validation failure preserves base graph (atomic write invariant)
+#   8. Trading halt (exit 20) → CRITICAL message, merged graph written to base
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -53,6 +55,7 @@ create_reviewer_graph() {
   local tool="$2"
   local verdict="$3"
   local severity="${4:-INFO}"
+  local loss_level="${5:-}"  # optional: override story_meta.loss_mode.level
   local reviewer_dir="$story_dir/$tool"
   mkdir -p "$reviewer_dir"
 
@@ -63,7 +66,26 @@ with open('$FIXTURE_BASE') as f:
 for at in g.get('ats', []):
     at['at_verdict']['verdict'] = '$verdict'
     at['at_verdict']['severity'] = '$severity'
+ll = '$loss_level'
+if ll:
+    g['story_meta']['loss_mode']['level'] = ll
+    g.get('meta', {}).get('hints', {}).get('AT-201', {})['loss_mode_level'] = ll
 with open('$reviewer_dir/proof_graph.json', 'w') as f:
+    json.dump(g, f, indent=2)
+"
+}
+
+# Helper: copy base fixture with optional loss_mode level override
+copy_base_with_level() {
+  local story_dir="$1"
+  local loss_level="$2"
+  python3 -c "
+import json
+with open('$FIXTURE_BASE') as f:
+    g = json.load(f)
+g['story_meta']['loss_mode']['level'] = '$loss_level'
+g.get('meta', {}).get('hints', {}).get('AT-201', {})['loss_mode_level'] = '$loss_level'
+with open('$story_dir/proof_graph.json', 'w') as f:
     json.dump(g, f, indent=2)
 "
 }
@@ -267,6 +289,79 @@ test_non_reviewer_dirs_ignored() {
   pass "non-reviewer dir (self_review) correctly ignored"
 }
 
+# ── Test 7: Validation failure preserves base graph (atomic write) ──
+# Devils-advocate mutation 5: if aggregate wrote directly to BASE (no temp),
+# this test would fail because BASE would be overwritten with invalid data.
+
+test_base_preserved_on_failure() {
+  local sid="TEST-PRESERVE"
+  local story_dir
+  story_dir="$(setup_story "$sid")"
+  copy_base "$story_dir"
+
+  # Record base content before aggregation
+  local base_before
+  base_before="$(cat "$story_dir/proof_graph.json")"
+
+  # Create a reviewer with FAIL_OPEN_RISK/BLOCKING — will fail validation
+  create_reviewer_graph "$story_dir" "opus" "FAIL_OPEN_RISK" "BLOCKING"
+
+  set +e
+  output="$(run_aggregate "$sid" 2>&1)"
+  rc=$?
+  set -e
+
+  # Must fail validation
+  [[ $rc -ne 0 ]] || fail "preserve: expected non-zero exit, got 0"
+
+  # Base graph must be byte-identical to pre-aggregation state
+  local base_after
+  base_after="$(cat "$story_dir/proof_graph.json")"
+  [[ "$base_before" == "$base_after" ]] \
+    || fail "preserve: base graph was modified despite validation failure (atomic write broken)"
+
+  pass "validation failure → base graph preserved (atomic write invariant)"
+}
+
+# ── Test 8: Trading halt (exit 20) → CRITICAL message + graph written ──
+# Exercises the rc=20 code path (lines 92-95 of aggregate_proofs.sh).
+# Requires: safety_critical=true + loss_level=HIGH + FAIL_OPEN_RISK verdict.
+
+test_trading_halt() {
+  local sid="TEST-HALT"
+  local story_dir
+  story_dir="$(setup_story "$sid")"
+  # Use HIGH loss_level (not MED) to trigger trading halt
+  copy_base_with_level "$story_dir" "HIGH"
+
+  # Create reviewer with FAIL_OPEN_RISK — with HIGH loss, triggers halt
+  create_reviewer_graph "$story_dir" "opus" "FAIL_OPEN_RISK" "BLOCKING" "HIGH"
+
+  set +e
+  output="$(run_aggregate "$sid" 2>&1)"
+  rc=$?
+  set -e
+
+  # Must exit 20 (trading halt)
+  [[ $rc -eq 20 ]] || fail "trading halt: expected exit 20, got $rc. Output: $output"
+
+  # Must contain CRITICAL message
+  echo "$output" | grep -q "CRITICAL.*Trading halt" \
+    || fail "trading halt: expected 'CRITICAL.*Trading halt' in output. Output: $output"
+
+  # Must contain aggregation confirmation (graph is written for inspectability)
+  echo "$output" | grep -q "Aggregated 1 reviewer" \
+    || fail "trading halt: expected 'Aggregated 1 reviewer' in output"
+
+  # Verify merged graph WAS written to base (exit 20 intentionally commits)
+  local merged_verdict
+  merged_verdict="$(read_merged_field "$story_dir/proof_graph.json" "print(g['ats'][0]['at_verdict']['verdict'])")"
+  [[ "$merged_verdict" == "FAIL_OPEN_RISK" ]] \
+    || fail "trading halt: expected FAIL_OPEN_RISK in base (written for forensics), got $merged_verdict"
+
+  pass "trading halt → exit 20, CRITICAL message, merged graph written"
+}
+
 # ── Run all tests ─────────────────────────────────────────────────
 
 echo "=== aggregate_proofs.sh tests ==="
@@ -276,4 +371,6 @@ test_single_reviewer
 test_two_reviewers_strictest
 test_blocking_rejected
 test_non_reviewer_dirs_ignored
+test_base_preserved_on_failure
+test_trading_halt
 echo "=== all tests passed ==="

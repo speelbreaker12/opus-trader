@@ -67,6 +67,10 @@ test_proof_graph_valid_combo_passes_guard() {
     fail "valid combo: guard incorrectly rejected with 'requires --tool opus|kimi'"
   fi
 
+  # Guard exit code is 2; any other exit (0 or other) means guard did not fire
+  [[ $rc -ne 2 ]] \
+    || fail "valid combo: exit code 2 means the guard fired when it should not have"
+
   # Script may fail for other reasons (missing claude CLI, missing story)
   # but it should NOT have failed at the --proof-graph guard
   pass "--proof-graph + --prompt enriched + --tool opus → guard passes (exit $rc)"
