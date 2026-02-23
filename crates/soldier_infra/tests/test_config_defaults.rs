@@ -8,7 +8,7 @@
 //! `test_config_init.rs` via `build_gate_config_from_raw()`.
 
 use soldier_infra::config::{
-    ALL_PARAMS, ConfigParam, MissingConfigError, appendix_a_default, param_name,
+    ALL_PARAMS, ConfigParam, appendix_a_default, param_name,
     resolve_config_value,
 };
 
@@ -45,36 +45,9 @@ fn test_missing_replay_window_hours_applies_default_48() {
 
 // --- AT-040: missing parameter without Appendix A default → fail-closed ---
 
-#[test]
-fn test_missing_non_appendix_a_param_fails_closed() {
-    // AT-040: a parameter with no Appendix A default must fail-closed when missing.
-    //
-    // All current ConfigParam variants have Appendix A defaults (by design).
-    // AT-040 concerns parameters like `dd_limit` (§5.2) that intentionally lack
-    // defaults — those won't have ConfigParam variants at all; their gates must
-    // fail-closed independently when the parameter is missing from runtime config.
-    //
-    // This test verifies:
-    // 1. The MissingConfigError type produces deterministic, informative messages
-    // 2. Every ConfigParam variant with a default resolves correctly via the
-    //    resolver (verified in test_all_params_resolve_through_resolver below)
-    // 3. The error path contract: when resolve_config_value gets None + no default,
-    //    it returns Err (verified by the function's structure and types)
-    let err = MissingConfigError {
-        param_name: "dd_limit",
-        reason: "no Appendix A default; gate must fail-closed",
-    };
-    let msg = format!("{err}");
-    assert!(
-        msg.contains("dd_limit"),
-        "error must identify the parameter"
-    );
-    assert!(msg.contains("fail-closed"), "error must state fail-closed");
-    assert!(
-        msg.contains("no Appendix A default"),
-        "error must explain why"
-    );
-}
+// AT-040: The fail-closed Err path test (SyntheticNoDefault) lives in
+// config.rs::tests::test_missing_non_appendix_a_param_fails_closed because
+// #[cfg(test)] enum variants are only visible to unit tests, not integration tests.
 
 // GAP-010-1: AT-040 fail-closed Err path — regression guard.
 //

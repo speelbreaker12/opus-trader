@@ -75,6 +75,8 @@ pub enum ConfigParam {
     EvidenceguardCountersMaxAgeMs,
 
     // Open Permission Latch
+    /// Floor for position reconcile epsilon. Effective epsilon at runtime is
+    /// `max(this_value, instrument.min_amount)` per CONTRACT.md §2.2.4.
     PositionReconcileEpsilon,
     ReconcileTradeLookbackSec,
 
@@ -122,6 +124,11 @@ pub enum ConfigParam {
 
     // GOP canary
     CanaryEvidenceAbortS,
+
+    /// Test-only variant with no Appendix A default, used to exercise the
+    /// `resolve_config_value` Err path (AT-040).
+    #[cfg(test)]
+    SyntheticNoDefault,
 }
 
 /// Error when a required parameter is missing and has no Appendix A default.
@@ -211,7 +218,7 @@ pub fn appendix_a_default(param: ConfigParam) -> Option<f64> {
         ConfigParam::EvidenceguardGlobalCooldown => Some(120.0),
         ConfigParam::EvidenceguardCountersMaxAgeMs => Some(60000.0),
 
-        // Open Permission Latch
+        // Open Permission Latch — floor value; callsite applies max(floor, instrument.min_amount)
         ConfigParam::PositionReconcileEpsilon => Some(1e-6),
         ConfigParam::ReconcileTradeLookbackSec => Some(300.0),
 
@@ -259,6 +266,9 @@ pub fn appendix_a_default(param: ConfigParam) -> Option<f64> {
 
         // GOP canary
         ConfigParam::CanaryEvidenceAbortS => Some(180.0),
+
+        #[cfg(test)]
+        ConfigParam::SyntheticNoDefault => None,
     }
 }
 
@@ -339,6 +349,9 @@ pub fn param_name(param: ConfigParam) -> &'static str {
         ConfigParam::TickL2RetentionHours => "tick_l2_retention_hours",
         ConfigParam::ParquetAnalyticsRetentionDays => "parquet_analytics_retention_days",
         ConfigParam::CanaryEvidenceAbortS => "canary_evidence_abort_s",
+
+        #[cfg(test)]
+        ConfigParam::SyntheticNoDefault => "synthetic_no_default_for_testing",
     }
 }
 
@@ -544,6 +557,27 @@ pub fn build_gate_config_from_raw(raw: &RawThresholdConfig) -> Result<GateConfig
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// AT-040: drive resolve_config_value into the actual Err path using the
+    /// test-only SyntheticNoDefault variant (no Appendix A default).
+    #[test]
+    fn test_missing_non_appendix_a_param_fails_closed() {
+        let result = resolve_config_value(ConfigParam::SyntheticNoDefault, None);
+        assert!(result.is_err(), "no-default param with None must fail-closed");
+        let err = result.unwrap_err();
+        assert!(
+            err.param_name.contains("synthetic_no_default"),
+            "error must identify the parameter, got: {}",
+            err.param_name
+        );
+        assert!(
+            err.reason.contains("no Appendix A default"),
+            "error must explain why, got: {}",
+            err.reason
+        );
+        let msg = format!("{err}");
+        assert!(msg.contains("fail-closed"), "Display must state fail-closed, got: {msg}");
+    }
 
     #[test]
     fn all_params_have_defaults() {

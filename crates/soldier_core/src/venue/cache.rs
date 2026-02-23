@@ -175,6 +175,12 @@ impl InstrumentCache {
                 age_s: cache_age_s,
                 ttl_s,
             });
+            tracing::warn!(
+                instrument_id = %instrument_id,
+                age_s = cache_age_s,
+                ttl_s = ttl_s,
+                "InstrumentCacheTtlBreach"
+            );
             RiskState::Degraded
         } else {
             RiskState::Healthy
@@ -277,5 +283,55 @@ pub fn opens_blocked(risk_state: RiskState) -> bool {
     match risk_state {
         RiskState::Healthy => false,
         RiskState::Degraded | RiskState::Maintenance | RiskState::Kill => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tracing_test::traced_test;
+
+    /// TRIP test (S1-006): stale lookup emits InstrumentCacheTtlBreach structured log
+    /// with instrument_id, age_s, and ttl_s fields.
+    #[traced_test]
+    #[test]
+    fn test_ttl_breach_emits_structured_log() {
+        let mut cache = InstrumentCache::new();
+        let t0 = Instant::now();
+        let ttl_s = 3600.0;
+
+        cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+        // Advance past TTL → stale → tracing::warn! fires
+        let stale_time = t0 + Duration::from_secs(7200);
+        let result = cache.get_at("BTC-PERPETUAL", ttl_s, stale_time).unwrap();
+        assert_eq!(result.risk_state, RiskState::Degraded);
+
+        // Verify structured log was emitted
+        assert!(logs_contain("InstrumentCacheTtlBreach"));
+        assert!(logs_contain("BTC-PERPETUAL"));
+        assert!(logs_contain("age_s"));
+        assert!(logs_contain("ttl_s"));
+    }
+
+    /// NON-TRIP test (S1-006): fresh lookup must NOT emit breach log.
+    #[traced_test]
+    #[test]
+    fn test_fresh_lookup_does_not_emit_breach_log() {
+        let mut cache = InstrumentCache::new();
+        let t0 = Instant::now();
+        let ttl_s = 3600.0;
+
+        cache.insert_at("BTC-PERPETUAL", InstrumentKind::Perpetual, t0);
+
+        // Lookup within TTL → fresh → no breach log
+        let result = cache.get_at("BTC-PERPETUAL", ttl_s, t0).unwrap();
+        assert_eq!(result.risk_state, RiskState::Healthy);
+
+        assert!(
+            !logs_contain("InstrumentCacheTtlBreach"),
+            "fresh lookup must not emit breach log"
+        );
     }
 }

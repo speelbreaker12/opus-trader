@@ -13,6 +13,9 @@ use soldier_core::risk::RiskState;
 use soldier_core::venue::{
     CacheTtlBreach, InstrumentCache, InstrumentKind, MAX_PENDING_BREACH_EVENTS, opens_blocked,
 };
+// S1-006 tracing tests (TRIP + NON-TRIP) live in cache.rs::tests because
+// tracing-test's thread-local subscriber only captures events from the same
+// compilation unit. See cache::tests::test_ttl_breach_emits_structured_log.
 
 // ─── Fresh vs stale ─────────────────────────────────────────────────────
 
@@ -606,3 +609,4 @@ fn test_different_ttl_config_respected() {
         "61s must be stale under ttl_s=60 — proves TTL is not hardcoded to 3600"
     );
 }
+
