@@ -202,45 +202,8 @@ for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
       echo "--- end guard output ---" >&2
     fi
   fi
-elif [[ -f "$STORY_REVIEW_FINDINGS_GUARD" ]]; then
-  echo "[FAIL] Story findings-review guard not executable: $STORY_REVIEW_FINDINGS_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing story findings-review guard: $STORY_REVIEW_FINDINGS_GUARD (setup error)" >&2
-  exit 2
-fi
-
-# 3f. stoic-cli critical invariants guard (fail-closed)
-STOIC_CLI_INVARIANT_GUARD="plans/stoic_cli_invariant_check.sh"
-if [[ -x "$STOIC_CLI_INVARIANT_GUARD" ]]; then
-  if "$STOIC_CLI_INVARIANT_GUARD"; then
-    pass "stoic-cli invariants guard"
-  else
-    fail "stoic-cli invariants guard failed"
-  fi
-elif [[ -f "$STOIC_CLI_INVARIANT_GUARD" ]]; then
-  echo "[FAIL] stoic-cli invariants guard not executable: $STOIC_CLI_INVARIANT_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing stoic-cli invariants guard: $STOIC_CLI_INVARIANT_GUARD (setup error)" >&2
-  exit 2
-fi
-
-# 3g. rollout toggle policy wiring guard (fail-closed)
-TOGGLE_POLICY_GUARD="plans/toggle_policy_check.sh"
-if [[ -x "$TOGGLE_POLICY_GUARD" ]]; then
-  if "$TOGGLE_POLICY_GUARD" >/dev/null; then
-    pass "Toggle policy wiring guard"
-  else
-    fail "Toggle policy wiring guard failed"
-  fi
-elif [[ -f "$TOGGLE_POLICY_GUARD" ]]; then
-  echo "[FAIL] Toggle policy guard not executable: $TOGGLE_POLICY_GUARD (setup error)" >&2
-  exit 2
-else
-  echo "[FAIL] Missing toggle policy guard: $TOGGLE_POLICY_GUARD (setup error)" >&2
-  exit 2
-fi
+  ((_guard_idx++)) || true
+done
 
 # =============================================================================
 # Tier 2: Fast checks (<30s)

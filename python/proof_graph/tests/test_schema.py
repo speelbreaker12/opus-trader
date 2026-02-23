@@ -1,7 +1,6 @@
 """Tests for proof graph schema parsing and deny-unknown-fields."""
 from __future__ import annotations
 
-import copy
 import json
 import unittest
 from pathlib import Path

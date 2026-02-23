@@ -134,7 +134,7 @@ class TestValidateCLI(unittest.TestCase):
             f.flush()
             try:
                 # Without --strict: WARN (exit 0)
-                result_normal = _run([
+                _run([
                     f.name,
                     "--contract-path", str(CONTRACT),
                     "--prd-path", str(PRD),

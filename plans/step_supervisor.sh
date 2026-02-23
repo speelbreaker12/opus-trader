@@ -1,216 +1,332 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# step_supervisor.sh — thin orchestration wrapper around wf_step.sh
+# step_supervisor.sh — single-step orchestration wrapper around plans/wf_step.sh
 #
-# All validation lives in wf_step.sh. This script only does:
-#   next → prompt → (builder works) → validate → next
+# Feeds the builder exactly ONE step at a time. Validates completion via wf_step.sh
+# receipt chain, then advances. Builder never sees future steps.
 #
 # Usage:
-#   step_supervisor.sh <STORY_ID> next [--machine] [--recon]
-#   step_supervisor.sh <STORY_ID> prompt [<step>] [--recon]
-#   step_supervisor.sh <STORY_ID> validate|run [<step>] [--recon]
-#   step_supervisor.sh <STORY_ID> status [--machine] [--recon]
-#   step_supervisor.sh <STORY_ID> reset
+#   ./plans/step_supervisor.sh <STORY_ID> next
+#   ./plans/step_supervisor.sh <STORY_ID> prompt            # prints prompt for next step
+#   ./plans/step_supervisor.sh <STORY_ID> run               # validates + writes receipt
+#   ./plans/step_supervisor.sh <STORY_ID> status            # shows receipt chain
+#   ./plans/step_supervisor.sh <STORY_ID> reset             # deletes receipts for story
+#
+# Environment:
+#   STEP_SUPERVISOR_BASE_BRANCH  — required for prompt variable substitution
+#   STORY_ARTIFACTS_ROOT         — override artifacts/story root (optional)
+#
+# Exit codes:
+#   0 — success
+#   1 — validation failed (wf_step.sh prerequisite missing or step validation failed)
+#   2 — usage/setup error (bad args, missing env vars, path traversal)
+#   5 — HEAD mismatch (drift since last receipt)
 
-STEPS=(preflight implement self_review cycle1 fix cycle2 resolution verify_full)
-WF_STEP="./plans/wf_step.sh"
-PROMPTS_DIR="plans/step_prompts"
-PREAMBLE="$PROMPTS_DIR/builder_preamble.md"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+ARTIFACTS_ROOT="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
+WF_STEP="$ROOT/plans/wf_step.sh"
+PRD_SET_PASS="$ROOT/plans/prd_set_pass.sh"
+RECON_MODE=0
 
 usage() {
   cat >&2 <<'EOF'
-Usage: step_supervisor.sh <STORY_ID> <cmd> [<step>] [--recon] [--machine]
+Usage: step_supervisor.sh <STORY_ID> <cmd> [options]
 
 Commands:
-  next          Print the next required step (or "done").
-  prompt        Print the builder prompt for the next step.
-  validate|run  Validate the next step via wf_step.sh + write receipt.
-  status        Show receipt chain.
-  reset         Delete all receipts for story.
+  next      Print the next required step (or "pass" when all 8 done).
+  prompt    Print the prompt for the next step (with variable substitution).
+  run       Validate the next step and write receipt via wf_step.sh.
+  status    Show receipt chain for story.
+  reset     Delete all receipts for story.
 
 Options:
-  --recon     Reconciliation mode (audit already-passing stories)
-  --machine   Machine-readable output (pipe-delimited)
+  --recon   Reconciliation mode (audit already-passing stories)
 
 Environment:
-  STEP_SUPERVISOR_BASE_BRANCH  Base branch for review diffs
+  STEP_SUPERVISOR_BASE_BRANCH  Base branch for review diffs (required for prompt)
+
+Exit codes:
+  0  success
+  1  validation failed (prerequisites not met)
+  2  usage/setup error
+  5  HEAD mismatch
+
+Rollback:
+  plans/wf_step.sh <STORY_ID> --reset --yes   # clear all receipts
+  plans/prd_set_pass.sh <STORY_ID> false       # flip passes back if needed
 EOF
-  exit 2
 }
 
-# ── Arg parsing ─────────────────────────────────────────────────────
-[[ $# -ge 2 ]] || usage
-STORY="$1"; shift
-CMD="$1"; shift
+die() { echo "STEP_SUPERVISOR ERROR: $*" >&2; exit 2; }
 
-RECON_MODE=0
-MACHINE=0
-BASE_BRANCH="${STEP_SUPERVISOR_BASE_BRANCH:-}"
-STEP_ARG=""
+# ── Argument parsing ────────────────────────────────────────────────
+STORY="${1:-}"; CMD="${2:-}"
+[[ -n "$STORY" && -n "$CMD" ]] || { usage; exit 2; }
+shift 2
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --recon)   RECON_MODE=1 ;;
-    --machine) MACHINE=1 ;;
-    -h|--help) usage ;;
-    -*)        echo "Unknown option: $1" >&2; usage ;;
-    *)
-      if [[ -z "$STEP_ARG" ]]; then
-        STEP_ARG="$1"
-      else
-        echo "Unexpected arg: $1" >&2; usage
-      fi
-      ;;
+    --recon) RECON_MODE=1; shift ;;
+    --root) ROOT="$2"; shift 2 ;;
+    --artifacts-root) ARTIFACTS_ROOT="$2"; shift 2 ;;
+    --wf-step) WF_STEP="$2"; shift 2 ;;
+    --prd-set-pass) PRD_SET_PASS="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown arg: $1" ;;
   esac
-  shift
 done
 
-# Security: prevent path traversal
-[[ "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "Invalid STORY_ID: $STORY" >&2; exit 2; }
+# ── Security: STORY_ID validation (prevent path traversal) ─────────
+if [[ ! "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+  die "invalid STORY_ID '$STORY' — must match ^[A-Za-z0-9][A-Za-z0-9_-]*\$"
+fi
 
-# ── Paths ───────────────────────────────────────────────────────────
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+[[ -x "$WF_STEP" ]] || die "wf_step.sh not executable at: $WF_STEP"
+
 RECEIPT_DIR="${WF_RECEIPT_DIR:-$ROOT/.wf/receipts/$STORY}"
+PROMPTS_DIR="$ROOT/plans/step_prompts"
 
-# ── Helpers ─────────────────────────────────────────────────────────
+# Must match wf_step.sh STEPS array (minus 'pass' which is handled specially).
+STEPS=(preflight implement self_review cycle1 fix cycle2 resolution verify_full)
 
-receipt_file() {
-  local step="$1" i
+# ── Receipt filename helpers (must match wf_step.sh:receipt_file pattern) ───
+
+step_index() {
+  local s="$1"
   for i in "${!STEPS[@]}"; do
-    [[ "${STEPS[$i]}" == "$step" ]] && { printf '%s/%02d_%s.json' "$RECEIPT_DIR" "$i" "$step"; return; }
+    [[ "${STEPS[$i]}" == "$s" ]] && { echo "$i"; return 0; }
   done
   return 1
 }
 
-first_missing_step() {
-  local step f
-  for step in "${STEPS[@]}"; do
-    f="$(receipt_file "$step")"
-    [[ -f "$f" ]] || { echo "$step"; return; }
+receipt_file() {
+  local s="$1" idx
+  idx="$(step_index "$s")"
+  printf '%s/%02d_%s.json' "$RECEIPT_DIR" "$idx" "$s"
+}
+
+# ── Core functions ──────────────────────────────────────────────────
+
+last_receipt_head() {
+  local latest="" s f
+  for s in "${STEPS[@]}"; do
+    f="$(receipt_file "$s")"
+    [[ -f "$f" ]] && latest="$f"
   done
-  echo "done"
+  if [[ -n "$latest" ]]; then
+    jq -r '.head_sha // empty' "$latest" 2>/dev/null || true
+  fi
+}
+
+first_missing_step() {
+  local s
+  local current_head
+  current_head="$(git rev-parse HEAD 2>/dev/null || echo '')"
+
+  for s in "${STEPS[@]}"; do
+    if [[ ! -f "$(receipt_file "$s")" ]]; then
+      # Check for gaps: if this step is missing but a LATER step exists, that's a problem.
+      local later found_later=0
+      for later in "${STEPS[@]}"; do
+        if [[ "$later" == "$s" ]]; then
+          found_later=1
+          continue
+        fi
+        if [[ "$found_later" -eq 1 && -f "$(receipt_file "$later")" ]]; then
+          echo "STEP_SUPERVISOR: receipt gap detected — '$s' missing but '$later' exists" >&2
+          exit 4
+        fi
+      done
+      echo "$s"
+      return 0
+    fi
+  done
+
+  # All steps done — check HEAD monotonicity before declaring complete.
+  local last_head
+  last_head="$(last_receipt_head)"
+  if [[ -n "$last_head" && -n "$current_head" && "$last_head" != "$current_head" ]]; then
+    echo "STEP_SUPERVISOR: HEAD changed since last receipt (receipt=$last_head current=$current_head)" >&2
+    echo "STEP_SUPERVISOR: run 'plans/wf_step.sh $STORY --reset' to restart" >&2
+    exit 5
+  fi
+
+  echo "pass"
+}
+
+print_next() {
+  first_missing_step
 }
 
 prompt_file_for_step() {
   local step="$1"
+  local f
   if [[ "$RECON_MODE" -eq 1 ]]; then
-    echo "$ROOT/$PROMPTS_DIR/recon/$step.md"
+    f="$PROMPTS_DIR/recon/$step.md"
   else
-    echo "$ROOT/$PROMPTS_DIR/$step.md"
+    f="$PROMPTS_DIR/$step.md"
   fi
+  [[ -f "$f" ]] || die "missing prompt file: $f"
+  echo "$f"
 }
 
-run_wf_step() {
+# Detect whether recon should stay GREEN or escalate to YELLOW (full requirements).
+# GREEN: no code changes since cycle1 → recon prompts + relaxed validation
+# YELLOW: code changed after cycle1 → normal prompts + full validation
+should_use_recon_mode() {
+  local step="$1" story="$2"
+  # Only relevant for recon mode
+  [[ "$RECON_MODE" -eq 1 ]] || return 1
+
+  # Steps before fix: always use recon mode
+  case "$step" in
+    preflight|implement|self_review|cycle1|fix) return 0 ;;
+  esac
+
+  # Steps after fix: check if HEAD changed since cycle1
+  local cycle1_receipt
+  cycle1_receipt="$(receipt_file cycle1)"
+  if [[ -f "$cycle1_receipt" ]]; then
+    local cycle1_head
+    cycle1_head="$(jq -r '.head_sha // ""' "$cycle1_receipt" 2>/dev/null)"
+    local current_head
+    current_head="$(git rev-parse HEAD 2>/dev/null)"
+    if [[ -n "$cycle1_head" && "$cycle1_head" != "$current_head" ]]; then
+      echo "SUPERVISOR: HEAD changed since cycle1 ($cycle1_head → $current_head)" >&2
+      echo "SUPERVISOR: escalating to full review requirements (YELLOW path)" >&2
+      return 1  # Don't use recon mode → full requirements
+    fi
+  fi
+  return 0  # GREEN path → use recon mode
+}
+
+substitute_vars() {
+  local text="$1"
+  local head_sha
+  head_sha="$(git rev-parse HEAD 2>/dev/null || echo 'UNKNOWN')"
+  local base_branch="${STEP_SUPERVISOR_BASE_BRANCH:-UNSET}"
+
+  text="${text//\$\{STORY_ID\}/$STORY}"
+  text="${text//\$\{BASE_BRANCH\}/$base_branch}"
+  text="${text//\$\{HEAD\}/$head_sha}"
+  text="${text//\$\{RECON_MODE\}/$RECON_MODE}"
+  echo "$text"
+}
+
+run_step() {
   local step="$1"
-  if [[ "$RECON_MODE" -eq 1 ]]; then
-    WF_RECON_MODE=1 "$WF_STEP" "$STORY" "$step"
+
+  if [[ "$step" == "pass" ]]; then
+    echo "STEP_SUPERVISOR: all 8 steps complete for $STORY"
+    echo "STEP_SUPERVISOR: running final chain validation..."
+    local rc=0
+    "$WF_STEP" "$STORY" pass || rc=$?
+    case "$rc" in
+      0)
+        echo
+        echo "STEP_SUPERVISOR: receipt chain validated. Next action:"
+        echo "  $PRD_SET_PASS $STORY true"
+        echo "(step_supervisor does NOT run prd_set_pass for you.)"
+        ;;
+      1) echo "STEP_SUPERVISOR BLOCKED: prerequisite missing for pass step" >&2; exit 1 ;;
+      5) echo "STEP_SUPERVISOR HALT: HEAD mismatch — receipts stale" >&2; exit 5 ;;
+      *) echo "STEP_SUPERVISOR: wf_step.sh exited $rc for pass step" >&2; exit "$rc" ;;
+    esac
+    return 0
+  fi
+
+  # Run wf_step.sh (mechanical validation + receipt write)
+  echo "STEP_SUPERVISOR: validating step '$step' for $STORY..."
+  local rc=0
+  if should_use_recon_mode "$step" "$STORY"; then
+    WF_RECON_MODE=1 "$WF_STEP" "$STORY" "$step" || rc=$?
   else
-    "$WF_STEP" "$STORY" "$step"
+    "$WF_STEP" "$STORY" "$step" || rc=$?
+  fi
+
+  case "$rc" in
+    0) ;;  # Success
+    1)
+      echo "STEP_SUPERVISOR BLOCKED: prerequisite missing for '$step'" >&2
+      echo "STEP_SUPERVISOR: check receipt chain with: $0 $STORY status" >&2
+      exit 1
+      ;;
+    3)
+      echo "STEP_SUPERVISOR BLOCKED: step validation failed for '$step'" >&2
+      echo "STEP_SUPERVISOR: builder must produce the required artifacts" >&2
+      exit 1
+      ;;
+    5)
+      echo "STEP_SUPERVISOR HALT: HEAD mismatch for '$step'" >&2
+      exit 5
+      ;;
+    *)
+      echo "STEP_SUPERVISOR: wf_step.sh exited $rc for step '$step'" >&2
+      exit "$rc"
+      ;;
+  esac
+
+  echo "STEP_SUPERVISOR: step '$step' COMPLETE"
+}
+
+# ── Mutual exclusion for run command ────────────────────────────────
+run_with_lock() {
+  local lockfile="/tmp/step_supervisor_${STORY}.lock"
+  local lockdir="${lockfile}.d"
+  if command -v flock >/dev/null 2>&1; then
+    (
+      if ! flock -n 9; then
+        die "another supervisor is running for story $STORY (lock: $lockfile)"
+      fi
+      run_step "$1"
+    ) 9>"$lockfile"
+  else
+    # macOS fallback: mkdir is atomic
+    if ! mkdir "$lockdir" 2>/dev/null; then
+      die "another supervisor is running for story $STORY (lock: $lockdir)"
+    fi
+    local rc=0
+    run_step "$1" || rc=$?
+    rmdir "$lockdir" 2>/dev/null || true
+    return "$rc"
   fi
 }
 
-find_prior_postmortem() {
-  # Find the most recently modified postmortem in artifacts/story/*/postmortem.md
-  # excluding the current story.
-  # Uses -exec {} + so ls is never invoked on empty results (portability fix).
-  local pm
-  pm="$(find "$ROOT/artifacts/story" -maxdepth 2 -name 'postmortem.md' -not -path "*/$STORY/*" \
-    -exec ls -t {} + 2>/dev/null | head -1 || true)"
-  echo "${pm:-NONE}"
-}
-
-# ── Resolve pending step ────────────────────────────────────────────
-pending="$(first_missing_step)"
-step="${STEP_ARG:-$pending}"
-
-# ── Commands ────────────────────────────────────────────────────────
+# ── Main dispatch ───────────────────────────────────────────────────
 case "$CMD" in
   next)
-    if [[ "$MACHINE" -eq 1 ]]; then
-      [[ "$pending" == "done" ]] && echo "DONE|-" || echo "PENDING|$pending"
-    else
-      echo "$pending"
-    fi
+    print_next
     ;;
-
   prompt)
-    [[ "$pending" != "done" ]] || { echo "All steps complete."; exit 0; }
-
-    # Skip guard
-    if [[ -n "$STEP_ARG" && "$step" != "$pending" ]]; then
-      echo "Refusing prompt for '$step' — next required step is '$pending'" >&2
-      exit 3
+    step="$(print_next)"
+    if [[ "$step" == "pass" ]]; then
+      echo "# NEXT STEP: pass"
+      echo "# No builder prompt — supervisor runs prd_set_pass.sh directly."
+      echo
+      echo "All 8 builder steps are complete."
+      echo "Run: $0 $STORY run"
+      exit 0
     fi
-
-    pf="$(prompt_file_for_step "$step")"
-    [[ -f "$pf" ]] || { echo "Missing prompt: $pf" >&2; exit 1; }
-
-    HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
-    PRIOR_PM="$(find_prior_postmortem)"
-
-    # Preamble
-    [[ -f "$ROOT/$PREAMBLE" ]] && { cat "$ROOT/$PREAMBLE"; echo; echo "---"; echo; }
-
-    # Render with variable substitution
-    sed \
-      -e "s|\${STORY_ID}|$STORY|g" \
-      -e "s|\${BASE_BRANCH}|${BASE_BRANCH:-main}|g" \
-      -e "s|\${HEAD}|$HEAD_SHA|g" \
-      -e "s|\${RECON_MODE}|$RECON_MODE|g" \
-      -e "s|\${PRIOR_POSTMORTEM_PATH}|$PRIOR_PM|g" \
-      "$pf"
+    f="$(prompt_file_for_step "$step")"
+    echo "# NEXT STEP: $step"
+    echo "# PROMPT FILE: $f"
+    [[ "$RECON_MODE" -eq 1 ]] && echo "# MODE: reconciliation"
+    echo
+    content="$(cat "$f")"
+    substitute_vars "$content"
     ;;
-
-  validate|run)
-    [[ "$pending" != "done" ]] || { echo "All steps complete."; exit 0; }
-
-    # Skip guard
-    if [[ -n "$STEP_ARG" && "$step" != "$pending" ]]; then
-      echo "Refusing '$step' — next required step is '$pending'" >&2
-      exit 3
-    fi
-
-    rc=0
-    run_wf_step "$step" || rc=$?
-    if [[ "$rc" -ne 0 ]]; then
-      case "$rc" in
-        1) echo "Hint: prerequisite receipt missing." >&2 ;;
-        3) echo "Hint: required artifacts not found or format wrong." >&2 ;;
-        5) echo "Hint: HEAD drift or receipt mismatch." >&2 ;;
-      esac
-      exit "$rc"
-    fi
-    echo "Validated: $step"
+  run)
+    step="$(print_next)"
+    run_with_lock "$step"
     ;;
-
   status)
-    if [[ "$MACHINE" -eq 1 ]]; then
-      done_count=0; current="-"
-      for s in "${STEPS[@]}"; do
-        [[ -f "$(receipt_file "$s")" ]] && { done_count=$((done_count + 1)); current="$s"; }
-      done
-      echo "STATUS|story=${STORY}|current=${current}|next=${pending}|receipts=${done_count}/8|recon=${RECON_MODE}"
-    else
-      echo "Story: $STORY"
-      echo "Mode: $([[ "$RECON_MODE" -eq 1 ]] && echo recon || echo normal)"
-      echo "Next: $pending"
-      echo "Receipts:"
-      for s in "${STEPS[@]}"; do
-        if [[ -f "$(receipt_file "$s")" ]]; then
-          echo "  [x] $s"
-        else
-          echo "  [ ] $s"
-        fi
-      done
-    fi
+    "$WF_STEP" "$STORY" --status
     ;;
-
   reset)
     "$WF_STEP" "$STORY" --reset --yes
     ;;
-
   *)
-    usage
+    die "unknown command: $CMD (expected: next|prompt|run|status|reset)"
     ;;
 esac
