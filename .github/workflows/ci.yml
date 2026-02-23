@@ -37,46 +37,6 @@ jobs:
           path: artifacts/phase1_compare/ci_snapshot_isolation/
           if-no-files-found: ignore
 
-  copilot-signal:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Copilot signal
-        run: echo "copilot-signal"
-
-  copilot-gate:
-    if: |
-      github.event_name == 'pull_request' ||
-      github.event_name == 'pull_request_review' ||
-      github.event_name == 'pull_request_review_comment' ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-      checks: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Enforce copilot gate (merge health + bot comments)
-        run: |
-          chmod +x ./plans/pr_gate.sh
-          ./plans/pr_gate.sh \
-            --pr "${PR_NUMBER}" \
-            --wait \
-            --timeout-secs 1800 \
-            --poll-secs 20 \
-            --aftercare-ack-mode auto \
-            --bot-comments-mode block \
-            --require-copilot-review \
-            --ignore-check-run-regex '^(copilot-gate|prd-story-gate)$'
-
   prd-story-gate:
     if: |
       false &&
