@@ -645,6 +645,25 @@ if [[ -x "$ROOT/plans/fail_closed_coverage.sh" ]]; then
   fi
 fi
 
+# --- Proof graph validation (full mode only, post-aggregation) ---
+# Single-level glob: artifacts/story/*/proof_graph.json matches only
+# base/merged graphs (e.g. artifacts/story/S1-007/proof_graph.json).
+# Reviewer sub-directories (codex/, opus/, kimi/) are two levels deep
+# and are intentionally excluded by the glob pattern.
+PROOF_GRAPH_TIMEOUT="${PROOF_GRAPH_TIMEOUT:-30s}"
+if [[ "$MODE" == "full" ]]; then
+  for pg in "$ROOT"/artifacts/story/*/proof_graph.json; do
+    [[ -f "$pg" ]] || continue
+    sid="$(basename "$(dirname "$pg")")"
+    log "14g-pg) proof graph validation: $sid"
+    run_logged_or_exit "proof_graph_${sid}" "$PROOF_GRAPH_TIMEOUT" \
+      python3 "$ROOT/python/proof_graph/validate.py" "$pg" \
+        --contract-path "$ROOT/specs/CONTRACT.md" \
+        --prd-path "$ROOT/plans/prd.json" \
+        --strict
+  done
+fi
+
 export ROOT MODE VERIFY_ARTIFACTS_DIR VERIFY_CONSOLE VERIFY_LOG_CAPTURE
 export TIMEOUT_BIN ENABLE_TIMEOUTS VERIFY_FAIL_TAIL_LINES VERIFY_FAIL_SUMMARY_LINES TIMEOUT_WARNED
 export RUST_FMT_TIMEOUT RUST_CLIPPY_TIMEOUT RUST_TEST_TIMEOUT

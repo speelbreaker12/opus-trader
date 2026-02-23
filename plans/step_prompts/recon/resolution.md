@@ -33,6 +33,15 @@ TASK
      - Section 9: Complete the checklist (all boxes checked)
    - Keep it to ~1 page. If you can't name the constraint in one sentence, it's fluff.
 
+PROOF GRAPH AGGREGATION (before VERIFY_FULL)
+
+If reviewer proof graphs exist (from --proof-graph reviews), aggregate them:
+```
+bash plans/aggregate_proofs.sh ${STORY_ID}
+```
+This merges all reviewer verdicts into the base proof_graph.json (fail-closed, strictest wins).
+If no reviewer graphs exist, the base graph is unchanged and this step exits 0.
+
 OUTPUT
 - Print the path to review_resolution.md
 - Postmortem path (if written)

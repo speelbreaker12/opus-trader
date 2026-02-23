@@ -21,6 +21,7 @@ Options:
                      generic  = code-quality focus (SOLID, naming, doc, types)
                      enriched = contract-proof focus (ATs, premortem, fail-closed)
                      Run both for maximum coverage.
+  --proof-graph      Generate per-reviewer proof_graph.json skeleton (requires --prompt enriched)
   --commit REF       Review a specific commit (default: HEAD)
   --base REF         Review diff from base to HEAD
   --uncommitted      Review uncommitted changes
@@ -41,8 +42,9 @@ Artifacts:
 Examples:
   plans/review_logged.sh S1-004 --tool codex --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool codex --files "src/gate.rs src/risk.rs"
-  plans/review_logged.sh S1-004 --tool opus --prompt generic --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool opus --prompt enriched --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool opus --prompt generic --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool opus --proof-graph --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool kimi --base main
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
 EOF
@@ -163,6 +165,7 @@ shift
 
 tool=""
 prompt_style="enriched"
+proof_graph=false
 mode="commit"
 commit="HEAD"
 base=""
@@ -180,6 +183,10 @@ while [[ $# -gt 0 ]]; do
     --prompt)
       prompt_style="${2:?missing prompt style (generic|enriched)}"
       shift 2
+      ;;
+    --proof-graph)
+      proof_graph=true
+      shift 1
       ;;
     --commit)
       mode="commit"
@@ -229,6 +236,18 @@ case "$prompt_style" in
   generic|enriched) ;;
   *) echo "ERROR: unknown --prompt '$prompt_style' (expected: generic or enriched)" >&2; exit 2 ;;
 esac
+
+# --proof-graph guards
+if [[ "$proof_graph" == "true" ]]; then
+  if [[ "$prompt_style" == "generic" ]]; then
+    echo "ERROR: --proof-graph requires --prompt enriched (generic lacks AT/premortem context)" >&2
+    exit 2
+  fi
+  if [[ "$tool" == "codex" && "$mode" != "files" ]]; then
+    echo "ERROR: --proof-graph requires --tool opus|kimi or --tool codex --files (codex diff mode bypasses prompt injection)" >&2
+    exit 2
+  fi
+fi
 
 if [[ -z "$title" ]]; then
   title="$story: $(ucfirst "$tool") review"
@@ -395,6 +414,24 @@ PROMPT_EOF
   fi
 }
 
+# ── Proof graph skeleton generation (before review) ───────────────
+pg_skeleton=""
+if [[ "$proof_graph" == "true" ]]; then
+  pg_outdir="$outdir"  # artifacts/story/<ID>/<tool>/
+  echo "Generating proof graph skeleton for $story (reviewer: $tool)..." >&2
+  python3 "$root/python/proof_graph/init.py" "$story" \
+    --prd-path "$root/plans/prd.json" \
+    --contract-path "$root/specs/CONTRACT.md" \
+    --premortem-dir "$root/artifacts/story/$story/" \
+    --output-dir "$pg_outdir" >&2
+  pg_skeleton="$pg_outdir/proof_graph.json"
+  if [[ ! -f "$pg_skeleton" ]]; then
+    echo "ERROR: proof_graph.json skeleton not created at $pg_skeleton" >&2
+    exit 1
+  fi
+  echo "Proof graph skeleton: $pg_skeleton" >&2
+fi
+
 # ── Build tool-specific command ─────────────────────────────────────
 case "$tool" in
   codex)
@@ -493,6 +530,9 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
     echo "- Codex Mode: exec (prompt pass-through)"
   fi
   echo "- Prompt style: $prompt_style"
+  if [[ "$proof_graph" == "true" ]]; then
+    echo "- Proof graph: $pg_skeleton"
+  fi
   echo "- Command: ${cmd[*]}"
   echo "- Artifact Provenance: logger-v2"
   echo "- Generator Script: plans/review_logged.sh"
