@@ -21,6 +21,7 @@ from python.proof_graph.rules import (
     r_035, r_036, r_037, r_038, r_039, r_040, r_041,
     r_042, r_043, r_044, r_045, r_046, r_047,
     r_048, r_049, r_050, r_051, r_052, r_053, r_054, r_055,
+    r_056, r_057,
     validate,
 )
 from python.proof_graph.schema import ProofGraph
@@ -1899,6 +1900,166 @@ class TestR055_IdFormat(unittest.TestCase):
     def test_clean_on_valid(self):
         ctx = _ctx("valid_proof_graph.json")
         self.assertEqual(r_055(ctx), [])
+
+
+class TestR008_WiringEvidencePlaceholder(unittest.TestCase):
+    """D5-003: R-008 catches placeholders in wiring.evidence."""
+
+    def test_fires_on_wiring_evidence_placeholder(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["wiring"]["evidence"] = "TBD"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_008(ctx)
+        self.assertTrue(any(
+            f.rule == "R-008" and "wiring.evidence" in f.field_path
+            for f in findings
+        ))
+
+
+class TestR028_LatchReasonMechanism(unittest.TestCase):
+    """D5-002: R-028 coverage for latch_reason mechanism."""
+
+    def test_fires_on_missing_latch_reason_assert(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["tests"][0]["causal_proof"]["mechanism"] = "latch_reason"
+        data["ats"][0]["tests"][0]["causal_proof"].pop("latch_reason_assert", None)
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_028(ctx)
+        self.assertTrue(any(
+            f.rule == "R-028" and "latch_reason_assert" in f.message
+            for f in findings
+        ))
+
+
+class TestR045_ReconciledUnitOnlyNonProven(unittest.TestCase):
+    """D1-001: R-045 now covers RECONCILED_UNIT_ONLY."""
+
+    def test_fires_on_reconciled_unit_only_missing(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_verdict"]["reconciliation_status"] = "RECONCILED_UNIT_ONLY"
+        data["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        data["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        data["story_verdict"]["blocking_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_045(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("RECONCILED_UNIT_ONLY", findings[0].message)
+
+    def test_clean_on_reconciled_unit_only_proven_unit(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_verdict"]["reconciliation_status"] = "RECONCILED_UNIT_ONLY"
+        data["ats"][0]["at_verdict"]["verdict"] = "PROVEN_UNIT"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_045(ctx), [])
+
+
+class TestR045_ReconciledWithDebtWeakProof(unittest.TestCase):
+    """D5-001: R-045 test for RECONCILED_WITH_DEBT + WEAK_PROOF."""
+
+    def test_fires_on_reconciled_with_debt_weak_proof(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_verdict"]["reconciliation_status"] = "RECONCILED_WITH_DEBT"
+        data["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        data["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        data["story_verdict"]["hardening_count"] = 1
+        data["debt_register"] = [{
+            "at_id": "AT-201",
+            "description": "weak proof",
+            "target_slice": "S2",
+        }]
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_045(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("RECONCILED_WITH_DEBT", findings[0].message)
+
+
+class TestR056_DeferredSafetyCritical(unittest.TestCase):
+    def test_fires_on_deferred(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["at_verdict"]["verdict"] = "DEFERRED"
+        data["ats"][0]["at_verdict"]["severity"] = "INFO"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_056(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-056")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_proven(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_056(ctx), [])
+
+    def test_no_fire_when_not_safety_critical(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_meta"]["safety_critical"] = False
+        data["ats"][0]["at_verdict"]["verdict"] = "DEFERRED"
+        data["ats"][0]["at_verdict"]["severity"] = "INFO"
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_056(ctx), [])
+
+
+class TestR057_SafetyCriticalEscalation(unittest.TestCase):
+    def test_fires_on_untested_enforcement(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["at_verdict"]["verdict"] = "UNTESTED_ENFORCEMENT"
+        data["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        data["story_verdict"]["hardening_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_057(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-057")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_fires_on_claimed_not_proven(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["at_verdict"]["verdict"] = "CLAIMED_NOT_PROVEN"
+        data["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        data["story_verdict"]["hardening_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_057(ctx)
+        self.assertEqual(len(findings), 1)
+
+    def test_clean_on_proven(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_057(ctx), [])
+
+    def test_no_fire_when_not_safety_critical(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_meta"]["safety_critical"] = False
+        data["ats"][0]["at_verdict"]["verdict"] = "UNTESTED_ENFORCEMENT"
+        data["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        data["story_verdict"]["hardening_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        self.assertEqual(r_057(ctx), [])
 
 
 if __name__ == "__main__":

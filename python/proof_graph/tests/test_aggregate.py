@@ -370,6 +370,60 @@ class TestAggregate(unittest.TestCase):
         merged = aggregate(base, [r1], review_labels=["codex"])
         self.assertNotIn("stale_rationales", merged["meta"])
 
+    def test_reconciliation_stale_flagged(self):
+        """D2-001: meta.reconciliation_stale set when blocking_count > 0
+        under reconciled status."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged = aggregate(base, [r1], review_labels=["codex"])
+
+        # reconciliation_status is NOT recomputed (stays RECONCILED)
+        self.assertEqual(merged["story_verdict"]["reconciliation_status"], "RECONCILED")
+        # But reconciliation_stale flag IS set
+        self.assertTrue(merged["meta"].get("reconciliation_stale", False))
+
+    def test_reconciliation_not_stale_when_clean(self):
+        """No reconciliation_stale when blocking_count == 0."""
+        base = self._base()
+        r1 = deepcopy(base)
+        merged = aggregate(base, [r1], review_labels=["codex"])
+        self.assertNotIn("reconciliation_stale", merged["meta"])
+
+    def test_reconciliation_stale_cleaned_when_status_changes(self):
+        """reconciliation_stale cleared when reconciliation_status leaves
+        the reconciled family (e.g. operator sets NOT_RECONCILED)."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r1["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        merged1 = aggregate(base, [r1], review_labels=["codex"])
+        self.assertTrue(merged1["meta"].get("reconciliation_stale", False))
+
+        # Operator updates reconciliation_status to NOT_RECONCILED
+        merged1["story_verdict"]["reconciliation_status"] = "NOT_RECONCILED"
+        r2 = deepcopy(merged1)
+        merged2 = aggregate(merged1, [r2], review_labels=["codex2"])
+        self.assertNotIn("reconciliation_stale", merged2["meta"])
+
+    def test_unknown_severity_fail_closed(self):
+        """D2-003: unknown severity treated as stricter than BLOCKING."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        # r1 has known BLOCKING severity
+        r1["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        # r2 has unknown severity — should be treated as strictest
+        r2["ats"][0]["at_verdict"]["severity"] = "ULTRA_CRITICAL"
+
+        merged = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+
+        at201 = next(at for at in merged["ats"] if at["at_id"] == "AT-201")
+        # Unknown severity wins (fail-closed: stricter than BLOCKING)
+        self.assertEqual(at201["at_verdict"]["severity"], "ULTRA_CRITICAL")
+
 
 if __name__ == "__main__":
     unittest.main()

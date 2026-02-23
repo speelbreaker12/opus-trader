@@ -1,4 +1,4 @@
-"""57 validation rules for proof graph (20 V1 + 37 V2)."""
+"""60 validation rules for proof graph (43 V1+V2, 17 V2-only)."""
 from __future__ import annotations
 
 import re
@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
-from .schema import ProofGraph, SHA_RE
+from .schema import CausalProof, ProofGraph, SHA_RE
 from .enums import (
     AssumptionStatus,
     CausalMechanism,
@@ -148,7 +148,11 @@ def r_006(ctx: ValidationContext) -> list[Finding]:
 
 
 def r_007(ctx: ValidationContext) -> list[Finding]:
-    """AT ID not in CONTRACT.md."""
+    """AT ID not in CONTRACT.md.
+
+    Skipped when contract_ats is empty (CLI enforces CONTRACT.md presence;
+    programmatic callers must populate ValidationContext.contract_ats).
+    """
     if not ctx.contract_ats:
         return []
     findings: list[Finding] = []
@@ -710,6 +714,11 @@ _MECHANISM_ASSERT_MAP: dict[str, str] = {
     CausalMechanism.LATCH_REASON.value: "latch_reason_assert",
 }
 
+# Verify at import time that all assertion attributes exist on CausalProof
+assert all(
+    hasattr(CausalProof, attr) for attr in _MECHANISM_ASSERT_MAP.values()
+), f"_MECHANISM_ASSERT_MAP references unknown CausalProof attributes"
+
 # Known enforcement_point values (from CLAUDE.md / CONTRACT.md)
 _KNOWN_ENFORCEMENT_POINTS = {
     "PolicyGuard", "EvidenceGuard", "DispatcherChokepoint",
@@ -852,7 +861,11 @@ def r_032(ctx: ValidationContext) -> list[Finding]:
 
 
 def r_033(ctx: ValidationContext) -> list[Finding]:
-    """Enforcement NOT_FOUND + PROVEN_INTEGRATED verdict contradiction."""
+    """Enforcement NOT_FOUND + PROVEN_INTEGRATED verdict contradiction.
+
+    NOT_FOUND + PROVEN_UNIT is intentionally allowed: unit tests can exist
+    without locating the enforcement point in source code.
+    """
     findings: list[Finding] = []
     for at in ctx.graph.ats:
         if at.enforcement.status == EnforcementStatus.NOT_FOUND and \
@@ -1142,6 +1155,7 @@ def r_044(ctx: ValidationContext) -> list[Finding]:
 _RECONCILED_STATUSES = {
     ReconciliationStatus.RECONCILED,
     ReconciliationStatus.RECONCILED_WITH_DEBT,
+    ReconciliationStatus.RECONCILED_UNIT_ONLY,
 }
 
 
@@ -1226,7 +1240,12 @@ def r_048(ctx: ValidationContext) -> list[Finding]:
 
 
 def r_049(ctx: ValidationContext) -> list[Finding]:
-    """V2: extra_discovered=true AT with no visibility flag."""
+    """V2: extra_discovered=true AT with no visibility flag.
+
+    Only flags PROVEN + INFO (the lowest-visibility combination).
+    Non-proven verdicts (WEAK_PROOF etc.) already have elevated attention
+    from other rules (R-045, R-002).
+    """
     if not _is_v2(ctx):
         return []
     findings: list[Finding] = []
@@ -1420,26 +1439,74 @@ def r_055(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+_SAFETY_ESCALATION_VERDICTS = {
+    Verdict.UNTESTED_ENFORCEMENT,
+    Verdict.CLAIMED_NOT_PROVEN,
+}
+
+
+def r_056(ctx: ValidationContext) -> list[Finding]:
+    """DEFERRED verdict on safety_critical AT."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict == Verdict.DEFERRED:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-056",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id} has DEFERRED verdict "
+                    f"(requires explicit resolution)"
+                ),
+            ))
+    return findings
+
+
+def r_057(ctx: ValidationContext) -> list[Finding]:
+    """safety_critical AT with UNTESTED_ENFORCEMENT or CLAIMED_NOT_PROVEN."""
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict in _SAFETY_ESCALATION_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-057",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id} has "
+                    f"{at.at_verdict.verdict.value} verdict"
+                ),
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
     r_016b, r_017,
-    # V2 rules
+    # V2 schema rules (initial)
     r_006b, r_018, r_019, r_020, r_021, r_022, r_023, r_024,
     r_024b, r_025, r_026,
-    # V3 rules (validator-audit round 2)
+    # Batch 3: audit round 2
     r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
     r_035, r_036, r_037,
-    # V3 rules (validator-audit round 3)
+    # Batch 4: audit round 3
     r_038, r_039, r_040, r_041,
-    # V4 rules (validator-audit round 4)
+    # Batch 5: audit round 4
     r_042, r_043, r_044, r_045, r_046, r_047,
-    # V5 rules (validator-audit round 5)
+    # Batch 6: audit round 5
     r_048, r_049,
-    # V6 rules (validator-audit round 6)
+    # Batch 7: audit round 6
     r_050, r_051,
-    # V7 rules (validator-audit round 7)
+    # Batch 8: audit round 7
     r_052, r_053, r_054, r_055,
+    # Batch 9: enriched review
+    r_056, r_057,
 ]
 
 

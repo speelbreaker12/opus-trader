@@ -29,6 +29,9 @@ SEVERITY_STRICTNESS: dict[str, int] = {
     "BLOCKING": 2,
 }
 
+# Unknown severity values get rank 3 (fail-closed: stricter than BLOCKING)
+UNKNOWN_SEVERITY_RANK = 3
+
 # Full verdict strictness ordering (0=least strict, higher=more strict)
 VERDICT_STRICTNESS: dict[str, int] = {
     "PROVEN_INTEGRATED": 0,
@@ -151,6 +154,8 @@ def aggregate(
             # Deterministic tie-break: among reviewers with the strictest
             # verdict, pick the one with the strictest severity, then
             # lowest label (alphabetical) for full determinism.
+            # Note: the entire AT is copied wholesale from the selected
+            # reviewer (no field-level merge across reviewers).
             best_entry = None
             best_sev = -1
             best_label = ""
@@ -158,7 +163,8 @@ def aggregate(
                 rv = rat.get("at_verdict", {}).get("verdict", "MISSING")
                 if rv == strictest or (strictest == DEFERRED_VERDICT):
                     rsev = SEVERITY_STRICTNESS.get(
-                        rat.get("at_verdict", {}).get("severity", ""), 0
+                        rat.get("at_verdict", {}).get("severity", ""),
+                        UNKNOWN_SEVERITY_RANK,
                     )
                     if best_entry is None or rsev > best_sev or \
                             (rsev == best_sev and label < best_label):
@@ -190,10 +196,10 @@ def aggregate(
             # (independent of whether the verdict changed) for fail-closed
             # correctness. Tie-break: highest severity rank wins.
             best_sev_str = base_at.get("at_verdict", {}).get("severity", "")
-            best_sev_rank = SEVERITY_STRICTNESS.get(best_sev_str, 0)
+            best_sev_rank = SEVERITY_STRICTNESS.get(best_sev_str, UNKNOWN_SEVERITY_RANK)
             for _lbl, rat in reviewer_entries:
                 rsev = rat.get("at_verdict", {}).get("severity", "")
-                rsev_rank = SEVERITY_STRICTNESS.get(rsev, 0)
+                rsev_rank = SEVERITY_STRICTNESS.get(rsev, UNKNOWN_SEVERITY_RANK)
                 if rsev_rank > best_sev_rank:
                     best_sev_rank = rsev_rank
                     best_sev_str = rsev
@@ -225,6 +231,15 @@ def aggregate(
     # Recompute trading halt from merged data
     merged["story_verdict"]["trading_halt_trigger"] = _compute_trading_halt(merged)
 
+    # Detect stale reconciliation: blocking_count > 0 under a reconciled-family status
+    # means downstream validate() will catch the contradiction via R-001, but
+    # consumers reading the merged graph without validation need a signal.
+    _RECONCILED_FAMILY = {"RECONCILED", "RECONCILED_WITH_DEBT", "RECONCILED_UNIT_ONLY"}
+    recon_status = merged.get("story_verdict", {}).get("reconciliation_status", "")
+    reconciliation_stale = (
+        blocking_count > 0 and recon_status in _RECONCILED_FAMILY
+    )
+
     # Populate meta
     if "meta" not in merged:
         merged["meta"] = {}
@@ -233,10 +248,13 @@ def aggregate(
     # Clear stale fields from prior aggregation, then set new ones
     merged["meta"].pop("conflicts", None)
     merged["meta"].pop("stale_rationales", None)
+    merged["meta"].pop("reconciliation_stale", None)
     if conflicts:
         merged["meta"]["conflicts"] = conflicts
     if stale_rationales:
         merged["meta"]["stale_rationales"] = sorted(stale_rationales)
+    if reconciliation_stale:
+        merged["meta"]["reconciliation_stale"] = True
 
     return merged
 
