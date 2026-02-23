@@ -220,21 +220,43 @@ def extract_external_review_meta(content: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 FAILURE_CODE_ACTIONS: dict[str, str] = {
+    # ── Manifest-level failures ──
+    "MANIFEST_MISSING": "manifest JSON file not found on disk",
+    "MANIFEST_JSON_INVALID": "manifest file is not valid JSON or not a JSON object",
+    "MANIFEST_PROVENANCE_INVALID": "manifest provenance block has missing/invalid fields",
+    "MANIFEST_CYCLE_MISMATCH": "manifest cycle (C1/C2) doesn't match expected value",
+    "MANIFEST_PHASE_MISMATCH": "manifest phase (R3/R7d) doesn't match expected value",
+    "MANIFEST_STORY_ID_MISMATCH": "manifest story_id doesn't match expected value",
+    "MANIFEST_SLICE_ID_MISMATCH": "manifest slice_id doesn't match expected value",
+    "MANIFEST_HEAD_COMMIT_MISMATCH": "manifest head_commit doesn't match expected value",
+    "MANIFEST_BASE_COMMIT_MISMATCH": "manifest base_commit doesn't match expected value",
+    "MANIFEST_REQUIRED_COMBO_MISSING": "missing Codex/Opus generic/enriched run",
+    "MANIFEST_DUPLICATE_COMBO": "same tool:prompt_style combo appears multiple times",
+    "MANIFEST_UNEXPECTED_TOOL": "review uses unrecognized tool (expected: codex/opus/kimi)",
+    "MANIFEST_UNEXPECTED_PROMPT_STYLE": "review uses unrecognized prompt_style (expected: generic/enriched)",
+    "MANIFEST_CHECK_SUMMARY_INCONSISTENT": "manifest claims PASS but computed validation disagrees",
+    "MANIFEST_VALIDATION_STATUS_FAIL": "manifest's own validation.status is FAIL",
+    # ── Schema failures ──
+    "SCHEMA_MISSING": "JSON Schema file not found on disk",
+    "SCHEMA_INVALID": "JSON Schema file is not valid JSON or has schema errors",
+    "SCHEMA_VALIDATION_FAILED": "manifest does not conform to JSON Schema",
+    "SCHEMA_VALIDATION_SKIPPED": "jsonschema package not installed — schema check could not run",
+    # ── Review basis / cycle semantics ──
     "REVIEW_BASIS_MISSING": "reviewer didn't include cycle scope line",
     "REVIEW_BASIS_MISMATCH": "review_basis doesn't match expected cycle scope",
     "PREEXISTING_ENFORCEMENT_CITATION_MISSING": "C1 review not anchored to real pre-existing enforcement",
     "PREEXISTING_TEST_CITATION_MISSING": "C1 review lacks proof-test anchor",
     "DIFF_ONLY_REVIEW_REJECTED_CHECK_FAILED": "reviewer likely audited diff only",
-    "MANIFEST_REQUIRED_COMBO_MISSING": "missing Codex/Opus generic/enriched run",
+    # ── Artifact integrity ──
+    "REVIEW_ARTIFACT_MISSING": "referenced review artifact file not found on disk",
     "REVIEW_ARTIFACT_HASH_MISMATCH": "artifact mutated after manifest generation",
+    "REVIEW_ARTIFACT_HASH_FORMAT_INVALID": "artifact_sha256 field is malformed (not a valid 64-char hex digest)",
+    "REVIEW_ARTIFACT_HEADER_VALIDATION_FAILED": "review artifact provenance header invalid",
+    # ── Commit alignment ──
     "HEAD_COMMIT_ALIGNMENT_FAILED": "review artifact not for current head",
     "BASE_COMMIT_ALIGNMENT_FAILED": "C2 review diff anchor incorrect",
-    "MANIFEST_CHECK_SUMMARY_INCONSISTENT": "manifest claims PASS but computed validation disagrees",
-    "MANIFEST_VALIDATION_STATUS_FAIL": "manifest's own validation.status is FAIL",
-    "REVIEW_ARTIFACT_MISSING": "referenced review artifact file not found on disk",
-    "REVIEW_ARTIFACT_HEADER_VALIDATION_FAILED": "review artifact provenance header invalid",
-    "SCHEMA_VALIDATION_FAILED": "manifest does not conform to JSON Schema",
-    "MANIFEST_PROVENANCE_INVALID": "manifest provenance block has missing/invalid fields",
+    # ── Internal errors ──
+    "CONSISTENCY_CHECK_ERROR": "consistency check (Step F) crashed — fail-closed",
 }
 
 

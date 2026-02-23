@@ -24,14 +24,27 @@ from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
+# Import shared patterns from lib
+# ---------------------------------------------------------------------------
+_VALIDATORS_DIR = Path(__file__).resolve().parent
+if str(_VALIDATORS_DIR) not in sys.path:
+    sys.path.insert(0, str(_VALIDATORS_DIR))
+
+from lib_review_artifacts import (  # noqa: E402
+    HEXSHA_RE,
+    ISO8601Z_RE,
+    MD_HEADER_KEY_MAP,
+    YAML_FENCE_RE as _LIB_YAML_FENCE_RE,
+    REVIEW_META_SECTION_RE as _LIB_REVIEW_META_SECTION_RE,
+    extract_external_review_meta,
+)
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 VERSION = "v1"
 VALIDATOR_NAME = "validate_review_header"
-
-HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-ISO8601Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 VALID_TOOLS = {"codex", "opus", "kimi", "script"}
 VALID_PROMPT_STYLES = {"generic", "enriched", "none"}
@@ -57,8 +70,8 @@ RECOMMENDED_PROVENANCE_FIELDS = [
     "generated_at", "artifact_provenance",
 ]
 
-REVIEW_META_SECTION_RE = re.compile(r"^review_meta:\s*$")
-YAML_FENCE_RE = re.compile(r"^---\s*$")
+REVIEW_META_SECTION_RE = _LIB_REVIEW_META_SECTION_RE
+YAML_FENCE_RE = _LIB_YAML_FENCE_RE
 
 
 # ---------------------------------------------------------------------------
@@ -87,37 +100,12 @@ def extract_provenance_md(content: str) -> dict[str, str] | None:
             return prov
 
     # Fall back to dash-prefixed header lines: "- Key: Value"
-    key_map = {
-        "story": "story_id",
-        "slice": "slice_id",
-        "timestamp (utc)": "generated_at",
-        "head": "head_commit",
-        "base ref": "base_commit",
-        "branch": "branch",
-        "mode": "mode",
-        "model": "model",
-        "prompt style": "prompt_style",
-        "tool": "tool",
-        "artifact provenance": "artifact_provenance",
-        "generator script": "generator_script",
-        "command exit code": "command_exit_code",
-        "transcript sha256": "transcript_sha256",
-        "transcript bytes": "transcript_bytes",
-        "duration seconds": "duration_seconds",
-        "codex mode": "codex_mode",
-        "commit ref": "commit_ref",
-        "files": "files",
-        "command": "command",
-        "cycle": "cycle",
-        "phase equivalent": "phase_equivalent",
-        "review basis": "review_basis",
-    }
     for line in lines:
         m = re.match(r"^- ([^:]+):\s*(.+)$", line)
         if m:
             raw_key = m.group(1).strip().lower()
             val = m.group(2).strip()
-            mapped = key_map.get(raw_key)
+            mapped = MD_HEADER_KEY_MAP.get(raw_key)
             if mapped:
                 prov[mapped] = val
             else:
@@ -136,69 +124,16 @@ def extract_provenance_json(data: dict[str, Any]) -> dict[str, Any] | None:
 
 
 # ---------------------------------------------------------------------------
-# Review meta extraction (reused from validate_external_manifest.py)
+# Review meta extraction — delegates to lib_review_artifacts
 # ---------------------------------------------------------------------------
 
 def parse_review_meta(content: str) -> dict[str, Any] | None:
-    """Parse review_meta YAML block from markdown content."""
-    lines = content.split("\n")
-    in_meta_block = False
-    meta_start = -1
+    """Parse review_meta YAML block from markdown content.
 
-    for i, line in enumerate(lines):
-        if YAML_FENCE_RE.match(line.strip()):
-            if in_meta_block:
-                break
-            for j in range(i + 1, min(i + 5, len(lines))):
-                if REVIEW_META_SECTION_RE.match(lines[j].strip()):
-                    in_meta_block = True
-                    meta_start = i + 1
-                    break
-
-    if not in_meta_block or meta_start < 0:
-        return None
-
-    result: dict[str, Any] = {
-        "evidence_citations": {
-            "preexisting_enforcement": [],
-            "preexisting_tests": [],
-        },
-        "checks": {},
-    }
-
-    current_list: list[str] | None = None
-    for line in lines[meta_start:]:
-        stripped = line.strip()
-        if stripped == "---":
-            break
-        if stripped in ("review_meta:", "evidence_citations:"):
-            continue
-        if stripped.startswith("preexisting_enforcement:"):
-            rest = stripped.split(":", 1)[1].strip()
-            if rest == "[]":
-                current_list = None
-            else:
-                current_list = result["evidence_citations"]["preexisting_enforcement"]
-            continue
-        if stripped.startswith("preexisting_tests:"):
-            rest = stripped.split(":", 1)[1].strip()
-            if rest == "[]":
-                current_list = None
-            else:
-                current_list = result["evidence_citations"]["preexisting_tests"]
-            continue
-        if stripped == "checks:":
-            current_list = None
-            continue
-        if stripped.startswith("diff_only_review_rejected:"):
-            val_str = stripped.split(":", 1)[1].strip()
-            result["checks"]["diff_only_review_rejected"] = val_str == "true"
-            continue
-        if stripped.startswith("- ") and current_list is not None:
-            val = stripped[2:].strip().strip('"')
-            current_list.append(val)
-
-    return result
+    Delegates to lib_review_artifacts.extract_external_review_meta to
+    prevent drift between validators.
+    """
+    return extract_external_review_meta(content)
 
 
 # ---------------------------------------------------------------------------

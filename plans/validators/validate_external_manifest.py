@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import sys
 import traceback
 from pathlib import Path
@@ -42,7 +41,12 @@ from validate_review_header import (  # noqa: E402
     extract_provenance_json,
     build_parser as build_header_parser,
 )
-from lib_review_artifacts import explain_failure_code  # noqa: E402
+from lib_review_artifacts import (  # noqa: E402
+    explain_failure_code,
+    HEXSHA_RE as _LIB_HEXSHA_RE,
+    SHA256_RE as _LIB_SHA256_RE,
+    ISO8601Z_RE as _LIB_ISO8601Z_RE,
+)
 
 # Optional: JSON Schema validation
 try:
@@ -58,9 +62,9 @@ except ImportError:
 VERSION = "v1"
 VALIDATOR_NAME = "validate_external_manifest"
 
-HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
-SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-ISO8601Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+HEXSHA_RE = _LIB_HEXSHA_RE
+SHA256_RE = _LIB_SHA256_RE
+ISO8601Z_RE = _LIB_ISO8601Z_RE
 
 VALID_TOOLS = {"codex", "opus", "kimi"}
 VALID_PROMPT_STYLES = {"generic", "enriched"}
@@ -221,8 +225,9 @@ def step_a_load_and_schema(
                 r.check("manifest_schema_valid", False)
                 r.warn(f"schema error: {e.message}")
         else:
-            r.warn("jsonschema not installed — schema validation skipped")
-            r.check("manifest_schema_valid", True)
+            r.fail("SCHEMA_VALIDATION_SKIPPED")
+            r.warn("jsonschema not installed — schema validation skipped (install: pip install jsonschema)")
+            r.check("manifest_schema_valid", False)
     else:
         r.check("manifest_schema_valid", True)
 
@@ -464,6 +469,11 @@ def step_d_artifacts(
                 all_hashes = False
             else:
                 artifact_info["sha256_match"] = True
+        elif expected_sha:
+            # Non-empty but malformed hash — fail-closed
+            artifact_info["sha256_match"] = False
+            r.fail("REVIEW_ARTIFACT_HASH_FORMAT_INVALID")
+            all_hashes = False
         else:
             artifact_info["sha256_match"] = True  # no hash to check
 
@@ -472,6 +482,7 @@ def step_d_artifacts(
             content = artifact_path.read_text(encoding="utf-8")
         except OSError:
             artifact_info["header_validation_status"] = "ERROR"
+            r.fail("REVIEW_ARTIFACT_HEADER_VALIDATION_FAILED")
             all_headers = False
             r.artifacts.append(artifact_info)
             continue
@@ -818,6 +829,7 @@ def main() -> int:
     try:
         step_f_consistency(data, r)
     except Exception:
+        r.fail("CONSISTENCY_CHECK_ERROR")
         r.warn(f"consistency check error: {traceback.format_exc()}")
 
     # ── Output ────────────────────────────────────────────────────────
