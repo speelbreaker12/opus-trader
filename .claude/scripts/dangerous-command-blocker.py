@@ -25,6 +25,7 @@ catastrophic_patterns = [
     (r"\bchmod\s+(-R\s+)?777\s+/", "chmod 777 on root"),
     (r"\bchown\s+(-R\s+)?.*\s+/(\s|$)", "chown on root directory"),
     (r"\bgit\s+push\s+.*--force(?!-with-lease)(\s|$)", "git force push (use --force-with-lease)"),
+    (r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", "git push to main/master (use a feature branch)"),
     (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard"),
 ]
 

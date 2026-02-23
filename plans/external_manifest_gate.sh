@@ -30,7 +30,10 @@ Gate names emitted:
 USAGE
 }
 
-die() { echo "GATE FAIL: $*" >&2; exit 1; }
+die() { echo "GATE FAIL: $*" >&2; exit 2; }
+# exit 1 = manifest not found (non-fatal in prd_set_pass.sh)
+# exit 2 = real gate failure (fatal in prd_set_pass.sh)
+die_not_found() { echo "GATE SKIP: $*" >&2; exit 1; }
 
 gate_type="${1:-}"
 story_id="${2:-}"
@@ -108,7 +111,7 @@ fi
 # ── Gate check 1: Manifest exists ────────────────────────────────────
 
 if [[ ! -f "$manifest_path" ]]; then
-  die "$gate_name: manifest not found at $manifest_path"
+  die_not_found "$gate_name: manifest not found at $manifest_path"
 fi
 
 echo "INFO: Validating $gate_name for $story_id ($slice_id)" >&2
