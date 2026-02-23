@@ -516,21 +516,21 @@ For stories reconciled before v1.6, anchors are added during the next reconcilia
 
 > Items identified during review but too large for v1.6. Tracked here for visibility.
 
-## Machine-Verifiable Proof Graphs -- ~~v2.0~~ V1 SHIPPED (v1.7)
+## Machine-Verifiable Proof Graphs -- V1+V2 SHIPPED
 
-> **Status**: V1 implemented. See `python/proof_graph/` for the full package.
+> **Status**: V1+V2 implemented. See `python/proof_graph/` for the full package (60 rules, 319 tests).
 
-V1 delivers per-story `proof_graph.json` with:
-- **Schema**: Frozen dataclasses with `from_dict()` + deny-unknown-fields (`schema_version: 1`)
-- **Validator**: 18 rules (`python/proof_graph/validate.py --strict`) -- enforcement-critical at pass-flip
+V1+V2 delivers per-story `proof_graph.json` with:
+- **Schema**: Frozen dataclasses with `from_dict()` + deny-unknown-fields, type-safe `_require_bool`/`_require_int` helpers (`schema_version: 1` and `2`)
+- **Validator**: 60 rules (`python/proof_graph/validate.py --strict`) -- enforcement-critical at pass-flip
 - **Scaffolder**: `python/proof_graph/scaffold.py` generates skeleton from prd.json + CONTRACT.md
 - **Gate integration**: `prd_set_pass.sh` validates with `--strict` (exit 10 on failure)
 - **Legacy exemption**: `plans/proof_graph_exempt.txt` grandfathers existing stories; shrinks via reconciliation
 - **Stdlib-only**: Zero external dependencies
 
-Key rules: R-001 (RECONCILED + BLOCKING contradiction), R-004 (stale test SHA), R-007 (phantom AT not in CONTRACT.md), R-008 (placeholder detection), R-015 (FAIL_OPEN_RISK), R-016b (safety-critical without TRIP tests).
+Key rules: R-001 (RECONCILED + BLOCKING contradiction), R-004 (stale test SHA), R-007 (phantom AT not in CONTRACT.md), R-008 (placeholder detection), R-015 (FAIL_OPEN_RISK), R-016b (safety-critical without TRIP tests), R-050 (duplicate at_id), R-052 (wiring-verdict alignment), R-056 (DEFERRED on safety_critical), R-057 (escalation verdicts on safety_critical).
 
-**V2 roadmap** (remaining from original proposal):
+**V2 status**: Shipped — 17 V2-only rules, strictest-wins aggregate merge (`aggregate.py`), trading halt detection, type-safe schema parsing. **Remaining roadmap**:
 - Cross-slice regression detection (detect if a later slice overwrites earlier AT ownership)
 - Auto-generation from R1 evidence ledger output
 - R4 aggregation script integration
@@ -580,6 +580,14 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 - 6-category fail-closed check (adds narrowing casts)
 - AT semantic match check, combinatorial coverage check, constants accuracy check
 - Root cause: Opus 4.6 external review surfaced 5 gaps missed by all prior review layers including Kimi K2.5
+
+### v3.1
+- Proof graph V2 pipeline: 60 rules (43 V1+V2, 17 V2-only), 319 tests
+- Strictest-wins reviewer merge (`aggregate.py`) with conflict tracking and stale rationale detection
+- Type-safe schema parsing (`_require_bool`/`_require_int`), `schema_version: 2`
+- Trading halt detection (exit code 20), safety-critical rules (R-056, R-057)
+- `RECONCILED_UNIT_ONLY` reconciliation status, `reconciliation_stale` aggregate flag
+- Unknown severity/verdict fail-closed defaults (rank 3/9)
 
 ### v1.7
 - Machine-verifiable proof graphs V1 (`python/proof_graph/`)

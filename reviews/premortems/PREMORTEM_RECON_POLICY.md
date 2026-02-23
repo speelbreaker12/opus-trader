@@ -21,7 +21,7 @@
 | Golden Vector | A table-driven test with 10-30 input cases covering boundary, NaN/Inf/missing, and wrong-impl scenarios. |
 | Evidence Ledger | Per-story document produced during reconciliation with file:line citations for every audit check. |
 | Simpler-Than-Correct Gate | A meta-check: "Is there any implementation SIMPLER than the correct one that passes the entire test suite?" If yes, the suite has a mutation gap. Applied in Phase R5b (preliminary, builder catches own gaps) and definitively in Phase R7e (independent auditor). R5b is defense-in-depth; it does not replace R7e. |
-| Proof Graph | Per-story `proof_graph.json` -- structured JSON mapping each AT to enforcement point, tests, wiring status, observability, and verdict. Validated by `python/proof_graph/validate.py` with 18 rules. Schema version 1. |
+| Proof Graph | Per-story `proof_graph.json` -- structured JSON mapping each AT to enforcement point, tests, wiring status, observability, and verdict. Validated by `python/proof_graph/validate.py` with 60 rules (43 V1+V2, 17 V2-only). Schema versions 1 and 2. |
 | Story Proof Scope | The minimum context needed to audit a story's contract compliance: PRD item, `enforcing_contract_ats[]`, premortem (especially sections 2/4/5), recon preflight, `scope.touch` files, proving test files from `implementation_tests[]`, relevant CONTRACT.md sections, and direct integration surfaces for causality. |
 | Review Basis | An explicit label every reviewer must include in their output: `STORY_SCOPE (Cycle 1)` or `FIX_DIFF + AT_REGRESSION (Cycle 2)`. |
 
@@ -190,11 +190,11 @@ Twelve checks, all must pass:
 | 9 | Debt register valid: every DEFERRED gap has entry, no TBD target_slice, no empty owner | Invalid debt entry blocks |
 | 10 | No overdue debt (target_slice already passed) | Overdue debt blocks until re-targeted |
 | 11 | `proof_graph.json` exists at `artifacts/story/<ID>/proof_graph.json` | Missing proof graph blocks (unless listed in `plans/proof_graph_exempt.txt`) |
-| 12 | `python/proof_graph/validate.py --strict` passes (18 rules, WARNs promoted to ERRORs) | Exit code 10 on failure blocks |
+| 12 | `python/proof_graph/validate.py --strict` passes (60 rules, WARNs promoted to ERRORs) | Exit code 1 on failure blocks; exit code 20 on trading halt |
 
 ### 3.10 Proof Graph Gate
 
-`validate.py --strict` enforces 18+ rules. Key rules include:
+`validate.py --strict` enforces 60 rules (R-001..R-057 + R-006b/R-016b/R-024b). Key rules include:
 
 - R-001: RECONCILED verdict with BLOCKING contradiction
 - R-004: Stale test SHA
@@ -202,8 +202,13 @@ Twelve checks, all must pass:
 - R-008: Placeholder detection
 - R-015: FAIL_OPEN_RISK
 - R-016b: Safety-critical AT without TRIP tests
+- R-050: Duplicate at_id detection
+- R-052: Wiring-verdict alignment
+- R-053: YELLOW stoplight on safety_critical
+- R-056: DEFERRED verdict on safety_critical AT
+- R-057: UNTESTED_ENFORCEMENT/CLAIMED_NOT_PROVEN on safety_critical AT
 
-Exit codes: 10 (validation failure), 20 (schema error).
+Exit codes: 0 (pass), 1 (validation failure), 2 (usage/schema error), 3 (file/parse error), 20 (trading halt).
 
 Generate skeleton: `python3 python/proof_graph/scaffold.py <ID>`.
 
