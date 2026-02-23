@@ -1,4 +1,4 @@
-"""42 validation rules for proof graph (18 V1 + 24 V2)."""
+"""48 validation rules for proof graph (18 V1 + 30 V2)."""
 from __future__ import annotations
 
 import re
@@ -208,6 +208,15 @@ def r_008(ctx: ValidationContext) -> list[Finding]:
                 f"ats.{at.at_id}.equivalent_mutants[{j}].killed_by",
                 at.at_id,
             )
+        if at.debt:
+            _check(
+                at.debt.description,
+                f"ats.{at.at_id}.debt.description",
+                at.at_id,
+            )
+    for k, dr in enumerate(g.debt_register):
+        _check(dr.description, f"debt_register[{k}].description")
+        _check(dr.target_slice, f"debt_register[{k}].target_slice")
     return findings
 
 
@@ -1071,6 +1080,126 @@ def r_041(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+_ISO8601_RE = re.compile(
+    r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$'
+)
+
+
+def r_042(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical + section5_wrong_impl_blocked == PARTIAL."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        s5 = at.premortem_checks.section5_wrong_impl_blocked
+        if s5 == WrongImplStatus.PARTIAL:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-042",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"premortem §5 wrong_impl_blocked is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_043(ctx: ValidationContext) -> list[Finding]:
+    """V2: section4_decision_match == PARTIAL."""
+    if not _is_v2(ctx):
+        return []
+    findings: list[Finding] = []
+    for at in ctx.graph.ats:
+        s4 = at.premortem_checks.section4_decision_match
+        if s4 == DecisionMatch.PARTIAL:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-043",
+                at_id=at.at_id,
+                message=(
+                    f"AT {at.at_id}: premortem §4 decision_match is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_044(ctx: ValidationContext) -> list[Finding]:
+    """V2: safety_critical + section2_assumptions == PARTIAL."""
+    if not _is_v2(ctx):
+        return []
+    g = ctx.graph
+    if not g.story_meta.safety_critical:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        s2 = at.premortem_checks.section2_assumptions
+        if s2 == AssumptionStatus.PARTIAL:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-044",
+                at_id=at.at_id,
+                message=(
+                    f"safety_critical AT {at.at_id}: "
+                    f"premortem §2 assumptions status is PARTIAL"
+                ),
+            ))
+    return findings
+
+
+def r_045(ctx: ValidationContext) -> list[Finding]:
+    """RECONCILED but AT has non-proven verdict."""
+    g = ctx.graph
+    if g.story_verdict.reconciliation_status != ReconciliationStatus.RECONCILED:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict not in _PROVEN_VERDICTS:
+            findings.append(Finding(
+                severity=Severity.HARDENING,
+                rule="R-045",
+                at_id=at.at_id,
+                message=(
+                    f"story is RECONCILED but AT {at.at_id} "
+                    f"has non-proven verdict {at.at_verdict.verdict.value}"
+                ),
+            ))
+    return findings
+
+
+def r_046(ctx: ValidationContext) -> list[Finding]:
+    """generated_at not valid ISO-8601 timestamp."""
+    ts = ctx.graph.generated_at
+    if not _ISO8601_RE.match(ts):
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-046",
+            at_id=None,
+            message=f"generated_at is not valid ISO-8601: {ts!r}",
+            field_path="generated_at",
+        )]
+    return []
+
+
+def r_047(ctx: ValidationContext) -> list[Finding]:
+    """Non-exempt story with empty scope_touch."""
+    g = ctx.graph
+    if g.story_meta.category in ("policy", "certification"):
+        return []
+    if not g.story_meta.scope_touch:
+        return [Finding(
+            severity=Severity.HARDENING,
+            rule="R-047",
+            at_id=None,
+            message="scope_touch is empty on non-exempt story",
+            field_path="story_meta.scope_touch",
+        )]
+    return []
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
@@ -1083,6 +1212,8 @@ ALL_RULES = [
     r_035, r_036, r_037,
     # V3 rules (validator-audit round 3)
     r_038, r_039, r_040, r_041,
+    # V4 rules (validator-audit round 4)
+    r_042, r_043, r_044, r_045, r_046, r_047,
 ]
 
 

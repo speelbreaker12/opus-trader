@@ -305,6 +305,17 @@ class TestAggregate(unittest.TestCase):
         # Should pick the BLOCKING severity entry (strictest)
         self.assertEqual(at300["at_verdict"]["severity"], "BLOCKING")
 
+    def test_zero_reviews_returns_base(self):
+        """Zero reviews → returns base with empty review_sources."""
+        base = self._base()
+        merged = aggregate(base, [], review_labels=[])
+        self.assertEqual(merged["meta"]["review_sources"], [])
+        self.assertEqual(merged["meta"]["review_count"], 0)
+        # ATs unchanged
+        self.assertEqual(len(merged["ats"]), len(base["ats"]))
+        # No conflicts
+        self.assertNotIn("conflicts", merged["meta"])
+
 
 if __name__ == "__main__":
     unittest.main()
