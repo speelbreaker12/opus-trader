@@ -211,6 +211,60 @@ fn test_assembled_pipeline_unknown_kind_rejects() {
     );
 }
 
+// ─── CancelOnly bypass ──────────────────────────────────────────────────
+
+/// CancelOnly must bypass assembly even when metadata is invalid.
+/// This prevents urgent cancellations from being blocked by sizing failures.
+#[test]
+fn test_assembled_pipeline_cancel_only_bypasses_assembly() {
+    // Invalid metadata that would fail assembly for any other intent class.
+    let meta = InstrumentKindInput {
+        is_option: false,
+        is_future: false,
+        is_perpetual: false,
+        is_linear: false,
+    };
+    let params = SizingParams {
+        canonical_qty: f64::NAN,
+        index_price: f64::NAN,
+        contract_multiplier: None,
+    };
+    let base = base_open_input();
+    let remaining = AssembledPipelineParams {
+        intent_class: ChokeIntentClass::CancelOnly,
+        risk_state: RiskState::Healthy,
+        preflight: base.preflight,
+        venue_capabilities: base.venue_capabilities,
+        bot_feature_flags: base.bot_feature_flags,
+        quantize: base.quantize,
+        fee_snapshot: base.fee_snapshot,
+        fee_config: base.fee_config,
+        expiry_guard: base.expiry_guard,
+        liquidity: base.liquidity,
+        net_edge: base.net_edge,
+        pricer: base.pricer,
+        wal_recorded: base.wal_recorded,
+        requested_qty: base.requested_qty,
+        max_dispatch_qty: base.max_dispatch_qty,
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut mismatch = MismatchMetrics::new();
+
+    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+
+    // CancelOnly must be approved even with garbage metadata/sizing.
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "CancelOnly must bypass assembly and be approved, got {:?}",
+        result.decision
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        1,
+        "CancelOnly must produce exactly 1 approved dispatch"
+    );
+}
+
 // ─── choke_intent_to_dispatch mapping ────────────────────────────────────
 
 /// Table-driven test: verify all 4 ChokeIntentClass variants map correctly.

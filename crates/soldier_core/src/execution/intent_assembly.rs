@@ -143,6 +143,17 @@ pub fn assemble_sizing(
 /// into the pipeline path.
 ///
 /// Assembly failure is fail-closed: returns `Rejected` with `AssemblyFailed`.
+///
+/// **CancelOnly bypass**: CancelOnly intents skip assembly entirely and go
+/// straight to the pipeline, where the chokepoint short-circuits to Approved.
+/// This prevents metadata/sizing failures from blocking urgent cancellations.
+///
+/// **Metrics note**: Assembly failures return `PipelineResult` before the
+/// chokepoint is reached, so `metrics.chokepoint.rejected_total` is not
+/// incremented. This is intentional: `rejected_total` tracks chokepoint-level
+/// rejections, not pre-chokepoint assembly failures. Assembly failures are
+/// observable via the `tracing::warn!` log and the `AssemblyFailed` reject
+/// reason code in the returned `PipelineResult`.
 pub fn evaluate_assembled_pipeline(
     meta: &InstrumentKindInput,
     sizing_params: &SizingParams,
@@ -150,6 +161,31 @@ pub fn evaluate_assembled_pipeline(
     remaining: AssembledPipelineParams<'_>,
     metrics: &mut IntentPipelineMetrics,
 ) -> PipelineResult {
+    // CancelOnly intents bypass assembly: cancels must never be blocked by
+    // metadata/sizing failures. The chokepoint short-circuits CancelOnly to
+    // Approved after Gate 1 (DispatchAuth).
+    if remaining.intent_class == ChokeIntentClass::CancelOnly {
+        let pipeline_input = IntentPipelineInput {
+            intent_class: remaining.intent_class,
+            risk_state: remaining.risk_state,
+            preflight: remaining.preflight,
+            venue_capabilities: remaining.venue_capabilities,
+            bot_feature_flags: remaining.bot_feature_flags,
+            quantize: remaining.quantize,
+            dispatch_consistency_passed: true,
+            fee_snapshot: remaining.fee_snapshot,
+            fee_config: remaining.fee_config,
+            expiry_guard: remaining.expiry_guard,
+            liquidity: remaining.liquidity,
+            net_edge: remaining.net_edge,
+            pricer: remaining.pricer,
+            wal_recorded: remaining.wal_recorded,
+            requested_qty: remaining.requested_qty,
+            max_dispatch_qty: remaining.max_dispatch_qty,
+        };
+        return evaluate_intent_pipeline(&pipeline_input, metrics);
+    }
+
     // Step 1: Convert intent class for dispatch mapping.
     let intent = choke_intent_to_dispatch(remaining.intent_class);
 
