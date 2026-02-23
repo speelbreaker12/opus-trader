@@ -218,8 +218,7 @@ except ValidationError as e:
 | Write acceptance test | `/acceptance-test` | Contract alignment |
 | Check contracts (fast) | `/contract-review` | Fail-open hazard filter on code diffs |
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
-| Resolve merge conflicts | `/merge-resolve` | Per-file diff check before --theirs, safety-biased resolution |
-| Start new task / create worktree | `/branch-hygiene` | Never commit on main, worktree isolation, push discipline |
+| Git workflow (branches, merges, worktrees) | `/git` | Never commit on main, per-file diff before --theirs, worktree isolation, safety-biased conflict resolution |
 
 **Process:**
 ```
