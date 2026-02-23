@@ -355,6 +355,55 @@ def check_required_combos(reviews: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
+VALID_TOOLS = {"codex", "opus", "kimi"}
+VALID_PROMPT_STYLES = {"generic", "enriched"}
+
+
+def _validate_combo_items(combos: list[Any]) -> list[str]:
+    """Validate each required_combinations item has valid tool + prompt_style."""
+    errors: list[str] = []
+    for i, item in enumerate(combos):
+        ctx = f"required_combinations[{i}]"
+        if not isinstance(item, dict):
+            errors.append(f"{ctx}: must be an object, got {type(item).__name__}")
+            continue
+        tool = item.get("tool")
+        ps = item.get("prompt_style")
+        if tool is None:
+            errors.append(f"{ctx}: missing required field 'tool'")
+        elif tool not in VALID_TOOLS:
+            errors.append(f"{ctx}: 'tool' must be one of {sorted(VALID_TOOLS)}, got '{tool}'")
+        if ps is None:
+            errors.append(f"{ctx}: missing required field 'prompt_style'")
+        elif ps not in VALID_PROMPT_STYLES:
+            errors.append(f"{ctx}: 'prompt_style' must be one of {sorted(VALID_PROMPT_STYLES)}, got '{ps}'")
+    return errors
+
+
+def _verify_commit_alignment(data: dict[str, Any], reviews: list[dict[str, Any]]) -> list[str]:
+    """R7: Recompute commit alignment — verify each review's commits match provenance."""
+    errors: list[str] = []
+    prov = data.get("provenance", {})
+    manifest_head = prov.get("head_commit", "")
+    manifest_base = prov.get("base_commit", "")
+    for i, r in enumerate(reviews):
+        if not isinstance(r, dict):
+            continue
+        entry_head = r.get("head_commit", "")
+        entry_base = r.get("base_commit", "")
+        if entry_head and manifest_head and entry_head != manifest_head:
+            errors.append(
+                f"reviews[{i}]: head_commit='{entry_head}' != "
+                f"provenance.head_commit='{manifest_head}'"
+            )
+        if entry_base and manifest_base and entry_base != manifest_base:
+            errors.append(
+                f"reviews[{i}]: base_commit='{entry_base}' != "
+                f"provenance.base_commit='{manifest_base}'"
+            )
+    return errors
+
+
 # ---------------------------------------------------------------------------
 # Top-level validators
 # ---------------------------------------------------------------------------
@@ -376,6 +425,7 @@ def validate_r3(data: dict[str, Any], check_files: bool, manifest_dir: Path) -> 
     if isinstance(combos, list):
         if len(combos) < 4:
             errors.append(f"required_combinations: must have >= 4 items, got {len(combos)}")
+        errors += _validate_combo_items(combos)
     elif combos is not None:
         errors.append("required_combinations: must be an array")
 
@@ -420,6 +470,7 @@ def validate_r7(data: dict[str, Any], check_files: bool, manifest_dir: Path) -> 
     if isinstance(combos, list):
         if len(combos) < 4:
             errors.append(f"required_combinations: must have >= 4 items, got {len(combos)}")
+        errors += _validate_combo_items(combos)
     elif combos is not None:
         errors.append("required_combinations: must be an array")
 
@@ -431,6 +482,8 @@ def validate_r7(data: dict[str, Any], check_files: bool, manifest_dir: Path) -> 
         for i, entry in enumerate(reviews):
             errors += validate_review_entry_r7(entry, i, check_files, manifest_dir)
         errors += check_required_combos(reviews)
+        # Recompute commit alignment — don't trust self-reported flags
+        errors += _verify_commit_alignment(data, reviews)
     elif reviews is not None:
         errors.append("reviews: must be an array")
 

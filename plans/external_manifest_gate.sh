@@ -225,16 +225,31 @@ if [[ "$gate_type" == "r3" ]]; then
   fi
 fi
 
-# R7-specific checks
+# R7-specific checks: recompute commit alignment (don't trust self-reported flags)
 if [[ "$gate_type" == "r7" ]]; then
-  # head_commit matches manifest for all entries
+  manifest_head=$(jq -r '.provenance.head_commit // empty' "$manifest_path" 2>/dev/null)
+  manifest_base=$(jq -r '.provenance.base_commit // empty' "$manifest_path" 2>/dev/null)
+
+  for ((i=0; i<review_count; i++)); do
+    entry_head=$(jq -r ".reviews[$i].head_commit // empty" "$manifest_path" 2>/dev/null)
+    entry_base=$(jq -r ".reviews[$i].base_commit // empty" "$manifest_path" 2>/dev/null)
+
+    if [[ "$entry_head" != "$manifest_head" ]]; then
+      echo "  FAIL: reviews[$i].head_commit='$entry_head' != provenance.head_commit='$manifest_head'" >&2
+      errors=$((errors + 1))
+    fi
+    if [[ "$entry_base" != "$manifest_base" ]]; then
+      echo "  FAIL: reviews[$i].base_commit='$entry_base' != provenance.base_commit='$manifest_base'" >&2
+      errors=$((errors + 1))
+    fi
+  done
+
+  # Also verify the self-reported flags are consistent (catch dishonest manifests)
   head_check=$(jq -r '.validation.head_commit_alignment_check // empty' "$manifest_path" 2>/dev/null)
   if [[ "$head_check" != "PASS" ]]; then
     echo "  FAIL: validation.head_commit_alignment_check != PASS (got '$head_check')" >&2
     errors=$((errors + 1))
   fi
-
-  # base_commit matches manifest for all entries
   base_check=$(jq -r '.validation.base_commit_alignment_check // empty' "$manifest_path" 2>/dev/null)
   if [[ "$base_check" != "PASS" ]]; then
     echo "  FAIL: validation.base_commit_alignment_check != PASS (got '$base_check')" >&2
