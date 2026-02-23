@@ -58,7 +58,7 @@ pub use group::{
 };
 pub use intent_assembly::{
     AssembledPipelineParams, AssembledSizing, AssemblySizingError, SizingParams,
-    assemble_sizing, evaluate_assembled_pipeline,
+    assemble_sizing, choke_intent_to_dispatch, evaluate_assembled_pipeline,
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
@@ -69,8 +69,8 @@ pub use label::{
     encode_label,
 };
 pub use open_runtime::{
-    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
-    settle_pending_on_tlsm_terminal,
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_intent_with_assembly,
+    build_open_order_intent_runtime, settle_pending_on_tlsm_terminal,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use pipeline::{

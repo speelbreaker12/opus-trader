@@ -12,15 +12,17 @@ use crate::risk::{
 };
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
+use super::intent_assembly::{SizingParams, assemble_sizing};
 #[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics,
-    NetEdgeResult, PricerInput, PricerMetrics, PricerResult, Tlsm, build_gate_results,
-    build_order_intent, compute_limit_price, evaluate_inventory_skew, evaluate_liquidity_gate,
-    evaluate_net_edge,
+    IntentClass, InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason,
+    InventorySkewResult, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
+    MismatchMetrics, NetEdgeInput, NetEdgeMetrics, NetEdgeResult, PricerInput, PricerMetrics,
+    PricerResult, Tlsm, build_gate_results, build_order_intent, compute_limit_price,
+    evaluate_inventory_skew, evaluate_liquidity_gate, evaluate_net_edge,
 };
+use crate::venue::types::InstrumentKindInput;
 
 const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
 const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
@@ -373,4 +375,51 @@ pub fn settle_pending_on_tlsm_terminal(
             );
         }
     }
+}
+
+/// Build an OPEN intent with full assembly validation.
+///
+/// This combines `assemble_sizing()` (deriving `dispatch_consistency_passed`
+/// and optionally degrading risk state) with the OPEN runtime gate evaluation.
+///
+/// Use this entry point when raw venue metadata is available. It provides the
+/// production callsite for `derive_instrument_kind`, `build_order_size`, and
+/// `validate_and_dispatch` — ensuring the full assembly chain is exercised
+/// before gate evaluation.
+///
+/// Assembly failure is fail-closed: `dispatch_consistency_passed` is set to
+/// `false` and risk state is degraded.
+pub fn build_open_intent_with_assembly(
+    assembly_meta: &InstrumentKindInput,
+    sizing_params: &SizingParams,
+    input: &OpenRuntimeInput<'_>,
+    pending_book: &PendingExposureBook,
+    choke_metrics: &mut ChokeMetrics,
+    runtime_metrics: &mut OpenRuntimeMetrics,
+    mismatch_metrics: &mut MismatchMetrics,
+) -> OpenRuntimeOutput {
+    let mut adjusted_input = input.clone();
+
+    match assemble_sizing(assembly_meta, sizing_params, IntentClass::Open, mismatch_metrics) {
+        Ok(assembled) => {
+            adjusted_input.base_gates.dispatch_consistency_passed =
+                assembled.dispatch_consistency_passed;
+            if assembled.risk_state_degraded
+                && adjusted_input.base_gates.risk_state == RiskState::Healthy
+            {
+                adjusted_input.base_gates.risk_state = RiskState::Degraded;
+            }
+        }
+        Err(e) => {
+            tracing::warn!(?e, "assembly failed — degrading dispatch_consistency to false");
+            adjusted_input.base_gates.dispatch_consistency_passed = false;
+        }
+    }
+
+    build_open_order_intent_runtime(
+        &adjusted_input,
+        pending_book,
+        choke_metrics,
+        runtime_metrics,
+    )
 }

@@ -81,7 +81,7 @@ pub struct AssembledPipelineParams<'a> {
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 /// Map chokepoint intent class to dispatch intent class.
-fn choke_intent_to_dispatch(c: ChokeIntentClass) -> IntentClass {
+pub fn choke_intent_to_dispatch(c: ChokeIntentClass) -> IntentClass {
     match c {
         ChokeIntentClass::Open => IntentClass::Open,
         ChokeIntentClass::Close => IntentClass::Close,

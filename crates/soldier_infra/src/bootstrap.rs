@@ -18,6 +18,7 @@
 use std::io;
 use std::path::PathBuf;
 
+use crate::config::{GateConfig, RawThresholdConfig, build_gate_config_from_raw};
 use crate::store::{LedgerMetrics, RegistryMetrics, ReplayOutcome, TradeIdRegistry, WalLedger};
 
 /// Durable storage configuration per CONTRACT.md §2.4.
@@ -251,6 +252,48 @@ pub fn bootstrap_storage(config: &StorageConfig) -> io::Result<BootstrapResult> 
         trade_id_registry,
         trade_id_metrics: RegistryMetrics::new(),
         replay_outcome,
+    })
+}
+
+/// Full bootstrap configuration including gate thresholds.
+#[derive(Debug, Clone)]
+pub struct FullBootstrapConfig {
+    /// Durable storage configuration.
+    pub storage: StorageConfig,
+    /// Raw gate threshold overrides (None fields use Appendix A defaults).
+    pub gate_thresholds: RawThresholdConfig,
+}
+
+/// Result of full bootstrap (storage + validated gate config).
+#[derive(Debug)]
+pub struct FullBootstrapResult {
+    /// Bootstrap result for durable storage.
+    pub storage: BootstrapResult,
+    /// Validated gate configuration with Appendix A defaults applied.
+    pub gate_config: GateConfig,
+}
+
+/// Initialize durable storage and validate gate configuration in one step.
+///
+/// Gate thresholds are validated via `build_gate_config_from_raw()` before
+/// storage bootstrap. If thresholds are invalid (NaN, negative, percentage
+/// out of range), bootstrap fails closed before touching storage.
+///
+/// This is the recommended production entry point that ensures
+/// `resolve_config_value` is exercised for all gate-critical parameters.
+pub fn bootstrap_full(config: &FullBootstrapConfig) -> io::Result<FullBootstrapResult> {
+    let gate_config = build_gate_config_from_raw(&config.gate_thresholds).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("gate config validation failed: {e}"),
+        )
+    })?;
+
+    let storage = bootstrap_storage(&config.storage)?;
+
+    Ok(FullBootstrapResult {
+        storage,
+        gate_config,
     })
 }
 

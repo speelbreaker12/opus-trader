@@ -12,7 +12,7 @@ mod common;
 use soldier_core::execution::{
     AssembledPipelineParams, AssemblySizingError, ChokeIntentClass, ChokeResult,
     IntentPipelineMetrics, MismatchMetrics, RejectReasonCode, SizingParams,
-    assemble_sizing, evaluate_assembled_pipeline,
+    assemble_sizing, choke_intent_to_dispatch, evaluate_assembled_pipeline,
 };
 use soldier_core::execution::dispatch_map::IntentClass;
 use soldier_core::risk::RiskState;
@@ -146,6 +146,13 @@ fn test_assembly_mismatch_sets_degraded() {
         0,
         "dispatch count must be 0 when assembly mismatch degrades risk state"
     );
+    // Devil's advocate mutation guard: verify rejection is specifically from DispatchAuth
+    // (via Degraded risk state override), not from the dispatch consistency gate.
+    assert_eq!(
+        pipeline_result.reject_reason_code,
+        Some(RejectReasonCode::MarginHeadroomRejectOpens),
+        "rejection must come from DispatchAuth (Degraded override), not dispatch consistency gate"
+    );
 }
 
 // ─── evaluate_assembled_pipeline integration ────────────────────────────
@@ -196,4 +203,31 @@ fn test_assembled_pipeline_unknown_kind_rejects() {
         Some(RejectReasonCode::AssemblyFailed),
         "reject reason must be AssemblyFailed"
     );
+    // Dispatch causality: assembly failure must prevent dispatch.
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when assembly fails (unknown instrument kind)"
+    );
+}
+
+// ─── choke_intent_to_dispatch mapping ────────────────────────────────────
+
+/// Table-driven test: verify all 4 ChokeIntentClass variants map correctly.
+#[test]
+fn test_choke_intent_to_dispatch_mapping() {
+    let cases = [
+        (ChokeIntentClass::Open, IntentClass::Open),
+        (ChokeIntentClass::Close, IntentClass::Close),
+        (ChokeIntentClass::Hedge, IntentClass::Hedge),
+        (ChokeIntentClass::CancelOnly, IntentClass::Cancel),
+    ];
+
+    for (choke, expected_dispatch) in cases {
+        let actual = choke_intent_to_dispatch(choke);
+        assert_eq!(
+            actual, expected_dispatch,
+            "choke_intent_to_dispatch({choke:?}) should map to {expected_dispatch:?}"
+        );
+    }
 }
