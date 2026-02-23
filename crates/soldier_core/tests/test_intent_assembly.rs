@@ -342,11 +342,12 @@ fn test_assembled_pipeline_close_valid_assembly_approved() {
     );
 }
 
-/// Close intent with assembly failure → AssemblyFailed rejection.
-/// Documents current behavior: Close is NOT bypassed on assembly failure
-/// (unlike CancelOnly). This is a design choice that may be revisited.
+/// Close intent with assembly failure → bypasses assembly, approved.
+/// CSP Invariant F / AT-1049: risk-reducing intents must not be blocked
+/// by metadata/sizing failures. Close falls through to the pipeline with
+/// no_contracts() consistency.
 #[test]
-fn test_assembled_pipeline_close_assembly_failure_rejects() {
+fn test_assembled_pipeline_close_assembly_failure_bypasses() {
     let meta = InstrumentKindInput {
         is_option: false,
         is_future: false,
@@ -382,18 +383,14 @@ fn test_assembled_pipeline_close_assembly_failure_rejects() {
     let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
-        matches!(result.decision, ChokeResult::Rejected { .. }),
-        "Close with assembly failure currently returns Rejected"
-    );
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::AssemblyFailed),
-        "reject reason must be AssemblyFailed"
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "Close must bypass assembly failure (CSP Invariant F), got {:?}",
+        result.decision
     );
     assert_eq!(
         metrics.chokepoint.approved_total(),
-        0,
-        "dispatch count must be 0 when assembly fails"
+        1,
+        "Close must produce exactly 1 approved dispatch even when assembly fails"
     );
 }
 
@@ -446,9 +443,10 @@ fn test_assembled_pipeline_hedge_valid_assembly_approved() {
     );
 }
 
-/// Hedge intent with assembly failure → AssemblyFailed rejection.
+/// Hedge intent with assembly failure → bypasses assembly, approved.
+/// Same as Close: CSP Invariant F requires risk-reducing bypass.
 #[test]
-fn test_assembled_pipeline_hedge_assembly_failure_rejects() {
+fn test_assembled_pipeline_hedge_assembly_failure_bypasses() {
     let meta = InstrumentKindInput {
         is_option: false,
         is_future: false,
@@ -484,30 +482,23 @@ fn test_assembled_pipeline_hedge_assembly_failure_rejects() {
     let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
-        matches!(result.decision, ChokeResult::Rejected { .. }),
-        "Hedge with assembly failure currently returns Rejected"
-    );
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::AssemblyFailed),
-        "reject reason must be AssemblyFailed"
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "Hedge must bypass assembly failure (CSP Invariant F), got {:?}",
+        result.decision
     );
     assert_eq!(
         metrics.chokepoint.approved_total(),
-        0,
-        "dispatch count must be 0 when assembly fails"
+        1,
+        "Hedge must produce exactly 1 approved dispatch even when assembly fails"
     );
 }
 
-/// Close intent with dispatch mismatch → currently blocked by DispatchConsistency (Gate 4).
-///
-/// NOTE (opus review P1): Gate 4 blocks Close on dispatch mismatch. The opus
-/// contract-proof audit argues this is incorrect — Close is risk-reducing and
-/// should not be blocked by AT-920 dispatch consistency. A future fix should
-/// either skip Gate 4 for Close/Hedge or degrade dispatch_consistency_passed
-/// without rejecting. This test documents the CURRENT behavior.
+/// Close intent with dispatch mismatch → Gate 4 skipped, approved.
+/// CSP Invariant F / AT-104: risk-reducing intents skip DispatchConsistency.
+/// The mismatch degrades risk state (Healthy → Degraded), but Close bypasses
+/// DispatchAuth and Gate 4, so it is still approved.
 #[test]
-fn test_assembled_pipeline_close_mismatch_blocked_by_dispatch_consistency() {
+fn test_assembled_pipeline_close_mismatch_bypasses_dispatch_consistency() {
     let meta = InstrumentKindInput {
         is_option: false,
         is_future: true,
@@ -542,23 +533,17 @@ fn test_assembled_pipeline_close_mismatch_blocked_by_dispatch_consistency() {
 
     let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
-    // Current behavior: Close IS blocked by dispatch consistency (Gate 4).
-    // This is documented as a P1 finding — risk-reducing intents should
-    // arguably not be blocked by AT-920 contract mismatch.
+    // Close bypasses Gate 4 (DispatchConsistency) — risk-reducing intents
+    // must not be blocked by AT-920 contract mismatch.
     assert!(
-        matches!(result.decision, ChokeResult::Rejected { .. }),
-        "Close is currently blocked by dispatch mismatch (Gate 4), got {:?}",
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "Close must bypass dispatch mismatch (Gate 4 skipped), got {:?}",
         result.decision
     );
     assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::ContractsAmountMismatch),
-        "rejection must be from DispatchConsistency gate"
-    );
-    assert_eq!(
         metrics.chokepoint.approved_total(),
-        0,
-        "dispatch count must be 0 when Close is blocked by dispatch consistency"
+        1,
+        "Close dispatch count must be 1 (mismatch does not block risk-reducing intents)"
     );
 }
 

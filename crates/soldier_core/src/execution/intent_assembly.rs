@@ -192,8 +192,42 @@ pub fn evaluate_assembled_pipeline(
     let intent = choke_intent_to_dispatch(remaining.intent_class);
 
     // Step 2: Assemble sizing (derive kind + build size + validate dispatch).
+    //
+    // Close/Hedge bypass on assembly failure (CSP Invariant F / AT-1049):
+    // Risk-reducing intents must never be blocked by metadata/sizing failures.
+    // On assembly Err, Close/Hedge fall through to the pipeline with
+    // no_contracts() consistency (skipping Gate 4) so the chokepoint can
+    // approve them. Open intents fail-closed with AssemblyFailed.
     let assembled = match assemble_sizing(meta, sizing_params, intent, mismatch_metrics) {
         Ok(assembled) => assembled,
+        Err(e) if remaining.intent_class == ChokeIntentClass::Close
+              || remaining.intent_class == ChokeIntentClass::Hedge =>
+        {
+            tracing::warn!(
+                ?e,
+                intent_class = ?remaining.intent_class,
+                "assembly failed for risk-reducing intent — bypassing (CSP Invariant F)"
+            );
+            let pipeline_input = IntentPipelineInput {
+                intent_class: remaining.intent_class,
+                risk_state: remaining.risk_state,
+                preflight: remaining.preflight,
+                venue_capabilities: remaining.venue_capabilities,
+                bot_feature_flags: remaining.bot_feature_flags,
+                quantize: remaining.quantize,
+                dispatch_consistency: DispatchConsistencyProof::no_contracts(),
+                fee_snapshot: remaining.fee_snapshot,
+                fee_config: remaining.fee_config,
+                expiry_guard: remaining.expiry_guard,
+                liquidity: remaining.liquidity,
+                net_edge: remaining.net_edge,
+                pricer: remaining.pricer,
+                wal_recorded: remaining.wal_recorded,
+                requested_qty: remaining.requested_qty,
+                max_dispatch_qty: remaining.max_dispatch_qty,
+            };
+            return evaluate_intent_pipeline(&pipeline_input, metrics);
+        }
         Err(e) => {
             tracing::warn!(?e, "intent assembly failed — rejecting fail-closed");
             return PipelineResult {

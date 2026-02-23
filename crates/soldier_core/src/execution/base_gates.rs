@@ -319,7 +319,13 @@ pub fn evaluate_base_gates(
     };
 
     // ── Gate 4: DispatchConsistency ─────────────────────────────────────
-    if !input.dispatch_consistency.passed() {
+    // Close/Hedge/CancelOnly skip: risk-reducing intents must not be blocked
+    // by AT-920 contract mismatch (CSP Invariant F / AT-1049 / AT-104).
+    let skip_dispatch_consistency = matches!(
+        input.intent_class,
+        ChokeIntentClass::Close | ChokeIntentClass::Hedge | ChokeIntentClass::CancelOnly
+    );
+    if !skip_dispatch_consistency && !input.dispatch_consistency.passed() {
         gate_outcomes.push(GateOutcome::Reject {
             gate: GateStep::DispatchConsistency,
             reason_code: RejectReasonCode::ContractsAmountMismatch,
