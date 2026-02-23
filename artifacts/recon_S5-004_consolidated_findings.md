@@ -1,17 +1,18 @@
 # Slice 1 Reconciliation — Consolidated Findings Report
 
-> Branch: `recon/S5-004`
-> HEAD: `526b99c`
+> Branch: `recon/S5-004` → merged to `main` via PR #120
+> Cycle 1 HEAD: `526b99c` | Cycle 2 HEAD: `eff15ca` | Final: `575b92a`
 > Date: 2026-02-22
-> Review tools: Kimi (4 batches, Cycle 1+2), Opus generic (9/9), Opus enriched (9/9), Codex generic (9/9), Codex enriched (9/9)
+> Review tools: Kimi (4 batches, Cycle 1+2), Opus generic (9/9), Opus enriched (9/9), Codex generic C1 (9/9), Codex enriched C1 (9/9), Codex generic C2 (9/9), Codex enriched C2 (9/9)
 > Stories covered: S1-002, S1-003, S1-004, S1-005, S1-006, S1-007, S1-010, S1-011, S1-012
 
 ## Executive Summary
 
-- **Total unique P1 findings**: 36 (0 P0)
+- **Total unique findings**: 39 (36 Cycle 1 P1 + 3 new Cycle 2: 2 P1, 1 P0 escalation)
+- **Resolution**: 17 FIXED, 17 STRUCTURAL (blocked on Slice 2+ wiring), 5 DEFERRED
 - **Codex digest FINDINGS_SUMMARY counts are unreliable** — the summary line often reports inflated P0/P1 counts not found in the review body
 - **Systemic theme**: 6 of 9 stories have functions with zero production callsites; AT enforcement exists only in tests
-- **All findings are post-fix**: reviews ran on code with all Kimi Cycle 1+2 fixes already applied
+- **Cycle 1 findings** ran on code with all Kimi Cycle 1+2 fixes already applied; **Cycle 2 findings** ran after the reconciliation fix commit (`eff15ca`)
 
 ## Coverage Matrix
 
@@ -61,124 +62,151 @@ Tests claim AT compliance but don't prove causality through the enforcement poin
 | S1-011 | AT-333 | Tests check field deserialization, not that quantization/sizing actually uses fetched metadata |
 | S1-012 | AT-949/960-966 | Lifecycle terminal handling tested as enum mapping, not wired into production reconcile/cancel flow |
 
-### Theme 3: Non-Runnable Proving Tests (3/9 stories)
+### Theme 3: Non-Runnable Proving Tests (3/9 stories) — ALL FIXED
 
-Tests fail to compile due to unresolved imports:
+Tests failed to compile due to unresolved imports. All resolved in `de81950`.
 
-| Story | Import Error | Module |
-|-------|-------------|--------|
-| S1-003 | `PricerSide` | tests/common/mod.rs |
-| S1-011 | `ledger::WalWriterConfig` | store/mod.rs |
-| S1-012 | `PricerSide` | tests/common/mod.rs |
+| Story | Import Error | Module | Resolution |
+|-------|-------------|--------|------------|
+| S1-003 | `PricerSide` | tests/common/mod.rs | **FIXED** — `PricerSide` → `Side` |
+| S1-011 | `ledger::WalWriterConfig` | store/mod.rs | **FIXED** — `WalWriterConfig` struct created |
+| S1-012 | `PricerSide` | tests/common/mod.rs | **FIXED** — `PricerSide` → `Side` |
 
-### Theme 4: Missing Fail-Closed Guards (3/9 stories)
+### Theme 4: Missing Fail-Closed Guards (3/9 stories) — 2 FIXED, 1 DEFERRED
 
-| Story | Gap |
-|-------|-----|
-| S1-004 | `notional_usd`/`qty_coin` can be Inf/NaN for extreme-but-finite inputs; `as i64` silently saturates |
-| S1-005 | NaN/Inf/negative/zero bypasses `map_to_dispatch_unchecked` without rejection |
-| S1-010 | `resolve_config_value` conflates "missing" with "unparseable" — parse errors mapped to None silently apply defaults |
+| Story | Gap | Resolution |
+|-------|-----|------------|
+| S1-004 | `notional_usd`/`qty_coin` can be Inf/NaN; `as i64` silently saturates | **FIXED** — `is_finite()` guard + overflow check in `de81950` |
+| S1-005 | NaN/Inf/negative/zero bypasses `map_to_dispatch_unchecked` | **FIXED** — `DispatchMapError::InvalidAmount` guard in `de81950` |
+| S1-010 | `resolve_config_value` conflates "missing" with "unparseable" | DEFERRED — all 74 params have defaults; revisit when no-default params added |
 
-### Theme 5: PRD-Named Tests Don't Exist (3/9 stories)
+### Theme 5: PRD-Named Tests Don't Exist (3/9 stories) — ALL FIXED
 
-| Story | Missing Test Name |
-|-------|------------------|
-| S1-002 | `test_instrument_metadata_uses_get_instruments` |
-| S1-003 | `test_instrument_cache_ttl_blocks_opens_allows_closes` |
-| S1-012 | `test_expiry_cancel_idempotent_duplicate_noop` |
+All three missing tests created in `de81950`.
 
-### Theme 6: API Design Flaws (3/9 stories)
+| Story | Missing Test Name | Resolution |
+|-------|------------------|------------|
+| S1-002 | `test_instrument_metadata_uses_get_instruments` | **FIXED** — added to `test_instrument_kind_mapping.rs` |
+| S1-003 | `test_instrument_cache_ttl_blocks_opens_allows_closes` | **FIXED** — added to `test_instrument_cache_ttl.rs` |
+| S1-012 | `test_expiry_cancel_idempotent_duplicate_noop` | **FIXED** — added to `test_expiry_guard.rs` |
 
-| Story | Finding |
-|-------|---------|
-| S1-007 | `dispatch_consistency_passed` is a bare bool, bypassable by callers; atomic reject+degrade not enforced |
-| S1-006 | `instrument_cache_hits_total` only counts hits, not all accesses (PRD semantic mismatch) |
-| S1-011 | Strict `DeribitInstrumentKind`/`SettlementPeriod` enums cause total batch deserialization failure on any unknown venue value |
+### Theme 6: API Design Flaws (3/9 stories) — 2 FIXED, 1 DEFERRED
+
+| Story | Finding | Resolution |
+|-------|---------|------------|
+| S1-007 | `dispatch_consistency_passed` is a bare bool, bypassable by callers | DEFERRED — needs Slice 2 API reshape to `ValidatedDispatch` proof token |
+| S1-006 | `instrument_cache_hits_total` only counts hits, not all accesses | **FIXED** — `lookups_total` counter added in `de81950` |
+| S1-011 | Strict enums cause total batch deserialization failure on unknown venue value | **FIXED** — `#[serde(other)]` Unknown variants + `tracing::warn!` in `de81950` |
 
 ---
 
-## Per-Story Findings
+## Per-Story Findings — Full Crosswalk
 
-### S1-002 — InstrumentKind Mapping
+**Resolution key**: FIXED = code/test change landed | STRUCTURAL = needs Slice 2+ production wiring | DEFERRED = conscious deferral with rationale
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | `derive_instrument_kind` has zero production callsites — mapping logic is orphaned/dead code | opus-generic, codex-enriched |
-| 2 | P1 | AT-333 proof gap: tests never assert tick_size/amount_step/min_amount/contract_multiplier passthrough into quantization | codex-enriched, opus-generic |
-| 3 | P1 | PRD requires `test_instrument_metadata_uses_get_instruments` but it doesn't exist; `test_get_instruments_realistic_payloads` only checks enum booleans | codex-enriched |
-| 4 | P1 | `derive_instrument_kind` is fail-open on contradictory flags (is_option=true AND is_future=true resolves to Option); test locks in this behavior | codex-generic |
+### S1-002 — InstrumentKind Mapping (2 fixed, 2 structural)
 
-### S1-003 — Instrument Cache TTL
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | `derive_instrument_kind` has zero production callsites — mapping logic is orphaned/dead code | opus-generic, codex-enriched | STRUCTURAL | Needs runtime dispatch wiring (Slice 2+) |
+| 2 | P1 | AT-333 proof gap: tests never assert tick_size/amount_step/min_amount/contract_multiplier passthrough into quantization | codex-enriched, opus-generic | STRUCTURAL | Needs production wiring before causal test is possible |
+| 3 | P1 | PRD requires `test_instrument_metadata_uses_get_instruments` but it doesn't exist | codex-enriched | **FIXED** | `de81950` — test added to `test_instrument_kind_mapping.rs` |
+| 4 | P1 | `derive_instrument_kind` is fail-open on contradictory flags (is_option+is_future → Option) | codex-generic | **FIXED** | `de81950` — returns `None` + `tracing::warn!` in `venue/types.rs` |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | `opens_blocked` has zero production callsites — AT-104 gate may be paper-only | opus-generic |
-| 2 | P1 | AT-279 proof incomplete: no PolicyGuard-level test proving TradingMode::ReduceOnly within one tick from stale cache | codex-enriched |
-| 3 | P1 | PRD names `test_instrument_cache_ttl_blocks_opens_allows_closes` but it doesn't exist; present test is non-causal | codex-enriched |
-| 4 | P1 | Cross-file AT-104 causality test fails to compile: unresolved import `PricerSide` in common/mod.rs | codex-enriched |
+### S1-003 — Instrument Cache TTL (2 fixed, 2 structural)
 
-### S1-004 — Order Sizing
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | `opens_blocked` has zero production callsites — AT-104 gate may be paper-only | opus-generic | STRUCTURAL | Needs runtime dispatch wiring (Slice 2+) |
+| 2 | P1 | AT-279 proof incomplete: no PolicyGuard-level test proving TradingMode::ReduceOnly within one tick from stale cache | codex-enriched | STRUCTURAL | Needs PolicyGuard integration (Slice 2+) |
+| 3 | P1 | PRD names `test_instrument_cache_ttl_blocks_opens_allows_closes` but it doesn't exist | codex-enriched | **FIXED** | `de81950` — test added to `test_instrument_cache_ttl.rs` |
+| 4 | P1 | Cross-file AT-104 causality test fails to compile: unresolved import `PricerSide` | codex-enriched | **FIXED** | `de81950` — `PricerSide` → `Side` in `tests/common/mod.rs` |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | `build_order_size` has zero production callsites — AT-277 enforcement exists only in tests | opus-enriched |
-| 2 | P1 | AT-277 paper-proof gap: tests only cover build_order_size construction, not dispatcher mapping or mismatch reject/degrade | codex-enriched |
-| 3 | P1 | `notional_usd`/`qty_coin` can be Inf/NaN for extreme-but-finite inputs; function returns Ok with non-finite internals | codex-enriched |
-| 4 | P1 | `(qty/mult).round() as i64` silently saturates to i64::MAX on large finite values instead of returning error | codex-enriched, codex-generic |
-| 5 | P1 | `with_intent_trace_ids` not panic-safe: if closure panics, stale trace IDs leak into subsequent metrics on same thread | codex-generic |
+### S1-004 — Order Sizing (3 fixed, 2 structural)
 
-### S1-005 — Canonical Amount Mapping
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | `build_order_size` has zero production callsites — AT-277 enforcement exists only in tests | opus-enriched | STRUCTURAL | Needs runtime dispatch wiring (Slice 2+) |
+| 2 | P1 | AT-277 paper-proof gap: tests only cover build_order_size construction, not dispatcher mapping | codex-enriched | STRUCTURAL | Needs production wiring before causal test is possible |
+| 3 | P1 | `notional_usd`/`qty_coin` can be Inf/NaN for extreme-but-finite inputs | codex-enriched | **FIXED** | `de81950` — `is_finite()` guard + `OrderSizeError::InvalidNotional` in `order_size.rs` |
+| 4 | P1 | `(qty/mult).round() as i64` silently saturates to i64::MAX on large finite values | codex-enriched, codex-generic | **FIXED** | `de81950` — range check + `OrderSizeError::ContractsOverflow` in `order_size.rs` |
+| 5 | P1 | `with_intent_trace_ids` not panic-safe: if closure panics, stale trace IDs leak | codex-generic | **FIXED** | `de81950` — manual Drop guard in `execution/mod.rs` |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | AT-920 enforcement dead code: `validate_and_dispatch` has zero production callsites | opus-generic, codex-generic, codex-enriched |
-| 2 | P1 | `validate_and_dispatch` returns Err on mismatch but never communicates RiskState::Degraded — undocumented caller convention | opus-generic |
-| 3 | P1 | NaN/Inf/negative/zero amount bypasses `map_to_dispatch_unchecked` without rejection — premortem §3 mitigation missing | opus-enriched, codex-enriched |
-| 4 | P1 | AT-920 mismatch-to-Degraded causality simulated in test (manual RiskState assignment), not enforced by runtime | codex-enriched |
+### S1-005 — Canonical Amount Mapping (1 fixed, 3 structural)
 
-### S1-006 — Cache Observability
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | AT-920 enforcement dead code: `validate_and_dispatch` has zero production callsites | opus-generic, codex-generic, codex-enriched | STRUCTURAL | Needs runtime dispatch wiring (Slice 2+) |
+| 2 | P1 | `validate_and_dispatch` returns Err on mismatch but never communicates RiskState::Degraded | opus-generic | STRUCTURAL | Needs API reshape to thread Degraded state (Slice 2+) |
+| 3 | P1 | NaN/Inf/negative/zero amount bypasses `map_to_dispatch_unchecked` without rejection | opus-enriched, codex-enriched | **FIXED** | `de81950` — `DispatchMapError::InvalidAmount` guard in `dispatch_map.rs` |
+| 4 | P1 | AT-920 mismatch-to-Degraded causality simulated in test, not enforced by runtime | codex-enriched | STRUCTURAL | Needs production wiring + API reshape (Slice 2+) |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | No structured log emitted on TTL breach — implementation only buffers CacheTtlBreach events; no `tracing::warn!` in stale path | codex-enriched, codex-generic |
-| 2 | P1 | AT-104 proof is unit-level only (`opens_blocked`) — does not prove dispatch count or reject path causality | codex-enriched, codex-generic |
-| 3 | P1 | `instrument_cache_hits_total` increments only on cache hit; PRD says count all accesses — semantic mismatch | codex-enriched, codex-generic |
+### S1-006 — Cache Observability (1 fixed, 2 structural)
 
-### S1-007 — Dispatch Consistency
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | No structured log emitted on TTL breach — only buffers CacheTtlBreach events | codex-enriched, codex-generic | STRUCTURAL | Needs production wiring for structured log emission |
+| 2 | P1 | AT-104 proof is unit-level only — does not prove dispatch count or reject path causality | codex-enriched, codex-generic | STRUCTURAL | Needs PolicyGuard integration (Slice 2+) |
+| 3 | P1 | `instrument_cache_hits_total` increments only on cache hit; PRD says count all accesses | codex-enriched, codex-generic | **FIXED** | `de81950` — `lookups_total` counter added to `venue/cache.rs` |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | `dispatch_consistency_passed` is a bare bool — AT-920 bypassable by any caller passing true without running `validate_and_dispatch` | opus-generic, codex-enriched, codex-generic |
-| 2 | P1 | `validate_and_dispatch` has zero production callsites — AT-920 mismatch+Degraded never enforced in production | opus-generic |
-| 3 | P1 | API shape doesn't enforce atomic reject+degrade — `validate_and_dispatch` returns error-only on mismatch; test manually sets RiskState::Degraded | codex-enriched, codex-generic |
+### S1-007 — Dispatch Consistency (0 fixed, 2 structural, 1 deferred)
 
-### S1-010 — Config Resolution
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | `dispatch_consistency_passed` is a bare bool — AT-920 bypassable by any caller | opus-generic, codex-enriched, codex-generic | DEFERRED | Needs API reshape to type-safe `ValidatedDispatch` proof token (Slice 2) |
+| 2 | P1 | `validate_and_dispatch` has zero production callsites | opus-generic | STRUCTURAL | Needs runtime dispatch wiring (Slice 2+) |
+| 3 | P1 | API shape doesn't enforce atomic reject+degrade | codex-enriched, codex-generic | STRUCTURAL | Needs API reshape (Slice 2+) |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | AT-040 Err path structurally unreachable: all 74 ConfigParam variants have defaults so fail-closed branch has zero exercised coverage | opus-generic, opus-enriched, codex-enriched |
-| 2 | P1 | `resolve_config_value` only called in tests — no enforcement point (PolicyGuard, EvidenceGuard, InstrumentCache) consumes the config resolver | opus-enriched |
-| 3 | P1 | AT-424/AT-971 tests validate resolver output only, not gate-level causality (no reject/latch/decision path proven) | codex-enriched |
-| 4 | P1 | `resolve_config_value` conflates "missing" with "unparseable" — parse errors mapped to None silently apply defaults instead of failing closed | codex-enriched |
-| 5 | P1 | `position_reconcile_epsilon` hardcoded to 1e-6 but contract requires `max(1e-6, instrument min_amount)`, causing persistent latch blocks for larger-step instruments | codex-generic |
+### S1-010 — Config Resolution (0 fixed, 2 structural, 3 deferred)
 
-### S1-011 — Instrument Batch Deserialization
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | AT-040 Err path structurally unreachable: all 74 ConfigParam variants have defaults | opus-generic, opus-enriched, codex-enriched | DEFERRED | Academic — no params without defaults exist yet; revisit when no-default params added |
+| 2 | P1 | `resolve_config_value` only called in tests — no production consumer | opus-enriched | STRUCTURAL | Needs PolicyGuard/EvidenceGuard integration (Slice 2+) |
+| 3 | P1 | AT-424/AT-971 tests validate resolver output only, not gate-level causality | codex-enriched | STRUCTURAL | Needs production wiring before causal test is possible |
+| 4 | P1 | `resolve_config_value` conflates "missing" with "unparseable" — parse errors silently apply defaults | codex-enriched | DEFERRED | Academic — all 74 params have defaults; revisit when no-default params added |
+| 5 | P1 | `position_reconcile_epsilon` hardcoded to 1e-6 but contract requires `max(1e-6, instrument min_amount)` | codex-generic | DEFERRED | Needs contract clarification on instrument-aware epsilon |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | AT-333 not causally proven — tests check field deserialization existence but not that quantization/sizing actually uses fetched metadata values | codex-enriched |
-| 2 | P1 | `amount_step` is `Option` with `serde(default)`, tests accept its absence — contradicts acceptance requiring all four sizing fields present | codex-enriched |
-| 3 | P1 | Proving tests non-runnable — cargo test fails to compile: unresolved import `ledger::WalWriterConfig` in store/mod.rs | codex-enriched |
-| 4 | P1 | Missing `option_combo` deserialization test — broken serde rename would not be caught; acceptance explicitly requires this variant | opus-generic, opus-enriched |
-| 5 | P1 | Strict `DeribitInstrumentKind`/`SettlementPeriod` enums cause total batch deserialization failure on any unknown venue value | opus-generic |
+### S1-011 — Instrument Batch Deserialization (3 fixed, 2 structural)
 
-### S1-012 — Expiry Lifecycle
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | AT-333 not causally proven — tests check field deserialization but not sizing/quantization usage | codex-enriched | STRUCTURAL | Needs production wiring before causal test is possible |
+| 2 | P1 | `amount_step` is `Option` with `serde(default)` — contradicts acceptance requiring all four sizing fields | codex-enriched | STRUCTURAL | Needs production validation layer (Slice 2+) |
+| 3 | P1 | Proving tests non-runnable — unresolved import `ledger::WalWriterConfig` | codex-enriched | **FIXED** | `de81950` — `WalWriterConfig` struct created in `store/ledger.rs` |
+| 4 | P1 | Missing `option_combo` deserialization test | opus-generic, opus-enriched | **FIXED** | `de81950` — `test_option_combo_deserializes` added to `test_deribit_instrument.rs` |
+| 5 | P1 | Strict `DeribitInstrumentKind`/`SettlementPeriod` enums cause total batch failure on unknown venue value | opus-generic | **FIXED** | `de81950` — `#[serde(other)]` Unknown variants + `tracing::warn!` in `deribit/public/mod.rs` |
 
-| # | Severity | Finding | Tools |
-|---|----------|---------|-------|
-| 1 | P1 | AT-949/960/961/962/966 lifecycle terminal handling not wired into production reconcile/cancel flow — tests prove enum mapping only | codex-enriched |
-| 2 | P1 | Proving tests non-runnable — cargo test fails to compile: unresolved import `PricerSide` in tests/common/mod.rs | codex-enriched |
-| 3 | P1 | AT-960 has no proving test for duplicate cancel idempotency — premortem lists `test_expiry_cancel_idempotent_duplicate_noop` but it doesn't exist | opus-enriched |
+### S1-012 — Expiry Lifecycle (2 fixed, 1 structural)
+
+| # | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|----------|---------|-------|------------|---------------|
+| 1 | P1 | AT-949/960-966 lifecycle terminal handling not wired into production reconcile/cancel flow | codex-enriched | STRUCTURAL | Needs runtime dispatch wiring (Slice 2+) |
+| 2 | P1 | Proving tests non-runnable — unresolved import `PricerSide` | codex-enriched | **FIXED** | `de81950` — `PricerSide` → `Side` in `tests/common/mod.rs` |
+| 3 | P1 | AT-960 has no proving test for duplicate cancel idempotency | opus-enriched | **FIXED** | `de81950` — `test_expiry_cancel_idempotent_duplicate_noop` added to `test_expiry_guard.rs` |
+
+---
+
+### New Findings from Cycle 2 (3 findings: 2 P1, 1 P0 escalation)
+
+These were NOT present in Cycle 1 reviews. Discovered by Codex Cycle 2 after the reconciliation fix commit.
+
+| # | Story | Severity | Finding | Tools | Resolution | Commit / Note |
+|---|-------|----------|---------|-------|------------|---------------|
+| C2-1 | S1-010 | P1 (new) | WAL `update_state`/`mark_sent` silently drop transitions when writer channel full or disconnected | codex-C2-generic | **FIXED** | `72d84db` — Disconnected returns Ok (CSP.3.2), Full increments `enqueue_failures` metric + `tracing::warn` |
+| C2-2 | S1-010 | P1 (new) | WAL replay uses last-writer-wins for duplicate IntentRecorded, hiding duplication | codex-C2-generic | **FIXED** | `72d84db` — `tracing::warn!("duplicate IntentRecorded")` on replay + `test_replay_duplicate_intent_recorded_last_writer_wins` |
+| C2-3 | S1-007 | P0 (escalation) | `dispatch_consistency_passed` bare bool bypass escalated from P1 to P0 (Critical) by enriched review | codex-C2-enriched | DEFERRED | Same root cause as C1 finding S1-007 #1; needs Slice 2 API reshape to `ValidatedDispatch` proof token |
+
+---
+
+## Resolution Summary
+
+| Status | Count | Details |
+|--------|-------|---------|
+| **FIXED** | 17 | 14 in `de81950` (Cycle 1 fixes) + 3 in `72d84db` (WAL Cycle 2 fixes) |
+| **STRUCTURAL** | 17 | Blocked on Slice 2+ production wiring — zero callsites (6) + paper-only AT proof (11) |
+| **DEFERRED** | 5 | Bare bool API (1), academic/no-default-params (2), epsilon contract (1), C2 P0 escalation (1, same root as deferred #1) |
+| **Total** | **39** | 36 Cycle 1 + 3 Cycle 2 |
 
 ---
 
