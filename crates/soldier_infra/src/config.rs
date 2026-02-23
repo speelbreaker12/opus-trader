@@ -75,6 +75,8 @@ pub enum ConfigParam {
     EvidenceguardCountersMaxAgeMs,
 
     // Open Permission Latch
+    /// Floor for position reconcile epsilon. Effective epsilon at runtime is
+    /// `max(this_value, instrument.min_amount)` per CONTRACT.md §2.2.4.
     PositionReconcileEpsilon,
     ReconcileTradeLookbackSec,
 
@@ -122,6 +124,11 @@ pub enum ConfigParam {
 
     // GOP canary
     CanaryEvidenceAbortS,
+
+    /// Test-only variant with no Appendix A default, used to exercise the
+    /// `resolve_config_value` Err path (AT-040).
+    #[cfg(test)]
+    SyntheticNoDefault,
 }
 
 /// Error when a required parameter is missing and has no Appendix A default.
@@ -211,7 +218,7 @@ pub fn appendix_a_default(param: ConfigParam) -> Option<f64> {
         ConfigParam::EvidenceguardGlobalCooldown => Some(120.0),
         ConfigParam::EvidenceguardCountersMaxAgeMs => Some(60000.0),
 
-        // Open Permission Latch
+        // Open Permission Latch — floor value; callsite applies max(floor, instrument.min_amount)
         ConfigParam::PositionReconcileEpsilon => Some(1e-6),
         ConfigParam::ReconcileTradeLookbackSec => Some(300.0),
 
@@ -259,6 +266,9 @@ pub fn appendix_a_default(param: ConfigParam) -> Option<f64> {
 
         // GOP canary
         ConfigParam::CanaryEvidenceAbortS => Some(180.0),
+
+        #[cfg(test)]
+        ConfigParam::SyntheticNoDefault => None,
     }
 }
 
@@ -339,6 +349,9 @@ pub fn param_name(param: ConfigParam) -> &'static str {
         ConfigParam::TickL2RetentionHours => "tick_l2_retention_hours",
         ConfigParam::ParquetAnalyticsRetentionDays => "parquet_analytics_retention_days",
         ConfigParam::CanaryEvidenceAbortS => "canary_evidence_abort_s",
+
+        #[cfg(test)]
+        ConfigParam::SyntheticNoDefault => "synthetic_no_default_for_testing",
     }
 }
 
@@ -425,12 +438,6 @@ pub const ALL_PARAMS: &[ConfigParam] = &[
     ConfigParam::CanaryEvidenceAbortS,
 ];
 
-/// Resolve a configuration value with Appendix A fail-safe semantics.
-///
-/// - If `value` is `Some`, returns that value (explicit config takes precedence).
-/// - If `value` is `None` and the parameter has an Appendix A default, returns the default.
-/// - If `value` is `None` and no Appendix A default exists, returns `Err` (fail-closed).
-
 /// Returns true if the parameter is a percentage/fraction that must be in [0.0, 1.0].
 ///
 /// CONTRACT.md Appendix A marks these as "pct" in the unit column.
@@ -456,7 +463,11 @@ fn is_percentage_param(param: ConfigParam) -> bool {
     )
 }
 
-// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
+/// Resolve a configuration value with Appendix A fail-safe semantics.
+///
+/// - If `value` is `Some`, returns that value (explicit config takes precedence).
+/// - If `value` is `None` and the parameter has an Appendix A default, returns the default.
+/// - If `value` is `None` and no Appendix A default exists, returns `Err` (fail-closed).
 pub fn resolve_config_value(
     param: ConfigParam,
     value: Option<f64>,
@@ -488,9 +499,85 @@ pub fn resolve_config_value(
     })
 }
 
+// ─── Gate config builder ─────────────────────────────────────────────────
+
+/// Resolved gate-critical configuration thresholds.
+///
+/// All values are validated (finite, non-negative, within range)
+/// via `resolve_config_value`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GateConfig {
+    /// Fee cache soft staleness threshold (seconds).
+    pub fee_cache_soft_s: f64,
+    /// Fee cache hard staleness threshold (seconds).
+    pub fee_cache_hard_s: f64,
+    /// Fee staleness buffer multiplier.
+    pub fee_stale_buffer: f64,
+    /// Instrument cache TTL (seconds).
+    pub instrument_cache_ttl_s: f64,
+    /// L2 book snapshot max age (milliseconds).
+    pub l2_book_snapshot_max_age_ms: f64,
+    /// Maximum slippage for liquidity gate (basis points).
+    pub max_slippage_bps: f64,
+    /// AT-920 contracts/amount match tolerance.
+    pub contracts_amount_match_tolerance: f64,
+}
+
+/// Raw (un-validated) threshold configuration from external sources.
+///
+/// `None` fields fall back to Appendix A defaults via `resolve_config_value`.
+#[derive(Debug, Clone, Default)]
+pub struct RawThresholdConfig {
+    pub fee_cache_soft_s: Option<f64>,
+    pub fee_cache_hard_s: Option<f64>,
+    pub fee_stale_buffer: Option<f64>,
+    pub instrument_cache_ttl_s: Option<f64>,
+    pub l2_book_snapshot_max_age_ms: Option<f64>,
+    pub max_slippage_bps: Option<f64>,
+    pub contracts_amount_match_tolerance: Option<f64>,
+}
+
+/// Build a validated `GateConfig` from raw thresholds using Appendix A defaults.
+///
+/// Each parameter is resolved via `resolve_config_value`, which applies the
+/// Appendix A default when the raw value is `None` and rejects non-finite or
+/// out-of-range values. Returns the first error encountered (fail-closed).
+pub fn build_gate_config_from_raw(raw: &RawThresholdConfig) -> Result<GateConfig, MissingConfigError> {
+    Ok(GateConfig {
+        fee_cache_soft_s: resolve_config_value(ConfigParam::FeeCacheSoftS, raw.fee_cache_soft_s)?,
+        fee_cache_hard_s: resolve_config_value(ConfigParam::FeeCacheHardS, raw.fee_cache_hard_s)?,
+        fee_stale_buffer: resolve_config_value(ConfigParam::FeeStaleBuffer, raw.fee_stale_buffer)?,
+        instrument_cache_ttl_s: resolve_config_value(ConfigParam::InstrumentCacheTtlS, raw.instrument_cache_ttl_s)?,
+        l2_book_snapshot_max_age_ms: resolve_config_value(ConfigParam::L2BookSnapshotMaxAgeMs, raw.l2_book_snapshot_max_age_ms)?,
+        max_slippage_bps: resolve_config_value(ConfigParam::MaxSlippageBps, raw.max_slippage_bps)?,
+        contracts_amount_match_tolerance: resolve_config_value(ConfigParam::ContractsAmountMatchTolerance, raw.contracts_amount_match_tolerance)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// AT-040: drive resolve_config_value into the actual Err path using the
+    /// test-only SyntheticNoDefault variant (no Appendix A default).
+    #[test]
+    fn test_missing_non_appendix_a_param_fails_closed() {
+        let result = resolve_config_value(ConfigParam::SyntheticNoDefault, None);
+        assert!(result.is_err(), "no-default param with None must fail-closed");
+        let err = result.unwrap_err();
+        assert!(
+            err.param_name.contains("synthetic_no_default"),
+            "error must identify the parameter, got: {}",
+            err.param_name
+        );
+        assert!(
+            err.reason.contains("no Appendix A default"),
+            "error must explain why, got: {}",
+            err.reason
+        );
+        let msg = format!("{err}");
+        assert!(msg.contains("fail-closed"), "Display must state fail-closed, got: {msg}");
+    }
 
     #[test]
     fn all_params_have_defaults() {

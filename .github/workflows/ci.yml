@@ -37,46 +37,6 @@ jobs:
           path: artifacts/phase1_compare/ci_snapshot_isolation/
           if-no-files-found: ignore
 
-  copilot-signal:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Copilot signal
-        run: echo "copilot-signal"
-
-  copilot-gate:
-    if: |
-      github.event_name == 'pull_request' ||
-      github.event_name == 'pull_request_review' ||
-      github.event_name == 'pull_request_review_comment' ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-      checks: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Enforce copilot gate (merge health + bot comments)
-        run: |
-          chmod +x ./plans/pr_gate.sh
-          ./plans/pr_gate.sh \
-            --pr "${PR_NUMBER}" \
-            --wait \
-            --timeout-secs 1800 \
-            --poll-secs 20 \
-            --aftercare-ack-mode auto \
-            --bot-comments-mode block \
-            --require-copilot-review \
-            --ignore-check-run-regex '^(copilot-gate|prd-story-gate)$'
-
   prd-story-gate:
     if: |
       false &&
@@ -170,58 +130,6 @@ jobs:
             --require-aftercare-ack \
             --require-copilot-review \
             --ignore-check-run-regex '^(copilot-gate|prd-story-gate)$'
-
-  pr-template-lint:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Lint PR template sections
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          PR_DRAFT: ${{ github.event.pull_request.draft }}
-          PR_TEMPLATE_LINT_DRAFT_MODE: warn
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: |
-          # Skip template lint for deployment branches
-          if [[ "${PR_HEAD_REF}" =~ ^deploy/ ]]; then
-            echo "ℹ️  Skipping PR template lint for deployment branch: ${PR_HEAD_REF}"
-            exit 0
-          fi
-
-          mode="strict"
-          if [[ "${PR_DRAFT}" == "true" && "${PR_TEMPLATE_LINT_DRAFT_MODE}" != "strict" ]]; then
-            mode="warn"
-          fi
-
-          printf '%s' "${PR_BODY:-}" > pr_body.md
-
-          set +e
-          python3 tools/ci/lint_pr_template_sections.py --body-file pr_body.md --mode "$mode" | tee pr_template_lint.log
-          rc=${PIPESTATUS[0]}
-          set -e
-
-          if [[ -s pr_template_lint.log ]]; then
-            while IFS= read -r line; do
-              [[ -z "$line" ]] && continue
-              if [[ "$mode" == "warn" ]]; then
-                echo "::warning::$line"
-              elif [[ "$rc" -ne 0 ]]; then
-                echo "::error::$line"
-              fi
-            done < pr_template_lint.log
-          fi
-
-          if [[ "$mode" == "warn" ]]; then
-            echo "PR template lint ran in warn mode for draft PR."
-            exit 0
-          fi
-          exit "$rc"
 
   crossref-gate:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'

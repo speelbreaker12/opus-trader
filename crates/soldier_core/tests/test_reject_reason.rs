@@ -185,6 +185,7 @@ fn test_registry_contains_all_enum_variants() {
         RejectReasonCode::InstrumentExpiredOrDelisted,
         RejectReasonCode::FeedbackLoopGuardActive,
         RejectReasonCode::LabelTooLong,
+        RejectReasonCode::AssemblyFailed,
     ];
 
     let registry = reject_reason_registry();

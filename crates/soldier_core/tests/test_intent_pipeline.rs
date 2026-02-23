@@ -3,8 +3,9 @@
 mod common;
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep, IntentPipelineMetrics,
-    LiquidityGateInput, OrderType, PostOnlyInput, RejectReasonCode, Side, evaluate_intent_pipeline,
+    ChokeIntentClass, ChokeRejectReason, ChokeResult, DispatchConsistencyProof, GateStep,
+    IntentPipelineMetrics, LiquidityGateInput, OrderType, PostOnlyInput, RejectReasonCode, Side,
+    evaluate_intent_pipeline,
 };
 use soldier_core::risk::RiskState;
 use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
@@ -55,6 +56,12 @@ fn test_pipeline_open_missing_l2_rejected_at_liquidity_gate() {
     assert_eq!(
         result.reject_reason_code,
         Some(RejectReasonCode::LiquidityGateNoL2)
+    );
+    // Dispatch causality: gate rejection must prevent dispatch.
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when liquidity gate rejects (missing L2)"
     );
 }
 
@@ -284,7 +291,7 @@ fn test_at104_degraded_blocks_open_at_chokepoint() {
 #[test]
 fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
     let mut input = base_open_input();
-    input.dispatch_consistency_passed = false;
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
@@ -318,14 +325,82 @@ fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
     );
 }
 
-/// AT-920 supplement: dispatch_consistency_passed=false rejects CLOSE too.
-/// Gate 4 is intent-class-agnostic (only CancelOnly short-circuits before it).
-/// This test guards against a future refactor that accidentally excludes CLOSE.
+/// AT-920 + CSP Invariant F: Close bypasses Gate 4 (DispatchConsistency).
+/// Risk-reducing intents must not be blocked by contract mismatch.
 #[test]
-fn test_at920_pipeline_dispatch_consistency_rejects_close() {
+fn test_at920_pipeline_dispatch_consistency_skips_close() {
     let mut input = base_open_input();
     input.intent_class = ChokeIntentClass::Close;
-    input.dispatch_consistency_passed = false;
+    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "Close must bypass Gate 4 (CSP Invariant F), got {:?}",
+        result.decision
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        1,
+        "Close dispatch count must be 1 even with dispatch_consistency=false"
+    );
+}
+
+// ─── Dispatch causality: gate-specific rejection → dispatch=0 ──────────
+
+/// Causality proof: quantize too-small blocks dispatch.
+/// raw_qty below min_amount → TooSmallAfterQuantization → dispatch=0.
+#[test]
+fn test_causality_quantize_too_small_blocks_dispatch() {
+    let mut input = base_open_input();
+    // min_amount is 0.1 in base_open_input; set raw_qty below it.
+    input.quantize.raw_qty = 0.001;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::Quantize,
+                        ..
+                    }
+                ),
+                "expected Quantize gate rejection, got {reason:?}"
+            );
+            assert!(gate_trace.contains(&GateStep::Quantize));
+        }
+        other => panic!("expected Rejected at Quantize, got {other:?}"),
+    }
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when quantize rejects (too small)"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::TooSmallAfterQuantization)
+    );
+}
+
+/// Causality proof: expiry guard blocks dispatch for OPEN near expiry.
+/// now_ms inside expiry buffer → InstrumentExpiredOrDelisted → dispatch=0.
+#[test]
+fn test_causality_expiry_guard_blocks_dispatch() {
+    let mut input = base_open_input();
+    // Set now_ms inside the expiry buffer (expiry - buffer < now < expiry).
+    // expiry_delist_buffer_s = 60, so the opens_blocked_from_ms = expiry - 60*1000.
+    // Set expiry to 1_100_000 and now to 1_050_000 (within 60s buffer).
+    input.expiry_guard = Some(soldier_core::venue::ExpiryGuardInput {
+        now_ms: 1_050_000,
+        expiration_timestamp_ms: Some(1_100_000),
+        expiry_delist_buffer_s: 60,
+        intent: soldier_core::venue::LifecycleIntent::Open,
+        instrument_kind: Some(InstrumentKind::LinearFuture),
+    });
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
@@ -335,18 +410,62 @@ fn test_at920_pipeline_dispatch_consistency_rejects_close() {
                 matches!(
                     reason,
                     ChokeRejectReason::GateRejected {
-                        gate: GateStep::DispatchConsistency,
+                        gate: GateStep::ExpiryGuard,
                         ..
                     }
                 ),
-                "CLOSE must also be rejected when dispatch consistency fails, got {reason:?}"
+                "expected ExpiryGuard rejection, got {reason:?}"
             );
         }
-        other => panic!("expected Rejected for CLOSE, got {other:?}"),
+        other => panic!("expected Rejected at ExpiryGuard, got {other:?}"),
     }
-    assert_eq!(metrics.chokepoint.approved_total(), 0);
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when expiry guard rejects"
+    );
     assert_eq!(
         result.reject_reason_code,
-        Some(RejectReasonCode::ContractsAmountMismatch)
+        Some(RejectReasonCode::InstrumentExpiredOrDelisted)
+    );
+}
+
+/// Causality proof: fee cache hard-stale blocks dispatch.
+/// now_ms far ahead of fee_model_cached_at_ts_ms → FeeCacheStale → dispatch=0.
+#[test]
+fn test_causality_fee_cache_stale_blocks_dispatch() {
+    let mut input = base_open_input();
+    // Default fee_cache_hard_s = 900s = 900_000ms. Set cache age far beyond.
+    input.fee_snapshot = soldier_core::risk::FeeCacheSnapshot {
+        fee_rate: 0.0005,
+        fee_model_cached_at_ts_ms: Some(100_000),
+        now_ms: 2_000_000, // age = 1_900s >> 900s hard threshold
+    };
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::FeeCacheCheck,
+                        ..
+                    }
+                ),
+                "expected FeeCacheCheck rejection, got {reason:?}"
+            );
+        }
+        other => panic!("expected Rejected at FeeCacheCheck, got {other:?}"),
+    }
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when fee cache is hard-stale"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::FeeCacheStale)
     );
 }

@@ -3,6 +3,9 @@
 //! CONTRACT.md §1.0.X (Instrument Metadata Freshness):
 //! - AT-104: stale metadata blocks OPEN, allows CLOSE/HEDGE/CANCEL
 //! - instrument_cache_age_s vs instrument_cache_ttl_s comparison
+//!
+//! **Dispatch causality**: Pipeline-level proof that Degraded blocks OPEN dispatch
+//! lives in `test_intent_pipeline.rs::test_at104_degraded_blocks_open_at_chokepoint`.
 
 use std::time::{Duration, Instant};
 
@@ -10,6 +13,9 @@ use soldier_core::risk::RiskState;
 use soldier_core::venue::{
     CacheTtlBreach, InstrumentCache, InstrumentKind, MAX_PENDING_BREACH_EVENTS, opens_blocked,
 };
+// S1-006 tracing tests (TRIP + NON-TRIP) live in cache.rs::tests because
+// tracing-test's thread-local subscriber only captures events from the same
+// compilation unit. See cache::tests::test_ttl_breach_emits_structured_log.
 
 // ─── Fresh vs stale ─────────────────────────────────────────────────────
 
@@ -603,3 +609,4 @@ fn test_different_ttl_config_respected() {
         "61s must be stale under ttl_s=60 — proves TTL is not hardcoded to 3600"
     );
 }
+

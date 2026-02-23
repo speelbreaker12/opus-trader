@@ -91,6 +91,7 @@ Then inspect touched files for:
 - Where is intent classified?
 - Where is reduce_only injected?
 - Where are latches / staleness checks applied?
+- **For each NEW function that takes `ChokeIntentClass` or `IntentClass`**: trace CancelOnly through it. CancelOnly must never be blocked by non-dispatch failures (metadata, sizing, consistency). If the function runs sizing/validation before checking intent class, CancelOnly can be falsely rejected — this is a P1 cancel-blocking hazard.
 
 ### Phase 2.5 — Callsite trace
 

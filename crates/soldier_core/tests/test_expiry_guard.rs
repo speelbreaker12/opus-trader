@@ -1,3 +1,8 @@
+//! Tests for expiry guard (instrument expiry/delist OPEN block).
+//!
+//! **Dispatch causality**: Pipeline-level proof that expiry guard blocks dispatch
+//! lives in `test_intent_pipeline.rs::test_causality_expiry_guard_blocks_dispatch`.
+
 mod common;
 
 use soldier_core::execution::{

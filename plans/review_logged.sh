@@ -638,8 +638,60 @@ p1="$(grep -coE '\bP1\b' "$transcript_tmp" 2>/dev/null || echo 999)"
 p2="$(grep -coE '\bP2\b' "$transcript_tmp" 2>/dev/null || echo 999)"
 echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
 
-# Create legacy timestamped symlink for backwards compatibility with wf_step.sh
-ln -sf "$canonical_name" "$legacy_file" 2>/dev/null || true
+# ── Extract review_meta for deterministic gate checks ────────────────
+# Scans transcript for file:line citations, classifies as enforcement vs test.
+# This structured block is the source of truth for manifest checks —
+# no heuristic prose scanning needed by downstream consumers.
+
+enforcement_cites=()
+test_cites=()
+
+# Extract file:line or file:line::function patterns from transcript
+while IFS= read -r cite; do
+  [[ -z "$cite" ]] && continue
+  if [[ "$cite" == *"/tests/"* || "$cite" == *"/test_"* ]]; then
+    test_cites+=("$cite")
+  else
+    enforcement_cites+=("$cite")
+  fi
+done < <(grep -oE '[a-zA-Z0-9_/.:-]+\.rs:[0-9]+(::[ a-zA-Z0-9_]+)?' "$transcript_tmp" 2>/dev/null | sort -u || true)
+
+# diff_only_review_rejected:
+# enriched prompts explicitly request full contract-proof scope → rejected by construction.
+# generic prompts → check if transcript explicitly mentions rejecting diff-only scope.
+# fail-closed: if uncertain, treat as NOT rejected (conservative for R3 gate).
+diff_rejected=false
+if [[ "$prompt_style" == "enriched" ]]; then
+  diff_rejected=true
+elif grep -qiE '(reject.*diff.only|beyond.*diff|full.*scope|contract.proof|story.scope)' "$transcript_tmp" 2>/dev/null; then
+  diff_rejected=true
+fi
+
+{
+  echo ""
+  echo "---"
+  echo "review_meta:"
+  echo "  evidence_citations:"
+  if [[ ${#enforcement_cites[@]} -gt 0 ]]; then
+    echo "    preexisting_enforcement:"
+    for c in "${enforcement_cites[@]}"; do
+      echo "      - \"$c\""
+    done
+  else
+    echo "    preexisting_enforcement: []"
+  fi
+  if [[ ${#test_cites[@]} -gt 0 ]]; then
+    echo "    preexisting_tests:"
+    for c in "${test_cites[@]}"; do
+      echo "      - \"$c\""
+    done
+  else
+    echo "    preexisting_tests: []"
+  fi
+  echo "  checks:"
+  echo "    diff_only_review_rejected: $diff_rejected"
+  echo "---"
+} >> "$outfile"
 
 # ── Post-validation hard gates (v3.0) ──────────────────────────────
 # These checks validate the generated artifact meets structural requirements.
@@ -740,6 +792,17 @@ if [[ "$tool" == "codex" ]]; then
     fi
   fi
 fi
+
+# ── Normalize: copy to canonical path for deterministic pipeline lookup ──
+# Canonical name: <tool>.<prompt_style>.md  (e.g., codex.enriched.md, opus.generic.md)
+# This keeps review_logged.sh's timestamped filenames while providing a stable
+# path that reconciliation validators and external manifest builders can rely on.
+canonical_name="${tool}.${prompt_style}.md"
+canonical_path="$outdir/$canonical_name"
+
+# Overwrite any previous canonical file for this tool+prompt combo
+cp "$outfile" "$canonical_path"
+echo "Normalized: $canonical_path" >&2
 
 echo "Saved $(ucfirst "$tool") review: $outfile (canonical: $canonical_name)" >&2
 exit "$rc"

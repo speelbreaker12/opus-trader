@@ -2,6 +2,10 @@
 //!
 //! Validates mapping from venue metadata to CONTRACT.md instrument_kind
 //! (AT-333) and RiskState variants.
+//!
+//! **Dispatch causality**: Pipeline-level proof that unknown instrument kind
+//! blocks dispatch lives in `test_intent_assembly.rs::test_assembly_unknown_kind_fails_closed`
+//! and `test_assembled_pipeline_unknown_kind_rejects`.
 
 use soldier_core::risk::RiskState;
 use soldier_core::venue::{InstrumentKind, InstrumentKindInput, derive_instrument_kind};

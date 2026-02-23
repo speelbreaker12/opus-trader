@@ -1,154 +1,245 @@
 #!/usr/bin/env python3
-"""Render human-readable .md companion from external manifest JSON.
+"""Render R3/R7 external manifest JSON as human-readable markdown.
 
-Usage: plans/render_external_manifest.py <manifest.json> [--output <path>]
-
-Reads R3_EXTERNAL_MANIFEST.json or R7_EXTERNAL_MANIFEST.json and produces
-a markdown summary suitable for human review. Output defaults to the same
-directory as the input, with .json replaced by .md.
-
-Exit codes:
-  0 = success
-  1 = render error
-  2 = usage error
+Usage:
+    render_external_manifest.py <manifest.json>
 """
 from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 
-def render(data: dict) -> str:
-    """Render manifest dict to markdown string."""
-    sv = data.get("schema_version", "unknown")
-    cycle = data.get("cycle", "?")
-    story = data.get("story_id", "?")
-    basis = data.get("review_basis", "?")
-    head = data.get("head_commit", "?")
-    base = data.get("base_commit")
-    status = data.get("validation_status", "?")
-    created = data.get("created_at", "?")
+def render_provenance(prov: dict[str, Any]) -> str:
+    """Render top-level provenance as YAML-style front matter."""
+    lines = ["---"]
+    for key in [
+        "tool", "model", "prompt_style", "cycle", "phase_equivalent",
+        "review_basis", "story_id", "slice_id", "head_commit", "base_commit",
+        "generated_at", "artifact_provenance", "schema_version",
+    ]:
+        if key in prov:
+            lines.append(f"{key}: {prov[key]}")
+    lines.append("---")
+    return "\n".join(lines)
 
-    lines = [
-        "---",
-        "provenance:",
-        "  tool: script",
-        f"  schema_version: {sv}",
-        "  model: n/a",
-        "  prompt_style: none",
-        f"  cycle: {cycle}",
-        f"  phase_equivalent: {'R3' if cycle == 'C1' else 'R7d'}",
-        f"  story_id: {story}",
-        f'  head_commit: "{head}"',
-        f'  generated_at: "{datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}"',
-        '  artifact_provenance: "renderer-v1"',
-        "---",
-        "",
-        f"# External Review Manifest — {story} (Cycle {cycle[-1]})",
-        "",
-        f"**Review basis**: {basis}",
-        f"**Head commit**: `{head}`",
-    ]
 
-    if base:
-        lines.append(f"**Base commit**: `{base}`")
-
-    lines.extend([
-        f"**Status**: {status}",
-        f"**Generated**: {created}",
-        "",
-        "## Tools",
-        "",
-        "| Tool | Model | Enriched | Generic |",
-        "|------|-------|----------|---------|",
-    ])
-
-    tools = data.get("tools", [])
-    for t in tools:
-        tool_name = t.get("tool", "?")
-        model = t.get("model", "?")
-        artifacts = t.get("artifacts", {})
-
-        enriched = artifacts.get("enriched", {})
-        generic = artifacts.get("generic", {})
-
-        e_path = enriched.get("path", "?")
-        e_ok = "exists" if enriched.get("exists") else "MISSING"
-        g_path = generic.get("path", "?")
-        g_ok = "exists" if generic.get("exists") else "MISSING"
-
-        lines.append(f"| {tool_name} | {model} | `{e_path}` ({e_ok}) | `{g_path}` ({g_ok}) |")
-
+def render_reviews_table(reviews: list[dict[str, Any]], manifest_type: str) -> str:
+    """Render reviews[] as a markdown table."""
+    lines: list[str] = []
+    lines.append("## Reviews")
     lines.append("")
 
-    # C1-specific: citation validation
-    if cycle == "C1":
-        enf = data.get("validated_preexisting_enforcement_citation")
-        test = data.get("validated_preexisting_test_citation")
-        lines.extend([
-            "## Citation Validation (Cycle 1)",
-            "",
-            f"- Pre-existing enforcement citation: **{'PASS' if enf else 'FAIL'}**",
-            f"- Pre-existing test citation: **{'PASS' if test else 'FAIL'}**",
-            "",
-        ])
+    if manifest_type == "r3":
+        lines.append(
+            "| # | Tool | Prompt | Model | Phase | SHA256 (trunc) | "
+            "Basis | Enforce | Test | DiffReject |"
+        )
+        lines.append(
+            "|---|------|--------|-------|-------|----------------|"
+            "------|---------|------|------------|"
+        )
+        for i, r in enumerate(reviews):
+            sha_trunc = r.get("artifact_sha256", "")[:12] + "..."
+            checks = r.get("checks", {})
+            lines.append(
+                f"| {i+1} "
+                f"| {r.get('tool', '?')} "
+                f"| {r.get('prompt_style', '?')} "
+                f"| {r.get('model', '?')} "
+                f"| {r.get('phase_equivalent', '?')} "
+                f"| `{sha_trunc}` "
+                f"| {_bool_icon(checks.get('review_basis_present'))} "
+                f"| {_bool_icon(checks.get('preexisting_enforcement_citation_present'))} "
+                f"| {_bool_icon(checks.get('preexisting_test_citation_present'))} "
+                f"| {_bool_icon(checks.get('diff_only_review_rejected'))} |"
+            )
+    else:  # r7
+        lines.append(
+            "| # | Tool | Prompt | Model | Phase | SHA256 (trunc) | "
+            "Basis | HeadMatch | BaseMatch |"
+        )
+        lines.append(
+            "|---|------|--------|-------|-------|----------------|"
+            "------|-----------|-----------|"
+        )
+        for i, r in enumerate(reviews):
+            sha_trunc = r.get("artifact_sha256", "")[:12] + "..."
+            checks = r.get("checks", {})
+            lines.append(
+                f"| {i+1} "
+                f"| {r.get('tool', '?')} "
+                f"| {r.get('prompt_style', '?')} "
+                f"| {r.get('model', '?')} "
+                f"| {r.get('phase_equivalent', '?')} "
+                f"| `{sha_trunc}` "
+                f"| {_bool_icon(checks.get('review_basis_present'))} "
+                f"| {_bool_icon(checks.get('head_commit_matches_manifest'))} "
+                f"| {_bool_icon(checks.get('base_commit_matches_manifest'))} |"
+            )
 
-    # Summary
-    total_tools = len(tools)
-    all_exist = all(
-        t.get("artifacts", {}).get(s, {}).get("exists") is True
-        for t in tools
-        for s in ("enriched", "generic")
-    )
-
-    lines.extend([
-        "## Summary",
-        "",
-        f"- Tools: {total_tools}",
-        f"- All artifacts present: **{'YES' if all_exist else 'NO'}**",
-        f"- Validation status: **{status}**",
-        "",
-    ])
+    # Artifact paths
+    lines.append("")
+    lines.append("### Artifact Paths")
+    lines.append("")
+    for i, r in enumerate(reviews):
+        lines.append(f"- [{i+1}] `{r.get('artifact_path', '?')}`")
 
     return "\n".join(lines)
 
 
+def render_validation(val: dict[str, Any], manifest_type: str) -> str:
+    """Render validation section as PASS/FAIL table."""
+    lines: list[str] = []
+    lines.append("## Validation")
+    lines.append("")
+    lines.append(f"**Overall status: {val.get('status', '?')}**")
+    lines.append("")
+    lines.append("| Check | Result |")
+    lines.append("|-------|--------|")
+
+    if manifest_type == "r3":
+        check_keys = [
+            "review_basis_check",
+            "preexisting_enforcement_citation_check",
+            "preexisting_test_citation_check",
+            "diff_only_review_check",
+        ]
+    else:
+        check_keys = [
+            "review_basis_check",
+            "required_combinations_check",
+            "head_commit_alignment_check",
+            "base_commit_alignment_check",
+        ]
+
+    for ck in check_keys:
+        result = val.get(ck, "?")
+        icon = "PASS" if result == "PASS" else "FAIL" if result == "FAIL" else "?"
+        lines.append(f"| {ck} | {icon} |")
+
+    errors = val.get("errors", [])
+    if errors:
+        lines.append("")
+        lines.append("### Errors")
+        lines.append("")
+        for e in errors:
+            lines.append(f"- {e}")
+
+    return "\n".join(lines)
+
+
+def render_regression_scope(rs: dict[str, Any]) -> str:
+    """Render R7 regression_scope section."""
+    lines: list[str] = []
+    lines.append("## Regression Scope")
+    lines.append("")
+    lines.append(f"- **Base commit:** `{rs.get('base_commit', '?')}`")
+    lines.append(f"- **Head commit:** `{rs.get('head_commit', '?')}`")
+    lines.append("")
+
+    ats = rs.get("affected_ats", [])
+    if ats:
+        lines.append("### Affected ATs")
+        lines.append("")
+        for at in ats:
+            lines.append(f"- {at}")
+        lines.append("")
+
+    files = rs.get("changed_files", [])
+    if files:
+        lines.append("### Changed Files")
+        lines.append("")
+        for f in files:
+            lines.append(f"- `{f}`")
+
+    return "\n".join(lines)
+
+
+def render_required_combos(combos: list[dict[str, Any]]) -> str:
+    """Render required_combinations as a short list."""
+    lines: list[str] = []
+    lines.append("## Required Combinations")
+    lines.append("")
+    for c in combos:
+        lines.append(f"- {c.get('tool', '?')} x {c.get('prompt_style', '?')}")
+    return "\n".join(lines)
+
+
+def _bool_icon(val: Any) -> str:
+    if val is True:
+        return "PASS"
+    if val is False:
+        return "FAIL"
+    return "?"
+
+
+def render(data: dict[str, Any]) -> str:
+    """Render a complete manifest to markdown."""
+    phase = data.get("phase", "?")
+    cycle = data.get("cycle", "?")
+    story = data.get("story_id", "?")
+    slice_id = data.get("slice_id", "?")
+    manifest_type = "r3" if phase == "R3" else "r7"
+
+    sections: list[str] = []
+
+    # Header
+    sections.append(f"# {phase} External Manifest — {story} ({slice_id}, {cycle})")
+
+    # Provenance
+    prov = data.get("provenance", {})
+    if prov:
+        sections.append(render_provenance(prov))
+
+    # Required combos
+    combos = data.get("required_combinations", [])
+    if combos:
+        sections.append(render_required_combos(combos))
+
+    # Reviews
+    reviews = data.get("reviews", [])
+    if reviews:
+        sections.append(render_reviews_table(reviews, manifest_type))
+
+    # Regression scope (R7 only)
+    if manifest_type == "r7":
+        rs = data.get("regression_scope", {})
+        if rs:
+            sections.append(render_regression_scope(rs))
+
+    # Validation
+    val = data.get("validation", {})
+    if val:
+        sections.append(render_validation(val, manifest_type))
+
+    return "\n\n".join(sections) + "\n"
+
+
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: render_external_manifest.py <manifest.json> [--output <path>]", file=sys.stderr)
+        print("Usage: render_external_manifest.py <manifest.json>", file=sys.stderr)
         return 2
 
-    input_path = Path(sys.argv[1])
-    if not input_path.exists():
-        print(f"File not found: {input_path}", file=sys.stderr)
-        return 2
-
-    # Determine output path
-    output_path: Path
-    if "--output" in sys.argv:
-        idx = sys.argv.index("--output")
-        if idx + 1 >= len(sys.argv):
-            print("--output requires a path argument", file=sys.stderr)
-            return 2
-        output_path = Path(sys.argv[idx + 1])
-    else:
-        output_path = input_path.with_suffix(".md")
+    manifest_path = Path(sys.argv[1])
+    if not manifest_path.exists():
+        print(f"ERROR: file not found: {manifest_path}", file=sys.stderr)
+        return 1
 
     try:
-        data = json.loads(input_path.read_text(encoding="utf-8"))
+        with open(manifest_path) as f:
+            data = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"Invalid JSON: {e}", file=sys.stderr)
+        print(f"ERROR: invalid JSON: {e}", file=sys.stderr)
         return 1
 
     if not isinstance(data, dict):
-        print("Root must be a JSON object", file=sys.stderr)
+        print("ERROR: manifest must be a JSON object", file=sys.stderr)
         return 1
 
-    md = render(data)
-    output_path.write_text(md, encoding="utf-8")
-    print(f"OK: rendered {output_path.name} ({len(md)} bytes)")
+    print(render(data))
     return 0
 
 

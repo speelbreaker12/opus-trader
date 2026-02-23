@@ -11,6 +11,9 @@
 //! C1: All reject gates run before RecordedBeforeDispatch (persist).
 //! C2: RecordedBeforeDispatch (WAL) is the last gate before dispatch.
 //! C3: No side effects (approval) occur before all gates pass.
+//!
+//! **Dispatch causality**: Pipeline-level AT-920 proofs live in
+//! `test_intent_pipeline.rs::test_at920_pipeline_dispatch_consistency_failure_rejected`.
 
 #![allow(deprecated)]
 

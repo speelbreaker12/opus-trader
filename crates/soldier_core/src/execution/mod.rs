@@ -12,6 +12,7 @@ pub mod gate;
 pub mod gate_outcome;
 pub mod gates;
 pub mod group;
+pub mod intent_assembly;
 pub mod inventory_skew;
 pub mod label;
 pub mod open_runtime;
@@ -37,8 +38,8 @@ pub use build_order_intent::{
     gate_sequence_total,
 };
 pub use dispatch_map::{
-    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchMapError, DispatchRequest, IntentClass,
-    MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
+    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchConsistencyProof, DispatchMapError, DispatchRequest,
+    IntentClass, MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
 };
 pub use gate::{
     GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
@@ -55,6 +56,10 @@ pub use group::{
     GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
     persist_before_dispatch, try_acquire_group_lock,
 };
+pub use intent_assembly::{
+    AssembledPipelineParams, AssembledSizing, AssemblySizingError, SizingParams,
+    assemble_sizing, choke_intent_to_dispatch, evaluate_assembled_pipeline,
+};
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
     evaluate_inventory_skew,
@@ -64,8 +69,8 @@ pub use label::{
     encode_label,
 };
 pub use open_runtime::{
-    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
-    settle_pending_on_tlsm_terminal,
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_intent_with_assembly,
+    build_open_order_intent_runtime, settle_pending_on_tlsm_terminal,
 };
 pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
 pub use pipeline::{

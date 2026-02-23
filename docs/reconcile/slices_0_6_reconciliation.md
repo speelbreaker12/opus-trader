@@ -80,6 +80,7 @@ _None remaining._ S1-007 downgraded to YELLOW after pipeline-level test added (s
 
 ### Remaining (no action required)
 - S0-004: AT-022 scaffolding — deferred to S8-008 (explicitly tracked)
+- S1-011: RESOLVED — amount_step `Option<f64>` design settled (AT-333)
 - S2-004: AT-201 closed-enum compile-time guarantee — informational
 - S5-000: Naming discrepancy `InsufficientDepthWithinBudget` vs `ExpectedSlippageTooHigh` — informational
 

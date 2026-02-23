@@ -19,6 +19,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::risk::RiskState;
+use crate::venue::opens_blocked;
 
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
@@ -126,6 +127,8 @@ pub enum ChokeRejectReason {
     RiskStateNotHealthy,
     /// A gate rejected the intent (gate name + reason string).
     GateRejected { gate: GateStep, reason: String },
+    /// Intent assembly (sizing + dispatch mapping) failed before gate evaluation.
+    AssemblyFailed,
 }
 
 /// Result of the chokepoint evaluation.
@@ -277,7 +280,7 @@ fn build_order_intent_internal(
 
     // Gate 1: Dispatch authorization (RiskState check)
     trace.push(GateStep::DispatchAuth);
-    if intent_class == ChokeIntentClass::Open && risk_state != RiskState::Healthy {
+    if intent_class == ChokeIntentClass::Open && opens_blocked(risk_state) {
         return finish_rejected(metrics, ChokeRejectReason::RiskStateNotHealthy, trace);
     }
 

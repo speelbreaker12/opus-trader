@@ -32,6 +32,7 @@ pub enum RejectReasonCode {
     InstrumentExpiredOrDelisted,
     FeedbackLoopGuardActive,
     LabelTooLong,
+    AssemblyFailed,
 }
 
 /// Typed per-gate rejection codes produced by real gate evaluators.
@@ -88,6 +89,7 @@ impl RejectReasonCode {
             RejectReasonCode::InstrumentExpiredOrDelisted => "InstrumentExpiredOrDelisted",
             RejectReasonCode::FeedbackLoopGuardActive => "FeedbackLoopGuardActive",
             RejectReasonCode::LabelTooLong => "LabelTooLong",
+            RejectReasonCode::AssemblyFailed => "AssemblyFailed",
         }
     }
 }
@@ -119,6 +121,7 @@ const REGISTRY: &[RejectReasonCode] = &[
     RejectReasonCode::InstrumentExpiredOrDelisted,
     RejectReasonCode::FeedbackLoopGuardActive,
     RejectReasonCode::LabelTooLong,
+    RejectReasonCode::AssemblyFailed,
 ];
 
 pub fn reject_reason_registry() -> &'static [RejectReasonCode] {
@@ -197,5 +200,6 @@ pub fn reject_reason_from_chokepoint(
             gate: GateStep::DispatchAuth,
             ..
         } => RejectReasonCode::MarginHeadroomRejectOpens,
+        ChokeRejectReason::AssemblyFailed => RejectReasonCode::AssemblyFailed,
     }
 }

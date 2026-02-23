@@ -39,6 +39,7 @@ For each AT, iterate:
    - Off-by-one / boundary flip (`<` vs `<=`)
    - Ignore one input field entirely
    - Swap two enum variants
+   - **Enum variant sweep**: For each enum variant the function accepts, feed it through the full function with hostile/garbage inputs for all other parameters. Example: `evaluate_assembled_pipeline(CancelOnly, NaN_metadata)` — does CancelOnly still get approved? Tests that only exercise one variant (e.g., always Open) leave every other variant's path untested.
 
 2. **Run tests**: `cargo test` on the relevant module. Does the wrong impl pass?
 

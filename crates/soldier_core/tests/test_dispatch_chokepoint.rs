@@ -159,6 +159,12 @@ fn test_dispatch_chokepoint_no_direct_exchange_client_usage() {
         if rel_str == "execution/build_order_intent.rs" {
             continue;
         }
+        // intent_assembly is the production assembly helper that wires
+        // derive_instrument_kind + build_order_size + validate_and_dispatch
+        // into the pipeline path (feeds evaluate_intent_pipeline).
+        if rel_str == "execution/intent_assembly.rs" {
+            continue;
+        }
         // execution/mod.rs re-exports symbols and is not a call site.
         if rel_str == "execution/mod.rs" {
             continue;

@@ -6,7 +6,7 @@
 //! Returns a `BaseGatesPassed` proof token that cannot be constructed externally,
 //! guaranteeing that downstream gates only run after gates 1-6 pass.
 
-use super::ChokeIntentClass;
+use super::{ChokeIntentClass, DispatchConsistencyProof};
 use crate::execution::build_order_intent::GateStep;
 use crate::execution::gate_outcome::GateOutcome;
 use crate::execution::pipeline::QuantizePipelineInput;
@@ -19,7 +19,7 @@ use crate::risk::{
 };
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, LifecycleIntent, VenueCapabilities, evaluate_capabilities,
-    evaluate_expiry_guard,
+    evaluate_expiry_guard, opens_blocked,
 };
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ pub struct BaseGatesInput<'a> {
     /// AT-920 dispatch consistency pre-evaluated by the caller.
     /// The actual contracts/amount check happens in dispatch_map.rs
     /// and requires venue-specific data not available at this layer.
-    pub dispatch_consistency_passed: bool,
+    pub dispatch_consistency: DispatchConsistencyProof,
     pub fee_snapshot: FeeCacheSnapshot,
     pub fee_config: FeeStalenessConfig,
     pub expiry_guard: Option<ExpiryGuardInput>,
@@ -241,7 +241,7 @@ pub fn evaluate_base_gates(
     // Mirror chokepoint early-exit: CancelOnly bypasses all gates.
     // OPEN + !Healthy is rejected by the chokepoint's dispatch_auth gate.
     let dispatch_auth_short_circuit = input.intent_class == ChokeIntentClass::CancelOnly
-        || (input.intent_class == ChokeIntentClass::Open && input.risk_state != RiskState::Healthy);
+        || (input.intent_class == ChokeIntentClass::Open && opens_blocked(input.risk_state));
 
     if dispatch_auth_short_circuit {
         // CancelOnly: all gates pass, chokepoint handles approval.
@@ -319,7 +319,13 @@ pub fn evaluate_base_gates(
     };
 
     // ── Gate 4: DispatchConsistency ─────────────────────────────────────
-    if !input.dispatch_consistency_passed {
+    // Close/Hedge/CancelOnly skip: risk-reducing intents must not be blocked
+    // by AT-920 contract mismatch (CSP Invariant F / AT-1049 / AT-104).
+    let skip_dispatch_consistency = matches!(
+        input.intent_class,
+        ChokeIntentClass::Close | ChokeIntentClass::Hedge | ChokeIntentClass::CancelOnly
+    );
+    if !skip_dispatch_consistency && !input.dispatch_consistency.passed() {
         gate_outcomes.push(GateOutcome::Reject {
             gate: GateStep::DispatchConsistency,
             reason_code: RejectReasonCode::ContractsAmountMismatch,
