@@ -70,6 +70,37 @@ HEAD: $review_head
 Blocking addressed: YES
 Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
 EOF
+
+  # Proof graph that passes validate.py --strict (V1 schema)
+  cat > "$story_root/proof_graph.json" <<EOF
+{
+  "schema_version": 1,
+  "head_sha": "$review_head",
+  "generated_at": "2026-02-22T00:00:00+00:00",
+  "story_meta": {
+    "story_id": "$story_id",
+    "category": "hardening",
+    "enforcement_point": "WAL",
+    "loss_mode": {"worst_case": "test", "fail_closed_cap": "test cap", "drift_metric": "test metric", "level": "LOW"},
+    "safety_critical": false,
+    "scope_touch": ["crates/soldier_infra/src/wal.rs"]
+  },
+  "ats": [{
+    "at_id": "AT-001",
+    "enforcement": {"status": "FOUND", "evidence": ["wal.rs:42"]},
+    "tests": [
+      {"test_name": "test_wal_write", "kind": "TRIP", "causal_proof": {"mechanism": "dispatch_count_assert", "dispatch_count_assert": "0"}, "execution": {"ran_at_head_sha": "$review_head", "pass_result": true}},
+      {"test_name": "test_wal_read", "kind": "NON-TRIP", "causal_proof": {"mechanism": "dispatch_count_assert", "dispatch_count_assert": "1"}, "execution": {"ran_at_head_sha": "$review_head", "pass_result": true}}
+    ],
+    "wiring": {"status": "PROVEN_INTEGRATED", "evidence": "test calls wal directly"},
+    "observability": {"metric": "wal_write_latency_ms", "alert": "wal_write_alert"},
+    "premortem_checks": {"stoplight": "GREEN", "sections_filled": 10},
+    "at_verdict": {"verdict": "PROVEN_INTEGRATED", "severity": "INFO", "rationale": "proven"}
+  }],
+  "story_verdict": {"reconciliation_status": "RECONCILED", "blocking_count": 0, "hardening_count": 0, "summary": "all proven"},
+  "debt_register": []
+}
+EOF
 }
 
 setup_case() {

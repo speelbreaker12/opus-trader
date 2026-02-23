@@ -150,6 +150,41 @@ test_scaffold_then_validate() {
   fi
 }
 
+# ── Test 7: V2 valid proof_graph.json → exit 0 ──────────────────────
+
+test_valid_v2_proof_graph() {
+  local fixture="$ROOT/python/proof_graph/tests/fixtures/valid_proof_graph_v2.json"
+  [[ -f "$fixture" ]] || fail "missing fixture: $fixture"
+
+  if python3 "$VALIDATE" "$fixture" \
+       --contract-path "$CONTRACT" \
+       --prd-path "$PRD" \
+       --strict >/dev/null 2>&1; then
+    pass "valid V2 proof_graph.json → exit 0"
+  else
+    fail "valid V2 proof_graph.json should exit 0 but got $?"
+  fi
+}
+
+# ── Test 8: V2 trading halt → exit 20 ───────────────────────────────
+
+test_trading_halt_exit_20() {
+  local fixture="$ROOT/python/proof_graph/tests/fixtures/v2_trading_halt.json"
+  [[ -f "$fixture" ]] || fail "missing fixture: $fixture"
+
+  local rc=0
+  python3 "$VALIDATE" "$fixture" \
+       --contract-path "$CONTRACT" \
+       --prd-path "$PRD" \
+       --strict >/dev/null 2>&1 || rc=$?
+
+  if [[ "$rc" -eq 20 ]]; then
+    pass "V2 trading halt → exit 20"
+  else
+    fail "V2 trading halt expected exit 20 but got $rc"
+  fi
+}
+
 # ── Run all tests ────────────────────────────────────────────────────
 
 echo "=== proof_graph gate regression tests ==="
@@ -159,4 +194,6 @@ test_exempt_story
 test_non_exempt_missing
 test_unsupported_version
 test_scaffold_then_validate
+test_valid_v2_proof_graph
+test_trading_halt_exit_20
 echo "=== all proof_graph gate tests passed ==="

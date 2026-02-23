@@ -6,6 +6,7 @@ Exit codes:
   1 = fail (errors found)
   2 = usage/schema error (unsupported version, bad args)
   3 = file/parse error (missing file, invalid JSON)
+  20 = trading halt (BLOCKING findings + recomputed halt condition is true)
 """
 from __future__ import annotations
 
@@ -27,7 +28,9 @@ if __name__ == "__main__":
         sys.path.insert(0, _pkg_parent)
 
 from python.proof_graph.contract_ats import extract_contract_ats
-from python.proof_graph.rules import Finding, ValidationContext, validate
+from python.proof_graph.rules import (
+    Finding, ValidationContext, validate, compute_trading_halt,
+)
 from python.proof_graph.schema import ProofGraph, ProofGraphParseError
 from python.proof_graph.enums import Severity
 
@@ -38,7 +41,10 @@ def _load_prd_items(prd_path: Path) -> dict[str, Any]:
     return {item["id"]: item for item in data.get("items", [])}
 
 
-def _findings_to_json(findings: list[Finding], strict: bool) -> dict[str, Any]:
+def _count_findings(
+    findings: list[Finding], strict: bool,
+) -> tuple[int, int]:
+    """Return (errors, warnings) counts."""
     errors = 0
     warnings = 0
     for f in findings:
@@ -51,8 +57,31 @@ def _findings_to_json(findings: list[Finding], strict: bool) -> dict[str, Any]:
                 warnings += 1
         else:
             warnings += 1
+    return errors, warnings
 
-    exit_code = 1 if errors > 0 else 0
+
+def _compute_exit_code(
+    errors: int, ctx: ValidationContext,
+) -> int:
+    """Determine exit code: 20 for trading halt, 1 for errors, 0 for clean.
+
+    Exit 20 fires when:
+      - There are BLOCKING findings (errors > 0), AND
+      - schema_version >= 2, AND
+      - The recomputed halt condition is true
+    """
+    if errors == 0:
+        return 0
+    if ctx.graph.schema_version >= 2 and compute_trading_halt(ctx):
+        return 20
+    return 1
+
+
+def _findings_to_json(
+    findings: list[Finding], strict: bool, ctx: ValidationContext,
+) -> dict[str, Any]:
+    errors, warnings = _count_findings(findings, strict)
+    exit_code = _compute_exit_code(errors, ctx)
     return {
         "findings": [
             {
@@ -65,6 +94,7 @@ def _findings_to_json(findings: list[Finding], strict: bool) -> dict[str, Any]:
             for f in findings
         ],
         "summary": {"errors": errors, "warnings": warnings},
+        "trading_halt": exit_code == 20,
         "exit_code": exit_code,
     }
 
@@ -143,36 +173,34 @@ def main(argv: list[str] | None = None) -> int:
     findings = validate(ctx)
 
     if args.json_output:
-        result = _findings_to_json(findings, args.strict)
+        result = _findings_to_json(findings, args.strict, ctx)
         print(json.dumps(result, indent=2))
         return result["exit_code"]
 
     # Human-readable output
-    errors = 0
-    warnings = 0
+    errors, warnings = _count_findings(findings, args.strict)
     for f in findings:
         if f.severity == Severity.BLOCKING:
-            errors += 1
             label = "ERROR"
         elif f.severity == Severity.HARDENING:
             if args.strict:
-                errors += 1
                 label = "ERROR (--strict)"
             else:
-                warnings += 1
                 label = "WARN"
         else:
-            warnings += 1
             label = "INFO"
         at_part = f" [{f.at_id}]" if f.at_id else ""
         print(f"  {label} {f.rule}{at_part}: {f.message}")
 
-    if errors == 0 and warnings == 0:
+    exit_code = _compute_exit_code(errors, ctx)
+    if exit_code == 0:
         print(f"OK: proof graph valid for {graph.story_meta.story_id}")
     else:
         print(f"\nSummary: {errors} error(s), {warnings} warning(s)")
+        if exit_code == 20:
+            print("CRITICAL: TRADING HALT condition detected", file=sys.stderr)
 
-    return 1 if errors > 0 else 0
+    return exit_code
 
 
 if __name__ == "__main__":

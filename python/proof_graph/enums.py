@@ -12,6 +12,7 @@ class Verdict(str, Enum):
     MISSING = "MISSING"
     FAIL_OPEN_RISK = "FAIL_OPEN_RISK"
     DEFERRED = "DEFERRED"
+    INVALID_REF = "INVALID_REF"  # V2: contract reference invalid
 
 
 class Severity(str, Enum):
@@ -55,3 +56,36 @@ class ReconciliationStatus(str, Enum):
     RECONCILED = "RECONCILED"
     RECONCILED_WITH_DEBT = "RECONCILED_WITH_DEBT"
     NOT_RECONCILED = "NOT_RECONCILED"
+    RECONCILED_UNIT_ONLY = "RECONCILED_UNIT_ONLY"  # V2
+    BLOCKED_TRADING_HALT = "BLOCKED_TRADING_HALT"  # V2
+
+
+class CausalMechanism(str, Enum):
+    """Known causal proof mechanisms (V2)."""
+    DISPATCH_COUNT = "dispatch_count"
+    REJECT_REASON = "reject_reason"
+    LATCH_REASON = "latch_reason"
+    MODE_TRANSITION = "mode_transition"
+    REASON_CODE = "reason_code"
+    CORTEX_OVERRIDE = "cortex_override"
+
+
+class WrongImplStatus(str, Enum):
+    """Premortem §5 wrong-impl blocked status (V2)."""
+    ALL = "ALL"
+    PARTIAL = "PARTIAL"
+    NONE = "NONE"
+
+
+class DecisionMatch(str, Enum):
+    """Premortem §4 decision match status (V2)."""
+    YES = "YES"
+    NO = "NO"
+    PARTIAL = "PARTIAL"
+
+
+class AssumptionStatus(str, Enum):
+    """Premortem §2 assumption validation status (V2)."""
+    ALL_VALIDATED = "ALL_VALIDATED"
+    PARTIAL = "PARTIAL"
+    NONE = "NONE"

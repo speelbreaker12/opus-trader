@@ -9,7 +9,10 @@ from python.proof_graph.rules import (
     ValidationContext,
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
-    r_016b, r_017, validate,
+    r_016b, r_017,
+    r_006b, r_018, r_019, r_020, r_021, r_022, r_023, r_024,
+    r_024b, r_025, r_026,
+    validate,
 )
 from python.proof_graph.schema import ProofGraph
 from python.proof_graph.enums import Severity
@@ -384,6 +387,272 @@ class TestValidateAll(unittest.TestCase):
         findings = validate(ctx)
         rules = {f.rule for f in findings if f.severity == Severity.BLOCKING}
         self.assertIn("R-001", rules)
+
+
+# ── V2 Rule Tests ────────────────────────────────────────────────────
+
+
+class TestR006b_EmptyEvidenceEntries(unittest.TestCase):
+    def test_fires_on_v2_empty_entries(self):
+        ctx = _ctx("v2_no_enrichment.json")
+        findings = r_006b(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-006b")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_v2_with_entries(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_006b(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_006b(ctx), [])
+
+
+class TestR018_InvalidCitation(unittest.TestCase):
+    def test_fires_on_bad_citation(self):
+        ctx = _ctx("v2_bad_citation.json")
+        findings = r_018(ctx)
+        # empty file, line_start < 1, line_end < line_start, empty symbol
+        self.assertTrue(len(findings) >= 4)
+        self.assertTrue(all(f.rule == "R-018" for f in findings))
+        self.assertTrue(all(f.severity == Severity.BLOCKING for f in findings))
+
+    def test_clean_on_valid_v2(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_018(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_018(ctx), [])
+
+
+class TestR019_WrongImplSafetyCritical(unittest.TestCase):
+    def test_fires_on_wrong_impl(self):
+        ctx = _ctx("v2_wrong_impl_safety.json")
+        findings = r_019(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-019")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+
+    def test_clean_on_valid(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_019(ctx), [])
+
+    def test_no_fire_when_not_safety_critical(self):
+        ctx = _ctx("v2_no_enrichment.json")  # safety_critical=false
+        self.assertEqual(r_019(ctx), [])
+
+    def test_fires_on_v1_too(self):
+        """R-019 works on V1 graphs (V1+V2 rule)."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["at_verdict"]["verdict"] = "WRONG_IMPL_UNBLOCKED"
+        data["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        data["story_verdict"]["blocking_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_019(ctx)
+        self.assertEqual(len(findings), 1)
+
+
+class TestR020_EmptyCallerChain(unittest.TestCase):
+    def test_fires_on_blank_chain(self):
+        ctx = _ctx("v2_missing_caller_chain.json")
+        findings = r_020(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-020")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_valid_chain(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_020(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_020(ctx), [])
+
+
+class TestR021_WrongImplNotBlocked(unittest.TestCase):
+    def test_fires_on_none(self):
+        ctx = _ctx("v2_premortem_gap.json")
+        findings = r_021(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-021")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+
+    def test_clean_on_all(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_021(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_021(ctx), [])
+
+    def test_no_fire_when_not_safety_critical(self):
+        ctx = _ctx("v2_no_enrichment.json")  # safety_critical=false
+        self.assertEqual(r_021(ctx), [])
+
+
+class TestR022_DecisionMismatch(unittest.TestCase):
+    def test_fires_on_no(self):
+        ctx = _ctx("v2_premortem_gap.json")
+        findings = r_022(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-022")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+
+    def test_clean_on_yes(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_022(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_022(ctx), [])
+
+
+class TestR023_InvalidRef(unittest.TestCase):
+    def test_fires_on_invalid_ref(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["at_verdict"]["verdict"] = "INVALID_REF"
+        data["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        data["story_verdict"]["blocking_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_023(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-023")
+
+    def test_clean_on_valid(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_023(ctx), [])
+
+    def test_works_on_v1(self):
+        """R-023 is V1+V2 — fires if INVALID_REF appears in V1 graph."""
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["at_verdict"]["verdict"] = "INVALID_REF"
+        data["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+        data["story_verdict"]["blocking_count"] = 1
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_023(ctx)
+        self.assertEqual(len(findings), 1)
+
+
+class TestR024_EmptyWhyCausal(unittest.TestCase):
+    def test_fires_on_empty_why_causal(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["ats"][0]["tests"][0]["causal_proof"]["why_causal"] = ""
+        data["ats"][0]["tests"][1]["causal_proof"]["why_causal"] = "  "
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_024(ctx)
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(all(f.rule == "R-024" for f in findings))
+
+    def test_clean_on_populated(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_024(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_024(ctx), [])
+
+    def test_no_fire_when_not_safety_critical(self):
+        ctx = _ctx("v2_no_enrichment.json")  # safety_critical=false
+        self.assertEqual(r_024(ctx), [])
+
+
+class TestR024b_NonStandardMechanism(unittest.TestCase):
+    def test_fires_on_non_standard(self):
+        ctx = _ctx("v2_no_enrichment.json")  # mechanism=dispatch_count_assert
+        findings = r_024b(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-024b")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_standard(self):
+        ctx = _ctx("valid_proof_graph_v2.json")  # mechanism=dispatch_count
+        self.assertEqual(r_024b(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_024b(ctx), [])
+
+
+class TestR025_TradingHaltConsistency(unittest.TestCase):
+    def test_fires_when_recomputed_true_stored_false(self):
+        ctx = _ctx("v2_trading_halt.json")
+        findings = r_025(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-025")
+        self.assertEqual(findings[0].severity, Severity.BLOCKING)
+
+    def test_info_when_stored_true_recomputed_false(self):
+        data = json.loads(
+            (FIXTURES / "valid_proof_graph_v2.json").read_text(encoding="utf-8")
+        )
+        data["story_verdict"]["trading_halt_trigger"] = True
+        pg = ProofGraph.from_dict(data)
+        ctx = ValidationContext(graph=pg)
+        findings = r_025(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].severity, Severity.INFO)
+
+    def test_clean_when_consistent(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_025(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_025(ctx), [])
+
+
+class TestR026_NoV2Enrichment(unittest.TestCase):
+    def test_fires_on_zero_enrichment(self):
+        ctx = _ctx("v2_no_enrichment.json")
+        findings = r_026(ctx)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule, "R-026")
+        self.assertEqual(findings[0].severity, Severity.HARDENING)
+
+    def test_clean_on_enriched(self):
+        ctx = _ctx("valid_proof_graph_v2.json")
+        self.assertEqual(r_026(ctx), [])
+
+    def test_clean_on_partial_enrichment(self):
+        """Only evidence_entries populated — not zero enrichment."""
+        ctx = _ctx("v2_no_enrichment.json")
+        # Patch: add one evidence entry to first AT
+        at = ctx.graph.ats[0]
+        from python.proof_graph.schema import EvidenceEntry, Enforcement
+        patched_enforcement = Enforcement(
+            status=at.enforcement.status,
+            evidence=at.enforcement.evidence,
+            evidence_entries=[EvidenceEntry(
+                file="build_order_intent.rs",
+                line_start=1, line_end=10, symbol="check",
+            )],
+        )
+        import dataclasses
+        patched_at = dataclasses.replace(at, enforcement=patched_enforcement)
+        patched_graph = dataclasses.replace(
+            ctx.graph, ats=[patched_at],
+        )
+        ctx.graph = patched_graph
+        # Should NOT fire — has evidence_entries (partial enrichment)
+        self.assertEqual(r_026(ctx), [])
+
+    def test_skips_v1(self):
+        ctx = _ctx("valid_proof_graph.json")
+        self.assertEqual(r_026(ctx), [])
 
 
 if __name__ == "__main__":

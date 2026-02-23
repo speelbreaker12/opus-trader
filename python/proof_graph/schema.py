@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .enums import (
+    AssumptionStatus,
+    CausalMechanism,
+    DecisionMatch,
     EnforcementStatus,
     LossModeLevel,
     ReconciliationStatus,
@@ -14,11 +17,13 @@ from .enums import (
     TestKind,
     Verdict,
     WiringStatus,
+    WrongImplStatus,
 )
 
 SHA_RE = re.compile(r'^[0-9a-f]{40}$')
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION_MIN = 1
+SCHEMA_VERSION_MAX = 2
 
 
 class ProofGraphParseError(Exception):
@@ -51,6 +56,32 @@ def _enum(cls: type, value: str, path: list[str]) -> Any:
     except ValueError:
         raise ProofGraphParseError(
             f"invalid {cls.__name__} value: {value!r}", path=path
+        )
+
+
+# ── V2 Evidence Entry ────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class EvidenceEntry:
+    """Structured file/line/symbol citation (V2)."""
+    file: str
+    line_start: int
+    line_end: int
+    symbol: str
+    snippet: str = ""
+
+    _KNOWN = {"file", "line_start", "line_end", "symbol", "snippet"}
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any], path: list[str]) -> EvidenceEntry:
+        _deny_unknown(d, cls._KNOWN, path)
+        return cls(
+            file=_require(d, "file", path),
+            line_start=_require(d, "line_start", path),
+            line_end=_require(d, "line_end", path),
+            symbol=_require(d, "symbol", path),
+            snippet=d.get("snippet", ""),
         )
 
 
@@ -112,20 +143,25 @@ class CausalProof:
     dispatch_count_assert: Optional[str] = None
     reject_reason_assert: Optional[str] = None
     latch_reason_assert: Optional[str] = None
+    why_causal: str = ""  # V2: explanation of causal mechanism
 
     _KNOWN = {
         "mechanism", "dispatch_count_assert",
         "reject_reason_assert", "latch_reason_assert",
     }
+    _KNOWN_V2 = _KNOWN | {"why_causal"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> CausalProof:
-        _deny_unknown(d, cls._KNOWN, path)
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> CausalProof:
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
         return cls(
             mechanism=_require(d, "mechanism", path),
             dispatch_count_assert=d.get("dispatch_count_assert"),
             reject_reason_assert=d.get("reject_reason_assert"),
             latch_reason_assert=d.get("latch_reason_assert"),
+            why_causal=d.get("why_causal", ""),
         )
 
 
@@ -155,13 +191,15 @@ class TestEntry:
     _KNOWN = {"test_name", "kind", "causal_proof", "execution"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> TestEntry:
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> TestEntry:
         _deny_unknown(d, cls._KNOWN, path)
         return cls(
             test_name=_require(d, "test_name", path),
             kind=_enum(TestKind, _require(d, "kind", path), path + ["kind"]),
             causal_proof=CausalProof.from_dict(
-                _require(d, "causal_proof", path), path + ["causal_proof"]
+                _require(d, "causal_proof", path), path + ["causal_proof"],
+                version=version,
             ),
             execution=TestExecution.from_dict(
                 _require(d, "execution", path), path + ["execution"]
@@ -173,17 +211,27 @@ class TestEntry:
 class Enforcement:
     status: EnforcementStatus
     evidence: list[str]
+    evidence_entries: list[EvidenceEntry] = field(default_factory=list)  # V2
 
     _KNOWN = {"status", "evidence"}
+    _KNOWN_V2 = _KNOWN | {"evidence_entries"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> Enforcement:
-        _deny_unknown(d, cls._KNOWN, path)
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> Enforcement:
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
+        entries_raw = d.get("evidence_entries", [])
+        entries = [
+            EvidenceEntry.from_dict(e, path + [f"evidence_entries[{i}]"])
+            for i, e in enumerate(entries_raw)
+        ]
         return cls(
             status=_enum(
                 EnforcementStatus, _require(d, "status", path), path + ["status"]
             ),
             evidence=_require(d, "evidence", path),
+            evidence_entries=entries,
         )
 
 
@@ -191,17 +239,26 @@ class Enforcement:
 class Wiring:
     status: WiringStatus
     evidence: str
+    caller_chain: list[str] = field(default_factory=list)  # V2
+    entrypoint: str = ""  # V2
+    proof_type: str = ""  # V2
 
     _KNOWN = {"status", "evidence"}
+    _KNOWN_V2 = _KNOWN | {"caller_chain", "entrypoint", "proof_type"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> Wiring:
-        _deny_unknown(d, cls._KNOWN, path)
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> Wiring:
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
         return cls(
             status=_enum(
                 WiringStatus, _require(d, "status", path), path + ["status"]
             ),
             evidence=_require(d, "evidence", path),
+            caller_chain=d.get("caller_chain", []),
+            entrypoint=d.get("entrypoint", ""),
+            proof_type=d.get("proof_type", ""),
         )
 
 
@@ -225,17 +282,41 @@ class Observability:
 class PremortemChecks:
     stoplight: StoplightColor
     sections_filled: int
+    section5_wrong_impl_blocked: Optional[WrongImplStatus] = None  # V2
+    section4_decision_match: Optional[DecisionMatch] = None  # V2
+    section2_assumptions: Optional[AssumptionStatus] = None  # V2
 
     _KNOWN = {"stoplight", "sections_filled"}
+    _KNOWN_V2 = _KNOWN | {
+        "section5_wrong_impl_blocked", "section4_decision_match",
+        "section2_assumptions",
+    }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> PremortemChecks:
-        _deny_unknown(d, cls._KNOWN, path)
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> PremortemChecks:
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
+        s5 = None
+        if "section5_wrong_impl_blocked" in d:
+            s5 = _enum(WrongImplStatus, d["section5_wrong_impl_blocked"],
+                       path + ["section5_wrong_impl_blocked"])
+        s4 = None
+        if "section4_decision_match" in d:
+            s4 = _enum(DecisionMatch, d["section4_decision_match"],
+                       path + ["section4_decision_match"])
+        s2 = None
+        if "section2_assumptions" in d:
+            s2 = _enum(AssumptionStatus, d["section2_assumptions"],
+                       path + ["section2_assumptions"])
         return cls(
             stoplight=_enum(
                 StoplightColor, _require(d, "stoplight", path), path + ["stoplight"]
             ),
             sections_filled=_require(d, "sections_filled", path),
+            section5_wrong_impl_blocked=s5,
+            section4_decision_match=s4,
+            section2_assumptions=s2,
         )
 
 
@@ -305,18 +386,22 @@ class ATEntry:
     at_verdict: ATVerdict
     equivalent_mutants: list[EquivalentMutant] = field(default_factory=list)
     debt: Optional[DebtEntry] = None
+    extra_discovered: bool = False  # V2
 
     _KNOWN = {
         "at_id", "enforcement", "tests", "wiring", "observability",
         "premortem_checks", "at_verdict", "equivalent_mutants", "debt",
     }
+    _KNOWN_V2 = _KNOWN | {"extra_discovered"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> ATEntry:
-        _deny_unknown(d, cls._KNOWN, path)
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> ATEntry:
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
         tests_raw = _require(d, "tests", path)
         tests = [
-            TestEntry.from_dict(t, path + [f"tests[{i}]"])
+            TestEntry.from_dict(t, path + [f"tests[{i}]"], version=version)
             for i, t in enumerate(tests_raw)
         ]
         mutants_raw = d.get("equivalent_mutants", [])
@@ -330,23 +415,27 @@ class ATEntry:
         return cls(
             at_id=_require(d, "at_id", path),
             enforcement=Enforcement.from_dict(
-                _require(d, "enforcement", path), path + ["enforcement"]
+                _require(d, "enforcement", path), path + ["enforcement"],
+                version=version,
             ),
             tests=tests,
             wiring=Wiring.from_dict(
-                _require(d, "wiring", path), path + ["wiring"]
+                _require(d, "wiring", path), path + ["wiring"],
+                version=version,
             ),
             observability=Observability.from_dict(
                 _require(d, "observability", path), path + ["observability"]
             ),
             premortem_checks=PremortemChecks.from_dict(
-                _require(d, "premortem_checks", path), path + ["premortem_checks"]
+                _require(d, "premortem_checks", path), path + ["premortem_checks"],
+                version=version,
             ),
             at_verdict=ATVerdict.from_dict(
                 _require(d, "at_verdict", path), path + ["at_verdict"]
             ),
             equivalent_mutants=mutants,
             debt=debt,
+            extra_discovered=d.get("extra_discovered", False),
         )
 
 
@@ -377,14 +466,18 @@ class StoryVerdict:
     blocking_count: int
     hardening_count: int
     summary: str
+    trading_halt_trigger: bool = False  # V2
 
     _KNOWN = {
         "reconciliation_status", "blocking_count", "hardening_count", "summary",
     }
+    _KNOWN_V2 = _KNOWN | {"trading_halt_trigger"}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any], path: list[str]) -> StoryVerdict:
-        _deny_unknown(d, cls._KNOWN, path)
+    def from_dict(cls, d: dict[str, Any], path: list[str],
+                  version: int = 1) -> StoryVerdict:
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
         return cls(
             reconciliation_status=_enum(
                 ReconciliationStatus,
@@ -394,6 +487,7 @@ class StoryVerdict:
             blocking_count=_require(d, "blocking_count", path),
             hardening_count=_require(d, "hardening_count", path),
             summary=_require(d, "summary", path),
+            trading_halt_trigger=d.get("trading_halt_trigger", False),
         )
 
 
@@ -409,28 +503,34 @@ class ProofGraph:
     ats: list[ATEntry]
     story_verdict: StoryVerdict
     debt_register: list[DebtRegisterEntry] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)  # V2: opaque extensibility
 
     _KNOWN = {
         "schema_version", "head_sha", "generated_at",
         "story_meta", "ats", "story_verdict", "debt_register",
     }
+    _KNOWN_V2 = _KNOWN | {"meta"}
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> ProofGraph:
         path: list[str] = []
-        _deny_unknown(d, cls._KNOWN, path)
 
         version = _require(d, "schema_version", path)
-        if version != SCHEMA_VERSION:
+        if not isinstance(version, int) or \
+                version < SCHEMA_VERSION_MIN or version > SCHEMA_VERSION_MAX:
             raise ProofGraphParseError(
-                f"unsupported schema_version {version} (expected {SCHEMA_VERSION}). "
+                f"unsupported schema_version {version} "
+                f"(expected {SCHEMA_VERSION_MIN}-{SCHEMA_VERSION_MAX}). "
                 f"Upgrade your proof_graph tooling.",
                 path=["schema_version"],
             )
 
+        known = cls._KNOWN_V2 if version >= 2 else cls._KNOWN
+        _deny_unknown(d, known, path)
+
         ats_raw = _require(d, "ats", path)
         ats = [
-            ATEntry.from_dict(a, [f"ats[{i}]"])
+            ATEntry.from_dict(a, [f"ats[{i}]"], version=version)
             for i, a in enumerate(ats_raw)
         ]
         dr_raw = d.get("debt_register", [])
@@ -448,7 +548,9 @@ class ProofGraph:
             ),
             ats=ats,
             story_verdict=StoryVerdict.from_dict(
-                _require(d, "story_verdict", path), ["story_verdict"]
+                _require(d, "story_verdict", path), ["story_verdict"],
+                version=version,
             ),
             debt_register=debt_register,
+            meta=d.get("meta", {}),
         )
