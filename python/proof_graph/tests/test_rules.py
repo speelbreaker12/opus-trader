@@ -1,4 +1,9 @@
-"""Table-driven tests for proof graph validation rules."""
+"""Table-driven tests for proof graph validation rules.
+
+Note: V1 fixtures use non-standard mechanism values (e.g. "dispatch_count_assert"
+instead of "dispatch_count"). This is intentional — V1 did not enforce the
+CausalMechanism enum (R-024b is V2-only).
+"""
 from __future__ import annotations
 
 import json

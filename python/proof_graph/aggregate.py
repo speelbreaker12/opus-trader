@@ -125,6 +125,7 @@ def aggregate(
             reviewer_ats[at_id].append((label, at))
 
     conflicts: dict[str, Any] = {}
+    stale_rationales: list[str] = []
 
     # Process each AT
     all_at_ids = set(base_ats.keys()) | set(reviewer_ats.keys())
@@ -179,13 +180,15 @@ def aggregate(
                 }
                 continue
 
-            # Update verdict to strictest
+            # Update verdict to strictest; track stale rationale
+            old_verdict = base_at.get("at_verdict", {}).get("verdict", "")
             base_at["at_verdict"]["verdict"] = strictest
+            if strictest != old_verdict:
+                stale_rationales.append(at_id)
 
             # Always compute the strictest severity across all reviewers
             # (independent of whether the verdict changed) for fail-closed
-            # correctness. Deterministic tie-break: highest severity rank,
-            # then lowest label.
+            # correctness. Tie-break: highest severity rank wins.
             best_sev_str = base_at.get("at_verdict", {}).get("severity", "")
             best_sev_rank = SEVERITY_STRICTNESS.get(best_sev_str, 0)
             for _lbl, rat in reviewer_entries:
@@ -227,10 +230,13 @@ def aggregate(
         merged["meta"] = {}
     merged["meta"]["review_sources"] = review_labels
     merged["meta"]["review_count"] = len(review_labels)
-    # Clear stale conflicts from prior aggregation, then set new ones
+    # Clear stale fields from prior aggregation, then set new ones
     merged["meta"].pop("conflicts", None)
+    merged["meta"].pop("stale_rationales", None)
     if conflicts:
         merged["meta"]["conflicts"] = conflicts
+    if stale_rationales:
+        merged["meta"]["stale_rationales"] = sorted(stale_rationales)
 
     return merged
 

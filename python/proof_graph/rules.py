@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Optional
 
 from .schema import ProofGraph, SHA_RE
@@ -187,11 +188,6 @@ def r_008(ctx: ValidationContext) -> list[Finding]:
                 f"ats.{at.at_id}.tests[{i}].causal_proof.mechanism",
                 at.at_id,
             )
-        _check(
-            at.enforcement.status.value,
-            f"ats.{at.at_id}.enforcement.status",
-            at.at_id,
-        )
         for ev in at.enforcement.evidence:
             _check(ev, f"ats.{at.at_id}.enforcement.evidence", at.at_id)
         _check(at.wiring.evidence, f"ats.{at.at_id}.wiring.evidence", at.at_id)
@@ -431,8 +427,8 @@ def compute_trading_halt(ctx: ValidationContext) -> bool:
     g = ctx.graph
     return should_trigger_trading_halt(
         safety_critical=g.story_meta.safety_critical,
-        loss_level=g.story_meta.loss_mode.level,
-        verdicts=[at.at_verdict.verdict for at in g.ats],
+        loss_level=g.story_meta.loss_mode.level.value,
+        verdicts=[at.at_verdict.verdict.value for at in g.ats],
     )
 
 
@@ -1078,11 +1074,6 @@ def r_041(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
-_ISO8601_RE = re.compile(
-    r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:\d{2}|Z)$'
-)
-
-
 def r_042(ctx: ValidationContext) -> list[Finding]:
     """V2: safety_critical + section5_wrong_impl_blocked == PARTIAL."""
     if not _is_v2(ctx):
@@ -1176,9 +1167,19 @@ def r_045(ctx: ValidationContext) -> list[Finding]:
 
 
 def r_046(ctx: ValidationContext) -> list[Finding]:
-    """generated_at not valid ISO-8601 timestamp."""
+    """generated_at not valid ISO-8601 timestamp with timezone."""
     ts = ctx.graph.generated_at
-    if not _ISO8601_RE.match(ts):
+    try:
+        parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return [Finding(
+                severity=Severity.HARDENING,
+                rule="R-046",
+                at_id=None,
+                message=f"generated_at has no timezone: {ts!r}",
+                field_path="generated_at",
+            )]
+    except (ValueError, TypeError):
         return [Finding(
             severity=Severity.HARDENING,
             rule="R-046",

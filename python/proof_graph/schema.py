@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Optional, TypeVar
 
 from .enums import (
     AssumptionStatus,
@@ -49,7 +50,10 @@ def _require(d: dict[str, Any], key: str, path: list[str]) -> Any:
     return d[key]
 
 
-def _enum(cls: type, value: str, path: list[str]) -> Any:
+_E = TypeVar("_E", bound=Enum)
+
+
+def _enum(cls: type[_E], value: str, path: list[str]) -> _E:
     try:
         return cls(value)
     except ValueError:

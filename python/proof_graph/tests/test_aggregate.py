@@ -338,11 +338,11 @@ class TestAggregate(unittest.TestCase):
         self.assertGreaterEqual(merged["story_verdict"]["blocking_count"], 1)
 
     def test_rationale_stale_after_verdict_change(self):
-        """F7-008: aggregate updates verdict+severity but keeps base rationale.
+        """F7-008/F-09: aggregate updates verdict+severity but keeps base rationale.
 
         When the strictest reviewer provides a different verdict, the
-        rationale string remains from the base AT. This is known behavior;
-        downstream consumers should not rely on rationale consistency.
+        rationale string remains from the base AT. The AT is tracked in
+        meta.stale_rationales so downstream consumers can detect this state.
         """
         base = self._base()
         r1 = deepcopy(base)
@@ -360,6 +360,15 @@ class TestAggregate(unittest.TestCase):
         self.assertEqual(at201["at_verdict"]["verdict"], "MISSING")
         # Rationale is from base (not updated)
         self.assertEqual(at201["at_verdict"]["rationale"], base_rationale)
+        # Stale rationale is tracked in meta
+        self.assertIn("AT-201", merged["meta"]["stale_rationales"])
+
+    def test_no_stale_rationales_when_agreement(self):
+        """When reviewers agree with base, no stale rationales."""
+        base = self._base()
+        r1 = deepcopy(base)
+        merged = aggregate(base, [r1], review_labels=["codex"])
+        self.assertNotIn("stale_rationales", merged["meta"])
 
 
 if __name__ == "__main__":
