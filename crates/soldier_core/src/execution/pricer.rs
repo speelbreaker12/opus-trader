@@ -14,6 +14,8 @@
 //!
 //! AT-223.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use super::quantize::Side;
 
 // --- Pricer input --------------------------------------------------------
@@ -114,8 +116,41 @@ impl Default for PricerMetrics {
     }
 }
 
+static PRICER_REJECT_NET_EDGE_TOO_LOW_TOTAL: AtomicU64 = AtomicU64::new(0);
+static PRICER_REJECT_INVALID_INPUT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for pricer gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `PricerMetrics` for tick-level debugging.
+pub fn pricer_reject_total(reason: PricerRejectReason) -> u64 {
+    match reason {
+        PricerRejectReason::NetEdgeTooLow => {
+            PRICER_REJECT_NET_EDGE_TOO_LOW_TOTAL.load(Ordering::Relaxed)
+        }
+        PricerRejectReason::InvalidInput => {
+            PRICER_REJECT_INVALID_INPUT_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_pricer_reject(reason: PricerRejectReason) {
+    match reason {
+        PricerRejectReason::NetEdgeTooLow => {
+            PRICER_REJECT_NET_EDGE_TOO_LOW_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        PricerRejectReason::InvalidInput => {
+            PRICER_REJECT_INVALID_INPUT_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line(super::METRIC_PRICER_REJECT, &tail);
+    tracing::debug!("PricerReject reason={:?}", reason);
+}
+
 fn reject_invalid(metrics: &mut PricerMetrics) -> PricerResult {
     metrics.record_reject();
+    bump_pricer_reject(PricerRejectReason::InvalidInput);
     PricerResult::Rejected {
         reason: PricerRejectReason::InvalidInput,
         net_edge_usd: None,
@@ -152,6 +187,7 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
     // Reject if net_edge < min_edge
     if net_edge < input.min_edge_usd {
         metrics.record_reject();
+        bump_pricer_reject(PricerRejectReason::NetEdgeTooLow);
         return PricerResult::Rejected {
             reason: PricerRejectReason::NetEdgeTooLow,
             net_edge_usd: Some(net_edge),

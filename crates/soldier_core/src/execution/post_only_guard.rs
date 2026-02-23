@@ -6,6 +6,8 @@
 //!
 //! AT-916.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::execution::quantize::Side;
 
 // ─── Input ──────────────────────────────────────────────────────────────
@@ -68,6 +70,22 @@ impl Default for PostOnlyMetrics {
     }
 }
 
+static POST_ONLY_CROSS_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for post-only crossing guard.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `PostOnlyMetrics` for tick-level debugging.
+pub fn post_only_reject_total() -> u64 {
+    POST_ONLY_CROSS_REJECT_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_post_only_reject() {
+    POST_ONLY_CROSS_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line(super::METRIC_POST_ONLY_REJECT, "");
+    tracing::debug!("PostOnlyReject");
+}
+
 // ─── Core function ──────────────────────────────────────────────────────
 
 /// Check whether a post-only order would cross the book.
@@ -97,6 +115,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
             "post_only: non-finite limit_price, rejecting (fail-closed)"
         );
         metrics.record_reject();
+        bump_post_only_reject();
         return PostOnlyResult::Rejected;
     }
 
@@ -110,6 +129,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
                         "post_only: non-finite best_ask, rejecting (fail-closed)"
                     );
                     metrics.record_reject();
+                    bump_post_only_reject();
                     return PostOnlyResult::Rejected;
                 }
                 input.limit_price >= ask
@@ -125,6 +145,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
                         "post_only: non-finite best_bid, rejecting (fail-closed)"
                     );
                     metrics.record_reject();
+                    bump_post_only_reject();
                     return PostOnlyResult::Rejected;
                 }
                 input.limit_price <= bid
@@ -135,6 +156,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
 
     if would_cross {
         metrics.record_reject();
+        bump_post_only_reject();
         PostOnlyResult::Rejected
     } else {
         PostOnlyResult::Allowed

@@ -8,8 +8,29 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::risk::RiskState;
+
+static PENDING_EXPOSURE_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for pending exposure reserve attempts.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `PendingExposureMetrics` for tick-level debugging.
+pub fn pending_exposure_reject_total() -> u64 {
+    PENDING_EXPOSURE_REJECT_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_pending_exposure_reject(reason: PendingExposureRejectReason) {
+    PENDING_EXPOSURE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    let tail = format!("reason={reason:?}");
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_PENDING_EXPOSURE_REJECT,
+        &tail,
+    );
+    tracing::debug!("PendingExposureReject reason={:?}", reason);
+}
 
 /// Stable idempotency key for pending exposure reservations.
 /// Typically derived from intent_hash. Prevents double-counting on retry.
@@ -398,6 +419,7 @@ impl PendingExposureBook {
         // 1. Check instrument is registered.
         if !inner.instruments.contains_key(instrument_id) {
             metrics.record_reserve_instrument_not_registered();
+            bump_pending_exposure_reject(PendingExposureRejectReason::InstrumentNotRegistered);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::InstrumentNotRegistered,
                 pending_total: f64::NAN,
@@ -418,6 +440,7 @@ impl PendingExposureBook {
                 .get(instrument_id)
                 .map_or(0.0, |b| b.pending_total);
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(PendingExposureRejectReason::PendingExposureBudgetExceeded);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: pending,
@@ -428,6 +451,7 @@ impl PendingExposureBook {
         let book = inner.instruments.get(instrument_id).unwrap(); // safe: checked above
         let Some(limit) = normalized_limit(book.delta_limit) else {
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(PendingExposureRejectReason::PendingExposureBudgetExceeded);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: book.pending_total,
@@ -442,6 +466,7 @@ impl PendingExposureBook {
             || !book.pending_negative.is_finite()
         {
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(PendingExposureRejectReason::PendingExposureBudgetExceeded);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: book.pending_total,
@@ -475,6 +500,7 @@ impl PendingExposureBook {
         let worst_case_short = current_delta + projected_negative;
         if worst_case_long.abs() > limit || worst_case_short.abs() > limit {
             metrics.record_reserve_reject();
+            bump_pending_exposure_reject(PendingExposureRejectReason::PendingExposureBudgetExceeded);
             return PendingExposureResult::Rejected {
                 reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                 pending_total: book.pending_total,
@@ -490,6 +516,7 @@ impl PendingExposureBook {
             let trial_global = inner.global_total - old_global_delta + delta_impact_est;
             if trial_global.abs() > global_limit {
                 metrics.record_reserve_reject();
+                bump_pending_exposure_reject(PendingExposureRejectReason::PendingExposureBudgetExceeded);
                 return PendingExposureResult::Rejected {
                     reason: PendingExposureRejectReason::PendingExposureBudgetExceeded,
                     pending_total: book.pending_total,

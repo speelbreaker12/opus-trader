@@ -6,6 +6,52 @@
 //! - AT-911: rejection reason must be GlobalExposureBudgetExceeded.
 //! - AT-929: evaluate with current + pending exposure.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Reason for the static counter to discriminate rejection causes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExposureBudgetStaticRejectReason {
+    /// Budget exceeded after correlation adjustment.
+    Reject,
+    /// Global delta limit missing or invalid (fail-closed).
+    LimitMissing,
+}
+
+static EXPOSURE_BUDGET_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+static EXPOSURE_BUDGET_REJECT_LIMIT_MISSING_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for global exposure budget gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `ExposureBudgetMetrics` for tick-level debugging.
+pub fn exposure_budget_reject_total(reason: ExposureBudgetStaticRejectReason) -> u64 {
+    match reason {
+        ExposureBudgetStaticRejectReason::Reject => {
+            EXPOSURE_BUDGET_REJECT_TOTAL.load(Ordering::Relaxed)
+        }
+        ExposureBudgetStaticRejectReason::LimitMissing => {
+            EXPOSURE_BUDGET_REJECT_LIMIT_MISSING_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_exposure_budget_reject(reason: ExposureBudgetStaticRejectReason) {
+    match reason {
+        ExposureBudgetStaticRejectReason::Reject => {
+            EXPOSURE_BUDGET_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        ExposureBudgetStaticRejectReason::LimitMissing => {
+            EXPOSURE_BUDGET_REJECT_LIMIT_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_EXPOSURE_BUDGET_REJECT,
+        &tail,
+    );
+    tracing::debug!("ExposureBudgetReject reason={:?}", reason);
+}
+
 /// Correlation bucket for candidate exposure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExposureBucket {
@@ -100,6 +146,7 @@ pub fn evaluate_global_exposure_budget(
         Some(v) if v.is_finite() && v > 0.0 => v,
         _ => {
             metrics.record_reject_limit_missing();
+            bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::LimitMissing);
             return ExposureBudgetResult::Rejected {
                 reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
                 portfolio_delta_usd: None,
@@ -119,6 +166,7 @@ pub fn evaluate_global_exposure_budget(
         || !input.candidate_delta_usd.is_finite()
     {
         metrics.record_reject();
+        bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::Reject);
         return ExposureBudgetResult::Rejected {
             reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
             portfolio_delta_usd: None,
@@ -140,6 +188,7 @@ pub fn evaluate_global_exposure_budget(
     let portfolio = conservative_corr_magnitude(combined_btc, combined_eth, combined_alts);
     if !portfolio.is_finite() || portfolio > limit {
         metrics.record_reject();
+        bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::Reject);
         return ExposureBudgetResult::Rejected {
             reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
             portfolio_delta_usd: Some(portfolio),

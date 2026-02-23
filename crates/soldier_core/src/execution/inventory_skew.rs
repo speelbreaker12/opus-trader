@@ -6,6 +6,8 @@
 //!
 //! Missing `delta_limit` is fail-closed.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use super::quantize::Side;
 
 /// Inventory Skew input.
@@ -101,6 +103,38 @@ impl InventorySkewMetrics {
     }
 }
 
+static INVENTORY_SKEW_REJECT_DELTA_LIMIT_MISSING_TOTAL: AtomicU64 = AtomicU64::new(0);
+static INVENTORY_SKEW_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for inventory skew gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `InventorySkewMetrics` for tick-level debugging.
+pub fn inventory_skew_reject_total(reason: InventorySkewRejectReason) -> u64 {
+    match reason {
+        InventorySkewRejectReason::InventorySkewDeltaLimitMissing => {
+            INVENTORY_SKEW_REJECT_DELTA_LIMIT_MISSING_TOTAL.load(Ordering::Relaxed)
+        }
+        InventorySkewRejectReason::InventorySkewReject => {
+            INVENTORY_SKEW_REJECT_TOTAL.load(Ordering::Relaxed)
+        }
+    }
+}
+
+fn bump_inventory_skew_reject(reason: InventorySkewRejectReason) {
+    match reason {
+        InventorySkewRejectReason::InventorySkewDeltaLimitMissing => {
+            INVENTORY_SKEW_REJECT_DELTA_LIMIT_MISSING_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+        InventorySkewRejectReason::InventorySkewReject => {
+            INVENTORY_SKEW_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    let tail = format!("reason={reason:?}");
+    super::emit_execution_metric_line(super::METRIC_INVENTORY_SKEW_REJECT, &tail);
+    tracing::debug!("InventorySkewReject reason={:?}", reason);
+}
+
 /// Clamp inventory bias to [-1.0, 1.0].
 ///
 /// This is intentional normalization, NOT a hard limit. When `combined_delta`
@@ -129,6 +163,7 @@ pub fn evaluate_inventory_skew(
         Some(v) if v.is_finite() && v > 0.0 => v,
         _ => {
             metrics.record_reject_delta_limit_missing();
+            bump_inventory_skew_reject(InventorySkewRejectReason::InventorySkewDeltaLimitMissing);
             return InventorySkewResult::Rejected {
                 reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
                 inventory_bias: None,
@@ -151,6 +186,7 @@ pub fn evaluate_inventory_skew(
         || input.inventory_skew_k < 0.0
     {
         metrics.record_reject();
+        bump_inventory_skew_reject(InventorySkewRejectReason::InventorySkewReject);
         return InventorySkewResult::Rejected {
             reason: InventorySkewRejectReason::InventorySkewReject,
             inventory_bias: None,
@@ -192,6 +228,7 @@ pub fn evaluate_inventory_skew(
 
     if input.net_edge_usd < adjusted_min_edge_usd {
         metrics.record_reject();
+        bump_inventory_skew_reject(InventorySkewRejectReason::InventorySkewReject);
         return InventorySkewResult::Rejected {
             reason: InventorySkewRejectReason::InventorySkewReject,
             inventory_bias: Some(inventory_bias),

@@ -9,9 +9,53 @@
 //!
 //! AT-116, AT-220, AT-924, AT-936.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use super::tlsm::TlsmState;
+
+static GROUP_LOCK_TIMEOUT_TOTAL: AtomicU64 = AtomicU64::new(0);
+static GROUP_PERSIST_FAIL_TOTAL: AtomicU64 = AtomicU64::new(0);
+static GROUP_MIXED_FAILED_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime counter for group lock acquisition timeouts.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+pub fn group_lock_timeout_total() -> u64 {
+    GROUP_LOCK_TIMEOUT_TOTAL.load(Ordering::Relaxed)
+}
+
+/// Process-lifetime counter for group persistence failures.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+pub fn group_persist_fail_total() -> u64 {
+    GROUP_PERSIST_FAIL_TOTAL.load(Ordering::Relaxed)
+}
+
+/// Process-lifetime counter for group MixedFailed state entries.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+pub fn group_mixed_failed_total() -> u64 {
+    GROUP_MIXED_FAILED_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_group_lock_timeout() {
+    GROUP_LOCK_TIMEOUT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line(super::METRIC_GROUP_LOCK_TIMEOUT, "");
+    tracing::debug!("GroupLockTimeout");
+}
+
+fn bump_group_persist_fail() {
+    GROUP_PERSIST_FAIL_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line(super::METRIC_GROUP_PERSIST_FAIL, "");
+    tracing::debug!("GroupPersistFail");
+}
+
+fn bump_group_mixed_failed() {
+    GROUP_MIXED_FAILED_TOTAL.fetch_add(1, Ordering::Relaxed);
+    super::emit_execution_metric_line(super::METRIC_GROUP_MIXED_FAILED, "");
+    tracing::debug!("GroupMixedFailed");
+}
 
 // ─── GroupState ─────────────────────────────────────────────────────────
 
@@ -260,6 +304,7 @@ impl AtomicGroup {
             if self.state == GroupState::Dispatched || self.state == GroupState::New {
                 self.state = GroupState::MixedFailed;
                 self.containment_pending = true;
+                bump_group_mixed_failed();
                 return GroupStateTransition::EnteredMixedFailed { reason };
             }
         }
@@ -278,6 +323,7 @@ impl AtomicGroup {
             }
             self.state = GroupState::MixedFailed;
             self.containment_pending = true;
+            bump_group_mixed_failed();
             return GroupStateTransition::EnteredMixedFailed { reason };
         }
 
@@ -393,12 +439,14 @@ pub fn try_acquire_group_lock(lock: &mut GroupLock, config: &GroupConfig) -> Loc
 
     // If lock is already held and expired, force ReduceOnly
     if lock.is_held() && lock.is_expired(max_wait) {
+        bump_group_lock_timeout();
         return LockAcquisitionResult::TimedOut;
     }
 
     if lock.try_acquire() {
         LockAcquisitionResult::Acquired
     } else {
+        bump_group_lock_timeout();
         LockAcquisitionResult::TimedOut
     }
 }
@@ -415,7 +463,10 @@ pub fn persist_before_dispatch(
 ) -> Result<(), GroupError> {
     persistence
         .persist_group_intent(&group.group_id)
-        .map_err(|reason| GroupError::PersistenceFailed { reason })
+        .map_err(|reason| {
+            bump_group_persist_fail();
+            GroupError::PersistenceFailed { reason }
+        })
 }
 
 #[cfg(test)]

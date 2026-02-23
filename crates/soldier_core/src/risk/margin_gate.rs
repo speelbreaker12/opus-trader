@@ -5,6 +5,27 @@
 //! - Threshold defaults: reject_opens=0.70, reduceonly=0.85, kill=0.95.
 //! - Mode progression: Active -> ReduceOnly -> Kill.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static MARGIN_GATE_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Process-lifetime rejection counter for margin headroom gate.
+///
+/// Use for production monitoring and multi-hour root cause analysis.
+/// Compare with instance `MarginGateMetrics` for tick-level debugging.
+pub fn margin_gate_reject_total() -> u64 {
+    MARGIN_GATE_REJECT_TOTAL.load(Ordering::Relaxed)
+}
+
+fn bump_margin_gate_reject() {
+    MARGIN_GATE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
+    crate::execution::emit_execution_metric_line(
+        crate::execution::METRIC_MARGIN_GATE_REJECT,
+        "",
+    );
+    tracing::debug!("MarginGateReject");
+}
+
 /// Margin gate mode hint for PolicyGuard integration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarginGateMode {
@@ -92,6 +113,7 @@ pub fn evaluate_margin_headroom_gate(
         || input.equity_usd <= 0.0
     {
         metrics.record_reject();
+        bump_margin_gate_reject();
         return MarginGateDecision::Rejected {
             reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
             mm_util: None,
@@ -102,6 +124,7 @@ pub fn evaluate_margin_headroom_gate(
 
     if mm_util >= input.mm_util_reject_opens {
         metrics.record_reject();
+        bump_margin_gate_reject();
         return MarginGateDecision::Rejected {
             reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
             mm_util: Some(mm_util),
