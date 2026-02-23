@@ -222,6 +222,89 @@ class TestAggregate(unittest.TestCase):
         merged = aggregate(base, [r1, r2])
         self.assertEqual(merged["meta"]["review_sources"], ["reviewer_0", "reviewer_1"])
 
+    def test_severity_tightened_independently(self):
+        """Same verdict, different severity → strictest severity wins."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        # Both agree on PROVEN_INTEGRATED but differ on severity
+        r1["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r1["ats"][0]["at_verdict"]["severity"] = "INFO"
+        r2["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r2["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+
+        at201 = next(at for at in merged["ats"] if at["at_id"] == "AT-201")
+        # Verdict stays PROVEN_INTEGRATED (agreement)
+        self.assertEqual(at201["at_verdict"]["verdict"], "PROVEN_INTEGRATED")
+        # Severity should be BLOCKING (strictest)
+        self.assertEqual(at201["at_verdict"]["severity"], "BLOCKING")
+
+    def test_order_independence(self):
+        """Swapping reviewer order produces identical result."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        r1["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        r1["ats"][0]["at_verdict"]["severity"] = "HARDENING"
+        r2["ats"][0]["at_verdict"]["verdict"] = "MISSING"
+        r2["ats"][0]["at_verdict"]["severity"] = "BLOCKING"
+
+        merged_ab = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+        merged_ba = aggregate(base, [r2, r1], review_labels=["opus", "codex"])
+
+        at_ab = next(at for at in merged_ab["ats"] if at["at_id"] == "AT-201")
+        at_ba = next(at for at in merged_ba["ats"] if at["at_id"] == "AT-201")
+        self.assertEqual(at_ab["at_verdict"]["verdict"], at_ba["at_verdict"]["verdict"])
+        self.assertEqual(at_ab["at_verdict"]["severity"], at_ba["at_verdict"]["severity"])
+
+    def test_stale_conflicts_cleaned_on_reaggregation(self):
+        """Re-aggregation cleans up old conflicts when no longer applicable."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+        # First aggregation: disagreement → conflict
+        r1["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r2["ats"][0]["at_verdict"]["verdict"] = "WEAK_PROOF"
+        merged1 = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+        self.assertIn("AT-201", merged1["meta"]["conflicts"])
+
+        # Second aggregation: agreement → no conflict
+        r3 = deepcopy(base)
+        r4 = deepcopy(base)
+        r3["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        r4["ats"][0]["at_verdict"]["verdict"] = "PROVEN_INTEGRATED"
+        merged2 = aggregate(merged1, [r3, r4], review_labels=["codex2", "opus2"])
+        # Old conflicts should be gone
+        self.assertNotIn("conflicts", merged2["meta"])
+
+    def test_deterministic_tiebreak_new_at(self):
+        """When AT in reviewers but not base, deterministic tie-break picks
+        strictest severity then lowest label."""
+        base = self._base()
+        r1 = deepcopy(base)
+        r2 = deepcopy(base)
+
+        # Add AT-300 to both reviewers with same verdict but diff severity
+        new_at_1 = deepcopy(r1["ats"][0])
+        new_at_1["at_id"] = "AT-300"
+        new_at_1["at_verdict"]["verdict"] = "WEAK_PROOF"
+        new_at_1["at_verdict"]["severity"] = "INFO"
+        r1["ats"].append(new_at_1)
+
+        new_at_2 = deepcopy(r2["ats"][0])
+        new_at_2["at_id"] = "AT-300"
+        new_at_2["at_verdict"]["verdict"] = "WEAK_PROOF"
+        new_at_2["at_verdict"]["severity"] = "BLOCKING"
+        r2["ats"].append(new_at_2)
+
+        merged = aggregate(base, [r1, r2], review_labels=["codex", "opus"])
+
+        at300 = next(at for at in merged["ats"] if at["at_id"] == "AT-300")
+        # Should pick the BLOCKING severity entry (strictest)
+        self.assertEqual(at300["at_verdict"]["severity"], "BLOCKING")
+
 
 if __name__ == "__main__":
     unittest.main()

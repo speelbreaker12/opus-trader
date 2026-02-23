@@ -1,4 +1,4 @@
-"""29 validation rules for proof graph (18 V1 + 11 V2)."""
+"""37 validation rules for proof graph (18 V1 + 19 V2)."""
 from __future__ import annotations
 
 import re
@@ -918,6 +918,27 @@ def r_036(ctx: ValidationContext) -> list[Finding]:
     return findings
 
 
+def r_037(ctx: ValidationContext) -> list[Finding]:
+    """RECONCILED_UNIT_ONLY but AT has PROVEN_INTEGRATED verdict."""
+    g = ctx.graph
+    if g.story_verdict.reconciliation_status != \
+            ReconciliationStatus.RECONCILED_UNIT_ONLY:
+        return []
+    findings: list[Finding] = []
+    for at in g.ats:
+        if at.at_verdict.verdict == Verdict.PROVEN_INTEGRATED:
+            findings.append(Finding(
+                severity=Severity.BLOCKING,
+                rule="R-037",
+                at_id=at.at_id,
+                message=(
+                    f"reconciliation_status is RECONCILED_UNIT_ONLY "
+                    f"but AT {at.at_id} claims PROVEN_INTEGRATED"
+                ),
+            ))
+    return findings
+
+
 ALL_RULES = [
     r_001, r_002, r_003, r_004, r_005, r_006, r_007, r_008,
     r_009, r_010, r_011, r_012, r_013, r_014, r_015, r_016,
@@ -927,7 +948,7 @@ ALL_RULES = [
     r_024b, r_025, r_026,
     # V3 rules (validator-audit findings)
     r_027, r_028, r_029, r_030, r_031, r_032, r_033, r_034,
-    r_035, r_036,
+    r_035, r_036, r_037,
 ]
 
 

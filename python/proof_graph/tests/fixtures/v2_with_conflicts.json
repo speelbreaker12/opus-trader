@@ -73,6 +73,7 @@
           "kind": "TRIP",
           "causal_proof": {
             "mechanism": "reject_reason",
+            "reject_reason_assert": "OutOfBounds",
             "dispatch_count_assert": "0",
             "why_causal": "Injects out-of-bounds value"
           },
