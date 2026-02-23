@@ -1,0 +1,101 @@
+{
+  "schema_version": 2,
+  "head_sha": "aabbccddee00112233445566778899aabbccddee",
+  "generated_at": "2026-02-21T10:00:00+00:00",
+  "story_meta": {
+    "story_id": "S1-007",
+    "category": "enforcement",
+    "enforcement_point": "DispatcherChokepoint",
+    "loss_mode": {
+      "worst_case": "Stale metadata -> wrong price -> bad fill",
+      "fail_closed_cap": "Dispatcher rejects intent; no dispatch",
+      "drift_metric": "metadata_staleness_ms",
+      "level": "MED"
+    },
+    "safety_critical": true,
+    "scope_touch": ["crates/soldier_core/src/execution/build_order_intent.rs"]
+  },
+  "ats": [
+    {
+      "at_id": "AT-201",
+      "enforcement": {
+        "status": "FOUND",
+        "evidence": ["crates/soldier_core/src/execution/build_order_intent.rs:42"],
+        "evidence_entries": [
+          {
+            "file": "crates/soldier_core/src/execution/build_order_intent.rs",
+            "line_start": 40,
+            "line_end": 45,
+            "symbol": "check_metadata_staleness",
+            "snippet": "if metadata.age_ms > threshold { return Err(StaleMetadata) }"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "test_name": "test_stale_metadata_blocks_open",
+          "kind": "TRIP",
+          "causal_proof": {
+            "mechanism": "dispatch_count",
+            "dispatch_count_assert": "0",
+            "reject_reason_assert": "StaleMetadata",
+            "why_causal": "Injects stale metadata, asserts dispatch_count==0 and reject_reason==StaleMetadata"
+          },
+          "execution": {
+            "ran_at_head_sha": "aabbccddee00112233445566778899aabbccddee",
+            "pass_result": true
+          }
+        },
+        {
+          "test_name": "test_fresh_metadata_allows_dispatch",
+          "kind": "NON-TRIP",
+          "causal_proof": {
+            "mechanism": "dispatch_count",
+            "dispatch_count_assert": "1",
+            "why_causal": "Fresh metadata passes all checks, dispatch_count==1 proves pass-through"
+          },
+          "execution": {
+            "ran_at_head_sha": "aabbccddee00112233445566778899aabbccddee",
+            "pass_result": true
+          }
+        }
+      ],
+      "wiring": {
+        "status": "PROVEN_INTEGRATED",
+        "evidence": "test_stale_metadata_blocks_open runs through full pipeline",
+        "caller_chain": ["test_fn", "run_pipeline", "build_order_intent", "check_metadata_staleness"],
+        "entrypoint": "test_fn",
+        "proof_type": "integration_test"
+      },
+      "observability": {
+        "metric": "metadata_staleness_ms",
+        "alert": "metadata_stale_alert"
+      },
+      "premortem_checks": {
+        "stoplight": "GREEN",
+        "sections_filled": 10,
+        "section5_wrong_impl_blocked": "ALL",
+        "section4_decision_match": "YES",
+        "section2_assumptions": "ALL_VALIDATED"
+      },
+      "at_verdict": {
+        "verdict": "PROVEN_INTEGRATED",
+        "severity": "INFO",
+        "rationale": "TRIP test proves dispatch blocked on stale metadata"
+      },
+      "extra_discovered": false
+    }
+  ],
+  "story_verdict": {
+    "reconciliation_status": "RECONCILED",
+    "blocking_count": 0,
+    "hardening_count": 0,
+    "summary": "All ATs proven with TRIP tests through full pipeline",
+    "trading_halt_trigger": false
+  },
+  "debt_register": [],
+  "meta": {
+    "hints": {"AT-201": {"safety_critical": true, "loss_mode_level": "MED"}},
+    "init_tool_version": "2.0.0"
+  }
+}

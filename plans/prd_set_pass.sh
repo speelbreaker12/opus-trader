@@ -19,6 +19,7 @@ Rules for passes=true:
   - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
   - loss_mode.worst_case, .fail_closed_cap, .drift_metric must all be non-empty (exit 9) — exempt: policy/certification
   - proof_graph.json must exist and validate (exit 10) — exempt: IDs in plans/proof_graph_exempt.txt
+  - proof_graph TRADING HALT condition triggers exit 20 (V2 graphs with safety_critical + HIGH/CRITICAL + FAIL_OPEN_RISK/WRONG_IMPL_UNBLOCKED)
 USAGE
 }
 
@@ -228,11 +229,17 @@ if [[ "$STATUS" == "true" ]]; then
       echo "ERROR: python3 required for proof graph validation" >&2
       exit 10
     }
-    if ! python3 "$ROOT/python/proof_graph/validate.py" "$proof_graph_file" \
+    pg_rc=0
+    python3 "$ROOT/python/proof_graph/validate.py" "$proof_graph_file" \
          --contract-path "$ROOT/specs/CONTRACT.md" \
          --prd-path "$PRD_FILE" \
-         --strict; then
-      echo "ERROR: proof graph validation failed for $ID" >&2
+         --strict || pg_rc=$?
+
+    if [[ "$pg_rc" -eq 20 ]]; then
+      echo "CRITICAL: proof graph triggered TRADING HALT for $ID" >&2
+      exit 20
+    elif [[ "$pg_rc" -ne 0 ]]; then
+      echo "ERROR: proof graph validation failed for $ID (exit $pg_rc)" >&2
       exit 10
     fi
   elif [[ -f "$exempt_list" ]] && grep -qxF "$ID" "$exempt_list"; then

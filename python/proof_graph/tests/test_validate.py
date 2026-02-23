@@ -170,5 +170,51 @@ class TestValidateCLI(unittest.TestCase):
                 os.unlink(f.name)
 
 
+    def test_v2_valid_graph_exit_0(self):
+        result = _run([
+            str(FIXTURES / "valid_proof_graph_v2.json"),
+            "--contract-path", str(CONTRACT),
+            "--prd-path", str(PRD),
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
+    def test_v2_trading_halt_exit_20(self):
+        """V2 graph with recomputed trading halt → exit 20."""
+        result = _run([
+            str(FIXTURES / "v2_trading_halt.json"),
+            "--contract-path", str(CONTRACT),
+            "--prd-path", str(PRD),
+            "--strict",
+        ])
+        self.assertEqual(result.returncode, 20,
+                         f"Expected exit 20 for trading halt: stdout={result.stdout} stderr={result.stderr}")
+        self.assertIn("TRADING HALT", result.stderr)
+
+    def test_v2_trading_halt_json_output(self):
+        """JSON output includes trading_halt field."""
+        result = _run([
+            str(FIXTURES / "v2_trading_halt.json"),
+            "--contract-path", str(CONTRACT),
+            "--prd-path", str(PRD),
+            "--strict",
+            "--json-output",
+        ])
+        self.assertEqual(result.returncode, 20)
+        output = json.loads(result.stdout)
+        self.assertTrue(output["trading_halt"])
+        self.assertEqual(output["exit_code"], 20)
+
+    def test_v2_blocking_no_halt_exit_1(self):
+        """V2 graph with BLOCKING findings but no halt condition → exit 1."""
+        result = _run([
+            str(FIXTURES / "v2_bad_citation.json"),
+            "--contract-path", str(CONTRACT),
+            "--prd-path", str(PRD),
+            "--strict",
+        ])
+        self.assertEqual(result.returncode, 1,
+                         f"Expected exit 1 (not 20): stdout={result.stdout} stderr={result.stderr}")
+
+
 if __name__ == "__main__":
     unittest.main()
