@@ -131,141 +131,55 @@ if ! "$validator_sh" "$bash_artifact_type" "$manifest_path" 2>&1; then
   die "$gate_name: bash structural validation failed"
 fi
 
-# ── Gate check 4: Python deep validation ─────────────────────────────
+# ── Gate check 4: Python deep validation (Step A-F) ──────────────────
+# The v2 Python validator performs the full 6-step algorithm:
+#   A: schema validation, B: provenance, C: combos, D: artifact integrity,
+#   E: cycle-specific semantics (including review_basis_check), F: consistency.
 
-validator_py="$repo_root/plans/validate_external_manifest.py"
+validator_py="$repo_root/plans/validators/validate_external_manifest.py"
 if [[ ! -f "$validator_py" ]]; then
-  die "$gate_name: Python validator not found: $validator_py"
+  # Fall back to legacy location
+  validator_py="$repo_root/plans/validate_external_manifest.py"
+fi
+if [[ ! -f "$validator_py" ]]; then
+  die "$gate_name: Python validator not found"
 fi
 
-if ! python3 "$validator_py" "$manifest_path" $check_files 2>&1; then
-  die "$gate_name: Python schema validation failed"
+# Resolve schema path
+schema_r3="$repo_root/specs/schemas/recon/r3_external_manifest.schema.json"
+schema_r7="$repo_root/specs/schemas/recon/r7_external_manifest.schema.json"
+schema_path=""
+if [[ "$gate_type" == "r3" && -f "$schema_r3" ]]; then
+  schema_path="$schema_r3"
+elif [[ "$gate_type" == "r7" && -f "$schema_r7" ]]; then
+  schema_path="$schema_r7"
 fi
 
-# ── Gate check 5: Semantic field verification ────────────────────────
-
-errors=0
-
-# Verify story_id and slice_id match arguments
-manifest_story=$(jq -r '.story_id // empty' "$manifest_path")
-manifest_slice=$(jq -r '.slice_id // empty' "$manifest_path")
-if [[ "$manifest_story" != "$story_id" ]]; then
-  echo "  FAIL: story_id mismatch: manifest='$manifest_story', expected='$story_id'" >&2
-  errors=$((errors + 1))
-fi
-if [[ "$manifest_slice" != "$slice_id" ]]; then
-  echo "  FAIL: slice_id mismatch: manifest='$manifest_slice', expected='$slice_id'" >&2
-  errors=$((errors + 1))
-fi
-
-# Verify phase and cycle
-manifest_phase=$(jq -r '.phase // empty' "$manifest_path")
-manifest_cycle=$(jq -r '.cycle // empty' "$manifest_path")
-if [[ "$manifest_phase" != "$expected_phase" ]]; then
-  echo "  FAIL: phase mismatch: manifest='$manifest_phase', expected='$expected_phase'" >&2
-  errors=$((errors + 1))
-fi
-if [[ "$manifest_cycle" != "$expected_cycle" ]]; then
-  echo "  FAIL: cycle mismatch: manifest='$manifest_cycle', expected='$expected_cycle'" >&2
-  errors=$((errors + 1))
+# Build validator command
+py_args=(
+  --manifest "$manifest_path"
+  --format json
+  --repo-root "$repo_root"
+  --cycle "$expected_cycle"
+  --expect-phase "$expected_phase"
+  --expect-story-id "$story_id"
+  --expect-slice-id "$slice_id"
+  --require-combo codex:enriched
+  --require-combo codex:generic
+  --require-combo opus:enriched
+  --require-combo opus:generic
+)
+if [[ -n "$schema_path" ]]; then
+  py_args+=(--schema "$schema_path")
 fi
 
-# Verify required combos present in reviews
-for combo in "codex:enriched" "codex:generic" "opus:enriched" "opus:generic"; do
-  IFS=: read -r tool prompt_style <<< "$combo"
-  count=$(jq --arg t "$tool" --arg p "$prompt_style" \
-    '[.reviews[] | select(.tool == $t and .prompt_style == $p)] | length' \
-    "$manifest_path" 2>/dev/null || echo 0)
-  if [[ "$count" -lt 1 ]]; then
-    echo "  FAIL: missing required combo: tool=$tool, prompt_style=$prompt_style" >&2
-    errors=$((errors + 1))
-  fi
-done
+py_output=$(python3 "$validator_py" "${py_args[@]}" 2>&1) || true
+py_status=$(echo "$py_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','UNKNOWN'))" 2>/dev/null) || py_status="UNKNOWN"
 
-# Verify every review has provenance with required fields
-review_count=$(jq '.reviews | length' "$manifest_path" 2>/dev/null || echo 0)
-for ((i=0; i<review_count; i++)); do
-  for field in tool model prompt_style cycle phase_equivalent; do
-    val=$(jq -r ".reviews[$i].provenance.$field // empty" "$manifest_path" 2>/dev/null)
-    if [[ -z "$val" ]]; then
-      echo "  FAIL: reviews[$i].provenance missing required field '$field'" >&2
-      errors=$((errors + 1))
-    fi
-  done
-
-  # Verify review_basis on each entry
-  entry_basis=$(jq -r ".reviews[$i].review_basis // empty" "$manifest_path" 2>/dev/null)
-  if [[ "$entry_basis" != "$expected_review_basis" ]]; then
-    echo "  FAIL: reviews[$i].review_basis='$entry_basis', expected='$expected_review_basis'" >&2
-    errors=$((errors + 1))
-  fi
-done
-
-# R3-specific checks
-if [[ "$gate_type" == "r3" ]]; then
-  # Pre-existing enforcement citation check
-  citation_check=$(jq -r '.validation.preexisting_enforcement_citation_check // empty' "$manifest_path" 2>/dev/null)
-  if [[ "$citation_check" != "PASS" ]]; then
-    echo "  FAIL: validation.preexisting_enforcement_citation_check != PASS (got '$citation_check')" >&2
-    errors=$((errors + 1))
-  fi
-
-  # Pre-existing test citation check
-  test_check=$(jq -r '.validation.preexisting_test_citation_check // empty' "$manifest_path" 2>/dev/null)
-  if [[ "$test_check" != "PASS" ]]; then
-    echo "  FAIL: validation.preexisting_test_citation_check != PASS (got '$test_check')" >&2
-    errors=$((errors + 1))
-  fi
-
-  # Diff-only review check
-  diff_check=$(jq -r '.validation.diff_only_review_check // empty' "$manifest_path" 2>/dev/null)
-  if [[ "$diff_check" != "PASS" ]]; then
-    echo "  FAIL: validation.diff_only_review_check != PASS (got '$diff_check')" >&2
-    errors=$((errors + 1))
-  fi
-fi
-
-# R7-specific checks: recompute commit alignment (don't trust self-reported flags)
-if [[ "$gate_type" == "r7" ]]; then
-  manifest_head=$(jq -r '.provenance.head_commit // empty' "$manifest_path" 2>/dev/null)
-  manifest_base=$(jq -r '.provenance.base_commit // empty' "$manifest_path" 2>/dev/null)
-
-  for ((i=0; i<review_count; i++)); do
-    entry_head=$(jq -r ".reviews[$i].head_commit // empty" "$manifest_path" 2>/dev/null)
-    entry_base=$(jq -r ".reviews[$i].base_commit // empty" "$manifest_path" 2>/dev/null)
-
-    if [[ "$entry_head" != "$manifest_head" ]]; then
-      echo "  FAIL: reviews[$i].head_commit='$entry_head' != provenance.head_commit='$manifest_head'" >&2
-      errors=$((errors + 1))
-    fi
-    if [[ "$entry_base" != "$manifest_base" ]]; then
-      echo "  FAIL: reviews[$i].base_commit='$entry_base' != provenance.base_commit='$manifest_base'" >&2
-      errors=$((errors + 1))
-    fi
-  done
-
-  # Also verify the self-reported flags are consistent (catch dishonest manifests)
-  head_check=$(jq -r '.validation.head_commit_alignment_check // empty' "$manifest_path" 2>/dev/null)
-  if [[ "$head_check" != "PASS" ]]; then
-    echo "  FAIL: validation.head_commit_alignment_check != PASS (got '$head_check')" >&2
-    errors=$((errors + 1))
-  fi
-  base_check=$(jq -r '.validation.base_commit_alignment_check // empty' "$manifest_path" 2>/dev/null)
-  if [[ "$base_check" != "PASS" ]]; then
-    echo "  FAIL: validation.base_commit_alignment_check != PASS (got '$base_check')" >&2
-    errors=$((errors + 1))
-  fi
-fi
-
-# Overall validation status must be PASS
-overall=$(jq -r '.validation.status // empty' "$manifest_path" 2>/dev/null)
-if [[ "$overall" != "PASS" ]]; then
-  echo "  FAIL: validation.status != PASS (got '$overall')" >&2
-  errors=$((errors + 1))
-fi
-
-if [[ "$errors" -gt 0 ]]; then
-  die "$gate_name: $errors semantic check(s) failed"
+echo "  Python validator status: $py_status" >&2
+if [[ "$py_status" != "PASS" ]]; then
+  echo "$py_output" >&2
+  die "$gate_name: Python validator returned $py_status"
 fi
 
 # ── All checks passed ────────────────────────────────────────────────

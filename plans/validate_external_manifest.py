@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """Validate R3/R7 external manifest JSON against v2 schemas.
 
-Usage:
+DEPRECATED: Use plans/validators/validate_external_manifest.py instead.
+This file is kept for backward compatibility and delegates to the new
+validator when invoked with the new CLI flags (--manifest).
+
+Legacy usage:
     validate_external_manifest.py <manifest.json> [--check-files]
+
+New usage:
+    plans/validators/validate_external_manifest.py --manifest <path> --format json --repo-root .
 
 Options:
     --check-files   Verify artifact_path files exist on disk and sha256 matches
