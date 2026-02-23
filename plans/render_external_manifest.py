@@ -35,6 +35,7 @@ def render(data: dict) -> str:
         "---",
         "provenance:",
         "  tool: script",
+        f"  schema_version: {sv}",
         "  model: n/a",
         "  prompt_style: none",
         f"  cycle: {cycle}",
