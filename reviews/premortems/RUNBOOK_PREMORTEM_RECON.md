@@ -466,8 +466,14 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 **Hard rule**: Cycle 2 (R7) cannot start unless `R5B_SELF_REVIEW_PROVEN` passes.
 
+**Agent parallelism**:
+
+| Agent count | Parallelism model | Rationale |
+|-------------|-------------------|-----------|
+| 6 (one per skill) | All 6 skills run in parallel; premortem walk (step 2) runs after all 6 complete | Each skill is independent and benefits from a fresh perspective. Parallel execution avoids context bleed between skills. |
+
 **Operator steps**:
-1. Run 6-skill stack on story-scope code (not just diff) — matches `/review-stack` (aka `/6`):
+1. Run 6-skill stack on story-scope code (not just diff) — matches `/review-stack` (aka `/6`), 6 agents in parallel:
    - `/pr-review`
    - `/failure-mode-review`
    - `/strategic-failure-review`
