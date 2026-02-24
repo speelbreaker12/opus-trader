@@ -412,6 +412,8 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 **Mode**: `WRITE_ALLOWED_GAP_REMEDIATION_ONLY`
 
+**Agent**: Any available agent (need not be the R1 author). The R5 agent is assumed to be a cold-start session with no prior context.
+
 **Inputs**: `GAP_LIST.json` / `GAP_LIST.md`, story code + tests, R1 evidence ledgers
 
 **Hard rules**:
@@ -423,12 +425,28 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 - Run tests before and after — no regressions
 
 **Operator steps**:
-1. Implement code/test/observability fixes for each gap
+
+*Step 0 — Context Build (cold-start, mandatory before any code changes):*
+1. Read the story entry in `plans/prd.json` (scope, ATs, enforcement points)
+2. Read the R1 evidence ledger: `reviews/reconciliations/${SLICE_ID}/${STORY_ID}_reconciliation.md`
+3. Read the gap list: `GAP_LIST.json` + `GAP_LIST.md` — understand each gap's AT, severity, and what's missing
+4. Read the premortem: `reviews/premortems/${STORY_ID}_premortem.md` (§4 decisions, §5 wrong-impl, §6 proof plan)
+5. Read the actual enforcement code and test files cited in the evidence ledger (verify citations are still accurate)
+
+*Step 1 — Remediation Plan (write before coding):*
+1. For each gap in `GAP_LIST.json`, draft: what file(s) to change, what test(s) to add/modify, which premortem §6 proof strategy applies
+2. Flag any gap where the fix approach is unclear or the evidence ledger citation is stale
+3. Write plan to `R5_REMEDIATION_PLAN.md` — one section per `GAP-*` ID with: gap description, planned change, target file:line, expected test assertion
+4. Verify plan scope: every planned change maps to a `GAP-*` ID, no unrelated work
+
+*Step 2 — Implement:*
+1. Implement code/test/observability fixes for each gap, following the plan
 2. Update evidence ledger rows: GAP → FIXED, add new file:line citations
 3. Generate proof graph: `python3 python/proof_graph/scaffold.py ${STORY_ID}`, populate from evidence ledger verdicts/citations, validate with `python3 python/proof_graph/validate.py --strict artifacts/story/${STORY_ID}/proof_graph.json`
 4. Run verification commands (at least `verify.sh quick` + targeted tests)
 
 **Output**:
+- `R5_REMEDIATION_PLAN.md` (written before coding — one section per gap with planned change, target file:line, expected assertion)
 - Code changes + updated evidence ledgers
 - `artifacts/story/${STORY_ID}/proof_graph.json` (machine-verifiable proof graph)
 - `R5_REMEDIATION_NOTES.md` (narrative: what was fixed, per gap)
