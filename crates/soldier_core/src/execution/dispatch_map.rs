@@ -77,10 +77,20 @@ pub enum DispatchMapError {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValidatedDispatch {
     /// The dispatch request to send to the venue.
-    pub request: DispatchRequest,
+    request: DispatchRequest,
     /// Risk state resulting from validation.
     /// `Healthy` when all checks pass.
-    pub risk_state: RiskState,
+    risk_state: RiskState,
+}
+
+impl ValidatedDispatch {
+    pub fn request(&self) -> &DispatchRequest {
+        &self.request
+    }
+
+    pub fn risk_state(&self) -> RiskState {
+        self.risk_state
+    }
 }
 
 /// Proof that AT-920 dispatch consistency was evaluated (or explicitly skipped).
@@ -102,9 +112,8 @@ pub struct DispatchConsistencyProof(bool);
 impl DispatchConsistencyProof {
     /// AT-920 validation was performed and passed.
     ///
-    /// Note: `ValidatedDispatch` currently has pub fields, so this is
-    /// forgeable by constructing a fake `ValidatedDispatch`. Acceptable
-    /// for mechanical guard; full fix in Slice 2 (make ValidatedDispatch opaque).
+    /// `ValidatedDispatch` has private fields, so this can only be obtained
+    /// from a real `validate_and_dispatch()` call.
     pub fn from_validated(_dispatch: &ValidatedDispatch) -> Self {
         Self(true)
     }

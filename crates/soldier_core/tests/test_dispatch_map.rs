@@ -303,8 +303,8 @@ fn test_at920_consistent_contracts_passes() {
         &mut metrics,
     );
     let validated = result.unwrap();
-    assert!((validated.request.amount - 3.0).abs() < 1e-9);
-    assert_eq!(validated.risk_state, RiskState::Healthy);
+    assert!((validated.request().amount - 3.0).abs() < 1e-9);
+    assert_eq!(validated.risk_state(), RiskState::Healthy);
     assert_eq!(metrics.reject_unit_mismatch_total(), 0);
 }
 

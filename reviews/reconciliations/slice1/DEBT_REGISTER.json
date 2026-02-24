@@ -138,19 +138,21 @@
       "owner": "TBD",
       "related_ats": ["AT-920"],
       "source_phase": "fresh-eyes-v3.1",
-      "status": "OPEN"
+      "status": "FIXED",
+      "resolution": "Added PricerInputMissing, PricerInputInvalid, GateCascadeSkip reject codes. Updated pipeline.rs, gate_outcome.rs, CONTRACT.md §2.2.6, manifest, tests."
     },
     {
       "id": "GAP-FE-002",
       "story_id": "cross-cutting",
       "type": "FRESH_EYES",
       "priority": "P2",
-      "description": "4 production unwrap() calls in pending_exposure.rs:451,545,629,667. Guarded by prior checks but violates CLAUDE.md non-negotiable no-unwrap policy.",
+      "description": "7 production unwrap() calls in pending_exposure.rs. Guarded by prior checks but violates CLAUDE.md non-negotiable no-unwrap policy.",
       "target_slice": "Slice 2",
       "owner": "TBD",
       "related_ats": [],
       "source_phase": "fresh-eyes-v3.1",
-      "status": "OPEN"
+      "status": "FIXED",
+      "resolution": "Replaced all 7 unwrap() calls with descriptive expect() messages including function name."
     },
     {
       "id": "GAP-FE-003",
@@ -163,7 +165,8 @@
       "related_ats": ["AT-920"],
       "source_phase": "fresh-eyes-v3.1",
       "extends_escalation": "DEBT-S1-007-01",
-      "status": "OPEN"
+      "status": "FIXED",
+      "resolution": "Gated all_passed() behind cfg(any(test, feature = \"test-helpers\")). Restricted new(pass) to pub(crate)."
     },
     {
       "id": "GAP-FE-004",
@@ -175,18 +178,34 @@
       "owner": "TBD",
       "related_ats": ["AT-920"],
       "source_phase": "fresh-eyes-v3.1",
-      "status": "OPEN"
+      "extends_escalation": "DEBT-S1-007-01",
+      "status": "MITIGATED",
+      "resolution": "Migrated pipeline.rs and open_runtime.rs to use build_order_intent_with_wal_gate() via PrecomputedWalGate shim. Shim wraps precomputed bool — real WAL gate injection tracked as DEBT-FE-004-WAL."
     },
     {
       "id": "GAP-FE-005",
       "story_id": "S1-007",
       "type": "FRESH_EYES",
       "priority": "P2",
-      "description": "ValidatedDispatch pub fields (dispatch_map.rs:78-84) make proof token forgeable. DEBT-S1-007-01 fix must also make token unforgeable (private fields + #[non_exhaustive]).",
+      "description": "ValidatedDispatch pub fields (dispatch_map.rs:78-84) make proof token forgeable. DEBT-S1-007-01 fix must also make token unforgeable.",
       "target_slice": "Slice 2",
       "owner": "TBD",
       "related_ats": ["AT-920"],
       "source_phase": "fresh-eyes-v3.1",
+      "extends_escalation": "DEBT-S1-007-01",
+      "status": "FIXED",
+      "resolution": "Made ValidatedDispatch fields private, added getter methods. Private fields prevent external construction (no #[non_exhaustive] needed)."
+    },
+    {
+      "id": "DEBT-FE-004-WAL",
+      "story_id": "S1-007",
+      "type": "DEBT",
+      "priority": "P2",
+      "description": "Replace PrecomputedWalGate migration shim with real WAL gate injection. PrecomputedWalGate wraps a precomputed bool — the exact pattern the WAL gate API was designed to eliminate.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "fresh-eyes-fix",
       "extends_escalation": "DEBT-S1-007-01",
       "status": "OPEN"
     }

@@ -2744,6 +2744,13 @@ Profile: CSP
 - `ExpectedSlippageTooHigh`
 - `NetEdgeTooLow`
 - `NetEdgeInputMissing`
+- `PricerInputMissing`
+- `PricerInputInvalid`
+- `GateCascadeSkip`
+- `InsufficientDepthWithinBudget`
+- `FeeCacheStale`
+- `RecordedBeforeDispatchFailed`
+- `AssemblyFailed`
 - `InventorySkew`
 - `InventorySkewDeltaLimitMissing`
 - `PendingExposureBudgetExceeded`

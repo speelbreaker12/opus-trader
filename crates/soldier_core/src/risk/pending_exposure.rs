@@ -448,7 +448,7 @@ impl PendingExposureBook {
         }
 
         // 3. Per-instrument limit check.
-        let book = inner.instruments.get(instrument_id).unwrap(); // safe: checked above
+        let book = inner.instruments.get(instrument_id).expect("reserve: instrument verified present in contains_key check");
         let Some(limit) = normalized_limit(book.delta_limit) else {
             metrics.record_reserve_reject();
             bump_pending_exposure_reject(PendingExposureRejectReason::PendingExposureBudgetExceeded);
@@ -542,7 +542,7 @@ impl PendingExposureBook {
             snap_to_zero(inner.global_total - old_global_delta + delta_impact_est);
 
         // Atomic assignment block — per-instrument.
-        let book = inner.instruments.get_mut(instrument_id).unwrap(); // safe: checked above
+        let book = inner.instruments.get_mut(instrument_id).expect("reserve: instrument verified present in contains_key check");
         book.pending_positive = new_positive;
         book.pending_negative = new_negative;
         book.pending_total = new_total;
@@ -563,7 +563,7 @@ impl PendingExposureBook {
 
         #[cfg(debug_assertions)]
         {
-            let book = inner.instruments.get(instrument_id).unwrap();
+            let book = inner.instruments.get(instrument_id).expect("reserve: instrument verified present in contains_key check");
             assert_invariants(book);
             assert_global_consistency(&inner);
         }
@@ -626,7 +626,7 @@ impl PendingExposureBook {
 
         // Check reservation exists before mutating anything.
         let delta_impact_est = {
-            let book = inner.instruments.get(&canonical_instrument).unwrap();
+            let book = inner.instruments.get(&canonical_instrument).expect("settle: canonical_instrument verified present in contains_key check");
             match book.reservations.get(reservation_id).copied() {
                 Some(d) => d,
                 None => {
@@ -644,7 +644,7 @@ impl PendingExposureBook {
         // Compute final values from current state (read-only access).
         let old_global_total = inner.global_total;
         let (new_positive, new_negative, new_total) = {
-            let book = inner.instruments.get(&canonical_instrument).unwrap();
+            let book = inner.instruments.get(&canonical_instrument).expect("settle: canonical_instrument verified present in contains_key check");
             let pos = if delta_impact_est >= 0.0 {
                 book.pending_positive - delta_impact_est
             } else {
@@ -664,7 +664,7 @@ impl PendingExposureBook {
 
         // Atomic assignment block — all mutations at once.
         {
-            let book = inner.instruments.get_mut(&canonical_instrument).unwrap();
+            let book = inner.instruments.get_mut(&canonical_instrument).expect("settle: canonical_instrument verified present in contains_key check");
             book.reservations.remove(reservation_id);
             book.pending_positive = new_positive;
             book.pending_negative = new_negative;
@@ -677,7 +677,7 @@ impl PendingExposureBook {
 
         #[cfg(debug_assertions)]
         {
-            let book = inner.instruments.get(&canonical_instrument).unwrap();
+            let book = inner.instruments.get(&canonical_instrument).expect("settle: canonical_instrument verified present in contains_key check");
             assert_invariants(book);
             assert_global_consistency(&inner);
         }

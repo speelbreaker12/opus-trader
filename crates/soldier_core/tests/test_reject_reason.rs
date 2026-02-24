@@ -125,6 +125,13 @@ fn test_registry_contains_contract_minimum_set() {
         "ExpectedSlippageTooHigh",
         "NetEdgeTooLow",
         "NetEdgeInputMissing",
+        "PricerInputMissing",
+        "PricerInputInvalid",
+        "GateCascadeSkip",
+        "InsufficientDepthWithinBudget",
+        "FeeCacheStale",
+        "RecordedBeforeDispatchFailed",
+        "AssemblyFailed",
         "InventorySkew",
         "InventorySkewDeltaLimitMissing",
         "PendingExposureBudgetExceeded",
@@ -135,8 +142,6 @@ fn test_registry_contains_contract_minimum_set() {
         "OrderTypeStopForbidden",
         "LinkedOrderTypeForbidden",
         "PostOnlyWouldCross",
-        "FeeCacheStale",
-        "RecordedBeforeDispatchFailed",
         "RiskIncreasingCancelReplaceForbidden",
         "RateLimitBrownout",
         "InstrumentExpiredOrDelisted",
@@ -170,6 +175,9 @@ fn test_registry_contains_all_enum_variants() {
         RejectReasonCode::RecordedBeforeDispatchFailed,
         RejectReasonCode::NetEdgeTooLow,
         RejectReasonCode::NetEdgeInputMissing,
+        RejectReasonCode::PricerInputMissing,
+        RejectReasonCode::PricerInputInvalid,
+        RejectReasonCode::GateCascadeSkip,
         RejectReasonCode::InventorySkew,
         RejectReasonCode::InventorySkewDeltaLimitMissing,
         RejectReasonCode::PendingExposureBudgetExceeded,
@@ -223,6 +231,23 @@ fn test_reject_reason_serde_round_trip() {
     let deserialized2: RejectReasonCode =
         serde_json::from_str(&json2).expect("deserialization failed");
     assert_eq!(deserialized2, code2);
+}
+
+/// GAP-FE-001: Serde round-trip for the 3 new reject reason codes.
+#[test]
+fn test_reject_reason_serde_round_trip_fe001_codes() {
+    let cases = [
+        (RejectReasonCode::PricerInputMissing, r#""PRICER_INPUT_MISSING""#),
+        (RejectReasonCode::PricerInputInvalid, r#""PRICER_INPUT_INVALID""#),
+        (RejectReasonCode::GateCascadeSkip, r#""GATE_CASCADE_SKIP""#),
+    ];
+    for (code, expected_json) in cases {
+        let json = serde_json::to_string(&code).expect("serialization failed");
+        assert_eq!(json, expected_json, "serde output mismatch for {code:?}");
+        let deserialized: RejectReasonCode =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(deserialized, code, "round-trip mismatch for {code:?}");
+    }
 }
 
 /// AT-201: unknown external actions MUST be classified as Open at the intake boundary.
@@ -289,6 +314,9 @@ fn test_as_str_matches_serde_output_for_all_variants() {
         RejectReasonCode::RecordedBeforeDispatchFailed,
         RejectReasonCode::NetEdgeTooLow,
         RejectReasonCode::NetEdgeInputMissing,
+        RejectReasonCode::PricerInputMissing,
+        RejectReasonCode::PricerInputInvalid,
+        RejectReasonCode::GateCascadeSkip,
         RejectReasonCode::InventorySkew,
         RejectReasonCode::InventorySkewDeltaLimitMissing,
         RejectReasonCode::PendingExposureBudgetExceeded,
@@ -304,6 +332,7 @@ fn test_as_str_matches_serde_output_for_all_variants() {
         RejectReasonCode::InstrumentExpiredOrDelisted,
         RejectReasonCode::FeedbackLoopGuardActive,
         RejectReasonCode::LabelTooLong,
+        RejectReasonCode::AssemblyFailed,
     ];
 
     for code in &all_variants {

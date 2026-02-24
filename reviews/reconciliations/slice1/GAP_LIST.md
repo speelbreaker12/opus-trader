@@ -373,6 +373,16 @@ Test baseline: 890 → 897 (+7 new tests, 0 regressions).
 - **Owner**: TBD (Slice 2, alongside DEBT-S1-007-01 resolution)
 - **Source**: Fresh-eyes audit (v3.1 cycle)
 
+### Fresh-Eyes Audit: Remediation (fix/fresh-eyes-audit-gaps)
+
+| Gap ID | Priority | Type | Status |
+|--------|----------|------|--------|
+| GAP-FE-001 | P1 | CODE_FIX | **FIXED** — Added PricerInputMissing, PricerInputInvalid, GateCascadeSkip reject codes. Updated pipeline.rs, gate_outcome.rs, CONTRACT.md §2.2.6, manifest, tests (incl. pipeline causality tests). Also fixed pre-existing drift: added AssemblyFailed and InsufficientDepthWithinBudget to contract + manifest. |
+| GAP-FE-002 | P2 | CODE_FIX | **FIXED** — Replaced all 7 bare unwrap() calls in pending_exposure.rs with descriptive expect() messages including function name. Removed `// safe: checked above` comments. |
+| GAP-FE-003 | P2 | DESIGN_RISK | **FIXED** — Gated `all_passed()` behind `#[cfg(any(test, feature = "test-helpers"))]`. Restricted `new(pass: bool)` to `pub(crate)`. Production code cannot construct bypass GateResults. |
+| GAP-FE-004 | P2 | CODE_FIX | **MITIGATED** — Migrated pipeline.rs and open_runtime.rs to `build_order_intent_with_wal_gate()` via `PrecomputedWalGate` shim. Shim wraps precomputed bool (migration step, not full fix). New debt: DEBT-FE-004-WAL for real WAL gate injection. |
+| GAP-FE-005 | P2 | DESIGN_RISK | **FIXED** — Made ValidatedDispatch fields private, added getter methods. Private fields prevent external construction without `validate_and_dispatch()`. |
+
 ### Fresh-Eyes Audit: Dependency Graph
 
 ```

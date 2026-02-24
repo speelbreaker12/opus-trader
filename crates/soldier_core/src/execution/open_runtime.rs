@@ -13,14 +13,15 @@ use crate::risk::{
 
 use super::DispatchConsistencyProof;
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
+#[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+use super::build_order_intent::PrecomputedWalGate;
 use super::intent_assembly::{SizingParams, assemble_sizing};
-#[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     IntentClass, InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason,
     InventorySkewResult, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
     MismatchMetrics, NetEdgeInput, NetEdgeMetrics, NetEdgeResult, PricerInput, PricerMetrics,
-    PricerResult, Tlsm, build_gate_results, build_order_intent, compute_limit_price,
+    PricerResult, Tlsm, build_gate_results, build_order_intent_with_wal_gate, compute_limit_price,
     evaluate_inventory_skew, evaluate_liquidity_gate, evaluate_net_edge,
 };
 use crate::venue::types::InstrumentKindInput;
@@ -274,13 +275,16 @@ pub fn build_open_order_intent_runtime(
     }
 
     gate_results.max_dispatch_qty = max_dispatch_qty;
-    // TODO: migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
-    #[allow(deprecated)]
-    let mut choke_result = build_order_intent(
+    #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+    let mut wal_gate = PrecomputedWalGate {
+        recorded: gate_results.wal_recorded,
+    };
+    let mut choke_result = build_order_intent_with_wal_gate(
         ChokeIntentClass::Open,
         effective_risk_state,
         choke_metrics,
         &gate_results,
+        &mut wal_gate,
     );
     if let Some(override_reason) = liquidity_override_reason {
         choke_result = match choke_result {
