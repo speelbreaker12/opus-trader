@@ -119,7 +119,42 @@ else
   stoplight_is_red=true
 fi
 
-# ---- Check 4: AT ownership conflicts ----
+# ---- Check 4: YELLOW gap disposition ----
+# POLICY §3.2 check 4: If STOPLIGHT is YELLOW, every gap must be marked DEFERRED or FIX IN STEP 5
+yellow_gaps_ok=true
+if [[ "$premortem_exists" == "true" && "$stoplight" == "YELLOW" ]]; then
+  # Extract §10 content (between "## 10)" and EOF or next "## ")
+  s10_content="$(sed -n '/^## 10)/,/^## [0-9]/{/^## [0-9]/!p;}' "$PREMORTEM_PATH" 2>/dev/null || true)"
+  if [[ -z "$s10_content" ]]; then
+    # Also try to end of file if §10 is last section
+    s10_content="$(sed -n '/^## 10)/,$p' "$PREMORTEM_PATH" 2>/dev/null || true)"
+  fi
+
+  # Look for gap/concern lines that are NOT marked DEFERRED or FIX IN STEP 5
+  # Gap items typically appear as bullet points or table rows in §10
+  unresolved_yellow_gaps=0
+  while IFS= read -r line; do
+    # Skip empty lines, headers, and the STOPLIGHT line itself
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^## ]] && continue
+    [[ "$line" =~ STOPLIGHT ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+
+    # Check bullet/list items that look like gaps/concerns
+    if echo "$line" | grep -qiE '(gap|concern|risk|blocker|assumption|debt|open)' 2>/dev/null; then
+      if ! echo "$line" | grep -qiE '(DEFERRED|FIX IN STEP 5|resolved|closed|mitigated)' 2>/dev/null; then
+        unresolved_yellow_gaps=$((unresolved_yellow_gaps + 1))
+      fi
+    fi
+  done <<< "$s10_content"
+
+  if [[ $unresolved_yellow_gaps -gt 0 ]]; then
+    yellow_gaps_ok=false
+    reasons+=("STOPLIGHT is YELLOW with $unresolved_yellow_gaps unresolved gap(s) not marked DEFERRED or FIX IN STEP 5")
+  fi
+fi
+
+# ---- Check 5: AT ownership conflicts ----
 ownership_conflicts=0
 ownership_conflict_details=()
 if [[ "$premortem_exists" == "true" ]]; then
@@ -135,10 +170,9 @@ if [[ "$premortem_exists" == "true" ]]; then
 
   # Check each AT against other premortems
   # Build structured conflict details: {at_id, claiming_stories[]}
-  declare -A at_claimants
   if [[ ${#my_ats[@]} -gt 0 ]]; then
     for at_id in "${my_ats[@]}"; do
-      at_claimants["$at_id"]="$story_id"
+      claimants="$story_id"
       for other_pm in reviews/premortems/*_premortem.md; do
         [[ "$other_pm" == "$PREMORTEM_PATH" ]] && continue
         [[ -f "$other_pm" ]] || continue
@@ -147,7 +181,7 @@ if [[ "$premortem_exists" == "true" ]]; then
 
         if echo "$other_s1" | grep -E '^\|' | grep -qF "$at_id" 2>/dev/null; then
           other_story="$(basename "$other_pm" _premortem.md)"
-          at_claimants["$at_id"]="${at_claimants[$at_id]},$other_story"
+          claimants="${claimants},$other_story"
         fi
       done
     done
@@ -205,6 +239,33 @@ if [[ "$premortem_exists" == "true" ]]; then
   fi
 fi
 
+# ---- Check 6: Required context files exist ----
+context_files_ok=true
+if [[ ! -f "specs/CONTRACT.md" ]]; then
+  context_files_ok=false
+  reasons+=("required context file missing: specs/CONTRACT.md")
+fi
+if [[ ! -f "plans/prd.json" ]]; then
+  context_files_ok=false
+  reasons+=("required context file missing: plans/prd.json")
+fi
+# Check story exists in prd.json
+if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
+  prd_entry="$(jq -e --arg sid "$story_id" '.items[] | select(.id == $sid)' plans/prd.json 2>/dev/null || true)"
+  if [[ -z "$prd_entry" ]]; then
+    context_files_ok=false
+    reasons+=("story $story_id not found in plans/prd.json")
+  else
+    # Check scope.touch files exist
+    while IFS= read -r touch_file; do
+      if [[ -n "$touch_file" && ! -f "$touch_file" ]]; then
+        context_files_ok=false
+        reasons+=("scope.touch file missing: $touch_file")
+      fi
+    done < <(echo "$prd_entry" | jq -r '.scope.touch[]? // empty' 2>/dev/null)
+  fi
+fi
+
 # ---- Determine ready status ----
 ready=true
 if [[ ${#reasons[@]} -gt 0 ]]; then
@@ -258,6 +319,8 @@ if [[ "$json_mode" == "true" ]]; then
       --argjson premortem_exists "$premortem_exists" \
       --arg stoplight "$stoplight" \
       --argjson stoplight_is_red "$stoplight_is_red" \
+      --argjson yellow_gaps_ok "$yellow_gaps_ok" \
+      --argjson context_files_ok "$context_files_ok" \
       --argjson ownership_conflicts "$ownership_conflicts" \
       --argjson ownership_conflict_details "$conflict_json" \
       --argjson s0 "$s0" \
@@ -282,6 +345,8 @@ if [[ "$json_mode" == "true" ]]; then
         premortem_exists: $premortem_exists,
         stoplight: $stoplight,
         stoplight_is_red: $stoplight_is_red,
+        yellow_gaps_ok: $yellow_gaps_ok,
+        context_files_ok: $context_files_ok,
         ownership_conflicts: $ownership_conflicts,
         ownership_conflict_details: $ownership_conflict_details,
         sections_present: {
@@ -302,6 +367,8 @@ if [[ "$json_mode" == "true" ]]; then
     printf '  "premortem_exists": %s,\n' "$premortem_exists"
     printf '  "stoplight": "%s",\n' "$stoplight"
     printf '  "stoplight_is_red": %s,\n' "$stoplight_is_red"
+    printf '  "yellow_gaps_ok": %s,\n' "$yellow_gaps_ok"
+    printf '  "context_files_ok": %s,\n' "$context_files_ok"
     printf '  "ownership_conflicts": %d,\n' "$ownership_conflicts"
     printf '  "ownership_conflict_details": %s,\n' "$conflict_json"
     printf '  "sections_present": {\n'

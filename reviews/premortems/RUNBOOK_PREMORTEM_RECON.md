@@ -38,21 +38,18 @@ If any required artifact is missing: **STOP. Emit `MISSING_ARTIFACT`. Do not con
 
 **Command**: `plans/premortem_ready.sh ${STORY_ID}`
 
-Checks:
-1. Premortem file exists
-2. STOPLIGHT != RED
-3. No AT ownership conflicts (no AT claimed as primary by 2+ stories)
-4. All sections §0-§10 present (delegates to `premortem_gate.sh`)
+Six checks, evaluated in order:
+
+| # | Check | Failure | Exit |
+|---|-------|---------|------|
+| 1 | Premortem file exists | `NO-GO: PREMORTEM_MISSING` | Stop — write premortem first (Mode A). No surrogate path. |
+| 2 | All sections §0-§10 present | `NO-GO: SECTIONS_MISSING` (delegates to `premortem_gate.sh`) | Stop |
+| 3 | STOPLIGHT != RED | `NO-GO: STOPLIGHT_RED` | Stop |
+| 4 | If STOPLIGHT is YELLOW: every gap marked DEFERRED or FIX IN STEP 5 | `NO-GO: UNRESOLVED_YELLOW_GAPS` | Stop |
+| 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
+| 6 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT` | Stop (also enforced by §1.1) |
 
 **Exit 0** = proceed. **Exit 1** = blocked (fix premortem first).
-
-### 1.3 STOPLIGHT Gate (Mode B)
-
-| STOPLIGHT | Action |
-|-----------|--------|
-| RED | **STOP** — fix premortem first |
-| YELLOW | Continue; carry all deferred items into gap list |
-| GREEN | Continue |
 
 ---
 
@@ -157,7 +154,7 @@ Checks:
 | `implement` | R5 | A |
 | `self_review` | R5b | B |
 | `cycle1` | R2 + R3 (R3A + R3B) + R4 + R4b | B |
-| `fix` | R7a-R7c fixes | C |
+| `fix` | R7a + R7b + R7c (reviews) → R7c-fix (apply findings) | C |
 | `cycle2` | R7d (R7d.1 + R7d.2) + R7e + R7f | C |
 | `resolution` | R6 | D |
 | `verify_full` | `verify.sh full` | D |
@@ -470,26 +467,28 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 **Hard rule**: Cycle 2 (R7) cannot start unless `R5B_SELF_REVIEW_PROVEN` passes.
 
 **Operator steps**:
-1. Run 5-skill stack on story-scope code (not just diff):
+1. Run 6-skill stack on story-scope code (not just diff) — matches `/review-stack` (aka `/6`):
    - `/pr-review`
    - `/failure-mode-review`
    - `/strategic-failure-review`
    - `/contract-review`
+   - `/validator-audit`
    - `/devils-advocate`
 2. Walk premortem: §2 assumptions → §4 decisions → §5 wrong impls → §6 proof plan → §10 STOPLIGHT
 3. Fix all P0/P1 blockers immediately
 4. Re-run affected skill(s) after fixes
 5. Emit gate artifact with `head_commit` validation
-6. Produce 5 skill receipts in `reviews/reconciliations/<slice>/receipts/`
+6. Produce 6 skill receipts in `reviews/reconciliations/<slice>/receipts/`
 
 **Output**:
 - `SELF_REVIEW_R5b.md` (narrative)
 - `R5B_SELF_REVIEW_GATE.json` (sidecar schema: `specs/schemas/recon/self_review_sidecar.schema.json`)
-- 5 skill receipt JSONs in `receipts/`:
+- 6 skill receipt JSONs in `receipts/`:
   - `r5b_pr_review.json`
   - `r5b_failure_mode_review.json`
   - `r5b_strategic_review.json`
   - `r5b_contract_review.json`
+  - `r5b_validator_audit.json`
   - `r5b_devils_advocate.json`
 **Receipt**: `plans/wf_step.sh ${STORY_ID} self_review`
 
@@ -497,7 +496,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 | Gate ID | Check |
 |---------|-------|
-| `R5B_SELF_REVIEW_PROVEN` | All 5 receipt files exist; `head_commit` in each == current HEAD; `started_at`/`ended_at` timestamps plausible; `exit_status == "completed"` for all; all `artifact_paths[]` exist on disk |
+| `R5B_SELF_REVIEW_PROVEN` | All 6 receipt files exist; `head_commit` in each == current HEAD; `started_at`/`ended_at` timestamps plausible; `exit_status == "completed"` for all; all `artifact_paths[]` exist on disk |
 
 **On failure**: block with `SELF_REVIEW_UNPROVEN:<reason>` — no Cycle 2 start.
 
@@ -520,10 +519,18 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 8. Verify R5b receipts (hard gate)
 9. Confirm evidence ledgers updated with FIXED citations
 10. Assign story verdict: RECONCILED | RECONCILED-WITH-DEBT | RECONCILED_UNIT_ONLY | NOT RECONCILED
+11. Write postmortem (conditionally required — see below):
+    - **Required when**: STOPLIGHT is YELLOW or RED, OR story touches gates, TradingMode, RiskState, WAL, or replay
+    - Use template: `plans/postmortem_template.md`
+    - Save to: `artifacts/story/${STORY_ID}/postmortem.md`
+    - Fill all 9 sections (§1 constraint in one sentence, §5 wrong impl, §6 rule updates, §8 next-story note, §9 checklist)
+    - Validate: `plans/postmortem_gate.sh ${STORY_ID}`
+    - If postmortem is not required for this story, record: `POSTMORTEM_EXEMPT: <reason>` in R6 summary
 
 **Output**:
 - `R6_VERIFY_SUMMARY.md` (narrative)
 - `R6_VERIFY_SUMMARY.json` (schema: `specs/schemas/recon/verify_result.schema.json`) — JSON-primary (gate artifact)
+- `artifacts/story/${STORY_ID}/postmortem.md` (when required by step 11)
 **Receipt**: `plans/wf_step.sh ${STORY_ID} resolution`
 
 **Gate checks (hard, pass-flip relevant)**:
@@ -534,6 +541,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 | `R6_RUNTIME_ENFORCEMENT_GATE` | Every safety-critical AT is PROVEN-INTEGRATED; PROVEN-UNIT on safety-critical AT blocks pass |
 | `R6_MECHANICAL_GATES` | Workflow receipts present; `verify.sh` passed; `contract_review.json` decision == "PASS"; `loss_mode` populated; R5b receipts verified |
 | `R6_PROOF_GRAPH_GATE` | `proof_graph.json` exists; `validate.py --strict` passes; exemptions only via `proof_graph_exempt.txt` |
+| `R6_POSTMORTEM_GATE` | If postmortem required: `postmortem_gate.sh` exits 0. If exempt: `POSTMORTEM_EXEMPT` recorded in R6 summary with reason. |
 
 ---
 
@@ -544,7 +552,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 **Hard rule**: Cycle 2 cannot start unless `R5B_SELF_REVIEW_PROVEN` passed.
 
-**Execution order**: R7a, R7b, R7c may run in parallel → apply fixes → R7d.1 + R7d.2 + R7e → R7f runs last.
+**Execution order**: R7a, R7b, R7c may run in parallel → R7c-fix (apply findings) → R7d.1 + R7d.2 + R7e → R7f runs last.
 
 #### R7a — Contract Review (R5/R7 diff)
 
@@ -590,6 +598,53 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 |---------|-------|
 | `R7C_WIRING_CLASSIFICATION_COMPLETE` | Every safety-critical AT classified |
 | `R7C_NO_UNCLASSIFIED_SAFETY_AT` | Missing classification blocks phase close |
+
+#### R7c-fix — Apply R7a-R7c Findings (Code Changes)
+
+**Mode**: `WRITE_ALLOWED_REVIEW_FIX_ONLY`
+
+**Agent**: Any available agent (need not be the R7a-c reviewer). The R7c-fix agent is assumed to be a cold-start session with no prior context.
+
+**Inputs**: R7A/R7B/R7C findings, R5 remediation notes, gap list, evidence ledgers, premortem
+
+**Hard rules**:
+- Fix only findings from R7a, R7b, R7c — no unrelated refactors
+- Every change must trace to a specific R7a/R7b/R7c finding
+- Run tests before and after — no regressions
+- No `unwrap()` introduced in production paths
+
+**Operator steps**:
+
+*Step 0 — Context Build (cold-start, mandatory before any code changes):*
+1. Read the story entry in `plans/prd.json` (scope, ATs, enforcement points)
+2. Read R7A, R7B, R7C artifacts — understand each finding's severity, AT, and what needs fixing
+3. Read the R5 remediation notes — understand what was already fixed
+4. Read the premortem: `reviews/premortems/${STORY_ID}_premortem.md` (§4 decisions, §5 wrong-impl)
+5. Read the actual enforcement code and test files cited in findings (verify citations are still accurate)
+
+*Step 1 — Fix Plan (write before coding):*
+1. For each R7a/R7b/R7c finding that requires a code change, draft: what file(s) to change, what test(s) to add/modify
+2. Flag any finding where the fix approach is unclear or the citation is stale
+3. Write plan to `R7C_FIX_PLAN.md` — one section per finding with: finding ID, planned change, target file:line, expected test assertion
+4. Verify plan scope: every planned change maps to an R7a/R7b/R7c finding, no unrelated work
+
+*Step 2 — Implement:*
+1. Implement code/test fixes for each finding, following the plan
+2. Run verification commands (at least `verify.sh quick` + targeted tests)
+
+**Output**:
+- `R7C_FIX_PLAN.md` (written before coding)
+- Code changes
+- `R7C_FIX_NOTES.md` (narrative: what was fixed, per finding)
+
+**Gate checks**:
+
+| Gate ID | Check |
+|---------|-------|
+| `R7C_FIX_ONLY_FINDING_FILES_CHANGED` | Diff scope matches declared fixes (no unrelated changes) |
+| `R7C_FIX_NO_UNWRAP_IN_PROD` | `rg 'unwrap()'` on touched production files returns 0 new hits |
+
+---
 
 #### R7d — External Review Cycle 2 + Code Review Expert
 
@@ -718,6 +773,8 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 | `R7C_NO_UNCLASSIFIED_SAFETY_AT` | R7c |
 | `R7D_EXTERNAL_C2_COMPLETE` | R7d.1 |
 | `R7D_CODE_REVIEW_EXPERT_COMPLETE` | R7d.2 |
+| `R7C_FIX_ONLY_FINDING_FILES_CHANGED` | R7c-fix |
+| `R7C_FIX_NO_UNWRAP_IN_PROD` | R7c-fix |
 | `R7D_BLOCKERS_RESOLVED` | R7d |
 | `R7E_MUTATION_ANALYSIS_COMPLETE` | R7e |
 | `R7E_SIMPLER_THAN_CORRECT_GATE` | R7e |
@@ -751,6 +808,7 @@ A story is pass-eligible only if ALL conditions are met:
 | Loss mode | `worst_case`, `fail_closed_cap`, `drift_metric` all populated |
 | Proof graph | `proof_graph.json` validates with `validate.py --strict` (or story in exempt list) |
 | Fail-closed | `fail_closed_coverage.sh` passes (test counts + patterns) |
+| Postmortem | If required: `postmortem_gate.sh` passes. If exempt: `POSTMORTEM_EXEMPT` in R6 summary. |
 | R7 exit | All R7 exit conditions met |
 
 If any condition fails: **`prd_set_pass.sh` is blocked.**
@@ -821,6 +879,7 @@ reviews/reconciliations/<SLICE_ID>/
   DEBT_REGISTER.json
 
   # ── R5: Remediation ──
+  R5_REMEDIATION_PLAN.md                      # written before coding (one section per gap)
   R5_REMEDIATION_NOTES.md
   R5_REMEDIATION_NOTES.json                   # sidecar (gap_id mappings, touched files)
 
@@ -832,6 +891,7 @@ reviews/reconciliations/<SLICE_ID>/
     r5b_failure_mode_review.json
     r5b_strategic_review.json
     r5b_contract_review.json
+    r5b_validator_audit.json
     r5b_devils_advocate.json
 
   # ── R6: Verify ──
@@ -845,6 +905,8 @@ reviews/reconciliations/<SLICE_ID>/
   R7B_STRATEGIC_REVIEW.json                   # sidecar
   R7C_WIRING_AUDIT.md
   R7C_WIRING_AUDIT.json
+  R7C_FIX_PLAN.md                            # written before coding (one section per finding)
+  R7C_FIX_NOTES.md                           # narrative: what was fixed, per finding
   R7D_CODE_REVIEW_EXPERT.md
   R7D_CODE_REVIEW_EXPERT.json                 # sidecar
   R7E_DEVILS_ADVOCATE.md
@@ -872,6 +934,7 @@ reviews/reconciliations/<SLICE_ID>/
 
 artifacts/story/<STORY_ID>/
   proof_graph.json
+  postmortem.md                              # conditionally required (R6 step 11)
 
 plans/prompts/
   slice_reconcile_implement.md                # derived copy of Appendix A
@@ -981,16 +1044,19 @@ Validators reject if: `head_commit` mismatch, `markdown_sha256` drift, unsupport
 | R3B | `<tool>.<style>.md` | Markdown (external review) | `review_receipt.schema.json` |
 | R4 | `GAP_LIST` | JSON-primary + .md companion | `gap_list.schema.json` |
 | R4b | `R4B_EXTERNAL_MAPPING` | JSON-primary + rendered .md | `phase_mapping.schema.json` |
+| R5 | `R5_REMEDIATION_PLAN` | Markdown | — |
 | R5 | `R5_REMEDIATION_NOTES` | Markdown + sidecar | — |
 | R5b | `SELF_REVIEW_R5b` / `R5B_SELF_REVIEW_GATE` | Markdown + sidecar | `self_review_sidecar.schema.json` |
 | R6 | `R6_VERIFY_SUMMARY` | JSON-primary + .md companion | `verify_result.schema.json` |
 | R7a | `R7A_CONTRACT_REVIEW` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
 | R7b | `R7B_STRATEGIC_REVIEW` | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
 | R7c | `R7C_WIRING_AUDIT` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
+| R7c-fix | `R7C_FIX_PLAN` / `R7C_FIX_NOTES` | Markdown | — |
 | R7d.1 | `R7_EXTERNAL_MANIFEST` | JSON-primary + rendered .md | `r7_external_manifest.schema.json` |
 | R7d.2 | `R7D_CODE_REVIEW_EXPERT` | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
 | R7e | `R7E_DEVILS_ADVOCATE` / `R7E_MUTATION_RESULTS` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
 | R7f | `R7F_DEBT_REGISTER_VALIDATION` | Markdown + JSON | — |
+| R6 | `postmortem.md` (in `artifacts/story/`) | Markdown | validated by `postmortem_gate.sh` |
 | Gate | premortem ready | JSON-primary | `premortem_ready.schema.json` |
 
 **Rule**: If the artifact directly controls a gate or pass-flip → JSON-primary. If it primarily supports human reasoning → markdown + JSON sidecar. Every phase produces both `.md` and `.json`.
@@ -1052,6 +1118,7 @@ Full definitions and escalation rules in [POLICY](PREMORTEM_RECON_POLICY.md).
 | `R6_RUNTIME_ENFORCEMENT_GATE` | R6 | Yes |
 | `R6_MECHANICAL_GATES` | R6 | Yes |
 | `R6_PROOF_GRAPH_GATE` | R6 | Yes |
+| `R6_POSTMORTEM_GATE` | R6 | Yes (conditional) |
 | `R7A_CONTRACT_REVIEW_COMPLETE` | R7a | Yes |
 | `R7A_DECISION_PASS_REQUIRED` | R7a | Yes |
 | `R7B_STRATEGIC_REVIEW_COMPLETE` | R7b | Yes |
@@ -1059,6 +1126,8 @@ Full definitions and escalation rules in [POLICY](PREMORTEM_RECON_POLICY.md).
 | `R7C_NO_UNCLASSIFIED_SAFETY_AT` | R7c | Yes |
 | `R7D_EXTERNAL_C2_COMPLETE` | R7d.1 | Yes |
 | `R7D_CODE_REVIEW_EXPERT_COMPLETE` | R7d.2 | Yes |
+| `R7C_FIX_ONLY_FINDING_FILES_CHANGED` | R7c-fix | Yes |
+| `R7C_FIX_NO_UNWRAP_IN_PROD` | R7c-fix | Yes |
 | `R7D_BLOCKERS_RESOLVED` | R7d | Yes |
 | `R7E_MUTATION_ANALYSIS_COMPLETE` | R7e | Yes |
 | `R7E_SIMPLER_THAN_CORRECT_GATE` | R7e | Yes |

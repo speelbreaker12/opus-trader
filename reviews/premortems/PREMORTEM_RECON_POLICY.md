@@ -107,16 +107,20 @@ If both the premortem and the recon preflight have a STOPLIGHT, the more restric
 
 ### 3.2 PREMORTEM_READY Gate
 
-Four checks, evaluated in priority order:
+**Command**: `plans/premortem_ready.sh ${STORY_ID}` — mechanical enforcement of all six checks.
+
+Six checks, evaluated in order:
 
 | # | Check | Failure | Exit |
 |---|-------|---------|------|
-| 1 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT: <filename>` | Stop |
-| 2 | Premortem exists | If absent: use recon preflight as surrogate (`PREMORTEM_ABSENT`). Skip sections 2/4/5 checks. Mark safety-critical stories for retro-premortem. | Continue (narrowed audit) |
+| 1 | Premortem file exists | `NO-GO: PREMORTEM_MISSING`. Write premortem first (Mode A). No surrogate path. | Stop |
+| 2 | All sections §0-§10 present | `NO-GO: SECTIONS_MISSING` (delegates to `premortem_gate.sh`) | Stop |
 | 3 | STOPLIGHT is not RED | `NO-GO: STOPLIGHT_RED` | Stop |
 | 4 | If STOPLIGHT is YELLOW: every gap marked DEFERRED or FIX IN STEP 5 | `NO-GO: UNRESOLVED_YELLOW_GAPS` | Stop |
+| 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
+| 6 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT: <filename>` | Stop |
 
-**Rule priority**: MISSING_ARTIFACT (items 4-7 of READ FIRST) fires first regardless of premortem status. If both premortem AND required context files are missing, MISSING_ARTIFACT takes precedence.
+All six are hard stops. If any check fails, reconciliation cannot proceed.
 
 ### 3.3 Review Basis Line (Hard Rule)
 

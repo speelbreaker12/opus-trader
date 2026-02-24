@@ -134,20 +134,16 @@ it for additional context. If it does not exist and the premortem does, proceed 
 **Item 3 (prior postmortems) is OPTIONAL.** If no postmortem exists for this story, proceed
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.
 
-**PREMORTEM FALLBACK RULE** (item 1 only): If `reviews/premortems/${STORY_ID}_premortem.md` does not exist:
-- Use the Step 1 recon preflight artifact as the **surrogate premortem**. It contains the
-  contract-to-AT-to-test proof audit, which covers the core reconciliation checks (§1 clause audit,
-  §6 proof plan equivalents).
-- Skip premortem-specific checks (§2 assumptions, §4 decisions, §5 wrong impls) — these sections
-  don't exist in the surrogate. Note in the output: `PREMORTEM_ABSENT: using recon preflight as surrogate.`
-- The surrogate mode produces a narrower audit (enforcement + causal proof + fail-closed only).
-  Mark the story for **retro-premortem** creation if it is safety-critical (MED/HIGH risk).
-- Do NOT hallucinate premortem content. Do NOT invent §5 wrong impls from imagination.
+**PREMORTEM HARD RULE** (item 1): If `reviews/premortems/${STORY_ID}_premortem.md` does not exist:
+- **STOP.** Output `NO-GO: PREMORTEM_MISSING`. Do not proceed.
+- Write the premortem first using Mode A (Premortem Authoring) before entering reconciliation.
+- There is no surrogate or fallback path. A properly authored premortem (§0-§10) is a hard
+  prerequisite for reconciliation.
 
 **RULE PRIORITY**: When multiple rules apply, evaluate in this order:
-1. **MISSING_ARTIFACT** (items 4-7) — if any required context file is absent → NO-GO. This fires first regardless of premortem status.
-2. **PREMORTEM_FALLBACK** (item 1) — if premortem is absent but items 4-7 are present → use surrogate.
-3. If both item 1 AND any of items 4-7 are missing → NO-GO (MISSING_ARTIFACT takes precedence).
+1. **MISSING_ARTIFACT** (items 4-7) — if any required context file is absent → NO-GO.
+2. **PREMORTEM_MISSING** (item 1) — if premortem is absent → NO-GO. Write premortem first (Mode A).
+3. If both item 1 AND any of items 4-7 are missing → NO-GO (report all missing artifacts).
 
 ## HARD GATE
 
