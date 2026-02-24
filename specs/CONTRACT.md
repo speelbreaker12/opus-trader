@@ -2746,11 +2746,11 @@ Profile: CSP
 - `NetEdgeInputMissing`
 - `PricerInputMissing`
 - `PricerInputInvalid`
-- `GateCascadeSkip`
+- `GateCascadeSkip` _(internal diagnostic — never emitted as primary reject code; set on cascaded downstream gates)_
 - `InsufficientDepthWithinBudget`
+- `AssemblyFailed`
 - `FeeCacheStale`
 - `RecordedBeforeDispatchFailed`
-- `AssemblyFailed`
 - `InventorySkew`
 - `InventorySkewDeltaLimitMissing`
 - `PendingExposureBudgetExceeded`

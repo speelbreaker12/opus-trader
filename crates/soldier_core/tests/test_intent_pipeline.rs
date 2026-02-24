@@ -440,6 +440,21 @@ fn test_fe001_pricer_none_yields_pricer_input_missing() {
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::Pricer,
+                        ..
+                    }
+                ),
+                "expected Pricer gate rejection, got {reason:?}"
+            );
+        }
+        other => panic!("expected Rejected at Pricer gate, got {other:?}"),
+    }
     assert_eq!(
         result.reject_reason_code,
         Some(RejectReasonCode::PricerInputMissing),
@@ -473,6 +488,21 @@ fn test_fe001_pricer_invalid_input_yields_pricer_input_invalid() {
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::Pricer,
+                        ..
+                    }
+                ),
+                "expected Pricer gate rejection, got {reason:?}"
+            );
+        }
+        other => panic!("expected Rejected at Pricer gate, got {other:?}"),
+    }
     assert_eq!(
         result.reject_reason_code,
         Some(RejectReasonCode::PricerInputInvalid),

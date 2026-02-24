@@ -242,7 +242,7 @@ pub fn evaluate_intent_pipeline(
         liquidity_gate_passed,
         net_edge_passed,
         pricer_passed,
-        input.wal_recorded,
+        input.wal_recorded, // Note: dead in the WAL adapter path (PrecomputedWalGate is the authority); kept for GateRejectCodes sidecar
         input.requested_qty,
         input.max_dispatch_qty,
     );

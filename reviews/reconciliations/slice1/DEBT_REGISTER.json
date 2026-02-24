@@ -146,7 +146,7 @@
       "story_id": "cross-cutting",
       "type": "FRESH_EYES",
       "priority": "P2",
-      "description": "7 production unwrap() calls in pending_exposure.rs. Guarded by prior checks but violates CLAUDE.md non-negotiable no-unwrap policy.",
+      "description": "7 unwrap() calls in pending_exposure.rs (5 production, 2 debug_assertions). Guarded by prior checks but violates CLAUDE.md non-negotiable no-unwrap policy.",
       "target_slice": "Slice 2",
       "owner": "TBD",
       "related_ats": [],
