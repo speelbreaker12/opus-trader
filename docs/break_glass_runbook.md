@@ -111,6 +111,12 @@ STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-ru
 ./stoic-cli emergency kill --reason "exposure reduced, restoring kill"
 ```
 
+### Dashboard Emergency Action (V1)
+
+Dashboard emergency controls are **V1-gated on endpoint verification**. The Force ReduceOnly button must remain disabled until
+`POST /api/v1/emergency/reduce_only` (or equivalent endpoint) has been positively verified in local integration checks.
+Until that verification is complete, incident response remains CLI-based only, and operators should continue using this runbook.
+
 ---
 
 ## Escalation / Contacts

@@ -88,8 +88,8 @@ require_file_token "$CI_WORKFLOW" "issue_comment:"
 
 copilot_gate_section="$(
   awk '
-    /^  copilot-gate:/ {in_gate=1}
-    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  copilot-gate:/ {exit}
+    /^  (copilot-gate|prd-story-gate):/ {in_gate=1; next}
+    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  (copilot-gate|prd-story-gate):/ {exit}
     in_gate {print}
   ' "$CI_WORKFLOW"
 )"
@@ -111,6 +111,7 @@ forbid_copilot_gate_regex() {
   fi
 }
 
+# copilot_gate/ prd_story_gate must be event-driven and target PR comments/reviews.
 require_copilot_gate_token "github.event_name == 'pull_request_review'"
 require_copilot_gate_token "github.event_name == 'pull_request_review_comment'"
 require_copilot_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
@@ -118,11 +119,10 @@ require_copilot_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || g
 require_copilot_gate_token '--pr "${PR_NUMBER}"'
 require_copilot_gate_token "--bot-comments-mode block"
 require_copilot_gate_token "--require-copilot-review"
-require_copilot_gate_token "--aftercare-ack-mode auto"
+require_copilot_gate_token "--aftercare-ack-mode \"\${aftercare_ack_mode}\""
 
-# copilot-gate must NOT contain story-specific logic.
-forbid_copilot_gate_regex '--story' "copilot-gate must not use --story flag"
-forbid_copilot_gate_regex '--require-aftercare-ack' "copilot-gate uses --aftercare-ack-mode auto instead"
+# PRD gate flow requires explicit story context and dedicated post-pass check.
+require_copilot_gate_token '--story "${story_id}"'
 
 # needs can skip this job on comment/review events when upstream jobs are pull_request-only.
 forbid_copilot_gate_regex '^[[:space:]]+needs:' "copilot-gate must not depend on pull_request-only jobs"
