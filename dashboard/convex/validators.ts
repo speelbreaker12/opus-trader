@@ -154,6 +154,27 @@ function isSubsequenceOrdered(candidate: string[], universe: string[]): boolean 
 function validateNode(value: unknown, schemaNode: SchemaNode, schema: SchemaDocument, path: string): ValidationIssue[] {
   const node = resolveSchemaNode(schemaNode, schema);
   const issues: ValidationIssue[] = [];
+  const actualType = valueTypeName(value);
+
+  const ifNode = (node as SchemaNode & { if?: SchemaNode; then?: SchemaNode; else?: SchemaNode }).if;
+  const thenNode = (node as SchemaNode & { if?: SchemaNode; then?: SchemaNode }).then;
+  const elseNode = (node as SchemaNode & { if?: SchemaNode; then?: SchemaNode; else?: SchemaNode }).else;
+
+  if (ifNode && thenNode) {
+    const ifIssues = validateNode(value, ifNode, schema, `${path}::if`);
+    if (ifIssues.length === 0) {
+      issues.push(...validateNode(value, thenNode, schema, `${path}::then`));
+    } else if (elseNode) {
+      issues.push(...validateNode(value, elseNode, schema, `${path}::else`));
+    }
+  }
+
+  const allOf = (node as SchemaNode & { allOf?: SchemaNode[] }).allOf;
+  if (allOf && Array.isArray(allOf)) {
+    for (const schemaOverride of allOf) {
+      issues.push(...validateNode(value, schemaOverride, schema, `${path}::allOf`));
+    }
+  }
 
   if (typeof node.const !== "undefined") {
     if (value !== node.const) {
