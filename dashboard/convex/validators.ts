@@ -24,11 +24,16 @@ type SchemaNode = {
   uniqueItems?: boolean;
   items?: SchemaNode;
   anyOf?: SchemaNode[];
+  $ref?: string;
+  required?: string[];
+  properties?: Record<string, SchemaNode>;
+  additionalProperties?: boolean;
 };
 
 type SchemaDocument = {
   required?: string[];
   properties?: Record<string, SchemaNode>;
+  $defs?: Record<string, SchemaNode>;
 };
 
 type Manifest = {
@@ -73,6 +78,24 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isNumber(value: unknown): value is number {
   return typeof value === "number" && !Number.isNaN(value) && Number.isFinite(value);
+}
+
+function resolveSchemaNode(node: SchemaNode, schema: SchemaDocument): SchemaNode {
+  if (!node.$ref || !node.$ref.startsWith("#/$defs/")) {
+    return node;
+  }
+
+  const defs = schema.$defs ?? {};
+  const ref = node.$ref.slice("#/$defs/".length);
+  return defs[ref] ?? node;
+}
+
+function valueTypeName(value: unknown): string {
+  return Array.isArray(value) ? "array" : value === null ? "null" : typeof value;
+}
+
+function emitPath(parent: string, segment: string | number): string {
+  return typeof segment === "number" ? `${parent}[${segment}]` : `${parent}.${segment}`;
 }
 
 function coerceCodeList(raw: unknown): string[] {
@@ -128,169 +151,198 @@ function isSubsequenceOrdered(candidate: string[], universe: string[]): boolean 
   return true;
 }
 
-function validatePrimitiveBranch(value: unknown, branch: SchemaNode): ValidationIssue[] {
+function validateNode(value: unknown, schemaNode: SchemaNode, schema: SchemaDocument, path: string): ValidationIssue[] {
+  const node = resolveSchemaNode(schemaNode, schema);
   const issues: ValidationIssue[] = [];
 
-  if (typeof branch.const !== "undefined") {
-    if (value !== branch.const) {
-      return [toIssue("SCHEMA", `value must equal ${JSON.stringify(branch.const)}`)];
+  if (typeof node.const !== "undefined") {
+    if (value !== node.const) {
+      issues.push(toIssue("SCHEMA", `${path} must equal ${JSON.stringify(node.const)}`));
     }
     return issues;
   }
 
-  if (branch.enum && !branch.enum.includes(value as never)) {
-    return [toIssue("SCHEMA", `value must be one of ${JSON.stringify(branch.enum)}`)];
+  if (node.anyOf) {
+    const ok = node.anyOf.some((branch) => validateNode(value, branch, schema, path).length === 0);
+    if (!ok) {
+      issues.push(toIssue("SCHEMA", `${path} does not match any allowed variants`));
+    }
+    return issues;
   }
 
-  if (branch.type) {
-    const allowed = Array.isArray(branch.type) ? branch.type : [branch.type];
-    const valueType = Array.isArray(value) ? "array" : value === null ? "null" : typeof value;
-    const normalized = new Set(allowed.map((entry) => (entry === "integer" ? "number" : entry)));
+  if (node.enum && !node.enum.includes(value as never)) {
+    issues.push(toIssue("SCHEMA", `${path} must be one of ${JSON.stringify(node.enum)}`));
+  }
 
-    if (!normalized.has(valueType)) {
-      return [toIssue("SCHEMA", `value expects ${JSON.stringify(allowed)}, got ${valueType}`)];
+  if (node.type) {
+    const allowed = Array.isArray(node.type) ? node.type : [node.type];
+    const expectedTypes = new Set(allowed.map((entry) => (entry === "integer" ? "number" : entry)));
+    const actualType = valueTypeName(value);
+
+    if (!expectedTypes.has(actualType)) {
+      issues.push(toIssue("SCHEMA", `${path} expects ${JSON.stringify(allowed)}, got ${actualType}`));
+      return issues;
     }
 
-    if (branch.type.includes("integer") && isNumber(value) && value % 1 !== 0) {
-      issues.push(toIssue("SCHEMA", `value must be integer`));
+    const isNumericType = allowed.includes("integer") || allowed.includes("number");
+    if (isNumericType && isNumber(value) && node.type) {
+      if (allowed.includes("integer") && value % 1 !== 0) {
+        issues.push(toIssue("SCHEMA", `${path} must be integer`));
+      }
+      if (node.minimum !== undefined && isNumber(value) && value < node.minimum) {
+        issues.push(toIssue("SCHEMA", `${path} minimum is ${node.minimum}`));
+      }
+    } else if (allowed.includes("number") && node.minimum !== undefined && isNumber(value) && value < node.minimum) {
+      issues.push(toIssue("SCHEMA", `${path} minimum is ${node.minimum}`));
+    }
+
+    if (isNumericType && node.maximum !== undefined && isNumber(value) && value > node.maximum) {
+      issues.push(toIssue("SCHEMA", `${path} maximum is ${node.maximum}`));
+    }
+
+    if (allowed.includes("string") && typeof node.minLength === "number") {
+      if (typeof value === "string" && value.length < node.minLength) {
+        issues.push(toIssue("SCHEMA", `${path} minLength is ${node.minLength}`));
+      }
+    }
+
+    if ((allowed.includes("array") || node.items) && Array.isArray(value)) {
+      const arrayValue = value;
+      if (node.uniqueItems && new Set(arrayValue).size !== arrayValue.length) {
+        issues.push(toIssue("SCHEMA", `${path} requires unique items`));
+      }
+      if (typeof node.minItems === "number" && arrayValue.length < node.minItems) {
+        issues.push(toIssue("SCHEMA", `${path} minimum is ${node.minItems} items`));
+      }
+      if (typeof node.maxItems === "number" && arrayValue.length > node.maxItems) {
+        issues.push(toIssue("SCHEMA", `${path} maximum is ${node.maxItems} items`));
+      }
+
+      if (node.contains && node.contains.const !== undefined) {
+        const hasRequired = arrayValue.includes(node.contains.const as never);
+        const minContains = node.minContains ?? 1;
+        if (!hasRequired && minContains > 0) {
+          issues.push(
+            toIssue(
+              "SCHEMA",
+              `${path} must contain ${JSON.stringify(node.contains.const)} at least ${minContains} time(s)`,
+            ),
+          );
+        }
+      }
+
+      if (node.contains && typeof node.contains.type === "string") {
+        const itemType = node.contains.type === "integer" ? "number" : node.contains.type;
+        const invalid = arrayValue.some((entry) => {
+          const entryType = entry === null ? "null" : typeof entry;
+          return entryType !== itemType;
+        });
+        if (invalid) {
+          issues.push(toIssue("SCHEMA", `${path} contains must be ${JSON.stringify(node.contains.type)} values`));
+        }
+      }
+
+      if (node.items) {
+        const invalidItems =
+          node.items.enum !== undefined
+            ? arrayValue.filter((item) => typeof item !== "string" || !node.items!.enum!.includes(item as never))
+            : [];
+        if (invalidItems.length > 0) {
+          issues.push(toIssue("SCHEMA", `${path} contains invalid entries: ${JSON.stringify(invalidItems)}`));
+        }
+
+        for (let i = 0; i < arrayValue.length; i++) {
+          const itemPath = emitPath(path, i);
+          const item = arrayValue[i];
+          if (typeof node.items.type === "string") {
+            const expectedItemType = node.items.type === "integer" ? "number" : node.items.type;
+            const actualItemType = valueTypeName(item);
+            if (actualItemType !== expectedItemType) {
+              issues.push(
+                toIssue("SCHEMA", `${itemPath} must be ${JSON.stringify(node.items.type)}: ${JSON.stringify(item)}`),
+              );
+              continue;
+            }
+          }
+
+          if (
+            node.items.type ||
+            node.items.$ref ||
+            node.items.enum ||
+            node.items.properties ||
+            node.items.anyOf ||
+            node.items.required ||
+            node.items.additionalProperties !== undefined
+          ) {
+            issues.push(...validateNode(item, node.items, schema, itemPath));
+          }
+        }
+      }
+
+      return issues;
+    }
+
+    if (allowed.includes("object") || node.required || node.properties) {
+      if (!isObject(value)) {
+        issues.push(toIssue("SCHEMA", `${path} expects object, got ${actualType}`));
+        return issues;
+      }
+
+      const required = node.required ?? [];
+      const properties = node.properties ?? {};
+      for (const requiredKey of required) {
+        if (!(requiredKey in value)) {
+          issues.push(toIssue("SCHEMA", `required key missing: ${emitPath(path, requiredKey)}`));
+        }
+      }
+
+      for (const [objKey, objValue] of Object.entries(value)) {
+        const property = properties[objKey];
+        if (!property) {
+          if (node.additionalProperties === false) {
+            issues.push(toIssue("SCHEMA", `${emitPath(path, objKey)} is not allowed`));
+          }
+          continue;
+        }
+        issues.push(...validateNode(objValue, property, schema, emitPath(path, objKey)));
+      }
+
+      return issues;
     }
   }
 
-  if (typeof branch.minimum === "number" && isNumber(value) && value < branch.minimum) {
-    issues.push(toIssue("SCHEMA", `minimum is ${branch.minimum}`));
-  }
-  if (typeof branch.maximum === "number" && isNumber(value) && value > branch.maximum) {
-    issues.push(toIssue("SCHEMA", `maximum is ${branch.maximum}`));
+  if ((node.properties && isObject(value)) || node.required || node.additionalProperties === false) {
+    if (!isObject(value)) {
+      issues.push(toIssue("SCHEMA", `${path} expects object, got ${actualType}`));
+      return issues;
+    }
+
+    const required = node.required ?? [];
+    const properties = node.properties ?? {};
+    for (const requiredKey of required) {
+      if (!(requiredKey in value)) {
+        issues.push(toIssue("SCHEMA", `required key missing: ${emitPath(path, requiredKey)}`));
+      }
+    }
+
+    for (const [objKey, objValue] of Object.entries(value)) {
+      const property = properties[objKey];
+      if (!property) {
+        if (node.additionalProperties === false) {
+          issues.push(toIssue("SCHEMA", `${emitPath(path, objKey)} is not allowed`));
+        }
+        continue;
+      }
+      issues.push(...validateNode(objValue, property, schema, emitPath(path, objKey)));
+    }
+    return issues;
   }
 
   return issues;
 }
 
 function validateAgainstSimpleSchema(payload: Record<string, unknown>, schema: SchemaDocument): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-
-  const required = schema.required ?? [];
-  for (const key of required) {
-    if (!(key in payload)) {
-      issues.push(toIssue("SCHEMA", `required key missing: ${key}`));
-    }
-  }
-
-  const properties = schema.properties ?? {};
-  for (const [key, value] of Object.entries(payload)) {
-    const prop = properties[key];
-    if (!prop) {
-      continue;
-    }
-
-    const valueIsArray = Array.isArray(value);
-
-    if (typeof prop.const !== "undefined") {
-      if (value !== prop.const) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" must equal ${JSON.stringify(prop.const)}`));
-      }
-      continue;
-    }
-
-    if (prop.anyOf) {
-      const ok = prop.anyOf.some((branch) => validatePrimitiveBranch(value, branch).length === 0);
-      if (!ok) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" does not match any allowed variants`));
-      }
-      continue;
-    }
-
-    if (prop.enum && !prop.enum.includes(value as never)) {
-      issues.push(toIssue("SCHEMA", `\"${key}\" must be one of ${JSON.stringify(prop.enum)}`));
-    }
-
-    if (prop.type) {
-      const allowed = Array.isArray(prop.type) ? prop.type : [prop.type];
-      const expectedTypes = new Set(
-        allowed.map((entry) => (entry === "integer" ? "number" : entry)),
-      );
-      const actualType = Array.isArray(value) ? "array" : value === null ? "null" : typeof value;
-      if (!expectedTypes.has(actualType)) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" expects ${JSON.stringify(allowed)}, got ${actualType}`));
-      } else if (actualType === "number") {
-        if (Array.isArray(allowed) && allowed.includes("integer") && isNumber(value) && value % 1 !== 0) {
-          issues.push(toIssue("SCHEMA", `\"${key}\" must be integer`));
-        }
-      } else if (actualType !== "number" && prop.minimum !== undefined) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" minimum requires number`));
-      }
-    }
-
-    if (typeof prop.minLength === "number" && typeof value === "string") {
-      if (value.length < prop.minLength) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" minLength is ${prop.minLength}`));
-      }
-    }
-
-    if (typeof prop.minimum === "number" && isNumber(value) && value < prop.minimum) {
-      issues.push(toIssue("SCHEMA", `\"${key}\" minimum is ${prop.minimum}`));
-    }
-    if (typeof prop.maximum === "number" && isNumber(value) && value > prop.maximum) {
-      issues.push(toIssue("SCHEMA", `\"${key}\" maximum is ${prop.maximum}`));
-    }
-
-    if (Array.isArray(value) && prop.uniqueItems) {
-      if (new Set(value).size !== value.length) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" requires unique items`));
-      }
-    }
-
-    if (valueIsArray && prop.items && prop.items.enum) {
-      const invalidItems = value.filter((item) => typeof item !== "string" || !prop.items!.enum!.includes(item as never));
-      if (invalidItems.length > 0) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" contains invalid entries: ${JSON.stringify(invalidItems)}`));
-      }
-    }
-
-    if (valueIsArray && prop.items && typeof prop.items.type === "string") {
-      const expectedItemType = prop.items.type === "integer" ? "number" : prop.items.type;
-      const invalidItems = value.filter((item) => {
-        const actualType = item === null ? "null" : typeof item;
-        return actualType !== expectedItemType;
-      });
-      if (invalidItems.length > 0) {
-        issues.push(
-          toIssue("SCHEMA", `\"${key}\" items must be ${JSON.stringify(prop.items.type)}: ${JSON.stringify(invalidItems)}`),
-        );
-      }
-    }
-
-    if (valueIsArray && typeof prop.minItems === "number" && value.length < prop.minItems) {
-      issues.push(toIssue("SCHEMA", `\"${key}\" minimum is ${prop.minItems} items`));
-    }
-
-    if (valueIsArray && typeof prop.maxItems === "number" && value.length > prop.maxItems) {
-      issues.push(toIssue("SCHEMA", `\"${key}\" maximum is ${prop.maxItems} items`));
-    }
-
-    if (valueIsArray && prop.contains && prop.contains.const) {
-      const hasRequired = value.includes(prop.contains.const as never);
-      const minContains = prop.minContains ?? 1;
-      if (!hasRequired && minContains > 0) {
-        issues.push(
-          toIssue("SCHEMA", `\"${key}\" must contain ${JSON.stringify(prop.contains.const)} at least ${minContains} time(s)`),
-        );
-      }
-    }
-
-    if (valueIsArray && prop.contains && typeof prop.contains.type === "string") {
-      const itemType = prop.contains.type === "integer" ? "number" : prop.contains.type;
-      const invalid = value.some((entry) => {
-        const actualType = entry === null ? "null" : typeof entry;
-        return actualType !== itemType;
-      });
-      if (invalid) {
-        issues.push(toIssue("SCHEMA", `\"${key}\" contains must be ${JSON.stringify(prop.contains.type)} values`));
-      }
-    }
-  }
-
-  return issues;
+  return validateNode(payload, schema as SchemaNode, schema, "$");
 }
 
 function validateManifestRegistry(payload: Record<string, unknown>, manifest: Manifest): ValidationIssue[] {
