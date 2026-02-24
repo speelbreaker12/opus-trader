@@ -64,8 +64,8 @@ Checks:
 
 **Steps**:
 1. Create worktree on dedicated branch: `git worktree add ../wt_<name> -b premortem/<slice> main`
-2. Group stories by shared files/dependencies (3-4 balanced batches)
-3. Assign 4 writer agents by domain batch
+2. Group stories by shared files/dependencies into balanced batches
+3. Assign writer agents by domain batch: `max(2, min(ceil(story_count / 2), 4))` agents, one per batch (min 2 required for cross-review in Phase 4; cap at 4)
 4. Each writer creates `<STORY-ID>_premortem.md` filling §0-§10
 5. Writers must NOT inspect implementation code
 
@@ -255,6 +255,17 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 - Every review artifact must include: `Review basis: STORY_SCOPE (Cycle 1)`
 - Every Cycle 1 review must cite at least one pre-existing enforcement point AND one pre-existing test (both outside the recon diff)
 - If all citations are diff-only → `DIFF_ONLY_REVIEW_REJECTED`
+
+**Agent parallelism**:
+
+| Sub-phase | Agent count | Parallelism model | Rationale |
+|-----------|-------------|-------------------|-----------|
+| R3A | min(batch_count, 3); single-story recon = 1 | 1 agent per batch; stories sequential within batch | Sequential-within-batch lets the reviewer detect cross-story patterns ("same gap in 3 of 4 stories"). Parallelizing within a batch loses that signal. |
+| R3B | 1 dispatcher agent | Stories × tools in parallel; prompt styles (enriched, generic) sequential per tool | External calls are rate-limit-bound, not coordination-bound. Enriched runs first so generic doesn't duplicate its findings. |
+
+- **Batch assignment**: Reuse R1 batch grouping. Each R3A agent reviews one batch they did NOT author.
+- **Single-story recon**: 1 internal reviewer is sufficient (R1 and R3A are inherently different agents).
+- **R3B scaling**: Add tools (codex, opus, kimi) for breadth; adding stories per tool is free parallelism.
 
 #### R3A — Internal Cross-Review
 

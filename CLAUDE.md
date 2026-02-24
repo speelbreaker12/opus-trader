@@ -216,6 +216,7 @@ except ValidationError as e:
 | Pre-implementation risk analysis | premortem | Forces failure modes, wrong impls, decisions before coding |
 | Implement PRD story | premortem → `/slice-execute` → `/post-impl-audit` | Premortem gate, fail-closed implementation, breaker audit |
 | Implement single story | `/slice-execute` | Premortem gate → preflight → implement → golden vectors |
+| Reconcile story (premortem + audit) | `/reconcil` | Mode A/B routing, R1-R7 phases, verdict assignment, 15-check pass gate |
 | Audit after implementation | `/post-impl-audit` | Breaker audit: AT proof, fail-closed, wrong-impl, paper compliance |
 | Write acceptance test | `/acceptance-test` | Contract alignment |
 | Check contracts (fast) | `/contract-review` | Fail-open hazard filter + workflow alignment (subsumes `/audit`) |
@@ -393,6 +394,34 @@ Key questions:
 - For each cache: what happens when source disappears but cache remains?
 - For each error return: what does the caller do with it?
 - For each `|| true` or silent catch: is silent failure safe here?
+
+## Self-Review Protocol (Anti-Author-Blindness)
+
+When reviewing your own plan or code (including review-stack output), apply these mechanical checks **before** declaring the review complete. These catch the exact failure mode where you "read what you meant, not what you wrote."
+
+**1. Title-Body Cross-Reference (MANDATORY)**
+For every section header/title, compare it against the section body:
+- Does the title's claim match the body's action? ("Fix" vs "Defer", "`#[cfg(test)]`" vs "`#[cfg(any(test, feature = ...))]`")
+- If a human read ONLY the title, would they implement the right thing?
+
+**2. Scope-Match Verification Claims (MANDATORY)**
+For every verification step that uses grep/search:
+- Does the claim specify an explicit path scope? ("zero in `src/`" vs "zero globally")
+- Re-run the search mentally against ALL code (including tests) — does the claim hold?
+- If the claim is "zero occurrences," enumerate known callsites from exploration and confirm each is covered
+
+**3. Intro-Step Parity (MANDATORY for multi-step plans)**
+After writing all steps, re-read the intro/context paragraph:
+- Count how many steps are actual fixes vs defers/debt-tracking
+- Does the intro's count claim match? ("remediates 4 P1 gaps" vs "3 fixes + 1 defer")
+
+**4. cfg-Gate Integration Test Check (Rust-specific)**
+When gating code behind `#[cfg(test)]` or `#[cfg(feature = "...")]`:
+- Integration tests (in `tests/`) compile the crate as a normal dependency — `#[cfg(test)]` is NOT set
+- Only `#[cfg(feature = "test-helpers")]` works for integration tests (via dev-dependency)
+- Always state which mechanism enables compilation for each caller category
+
+**Origin**: These rules were added after a 6-skill review stack missed 3 findings (2× P1, 1× P2) due to author's blindness — reviewing detailed body while trusting summary/framing.
 
 ## PRD Audit Patterns
 
