@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R7b-strategic-review
+  cycle: recon-v1.x (original)
+  phase_equivalent: R7b
+artifact_type: strategic_review
+scope: slice 1 systemic risks
+---
+
 # Strategic Failure Review: Slice 1 Reconciliation
 
 > Reviewer: Claude Opus 4.6 (adversarial strategic review)

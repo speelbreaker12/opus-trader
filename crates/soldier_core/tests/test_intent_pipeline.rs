@@ -430,6 +430,91 @@ fn test_causality_expiry_guard_blocks_dispatch() {
     );
 }
 
+/// GAP-FE-001 causality: pricer input None → PricerInputMissing reject code.
+/// When input.pricer is None but liquidity and net_edge pass, the pipeline
+/// must assign PricerInputMissing (not NetEdgeInputMissing).
+#[test]
+fn test_fe001_pricer_none_yields_pricer_input_missing() {
+    let mut input = base_open_input();
+    input.pricer = None;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::Pricer,
+                        ..
+                    }
+                ),
+                "expected Pricer gate rejection, got {reason:?}"
+            );
+        }
+        other => panic!("expected Rejected at Pricer gate, got {other:?}"),
+    }
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::PricerInputMissing),
+        "pricer=None with passing liquidity+net_edge must produce PricerInputMissing"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when pricer input is missing"
+    );
+}
+
+/// GAP-FE-001 causality: PricerRejectReason::InvalidInput → PricerInputInvalid reject code.
+/// When the pricer rejects due to invalid input (via gate_outcome converter),
+/// the pipeline must assign PricerInputInvalid (not NetEdgeInputMissing).
+#[test]
+fn test_fe001_pricer_invalid_input_yields_pricer_input_invalid() {
+    use soldier_core::execution::PricerInput;
+
+    let mut input = base_open_input();
+    // Construct a pricer input that will produce InvalidInput rejection:
+    // fair_price=NaN triggers PricerRejectReason::InvalidInput in compute_limit_price.
+    input.pricer = Some(PricerInput {
+        fair_price: f64::NAN,
+        gross_edge_usd: 10.0,
+        min_edge_usd: 2.0,
+        fee_estimate_usd: 2.0,
+        qty: 1.0,
+        side: Side::Buy,
+    });
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::Pricer,
+                        ..
+                    }
+                ),
+                "expected Pricer gate rejection, got {reason:?}"
+            );
+        }
+        other => panic!("expected Rejected at Pricer gate, got {other:?}"),
+    }
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::PricerInputInvalid),
+        "pricer InvalidInput must produce PricerInputInvalid (not NetEdgeInputMissing)"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when pricer input is invalid"
+    );
+}
+
 /// Causality proof: fee cache hard-stale blocks dispatch.
 /// now_ms far ahead of fee_model_cached_at_ts_ms → FeeCacheStale → dispatch=0.
 #[test]
@@ -467,5 +552,41 @@ fn test_causality_fee_cache_stale_blocks_dispatch() {
     assert_eq!(
         result.reject_reason_code,
         Some(RejectReasonCode::FeeCacheStale)
+    );
+}
+
+/// GAP-FE-004 causality: wal_recorded=false in pipeline → RecordedBeforeDispatchFailed
+/// reject code, dispatch count = 0.
+#[test]
+fn test_fe004_pipeline_wal_not_recorded_yields_recorded_before_dispatch_failed() {
+    let mut input = base_open_input();
+    input.wal_recorded = false;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+    match &result.decision {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::RecordedBeforeDispatch,
+                        ..
+                    }
+                ),
+                "expected RecordedBeforeDispatch rejection, got {reason:?}"
+            );
+            assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
+        }
+        other => panic!("expected Rejected at RecordedBeforeDispatch, got {other:?}"),
+    }
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when WAL recording fails"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::RecordedBeforeDispatchFailed)
     );
 }

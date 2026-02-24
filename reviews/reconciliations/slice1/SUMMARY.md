@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R6-summary
+  cycle: recon-v1.x (original)
+  phase_equivalent: R6
+artifact_type: reconciliation_summary
+scope: slice 1 (all 13 stories)
+---
+
 # Slice 1 Reconciliation Summary
 
 **Date**: 2026-02-21

@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R1-agent (reconciliation)
+  cycle: recon-v1.x (original)
+  phase_equivalent: R1
+artifact_type: evidence_ledger_batch
+scope: S1-004, S1-005, S1-007
+---
+
 # RECONCILIATION AUDIT — DISPATCH BATCH (S1-004, S1-005, S1-007)
 
 NO_PRIOR_POSTMORTEM (for all 3 stories)

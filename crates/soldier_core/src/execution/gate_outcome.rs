@@ -192,12 +192,9 @@ impl GateOutcome {
         match result {
             PricerResult::LimitPrice { .. } => GateOutcome::Allow { gate },
             PricerResult::Rejected { reason, .. } => {
-                // NOTE: Pricer InvalidInput maps to NetEdgeInputMissing for backward
-                // compatibility with the original pipeline.rs inline logic. Phase 2
-                // debt: introduce a dedicated RejectReasonCode for pricer input errors.
                 let code = match reason {
                     PricerRejectReason::NetEdgeTooLow => RejectReasonCode::NetEdgeTooLow,
-                    PricerRejectReason::InvalidInput => RejectReasonCode::NetEdgeInputMissing,
+                    PricerRejectReason::InvalidInput => RejectReasonCode::PricerInputInvalid,
                 };
                 GateOutcome::Reject {
                     gate,

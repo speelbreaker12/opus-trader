@@ -12,3 +12,7 @@ serde = { version = "1", features = ["derive"] }
 proptest = "1"
 serde_json = "1"
 tracing-test = "0.2"
+soldier_core = { path = ".", features = ["test-helpers"] }
+
+[features]
+test-helpers = []

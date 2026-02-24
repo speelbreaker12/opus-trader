@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R7a-contract-review
+  cycle: recon-v1.x (original)
+  phase_equivalent: R7a
+artifact_type: contract_review
+scope: remediation diff
+---
+
 # Contract Review: Phase R5 Remediation Diff
 
 **Reviewer:** contract-review skill (claude-opus-4-6)

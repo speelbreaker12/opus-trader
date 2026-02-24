@@ -9,13 +9,15 @@ use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
+#[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+use super::build_order_intent::PrecomputedWalGate;
 use super::gate_outcome::GateOutcome;
-#[allow(deprecated)] // TODO: migrate to build_order_intent_with_wal_gate()
+use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 use super::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateStep, LiquidityGateInput,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, LiquidityGateInput,
     LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PreflightInput, PreflightMetrics,
-    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, RejectReasonCode, Side,
-    build_gate_results, build_order_intent_with_reject_reason_code, compute_limit_price,
+    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, Side,
+    build_gate_results, build_order_intent_with_wal_gate, compute_limit_price,
     evaluate_liquidity_gate, evaluate_net_edge,
 };
 
@@ -204,8 +206,9 @@ pub fn evaluate_intent_pipeline(
                 }
             };
         } else {
+            // Cascade: liquidity failed, so net_edge is skipped (not a genuine missing input).
             net_edge_passed = false;
-            net_edge_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
+            net_edge_reject_code = Some(RejectReasonCode::GateCascadeSkip);
         }
 
         if net_edge_passed {
@@ -218,13 +221,14 @@ pub fn evaluate_intent_pipeline(
                     passed
                 }
                 None => {
-                    pricer_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
+                    pricer_reject_code = Some(RejectReasonCode::PricerInputMissing);
                     false
                 }
             };
         } else {
+            // Cascade: net_edge failed (or was skipped), so pricer is skipped.
             pricer_passed = false;
-            pricer_reject_code = Some(RejectReasonCode::NetEdgeInputMissing);
+            pricer_reject_code = Some(RejectReasonCode::GateCascadeSkip);
         }
     }
 
@@ -238,7 +242,7 @@ pub fn evaluate_intent_pipeline(
         liquidity_gate_passed,
         net_edge_passed,
         pricer_passed,
-        input.wal_recorded,
+        input.wal_recorded, // Note: dead in the WAL adapter path (PrecomputedWalGate is the authority); kept for GateRejectCodes sidecar
         input.requested_qty,
         input.max_dispatch_qty,
     );
@@ -258,16 +262,23 @@ pub fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
-    // TODO(Phase 2): migrate to build_order_intent_with_wal_gate() to prevent WAL bypass.
     // TODO(Phase 2): migrate open_runtime.rs GateResults construction to use GateOutcome converters.
-    #[allow(deprecated)]
-    let (decision, reject_reason_code) = build_order_intent_with_reject_reason_code(
+    #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+    let mut wal_gate = PrecomputedWalGate {
+        recorded: input.wal_recorded,
+    };
+    let decision = build_order_intent_with_wal_gate(
         input.intent_class,
         input.risk_state,
         &mut metrics.chokepoint,
         &gate_results,
-        &gate_reject_codes,
+        &mut wal_gate,
     );
+    let reject_reason_code = if let ChokeResult::Rejected { reason, .. } = &decision {
+        Some(reject_reason_from_chokepoint(reason, &gate_reject_codes))
+    } else {
+        None
+    };
 
     PipelineResult {
         decision,

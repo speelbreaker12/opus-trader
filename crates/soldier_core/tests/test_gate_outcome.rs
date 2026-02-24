@@ -332,7 +332,7 @@ fn pricer_invalid_input() {
     let outcome = GateOutcome::from_pricer(GateStep::Pricer, &result);
     assert_eq!(
         outcome.to_legacy(),
-        (false, Some(RejectReasonCode::NetEdgeInputMissing))
+        (false, Some(RejectReasonCode::PricerInputInvalid))
     );
 }
 

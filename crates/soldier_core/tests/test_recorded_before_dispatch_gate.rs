@@ -207,3 +207,9 @@ fn test_close_intent_approved_when_optional_wal_gate_missing() {
     // Close intent must not be blocked by WAL failure (CSP.3.2)
     assert!(matches!(result, ChokeResult::Approved { .. }));
 }
+
+// GAP-FE-004: PrecomputedWalGate is pub(crate), so direct unit tests are not possible
+// from integration tests. Pipeline-level coverage is in test_intent_pipeline.rs:
+// - test_fe004_pipeline_wal_not_recorded_yields_recorded_before_dispatch_failed
+// The existing test_wal_gate_success_allows / test_wal_gate_failure_rejects cover
+// the same trait interface exercised by PrecomputedWalGate.

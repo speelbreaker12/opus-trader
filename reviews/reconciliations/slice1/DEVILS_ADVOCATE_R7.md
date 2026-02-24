@@ -1,3 +1,14 @@
+---
+provenance:
+  tool: claude-code
+  model: claude-opus-4-20250514
+  prompt_style: R7e-devils-advocate
+  cycle: recon-v1.x (original)
+  phase_equivalent: R7e
+artifact_type: mutation_analysis
+scope: slice 1 (initial pass)
+---
+
 # Devils Advocate: Phase R5 Reconciliation Tests (R7 Mutation Analysis)
 
 **Date**: 2026-02-21

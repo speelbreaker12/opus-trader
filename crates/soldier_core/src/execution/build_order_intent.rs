@@ -493,6 +493,27 @@ pub fn build_order_intent_with_reject_reason_code(
     (result, code)
 }
 
+// --- Transitional WAL adapter -------------------------------------------
+
+/// Transitional adapter: wraps precomputed WAL bool into RecordedBeforeDispatchGate.
+///
+/// TODO(Slice 2): Replace with real WAL gate that performs actual append.
+#[deprecated(note = "Migration shim — replace with real WAL gate injection")]
+pub(crate) struct PrecomputedWalGate {
+    pub(crate) recorded: bool,
+}
+
+#[allow(deprecated)]
+impl RecordedBeforeDispatchGate for PrecomputedWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        if self.recorded {
+            Ok(())
+        } else {
+            Err("WAL recording not completed (precomputed=false)".to_string())
+        }
+    }
+}
+
 // --- Gate results (pre-computed by caller) ------------------------------
 
 /// Pre-computed gate results passed to the chokepoint.
@@ -524,11 +545,12 @@ impl Default for GateResults {
 }
 
 impl GateResults {
+    #[cfg(any(test, feature = "test-helpers"))]
     pub const fn all_passed() -> Self {
         Self::new(true)
     }
 
-    pub const fn new(pass: bool) -> Self {
+    pub(crate) const fn new(pass: bool) -> Self {
         Self {
             preflight_passed: pass,
             quantize_passed: pass,

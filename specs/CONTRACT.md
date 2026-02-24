@@ -2744,6 +2744,13 @@ Profile: CSP
 - `ExpectedSlippageTooHigh`
 - `NetEdgeTooLow`
 - `NetEdgeInputMissing`
+- `PricerInputMissing`
+- `PricerInputInvalid`
+- `GateCascadeSkip` _(internal diagnostic — never emitted as primary reject code; set on cascaded downstream gates)_
+- `InsufficientDepthWithinBudget`
+- `AssemblyFailed`
+- `FeeCacheStale`
+- `RecordedBeforeDispatchFailed`
 - `InventorySkew`
 - `InventorySkewDeltaLimitMissing`
 - `PendingExposureBudgetExceeded`
