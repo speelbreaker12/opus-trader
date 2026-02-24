@@ -1,0 +1,74 @@
+{
+  "schema_version": "runtime_state.v1",
+  "generated_at": "2026-02-23T21:10:03Z",
+  "instance_id": "soldier-main-01",
+  "service": "soldier_core",
+  "env": "paper",
+  "head_commit": "4a2e6fc",
+  "safety": {
+    "trading_mode": "REDUCE_ONLY",
+    "risk_state": "DEGRADED",
+    "mode_reasons": [],
+    "latches": {
+      "open_permission_latched_off": true,
+      "market_truth_latched": false
+    },
+    "f1_cert_state": {
+      "status": "BLOCKED",
+      "reason_codes": ["AT_225_FAILING"],
+      "last_certified_at": "2026-02-23T20:55:00Z"
+    },
+    "owner_view": { "unblock_steps": [] }
+  },
+  "metrics": {
+    "mm_util": {
+      "value": 0.78,
+      "unit": "ratio",
+      "threshold_state": "WARN",
+      "reason": "Above warn threshold 0.75",
+      "updated_at": "2026-02-23T21:10:02Z"
+    },
+    "disk_used_pct": {
+      "value": 67.4,
+      "unit": "percent",
+      "threshold_state": "OK",
+      "reason": "Below warn threshold 80",
+      "updated_at": "2026-02-23T21:10:01Z"
+    },
+    "wal_queue_depth": {
+      "value": 42,
+      "unit": "count",
+      "threshold_state": "OK",
+      "reason": "Within queue budget",
+      "updated_at": "2026-02-23T21:10:02Z"
+    },
+    "ws_event_lag": {
+      "value": 320,
+      "unit": "ms",
+      "threshold_state": "WARN",
+      "reason": "Lag > 250ms warn",
+      "updated_at": "2026-02-23T21:10:02Z"
+    },
+    "http_429_count": {
+      "value": 3,
+      "unit": "count",
+      "threshold_state": "WARN",
+      "reason": "Recent 429s detected",
+      "updated_at": "2026-02-23T21:10:02Z"
+    },
+    "deribit_10028_count": {
+      "value": 0,
+      "unit": "count",
+      "threshold_state": "OK",
+      "reason": "No recent 10028 errors",
+      "updated_at": "2026-02-23T21:10:02Z"
+    },
+    "deribit_http_p95": {
+      "value": 185,
+      "unit": "ms",
+      "threshold_state": "OK",
+      "reason": "Below warn threshold 250ms",
+      "updated_at": "2026-02-23T21:10:02Z"
+    }
+  }
+}

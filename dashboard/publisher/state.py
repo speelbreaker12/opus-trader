@@ -146,6 +146,20 @@ class SidecarState:
       ),
     )
 
+  def with_last_error(self, code: str) -> "SidecarState":
+    return SidecarState(
+      schema_version=self.schema_version,
+      instance_id=self.instance_id,
+      last_seen_snapshot_hash=self.last_seen_snapshot_hash,
+      last_sent_snapshot_hash=self.last_sent_snapshot_hash,
+      last_seen_generated_at=self.last_seen_generated_at,
+      last_success_at=self.last_success_at,
+      last_error_at=_utc_now_iso(),
+      last_error_code=code,
+      consecutive_failures=self.consecutive_failures,
+      totals=self.totals,
+    )
+
   def to_json(self) -> Dict[str, Any]:
     return {
       "schema_version": self.schema_version,
