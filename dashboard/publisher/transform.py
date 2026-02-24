@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from hashlib import sha256
+import re
 from typing import Any, Dict, Optional
 
 
@@ -11,6 +12,30 @@ class SnapshotBuilderError(Exception):
 
 
 RUNTIME_STATE_VERSION = "runtime_state.v1"
+REQUIRED_RUNTIME_METRICS = (
+  "mm_util",
+  "disk_used_pct",
+  "wal_queue_depth",
+  "ws_event_lag",
+  "http_429_count",
+  "deribit_10028_count",
+  "deribit_http_p95",
+)
+RUNTIME_TRADING_MODES = {"NORMAL", "REDUCE_ONLY", "PAUSED", "SHADOW", "KILL"}
+RUNTIME_RISK_STATES = {"HEALTHY", "DEGRADED", "MAINTENANCE", "KILL"}
+RUNTIME_F1_STATES = {"VALID", "BLOCKED", "UNKNOWN"}
+RUNTIME_THRESHOLD_STATES = {"OK", "WARN", "CRIT", "UNKNOWN"}
+HEAD_COMMIT_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+
+
+def _is_iso8601_utc_z(value: object) -> bool:
+  if not isinstance(value, str) or not value.endswith("Z"):
+    return False
+  try:
+    datetime.fromisoformat(value.replace("Z", "+00:00"))
+  except (ValueError, OverflowError):
+    return False
+  return True
 
 
 def _utc_iso(ts_ms: Optional[object] = None) -> str:
@@ -58,6 +83,134 @@ def _safe_str_list(value: object) -> list[str]:
   if not isinstance(value, list):
     return []
   return [item for item in value if isinstance(item, str)]
+
+
+def _require_mapping(payload: Dict[str, Any], key: str) -> Dict[str, Any]:
+  value = payload.get(key)
+  if not isinstance(value, dict):
+    raise SnapshotBuilderError(f"runtime_state {key} must be an object")
+  return value
+
+
+def _validate_runtime_metric(key: str, metric: object) -> None:
+  if not isinstance(metric, dict):
+    raise SnapshotBuilderError(f"runtime_state.metrics.{key} must be an object")
+
+  required = ("value", "unit", "threshold_state", "reason", "updated_at")
+  for field in required:
+    if field not in metric:
+      raise SnapshotBuilderError(f"runtime_state.metrics.{key}.{field} is required")
+
+  value = metric["value"]
+  if value is not None and not isinstance(value, (int, float)):
+    raise SnapshotBuilderError(f"runtime_state.metrics.{key}.value must be number or null")
+  if isinstance(value, bool):
+    raise SnapshotBuilderError(f"runtime_state.metrics.{key}.value must be number or null")
+
+  if not isinstance(metric["unit"], str) or not metric["unit"]:
+    raise SnapshotBuilderError(f"runtime_state.metrics.{key}.unit must be a non-empty string")
+
+  threshold_state = metric["threshold_state"]
+  if threshold_state not in RUNTIME_THRESHOLD_STATES:
+    raise SnapshotBuilderError(
+      f"runtime_state.metrics.{key}.threshold_state must be one of {sorted(RUNTIME_THRESHOLD_STATES)}",
+    )
+
+  if not isinstance(metric["reason"], str):
+    raise SnapshotBuilderError(f"runtime_state.metrics.{key}.reason must be a string")
+
+  if not _is_iso8601_utc_z(metric["updated_at"]):
+    raise SnapshotBuilderError(
+      f"runtime_state.metrics.{key}.updated_at must be ISO-8601 UTC timestamp ending in Z",
+    )
+
+
+def _validate_runtime_payload(payload: Dict[str, Any]) -> None:
+  required = (
+    "schema_version",
+    "generated_at",
+    "instance_id",
+    "service",
+    "env",
+    "head_commit",
+    "snapshot_seq",
+    "safety",
+    "metrics",
+    "freshness",
+  )
+  for field in required:
+    if field not in payload:
+      raise SnapshotBuilderError(f"runtime_state missing required field: {field}")
+
+  if payload["schema_version"] != RUNTIME_STATE_VERSION:
+    raise SnapshotBuilderError(f"runtime_state schema_version must be {RUNTIME_STATE_VERSION}")
+
+  if not _is_iso8601_utc_z(payload["generated_at"]):
+    raise SnapshotBuilderError("runtime_state.generated_at must be ISO-8601 UTC timestamp ending in Z")
+
+  instance_id = payload["instance_id"]
+  if not isinstance(instance_id, str) or not instance_id:
+    raise SnapshotBuilderError("runtime_state.instance_id must be a non-empty string")
+
+  service = payload["service"]
+  if not isinstance(service, str) or not service:
+    raise SnapshotBuilderError("runtime_state.service must be a non-empty string")
+
+  env = payload["env"]
+  if not isinstance(env, str) or not env:
+    raise SnapshotBuilderError("runtime_state.env must be a non-empty string")
+
+  head_commit = payload["head_commit"]
+  if not isinstance(head_commit, str) or not HEAD_COMMIT_RE.match(head_commit):
+    raise SnapshotBuilderError("runtime_state.head_commit must be 7-40 hex chars")
+
+  snapshot_seq = payload["snapshot_seq"]
+  if not isinstance(snapshot_seq, int) or snapshot_seq < 0:
+    raise SnapshotBuilderError("runtime_state.snapshot_seq must be a non-negative integer")
+
+  safety = _require_mapping(payload, "safety")
+
+  trading_mode = safety.get("trading_mode")
+  if trading_mode not in RUNTIME_TRADING_MODES:
+    raise SnapshotBuilderError("runtime_state.safety.trading_mode must be one of NORMAL, REDUCE_ONLY, PAUSED, SHADOW, KILL")
+
+  risk_state = safety.get("risk_state")
+  if risk_state not in RUNTIME_RISK_STATES:
+    raise SnapshotBuilderError("runtime_state.safety.risk_state must be one of HEALTHY, DEGRADED, MAINTENANCE, KILL")
+
+  mode_reasons = safety.get("mode_reasons")
+  if not isinstance(mode_reasons, list) or not all(isinstance(item, str) for item in mode_reasons):
+    raise SnapshotBuilderError("runtime_state.safety.mode_reasons must be an array of strings")
+
+  latches = _require_mapping(safety, "latches")
+  if not isinstance(latches.get("open_permission_latched_off"), bool) or not isinstance(latches.get("market_truth_latched"), bool):
+    raise SnapshotBuilderError("runtime_state.safety.latches fields must be booleans")
+
+  f1_state = _require_mapping(safety, "f1_cert_state")
+  if f1_state.get("status") not in RUNTIME_F1_STATES:
+    raise SnapshotBuilderError("runtime_state.safety.f1_cert_state.status must be VALID, BLOCKED, or UNKNOWN")
+  reason_codes = f1_state.get("reason_codes")
+  if not isinstance(reason_codes, list) or not all(isinstance(item, str) for item in reason_codes):
+    raise SnapshotBuilderError("runtime_state.safety.f1_cert_state.reason_codes must be an array of strings")
+  if f1_state.get("last_certified_at") is not None and not _is_iso8601_utc_z(f1_state.get("last_certified_at")):
+    raise SnapshotBuilderError("runtime_state.safety.f1_cert_state.last_certified_at must be UTC timestamp ending in Z or null")
+
+  owner_view = _require_mapping(safety, "owner_view")
+  unblock_steps = owner_view.get("unblock_steps")
+  if not isinstance(unblock_steps, list) or not all(isinstance(item, str) for item in unblock_steps):
+    raise SnapshotBuilderError("runtime_state.safety.owner_view.unblock_steps must be an array of strings")
+
+  metrics = _require_mapping(payload, "metrics")
+  for metric_key in REQUIRED_RUNTIME_METRICS:
+    _validate_runtime_metric(metric_key, metrics.get(metric_key))
+
+  freshness = _require_mapping(payload, "freshness")
+  expected_publish_interval_s = freshness.get("expected_publish_interval_s")
+  stale_after_s = freshness.get("stale_after_s")
+  if not isinstance(expected_publish_interval_s, int) or expected_publish_interval_s <= 0:
+    raise SnapshotBuilderError("runtime_state.freshness.expected_publish_interval_s must be a positive integer")
+  if not isinstance(stale_after_s, int) or stale_after_s <= 0:
+    raise SnapshotBuilderError("runtime_state.freshness.stale_after_s must be a positive integer")
 
 
 def _metric_state(value: Optional[float], warn: float, crit: float) -> str:
@@ -118,6 +271,8 @@ def _map_trading_mode(raw: object) -> str:
     return "REDUCE_ONLY"
   if raw == "Kill":
     return "KILL"
+  if raw in {"NORMAL", "REDUCE_ONLY", "PAUSED", "SHADOW", "KILL"}:
+    return str(raw)
   if raw in {"ReduceOnly", "REDUCE_ONLY", "REDUCEONLY"}:
     return "REDUCE_ONLY"
   if raw in {"Paused", "PAUSED"}:
@@ -130,14 +285,10 @@ def _map_trading_mode(raw: object) -> str:
 
 
 def _map_risk_state(raw: object) -> str:
-  if raw in {"Healthy", "HEALTHY", "healthy"}:
-    return "HEALTHY"
-  if raw in {"Degraded", "DEGRADED", "degraded"}:
-    return "DEGRADED"
-  if raw in {"Maintenance", "MAINTENANCE", "maintenance"}:
-    return "MAINTENANCE"
-  if raw in {"KILL", "Kill", "kill"}:
-    return "KILL"
+  if isinstance(raw, str):
+    normalized = raw.upper()
+    if normalized in RUNTIME_RISK_STATES:
+      return normalized
   if raw in {"Normal", "NORMAL", "normal"}:
     return "HEALTHY"
   raise SnapshotBuilderError(f"unsupported risk_state '{raw}'")
@@ -220,6 +371,8 @@ def _build_from_runtime_payload(
   stale_after_s: int,
   publisher_version: str,
 ) -> Dict[str, Any]:
+  _validate_runtime_payload(payload)
+
   safety = payload.get("safety", {})
   metrics = payload.get("metrics", {})
   freshness = payload.get("freshness", {})
@@ -278,8 +431,8 @@ def _build_from_runtime_payload(
       "deribit_http_p95": _build_metric_from_runtime(metrics.get("deribit_http_p95"), "deribit_http_p95", now),
     },
     "freshness": {
-      "expected_publish_interval_s": _safe_int(freshness.get("expected_publish_interval_s")) or expected_publish_interval_s,
-      "stale_after_s": _safe_int(freshness.get("stale_after_s")) or stale_after_s,
+      "expected_publish_interval_s": freshness.get("expected_publish_interval_s"),
+      "stale_after_s": freshness.get("stale_after_s"),
     },
     "publisher": {
       "attempt": attempt,

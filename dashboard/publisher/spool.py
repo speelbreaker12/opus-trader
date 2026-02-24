@@ -4,10 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
 import sqlite3
-from typing import Any, Dict, Iterable, List, Optional
-
-
-OutboxStatus = tuple[str, str, int, str, Optional[str], Optional[str], str, str, Optional[str]]
+from typing import Any, Dict, Optional
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -34,9 +32,10 @@ class OutboxRow:
 
 
 class SpoolStore:
-  def __init__(self, path):
+  def __init__(self, path: Path):
     self.path = path
-    self._conn = sqlite3.connect(path, timeout=30.0)
+    self.path.parent.mkdir(parents=True, exist_ok=True)
+    self._conn = sqlite3.connect(str(path), timeout=30.0)
     self._conn.execute("PRAGMA journal_mode=WAL")
     self._conn.row_factory = sqlite3.Row
     self._ensure_schema()
