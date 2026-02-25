@@ -1,0 +1,62 @@
+{
+  "schema_version": "r5b_receipt.v1",
+  "story_id": "S0",
+  "tool": "pr-review",
+  "step": "R5b",
+  "phase_equivalent": "R5b",
+  "head_commit": "e04a39f9150316caa2a97a5e371cbb5ab7284f5a",
+  "started_at": "2026-02-24T20:34:27Z",
+  "ended_at": "2026-02-24T20:34:27Z",
+  "exit_status": "completed",
+  "artifact_paths": [
+    "reviews/reconciliations/S0/receipts/r5b_pr_review.json"
+  ],
+  "finding_counts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 3,
+    "INFO": 0
+  },
+  "summary": "Transport and validation findings: AT-022 HTTP endpoint contract drift + dispatch/keys input validation and scope traceability gaps remain. ",
+  "findings": [
+    {
+      "severity": "P1",
+      "id": "PR-1",
+      "evidence": "specs/CONTRACT.md:4442-4447 + stoic-cli:1041-1062 + docs/health_endpoint.md:16-19",
+      "description": "AT-022 requires HTTP GET /api/v1/health; implementation is CLI-only (stoic-cli), not endpoint-based."
+    },
+    {
+      "severity": "P2",
+      "id": "PR-2",
+      "evidence": "plans/prd.json:381-385 + crates/soldier_infra/src/lib.rs:1-14",
+      "description": "Scope/implementation mismatch for S0-004 enforcement traceability."
+    },
+    {
+      "severity": "P2",
+      "id": "PR-3",
+      "evidence": "stoic-cli:918-943",
+      "description": "dispatch-check relies on caller-provided mode; risk of runtime bypass behavior assumptions."
+    },
+    {
+      "severity": "P2",
+      "id": "PR-4",
+      "evidence": "stoic-cli:961-1034",
+      "description": "_cmd_keys_check misses probe metadata validation (env, exchange, key_id, timestamp_utc, operator)."
+    },
+    {
+      "severity": "P3",
+      "id": "PR-5",
+      "evidence": "docs/launch_policy.md:11-12 + config/policy.json:3",
+      "description": "Governance placeholders and version drift."
+    }
+  ],
+  "evidence_refs": [
+    "specs/CONTRACT.md:4442-4447",
+    "stoic-cli:918-943",
+    "stoic-cli:961-1034",
+    "stoic-cli:1041-1062",
+    "plans/prd.json:381-385",
+    "docs/launch_policy.md:11-12",
+    "config/policy.json:3"
+  ]
+}

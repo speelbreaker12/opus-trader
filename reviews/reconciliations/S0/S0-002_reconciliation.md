@@ -179,4 +179,11 @@ The S0-002 implementation is **stronger than the premortem predicted**. Key find
 
 ---
 
+## R5 Remediation Update (2026-02-24)
+
+- `GAP-S0-002-001` (`P1`, `CODE_FIX`) -> `FIXED`.
+  - `keys-check` now explicitly rejects `all`, `transfer`, `withdraw`, and `margin` scopes, closing the non-trade scope bypass path (`stoic-cli:996-1003`).
+  - Added a hard fail when withdraw probe reports success (`stoic-cli:1006-1012`).
+  - Added single-violation regression test `test_api_keys_all_scope_rejected_runtime` for `scopes=["all"]` (`crates/soldier_infra/tests/test_phase0_runtime.rs:309-368`).
+
 READY FOR SELF_REVIEW

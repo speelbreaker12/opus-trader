@@ -187,4 +187,15 @@ The PRD scope declaration is INACCURATE. The primary enforcement file (`stoic-cl
 
 ---
 
+## R5 Remediation Update (2026-02-24)
+
+- `GAP-S0-004-002` (`P1`, `TEST_FIX`) -> `FIXED`.
+  - `test_status_command_behavior_runtime` now asserts `contract_version == "5.2"` on healthy and unhealthy status paths (`crates/soldier_infra/tests/test_phase0_runtime.rs:537-540`, `crates/soldier_infra/tests/test_phase0_runtime.rs:610-613`).
+- `GAP-S0-004-003` (`P1`, `TEST_FIX`) -> `FIXED`.
+  - `test_status_command_behavior_runtime` now asserts `build_id` value propagation on healthy and unhealthy paths (`crates/soldier_infra/tests/test_phase0_runtime.rs:533-536`, `crates/soldier_infra/tests/test_phase0_runtime.rs:606-609`).
+- `GAP-S0-004-004` (`P1`, `TEST_FIX`) -> `FIXED`.
+  - Added dedicated `test_health_command_behavior_runtime` to exercise `./stoic-cli health --format json` healthy/unhealthy behavior (`crates/soldier_infra/tests/test_phase0_runtime.rs:632-696`).
+- `GAP-S0-004-005` (`P1`, `TEST_FIX`) -> `FIXED`.
+  - Added explicit REDUCE_ONLY status assertions (`trading_mode=REDUCE_ONLY`, `is_trading_allowed=false`) in status coverage (`crates/soldier_infra/tests/test_phase0_runtime.rs:547-588`).
+
 READY FOR SELF_REVIEW

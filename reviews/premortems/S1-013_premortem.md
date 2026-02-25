@@ -13,7 +13,7 @@
     risk logic, or state machine changes. Worst case: a bad PR merges or a good PR is
     blocked — both are recoverable.
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 Source: CONTRACT.md §0.Z.9 "CSP-Only CI Gate (Normative)" and §0.Z.9.1 "Meta-Acceptance Tests for CSP_ONLY CI Gate"
 
@@ -86,7 +86,7 @@ For EACH AT claimed by this story:
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -140,3 +140,6 @@ No debt items. All gates pass. Low risk, no financial exposure, no production co
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [x] No new debt without owner + target slice
+
+Prior Postmortem: NONE
+Reused Guardrail: NONE

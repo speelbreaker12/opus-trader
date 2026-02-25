@@ -224,4 +224,12 @@ All 4 scope files exist and have substantive content. Scope matches premortem pr
 
 ---
 
+## R5 Remediation Update (2026-02-24)
+
+- `GAP-S0-003-001` (`P0`, `CODE_FIX`) -> `FIXED`.
+  - `_load_runtime_state()` now fail-closes to `KILL` when the state file is missing after prior initialization, with explicit error `runtime_state_missing_after_init` (`stoic-cli:205-216`).
+  - Runtime writes now persist an initialization marker (`stoic-cli:163-169`, `stoic-cli:301-325`).
+- `GAP-S0-003-002` (`P1`, `TEST_FIX`) -> `FIXED`.
+  - Added regression test `test_break_glass_state_file_deletion_fails_closed_runtime` that kills, deletes runtime state, and asserts status remains fail-closed (`crates/soldier_infra/tests/test_phase0_runtime.rs:845-903`).
+
 READY FOR SELF_REVIEW

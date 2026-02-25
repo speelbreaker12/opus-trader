@@ -158,3 +158,6 @@ For EACH AT claimed by this story:
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [ ] RejectReason name must be resolved before coding (debt item tracked above)
 - [ ] NaN guard test must be written during implementation (debt item tracked above)
+
+Prior Postmortem: NONE
+Reused Guardrail: NONE

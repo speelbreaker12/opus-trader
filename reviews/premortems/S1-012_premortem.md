@@ -14,7 +14,7 @@
     but incorrect implementation could allow OPEN on an expired instrument (financial loss)
     or halt management of healthy instruments (collateral damage).
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 Source: CONTRACT.md §1.0.Y "Instrument Lifecycle & Expiry Safety (Expiry Cliff Guard) -- MUST implement"
 
@@ -107,7 +107,7 @@ For EACH AT claimed by this story:
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -181,3 +181,6 @@ TRIP/NON-TRIP pairings:
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [x] No new debt without owner + target slice
+
+Prior Postmortem: NONE
+Reused Guardrail: NONE

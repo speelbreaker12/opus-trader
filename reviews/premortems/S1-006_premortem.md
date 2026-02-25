@@ -11,7 +11,7 @@
 - **Risk rating**: LOW
   - Observability-only: structured logs and metrics. No gate logic, no dispatch decisions, no state machine changes. Depends on S1-003 for the cache infrastructure.
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 | AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
 |----|-----------|---------------------------|------------------------|-----------|
@@ -79,7 +79,7 @@
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement -> tests)
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -126,3 +126,6 @@ Note: This story does not change gate behavior. TRIP/NON-TRIP for the enforcemen
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [x] No new debt without owner + target slice
+
+Prior Postmortem: NONE
+Reused Guardrail: NONE

@@ -190,7 +190,7 @@ Anti-patterns are grouped by failure domain for faster lookup during reviews.
 **Pattern**: Agent cites a real `file:line` but the cited line is blank, a comment, or a helper function — not the actual enforcement gate.
 **Risk**: Poisons every downstream layer (cross-review, evidence ledger, proof graph) with unverifiable claims. All subsequent reviews inherit the false citation without rechecking.
 **Fix**: (a) Automated AST/grep validation of all `file:line` citations — verify the cited line contains a function call or guard expression, not whitespace. (b) Introduce Codebase Audit Anchors (`#[audit_anchor(AT-920)]`) that CI validates against `prd.json` AT lists. Citations referencing functions without audit anchors on safety-critical ATs produce `CITATION_UNANCHORED` warning.
-**Gate**: `validate.py` citation check. Hard gate in RUNBOOK — pre-existing citations must be verified before evidence ledger is accepted.
+**Gate**: `verify_citations.sh --artifact <review_artifact> --mode C1 --json` hard gate in RUNBOOK — pre-existing citations must be verified before evidence ledger is accepted.
 
 ---
 
@@ -306,8 +306,10 @@ Anti-patterns are grouped by failure domain for faster lookup during reviews.
 
 **Pattern**: Review tool is run with only one prompt style (generic OR enriched) instead of both.
 **Risk**: Systematic blind spots. Generic prompts find code-level issues (overflow, panic safety, dead code). Enriched prompts find contract-level issues (AT proof gaps, premortem conformance, phantom tests, decision divergence). In S5-004: enriched found 14 unique findings (39%) including all phantom-test discoveries; generic found 4 unique (11%) including `as i64` saturation. Neither alone exceeds ~60%.
-**Fix**: Always run BOTH generic and enriched prompts for each review tool via `review_logged.sh --prompt enriched` and `--prompt generic`. Compare findings to identify prompt-specific blind spots. Track "unique finding %" per prompt style.
-**Gate**: `review_logged.sh` tracks prompt style in artifact provenance header. No hard automated gate — lead must verify both styles were run.
+**Fix**: Always run BOTH generic and enriched prompts for each review tool in Cycle 1. For Cycle 2, use manifest-driven coverage:
+- `cycle2_path.mode = dual_combo`: both prompt styles required.
+- `cycle2_path.mode = recon_clean_single`: one prompt style required, single combo is manifest-declared.
+**Gate**: Cycle 1 hard gate via `review_logged.sh` manifest validation (`required_combinations`), including both prompt styles. Cycle 2 hard gate via `external_manifest_gate.sh`, which enforces `cycle2_path.mode` and required-combination contracts.
 
 ---
 
@@ -349,7 +351,7 @@ Anti-patterns that interact or compound each other. If you find one, check for t
 | `prd_set_pass.sh` | #7 (PROVEN-INTEGRATED), #15 (overdue debt), #20 (zero-caller block) |
 | `/git` skill | #26 (per-file diff before --theirs) |
 | RUNBOOK hard gates | #6 (R7c mandatory), #8 (review basis), #12 (citation check), #23 (evidence ledger), #24 (phase-mapping) |
-| No automated gate | #1, #2, #3, #4, #5, #9, #10, #11, #14, #16, #17, #18, #19, #25 |
+| `external_manifest_gate.sh` + `review_logged.sh` + manifest schema | #1, #2, #3, #4, #5, #9, #10, #11, #14, #16, #17, #18, #19 |
 
 ---
 

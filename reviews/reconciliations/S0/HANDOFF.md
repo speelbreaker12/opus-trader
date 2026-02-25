@@ -33,11 +33,11 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 | Story | preflight | implement | self_review | cycle1 | fix | cycle2 | resolution | verify | pass |
 |-------|-----------|-----------|-------------|--------|-----|--------|------------|--------|------|
 | S0-000 | ✓ | ✓ | ✓ | ✓ | · | · | · | · | · |
-| S0-001 | ✓ | ✓ | ✓ | ✓ | · | · | · | · | · |
-| S0-002 | ✓ | ✓ | ✓ | ✓ | · | · | · | · | · |
+| S0-001 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | · | · | · |
+| S0-002 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | · | · |
 | S0-003 | ✓ | ✓ | ✓ | ✓ | · | · | · | · | · |
 | S0-004 | ✓ | ✓ | ✓ | ✓ | · | · | · | · | · |
-| S0-005 | ✓ | ✓ | ✓ | ✓ | · | · | · | · | · |
+| S0-005 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | · |
 
 ## Per-Story Work Log
 
@@ -406,7 +406,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Story: `S0-005`
 - Step: `verify_full`
 - Status: `verify_full blocked by mechanical verification failures in ./plans/verify.sh full on dirty worktree`
-- HEAD at stop: `0c118b5cb92000080fce74768a607fd9c9f8bd3f`
+- HEAD at stop: `ea05d2a`
 
 ### What happened (2–5 bullets)
 

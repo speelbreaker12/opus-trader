@@ -114,3 +114,6 @@ Note: These are structural/scaffolding ATs, not safety-critical runtime gates. T
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [x] No new debt without owner + target slice
+
+Prior Postmortem: NONE
+Reused Guardrail: NONE

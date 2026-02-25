@@ -1,0 +1,24 @@
+{
+  "schema_version": "review_artifact_sidecar.v1",
+  "head_commit": "0c118b5cb92000080fce74768a607fd9c9f8bd3f",
+  "created_at": "2026-02-25T18:48:55Z",
+  "markdown_sha256": "1d7dffc5bd28c7369d4791c07b74b4f1b553a1ecf7dbed9aebece553b78fadc3",
+  "markdown_path": "reviews/reconciliations/S0/R7B_STRATEGIC_REVIEW.md",
+  "story_id": "S0",
+  "review_type": "strategic_review",
+  "review_basis": "FIX_DIFF_AT_REGRESSION",
+  "tool": "strategic-failure-review",
+  "model": "manual",
+  "prompt_style": "generic",
+  "cycle": "C2",
+  "phase_equivalent": "R7b",
+  "citations_count": 1,
+  "pre_existing_citations_count": 1,
+  "finding_counts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "INFO": 0
+  },
+  "basis_line_present": true
+}

@@ -11,7 +11,7 @@
 - **Risk rating**: MED
   - Touches risk gates (RiskState transition), affects TradingMode computation via PolicyGuard, and controls OPEN/CLOSE dispatch eligibility. A fail-open bug here allows trading on stale metadata.
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 | AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
 |----|-----------|---------------------------|------------------------|-----------|
@@ -96,7 +96,7 @@
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -148,3 +148,6 @@
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [x] No new debt without owner + target slice
+
+Prior Postmortem: NONE
+Reused Guardrail: NONE

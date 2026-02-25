@@ -200,6 +200,7 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 - `<STORY_ID>_reconciliation.md` (evidence ledger)
 - `<STORY_ID>_reconciliation.json` (sidecar — gate fields only) [Wave 2: JSON-primary `evidence_ledger.json`]
 - Validate: `plans/validate_recon_artifact.sh evidence_ledger <path>` [Wave 2]
+- `.wf/recon_scope_lock/<STORY_ID>.scope_lock.json` (R1 scope-lock artifact)
 **Receipt**: `plans/wf_step.sh ${STORY_ID} preflight`
 
 **Gate checks**:
@@ -208,6 +209,7 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 |---------|-------|
 | `R1_READ_ONLY_INTEGRITY_OK` | `git status --porcelain` unchanged (start == end) |
 | `R1_EVIDENCE_LEDGER_COMPLETE` | Artifact exists, contains per-AT table, contains citations for enforcement + test, contains gap section, contains story verdict |
+| `R1_SCOPE_LOCK_CREATED` | Scope lock exists at `.wf/recon_scope_lock/<STORY_ID>.scope_lock.json` and matches scope in `plans/prd.json` |
 
 **Blocking if**: `gate_result=NO-GO` or `read_only_violation=true`
 
@@ -252,6 +254,8 @@ Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step complet
 - Every review artifact must include: `Review basis: STORY_SCOPE (Cycle 1)`
 - Every Cycle 1 review must cite at least one pre-existing enforcement point AND one pre-existing test (both outside the recon diff)
 - If all citations are diff-only → `DIFF_ONLY_REVIEW_REJECTED`
+- Cycle 1 commands may only run after preflight scope-lock capture succeeds for that story (`.wf/recon_scope_lock/<STORY_ID>.scope_lock.json`)
+- If `plans/review_logged.sh` lacks sidecar-compatible output, fix/revert review logger first and re-run preflight cycle checks (`R3_EXTERNAL_MANIFEST` requires `review_artifact_sidecar`-compatible artifacts)
 
 **Agent parallelism**:
 
@@ -300,6 +304,7 @@ plans/review_logged.sh <STORY_ID> --tool codex --prompt enriched --base <BASE_BR
 plans/review_logged.sh <STORY_ID> --tool codex --prompt generic  --base <BASE_BRANCH>
 ```
 Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommended 2+.
+When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refresh.sh` (slice-start default) to avoid unnecessary reruns.
 
 **Artifact requirements**:
 - `review_logged.sh` outputs are normalized into canonical filenames (see [§6 Canonical Directory Layout](#6-artifact-layout--provenance)):

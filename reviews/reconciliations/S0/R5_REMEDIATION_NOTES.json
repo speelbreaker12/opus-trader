@@ -1,0 +1,118 @@
+{
+  "schema_version": "r5_remediation_notes.v1",
+  "slice_id": "S0",
+  "generated_at": "2026-02-24T18:38:02Z",
+  "head_sha": "f653516a57427f52dbeabed6779053896562c472",
+  "gaps": [
+    {
+      "gap_id": "GAP-S0-003-001",
+      "story_id": "S0-003",
+      "status": "FIXED",
+      "resolution_type": "code_fix",
+      "touched_files": [
+        "stoic-cli"
+      ],
+      "evidence": [
+        "stoic-cli:163",
+        "stoic-cli:205",
+        "stoic-cli:214",
+        "stoic-cli:323"
+      ]
+    },
+    {
+      "gap_id": "GAP-S0-003-002",
+      "story_id": "S0-003",
+      "status": "FIXED",
+      "resolution_type": "test_addition",
+      "touched_files": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs"
+      ],
+      "evidence": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:845",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:875",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:877"
+      ]
+    },
+    {
+      "gap_id": "GAP-S0-002-001",
+      "story_id": "S0-002",
+      "status": "FIXED",
+      "resolution_type": "code_and_test",
+      "touched_files": [
+        "stoic-cli",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs"
+      ],
+      "evidence": [
+        "stoic-cli:998",
+        "stoic-cli:1000",
+        "stoic-cli:1010",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:309"
+      ]
+    },
+    {
+      "gap_id": "GAP-S0-004-002",
+      "story_id": "S0-004",
+      "status": "FIXED",
+      "resolution_type": "test_addition",
+      "touched_files": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs"
+      ],
+      "evidence": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:537",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:610"
+      ]
+    },
+    {
+      "gap_id": "GAP-S0-004-003",
+      "story_id": "S0-004",
+      "status": "FIXED",
+      "resolution_type": "test_addition",
+      "touched_files": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs"
+      ],
+      "evidence": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:533",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:606"
+      ]
+    },
+    {
+      "gap_id": "GAP-S0-004-004",
+      "story_id": "S0-004",
+      "status": "FIXED",
+      "resolution_type": "test_addition",
+      "touched_files": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs"
+      ],
+      "evidence": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:632",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:674"
+      ]
+    },
+    {
+      "gap_id": "GAP-S0-004-005",
+      "story_id": "S0-004",
+      "status": "FIXED",
+      "resolution_type": "test_addition",
+      "touched_files": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs"
+      ],
+      "evidence": [
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:547",
+        "crates/soldier_infra/tests/test_phase0_runtime.rs:585"
+      ]
+    }
+  ],
+  "verification": {
+    "targeted_tests": [
+      "python3 -m py_compile stoic-cli",
+      "cargo test -p soldier_infra --test test_phase0_runtime"
+    ],
+    "verify_commands": [
+      "./plans/verify.sh quick"
+    ],
+    "verify_result": "blocked_by_pre_existing_preflight_failure",
+    "verify_artifacts": [
+      "artifacts/verify/20260224_122958"
+    ]
+  }
+}

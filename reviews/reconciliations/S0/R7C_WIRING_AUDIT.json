@@ -1,0 +1,24 @@
+{
+  "schema_version": "review_artifact_sidecar.v1",
+  "head_commit": "0c118b5cb92000080fce74768a607fd9c9f8bd3f",
+  "created_at": "2026-02-25T18:48:55Z",
+  "markdown_sha256": "1c4488e290b1f9be05b38cb81594f1b8b635adc9cfa859ffea9c3cdf99263bfe",
+  "markdown_path": "reviews/reconciliations/S0/R7C_WIRING_AUDIT.md",
+  "story_id": "S0",
+  "review_type": "wiring_audit",
+  "review_basis": "FIX_DIFF_AT_REGRESSION",
+  "tool": "manual",
+  "model": "manual",
+  "prompt_style": "generic",
+  "cycle": "C2",
+  "phase_equivalent": "R7c",
+  "citations_count": 6,
+  "pre_existing_citations_count": 4,
+  "finding_counts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0,
+    "INFO": 0
+  },
+  "basis_line_present": true
+}

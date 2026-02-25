@@ -1,0 +1,64 @@
+{
+  "schema_version": "self_review_sidecar.v1",
+  "head_commit": "e04a39f9150316caa2a97a5e371cbb5ab7284f5a",
+  "created_at": "2026-02-24T20:34:27Z",
+  "markdown_sha256": "396798ea2a81d09c209bedf248b512c6ea51e61eedd8509cc867b71e6d577d21",
+  "markdown_path": "reviews/reconciliations/S0/SELF_REVIEW_R5b.md",
+  "story_id": "S0",
+  "skills_run": [
+    {
+      "name": "pr-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 1, "P2": 3 },
+      "receipt_path": "reviews/reconciliations/S0/receipts/r5b_pr_review.json"
+    },
+    {
+      "name": "failure-mode-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 0, "P2": 1 },
+      "receipt_path": "reviews/reconciliations/S0/receipts/r5b_failure_mode_review.json"
+    },
+    {
+      "name": "strategic-failure-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 2, "P2": 3 },
+      "receipt_path": "reviews/reconciliations/S0/receipts/r5b_strategic_review.json"
+    },
+    {
+      "name": "contract-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 1, "P2": 2 },
+      "receipt_path": "reviews/reconciliations/S0/receipts/r5b_contract_review.json"
+    },
+    {
+      "name": "validator-audit",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 0, "P2": 3 },
+      "receipt_path": "reviews/reconciliations/S0/receipts/r5b_validator_audit.json"
+    },
+    {
+      "name": "devils-advocate",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 1, "P2": 2 },
+      "receipt_path": "reviews/reconciliations/S0/receipts/r5b_devils_advocate.json"
+    }
+  ],
+  "total_blockers": 11,
+  "premortem_crosscheck": {
+    "s2": "CHECKED",
+    "s4": "CHECKED",
+    "s5": "CHECKED",
+    "s6": "CHECKED",
+    "s10": "CHECKED"
+  },
+  "at_proof_gaps": [
+    {
+      "at_id": "AT-023",
+      "description": "Probe/keys behavior is implemented for CLI checks; transport-level proof for AT-023 is deferred to S8.9 via DEBT-S0-004-007."
+    },
+    {
+      "at_id": "AT-022",
+      "description": "Contract endpoint proof for AT-022 is deferred to S8.9; Slice 0 self-review scope intentionally carries partial coverage."
+    }
+  ]
+}

@@ -154,14 +154,26 @@ Every story must have an evidence ledger (one per story) before the `cycle1` rec
 
 ### 3.7 RECON-CLEAN Independent Verification Gate
 
-When Cycle 2 is abbreviated via the RECON-CLEAN exception, the lead must independently verify:
+When Cycle 2 is abbreviated via the Cycle-2 manifest `recon_clean_single` mode, the lead must independently verify:
 
-1. Read at least one Cycle 1 review artifact for the story and confirm no findings were downgraded from BLOCKING to INFO without justification.
-2. Confirm the R5b self-review artifact exists and its `finding_counts` show `P0: 0, P1: 0`.
-3. Record verification in the resolution artifact: `RECON-CLEAN verified: reviewed <artifact name>, confirmed BLOCKING=0`.
+1. Confirm explicit manifest fields (Cycle 2 manifest or self-review manifest):
+   - `cycle2_path.mode == "recon_clean_single"`
+   - `cycle2_path.single_combo_choice.tool` and `.prompt_style` match the selected single Cycle 2 review
+   - `cycle2_path.single_combo_justification` is non-empty
+2. Confirm `r5b` was a no-fix path (`R5B_NO_FIXES_NEEDED.md` exists) and its JSON finding counts are `P0: 0, P1: 0, P2: 0`.
+3. Record verification in the resolution artifact: `RECON-CLEAN verified: reviewed <artifact name>, confirmed mode: recon_clean_single`.
 4. Include lead sign-off: `RECON-CLEAN approved by: <lead name/agent>`.
 
 Without independent verification, RECON-CLEAN is not valid.
+
+#### 3.7.1 Required RECON-CLEAN Data Fields
+
+Manifest/summary fields that drive Cycle-2 flow and RECON-CLEAN eligibility must be explicit:
+
+- `cycle2_path.mode` (`"dual_combo"` or `"recon_clean_single"`)
+- `cycle2_path.required_combinations` (`array`)
+- `cycle2_path.single_combo_choice` (`object`; required when `mode="recon_clean_single"`)
+- `cycle2_path.single_combo_justification` (`string`; required when `mode="recon_clean_single"`)
 
 ### 3.8 R5b Skill Receipt Validation
 
@@ -209,7 +221,7 @@ Fifteen checks, all must pass:
 | 11 | `proof_graph.json` exists at `artifacts/story/<ID>/proof_graph.json` | Missing proof graph blocks (unless listed in `plans/proof_graph_exempt.txt`) |
 | 12 | `python/proof_graph/validate.py --strict` passes (60 rules, WARNs promoted to ERRORs) | Exit code 1 on failure blocks; exit code 20 on trading halt |
 | 13 | `R3_EXTERNAL_C1_COMPLETE` passed; all external C1 findings mapped via R4b | Unmapped external finding blocks |
-| 14 | `R7D_EXTERNAL_C2_COMPLETE` passed (or RECON-CLEAN approved with lead sign-off) | Missing Cycle 2 review blocks |
+| 14 | `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` or `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` passed (mode + findings-driven selection) | Missing Cycle 2 review gate |
 | 15 | `fail_closed_coverage.sh` passes (test counts + fail-closed keyword patterns) | Insufficient fail-closed test coverage blocks |
 
 ### 3.10 Proof Graph Gate
@@ -275,7 +287,11 @@ Default to story-scope.
 - Cycle 1: `STORY_SCOPE` -- full story implementation, not diff-only.
 - Cycle 2: `FIX_DIFF + AT_REGRESSION` -- remediation diff plus targeted re-check of AT proofs affected by changes.
 - Every review artifact (self-review and external) must include the Review Basis line.
-- **GREEN path (recon only)**: If Cycle 1 + self-review found zero findings AND no code changed, Cycle 2 requires only 1 external artifact (relaxed). Receipt records `recon_relaxation: "min_reviews_relaxed_to_1"`. Detected automatically by scanning review artifacts for zero-finding patterns ("0 findings", "no issues", "P0: 0.*P1: 0").
+- **GREEN path (recon only)**: If Cycle 1 + self-review reported zero blocking findings and no code changed, Cycle 2 requires only 1 external artifact (relaxed). `recon_relaxation: "min_reviews_relaxed_to_1"` is emitted only when manifest fields confirm:
+  - `code_changed == false`
+  - `finding_counts.P0 == 0`
+  - `finding_counts.P1 == 0`
+  - `blocking_findings_present == false`
 - **YELLOW/RED path**: Code changed in fix step → 2 external artifacts required (full). `prd_set_pass.sh` must be re-run regardless of prior `passes=true` status.
 - Cycle 2 R7d-R7e scope: remediation diff (R5 + R5b + R7a-c changes) plus targeted re-check of AT proofs affected by those changes. If a fix modified a test for AT-960, re-run mutation analysis on AT-960's full proof chain.
 
@@ -287,6 +303,20 @@ Default to story-scope.
 
 - **Gate-driving artifacts**: JSON-primary. Markdown is rendered only (never edited manually).
 - **Human judgment artifacts**: Markdown + JSON sidecar. Markdown is source of truth; sidecar is gate summary.
+
+### 5.1a Evidence Packager Contract (JSON-first)
+
+To reduce duplicated transcription, each phase uses a packager workflow:
+
+1. Reviewer provides the JSON evidence in the prescribed schema.
+2. The packager renders markdown companions for review readability.
+3. Gate checks compare rendered artifacts against JSON keys and `markdown_sha256` drift.
+
+Packager-only expectations:
+
+- Phase artifacts listed as JSON-primary in this policy are machine sources.
+- Markdown companions are review ergonomics and may summarize; they must not introduce required facts absent from JSON.
+- If a required field is absent in JSON, manual review can continue but the gate cannot pass.
 
 ### 5.2 Schema Inventory
 
@@ -301,7 +331,7 @@ Default to story-scope.
 | Proof graph | JSON-primary | R6 | `artifacts/story/<ID>/proof_graph.json` |
 | Self-review | Markdown (source) | R5b | `reviews/reconciliations/<slice>/SELF_REVIEW_R5b.md` |
 | Contract review | Markdown (source) | R7a | `reviews/reconciliations/<slice>/R7A_CONTRACT_REVIEW.md` |
-| Strategic review | Markdown (source) | R7b | `reviews/reconciliations/<slice>/R7B_STRATEGIC_REVIEW.md` |
+| Strategic review | Markdown (source) | risk-gate R7b | `reviews/reconciliations/<slice>/R7B_STRATEGIC_REVIEW.md` |
 | Wiring audit | Markdown (source) | R7c | `reviews/reconciliations/<slice>/R7C_WIRING_AUDIT.md` |
 | Devils advocate | Markdown (source) | R7e | `reviews/reconciliations/<slice>/R7E_DEVILS_ADVOCATE.md` |
 | Devils advocate recheck | Markdown (source) | R7e | `reviews/reconciliations/<slice>/R7E_DEVILS_ADVOCATE_RECHECK.md` |

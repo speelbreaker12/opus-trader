@@ -18,7 +18,7 @@
 
 ## 1) Clause audit (contract -> AT traceability)
 
-| AT | Contract SS | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
+| AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
 |----|-----------|---------------------------|------------------------|-----------|
 | AT-201 | Definitions (intent classification) | "if an intent cannot be classified, it MUST be treated as OPEN" | MUST | Yes -- provide unknown action, verify OPEN classification |
 | AT-343 | §1.1 (Intent Identity) | "two intents with identical canonical fields evaluated at different wall-clock times ... the two intent_hash values are identical" | MUST (implicit -- "identical" is a hard requirement) | Yes -- compute hash at t0 and t1, assert equality |
@@ -37,7 +37,7 @@
 |---|-----------|---------------|---------------------|------------|
 | 1 | S2-000 (Quantization rounding) is complete and provides `qty_steps: u64` and `price_ticks: u64` (or equivalent integer types) as outputs | If quantization outputs are `f64` (e.g., `qty_q` as a float), hashing floats reintroduces non-determinism. The hash function signature must accept integer types, not floats. | Type-level enforcement: hash function takes `u64` for qty and price, not `f64`. Compile error if caller passes float. | Must verify at implementation time that S2-000 exports integer step/tick counts. |
 | 2 | `xxhash64` is the hash algorithm, not SHA-256, BLAKE3, or another hash | Using a different algorithm changes all downstream consumers (label ih16, WAL dedup keys). CONTRACT.md §1.1 explicitly says `xxhash64`. | Test: compute known input, assert output matches xxhash64 reference value (golden vector). | Must verify correct crate (`xxhash-rust` or equivalent) is used. |
-| 3 | Hash input fields are concatenated with a deterministic separator or framing, not just raw concatenation; this relies on Deribit ASCII instrument names, since null-byte separators are not allowed in non-ASCII fields. If a non-ASCII instrument name appears, fallback to length-prefix framing. | Raw concatenation of `"BTC"` + `"USD"` is identical to `"BTCU"` + `"SD"` -- a classic hash collision via ambiguous field boundaries. Without separators or length-prefixed framing, distinct inputs can produce identical hashes. | Test: construct two inputs where raw concatenation is identical but field values differ (e.g., instrument `"AB"` + side `"CD"` vs. instrument `"ABC"` + side `"D"`), assert hashes differ. | Not specified in CONTRACT.md -- must be a design decision (§4). |
+| 3 | Hash input fields are concatenated with a deterministic separator or framing, not just raw concatenation; this assumes Deribit instrument and side inputs are ASCII. If a non-ASCII instrument, side, or group_id appears, fallback to length-prefix framing is required. | Raw concatenation of `"BTC"` + `"USD"` is identical to `"BTCU"` + `"SD"` -- a classic hash collision via ambiguous field boundaries. Without separators or length-prefixed framing, distinct inputs can produce identical hashes. | Test: construct two inputs where raw concatenation is identical but field values differ (e.g., instrument `"AB"` + side `"CD"` vs. instrument `"ABC"` + side `"D"`), assert hashes differ. | Not specified in CONTRACT.md -- must be a design decision (§4). |
 | 4 | The hash input field order is fixed and canonical: `instrument + side + qty_q + limit_price_q + group_id + leg_idx` per CONTRACT.md §1.1 | If field order varies (e.g., due to struct field iteration order or HashMap), the hash is non-deterministic across codepaths. | Test: construct identical inputs in two different struct instantiation orders, assert same hash. AT-218 covers this. | CONTRACT.md specifies the order explicitly. |
 | 5 | `side` is serialized as a stable, canonical string (e.g., `"Buy"`, `"Sell"`), not as an enum discriminant integer that could change across versions | If `side` is serialized as `0`/`1` and the enum variant order changes in a future refactor, all existing WAL hashes become invalid and dedup breaks silently. | Test: assert hash of `Side::Buy` is stable across versions by including a golden vector with known hash output. | Must verify serialization format at implementation time. |
 | 6 | `group_id` is a UUID string in a canonical format (lowercase, with or without dashes -- but always the same format) | If `group_id` formatting varies (e.g., uppercase vs lowercase hex, with vs without dashes), the same logical group produces different hashes. | Test: compute hash with `"550e8400-e29b-41d4-a716-446655440000"` and `"550E8400-E29B-41D4-A716-446655440000"`, assert they either produce the same hash (if normalized) or the normalization is enforced upstream. | Must decide canonical format (§4). |
@@ -157,9 +157,9 @@
 
 ## 8) Conflict scan & hot zones
 - **Invariants/gates impacted**: The intent_hash feeds into:
-  1. WAL dedup (SS2.4 Durable Intent Ledger): hash is the dedup key
+  1. WAL dedup (§2.4 Durable Intent Ledger): hash is the dedup key
   2. Label encoding (§1.1): `ih16` field in the s4 label is the first 16 hex chars of intent_hash
-  3. TruthCapsule linkage (SS2.5): capsules are keyed by `(group_id, leg_idx, intent_hash)`
+  3. TruthCapsule linkage (§2.5): capsules are keyed by `(group_id, leg_idx, intent_hash)`
   4. Corrective actions: `ReplaceIOC(intent_hash, new_limit_price)` references intent_hash
 
   Changing the hash function after any of these consumers are implemented requires a coordinated migration. Since S2-001 is early in the sequence (Slice 2), consumers S2-002 (label), S2-003+ (WAL), and later stories have not yet been implemented, so the risk of breaking existing consumers is low.
@@ -207,18 +207,18 @@ Reused Guardrail: NONE (no prior postmortem in this slice)
 | Non-canonical field exclusion test not in any AT | Med | AT-343 and AT-218 do not test that hash ignores non-canonical fields (strat_id, reduce_only, etc.). A wrong impl that includes extra fields passes all ATs if fixtures do not vary those fields. | S2-001 implementer | S2-001 implementation | `test_idempotency::hash_ignores_non_canonical_fields` |
 | Field boundary collision test not in any AT | Low | FM-3 is a theoretical risk; null-byte separator eliminates it. But no AT proves the separator works. | S2-001 implementer | S2-001 implementation | `test_idempotency::hash_field_boundary_no_collision` |
 | AT-201 is listed as enforcing but is contextual for this story | Low | AT-201 is about intent classification fail-closed, not about hashing. This story should not claim primary enforcement of AT-201. | PRD maintainer | PRD cleanup | Remove AT-201 from S2-001's `enforcing_contract_ats` or add a note that it is contextual |
-| S2-000 integer type export not verified | Low | Whether S2-000 exports `qty_steps`/`price_ticks` as `u64` is unknown until implementation. If it exports only floats, the exploit in SS9 must be applied. | S2-001 implementer | S2-001 implementation | Verify S2-000 API at implementation start; add integer accessors if missing |
+| S2-000 integer type export not verified | Low | Whether S2-000 exports `qty_steps`/`price_ticks` as `u64` is unknown until implementation. If it exports only floats, the exploit in FM-1 must be applied. | S2-001 implementer | S2-001 implementation | Verify S2-000 API at implementation start; add integer accessors if missing |
 | Cross-restart determinism test (golden vector across process restarts) | Med | AT-218 tests within a single process. No AT proves hash stability across restarts. The golden vector test implicitly proves this (hardcoded expected value), but an explicit cross-restart test would be stronger evidence. | S2-001 implementer | S2-001 implementation or evidence story | `test_intent_determinism` (evidence story) covers this; verify it uses the same hash function |
 
 YELLOW with all debt tracked and assigned to target slices. No RED blockers. All YELLOW items are addressable within S2-001 implementation (no external dependencies except the AT-201 PRD cleanup, which is low severity).
 
 **Exit criteria (definition of done, before I start):**
 - [x] §1 clause audit: every AT traced to normative clause -- 4 ATs traced; AT-201 noted as contextual
-- [x] SS2 all assumptions validated or killed -- 10 assumptions documented with test strategies
-- [x] SS3 all failure modes have detection + mitigation -- 7 modes identified, all with detection and mitigation
+- [x] §2 all assumptions validated or killed -- 10 assumptions documented with test strategies
+- [x] §3 all failure modes have detection + mitigation -- 7 modes identified, all with detection and mitigation
 - [x] §4 all decisions resolved, grounded in evidence -- 4 decisions resolved with CONTRACT.md and PRD references
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives -- 7 wrong impls identified with tightening tests
-- [x] SS6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN -- AT-343, AT-218, AT-928 all have both; AT-201 excluded as contextual
-- [x] SS7 loss_mode documented with fail-closed boundary + rollback plan -- double-position worst case documented; PolicyGuard position limit is the cap; rollback plan includes WAL wipe + reconciliation
-- [x] SS8 conflict scan clean (no CONTRACT.md conflicts) -- clean; cross-story dependencies on S2-000 (input) and S2-002 (output) noted
+- [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN -- AT-343, AT-218, AT-928 all have both; AT-201 excluded as contextual
+- [x] §7 loss_mode documented with fail-closed boundary + rollback plan -- double-position worst case documented; PolicyGuard position limit is the cap; rollback plan includes WAL wipe + reconciliation
+- [x] §8 conflict scan clean (no CONTRACT.md conflicts) -- clean; cross-story dependencies on S2-000 (input) and S2-002 (output) noted
 - [x] No new debt without owner + target slice -- 6 debt items tracked in register with owners and target slices
