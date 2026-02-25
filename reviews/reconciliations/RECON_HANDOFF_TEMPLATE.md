@@ -86,8 +86,8 @@ doesn't deserve `passes=true`.
 
 Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · `✗` blocked
 
-| Story | preflight | implement | self_review | cycle1 | fix | cycle2 | resolution | verify | pass |
-|-------|-----------|-----------|-------------|--------|-----|--------|------------|--------|------|
+| Story | preflight | implement | self_review | cycle1 | fix | cycle2 | resolution | verify_full | pass |
+|-------|-----------|-----------|-------------|--------|-----|--------|------------|-------------|------|
 | {{S1}} | · | · | · | · | · | · | · | · | · |
 | {{S2}} | · | · | · | · | · | · | · | · | · |
 | {{S3}} | · | · | · | · | · | · | · | · | · |
@@ -233,7 +233,8 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Wiring audit: `reviews/reconciliations/{{SLICE_ID}}/R7C_WIRING_AUDIT.json`
 - Fix plan: `reviews/reconciliations/{{SLICE_ID}}/R7C_FIX_PLAN.md` {{exists / n/a}}
 - Fix notes: `reviews/reconciliations/{{SLICE_ID}}/R7C_FIX_NOTES.md` {{exists / n/a}}
-- Changes made: {{none / brief description}}
+- Fixes applied: {{none / list GAP-IDs or findings}}
+- Files changed: {{list paths}}
 - Notes: {{anything the next agent needs to know}}
 
 > **Step 5 debrief** · `§0: CLEAN` to skip §1–§11.
@@ -331,6 +332,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 - Reference: RUNBOOK §4 (Pass-Flip Gate — 15 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
 - Status: {{NOT_STARTED / COMPLETE / SKIPPED-GREEN}}
+- Receipt: `.wf/receipts/{{STORY_ID}}/08_pass.json`
 - Path: {{GREEN — no re-flip / YELLOW — prd_set_pass.sh re-run}}
 - Decision file: `reviews/reconciliations/{{SLICE_ID}}/DECISION.json` {{exists / n/a}}
 - Result: {{passes=true confirmed / blocked by: {{reason}}}}
