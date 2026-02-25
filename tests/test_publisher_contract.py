@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+import time
 from contextlib import contextmanager
 
 import pytest
@@ -122,6 +123,9 @@ def test_sidecar_state_counters(tmp_path: Path) -> None:
 
 class _RateLimitHandler(BaseHTTPRequestHandler):
   def do_POST(self) -> None:
+    content_length = int(self.headers.get("Content-Length", "0"))
+    if content_length > 0:
+      self.rfile.read(content_length)
     self.send_response(429)
     self.send_header("Content-Type", "application/json")
     self.end_headers()
@@ -136,6 +140,7 @@ def _run_rate_limit_server() -> "tuple[HTTPServer, int]":
   server = HTTPServer(("127.0.0.1", 0), _RateLimitHandler)
   thread = threading.Thread(target=server.serve_forever, daemon=True)
   thread.start()
+  time.sleep(0.05)
   try:
     yield server, server.server_address[1]
   finally:
@@ -288,6 +293,97 @@ def test_process_once_duplicate_snapshot_does_not_requeue_and_increments_only_de
   assert dedup_state.totals.deduped == 1
   assert dedup_state.totals.sent == 1
   assert dedup_state.totals.failed == 0
+
+
+def test_process_once_duplicate_snapshot_still_drains_pending_retry_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  source = json.loads((ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"))
+  now = datetime.now(tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+  source["generated_at"] = now
+  source["snapshot_seq"] = 10
+
+  source_path = tmp_path / "runtime_state.json"
+  source_path.write_text(json.dumps(source, indent=2), encoding="utf-8")
+  cfg = publisher.PublisherConfig(
+    source_snapshot_path=source_path,
+    state_path=tmp_path / "state.json",
+    spool_db_path=tmp_path / "spool.db",
+    log_path=tmp_path / "publisher.log",
+    convex_endpoint="http://127.0.0.1:1/status",
+    convex_secret=None,
+    instance_id="soldier-main-01",
+    service="soldier_core",
+    env="paper",
+    head_commit="4a2e6fc",
+    expected_publish_interval_s=2,
+    stale_after_s=15,
+    poll_interval_s=2,
+    publisher_version="status-publisher.v1",
+    max_attempts=3,
+    connect_timeout_s=2.0,
+    read_timeout_s=5.0,
+    request_total_timeout_s=8.0,
+  )
+
+  outbox = spool.SpoolStore(cfg.spool_db_path)
+  sidecar_state = publisher.load_state(cfg.state_path, cfg.instance_id)
+
+  try:
+    monkeypatch.setattr(
+      publisher,
+      "_http_post_envelope",
+      lambda *args, **kwargs: publisher.HttpTransportResult(
+        ok=False,
+        retryable=True,
+        code=publisher.HTTP_STATUS_5XX,
+        detail="temporary transport failure",
+      ),
+    )
+    failed_state = publisher._process_once(cfg, outbox, sidecar_state)
+
+    row_count = outbox._conn.execute(
+      "SELECT status, attempt_count, snapshot_hash FROM outbox",
+    ).fetchall()
+    assert len(row_count) == 1
+    assert row_count[0][0] == "FAILED_RETRY"
+    assert row_count[0][1] == 1
+    snapshot_hash = row_count[0][2]
+    outbox._conn.execute(
+      "UPDATE outbox SET next_attempt_at = ? WHERE snapshot_hash = ?",
+      (publisher._utc_now_iso(), snapshot_hash),
+    )
+    outbox._conn.commit()
+
+    monkeypatch.setattr(
+      publisher,
+      "_http_post_envelope",
+      lambda *args, **kwargs: publisher.HttpTransportResult(
+        ok=True,
+        retryable=False,
+        code="",
+        detail='{"duplicate":true}',
+      ),
+    )
+    dedup_state = publisher._process_once(cfg, outbox, failed_state)
+
+    row = outbox._conn.execute(
+      "SELECT status, attempt_count, snapshot_hash FROM outbox WHERE snapshot_hash = ?",
+      (snapshot_hash,),
+    ).fetchone()
+  finally:
+    outbox.close()
+
+  assert row is not None
+  assert row["status"] == "SENT"
+  assert row["attempt_count"] == 1
+  assert failed_state.totals.seen == 1
+  assert failed_state.totals.failed == 1
+  assert failed_state.totals.deduped == 0
+  assert failed_state.totals.sent == 0
+  assert dedup_state.totals.seen == 2
+  assert dedup_state.totals.failed == 1
+  assert dedup_state.totals.sent == 1
+  assert dedup_state.totals.deduped == 1
+  assert dedup_state.last_error_code is None
 
 
 def test_extract_snapshot_seq_invalid() -> None:

@@ -35,7 +35,7 @@ const VALIDATION_ERROR = {
 
 const INTERNAL_ERROR = {
   status: 500,
-  code: "CONVEX_INTERNAL_ERROR",
+  code: "HTTP_STATUS_5XX",
   body: "internal server error",
 };
 
@@ -100,7 +100,7 @@ http.route({
       const message = String(error);
       const lower = message.toLowerCase();
       if (lower.includes("authorization") || lower.includes("permission")) {
-        return asJsonResponse({ code: "AUTH_ERROR", error: BAD_AUTH.body }, BAD_AUTH.status);
+        return asJsonResponse({ code: CONVEX_AUTH_ERROR.code, error: BAD_AUTH.body }, BAD_AUTH.status);
       }
 
       if (isValidationLikeError(message)) {

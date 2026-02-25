@@ -422,77 +422,10 @@ def _safe_save_state(path: Path, state: SidecarState) -> None:
     raise PublisherError(STATE_FILE_WRITE_ERROR, f"failed to write state file: {exc}", permanent=False) from exc
 
 
-def _process_once(config: PublisherConfig, spool: SpoolStore, state: SidecarState) -> SidecarState:
-  source = _load_source_snapshot(config.source_snapshot_path)
-  _ensure_runtime_schema(source)
-
-  generated_at = source.get("generated_at")
-  generated_at_dt = _parse_utc_timestamp(generated_at)
-  snapshot_seq = _extract_snapshot_seq(source)
-  try:
-    snapshot_hash = hash_snapshot(source)
-  except Exception as exc:
-    raise PublisherError(SNAPSHOT_HASH_COMPUTE_ERROR, f"failed to hash snapshot: {exc}", permanent=False) from exc
-
-  previous_last_seen_hash = state.last_seen_snapshot_hash
-  previous_last_seen_seq = state.last_seen_snapshot_seq
-
-  if snapshot_hash == previous_last_seen_hash:
-    state = state.with_seen(snapshot_hash, generated_at, snapshot_seq)
-    LOG.info("duplicate snapshot detected snapshot_hash=%s", snapshot_hash)
-    return state.with_dedup().with_last_error(SNAPSHOT_DUPLICATE_SKIPPED)
-
-  if previous_last_seen_seq is not None and snapshot_seq <= previous_last_seen_seq:
-    raise PublisherError(
-      RUNTIME_SCHEMA_INVALID,
-      f"runtime snapshot_seq must increase; got {snapshot_seq} after {previous_last_seen_seq}",
-      permanent=True,
-    )
-
-  state = state.with_seen(snapshot_hash, generated_at, snapshot_seq)
-
-  if _is_snapshot_stale(generated_at_dt, config.stale_after_s):
-    raise PublisherError(
-      RUNTIME_SNAPSHOT_STALE,
-      f"snapshot older than stale_after_s={config.stale_after_s}s",
-      permanent=False,
-    )
-
-  try:
-    snapshot = build_snapshot_envelope(
-      source,
-      instance_id=config.instance_id,
-      service=config.service,
-      env=config.env,
-      head_commit=config.head_commit,
-      expected_publish_interval_s=config.expected_publish_interval_s,
-      stale_after_s=config.stale_after_s,
-      generated_at=generated_at,
-      publisher_version=config.publisher_version,
-      attempt=1,
-    )
-  except SnapshotBuilderError as exc:
-    code = _classify_snapshot_builder_error(exc)
-    raise PublisherError(code, f"snapshot build failed: {exc}", permanent=True) from exc
-
-  payload_json = json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
-  inserted = _safe_spool_enqueue(
-    spool,
-    snapshot_hash=snapshot_hash,
-    instance_id=config.instance_id,
-    generated_at=generated_at,
-    payload_json=payload_json,
-    next_attempt_at=_utc_now_iso(),
-  )
-  if not inserted:
-    LOG.info("%s snapshot_hash=%s", SNAPSHOT_DUPLICATE_SKIPPED, snapshot_hash)
-    return state.with_dedup().with_last_error(SNAPSHOT_DUPLICATE_SKIPPED)
-
-  state = state.with_queued()
-
+def _send_ready_row(config: PublisherConfig, spool: SpoolStore, row_state: SidecarState) -> SidecarState:
   rows = _safe_ready_rows(spool, limit=1)
   if not rows:
-    return state
+    return row_state
 
   row = rows[0]
   attempt = row.attempt_count + 1
@@ -516,7 +449,7 @@ def _process_once(config: PublisherConfig, spool: SpoolStore, state: SidecarStat
     sent_at = _utc_now_iso()
     _safe_mark_success(spool, row.id, sent_at)
     LOG.info("sent snapshot_hash=%s", row.snapshot_hash)
-    return state.with_send_success(row.snapshot_hash, sent_at)
+    return row_state.with_send_success(row.snapshot_hash, sent_at)
 
   if result.retryable and attempt < config.max_attempts:
     delay = _attempt_delay_seconds(attempt)
@@ -525,11 +458,82 @@ def _process_once(config: PublisherConfig, spool: SpoolStore, state: SidecarStat
       tz=timezone.utc,
     ).isoformat(timespec="seconds").replace("+00:00", "Z")
     _safe_mark_retry(spool, row.id, attempt, next_attempt, result.code, result.detail)
-    return state.with_send_failure(result.code, permanent=False)
+    return row_state.with_send_failure(result.code, permanent=False)
 
   _safe_mark_perm_failure(spool, row.id, attempt, result.code, result.detail)
   LOG.error("permanent delivery failure snapshot_hash=%s code=%s detail=%s", row.snapshot_hash, result.code, result.detail)
-  return state.with_send_failure(result.code, permanent=True)
+  return row_state.with_send_failure(result.code, permanent=True)
+
+
+def _process_once(config: PublisherConfig, spool: SpoolStore, state: SidecarState) -> SidecarState:
+  source = _load_source_snapshot(config.source_snapshot_path)
+  _ensure_runtime_schema(source)
+
+  generated_at = source.get("generated_at")
+  generated_at_dt = _parse_utc_timestamp(generated_at)
+  snapshot_seq = _extract_snapshot_seq(source)
+  try:
+    snapshot_hash = hash_snapshot(source)
+  except Exception as exc:
+    raise PublisherError(SNAPSHOT_HASH_COMPUTE_ERROR, f"failed to hash snapshot: {exc}", permanent=False) from exc
+
+  previous_last_seen_hash = state.last_seen_snapshot_hash
+  previous_last_seen_seq = state.last_seen_snapshot_seq
+
+  if snapshot_hash == previous_last_seen_hash:
+    state = state.with_seen(snapshot_hash, generated_at, snapshot_seq)
+    LOG.info("duplicate snapshot detected snapshot_hash=%s", snapshot_hash)
+    state = state.with_dedup().with_last_error(SNAPSHOT_DUPLICATE_SKIPPED)
+  else:
+    if previous_last_seen_seq is not None and snapshot_seq <= previous_last_seen_seq:
+      raise PublisherError(
+        RUNTIME_SCHEMA_INVALID,
+        f"runtime snapshot_seq must increase; got {snapshot_seq} after {previous_last_seen_seq}",
+        permanent=True,
+      )
+
+    state = state.with_seen(snapshot_hash, generated_at, snapshot_seq)
+
+    if _is_snapshot_stale(generated_at_dt, config.stale_after_s):
+      raise PublisherError(
+        RUNTIME_SNAPSHOT_STALE,
+        f"snapshot older than stale_after_s={config.stale_after_s}s",
+        permanent=False,
+      )
+
+    try:
+      snapshot = build_snapshot_envelope(
+        source,
+        instance_id=config.instance_id,
+        service=config.service,
+        env=config.env,
+        head_commit=config.head_commit,
+        expected_publish_interval_s=config.expected_publish_interval_s,
+        stale_after_s=config.stale_after_s,
+        generated_at=generated_at,
+        publisher_version=config.publisher_version,
+        attempt=1,
+      )
+    except SnapshotBuilderError as exc:
+      code = _classify_snapshot_builder_error(exc)
+      raise PublisherError(code, f"snapshot build failed: {exc}", permanent=True) from exc
+
+    payload_json = json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
+    inserted = _safe_spool_enqueue(
+      spool,
+      snapshot_hash=snapshot_hash,
+      instance_id=config.instance_id,
+      generated_at=generated_at,
+      payload_json=payload_json,
+      next_attempt_at=_utc_now_iso(),
+    )
+    if not inserted:
+      LOG.info("%s snapshot_hash=%s", SNAPSHOT_DUPLICATE_SKIPPED, snapshot_hash)
+      state = state.with_dedup().with_last_error(SNAPSHOT_DUPLICATE_SKIPPED)
+    else:
+      state = state.with_queued()
+
+  return _send_ready_row(config, spool, state)
 
 
 def run_loop(config: PublisherConfig) -> None:
