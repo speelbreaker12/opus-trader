@@ -392,8 +392,10 @@ pub fn settle_pending_on_tlsm_terminal(
 /// `validate_and_dispatch` — ensuring the full assembly chain is exercised
 /// before gate evaluation.
 ///
+/// TODO(slice-2): Wire as production entry point for order submission.
+///
 /// Assembly failure is fail-closed: `dispatch_consistency` is set to
-/// `unchecked(false)` and risk state is degraded.
+/// `failed()` and risk state is degraded.
 pub fn build_open_intent_with_assembly(
     assembly_meta: &InstrumentKindInput,
     sizing_params: &SizingParams,
@@ -417,7 +419,10 @@ pub fn build_open_intent_with_assembly(
         }
         Err(e) => {
             tracing::warn!(?e, "assembly failed — degrading dispatch_consistency to false");
-            adjusted_input.base_gates.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
+            adjusted_input.base_gates.dispatch_consistency = DispatchConsistencyProof::failed();
+            if adjusted_input.base_gates.risk_state == RiskState::Healthy {
+                adjusted_input.base_gates.risk_state = RiskState::Degraded;
+            }
         }
     }
 

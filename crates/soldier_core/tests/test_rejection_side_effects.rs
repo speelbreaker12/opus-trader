@@ -10,7 +10,7 @@
 #![allow(deprecated)]
 
 mod common;
-use common::{assert_no_dispatch, assert_no_dispatch_no_wal};
+use common::{assert_no_dispatch, assert_no_dispatch_no_wal, gate_results_all_passing};
 
 use soldier_core::execution::preflight_intent;
 use soldier_core::execution::{
@@ -56,7 +56,7 @@ impl PersistentState {
 #[test]
 fn test_rejected_intent_has_no_side_effects() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(
         ChokeIntentClass::Open,
@@ -74,7 +74,7 @@ fn test_rejected_intent_has_no_side_effects() {
 #[test]
 fn test_rejected_risk_state_no_side_effects() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(
         ChokeIntentClass::Open,
@@ -275,7 +275,7 @@ fn test_rejected_wal_gate_no_side_effects() {
 
     let gates = GateResults {
         wal_recorded: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(
@@ -337,7 +337,7 @@ fn test_multiple_rejections_no_state_accumulation() {
     let mut quantize_metrics = QuantizeMetrics::new();
 
     // Rejection 1: RiskState
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     build_order_intent(
         ChokeIntentClass::Open,
         RiskState::Kill,
@@ -356,7 +356,7 @@ fn test_multiple_rejections_no_state_accumulation() {
     // Rejection 3: Gate failure
     let bad_gates = GateResults {
         preflight_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
     build_order_intent(
         ChokeIntentClass::Open,

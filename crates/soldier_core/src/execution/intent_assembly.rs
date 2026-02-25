@@ -125,7 +125,7 @@ pub fn assemble_sizing(
     let (dispatch_consistency, risk_state_degraded) =
         match validate_and_dispatch(&order_size, instrument_kind, intent, params.contract_multiplier, mismatch_metrics) {
             Ok(ref validated) => (DispatchConsistencyProof::from_validated(validated), false),
-            Err(_) => (DispatchConsistencyProof::unchecked(false), true),
+            Err(_) => (DispatchConsistencyProof::failed(), true),
         };
 
     Ok(AssembledSizing {

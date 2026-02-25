@@ -545,11 +545,6 @@ impl Default for GateResults {
 }
 
 impl GateResults {
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub const fn all_passed() -> Self {
-        Self::new(true)
-    }
-
     pub(crate) const fn new(pass: bool) -> Self {
         Self {
             preflight_passed: pass,

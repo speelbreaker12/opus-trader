@@ -99,7 +99,8 @@ impl ValidatedDispatch {
 /// Constructors document the provenance of each `true` value:
 /// - `from_validated()` — real `validate_and_dispatch()` proof
 /// - `no_contracts()` — contracts absent, AT-920 N/A
-/// - `unchecked()` — bypass (TODO(slice-2): eliminate all callsites)
+/// - `failed()` — explicit fail-closed proof for production error paths
+/// - `unchecked()` — test-only bypass
 ///
 /// DO NOT implement `From<bool>` or add implicit conversions — the restricted
 /// constructor set is the entire point of this type (5-skill review finding #4).
@@ -123,8 +124,13 @@ impl DispatchConsistencyProof {
         Self(true)
     }
 
-    /// Bypass: caller asserts consistency without structural proof.
-    /// TODO(slice-2): Replace all callsites with from_validated() or no_contracts().
+    /// Explicit fail-closed proof used on validation errors.
+    pub fn failed() -> Self {
+        Self(false)
+    }
+
+    /// Test-only bypass: caller asserts consistency without structural proof.
+    #[cfg(test)]
     pub fn unchecked(passed: bool) -> Self {
         Self(passed)
     }
@@ -221,7 +227,6 @@ fn map_to_dispatch_unchecked(
     })
 }
 
-// TODO(slice-N): Wire into production dispatch — currently only called from unit tests
 /// Validate contracts/amount consistency and dispatch (AT-920).
 ///
 /// CONTRACT.md AT-920: If `contracts` and canonical amount are both present,

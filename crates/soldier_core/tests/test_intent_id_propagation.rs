@@ -12,6 +12,9 @@
 
 #![allow(deprecated)]
 
+mod common;
+use common::gate_results_all_passing;
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     build_order_intent,
@@ -102,7 +105,7 @@ fn test_intent_id_propagates_through_approved_pipeline() {
 
     // Stage 4: Chokepoint
     let mut cm = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let cr = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut cm, &gates);
     let trace = match cr {
         ChokeResult::Approved { gate_trace } => gate_trace,
@@ -146,7 +149,7 @@ fn test_intent_id_propagates_through_rejected_pipeline() {
 
     // Stage 1: Chokepoint rejects at DispatchAuth
     let mut cm = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let cr = build_order_intent(ChokeIntentClass::Open, RiskState::Degraded, &mut cm, &gates);
 
     let reject_reason = match &cr {
@@ -209,7 +212,7 @@ fn test_metrics_attributable_to_intent() {
     let mut metrics1 = ChokeMetrics::new();
     let mut metrics2 = ChokeMetrics::new();
 
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     // Intent 1: approved
     let _ = build_order_intent(
@@ -266,7 +269,7 @@ fn test_gate_trace_provides_audit_trail() {
     let mut cm = ChokeMetrics::new();
     let gates = GateResults {
         net_edge_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut cm, &gates);
@@ -313,7 +316,7 @@ fn test_gate_trace_provides_audit_trail() {
 #[test]
 fn test_gate_trace_ordering_enables_correlation() {
     let mut cm = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut cm, &gates);
 

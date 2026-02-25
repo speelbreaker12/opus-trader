@@ -3,9 +3,12 @@
 //! AT-216: s4 label format, length <= 64, parse correctness.
 //! AT-217: disambiguation uses ih16 (tested structurally here).
 
+mod common;
+use common::gate_results_all_passing;
+
 #[allow(deprecated)]
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateResults, LABEL_MAX_LEN, LabelError,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, LABEL_MAX_LEN, LabelError,
     LabelInput, build_order_intent, decode_label, derive_gid12, derive_sid8, encode_label,
 };
 use soldier_core::risk::RiskState;
@@ -338,7 +341,7 @@ fn test_at041_label_too_long_caller_sets_degraded_blocks_open() {
         ChokeIntentClass::Open,
         risk_after_label_error,
         &mut choke,
-        &GateResults::all_passed(),
+        &gate_results_all_passing(),
     );
     assert!(
         matches!(choke_result, ChokeResult::Rejected { .. }),

@@ -291,7 +291,7 @@ fn test_at104_degraded_blocks_open_at_chokepoint() {
 #[test]
 fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
     let mut input = base_open_input();
-    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
+    input.dispatch_consistency = DispatchConsistencyProof::failed();
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
@@ -331,7 +331,7 @@ fn test_at920_pipeline_dispatch_consistency_failure_rejected() {
 fn test_at920_pipeline_dispatch_consistency_skips_close() {
     let mut input = base_open_input();
     input.intent_class = ChokeIntentClass::Close;
-    input.dispatch_consistency = DispatchConsistencyProof::unchecked(false);
+    input.dispatch_consistency = DispatchConsistencyProof::failed();
     let mut metrics = IntentPipelineMetrics::new();
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);

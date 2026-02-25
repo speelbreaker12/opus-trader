@@ -81,6 +81,27 @@ fn remove_if_exists(path: &Path) {
             path.display()
         );
     }
+
+    let Some(name) = path.file_name().and_then(|f| f.to_str()) else {
+        return;
+    };
+    if !name.ends_with(".state.json") {
+        return;
+    }
+
+    for sidecar in [
+        path.with_file_name(format!(".{name}.lock")),
+        path.with_file_name(format!(".{name}.initialized")),
+    ] {
+        if let Err(err) = fs::remove_file(&sidecar) {
+            assert_eq!(
+                err.kind(),
+                std::io::ErrorKind::NotFound,
+                "failed to remove temporary sidecar {}: {err}",
+                sidecar.display()
+            );
+        }
+    }
 }
 
 #[test]
@@ -228,6 +249,81 @@ fn test_api_keys_are_least_privilege_runtime() {
 }
 
 #[test]
+fn test_api_keys_metadata_required_fields_runtime() {
+    let bad_probe = unique_temp_file("phase0_bad_probe_metadata", "json");
+    let bad_probe_json = r#"
+{
+  "probe_metadata": {
+    "probe_version": "1.1",
+    "executed_by": "phase0_drill"
+  },
+  "probes": [
+    {
+      "env": "STAGING",
+      "exchange": 123,
+      "key_id": null,
+      "scopes": ["read_account", "trade"],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied"
+        },
+        "transfer": {
+          "attempted": true,
+          "result": "permission_denied"
+        }
+      }
+    }
+  ],
+  "operator": "phase0_operator"
+}
+"#;
+    fs::write(&bad_probe, bad_probe_json).expect("write bad probe metadata");
+
+    let bad_out = run_cli(
+        [
+            "keys-check",
+            "--probe",
+            bad_probe.to_str().unwrap(),
+            "--env",
+            "STAGING",
+        ],
+        &[],
+    );
+    assert_eq!(
+        bad_out.status.code(),
+        Some(1),
+        "metadata-malformed probe must fail keys-check"
+    );
+    let bad_payload = parse_stdout_json(&bad_out);
+    assert_eq!(bad_payload["ok"], Value::Bool(false));
+    let errs = bad_payload["errors"]
+        .as_array()
+        .expect("errors array expected for failing key metadata checks");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("missing required metadata field 'exchange'")),
+        "failure should report non-string exchange metadata"
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("missing required metadata field 'key_id'")),
+        "failure should report non-string key_id metadata"
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e
+                .as_str()
+                .unwrap_or("")
+                .contains("probe_metadata.timestamp_utc")),
+        "failure should report missing timestamp_utc metadata"
+    );
+    remove_if_exists(&bad_probe);
+}
+
+#[test]
 fn test_api_keys_transfer_privilege_rejected_runtime() {
     let bad_probe = unique_temp_file("phase0_bad_transfer_probe", "json");
     let bad_probe_json = r#"
@@ -281,6 +377,68 @@ fn test_api_keys_transfer_privilege_rejected_runtime() {
             .any(|e| e.as_str().unwrap_or("").contains("transfer")),
         "failure should explicitly report transfer least-privilege violations"
     );
+    remove_if_exists(&bad_probe);
+}
+
+#[test]
+fn test_api_keys_all_scope_rejected_runtime() {
+    let bad_probe = unique_temp_file("phase0_bad_all_scope_probe", "json");
+    let bad_probe_json = r#"
+{
+  "probes": [
+    {
+      "env": "STAGING",
+      "exchange": "Deribit",
+      "key_id": "key_staging_all_scope_bad",
+      "scopes": ["all"],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "place_order": {
+          "attempted": true,
+          "result": "failed"
+        },
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied"
+        },
+        "transfer": {
+          "attempted": true,
+          "result": "permission_denied"
+        }
+      }
+    }
+  ]
+}
+"#;
+    fs::write(&bad_probe, bad_probe_json).expect("write bad all-scope probe");
+
+    let bad_out = run_cli(
+        [
+            "keys-check",
+            "--probe",
+            bad_probe.to_str().unwrap(),
+            "--env",
+            "STAGING",
+        ],
+        &[],
+    );
+    assert_eq!(
+        bad_out.status.code(),
+        Some(1),
+        "all-scope probe must fail least-privilege checks"
+    );
+    let bad_payload = parse_stdout_json(&bad_out);
+    assert_eq!(bad_payload["ok"], Value::Bool(false));
+    let errs = bad_payload["errors"]
+        .as_array()
+        .expect("errors array expected for failing all-scope checks");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").contains("must not include all")),
+        "failure should explicitly report all-scope violation"
+    );
+
     remove_if_exists(&bad_probe);
 }
 
@@ -448,10 +606,61 @@ fn test_status_command_behavior_runtime() {
     let healthy_payload = parse_stdout_json(&healthy_out);
     assert_eq!(healthy_payload["ok"], Value::Bool(true));
     assert_eq!(
+        healthy_payload["build_id"],
+        Value::String("phase0-status-runtime-test".to_string())
+    );
+    assert_eq!(
+        healthy_payload["contract_version"],
+        Value::String("5.2".to_string())
+    );
+    assert_eq!(
         healthy_payload["trading_mode"],
         Value::String("ACTIVE".to_string())
     );
     assert_eq!(healthy_payload["is_trading_allowed"], Value::Bool(true));
+
+    let reduce_only_out = run_cli(
+        [
+            "emergency",
+            "reduce-only",
+            "--reason",
+            "status reduce-only coverage",
+        ],
+        &[
+            ("STOIC_POLICY_PATH", valid_policy_str),
+            ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+            ("STOIC_BUILD_ID", "phase0-status-runtime-test"),
+        ],
+    );
+    assert_eq!(
+        reduce_only_out.status.code(),
+        Some(0),
+        "reduce-only transition should succeed for status coverage"
+    );
+
+    let reduce_only_status_out = run_cli(
+        ["status", "--format", "json"],
+        &[
+            ("STOIC_POLICY_PATH", valid_policy_str),
+            ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+            ("STOIC_BUILD_ID", "phase0-status-runtime-test"),
+        ],
+    );
+    assert_eq!(
+        reduce_only_status_out.status.code(),
+        Some(0),
+        "status reduce-only path should remain healthy"
+    );
+    let reduce_only_payload = parse_stdout_json(&reduce_only_status_out);
+    assert_eq!(
+        reduce_only_payload["trading_mode"],
+        Value::String("REDUCE_ONLY".to_string())
+    );
+    assert_eq!(
+        reduce_only_payload["is_trading_allowed"],
+        Value::Bool(false),
+        "REDUCE_ONLY must not be reported as trading-allowed"
+    );
 
     let missing_policy = root.join("config/missing_policy_for_status_test.json");
     let unhealthy_out = run_cli(
@@ -470,6 +679,14 @@ fn test_status_command_behavior_runtime() {
     let unhealthy_payload = parse_stdout_json(&unhealthy_out);
     assert_eq!(unhealthy_payload["ok"], Value::Bool(false));
     assert_eq!(
+        unhealthy_payload["build_id"],
+        Value::String("phase0-status-runtime-test".to_string())
+    );
+    assert_eq!(
+        unhealthy_payload["contract_version"],
+        Value::String("5.2".to_string())
+    );
+    assert_eq!(
         unhealthy_payload["trading_mode"],
         Value::String("KILL".to_string())
     );
@@ -484,6 +701,73 @@ fn test_status_command_behavior_runtime() {
     );
 
     remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_health_command_behavior_runtime() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+
+    let healthy_out = run_cli(
+        ["health", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                valid_policy.to_str().expect("utf8 policy path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-health-runtime-test"),
+        ],
+    );
+    assert_eq!(
+        healthy_out.status.code(),
+        Some(0),
+        "health healthy path must exit 0"
+    );
+    let healthy_payload = parse_stdout_json(&healthy_out);
+    assert_eq!(healthy_payload["ok"], Value::Bool(true));
+    assert_eq!(
+        healthy_payload["build_id"],
+        Value::String("phase0-health-runtime-test".to_string())
+    );
+    assert_eq!(
+        healthy_payload["contract_version"],
+        Value::String("5.2".to_string())
+    );
+
+    let missing_policy = root.join("config/missing_policy_for_health_test.json");
+    let unhealthy_out = run_cli(
+        ["health", "--format", "json"],
+        &[
+            (
+                "STOIC_POLICY_PATH",
+                missing_policy.to_str().expect("utf8 policy path"),
+            ),
+            ("STOIC_BUILD_ID", "phase0-health-runtime-test"),
+        ],
+    );
+    assert_eq!(
+        unhealthy_out.status.code(),
+        Some(1),
+        "health unhealthy path must exit 1"
+    );
+    let unhealthy_payload = parse_stdout_json(&unhealthy_out);
+    assert_eq!(unhealthy_payload["ok"], Value::Bool(false));
+    assert_eq!(
+        unhealthy_payload["build_id"],
+        Value::String("phase0-health-runtime-test".to_string())
+    );
+    assert_eq!(
+        unhealthy_payload["contract_version"],
+        Value::String("5.2".to_string())
+    );
+    let errs = unhealthy_payload["errors"]
+        .as_array()
+        .expect("errors array expected on unhealthy health command");
+    assert!(
+        errs.iter()
+            .any(|e| e.as_str().unwrap_or("").to_lowercase().contains("policy")),
+        "health unhealthy errors should mention policy failure"
+    );
 }
 
 #[test]
@@ -630,6 +914,155 @@ fn test_break_glass_command_path_runtime() {
     );
 
     remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_break_glass_state_file_deletion_fails_closed_runtime() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_break_glass_state_deleted");
+    remove_if_exists(&runtime_state);
+
+    let runtime_state_str = runtime_state.to_str().expect("utf8 path");
+    let valid_policy_str = valid_policy.to_str().expect("utf8 path");
+    let env_base = [
+        ("STOIC_POLICY_PATH", valid_policy_str),
+        ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+        ("STOIC_BUILD_ID", "phase0-break-glass-state-deleted-test"),
+        ("STOIC_DRILL_MODE", "1"),
+    ];
+
+    let kill_out = run_cli(
+        [
+            "emergency",
+            "kill",
+            "--reason",
+            "phase0 state deletion fail-closed coverage",
+        ],
+        &env_base,
+    );
+    assert_eq!(
+        kill_out.status.code(),
+        Some(0),
+        "emergency kill must succeed before deletion scenario"
+    );
+
+    fs::remove_file(&runtime_state).expect("simulate state-file deletion after kill");
+
+    let status_after_delete = run_cli(["status", "--format", "json"], &env_base);
+    assert_eq!(
+        status_after_delete.status.code(),
+        Some(1),
+        "missing runtime state after prior kill initialization must fail closed"
+    );
+    let status_payload = parse_stdout_json(&status_after_delete);
+    assert_eq!(status_payload["ok"], Value::Bool(false));
+    assert_eq!(
+        status_payload["trading_mode"],
+        Value::String("KILL".to_string())
+    );
+    assert_eq!(status_payload["is_trading_allowed"], Value::Bool(false));
+    let errs = status_payload["errors"]
+        .as_array()
+        .expect("errors array expected when runtime state disappears after initialization");
+    assert!(
+        errs.iter().any(|e| {
+            e.as_str()
+                .unwrap_or("")
+                .contains("state file missing after prior initialization")
+        }),
+        "status should explicitly report missing state file after initialization"
+    );
+
+    remove_if_exists(&runtime_state);
+}
+
+#[test]
+fn test_break_glass_state_file_and_marker_deletion_fails_closed_runtime() {
+    let root = repo_root();
+    let valid_policy = root.join("config/policy.json");
+    let runtime_state = unique_temp_state_file("phase0_break_glass_state_and_marker_deleted");
+    remove_if_exists(&runtime_state);
+
+    let runtime_state_str = runtime_state.to_str().expect("utf8 path");
+    let valid_policy_str = valid_policy.to_str().expect("utf8 path");
+    let env_base = [
+        ("STOIC_POLICY_PATH", valid_policy_str),
+        ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
+        ("STOIC_BUILD_ID", "phase0-break-glass-state-and-marker-deleted-test"),
+        ("STOIC_DRILL_MODE", "1"),
+    ];
+
+    let kill_out = run_cli(
+        [
+            "emergency",
+            "kill",
+            "--reason",
+            "phase0 state + marker deletion fail-closed coverage",
+        ],
+        &env_base,
+    );
+    assert_eq!(
+        kill_out.status.code(),
+        Some(0),
+        "emergency kill must succeed before deletion scenario"
+    );
+
+    remove_if_exists(&runtime_state);
+
+    let status_after_delete = run_cli(["status", "--format", "json"], &env_base);
+    assert_eq!(
+        status_after_delete.status.code(),
+        Some(1),
+        "missing runtime state and marker after initialization must fail closed"
+    );
+    let status_payload = parse_stdout_json(&status_after_delete);
+    assert_eq!(status_payload["ok"], Value::Bool(false));
+    assert_eq!(
+        status_payload["trading_mode"],
+        Value::String("KILL".to_string())
+    );
+    assert_eq!(status_payload["is_trading_allowed"], Value::Bool(false));
+    let status_errs = status_payload["errors"]
+        .as_array()
+        .expect("errors array expected when runtime state disappears after initialization");
+    assert!(
+        status_errs.iter().any(|e| {
+            e.as_str()
+                .unwrap_or("")
+                .contains("state file missing after prior initialization")
+        }),
+        "status should explicitly report missing state file after initialization"
+    );
+
+    let dispatch_after_delete = run_cli(
+        ["dispatch-check", "--intent", "OPEN", "--mode", "ACTIVE"],
+        &env_base,
+    );
+    assert_eq!(
+        dispatch_after_delete.status.code(),
+        Some(1),
+        "dispatch must remain blocked when state + marker are missing after initialization"
+    );
+    let dispatch_payload = parse_stdout_json(&dispatch_after_delete);
+    assert_eq!(dispatch_payload["ok"], Value::Bool(false));
+    assert_eq!(
+        dispatch_payload["reason"],
+        Value::String("runtime_state_unavailable".to_string())
+    );
+    assert_eq!(
+        dispatch_payload["resolved_mode"],
+        Value::String("KILL".to_string())
+    );
+    let dispatch_errs = dispatch_payload["errors"]
+        .as_array()
+        .expect("errors array expected when dispatch-check reads missing runtime state after init");
+    assert!(
+        dispatch_errs
+            .iter()
+            .any(|e| e.as_str().unwrap_or("").contains("state file missing after prior initialization")),
+        "dispatch should fail closed with explicit missing-state reason"
+    );
 }
 
 #[test]

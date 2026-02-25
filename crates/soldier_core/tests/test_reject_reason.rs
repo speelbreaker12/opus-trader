@@ -1,6 +1,9 @@
 #![allow(deprecated)] // Tests use deprecated build_order_intent_with_reject_reason_code; TODO: migrate to WAL gate API
 use std::collections::HashSet;
 
+mod common;
+use common::gate_results_all_passing;
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateResults, RejectReasonCode,
     build_order_intent_with_reject_reason_code, reject_reason_registry,
@@ -11,7 +14,7 @@ use soldier_core::risk::RiskState;
 #[test]
 fn test_reject_reason_present_on_pre_dispatch_reject() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let (result, code) = build_order_intent_with_reject_reason_code(
         ChokeIntentClass::Open,
@@ -30,7 +33,7 @@ fn test_reject_reason_in_registry() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let (_, code) = build_order_intent_with_reject_reason_code(
@@ -53,7 +56,7 @@ fn test_typed_preflight_code_wins_over_text_heuristics() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
     let gate_reject_codes = GateRejectCodes {
         preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
@@ -76,7 +79,7 @@ fn test_fee_cache_check_maps_to_fee_cache_stale() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         fee_cache_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let (_, code) = build_order_intent_with_reject_reason_code(
@@ -95,7 +98,7 @@ fn test_recorded_before_dispatch_maps_to_recorded_before_dispatch_failed() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         wal_recorded: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let (_, code) = build_order_intent_with_reject_reason_code(
@@ -266,7 +269,7 @@ fn test_at201_open_classified_intent_blocked_by_open_gates() {
         ChokeIntentClass::Open,
         RiskState::Degraded,
         &mut m_open,
-        &GateResults::all_passed(),
+        &gate_results_all_passing(),
         &GateRejectCodes::default(),
     );
     assert!(
@@ -286,7 +289,7 @@ fn test_at201_open_classified_intent_blocked_by_open_gates() {
         ChokeIntentClass::Close,
         RiskState::Degraded,
         &mut m_close,
-        &GateResults::all_passed(),
+        &gate_results_all_passing(),
         &GateRejectCodes::default(),
     );
     assert!(

@@ -17,6 +17,9 @@
 
 #![allow(deprecated)]
 
+mod common;
+use common::gate_results_all_passing;
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
     GateSequenceResult, GateStep, build_order_intent, gate_sequence_total,
@@ -29,7 +32,7 @@ use soldier_core::risk::RiskState;
 #[test]
 fn test_at501_open_all_gates_pass_trace_order() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed(); // all pass
+    let gates = gate_results_all_passing(); // all pass
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
 
@@ -64,7 +67,7 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
     let _ = take_execution_metric_lines();
 
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let result = with_intent_trace_ids(intent_id, run_id, || {
         build_order_intent(
             ChokeIntentClass::Open,
@@ -111,7 +114,7 @@ fn test_gate_sequence_emits_structured_reject_metric_line() {
 #[test]
 fn test_at502_open_gate_count() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
 
@@ -128,7 +131,7 @@ fn test_at502_open_gate_count() {
 #[test]
 fn test_at503_close_skips_liquidity_edge_pricer() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Close, RiskState::Healthy, &mut m, &gates);
 
@@ -158,7 +161,7 @@ fn test_at503_close_skips_liquidity_edge_pricer() {
 #[test]
 fn test_at503_hedge_skips_liquidity_edge_pricer() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Hedge, RiskState::Healthy, &mut m, &gates);
 
@@ -213,7 +216,7 @@ fn test_at504_cancel_only_dispatch_auth_only() {
 #[test]
 fn test_at504_cancel_approved_even_degraded() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     // CANCEL should pass even with Degraded risk state
     let result = build_order_intent(
@@ -231,7 +234,7 @@ fn test_at504_cancel_approved_even_degraded() {
 #[test]
 fn test_at505_open_degraded_rejected() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Degraded, &mut m, &gates);
 
@@ -249,7 +252,7 @@ fn test_at505_open_degraded_rejected() {
 #[test]
 fn test_at505_open_maintenance_rejected() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(
         ChokeIntentClass::Open,
@@ -270,7 +273,7 @@ fn test_at505_open_maintenance_rejected() {
 #[test]
 fn test_at505_open_kill_rejected() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Kill, &mut m, &gates);
 
@@ -286,7 +289,7 @@ fn test_at505_open_kill_rejected() {
 #[test]
 fn test_at505_close_degraded_allowed() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     // CLOSE must pass even with Degraded (risk-reducing)
     let result = build_order_intent(ChokeIntentClass::Close, RiskState::Degraded, &mut m, &gates);
@@ -297,7 +300,7 @@ fn test_at505_close_degraded_allowed() {
 #[test]
 fn test_at505_hedge_degraded_allowed() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Hedge, RiskState::Degraded, &mut m, &gates);
 
@@ -311,7 +314,7 @@ fn test_at506_preflight_reject_stops_at_gate2() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -339,7 +342,7 @@ fn test_at506_quantize_reject_stops_at_gate3() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         quantize_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -371,7 +374,7 @@ fn test_at506_dispatch_consistency_reject_stops_at_gate4() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         dispatch_consistency_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -396,7 +399,7 @@ fn test_at506_fee_cache_reject_stops_at_gate5() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         fee_cache_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -421,7 +424,7 @@ fn test_at506_liquidity_reject_stops_at_gate7() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -446,7 +449,7 @@ fn test_at506_net_edge_reject_stops_at_gate8() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         net_edge_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -471,7 +474,7 @@ fn test_at506_pricer_reject_stops_at_gate9() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         pricer_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -496,7 +499,7 @@ fn test_at506_wal_reject_stops_at_gate10() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         wal_recorded: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -521,7 +524,7 @@ fn test_at506_wal_reject_stops_at_gate10() {
 #[test]
 fn test_metrics_approved_increments() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
     build_order_intent(ChokeIntentClass::Close, RiskState::Healthy, &mut m, &gates);
@@ -535,7 +538,7 @@ fn test_metrics_rejected_increments() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -547,7 +550,7 @@ fn test_metrics_rejected_increments() {
 #[test]
 fn test_metrics_risk_state_rejection_counted() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     build_order_intent(ChokeIntentClass::Open, RiskState::Degraded, &mut m, &gates);
     build_order_intent(ChokeIntentClass::Open, RiskState::Kill, &mut m, &gates);
@@ -571,7 +574,7 @@ fn test_close_wal_failure_not_blocked() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         wal_recorded: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     // CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE intents.
@@ -591,7 +594,7 @@ fn test_constraint_reject_gates_before_persist() {
     // For every gate that can reject, verify it appears BEFORE
     // RecordedBeforeDispatch in the trace.
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
 
@@ -635,7 +638,7 @@ fn test_constraint_reject_gates_before_persist() {
 #[test]
 fn test_constraint_wal_is_last_gate_open() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
 
@@ -654,7 +657,7 @@ fn test_constraint_wal_is_last_gate_open() {
 #[test]
 fn test_constraint_wal_is_last_gate_close() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Close, RiskState::Healthy, &mut m, &gates);
 
@@ -673,7 +676,7 @@ fn test_constraint_wal_is_last_gate_close() {
 #[test]
 fn test_constraint_wal_is_last_gate_hedge() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent(ChokeIntentClass::Hedge, RiskState::Healthy, &mut m, &gates);
 
@@ -699,63 +702,63 @@ fn test_constraint_no_approval_with_any_gate_failed() {
             "preflight",
             GateResults {
                 preflight_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "quantize",
             GateResults {
                 quantize_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "dispatch_consistency",
             GateResults {
                 dispatch_consistency_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "fee_cache",
             GateResults {
                 fee_cache_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "expiry_guard",
             GateResults {
                 expiry_guard_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "liquidity",
             GateResults {
                 liquidity_gate_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "net_edge",
             GateResults {
                 net_edge_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "pricer",
             GateResults {
                 pricer_passed: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
         (
             "wal",
             GateResults {
                 wal_recorded: false,
-                ..GateResults::all_passed()
+                ..gate_results_all_passing()
             },
         ),
     ];
@@ -776,7 +779,7 @@ fn test_constraint_no_approval_with_any_gate_failed() {
 #[test]
 fn test_constraint_approval_requires_all_gates_pass() {
     let mut m = ChokeMetrics::new();
-    let gates = GateResults::all_passed(); // all true
+    let gates = gate_results_all_passing(); // all true
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
 
@@ -796,7 +799,7 @@ fn test_constraint_rejected_trace_stops_at_failure() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -836,7 +839,7 @@ fn test_constraint_wal_after_all_validation_gates() {
         ChokeIntentClass::Hedge,
     ] {
         let mut m = ChokeMetrics::new();
-        let gates = GateResults::all_passed();
+        let gates = gate_results_all_passing();
 
         let result = build_order_intent(intent_class, RiskState::Healthy, &mut m, &gates);
 
@@ -866,7 +869,7 @@ fn test_dispatch_consistency_rejects_when_requested_qty_exceeds_clamp() {
     let gates = GateResults {
         requested_qty: Some(5.0),
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -889,7 +892,7 @@ fn test_dispatch_consistency_allows_when_requested_qty_within_clamp() {
     let gates = GateResults {
         requested_qty: Some(2.0),
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -902,7 +905,7 @@ fn test_dispatch_consistency_rejects_when_clamp_requested_qty_missing() {
     let gates = GateResults {
         requested_qty: None,
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -925,7 +928,7 @@ fn test_dispatch_consistency_rejects_when_clamp_max_dispatch_qty_missing() {
     let gates = GateResults {
         requested_qty: Some(2.0),
         max_dispatch_qty: None,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -949,7 +952,7 @@ fn test_at506_expiry_guard_reject_stops_at_gate6() {
     let mut m = ChokeMetrics::new();
     let gates = GateResults {
         expiry_guard_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -978,7 +981,7 @@ fn test_dispatch_consistency_clamp_at_exact_equality_allowed() {
     let gates = GateResults {
         requested_qty: Some(2.0),
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -996,7 +999,7 @@ fn test_dispatch_consistency_clamp_within_epsilon_allowed() {
     let gates = GateResults {
         requested_qty: Some(2.0 + 1e-13),
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -1013,7 +1016,7 @@ fn test_dispatch_consistency_clamp_below_max_allowed() {
     let gates = GateResults {
         requested_qty: Some(1.5),
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);
@@ -1031,7 +1034,7 @@ fn test_dispatch_consistency_clamp_above_epsilon_rejected() {
     let gates = GateResults {
         requested_qty: Some(2.0 + 1e-11),
         max_dispatch_qty: Some(2.0),
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let result = build_order_intent(ChokeIntentClass::Open, RiskState::Healthy, &mut m, &gates);

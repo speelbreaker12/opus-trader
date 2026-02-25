@@ -7,10 +7,10 @@
 #![allow(deprecated)]
 
 mod common;
-use common::assert_no_dispatch_no_wal;
+use common::{assert_no_dispatch_no_wal, gate_results_all_passing};
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, build_order_intent,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, build_order_intent,
 };
 use soldier_core::execution::{
     GateIntentClass, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
@@ -268,7 +268,7 @@ fn test_zero_qty_pricer_fails_closed() {
 
 #[test]
 fn test_unhealthy_risk_state_fails_closed() {
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     // All non-Healthy states must reject OPEN
     for risk_state in [RiskState::Degraded, RiskState::Maintenance, RiskState::Kill] {

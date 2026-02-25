@@ -7,6 +7,9 @@
 
 #![allow(deprecated)]
 
+mod common;
+use common::gate_results_all_passing;
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateResults, GateStep, build_order_intent,
 };
@@ -73,7 +76,7 @@ fn test_quantize_sell_deterministic() {
 
 #[test]
 fn test_chokepoint_same_inputs_same_trace() {
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let mut traces = Vec::new();
     for _ in 0..100 {
@@ -95,7 +98,7 @@ fn test_chokepoint_same_inputs_same_trace() {
 fn test_chokepoint_rejected_deterministic() {
     let gates = GateResults {
         liquidity_gate_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
 
     let mut results = Vec::new();
@@ -354,7 +357,7 @@ fn test_full_pipeline_determinism() {
         side: Side::Buy,
     };
 
-    let gate_results = GateResults::all_passed();
+    let gate_results = gate_results_all_passing();
 
     #[derive(Debug, PartialEq)]
     struct PipelineSnapshot {

@@ -3,9 +3,12 @@
 //! AT-277: dispatcher mapping validates option sizing and amount field.
 
 #[allow(deprecated)]
+mod common;
+use common::gate_results_all_passing;
+
 use soldier_core::execution::{
-    CONTRACTS_AMOUNT_MATCH_TOLERANCE, ChokeIntentClass, ChokeMetrics, ChokeResult,
-    DispatchMapError, GateResults, IntentClass, MismatchMetrics, OrderSize, OrderSizeInput,
+    CONTRACTS_AMOUNT_MATCH_TOLERANCE, ChokeIntentClass, ChokeMetrics, ChokeResult, DispatchMapError,
+    IntentClass, MismatchMetrics, OrderSize, OrderSizeInput,
     build_order_intent, build_order_size, map_to_dispatch, validate_and_dispatch,
 };
 use soldier_core::risk::RiskState;
@@ -656,10 +659,11 @@ fn test_at920_no_dispatch_on_mismatch() {
 
 /// AT-920: contracts/amount mismatch → RiskState::Degraded → next OPEN blocked.
 ///
-/// NOTE: validate_and_dispatch() currently has zero production callsites. This test
-/// documents the REQUIRED caller behavior (map ContractsAmountMismatch → Degraded) and
-/// proves that Degraded blocks OPEN at the chokepoint. Full AT-920 enforcement requires
-/// wiring validate_and_dispatch() into the production pipeline (tracked separately).
+/// NOTE: production validation for AT-920 mismatch flows through `intent_assembly.rs`,
+/// which calls `validate_and_dispatch` before pipeline evaluation. This test documents the
+/// REQUIRED caller behavior (map ContractsAmountMismatch → Degraded) and proves that Degraded
+/// blocks OPEN at the chokepoint. If production wiring semantics change, update this test
+/// alongside the caller path proof.
 ///
 /// TODO(AT-920-PROD): When validate_and_dispatch() is wired into the production pipeline,
 /// add a caller-level integration test confirming the ContractsAmountMismatch → Degraded
@@ -712,7 +716,7 @@ fn test_at920_mismatch_caller_sets_degraded_and_blocks_open() {
         ChokeIntentClass::Open,
         risk_after_mismatch,
         &mut choke,
-        &GateResults::all_passed(),
+        &gate_results_all_passing(),
     );
     assert!(
         matches!(choke_result, ChokeResult::Rejected { .. }),
@@ -745,6 +749,19 @@ fn test_dispatch_map_zero_amount_returns_err() {
         qty_coin: Some(0.0),
         qty_usd: None,
         notional_usd: 0.0,
+    };
+    let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
+    assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));
+}
+
+/// Fail-closed: negative amount returns InvalidAmount error.
+#[test]
+fn test_dispatch_map_negative_amount_returns_err() {
+    let order_size = OrderSize {
+        contracts: None,
+        qty_coin: Some(-1.0),
+        qty_usd: None,
+        notional_usd: -10_000.0,
     };
     let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
     assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));

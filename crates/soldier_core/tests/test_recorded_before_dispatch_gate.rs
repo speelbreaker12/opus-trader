@@ -1,5 +1,8 @@
 //! Tests for runtime RecordedBeforeDispatch gate helpers.
 
+mod common;
+use common::gate_results_all_passing;
+
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     RecordedBeforeDispatchGate, build_order_intent_with_optional_wal_gate,
@@ -26,7 +29,7 @@ impl RecordedBeforeDispatchGate for StubWalGate {
 #[test]
 fn test_optional_wal_gate_missing_is_fail_closed() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
 
     let result = build_order_intent_with_optional_wal_gate(
         ChokeIntentClass::Open,
@@ -50,7 +53,7 @@ fn test_optional_wal_gate_missing_is_fail_closed() {
 #[test]
 fn test_wal_gate_failure_rejects() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let mut wal_gate = StubWalGate {
         should_succeed: false,
         call_count: 0,
@@ -71,7 +74,7 @@ fn test_wal_gate_failure_rejects() {
 #[test]
 fn test_wal_gate_success_allows() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let mut wal_gate = StubWalGate {
         should_succeed: true,
         call_count: 0,
@@ -92,7 +95,7 @@ fn test_wal_gate_success_allows() {
 #[test]
 fn test_wal_gate_not_called_when_risk_state_rejects_early() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let mut wal_gate = StubWalGate {
         should_succeed: true,
         call_count: 0,
@@ -121,7 +124,7 @@ fn test_wal_gate_not_called_when_preflight_rejects_early() {
     let mut metrics = ChokeMetrics::new();
     let gates = GateResults {
         preflight_passed: false,
-        ..GateResults::all_passed()
+        ..gate_results_all_passing()
     };
     let mut wal_gate = StubWalGate {
         should_succeed: true,
@@ -151,7 +154,7 @@ fn test_wal_gate_not_called_when_preflight_rejects_early() {
 #[test]
 fn test_close_intent_approved_despite_wal_failure() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let mut wal_gate = StubWalGate {
         should_succeed: false,
         call_count: 0,
@@ -172,7 +175,7 @@ fn test_close_intent_approved_despite_wal_failure() {
 #[test]
 fn test_hedge_intent_approved_despite_wal_failure() {
     let mut metrics = ChokeMetrics::new();
-    let gates = GateResults::all_passed();
+    let gates = gate_results_all_passing();
     let mut wal_gate = StubWalGate {
         should_succeed: false,
         call_count: 0,
@@ -193,7 +196,7 @@ fn test_hedge_intent_approved_despite_wal_failure() {
 #[test]
 fn test_close_intent_approved_when_optional_wal_gate_missing() {
     let mut metrics = ChokeMetrics::new();
-    let mut gates = GateResults::all_passed();
+    let mut gates = gate_results_all_passing();
     gates.wal_recorded = false; // WAL not recorded
 
     let result = build_order_intent_with_optional_wal_gate(

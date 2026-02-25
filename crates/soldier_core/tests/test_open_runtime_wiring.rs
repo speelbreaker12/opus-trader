@@ -53,7 +53,7 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
                     min_amount: 0.1,
                 },
             },
-            dispatch_consistency: DispatchConsistencyProof::unchecked(true),
+            dispatch_consistency: DispatchConsistencyProof::no_contracts(),
             fee_snapshot: FeeCacheSnapshot {
                 fee_rate: 0.0005,
                 fee_model_cached_at_ts_ms: Some(1_000_000),
