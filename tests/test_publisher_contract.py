@@ -8,6 +8,7 @@ import pytest
 
 from dashboard.publisher import spool, state
 from dashboard.publisher.transform import SnapshotBuilderError, build_snapshot_envelope, hash_snapshot
+from dashboard.publisher import publisher
 from dashboard.publisher.state import load_state, save_state
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -83,7 +84,7 @@ def test_runtime_state_payload_transforms_owner_view_schema_errors() -> None:
 def test_sidecar_state_counters(tmp_path: Path) -> None:
   temp_state = tmp_path / "status_publisher_state_test.json"
   baseline = load_state(temp_state, "soldier-main-01")
-  seen = baseline.with_seen("h1", "2026-02-23T21:10:03Z")
+  seen = baseline.with_seen("h1", "2026-02-23T21:10:03Z", 1)
   deduped = seen.with_dedup().with_last_error("SNAPSHOT_DUPLICATE_SKIPPED")
   queued = deduped.with_queued()
   sent = queued.with_send_success("h2", "2026-02-23T21:10:04Z")
@@ -102,6 +103,56 @@ def test_sidecar_state_counters(tmp_path: Path) -> None:
   save_state(temp_state, failed)
   restored = load_state(temp_state, "soldier-main-01")
   assert restored.totals == failed.totals
+  assert restored.last_seen_snapshot_seq == 1
+
+
+def test_extract_snapshot_seq_invalid() -> None:
+  with pytest.raises(publisher.PublisherError) as exc:
+    publisher._extract_snapshot_seq({"snapshot_seq": -1})
+  assert exc.value.code == publisher.RUNTIME_SCHEMA_INVALID
+
+  with pytest.raises(publisher.PublisherError):
+    publisher._extract_snapshot_seq({})
+
+  assert publisher._extract_snapshot_seq({"snapshot_seq": 7}) == 7
+
+
+def test_process_once_enforces_snapshot_seq_monotonicity(tmp_path: Path) -> None:
+  source = json.loads((ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"))
+  source["snapshot_seq"] = 10
+  source_path = tmp_path / "runtime_state.json"
+  source_path.write_text(json.dumps(source, indent=2), encoding="utf-8")
+
+  cfg = publisher.PublisherConfig(
+    source_snapshot_path=source_path,
+    state_path=tmp_path / "state.json",
+    spool_db_path=tmp_path / "spool.db",
+    log_path=tmp_path / "publisher.log",
+    convex_endpoint="http://localhost:1",
+    convex_secret=None,
+    instance_id="soldier-main-01",
+    service="soldier_core",
+    env="paper",
+    head_commit="4a2e6fc",
+    expected_publish_interval_s=2,
+    stale_after_s=15,
+    poll_interval_s=2,
+    publisher_version="status-publisher.v1",
+    max_attempts=6,
+    connect_timeout_s=2.0,
+    read_timeout_s=5.0,
+    request_total_timeout_s=8.0,
+  )
+
+  state_obj = publisher.load_state(cfg.state_path, cfg.instance_id)
+  state_obj = state_obj.with_seen("baseline", "2026-02-23T21:10:03Z", 20)
+  outbox = spool.SpoolStore(cfg.spool_db_path)
+  try:
+    with pytest.raises(publisher.PublisherError) as exc:
+      publisher._process_once(cfg, outbox, state_obj)
+    assert exc.value.code == publisher.RUNTIME_SCHEMA_INVALID
+  finally:
+    outbox.close()
 
 
 def test_spool_retention_removes_expired_sent_and_failed_perm_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

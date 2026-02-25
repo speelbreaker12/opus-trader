@@ -27,7 +27,7 @@ type SchemaNode = {
   $ref?: string;
   required?: string[];
   properties?: Record<string, SchemaNode>;
-  additionalProperties?: boolean;
+  additionalProperties?: boolean | SchemaNode;
 };
 
 type SchemaDocument = {
@@ -96,6 +96,43 @@ function valueTypeName(value: unknown): string {
 
 function emitPath(parent: string, segment: string | number): string {
   return typeof segment === "number" ? `${parent}[${segment}]` : `${parent}.${segment}`;
+}
+
+function validateObjectNode(
+  value: unknown,
+  schemaNode: SchemaNode,
+  schema: SchemaDocument,
+  path: string,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!isObject(value)) {
+    issues.push(toIssue("SCHEMA", `${path} expects object, got ${valueTypeName(value)}`));
+    return issues;
+  }
+
+  const required = schemaNode.required ?? [];
+  const properties = schemaNode.properties ?? {};
+  for (const requiredKey of required) {
+    if (!(requiredKey in value)) {
+      issues.push(toIssue("SCHEMA", `required key missing: ${emitPath(path, requiredKey)}`));
+    }
+  }
+
+  for (const [objKey, objValue] of Object.entries(value)) {
+    const property = properties[objKey];
+    if (!property) {
+      if (schemaNode.additionalProperties === false) {
+        issues.push(toIssue("SCHEMA", `${emitPath(path, objKey)} is not allowed`));
+      } else if (typeof schemaNode.additionalProperties === "object" && schemaNode.additionalProperties !== null) {
+        issues.push(...validateNode(objValue, schemaNode.additionalProperties, schema, emitPath(path, objKey)));
+      }
+      continue;
+    }
+
+    issues.push(...validateNode(objValue, property, schema, emitPath(path, objKey)));
+  }
+
+  return issues;
 }
 
 function coerceCodeList(raw: unknown): string[] {
@@ -304,58 +341,13 @@ function validateNode(value: unknown, schemaNode: SchemaNode, schema: SchemaDocu
     }
 
     if (allowed.includes("object") || node.required || node.properties) {
-      if (!isObject(value)) {
-        issues.push(toIssue("SCHEMA", `${path} expects object, got ${actualType}`));
-        return issues;
-      }
-
-      const required = node.required ?? [];
-      const properties = node.properties ?? {};
-      for (const requiredKey of required) {
-        if (!(requiredKey in value)) {
-          issues.push(toIssue("SCHEMA", `required key missing: ${emitPath(path, requiredKey)}`));
-        }
-      }
-
-      for (const [objKey, objValue] of Object.entries(value)) {
-        const property = properties[objKey];
-        if (!property) {
-          if (node.additionalProperties === false) {
-            issues.push(toIssue("SCHEMA", `${emitPath(path, objKey)} is not allowed`));
-          }
-          continue;
-        }
-        issues.push(...validateNode(objValue, property, schema, emitPath(path, objKey)));
-      }
-
+      issues.push(...validateObjectNode(value, node, schema, path));
       return issues;
     }
   }
 
   if ((node.properties && isObject(value)) || node.required || node.additionalProperties === false) {
-    if (!isObject(value)) {
-      issues.push(toIssue("SCHEMA", `${path} expects object, got ${actualType}`));
-      return issues;
-    }
-
-    const required = node.required ?? [];
-    const properties = node.properties ?? {};
-    for (const requiredKey of required) {
-      if (!(requiredKey in value)) {
-        issues.push(toIssue("SCHEMA", `required key missing: ${emitPath(path, requiredKey)}`));
-      }
-    }
-
-    for (const [objKey, objValue] of Object.entries(value)) {
-      const property = properties[objKey];
-      if (!property) {
-        if (node.additionalProperties === false) {
-          issues.push(toIssue("SCHEMA", `${emitPath(path, objKey)} is not allowed`));
-        }
-        continue;
-      }
-      issues.push(...validateNode(objValue, property, schema, emitPath(path, objKey)));
-    }
+    issues.push(...validateObjectNode(value, node, schema, path));
     return issues;
   }
 

@@ -15,6 +15,14 @@ def _utc_now_iso() -> str:
   return datetime.now(tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _coerce_non_negative_int(value: Any) -> int | None:
+  if isinstance(value, bool):
+    return None
+  if isinstance(value, int):
+    return value if value >= 0 else None
+  return None
+
+
 @dataclass(frozen=True)
 class SidecarTotals:
   seen: int
@@ -38,6 +46,7 @@ class SidecarState:
   schema_version: str
   instance_id: str
   last_seen_snapshot_hash: str | None
+  last_seen_snapshot_seq: int | None
   last_sent_snapshot_hash: str | None
   last_seen_generated_at: str | None
   last_success_at: str | None
@@ -46,11 +55,17 @@ class SidecarState:
   consecutive_failures: int
   totals: SidecarTotals
 
-  def with_seen(self, snapshot_hash: str, generated_at: str | None) -> "SidecarState":
+  def with_seen(
+    self,
+    snapshot_hash: str,
+    generated_at: str | None,
+    snapshot_seq: int | None,
+  ) -> "SidecarState":
     return SidecarState(
       schema_version=self.schema_version,
       instance_id=self.instance_id,
       last_seen_snapshot_hash=snapshot_hash,
+      last_seen_snapshot_seq=snapshot_seq,
       last_sent_snapshot_hash=self.last_sent_snapshot_hash,
       last_seen_generated_at=generated_at,
       last_success_at=self.last_success_at,
@@ -71,6 +86,7 @@ class SidecarState:
       schema_version=self.schema_version,
       instance_id=self.instance_id,
       last_seen_snapshot_hash=self.last_seen_snapshot_hash,
+      last_seen_snapshot_seq=self.last_seen_snapshot_seq,
       last_sent_snapshot_hash=self.last_sent_snapshot_hash,
       last_seen_generated_at=self.last_seen_generated_at,
       last_success_at=self.last_success_at,
@@ -91,6 +107,7 @@ class SidecarState:
       schema_version=self.schema_version,
       instance_id=self.instance_id,
       last_seen_snapshot_hash=self.last_seen_snapshot_hash,
+      last_seen_snapshot_seq=self.last_seen_snapshot_seq,
       last_sent_snapshot_hash=self.last_sent_snapshot_hash,
       last_seen_generated_at=self.last_seen_generated_at,
       last_success_at=self.last_success_at,
@@ -111,6 +128,7 @@ class SidecarState:
       schema_version=self.schema_version,
       instance_id=self.instance_id,
       last_seen_snapshot_hash=self.last_seen_snapshot_hash,
+      last_seen_snapshot_seq=self.last_seen_snapshot_seq,
       last_sent_snapshot_hash=snapshot_hash,
       last_seen_generated_at=self.last_seen_generated_at,
       last_success_at=published_at,
@@ -131,6 +149,7 @@ class SidecarState:
       schema_version=self.schema_version,
       instance_id=self.instance_id,
       last_seen_snapshot_hash=self.last_seen_snapshot_hash,
+      last_seen_snapshot_seq=self.last_seen_snapshot_seq,
       last_sent_snapshot_hash=self.last_sent_snapshot_hash,
       last_seen_generated_at=self.last_seen_generated_at,
       last_success_at=self.last_success_at,
@@ -151,6 +170,7 @@ class SidecarState:
       schema_version=self.schema_version,
       instance_id=self.instance_id,
       last_seen_snapshot_hash=self.last_seen_snapshot_hash,
+      last_seen_snapshot_seq=self.last_seen_snapshot_seq,
       last_sent_snapshot_hash=self.last_sent_snapshot_hash,
       last_seen_generated_at=self.last_seen_generated_at,
       last_success_at=self.last_success_at,
@@ -165,6 +185,7 @@ class SidecarState:
       "schema_version": self.schema_version,
       "instance_id": self.instance_id,
       "last_seen_snapshot_hash": self.last_seen_snapshot_hash,
+      "last_seen_snapshot_seq": self.last_seen_snapshot_seq,
       "last_sent_snapshot_hash": self.last_sent_snapshot_hash,
       "last_seen_generated_at": self.last_seen_generated_at,
       "last_success_at": self.last_success_at,
@@ -180,6 +201,7 @@ def _default_state(instance_id: str) -> SidecarState:
     schema_version=STATE_SCHEMA_VERSION,
     instance_id=instance_id,
     last_seen_snapshot_hash=None,
+    last_seen_snapshot_seq=None,
     last_sent_snapshot_hash=None,
     last_seen_generated_at=None,
     last_success_at=None,
@@ -207,6 +229,7 @@ def load_state(path: Path, instance_id: str) -> SidecarState:
     schema_version=STATE_SCHEMA_VERSION,
     instance_id=raw.get("instance_id", instance_id),
     last_seen_snapshot_hash=raw.get("last_seen_snapshot_hash"),
+    last_seen_snapshot_seq=_coerce_non_negative_int(raw.get("last_seen_snapshot_seq")),
     last_sent_snapshot_hash=raw.get("last_sent_snapshot_hash"),
     last_seen_generated_at=raw.get("last_seen_generated_at"),
     last_success_at=raw.get("last_success_at"),
@@ -233,14 +256,14 @@ def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
       handle.flush()
       os.fsync(handle.fileno())
 
+    tmp.chmod(0o600)
+    tmp.replace(path)
+
     dir_fd = os.open(str(path.parent), os.O_RDONLY)
     try:
       os.fsync(dir_fd)
     finally:
       os.close(dir_fd)
-
-    tmp.chmod(0o600)
-    tmp.replace(path)
   finally:
     if tmp.exists():
       # best effort cleanup

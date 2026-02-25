@@ -100,6 +100,13 @@ def _parse_total_timeout(default: float = 8.0) -> float:
   return value if value > 0 else default
 
 
+def _extract_snapshot_seq(payload: Dict[str, Any]) -> int:
+  snapshot_seq = payload.get("snapshot_seq")
+  if not isinstance(snapshot_seq, int) or snapshot_seq < 0:
+    raise PublisherError(RUNTIME_SCHEMA_INVALID, "runtime_state.snapshot_seq must be a non-negative integer")
+  return snapshot_seq
+
+
 @dataclass(frozen=True)
 class PublisherConfig:
   source_snapshot_path: Path
@@ -421,17 +428,28 @@ def _process_once(config: PublisherConfig, spool: SpoolStore, state: SidecarStat
 
   generated_at = source.get("generated_at")
   generated_at_dt = _parse_utc_timestamp(generated_at)
+  snapshot_seq = _extract_snapshot_seq(source)
   try:
     snapshot_hash = hash_snapshot(source)
   except Exception as exc:
     raise PublisherError(SNAPSHOT_HASH_COMPUTE_ERROR, f"failed to hash snapshot: {exc}", permanent=False) from exc
 
   previous_last_seen_hash = state.last_seen_snapshot_hash
-  state = state.with_seen(snapshot_hash, generated_at)
+  previous_last_seen_seq = state.last_seen_snapshot_seq
 
   if snapshot_hash == previous_last_seen_hash:
-    LOG.info("%s snapshot_hash=%s", SNAPSHOT_DUPLICATE_SKIPPED, snapshot_hash)
+    state = state.with_seen(snapshot_hash, generated_at, snapshot_seq)
+    LOG.info("duplicate snapshot detected snapshot_hash=%s", snapshot_hash)
     return state.with_dedup().with_last_error(SNAPSHOT_DUPLICATE_SKIPPED)
+
+  if previous_last_seen_seq is not None and snapshot_seq <= previous_last_seen_seq:
+    raise PublisherError(
+      RUNTIME_SCHEMA_INVALID,
+      f"runtime snapshot_seq must increase; got {snapshot_seq} after {previous_last_seen_seq}",
+      permanent=True,
+    )
+
+  state = state.with_seen(snapshot_hash, generated_at, snapshot_seq)
 
   if _is_snapshot_stale(generated_at_dt, config.stale_after_s):
     raise PublisherError(

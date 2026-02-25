@@ -1,0 +1,91 @@
+{
+  "schema_version": "phase5_synthesis.v1",
+  "head_commit": "9ac021f1f0b0cb6f5f9c1575d91e1bde0c25b48e",
+  "created_at": "2026-02-24T23:55:55Z",
+  "tool": "script",
+  "model": "n/a",
+  "prompt_style": "none",
+  "cycle": "C1",
+  "phase_equivalent": "R5",
+  "review_basis": "STORY_SCOPE (Cycle 1)",
+  "story_id": "S2",
+  "slice_id": "S2",
+  "artifact_provenance": "manual",
+  "metadata": {
+    "phase": "Mode A Phase 5 — Synthesis",
+    "date": "2026-02-24",
+    "slice": "S2",
+    "stories": [
+      "S2-000",
+      "S2-001",
+      "S2-002",
+      "S2-003",
+      "S2-004"
+    ],
+    "cross_review_agents": ["Agent A", "Agent B", "Agent C"],
+    "input_artifacts": [
+      "reviews/premortems/S2_cross_review_agent_A.md",
+      "reviews/premortems/S2_cross_review_agent_B.md",
+      "reviews/premortems/S2_cross_review_agent_C.md"
+    ]
+  },
+  "verdicts": {
+    "S2-000": { "agent_A": "ACCEPT-WITH-MERIT", "agent_B": "ACCEPT-WITH-MERIT", "agent_C": "ACCEPT-WITH-MERIT", "consensus": "ACCEPT-WITH-MERIT" },
+    "S2-001": { "agent_A": "PASS-WITH-ISSUES", "agent_B": "PASS-WITH-ISSUES", "agent_C": "PASS-WITH-ISSUES", "consensus": "PASS-WITH-ISSUES" },
+    "S2-002": { "agent_A": "PASS", "agent_B": "PASS", "agent_C": "PASS", "consensus": "PASS" },
+    "S2-003": { "agent_A": "PASS-WITH-ISSUES", "agent_B": "PASS-WITH-ISSUES", "agent_C": "PASS-WITH-ISSUES", "consensus": "PASS-WITH-ISSUES" },
+    "S2-004": { "agent_A": "PASS-WITH-ISSUES", "agent_B": "PASS-WITH-ISSUES", "agent_C": "PASS-WITH-ISSUES", "consensus": "PASS-WITH-ISSUES" }
+  },
+  "rating_disagreements": [],
+  "net_new_findings": [
+    {
+      "id": "NNF-1",
+      "source": "Agent A/B",
+      "type": "per_story",
+      "story": "S2-000",
+      "title": "AT-280 enforcement location remains claim/implementation ambiguity",
+      "description": "Story still requires a concrete enforcement point decision for AT-280 (inline quantize path vs explicit units-consistency function) and a single causality test asserting reject reason + dispatch_count.",
+      "status": "OPEN",
+      "priority": "MUST_FIX"
+    },
+    {
+      "id": "NNF-2",
+      "source": "Agent A/C",
+      "type": "per_story",
+      "story": "S2-001",
+      "title": "Non-ASCII separator fallback needs mandatory fixture coverage",
+      "description": "The fallback behavior in `§2` assumption 3 is strong, but currently only documented as an assumption; cross-reviews request at least one explicit fixture-based negative test.",
+      "status": "OPEN",
+      "priority": "MUST_FIX"
+    },
+    {
+      "id": "NNF-3",
+      "source": "Agent A",
+      "type": "cross_story",
+      "title": "Single-parser ownership for `s4:` labels",
+      "description": "Multiple stories rely on shared label format; without a canonical-construction invariant, drift is possible if non-`label.rs` code paths emit labels.",
+      "status": "OPEN",
+      "priority": "MUST_FIX"
+    },
+    {
+      "id": "NNF-4",
+      "source": "Agent C",
+      "type": "per_story",
+      "story": "S2-004",
+      "title": "Ensure PRD-only reason-code identifiers are never emitted as primary rejects",
+      "description": "Decision to treat PRD-only codes as diagnostics should be enforced with negative tests to prevent future emission as primary reject codes.",
+      "status": "OPEN",
+      "priority": "SHOULD_FIX"
+    }
+  ],
+  "fix_summary": {
+    "total_findings": 4,
+    "fixed_in_revision": 0,
+    "open_remaining": 4,
+    "by_priority": {
+      "MUST_FIX": 3,
+      "SHOULD_FIX": 1,
+      "NICE_TO_HAVE": 0
+    }
+  }
+}
