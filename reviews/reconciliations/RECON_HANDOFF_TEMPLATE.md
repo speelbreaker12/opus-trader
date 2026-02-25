@@ -109,7 +109,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 | Gate | Artifact | Validation command | Status |
 |------|----------|--------------------|--------|
 | A Preflight | `reviews/reconciliations/{{SLICE_ID}}/{{STORY_ID}}_reconciliation.md` | (n/a) | {{PASS/FAIL}} |
-| B Self-review | `reviews/reconciliations/{{SLICE_ID}}/R5B_SELF_REVIEW_GATE.json` + `receipts/r5b_*.json` (count={{N}}) | (n/a) | {{PASS/FAIL}} |
+| B Self-review | `reviews/reconciliations/{{SLICE_ID}}/R5B_SELF_REVIEW_GATE.json` + `reviews/reconciliations/{{SLICE_ID}}/receipts/r5b_*.json` (count={{N}}) | (n/a) | {{PASS/FAIL}} |
 | C External C1 | `artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL}} |
 | C2 External C2 | `reviews/reconciliations/{{SLICE_ID}}/external/cycle2/{{STORY_ID}}/R7_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL/NA}} |
 | D Verify | `reviews/reconciliations/{{SLICE_ID}}/verify_full/{{STORY_ID}}/verify_tail.txt` + `verify.meta.json` | (n/a) | {{PASS/FAIL}} |
