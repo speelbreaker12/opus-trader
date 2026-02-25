@@ -24,6 +24,7 @@ RUNTIME_STATE_SCHEMA_PATH = ROOT / "python" / "schemas" / "runtime_state_v1.sche
   [
     ("runtime_state_v1_valid.json", False),
     ("runtime_state_v1_missing_key.json", True),
+    ("runtime_state_v1_invalid_owner_view_unblock_type.json", True),
   ],
 )
 def test_runtime_state_contract_validation(fixture_name: str, should_raise: bool) -> None:
@@ -154,8 +155,139 @@ def test_http_post_envelope_maps_429_to_convex_rate_limited_code() -> None:
       total_timeout_s=8.0,
     )
     assert result.ok is False
-    assert result.retryable is True
-    assert result.code == publisher.CONVEX_RATE_LIMITED
+  assert result.retryable is True
+  assert result.code == publisher.CONVEX_RATE_LIMITED
+
+
+def test_process_once_retryable_error_marks_state_and_queue_retryable_row(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  source = json.loads((ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"))
+  now = datetime.now(tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+  source["generated_at"] = now
+  source["snapshot_seq"] = 1
+  snapshot_hash = hash_snapshot(source)
+
+  source_path = tmp_path / "runtime_state.json"
+  source_path.write_text(json.dumps(source, indent=2), encoding="utf-8")
+
+  cfg = publisher.PublisherConfig(
+    source_snapshot_path=source_path,
+    state_path=tmp_path / "state.json",
+    spool_db_path=tmp_path / "spool.db",
+    log_path=tmp_path / "publisher.log",
+    convex_endpoint="http://127.0.0.1:1/status",
+    convex_secret=None,
+    instance_id="soldier-main-01",
+    service="soldier_core",
+    env="paper",
+    head_commit="4a2e6fc",
+    expected_publish_interval_s=2,
+    stale_after_s=15,
+    poll_interval_s=2,
+    publisher_version="status-publisher.v1",
+    max_attempts=3,
+    connect_timeout_s=2.0,
+    read_timeout_s=5.0,
+    request_total_timeout_s=8.0,
+  )
+
+  sidecar_state = publisher.load_state(cfg.state_path, cfg.instance_id)
+  spool_store = spool.SpoolStore(cfg.spool_db_path)
+  row = None
+
+  monkeypatch.setattr(
+    publisher,
+    "_http_post_envelope",
+    lambda *args, **kwargs: publisher.HttpTransportResult(
+      ok=False,
+      retryable=True,
+      code=publisher.HTTP_STATUS_5XX,
+      detail="temporary transport failure",
+    ),
+  )
+
+  try:
+    updated_state = publisher._process_once(cfg, spool_store, sidecar_state)
+    row = spool_store._conn.execute(
+      "SELECT status, attempt_count, snapshot_hash FROM outbox WHERE snapshot_hash = ?",
+      (snapshot_hash,),
+    ).fetchone()
+  finally:
+    spool_store.close()
+
+  assert row is not None
+  assert row["status"] == "FAILED_RETRY"
+  assert row["attempt_count"] == 1
+  assert row["snapshot_hash"] == snapshot_hash
+
+  assert updated_state.totals.seen == 1
+  assert updated_state.totals.queued == 1
+  assert updated_state.totals.failed == 1
+  assert updated_state.totals.sent == 0
+  assert updated_state.last_error_code == publisher.HTTP_STATUS_5XX
+  assert updated_state.consecutive_failures == 1
+
+def test_process_once_duplicate_snapshot_does_not_requeue_and_increments_only_dedup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  source = json.loads((ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"))
+  now = datetime.now(tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+  source["generated_at"] = now
+  source["snapshot_seq"] = 10
+
+  source_path = tmp_path / "runtime_state.json"
+  source_path.write_text(json.dumps(source, indent=2), encoding="utf-8")
+  cfg = publisher.PublisherConfig(
+    source_snapshot_path=source_path,
+    state_path=tmp_path / "state.json",
+    spool_db_path=tmp_path / "spool.db",
+    log_path=tmp_path / "publisher.log",
+    convex_endpoint="http://127.0.0.1:1/status",
+    convex_secret=None,
+    instance_id="soldier-main-01",
+    service="soldier_core",
+    env="paper",
+    head_commit="4a2e6fc",
+    expected_publish_interval_s=2,
+    stale_after_s=15,
+    poll_interval_s=2,
+    publisher_version="status-publisher.v1",
+    max_attempts=3,
+    connect_timeout_s=2.0,
+    read_timeout_s=5.0,
+    request_total_timeout_s=8.0,
+  )
+
+  outbox = spool.SpoolStore(cfg.spool_db_path)
+  sidecar_state = publisher.load_state(cfg.state_path, cfg.instance_id)
+  row_count = -1
+
+  monkeypatch.setattr(
+    publisher,
+    "_http_post_envelope",
+    lambda *args, **kwargs: publisher.HttpTransportResult(
+      ok=True,
+      retryable=False,
+      code="",
+      detail='{"duplicate":false}',
+    ),
+  )
+
+  try:
+    sent_state = publisher._process_once(cfg, outbox, sidecar_state)
+    dedup_state = publisher._process_once(cfg, outbox, sent_state)
+    row_count = outbox._conn.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
+  finally:
+    outbox.close()
+
+  assert row_count == 1
+  assert sent_state.totals.seen == 1
+  assert sent_state.totals.queued == 1
+  assert sent_state.totals.sent == 1
+  assert sent_state.totals.failed == 0
+
+  assert dedup_state.totals.seen == 2
+  assert dedup_state.totals.queued == 1
+  assert dedup_state.totals.deduped == 1
+  assert dedup_state.totals.sent == 1
+  assert dedup_state.totals.failed == 0
 
 
 def test_extract_snapshot_seq_invalid() -> None:
