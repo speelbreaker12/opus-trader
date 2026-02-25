@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from dashboard.publisher import spool, state
 from dashboard.publisher.transform import SnapshotBuilderError, build_snapshot_envelope, hash_snapshot
@@ -12,6 +13,7 @@ from dashboard.publisher import publisher
 from dashboard.publisher.state import load_state, save_state
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNTIME_STATE_SCHEMA_PATH = ROOT / "python" / "schemas" / "runtime_state_v1.schema.json"
 
 
 @pytest.mark.parametrize(
@@ -62,6 +64,14 @@ def test_runtime_state_contract_validation(fixture_name: str, should_raise: bool
   assert snapshot["snapshot_hash"] == hash_snapshot(payload)
 
 
+def test_runtime_state_v1_schema_validation() -> None:
+  payload = json.loads(
+    (ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"),
+  )
+  schema = json.loads(RUNTIME_STATE_SCHEMA_PATH.read_text(encoding="utf-8"))
+  Draft202012Validator(schema).validate(payload)
+
+
 def test_runtime_state_payload_transforms_owner_view_schema_errors() -> None:
   payload = json.loads((ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"))
   payload["safety"]["owner_view"] = {"unblock_steps": [1, 2, 3]}
@@ -88,7 +98,7 @@ def test_sidecar_state_counters(tmp_path: Path) -> None:
   deduped = seen.with_dedup().with_last_error("SNAPSHOT_DUPLICATE_SKIPPED")
   queued = deduped.with_queued()
   sent = queued.with_send_success("h2", "2026-02-23T21:10:04Z")
-  failed = sent.with_send_failure("CONVEX_RATE_LIMITED", permanent=False)
+  failed = sent.with_send_failure(publisher.HTTP_STATUS_429, permanent=False)
 
   assert baseline.totals == state.SidecarTotals(seen=0, deduped=0, queued=0, sent=0, failed=0)
   assert seen.totals.seen == 1
@@ -203,6 +213,69 @@ def test_spool_retention_removes_expired_sent_and_failed_perm_rows(tmp_path: Pat
   assert status_by_hash == {
     "recent-sent": "SENT",
     "recent-fail": "FAILED_PERM",
+  }
+
+  store.close()
+
+
+def test_spool_retention_keeps_latest_sent_rows_and_failed_perm_window(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  spool_path = tmp_path / "status_publisher_spool_test.db"
+  store = spool.SpoolStore(spool_path)
+
+  now = datetime(2026, 2, 23, 22, 0, 0, tzinfo=timezone.utc)
+
+  class FrozenDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+      return now if tz is None else now.astimezone(tz)
+
+  monkeypatch.setattr(spool, "datetime", FrozenDateTime)
+
+  def iso(value: datetime) -> str:
+    return value.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+  def insert_row(
+    *,
+    status: str,
+    created_days_ago: int,
+    seen_days_ago: int,
+    snapshot_hash: str,
+    attempt_count: int = 0,
+    generated_at: str = "2026-02-23T21:10:03Z",
+  ) -> None:
+    created_at = iso(now - timedelta(days=created_days_ago))
+    next_attempt_at = iso(now - timedelta(days=seen_days_ago))
+    store._conn.execute(
+      "INSERT INTO outbox (snapshot_hash, instance_id, generated_at, payload_json, status, attempt_count, next_attempt_at, created_at, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      (
+        snapshot_hash,
+        "soldier-main-01",
+        generated_at,
+        "{}",
+        status,
+        attempt_count,
+        next_attempt_at,
+        created_at,
+        None,
+      ),
+    )
+    store._conn.execute("COMMIT")
+
+  insert_row(status="SENT", created_days_ago=40, seen_days_ago=40, snapshot_hash="old-sent-a")
+  insert_row(status="SENT", created_days_ago=10, seen_days_ago=10, snapshot_hash="window-sent-b")
+  insert_row(status="SENT", created_days_ago=2, seen_days_ago=2, snapshot_hash="recent-sent-c")
+  insert_row(status="SENT", created_days_ago=1, seen_days_ago=1, snapshot_hash="recent-sent-d")
+  insert_row(status="FAILED_PERM", created_days_ago=31, seen_days_ago=31, snapshot_hash="old-fail-a")
+  insert_row(status="FAILED_PERM", created_days_ago=5, seen_days_ago=5, snapshot_hash="recent-fail-b")
+
+  store.apply_retention(sent_keep_days=7, failed_perm_keep_days=30, keep_last_sent=2)
+  rows = store._conn.execute("SELECT snapshot_hash, status FROM outbox ORDER BY id").fetchall()
+  status_by_hash = {row[0]: row[1] for row in rows}
+
+  assert status_by_hash == {
+    "recent-sent-c": "SENT",
+    "recent-sent-d": "SENT",
+    "recent-fail-b": "FAILED_PERM",
   }
 
   store.close()
