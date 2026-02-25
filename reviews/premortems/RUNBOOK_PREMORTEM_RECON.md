@@ -152,7 +152,7 @@ Six checks, evaluated in order:
 |--------------------|----------------|-----|
 | `preflight` | R1 | A |
 | `implement` | R5 | A |
-| `self_review` | R5b | B |
+| `self_review` | R5b (R5b.1 → R5b.2 → R5b.3 → R5b.4) | B |
 | `cycle1` | R2 + R3 (R3A + R3B) + R4 + R4b | B |
 | `fix` | R7a + R7b + R7c (reviews) → R7c-fix (apply findings) | C |
 | `cycle2` | R7d (R7d.1 + R7d.2) + R7e + R7f | C |
@@ -466,43 +466,297 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 
 **Hard rule**: Cycle 2 (R7) cannot start unless `R5B_SELF_REVIEW_PROVEN` passes.
 
-**Agent parallelism**:
+**Agent model** (4 phases, 3 agent roles):
 
-| Agent count | Parallelism model | Rationale |
-|-------------|-------------------|-----------|
-| 6 (one per skill) | All 6 skills run in parallel; premortem walk (step 2) runs after all 6 complete | Each skill is independent and benefits from a fresh perspective. Parallel execution avoids context bleed between skills. |
+| Phase | Agent(s) | Role | Mode | Output |
+|-------|----------|------|------|--------|
+| R5b.1 — Skill reviews | Agents 1-6 (parallel) | Reviewer | Read-only | 6 skill receipts |
+| R5b.2 — Synthesis + plan | Agent 7 (planner) | Planner | Read-only | `R5B_FIX_PLAN.md` |
+| R5b.3 — Fix | Agent 8 (fixer) | Fixer | Read-write | Commits |
+| R5b.4 — Re-run | Agents 9+ (parallel) | Reviewer | Read-only | Updated receipts |
+
+**Rationale**: Separating review, planning, and fixing into distinct agents prevents scope creep (planner can't accidentally edit code), keeps the fixer's context small (reads the plan, not 6 full review outputs), and gives re-run agents a clean perspective with no carry-over bias.
+
+#### R5b.1 — Skill Reviews (parallel)
+
+Run 6-skill stack on story-scope code (not just diff). All 6 run in parallel (one agent per skill). Each skill is independent and benefits from a fresh perspective. Parallel execution avoids context bleed between skills.
+
+**Orchestrator prep** (before dispatching agents):
+```bash
+# Extract story context for prompt enrichment
+STORY_ID="${STORY_ID}"
+PREMORTEM="reviews/premortems/${STORY_ID}_premortem.md"
+SCOPE_TOUCH=$(jq -r '.stories["'${STORY_ID}'"].scope.touch[]' plans/prd.json)
+ATS=$(jq -r '.stories["'${STORY_ID}'"].enforcing_contract_ats[]' plans/prd.json)
+IMPL_TESTS=$(jq -r '.stories["'${STORY_ID}'"].implementation_tests[]' plans/prd.json)
+```
+
+**Per-agent enriched prompts**:
+
+Each agent receives: (a) its skill file from `SKILLS/`, (b) the common context block, (c) its skill-specific enrichment.
+
+##### Common context (all 6 agents)
+
+```
+STORY: ${STORY_ID}
+SCOPE: story-scope (all files in scope.touch, not just diff)
+REVIEW_BASIS: STORY_SCOPE (R5b Self-Review)
+
+Files in scope.touch:
+${SCOPE_TOUCH}
+
+Enforcing contract ATs:
+${ATS}
+
+Read the skill file first, then apply it to this story's code.
+Write findings to: reviews/reconciliations/${SLICE_ID}/receipts/r5b_<skill>.json
+```
+
+##### Agent 1: `/pr-review`
+
+```
+SKILL: Read SKILLS/pr-review.md and follow its checklist.
+
+ENRICHMENT — Premortem context:
+- Read ${PREMORTEM} §0 (scope) and §8 (conflict scan / hot zones).
+- §8 identifies files with overlapping concerns or recent churn.
+  Pay extra attention to SOLID violations in those hot zones.
+- Read ${PREMORTEM} §3 (failure modes) — any failure mode that
+  traces to a code quality issue (missing error handling, tight
+  coupling) is a P1 finding, not just style.
+
+FOCUS QUESTIONS:
+1. Do the scope.touch files follow the codebase's established patterns?
+   (Check crates/soldier_core/ conventions: newtypes, structured logging,
+   fail-closed defaults.)
+2. Are there any unwrap()/expect() calls in production paths?
+3. Is error handling consistent — does every ? chain produce a
+   meaningful error type, or are errors erased?
+4. Any dead code or unreachable branches introduced by this story?
+```
+
+##### Agent 2: `/failure-mode-review`
+
+```
+SKILL: Read SKILLS/failure-mode-review.md and follow its checklist.
+
+ENRICHMENT — Premortem context:
+- Read ${PREMORTEM} §3 (top 5 failure modes) — these are the author's
+  predicted failure paths. Your job is to verify they were mitigated
+  AND to find failure modes the author missed.
+- Read ${PREMORTEM} §5 (wrong impls) — each wrong impl implies a
+  failure mode. If the wrong impl is "skip the check entirely,"
+  the failure mode is "guard is bypassed under condition X."
+- Read the R1 evidence ledger if it exists:
+  reviews/reconciliations/${SLICE_ID}/${STORY_ID}_reconciliation.md
+
+FOCUS QUESTIONS:
+1. For each enforcement point in scope.touch: what happens when
+   the input is None, NaN, Inf, negative, stale, or empty?
+2. Trace the reject path — does it log (structured, with reason code)?
+   Does it increment a metric? Or is it silent?
+3. Are there any warn-and-continue paths where the contract requires
+   reject-and-halt?
+4. What happens on partial state (restart mid-operation, cache stale
+   but present, WAL half-written)?
+5. For each premortem §3 failure mode: is the mitigation real code
+   or just a comment/TODO?
+```
+
+##### Agent 3: `/strategic-failure-review`
+
+```
+SKILL: Read SKILLS/strategic-failure-review.md and follow its checklist.
+
+ENRICHMENT — Premortem context:
+- Read ${PREMORTEM} §4 (open decisions) — these record explicit design
+  choices with rejected alternatives. Check whether the chosen option
+  was actually implemented, and whether any rejected option was
+  silently adopted (auto-escalation to P1 per policy).
+- Read ${PREMORTEM} §7 (economic risk / loss_mode) — understand the
+  worst-case economic impact. Strategic risks in high-loss stories
+  are P0, not P2.
+- Read ${PREMORTEM} §9 (constraints) — known constraints may create
+  systemic risks (e.g., "we assumed the cache is always warm").
+
+FOCUS QUESTIONS:
+1. What assumptions does this code make about its environment that
+   could silently break? (e.g., "upstream always sends field X",
+   "config is never stale", "this runs single-threaded")
+2. If this story's enforcement fails silently, what is the blast
+   radius? Single instrument? All instruments? Full system halt?
+3. Are there any hidden coupling points — shared state, global
+   config, implicit ordering dependencies?
+4. Could an operator misconfigure this in production? What's the
+   failure mode of wrong config values?
+```
+
+##### Agent 4: `/contract-review`
+
+```
+SKILL: Read SKILLS/contract-review.md and follow its checklist.
+
+ENRICHMENT — Premortem context:
+- Read ${PREMORTEM} §1 (clause audit) — the AT-to-contract mapping.
+  Verify each mapping is still accurate against specs/CONTRACT.md.
+- Read ${PREMORTEM} §6 (proof plan) — the predicted enforcement
+  points and proving tests. Compare predictions to reality.
+- Read specs/CONTRACT.md for these specific ATs: ${ATS}
+
+FOCUS QUESTIONS:
+1. For each AT: does the enforcement point actually enforce what
+   the contract clause requires? (Not just "code exists" but
+   "code enforces the specific invariant.")
+2. Are there any fail-open paths where CONTRACT.md requires
+   fail-closed? Check: missing input, stale input, NaN.
+3. Does the code's behavior match CONTRACT.md exactly, or does
+   it implement a superset/subset of the requirement?
+4. Any contract clauses in scope that have NO enforcement point?
+5. Is loss_mode consistent with what CONTRACT.md implies about
+   the severity of this invariant?
+```
+
+##### Agent 5: `/validator-audit`
+
+```
+SKILL: Read SKILLS/validator-audit.md and follow its checklist.
+
+ENRICHMENT — Premortem context:
+- Read ${PREMORTEM} §2 (assumptions) — each assumption should have
+  become a test. Check which ones did and which are still untested.
+- Read ${PREMORTEM} §6 (proof plan) — the predicted test structure.
+  Compare: are the tests organized as predicted? Any missing?
+
+Implementation tests for this story:
+${IMPL_TESTS}
+
+FOCUS QUESTIONS:
+1. For each implementation_test: does it actually exist as a #[test]
+   function? (No phantom tests.)
+2. Does each test prove causality — asserting reject_reason,
+   dispatch_count, latch_reason, or mode_transition — or just
+   that "something happened" (is_err, is_some)?
+3. For safety-critical ATs: do both TRIP and NON-TRIP tests exist?
+4. Are there golden vectors / table-driven tests? How many rows?
+   Do they cover boundary, NaN/Inf/missing?
+5. For each premortem §2 assumption: is there a corresponding test?
+```
+
+##### Agent 6: `/devils-advocate`
+
+```
+SKILL: Read SKILLS/devils-advocate.md and follow its checklist.
+
+ENRICHMENT — Premortem context:
+- Read ${PREMORTEM} §5 (wrong implementation gate) — this is your
+  PRIMARY input. The premortem predicted specific wrong impls that
+  are simpler than the correct one and would pass naive tests.
+- For each wrong impl in §5: can you write it right now and have
+  ALL existing tests pass? If yes, that's a P0 gap.
+
+Implementation tests for this story:
+${IMPL_TESTS}
+
+FOCUS QUESTIONS:
+1. For each wrong impl in §5: does a tightening test exist that
+   would catch it? Name the test. If no test exists, mark
+   WRONG_IMPL_UNBLOCKED (P0).
+2. Beyond §5: can YOU think of a simpler-than-correct implementation
+   that passes all tests? (The Simpler-Than-Correct Gate.)
+3. Could you delete an enforcement branch and still pass all tests?
+   If yes, the test suite has a mutation gap.
+4. Are any tests tautological — they pass regardless of
+   implementation because they test the wrong thing?
+5. For table-driven tests: are the boundary rows actually at the
+   boundary, or off-by-one in the safe direction?
+```
+
+**Output**: 6 skill receipt JSONs in `reviews/reconciliations/<slice>/receipts/`:
+- `r5b_pr_review.json`
+- `r5b_failure_mode_review.json`
+- `r5b_strategic_review.json`
+- `r5b_contract_review.json`
+- `r5b_validator_audit.json`
+- `r5b_devils_advocate.json`
+
+#### R5b.2 — Synthesis + Fix Plan (single agent, read-only)
+
+**Inputs**: All 6 skill receipts + premortem for `${STORY_ID}`
 
 **Operator steps**:
-1. Run 6-skill stack on story-scope code (not just diff) — matches `/review-stack` (aka `/6`), 6 agents in parallel:
-   - `/pr-review`
-   - `/failure-mode-review`
-   - `/strategic-failure-review`
-   - `/contract-review`
-   - `/validator-audit`
-   - `/devils-advocate`
+1. Read all 6 skill outputs
 2. Walk premortem: §2 assumptions → §4 decisions → §5 wrong impls → §6 proof plan → §10 STOPLIGHT
-3. Fix all P0/P1 blockers immediately
-4. Re-run affected skill(s) after fixes
-5. Emit gate artifact with `head_commit` validation
-6. Produce 6 skill receipts in `reviews/reconciliations/<slice>/receipts/`
+3. Cross-reference skill findings against premortem sections — flag conflicts between skills
+4. Classify each finding: P0 (blocking) / P1 (must-fix) / P2 (should-fix) / INFO
+5. Write fix plan: for each P0/P1/P2, specify file, function, what to change, and why. Only INFO findings are excluded from the plan.
+6. Estimate blast radius (how many files touched, any cross-cutting changes)
+
+**Hard constraint**: This agent has **no edit/write tools** — it produces the plan only.
+
+**Output — two paths**:
+
+**Path A (fixes needed)**: If any P0/P1/P2 findings exist → write `R5B_FIX_PLAN.md` with sections:
+- Finding summary (counts by priority)
+- Conflict resolution (if skills disagree)
+- Ordered fix list (P0 first, then P1, then P2; smallest fix first within each priority)
+- Blast radius estimate
+- INFO findings (noted, no action required)
+
+Then proceed to R5b.3.
+
+**Path B (no fixes)**: If all findings are INFO → write `R5B_NO_FIXES_NEEDED.md` with:
+- Finding summary (`P0: 0, P1: 0, P2: 0`)
+- INFO findings list
+- Explicit statement: "No code changes required. Skipping R5b.3 and R5b.4."
+
+Then skip R5b.3 and R5b.4, proceed directly to R5b Gate.
+
+#### R5b.3 — Fix (single agent, read-write)
+
+**Skipped if** `R5B_NO_FIXES_NEEDED.md` exists (Path B above).
+
+**Inputs**: `R5B_FIX_PLAN.md` only (does NOT read raw skill outputs)
+
+**Operator steps**:
+1. Read the fix plan
+2. Execute each fix in plan order (P0 → P1 → P2)
+3. For each fix, record what was changed in `R5B_FIX_LOG.md` (file:line, before/after summary)
+4. Do NOT fix anything not in the plan — if a new issue is discovered, note it in the fix log for re-planning
+
+**Hard constraint**: Only changes listed in the fix plan are permitted. Unplanned changes require a re-plan cycle (back to R5b.2).
 
 **Output**:
-- `SELF_REVIEW_R5b.md` (narrative)
-- `R5B_SELF_REVIEW_GATE.json` (sidecar schema: `specs/schemas/recon/self_review_sidecar.schema.json`)
-- 6 skill receipt JSONs in `receipts/`:
-  - `r5b_pr_review.json`
-  - `r5b_failure_mode_review.json`
-  - `r5b_strategic_review.json`
-  - `r5b_contract_review.json`
-  - `r5b_validator_audit.json`
-  - `r5b_devils_advocate.json`
+- Commits (one per logical fix or grouped by plan section)
+- `R5B_FIX_LOG.md` (what was changed and why, traceable to fix plan items)
+
+#### R5b.4 — Re-run Affected Skills (parallel)
+
+**Skipped if** `R5B_NO_FIXES_NEEDED.md` exists (Path B above).
+
+**Inputs**: `R5B_FIX_LOG.md` (to determine which skills are affected)
+
+Re-run only the skill(s) whose domain was touched by the fixes. Each re-run agent gets a clean context (no carry-over from R5b.1). If re-run finds new P0/P1/P2 findings, cycle back to R5b.2 (re-plan).
+
+**Output**: Updated skill receipts (replace originals in `receipts/`)
+
+#### R5b Gate
+
+**Prerequisite**: R5b runs in the existing recon worktree (`recon/${STORY_ID}` branch). All sub-phases (R5b.1–R5b.4) work in this same worktree — no sub-worktree needed since the recon branch already provides isolation.
+
+After all phases complete (or after R5b.2 Path B skip):
+1. Verify clean working tree: `git status --porcelain` must be empty (no uncommitted changes)
+2. Emit gate artifact with `head_commit` validation
+3. Produce final `SELF_REVIEW_R5b.md` (narrative summary of all phases)
+4. Produce `R5B_SELF_REVIEW_GATE.json` (sidecar schema: `specs/schemas/recon/self_review_sidecar.schema.json`)
+
 **Receipt**: `plans/wf_step.sh ${STORY_ID} self_review`
 
 **Gate checks (hard)**:
 
 | Gate ID | Check |
 |---------|-------|
-| `R5B_SELF_REVIEW_PROVEN` | All 6 receipt files exist; `head_commit` in each == current HEAD; `started_at`/`ended_at` timestamps plausible; `exit_status == "completed"` for all; all `artifact_paths[]` exist on disk |
+| `R5B_CLEAN_TREE` | `git status --porcelain` is empty — all R5b.3 changes must be committed, no stray files |
+| `R5B_SELF_REVIEW_PROVEN` | All 6 receipt files exist; `head_commit` in each == current HEAD; `started_at`/`ended_at` timestamps plausible; `exit_status == "completed"` for all; all `artifact_paths[]` exist on disk; either `R5B_FIX_PLAN.md` + `R5B_FIX_LOG.md` exist (Path A) or `R5B_NO_FIXES_NEEDED.md` exists (Path B) |
 
 **On failure**: block with `SELF_REVIEW_UNPROVEN:<reason>` — no Cycle 2 start.
 
@@ -698,7 +952,7 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 
 **RECON-CLEAN exception**: If Cycle 1 + self-review found `BLOCKING=0` AND no code changed (`git diff → 0`):
 1. Lead independently verifies `BLOCKING=0` claim (reads at least 1 Cycle 1 artifact)
-2. Confirms R5b self-review `finding_counts` show `P0: 0, P1: 0`
+2. Confirms R5b self-review `finding_counts` show `P0: 0, P1: 0, P2: 0` (i.e., `R5B_NO_FIXES_NEEDED.md` exists — Path B)
 3. Records: `RECON-CLEAN approved by: <lead>` + `RECON-CLEAN verified: reviewed <artifact>`
 4. Manifest `validation_status` = `"recon_clean"` (exempt from dual-prompt requirement)
 
@@ -890,7 +1144,9 @@ reviews/reconciliations/<SLICE_ID>/
   R5_REMEDIATION_NOTES.json                   # sidecar (gap_id mappings, touched files)
 
   # ── R5b: Self-Review ──
-  SELF_REVIEW_R5b.md
+  R5B_FIX_PLAN.md                             # R5b.2 planner output (read-only synthesis)
+  R5B_FIX_LOG.md                              # R5b.3 fixer output (what was changed)
+  SELF_REVIEW_R5b.md                          # final narrative summary
   R5B_SELF_REVIEW_GATE.json                   # sidecar (gate summary)
   receipts/
     r5b_pr_review.json
@@ -963,7 +1219,7 @@ Every review artifact (`.md` and `.json`) produced in R1–R7 must include a sta
 | `model` | String (e.g., `gpt-5.3`, `claude-opus-4-6`, `kimi-k2.5`, `n/a`) |
 | `prompt_style` | `generic` \| `enriched` \| `none` |
 | `cycle` | `C1` \| `C2` \| `SELF` \| `NONE` |
-| `phase_equivalent` | `R1` \| `R2` \| `R3` \| `R4` \| `R4b` \| `R5` \| `R5b` \| `R6` \| `R7a` \| `R7b` \| `R7c` \| `R7d` \| `R7e` \| `R7f` |
+| `phase_equivalent` | `R1` \| `R2` \| `R3` \| `R4` \| `R4b` \| `R5` \| `R5b` \| `R5b.1` \| `R5b.2` \| `R5b.3` \| `R5b.4` \| `R6` \| `R7a` \| `R7b` \| `R7c` \| `R7d` \| `R7e` \| `R7f` |
 
 #### 6.2.2 Full Provenance Set (recommended for all artifacts)
 
@@ -1052,6 +1308,8 @@ Validators reject if: `head_commit` mismatch, `markdown_sha256` drift, unsupport
 | R4b | `R4B_EXTERNAL_MAPPING` | JSON-primary + rendered .md | `phase_mapping.schema.json` |
 | R5 | `R5_REMEDIATION_PLAN` | Markdown | — |
 | R5 | `R5_REMEDIATION_NOTES` | Markdown + sidecar | — |
+| R5b.2 | `R5B_FIX_PLAN` | Markdown | — |
+| R5b.3 | `R5B_FIX_LOG` | Markdown | — |
 | R5b | `SELF_REVIEW_R5b` / `R5B_SELF_REVIEW_GATE` | Markdown + sidecar | `self_review_sidecar.schema.json` |
 | R6 | `R6_VERIFY_SUMMARY` | JSON-primary + .md companion | `verify_result.schema.json` |
 | R7a | `R7A_CONTRACT_REVIEW` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
@@ -1119,6 +1377,7 @@ Full definitions and escalation rules in [POLICY](PREMORTEM_RECON_POLICY.md).
 | `R5_ONLY_GAP_FILES_CHANGED` | R5 | Yes |
 | `R5_GAP_TRACEABILITY_OK` | R5 | Yes |
 | `R5_NO_UNWRAP_IN_PROD` | R5 | Yes |
+| `R5B_CLEAN_TREE` | R5b | Yes (blocks Cycle 2) |
 | `R5B_SELF_REVIEW_PROVEN` | R5b | Yes (blocks Cycle 2) |
 | `R6_PROOF_GATE` | R6 | Yes |
 | `R6_RUNTIME_ENFORCEMENT_GATE` | R6 | Yes |

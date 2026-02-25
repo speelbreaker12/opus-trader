@@ -5,12 +5,26 @@ const http = httpRouter();
 
 const MISSING_AUTH = {
   status: 401,
+  code: "CONVEX_AUTH_ERROR",
   body: "missing Authorization header",
 };
 
 const BAD_AUTH = {
   status: 401,
+  code: "CONVEX_AUTH_ERROR",
   body: "invalid Authorization header",
+};
+
+const INVALID_JSON = {
+  status: 400,
+  code: "CONVEX_RESPONSE_INVALID",
+  body: "invalid JSON body",
+};
+
+const INVALID_PAYLOAD = {
+  status: 400,
+  code: "CONVEX_RESPONSE_INVALID",
+  body: "payload must be an object",
 };
 
 const VALIDATION_ERROR = {
@@ -72,11 +86,11 @@ http.route({
     try {
       payload = await req.json();
     } catch {
-      return new Response("invalid JSON body", { status: 400 });
+      return asJsonResponse({ code: INVALID_JSON.code, error: INVALID_JSON.body }, INVALID_JSON.status);
     }
 
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      return asJsonResponse({ code: "SCHEMA_INVALID", error: "payload must be an object" }, 400);
+      return asJsonResponse({ code: INVALID_PAYLOAD.code, error: INVALID_PAYLOAD.body }, INVALID_PAYLOAD.status);
     }
 
     try {

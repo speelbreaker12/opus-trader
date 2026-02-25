@@ -163,7 +163,7 @@ Evidence ledger cross-review has failure modes that don't exist in premortem cro
 
 The constraint in the review process is **reviewer attention** -- it is finite, expensive, and non-renewable within a review cycle. The highest-throughput setup:
 
-1. **Self-review (R5b) should be heavy** -- the builder does the evidence assembly, builds the proof table, runs 5 skills, fixes blockers.
+1. **Self-review (R5b) should be heavy** -- 6 parallel reviewer agents run the skill stack (R5b.1), a planner agent synthesizes findings and writes a fix plan (R5b.2), a fixer agent executes the plan (R5b.3), and affected skills are re-run by fresh agents (R5b.4).
 2. **Cycle 1 external review can be lighter** if self-review is high quality -- the reviewer stress-tests and catches what slipped, rather than starting from scratch.
 3. **Cycle 2 is narrowly scoped** -- only the fixes, only the affected AT proofs.
 
@@ -374,7 +374,7 @@ The `plans/step_supervisor.sh` and `plans/wf_step.sh` use a 9-step receipt chain
 |--------------------|----------------|-----|-------------|
 | `preflight` | R1 (Parallel Reconcile) | A | Read-only audit: locate enforcement, verify fail-closed, build evidence ledger |
 | `implement` | R5 (Remediation) | A | Fix gaps from R4 gap list (only phase that modifies code) |
-| `self_review` | R5b (Self-Review) | B | 5-skill stack on story-scope code, fix blockers, produce gate artifact + skill receipts |
+| `self_review` | R5b (Self-Review: R5b.1→R5b.2→R5b.3→R5b.4) | B | 6-skill stack (R5b.1), synthesis + fix plan (R5b.2), execute fixes (R5b.3), re-run affected skills (R5b.4), produce gate artifact + skill receipts |
 | `cycle1` | R2 (Lead Eval) + R3 (Cross-Review) + R4 (Synthesis) | B | External story-scope audit, cross-review, gap aggregation |
 | `fix` | R7a-R7c fixes | C | Apply contract review, strategic review, and wiring audit fixes |
 | `cycle2` | R7d (Code Review) + R7e (Devils Advocate) + R7f (Debt Validation) | C | Post-remediation audit on fix diff + AT regression |
@@ -384,7 +384,7 @@ The `plans/step_supervisor.sh` and `plans/wf_step.sh` use a 9-step receipt chain
 
 **Note**: The `cycle1` step spans R2-R4 because the receipt tracks the completion of the entire Cycle 1 review round, not individual sub-phases. Similarly, `cycle2` spans R7d-R7f.
 
-**Receipt system distinction**: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track workflow step completion. R5b skill receipts (`reviews/reconciliations/<slice>/receipts/`) track individual skill execution within a step. These are complementary -- the workflow receipt proves the step ran, the skill receipts prove *how* it ran.
+**Receipt system distinction**: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track workflow step completion. R5b skill receipts (`reviews/reconciliations/<slice>/receipts/`) track individual skill execution within R5b.1. R5b also produces `R5B_FIX_PLAN.md` (R5b.2) and `R5B_FIX_LOG.md` (R5b.3). These are complementary -- the workflow receipt proves the step ran, the skill receipts prove *how* reviews ran, and the fix plan/log prove *what* was planned vs changed.
 
 ---
 

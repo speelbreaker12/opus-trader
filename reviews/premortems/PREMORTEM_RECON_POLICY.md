@@ -21,7 +21,7 @@
 | Fail-Closed | Error/edge-case handling that defaults to rejection/degradation (not warn-and-continue). |
 | Golden Vector | A table-driven test with 10-30 input cases covering boundary, NaN/Inf/missing, and wrong-impl scenarios. |
 | Evidence Ledger | Per-story document produced during reconciliation with file:line citations for every audit check. |
-| Simpler-Than-Correct Gate | A meta-check: "Is there any implementation SIMPLER than the correct one that passes the entire test suite?" If yes, the suite has a mutation gap. Applied in Phase R5b (preliminary, builder catches own gaps) and definitively in Phase R7e (independent auditor). R5b is defense-in-depth; it does not replace R7e. |
+| Simpler-Than-Correct Gate | A meta-check: "Is there any implementation SIMPLER than the correct one that passes the entire test suite?" If yes, the suite has a mutation gap. Applied in Phase R5b.1 (preliminary, reviewers catch gaps) and definitively in Phase R7e (independent auditor). R5b is defense-in-depth; it does not replace R7e. |
 | Proof Graph | Per-story `proof_graph.json` -- structured JSON mapping each AT to enforcement point, tests, wiring status, observability, and verdict. Validated by `python/proof_graph/validate.py` with 60 rules (43 V1+V2, 17 V2-only). Schema versions 1 and 2. |
 | Story Proof Scope | The minimum context needed to audit a story's contract compliance: PRD item, `enforcing_contract_ats[]`, premortem (especially sections 2/4/5), recon preflight, `scope.touch` files, proving test files from `implementation_tests[]`, relevant CONTRACT.md sections, and direct integration surfaces for causality. |
 | Review Basis | An explicit label every reviewer must include in their output: `STORY_SCOPE (Cycle 1)` or `FIX_DIFF + AT_REGRESSION (Cycle 2)`. |
@@ -165,7 +165,7 @@ Without independent verification, RECON-CLEAN is not valid.
 
 ### 3.8 R5b Skill Receipt Validation
 
-Five receipt files must exist at `reviews/reconciliations/<slice>/receipts/`:
+Six receipt files must exist at `reviews/reconciliations/<slice>/receipts/`:
 
 | Skill | Receipt filename |
 |-------|-----------------|
@@ -173,15 +173,22 @@ Five receipt files must exist at `reviews/reconciliations/<slice>/receipts/`:
 | `/failure-mode-review` | `r5b_failure_mode_review.json` |
 | `/strategic-failure-review` | `r5b_strategic_review.json` |
 | `/contract-review` | `r5b_contract_review.json` |
+| `/validator-audit` | `r5b_validator_audit.json` |
 | `/devils-advocate` | `r5b_devils_advocate.json` |
+
+Additionally, the R5b planning/fix artifacts must exist:
+- `R5B_FIX_PLAN.md` — synthesis + fix plan (R5b.2 output)
+- `R5B_FIX_LOG.md` or `R5B_NO_FIXES_NEEDED.md` — fix record (R5b.3 output)
 
 **Validation checks** (all must pass or Cycle 2 is blocked with `SELF_REVIEW_UNPROVEN: <reason>`):
 
-1. All 5 receipt files exist.
+1. All 6 receipt files exist.
 2. Each receipt's `head_commit` matches current HEAD (prevents stale receipts).
 3. Each receipt's `started_at`/`ended_at` timestamps are plausible and within the R5b window.
 4. Each receipt's `exit_status` is `"completed"` (not `"skipped"` or `"failed"`).
 5. Each receipt's `artifact_paths[]` reference files that exist on disk.
+6. `R5B_FIX_PLAN.md` exists.
+7. `R5B_FIX_LOG.md` or `R5B_NO_FIXES_NEEDED.md` exists.
 
 ### 3.9 prd_set_pass.sh Gate
 
@@ -195,7 +202,7 @@ Fifteen checks, all must pass:
 | 4 | `verify.sh` passed | Failed verification blocks |
 | 5 | `contract_review.json` contains `"decision": "PASS"` | Non-PASS decision blocks |
 | 6 | `loss_mode` fields populated (all 3 subfields: `worst_case`, `fail_closed_cap`, `drift_metric`) | Empty or TBD blocks (exempt: policy/certification stories) |
-| 7 | R5b skill receipts verified (5 files, head_commit match, timestamps, exit_status, artifact_paths) | Any `SELF_REVIEW_UNPROVEN` blocks |
+| 7 | R5b skill receipts verified (6 files, head_commit match, timestamps, exit_status, artifact_paths) + fix plan/log exist | Any `SELF_REVIEW_UNPROVEN` blocks |
 | 8 | No `WEAK_PROOF` on MED/HIGH `loss_mode` ATs | Remaining WEAK_PROOF blocks |
 | 9 | Debt register valid: every DEFERRED gap has entry, no TBD target_slice, no empty owner | Invalid debt entry blocks |
 | 10 | No overdue debt (target_slice already passed) | Overdue debt blocks until re-targeted |
@@ -284,7 +291,9 @@ Default to story-scope.
 | Artifact | Format | Phase | Location |
 |----------|--------|-------|----------|
 | Evidence ledger | Markdown (source) | R1 | `reviews/reconciliations/<slice>/<ID>_reconciliation.md` |
-| Skill receipts (5) | JSON-primary | R5b | `reviews/reconciliations/<slice>/receipts/r5b_*.json` |
+| Skill receipts (6) | JSON-primary | R5b.1 | `reviews/reconciliations/<slice>/receipts/r5b_*.json` |
+| Fix plan | Markdown | R5b.2 | `reviews/reconciliations/<slice>/R5B_FIX_PLAN.md` |
+| Fix log | Markdown | R5b.3 | `reviews/reconciliations/<slice>/R5B_FIX_LOG.md` |
 | Gap list (cross-review output) | JSON + Markdown | R3/R4 | `reviews/reconciliations/<slice>/GAP_LIST.md` |
 | Debt register | JSON-primary | R7f | `reviews/reconciliations/<slice>/DEBT_REGISTER.json` |
 | Proof graph | JSON-primary | R6 | `artifacts/story/<ID>/proof_graph.json` |
@@ -328,8 +337,9 @@ Every reconciled story must produce this minimum set. Missing items block the `R
 | # | Artifact | Phase | What it proves |
 |---|----------|-------|---------------|
 | 1 | **Preflight artifact** (AT proof audit table) | R1 | Each AT has an enforcement point + proving test (or explicit gap) |
-| 2a | **Self-review artifact** (with premortem cross-check + Evidence Index) | R5b | Builder tried to break the proof; sections 2/4/5 walked; 5-skill stack run |
-| 2b | **Skill receipts** (5 JSON files in `reviews/reconciliations/<slice>/receipts/`) | R5b | Machine-verifiable proof that each skill was executed (head_commit matches, timestamps plausible, artifacts exist) |
+| 2a | **Self-review artifact** (with premortem cross-check + Evidence Index) | R5b | 6-skill stack run (R5b.1); findings synthesized + fix plan written (R5b.2); fixes applied (R5b.3); affected skills re-run (R5b.4) |
+| 2b | **Skill receipts** (6 JSON files in `reviews/reconciliations/<slice>/receipts/`) | R5b.1 | Machine-verifiable proof that each skill was executed (head_commit matches, timestamps plausible, artifacts exist) |
+| 2c | **Fix plan + fix log** (`R5B_FIX_PLAN.md` + `R5B_FIX_LOG.md`) | R5b.2-3 | Auditable record of what was planned vs what was changed |
 | 3 | **Cycle 1 external review artifact(s)** (logged via `review_logged.sh`) | R3 | Independent auditor confirmed contract compliance on story proof scope |
 | 4 | **Cycle 2 external review artifact(s)** (logged, or `RECON-CLEAN` exception) | R7 | Fix diff verified; Cycle 1 findings closed; no regressions |
 | 5 | **Review resolution artifact** | R6 | All BLOCKING findings closed; verdicts assigned with evidence |
@@ -429,17 +439,20 @@ Location: `reviews/reconciliations/<slice>/receipts/r5b_<skill>.json`
 | `/failure-mode-review` | `r5b_failure_mode_review.json` |
 | `/strategic-failure-review` | `r5b_strategic_review.json` |
 | `/contract-review` | `r5b_contract_review.json` |
+| `/validator-audit` | `r5b_validator_audit.json` |
 | `/devils-advocate` | `r5b_devils_advocate.json` |
 
 ### 8.3 R6 Gate Check Rules
 
-All 5 checks must pass (blocking with `SELF_REVIEW_UNPROVEN: <reason>` on failure):
+All 7 checks must pass (blocking with `SELF_REVIEW_UNPROVEN: <reason>` on failure):
 
-1. All 5 receipt files exist.
+1. All 6 receipt files exist.
 2. Each `head_commit` matches current HEAD.
 3. Each `started_at`/`ended_at` is plausible and within the R5b window.
 4. Each `exit_status` is `"completed"`.
 5. Each `artifact_paths[]` entry references a file that exists on disk.
+6. `R5B_FIX_PLAN.md` exists.
+7. `R5B_FIX_LOG.md` or `R5B_NO_FIXES_NEEDED.md` exists.
 
 ---
 

@@ -160,10 +160,10 @@ Anti-patterns are grouped by failure domain for faster lookup during reviews.
 
 ### #9 — Skipping Phase R5b self-review
 
-**Pattern**: Builder sends remediation code directly to external review (Cycle 2) without running the 5-skill self-review stack first.
-**Risk**: Wastes the scarce constraint of reviewer attention. External reviewers rediscover issues the builder already saw, consuming review budget on known problems.
-**Fix**: Builder must run the 5-skill stack (`/pr-review` -> `/failure-mode-review` -> `/strategic-failure-review` -> `/contract-review` -> `/devils-advocate`), fix P0/P1/P2 blockers, and produce a gate artifact before Cycle 2 begins.
-**Gate**: No automated gate — step supervisor enforces ordering (self_review step must precede cycle2).
+**Pattern**: Remediation code is sent directly to external review (Cycle 2) without running the 6-skill self-review stack first.
+**Risk**: Wastes the scarce constraint of reviewer attention. External reviewers rediscover issues the reviewers would have caught, consuming review budget on known problems.
+**Fix**: R5b must complete all 4 sub-phases: 6 parallel skill reviews (R5b.1), synthesis + fix plan (R5b.2), execute fixes per plan (R5b.3), re-run affected skills (R5b.4). Gate artifact + all 6 skill receipts + fix plan/log must exist before Cycle 2 begins.
+**Gate**: `R5B_SELF_REVIEW_PROVEN` — all 6 receipts, fix plan, fix log must exist with valid head_commit. Step supervisor enforces ordering (self_review step must precede cycle2).
 
 ---
 
