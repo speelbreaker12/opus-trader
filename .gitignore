@@ -1,6 +1,7 @@
 .ralph/
 .wf/
 target/
+dashboard/node_modules/
 plans/logs/
 plans/progress_archive.txt
 artifacts/verify/
