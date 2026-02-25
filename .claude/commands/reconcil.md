@@ -8,17 +8,34 @@
 ls reviews/reconciliations/*/HANDOFF.md 2>/dev/null
 ```
 
-**If HANDOFF.md exists:**
-- Read it. Multiple files → pick most recently modified (or ask).
-- Go to the **HANDOFF** section at the bottom.
-- Follow "Next steps" exactly as written.
-- Each step block has a `Reference:` line — use it if you need the governing doc for that step.
-- Do NOT read all 5 source-of-truth docs upfront. Read only what the current step's Reference line points to.
+#### No HANDOFF.md found → Fresh start
 
-**If no HANDOFF.md exists (fresh start):**
 - Read `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md` (your role, format, and all step references are in there).
 - Ask: which slice? which stories?
 - Copy template → `reviews/reconciliations/<SLICE_ID>/HANDOFF.md`, fill slice/story names, begin.
+
+#### HANDOFF.md found → Update it first, then act
+
+**Always do this regardless of whether this is a mid-session check or end-of-session handoff:**
+
+1. **Audit completed steps for unfilled placeholders** — scan every step block that is marked
+   `COMPLETE` or `IN_PROGRESS` for any remaining `{{...}}` tokens. Fill them with real values
+   from artifacts on disk or from work already done this session.
+
+2. **Update the status matrix** at the top — make sure every story's step symbols (`·` `→` `✓` `✗`)
+   reflect the actual current state.
+
+3. **Rewrite the HANDOFF section** at the bottom — always overwrite it with the current position:
+   - Stopped at: current story + step
+   - What happened: 2–5 bullets summarising this session's work
+   - Must read first: the 2–3 artifacts a cold-start agent needs most
+   - Next steps: exact actions (commands, not descriptions)
+   - Resume command
+
+4. **Then continue or stop:**
+   - If context is healthy → resume work from where you are, using the step's `Reference:` line
+     to find the governing doc section if needed.
+   - If context is nearly full → stop after writing the HANDOFF. The filled handoff IS the output.
 
 ---
 
