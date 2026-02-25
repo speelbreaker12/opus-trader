@@ -149,6 +149,22 @@ If a required script/artifact is missing or invalid, the workflow must produce a
 - Late discovery of PRD/schema/shell issues → run fast precheck early (schema/self-dep/shellcheck/traceability only).
 - Re-running full verify after small harness tweaks → minimize harness churn; group harness edits and validate once.
 
+## /reconcil — Premortem + Reconciliation Orchestrator
+
+Run to audit already-passing stories or start a fresh reconciliation session. Full spec: `SKILLS/reconcil.md`.
+
+1. Check for active handoff: `ls reviews/reconciliations/*/HANDOFF.md 2>/dev/null`
+2. **No HANDOFF found → Fresh start**: read `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md`, ask which slice/stories, copy template, begin.
+3. **HANDOFF found → Update first, then act**:
+   - Fill unfilled `{{...}}` placeholders in completed/in-progress steps.
+   - Update the status matrix (symbols: `·` `→` `✓` `✗`).
+   - Rewrite the HANDOFF section (stopped-at · what happened · must-read artifacts · next steps · resume command).
+   - Continue if context healthy; stop after writing HANDOFF if context is nearly full.
+
+Hard rules: R1 (preflight) is read-only. No Cycle 2 without `R5B_SELF_REVIEW_PROVEN` gate. No fake citations. No DEFERRED without a schema-validated debt register entry.
+
+---
+
 ## /toc — Theory of Constraints Commit
 
 Run after completing any unit of work. Full spec: `SKILLS/toc.md`.
