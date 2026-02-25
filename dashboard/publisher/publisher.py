@@ -325,7 +325,7 @@ def _http_post_envelope(
     if status_code == 409:
       return HttpTransportResult(True, False, "", response_body)
     if status_code == 429:
-      return HttpTransportResult(False, True, CONVEX_RATE_LIMITED, f"HTTP {status_code}: {response_body}")
+      return HttpTransportResult(False, True, HTTP_STATUS_429, f"HTTP {status_code}: {response_body}")
     if status_code in {400, 422}:
       return HttpTransportResult(False, False, CONVEX_UPSERT_REJECTED, f"HTTP {status_code}: {response_body}")
     if status_code in {401, 403}:
