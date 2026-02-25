@@ -20,6 +20,7 @@ import fcntl
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -35,8 +36,25 @@ DEFAULT_POLICY_PATH = ROOT / "config" / "policy.json"
 DEFAULT_CONTRACT_VERSION = "5.2"
 DEFAULT_KEY_SCOPE_PROBE = ROOT / "evidence" / "phase0" / "keys" / "key_scope_probe.json"
 DEFAULT_RUNTIME_STATE_PATH = ROOT / "artifacts" / "phase0" / "runtime_state.json"
+DEFAULT_RUNTIME_STATE_V1_PATH = ROOT / "var" / "runtime" / "runtime_state.json"
 RUNTIME_MODES = {"ACTIVE", "REDUCE_ONLY", "KILL"}
 RUNTIME_STATE_SCHEMA_VERSION = 1
+RUNTIME_STATE_V1_SCHEMA_VERSION = "runtime_state.v1"
+RUNTIME_STATE_V1_PUBLISH_INTERVAL_S = 2
+RUNTIME_STATE_V1_STALE_AFTER_S = 15
+RUNTIME_STATE_V1_HEAD_COMMIT_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+RUNTIME_STATE_V1_DEFAULT_INSTANCE_ID = "soldier-main-01"
+RUNTIME_STATE_V1_DEFAULT_SERVICE = "soldier_core"
+RUNTIME_STATE_V1_DEFAULT_ENV = "paper"
+RUNTIME_STATE_V1_METRIC_UNITS = {
+    "mm_util": "ratio",
+    "disk_used_pct": "percent",
+    "wal_queue_depth": "count",
+    "ws_event_lag": "ms",
+    "http_429_count": "count",
+    "deribit_10028_count": "count",
+    "deribit_http_p95": "ms",
+}
 DEFAULT_MAX_PENDING_ORDERS = 1000
 EXTERNAL_RUNTIME_STATE_ACK_VALUE = "I_UNDERSTAND"
 
@@ -160,6 +178,15 @@ def _runtime_state_path() -> Path:
     return path
 
 
+def _runtime_state_initialized_marker_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.initialized")
+
+
+def _runtime_state_initialized(path: Path) -> bool:
+    # Marker is written only after a successful runtime-state write.
+    return _runtime_state_initialized_marker_path(path).exists()
+
+
 def _default_runtime_state(*, trading_mode: str = "ACTIVE", reason: str = "") -> Dict[str, Any]:
     mode = str(trading_mode).upper()
     if mode not in RUNTIME_MODES:
@@ -171,6 +198,7 @@ def _default_runtime_state(*, trading_mode: str = "ACTIVE", reason: str = "") ->
         "trading_mode": mode,
         "orders_in_flight": orders_in_flight,
         "pending_orders": pending_orders,
+        "snapshot_seq": 0,
         "last_transition_reason": reason,
         "last_transition_ts": _utc_now_iso(),
     }
@@ -196,6 +224,14 @@ def _normalize_pending_orders(raw: Any) -> list[Dict[str, Any]]:
 def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
     default_state = _default_runtime_state()
     if not path.exists():
+        if _runtime_state_initialized(path):
+            return (
+                _default_runtime_state(
+                    trading_mode="KILL",
+                    reason="runtime_state_missing_after_init",
+                ),
+                [f"runtime_state: state file missing after prior initialization: {path}"],
+            )
         return default_state, []
     try:
         obj = json.loads(path.read_text(encoding="utf-8"))
@@ -244,6 +280,12 @@ def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
     if not isinstance(orders_in_flight, int) or orders_in_flight < 0:
         orders_in_flight = default_state["orders_in_flight"]
 
+    raw_snapshot_seq = obj.get("snapshot_seq", default_state["snapshot_seq"])
+    if isinstance(raw_snapshot_seq, bool) or not isinstance(raw_snapshot_seq, int):
+        snapshot_seq = default_state["snapshot_seq"]
+    else:
+        snapshot_seq = max(raw_snapshot_seq, 0)
+
     pending_orders = _normalize_pending_orders(obj.get("pending_orders", default_state["pending_orders"]))
 
     state = {
@@ -253,8 +295,187 @@ def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
         "pending_orders": pending_orders,
         "last_transition_reason": str(obj.get("last_transition_reason", "")),
         "last_transition_ts": str(obj.get("last_transition_ts", default_state["last_transition_ts"])),
+        "snapshot_seq": snapshot_seq,
     }
     return state, []
+
+
+def _runtime_state_v1_path() -> Path:
+    raw = os.environ.get("STOIC_RUNTIME_STATE_V1_PATH")
+    if raw:
+        return Path(raw).resolve()
+    return DEFAULT_RUNTIME_STATE_V1_PATH
+
+
+def _parse_positive_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(str(raw).strip())
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _runtime_state_v1_head_commit() -> str:
+    for key in ("STOIC_RUNTIME_STATE_HEAD_COMMIT", "HEAD_COMMIT", "STOIC_BUILD_ID"):
+        candidate = str(os.environ.get(key, "")).strip()
+        if candidate and RUNTIME_STATE_V1_HEAD_COMMIT_RE.fullmatch(candidate):
+            return candidate
+
+    try:
+        git_commit = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        if git_commit and RUNTIME_STATE_V1_HEAD_COMMIT_RE.fullmatch(git_commit):
+            return git_commit
+    except Exception:
+        pass
+
+    return "0000000"
+
+
+def _runtime_state_v1_instance_id() -> str:
+    return str(
+        os.environ.get("STATUS_PUBLISHER_INSTANCE_ID")
+        or os.environ.get("STOIC_INSTANCE_ID")
+        or os.environ.get("HOSTNAME", RUNTIME_STATE_V1_DEFAULT_INSTANCE_ID),
+    ).strip() or RUNTIME_STATE_V1_DEFAULT_INSTANCE_ID
+
+
+def _runtime_state_v1_service() -> str:
+    return str(
+        os.environ.get("STATUS_PUBLISHER_SERVICE") or RUNTIME_STATE_V1_DEFAULT_SERVICE,
+    ).strip() or RUNTIME_STATE_V1_DEFAULT_SERVICE
+
+
+def _runtime_state_v1_env() -> str:
+    return str(
+        os.environ.get("STATUS_PUBLISHER_ENV") or os.environ.get("ENVIRONMENT", RUNTIME_STATE_V1_DEFAULT_ENV),
+    ).strip() or RUNTIME_STATE_V1_DEFAULT_ENV
+
+
+def _to_safe_reason_codes(raw_reason: Any) -> list[str]:
+    if isinstance(raw_reason, list):
+        return [str(item) for item in raw_reason if str(item).strip()]
+    reason = str(raw_reason).strip() if raw_reason is not None else ""
+    if reason:
+        return [reason]
+    return []
+
+
+def _metric_unavailable(unit: str, updated_at: str) -> Dict[str, Any]:
+    return {
+        "value": None,
+        "unit": unit,
+        "threshold_state": "UNKNOWN",
+        "reason": "Metric unavailable",
+        "updated_at": updated_at,
+    }
+
+
+def _runtime_state_v1_payload(legacy_state: Dict[str, Any], generated_at: str, snapshot_seq: int) -> Dict[str, Any]:
+    legacy_mode = str(legacy_state.get("trading_mode", "KILL")).upper()
+    if legacy_mode == "ACTIVE":
+        trading_mode = "NORMAL"
+        risk_state = "HEALTHY"
+        f1_status = "VALID"
+        f1_reason_codes: list[str] = []
+        owner_latch = False
+        market_truth_latch = False
+    elif legacy_mode == "REDUCE_ONLY":
+        trading_mode = "REDUCE_ONLY"
+        risk_state = "DEGRADED"
+        f1_status = "UNKNOWN"
+        f1_reason_codes = ["runtime_mode_reduced"]
+        owner_latch = True
+        market_truth_latch = False
+    elif legacy_mode in {"KILL", "PAUSED", "SHADOW"}:
+        trading_mode = legacy_mode if legacy_mode in {"PAUSED", "SHADOW"} else "KILL"
+        risk_state = "KILL"
+        f1_status = "BLOCKED"
+        f1_reason_codes = ["runtime_mode_non_normal"]
+        owner_latch = True
+        market_truth_latch = True
+    else:
+        trading_mode = "KILL"
+        risk_state = "KILL"
+        f1_status = "BLOCKED"
+        f1_reason_codes = ["runtime_mode_unknown"]
+        owner_latch = True
+        market_truth_latch = True
+
+    reason = str(legacy_state.get("last_transition_reason", "")).strip()
+    owner_steps = _to_safe_reason_codes(reason)
+
+    if trading_mode != "NORMAL" and not owner_steps:
+        owner_steps = [f"runtime mode changed to {trading_mode}"]
+
+    last_certified_at = str(legacy_state.get("last_transition_ts", generated_at)).strip()
+    if not last_certified_at.endswith("Z"):
+        last_certified_at = generated_at
+
+    metrics = {
+        key: _metric_unavailable(unit, generated_at)
+        for key, unit in RUNTIME_STATE_V1_METRIC_UNITS.items()
+    }
+
+    return {
+        "schema_version": RUNTIME_STATE_V1_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "instance_id": _runtime_state_v1_instance_id(),
+        "service": _runtime_state_v1_service(),
+        "env": _runtime_state_v1_env(),
+        "head_commit": _runtime_state_v1_head_commit(),
+        "snapshot_seq": snapshot_seq,
+        "safety": {
+            "trading_mode": trading_mode,
+            "risk_state": risk_state,
+            "mode_reasons": _to_safe_reason_codes(legacy_state.get("last_transition_reason", "")),
+            "latches": {
+                "open_permission_latched_off": owner_latch,
+                "market_truth_latched": market_truth_latch,
+            },
+            "f1_cert_state": {
+                "status": f1_status,
+                "reason_codes": f1_reason_codes,
+                "last_certified_at": last_certified_at,
+            },
+            "owner_view": {
+                "unblock_steps": owner_steps,
+            },
+        },
+        "metrics": metrics,
+        "freshness": {
+            "expected_publish_interval_s": _parse_positive_int(
+                "STATUS_PUBLISHER_EXPECTED_INTERVAL_S",
+                RUNTIME_STATE_V1_PUBLISH_INTERVAL_S,
+            ),
+            "stale_after_s": _parse_positive_int(
+                "STATUS_PUBLISHER_STALE_AFTER_S",
+                RUNTIME_STATE_V1_STALE_AFTER_S,
+            ),
+        },
+    }
+
+
+def _next_snapshot_seq(state: Dict[str, Any]) -> int:
+    raw_seq = state.get("snapshot_seq", 0)
+    if not isinstance(raw_seq, int) or isinstance(raw_seq, bool):
+        return 1
+    return max(0, raw_seq) + 1
+
+
+def _write_runtime_state_v1(state: Dict[str, Any], *, generated_at: str, snapshot_seq: int) -> None:
+    payload = _runtime_state_v1_payload(state, generated_at=generated_at, snapshot_seq=snapshot_seq)
+    path = _runtime_state_v1_path()
+    payload_text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    _write_atomic_text_file(path, payload_text)
+    v1_parent = path.parent
+    _fsync_directory(v1_parent)
 
 
 def _runtime_state_lock_path(path: Path) -> Path:
@@ -281,10 +502,42 @@ def _fsync_directory(path: Path) -> None:
         os.close(dir_fd)
 
 
+def _fsync_file(path: Path) -> None:
+    with path.open("r+b") as handle:
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _write_atomic_text_file(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    tmp_path = Path(tmp.name)
+    try:
+        with tmp:
+            tmp.write(text)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        os.replace(tmp_path, path)
+        _fsync_file(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
 def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     materialized = dict(state)
     materialized["schema_version"] = RUNTIME_STATE_SCHEMA_VERSION
+    snapshot_seq = _next_snapshot_seq(materialized)
+    materialized["snapshot_seq"] = snapshot_seq
+    generated_at = _utc_now_iso()
 
     # Atomic write via temp file + rename prevents partial file visibility.
     tmp = tempfile.NamedTemporaryFile(
@@ -303,7 +556,11 @@ def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
             tmp.flush()
             os.fsync(tmp.fileno())
         os.replace(tmp_path, path)
+        _fsync_file(path)
+        marker_path = _runtime_state_initialized_marker_path(path)
+        _write_atomic_text_file(marker_path, _utc_now_iso() + "\n")
         _fsync_directory(path.parent)
+        _write_runtime_state_v1(materialized, generated_at=generated_at, snapshot_seq=snapshot_seq)
     finally:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
@@ -896,6 +1153,35 @@ def _dispatch_decision(intent: str, mode: str) -> tuple[bool, str]:
     return False, "unknown_mode"
 
 
+def _resolve_dispatch_mode(args_mode: str) -> tuple[str, Optional[Path], Optional[str], list[str]]:
+    requested_mode = str(args_mode).upper()
+    errors: list[str] = []
+    try:
+        state_path = _runtime_state_path()
+    except RuntimeError as exc:
+        return requested_mode, None, f"runtime_state_path_invalid: {exc}", []
+
+    if not state_path.exists() and not _runtime_state_initialized(state_path):
+        return requested_mode, state_path, None, []
+
+    state, state_errors = _load_runtime_state(state_path)
+    if state_errors:
+        errors.extend(state_errors)
+        return "KILL", state_path, "runtime_state_unavailable", errors
+
+    resolved_mode = str(state.get("trading_mode", requested_mode)).upper()
+    if resolved_mode not in RUNTIME_MODES:
+        return requested_mode, state_path, "runtime_state_invalid_mode", [f"runtime_state invalid mode={resolved_mode!r}"]
+
+    if resolved_mode != requested_mode:
+        errors.append(
+            f"dispatch-check mode mismatch: requested {requested_mode} != runtime mode {resolved_mode}"
+        )
+        return requested_mode, state_path, "mode_mismatch_with_runtime_state", errors
+
+    return resolved_mode, state_path, None, []
+
+
 def _cmd_dispatch_check(args: argparse.Namespace) -> int:
     policy_path = Path(os.environ.get("STOIC_POLICY_PATH", str(DEFAULT_POLICY_PATH))).resolve()
     policy, policy_errors = _load_policy_with_validation(policy_path)
@@ -911,15 +1197,35 @@ def _cmd_dispatch_check(args: argparse.Namespace) -> int:
         _print_json(payload)
         return 1
 
-    allowed, reason = _dispatch_decision(intent=args.intent, mode=args.mode)
+    resolved_mode, state_path, mode_error, dispatch_errors = _resolve_dispatch_mode(args.mode)
+    if mode_error:
+        payload = {
+            "ok": False,
+            "decision": "BLOCK",
+            "reason": mode_error,
+            "errors": dispatch_errors,
+            "intent": args.intent,
+            "mode": args.mode,
+            "resolved_mode": resolved_mode,
+            "contract_version": str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION)),
+        }
+        if state_path is not None:
+            _add_runtime_state_context(payload, state_path)
+        _print_json(payload)
+        return 1
+
+    allowed, reason = _dispatch_decision(intent=args.intent, mode=resolved_mode)
     payload = {
         "ok": bool(allowed),
         "decision": "ALLOW" if allowed else "BLOCK",
         "reason": reason,
         "intent": args.intent,
         "mode": args.mode,
+        "resolved_mode": resolved_mode,
         "contract_version": str(policy.get("contract_version_target", DEFAULT_CONTRACT_VERSION)),
     }
+    if state_path is not None:
+        _add_runtime_state_context(payload, state_path)
     _print_json(payload)
     return 0 if allowed else 1
 
@@ -937,6 +1243,58 @@ def _probe_entries_for_env(entries: Iterable[Dict[str, Any]], env: Optional[str]
         return list(entries)
     target = env.strip().upper()
     return [p for p in entries if str(p.get("env", "")).strip().upper() == target]
+
+
+def _validate_probe_metadata(
+    entry: Dict[str, Any],
+    fallback_metadata: Dict[str, Any],
+    label: str,
+    errors: list[str],
+) -> None:
+    for key in ("env", "exchange", "key_id"):
+        value = entry.get(key)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{label}: missing required metadata field '{key}'")
+
+    timestamp = entry.get("timestamp_utc", fallback_metadata.get("timestamp_utc"))
+    if not isinstance(timestamp, str) or not timestamp.strip():
+        errors.append(f"{label}: missing required metadata field 'timestamp_utc'")
+
+    operator = entry.get("operator", fallback_metadata.get("operator"))
+    if not isinstance(operator, str) or not operator.strip():
+        errors.append(f"{label}: missing required metadata field 'operator'")
+
+
+def _collect_probe_metadata_defaults(probe_obj: Dict[str, Any]) -> Dict[str, Any]:
+    defaults: Dict[str, Any] = {}
+    if not isinstance(probe_obj, dict):
+        return defaults
+
+    probe_metadata = probe_obj.get("probe_metadata")
+    if isinstance(probe_metadata, dict):
+        defaults["timestamp_utc"] = probe_metadata.get("timestamp_utc")
+
+    defaults["operator"] = probe_obj.get("operator")
+    return defaults
+
+
+def _validate_probe_container_metadata(probe_obj: Any, errors: list[str]) -> None:
+    if not isinstance(probe_obj, dict):
+        errors.append("probe metadata: expected top-level object")
+        return
+
+    probe_metadata = probe_obj.get("probe_metadata")
+    if not isinstance(probe_metadata, dict):
+        errors.append("probe metadata: missing or invalid 'probe_metadata'")
+        return
+
+    timestamp = probe_metadata.get("timestamp_utc")
+    if not isinstance(timestamp, str) or not timestamp.strip():
+        errors.append("probe metadata: 'probe_metadata.timestamp_utc' is required")
+
+    operator = probe_obj.get("operator")
+    if not isinstance(operator, str) or not operator.strip():
+        errors.append("probe metadata: 'operator' is required")
 
 
 def _cmd_keys_check(args: argparse.Namespace) -> int:
@@ -967,8 +1325,12 @@ def _cmd_keys_check(args: argparse.Namespace) -> int:
         _print_json(payload)
         return 1
 
+    metadata_defaults = _collect_probe_metadata_defaults(probe_obj)
+    _validate_probe_container_metadata(probe_obj, errors)
+
     for idx, entry in enumerate(selected, start=1):
         label = f"entry[{idx}] env={entry.get('env', 'UNKNOWN')}"
+        _validate_probe_metadata(entry, metadata_defaults, label, errors)
         if entry.get("withdraw_enabled") is not False:
             errors.append(f"{label}: withdraw_enabled must be false")
         if entry.get("transfer_enabled") is not False:
@@ -978,15 +1340,20 @@ def _cmd_keys_check(args: argparse.Namespace) -> int:
         scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
         if "transfer" in scopes_lower:
             errors.append(f"{label}: scopes must not include transfer")
+        for forbidden in ("all", "withdraw", "margin"):
+            if forbidden in scopes_lower:
+                errors.append(f"{label}: scopes must not include {forbidden}")
         results = entry.get("probe_results", {}) if isinstance(entry.get("probe_results"), dict) else {}
         place_order = results.get("place_order", {}) if isinstance(results.get("place_order"), dict) else {}
         place_result = str(place_order.get("result", "")).lower()
+        withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
+        withdraw_result = str(withdraw.get("result", "")).lower()
         transfer = results.get("transfer", {}) if isinstance(results.get("transfer"), dict) else {}
         transfer_result = str(transfer.get("result", "")).lower()
+        if withdraw_result in {"success", "accepted"}:
+            errors.append(f"{label}: withdraw probe must not show success")
 
         if "trade" in scopes_lower:
-            withdraw = results.get("withdraw", {}) if isinstance(results.get("withdraw"), dict) else {}
-            withdraw_result = str(withdraw.get("result", "")).lower()
             if withdraw_result not in {"permission_denied", "forbidden", "rejected", "failed", "not_allowed"}:
                 errors.append(f"{label}: trade scope requires explicit forbidden withdrawal result")
             if transfer_result in {"success", "accepted"}:
