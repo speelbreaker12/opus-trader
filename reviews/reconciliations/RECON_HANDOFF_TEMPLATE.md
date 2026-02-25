@@ -43,11 +43,16 @@ doesn't deserve `passes=true`.
 
 ---
 
-> **Step debrief discipline** — every step ends with an 11-section debrief block. Fill it
-> before writing the receipt. Write `§0: CLEAN` to skip sections §1–§11 on clean runs.
-> On friction: fill every section that applies; write `n/a` for sections that don't.
-> Proposals in §8 that survive §11 get promoted to the **Process Backlog** table.
-> Skipping debriefs = the next agent hits the same wall you just hit.
+> **Step update discipline (fast, mandatory)**
+> 1. After every step: update the step header lines (Status / Receipt / Gate / key artifact paths).
+> 2. Update the Story Status Matrix row for the story you touched.
+> 3. If the step is a **hard-evidence gate** (Preflight, Self-review, External C1/C2, Verify), fill the Evidence/Proof lines with **PASS/FAIL + paths**.
+>
+> **Debrief blocks are optional** unless:
+> - Status == BLOCKED, or
+> - you hit recurring friction worth promoting to the Process Backlog.
+> On clean runs: write `§0: CLEAN` only and move on.
+> **Skipping when friction exists = the next agent hits the same wall you just hit.**
 >
 > **Debrief sections at a glance**
 > - §0  One-line outcome + workstream/contract area
@@ -99,12 +104,23 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 **Premortem**: `reviews/premortems/{{STORY_ID}}_premortem.md` — STOPLIGHT: {{GREEN/YELLOW/RED}}
 
+#### Hard Evidence Summary (fail-closed gates only)
+
+| Gate | Artifact | Validation command | Status |
+|------|----------|--------------------|--------|
+| A Preflight | `reviews/reconciliations/{{SLICE_ID}}/{{STORY_ID}}_reconciliation.md` | (n/a) | {{PASS/FAIL}} |
+| B Self-review | `reviews/reconciliations/{{SLICE_ID}}/R5B_SELF_REVIEW_GATE.json` + `receipts/r5b_*.json` (count={{N}}) | (n/a) | {{PASS/FAIL}} |
+| C External C1 | `artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL}} |
+| C2 External C2 | `reviews/reconciliations/{{SLICE_ID}}/external/cycle2/{{STORY_ID}}/R7_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL/NA}} |
+| D Verify | `reviews/reconciliations/{{SLICE_ID}}/verify_full/{{STORY_ID}}/verify_tail.txt` + `verify.meta.json` | (n/a) | {{PASS/FAIL}} |
+
 #### Step 1 · preflight (R1 — read-only audit)
 
 - Reference: RUNBOOK §3 → R1 · R1 prompt (canonical): `PREMORTEM_RECONCILIATION_PROCESS.md` Appendix A
 - Status: {{NOT_STARTED / IN_PROGRESS / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/00_preflight.json`
 - Evidence ledger: `reviews/reconciliations/{{SLICE_ID}}/{{STORY_ID}}_reconciliation.md`
+- Evidence check: ledger exists + non-empty: {{PASS/FAIL}}
 - Gate: {{GO / NO-GO}}
 - AT verdicts (one line each):
   - `{{AT-ID}}`: {{PROVEN / WEAK_PROOF / CLAIMED_NOT_PROVEN}} — {{one-line note}}
@@ -133,7 +149,8 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Remediation plan: `reviews/reconciliations/{{SLICE_ID}}/R5_REMEDIATION_PLAN.md`
 - Remediation notes: `reviews/reconciliations/{{SLICE_ID}}/R5_REMEDIATION_NOTES.md`
 - Recon relaxation: {{implement_diff_check_skipped / n/a}}
-- Changes made: {{none / brief description}}
+- Fixes applied: {{none / list GAP-IDs or findings}}
+- Files changed: {{list paths}}
 - Notes: {{anything the next agent needs to know}}
 
 > **Step 2 debrief** · `§0: CLEAN` to skip §1–§11.
@@ -157,6 +174,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Receipt: `.wf/receipts/{{STORY_ID}}/02_self_review.json`
 - Gate artifact: `reviews/reconciliations/{{SLICE_ID}}/R5B_SELF_REVIEW_GATE.json`
 - Skill receipts: `reviews/reconciliations/{{SLICE_ID}}/receipts/r5b_*.json`
+- Evidence check: >=6 `r5b_*.json` receipts present (count={{N}}): {{PASS/FAIL}}
 - Path taken: {{A — fixes needed / B — no fixes needed}}
 - Fix plan: `reviews/reconciliations/{{SLICE_ID}}/R5B_FIX_PLAN.md` {{exists / n/a}}
 - Fix log: `reviews/reconciliations/{{SLICE_ID}}/R5B_FIX_LOG.md` {{exists / n/a}}
@@ -182,7 +200,9 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Reference: RUNBOOK §3 → R2 (lead eval) · R3 (cross-review + external dual-prompt) · R4 (gap synthesis) · R4b (finding mapping)
 - Status: {{NOT_STARTED / IN_PROGRESS / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/03_cycle1.json`
-- External manifest: `reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json`
+- External manifest: `artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json`
+- Manifest validation: `./plans/validators/validate_external_manifest.py artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` — {{PASS/FAIL}}
+- Rerun rule (if fixes applied after C1): new run_id + new manifest sha required: {{YES/NO/NA}}
 - Gap list: `reviews/reconciliations/{{SLICE_ID}}/GAP_LIST.json`
 - External mapping: `reviews/reconciliations/{{SLICE_ID}}/R4B_EXTERNAL_MAPPING.json`
 - Escalation path: {{GREEN — 0 findings / YELLOW — findings exist}}
@@ -209,9 +229,10 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Status: {{NOT_STARTED / IN_PROGRESS / COMPLETE / BLOCKED / SKIPPED-GREEN}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/04_fix.json`
 - Contract review: `reviews/reconciliations/{{SLICE_ID}}/R7A_CONTRACT_REVIEW.json` — decision: {{PASS/FAIL}}
-- Strategic review: `reviews/reconciliations/{{SLICE_ID}}/R7B_STRATEGIC_REVIEW.md`
+- Strategic review: `reviews/reconciliations/{{SLICE_ID}}/R7B_STRATEGIC_REVIEW.md` {{exists / n/a (risk < HIGH)}}
 - Wiring audit: `reviews/reconciliations/{{SLICE_ID}}/R7C_WIRING_AUDIT.json`
 - Fix plan: `reviews/reconciliations/{{SLICE_ID}}/R7C_FIX_PLAN.md` {{exists / n/a}}
+- Fix notes: `reviews/reconciliations/{{SLICE_ID}}/R7C_FIX_NOTES.md` {{exists / n/a}}
 - Changes made: {{none / brief description}}
 - Notes: {{anything the next agent needs to know}}
 
@@ -236,6 +257,8 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Receipt: `.wf/receipts/{{STORY_ID}}/05_cycle2.json`
 - Recon relaxation: {{min_reviews_relaxed_to_1 / n/a}}
 - External manifest C2: `reviews/reconciliations/{{SLICE_ID}}/external/cycle2/{{STORY_ID}}/R7_EXTERNAL_MANIFEST.json`
+- Manifest validation C2: `./plans/validators/validate_external_manifest.py <manifest>` — {{PASS/FAIL/NA}}
+- Scope: {{FIX_DIFF / FULL_STORY}} (must match proof)
 - Devils advocate: `reviews/reconciliations/{{SLICE_ID}}/R7E_DEVILS_ADVOCATE.md`
 - Debt register: `reviews/reconciliations/{{SLICE_ID}}/DEBT_REGISTER.json` {{valid / invalid / pending}}
 - Notes: {{anything the next agent needs to know}}
@@ -264,6 +287,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Story verdict: {{RECONCILED / RECONCILED-WITH-DEBT / RECONCILED_UNIT_ONLY / NOT RECONCILED}}
 - Postmortem: `artifacts/story/{{STORY_ID}}/postmortem.md` {{required+done / exempt}}
 - Proof graph: `artifacts/story/{{STORY_ID}}/proof_graph.json` {{valid / invalid / pending}}
+- Decision file: `reviews/reconciliations/{{SLICE_ID}}/DECISION.json` {{exists / n/a}}
 - Notes: {{anything the next agent needs to know}}
 
 > **Step 7 debrief** · `§0: CLEAN` to skip §1–§11.
@@ -286,6 +310,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Status: {{NOT_STARTED / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/07_verify_full.json`
 - verify.meta.json HEAD: {{sha}}
+- verify output tail: `reviews/reconciliations/{{SLICE_ID}}/verify_full/{{STORY_ID}}/verify_tail.txt` {{exists/missing}}
 - Result: {{PASS / FAIL}}
 
 > **Step 8 debrief** · `§0: CLEAN` to skip §1–§11.
@@ -307,6 +332,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Reference: RUNBOOK §4 (Pass-Flip Gate — 15 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
 - Status: {{NOT_STARTED / COMPLETE / SKIPPED-GREEN}}
 - Path: {{GREEN — no re-flip / YELLOW — prd_set_pass.sh re-run}}
+- Decision file: `reviews/reconciliations/{{SLICE_ID}}/DECISION.json` {{exists / n/a}}
 - Result: {{passes=true confirmed / blocked by: {{reason}}}}
 
 > **Step 9 debrief** · `§0: CLEAN` to skip §1–§11.
@@ -336,9 +362,9 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 > The next slice's lead agent reads this first and must file patches/tickets for all P0/P1 entries
 > before starting Step 1 on the first story. If it's not here, it didn't happen.
 
-| # | Step | §8 rule (condensed) | Severity | Fix target | §11 status |
-|---|------|---------------------|----------|-----------|-----------|
-| 1 | {{step}} | `rule: … · trigger: … · prevents: … · enforce: …` | {{P0/P1/P2}} | {{RUNBOOK / POLICY / tooling / template}} | {{open / applied}} |
+| # | Step | §8 rule (condensed) | Severity | Fix target | Owner | §11 status |
+|---|------|---------------------|----------|-----------|-------|-----------|
+| 1 | {{step}} | `rule: … · trigger: … · prevents: … · enforce: …` | {{P0/P1/P2}} | {{RUNBOOK / POLICY / tooling / template}} | {{owner}} | {{open / applied}} |
 
 ---
 
@@ -352,6 +378,16 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Step: `{{step name}}`
 - Status: `{{what was done / what is mid-flight}}`
 - HEAD at stop: `{{git sha}}`
+
+### Hard-evidence status at stop
+
+| Gate | Status | Missing artifact (if FAIL/NA) |
+|------|--------|-------------------------------|
+| A Preflight | {{PASS/FAIL/NA}} | {{path or none}} |
+| B Self-review | {{PASS/FAIL/NA}} | {{path or none}} |
+| C External C1 | {{PASS/FAIL/NA}} | {{path or none}} |
+| C2 External C2 | {{PASS/FAIL/NA}} | {{path or none}} |
+| D Verify | {{PASS/FAIL/NA}} | {{path or none}} |
 
 ### What happened (2–5 bullets)
 
