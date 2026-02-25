@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: plans/verify_citations.sh --artifact <path> --mode C1 [--json]
+Usage: plans/verify_citations.sh --artifact <path> --mode C1 --json
 
 Wrapper around plans/validators/validate_review_header.py that enforces preexisting
 citation checks for cycle-1 cycle reviews.
@@ -25,7 +25,7 @@ USAGE
 
 artifact=""
 mode="C1"
-json_mode=1
+json_mode=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

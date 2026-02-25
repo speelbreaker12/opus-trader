@@ -341,7 +341,7 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 ```
 
 **Validation contract**:
-- **Command**: `verify_citations.sh --artifact <review_artifact> --mode C1 --json`
+- **Command**: `./plans/verify_citations.sh --artifact <review_artifact> --mode C1 --json`
 - **Input**: Cycle 1 review artifact path (`.md` or `.json`) with provenance metadata
 - **Output JSON keys**: `validator`, `status`, `artifact`, `failure_codes`
 - **Exit codes**:
