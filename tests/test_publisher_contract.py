@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+from contextlib import contextmanager
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -114,6 +117,45 @@ def test_sidecar_state_counters(tmp_path: Path) -> None:
   restored = load_state(temp_state, "soldier-main-01")
   assert restored.totals == failed.totals
   assert restored.last_seen_snapshot_seq == 1
+
+
+class _RateLimitHandler(BaseHTTPRequestHandler):
+  def do_POST(self) -> None:
+    self.send_response(429)
+    self.send_header("Content-Type", "application/json")
+    self.end_headers()
+    self.wfile.write(b'{"error":"rate limited"}')
+
+  def log_message(self, fmt: str, *args: object) -> None:
+    return
+
+
+@contextmanager
+def _run_rate_limit_server() -> "tuple[HTTPServer, int]":
+  server = HTTPServer(("127.0.0.1", 0), _RateLimitHandler)
+  thread = threading.Thread(target=server.serve_forever, daemon=True)
+  thread.start()
+  try:
+    yield server, server.server_address[1]
+  finally:
+    server.shutdown()
+    server.server_close()
+    thread.join(timeout=1.0)
+
+
+def test_http_post_envelope_maps_429_to_convex_rate_limited_code() -> None:
+  with _run_rate_limit_server() as (_, port):
+    result = publisher._http_post_envelope(
+      f"http://127.0.0.1:{port}/status",
+      secret="token",
+      payload={},
+      connect_timeout_s=2.0,
+      read_timeout_s=5.0,
+      total_timeout_s=8.0,
+    )
+    assert result.ok is False
+    assert result.retryable is True
+    assert result.code == publisher.CONVEX_RATE_LIMITED
 
 
 def test_extract_snapshot_seq_invalid() -> None:
