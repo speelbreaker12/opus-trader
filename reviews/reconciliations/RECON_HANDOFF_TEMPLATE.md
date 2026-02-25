@@ -261,21 +261,21 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Manifest validation C2: `./plans/validators/validate_external_manifest.py <manifest>` — {{PASS/FAIL/NA}}
 - Scope: {{FIX_DIFF / FULL_STORY}} (must match proof)
 - Devils advocate: `reviews/reconciliations/{{SLICE_ID}}/R7E_DEVILS_ADVOCATE.md`
-- Debt register: `reviews/reconciliations/{{SLICE_ID}}/DEBT_REGISTER.json` {{valid / invalid / pending}}
+- Debt register: `reviews/reconciliations/{{SLICE_ID}}/DEBT_REGISTER.json` {{valid / invalid / pending}} — R7f failures block pass-flip (Step 9), not this receipt
 - Notes: {{anything the next agent needs to know}}
 
 > **Step 6 debrief** · `§0: CLEAN` to skip §1–§11.
-> - §0 outcome + workstream: {{e.g. "CLEAN" · or "DEBT_REGISTER.json blocked receipt write due to TBD field · workstream: debt register schema"}}
-> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: validate debt register schema before writing receipt · Sub: C2 scope is FIX_DIFF only, not full story · Elevate: add TBD rejection to schema validator"}}
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "R7f: DEBT_REGISTER.json has target_slice: TBD — will block prd_set_pass.sh but receipt written · workstream: debt register completeness"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: complete debt entries (target_slice + owner) before R7f so pass-flip isn't blocked later · Sub: C2 scope is FIX_DIFF only, not full story · Elevate: add debt entry template to R4 gap draft"}}
 > - §2 evidence & proof: {{C2 manifest path, devils advocate finding IDs, debt register validation output}}
-> - §3 guesses & assumptions: {{e.g. "Assumed 'remediation_eta: TBD' was acceptable — schema rejects it"}}
-> - §4 friction (top 3): {{e.g. "1) Debt register schema has no worked example 2) GREEN path relaxation rule not clearly scoped to 'no code changes' case 3) n/a"}}
+> - §3 guesses & assumptions: {{e.g. "Assumed target_slice: TBD was acceptable — POLICY check #9 rejects it at pass-flip"}}
+> - §4 friction (top 3): {{e.g. "1) Debt register has no worked example 2) GREEN path relaxation rule not clearly scoped to 'no code changes' case 3) n/a"}}
 > - §5 failure modes hit: {{e.g. "Cycle2 scope drifted to full story instead of FIX_DIFF only"}}
 > - §6 conflict & change zoning: {{e.g. "Debt entry for GAP-04 also affects S0-003 — cross-story debt"}}
 > - §7 reuse: {{e.g. "/devils-advocate skill for R7e"}}
 > - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
 > - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
-> - §10 enforcement path: {{e.g. "Add TBD guard to debt register JSON schema · validate in R7f"}}
+> - §10 enforcement path: {{e.g. "Set concrete target_slice and non-empty owner in all debt entries before cycle2 closes · validated by POLICY checks #9/#10 at pass-flip"}}
 > - §11 applied: {{YES — what · NO — DEBT-###}}
 
 #### Step 7 · resolution (R6 — final verdict)
