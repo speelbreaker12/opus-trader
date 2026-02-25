@@ -154,7 +154,7 @@ Six checks, evaluated in order:
 | `implement` | R5 | A |
 | `self_review` | R5b (R5b.1 → R5b.2 → R5b.3 → R5b.4) | B |
 | `cycle1` | R2 + R3 (R3A + R3B) + R4 + R4b | B |
-| `fix` | R7a + R7b + R7c (reviews) → R7c-fix (apply findings) | C |
+| `fix` | R7a + risk-gate R7b (conditional) + R7c (reviews) → R7c-fix (apply findings) | C |
 | `cycle2` | R7d (R7d.1 + R7d.2) + R7e + R7f | C |
 | `resolution` | R6 | D |
 | `verify_full` | `verify.sh full` | D |
@@ -307,6 +307,10 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
 - Per-story manifest: `R3_EXTERNAL_MANIFEST.json` (source of truth, gate artifact)
 - Per-story rendered summary: `R3_EXTERNAL_MANIFEST.md` (human-readable companion)
 
+**JSON-first requirement**:
+- `R3_EXTERNAL_MANIFEST.json` is the machine source; render `.md` from JSON via `plans/render_external_manifest.py`.
+- Do not hand-edit rendered manifest companions.
+
 **`R3_EXTERNAL_MANIFEST.json` schema (required fields)**:
 ```json
 {
@@ -326,13 +330,27 @@ Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommen
       }
     }
   ],
-  "validated_preexisting_enforcement_citation": true,
-  "validated_preexisting_test_citation": true,
-  "validation_status": "completed"
+  "validation": {
+    "status": "PASS",
+    "review_basis_check": "PASS",
+    "preexisting_enforcement_citation_check": "PASS",
+    "preexisting_test_citation_check": "PASS",
+    "diff_only_review_check": "PASS"
+  }
 }
 ```
 
-**Blocking if**: missing basis line (exit 3), missing pre-existing citations (exit 4), missing phase mapping label (exit 5)
+**Validation contract**:
+- **Command**: `verify_citations.sh --artifact <review_artifact> --mode C1 --json`
+- **Input**: Cycle 1 review artifact path (`.md` or `.json`) with provenance metadata
+- **Output JSON keys**: `validator`, `status`, `artifact`, `failure_codes`
+- **Exit codes**:
+  - `0` — pass
+  - `1` — citation/validation failure
+  - `2` — invalid input or schema/usage
+  - `3` — infrastructure / I/O failure
+
+**Blocking if**: missing basis line, pre-existing citation checks, or phase-mapping label checks (`exit 1`); malformed invocation/input (`exit 2`); or I/O/infra failure (`exit 3`)
 
 #### R3 Gate Checks
 
@@ -812,7 +830,7 @@ After all phases complete (or after R5b.2 Path B skip):
 
 **Hard rule**: Cycle 2 cannot start unless `R5B_SELF_REVIEW_PROVEN` passed.
 
-**Execution order**: R7a, R7b, R7c may run in parallel → R7c-fix (apply findings) → R7d.1 + R7d.2 + R7e → R7f runs last.
+**Execution order**: R7a, risk-gate R7b (conditional), R7c may run in parallel → R7c-fix (apply findings) → R7d.1 + R7d.2 + R7e → R7f runs last.
 
 #### R7a — Contract Review (R5/R7 diff)
 
@@ -828,7 +846,7 @@ After all phases complete (or after R5b.2 Path B skip):
 | `R7A_CONTRACT_REVIEW_COMPLETE` | Artifact exists; review basis line present |
 | `R7A_DECISION_PASS_REQUIRED` | JSON `decision == "PASS"` before phase close |
 
-#### R7b — Strategic Failure Review (cross-story/systemic)
+#### risk-gate R7b — Strategic Failure Review (cross-story/systemic)
 
 **Command**: `/strategic-failure-review` on full reconciliation output
 **Focus**: Hidden systemic risk, shared primitive blast radius, capital-risk path regressions
@@ -839,7 +857,7 @@ After all phases complete (or after R5b.2 Path B skip):
 
 | Gate ID | Check |
 |---------|-------|
-| `R7B_STRATEGIC_REVIEW_COMPLETE` | Artifact exists; review basis line present; findings disposition recorded (FIXED / STRUCTURAL / DEFERRED) |
+| `R7B_STRATEGIC_REVIEW_COMPLETE` | For HIGH/shared-primitive stories only: artifact exists; review basis line present; findings disposition recorded (FIXED / STRUCTURAL / DEFERRED) |
 
 #### R7c — Production Wiring Audit (PROVEN-INTEGRATED vs PROVEN-UNIT)
 
@@ -868,8 +886,8 @@ After all phases complete (or after R5b.2 Path B skip):
 **Inputs**: R7A/R7B/R7C findings, R5 remediation notes, gap list, evidence ledgers, premortem
 
 **Hard rules**:
-- Fix only findings from R7a, R7b, R7c — no unrelated refactors
-- Every change must trace to a specific R7a/R7b/R7c finding
+- Fix only findings from R7a, risk-gate R7b, R7c — no unrelated refactors
+- Every change must trace to a specific R7a/risk-gate R7b/R7c finding
 - Run tests before and after — no regressions
 - No `unwrap()` introduced in production paths
 
@@ -883,10 +901,10 @@ After all phases complete (or after R5b.2 Path B skip):
 5. Read the actual enforcement code and test files cited in findings (verify citations are still accurate)
 
 *Step 1 — Fix Plan (write before coding):*
-1. For each R7a/R7b/R7c finding that requires a code change, draft: what file(s) to change, what test(s) to add/modify
+1. For each R7a/risk-gate R7b/R7c finding that requires a code change, draft: what file(s) to change, what test(s) to add/modify
 2. Flag any finding where the fix approach is unclear or the citation is stale
 3. Write plan to `R7C_FIX_PLAN.md` — one section per finding with: finding ID, planned change, target file:line, expected test assertion
-4. Verify plan scope: every planned change maps to an R7a/R7b/R7c finding, no unrelated work
+4. Verify plan scope: every planned change maps to an R7a/risk-gate R7b/R7c finding, no unrelated work
 
 *Step 2 — Implement:*
 1. Implement code/test fixes for each finding, following the plan
@@ -908,14 +926,19 @@ After all phases complete (or after R5b.2 Path B skip):
 
 #### R7d — External Review Cycle 2 + Code Review Expert
 
-##### R7d.1 — External Review Cycle 2 (mandatory, dual-prompt)
+##### R7d.1 — External Review Cycle 2 (manifest-driven dual-path)
 
-**Commands (per story, exact)**:
+Cycle 2 review combinations are determined by `R7_EXTERNAL_MANIFEST.json`:
+
+- `cycle2_path.mode == "dual_combo"`: dual-combo path (dual prompt styles), default.
+- `cycle2_path.mode == "recon_clean_single"`: one explicit `tool` + `prompt_style` combo.
+- In all cases, run at least the combinations in `cycle2_path.required_combinations`.
+
+**Commands (per required combo)**:
 ```bash
-plans/review_logged.sh <STORY_ID> --tool codex --prompt enriched --base <BASE_BRANCH>
-plans/review_logged.sh <STORY_ID> --tool codex --prompt generic  --base <BASE_BRANCH>
+plans/review_logged.sh <STORY_ID> --tool <tool> --prompt <style> --base <BASE_BRANCH>
 ```
-Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both prompt styles.
+Repeat with additional tools as needed. Minimum 1 combo; dual-combo requires both styles.
 
 **Required scope**: FIX_DIFF + AT_REGRESSION (not story-scope)
 **Required basis line**: `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`
@@ -925,17 +948,25 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 - Normalized filenames: `<tool>.enriched.md`, `<tool>.generic.md` per tool
 - Per-story manifest: `R7_EXTERNAL_MANIFEST.json` (source of truth, gate artifact)
 - Per-story rendered summary: `R7_EXTERNAL_MANIFEST.md` (human-readable companion)
+- Render companions from `plans/render_external_manifest.py`; do not hand-edit.
 
 **`R7_EXTERNAL_MANIFEST.json` schema (required fields)**:
 ```json
 {
-  "schema_version": "r7_external_manifest.v1",
+  "schema_version": "r7_external_manifest.v2",
   "head_commit": "<sha>",
   "created_at": "<ISO 8601>",
   "story_id": "<STORY_ID>",
+  "slice_id": "<slice-id>",
+  "phase": "R7d",
   "cycle": "C2",
   "review_basis": "FIX_DIFF + AT_REGRESSION (Cycle 2)",
-  "base_commit": "<sha>",
+  "required_combinations": [
+    { "tool": "codex", "prompt_style": "enriched" },
+    { "tool": "codex", "prompt_style": "generic" },
+    { "tool": "kimi", "prompt_style": "enriched" },
+    { "tool": "kimi", "prompt_style": "generic" }
+  ],
   "tools": [
     {
       "tool": "codex",
@@ -946,15 +977,43 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
       }
     }
   ],
-  "validation_status": "completed"
+  "cycle2_path": {
+    "mode": "dual_combo",
+    "required_combinations": [
+      { "tool": "codex", "prompt_style": "enriched" },
+      { "tool": "codex", "prompt_style": "generic" },
+      { "tool": "kimi", "prompt_style": "enriched" },
+      { "tool": "kimi", "prompt_style": "generic" }
+    ]
+  },
+  "regression_scope": {
+    "base_commit": "<sha>",
+    "head_commit": "<sha>",
+    "affected_ats": ["AT-1", "AT-2"],
+    "changed_files": ["src/foo.rs"]
+  },
+  "validation": {
+    "status": "PASS",
+    "review_basis_check": "PASS",
+    "required_combinations_check": "PASS",
+    "head_commit_alignment_check": "PASS",
+    "base_commit_alignment_check": "PASS"
+  }
 }
 ```
 
-**RECON-CLEAN exception**: If Cycle 1 + self-review found `BLOCKING=0` AND no code changed (`git diff → 0`):
-1. Lead independently verifies `BLOCKING=0` claim (reads at least 1 Cycle 1 artifact)
-2. Confirms R5b self-review `finding_counts` show `P0: 0, P1: 0, P2: 0` (i.e., `R5B_NO_FIXES_NEEDED.md` exists — Path B)
-3. Records: `RECON-CLEAN approved by: <lead>` + `RECON-CLEAN verified: reviewed <artifact>`
-4. Manifest `validation_status` = `"recon_clean"` (exempt from dual-prompt requirement)
+**Single-combo RECON-CLEAN flow (structured, machine-verifiable)**:
+If Cycle 1 + self-review reported no blocking work and no code changes are required:
+1. Lead authorizes RECON-CLEAN by setting:
+   - `cycle2_path.mode = "recon_clean_single"`
+   - `cycle2_path.single_combo_choice = { "tool": "<tool>", "prompt_style": "<generic|enriched>" }`
+   - `cycle2_path.required_combinations = [ single_combo_choice ]`
+   - `cycle2_path.single_combo_justification` is non-empty
+2. Confirms R5b no-fix path (`R5B_NO_FIXES_NEEDED.md`) and R5b self-review JSON has `finding_counts: { "P0": 0, "P1": 0, "P2": 0 }`
+3. Record:
+   - `RECON-CLEAN approved by: <lead>`
+   - `RECON-CLEAN verified: reviewed <artifact>`
+4. Run only the approved single combo and cite findings in `R7_EXTERNAL_MANIFEST.md`.
 
 ##### R7d.2 — Code Review Expert
 
@@ -966,7 +1025,7 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 
 | Gate ID | Check |
 |---------|-------|
-| `R7D_EXTERNAL_C2_COMPLETE` | One C2 manifest per story; both prompt styles present per tool; review basis line present in all artifacts (or RECON-CLEAN approved) |
+| `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` or `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` | One C2 manifest per story; required combos present for `cycle2_path.mode` (`dual_combo` requires dual-combo requirements; `recon_clean_single` requires one combo and `single_combo_justification`) |
 | `R7D_CODE_REVIEW_EXPERT_COMPLETE` | Artifact exists; findings disposition recorded |
 | `R7D_BLOCKERS_RESOLVED` | No unresolved P0/P1 findings before advancing to R7e |
 
@@ -1028,10 +1087,10 @@ Repeat with additional tools as available. Minimum 1 tool, recommended 2+, both 
 |---------|-------|
 | `R7A_CONTRACT_REVIEW_COMPLETE` | R7a |
 | `R7A_DECISION_PASS_REQUIRED` | R7a |
-| `R7B_STRATEGIC_REVIEW_COMPLETE` | R7b |
+| `R7B_STRATEGIC_REVIEW_COMPLETE` | risk-gate R7b |
 | `R7C_WIRING_CLASSIFICATION_COMPLETE` | R7c |
 | `R7C_NO_UNCLASSIFIED_SAFETY_AT` | R7c |
-| `R7D_EXTERNAL_C2_COMPLETE` | R7d.1 |
+| `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` / `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` | R7d.1 |
 | `R7D_CODE_REVIEW_EXPERT_COMPLETE` | R7d.2 |
 | `R7C_FIX_ONLY_FINDING_FILES_CHANGED` | R7c-fix |
 | `R7C_FIX_NO_UNWRAP_IN_PROD` | R7c-fix |
@@ -1061,7 +1120,7 @@ A story is pass-eligible only if ALL conditions are met:
 | Gaps | No unresolved P0/P1 |
 | Debt | DEBT_REGISTER.json valid for all deferred items |
 | External C1 | `R3_EXTERNAL_C1_COMPLETE` passed; all findings mapped (R4b) |
-| External C2 | `R7D_EXTERNAL_C2_COMPLETE` passed (or RECON-CLEAN approved) |
+| External C2 | `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` or `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` passed |
 | Receipts | All 8 workflow receipts present (wf_step.sh chain) |
 | Verify | `verify.sh full` passed with matching HEAD |
 | Contract | `contract_review.json` has `decision: "PASS"` |
@@ -1082,8 +1141,8 @@ If any condition fails: **`prd_set_pass.sh` is blocked.**
 3. **No DEFERRED without debt entry** — schema-validated, not prose
 4. **No "code is better" divergence** without evidence + lead approval
 5. **No blanket `--theirs`** on tooling/prompt files without merge-base diff inspection
-6. **No single-prompt reviews** — always both generic + enriched per tool
-7. **No RECON-CLEAN without lead sign-off** on BLOCKING=0 claim
+6. **No single-prompt reviews in Cycle 1** — always both generic + enriched per tool; Cycle 2 follows manifest mode (`dual_combo` or `recon_clean_single`)
+7. **No RECON-CLEAN without lead sign-off** on blocking-finding claim
 8. **No fake citations** — file:line must contain enforcement/test, not whitespace
 9. **No Cycle 2 without R5b gate** — `R5B_SELF_REVIEW_PROVEN` must pass first
 10. **No gap-list-complete without coverage proof** — "no gaps" requires structured justification
@@ -1129,7 +1188,7 @@ reviews/reconciliations/<SLICE_ID>/
         kimi.enriched.md                      # if run
         kimi.generic.md                       # if run
         R3_EXTERNAL_MANIFEST.json             # source of truth (gate artifact)
-        R3_EXTERNAL_MANIFEST.md               # rendered summary (human-readable)
+        R3_EXTERNAL_MANIFEST.md               # rendered summary (human-readable, generated from JSON)
 
   # ── R4 / R4b: Gap List + Finding Mapping ──
   GAP_LIST.md
@@ -1188,7 +1247,7 @@ reviews/reconciliations/<SLICE_ID>/
         kimi.enriched.md                      # if run
         kimi.generic.md                       # if run
         R7_EXTERNAL_MANIFEST.json             # source of truth (gate artifact)
-        R7_EXTERNAL_MANIFEST.md               # rendered summary (human-readable)
+        R7_EXTERNAL_MANIFEST.md               # rendered summary (human-readable, generated from JSON)
 
   # ── Final Roll-Up ──
   SUMMARY.md
@@ -1313,7 +1372,7 @@ Validators reject if: `head_commit` mismatch, `markdown_sha256` drift, unsupport
 | R5b | `SELF_REVIEW_R5b` / `R5B_SELF_REVIEW_GATE` | Markdown + sidecar | `self_review_sidecar.schema.json` |
 | R6 | `R6_VERIFY_SUMMARY` | JSON-primary + .md companion | `verify_result.schema.json` |
 | R7a | `R7A_CONTRACT_REVIEW` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
-| R7b | `R7B_STRATEGIC_REVIEW` | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
+| risk-gate R7b | `R7B_STRATEGIC_REVIEW` | Markdown + sidecar | `review_artifact_sidecar.schema.json` |
 | R7c | `R7C_WIRING_AUDIT` | Markdown + JSON | `review_artifact_sidecar.schema.json` |
 | R7c-fix | `R7C_FIX_PLAN` / `R7C_FIX_NOTES` | Markdown | — |
 | R7d.1 | `R7_EXTERNAL_MANIFEST` | JSON-primary + rendered .md | `r7_external_manifest.schema.json` |
@@ -1386,10 +1445,10 @@ Full definitions and escalation rules in [POLICY](PREMORTEM_RECON_POLICY.md).
 | `R6_POSTMORTEM_GATE` | R6 | Yes (conditional) |
 | `R7A_CONTRACT_REVIEW_COMPLETE` | R7a | Yes |
 | `R7A_DECISION_PASS_REQUIRED` | R7a | Yes |
-| `R7B_STRATEGIC_REVIEW_COMPLETE` | R7b | Yes |
+| `R7B_STRATEGIC_REVIEW_COMPLETE` | risk-gate R7b (high/shared-primitive only) | Yes |
 | `R7C_WIRING_CLASSIFICATION_COMPLETE` | R7c | Yes |
 | `R7C_NO_UNCLASSIFIED_SAFETY_AT` | R7c | Yes |
-| `R7D_EXTERNAL_C2_COMPLETE` | R7d.1 | Yes |
+| `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` / `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` | R7d.1 | Yes |
 | `R7D_CODE_REVIEW_EXPERT_COMPLETE` | R7d.2 | Yes |
 | `R7C_FIX_ONLY_FINDING_FILES_CHANGED` | R7c-fix | Yes |
 | `R7C_FIX_NO_UNWRAP_IN_PROD` | R7c-fix | Yes |

@@ -17,6 +17,9 @@
 - [ ] Proof includes exact commands, 1-3 key output lines, and artifact/log paths.
 - [ ] Pre-PR review wrapper evidence is present: `./plans/pre_pr_review_gate.sh <STORY_ID>` ran for the final HEAD before `./plans/pr_gate.sh --wait --story <STORY_ID>`.
 - [ ] Requirements touched list concrete CR-IDs/contract anchors (no vague claims).
+- [ ] For docs-change PRs touching `reviews/premortems/*` or `plans/wf*` guidance, include a smoke gate:
+  `./plans/verify_citations.sh --artifact reviews/reconciliations/<SLICE_ID>/external/cycle1/<STORY_ID>/<ARTIFACT>.md --mode C1 --json`
+  and attach at least one PASS output in PR evidence.
 - [ ] If any verification was rerun, the reason is stated.
 - [ ] Evidence/compounding/postmortem claims match the actual code (no stale line refs).
 - [ ] New runtime defaults are pinned to concrete values in docs/plan/spec (no ambiguous "e.g." defaults for enforcement behavior).

@@ -66,12 +66,12 @@ Collected during the first full execution of the R1-R7 reconciliation process on
 | Tests before remediation | 890 |
 | Tests after all R7 fixes | 899 (+9 net new) |
 | R7a contract review findings | 1 (invalid enforcement_point enum) |
-| R7b strategic review findings | 1 critical ("island of guards"), 3 secondary |
+| risk-gate R7b strategic review findings | 1 critical ("island of guards"), 3 secondary |
 | R7c wiring audit | 11 WIRED (42%), 15 NOT-WIRED (58%) |
 | R7d code review findings | 1 P1, 4 P2 (all fixed) |
 | R7e devils advocate gaps | 5 actionable (all closed on recheck), 1 structural (accepted) |
 | Final verdicts | 8 RECONCILED, 5 RECONCILED-WITH-DEBT, 0 NOT RECONCILED |
-| Highest-value finding | R7b+R7c: most guards tested in isolation but not wired into production |
+| Highest-value finding | risk-gate R7b + R7c: most guards tested in isolation but not wired into production |
 
 ---
 
