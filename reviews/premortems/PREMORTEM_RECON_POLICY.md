@@ -275,6 +275,8 @@ Default to story-scope.
 - Cycle 1: `STORY_SCOPE` -- full story implementation, not diff-only.
 - Cycle 2: `FIX_DIFF + AT_REGRESSION` -- remediation diff plus targeted re-check of AT proofs affected by changes.
 - Every review artifact (self-review and external) must include the Review Basis line.
+- **GREEN path (recon only)**: If Cycle 1 + self-review found zero findings AND no code changed, Cycle 2 requires only 1 external artifact (relaxed). Receipt records `recon_relaxation: "min_reviews_relaxed_to_1"`. Detected automatically by scanning review artifacts for zero-finding patterns ("0 findings", "no issues", "P0: 0.*P1: 0").
+- **YELLOW/RED path**: Code changed in fix step → 2 external artifacts required (full). `prd_set_pass.sh` must be re-run regardless of prior `passes=true` status.
 - Cycle 2 R7d-R7e scope: remediation diff (R5 + R5b + R7a-c changes) plus targeted re-check of AT proofs affected by those changes. If a fix modified a test for AT-960, re-run mutation analysis on AT-960's full proof chain.
 
 ---
@@ -419,6 +421,14 @@ Location: `reviews/reconciliations/<slice>/receipts/r5b_<skill>.json`
   "finding_counts": { "P0": 0, "P1": 1, "P2": 3 }
 }
 ```
+
+**Recon-mode receipt extras** (present only in recon mode):
+
+| Field | Values | When present |
+|-------|--------|-------------|
+| `recon_mode` | `true` | Always in recon |
+| `recon_relaxation` | `implement_diff_check_skipped` | Implement step (no diff required) |
+| `recon_relaxation` | `min_reviews_relaxed_to_1` | Cycle 2 step (GREEN path — no code changes) |
 
 | Field | Type | Constraint |
 |-------|------|------------|
