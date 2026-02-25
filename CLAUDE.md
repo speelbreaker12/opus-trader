@@ -205,6 +205,8 @@ except ValidationError as e:
 
 **CRITICAL: Before performing these tasks, check SKILLS/ for relevant skills and USE them.**
 
+Canonical catalog (single source of truth): `docs/skills/index.md`.
+
 | Task | Required Skill | Why |
 |------|----------------|-----|
 | Review a plan | `/plan-review` | Ad-hoc reviews miss failure modes |
@@ -223,11 +225,12 @@ except ValidationError as e:
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
 | Git workflow (branches, merges, worktrees) | `/git` | Never commit on main, per-file diff before --theirs, worktree isolation, safety-biased conflict resolution |
 | After completing any task | `/code-review-expert` | SOLID violations, security risks, code quality — run automatically after each implementation task |
+| Commit + debrief any unit of work | `/toc` | Theory of Constraints commit: §0 what shipped · §1 one constraint (exploit/subordinate/elevate) · §2 next story · §3 enforceable rules |
 
 **Process:**
 ```
 1. User requests: "review this plan"
-2. FIRST: Check if SKILLS/*review*.md or similar exists
+2. FIRST: Check `docs/skills/index.md`, then open the mapped `SKILLS/*` file
 3. Read the skill file
 4. Follow the skill's checklist systematically
 5. Do NOT do ad-hoc work that the skill covers

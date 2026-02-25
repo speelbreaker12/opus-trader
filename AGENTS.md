@@ -149,6 +149,21 @@ If a required script/artifact is missing or invalid, the workflow must produce a
 - Late discovery of PRD/schema/shell issues → run fast precheck early (schema/self-dep/shellcheck/traceability only).
 - Re-running full verify after small harness tweaks → minimize harness churn; group harness edits and validate once.
 
+## /toc — Theory of Constraints Commit
+
+Run after completing any unit of work. Full spec: `SKILLS/toc.md`.
+
+1. Commit current changes with project conventions.
+2. Answer four sections in chat:
+   - **§0 What shipped** — feature/behavior + value (one sentence each)
+   - **§1 Constraint (ONE)** — symptoms · token drain · exploit (workaround used) · subordinate (next-agent default) · elevate (permanent fix) · smallest increment · validation metric
+   - **§2 Next story** — single best follow-up + 1–3 upgrade candidates, each with increment + validation
+   - **§3 Enforceable rules** — 1–3 rules in `rule / trigger / prevents / enforce` format for the next agent
+
+Hard rule: §1 must name exactly ONE constraint. §3 rules must each name a specific `enforce:` target.
+
+---
+
 ## Handoff hygiene (when relevant)
 - Update `docs/codebase/*` with verified facts if you touched new areas.
 - Append deferred ideas to `plans/ideas.md`.
