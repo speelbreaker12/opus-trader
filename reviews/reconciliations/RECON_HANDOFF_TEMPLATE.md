@@ -43,6 +43,28 @@ doesn't deserve `passes=true`.
 
 ---
 
+> **Step debrief discipline** — every step ends with an 11-section debrief block. Fill it
+> before writing the receipt. Write `§0: CLEAN` to skip sections §1–§11 on clean runs.
+> On friction: fill every section that applies; write `n/a` for sections that don't.
+> Proposals in §8 that survive §11 get promoted to the **Process Backlog** table.
+> Skipping debriefs = the next agent hits the same wall you just hit.
+>
+> **Debrief sections at a glance**
+> - §0  One-line outcome + workstream/contract area
+> - §1  Constraint triad — Exploit · Subordinate · Elevate
+> - §2  Evidence & Proof — CR-IDs, test output lines, artifact paths
+> - §3  Guesses & Assumptions — what you assumed that might be wrong
+> - §4  Friction Log — top 3 time/token sinks
+> - §5  Failure modes hit
+> - §6  Conflict & Change Zoning — story/contract conflicts, scope changes
+> - §7  Reuse — patterns, skills applied
+> - §8  Proposal — `rule / trigger / prevents / enforce`
+> - §9  Concrete Elevation Plan — elevate + 2 subordinate wins (owner · effort · gain · proof)
+> - §10 Enforcement Path — how the elevation gets locked in
+> - §11 Apply or it didn't happen — YES with what / NO with debt register entry
+
+---
+
 ## Slice Context
 
 | Field | Value |
@@ -89,6 +111,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Gaps found: {{none / list GAP-IDs}}
 - Notes: {{anything the next agent needs to know}}
 
+> **Step 1 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "AT-926 CLAIMED_NOT_PROVEN · workstream: DispatcherChokepoint contract"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: use grep anchors not prose scan · Sub: defer WEAK_PROOF stories until CLAIMED_NOT_PROVEN are fixed · Elevate: add AT verdict validator to R1 prompt"}}
+> - §2 evidence & proof: {{CR-IDs, grep output lines, file:line citations that back your verdicts}}
+> - §3 guesses & assumptions: {{e.g. "Assumed integration test in tests/ counts as PROVEN — not confirmed in POLICY"}}
+> - §4 friction (top 3): {{e.g. "1) R1 prompt has no worked example for WEAK_PROOF 2) reconciliation.md schema has no field for AT-level verdicts 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "Grep search scope was too narrow — missed test/ coverage"}}
+> - §6 conflict & change zoning: {{e.g. "none" · or "AT-216 shared with S2-003 — verdict here ripples to that story"}}
+> - §7 reuse: {{e.g. "Used S0-003 evidence ledger as structural template"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Add grep check to R1 prompt step 4 · validate in CI"}}
+> - §11 applied: {{YES — describe what was patched/added · NO — debt register entry: DEBT-###}}
+
 #### Step 2 · implement (R5 — code fixes)
 
 - Reference: RUNBOOK §3 → R5 (steps 0–2: context build → remediation plan → implement)
@@ -99,6 +135,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Recon relaxation: {{implement_diff_check_skipped / n/a}}
 - Changes made: {{none / brief description}}
 - Notes: {{anything the next agent needs to know}}
+
+> **Step 2 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "Added missing REDUCE_ONLY path test · workstream: PolicyGuard contract"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: GAP_LIST is the authoritative scope — touch only listed files · Sub: defer clippy warnings outside scope · Elevate: add scope guard to R5 step 0"}}
+> - §2 evidence & proof: {{file:line of new code/test, CI result, before/after grep}}
+> - §3 guesses & assumptions: {{e.g. "Assumed existing test infrastructure supports table-driven style"}}
+> - §4 friction (top 3): {{e.g. "1) R5 context build is underdefined — no checklist of files to read 2) clippy warnings in unrelated files triggered scope creep 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "Edited file not in GAP_LIST — caught in self-review"}}
+> - §6 conflict & change zoning: {{e.g. "Change to label.rs touches S2-002 and S2-003 — coordinate"}}
+> - §7 reuse: {{e.g. "Table-driven test pattern from CLAUDE.md §Testing"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Add file-scope check to R5 step 0 checklist"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
 
 #### Step 3 · self_review (R5b — 6-skill stack)
 
@@ -113,6 +163,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Finding counts: P0={{N}} P1={{N}} P2={{N}}
 - Notes: {{anything the next agent needs to know}}
 
+> **Step 3 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "UNPROVEN gate despite all P1s addressed · workstream: self-review gate schema"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run all 6 skills in parallel, not sequential · Sub: defer P2s until P1s are closed · Elevate: add per-finding closure field to gate schema"}}
+> - §2 evidence & proof: {{gate JSON path, finding IDs, skill receipt paths}}
+> - §3 guesses & assumptions: {{e.g. "Assumed 'addressed' means any mention in fix log — gate requires explicit finding ID closure entry"}}
+> - §4 friction (top 3): {{e.g. "1) Gate JSON schema has no example of closure entries 2) R5b.2 planner consumed full skill output — very token-heavy 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "R5b.4 re-run not triggered because fixer marked all findings closed without re-verifying"}}
+> - §6 conflict & change zoning: {{e.g. "Slice-level gate is shared — S0-001 findings appear alongside S0-003"}}
+> - §7 reuse: {{e.g. "/code-review-expert and /devils-advocate skills used in R5b.1"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Schema validator update + RUNBOOK §3 R5b worked example"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
+
 #### Step 4 · cycle1 (R2+R3+R4+R4b — external review)
 
 - Reference: RUNBOOK §3 → R2 (lead eval) · R3 (cross-review + external dual-prompt) · R4 (gap synthesis) · R4b (finding mapping)
@@ -125,9 +189,23 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Top gaps (P0/P1 only): {{none / list with IDs}}
 - Notes: {{anything the next agent needs to know}}
 
-#### Step 5 · fix (R7a+R7b+R7c reviews → R7c-fix)
+> **Step 4 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "Sidecar JSON invalid, 3 retries · workstream: R3 external manifest schema"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run sidecar validator before review_logged.sh writes receipt · Sub: batch all stories before advancing to fix · Elevate: patch logger to emit valid JSON"}}
+> - §2 evidence & proof: {{sidecar file paths, parse error output, validator result}}
+> - §3 guesses & assumptions: {{e.g. "Assumed review_logged.sh always emits valid JSON — not the case on first run"}}
+> - §4 friction (top 3): {{e.g. "1) Sidecar parse failures caused 3 retries 2) No pre-run validator for sidecar schema 3) Scope expanded mid-cycle — should be locked at R1"}}
+> - §5 failure modes hit: {{e.g. "Logger emitted preamble text before JSON block"}}
+> - §6 conflict & change zoning: {{e.g. "Scope lock missing — S1-011 added after cycle1 started"}}
+> - §7 reuse: {{e.g. "Used S0 sidecar logger patch from prior slice"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Add sidecar validator call to review_logged.sh exit path"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
 
-- Reference: RUNBOOK §3 → R7a (contract review) · R7b (strategic review) · R7c (wiring audit) · R7c-fix (apply findings)
+#### Step 5 · fix (R7a + risk-gate R7b + R7c reviews → R7c-fix)
+
+- Reference: RUNBOOK §3 → R7a (contract review) · risk-gate R7b (strategic review; conditional for HIGH/shared-primitive stories) · R7c (wiring audit) · R7c-fix (apply findings)
 - Status: {{NOT_STARTED / IN_PROGRESS / COMPLETE / BLOCKED / SKIPPED-GREEN}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/04_fix.json`
 - Contract review: `reviews/reconciliations/{{SLICE_ID}}/R7A_CONTRACT_REVIEW.json` — decision: {{PASS/FAIL}}
@@ -136,6 +214,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Fix plan: `reviews/reconciliations/{{SLICE_ID}}/R7C_FIX_PLAN.md` {{exists / n/a}}
 - Changes made: {{none / brief description}}
 - Notes: {{anything the next agent needs to know}}
+
+> **Step 5 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "R7b triggered incorrectly for 'med' risk story · workstream: risk-gate policy"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run R7a/b/c in parallel when possible · Sub: block R7c-fix until all three reviews complete · Elevate: add explicit 'med+shared-primitive' rule to R7b gate"}}
+> - §2 evidence & proof: {{review JSON paths, wiring audit callsite citations, fix diff}}
+> - §3 guesses & assumptions: {{e.g. "Assumed 'med' risk never triggers R7b — RUNBOOK only specifies HIGH"}}
+> - §4 friction (top 3): {{e.g. "1) R7b gate trigger ambiguous for 'med' stories sharing primitives 2) R7c wiring audit has no template for documentation-only stories 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "R7c-fix applied before R7a review completed — out-of-order"}}
+> - §6 conflict & change zoning: {{e.g. "R7c fix to reject_reason.rs touches S2-004 and S2-000"}}
+> - §7 reuse: {{e.g. "/contract-review skill used for R7a"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Update POLICY §risk-gate table with 'med+shared-primitive' row"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
 
 #### Step 6 · cycle2 (R7d+R7e+R7f — post-fix audit)
 
@@ -147,6 +239,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Devils advocate: `reviews/reconciliations/{{SLICE_ID}}/R7E_DEVILS_ADVOCATE.md`
 - Debt register: `reviews/reconciliations/{{SLICE_ID}}/DEBT_REGISTER.json` {{valid / invalid / pending}}
 - Notes: {{anything the next agent needs to know}}
+
+> **Step 6 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "DEBT_REGISTER.json blocked receipt write due to TBD field · workstream: debt register schema"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: validate debt register schema before writing receipt · Sub: C2 scope is FIX_DIFF only, not full story · Elevate: add TBD rejection to schema validator"}}
+> - §2 evidence & proof: {{C2 manifest path, devils advocate finding IDs, debt register validation output}}
+> - §3 guesses & assumptions: {{e.g. "Assumed 'remediation_eta: TBD' was acceptable — schema rejects it"}}
+> - §4 friction (top 3): {{e.g. "1) Debt register schema has no worked example 2) GREEN path relaxation rule not clearly scoped to 'no code changes' case 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "Cycle2 scope drifted to full story instead of FIX_DIFF only"}}
+> - §6 conflict & change zoning: {{e.g. "Debt entry for GAP-04 also affects S0-003 — cross-story debt"}}
+> - §7 reuse: {{e.g. "/devils-advocate skill for R7e"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Add TBD guard to debt register JSON schema · validate in R7f"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
 
 #### Step 7 · resolution (R6 — final verdict)
 
@@ -160,13 +266,41 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Proof graph: `artifacts/story/{{STORY_ID}}/proof_graph.json` {{valid / invalid / pending}}
 - Notes: {{anything the next agent needs to know}}
 
+> **Step 7 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "Verdict enum had no case for proof-gap-only with no code changes · workstream: verdict policy"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: use resolution template strictly · Sub: do not re-open gaps at resolution stage · Elevate: add RECONCILED_PROOF_ONLY verdict to POLICY"}}
+> - §2 evidence & proof: {{review_resolution.md path, verdict value, proof_graph.json validity}}
+> - §3 guesses & assumptions: {{e.g. "Assumed RECONCILED_UNIT_ONLY covers proof-only cases — it doesn't"}}
+> - §4 friction (top 3): {{e.g. "1) Verdict enum gaps not documented in POLICY 2) Postmortem template reference is wrong path 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "Proof graph JSON invalid — missing required 'enforcement_point' field"}}
+> - §6 conflict & change zoning: {{e.g. "none"}}
+> - §7 reuse: {{e.g. "S0-002 resolution.md as structural template"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Update POLICY verdict table · add proof_graph schema validator to R6"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
+
 #### Step 8 · verify_full
 
-- Reference: RUNBOOK §3 → verify_full · run: `./plans/verify.sh full`
+- Reference: RUNBOOK §3 → verify_full · run: `PREFLIGHT_TIMEOUT=1200 ./plans/verify.sh full`
 - Status: {{NOT_STARTED / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/07_verify_full.json`
 - verify.meta.json HEAD: {{sha}}
 - Result: {{PASS / FAIL}}
+
+> **Step 8 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "FAILED_GATE at mechanical verification · workstream: enforcement-point callsite check"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run quick first to catch compile errors before full · Sub: don't re-run full on dirty tree · Elevate: scope mechanical check to src/ only"}}
+> - §2 evidence & proof: {{verify output tail, FAILED_GATE message, verify.meta.json HEAD}}
+> - §3 guesses & assumptions: {{e.g. "Assumed 900s timeout was enough — clean tree takes 1100s on CI hardware"}}
+> - §4 friction (top 3): {{e.g. "1) Default 900s timeout too short 2) Mechanical check searched test/ files — false failure 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "verify.sh full timed out — set PREFLIGHT_TIMEOUT=1200"}}
+> - §6 conflict & change zoning: {{e.g. "Pre-existing clippy warning in unrelated test file blocked full run"}}
+> - §7 reuse: {{e.g. "n/a"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Add PREFLIGHT_TIMEOUT=1200 to RUNBOOK §3 verify_full reference line"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
 
 #### Step 9 · pass
 
@@ -175,9 +309,36 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Path: {{GREEN — no re-flip / YELLOW — prd_set_pass.sh re-run}}
 - Result: {{passes=true confirmed / blocked by: {{reason}}}}
 
+> **Step 9 debrief** · `§0: CLEAN` to skip §1–§11.
+> - §0 outcome + workstream: {{e.g. "CLEAN" · or "prd_set_pass.sh failed — contract_review.json decision=CONDITIONAL not PASS · workstream: pass-flip gate"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 15 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
+> - §2 evidence & proof: {{prd_set_pass.sh output, contract_review.json decision field, PRD entry after flip}}
+> - §3 guesses & assumptions: {{e.g. "Assumed CONDITIONAL would pass the gate — only PASS does"}}
+> - §4 friction (top 3): {{e.g. "1) Gate error message doesn't name the failing check 2) GREEN path still requires prd_set_pass.sh — non-obvious 3) n/a"}}
+> - §5 failure modes hit: {{e.g. "Pass flipped for wrong story ID — always double-check before running"}}
+> - §6 conflict & change zoning: {{e.g. "none"}}
+> - §7 reuse: {{e.g. "n/a"}}
+> - §8 proposal: `rule: … · trigger: … · prevents: … · enforce: …`
+> - §9 elevation: `elevate: … | sub-win-1: owner · effort · gain · proof | sub-win-2: owner · effort · gain · proof`
+> - §10 enforcement path: {{e.g. "Update POLICY §3.9 with enumeration of acceptable decision values"}}
+> - §11 applied: {{YES — what · NO — DEBT-###}}
+
 ---
 
 <!-- Repeat the above block for each story -->
+
+---
+
+## Process Backlog
+
+> Promote here when a §8/§9 entry from any step debrief reveals a **recurring or structural** issue.
+> P0 = blocks progress · P1 = causes repeated rework · P2 = friction/confusion only.
+> The next slice's lead agent reads this first and must file patches/tickets for all P0/P1 entries
+> before starting Step 1 on the first story. If it's not here, it didn't happen.
+
+| # | Step | §8 rule (condensed) | Severity | Fix target | §11 status |
+|---|------|---------------------|----------|-----------|-----------|
+| 1 | {{step}} | `rule: … · trigger: … · prevents: … · enforce: …` | {{P0/P1/P2}} | {{RUNBOOK / POLICY / tooling / template}} | {{open / applied}} |
 
 ---
 
