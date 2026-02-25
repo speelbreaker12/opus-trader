@@ -95,7 +95,13 @@ def extract_provenance_md(content: str) -> dict[str, str] | None:
                 break
             m = re.match(r"^([a-z_]+):\s*(.+)$", line.strip())
             if m:
-                prov[m.group(1)] = m.group(2).strip()
+                val = m.group(2).strip()
+                if (len(val) >= 2 and (
+                    (val.startswith('"') and val.endswith('"')) or
+                    (val.startswith("'") and val.endswith("'"))
+                )):
+                    val = val[1:-1]
+                prov[m.group(1)] = val
         if prov:
             return prov
 
@@ -105,6 +111,11 @@ def extract_provenance_md(content: str) -> dict[str, str] | None:
         if m:
             raw_key = m.group(1).strip().lower()
             val = m.group(2).strip()
+            if (len(val) >= 2 and (
+                (val.startswith('"') and val.endswith('"')) or
+                (val.startswith("'") and val.endswith("'"))
+            )):
+                val = val[1:-1]
             mapped = MD_HEADER_KEY_MAP.get(raw_key)
             if mapped:
                 prov[mapped] = val

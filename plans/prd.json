@@ -387,14 +387,14 @@
         "avoid": []
       },
       "acceptance": [
-        "GIVEN the service is running WHEN GET /api/v1/health is called THEN HTTP 200 payload includes ok=true, build_id, and contract_version. (scaffolding — full AT-022 enforcement in S8-008)",
+        "GIVEN the service is running WHEN `./stoic-cli health` is executed THEN payload includes ok=true, build_id, and contract_version. (Phase-0 scaffolding; transport enforcement in S8.9)",
         "GIVEN Phase-0 owner status is requested WHEN status command runs THEN payload includes trading_mode and is_trading_allowed.",
         "GIVEN TradingMode is Active WHEN owner status is emitted THEN is_trading_allowed=true.",
         "GIVEN TradingMode is ReduceOnly or Kill WHEN owner status is emitted THEN is_trading_allowed=false."
       ],
       "steps": [
         "Update docs/health_endpoint.md with the minimal Phase-0 payload fields and examples.",
-        "Implement GET /api/v1/health payload keys: ok, build_id, contract_version.",
+        "Implement `./stoic-cli health` payload keys: ok, build_id, contract_version.",
         "Implement owner status output keys: trading_mode and is_trading_allowed.",
         "Wire status command behavior so is_trading_allowed derives from TradingMode deterministically.",
         "Add/adjust runtime tests to assert healthy and unhealthy payload semantics.",
@@ -414,16 +414,11 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
-      "contract_must_evidence": [
-        {
-          "quote": "GET /health returns ok, build_id, contract_version",
-          "location": "specs/CONTRACT.md §7.0",
-          "anchor": "AT-022"
-        }
-      ],
-      "enforcing_contract_ats": [
-        "AT-022"
-      ],
+      "contract_must_evidence": [],
+      "partial_coverage_notes": {
+        "AT-022": "Phase-0 implements CLI-only health/status payload scaffolding; HTTP transport endpoint enforcement is deferred to S8.9."
+      },
+      "enforcing_contract_ats": [],
       "reason_codes": {
         "type": "ModeReasonCode",
         "values": [
@@ -442,9 +437,7 @@
           "trading_mode",
           "is_trading_allowed"
         ],
-        "status_contract_ats": [
-          "AT-022"
-        ]
+        "status_contract_ats": []
       },
       "implementation_tests": [
         "crates/soldier_infra/tests/test_phase0_runtime.rs::test_status_command_behavior_runtime"

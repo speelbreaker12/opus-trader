@@ -70,8 +70,8 @@ VALID_PROMPT_STYLES = {"generic", "enriched"}
 REQUIRED_COMBOS_DEFAULT = [
     ("codex", "enriched"),
     ("codex", "generic"),
-    ("opus", "enriched"),
-    ("opus", "generic"),
+    ("kimi", "enriched"),
+    ("kimi", "generic"),
 ]
 
 R3_MANIFEST_PROV_REQUIRED = [
@@ -93,6 +93,64 @@ R7_VALIDATION_CHECKS = [
     "head_commit_alignment_check",
     "base_commit_alignment_check",
 ]
+
+
+def _resolve_required_combos_from_manifest(
+    data: dict[str, Any],
+    r: ManifestValidationResult,
+) -> list[tuple[str, str]]:
+    """Resolve required C2 combos from manifest cycle2_path when present.
+
+    Defaults to the legacy dual-combo flow when cycle2_path is absent.
+    """
+    phase = data.get("phase", "")
+    if phase != "R7d":
+        return list(REQUIRED_COMBOS_DEFAULT)
+
+    cycle2_path = data.get("cycle2_path")
+    if not isinstance(cycle2_path, dict):
+        r.warn("cycle2_path missing; defaulting to legacy dual_combo mode")
+        return list(REQUIRED_COMBOS_DEFAULT)
+
+    mode = cycle2_path.get("mode", "")
+    if mode == "dual_combo":
+        return list(REQUIRED_COMBOS_DEFAULT)
+
+    if mode == "recon_clean_single":
+        choice = cycle2_path.get("single_combo_choice")
+        if not isinstance(choice, dict):
+            r.fail("R7D_C2_SINGLE_MISMATCH")
+            r.warn("recon_clean_single requires cycle2_path.single_combo_choice")
+            return list(REQUIRED_COMBOS_DEFAULT)
+
+        tool = str(choice.get("tool", ""))
+        prompt_style = str(choice.get("prompt_style", ""))
+        if tool not in VALID_TOOLS or prompt_style not in VALID_PROMPT_STYLES:
+            r.fail("R7D_C2_SINGLE_MISMATCH")
+            return list(REQUIRED_COMBOS_DEFAULT)
+
+        required = [(tool, prompt_style)]
+
+        declared = data.get("required_combinations")
+        if not isinstance(declared, list) or len(declared) != 1:
+            r.fail("R7D_C2_SINGLE_MISMATCH")
+            return required
+
+        first = declared[0]
+        if not isinstance(first, dict) or first.get("tool") != tool or first.get("prompt_style") != prompt_style:
+            r.fail("R7D_C2_SINGLE_MISMATCH")
+            return required
+
+        justification = cycle2_path.get("single_combo_justification", "")
+        if not isinstance(justification, str) or justification.strip() == "":
+            r.fail("R7D_C2_SINGLE_MISMATCH")
+            r.warn("recon_clean_single requires non-empty cycle2_path.single_combo_justification")
+
+        return required
+
+    r.fail("R7D_C2_MODE_MISMATCH")
+    r.warn(f"unsupported cycle2_path.mode={mode!r}; defaulting to dual combo")
+    return list(REQUIRED_COMBOS_DEFAULT)
 
 
 # ---------------------------------------------------------------------------
@@ -794,6 +852,9 @@ def main() -> int:
         else:
             print(f"FAIL: unknown phase={phase!r} (expected R3 or R7d)", file=sys.stderr)
         return 4
+
+    if not args.require_combo:
+        required_combos = _resolve_required_combos_from_manifest(data, r)
 
     # ── Step B: Manifest provenance ───────────────────────────────────
     try:

@@ -217,20 +217,21 @@ if [[ "$STATUS" == "true" ]]; then
   # If external_manifest_gate.sh exists, run both gates.
   # Derive slice_id from story ID prefix (e.g., S1-004 → S1).
   ext_gate="$ROOT/plans/external_manifest_gate.sh"
-  if [[ -x "$ext_gate" ]]; then
+if [[ -x "$ext_gate" ]]; then
     slice_prefix="${ID%%-*}"  # S1-004 → S1
     for gate_type in r3 r7; do
+      gate_type_uc="$(printf '%s' "$gate_type" | tr '[:lower:]' '[:upper:]')"
       if "$ext_gate" "$gate_type" "$ID" "$slice_prefix" 2>&1; then
-        echo "OK: ${gate_type^^} external manifest gate passed for $ID"
+        echo "OK: ${gate_type_uc} external manifest gate passed for $ID"
       else
         gate_rc=$?
         # Gate failure is non-fatal if manifest doesn't exist yet
         # (not all stories have reconciliation manifests)
         if [[ "$gate_rc" -eq 1 ]]; then
-          echo "WARN: ${gate_type^^} external manifest gate failed for $ID (exit $gate_rc)" >&2
+          echo "WARN: ${gate_type_uc} external manifest gate failed for $ID (exit $gate_rc)" >&2
           echo "  This is expected if reconciliation has not been run for this story." >&2
         else
-          echo "ERROR: ${gate_type^^} external manifest gate failed for $ID (exit $gate_rc)" >&2
+          echo "ERROR: ${gate_type_uc} external manifest gate failed for $ID (exit $gate_rc)" >&2
           exit 4
         fi
       fi
@@ -283,6 +284,27 @@ if [[ "$STATUS" == "true" ]]; then
       echo "  Run: plans/wf_step.sh $ID --status  to see missing steps" >&2
       exit 4
     fi
+
+    WF_RECEIPT_DIR="${WF_RECEIPT_DIR:-$ROOT/.wf/receipts/$ID}"
+    if [[ ! -d "$WF_RECEIPT_DIR" ]]; then
+      echo "ERROR: workflow receipt directory missing: $WF_RECEIPT_DIR" >&2
+      exit 4
+    fi
+
+    required_wf_steps=(preflight implement self_review cycle1 fix cycle2 resolution verify_full pass)
+    for idx in $(seq 0 7); do
+      step_name="${required_wf_steps[$idx]}"
+      receipt_file="${WF_RECEIPT_DIR}/$(printf '%02d_%s.json' "$idx" "$step_name")"
+      if [[ ! -f "$receipt_file" ]]; then
+        echo "ERROR: missing required workflow receipt: $receipt_file" >&2
+        exit 4
+      fi
+
+      if ! jq -e '.head_sha and .timestamp_utc' "$receipt_file" >/dev/null 2>&1; then
+        echo "ERROR: workflow receipt missing required metadata: $receipt_file" >&2
+        exit 4
+      fi
+    done
   fi
 fi
 

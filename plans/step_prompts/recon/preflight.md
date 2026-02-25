@@ -19,7 +19,11 @@ TASK
    - note proof quality: PROVEN / WEAK / MISSING / DEFERRED
 5) Verify all scope.touch files exist.
 6) Run: cargo check --workspace
-7) Produce an AT proof audit table and a STOPLIGHT verdict for this story.
+7) Capture the resolved scope lock values you are reconciling against.
+8) Produce an AT proof audit table and a STOPLIGHT verdict for this story.
+
+OUTPUT ARTIFACTS
+- Scope lock: `.wf/recon_scope_lock/${STORY_ID}.scope_lock.json` (written by wf_step preflight step)
 
 OUTPUT
 - AT Proof Audit table: | AT | Test file:line | Causal? | Status | Notes |

@@ -15,7 +15,7 @@ AT-018	AT	CSP	S3-000	1	S3-000:contract_refs|enforcing_contract_ats	COVERED	S3-00
 AT-019	AT	CSP	S3-000	1	S3-000:contract_refs|enforcing_contract_ats	COVERED	S3-000	1	1	
 AT-020	AT	CSP	S2-000,S2-001,S8-001	3	S2-000:contract_refs;S2-001:contract_refs;S8-001:contract_refs|enforcing_contract_ats	COVERED	S2-000,S2-001	1	1	
 AT-021	AT	CSP	S2-000,S8-001	2	S2-000:contract_refs;S8-001:contract_refs|enforcing_contract_ats	COVERED	S2-000	1	1	
-AT-022	AT	CSP	S0-004,S2-003,S8-008	3	S0-004:enforcing_contract_ats;S2-003:contract_must_evidence.anchor|contract_refs;S8-008:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	AMBIGUOUS	S0-004,S2-003	1	1	
+AT-022	AT	CSP	S2-003,S8-008	2	S2-003:contract_must_evidence.anchor|contract_refs;S8-008:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	AMBIGUOUS	S2-003	1	1	
 AT-023	AT	CSP	S3-000,S8-013	2	S3-000:contract_refs;S8-013:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED	S3-000	1	1	
 AT-024	AT	CSP	S8-014	1	S8-014:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-025	AT	CSP	S3-000,S8-014	2	S3-000:contract_refs;S8-014:contract_refs|enforcing_contract_ats	CLAIMED	S3-000	1	1	
@@ -23,7 +23,7 @@ AT-026	AT	CSP	S3-000,S8-014	2	S3-000:contract_refs;S8-014:contract_refs|enforcin
 AT-027	AT	CSP	S3-000,S8-014	2	S3-000:contract_refs;S8-014:contract_refs|enforcing_contract_ats	CLAIMED	S3-000	1	1	
 AT-028	AT	CSP	S3-002,S8-014	2	S3-002:contract_must_evidence.anchor|contract_refs;S8-014:contract_refs|enforcing_contract_ats	CLAIMED	S3-002	1	1	
 AT-029	AT	GOP	S8-013	1	S8-013:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-030	AT	CSP	S6-007	1	S6-007:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	COVERED	S6-007	1	1	
+AT-030	AT	CSP	S6-007,S6-011	2	S6-007:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats;S6-011:enforcing_contract_ats	AMBIGUOUS	S6-007,S6-011	1	1	
 AT-031	AT	CSP	S5-001	1	S5-001:contract_refs|enforcing_contract_ats	COVERED	S5-001	1	1	
 AT-032	AT	CSP	S5-001	1	S5-001:contract_refs|enforcing_contract_ats	COVERED	S5-001	1	1	
 AT-033	AT	CSP	S5-001	1	S5-001:contract_refs|enforcing_contract_ats	COVERED	S5-001	1	1	
@@ -33,7 +33,7 @@ AT-036	AT	GOP	S13-002	1	S13-002:contract_refs|enforcing_contract_ats	CLAIMED		1	
 AT-040	AT	GOP	S1-010,S13-000	2	S1-010:contract_refs|enforcing_contract_ats;S13-000:contract_refs|enforcing_contract_ats	COVERED	S1-010	1	1	
 AT-041	AT	CSP	S2-002	1	S2-002:contract_refs|enforcing_contract_ats	COVERED	S2-002	1	1	
 AT-042	AT	CSP	S5-001	1	S5-001:contract_refs|enforcing_contract_ats	COVERED	S5-001	1	1	
-AT-043	AT	CSP	S6-007,S6-008,S6-009	3	S6-007:contract_refs|enforcing_contract_ats;S6-008:contract_must_evidence.anchor;S6-009:contract_must_evidence.anchor	COVERED	S6-007,S6-008,S6-009	1	1	
+AT-043	AT	CSP	S6-007,S6-008,S6-009,S6-011	4	S6-007:contract_refs|enforcing_contract_ats;S6-008:contract_must_evidence.anchor;S6-009:contract_must_evidence.anchor;S6-011:enforcing_contract_ats	COVERED	S6-007,S6-008,S6-009,S6-011	1	1	
 AT-044	AT	GOP	S10-001	1	S10-001:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-045	AT	CSP	S8-004	1	S8-004:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-046	AT	GOP	S10-000	1	S10-000:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
@@ -47,48 +47,25 @@ AT-1050	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1
 AT-1051	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1052	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1053	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1054	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1054	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-1055	AT	CSP	S8-011	1	S8-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1056	AT	CSP	S1-013,S13-004	2	S1-013:contract_refs|enforcing_contract_ats;S13-004:contract_refs|enforcing_contract_ats	COVERED	S1-013	1	1	
-AT-1057	AT	CSP	S1-013,S13-004	2	S1-013:contract_refs|enforcing_contract_ats;S13-004:contract_refs|enforcing_contract_ats	COVERED	S1-013	1	1	
+AT-1056	AT	CSP	S1-013,S13-004	2	S1-013:contract_refs|enforcing_contract_ats;S13-004:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1057	AT	CSP	S1-013,S13-004	2	S1-013:contract_refs|enforcing_contract_ats;S13-004:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-106	AT	CSP	S9-000	1	S9-000:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1062	AT	GOP	S13-000	1	S13-000:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1064	AT	CSP	S13-000	1	S13-000:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1065	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1065	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-1066	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1067	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1068	AT	CSP	S8-010	1	S8-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1069	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1069	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-107	AT	GOP	S8-002	1	S8-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1070	AT	CSP	S13-000	1	S13-000:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1071	AT	CSP	S11-002	1	S11-002:enforcing_contract_ats	CLAIMED		1	1	
-AT-1072	AT	CSP	S7-006	1	S7-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1073	AT	CSP	S7-006	1	S7-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1074	AT	CSP	S7-007	1	S7-007:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1075	AT	CSP	S7-007	1	S7-007:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1076	AT	CSP	S7-008	1	S7-008:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1077	AT	CSP	S8-015	1	S8-015:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1078	AT	CSP	S8-016	1	S8-016:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1079	AT	CSP	S8-015	1	S8-015:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1071	AT	CSP	S11-002	1	S11-002:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-108	AT	CSP	S10-004	1	S10-004:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1080	AT	CSP	S8-015	1	S8-015:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1081	AT	CSP	S8-016	1	S8-016:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1082	AT	CSP	S8-017	1	S8-017:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1083	AT	CSP	S9-006	1	S9-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1084	AT	CSP	S9-006	1	S9-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1085	AT	CSP	S9-007	1	S9-007:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1086	AT	CSP	S9-008	1	S9-008:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1087	AT	CSP	S10-005	1	S10-005:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1088	AT	CSP	S13-007	1	S13-007:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1089	AT	CSP	S7-009	1	S7-009:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1090	AT	CSP	S8-018	1	S8-018:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1091	AT	CSP	S7-009	1	S7-009:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1092	AT	CSP	S7-010	1	S7-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1093	AT	CSP	S7-010	1	S7-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1094	AT	CSP	S8-018	1	S8-018:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1095	AT	CSP	S9-009	1	S9-009:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1096	AT	CSP	S9-009	1	S9-009:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1097	AT	CSP	S7-011	1	S7-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1097	AT	CSP	S7-011	1	S7-011:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1098	AT	CSP	S9-010	1	S9-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1099	AT	CSP	S7-011	1	S7-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-110	AT	CSP	S9-003	1	S9-003:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
@@ -96,12 +73,12 @@ AT-1100	AT	CSP	S9-010	1	S9-010:contract_refs|enforcing_contract_ats	CLAIMED		1	1
 AT-1101	AT	CSP	S9-011	1	S9-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1102	AT	CSP	S9-011	1	S9-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1103	AT	CSP	S9-012	1	S9-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1104	AT	CSP	S11-003	1	S11-003:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1105	AT	CSP	S11-003	1	S11-003:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1104	AT	CSP	S11-003	1	S11-003:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
+AT-1105	AT	CSP	S11-003	1	S11-003:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-1106	AT	CSP	S10-006	1	S10-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1107	AT	GOP	S13-008	1	S13-008:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1108	AT	GOP	S12-002	1	S12-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1109	AT	GOP	S12-002	1	S12-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1108	AT	GOP	S12-002	1	S12-002:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1109	AT	GOP	S12-002	1	S12-002:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1110	AT	GOP	S13-008	1	S13-008:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1111	AT	CSP	S10-007	1	S10-007:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1112	AT	CSP	S9-012	1	S9-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
@@ -111,11 +88,11 @@ AT-1115	AT	CSP	S8-019	1	S8-019:contract_refs|enforcing_contract_ats	CLAIMED		1	1
 AT-1116	AT	CSP	S8-019	1	S8-019:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1117	AT	CSP	S9-013	1	S9-013:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1118	AT	CSP	S10-008	1	S10-008:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1119	AT	CSP	S14-001	1	S14-001:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1119	AT	CSP	S14-001	1	S14-001:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-112	AT	CSP	S8-011	1	S8-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1120	AT	CSP	S14-002	1	S14-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1121	AT	CSP	S14-002	1	S14-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-1122	AT	CSP	S14-001	1	S14-001:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1120	AT	GOP	S14-002	1	S14-002:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1121	AT	GOP	S14-002	1	S14-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-1122	AT	GOP	S14-001	1	S14-001:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-1123	AT	CSP	S10-007	1	S10-007:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-113	AT	CSP	S13-004	1	S13-004:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-115	AT	CSP	S8-003	1	S8-003:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
@@ -128,7 +105,7 @@ AT-121	AT	CSP	S9-004	1	S9-004:contract_must_evidence.anchor|contract_refs|enforc
 AT-122	AT	CSP	S9-004	1	S9-004:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-123	AT	CSP	S9-004	1	S9-004:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-124	AT	CSP	S9-004	1	S9-004:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-132	AT	CSP	S8-006	1	S8-006:enforcing_contract_ats	CLAIMED		1	1	
+AT-132	AT	CSP	S8-006	1	S8-006:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-133	AT	CSP	S9-000	1	S9-000:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-201	AT	CSP	S2-001,S2-004,S6-002	3	S2-001:contract_refs|enforcing_contract_ats;S2-004:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats;S6-002:contract_refs|enforcing_contract_ats	COVERED	S2-001,S2-004,S6-002	1	1	
 AT-202	AT	CSP	S9-002	1	S9-002:enforcing_contract_ats	CLAIMED		1	1	
@@ -150,15 +127,15 @@ AT-217	AT	CSP	S2-002,S2-003	2	S2-002:contract_refs|enforcing_contract_ats;S2-003
 AT-218	AT	CSP	S2-001,S6-001	2	S2-001:enforcing_contract_ats;S6-001:enforcing_contract_ats	COVERED	S2-001,S6-001	1	1	
 AT-219	AT	CSP	S2-000,S6-001	2	S2-000:enforcing_contract_ats;S6-001:enforcing_contract_ats	COVERED	S2-000,S6-001	1	1	
 AT-220	AT	CSP	S7-000	1	S7-000:enforcing_contract_ats	COVERED	S7-000	1	1	
-AT-221	AT	CSP	S7-004	1	S7-004:enforcing_contract_ats	CLAIMED		1	1	
-AT-222	AT	CSP	S5-000	1	S5-000:contract_refs|enforcing_contract_ats	COVERED	S5-000	1	1	
-AT-223	AT	CSP	S5-003	1	S5-003:contract_refs|enforcing_contract_ats	COVERED	S5-003	1	1	
-AT-224	AT	CSP	S6-007	1	S6-007:enforcing_contract_ats	COVERED	S6-007	1	1	
+AT-221	AT	CSP	S7-004	1	S7-004:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
+AT-222	AT	CSP	S5-000,S6-012	2	S5-000:contract_refs|enforcing_contract_ats;S6-012:enforcing_contract_ats	AMBIGUOUS	S5-000,S6-012	1	1	
+AT-223	AT	CSP	S5-003,S6-011	2	S5-003:contract_refs|enforcing_contract_ats;S6-011:enforcing_contract_ats	AMBIGUOUS	S5-003,S6-011	1	1	
+AT-224	AT	CSP	S6-007,S6-011	2	S6-007:enforcing_contract_ats;S6-011:enforcing_contract_ats	AMBIGUOUS	S6-007,S6-011	1	1	
 AT-225	AT	CSP	S6-008	1	S6-008:enforcing_contract_ats	COVERED	S6-008	1	1	
 AT-226	AT	CSP	S6-009	1	S6-009:enforcing_contract_ats	COVERED	S6-009	1	1	
 AT-227	AT	CSP	S6-010	1	S6-010:enforcing_contract_ats	COVERED	S6-010	1	1	
 AT-228	AT	CSP	S6-010	1	S6-010:enforcing_contract_ats	COVERED	S6-010	1	1	
-AT-229	AT	CSP	S7-003	1	S7-003:enforcing_contract_ats	CLAIMED		1	1	
+AT-229	AT	CSP	S7-003	1	S7-003:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-230	AT	CSP	S4-001	1	S4-001:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	COVERED	S4-001	1	1	
 AT-231	AT	CSP	S8-004	1	S8-004:enforcing_contract_ats	CLAIMED		1	1	
 AT-232	AT	CSP	S8-005	1	S8-005:enforcing_contract_ats	CLAIMED		1	1	
@@ -169,9 +146,9 @@ AT-236	AT	CSP	S7-002	1	S7-002:enforcing_contract_ats	CLAIMED		1	1
 AT-237	AT	CSP	S7-002	1	S7-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-238	AT	CSP	S9-000	1	S9-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-239	AT	CSP	S9-000	1	S9-000:enforcing_contract_ats	CLAIMED		1	1	
-AT-240	AT	CSP	S9-001	1	S9-001:enforcing_contract_ats	CLAIMED		1	1	
-AT-241	AT	CSP	S11-001	1	S11-001:enforcing_contract_ats	CLAIMED		1	1	
-AT-242	AT	CSP	S11-000	1	S11-000:enforcing_contract_ats	CLAIMED		1	1	
+AT-240	AT	CSP	S9-001	1	S9-001:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
+AT-241	AT	CSP	S11-001	1	S11-001:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
+AT-242	AT	CSP	S11-000	1	S11-000:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-243	AT	CSP	S5-002	1	S5-002:contract_refs|enforcing_contract_ats	COVERED	S5-002	1	1	
 AT-244	AT	CSP	S5-001	1	S5-001:contract_refs|enforcing_contract_ats	COVERED	S5-001	1	1	
 AT-245	AT	CSP	S5-001	1	S5-001:enforcing_contract_ats	COVERED	S5-001	1	1	
@@ -183,15 +160,15 @@ AT-250	AT	GOP	S10-000	1	S10-000:enforcing_contract_ats	CLAIMED		1	1
 AT-251	AT	GOP	S10-000	1	S10-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-252	AT	GOP	S10-000	1	S10-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-253	AT	GOP	S10-002	1	S10-002:enforcing_contract_ats	CLAIMED		1	1	
-AT-254	AT	GOP	S12-000	1	S12-000:enforcing_contract_ats	CLAIMED		1	1	
-AT-255	AT	GOP	S12-001	1	S12-001:enforcing_contract_ats	CLAIMED		1	1	
+AT-254	AT	GOP	S12-000	1	S12-000:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
+AT-255	AT	GOP	S12-001	1	S12-001:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-256	AT	GOP	S13-000	1	S13-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-257	AT	GOP	S13-000	1	S13-000:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-258	AT	CSP	S13-000	1	S13-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-259	AT	CSP	S13-000	1	S13-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-260	AT	GOP	S13-005	1	S13-005:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-261	AT	GOP	S13-005	1	S13-005:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-262	AT	GOP	S13-006	1	S13-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-262	AT	GOP	S13-006	1	S13-006:contract_refs	CLAIMED		1	1	
 AT-263	AT	GOP	S13-005	1	S13-005:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-264	AT	GOP	S14-000	1	S14-000:enforcing_contract_ats	CLAIMED		1	1	
 AT-265	AT	GOP	S14-000	1	S14-000:enforcing_contract_ats	CLAIMED		1	1	
@@ -200,11 +177,11 @@ AT-267	AT	CSP	S8-005	1	S8-005:enforcing_contract_ats	CLAIMED		1	1
 AT-268	AT	CSP	S8-005	1	S8-005:enforcing_contract_ats	CLAIMED		1	1	
 AT-269	AT	CSP	S4-002	1	S4-002:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	COVERED	S4-002	1	1	
 AT-270	AT	CSP	S4-002	1	S4-002:contract_refs|enforcing_contract_ats	COVERED	S4-002	1	1	
-AT-271	AT	CSP	S9-002	1	S9-002:enforcing_contract_ats	CLAIMED		1	1	
+AT-271	AT	CSP	S9-002	1	S9-002:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-272	AT	CSP	S9-002	1	S9-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-273	AT	CSP	S10-004	1	S10-004:enforcing_contract_ats	CLAIMED		1	1	
 AT-274	AT	GOP	S13-003	1	S13-003:enforcing_contract_ats	CLAIMED		1	1	
-AT-275	AT	GOP	S13-003	1	S13-003:enforcing_contract_ats	CLAIMED		1	1	
+AT-275	AT	GOP	S13-003	1	S13-003:contract_must_evidence.anchor|enforcing_contract_ats	CLAIMED		1	1	
 AT-276	AT	GOP	S13-003	1	S13-003:enforcing_contract_ats	CLAIMED		1	1	
 AT-277	AT	CSP	S1-004,S1-005,S1-008,S1-009	4	S1-004:enforcing_contract_ats;S1-005:enforcing_contract_ats;S1-008:enforcing_contract_ats;S1-009:enforcing_contract_ats	COVERED	S1-004,S1-005	1	1	
 AT-278	AT	CSP	S7-002	1	S7-002:enforcing_contract_ats	CLAIMED		1	1	
@@ -240,9 +217,9 @@ AT-307	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1
 AT-308	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-309	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-310	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
-AT-311	AT	GOP	S13-006	1	S13-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-312	AT	GOP	S13-006	1	S13-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-313	AT	GOP	S13-006	1	S13-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-311	AT	GOP	S13-006	1	S13-006:contract_refs	CLAIMED		1	1	
+AT-312	AT	GOP	S13-006	1	S13-006:contract_refs	CLAIMED		1	1	
+AT-313	AT	GOP	S13-006	1	S13-006:contract_refs	CLAIMED		1	1	
 AT-314	AT	CSP	S10-004	1	S10-004:enforcing_contract_ats	CLAIMED		1	1	
 AT-315	AT	CSP	S8-011	1	S8-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-316	AT	CSP	S7-002	1	S7-002:enforcing_contract_ats	CLAIMED		1	1	
@@ -266,14 +243,14 @@ AT-333	AT	CSP	S1-002,S1-011	2	S1-002:contract_refs|enforcing_contract_ats;S1-011
 AT-334	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-335	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-336	AT	CSP	S8-011	1	S8-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-337	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-337	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-338	AT	CSP	S7-002	1	S7-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-339	AT	CSP	S7-002	1	S7-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-340	AT	CSP	S7-002	1	S7-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-341	AT	CSP	S1-010	1	S1-010:contract_refs|enforcing_contract_ats	COVERED	S1-010	1	1	
 AT-342	AT	CSP	S8-014	1	S8-014:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-343	AT	CSP	S2-001,S6-001	2	S2-001:contract_refs|enforcing_contract_ats;S6-001:enforcing_contract_ats	COVERED	S2-001,S6-001	1	1	
-AT-344	AT	CSP	S5-000	1	S5-000:contract_refs|enforcing_contract_ats	COVERED	S5-000	1	1	
+AT-344	AT	CSP	S5-000,S6-012	2	S5-000:contract_refs|enforcing_contract_ats;S6-012:enforcing_contract_ats	AMBIGUOUS	S5-000,S6-012	1	1	
 AT-345	AT	CSP	S8-003	1	S8-003:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-346	AT	CSP	S7-002	1	S7-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-347	AT	CSP	S7-002	1	S7-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
@@ -298,12 +275,12 @@ AT-412	AT	CSP	S8-013	1	S8-013:contract_refs|enforcing_contract_ats	CLAIMED		1	1
 AT-413	AT	CSP	S8-001	1	S8-001:enforcing_contract_ats	CLAIMED		1	1	
 AT-414	AT	GOP	S10-002	1	S10-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-415	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
-AT-416	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-416	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-417	AT	CSP	S8-010	1	S8-010:enforcing_contract_ats	CLAIMED		1	1	
 AT-418	AT	CSP	S8-004	1	S8-004:enforcing_contract_ats	CLAIMED		1	1	
 AT-419	AT	CSP	S8-013	1	S8-013:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-420	AT	CSP	S8-004	1	S8-004:enforcing_contract_ats	CLAIMED		1	1	
-AT-421	AT	CSP	S5-000	1	S5-000:contract_refs|enforcing_contract_ats	COVERED	S5-000	1	1	
+AT-421	AT	CSP	S5-000,S6-012	2	S5-000:contract_refs|enforcing_contract_ats;S6-012:enforcing_contract_ats	AMBIGUOUS	S5-000,S6-012	1	1	
 AT-422	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-423	AT	CSP	S8-011	1	S8-011:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-424	AT	CSP	S1-010	1	S1-010:enforcing_contract_ats	COVERED	S1-010	1	1	
@@ -322,7 +299,7 @@ AT-905	AT	CSP	S1-001	1	S1-001:contract_refs|enforcing_contract_ats	COVERED	S1-00
 AT-906	AT	CSP	S4-000,S4-003,S6-000,S6-006	4	S4-000:contract_refs|enforcing_contract_ats;S4-003:contract_refs|enforcing_contract_ats;S6-000:enforcing_contract_ats;S6-006:enforcing_contract_ats	COVERED	S4-000,S4-003,S6-000,S6-006	1	1	
 AT-907	AT	CSP	S8-013	1	S8-013:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-908	AT	CSP	S2-000	1	S2-000:enforcing_contract_ats	COVERED	S2-000	1	1	
-AT-909	AT	CSP	S5-000	1	S5-000:contract_refs|enforcing_contract_ats	COVERED	S5-000	1	1	
+AT-909	AT	CSP	S5-000,S6-012	2	S5-000:contract_refs|enforcing_contract_ats;S6-012:enforcing_contract_ats	AMBIGUOUS	S5-000,S6-012	1	1	
 AT-910	AT	CSP	S6-008	1	S6-008:enforcing_contract_ats	COVERED	S6-008	1	1	
 AT-911	AT	CSP	S6-009	1	S6-009:enforcing_contract_ats	COVERED	S6-009	1	1	
 AT-912	AT	CSP	S6-010	1	S6-010:enforcing_contract_ats	COVERED	S6-010	1	1	
@@ -331,20 +308,20 @@ AT-914	AT	CSP	S3-000	1	S3-000:contract_refs|enforcing_contract_ats	COVERED	S3-00
 AT-915	AT	CSP	S3-000,S3-002	2	S3-000:contract_refs|enforcing_contract_ats;S3-002:contract_refs|enforcing_contract_ats	COVERED	S3-000,S3-002	1	1	
 AT-916	AT	CSP	S3-001	1	S3-001:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	COVERED	S3-001	1	1	
 AT-917	AT	GOP	S9-003	1	S9-003:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-918	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-918	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-919	AT	CSP	S9-001	1	S9-001:enforcing_contract_ats	CLAIMED		1	1	
 AT-920	AT	CSP	S1-007,S1-008,S1-009	3	S1-007:contract_refs|enforcing_contract_ats;S1-008:enforcing_contract_ats;S1-009:enforcing_contract_ats	COVERED	S1-007	1	1	
 AT-921	AT	CSP	S2-002	1	S2-002:contract_refs|enforcing_contract_ats	COVERED	S2-002	1	1	
 AT-922	AT	CSP	S6-007	1	S6-007:enforcing_contract_ats	COVERED	S6-007	1	1	
 AT-923	AT	GOP	S8-002	1	S8-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-924	AT	CSP	S7-000	1	S7-000:enforcing_contract_ats	COVERED	S7-000	1	1	
-AT-925	AT	CSP	S4-000,S8-012	2	S4-000:enforcing_contract_ats;S8-012:enforcing_contract_ats	AMBIGUOUS	S4-000	1	1	
+AT-925	AT	CSP	S13-006,S4-000,S8-012	3	S13-006:enforcing_contract_ats;S4-000:enforcing_contract_ats;S8-012:enforcing_contract_ats	AMBIGUOUS	S4-000	1	1	
 AT-926	AT	CSP	S2-000,S6-002,S6-005	3	S2-000:contract_refs|enforcing_contract_ats;S6-002:enforcing_contract_ats;S6-005:enforcing_contract_ats	COVERED	S2-000,S6-002,S6-005	1	1	
 AT-927	AT	CSP	S8-013	1	S8-013:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-928	AT	CSP	S2-001	1	S2-001:contract_refs|enforcing_contract_ats	COVERED	S2-001	1	1	
 AT-929	AT	CSP	S6-009	1	S6-009:enforcing_contract_ats	COVERED	S6-009	1	1	
 AT-930	AT	CSP	S6-005	1	S6-005:enforcing_contract_ats	COVERED	S6-005	1	1	
-AT-931	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-931	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
 AT-932	AT	CSP	S5-002	1	S5-002:contract_refs|enforcing_contract_ats	COVERED	S5-002	1	1	
 AT-933	AT	CSP		0		MISSING		0	0	
 AT-934	AT	CSP	S6-007	1	S6-007:enforcing_contract_ats	COVERED	S6-007	1	1	
@@ -355,7 +332,7 @@ AT-938	AT	CSP	S7-002	1	S7-002:enforcing_contract_ats	CLAIMED		1	1
 AT-939	AT	CSP	S7-002	1	S7-002:enforcing_contract_ats	CLAIMED		1	1	
 AT-940	AT	CSP	S4-000	1	S4-000:enforcing_contract_ats	COVERED	S4-000	1	1	
 AT-941	AT	CSP	S9-003	1	S9-003:enforcing_contract_ats	CLAIMED		1	1	
-AT-942	AT	GOP	S13-006	1	S13-006:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-942	AT	GOP	S13-006	1	S13-006:contract_refs	CLAIMED		1	1	
 AT-946	AT	CSP	S9-005	1	S9-005:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-947	AT	CSP	S9-005	1	S9-005:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-948	AT	CSP	S9-005	1	S9-005:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
@@ -384,5 +361,5 @@ AT-971	AT	GOP	S1-010	1	S1-010:enforcing_contract_ats	COVERED	S1-010	1	1
 AT-972	AT	GOP	S13-002	1	S13-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-973	AT	GOP	S13-002	1	S13-002:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
 AT-990	AT	CSP	S13-004	1	S13-004:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-991	AT	CSP	S8-012	1	S8-012:contract_refs|enforcing_contract_ats	CLAIMED		1	1	
-AT-992	AT	GOP	S8-012	1	S8-012:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	CLAIMED		1	1	
+AT-991	AT	CSP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	
+AT-992	AT	GOP	S13-006,S8-012	2	S13-006:enforcing_contract_ats;S8-012:contract_must_evidence.anchor|contract_refs|enforcing_contract_ats	AMBIGUOUS		1	1	

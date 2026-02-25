@@ -60,6 +60,63 @@ sha256_file() {
   shasum -a 256 "$file" | awk '{print $1}'
 }
 
+safe_count() {
+  local pattern="$1"
+  local fallback="${2:-999}"
+  set +e
+  local count
+  count="$(grep -coE "$pattern" "$transcript_tmp" 2>/dev/null || true)"
+  local rc="$?"
+  set -e
+  count="$(printf '%s' "$count" | tr -d '[:space:]')"
+  if [[ "$rc" -ne 0 || -z "$count" ]]; then
+    echo "$fallback"
+  else
+    echo "$count"
+  fi
+}
+
+json_int() {
+  local raw="${1:-0}"
+  raw="$(printf '%s' "$raw" | tr -d '[:space:]')"
+  if [[ "$raw" =~ ^[0-9]+$ ]]; then
+    echo "$raw"
+  else
+    echo 0
+  fi
+}
+
+count_review_citations() {
+  local inline_count
+  local markdown_count
+  local total
+
+  inline_count="$(safe_count '[A-Za-z0-9_./:-]+\.[A-Za-z0-9_]+:[0-9]+' 0)"
+  markdown_count="$(awk '
+    /^[[:space:]]*\*{0,2}File\*{0,2}:/ {
+      c++
+      pending=1
+      next
+    }
+    {
+      if (pending) {
+        if ($0 ~ /^\*\*Line:\*\*[[:space:]]*[0-9]+/) {
+          c++
+          pending=0
+        } else if ($0 !~ /^[[:space:]]*$/) {
+          pending=0
+        }
+      }
+    }
+    END { print c+0 }
+  ' "$transcript_tmp" 2>/dev/null || true)"
+
+  inline_count="$(json_int "$inline_count")"
+  markdown_count="$(json_int "$markdown_count")"
+  total="$(( inline_count + markdown_count ))"
+  echo "$total"
+}
+
 # Portable uppercase-first (zsh lacks ${var^})
 ucfirst() { echo "$1" | awk '{print toupper(substr($0,1,1)) substr($0,2)}'; }
 
@@ -633,9 +690,9 @@ echo "<<<REVIEW_TRANSCRIPT_END>>>" >> "$outfile"
 # Emit structured findings summary for deterministic gate parsing.
 # Counts P0-P3 by matching "| P<N>" or "P<N>:" or "**P<N>**" patterns in transcript.
 # Falls back to 999 if counting fails (fail-closed: assume findings exist).
-p0="$(grep -coE '\bP0\b' "$transcript_tmp" 2>/dev/null || echo 999)"
-p1="$(grep -coE '\bP1\b' "$transcript_tmp" 2>/dev/null || echo 999)"
-p2="$(grep -coE '\bP2\b' "$transcript_tmp" 2>/dev/null || echo 999)"
+p0="$(safe_count '\\bP0\\b' 999)"
+p1="$(safe_count '\\bP1\\b' 999)"
+p2="$(safe_count '\\bP2\\b' 999)"
 echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
 
 # ── Extract review_meta for deterministic gate checks ────────────────
@@ -712,7 +769,7 @@ fi
 # Uses authoritative cycle from provenance (not transcript-extracted).
 if [[ "$gate_exit" -eq 0 && "$prov_cycle" == "C1" ]]; then
   # Require at least one file:line citation in the transcript (pattern: path/file.rs:123)
-  citation_count="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+  citation_count="$(count_review_citations)"
   if [[ "$citation_count" -eq 0 ]]; then
     echo "HARD_GATE_FAIL: Cycle 1 review has zero file:line citations (pre-existing enforcement/test)" >&2
     echo "HARD_GATE: MISSING_PRE_EXISTING_CITATIONS (exit 4)" >> "$outfile"
@@ -738,7 +795,11 @@ if [[ "$gate_exit" -eq 0 ]]; then
   if [[ -f "$sidecar_schema" && -x "$validator" ]]; then
     sidecar_file="${outfile%.md}.sidecar.json"
     # Use provenance fields computed earlier (authoritative, not transcript-extracted)
-    citations_ct="$(grep -coE '[a-zA-Z0-9_/]+\.[a-z]+:[0-9]+' "$transcript_tmp" 2>/dev/null || echo 0)"
+    citations_ct="$(count_review_citations)"
+    citations_ct="$(json_int "$citations_ct")"
+    p0="$(json_int "$p0")"
+    p1="$(json_int "$p1")"
+    p2="$(json_int "$p2")"
 
     # Build sidecar JSON with full provenance
     cat > "$sidecar_file" <<SIDECAR_EOF

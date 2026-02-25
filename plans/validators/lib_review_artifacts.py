@@ -230,6 +230,8 @@ FAILURE_CODE_ACTIONS: dict[str, str] = {
     "MANIFEST_SLICE_ID_MISMATCH": "manifest slice_id doesn't match expected value",
     "MANIFEST_HEAD_COMMIT_MISMATCH": "manifest head_commit doesn't match expected value",
     "MANIFEST_BASE_COMMIT_MISMATCH": "manifest base_commit doesn't match expected value",
+    "R7D_C2_MODE_MISMATCH": "invalid or unsupported cycle2_path.mode",
+    "R7D_C2_SINGLE_MISMATCH": "recon_clean_single cycle2_path declaration does not match required_combinations",
     "MANIFEST_REQUIRED_COMBO_MISSING": "missing Codex/Opus generic/enriched run",
     "MANIFEST_DUPLICATE_COMBO": "same tool:prompt_style combo appears multiple times",
     "MANIFEST_UNEXPECTED_TOOL": "review uses unrecognized tool (expected: codex/opus/kimi)",

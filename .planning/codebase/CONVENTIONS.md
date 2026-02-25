@@ -1,188 +1,126 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-02-23
+**Analysis Date:** 2026-02-25
 
 ## Naming Patterns
 
 **Files:**
-- Rust source files: `snake_case.rs` (e.g., `liquidity_gate.rs`, `exposure_budget.rs`)
-- Test files: `test_<module>.rs` for unit/integration tests (e.g., `test_liquidity_gate.rs`)
-- Property-based tests: `prop_<module>.rs` (e.g., `prop_liquidity_gate.rs`)
-- Module organization: Public re-exports in `mod.rs` files
+- Rust source uses snake_case file names (`order_size.rs`, `quantize.rs`, `ledger.rs`).
+- Rust test files are mainly split into module-level and crate-level suites under `crates/soldier_core/tests/*.rs`, `crates/soldier_infra/tests/*.rs`, and in-module `#[cfg(test)]` blocks in `crates/*/src/*.rs`.
+- Python uses snake_case test module names (`test_rules.py`, `test_init.py`) under `python/proof_graph/tests/`.
+- Dashboard TS file names and source layout are not fully represented; dashboard package is mostly metadata (`dashboard/package.json`, `dashboard/tsconfig.json`).
 
 **Functions:**
-- Private helper functions: `snake_case` (e.g., `compute_wap()`, `reject_with_metrics()`)
-- Public API functions: `snake_case` with full underscore separation (e.g., `evaluate_liquidity_gate()`, `compute_intent_hash()`)
-- Test functions: `test_<descriptive_name>_<outcome>` or `test_at<number>_<gate>_<scenario>()` (e.g., `test_at222_slippage_exceeds_max_rejected()`, `test_base_gates_all_pass_returns_proof()`)
-- Builder/factory functions: `<thing>()` (e.g., `gate_input()`, `passing_base_input()`)
+- Rust and Python functions are `snake_case` (e.g., `resolve_config_value`, `build_order_size`, `test_at908_too_small_rejected`).
+- No special async naming prefix is used.
+- Test function naming is `test_<scenario>` in Rust.
+- Not detected: specific handler naming convention like `handleX`.
 
 **Variables:**
-- Local variables: `snake_case` (e.g., `order_qty`, `reject_reason`, `fillable_qty`)
-- Constants: `SCREAMING_SNAKE_CASE` (e.g., `LIQUIDITY_GATE_REJECT_NO_L2_TOTAL`, `CSP_MINIMUM_KEYS`)
-- Static atomics: descriptive `SCREAMING_SNAKE_CASE` (e.g., `LIQUIDITY_GATE_REJECT_NO_L2_TOTAL`)
-- Tuple/shorthand: abbreviated (e.g., `ts` for timestamp, `wap` for weighted average price)
+- `snake_case` for local variables and function parameters (`gate_results_all_passing`, `raw_qty`).
+- `UPPER_SNAKE_CASE` for constants in Rust (`EXPECTED_PARAM_COUNT`, `PROPTEST_CASES`, `BOUNDARY_EPS`).
+- No underscore-private naming convention is enforced; private items usually use normal `snake_case`.
 
 **Types:**
-- Public structs/enums: `PascalCase` (e.g., `LiquidityGateInput`, `RejectReasonCode`, `RiskState`)
-- Newtypes for domain values: `PascalCase` (e.g., `InstrumentId`, `ReservationId`)
-- Enum variants: `PascalCase` (e.g., `LiquidityGateRejectReason::InsufficientDepthWithinBudget`)
-- Generic parameters: `T`, `'a`, `'b` (conventional)
-- Lifetime parameters: `'a`, `'static` where applicable
+- Rust structs/enums/types are `PascalCase` (`GateConfig`, `QuantizeError`, `IntentSize`).
+- Python typed classes in tests and modules follow `PascalCase` (`ValidationContext`, `ProofGraph`, `Input`).
+- No interface/type-alias naming anomalies detected.
 
 ## Code Style
 
 **Formatting:**
-- Default Rust style (rustfmt 2024 edition, no custom config checked in)
-- Line length: 100 columns (inferred from code samples, not strict rule)
-- Indentation: 4 spaces
-- Struct/enum field formatting: Each field on own line with type annotation
+- Rust formatting is enforced through `cargo fmt --all -- --check` in verify.
+- No local Rust formatter config file detected (`rustfmt.toml` not detected).
+- Python/JS formatter config not detected for this map scope.
+- Indentation is 4 spaces in Rust and Python.
+- Semicolons are required by Rust compiler/language.
+- Line length appears unconstrained by repo config; observed style keeps lines moderate rather than tightly enforced.
 
 **Linting:**
-- `#![forbid(unsafe_code)]` at crate root (both `soldier_core` and `soldier_infra`)
-- No clippy overrides (default lints enforced)
-- Exhaustive pattern matching required (no wildcards on critical enums)
-- Numeric validation: explicit `is_finite()` checks for all f64 operations
+- Rust: `cargo clippy` in full verify mode (`cargo clippy --workspace --all-targets --all-features -- -D warnings`).
+- Python: lint/format via `ruff check .` and `ruff format --check .` when `ruff` is available.
+- No repository-wide JS linter is guaranteed; scripts are optional by package lockfile detection.
 
 ## Import Organization
 
 **Order:**
-1. Standard library imports (`use std::...`)
-2. External crate imports (`use proptest::...`, `use tracing::...`)
-3. Internal crate imports (`use crate::...`)
-4. Module-level items (`use super::...`)
-5. Grouped by logical domain (e.g., all risk module imports together)
+1. Standard library imports.
+2. External crate imports.
+3. Internal crate/module imports (`crate::`, `super::`, `use soldier_core::...`, `use soldier_infra::...`).
+
+**Grouping:**
+- Imports are grouped with blank lines and sorted to keep logical clusters.
+- Type-only imports are generally mixed with other uses (not separated).
 
 **Path Aliases:**
-- No aliasing of crate paths (explicit full paths preferred)
-- Re-exports centralized in `mod.rs` files (see `/crates/soldier_core/src/risk/mod.rs`)
-- Module re-exports use `pub use` with explicit item list (not `*`)
-
-Example from `risk/mod.rs`:
-```rust
-pub use exposure_budget::{
-    ExposureBucket, ExposureBudgetInput, ExposureBudgetMetrics,
-    ExposureBudgetRejectReason, ExposureBudgetResult,
-    evaluate_global_exposure_budget, exposure_budget_reject_total,
-};
-```
+- Not detected (no consistent path alias usage in the inspected files).
 
 ## Error Handling
 
 **Patterns:**
-- Prefer `?` operator over `unwrap()` or `expect()`
-- Only use `expect()` with explanatory context message (e.g., `"config missing: DB_URL"`)
-- Error types use enums for domain-specific rejection reasons (e.g., `FillableDepthError`, `LiquidityGateRejectReason`)
-- Fail-closed: invalid/missing data returns restrictive/safe value (e.g., missing L2 → reject OPEN orders)
-- Explicit error handling for floating-point operations:
-  ```rust
-  if !value.is_finite() || value <= 0.0 {
-      return Err(InvalidBook);
-  }
-  ```
+- Fail-closed by default for invalid/incomplete input (`Result::Err` paths dominate invalid metadata, invalid values, and boundary conditions).
+- Custom error enums and structs are used extensively (`QuantizeError`, `MissingConfigError`).
+- `?` is used for propagation; `match` blocks are used to convert/attach context.
+- Return early on guard failures is common.
 
-**Fail-Closed Examples:**
-- Missing L2 book: reject order placement (not silent allowance)
-- NaN/Inf quantities: reject with specific code (not clamp to default)
-- Stale staleness checks: treat missing data as stale (not fresh)
+**Error Types:**
+- Fail with structured domain errors for business-rule violations and validation failures.
+- Convert to user-facing `io::Error` with explicit context when crossing module boundaries.
+- Parse/contract violations are surfaced via explicit custom reasons/messages.
+
+**Logging:**
+- Structured logs via `tracing` in Rust (e.g., `tracing::warn!(...)`, `tracing::debug!(...)`) with named fields.
+- Not detected: centralized Python logging standardization.
 
 ## Logging
 
-**Framework:** `tracing` crate with structured fields
+**Framework:**
+- Rust: `tracing` crate.
 
 **Patterns:**
-- Debug-level logging for operational details: `tracing::debug!("message", field=value)`
-- Info-level for significant events: `tracing::info!(instrument_id = %id, side = ?side, "submitting order")`
-- Warn-level for recoverable issues: `tracing::warn!(?e, "operation failed")`
-- Error-level for unrecoverable issues (rare, fail-closed handles most)
-- Format specifiers: `?` for Debug output, `%` for Display, no specifier for structured fields
-
-**Metric Logging:**
-- Separate function for counter increments (e.g., `bump_liquidity_gate_reject()`)
-- Emit metric lines via `emit_execution_metric_line(METRIC_KEY, "field=value")`
-- Process-lifetime counters in static atomics (e.g., `LIQUIDITY_GATE_REJECT_NO_L2_TOTAL`)
-
-Example:
-```rust
-tracing::debug!(
-    "LiquidityGateReject reason={:?} wap={:?} slippage_bps={:?}",
-    reason, wap, slippage_bps
-);
-```
+- Use structured key/value logs for warning/error paths.
+- Logs are placed at validation and edge-condition points rather than every line of flow.
+- Avoids ad-hoc `println!` in tested logic where tracing is used.
 
 ## Comments
 
 **When to Comment:**
-- Module-level doc comments (line 1 of each file): high-level purpose + CONTRACT.md references
-- Struct/field doc comments: explain domain meaning (e.g., "Quantized price as integer ticks")
-- Algorithm explanations: before complex sections (e.g., fillable depth computation)
-- Invariants: explain non-obvious constraints (e.g., "Latch stays set until reconcile() is called")
-- Safety justifications: explain why fail-closed behavior is correct
-- Avoid: restating obvious code (e.g., `x = x + 1; // increment x`)
+- Document contract mapping, invariants, and safety rationale with doc comments (`//!`, `///`) before public/critical items.
+- Comments explain non-obvious behavior and boundary conditions.
 
-**Doc Comment Style:**
-```rust
-//! High-level module description.
-//!
-//! **Purpose:** What problem does this solve?
-//!
-//! **Algorithm:** Steps if non-trivial.
-//!
-//! **Contracts:** Reference CONTRACT.md sections (e.g., AT-222, §1.3).
+**JSDoc/TSDoc:**
+- Rust doc comments are heavily used.
+- Not detected: language-specific JSDoc/TSDoc usage (dashboard JS surface is minimal).
 
-/// Input to the Liquidity Gate evaluator.
-#[derive(Debug, Clone)]
-pub struct LiquidityGateInput {
-    /// Order quantity to evaluate.
-    pub order_qty: f64,
-    /// Order side: true = buy, false = sell.
-    pub is_buy: bool,
-    /// Intent classification.
-    pub intent_class: GateIntentClass,
-}
-```
+**TODO Comments:**
+- `TODO(...)` format observed, often with migration/scope tags (e.g., `TODO(slice-N): ...`).
+- No single mandatory issue-number format policy was detected beyond that pattern.
 
 ## Function Design
 
-**Size:** Functions should be focused and short (50-100 lines typical)
-- Complex logic broken into private helpers (`compute_wap()`, `compute_fillable_depth()`)
-- Top-level public functions orchestrate (e.g., `evaluate_liquidity_gate()` calls helpers)
+**Size:**
+- Functions are usually decomposed into small, single-responsibility units.
+- Long functions are avoided where practical.
 
 **Parameters:**
-- Use structs for inputs with 3+ fields (all gate evaluators use `XxxInput` structs)
-- Pass references for large/complex types: `&input`, `&snapshot`, `&mut metrics`
-- Immutable parameters preferred unless mutation is core responsibility (e.g., metrics collection)
+- Prefer small parameter structs for grouped inputs (`OrderSizeInput`, `QuantizeConstraints`, `IntentPipelineInput`).
+- Prefer simple value params for small constructors.
 
 **Return Values:**
-- Use enums for multi-outcome decisions: `Result<Value, Error>`, `enum Decision { Allowed, Rejected }`
-- Return tuples only for closely related pairs (e.g., `(wap, filled_qty)`)
-- Struct wrappers for complex results (e.g., `LiquidityGateResult { decision, metadata }`)
-- Never return `Option<Value>` without explaining None case in doc comment
+- Explicit return values are preferred.
+- Validation and conversion functions return `Result<T, E>` when failure is possible.
+- Error variants are handled before side effects.
 
 ## Module Design
 
 **Exports:**
-- Centralize re-exports in `mod.rs` files (not scattered across submodules)
-- Export types needed by callers, hide internal helpers (`pub fn`, private `fn`)
-- Use `pub use` with explicit item lists (no `*` imports)
+- Rust favors explicit `pub mod` plus `pub use` re-exports.
+- Public modules are grouped under crate roots (`src/lib.rs`, `crates/*/src/lib.rs`).
 
 **Barrel Files:**
-Example from `/crates/soldier_core/src/risk/mod.rs`:
-```rust
-pub mod exposure_budget;
-pub mod fees;
-pub mod margin_gate;
+- Barrel-like re-export pattern is standard in Rust (`pub mod ...`, `pub use ...`).
+- Preserve separation between core and infra crate boundaries.
+- No broad namespace wildcards in re-exports observed in sampled files.
 
-pub use exposure_budget::{
-    ExposureBucketMetrics, evaluate_global_exposure_budget,
-};
-pub use fees::evaluate_fee_staleness;
-pub use margin_gate::evaluate_margin_headroom_gate;
-```
-
-**Crate Structure:**
-- `soldier_core`: Pure logic, no I/O (execution gates, risk assessment, recovery)
-- `soldier_infra`: Infrastructure layer (config, WAL, Deribit integration, bootstrap)
-- Dependencies: `soldier_infra` depends on `soldier_core` (strict layering)
-
----
-*Convention analysis: 2026-02-23*
+*Convention analysis: 2026-02-25*
+*Update when patterns change*

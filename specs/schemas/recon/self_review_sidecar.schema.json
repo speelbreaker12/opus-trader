@@ -58,8 +58,8 @@
           "receipt_path": { "type": "string", "minLength": 1 }
         }
       },
-      "minItems": 5,
-      "maxItems": 5
+      "minItems": 6,
+      "maxItems": 6
     },
     "total_blockers": { "type": "integer", "minimum": 0 },
     "premortem_crosscheck": {

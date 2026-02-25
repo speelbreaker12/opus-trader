@@ -88,31 +88,33 @@ errors=()
 
 # ==== Guardrail checks (all schemas) ====
 
-# schema_version: must exist
-if ! jq -e '.schema_version' "$artifact_path" >/dev/null 2>&1; then
-  errors+=("missing required field: schema_version")
-else
-  # schema_version must match pattern: <schema_name>.v<N>
-  sv="$(jq -re '.schema_version' "$artifact_path" 2>/dev/null || true)"
-  expected_pattern="^${schema_name}\.v[0-9]+$"
-  if [[ ! "$sv" =~ $expected_pattern ]]; then
-    errors+=("schema_version '$sv' does not match expected pattern '${schema_name}.v<N>'")
+if [[ "$schema_name" != "r3_external_manifest" && "$schema_name" != "r7_external_manifest" ]]; then
+  # schema_version: must exist
+  if ! jq -e '.schema_version' "$artifact_path" >/dev/null 2>&1; then
+    errors+=("missing required field: schema_version")
+  else
+    # schema_version must match pattern: <schema_name>.v<N>
+    sv="$(jq -re '.schema_version' "$artifact_path" 2>/dev/null || true)"
+    expected_pattern="^${schema_name}\.v[0-9]+$"
+    if [[ ! "$sv" =~ $expected_pattern ]]; then
+      errors+=("schema_version '$sv' does not match expected pattern '${schema_name}.v<N>'")
+    fi
   fi
-fi
 
-# head_commit: must exist, length >= 7
-if ! jq -e '.head_commit' "$artifact_path" >/dev/null 2>&1; then
-  errors+=("missing required field: head_commit")
-else
-  hc_len="$(jq -re '.head_commit | length' "$artifact_path" 2>/dev/null || echo 0)"
-  if [[ "$hc_len" -lt 7 ]]; then
-    errors+=("head_commit too short (length=$hc_len, need >= 7)")
+  # head_commit: must exist, length >= 7
+  if ! jq -e '.head_commit' "$artifact_path" >/dev/null 2>&1; then
+    errors+=("missing required field: head_commit")
+  else
+    hc_len="$(jq -re '.head_commit | length' "$artifact_path" 2>/dev/null || echo 0)"
+    if [[ "$hc_len" -lt 7 ]]; then
+      errors+=("head_commit too short (length=$hc_len, need >= 7)")
+    fi
   fi
-fi
 
-# created_at: must exist
-if ! jq -e '.created_at' "$artifact_path" >/dev/null 2>&1; then
-  errors+=("missing required field: created_at")
+  # created_at: must exist
+  if ! jq -e '.created_at' "$artifact_path" >/dev/null 2>&1; then
+    errors+=("missing required field: created_at")
+  fi
 fi
 
 # ==== Sidecar checks (schema names ending in _sidecar) ====
@@ -151,6 +153,9 @@ fi
 # ==== Schema-specific required field checks ====
 required_fields=()
 
+# ==== Recognize v2 external manifest shape ====
+is_r3_v2_manifest="$(jq -e '(.provenance != null) and (.phase // "" == "R3") and (.required_combinations != null) and (.reviews != null) and (.validation != null)' "$artifact_path" >/dev/null 2>&1 && echo 1 || echo 0)"
+
 case "$schema_name" in
   gap_list)
     required_fields=("gaps" "systemic_gaps" "priority_summary")
@@ -176,15 +181,19 @@ case "$schema_name" in
   review_artifact_sidecar)
     required_fields=("story_id" "review_type" "review_basis" "tool" "phase_equivalent" "citations_count" "pre_existing_citations_count" "finding_counts" "basis_line_present")
     ;;
-  r3_external_manifest)
-    required_fields=("story_id" "cycle" "review_basis" "tools" "validated_preexisting_enforcement_citation" "validated_preexisting_test_citation" "validation_status")
+r3_external_manifest)
+    if [[ "$is_r3_v2_manifest" == "1" ]]; then
+      required_fields=()
+    else
+      required_fields=("story_id" "cycle" "review_basis" "tools" "validated_preexisting_enforcement_citation" "validated_preexisting_test_citation" "validation_status")
+    fi
     ;;
   r7_external_manifest)
     required_fields=("story_id" "cycle" "review_basis" "base_commit" "tools" "validation_status")
     ;;
 esac
 
-for field in "${required_fields[@]}"; do
+for field in "${required_fields[@]-}"; do
   if ! jq -e ".$field != null" "$artifact_path" >/dev/null 2>&1; then
     errors+=("missing or null required field: $field")
   fi
@@ -261,24 +270,47 @@ case "$schema_name" in
     fi
     ;;
   r3_external_manifest)
-    # cycle must be C1
-    cycle="$(jq -re '.cycle // empty' "$artifact_path" 2>/dev/null || true)"
-    if [[ -n "$cycle" && "$cycle" != "C1" ]]; then
-      errors+=("cycle '$cycle' must be 'C1' for r3_external_manifest")
-    fi
-    # citation booleans must be true
-    enf="$(jq -re '.validated_preexisting_enforcement_citation // empty' "$artifact_path" 2>/dev/null || true)"
-    if [[ "$enf" != "true" ]]; then
-      errors+=("validated_preexisting_enforcement_citation must be true for C1")
-    fi
-    test_cit="$(jq -re '.validated_preexisting_test_citation // empty' "$artifact_path" 2>/dev/null || true)"
-    if [[ "$test_cit" != "true" ]]; then
-      errors+=("validated_preexisting_test_citation must be true for C1")
-    fi
-    # tools must have at least 1 entry
-    tool_count="$(jq -re '.tools | length' "$artifact_path" 2>/dev/null || echo 0)"
-    if [[ "$tool_count" -lt 1 ]]; then
-      errors+=("tools array must have at least 1 entry")
+    if [[ "$is_r3_v2_manifest" == "1" ]]; then
+      cycle="$(jq -re '.cycle // empty' "$artifact_path" 2>/dev/null || true)"
+      phase="$(jq -re '.phase // empty' "$artifact_path" 2>/dev/null || true)"
+      if [[ -n "$cycle" && "$cycle" != "C1" ]]; then
+        errors+=("cycle '$cycle' must be 'C1' for r3_external_manifest")
+      fi
+      if [[ -n "$phase" && "$phase" != "R3" ]]; then
+        errors+=("phase '$phase' must be 'R3' for r3_external_manifest")
+      fi
+      review_count="$(jq -re '.reviews | length // 0' "$artifact_path" 2>/dev/null || echo 0)"
+      if [[ "$review_count" -lt 4 ]]; then
+        errors+=("expected at least 4 review entries for r3_external_manifest v2")
+      fi
+      combo_count="$(jq -re '.required_combinations | length // 0' "$artifact_path" 2>/dev/null || echo 0)"
+      if [[ "$combo_count" -lt 4 ]]; then
+        errors+=("expected at least 4 required_combinations entries for r3_external_manifest v2")
+      fi
+      status="$(jq -re '.validation.status // empty' "$artifact_path" 2>/dev/null || true)"
+      if [[ -n "$status" && "$status" != "PASS" ]]; then
+        errors+=("validation.status '$status' must be 'PASS' for r3_external_manifest")
+      fi
+    else
+      # cycle must be C1
+      cycle="$(jq -re '.cycle // empty' "$artifact_path" 2>/dev/null || true)"
+      if [[ -n "$cycle" && "$cycle" != "C1" ]]; then
+        errors+=("cycle '$cycle' must be 'C1' for r3_external_manifest")
+      fi
+      # citation booleans must be true
+      enf="$(jq -re '.validated_preexisting_enforcement_citation // empty' "$artifact_path" 2>/dev/null || true)"
+      if [[ "$enf" != "true" ]]; then
+        errors+=("validated_preexisting_enforcement_citation must be true for C1")
+      fi
+      test_cit="$(jq -re '.validated_preexisting_test_citation // empty' "$artifact_path" 2>/dev/null || true)"
+      if [[ "$test_cit" != "true" ]]; then
+        errors+=("validated_preexisting_test_citation must be true for C1")
+      fi
+      # tools must have at least 1 entry
+      tool_count="$(jq -re '.tools | length' "$artifact_path" 2>/dev/null || echo 0)"
+      if [[ "$tool_count" -lt 1 ]]; then
+        errors+=("tools array must have at least 1 entry")
+      fi
     fi
     ;;
   r7_external_manifest)

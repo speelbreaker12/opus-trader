@@ -3,6 +3,7 @@
 Purpose
 - Capture recurring corrections and preferred patterns for the workflow harness.
 - Manual-only; no automation. Update when a pattern repeats.
+- For prompt-backed skill catalog, see `docs/skills/index.md`.
 
 Usage policy
 - Read before starting any task.

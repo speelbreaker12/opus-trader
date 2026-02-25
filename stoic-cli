@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import importlib.util
+import hashlib
 import json
 import os
 import re
@@ -182,9 +183,17 @@ def _runtime_state_initialized_marker_path(path: Path) -> Path:
     return path.with_name(f".{path.name}.initialized")
 
 
+def _runtime_state_persistent_marker_path(path: Path) -> Path:
+    state_digest = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:16]
+    return path.parent / f".runtime_state.initialized.{state_digest}"
+
+
 def _runtime_state_initialized(path: Path) -> bool:
     # Marker is written only after a successful runtime-state write.
-    return _runtime_state_initialized_marker_path(path).exists()
+    return (
+        _runtime_state_initialized_marker_path(path).exists()
+        or _runtime_state_persistent_marker_path(path).exists()
+    )
 
 
 def _default_runtime_state(*, trading_mode: str = "ACTIVE", reason: str = "") -> Dict[str, Any]:
@@ -559,6 +568,8 @@ def _write_runtime_state(path: Path, state: Dict[str, Any]) -> None:
         _fsync_file(path)
         marker_path = _runtime_state_initialized_marker_path(path)
         _write_atomic_text_file(marker_path, _utc_now_iso() + "\n")
+        persistent_marker_path = _runtime_state_persistent_marker_path(path)
+        _write_atomic_text_file(persistent_marker_path, _utc_now_iso() + "\n")
         _fsync_directory(path.parent)
         _write_runtime_state_v1(materialized, generated_at=generated_at, snapshot_seq=snapshot_seq)
     finally:
@@ -1337,7 +1348,11 @@ def _cmd_keys_check(args: argparse.Namespace) -> int:
             errors.append(f"{label}: transfer_enabled must be false")
 
         scopes = entry.get("scopes", [])
-        scopes_lower = {str(s).lower() for s in scopes} if isinstance(scopes, list) else set()
+        if not isinstance(scopes, list):
+            errors.append(f"{label}: scopes must be an array")
+            scopes_lower = set()
+        else:
+            scopes_lower = {str(s).lower() for s in scopes}
         if "transfer" in scopes_lower:
             errors.append(f"{label}: scopes must not include transfer")
         for forbidden in ("all", "withdraw", "margin"):

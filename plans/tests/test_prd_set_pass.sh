@@ -17,7 +17,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
-story_id="WF-001"
+story_id="S1-001"
 
 setup_story_review_artifacts() {
   local case_dir="$1"
@@ -79,7 +79,7 @@ EOF
   "generated_at": "2026-02-22T00:00:00+00:00",
   "story_meta": {
     "story_id": "$story_id",
-    "category": "hardening",
+    "category": "infrastructure",
     "enforcement_point": "WAL",
     "loss_mode": {"worst_case": "test", "fail_closed_cap": "test cap", "drift_metric": "test metric", "level": "LOW"},
     "safety_critical": false,

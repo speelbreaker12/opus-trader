@@ -184,16 +184,11 @@ if [[ "$premortem_exists" == "true" ]]; then
           claimants="${claimants},$other_story"
         fi
       done
-    done
 
-    # Build conflict entries for ATs claimed by 2+ stories
-    for at_id in "${!at_claimants[@]}"; do
-      claimants="${at_claimants[$at_id]}"
-      # Count commas to detect multiple claimants
       comma_count="$(echo "$claimants" | tr -cd ',' | wc -c | tr -d '[:space:]')"
       if [[ "$comma_count" -gt 0 ]]; then
         ownership_conflicts=$((ownership_conflicts + 1))
-        ownership_conflict_details+=("{\"at_id\":\"$at_id\",\"claiming_stories\":[$(echo "$claimants" | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')]}")
+        ownership_conflict_details+=("{\"at_id\":\"$at_id\",\"claiming_stories\":[\"${claimants//,/\",\"}\"]}")
       fi
     done
   fi

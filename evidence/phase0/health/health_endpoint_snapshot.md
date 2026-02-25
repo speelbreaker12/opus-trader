@@ -1,7 +1,8 @@
 # Health + Owner Status (Phase 0)
 
 > **Purpose:** Minimal operator commands to verify both liveness and authority state.
-> Phase 0 requires health plus a tiny owner status surface.
+> Phase 0 provides CLI-only health and owner status scaffolding.
+> Transport-level `/api/v1/health` and `/api/v1/status` are deferred; this story proves payload shape and policy binding only.
 
 ## Metadata
 - doc_id: HEALTH-001
@@ -123,6 +124,7 @@ Implementation note:
 
 Phase 0 includes minimal status fields only; these remain out of scope:
 
+- [x] Full HTTP `/api/v1/health` transport semantics
 - [x] Full `/api/v1/status` schema and reason-code registry
 - [x] Position/P&L dashboards
 - [x] Phase 2+ policy explanation fields

@@ -129,7 +129,7 @@ jobs:
             --bot-comments-mode block \
             --require-aftercare-ack \
             --require-copilot-review \
-            --ignore-check-run-regex '^(copilot-gate|prd-story-gate)$'
+            --ignore-check-run-regex '^(prd-story-gate)$'
 
   crossref-gate:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'

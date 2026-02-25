@@ -1,120 +1,106 @@
 # External Integrations
 
-**Analysis Date:** 2026-02-23
+**Analysis Date:** 2026-02-25
 
 ## APIs & External Services
 
-**Cryptocurrency Exchange (Deribit):**
-- Deribit futures trading venue adapter
-  - SDK/Client: Custom implementation in `crates/soldier_infra/src/deribit/`
-  - Sub-modules:
-    - `account_summary.rs` - Fee tier caching and account data
-    - `public/mod.rs` - Instrument metadata (settlement periods, tick sizes)
-  - Auth: Assumed via environment variables or vault (not directly visible in code)
-  - Purpose: Market data fetching, order submission, position tracking
+**Payment Processing:**
+- Not detected
 
-**Market Data:**
-- WebSocket subscription handling (referenced in `CLAUDE.md` fail-closed patterns for WS gaps)
-- REST API for instrument metadata (DeribitInstrument types in `deribit/public/mod.rs`)
+**Email/SMS:**
+- Not detected
+
+**External APIs:**
+- Deribit - trading venue for market/private API access
+  - Integration method: HTTP-based integration (public/private API calls implied by exchange host config)
+  - Auth: Exchange API credentials loaded by environment (`TRADING_ENV`-scoped keying in `docs/env_matrix.md` and startup identity checks in `docs/keys_and_secrets.md`)
+  - Endpoints used: `test.deribit.com` (STAGING) and `www.deribit.com` (PAPER/LIVE) by environment matrix
+
+- Convex - status API and data service
+  - Integration method: Convex JS client functions + HTTP function endpoint (`dashboard/convex/http.ts`) and HTTP publish calls in `dashboard/publisher/publisher.py`
+  - Auth: Bearer secret token check against `CONVEX_PUBLISH_SECRET` in inbound function
+  - Endpoints used: Convex publish endpoint configured via `CONVEX_PUBLISH_ENDPOINT`
 
 ## Data Storage
 
 **Databases:**
-- None (no SQL/NoSQL database client found)
+- Convex - operational status data store (`statusSnapshots`, `latestStatusPointers`)
+  - Connection: environment-configured Convex endpoint
+  - Client: `convex` package from `dashboard/package.json` and Convex functions in `dashboard/convex`
+  - Migrations: none detected
+
+- SQLite (local file)
+  - Connection: local spool DB path via `STATUS_PUBLISHER_SPOOL_DB_PATH` in publisher
+  - Client: Python stdlib `sqlite3` in `dashboard/publisher/spool.py`
+  - Migrations: none detected
 
 **File Storage:**
-- Local filesystem only
-  - Write-Ahead Log (WAL) persistence: `crates/soldier_infra/src/store/ledger.rs`
-    - Intent records stored durably
-    - Replay capability for crash recovery
-    - Configurable writer via `WalWriterConfig`
-  - Trade ID registry: `crates/soldier_infra/src/store/trade_id_registry.rs`
-    - Idempotency registry stored locally
+- Not detected
 
 **Caching:**
-- Fee cache: `crates/soldier_infra/src/deribit/account_summary.rs`
-  - In-memory cache for Deribit fee tiers
-  - TTL configured via `FeeCache` type
-  - Hard staleness limit (config: `fee_cache_hard_s`)
+- Not detected
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Custom (vault-managed credentials assumed from policy.json)
+- Exchange key scopes and Vault/local env storage (custom runtime auth)
+  - Implementation: environment-driven API credentials with fail-closed environment checks
+  - Token storage: Vault for LIVE; `.env.staging` for STAGING; no LIVE keys in local `.env` by contract
+  - Session management: runtime identity verification against exchange account/subaccount on startup
 
-**Implementation:**
-- `config/policy.json` defines:
-  - Environment-level trading capability (trade_capable: true/false)
-  - LIVE environment expected to use vault-managed credentials
-  - Other environments (DEV, STAGING, PAPER) have explicit trust models
-- No OAuth, SAML, or JWT implementation visible
-- Credential handling:
-  - Assumed to flow through `FullBootstrapConfig` (`crates/soldier_infra/src/bootstrap.rs`)
-  - Environment-specific (LIVE vs STAGING vs DEV vs PAPER)
+**OAuth Integrations:**
+- Not detected
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None (No Sentry, Datadog, or equivalent)
+- Not detected
+
+**Analytics:**
+- Not detected
 
 **Logs:**
-- Structured logging via `tracing` crate
-  - Macros: `tracing::info!`, `tracing::warn!`, `tracing::error!`
-  - All safety-critical events logged with context (`instrument_id`, `side`, `intent_id`, `trading_mode`, etc.)
-- Log output: stdout/stderr (no centralized log aggregation)
-
-**Metrics:**
-- In-memory counters available:
-  - `LedgerMetrics` - WAL append operations (`crates/soldier_infra/src/store/ledger.rs`)
-  - `RegistryMetrics` - Trade ID registry operations
-  - `FeeCacheMetrics` - Fee cache hit/miss/stale events
-  - Reject counters (e.g., `net_edge_reject_total`) referenced in tests
+- Rust tracing (`tracing` crate) and publisher logs to stdout/stderr
+  - Integration: local process logs (no external collector detected)
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- GitHub (repository host)
-- GitHub Actions (CI runner: ubuntu-latest)
+- Convex
+  - Deployment: not explicitly documented in repo files
+  - Environment vars: `CONVEX_*` and exchange/runtime vars injected by deployment/runtime environment
 
 **CI Pipeline:**
-- `.github/workflows/ci.yml` - Multi-stage verification:
-  - **phase1-snapshot-isolation-smoke** - Snapshot isolation checks
-  - **prd-story-gate** - PRD story review enforcement (currently disabled: `if: false`)
-  - **crossref-gate** - Contract cross-reference validation
-  - **verify** - Full verification (Rust build, Python tools, Node setup)
-- `.github/workflows/codeql.yml` - Security scanning (Python analysis only)
-- Triggers: PR, push to main, scheduled daily at 1 UTC
-- Artifact storage: GitHub Actions artifacts (`artifacts/` directory)
-
-**Deployment:**
-- No deployment-specific configuration found
-- Branches: `main` (primary), story/* pattern (feature branches), deploy/* pattern (deployment branches)
-- **No container orchestration, serverless platform, or cloud deployment config**
+- Not detected
 
 ## Environment Configuration
 
-**Required env vars:**
-- `BASE_REF` - Git base reference for verification (set in CI: `origin/main`)
-- `VERIFY_CONSOLE` - Logging verbosity (set in CI: `verbose`)
-- `CROSSREF_ARTIFACTS_DIR` - Output directory for crossref validation
-- `PROPTEST_CASES` - Property test case count (referenced in test code)
-- `GH_TOKEN` - GitHub token for PR gate (provided by actions/github-script)
-- Exchange credentials (Deribit API key, secret) - assumed via environment or vault
+**Development:**
+- Required env vars: `TRADING_ENV`, `CONVEX_PUBLISH_ENDPOINT`, `CONVEX_PUBLISH_SECRET`, `STATUS_PUBLISHER_*`
+- Secrets location: Vault policy for LIVE; local env for STAGING testnet keys
+- Mock/stub services: DEV mode is mocked (no private exchange creds)
 
-**Secrets location:**
-- `config/policy.json` - Policy configuration (NOT secrets, but environment-sensitive)
-- `.env` files - Not checked in (referenced in `.gitignore` implicitly)
-- Vault assumed for LIVE environment (mentioned in policy.json: "vault-managed credentials")
+**Staging:**
+- Uses testnet exchange account and `.env.staging` key source in contract table
+
+**Production:**
+- Uses LIVE exchange account and Vault/IAM-backed secrets for trade keys
+- Live exchange calls allowed only for private endpoints under constrained key scopes
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- GitHub webhook events (PR opened, push, review, issue comments) → CI trigger
-- No explicit API webhook endpoints defined
+- Convex
+  - `/status` HTTP endpoint in `dashboard/convex/http.ts` for inbound status posts
+  - Verification: `Authorization: Bearer <CONVEX_PUBLISH_SECRET>` check
+  - Events: status snapshot ingestion and duplicate suppression/validation logic
 
 **Outgoing:**
-- None identified
+- Convex publish callbacks from runtime publisher
+  - Endpoint: `CONVEX_PUBLISH_ENDPOINT` (configured URL)
+  - Retry logic: exponential backoff with local spool/failover in `dashboard/publisher/publisher.py`
 
 ---
 
-*Integration audit: 2026-02-23*
+*Integration audit: 2026-02-25*
+*Update when adding/removing external services*

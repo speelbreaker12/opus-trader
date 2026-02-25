@@ -386,6 +386,67 @@ def test_process_once_duplicate_snapshot_still_drains_pending_retry_row(tmp_path
   assert dedup_state.last_error_code is None
 
 
+def test_spool_ready_rows_respects_next_attempt_exact_boundary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+  spool_path = tmp_path / "status_publisher_spool_test.db"
+  store = spool.SpoolStore(spool_path)
+  now = datetime(2026, 2, 23, 22, 0, 0, tzinfo=timezone.utc)
+
+  class FrozenDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+      return now if tz is None else now.astimezone(tz)
+
+  monkeypatch.setattr(spool, "datetime", FrozenDateTime)
+
+  now_text = now.isoformat(timespec="seconds").replace("+00:00", "Z")
+  future_text = (now + timedelta(seconds=1)).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+  store._conn.execute(
+    """
+    INSERT INTO outbox
+      (snapshot_hash, instance_id, generated_at, payload_json, status, attempt_count, next_attempt_at, created_at, sent_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+    (
+      "boundary-ready",
+      "soldier-main-01",
+      "2026-02-23T21:10:03Z",
+      "{}",
+      "PENDING",
+      0,
+      now_text,
+      now_text,
+      None,
+    ),
+  )
+  store._conn.execute(
+    """
+    INSERT INTO outbox
+      (snapshot_hash, instance_id, generated_at, payload_json, status, attempt_count, next_attempt_at, created_at, sent_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+    (
+      "future",
+      "soldier-main-01",
+      "2026-02-23T21:10:03Z",
+      "{}",
+      "PENDING",
+      0,
+      future_text,
+      now_text,
+      None,
+    ),
+  )
+  store._conn.execute("COMMIT")
+
+  rows = store.ready_rows(limit=10)
+  assert len(rows) == 1
+  assert rows[0].snapshot_hash == "boundary-ready"
+  assert rows[0].next_attempt_at == now_text
+
+  store.close()
+
+
 def test_extract_snapshot_seq_invalid() -> None:
   with pytest.raises(publisher.PublisherError) as exc:
     publisher._extract_snapshot_seq({"snapshot_seq": -1})

@@ -1,100 +1,87 @@
 # Technology Stack
 
-**Analysis Date:** 2026-02-23
+**Analysis Date:** 2026-02-25
 
 ## Languages
 
 **Primary:**
-- Rust 2024 edition - Core execution logic (`crates/soldier_core/` and `crates/soldier_infra/`)
-- Python 3.11+ - Proof graph generation, MCP server, validation tools (`python/`)
+- TypeScript 5.5 - `dashboard/convex` functions and scripts
+- Rust (edition 2024) - core/infrastructure workspace crates in `crates/soldier_core` and `crates/soldier_infra`
+- Python - local MCP server and status publisher tooling
 
 **Secondary:**
-- Bash - CI/CD orchestration, verification scripts (`plans/`, `scripts/`)
-- YAML - GitHub Actions workflows (`.github/workflows/`)
-- JSON - Configuration, contract definitions (`config/`, `specs/`)
-- Markdown - Documentation and specifications (`specs/`, `docs/`)
+- Not detected
 
 ## Runtime
 
 **Environment:**
-- Rust stable (managed via `dtolnay/rust-toolchain@stable`)
-- Python 3.11 (specified in CI: `.github/workflows/ci.yml` and `plans/ci/requirements-*.txt`)
+- Node.js (>=18, inferred from package-lock engine constraints in `dashboard/package-lock.json`)
+- Rust compiler runtime target (as required by workspace crates)
+- Python 3 (in `python/mcp_server/server.py`)
 
 **Package Manager:**
-- Cargo (Rust) - version 2 resolver (`Cargo.toml`)
-  - Lockfile: `Cargo.lock` (present, 20KB)
-- pip (Python) - with PyPI packages
-  - Lockfile: None (requirements.txt used instead)
+- npm (Node workspace in `dashboard/`)
+- Cargo (Rust workspace)
+- pip (`python/mcp_server/requirements.txt`)
+- Lockfile: `dashboard/package-lock.json` present
 
 ## Frameworks
 
 **Core:**
-- `tracing` 0.1 - Structured logging across all Rust crates
-- `serde` 1.x with derive macros - Serialization/deserialization (all crates)
-- `serde_json` 1.x - JSON support for Rust
+- Convex 1.x - backend/data platform and HTTP endpoint layer (`dashboard/convex`)
 
 **Testing:**
-- `proptest` 1.x - Property-based testing in `soldier_core` (dev-dependency)
-- `tracing-test` 0.2 - Tracing assertion helpers (dev-dependency)
-- pytest - Python test framework (reference in CI at `.github/workflows/codeql.yml`)
+- Rust built-in test harness (`cargo test`) for crates under `crates/` — inferred from dependency usage (`proptest`, test modules)
+- Not detected (for dashboard-side tooling)
 
 **Build/Dev:**
-- Cargo workspace (monorepo pattern with 2 crates)
-- GitHub Actions - CI/CD orchestration
-- CodeQL (v3) - Security analysis for Python code
+- TypeScript 5.5 (`dashboard/package.json` / `dashboard/tsconfig.json`)
+- tsx 4.19 (`dashboard/package.json`)
+- Convex CLI via `npx convex`
+- cargo for Rust workspace builds (`Cargo.toml`)
 
 ## Key Dependencies
 
+[Only include dependencies critical to understanding the stack - limit to 5-10 most important]
+
 **Critical:**
-- `xxhash-rust` 0.8 with xxh64 feature - Fast hashing for idempotency and registries
-- `serde` 1.x - Essential for all data serialization
-- `anyhow` 1.0 - Error handling (in Cargo.lock but not explicitly listed in tomls)
+- convex ^1.16.0 - status API/runtime + schema/mutations
+- mcp >=1.0.0 - MCP server tooling
+- serde 1.x - serialization for Rust core/infra domain/state
+- tracing 0.1 - runtime observability/logging instrumentation
+- xxhash-rust 0.8 - hashing support used in execution pipeline
 
 **Infrastructure:**
-- `mcp` >= 1.0.0 (Python) - Claude Code MCP protocol server (`python/mcp_server/requirements.txt`)
-- Standard library heavy: `std::env`, `std::fs`, `std::path`, `std::process`, `std::time`
+- proptest 1.x - property testing for Rust behavior checks
+- serde_json 1.x - JSON handling in Rust
+- sqlite3 (Python stdlib `sqlite3`) - local spool persistence in `dashboard/publisher/spool.py`
 
 ## Configuration
 
 **Environment:**
-- Policy configuration: `config/policy.json`
-  - Defines trading environments (DEV, STAGING, PAPER, LIVE)
-  - Risk limits (max daily loss, gross notional, order rate)
-  - Allowed/forbidden order types
-  - Fail-closed default enforcement
-
-- Runtime config: Built via `soldier_infra::config::{RawThresholdConfig, build_gate_config_from_raw}`
-  - Appendix A defaults for missing parameters
-  - Safety-critical threshold validation (NaN rejection, negative value checks)
+- `.env` pattern is environment-driven (`TRADING_ENV`, `CONVEX_PUBLISH_ENDPOINT`, `CONVEX_PUBLISH_SECRET`, and `STATUS_PUBLISHER_*` vars in publisher docs/code)
+- Secrets policy and source differ by environment (`.env.staging` for STAGING, Vault for LIVE)
 
 **Build:**
-- Workspace root: `Cargo.toml` (workspace definition)
-- Crate manifests:
-  - `crates/soldier_core/Cargo.toml` - Core trading logic
-  - `crates/soldier_infra/Cargo.toml` - Infrastructure (deribit adapter, WAL, config)
-- Python requirements:
-  - `python/mcp_server/requirements.txt` - MCP server dependencies
-
-**CI Configuration:**
-- `.github/workflows/ci.yml` - Main verification pipeline
-- `.github/workflows/codeql.yml` - Security scanning
-- `plans/ci/requirements-crossref.txt` - Cross-reference validation tools
-- `plans/ci/requirements-verify.txt` - Verification script dependencies
+- `dashboard/package.json`
+- `dashboard/package-lock.json`
+- `dashboard/tsconfig.json`
+- `Cargo.toml` (workspace)
+- `crates/soldier_core/Cargo.toml`
+- `crates/soldier_infra/Cargo.toml`
+- `python/mcp_server/requirements.txt`
 
 ## Platform Requirements
 
 **Development:**
-- Rust toolchain with fmt and clippy components
-- Python 3.11+
-- Bash shell (POSIX)
-- Git (for CI workflows)
-- Swap artifacts caching (Swatinem/rust-cache@v2 in CI)
+- macOS/Linux/Windows not explicitly constrained in code/config
+- Node, Rust, and Python toolchains available
 
 **Production:**
-- Target platform: Linux (Ubuntu LTS - ubuntu-latest in workflows)
-- No explicit database engine or external service dependencies (file-based WAL storage)
-- No containerization (Docker) specified in configuration
+- Convex-hosted status backend for runtime publishing and querying (`dashboard/convex`)
+- Live trading venue connectivity managed by runtime deployment (Deribit host from `docs/env_matrix.md`)
 
 ---
 
-*Stack analysis: 2026-02-23*
+*Stack analysis: 2026-02-25*
+*Update after major dependency changes*

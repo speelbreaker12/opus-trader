@@ -86,45 +86,45 @@ require_file_token "$CI_WORKFLOW" "pull_request_review:"
 require_file_token "$CI_WORKFLOW" "pull_request_review_comment:"
 require_file_token "$CI_WORKFLOW" "issue_comment:"
 
-copilot_gate_section="$(
+prd_story_gate_section="$(
   awk '
-    /^  (copilot-gate|prd-story-gate):/ {in_gate=1; next}
-    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  (copilot-gate|prd-story-gate):/ {exit}
+    /^  prd-story-gate:/ {in_gate=1; next}
+    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  prd-story-gate:/ {exit}
     in_gate {print}
   ' "$CI_WORKFLOW"
 )"
 
-[[ -n "$copilot_gate_section" ]] || fail "unable to parse copilot-gate job from $CI_WORKFLOW"
+[[ -n "$prd_story_gate_section" ]] || fail "unable to parse prd-story-gate job from $CI_WORKFLOW"
 
-require_copilot_gate_token() {
+require_prd_story_gate_token() {
   local token="$1"
-  if ! printf '%s\n' "$copilot_gate_section" | grep -Fq -- "$token"; then
-    fail "$CI_WORKFLOW copilot-gate job missing required token: $token"
+  if ! printf '%s\n' "$prd_story_gate_section" | grep -Fq -- "$token"; then
+    fail "$CI_WORKFLOW prd-story-gate job missing required token: $token"
   fi
 }
 
-forbid_copilot_gate_regex() {
+forbid_prd_story_gate_regex() {
   local pattern="$1"
   local reason="$2"
-  if printf '%s\n' "$copilot_gate_section" | grep -Eq -- "$pattern"; then
-    fail "$CI_WORKFLOW copilot-gate job contains forbidden reference ($reason): $pattern"
+  if printf '%s\n' "$prd_story_gate_section" | grep -Eq -- "$pattern"; then
+    fail "$CI_WORKFLOW prd-story-gate job contains forbidden reference ($reason): $pattern"
   fi
 }
 
-# copilot_gate/ prd_story_gate must be event-driven and target PR comments/reviews.
-require_copilot_gate_token "github.event_name == 'pull_request_review'"
-require_copilot_gate_token "github.event_name == 'pull_request_review_comment'"
-require_copilot_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
-require_copilot_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}'
-require_copilot_gate_token '--pr "${PR_NUMBER}"'
-require_copilot_gate_token "--bot-comments-mode block"
-require_copilot_gate_token "--require-copilot-review"
-require_copilot_gate_token "--aftercare-ack-mode \"\${aftercare_ack_mode}\""
+# prd-story-gate must be event-driven and target PR comments/reviews.
+require_prd_story_gate_token "github.event_name == 'pull_request_review'"
+require_prd_story_gate_token "github.event_name == 'pull_request_review_comment'"
+require_prd_story_gate_token "github.event_name == 'issue_comment' && github.event.issue.pull_request"
+require_prd_story_gate_token 'PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}'
+require_prd_story_gate_token '--pr "${PR_NUMBER}"'
+require_prd_story_gate_token "--bot-comments-mode block"
+require_prd_story_gate_token "--require-copilot-review"
+require_prd_story_gate_token "--aftercare-ack-mode \"\${aftercare_ack_mode}\""
 
 # PRD gate flow requires explicit story context and dedicated post-pass check.
-require_copilot_gate_token '--story "${story_id}"'
+require_prd_story_gate_token '--story "${story_id}"'
 
 # needs can skip this job on comment/review events when upstream jobs are pull_request-only.
-forbid_copilot_gate_regex '^[[:space:]]+needs:' "copilot-gate must not depend on pull_request-only jobs"
+forbid_prd_story_gate_regex '^[[:space:]]+needs:' "prd-story-gate must not depend on pull_request-only jobs"
 
 echo "PASS: README/CI verify parity check"

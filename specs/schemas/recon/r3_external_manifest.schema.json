@@ -88,7 +88,7 @@
           "contains": {
             "type": "object",
             "properties": {
-              "tool": { "const": "opus" },
+              "tool": { "const": "kimi" },
               "prompt_style": { "const": "enriched" }
             },
             "required": ["tool", "prompt_style"]
@@ -102,7 +102,7 @@
           "contains": {
             "type": "object",
             "properties": {
-              "tool": { "const": "opus" },
+              "tool": { "const": "kimi" },
               "prompt_style": { "const": "generic" }
             },
             "required": ["tool", "prompt_style"]

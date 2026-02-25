@@ -117,6 +117,11 @@ mkdir -p "$RECEIPT_DIR"
 art_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
 if [[ "$art_root" != /* ]]; then art_root="$ROOT/$art_root"; fi
 story_art="$art_root/$STORY"
+PRD_FILE="$ROOT/plans/prd.json"
+SCOPE_LOCK_DIR="${RECON_SCOPE_LOCK_DIR:-$ROOT/.wf/recon_scope_lock}"
+SCOPE_LOCK_FILE="$SCOPE_LOCK_DIR/${STORY}.scope_lock.json"
+REVIEW_LOGGED_SCRIPT="$ROOT/plans/review_logged.sh"
+mkdir -p "$SCOPE_LOCK_DIR"
 
 # ── Step index helpers ──────────────────────────────────────────────
 
@@ -137,6 +142,106 @@ receipt_file() {
   local idx
   idx="$(step_index "$s")"
   printf '%s/%02d_%s.json' "$RECEIPT_DIR" "$idx" "$s"
+}
+
+story_scope_json() {
+  local scope_json
+  scope_json="$(jq -c --arg sid "$STORY" '.items[]? | select(.id == $sid) | .scope' "$PRD_FILE" 2>/dev/null || true)"
+  if [[ -z "$scope_json" || "$scope_json" == "null" ]]; then
+    scope_json="$(jq -c --arg sid "$STORY" '.stories[$sid]? | .scope' "$PRD_FILE" 2>/dev/null || true)"
+  fi
+  printf '%s' "$scope_json"
+}
+
+scope_lock_hash() {
+  local scope_json="$1"
+  printf '%s' "$scope_json" | jq -S -c . | sha256sum | awk '{print $1}'
+}
+
+write_scope_lock() {
+  local scope_json="$1"
+  local scope_sha="$2"
+  local ts
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  jq -n \
+    --arg schema "recon_scope_lock.v1" \
+    --arg story "$STORY" \
+    --arg lock_head "$HEAD_SHA" \
+    --arg locked_at "$ts" \
+    --arg scope_sha "$scope_sha" \
+    --arg scope_source "$PRD_FILE" \
+    --argjson scope "$scope_json" \
+    '{schema_version: $schema, story_id: $story, lock_head_sha: $lock_head, locked_at: $locked_at, scope_source_file: $scope_source, scope_sha256: $scope_sha, scope: $scope}' \
+    > "$SCOPE_LOCK_FILE"
+}
+
+check_scope_lock_matches() {
+  local scope_json="$1"
+  local current_scope_sha
+  local lock_scope_sha
+  local lock_story
+  local lock_head
+  local preflight_head
+
+  if [[ ! -f "$SCOPE_LOCK_FILE" ]]; then
+    echo "WF_STEP: scope lock missing for $STORY at R1 completion (expected $SCOPE_LOCK_FILE)" >&2
+    return 1
+  fi
+
+  lock_story="$(jq -r '.story_id // empty' "$SCOPE_LOCK_FILE" 2>/dev/null || true)"
+  lock_scope_sha="$(jq -r '.scope_sha256 // empty' "$SCOPE_LOCK_FILE" 2>/dev/null || true)"
+  lock_head="$(jq -r '.lock_head_sha // empty' "$SCOPE_LOCK_FILE" 2>/dev/null || true)"
+  if [[ "$lock_story" != "$STORY" || -z "$lock_scope_sha" || -z "$lock_head" ]]; then
+    echo "WF_STEP: scope lock malformed for $STORY at $SCOPE_LOCK_FILE" >&2
+    return 1
+  fi
+
+  current_scope_sha="$(scope_lock_hash "$scope_json")"
+  if [[ "$current_scope_sha" != "$lock_scope_sha" ]]; then
+    echo "WF_STEP: scope lock mismatch for $STORY — scope changed after preflight." >&2
+    echo "  Re-run: plans/wf_step.sh $STORY preflight" >&2
+    return 1
+  fi
+
+  preflight_head="$(jq -r '.head_sha // empty' "$(receipt_file preflight)" 2>/dev/null || true)"
+  if [[ -n "$preflight_head" && "$lock_head" != "$preflight_head" ]]; then
+    echo "WF_STEP: scope lock head mismatch for $STORY." >&2
+    echo "  lock_head=$lock_head preflight_head=$preflight_head" >&2
+    echo "  Re-run: plans/wf_step.sh $STORY preflight" >&2
+    return 1
+  fi
+}
+
+check_review_logged_sidecar_patch() {
+  local missing=0
+  local p
+  local patterns=(
+    'sidecar_schema="$root/specs/schemas/recon/review_artifact_sidecar.schema.json"'
+    'cat > "$sidecar_file" <<SIDECAR_EOF'
+    'validator="$root/plans/validate_recon_artifact.sh"'
+    'if ! "$validator" review_artifact_sidecar "$sidecar_file"; then'
+  )
+  for p in "${patterns[@]}"; do
+    if ! grep -qF -- "$p" "$REVIEW_LOGGED_SCRIPT"; then
+      echo "WF_STEP: review_logged.sh missing required sidecar patch marker: $p" >&2
+      missing=1
+    fi
+  done
+  [[ "$missing" -eq 0 ]]
+}
+
+validate_receipt_story_ids() {
+  local f
+  local recorded_story
+
+  for f in "$RECEIPT_DIR"/*.json; do
+    [[ -f "$f" ]] || continue
+    recorded_story="$(jq -r '.story_id // empty' "$f" 2>/dev/null || true)"
+    if [[ -n "$recorded_story" && "$recorded_story" != "$STORY" ]]; then
+      echo "WF_STEP: receipt mismatch in $f: story_id=$recorded_story (expected=$STORY)" >&2
+      return 1
+    fi
+  done
 }
 
 # ── Status mode ─────────────────────────────────────────────────────
@@ -216,6 +321,10 @@ if [[ "$STEP_IDX" -gt 0 ]]; then
   done
 fi
 
+if ! validate_receipt_story_ids; then
+  fail "one or more existing receipts in $RECEIPT_DIR do not match STORY=$STORY"
+fi
+
 # ── Step-specific input validation ──────────────────────────────────
 
 get_base_head() {
@@ -273,6 +382,44 @@ cycle1_had_zero_findings() {
   return 1
 }
 
+verify_cycle1_citations() {
+  # Pre-flight citation check for C1 review artifacts before writing cycle1 receipt.
+  local art_dir="$1"
+  local artifact
+  local review_files=()
+  local citations_ok=1
+  local verifier="$ROOT/plans/verify_citations.sh"
+
+  if [[ ! -x "$verifier" ]]; then
+    echo "WF_STEP: citation validator missing or not executable at $verifier" >&2
+    return 1
+  fi
+
+  for d in "$art_dir/codex" "$art_dir/opus" "$art_dir/kimi"; do
+    if [[ -d "$d" ]]; then
+      while IFS= read -r artifact; do
+        [[ -f "$artifact" ]] || continue
+        review_files+=("$artifact")
+      done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | LC_ALL=C sort)
+    fi
+  done
+
+  if [[ "${#review_files[@]}" -eq 0 ]]; then
+    echo "WF_STEP: no cycle1 review artifacts found for citation check in $art_dir" >&2
+    return 1
+  fi
+
+  for artifact in "${review_files[@]}"; do
+    if ! "$verifier" --artifact "$artifact" --mode C1 --json; then
+      echo "WF_STEP: citation pre-gate failed for $artifact" >&2
+      citations_ok=0
+      break
+    fi
+  done
+
+  [[ "$citations_ok" -eq 1 ]]
+}
+
 case "$STEP" in
   preflight)
     # First step — record HEAD as BASE_HEAD.
@@ -319,6 +466,15 @@ case "$STEP" in
         exit 3
       fi
     fi
+
+    scope_json="$(story_scope_json)"
+    if [[ -z "$scope_json" || "$scope_json" == "null" ]]; then
+      echo "WF_STEP: preflight scope lock failed — story scope missing in $PRD_FILE for $STORY" >&2
+      exit 3
+    fi
+    scope_sha="$(scope_lock_hash "$scope_json")"
+    write_scope_lock "$scope_json" "$scope_sha"
+    echo "WF_STEP: scope lock recorded at $SCOPE_LOCK_FILE"
     ;;
 
   implement)
@@ -347,6 +503,21 @@ case "$STEP" in
     ;;
 
   cycle1)
+    scope_json="$(story_scope_json)"
+    if [[ -z "$scope_json" || "$scope_json" == "null" ]]; then
+      echo "WF_STEP: cycle1 requires scope lock data for $STORY — story scope missing in $PRD_FILE" >&2
+      exit 3
+    fi
+    if ! check_scope_lock_matches "$scope_json"; then
+      exit 3
+    fi
+
+    if ! check_review_logged_sidecar_patch; then
+      echo "WF_STEP: blocking cycle1 — review_logged.sh sidecar patch not present on HEAD" >&2
+      echo "  Ensure review_logged.sh includes sidecar schema generation + sidecar validation before cycle1 runs." >&2
+      exit 3
+    fi
+
     # Evidence ledger check (v3.0): verify R1 output exists before Cycle 1
     # Accepts multiple naming patterns: canonical (<ID>_reconciliation.md), legacy (evidence_ledger.*), or preflight artifacts
     evidence_found=false
@@ -370,6 +541,11 @@ case "$STEP" in
       echo "    - $story_art/evidence_ledger.md" >&2
       echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
       exit 6
+    fi
+
+    # Hard citation gate: all cycle1 reviews must pass pre-existing citation checks.
+    if ! verify_cycle1_citations "$story_art"; then
+      exit 3
     fi
 
     review_count=0
@@ -418,9 +594,30 @@ case "$STEP" in
 
   cycle2)
     min_reviews=2
-    # GREEN path: recon + cycle1 clean + fix didn't change code → abbreviated (1 review)
-    # YELLOW/RED path: findings exist OR fix changed code → full (2 reviews)
-    if [[ "$WF_RECON_MODE" -eq 1 ]]; then
+    # Prefer manifest-driven C2 mode when available; legacy fallback uses recon mode signals.
+    manifest_cycle2_path="$story_art/external/cycle2/$STORY/R7_EXTERNAL_MANIFEST.json"
+    cycle2_mode=""
+    if [[ -f "$manifest_cycle2_path" ]]; then
+      cycle2_mode="$(jq -r '.cycle2_path.mode // empty' "$manifest_cycle2_path" 2>/dev/null || true)"
+      case "$cycle2_mode" in
+        ""|null)
+          echo "WF_STEP: cycle2_path.mode missing in $manifest_cycle2_path; assuming dual_combo for legacy compatibility"
+          ;;
+        dual_combo)
+          echo "WF_STEP: cycle2_path.mode=dual_combo for $STORY -> requiring full dual-style cycle2 coverage"
+          ;;
+        recon_clean_single)
+          min_reviews=1
+          echo "WF_STEP: cycle2_path.mode=recon_clean_single for $STORY -> requiring single-style cycle2 coverage"
+          ;;
+        *)
+          echo "WF_STEP: unsupported cycle2_path.mode '$cycle2_mode' in $manifest_cycle2_path" >&2
+          exit 3
+          ;;
+      esac
+    elif [[ "$WF_RECON_MODE" -eq 1 ]]; then
+      # GREEN path: recon + cycle1 clean + fix didn't change code → abbreviated (1 review)
+      # YELLOW/RED path: findings exist OR fix changed code → full (2 reviews)
       fix_receipt="$(receipt_file fix)"
       fix_code_changed="$(jq -r '.code_changed // "false"' "$fix_receipt" 2>/dev/null || echo "false")"
       if cycle1_had_zero_findings "$story_art" && [[ "$fix_code_changed" != "true" ]]; then

@@ -73,6 +73,7 @@ If code "works" but violates this layer:
 ```
 specs/status/                          # Specs and manifest (this directory)
 ├── README.md                          # This file
+├── DASHBOARD_V1_SCOPE.md              # Strict V1 dashboard surface and acceptance rules
 ├── LOCKED_DECISIONS.md                # Contract-locked semantic decisions
 ├── status_reason_registries_manifest.json
 ├── OWNER_DASHBOARD_REASON_CODES.md
@@ -120,6 +121,15 @@ If you change a reason code:
 Skipping any step is a contract violation.
 
 ---
+
+### `DASHBOARD_V1_SCOPE.md`
+
+Strict dashboard V1 scope for shipped UI in this cycle:
+
+- safety surface fields
+- required metrics set
+- stale/fail-closed visibility rules
+- explicit V1 acceptance checks
 
 ### `python/schemas/status_csp_min.schema.json`
 JSONSchema for **runtime `/status` validation**.
@@ -263,6 +273,11 @@ If `owner_view` and contract fields disagree:
 - ❌ Do not remove fields "to simplify"
 - ❌ Do not treat `/status` as a debugging aid
 - ❌ Do not bypass the manifest by hardcoding enums
+- ❌ Add dashboard history-chart behavior in V1 before explicit V1 scope expansion
+
+## V1 Dashboard Scope
+
+See [`DASHBOARD_V1_SCOPE.md`](./DASHBOARD_V1_SCOPE.md) for the strict V1 panel scope and acceptance checks.
 
 ---
 

@@ -100,7 +100,7 @@ http.route({
       const message = String(error);
       const lower = message.toLowerCase();
       if (lower.includes("authorization") || lower.includes("permission")) {
-        return asJsonResponse({ code: CONVEX_AUTH_ERROR.code, error: BAD_AUTH.body }, BAD_AUTH.status);
+        return asJsonResponse({ code: BAD_AUTH.code, error: BAD_AUTH.body }, BAD_AUTH.status);
       }
 
       if (isValidationLikeError(message)) {
