@@ -11,7 +11,7 @@ set -euo pipefail
 
 STORY_ID="${1:?usage: step_loop.sh <STORY_ID> [--recon]}"
 RECON_FLAG="${2:-}"
-SUP="./plans/step_supervisor.sh"
+SUP="./plans/archive/step_supervisor.sh"
 
 while true; do
   step="$("$SUP" "$STORY_ID" next ${RECON_FLAG:+$RECON_FLAG})"
