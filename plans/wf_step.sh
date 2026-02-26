@@ -645,6 +645,25 @@ case "$STEP" in
       echo "WF_STEP: need at least $min_reviews review artifacts in $story_art/{codex,opus,kimi}/" >&2
       exit 3
     fi
+    # Basis-label check: verify >=1 artifact has FIX_DIFF review basis.
+    # Without this, C1 artifacts (STORY_SCOPE basis) satisfy the cycle2 gate spuriously.
+    c2_basis_count=0
+    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
+      if [[ -d "$d" ]]; then
+        while IFS= read -r f; do
+          if grep -q 'FIX_DIFF' "$f" 2>/dev/null; then
+            c2_basis_count=$((c2_basis_count + 1))
+          fi
+        done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
+      fi
+    done
+    if [[ "$c2_basis_count" -lt 1 ]]; then
+      echo "WF_STEP: cycle2 gate requires >=1 review artifact with 'FIX_DIFF' review basis — none found" >&2
+      echo "  in $story_art/{codex,opus,kimi}/" >&2
+      echo "  C1 artifacts (STORY_SCOPE basis) do not satisfy this gate." >&2
+      echo "  Run cycle2 reviews via review_logged.sh --cycle C2 before recording this receipt." >&2
+      exit 3
+    fi
     ;;
 
   resolution)
