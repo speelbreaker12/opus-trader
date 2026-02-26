@@ -9,12 +9,12 @@
 
 mod common;
 
+use soldier_core::execution::dispatch_map::IntentClass;
 use soldier_core::execution::{
     AssembledPipelineParams, AssemblySizingError, ChokeIntentClass, ChokeResult,
-    IntentPipelineMetrics, MismatchMetrics, RejectReasonCode, SizingParams,
-    assemble_sizing, choke_intent_to_dispatch, evaluate_assembled_pipeline,
+    IntentPipelineMetrics, MismatchMetrics, RejectReasonCode, SizingParams, assemble_sizing,
+    choke_intent_to_dispatch, evaluate_assembled_pipeline,
 };
-use soldier_core::execution::dispatch_map::IntentClass;
 use soldier_core::risk::RiskState;
 use soldier_core::venue::InstrumentKindInput;
 
@@ -217,7 +217,8 @@ fn test_assembled_pipeline_unknown_kind_rejects() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
         matches!(result.decision, ChokeResult::Rejected { .. }),
@@ -275,7 +276,8 @@ fn test_assembled_pipeline_cancel_only_bypasses_assembly() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     // CancelOnly must be approved even with garbage metadata/sizing.
     assert!(
@@ -328,7 +330,8 @@ fn test_assembled_pipeline_close_valid_assembly_approved() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
         matches!(result.decision, ChokeResult::Approved { .. }),
@@ -380,7 +383,8 @@ fn test_assembled_pipeline_close_assembly_failure_bypasses() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
         matches!(result.decision, ChokeResult::Approved { .. }),
@@ -429,7 +433,8 @@ fn test_assembled_pipeline_hedge_valid_assembly_approved() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
         matches!(result.decision, ChokeResult::Approved { .. }),
@@ -479,7 +484,8 @@ fn test_assembled_pipeline_hedge_assembly_failure_bypasses() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
         matches!(result.decision, ChokeResult::Approved { .. }),
@@ -531,7 +537,8 @@ fn test_assembled_pipeline_close_mismatch_bypasses_dispatch_consistency() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     // Close bypasses Gate 4 (DispatchConsistency) — risk-reducing intents
     // must not be blocked by AT-920 contract mismatch.
@@ -596,7 +603,8 @@ fn test_assembled_pipeline_kill_not_downgraded_by_mismatch() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     // Kill → OPEN must be rejected at DispatchAuth (Kill blocks all opens).
     assert!(
@@ -651,7 +659,8 @@ fn test_assembled_pipeline_maintenance_not_downgraded_by_mismatch() {
     let mut metrics = IntentPipelineMetrics::new();
     let mut mismatch = MismatchMetrics::new();
 
-    let result = evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
+    let result =
+        evaluate_assembled_pipeline(&meta, &params, &mut mismatch, remaining, &mut metrics);
 
     assert!(
         matches!(result.decision, ChokeResult::Rejected { .. }),

@@ -71,7 +71,6 @@ required=(
   plans/slice_completion_enforce.sh
   plans/slice_completion_review_guard.sh
   plans/slice_review_gate.sh
-  plans/step_supervisor.sh
   plans/stoic_cli_invariant_check.sh
   plans/toggle_policy_check.sh
   plans/ssot_lint.sh

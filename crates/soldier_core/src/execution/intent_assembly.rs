@@ -6,21 +6,21 @@
 use super::dispatch_map::{
     DispatchConsistencyProof, IntentClass, MismatchMetrics, validate_and_dispatch,
 };
+use super::gate::LiquidityGateInput;
+use super::gates::NetEdgeInput;
 use super::order_size::{OrderSize, OrderSizeInput, build_order_size};
-use super::pipeline::{IntentPipelineInput, IntentPipelineMetrics, PipelineResult, evaluate_intent_pipeline};
-use super::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult, RejectReasonCode,
+use super::pipeline::QuantizePipelineInput;
+use super::pipeline::{
+    IntentPipelineInput, IntentPipelineMetrics, PipelineResult, evaluate_intent_pipeline,
 };
+use super::preflight::PreflightInput;
+use super::pricer::PricerInput;
+use super::{ChokeIntentClass, ChokeRejectReason, ChokeResult, RejectReasonCode};
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, InstrumentKind, VenueCapabilities,
     types::{InstrumentKindInput, derive_instrument_kind},
 };
-use super::gate::LiquidityGateInput;
-use super::pricer::PricerInput;
-use super::gates::NetEdgeInput;
-use super::pipeline::QuantizePipelineInput;
-use super::preflight::PreflightInput;
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -108,8 +108,8 @@ pub fn assemble_sizing(
     mismatch_metrics: &mut MismatchMetrics,
 ) -> Result<AssembledSizing, AssemblySizingError> {
     // Step 1: Derive instrument kind from venue metadata.
-    let instrument_kind = derive_instrument_kind(meta)
-        .ok_or(AssemblySizingError::UnknownInstrumentKind)?;
+    let instrument_kind =
+        derive_instrument_kind(meta).ok_or(AssemblySizingError::UnknownInstrumentKind)?;
 
     // Step 2: Build canonical order sizing.
     let osi = OrderSizeInput {
@@ -122,11 +122,16 @@ pub fn assemble_sizing(
         .map_err(|e| AssemblySizingError::InvalidOrderSize(format!("{e:?}")))?;
 
     // Step 3: Validate dispatch consistency (AT-920).
-    let (dispatch_consistency, risk_state_degraded) =
-        match validate_and_dispatch(&order_size, instrument_kind, intent, params.contract_multiplier, mismatch_metrics) {
-            Ok(ref validated) => (DispatchConsistencyProof::from_validated(validated), false),
-            Err(_) => (DispatchConsistencyProof::failed(), true),
-        };
+    let (dispatch_consistency, risk_state_degraded) = match validate_and_dispatch(
+        &order_size,
+        instrument_kind,
+        intent,
+        params.contract_multiplier,
+        mismatch_metrics,
+    ) {
+        Ok(ref validated) => (DispatchConsistencyProof::from_validated(validated), false),
+        Err(_) => (DispatchConsistencyProof::failed(), true),
+    };
 
     Ok(AssembledSizing {
         instrument_kind,
@@ -200,8 +205,9 @@ pub fn evaluate_assembled_pipeline(
     // approve them. Open intents fail-closed with AssemblyFailed.
     let assembled = match assemble_sizing(meta, sizing_params, intent, mismatch_metrics) {
         Ok(assembled) => assembled,
-        Err(e) if remaining.intent_class == ChokeIntentClass::Close
-              || remaining.intent_class == ChokeIntentClass::Hedge =>
+        Err(e)
+            if remaining.intent_class == ChokeIntentClass::Close
+                || remaining.intent_class == ChokeIntentClass::Hedge =>
         {
             tracing::warn!(
                 ?e,
@@ -244,13 +250,12 @@ pub fn evaluate_assembled_pipeline(
     // If assembly detected a mismatch AND caller was Healthy, override to Degraded.
     // If caller was already Kill/Maintenance/Degraded, preserve the higher severity.
     // Matches the open_runtime.rs pattern: only escalate Healthy → Degraded.
-    let effective_risk_state = if assembled.risk_state_degraded
-        && remaining.risk_state == RiskState::Healthy
-    {
-        RiskState::Degraded
-    } else {
-        remaining.risk_state
-    };
+    let effective_risk_state =
+        if assembled.risk_state_degraded && remaining.risk_state == RiskState::Healthy {
+            RiskState::Degraded
+        } else {
+            remaining.risk_state
+        };
 
     // Step 4: Build full pipeline input from assembly result + remaining params.
     let pipeline_input = IntentPipelineInput {

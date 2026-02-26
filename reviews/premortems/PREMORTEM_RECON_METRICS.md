@@ -368,7 +368,7 @@ A story with an empty gap array and no coverage proof produces `UNCHECKED_CLEAN_
 
 > Core mapping: [RUNBOOK §3](RUNBOOK_PREMORTEM_RECON.md#3-mode-b--reconciliation-r1r7). Extended here with "What happens" commentary.
 
-The `plans/step_supervisor.sh` and `plans/wf_step.sh` use a 9-step receipt chain. This table maps those steps to Part B reconciliation phases:
+The canonical 9-step receipt chain lives in `plans/wf_step.sh`. `plans/step_supervisor.sh` is a deprecated compatibility wrapper during migration. This table maps the receipt steps to Part B reconciliation phases:
 
 | `wf_step.sh` step | Part B phase(s) | Pod | What happens |
 |--------------------|----------------|-----|-------------|

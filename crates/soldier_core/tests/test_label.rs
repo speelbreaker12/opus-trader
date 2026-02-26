@@ -8,8 +8,8 @@ use common::gate_results_all_passing;
 
 #[allow(deprecated)]
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, LABEL_MAX_LEN, LabelError,
-    LabelInput, build_order_intent, decode_label, derive_gid12, derive_sid8, encode_label,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, LABEL_MAX_LEN, LabelError, LabelInput,
+    build_order_intent, decode_label, derive_gid12, derive_sid8, encode_label,
 };
 use soldier_core::risk::RiskState;
 

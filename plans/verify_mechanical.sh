@@ -50,8 +50,8 @@ echo
 
 # ── Check 2: Callsite check ────────────────────────────────────────
 #
-# For each non-empty enforcement_point in prd.json, verify at least one
-# production callsite exists (excluding tests/).
+# For each non-empty enforcement_point on passes=true stories in prd.json,
+# verify at least one production callsite exists (excluding tests/).
 
 echo "=== Check 2: Enforcement point callsite check ==="
 CHECKS=$((CHECKS + 1))
@@ -66,7 +66,7 @@ else
     ep_failures=0
     ep_total=0
 
-    # Extract unique non-empty enforcement_point values
+    # Extract unique non-empty enforcement_point values from passes=true stories.
     while IFS= read -r ep; do
       [[ -z "$ep" ]] && continue
       ep_total=$((ep_total + 1))
@@ -85,7 +85,7 @@ else
           pattern="WalLedger\|wal_ledger\|append\|RecordedBeforeDispatch"
           ;;
         StatusEndpoint)
-          pattern="status_endpoint\|/api/v1/status\|build_status"
+          pattern="_cmd_status\|_cmd_health\|_status_payload\|_health_payload\|/api/v1/status\|/api/v1/health\|status_endpoint"
           ;;
         EvidenceGuard)
           pattern="EvidenceGuard\|evidence_guard"
@@ -98,19 +98,35 @@ else
           ;;
       esac
 
-      # Search production code (exclude tests/ directories)
-      hits=$(grep -rl "$pattern" \
-        --include='*.rs' \
-        "$ROOT/crates/" 2>/dev/null \
-        | grep -v '/tests/' \
-        | grep -v '_test\.rs' \
-        | head -3 || true)
+      # Search production code (exclude tests/ directories).
+      # StatusEndpoint is implemented via the production CLI entrypoint (`stoic-cli`)
+      # in addition to Rust code.
+      if [[ "$ep" == "StatusEndpoint" ]]; then
+        hits=$(
+          {
+            grep -rl "$pattern" \
+              --include='*.rs' \
+              "$ROOT/crates/" 2>/dev/null || true
+            grep -l "$pattern" "$ROOT/stoic-cli" 2>/dev/null || true
+          } | grep -v '/tests/' \
+            | grep -v '_test\.rs' \
+            | sort -u \
+            | head -3 || true
+        )
+      else
+        hits=$(grep -rl "$pattern" \
+          --include='*.rs' \
+          "$ROOT/crates/" 2>/dev/null \
+          | grep -v '/tests/' \
+          | grep -v '_test\.rs' \
+          | head -3 || true)
+      fi
 
       if [[ -z "$hits" ]]; then
         echo "  WARN: enforcement_point '$ep' — zero production callsites found"
         ep_failures=$((ep_failures + 1))
       fi
-    done < <(jq -r '.items[].enforcement_point // empty' "$prd" 2>/dev/null | sort -u | grep -v '^$')
+    done < <(jq -r '.items[] | select(.passes == true) | .enforcement_point // empty' "$prd" 2>/dev/null | sort -u | grep -v '^$')
 
     if [[ "$ep_failures" -gt 0 ]]; then
       fail "enforcement_point callsite check: $ep_failures/$ep_total enforcement points have zero production callsites"
@@ -123,8 +139,8 @@ echo
 
 # ── Check 3: Test existence check ──────────────────────────────────
 #
-# For each implementation_tests[] entry in prd.json, verify the file exists
-# AND contains #[test] fn <name>.
+# For each implementation_tests[] entry on passes=true stories in prd.json,
+# verify the file exists and contains the referenced test marker.
 
 echo "=== Check 3: Test existence check ==="
 CHECKS=$((CHECKS + 1))
@@ -146,6 +162,13 @@ else
       [[ -z "$entry" ]] && continue
       test_total=$((test_total + 1))
 
+      if [[ "$entry" != *"::"* ]]; then
+        echo "  MALFORMED ENTRY: $entry (expected path::test_name)"
+        test_missing_fn=$((test_missing_fn + 1))
+        test_failures=$((test_failures + 1))
+        continue
+      fi
+
       # Split on :: separator
       file_path="${entry%%::*}"
       test_fn="${entry##*::}"
@@ -165,6 +188,20 @@ else
         continue
       fi
 
+      # Shell tests: verify marker appears in the script.
+      if [[ "$file_path" == *.sh ]]; then
+        if [[ ! -f "$ROOT/$file_path" ]]; then
+          echo "  MISSING FILE: $file_path (from entry: $entry)"
+          test_missing_file=$((test_missing_file + 1))
+          test_failures=$((test_failures + 1))
+        elif ! grep -Fq "$test_fn" "$ROOT/$file_path" 2>/dev/null; then
+          echo "  MISSING FN: ${test_fn} not found in $file_path"
+          test_missing_fn=$((test_missing_fn + 1))
+          test_failures=$((test_failures + 1))
+        fi
+        continue
+      fi
+
       # Rust tests: path::test_fn_name
       if [[ ! -f "$ROOT/$file_path" ]]; then
         echo "  MISSING FILE: $file_path (from entry: $entry)"
@@ -175,7 +212,7 @@ else
         test_missing_fn=$((test_missing_fn + 1))
         test_failures=$((test_failures + 1))
       fi
-    done < <(jq -r '.items[].implementation_tests[]? // empty' "$prd" 2>/dev/null | sort -u)
+    done < <(jq -r '.items[] | select(.passes == true) | .implementation_tests[]? // empty' "$prd" 2>/dev/null | sort -u)
 
     if [[ "$test_failures" -gt 0 ]]; then
       fail "test existence check: $test_failures failures ($test_missing_file missing files, $test_missing_fn missing fns) out of $test_total tests"

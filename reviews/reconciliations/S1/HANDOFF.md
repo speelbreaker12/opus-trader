@@ -242,6 +242,10 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 ### Resume command
 
 ```bash
+/reconcil
+# Optional next-slice prompt:
 STEP_SUPERVISOR_BASE_BRANCH=main \
   plans/step_supervisor.sh S2-000 prompt --recon
+# Optional mechanical status check:
+plans/wf_step.sh S1-002 --status
 ```

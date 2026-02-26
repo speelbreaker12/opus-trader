@@ -16,9 +16,9 @@ use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from
 use super::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, LiquidityGateInput,
     LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PreflightInput, PreflightMetrics,
-    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, Side,
-    build_gate_results, build_order_intent_with_wal_gate, compute_limit_price,
-    evaluate_liquidity_gate, evaluate_net_edge,
+    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, Side, build_gate_results,
+    build_order_intent_with_wal_gate, compute_limit_price, evaluate_liquidity_gate,
+    evaluate_net_edge,
 };
 
 /// Quantize inputs required by the execution pipeline.

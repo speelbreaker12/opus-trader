@@ -7,36 +7,34 @@
 
 use soldier_core::execution::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    PostOnlyInput, PostOnlyMetrics, PostOnlyResult, PricerInput, PricerMetrics,
-    PricerRejectReason, PricerResult, QuantizeConstraints, QuantizeError, QuantizeMetrics,
-    QuantizeStaticRejectReason, Side, check_post_only, compute_limit_price,
-    evaluate_inventory_skew, inventory_skew_reject_total, post_only_reject_total,
-    pricer_reject_total, quantize, quantize_reject_total,
+    PostOnlyInput, PostOnlyMetrics, PostOnlyResult, PricerInput, PricerMetrics, PricerRejectReason,
+    PricerResult, QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizeStaticRejectReason,
+    Side, check_post_only, compute_limit_price, evaluate_inventory_skew,
+    inventory_skew_reject_total, post_only_reject_total, pricer_reject_total, quantize,
+    quantize_reject_total,
 };
 
 use soldier_core::execution::{
-    GroupConfig, GroupLock, InMemoryGroupPersistence, AtomicGroup,
-    group_lock_timeout_total, group_mixed_failed_total, group_persist_fail_total,
-    persist_before_dispatch, try_acquire_group_lock,
+    AtomicGroup, GroupConfig, GroupLock, InMemoryGroupPersistence, group_lock_timeout_total,
+    group_mixed_failed_total, group_persist_fail_total, persist_before_dispatch,
+    try_acquire_group_lock,
 };
 
 use soldier_core::risk::{
-    ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult,
-    ExposureBudgetStaticRejectReason, ExposureBucket, FeeCacheSnapshot,
-    FeeStaleness, FeeStalenessConfig, MarginGateDecision, MarginGateInput, MarginGateMetrics,
-    PendingExposureBook, PendingExposureMetrics, PendingExposureResult, ReservationId,
-    evaluate_fee_staleness, evaluate_global_exposure_budget, evaluate_margin_headroom_gate,
-    exposure_budget_reject_total, fee_staleness_hard_stale_total, margin_gate_reject_total,
-    pending_exposure_reject_total,
+    ExposureBucket, ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult,
+    ExposureBudgetStaticRejectReason, FeeCacheSnapshot, FeeStaleness, FeeStalenessConfig,
+    MarginGateDecision, MarginGateInput, MarginGateMetrics, PendingExposureBook,
+    PendingExposureMetrics, PendingExposureResult, ReservationId, evaluate_fee_staleness,
+    evaluate_global_exposure_budget, evaluate_margin_headroom_gate, exposure_budget_reject_total,
+    fee_staleness_hard_stale_total, margin_gate_reject_total, pending_exposure_reject_total,
 };
 
 // ─── Inventory Skew ─────────────────────────────────────────────────────
 
 #[test]
 fn test_inventory_skew_missing_delta_limit_reject_counter() {
-    let before = inventory_skew_reject_total(
-        InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
-    );
+    let before =
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewDeltaLimitMissing);
     let mut metrics = InventorySkewMetrics::new();
     let input = InventorySkewInput {
         current_delta: 0.0,
@@ -52,10 +50,12 @@ fn test_inventory_skew_missing_delta_limit_reject_counter() {
     };
     let result = evaluate_inventory_skew(&input, &mut metrics);
     assert!(matches!(result, InventorySkewResult::Rejected { .. }));
-    let after = inventory_skew_reject_total(
-        InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
+    let after =
+        inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewDeltaLimitMissing);
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
     );
-    assert!(after > before, "counter should increment: before={before}, after={after}");
 }
 
 #[test]
@@ -77,7 +77,10 @@ fn test_inventory_skew_nan_reject_counter() {
     let result = evaluate_inventory_skew(&input, &mut metrics);
     assert!(matches!(result, InventorySkewResult::Rejected { .. }));
     let after = inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -100,7 +103,10 @@ fn test_inventory_skew_edge_below_adjusted_reject_counter() {
     let result = evaluate_inventory_skew(&input, &mut metrics);
     assert!(matches!(result, InventorySkewResult::Rejected { .. }));
     let after = inventory_skew_reject_total(InventorySkewRejectReason::InventorySkewReject);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Pricer ─────────────────────────────────────────────────────────────
@@ -118,9 +124,18 @@ fn test_pricer_invalid_input_reject_counter() {
         side: Side::Buy,
     };
     let result = compute_limit_price(&input, &mut metrics);
-    assert!(matches!(result, PricerResult::Rejected { reason: PricerRejectReason::InvalidInput, .. }));
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
     let after = pricer_reject_total(PricerRejectReason::InvalidInput);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -136,9 +151,18 @@ fn test_pricer_net_edge_too_low_reject_counter() {
         side: Side::Buy,
     };
     let result = compute_limit_price(&input, &mut metrics);
-    assert!(matches!(result, PricerResult::Rejected { reason: PricerRejectReason::NetEdgeTooLow, .. }));
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::NetEdgeTooLow,
+            ..
+        }
+    ));
     let after = pricer_reject_total(PricerRejectReason::NetEdgeTooLow);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Quantize ───────────────────────────────────────────────────────────
@@ -153,9 +177,15 @@ fn test_quantize_too_small_reject_counter() {
     let before = quantize_reject_total(QuantizeStaticRejectReason::TooSmall);
     let mut metrics = QuantizeMetrics::new();
     let result = quantize(0.5, 100.0, Side::Buy, &constraints, &mut metrics);
-    assert!(matches!(result, Err(QuantizeError::TooSmallAfterQuantization { .. })));
+    assert!(matches!(
+        result,
+        Err(QuantizeError::TooSmallAfterQuantization { .. })
+    ));
     let after = quantize_reject_total(QuantizeStaticRejectReason::TooSmall);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -170,7 +200,10 @@ fn test_quantize_invalid_input_nan_reject_counter() {
     let result = quantize(f64::NAN, 100.0, Side::Buy, &constraints, &mut metrics);
     assert!(matches!(result, Err(QuantizeError::InvalidInput { .. })));
     let after = quantize_reject_total(QuantizeStaticRejectReason::InvalidInput);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -183,9 +216,15 @@ fn test_quantize_missing_metadata_reject_counter() {
     let before = quantize_reject_total(QuantizeStaticRejectReason::MetadataMissing);
     let mut metrics = QuantizeMetrics::new();
     let result = quantize(10.0, 100.0, Side::Buy, &constraints, &mut metrics);
-    assert!(matches!(result, Err(QuantizeError::InstrumentMetadataMissing { .. })));
+    assert!(matches!(
+        result,
+        Err(QuantizeError::InstrumentMetadataMissing { .. })
+    ));
     let after = quantize_reject_total(QuantizeStaticRejectReason::MetadataMissing);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Post-Only Guard ────────────────────────────────────────────────────
@@ -204,7 +243,10 @@ fn test_post_only_cross_reject_counter() {
     let result = check_post_only(&input, &mut metrics);
     assert_eq!(result, PostOnlyResult::Rejected);
     let after = post_only_reject_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -221,7 +263,10 @@ fn test_post_only_nan_limit_fail_closed_reject_counter() {
     let result = check_post_only(&input, &mut metrics);
     assert_eq!(result, PostOnlyResult::Rejected);
     let after = post_only_reject_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -240,7 +285,10 @@ fn test_post_only_counter_monotonic() {
     check_post_only(&input, &mut metrics);
     let after = post_only_reject_total();
     assert!(mid > before, "first call should increment");
-    assert!(after > mid, "second call should increment further (monotonic)");
+    assert!(
+        after > mid,
+        "second call should increment further (monotonic)"
+    );
 }
 
 // ─── Group ──────────────────────────────────────────────────────────────
@@ -256,7 +304,10 @@ fn test_group_lock_timeout_reject_counter() {
     lock.try_acquire(); // hold the lock
     let _result = try_acquire_group_lock(&mut lock, &config);
     let after = group_lock_timeout_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -270,13 +321,16 @@ fn test_group_persist_fail_reject_counter() {
     let result = persist_before_dispatch(&group, &mut store);
     assert!(result.is_err());
     let after = group_persist_fail_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
 fn test_group_mixed_failed_reject_counter() {
-    use soldier_core::execution::{GroupStateTransition, LegResult};
     use soldier_core::execution::tlsm::TlsmState;
+    use soldier_core::execution::{GroupStateTransition, LegResult};
 
     let before = group_mixed_failed_total();
     let config = GroupConfig::default();
@@ -308,9 +362,15 @@ fn test_group_mixed_failed_reject_counter() {
         },
         &config,
     );
-    assert!(matches!(transition, GroupStateTransition::EnteredMixedFailed { .. }));
+    assert!(matches!(
+        transition,
+        GroupStateTransition::EnteredMixedFailed { .. }
+    ));
     let after = group_mixed_failed_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Fee Staleness ──────────────────────────────────────────────────────
@@ -327,7 +387,10 @@ fn test_fee_staleness_hard_stale_missing_ts_reject_counter() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     let after = fee_staleness_hard_stale_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -342,7 +405,10 @@ fn test_fee_staleness_hard_stale_expired_reject_counter() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     let after = fee_staleness_hard_stale_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -357,7 +423,10 @@ fn test_fee_staleness_nan_rate_fail_closed_reject_counter() {
     let result = evaluate_fee_staleness(&snapshot, &config);
     assert_eq!(result.staleness, FeeStaleness::HardStale);
     let after = fee_staleness_hard_stale_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Margin Gate ────────────────────────────────────────────────────────
@@ -376,7 +445,10 @@ fn test_margin_gate_invalid_input_reject_counter() {
     let result = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(matches!(result, MarginGateDecision::Rejected { .. }));
     let after = margin_gate_reject_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -393,7 +465,10 @@ fn test_margin_gate_over_threshold_reject_counter() {
     let result = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(matches!(result, MarginGateDecision::Rejected { .. }));
     let after = margin_gate_reject_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Pending Exposure ───────────────────────────────────────────────────
@@ -408,7 +483,10 @@ fn test_pending_exposure_unregistered_instrument_reject_counter() {
     let result = book.reserve(&rid, "UNKNOWN", 0.0, 1.0, &mut metrics);
     assert!(matches!(result, PendingExposureResult::Rejected { .. }));
     let after = pending_exposure_reject_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -422,7 +500,10 @@ fn test_pending_exposure_budget_exceeded_reject_counter() {
     let result = book.reserve(&rid, "BTC", 0.0, 100.0, &mut metrics);
     assert!(matches!(result, PendingExposureResult::Rejected { .. }));
     let after = pending_exposure_reject_total();
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 // ─── Exposure Budget ────────────────────────────────────────────────────
@@ -445,7 +526,10 @@ fn test_exposure_budget_missing_limit_reject_counter() {
     let result = evaluate_global_exposure_budget(&input, &mut metrics);
     assert!(matches!(result, ExposureBudgetResult::Rejected { .. }));
     let after = exposure_budget_reject_total(ExposureBudgetStaticRejectReason::LimitMissing);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -466,7 +550,10 @@ fn test_exposure_budget_over_limit_reject_counter() {
     let result = evaluate_global_exposure_budget(&input, &mut metrics);
     assert!(matches!(result, ExposureBudgetResult::Rejected { .. }));
     let after = exposure_budget_reject_total(ExposureBudgetStaticRejectReason::Reject);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }
 
 #[test]
@@ -487,5 +574,8 @@ fn test_exposure_budget_nan_input_fail_closed_reject_counter() {
     let result = evaluate_global_exposure_budget(&input, &mut metrics);
     assert!(matches!(result, ExposureBudgetResult::Rejected { .. }));
     let after = exposure_budget_reject_total(ExposureBudgetStaticRejectReason::Reject);
-    assert!(after > before, "counter should increment: before={before}, after={after}");
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 }

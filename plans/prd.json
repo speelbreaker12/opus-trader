@@ -74,7 +74,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-022"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -145,7 +147,9 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-022"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -418,7 +422,9 @@
       "partial_coverage_notes": {
         "AT-022": "Phase-0 implements CLI-only health/status payload scaffolding; HTTP transport endpoint enforcement is deferred to S8.9."
       },
-      "enforcing_contract_ats": [],
+      "enforcing_contract_ats": [
+        "AT-022"
+      ],
       "reason_codes": {
         "type": "ModeReasonCode",
         "values": [
@@ -695,7 +701,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_instrument_kind_mapping.rs"
+        "crates/soldier_core/tests/test_instrument_kind_mapping.rs::test_option_maps_to_option"
       ],
       "primary_owner_for": [
         "AT-333"
@@ -806,9 +812,9 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "RiskState::Degraded",
-        "RiskState::Healthy",
-        "crates/soldier_core/tests/test_instrument_cache_ttl.rs"
+        "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_risk_state_for_stale_returns_degraded",
+        "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_risk_state_for_fresh_returns_healthy",
+        "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_fresh_instrument_cache_returns_healthy"
       ],
       "primary_owner_for": [
         "AT-104"
@@ -911,7 +917,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_order_size.rs"
+        "crates/soldier_core/tests/test_order_size.rs::test_at277_option_sizing"
       ],
       "primary_owner_for": [
         "AT-277"
@@ -1006,7 +1012,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_dispatch_map.rs"
+        "crates/soldier_core/tests/test_dispatch_map.rs::test_option_amount_is_qty_coin"
       ],
       "loss_mode": {
         "worst_case": "wrong amount field mapping → exchange rejects or fills wrong qty → position mismatch",
@@ -1119,7 +1125,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_instrument_cache_ttl.rs"
+        "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_fresh_instrument_cache_returns_healthy"
       ],
       "loss_mode": {
         "worst_case": "TTL breach unlogged → stale cache used silently → degraded state undetected",
@@ -1218,9 +1224,9 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "RiskState::Degraded",
-        "crates/soldier_core/tests/test_dispatch_map.rs",
-        "crates/soldier_core/tests/test_order_size.rs"
+        "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_risk_state_for_stale_returns_degraded",
+        "crates/soldier_core/tests/test_dispatch_map.rs::test_option_amount_is_qty_coin",
+        "crates/soldier_core/tests/test_order_size.rs::test_at277_option_sizing"
       ],
       "primary_owner_for": [
         "AT-920"
@@ -1569,7 +1575,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_infra/tests/test_deribit_instrument.rs"
+        "crates/soldier_infra/tests/test_deribit_instrument.rs::test_btc_perpetual_deserializes"
       ],
       "loss_mode": {
         "worst_case": "Deribit instrument struct missing kind field → InstrumentKind derivation fails → intent rejected",
@@ -1772,7 +1778,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "plans/tests/test_pr_gate.sh"
+        "plans/tests/test_pr_gate.sh::PASS: pr_gate"
       ],
       "primary_owner_for": [
         "AT-1056",
@@ -1876,7 +1882,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_quantize.rs"
+        "crates/soldier_core/tests/test_quantize.rs::test_qty_rounds_down"
       ],
       "primary_owner_for": [
         "AT-020",
@@ -1979,7 +1985,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_idempotency.rs"
+        "crates/soldier_core/tests/test_idempotency.rs::test_at218_deterministic_hash"
       ],
       "primary_owner_for": [
         "AT-201",
@@ -2082,7 +2088,7 @@
         ]
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_label.rs"
+        "crates/soldier_core/tests/test_label.rs::test_at216_label_starts_with_s4"
       ],
       "primary_owner_for": [
         "AT-216",
@@ -2191,8 +2197,8 @@
         ]
       },
       "implementation_tests": [
-        "RiskState::Degraded",
-        "crates/soldier_core/tests/test_label_match.rs"
+        "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_risk_state_for_stale_returns_degraded",
+        "crates/soldier_core/tests/test_label_match.rs::test_single_candidate_matches"
       ],
       "loss_mode": {
         "worst_case": "label match ambiguity → wrong intent matched to fill → position attribution error",
@@ -2426,7 +2432,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_preflight.rs"
+        "crates/soldier_core/tests/test_preflight.rs::test_limit_order_option_allowed"
       ],
       "primary_owner_for": [
         "AT-004",
@@ -2526,7 +2532,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_post_only_guard.rs"
+        "crates/soldier_core/tests/test_post_only_guard.rs::test_at916_buy_crosses_at_ask_rejected"
       ],
       "loss_mode": {
         "worst_case": "post-only crossing undetected → immediate fill as taker → unexpected fees and slippage",
@@ -2623,7 +2629,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_capabilities.rs"
+        "crates/soldier_core/tests/test_capabilities.rs::test_venue_default_linked_orders_not_supported"
       ],
       "loss_mode": {
         "worst_case": "capabilities matrix wrong → linked/OCO order dispatched but unsupported → exchange error",
@@ -2734,7 +2740,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_infra/tests/test_ledger_replay.rs"
+        "crates/soldier_infra/tests/test_ledger_replay.rs::test_append_and_lookup"
       ],
       "primary_owner_for": [
         "AT-233",
@@ -2843,7 +2849,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_tlsm.rs"
+        "crates/soldier_core/tests/test_tlsm.rs::test_normal_lifecycle_created_to_filled"
       ],
       "loss_mode": {
         "worst_case": "TLSM out-of-order event causes panic → process crash → position state lost",
@@ -2940,7 +2946,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_infra/tests/test_trade_id_registry.rs"
+        "crates/soldier_infra/tests/test_trade_id_registry.rs::test_insert_new_trade_id"
       ],
       "loss_mode": {
         "worst_case": "trade-ID dedup fails → duplicate fill processed → position doubled",
@@ -3051,7 +3057,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_infra/tests/test_dispatch_durability.rs"
+        "crates/soldier_infra/tests/test_dispatch_durability.rs::test_barrier_disabled_returns_immediately"
       ],
       "partial_coverage_notes": {
         "AT-969": "GOP-only AT. Requires EvidenceGuard (enforced_profile != CSP). S4 scope is CSP profile only. Deferred to EvidenceGuard integration slice. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
@@ -3167,7 +3173,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_liquidity_gate.rs"
+        "crates/soldier_core/tests/test_liquidity_gate.rs::test_at222_slippage_exceeds_max_rejected"
       ],
       "loss_mode": {
         "worst_case": "slippage too high undetected → sweep fills at bad price → large adverse fill",
@@ -3291,8 +3297,8 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_fee_staleness.rs",
-        "crates/soldier_infra/tests/test_fee_cache.rs"
+        "crates/soldier_core/tests/test_fee_staleness.rs::test_at244_fresh_cache_uses_actual_rate",
+        "crates/soldier_infra/tests/test_fee_cache.rs::test_at031_staleness_survives_restart"
       ],
       "loss_mode": {
         "worst_case": "fee cache stale undetected → fee estimate too low → net edge negative on fill",
@@ -3404,7 +3410,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_net_edge_gate.rs"
+        "crates/soldier_core/tests/test_net_edge_gate.rs::test_at015_net_edge_below_min_rejected"
       ],
       "primary_owner_for": [
         "AT-015"
@@ -3502,7 +3508,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_pricer.rs"
+        "crates/soldier_core/tests/test_pricer.rs::test_at223_buy_limit_clamped_to_min_edge"
       ],
       "loss_mode": {
         "worst_case": "IOC limit price not clamped → limit crosses fair → taker fill at bad price",
@@ -3602,7 +3608,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_gate_ordering.rs"
+        "crates/soldier_core/tests/test_gate_ordering.rs::test_at501_open_all_gates_pass_trace_order"
       ],
       "loss_mode": {
         "worst_case": "gate ordering wrong → dispatch before all checks → safety gate bypassed",
@@ -3684,7 +3690,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_dispatch_chokepoint.rs"
+        "crates/soldier_core/tests/test_dispatch_chokepoint.rs::test_dispatch_chokepoint_no_bypass_approved"
       ],
       "partial_coverage_notes": {
         "AT-925": "partial: architectural chokepoint proof (exchange client visibility restriction). PolicyGuard ReduceOnly forcing under WAL backpressure deferred to S8.1c. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
@@ -3767,7 +3773,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_intent_determinism.rs"
+        "crates/soldier_core/tests/test_intent_determinism.rs::test_quantize_same_inputs_same_output"
       ],
       "loss_mode": {
         "worst_case": "intent hash non-deterministic → WAL replay dispatches duplicate → double position",
@@ -3848,7 +3854,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_rejection_side_effects.rs"
+        "crates/soldier_core/tests/test_rejection_side_effects.rs::test_rejected_intent_has_no_side_effects"
       ],
       "loss_mode": {
         "worst_case": "partial side effects on rejection → ledger corrupted → position tracking wrong",
@@ -3931,7 +3937,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_intent_id_propagation.rs"
+        "crates/soldier_core/tests/test_intent_id_propagation.rs::test_intent_id_propagates_through_approved_pipeline"
       ],
       "primary_owner_for": [
         "AT-902"
@@ -4013,7 +4019,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_gate_ordering.rs"
+        "crates/soldier_core/tests/test_gate_ordering.rs::test_at501_open_all_gates_pass_trace_order"
       ],
       "primary_owner_for": [
         "AT-010"
@@ -4097,7 +4103,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_missing_config.rs"
+        "crates/soldier_core/tests/test_missing_config.rs::test_missing_tick_size_fails_closed"
       ],
       "loss_mode": {
         "worst_case": "missing config defaults to Active → trading in unsafe state → unguarded opens",
@@ -4180,7 +4186,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_infra/tests/test_crash_mid_intent.rs"
+        "crates/soldier_infra/tests/test_crash_mid_intent.rs::test_intent"
       ],
       "loss_mode": {
         "worst_case": "crash mid-intent → restart dispatches duplicate → double position",
@@ -4852,8 +4858,8 @@
         ]
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_atomic_group.rs::test_atomic_group_mixed_failed_then_flattened",
-        "crates/soldier_core/tests/test_atomic_group.rs::test_mixed_failed_blocks_opens_until_neutral"
+        "crates/soldier_core/tests/test_atomic_group.rs::at_116_leg_a_filled_leg_b_rejected_mixed_failed_and_containment",
+        "crates/soldier_core/tests/test_atomic_group.rs::at_116_leg_a_filled_leg_b_rejected_mixed_failed_and_containment"
       ],
       "loss_mode": {
         "worst_case": "group state machine wrong → incomplete group marked complete → unhedged leg exposure",
@@ -14158,6 +14164,494 @@
         "worst_case": "AT profile tagging missing → GOP test failure doesn't disable feature → broken feature in production",
         "fail_closed_cap": "EvidenceGuard disables GOP feature on test failure; profile tagging enforced",
         "drift_metric": ""
+      }
+    },
+    {
+      "id": "S14-003",
+      "priority": 190,
+      "phase": 4,
+      "slice": 14,
+      "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
+      "story_ref": "S14.3 — verify_full timeout policy in recon runbook",
+      "category": "policy",
+      "description": "Codify the verify_full timeout policy in the reconciliation runbook so full verify runs are invoked with explicit timeout guardrails and avoid silent 900s defaults.",
+      "contract_refs": [
+        "specs/WORKFLOW_CONTRACT.md (Fail-closed default)",
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 verify_full"
+      ],
+      "plan_refs": [
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #1"
+      ],
+      "scope": {
+        "touch": [
+          "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md",
+          "plans/tests/test_verify_timeout_policy.sh"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/**"
+        ]
+      },
+      "scope_note": "Owner: Workflow/Harness maintainers",
+      "acceptance": [
+        "GIVEN verify_full runbook guidance is consulted WHEN reconciliation operator executes full verify THEN command includes explicit PREFLIGHT_TIMEOUT=1200 before ./plans/verify.sh full.",
+        "GIVEN runbook examples are reviewed WHEN verify_full steps are copied THEN timeout setting is shown in deterministic command form, not prose-only guidance.",
+        "GIVEN timeout policy fixture tests run WHEN workflow checks execute THEN timeout policy checks pass and fail-closed on regression."
+      ],
+      "steps": [
+        "Update RUNBOOK_PREMORTEM_RECON verify_full section to include explicit PREFLIGHT_TIMEOUT=1200 invocation.",
+        "Add or adjust timeout-policy fixture assertions to match the runbook command contract.",
+        "Verify no conflicting verify_full examples remain in reconciliation docs.",
+        "Run targeted timeout-policy fixture tests.",
+        "Run verify quick/full per workflow expectations and archive artifacts.",
+        "Record reconciliation debt item linkage in handoff/process backlog references."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "bash plans/tests/test_verify_timeout_policy.sh"
+      ],
+      "evidence": [
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md updated verify_full command line",
+        "plans/tests/test_verify_timeout_policy.sh output"
+      ],
+      "dependencies": [],
+      "est_size": "XS",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [
+        {
+          "quote": "If a required script/artifact is missing or invalid, the workflow must produce a deterministic BLOCKED outcome.",
+          "location": "specs/WORKFLOW_CONTRACT.md",
+          "anchor": "WF-VERIFY-RULE"
+        }
+      ],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "VERIFY_TIMEOUT_POLICY_MISSING"
+        ]
+      },
+      "enforcement_point": "EvidenceGuard",
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
+      "observability": {
+        "metrics": [
+          {
+            "name": "recon_verify_timeout_policy_check_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "result"
+            ]
+          }
+        ],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/tests/test_verify_timeout_policy.sh"
+      ],
+      "primary_owner_for": [
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md"
+      ],
+      "loss_mode": {
+        "worst_case": "verify_full silently times out and reconciliation is incorrectly treated as complete",
+        "fail_closed_cap": "Explicit timeout policy blocks ambiguous verify outcomes",
+        "drift_metric": "verify_full timeout-policy fixture pass rate"
+      }
+    },
+    {
+      "id": "S14-004",
+      "priority": 191,
+      "phase": 4,
+      "slice": 14,
+      "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
+      "story_ref": "S14.4 — cycle1 sidecar validation in review logger path",
+      "category": "policy",
+      "description": "Harden cycle1 review logging by validating sidecar JSON deterministically before cycle1 receipt success is allowed.",
+      "contract_refs": [
+        "specs/WORKFLOW_CONTRACT.md (Fail-closed default)",
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 cycle1"
+      ],
+      "plan_refs": [
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #2"
+      ],
+      "scope": {
+        "touch": [
+          "plans/review_logged.sh",
+          "plans/tests/test_review_logged_proof_graph.sh",
+          "plans/wf_step.sh"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/**"
+        ]
+      },
+      "scope_note": "Owner: Workflow/Harness maintainers",
+      "acceptance": [
+        "GIVEN review_logged writes a sidecar WHEN sidecar schema validation fails THEN cycle1 path fails closed with deterministic diagnostics.",
+        "GIVEN review_logged succeeds WHEN cycle1 receipt is written THEN sidecar schema validity is proven by validator output.",
+        "GIVEN malformed sidecar input is introduced in fixtures WHEN tests run THEN failure is detected before receipt progression."
+      ],
+      "steps": [
+        "Add deterministic sidecar validation invocation in review_logged exit path.",
+        "Ensure cycle1 gate consumes sidecar validation outcome and blocks on invalid artifacts.",
+        "Extend or add fixture coverage for malformed sidecar scenarios.",
+        "Run targeted review-logging fixture tests.",
+        "Run verify quick/full and capture artifact-backed proof."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "bash plans/tests/test_review_logged_proof_graph.sh"
+      ],
+      "evidence": [
+        "plans/review_logged.sh sidecar validation path",
+        "plans/tests/test_review_logged_proof_graph.sh output"
+      ],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "med",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [
+        {
+          "quote": "Fail-closed default for missing/invalid workflow artifacts.",
+          "location": "specs/WORKFLOW_CONTRACT.md",
+          "anchor": "FAIL-CLOSED-WORKFLOW"
+        }
+      ],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "REVIEW_SIDECAR_INVALID"
+        ]
+      },
+      "enforcement_point": "EvidenceGuard",
+      "failure_mode": [
+        "parse_error",
+        "missing"
+      ],
+      "observability": {
+        "metrics": [
+          {
+            "name": "review_sidecar_validation_fail_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "stage"
+            ]
+          }
+        ],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/tests/test_review_logged_proof_graph.sh"
+      ],
+      "primary_owner_for": [
+        "plans/review_logged.sh"
+      ],
+      "loss_mode": {
+        "worst_case": "invalid review sidecar passes cycle1 and contaminates reconciliation evidence",
+        "fail_closed_cap": "sidecar validator blocks cycle1 receipt path on invalid artifacts",
+        "drift_metric": "cycle1 sidecar validation failures detected before receipt write"
+      }
+    },
+    {
+      "id": "S14-005",
+      "priority": 192,
+      "phase": 4,
+      "slice": 14,
+      "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
+      "story_ref": "S14.5 — R5b per-finding closure enforcement",
+      "category": "policy",
+      "description": "Require per-finding closure entries in R5b self-review gate artifacts so UNPROVEN decisions cannot persist without explicit closure accounting.",
+      "contract_refs": [
+        "specs/WORKFLOW_CONTRACT.md (Manual story discipline)",
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 R5b"
+      ],
+      "plan_refs": [
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #3"
+      ],
+      "scope": {
+        "touch": [
+          "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md",
+          "reviews/premortems/PREMORTEM_RECON_POLICY.md",
+          "plans/validate_recon_artifact.sh"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/**"
+        ]
+      },
+      "scope_note": "Owner: Reconciliation process maintainer",
+      "acceptance": [
+        "GIVEN an R5b gate artifact is produced WHEN findings are present THEN each finding has a closure record with deterministic status and reference.",
+        "GIVEN any finding lacks closure metadata WHEN gate artifact validation runs THEN validation fails closed.",
+        "GIVEN all findings include closure records WHEN R5b gate validates THEN artifact passes schema and policy checks."
+      ],
+      "steps": [
+        "Define required per-finding closure fields in reconciliation policy/runbook guidance.",
+        "Extend reconciliation artifact validation to fail on missing closure entries.",
+        "Add a worked example in runbook for valid R5b closure mapping.",
+        "Add fixture coverage for missing per-finding closure rows.",
+        "Run targeted validation checks and full verify."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "bash plans/tests/test_prd_set_pass.sh"
+      ],
+      "evidence": [
+        "RUNBOOK/POLICY updates for R5b closure mapping",
+        "validation output proving fail-closed behavior on missing closure"
+      ],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "med",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [
+        {
+          "quote": "No DEFERRED without validated debt entry; fail-closed on ambiguous reconciliation evidence.",
+          "location": "reviews/premortems/PREMORTEM_RECON_POLICY.md",
+          "anchor": "R5B_SELF_REVIEW_PROVEN"
+        }
+      ],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "R5B_CLOSURE_MISSING"
+        ]
+      },
+      "enforcement_point": "EvidenceGuard",
+      "failure_mode": [
+        "missing",
+        "parse_error"
+      ],
+      "observability": {
+        "metrics": [
+          {
+            "name": "r5b_closure_missing_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "severity"
+            ]
+          }
+        ],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/tests/test_prd_set_pass.sh"
+      ],
+      "primary_owner_for": [
+        "reviews/premortems/PREMORTEM_RECON_POLICY.md"
+      ],
+      "loss_mode": {
+        "worst_case": "unclosed high-severity findings are treated as reconciled and pass slips through",
+        "fail_closed_cap": "R5b validator blocks artifacts with missing closure mappings",
+        "drift_metric": "R5b closure completeness ratio"
+      }
+    },
+    {
+      "id": "S14-006",
+      "priority": 193,
+      "phase": 4,
+      "slice": 14,
+      "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
+      "story_ref": "S14.6 — mechanical verification callsite scope guard",
+      "category": "policy",
+      "description": "Restrict mechanical callsite enforcement checks to production source paths so test-only symbols do not trigger false blockers during full verify.",
+      "contract_refs": [
+        "specs/WORKFLOW_CONTRACT.md (Verification satisfaction + fail-closed)",
+        "plans/verify_fork.sh mechanical_verification gate"
+      ],
+      "plan_refs": [
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #4"
+      ],
+      "scope": {
+        "touch": [
+          "plans/verify_mechanical.sh",
+          "plans/tests/test_workflow_allowlist_coverage.sh"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/**"
+        ]
+      },
+      "scope_note": "Owner: Workflow/Harness maintainers",
+      "acceptance": [
+        "GIVEN enforcement callsite checks run WHEN only tests contain a symbol THEN mechanical verification does not report a production-callsite false failure.",
+        "GIVEN production callsites are truly absent WHEN mechanical verification runs THEN gate fails with deterministic diagnostics.",
+        "GIVEN source scoping is configured WHEN full verify runs THEN mechanical gate behavior is stable across clean and dirty worktrees."
+      ],
+      "steps": [
+        "Scope enforcement callsite search in verify_mechanical to production source paths.",
+        "Preserve fail-closed behavior for genuinely missing production callsites.",
+        "Add or adjust fixture assertions for src-only scope behavior.",
+        "Run mechanical verification directly and via full verify.",
+        "Document the scope rule in harness comments/tests."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "bash plans/verify_mechanical.sh"
+      ],
+      "evidence": [
+        "plans/verify_mechanical.sh src-only callsite check logic",
+        "artifacts/verify/*/mechanical_verification.log from passing full verify"
+      ],
+      "dependencies": [],
+      "est_size": "XS",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [
+        {
+          "quote": "Verification must be deterministic and artifact-backed.",
+          "location": "specs/WORKFLOW_CONTRACT.md",
+          "anchor": "WF-VERIFY-RULE"
+        }
+      ],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "MECHANICAL_SCOPE_MISCONFIGURED"
+        ]
+      },
+      "enforcement_point": "EvidenceGuard",
+      "failure_mode": [
+        "missing",
+        "stale"
+      ],
+      "observability": {
+        "metrics": [
+          {
+            "name": "mechanical_callsite_scope_fail_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "check"
+            ]
+          }
+        ],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/verify_mechanical.sh"
+      ],
+      "primary_owner_for": [
+        "plans/verify_mechanical.sh"
+      ],
+      "loss_mode": {
+        "worst_case": "false mechanical failures block reconciliation throughput and induce unsafe gate bypass pressure",
+        "fail_closed_cap": "src-only scope removes false positives while preserving real blockers",
+        "drift_metric": "mechanical false-positive incidence"
+      }
+    },
+    {
+      "id": "S14-007",
+      "priority": 194,
+      "phase": 4,
+      "slice": 14,
+      "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
+      "story_ref": "S14.7 — cycle1 receipt emits deterministic next-step prompt",
+      "category": "policy",
+      "description": "Emit an explicit next-step prompt after cycle1 receipt write so operators do not stall between cycle1 and fix in reconciliation loops.",
+      "contract_refs": [
+        "specs/WORKFLOW_CONTRACT.md (Manual story discipline)",
+        "plans/wf_step.sh cycle1 step contract"
+      ],
+      "plan_refs": [
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #5"
+      ],
+      "scope": {
+        "touch": [
+          "plans/wf_step.sh",
+          "plans/tests/test_wf_step.sh"
+        ],
+        "create": [],
+        "avoid": [
+          "crates/**"
+        ]
+      },
+      "scope_note": "Owner: Workflow/Harness maintainers",
+      "acceptance": [
+        "GIVEN cycle1 completes WHEN wf_step writes 03_cycle1.json THEN output includes deterministic prompt to run fix next.",
+        "GIVEN cycle1 is rerun in recon mode WHEN receipt is written THEN the next-step prompt remains present and unambiguous.",
+        "GIVEN wf_step fixture tests run WHEN cycle1 branch is exercised THEN prompt expectation is validated."
+      ],
+      "steps": [
+        "Add deterministic next-step message emission in wf_step cycle1 completion path.",
+        "Ensure message is emitted in both normal and recon flows.",
+        "Add/adjust wf_step fixture assertions for cycle1 prompt text.",
+        "Run wf_step fixture tests.",
+        "Run verify quick/full to ensure harness regressions are not introduced."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "bash plans/tests/test_wf_step.sh"
+      ],
+      "evidence": [
+        "plans/wf_step.sh cycle1 completion message",
+        "plans/tests/test_wf_step.sh output"
+      ],
+      "dependencies": [],
+      "est_size": "XS",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [
+        {
+          "quote": "Manual story loop must proceed step-by-step with deterministic gates and diagnostics.",
+          "location": "specs/WORKFLOW_CONTRACT.md",
+          "anchor": "MANUAL-STORY-DISCIPLINE"
+        }
+      ],
+      "enforcing_contract_ats": [],
+      "reason_codes": {
+        "type": "RejectReason",
+        "values": [
+          "NEXT_STEP_PROMPT_MISSING"
+        ]
+      },
+      "enforcement_point": "EvidenceGuard",
+      "failure_mode": [
+        "stale",
+        "missing"
+      ],
+      "observability": {
+        "metrics": [
+          {
+            "name": "wf_step_cycle1_prompt_emit_total",
+            "type": "counter",
+            "unit": "count",
+            "labels": [
+              "mode"
+            ]
+          }
+        ],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/tests/test_wf_step.sh"
+      ],
+      "primary_owner_for": [
+        "plans/wf_step.sh"
+      ],
+      "loss_mode": {
+        "worst_case": "operators stop after cycle1 and unresolved findings persist while story appears active",
+        "fail_closed_cap": "cycle1 completion message drives deterministic transition to fix step",
+        "drift_metric": "stories stalled after cycle1 without fix receipt"
       }
     }
   ]

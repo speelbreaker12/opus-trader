@@ -416,6 +416,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 ### Resume command
 
 ```bash
-STEP_SUPERVISOR_BASE_BRANCH={{BASE_BRANCH}} \
-  plans/step_supervisor.sh {{STORY_ID}} prompt --recon
+/reconcil
+# Optional mechanical status check:
+plans/wf_step.sh {{STORY_ID}} --status
 ```

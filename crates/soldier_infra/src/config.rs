@@ -542,15 +542,26 @@ pub struct RawThresholdConfig {
 /// Each parameter is resolved via `resolve_config_value`, which applies the
 /// Appendix A default when the raw value is `None` and rejects non-finite or
 /// out-of-range values. Returns the first error encountered (fail-closed).
-pub fn build_gate_config_from_raw(raw: &RawThresholdConfig) -> Result<GateConfig, MissingConfigError> {
+pub fn build_gate_config_from_raw(
+    raw: &RawThresholdConfig,
+) -> Result<GateConfig, MissingConfigError> {
     Ok(GateConfig {
         fee_cache_soft_s: resolve_config_value(ConfigParam::FeeCacheSoftS, raw.fee_cache_soft_s)?,
         fee_cache_hard_s: resolve_config_value(ConfigParam::FeeCacheHardS, raw.fee_cache_hard_s)?,
         fee_stale_buffer: resolve_config_value(ConfigParam::FeeStaleBuffer, raw.fee_stale_buffer)?,
-        instrument_cache_ttl_s: resolve_config_value(ConfigParam::InstrumentCacheTtlS, raw.instrument_cache_ttl_s)?,
-        l2_book_snapshot_max_age_ms: resolve_config_value(ConfigParam::L2BookSnapshotMaxAgeMs, raw.l2_book_snapshot_max_age_ms)?,
+        instrument_cache_ttl_s: resolve_config_value(
+            ConfigParam::InstrumentCacheTtlS,
+            raw.instrument_cache_ttl_s,
+        )?,
+        l2_book_snapshot_max_age_ms: resolve_config_value(
+            ConfigParam::L2BookSnapshotMaxAgeMs,
+            raw.l2_book_snapshot_max_age_ms,
+        )?,
         max_slippage_bps: resolve_config_value(ConfigParam::MaxSlippageBps, raw.max_slippage_bps)?,
-        contracts_amount_match_tolerance: resolve_config_value(ConfigParam::ContractsAmountMatchTolerance, raw.contracts_amount_match_tolerance)?,
+        contracts_amount_match_tolerance: resolve_config_value(
+            ConfigParam::ContractsAmountMatchTolerance,
+            raw.contracts_amount_match_tolerance,
+        )?,
     })
 }
 
@@ -563,7 +574,10 @@ mod tests {
     #[test]
     fn test_missing_non_appendix_a_param_fails_closed() {
         let result = resolve_config_value(ConfigParam::SyntheticNoDefault, None);
-        assert!(result.is_err(), "no-default param with None must fail-closed");
+        assert!(
+            result.is_err(),
+            "no-default param with None must fail-closed"
+        );
         let err = result.unwrap_err();
         assert!(
             err.param_name.contains("synthetic_no_default"),
@@ -576,7 +590,10 @@ mod tests {
             err.reason
         );
         let msg = format!("{err}");
-        assert!(msg.contains("fail-closed"), "Display must state fail-closed, got: {msg}");
+        assert!(
+            msg.contains("fail-closed"),
+            "Display must state fail-closed, got: {msg}"
+        );
     }
 
     #[test]

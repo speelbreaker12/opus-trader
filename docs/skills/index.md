@@ -51,7 +51,6 @@ Validation command:
 | `/slice-execute` | `SKILLS/slice-execute.md` | Per-story implementation protocol. |
 | `spec-lint-checklist` | `SKILLS/spec_lint_checklist/SKILL.md` | Checklist for `specs/CONTRACT.md` patches. |
 | `spec-lint-implementation-plan` | `SKILLS/spec-lint-implementation-plan/SKILL.md` | Validate `IMPLEMENTATION_PLAN.md` against safety contracts. |
-| `/step-supervisor` | `SKILLS/step-supervisor.md` | One-step-at-a-time workflow driver. |
 | `/strategic-failure-review` | `SKILLS/strategic-failure-review.md` | Systemic/architectural risk review. |
 | `/validator-audit` | `SKILLS/validator-audit.md` | Validator completeness and gap audit. |
 | `/verify` | `SKILLS/verify.md` | Verification run and failure explanation workflow. |

@@ -81,7 +81,7 @@ out=$({
   python3 "$validator" \
     --artifact "$artifact" \
     --expect-cycle "$mode" \
-    --fmt json \
+    --format json \
     --require-preexisting-citations \
     --strict
 } 2>&1)

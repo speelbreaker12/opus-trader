@@ -337,20 +337,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Status: COMPLETE
 - Evidence ledger: `reviews/reconciliations/S0/S0-005_reconciliation.md`
 - Gate: `GO (after heading + yellow-gap disposition fixes)`
-- Receipt: `.wf/receipts/S0-005/00_preflight.json` (written 2026-02-26T00:04:21Z)
+- Receipt: `.wf/receipts/S0-005/00_preflight.json`
 
 #### Step 2 · implement
 
 - Reference: RUNBOOK §3 → R5
 - Status: COMPLETE
-- Receipt: `.wf/receipts/S0-005/01_implement.json` (written 2026-02-26T00:10:23Z)
+- Receipt: `.wf/receipts/S0-005/01_implement.json`
 
 #### Step 3 · self_review
 
 - Reference: RUNBOOK §3 → R5b
 - Status: COMPLETE
-- Artifact: `artifacts/story/S0-005/self_review/SELF_REVIEW_R5b.md`
-- Receipt: `.wf/receipts/S0-005/02_self_review.json` (written 2026-02-26T00:13:13Z)
+- Artifact: `artifacts/story/S0-005/self_review/20260217T222456Z_self_review.md`
+- Receipt: `.wf/receipts/S0-005/02_self_review.json`
 - R5b artifacts completed:
   - `reviews/reconciliations/S0/receipts/r5b_*.json` (6 files)
   - `reviews/reconciliations/S0/R5B_FIX_PLAN.md`
@@ -365,20 +365,20 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Artifacts:
   - `artifacts/story/S0-005/S0-005_reconciliation.md`
   - `artifacts/story/S0-005/codex/20260226_cycle1_review.md`
-- Receipt: `.wf/receipts/S0-005/03_cycle1.json` (written 2026-02-26T00:13:26Z)
+- Receipt: `.wf/receipts/S0-005/03_cycle1.json`
 
 #### Step 5 · fix
 
 - Reference: RUNBOOK §3 → R7a/R7b/R7c
 - Status: COMPLETE
-- Receipt: `.wf/receipts/S0-005/04_fix.json` (written 2026-02-26T00:13:38Z)
+- Receipt: `.wf/receipts/S0-005/04_fix.json`
 - Notes: `cycle1` had zero findings; fix passed with no code changes (`code_changed=false` path).
 
 #### Step 6 · cycle2
 
 - Reference: RUNBOOK §3 → R7d/R7e/R7f
 - Status: COMPLETE
-- Receipt: `.wf/receipts/S0-005/05_cycle2.json` (written 2026-02-26T00:28:21Z)
+- Receipt: `.wf/receipts/S0-005/05_cycle2.json`
 - Mode: recon clean abbreviated path (`min_reviews=1`) after zero-findings fix path.
 
 #### Step 7 · resolution
@@ -386,14 +386,14 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Reference: RUNBOOK §3 → R6
 - Status: COMPLETE
 - Artifact: `artifacts/story/S0-005/review_resolution.md`
-- Receipt: `.wf/receipts/S0-005/06_resolution.json` (written 2026-02-26T00:29:20Z)
+- Receipt: `.wf/receipts/S0-005/06_resolution.json`
 
 #### Step 8 · verify_full
 
 - Reference: RUNBOOK §3 → verify_full
 - Status: COMPLETE
-- Receipt: `.wf/receipts/S0-005/07_verify_full.json` (written 2026-02-26T00:29:42Z)
-- Evidence: `artifacts/verify/20260225_174031/verify.meta.json` (mode=full, head matches current receipt chain head).
+- Receipt: `.wf/receipts/S0-005/07_verify_full.json`
+- Evidence: `artifacts/verify/20260225_205154/verify.meta.json` (mode=full, head matches current receipt chain head).
 
 #### Step 9 · pass
 
@@ -409,11 +409,11 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 | # | Step | §8 rule (condensed) | Severity | Fix target | §11 status |
 |---|------|---------------------|----------|-----------|-----------|
-| 1 | verify_full | `rule: always set PREFLIGHT_TIMEOUT=1200 · trigger: before ./plans/verify.sh full · prevents: false timeout block at 900s default · enforce: add env var to RUNBOOK §3 verify_full reference line` | P1 | RUNBOOK §3 verify_full | open |
-| 2 | cycle1 | `rule: validate sidecar JSON before writing receipt · trigger: after review_logged.sh exits · prevents: parse failures from logger preamble text · enforce: add validator call to review_logged.sh exit path` | P1 | tooling (`plans/review_logged.sh`) | open |
-| 3 | self_review | `rule: gate JSON must have per-finding closure entry · trigger: R5b.2 planner writes gate JSON · prevents: UNPROVEN gate after all P1s addressed · enforce: add worked example + schema validation to RUNBOOK §3 R5b` | P1 | RUNBOOK §3 R5b | open |
-| 4 | verify_full | `rule: scope mechanical callsite check to src/ only · trigger: verify.sh full mechanical gate · prevents: false failure from test/ files · enforce: patch verify.sh search scope` | P1 | tooling (`plans/verify.sh`) | open |
-| 5 | cycle1 | `rule: emit "next step: run fix" at end of cycle1 receipt write · trigger: wf_step.sh writes 03_cycle1.json · prevents: stalled stories with cycle1 ✓ but fix · not started · enforce: add prompt to wf_step.sh cycle1 completion message` | P2 | RUNBOOK §3 R2 / tooling | open |
+| 1 | verify_full | `rule: always set PREFLIGHT_TIMEOUT=1200 · trigger: before ./plans/verify.sh full · prevents: false timeout block at 900s default · enforce: add env var to RUNBOOK §3 verify_full reference line` | P1 | RUNBOOK §3 verify_full | tracked: `S14-003` |
+| 2 | cycle1 | `rule: validate sidecar JSON before writing receipt · trigger: after review_logged.sh exits · prevents: parse failures from logger preamble text · enforce: add validator call to review_logged.sh exit path` | P1 | tooling (`plans/review_logged.sh`) | tracked: `S14-004` |
+| 3 | self_review | `rule: gate JSON must have per-finding closure entry · trigger: R5b.2 planner writes gate JSON · prevents: UNPROVEN gate after all P1s addressed · enforce: add worked example + schema validation to RUNBOOK §3 R5b` | P1 | RUNBOOK §3 R5b | tracked: `S14-005` |
+| 4 | verify_full | `rule: scope mechanical callsite check to src/ only · trigger: verify.sh full mechanical gate · prevents: false failure from test/ files · enforce: patch verify.sh search scope` | P1 | tooling (`plans/verify.sh`) | tracked: `S14-006` |
+| 5 | cycle1 | `rule: emit "next step: run fix" at end of cycle1 receipt write · trigger: wf_step.sh writes 03_cycle1.json · prevents: stalled stories with cycle1 ✓ but fix · not started · enforce: add prompt to wf_step.sh cycle1 completion message` | P2 | RUNBOOK §3 R2 / tooling | tracked: `S14-007` |
 
 ---
 
@@ -423,22 +423,23 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 - Story: `S0` (slice-level)
 - Step: `reconciliation completion`
-- Status: `all in-scope stories S0-000..S0-005 completed through wf_step pass + prd_set_pass`
-- HEAD at stop: `650a09a`
+- Status: `all in-scope stories S0-000..S0-005 completed through resolution → verify_full → pass → prd_set_pass on repaired receipt chains`
+- HEAD at stop: `9b56c67`
 
 ### What happened (2–5 bullets)
 
-- Used parallel workers to scaffold required story artifacts for S0-000..S0-004 while preserving ownership boundaries.
-- Remediated premortem gate blockers in S0-000/S0-001/S0-002/S0-004 (exact heading text, `AT-` acceptance-line format, placeholder removal, and YELLOW disposition markers).
-- Ran runbook steps directly via `wf_step` (no `step_supervisor`) for S0-000..S0-004, and validated `pass` for all S0 stories including S0-005.
-- Executed `plans/prd_set_pass.sh <story> true` for all six S0 stories; all completed successfully at current HEAD.
-- Appended a live per-step trace in this handoff after each step execution.
+- Executed `./plans/verify.sh full` to green at `artifacts/verify/20260225_205154` on HEAD `9b56c67`.
+- Replayed `wf_step verify_full` and `wf_step pass` for S0-000..S0-005 after receipt-chain repair reset.
+- Resolved pass-gate blockers encountered during rerun (`test_story_review_gate` missing harness script, liquidity-gate flaky assertion under parallel tests, S0-004 AT metadata gap).
+- Re-ran `plans/prd_set_pass.sh <story> true` for all six S0 stories with the green verify artifact and contract review evidence.
+- Converted open S0 process-improvement backlog items into explicit PRD stories `S14-003..S14-007` with owner notes, acceptance criteria, and targeted verify commands.
+- Appended live trace entries after every executed reconciliation step in this session.
 
 ### Must read first (in order)
 
-1. `.wf/receipts/S0-000..S0-005/` — full receipt chains (00..07) with `wf_step pass` validation.
+1. `.wf/receipts/S0-000..S0-005/` — full repaired receipt chains (00..07) with `wf_step pass` validation.
 2. `reviews/reconciliations/S0/HANDOFF.md` — live trace and final slice state.
-3. `artifacts/verify/20260225_174031/` — verify run + `contract_review.json` used by `prd_set_pass`.
+3. `artifacts/verify/20260225_205154/` — green full verify run + `contract_review.json` used by `prd_set_pass`.
 
 ### Next steps (exact actions)
 
@@ -515,3 +516,69 @@ WF_RECON_MODE=1 \
 - 2026-02-26T00:53:00Z S0 promotion verification COMPLETE (premortem_gate + premortem_ready revalidated on main)
 - 2026-02-26T00:55:19Z S0 promotion push COMPLETE (origin/main advanced to 075aa4f)
 - 2026-02-26T00:58:24Z S0 CI verify watch COMPLETE (run 22423012044 verify job success on commit 11627f1)
+- 2026-02-26T02:13:52Z S0-000 receipts RESET (reconciliation repair run)
+- 2026-02-26T02:14:06Z S0-000 preflight COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:07Z S0-000 implement COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:09Z S0-000 self_review COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:12Z S0-000 cycle1 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:14Z S0-000 fix COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:16Z S0-000 cycle2 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:18Z S0-000 resolution COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:19Z S0-001 receipts RESET (reconciliation repair run)
+- 2026-02-26T02:14:33Z S0-001 preflight COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:34Z S0-001 implement COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:36Z S0-001 self_review COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:40Z S0-001 cycle1 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:42Z S0-001 fix COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:44Z S0-001 cycle2 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:46Z S0-001 resolution COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:14:47Z S0-002 receipts RESET (reconciliation repair run)
+- 2026-02-26T02:15:03Z S0-002 preflight COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:04Z S0-002 implement COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:06Z S0-002 self_review COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:09Z S0-002 cycle1 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:12Z S0-002 fix COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:14Z S0-002 cycle2 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:16Z S0-002 resolution COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:17Z S0-003 receipts RESET (reconciliation repair run)
+- 2026-02-26T02:15:30Z S0-003 preflight COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:32Z S0-003 implement COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:33Z S0-003 self_review COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:37Z S0-003 cycle1 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:39Z S0-003 fix COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:41Z S0-003 cycle2 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:43Z S0-003 resolution COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:15:44Z S0-004 receipts RESET (reconciliation repair run)
+- 2026-02-26T02:16:03Z S0-004 preflight COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:04Z S0-004 implement COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:06Z S0-004 self_review COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:09Z S0-004 cycle1 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:11Z S0-004 fix COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:13Z S0-004 cycle2 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:15Z S0-004 resolution COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:16Z S0-005 receipts RESET (reconciliation repair run)
+- 2026-02-26T02:16:29Z S0-005 preflight COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:30Z S0-005 implement COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:32Z S0-005 self_review COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:35Z S0-005 cycle1 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:37Z S0-005 fix COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:39Z S0-005 cycle2 COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T02:16:41Z S0-005 resolution COMPLETE (wf_step direct, recon mode)
+- 2026-02-26T03:00:14Z S0-000 verify_full COMPLETE (wf_step direct, recon mode; verify run 20260225_205154)
+- 2026-02-26T03:00:16Z S0-000 pass COMPLETE (wf_step chain validation; all 8 prerequisite receipts present)
+- 2026-02-26T03:00:18Z S0-001 verify_full COMPLETE (wf_step direct, recon mode; verify run 20260225_205154)
+- 2026-02-26T03:00:20Z S0-001 pass COMPLETE (wf_step chain validation; all 8 prerequisite receipts present)
+- 2026-02-26T03:00:22Z S0-002 verify_full COMPLETE (wf_step direct, recon mode; verify run 20260225_205154)
+- 2026-02-26T03:00:23Z S0-002 pass COMPLETE (wf_step chain validation; all 8 prerequisite receipts present)
+- 2026-02-26T03:00:25Z S0-003 verify_full COMPLETE (wf_step direct, recon mode; verify run 20260225_205154)
+- 2026-02-26T03:00:27Z S0-003 pass COMPLETE (wf_step chain validation; all 8 prerequisite receipts present)
+- 2026-02-26T03:00:29Z S0-004 verify_full COMPLETE (wf_step direct, recon mode; verify run 20260225_205154)
+- 2026-02-26T03:00:30Z S0-004 pass COMPLETE (wf_step chain validation; all 8 prerequisite receipts present)
+- 2026-02-26T03:00:32Z S0-005 verify_full COMPLETE (wf_step direct, recon mode; verify run 20260225_205154)
+- 2026-02-26T03:00:34Z S0-005 pass COMPLETE (wf_step chain validation; all 8 prerequisite receipts present)
+- 2026-02-26T03:02:46Z S0-000 prd_set_pass COMPLETE (passes=true validated against verify run 20260225_205154)
+- 2026-02-26T03:03:32Z S0-001 prd_set_pass COMPLETE (passes=true validated against verify run 20260225_205154)
+- 2026-02-26T03:04:18Z S0-002 prd_set_pass COMPLETE (passes=true validated against verify run 20260225_205154)
+- 2026-02-26T03:06:19Z S0-003 prd_set_pass COMPLETE (passes=true validated against verify run 20260225_205154)
+- 2026-02-26T03:10:18Z S0-004 prd_set_pass COMPLETE (passes=true validated against verify run 20260225_205154)
+- 2026-02-26T03:11:04Z S0-005 prd_set_pass COMPLETE (passes=true validated against verify run 20260225_205154)

@@ -512,7 +512,10 @@ fn test_queue_full_nonbarrier_increments_enqueue_failures() {
 
     // Next non-barrier op hits channel-full
     let result = ledger.update_state("h1", TlsState::PartialFill, &mut m);
-    assert!(result.is_ok(), "non-barrier channel-full should still succeed (HashMap updated)");
+    assert!(
+        result.is_ok(),
+        "non-barrier channel-full should still succeed (HashMap updated)"
+    );
 
     // Metric must have incremented
     assert!(
@@ -550,9 +553,17 @@ fn test_replay_duplicate_intent_recorded_last_writer_wins() {
 
     // Load ledger — replay should handle duplicate without error
     let ledger = WalLedger::with_storage_path(100, &path).expect("replay with dup");
-    assert_eq!(ledger.queue_depth(), 1, "duplicate should not create two entries");
+    assert_eq!(
+        ledger.queue_depth(),
+        1,
+        "duplicate should not create two entries"
+    );
     // Last-writer-wins: qty should be 2.0 (second record)
-    assert_eq!(ledger.get("h1").unwrap().qty_q, 2.0, "last-writer-wins: second record should prevail");
+    assert_eq!(
+        ledger.get("h1").unwrap().qty_q,
+        2.0,
+        "last-writer-wins: second record should prevail"
+    );
 
     drop(ledger);
     remove_if_exists(&path);
@@ -572,9 +583,17 @@ fn test_replay_illegal_state_transition_applies_anyway() {
         // h1 Created
         writeln!(f, r#"{{"kind":"intent_recorded","record":{{"intent_hash":"h1","group_id":"g1","leg_idx":0,"instrument":"BTC-PERP","side":"buy","qty_q":1.0,"limit_price_q":50000.0,"tls_state":"Created","created_ts":1000,"sent_ts":0,"ack_ts":0,"last_fill_ts":0,"exchange_order_id":null,"last_trade_id":null}}}}"#).unwrap();
         // h1 → Filled (valid)
-        writeln!(f, r#"{{"kind":"state_transition","intent_hash":"h1","new_state":"Filled"}}"#).unwrap();
+        writeln!(
+            f,
+            r#"{{"kind":"state_transition","intent_hash":"h1","new_state":"Filled"}}"#
+        )
+        .unwrap();
         // h1 Filled → Sent (INVALID — terminal state, no valid successors)
-        writeln!(f, r#"{{"kind":"state_transition","intent_hash":"h1","new_state":"Sent"}}"#).unwrap();
+        writeln!(
+            f,
+            r#"{{"kind":"state_transition","intent_hash":"h1","new_state":"Sent"}}"#
+        )
+        .unwrap();
         f.sync_all().unwrap();
     }
 
@@ -643,12 +662,14 @@ fn test_healthy_path_zero_enqueue_failures() {
 
     // No enqueue failures on healthy path
     assert_eq!(
-        m.wal_queue_enqueue_failures(), 0,
+        m.wal_queue_enqueue_failures(),
+        0,
         "healthy path must have zero enqueue_failures"
     );
     // No write errors on healthy path
     assert_eq!(
-        m.wal_write_errors(), 0,
+        m.wal_write_errors(),
+        0,
         "healthy path must have zero write_errors"
     );
 

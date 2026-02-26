@@ -303,21 +303,24 @@ fn test_api_keys_metadata_required_fields_runtime() {
         .as_array()
         .expect("errors array expected for failing key metadata checks");
     assert!(
-        errs.iter()
-            .any(|e| e.as_str().unwrap_or("").contains("missing required metadata field 'exchange'")),
+        errs.iter().any(|e| e
+            .as_str()
+            .unwrap_or("")
+            .contains("missing required metadata field 'exchange'")),
         "failure should report non-string exchange metadata"
     );
     assert!(
-        errs.iter()
-            .any(|e| e.as_str().unwrap_or("").contains("missing required metadata field 'key_id'")),
+        errs.iter().any(|e| e
+            .as_str()
+            .unwrap_or("")
+            .contains("missing required metadata field 'key_id'")),
         "failure should report non-string key_id metadata"
     );
     assert!(
-        errs.iter()
-            .any(|e| e
-                .as_str()
-                .unwrap_or("")
-                .contains("probe_metadata.timestamp_utc")),
+        errs.iter().any(|e| e
+            .as_str()
+            .unwrap_or("")
+            .contains("probe_metadata.timestamp_utc")),
         "failure should report missing timestamp_utc metadata"
     );
     remove_if_exists(&bad_probe);
@@ -989,7 +992,10 @@ fn test_break_glass_state_file_and_marker_deletion_fails_closed_runtime() {
     let env_base = [
         ("STOIC_POLICY_PATH", valid_policy_str),
         ("STOIC_RUNTIME_STATE_PATH", runtime_state_str),
-        ("STOIC_BUILD_ID", "phase0-break-glass-state-and-marker-deleted-test"),
+        (
+            "STOIC_BUILD_ID",
+            "phase0-break-glass-state-and-marker-deleted-test",
+        ),
         ("STOIC_DRILL_MODE", "1"),
     ];
 
@@ -1058,9 +1064,10 @@ fn test_break_glass_state_file_and_marker_deletion_fails_closed_runtime() {
         .as_array()
         .expect("errors array expected when dispatch-check reads missing runtime state after init");
     assert!(
-        dispatch_errs
-            .iter()
-            .any(|e| e.as_str().unwrap_or("").contains("state file missing after prior initialization")),
+        dispatch_errs.iter().any(|e| e
+            .as_str()
+            .unwrap_or("")
+            .contains("state file missing after prior initialization")),
         "dispatch should fail closed with explicit missing-state reason"
     );
 }

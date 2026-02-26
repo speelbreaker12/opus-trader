@@ -505,11 +505,10 @@ Reconciliation mode uses the **same 9-step workflow** to retroactively audit sto
 ### Activation
 
 ```bash
-# Via step_supervisor.sh
-plans/step_supervisor.sh <STORY_ID> prompt --recon
-plans/step_supervisor.sh <STORY_ID> run --recon
+# Preferred orchestration
+/reconcil
 
-# Via wf_step.sh directly
+# Preferred mechanical receipt execution
 WF_RECON_MODE=1 plans/wf_step.sh <STORY_ID> <step>
 ```
 

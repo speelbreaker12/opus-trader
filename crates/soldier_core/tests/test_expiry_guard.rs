@@ -597,7 +597,10 @@ fn test_expiry_cancel_idempotent_duplicate_noop() {
     );
 
     // Both calls produce identical decisions (idempotent)
-    assert_eq!(decision1.class, decision2.class, "duplicate cancel must be idempotent");
+    assert_eq!(
+        decision1.class, decision2.class,
+        "duplicate cancel must be idempotent"
+    );
     assert_eq!(decision1.retry, decision2.retry);
     assert_eq!(decision1.cancel_outcome, decision2.cancel_outcome);
     assert_eq!(decision1.instrument_state, decision2.instrument_state);

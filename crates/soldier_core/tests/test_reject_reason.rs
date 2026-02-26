@@ -240,8 +240,14 @@ fn test_reject_reason_serde_round_trip() {
 #[test]
 fn test_reject_reason_serde_round_trip_fe001_codes() {
     let cases = [
-        (RejectReasonCode::PricerInputMissing, r#""PRICER_INPUT_MISSING""#),
-        (RejectReasonCode::PricerInputInvalid, r#""PRICER_INPUT_INVALID""#),
+        (
+            RejectReasonCode::PricerInputMissing,
+            r#""PRICER_INPUT_MISSING""#,
+        ),
+        (
+            RejectReasonCode::PricerInputInvalid,
+            r#""PRICER_INPUT_INVALID""#,
+        ),
         (RejectReasonCode::GateCascadeSkip, r#""GATE_CASCADE_SKIP""#),
     ];
     for (code, expected_json) in cases {

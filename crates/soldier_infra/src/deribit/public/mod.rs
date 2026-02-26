@@ -123,9 +123,11 @@ impl DeribitInstrument {
 /// Returns None for Unknown kind (logs warning + increments metric).
 pub fn map_deribit_kind_to_input(kind: DeribitInstrumentKind) -> Option<(bool, bool)> {
     match kind {
-        DeribitInstrumentKind::Option => Some((true, false)),  // (is_option, is_future)
+        DeribitInstrumentKind::Option => Some((true, false)), // (is_option, is_future)
         DeribitInstrumentKind::Future => Some((false, true)),
-        DeribitInstrumentKind::OptionCombo | DeribitInstrumentKind::FutureCombo => Some((false, false)),
+        DeribitInstrumentKind::OptionCombo | DeribitInstrumentKind::FutureCombo => {
+            Some((false, false))
+        }
         DeribitInstrumentKind::Unknown => {
             tracing::warn!("unknown deribit instrument kind encountered");
             None

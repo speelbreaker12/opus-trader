@@ -79,8 +79,8 @@ pub use group::{
     persist_before_dispatch, try_acquire_group_lock,
 };
 pub use intent_assembly::{
-    AssembledPipelineParams, AssembledSizing, AssemblySizingError, SizingParams,
-    assemble_sizing, choke_intent_to_dispatch, evaluate_assembled_pipeline,
+    AssembledPipelineParams, AssembledSizing, AssemblySizingError, SizingParams, assemble_sizing,
+    choke_intent_to_dispatch, evaluate_assembled_pipeline,
 };
 pub use inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
@@ -111,8 +111,8 @@ pub use pricer::{
     pricer_reject_total,
 };
 pub use quantize::{
-    QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizeStaticRejectReason, QuantizedValues,
-    Side, quantize, quantize_reject_total,
+    QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizeStaticRejectReason,
+    QuantizedValues, Side, quantize, quantize_reject_total,
 };
 pub use reject_reason::{
     GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,

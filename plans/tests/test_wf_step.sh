@@ -601,17 +601,11 @@ bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
 assert_json_field "fix receipt has code_changed=false" "$RECEIPT_DIR/04_fix.json" ".code_changed" "false"
 
 echo ""
-echo "=== PART 9: Supervisor escalation integration ==="
+echo "=== PART 9: Recon cycle2 escalation integration (wf_step) ==="
 
-# Copy step_supervisor.sh into test repo
-STEP_SUPERVISOR="$(cd "$SCRIPT_DIR/.." && pwd)/step_supervisor.sh"
-cp "$STEP_SUPERVISOR" plans/step_supervisor.sh
-chmod +x plans/step_supervisor.sh
-
-# ── Test 26: Supervisor YELLOW escalation — HEAD change triggers full requirements ──
-echo "--- Test 26: Supervisor YELLOW escalation blocks cycle2 ---"
+# ── Test 26: Recon YELLOW escalation — code change triggers full cycle2 requirements ──
+echo "--- Test 26: Recon YELLOW escalation blocks cycle2 ---"
 bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
 
 # Ensure PRD has passes=true for TEST-001
 cat > plans/prd.json <<PRDEOF3
@@ -650,24 +644,19 @@ if [[ "$CYCLE1_HEAD" == "$CURRENT_HEAD" ]]; then
   echo "FAIL: test precondition — HEAD did not advance past cycle1"
   FAIL=$((FAIL + 1))
 else
-  # Run cycle2 through the SUPERVISOR with --recon
-  # Supervisor should detect HEAD change → YELLOW → run without WF_RECON_MODE
-  # Without WF_RECON_MODE, cycle2 needs 2 reviews; we only have 1 → wf_step exits 3
-  # Supervisor converts exit 3 → exit 1
-  rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
+  # Run cycle2 in recon mode:
+  # wf_step should detect fix.code_changed=true and require full cycle2 (2 reviews).
+  # We only have 1 review artifact, so cycle2 must fail with exit 3.
   set +e
-  bash plans/step_supervisor.sh TEST-001 run --recon \
-    --wf-step "$TMPDIR/plans/wf_step.sh" > /dev/null 2>&1
+  WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
   rc=$?
   set -e
-  rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
-  assert_exit "supervisor YELLOW escalation blocks cycle2 with 1 review" 1 "$rc"
+  assert_exit "wf_step recon YELLOW escalation blocks cycle2 with 1 review" 3 "$rc"
 fi
 
-# ── Test 27: Supervisor GREEN path — no HEAD change, cycle2 passes with 1 review ──
-echo "--- Test 27: Supervisor GREEN path passes cycle2 ---"
+# ── Test 27: Recon GREEN path — no code change, cycle2 passes with 1 review ──
+echo "--- Test 27: Recon GREEN path passes cycle2 ---"
 bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
-rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
 
 # Build chain through cycle1 with 0-findings (GREEN path — no code change needed)
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 preflight > /dev/null 2>&1
@@ -685,16 +674,12 @@ GREENREV
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
 
-# No code change — HEAD matches cycle1 receipt
-# Supervisor with --recon should detect GREEN → WF_RECON_MODE=1 → min_reviews=1
-rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
+# No code change — wf_step should keep abbreviated cycle2 path (min_reviews=1)
 set +e
-bash plans/step_supervisor.sh TEST-001 run --recon \
-  --wf-step "$TMPDIR/plans/wf_step.sh" > /dev/null 2>&1
+WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1
 rc=$?
 set -e
-rmdir /tmp/step_supervisor_TEST-001.lock.d 2>/dev/null || true
-assert_exit "supervisor GREEN path passes cycle2 with 1 review" 0 "$rc"
+assert_exit "wf_step recon GREEN path passes cycle2 with 1 review" 0 "$rc"
 
 
 echo ""
