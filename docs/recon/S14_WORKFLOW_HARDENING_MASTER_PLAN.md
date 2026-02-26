@@ -102,3 +102,38 @@ Behavior checks:
 2. Implement Phase B in a dedicated follow-up branch from updated `main`.
 3. Implement Phase C in a dedicated follow-up branch (or stacked on Phase B if simpler).
 4. Keep each phase independently verifiable and reviewable.
+
+## Boundary Lock (Confirmed)
+
+### Phase B includes only
+1. `plans/contract_review_emit.sh` finalization and tests.
+2. Full-verify wiring for:
+   - `contract_review_generate`
+   - `contract_review_validate`
+3. Contract/doc parity updates for those gates:
+   - `plans/verify_gate_contract_check.sh`
+   - `specs/WORKFLOW_CONTRACT.md`
+   - `docs/PRD_STORY_WORKFLOW.md`
+4. Workflow self-proof updates required only for files changed in Phase B.
+
+### Phase B excludes
+1. `plans/recon_bundle.sh` and any bundle manifest/import logic.
+2. Runbook portability instructions.
+3. Any pass-flip semantic changes (`prd_set_pass.sh` unchanged).
+
+### Phase C includes only
+1. `plans/recon_bundle.sh` export/import implementation.
+2. `plans/tests/test_recon_bundle.sh` and related harness wiring.
+3. Runbook/operator updates for deterministic export/import usage:
+   - `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md`
+4. Any allowlist/workflow_verify/preflight fixture updates needed for Phase C files.
+
+### Phase C excludes
+1. Changes to `contract_review_emit` behavior beyond what Phase B shipped.
+2. New full-verify gate semantics unrelated to recon bundle.
+3. Tarball-first packaging workflow.
+
+### Merge criteria per phase
+1. Phase B and Phase C must each be mergeable independently.
+2. Each phase must have targeted tests and contract-parity checks green before merge.
+3. If a cross-phase dependency appears, document it first, then explicitly re-scope.
