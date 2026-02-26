@@ -679,7 +679,7 @@ case "$STEP" in
     for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         while IFS= read -r f; do
-          if grep -q 'FIX_DIFF' "$f" 2>/dev/null; then
+          if grep -qm1 '^Review basis: FIX_DIFF' "$f" 2>/dev/null; then
             c2_basis_count=$((c2_basis_count + 1))
           fi
         done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
