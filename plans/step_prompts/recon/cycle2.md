@@ -10,10 +10,10 @@
   - `PATH: YELLOW` **or** `code_changed: YES` → **2 reviews** (full adversarial)
 - Dispatch review(s) via `plans/review_logged.sh <STORY_ID> --base <integration_branch> --tool <tool>`
 - Review basis: **FIX_DIFF** (review the fix changes, not full story scope)
-- Prefix all artifact filenames with `c2_` to distinguish from C1 artifacts
+- `review_logged.sh` writes the review basis line automatically; C2 artifacts are distinguished by `Review basis: FIX_DIFF` in their content — no filename prefix needed
 
 ## OUTPUT
-`artifacts/story/<ID>/<tool>/c2_*.md` → cycle2 review artifact(s)
+`artifacts/story/<ID>/<tool>/` → cycle2 review artifact(s) (identified by `Review basis: FIX_DIFF` in content)
 
 ## RECEIPT
 ```
