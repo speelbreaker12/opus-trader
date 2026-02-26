@@ -18,7 +18,8 @@ doesn't deserve `passes=true`.
 
 | Document | Path | When to read |
 |----------|------|-------------|
-| **RUNBOOK** — step-by-step operator instructions | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` | Your primary reference. Read the section for any step you're about to run. |
+| **INDEX** — step cards + debrief policy | `plans/step_prompts/recon/INDEX.md` | Read first. Links to all 8 step cards. Defines debrief policy (GREEN = one line; YELLOW/RED = full ToC). |
+| **RUNBOOK** — step-by-step operator instructions | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` | Reference only. Consult for escalation policy, debt register rules, verdict enum. Not required for normal execution. |
 | **POLICY** — verdicts, gates, schemas | `reviews/premortems/PREMORTEM_RECON_POLICY.md` | When you need to know what a verdict means, what a gate checks, or what a schema requires. |
 | **INDEX + R1 PROMPT** — Appendix A is the canonical R1 audit prompt | `reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md` | When running Step 1 (preflight/R1). Appendix A is the exact prompt to follow. |
 | **ANTI-PATTERNS** — 26 failure modes to avoid | `reviews/premortems/PREMORTEM_RECON_ANTIPATTERNS.md` | When reviewing code or writing verdicts. Top 5 are: paper enforcement, skip R7c, fake citation, single-prompt review, blanket --theirs. |
@@ -420,3 +421,35 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 # Optional mechanical status check:
 plans/wf_step.sh {{STORY_ID}} --status
 ```
+
+---
+
+### §1 Constraint (ONE)
+
+> The single biggest constraint that slowed this session. If the session was clean, write "None."
+
+- **How it manifested** (2–3 concrete symptoms):
+  -
+  -
+- **Time/token drain it caused**:
+- **Workaround I used (exploit)**:
+- **Next-agent default behavior (subordinate)**:
+- **Permanent fix proposal (elevate)**:
+- **Smallest increment**:
+- **Validation** (metric, fewer reruns, faster command, fewer flakes):
+
+### §2 Follow-up
+
+> Given what I built, what's the single best follow-up and what 1–3 upgrades are worth considering next?
+
+- Best follow-up:
+- Upgrades worth considering:
+  1.
+  2.
+
+### §3 Enforceable rules
+
+> Given the pain I hit (top sinks + failure modes), what 1–3 rules should we add so the next agent doesn't repeat it?
+
+1.
+2.
