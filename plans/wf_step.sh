@@ -406,7 +406,7 @@ read_cycle1_path() {
     esac
   fi
   # No canonical evidence ledger — fall back to legacy text detection for backward compat
-  echo "WF_STEP: no cycle1/evidence_ledger.md found; falling back to legacy findings detection" >&2
+  echo "WF_STEP: no cycle1/evidence_ledger.md at $ledger; falling back to legacy findings detection" >&2
   cycle1_had_zero_findings "$art_dir"
 }
 
