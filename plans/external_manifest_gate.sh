@@ -264,6 +264,23 @@ if [[ "$py_status" != "PASS" ]]; then
   fi
 fi
 
+validator_warnings="$(echo "$py_output" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for w in d.get('warnings', []):
+    if isinstance(w, str) and w.strip():
+        print(w.strip())
+" 2>/dev/null || true)"
+if [[ -n "$validator_warnings" ]]; then
+  while IFS= read -r warning; do
+    [[ -n "$warning" ]] || continue
+    echo "  Python validator warning: $warning" >&2
+  done <<< "$validator_warnings"
+fi
+
 # Extract review count from validator output
 review_count=$(echo "$py_output" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('artifacts',[])))" 2>/dev/null) || review_count="?"
 

@@ -18,7 +18,8 @@ doesn't deserve `passes=true`.
 
 | Document | Path | When to read |
 |----------|------|-------------|
-| **RUNBOOK** — step-by-step operator instructions | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` | Your primary reference. Read the section for any step you're about to run. |
+| **INDEX** — step cards + debrief policy | `plans/step_prompts/recon/INDEX.md` | Read first. Links to all 8 step cards. Defines debrief policy (GREEN = one line; YELLOW/RED = full ToC). |
+| **RUNBOOK** — step-by-step operator instructions | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` | Reference only. Consult for escalation policy, debt register rules, verdict enum. Not required for normal execution. |
 | **POLICY** — verdicts, gates, schemas | `reviews/premortems/PREMORTEM_RECON_POLICY.md` | When you need to know what a verdict means, what a gate checks, or what a schema requires. |
 | **INDEX + R1 PROMPT** — Appendix A is the canonical R1 audit prompt | `reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md` | When running Step 1 (preflight/R1). Appendix A is the exact prompt to follow. |
 | **ANTI-PATTERNS** — 26 failure modes to avoid | `reviews/premortems/PREMORTEM_RECON_ANTIPATTERNS.md` | When reviewing code or writing verdicts. Top 5 are: paper enforcement, skip R7c, fake citation, single-prompt review, blanket --theirs. |
@@ -331,7 +332,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 #### Step 9 · pass
 
-- Reference: RUNBOOK §4 (Pass-Flip Gate — 15 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
+- Reference: RUNBOOK §4 (Pass-Flip Gate — 14 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
 - Status: {{NOT_STARTED / COMPLETE / SKIPPED-GREEN}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/08_pass.json`
 - Path: {{GREEN — no re-flip / YELLOW — prd_set_pass.sh re-run}}
@@ -340,7 +341,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 > **Step 9 debrief** · `§0: CLEAN` to skip §1–§11.
 > - §0 outcome + workstream: {{e.g. "CLEAN" · or "prd_set_pass.sh failed — contract_review.json decision=CONDITIONAL not PASS · workstream: pass-flip gate"}}
-> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 15 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 14 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
 > - §2 evidence & proof: {{prd_set_pass.sh output, contract_review.json decision field, PRD entry after flip}}
 > - §3 guesses & assumptions: {{e.g. "Assumed CONDITIONAL would pass the gate — only PASS does"}}
 > - §4 friction (top 3): {{e.g. "1) Gate error message doesn't name the failing check 2) GREEN path still requires prd_set_pass.sh — non-obvious 3) n/a"}}
@@ -421,3 +422,35 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 # Optional mechanical status check:
 plans/wf_step.sh {{STORY_ID}} --status
 ```
+
+---
+
+### §1 Constraint (ONE)
+
+> The single biggest constraint that slowed this session. If the session was clean, write "None."
+
+- **How it manifested** (2–3 concrete symptoms):
+  -
+  -
+- **Time/token drain it caused**:
+- **Workaround I used (exploit)**:
+- **Next-agent default behavior (subordinate)**:
+- **Permanent fix proposal (elevate)**:
+- **Smallest increment**:
+- **Validation** (metric, fewer reruns, faster command, fewer flakes):
+
+### §2 Follow-up
+
+> Given what I built, what's the single best follow-up and what 1–3 upgrades are worth considering next?
+
+- Best follow-up:
+- Upgrades worth considering:
+  1.
+  2.
+
+### §3 Enforceable rules
+
+> Given the pain I hit (top sinks + failure modes), what 1–3 rules should we add so the next agent doesn't repeat it?
+
+1.
+2.

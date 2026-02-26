@@ -382,6 +382,35 @@ cycle1_had_zero_findings() {
   return 1
 }
 
+read_cycle1_path() {
+  # Reads the explicit PATH: GREEN / PATH: YELLOW signal written by the cycle1 agent.
+  # Returns 0 (green/zero-findings) if PATH: GREEN, 1 otherwise.
+  # Falls back to cycle1_had_zero_findings() for pre-existing artifacts without the signal.
+  local art_dir="$1"
+  local ledger="$art_dir/cycle1/evidence_ledger.md"
+  if [[ -f "$ledger" ]]; then
+    local first_line
+    first_line="$(head -1 "$ledger" 2>/dev/null || true)"
+    case "$first_line" in
+      "PATH: GREEN")
+        return 0
+        ;;
+      "PATH: YELLOW")
+        return 1
+        ;;
+      *)
+        # Unrecognized signal in canonical path — fall back for legacy artifacts.
+        echo "WF_STEP: unrecognized PATH signal in $ledger: '$first_line'; falling back to legacy findings detection" >&2
+        cycle1_had_zero_findings "$art_dir"
+        return $?
+        ;;
+    esac
+  fi
+  # No canonical evidence ledger — fall back to legacy text detection for backward compat
+  echo "WF_STEP: no cycle1/evidence_ledger.md at $ledger; falling back to legacy findings detection" >&2
+  cycle1_had_zero_findings "$art_dir"
+}
+
 verify_cycle1_citations() {
   # Pre-flight citation check for C1 review artifacts before writing cycle1 receipt.
   local art_dir="$1"
@@ -528,6 +557,7 @@ case "$STEP" in
       "$story_art/${STORY}_reconciliation.json" \
       "$story_art/evidence_ledger.json" \
       "$story_art/evidence_ledger.md" \
+      "$story_art/preflight/audit.md" \
       "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" \
       "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json"; do
       if [[ -f "$candidate" ]]; then
@@ -543,6 +573,7 @@ case "$STEP" in
       echo "    - $story_art/${STORY}_reconciliation.json" >&2
       echo "    - $story_art/evidence_ledger.json" >&2
       echo "    - $story_art/evidence_ledger.md" >&2
+      echo "    - $story_art/preflight/audit.md" >&2
       echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" >&2
       echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json" >&2
       echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
@@ -577,7 +608,7 @@ case "$STEP" in
 
     # Determine code_changed for receipt (deterministic, used by cycle2 escalation)
     FIX_CODE_CHANGED="false"
-    if cycle1_had_zero_findings "$story_art"; then
+    if read_cycle1_path "$story_art"; then
       echo "WF_STEP: cycle1 had 0 findings — fix step passes with no code changes" >&2
     else
       changed_files="$(git diff --name-only "$cycle1_head"..HEAD 2>/dev/null || true)"
@@ -626,7 +657,7 @@ case "$STEP" in
       # YELLOW/RED path: findings exist OR fix changed code → full (2 reviews)
       fix_receipt="$(receipt_file fix)"
       fix_code_changed="$(jq -r '.code_changed // "false"' "$fix_receipt" 2>/dev/null || echo "false")"
-      if cycle1_had_zero_findings "$story_art" && [[ "$fix_code_changed" != "true" ]]; then
+      if read_cycle1_path "$story_art" && [[ "$fix_code_changed" != "true" ]]; then
         min_reviews=1
         echo "WF_STEP: recon GREEN path — abbreviated cycle2 (min_reviews=1)" >&2
       elif [[ "$fix_code_changed" == "true" ]]; then
@@ -651,7 +682,18 @@ case "$STEP" in
     for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         while IFS= read -r f; do
-          if grep -q 'FIX_DIFF' "$f" 2>/dev/null; then
+          sidecar="${f%.md}.sidecar.json"
+          if [[ -f "$sidecar" ]]; then
+            sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
+            case "$sidecar_basis" in
+              FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)")
+                c2_basis_count=$((c2_basis_count + 1))
+                continue
+                ;;
+            esac
+          fi
+          # Legacy fallback: parse canonical review basis line in markdown header.
+          if grep -Eqm1 '^[[:space:]-]*Review basis:[[:space:]]*FIX_DIFF([[:space:]]*\+[[:space:]]*AT_REGRESSION[[:space:]]*\(Cycle 2\))?[[:space:]]*$' "$f" 2>/dev/null; then
             c2_basis_count=$((c2_basis_count + 1))
           fi
         done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)

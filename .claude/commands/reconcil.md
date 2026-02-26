@@ -70,4 +70,4 @@ Fill the **HANDOFF** section of the active `HANDOFF.md` before stopping:
 - What happened: 2–5 bullets
 - Must read first: ordered list of artifact paths
 - Next steps: exact commands or actions
-- Resume command: `STEP_SUPERVISOR_BASE_BRANCH=<branch> plans/step_supervisor.sh <ID> prompt --recon`
+- Resume command: `plans/wf_step.sh <STORY_ID> --status` (check receipt chain, then run next pending step)

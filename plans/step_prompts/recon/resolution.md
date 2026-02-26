@@ -1,54 +1,26 @@
-ROLE
-You are the Builder closing the review loop for ${STORY_ID}.
-You must create a gate-compliant review resolution artifact.
+# Step 6: resolution
 
-STORY
-- Story ID: ${STORY_ID}
-- Base branch: ${BASE_BRANCH}
-- Current HEAD: ${HEAD}
+## CONTEXT
+- `artifacts/story/<ID>/cycle1/evidence_ledger.md`
+- `artifacts/story/<ID>/<tool>/` → cycle2 artifacts (identified by `Review basis: FIX_DIFF` in content)
+- `artifacts/story/<ID>/fix/fix_summary.md` (PATH signal)
 
-TASK
-1) Read and use the template: plans/review_resolution_template.md
-2) Create: artifacts/story/${STORY_ID}/review_resolution.md
-3) The document MUST contain these exact lines:
-   Story: ${STORY_ID}
-   HEAD: ${HEAD}
-   Blocking addressed: YES
-   Remaining findings: BLOCKING=0 MAJOR=0 MEDIUM=0
-4) The document MUST reference the actual review files with real paths:
-   - Codex cycle 1 review file: <path>
-   - Codex cycle 2 review file: <path>
-   - Self-review file: <path>
-5) Include a "## Finding Disposition" section.
-   - For GREEN reconciliation (0 findings): "Reconciliation audit: no findings."
-   - Otherwise: disposition every finding (FIXED or DEFERRED with rationale).
-6) Write postmortem using plans/postmortem_template.md:
-   - Save to: artifacts/story/${STORY_ID}/postmortem.md
-   - Required for YELLOW/RED stories and any story touching gates, TradingMode, RiskState, WAL, or replay.
-   - Fill all 9 sections. Key requirements:
-     - Section 1: Name ONE constraint in a single sentence + Constraint Class
-     - Section 5: Describe a wrong implementation that could have passed before
-     - Section 6: Rule Updates table — at least one permanent change (this is the point)
-     - Section 8: Next-Story Startup Note (carry-forward constraint)
-     - Section 9: Complete the checklist (all boxes checked)
-   - Keep it to ~1 page. If you can't name the constraint in one sentence, it's fluff.
+## ACTION
+- Write `review_resolution.md`; must contain these exact lines:
+  ```
+  Blocking addressed: YES
+  Remaining findings: BLOCKING=0
+  ```
+- If PATH was YELLOW or RED at any point:
+  - Write `postmortem.md` using `plans/postmortem_template.md`
+  - Validate: `plans/postmortem_gate.sh <ID>`
+- If PATH was GREEN throughout: no postmortem required
 
-PROOF GRAPH AGGREGATION (before VERIFY_FULL)
+## OUTPUT
+- `artifacts/story/<ID>/review_resolution.md`
+- `artifacts/story/<ID>/postmortem.md` (YELLOW/RED only)
 
-If reviewer proof graphs exist (from --proof-graph reviews), aggregate them:
+## RECEIPT
 ```
-bash plans/aggregate_proofs.sh ${STORY_ID}
+plans/wf_step.sh <ID> resolution
 ```
-This merges all reviewer verdicts into the base proof_graph.json (fail-closed, strictest wins).
-If no reviewer graphs exist, the base graph is unchanged and this step exits 0.
-
-OUTPUT
-- Print the path to review_resolution.md
-- Postmortem path (if written)
-- Paste the final resolution contents
-- End with exact line: READY FOR VERIFY_FULL
-
-PROHIBITED
-- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
-- Do NOT omit the exact required lines
-- Do NOT leave placeholders (<TODO>, TBD, etc.)
