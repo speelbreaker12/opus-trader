@@ -66,6 +66,7 @@ required=(
   plans/pre_pr_review_gate.sh
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
+  plans/recon_bundle.sh
   plans/review_logged.sh
   plans/review_resolution_template.md
   plans/schemas/fork_attestation_remediation.schema.json
@@ -96,6 +97,7 @@ required=(
   plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
+  plans/tests/test_recon_bundle.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh

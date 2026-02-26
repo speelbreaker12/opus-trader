@@ -55,6 +55,7 @@ plans/prd_set_pass.sh
 plans/pre_pr_review_gate.sh
 plans/preflight.sh
 plans/readme_ci_parity_check.sh
+plans/recon_bundle.sh
 plans/review_logged.sh
 plans/review_resolution_template.md
 plans/schemas/crossref_execution_invariants.schema.json
@@ -98,6 +99,7 @@ plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
+plans/tests/test_recon_bundle.sh
 plans/tests/test_review_logged_proof_graph.sh
 plans/tests/test_roadmap_evidence_audit.sh
 plans/tests/test_slice_completion_enforce.sh

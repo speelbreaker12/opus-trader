@@ -706,3 +706,24 @@ Commands: bash -n plans/contract_review_emit.sh plans/tests/test_contract_review
 Evidence: plans/contract_review_emit.sh; plans/tests/test_contract_review_emit.sh; plans/verify_fork.sh.
 Notes: ./plans/verify.sh quick still fails in doc_sync_check on pre-existing IMPL_PLAN ref drift for S14-003..S14-007 (S14.3..S14.7), unrelated to this patch.
 Next: Rebase/cherry-pick onto updated main that carries the S14 doc-sync fix, then rerun ./plans/verify.sh quick.
+Story: S14 Phase C recon bundle portability
+Date: 2026-02-26 22:12:06 UTC
+Summary: Implemented deterministic recon bundle export/import with strict manifest + checksum/path/head validation, added fail-closed fixture coverage, wired workflow self-proof updates (preflight fixture list, workflow verify syntax check, allowlist + allowlist coverage), and documented canonical runbook commands for cross-worktree slice artifact portability.
+Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; bash plans/verify_gate_contract_check.sh; bash plans/tests/test_preflight_fixture_profiles.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
+Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; plans/tests/test_preflight_fixture_profiles.sh; reviews/premortems/RUNBOOK_PREMORTEM_RECON.md; docs/recon/artifact_field_contract.md; artifacts/verify/ (latest full run in this worktree).
+Notes: Assumption recorded: implemented “Part C” from `docs/recon/S14_WORKFLOW_HARDENING_MASTER_PLAN.md` in dedicated branch from updated `origin/main`, despite current `plans/prd.json` S14-004 text describing a different workflow follow-up.
+Next: Open PR for Phase C recon bundle portability and request clean-checkout CI verification.
+Story: PR #135 review remediation
+Date: 2026-02-26 22:35:55 UTC
+Summary: Addressed review findings by removing `eval`-based scope collection from recon bundle export, enforcing strict `--verify-run` token validation, adding symlink-component traversal blocking for import payload/destination paths, extending `test_recon_bundle` with command-injection and symlink payload adversarial cases, and reverting runtime-generated artifacts from the PR diff.
+Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/tests/test_workflow_allowlist_coverage.sh.
+Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; var/runtime/runtime_state.json (reverted); artifacts/phase0/meta_test_runtime/* (removed from branch diff).
+Notes: Review-scope assumption: security fixes prioritized as blocking P1 before any additional feature adjustments.
+Next: Commit remediation patch, push branch, and update PR #135.
+Story: PR #135 follow-up polish (P3 + handoff discoverability)
+Date: 2026-02-26 22:46:12 UTC
+Summary: Added defensive `--bundle-id` token validation parity with `--verify-run`, expanded recon bundle tests to cover unsafe bundle-id and destination symlink during real (non-dry-run) import, and added recon bundle portability pointer to the reconciliation handoff template quick-orientation section.
+Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_preflight_fixture_profiles.sh.
+Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md.
+Notes: Agreement recorded with review suggestion: this is low-risk consistency hardening rather than a blocker fix.
+Next: Commit, push, and add a short PR #135 note referencing the additional P3 coverage.
