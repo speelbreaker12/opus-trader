@@ -97,6 +97,9 @@ Note: This story has no runtime enforcement. The proof is that the document exis
 - State machine transitions affected: None.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: If the codebase has no existing OrderSize logic, the discovery report is mostly "not yet implemented."
 - Exploit: Frame the report as "contract requirements vs. current state (even if empty)" — the gap list is the value.
 - Smallest fix that prevents it next time: Template the discovery report format so future discovery stories are consistent.

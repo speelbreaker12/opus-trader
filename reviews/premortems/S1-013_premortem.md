@@ -119,6 +119,9 @@ Note: Both ATs share the NON-TRIP test (all-green scenario passes). This is acce
   - None
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - Lessons from prior story postmortems: No prior postmortems exist (first slice). No prior shell-script gate patterns to learn from.
 - What will slow me down: Mocking `gh` CLI responses for fixture tests requires careful setup — the `gh` commands return complex JSON, and the mock must be realistic enough to exercise jq filters.
 - Exploit (workaround for this story): Create static JSON fixture files representing each scenario (all-green, merge-conflict, checks-failing, changes-requested, bot-comments). Point the test script at these fixtures via a `GH_MOCK` environment variable or PATH override.

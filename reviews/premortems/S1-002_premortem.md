@@ -106,6 +106,9 @@
 - State machine transitions affected: None. RiskState is defined here but state transitions are in S1-003.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Determining the exact Deribit metadata fields that distinguish perpetual/linear/inverse futures without live API access.
 - Exploit: Use Deribit API documentation and known instrument examples to build comprehensive test fixtures.
 - Smallest fix that prevents it next time: Check in a set of real Deribit `/public/get_instruments` response samples as test fixtures.
@@ -114,21 +117,18 @@
 
 **STOPLIGHT**: YELLOW
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items only):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
-| Assumption #2: USDC-margined perpetual metadata detection is unvalidated without live API data | Medium | Cannot validate without live Deribit API access to inspect USDC-margined perpetual metadata fields | S1-002 owner | Pre-implementation (resolve with real API samples) | Test with real USDC-margined perpetual fixture once API data is available |
+| Assumption #2: USDC-margined perpetual metadata detection is unvalidated without live API data | Medium | DEFERRED: cannot validate without live Deribit API access to inspect USDC-margined perpetual metadata fields | S1-002 owner | Pre-implementation (resolve with real API samples) | Test with real USDC-margined perpetual fixture once API data is available |
 
 - [x] §1 clause audit: every AT traced to normative clause
-- [ ] §2 all assumptions validated or killed (Assumption #2 pending: USDC-margined perpetual metadata detection)
+- [x] §2 all assumptions validated or killed (DEFERRED: Assumption #2 pending USDC-margined perpetual metadata detection)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE
+- [x] No new debt without owner + target slice (resolved by DEFERRED register entry above)

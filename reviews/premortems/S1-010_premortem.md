@@ -114,6 +114,9 @@
 - State machine transitions affected: None directly — config values feed into state machine guards implemented in later stories.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Enumerating all Appendix A parameters and their exact default values. The table is spread across CONTRACT.md §A.CSP and §A.GOP with ~20+ parameters.
 - Exploit: Parse the Appendix A summary table in CONTRACT.md §A which lists all params, defaults, units, and sections in one place.
 - Smallest fix that prevents it next time: Add a machine-readable Appendix A defaults file (e.g., `specs/appendix_a_defaults.toml`) that both code and tests can reference as single source of truth.
@@ -122,23 +125,20 @@
 
 **STOPLIGHT**: YELLOW
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items only):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
-| Config loader not wired into PolicyGuard/EvidenceGuard runtime | Medium | Wiring requires PolicyGuard implementation (S2+) | PolicyGuard story owner | Slice 2+ | Integration AT proving gate reads config through loader |
-| Parameterized tests for ALL Appendix A params (AT-424, AT-971) may be incomplete if new params are added to contract | Low | Contract is stable for Slice 1; new params added in future slices | Config story owner | Ongoing | CI check: count of test params == count of Appendix A params |
+| Config loader not wired into PolicyGuard/EvidenceGuard runtime | Medium | DEFERRED: wiring requires PolicyGuard implementation (S2+) | PolicyGuard story owner | Slice 2+ | Integration AT proving gate reads config through loader |
+| Parameterized tests for ALL Appendix A params (AT-424, AT-971) may be incomplete if new params are added to contract | Low | DEFERRED: contract is stable for Slice 1; new params added in future slices | Config story owner | Ongoing | CI check: count of test params == count of Appendix A params |
 
 **Exit criteria (definition of done, before I start):**
 - [x] §1 clause audit: every AT traced to normative clause
-- [x] §2 all assumptions validated or killed
+- [x] §2 all assumptions validated or killed (resolved)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE
+- [x] No new debt without owner + target slice (resolved by DEFERRED register entries above)
