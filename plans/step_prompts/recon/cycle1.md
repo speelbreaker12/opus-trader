@@ -2,7 +2,7 @@
 
 ## CONTEXT
 - scope.touch files listed in `plans/prd.json` story entry
-- `artifacts/story/<ID>/premortem.md`
+- `reviews/premortems/<ID>_premortem.md`
 
 ## ACTION
 - Dispatch external review:
