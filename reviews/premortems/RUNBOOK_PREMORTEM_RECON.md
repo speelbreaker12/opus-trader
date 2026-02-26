@@ -1259,6 +1259,44 @@ plans/step_prompts/recon/
   cycle2.md
 ```
 
+### 6.1.1 Recon Bundle Portability (Deterministic Export/Import)
+
+Use `plans/recon_bundle.sh` to move slice-core reconciliation evidence between worktrees without manual copy drift.
+
+Canonical export command:
+```bash
+./plans/recon_bundle.sh export \
+  --slice S14 \
+  --verify-run 20260226_120000 \
+  --bundle-id S14_recon_20260226 \
+  --out-root artifacts/recon_bundles
+```
+
+Canonical import command (strict by default):
+```bash
+./plans/recon_bundle.sh import \
+  --bundle artifacts/recon_bundles/S14_recon_20260226
+```
+
+Dry-run validation before write:
+```bash
+./plans/recon_bundle.sh import \
+  --bundle artifacts/recon_bundles/S14_recon_20260226 \
+  --dry-run
+```
+
+Head mismatch policy:
+- Import blocks when `source_head_sha` differs from current `HEAD`.
+- Override only when intentionally importing across different heads:
+  `./plans/recon_bundle.sh import --bundle <dir> --allow-head-mismatch --dry-run`
+
+Bundle payload scope (fail-closed):
+- `reviews/reconciliations/<slice>/**`
+- `.wf/receipts/<slice>-*/**`
+- `.wf/recon_scope_lock/<slice>-*.scope_lock.json`
+- `artifacts/story/<slice>-*/**`
+- Optional `artifacts/verify/<run_id>/**` when `--verify-run` is supplied.
+
 ### 6.2 Provenance Header (Required on All Review Artifacts)
 
 Every review artifact (`.md` and `.json`) produced in R1–R7 must include a standard provenance header. This applies to internal reviews, external tool reviews, and manifests.
