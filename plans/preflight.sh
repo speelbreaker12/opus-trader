@@ -262,6 +262,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"
   "plans/tests/test_crossref_gate.sh"
+  "plans/tests/test_artifact_lint.sh"
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(
