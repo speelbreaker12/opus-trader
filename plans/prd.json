@@ -14172,7 +14172,7 @@
       "phase": 4,
       "slice": 14,
       "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
-      "story_ref": "S14.3 — verify_full timeout policy in recon runbook",
+      "story_ref": "S14.2a — verify_full timeout policy in recon runbook",
       "category": "policy",
       "description": "Codify the verify_full timeout policy in the reconciliation runbook so full verify runs are invoked with explicit timeout guardrails and avoid silent 900s defaults.",
       "contract_refs": [
@@ -14270,7 +14270,7 @@
       "phase": 4,
       "slice": 14,
       "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
-      "story_ref": "S14.4 — cycle1 sidecar validation in review logger path",
+      "story_ref": "S14.2b — cycle1 sidecar validation in review logger path",
       "category": "policy",
       "description": "Harden cycle1 review logging by validating sidecar JSON deterministically before cycle1 receipt success is allowed.",
       "contract_refs": [
@@ -14368,7 +14368,7 @@
       "phase": 4,
       "slice": 14,
       "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
-      "story_ref": "S14.5 — R5b per-finding closure enforcement",
+      "story_ref": "S14.2c — R5b per-finding closure enforcement",
       "category": "policy",
       "description": "Require per-finding closure entries in R5b self-review gate artifacts so UNPROVEN decisions cannot persist without explicit closure accounting.",
       "contract_refs": [
@@ -14466,7 +14466,7 @@
       "phase": 4,
       "slice": 14,
       "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
-      "story_ref": "S14.6 — mechanical verification callsite scope guard",
+      "story_ref": "S14.2d — mechanical verification callsite scope guard",
       "category": "policy",
       "description": "Restrict mechanical callsite enforcement checks to production source paths so test-only symbols do not trigger false blockers during full verify.",
       "contract_refs": [
@@ -14563,7 +14563,7 @@
       "phase": 4,
       "slice": 14,
       "slice_ref": "Slice 14 — Workflow Harness Reliability Follow-ups",
-      "story_ref": "S14.7 — cycle1 receipt emits deterministic next-step prompt",
+      "story_ref": "S14.2e — cycle1 receipt emits deterministic next-step prompt",
       "category": "policy",
       "description": "Emit an explicit next-step prompt after cycle1 receipt write so operators do not stall between cycle1 and fix in reconciliation loops.",
       "contract_refs": [

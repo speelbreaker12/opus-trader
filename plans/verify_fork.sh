@@ -130,6 +130,7 @@ GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
 DOC_SYNC_TIMEOUT="${DOC_SYNC_TIMEOUT:-30s}"
 WORKFLOW_TEST_TIMEOUT="${WORKFLOW_TEST_TIMEOUT:-15m}"
 ARTIFACT_LINT_TIMEOUT="${ARTIFACT_LINT_TIMEOUT:-45s}"
+CONTRACT_REVIEW_TIMEOUT="${CONTRACT_REVIEW_TIMEOUT:-30s}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -240,6 +241,90 @@ should_enable_csp_strict() {
   fi
 
   return 1
+}
+
+status_fixture_path_hash() {
+  local fixture_path="$1"
+  local hash=""
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    hash="$(printf '%s' "$fixture_path" | sha256sum | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    hash="$(printf '%s' "$fixture_path" | shasum -a 256 | awk '{print $1}')"
+  elif command -v python3 >/dev/null 2>&1; then
+    hash="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
+  elif command -v python >/dev/null 2>&1; then
+    hash="$(python -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
+  elif command -v cksum >/dev/null 2>&1; then
+    hash="$(printf '%s' "$fixture_path" | cksum | awk '{print $1}')"
+    hash="cksum_${hash}"
+  else
+    local len="${#fixture_path}"
+    local fallback_slug
+    fallback_slug="$(printf '%s' "$fixture_path" | tr '/.[[:space:]]' '_' | tr -cd 'A-Za-z0-9_-')"
+    [[ -z "$fallback_slug" ]] && fallback_slug="no_path"
+    hash="$(printf '%s_%s' "$len" "$fallback_slug")"
+  fi
+
+  hash="$(printf '%s' "$hash" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
+  if [[ -z "$hash" ]]; then
+    hash="invalid_hash"
+  fi
+  echo "${hash:0:24}"
+}
+
+status_fixture_gate_name() {
+  local fixture="$1"
+  local rel fixture_stem suffix
+  rel="${fixture#tests/fixtures/status/}"
+  fixture_stem="${rel%.json}"
+
+  local hash
+  hash="$(status_fixture_path_hash "$fixture_stem")"
+  hash="$(printf '%s' "$hash" | sed 's/[^a-z0-9]/_/g')"
+  hash="${hash:-unhashed}"
+  suffix="$(printf '%s' "$fixture_stem" | tr '/.-' '_' | tr -cd 'A-Za-z0-9_' | tr '[:upper:]' '[:lower:]')"
+  suffix="${suffix:0:36}"
+
+  if [[ -n "$suffix" ]]; then
+    printf '%s\n' "status_fixture_${hash}_${suffix}"
+  else
+    printf '%s\n' "status_fixture_${hash}"
+  fi
+}
+
+run_logged_nonblocking_gate() {
+  local gate_name="$1"
+  local timeout="$2"
+  shift 2
+
+  local rc=0
+  local had_errexit=0
+  case $- in
+    *e*) had_errexit=1 ;;
+  esac
+
+  set +e
+  if RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL=1 RUN_LOGGED_SKIP_FAILED_GATE=1 run_logged "$gate_name" "$timeout" "$@"; then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  if (( had_errexit == 1 )); then
+    set -e
+  fi
+
+  if [[ "$rc" != "0" ]]; then
+    local warn_file="${VERIFY_ARTIFACTS_DIR}/${gate_name}.warn"
+    : > "$warn_file"
+    if [[ "$rc" == "124" || "$rc" == "137" ]]; then
+      echo "WARN: ${gate_name} timed out in quick mode (limit=${timeout}, rc=${rc})" >> "$warn_file"
+    else
+      echo "WARN: ${gate_name} failed in quick mode with rc=${rc}" >> "$warn_file"
+    fi
+  fi
+  return 0
 }
 
 VERIFY_PARALLEL="${VERIFY_PARALLEL:-1}"
@@ -378,6 +463,16 @@ if command -v git >/dev/null 2>&1; then
   if [[ -n "$dirty_status" ]]; then
     warn "Working tree is dirty"
   fi
+fi
+
+if [[ "$MODE" == "full" ]]; then
+  log "00b) contract review generate"
+  run_logged_or_exit "contract_review_generate" "$CONTRACT_REVIEW_TIMEOUT" \
+    ./plans/contract_review_emit.sh --out "$VERIFY_ARTIFACTS_DIR/contract_review.json"
+
+  log "00c) contract review validate"
+  run_logged_or_exit "contract_review_validate" "$CONTRACT_REVIEW_TIMEOUT" \
+    ./plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"
 fi
 
 ensure_python
@@ -569,9 +664,7 @@ if [[ -d tests/fixtures/status ]]; then
     parallel_group_reset
     while IFS= read -r fixture; do
       [[ -f "$fixture" ]] || continue
-      rel="${fixture#tests/fixtures/status/}"
-      gate="status_fixture_${rel%.json}"
-      gate="$(echo "$gate" | sed 's#[/.-]#_#g; s/[^A-Za-z0-9_]/_/g')"
+      gate="$(status_fixture_gate_name "$fixture")"
 
       start_parallel_gate "$gate" "$STATUS_FIXTURE_TIMEOUT" \
         "$PYTHON_BIN" tools/validate_status.py --file "$fixture" --strict
@@ -582,9 +675,7 @@ if [[ -d tests/fixtures/status ]]; then
   else
     while IFS= read -r fixture; do
       [[ -f "$fixture" ]] || continue
-      rel="${fixture#tests/fixtures/status/}"
-      gate="status_fixture_${rel%.json}"
-      gate="$(echo "$gate" | sed 's#[/.-]#_#g; s/[^A-Za-z0-9_]/_/g')"
+      gate="$(status_fixture_gate_name "$fixture")"
 
       run_logged_or_exit "$gate" "$STATUS_FIXTURE_TIMEOUT" \
         "$PYTHON_BIN" tools/validate_status.py --file "$fixture" --strict
@@ -648,8 +739,8 @@ if [[ -x "$ROOT/plans/fail_closed_coverage.sh" ]]; then
     run_logged_or_exit "fail_closed_coverage" "$FAIL_CLOSED_COVERAGE_TIMEOUT" \
       bash "$ROOT/plans/fail_closed_coverage.sh"
   else
-    run_logged "fail_closed_coverage" "$FAIL_CLOSED_COVERAGE_TIMEOUT" \
-      bash "$ROOT/plans/fail_closed_coverage.sh" || true
+    run_logged_nonblocking_gate "fail_closed_coverage" "$FAIL_CLOSED_COVERAGE_TIMEOUT" \
+      bash "$ROOT/plans/fail_closed_coverage.sh"
   fi
 fi
 

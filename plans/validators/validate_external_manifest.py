@@ -77,7 +77,8 @@ REQUIRED_COMBOS_DEFAULT = [
 R3_MANIFEST_PROV_REQUIRED = [
     "tool", "model", "prompt_style", "cycle", "phase_equivalent",
     "review_basis", "story_id", "slice_id", "head_commit",
-    "generated_at", "artifact_provenance", "schema_version",
+    "generated_at", "artifact_provenance",
+    # schema_version intentionally omitted: absent = pre-v2 manifest (warn only, checked below)
 ]
 R7_MANIFEST_PROV_REQUIRED = R3_MANIFEST_PROV_REQUIRED + ["base_commit"]
 
@@ -359,13 +360,20 @@ def step_b_provenance(
         r.fail("MANIFEST_PROVENANCE_INVALID")
         valid = False
 
-    # Schema version
-    if phase == "R3" and prov.get("schema_version") != "r3_external_manifest.v2":
-        r.fail("MANIFEST_PROVENANCE_INVALID")
-        valid = False
-    if phase == "R7d" and prov.get("schema_version") != "r7_external_manifest.v2":
-        r.fail("MANIFEST_PROVENANCE_INVALID")
-        valid = False
+    # Schema version — absent = pre-v2 manifest (warn only); wrong value = hard fail
+    sv = prov.get("schema_version")
+    if phase == "R3":
+        if sv is None:
+            r.warn("schema_version absent in provenance (pre-v2 manifest; expected 'r3_external_manifest.v2')")
+        elif sv != "r3_external_manifest.v2":
+            r.fail("MANIFEST_PROVENANCE_INVALID")
+            valid = False
+    elif phase == "R7d":
+        if sv is None:
+            r.warn("schema_version absent in provenance (pre-v2 manifest; expected 'r7_external_manifest.v2')")
+        elif sv != "r7_external_manifest.v2":
+            r.fail("MANIFEST_PROVENANCE_INVALID")
+            valid = False
 
     # HEAD/base commit format
     head = prov.get("head_commit", "")

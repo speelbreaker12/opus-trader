@@ -291,6 +291,8 @@ Goal: "mergeable green" for marking PRD pass.
 
 FULL must run:
 - Everything in QUICK, plus:
+  - `contract_review_generate` (auto-seed `contract_review.json` with fail-closed default decision)
+  - `contract_review_validate` (schema-validate generated `contract_review.json`)
   - `artifact_lint` in strict full mode (must bind to current verify artifacts dir)
   - `crossref_gate` (marker-based evidence gate in CI mode; strictness controlled by sentinel/env)
   - `contract_coverage`
@@ -300,6 +302,7 @@ FULL must run:
   - `vendor_docs_lint_rust` (if supported)
 
 FULL is the only gate allowed to justify `passes=true`.
+Auto-seeded `contract_review.json` defaults to `decision=BLOCKED`; pass flip still requires explicit `decision=PASS` per section 8.1.
 
 ### 7.5 Local full is allowed
 In this fork, `verify full` MUST be runnable locally without special allow flags.

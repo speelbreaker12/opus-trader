@@ -31,6 +31,7 @@ doesn't deserve `passes=true`.
 - Reconciliation artifacts go under `reviews/reconciliations/{{SLICE_ID}}/`
 - Story artifacts (proof graph, postmortem) go under `artifacts/story/{{STORY_ID}}/`
 - Receipts track step completion: `.wf/receipts/{{STORY_ID}}/`
+- For cross-worktree portability of slice artifacts, use `plans/recon_bundle.sh` commands documented in `RUNBOOK_PREMORTEM_RECON.md` §6.1.1
 - **Never modify production code outside of Step 2 (implement/R5) and Step 5 (fix/R7c-fix)**
 
 ---
@@ -330,7 +331,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 #### Step 9 · pass
 
-- Reference: RUNBOOK §4 (Pass-Flip Gate — 15 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
+- Reference: RUNBOOK §4 (Pass-Flip Gate — 12 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
 - Status: {{NOT_STARTED / COMPLETE / SKIPPED-GREEN}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/08_pass.json`
 - Path: {{GREEN — no re-flip / YELLOW — prd_set_pass.sh re-run}}
@@ -339,7 +340,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 > **Step 9 debrief** · `§0: CLEAN` to skip §1–§11.
 > - §0 outcome + workstream: {{e.g. "CLEAN" · or "prd_set_pass.sh failed — contract_review.json decision=CONDITIONAL not PASS · workstream: pass-flip gate"}}
-> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 15 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 12 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
 > - §2 evidence & proof: {{prd_set_pass.sh output, contract_review.json decision field, PRD entry after flip}}
 > - §3 guesses & assumptions: {{e.g. "Assumed CONDITIONAL would pass the gate — only PASS does"}}
 > - §4 friction (top 3): {{e.g. "1) Gate error message doesn't name the failing check 2) GREEN path still requires prd_set_pass.sh — non-obvious 3) n/a"}}

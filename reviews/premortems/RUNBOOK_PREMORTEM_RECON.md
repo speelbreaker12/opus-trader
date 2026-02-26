@@ -146,21 +146,7 @@ Six checks, evaluated in order:
 
 ## 3) Mode B — Reconciliation (R1–R7)
 
-### Step Supervisor Phase Mapping
-
-| `wf_step.sh` step | Part B phase(s) | Pod |
-|--------------------|----------------|-----|
-| `preflight` | R1 | A |
-| `implement` | R5 | A |
-| `self_review` | R5b (R5b.1 → R5b.2 → R5b.3 → R5b.4) | B |
-| `cycle1` | R2 + R3 (R3A + R3B) + R4 + R4b | B |
-| `fix` | R7a + risk-gate R7b (conditional) + R7c (reviews) → R7c-fix (apply findings) | C |
-| `cycle2` | R7d (R7d.1 + R7d.2) + R7e + R7f | C |
-| `resolution` | R6 | D |
-| `verify_full` | `verify.sh full` | D |
-| `pass` | `prd_set_pass.sh` | supervisor |
-
-Receipt systems: `wf_step.sh` receipts (`.wf/receipts/<ID>/`) track step completion. R5b skill receipts (`reviews/reconciliations/<slice>/receipts/`) track individual skill execution.
+Run `plans/wf_step.sh ${STORY_ID} <step>` to record step completion. Steps in order: preflight → implement → self_review → cycle1 → fix → cycle2 → resolution → verify_full → pass. Receipts: `.wf/receipts/<ID>/`.
 
 ---
 
@@ -1134,6 +1120,8 @@ A story is pass-eligible only if ALL conditions are met:
 | Fail-closed | `fail_closed_coverage.sh` passes (test counts + patterns) |
 | Postmortem | If required: `postmortem_gate.sh` passes. If exempt: `POSTMORTEM_EXEMPT` in R6 summary. |
 | R7 exit | All R7 exit conditions met |
+> **Tip (verify_full timeout)**: If `verify.sh full` times out during preflight, set `PREFLIGHT_TIMEOUT=1200 ./plans/verify.sh full`. Default full-mode timeout is 1800s; override for slower machines or large workspaces.
+
 
 If any condition fails: **`prd_set_pass.sh` is blocked.**
 
@@ -1270,6 +1258,44 @@ plans/step_prompts/recon/
   cycle1.md
   cycle2.md
 ```
+
+### 6.1.1 Recon Bundle Portability (Deterministic Export/Import)
+
+Use `plans/recon_bundle.sh` to move slice-core reconciliation evidence between worktrees without manual copy drift.
+
+Canonical export command:
+```bash
+./plans/recon_bundle.sh export \
+  --slice S14 \
+  --verify-run 20260226_120000 \
+  --bundle-id S14_recon_20260226 \
+  --out-root artifacts/recon_bundles
+```
+
+Canonical import command (strict by default):
+```bash
+./plans/recon_bundle.sh import \
+  --bundle artifacts/recon_bundles/S14_recon_20260226
+```
+
+Dry-run validation before write:
+```bash
+./plans/recon_bundle.sh import \
+  --bundle artifacts/recon_bundles/S14_recon_20260226 \
+  --dry-run
+```
+
+Head mismatch policy:
+- Import blocks when `source_head_sha` differs from current `HEAD`.
+- Override only when intentionally importing across different heads:
+  `./plans/recon_bundle.sh import --bundle <dir> --allow-head-mismatch --dry-run`
+
+Bundle payload scope (fail-closed):
+- `reviews/reconciliations/<slice>/**`
+- `.wf/receipts/<slice>-*/**`
+- `.wf/recon_scope_lock/<slice>-*.scope_lock.json`
+- `artifacts/story/<slice>-*/**`
+- Optional `artifacts/verify/<run_id>/**` when `--verify-run` is supplied.
 
 ### 6.2 Provenance Header (Required on All Review Artifacts)
 

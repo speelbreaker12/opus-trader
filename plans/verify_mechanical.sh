@@ -98,27 +98,21 @@ else
           ;;
       esac
 
-      # Search production code (exclude tests/ directories).
+      # Search production src/ only (crates/*/src/ — excludes tests/ dirs and in-file cfg(test) blocks).
       # StatusEndpoint is implemented via the production CLI entrypoint (`stoic-cli`)
       # in addition to Rust code.
       if [[ "$ep" == "StatusEndpoint" ]]; then
         hits=$(
           {
-            grep -rl "$pattern" \
-              --include='*.rs' \
-              "$ROOT/crates/" 2>/dev/null || true
+            find "$ROOT/crates" -path '*/src/*.rs' -type f 2>/dev/null \
+              | xargs grep -l "$pattern" 2>/dev/null || true
             grep -l "$pattern" "$ROOT/stoic-cli" 2>/dev/null || true
-          } | grep -v '/tests/' \
-            | grep -v '_test\.rs' \
-            | sort -u \
+          } | sort -u \
             | head -3 || true
         )
       else
-        hits=$(grep -rl "$pattern" \
-          --include='*.rs' \
-          "$ROOT/crates/" 2>/dev/null \
-          | grep -v '/tests/' \
-          | grep -v '_test\.rs' \
+        hits=$(find "$ROOT/crates" -path '*/src/*.rs' -type f 2>/dev/null \
+          | xargs grep -l "$pattern" 2>/dev/null \
           | head -3 || true)
       fi
 

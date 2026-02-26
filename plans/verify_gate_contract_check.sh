@@ -87,6 +87,8 @@ done
 
 # Docs: full-only gate coverage.
 full_tokens=(
+  contract_review_generate
+  contract_review_validate
   artifact_lint
   crossref_gate
   contract_coverage
@@ -103,6 +105,8 @@ done
 
 # Verify implementation: contract/spec/status gates.
 verify_tokens=(
+  'run_logged_or_exit "contract_review_generate"'
+  'run_logged_or_exit "contract_review_validate"'
   'run_logged_or_exit "preflight"'
   'run_logged_or_exit "artifact_lint"'
   'run_logged_or_exit "contract_profiles"'
@@ -128,6 +132,8 @@ for token in "${verify_tokens[@]}"; do
 done
 
 require_code_token "$VERIFY" 'run_logged_or_exit "contract_coverage"'
+require_code_token "$VERIFY" './plans/contract_review_emit.sh --out "$VERIFY_ARTIFACTS_DIR/contract_review.json"'
+require_code_token "$VERIFY" './plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"'
 require_code_token "$VERIFY" 'tools/ci/check_contract_profiles.py'
 require_code_token "$VERIFY" 'tools/ci/check_contract_profile_map_parity.py'
 require_code_token "$VERIFY" 'tools/at_coverage_report.py'

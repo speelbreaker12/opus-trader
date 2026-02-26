@@ -1,3 +1,4 @@
+.githooks/pre-commit
 .githooks/pre-push
 .github/pull_request_template.md
 .github/workflows/ci.yml
@@ -16,6 +17,8 @@ plans/checkpoint_dependency_manifest.json
 plans/checkpoint_fingerprint_env_manifest.txt
 plans/ci/requirements-crossref.txt
 plans/ci/requirements-verify.txt
+plans/code_review_expert_attest.sh
+plans/code_review_expert_guard.sh
 plans/codex_review_digest.sh
 plans/codex_review_let_pass.sh
 plans/codex_review_logged.sh
@@ -23,6 +26,7 @@ plans/config/gate_sunsets.sh
 plans/contract_check.sh
 plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
+plans/contract_review_emit.sh
 plans/contract_review_validate.sh
 plans/crossref_burnin_check.sh
 plans/crossref_ci_strict
@@ -54,6 +58,7 @@ plans/prd_set_pass.sh
 plans/pre_pr_review_gate.sh
 plans/preflight.sh
 plans/readme_ci_parity_check.sh
+plans/recon_bundle.sh
 plans/review_logged.sh
 plans/review_resolution_template.md
 plans/schemas/crossref_execution_invariants.schema.json
@@ -82,9 +87,11 @@ plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
+plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh
+plans/tests/test_contract_review_emit.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
 plans/tests/test_doc_sync_check.sh
@@ -96,6 +103,7 @@ plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
+plans/tests/test_recon_bundle.sh
 plans/tests/test_review_logged_proof_graph.sh
 plans/tests/test_roadmap_evidence_audit.sh
 plans/tests/test_slice_completion_enforce.sh
