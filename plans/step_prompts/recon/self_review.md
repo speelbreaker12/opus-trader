@@ -4,7 +4,8 @@
 - `artifacts/story/<ID>/implement/patch_plan.md`
 - scope.touch code files listed in `plans/prd.json`
 
-## ACTION (4 sub-phases, multi-agent)
+## ACTION
+> 4 sub-phases, multi-agent coordination
 
 **R5b.1 — 6 agents in parallel, each runs one skill:**
 - Agent A: `/pr-review` → `FINDINGS_pr_review.md`
