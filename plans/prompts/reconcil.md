@@ -229,9 +229,9 @@ STORY_ID=S1-007 BASE_BRANCH=feature/slice4-cherry-pick HEAD=$(git rev-parse HEAD
   envsubst < plans/prompts/reconcil.md | agent-run --prompt -
 ```
 
-### Step supervisor integration
+### wf_step integration (preferred)
 ```bash
-# The step supervisor dispatches per-step prompts from plans/step_prompts/recon/
-# This orchestrator prompt is for standalone or manual use
-plans/step_supervisor.sh S1-007 next
+# Preferred orchestration: /reconcil
+# Preferred receipt execution:
+WF_RECON_MODE=1 plans/wf_step.sh S1-007 <step>
 ```

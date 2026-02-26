@@ -7,9 +7,10 @@ mod common;
 use common::gate_results_all_passing;
 
 use soldier_core::execution::{
-    CONTRACTS_AMOUNT_MATCH_TOLERANCE, ChokeIntentClass, ChokeMetrics, ChokeResult, DispatchMapError,
-    IntentClass, MismatchMetrics, OrderSize, OrderSizeInput,
-    build_order_intent, build_order_size, map_to_dispatch, validate_and_dispatch,
+    CONTRACTS_AMOUNT_MATCH_TOLERANCE, ChokeIntentClass, ChokeMetrics, ChokeResult,
+    DispatchMapError, IntentClass, MismatchMetrics, OrderSize, OrderSizeInput,
+    build_order_intent_with_optional_wal_gate, build_order_size, map_to_dispatch,
+    validate_and_dispatch,
 };
 use soldier_core::risk::RiskState;
 use soldier_core::venue::InstrumentKind;
@@ -712,11 +713,12 @@ fn test_at920_mismatch_caller_sets_degraded_and_blocks_open() {
 
     // Step 3: Degraded blocks subsequent OPEN at chokepoint (dispatch=0)
     let mut choke = ChokeMetrics::new();
-    let choke_result = build_order_intent(
+    let choke_result = build_order_intent_with_optional_wal_gate(
         ChokeIntentClass::Open,
         risk_after_mismatch,
         &mut choke,
         &gate_results_all_passing(),
+        None,
     );
     assert!(
         matches!(choke_result, ChokeResult::Rejected { .. }),
@@ -738,7 +740,10 @@ fn test_dispatch_map_nan_amount_returns_err() {
         notional_usd: f64::NAN,
     };
     let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
-    assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));
+    assert!(matches!(
+        result,
+        Err(DispatchMapError::InvalidAmount { .. })
+    ));
 }
 
 /// Fail-closed: zero amount returns InvalidAmount error.
@@ -751,7 +756,10 @@ fn test_dispatch_map_zero_amount_returns_err() {
         notional_usd: 0.0,
     };
     let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
-    assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));
+    assert!(matches!(
+        result,
+        Err(DispatchMapError::InvalidAmount { .. })
+    ));
 }
 
 /// Fail-closed: negative amount returns InvalidAmount error.
@@ -764,5 +772,8 @@ fn test_dispatch_map_negative_amount_returns_err() {
         notional_usd: -10_000.0,
     };
     let result = map_to_dispatch(&order_size, InstrumentKind::Option, IntentClass::Open);
-    assert!(matches!(result, Err(DispatchMapError::InvalidAmount { .. })));
+    assert!(matches!(
+        result,
+        Err(DispatchMapError::InvalidAmount { .. })
+    ));
 }

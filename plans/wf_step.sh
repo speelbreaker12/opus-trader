@@ -520,12 +520,16 @@ case "$STEP" in
 
     # Evidence ledger check (v3.0): verify R1 output exists before Cycle 1
     # Accepts multiple naming patterns: canonical (<ID>_reconciliation.md), legacy (evidence_ledger.*), or preflight artifacts
+    # Also checks slice-level recon dir (reviews/reconciliations/<SLICE>/) for stories that store ledgers there
+    slice_id="${STORY%%-*}"
     evidence_found=false
     for candidate in \
       "$story_art/${STORY}_reconciliation.md" \
       "$story_art/${STORY}_reconciliation.json" \
       "$story_art/evidence_ledger.json" \
-      "$story_art/evidence_ledger.md"; do
+      "$story_art/evidence_ledger.md" \
+      "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" \
+      "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json"; do
       if [[ -f "$candidate" ]]; then
         evidence_found=true
         break
@@ -539,6 +543,8 @@ case "$STEP" in
       echo "    - $story_art/${STORY}_reconciliation.json" >&2
       echo "    - $story_art/evidence_ledger.json" >&2
       echo "    - $story_art/evidence_ledger.md" >&2
+      echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" >&2
+      echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json" >&2
       echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
       exit 6
     fi
@@ -637,6 +643,25 @@ case "$STEP" in
     done
     if [[ "$review_count" -lt "$min_reviews" ]]; then
       echo "WF_STEP: need at least $min_reviews review artifacts in $story_art/{codex,opus,kimi}/" >&2
+      exit 3
+    fi
+    # Basis-label check: verify >=1 artifact has FIX_DIFF review basis.
+    # Without this, C1 artifacts (STORY_SCOPE basis) satisfy the cycle2 gate spuriously.
+    c2_basis_count=0
+    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
+      if [[ -d "$d" ]]; then
+        while IFS= read -r f; do
+          if grep -q 'FIX_DIFF' "$f" 2>/dev/null; then
+            c2_basis_count=$((c2_basis_count + 1))
+          fi
+        done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
+      fi
+    done
+    if [[ "$c2_basis_count" -lt 1 ]]; then
+      echo "WF_STEP: cycle2 gate requires >=1 review artifact with 'FIX_DIFF' review basis — none found" >&2
+      echo "  in $story_art/{codex,opus,kimi}/" >&2
+      echo "  C1 artifacts (STORY_SCOPE basis) do not satisfy this gate." >&2
+      echo "  Run cycle2 reviews via review_logged.sh --cycle C2 before recording this receipt." >&2
       exit 3
     fi
     ;;

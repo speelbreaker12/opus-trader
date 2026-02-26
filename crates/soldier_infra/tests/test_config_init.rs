@@ -69,10 +69,19 @@ fn test_build_gate_config_appendix_a_defaults_applied() {
     assert_eq!(config.fee_cache_soft_s, 300.0, "fee_cache_soft_s default");
     assert_eq!(config.fee_cache_hard_s, 900.0, "fee_cache_hard_s default");
     assert_eq!(config.fee_stale_buffer, 0.20, "fee_stale_buffer default");
-    assert_eq!(config.instrument_cache_ttl_s, 3600.0, "instrument_cache_ttl_s default");
-    assert_eq!(config.l2_book_snapshot_max_age_ms, 1000.0, "l2_book_snapshot_max_age_ms default");
+    assert_eq!(
+        config.instrument_cache_ttl_s, 3600.0,
+        "instrument_cache_ttl_s default"
+    );
+    assert_eq!(
+        config.l2_book_snapshot_max_age_ms, 1000.0,
+        "l2_book_snapshot_max_age_ms default"
+    );
     assert_eq!(config.max_slippage_bps, 10.0, "max_slippage_bps default");
-    assert_eq!(config.contracts_amount_match_tolerance, 0.001, "contracts_amount_match_tolerance default");
+    assert_eq!(
+        config.contracts_amount_match_tolerance, 0.001,
+        "contracts_amount_match_tolerance default"
+    );
 }
 
 /// Explicit values override Appendix A defaults.
@@ -90,5 +99,8 @@ fn test_build_gate_config_explicit_overrides_defaults() {
     assert_eq!(config.fee_cache_hard_s, 600.0, "explicit hard override");
     assert_eq!(config.max_slippage_bps, 25.0, "explicit slippage override");
     // Non-overridden fields still get defaults
-    assert_eq!(config.instrument_cache_ttl_s, 3600.0, "non-overridden default");
+    assert_eq!(
+        config.instrument_cache_ttl_s, 3600.0,
+        "non-overridden default"
+    );
 }

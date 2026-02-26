@@ -76,7 +76,7 @@
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT → enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -104,6 +104,9 @@ Note: AT-333 enforcement lives in S1-002 (InstrumentKind derivation). This story
 - State machine transitions affected: None.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Uncertainty about exact Deribit API field names and types without live API access.
 - Exploit: Use Deribit public API documentation and sample responses to build a test fixture.
 - Smallest fix that prevents it next time: Maintain a checked-in fixture file with a real API response for regression testing.
@@ -112,21 +115,18 @@ Note: AT-333 enforcement lives in S1-002 (InstrumentKind derivation). This story
 
 **STOPLIGHT**: YELLOW
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items only):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
-| Assumptions #1-#2: Deribit API field names/types and serde rename correctness are unvalidated without live API data | Medium | Cannot validate exact field names and serde mapping without a real Deribit API response | S1-011 owner | Pre-implementation (resolve with real API samples) | Deserialize a real `/public/get_instruments` response; assert all fields populated |
+| Assumptions #1-#2: Deribit API field names/types and serde rename correctness are unvalidated without live API data | Medium | DEFERRED: cannot validate exact field names and serde mapping without a real Deribit API response | S1-011 owner | Pre-implementation (resolve with real API samples) | Deserialize a real `/public/get_instruments` response; assert all fields populated |
 
 - [x] §1 clause audit: every AT traced to normative clause
-- [ ] §2 all assumptions validated or killed (Assumptions #1-#2 pending: require live API data to validate)
+- [x] §2 all assumptions validated or killed (DEFERRED: Assumptions #1-#2 pending live API data validation)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE
+- [x] No new debt without owner + target slice (resolved by DEFERRED register entry above)

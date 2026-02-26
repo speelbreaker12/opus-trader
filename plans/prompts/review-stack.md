@@ -264,8 +264,8 @@ cat SKILLS/pr-review.md SKILLS/failure-mode-review.md \
     plans/prompts/review-stack.md | agent-run --prompt -
 ```
 
-### Step supervisor integration
+### wf_step integration (preferred)
 ```bash
 # The review stack is invoked during self_review step
-plans/step_supervisor.sh S1-007 prompt  # shows the self_review prompt
+plans/wf_step.sh S1-007 self_review --dry-run
 ```

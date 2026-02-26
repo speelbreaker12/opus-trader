@@ -94,6 +94,9 @@ Note: These are structural/scaffolding ATs, not safety-critical runtime gates. T
 - State machine transitions affected: None.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Ensuring `plans/verify.sh` is correctly scoped (not too much, not too little).
 - Exploit: Keep verify.sh to a single `cargo test --workspace` invocation with `set -euo pipefail`.
 - Smallest fix that prevents it next time: Document the verify.sh contract in a comment header.

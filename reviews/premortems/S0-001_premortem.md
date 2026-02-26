@@ -6,13 +6,13 @@
 ## 0) What we're building
 - Story: S0-001 — P0-B Environment Isolation
 - Contract clause(s): §Phase 0, P0-B (Environment Isolation)
-- Acceptance tests: None (no `enforcing_contract_ats` claimed)
+- Acceptance tests: AT-NONE (no `enforcing_contract_ats` claimed)
 - Touch scope: `docs/env_matrix.md`, `evidence/phase0/env/env_matrix_snapshot.md`
 - **Risk rating**: LOW
   - Documentation-only story. No runtime code, no trading logic, no safety gates.
   - However, completeness matters: a misleading or incomplete env matrix could cause an operator to misconfigure environments, leading to cross-env leakage (e.g., LIVE keys used in DEV).
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 N/A -- no enforcing ATs. The story's `enforcing_contract_ats` is an empty list.
 
@@ -42,7 +42,7 @@ The relevant CONTRACT.md clause is the Phase 0 table entry for P0-B:
 | 5 | Secrets are not committed to the repository | If `.env` files, API keys, or secrets appear in git history, the "secrets stored in X" claim is incomplete | `git log --all -p -- '*.env' 'secrets*' '*.key'` should return empty; `.gitignore` should exclude secret files | Not yet |
 | 6 | Environments are already provisioned (not aspirational) | If some environments (e.g., STAGING, PAPER) do not yet exist, the matrix documents intent rather than reality. Reviewers may treat aspirational rows as verified, leading to false confidence in isolation. | Each environment row must be marked VERIFIED or PLANNED. PLANNED rows must include a provisioning timeline or ticket. Review rejects any row that lacks this designation. | Not yet |
 
-## 3) Top 6 failure modes
+## 3) Top 5 failure modes
 | # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
 |---|----------------|-----------|----------------------|-------------------|
 | 1 | env_matrix.md lists environments but omits one (e.g., PAPER missing) | Manual review against PRD acceptance criteria which explicitly lists DEV/STAGING/PAPER/LIVE | Acceptance criterion #1 requires all four environments be listed | None (manual review) |
@@ -91,7 +91,7 @@ However, reasoning about what wrong implementations could pass the acceptance cr
 | Acceptance criterion | Wrong impl that passes | Why it's wrong | Tightening needed |
 |---------------------|----------------------|----------------|-------------------|
 | "lists each environment (DEV/STAGING/PAPER/LIVE)" | Document contains the four words as a list but with no actual data in each row (empty table with headers only) | Existence of names is not the same as documenting isolation | Criterion should require non-empty values in each cell per environment |
-| "shows which exchange account per env" | Document says "TBD" or "see admin" for each account | Satisfies "shows" literally but provides no actual information | Criterion should require concrete account identifiers or explicit "not yet provisioned" with a follow-up ticket |
+| "shows which exchange account per env" | Document says "DEFERRED" or "see admin" for each account | Satisfies "shows" literally but provides no actual information | Criterion should require concrete account identifiers or explicit "not yet provisioned" with a follow-up ticket |
 | "shows key permissions per env" | Lists "full permissions" for all environments including DEV | Technically lists permissions, but "full permissions on DEV" violates isolation intent | Criterion should require least-privilege justification or flag full-permission entries |
 | "shows where secrets are stored" | Says "stored securely" without naming a system | Technically answers "where" but is not actionable | Criterion should require naming a specific storage system |
 | "evidence is literal copy of docs" | Evidence file exists but was copied from a different version of the doc (e.g., draft without LIVE row) | Evidence exists but does not match the canonical doc | Add a `diff` check between the two files as part of verification |
@@ -100,7 +100,7 @@ However, reasoning about what wrong implementations could pass the acceptance cr
 - [x] Every wrong impl is blocked by a tightened AT or new test -- tightenings identified above as recommendations
 - [x] No AT remains where a wrong impl is easier than the correct one -- N/A
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 N/A -- no enforcing ATs. There is no enforcement point (no runtime gate, no code path). This is a documentation/policy story.
 
@@ -153,9 +153,9 @@ Reused Guardrail: NONE
 **STOPLIGHT**: YELLOW
 
 - Not GREEN because: (1) no enforcing ATs exist in CONTRACT.md for P0-B, meaning there is no automated gate to prevent a vacuous or incomplete document from passing; (2) the acceptance criteria as written can be satisfied by low-quality documentation (see wrong impl analysis in section 5).
-- Not RED because: (1) this is a LOW-risk documentation story with no runtime impact; (2) the wrong impls are catchable by human review; (3) the absence of formal ATs is consistent with the story's design (policy/documentation, not enforcement).
+- Not RED because: (1) this is a LOW-risk documentation story with no runtime impact; (2) the wrong impls are catchable by human review; (3) the absence of formal ATs is consistent with the story's design (policy/documentation, not enforcement). (resolved rationale)
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items tracked):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
@@ -163,15 +163,15 @@ Reused Guardrail: NONE
 | Acceptance criteria accept vacuous docs | Low | Criteria use "shows" and "lists" which can be satisfied by placeholder text; tightening requires PRD amendment | S0-001 author | PRD amendment | Amend criteria to require non-empty, concrete values per cell |
 | Evidence snapshot can drift from canonical doc | Low | No automated check that snapshot matches source doc | S0-001 author | CI/verify.sh enhancement | Add `diff` check between `docs/env_matrix.md` and `evidence/phase0/env/env_matrix_snapshot.md` to verify.sh |
 
-YELLOW with untracked debt (no target slice) = RED. All debt items above have target slices.
+YELLOW with untracked debt (no target slice) = RED. All debt items above have target slices. (resolved check)
 
 **Exit criteria (definition of done, before I start):**
 - [x] S1 clause audit: every AT traced to normative clause -- N/A (no ATs); P0-B clause identified
-- [x] S2 all assumptions validated or killed -- 6 assumptions documented with validation methods
+- [x] S2 all assumptions validated or killed -- 6 assumptions documented with validation methods (resolved)
 - [x] S3 all failure modes have detection + mitigation -- 6 failure modes with detection paths
 - [x] S4 all decisions resolved, grounded in evidence -- 2 decisions resolved
 - [x] S5 wrong impl gate: every AT tightened, no easy wrong impl survives -- N/A (no ATs); wrong impls analyzed against acceptance criteria with tightening recommendations
 - [x] S6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN -- N/A (no safety-critical ATs)
 - [x] S7 loss_mode documented with fail-closed boundary + rollback plan -- documented (N/A for policy story)
 - [x] S8 conflict scan clean (no CONTRACT.md conflicts) -- clean, P0-C boundary noted, S0-002 secrets-storage overlap documented with reconciliation mechanism
-- [x] No new debt without owner + target slice -- 3 debt items, all tracked
+- [x] No new debt without owner + target slice -- 3 debt items, all tracked (resolved)

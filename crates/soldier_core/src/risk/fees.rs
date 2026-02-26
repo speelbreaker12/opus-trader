@@ -125,10 +125,7 @@ pub fn fee_staleness_hard_stale_total() -> u64 {
 
 fn bump_fee_staleness_hard_stale() {
     FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
-    crate::execution::emit_execution_metric_line(
-        crate::execution::METRIC_FEE_STALENESS_REJECT,
-        "",
-    );
+    crate::execution::emit_execution_metric_line(crate::execution::METRIC_FEE_STALENESS_REJECT, "");
     tracing::debug!("FeeStalenessHardStale");
 }
 

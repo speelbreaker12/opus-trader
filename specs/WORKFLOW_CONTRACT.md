@@ -42,7 +42,6 @@ These files must exist in the fork and remain functional:
 - `plans/self_review_logged.sh` (self-review artifact logger)
 - `plans/review_logged.sh` (unified review logger — dispatches to codex or opus)
 - `plans/wf_step.sh` (workflow step progress tracker — enforces step ordering)
-- `plans/step_supervisor.sh` (single-step orchestration wrapper)
 - `plans/prd_set_pass.sh` (pass-flip gate — verify + review + contract + receipts)
 - `plans/slice_completion_enforce.sh` (verify-full slice-close enforcement bridge)
 - Contract/spec validators (kept as-is unless explicitly changed):
@@ -61,12 +60,20 @@ These files must exist in the fork and remain functional:
   - `tests/fixtures/status/**` (if present, must validate)
 
 Optional but recommended:
+- `plans/step_supervisor.sh` (deprecated compatibility wrapper only; not required for workflow gating)
 - `plans/preflight.sh` (cheap early failure detector)
 - `plans/postmortem_gate.sh` (TOC postmortem artifact validator)
 - `plans/story_postmortem_logged.sh` (story-level postmortem artifact logger)
 - `plans/codex_review_digest.sh` (concise Codex digest artifact generator)
 - `reviews/REVIEW_CHECKLIST.md`
 - `SKILLS/failure-mode-review.md`, `SKILLS/strategic-failure-review.md`
+
+### 3.1 Deprecated compatibility removal criteria (`plans/step_supervisor.sh`)
+
+`plans/step_supervisor.sh` may be removed once all are true:
+- No operator-facing prompt/runbook/handoff resume command instructs `step_supervisor.sh`
+- Workflow gate wiring no longer references it (`plans/workflow_verify.sh`, `plans/workflow_files_allowlist.txt`, related allowlist tests)
+- Reconciliation escalation behavior (GREEN vs YELLOW/RED `cycle2` requirements) is proven by `plans/wf_step.sh`-based tests
 
 ---
 
@@ -130,7 +137,7 @@ Notes:
 - Never edit a worktree while it is running `full`.
 - Story review evidence MUST be SHA-consistent: self review, both external reviews, and resolution file must all target the same `REVIEW_SHA`.
 - If `HEAD` changes after review starts, discard partial review artifacts and regenerate the full review set for the chosen SHA.
-- **Reconciliation mode**: For already-passing stories (`passes=true`), the same receipt chain runs with relaxed `implement` (no diff required) and `cycle2` (1 review artifact sufficient on GREEN path) checks. Activate via `WF_RECON_MODE=1` or `step_supervisor.sh --recon`. See `docs/PRD_STORY_WORKFLOW.md` § Reconciliation Mode for full details.
+- **Reconciliation mode**: For already-passing stories (`passes=true`), the same receipt chain runs with relaxed `implement` (no diff required) and `cycle2` (1 review artifact sufficient on GREEN path) checks. Activate via `WF_RECON_MODE=1` with `plans/wf_step.sh`. `step_supervisor.sh --recon` is a deprecated compatibility path and is not required by workflow gates. See `docs/PRD_STORY_WORKFLOW.md` § Reconciliation Mode for full details.
 
 ### Recommended (non-blocking)
 - Keep a single commit per story (use `--amend` until full is green) to keep review/merge simple.
@@ -254,7 +261,8 @@ Goal: fast, repeatable, contract-first.
 
 QUICK must run:
 1) `preflight` (if present; no postmortem enforcement)
-2) Contract/spec validators (the "spec_validators_group"):
+2) `artifact_lint` (fast artifact/schema contract lint for changed/untracked JSON)
+3) Contract/spec validators (the "spec_validators_group"):
    - contract_profiles
    - at_profile_parity
    - at_coverage_report
@@ -268,9 +276,9 @@ QUICK must run:
    - crash_replay_idempotency
    - reconciliation_matrix
    - csp_trace
-3) Status fixtures validation (if `tests/fixtures/status/**` exists): `status_fixture_*`
-4) Doc sync validation: `doc_sync_check`
-5) Stack tests (language-gated by repo contents):
+4) Status fixtures validation (if `tests/fixtures/status/**` exists): `status_fixture_*`
+5) Doc sync validation: `doc_sync_check`
+6) Stack tests (language-gated by repo contents):
    - Rust: `rust_fmt`, `rust_tests_quick`
    - Python: `python_ruff_check`, `python_pytest_quick`
    - Node: `node_lint`, `node_typecheck`, `node_test`
@@ -283,6 +291,9 @@ Goal: "mergeable green" for marking PRD pass.
 
 FULL must run:
 - Everything in QUICK, plus:
+  - `contract_review_generate` (auto-seed `contract_review.json` with fail-closed default decision)
+  - `contract_review_validate` (schema-validate generated `contract_review.json`)
+  - `artifact_lint` in strict full mode (must bind to current verify artifacts dir)
   - `crossref_gate` (marker-based evidence gate in CI mode; strictness controlled by sentinel/env)
   - `contract_coverage`
   - Rust: `rust_clippy`, `rust_tests_full`
@@ -291,6 +302,7 @@ FULL must run:
   - `vendor_docs_lint_rust` (if supported)
 
 FULL is the only gate allowed to justify `passes=true`.
+Auto-seeded `contract_review.json` defaults to `decision=BLOCKED`; pass flip still requires explicit `decision=PASS` per section 8.1.
 
 ### 7.5 Local full is allowed
 In this fork, `verify full` MUST be runnable locally without special allow flags.

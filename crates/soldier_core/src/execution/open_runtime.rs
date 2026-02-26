@@ -407,10 +407,14 @@ pub fn build_open_intent_with_assembly(
 ) -> OpenRuntimeOutput {
     let mut adjusted_input = input.clone();
 
-    match assemble_sizing(assembly_meta, sizing_params, IntentClass::Open, mismatch_metrics) {
+    match assemble_sizing(
+        assembly_meta,
+        sizing_params,
+        IntentClass::Open,
+        mismatch_metrics,
+    ) {
         Ok(assembled) => {
-            adjusted_input.base_gates.dispatch_consistency =
-                assembled.dispatch_consistency;
+            adjusted_input.base_gates.dispatch_consistency = assembled.dispatch_consistency;
             if assembled.risk_state_degraded
                 && adjusted_input.base_gates.risk_state == RiskState::Healthy
             {
@@ -418,7 +422,10 @@ pub fn build_open_intent_with_assembly(
             }
         }
         Err(e) => {
-            tracing::warn!(?e, "assembly failed — degrading dispatch_consistency to false");
+            tracing::warn!(
+                ?e,
+                "assembly failed — degrading dispatch_consistency to false"
+            );
             adjusted_input.base_gates.dispatch_consistency = DispatchConsistencyProof::failed();
             if adjusted_input.base_gates.risk_state == RiskState::Healthy {
                 adjusted_input.base_gates.risk_state = RiskState::Degraded;

@@ -64,9 +64,12 @@ assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_profile_parity.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_contract_review_emit.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_recon_bundle.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_roadmap_evidence_audit.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_crossref_invariants.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_crossref_gate.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_artifact_lint.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_story_review_findings_guard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediation_verify.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
@@ -98,7 +101,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "17" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 17)"
+[[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"

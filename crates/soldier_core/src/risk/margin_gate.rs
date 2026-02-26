@@ -19,10 +19,7 @@ pub fn margin_gate_reject_total() -> u64 {
 
 fn bump_margin_gate_reject() {
     MARGIN_GATE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
-    crate::execution::emit_execution_metric_line(
-        crate::execution::METRIC_MARGIN_GATE_REJECT,
-        "",
-    );
+    crate::execution::emit_execution_metric_line(crate::execution::METRIC_MARGIN_GATE_REJECT, "");
     tracing::debug!("MarginGateReject");
 }
 

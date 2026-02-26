@@ -29,6 +29,14 @@ WF_STEP="$ROOT/plans/wf_step.sh"
 PRD_SET_PASS="$ROOT/plans/prd_set_pass.sh"
 RECON_MODE=0
 
+warn_deprecated() {
+  [[ "${STEP_SUPERVISOR_SILENCE_DEPRECATION:-0}" == "1" ]] && return 0
+  cat >&2 <<'EOF'
+STEP_SUPERVISOR DEPRECATED: prefer /reconcil for orchestration and plans/wf_step.sh for receipt execution.
+STEP_SUPERVISOR remains a compatibility wrapper during migration and may be removed in a future cleanup.
+EOF
+}
+
 usage() {
   cat >&2 <<'EOF'
 Usage: step_supervisor.sh <STORY_ID> <cmd> [options]
@@ -76,6 +84,8 @@ while [[ $# -gt 0 ]]; do
     *) die "unknown arg: $1" ;;
   esac
 done
+
+warn_deprecated
 
 # ── Security: STORY_ID validation (prevent path traversal) ─────────
 if [[ ! "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then

@@ -7,8 +7,9 @@ mod common;
 
 use soldier_core::execution::reject_reason::RejectReasonCode;
 use soldier_core::execution::{
-    BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, ChokeIntentClass, DispatchConsistencyProof, GateStep, OrderType,
-    PreflightInput, QuantizeConstraints, QuantizePipelineInput, Side, evaluate_base_gates,
+    BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, ChokeIntentClass, DispatchConsistencyProof,
+    GateStep, OrderType, PreflightInput, QuantizeConstraints, QuantizePipelineInput, Side,
+    evaluate_base_gates,
 };
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use soldier_core::venue::{

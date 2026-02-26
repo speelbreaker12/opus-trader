@@ -427,7 +427,8 @@ Generated during or after verify.sh full, placed in the verify artifacts directo
 { "decision": "PASS" }
 ```
 
-This is a human/supervisor judgment artifact — not auto-generated. Create it after confirming contract alignment.
+`verify.sh full` now auto-seeds this artifact with a fail-closed baseline (`decision=BLOCKED`).
+Before pass flip, replace or update it with human/supervisor judgment and ensure `decision=PASS`.
 
 ### Gate checks (all must pass)
 
@@ -505,11 +506,10 @@ Reconciliation mode uses the **same 9-step workflow** to retroactively audit sto
 ### Activation
 
 ```bash
-# Via step_supervisor.sh
-plans/step_supervisor.sh <STORY_ID> prompt --recon
-plans/step_supervisor.sh <STORY_ID> run --recon
+# Preferred orchestration
+/reconcil
 
-# Via wf_step.sh directly
+# Preferred mechanical receipt execution
 WF_RECON_MODE=1 plans/wf_step.sh <STORY_ID> <step>
 ```
 

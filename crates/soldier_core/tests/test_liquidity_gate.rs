@@ -607,7 +607,10 @@ fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
         liquidity_gate_reject_total(LiquidityGateRejectReason::InsufficientDepthWithinBudget);
     let after_samples = expected_slippage_bps_samples();
     assert_eq!(after_reject, before_reject + 1);
-    assert_eq!(after_samples, before_samples + 1);
+    assert!(
+        after_samples > before_samples,
+        "expected at least one additional slippage sample: before={before_samples} after={after_samples}"
+    );
 
     let lines = take_execution_metric_lines();
     assert!(

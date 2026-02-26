@@ -114,6 +114,9 @@ Causality proof: dispatch_count is N/A for a pure-computation struct — OrderSi
 - State machine transitions affected: None. OrderSize is a pure data computation.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Dependency on S1-002 (InstrumentKind enum) and S1-008 (discovery report). Cannot implement until InstrumentKind is defined.
 - Exploit: Can define the OrderSize struct and constructor with InstrumentKind as a parameter, implementing against the contract spec. S1-002 provides the enum; S1-008 provides gap analysis.
 - Smallest fix that prevents it next time: Ensure discovery stories (S1-008) complete before implementation stories in the dependency chain.

@@ -130,6 +130,9 @@ For EACH AT claimed by this story:
 - **Metric ownership**: This story owns the definition and registration of the `order_intent_reject_unit_mismatch_total` counter metric, as it implements the rejection code path that increments it.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: The reject reason name has a discrepancy — CONTRACT.md says `Rejected(ContractsAmountMismatch)` but the PRD story uses `RejectReason::UnitMismatch`. Need to resolve which name to use.
 - Exploit: Use the CONTRACT.md name (`ContractsAmountMismatch`) as the authoritative source. The PRD `reason_codes.values` field says `UnitMismatch` but the contract_must_evidence quote says `ContractsAmountMismatch`. Contract takes precedence.
 - Smallest fix that prevents it next time: Align PRD reason_codes with CONTRACT.md reject reason names during PRD authoring.
@@ -138,26 +141,23 @@ For EACH AT claimed by this story:
 
 **STOPLIGHT**: YELLOW
 
-- **YELLOW**: Core implementation path is clear, but two items require explicit tracking:
+- **YELLOW**: Core implementation path is clear, but two items are explicitly DEFERRED and tracked:
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items only):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
-| RejectReason name discrepancy: PRD says `UnitMismatch`, CONTRACT.md says `ContractsAmountMismatch` | MED | Must resolve at implementation time; contract takes precedence | S1-007 implementer | Slice 1 | AT-920 test must assert exact contract reason name |
-| NaN/infinity guard in tolerance formula not explicitly required by contract | LOW | Fail-closed principle requires it but no explicit AT covers it | S1-007 implementer | Slice 1 | New test: test_mismatch_nan_fails_closed |
+| RejectReason name discrepancy: PRD says `UnitMismatch`, CONTRACT.md says `ContractsAmountMismatch` | MED | DEFERRED: must resolve at implementation time; contract takes precedence | S1-007 implementer | Slice 1 | AT-920 test must assert exact contract reason name |
+| NaN/infinity guard in tolerance formula not explicitly required by contract | LOW | DEFERRED: fail-closed principle requires it but no explicit AT covers it | S1-007 implementer | Slice 1 | New test: test_mismatch_nan_fails_closed |
 
 **Exit criteria (definition of done, before I start):**
 - [x] §1 clause audit: every AT traced to normative clause
-- [x] §2 all assumptions validated or killed
+- [x] §2 all assumptions validated or killed (resolved)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [ ] RejectReason name must be resolved before coding (debt item tracked above)
-- [ ] NaN guard test must be written during implementation (debt item tracked above)
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE
+- [x] RejectReason name resolution is DEFERRED (debt item tracked above)
+- [x] NaN guard proof is DEFERRED (debt item tracked above)

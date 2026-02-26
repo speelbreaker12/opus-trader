@@ -129,6 +129,8 @@ ADVERSARIAL_GATE_TIMEOUT="${ADVERSARIAL_GATE_TIMEOUT:-2m}"
 GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
 DOC_SYNC_TIMEOUT="${DOC_SYNC_TIMEOUT:-30s}"
 WORKFLOW_TEST_TIMEOUT="${WORKFLOW_TEST_TIMEOUT:-15m}"
+ARTIFACT_LINT_TIMEOUT="${ARTIFACT_LINT_TIMEOUT:-45s}"
+CONTRACT_REVIEW_TIMEOUT="${CONTRACT_REVIEW_TIMEOUT:-30s}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -463,6 +465,16 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
+if [[ "$MODE" == "full" ]]; then
+  log "00b) contract review generate"
+  run_logged_or_exit "contract_review_generate" "$CONTRACT_REVIEW_TIMEOUT" \
+    ./plans/contract_review_emit.sh --out "$VERIFY_ARTIFACTS_DIR/contract_review.json"
+
+  log "00c) contract review validate"
+  run_logged_or_exit "contract_review_validate" "$CONTRACT_REVIEW_TIMEOUT" \
+    ./plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"
+fi
+
 ensure_python
 
 log "01) preflight"
@@ -470,6 +482,13 @@ run_logged_or_exit "preflight" "$PREFLIGHT_TIMEOUT" env POSTMORTEM_GATE=0 PREFLI
 
 log "01b) verify gate contract"
 run_logged_or_exit "verify_gate_contract" "$PREFLIGHT_TIMEOUT" ./plans/verify_gate_contract_check.sh
+
+log "01c) artifact lint"
+artifact_lint_cmd=(./plans/artifact_lint.sh --mode "$MODE")
+if [[ "$MODE" == "full" ]]; then
+  artifact_lint_cmd+=(--verify-artifacts-dir "$VERIFY_ARTIFACTS_DIR")
+fi
+run_logged_or_exit "artifact_lint" "$ARTIFACT_LINT_TIMEOUT" "${artifact_lint_cmd[@]}"
 
 if [[ -f "docs/contract_kernel.json" ]]; then
   log "02) contract kernel"
