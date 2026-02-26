@@ -60,8 +60,9 @@ boundary — see §12.
 1. **Compiler-enforced privacy**: internal modules become `mod` (not `pub mod`).
    External crates cannot reach gate internals via deep module paths.
 2. **Centralized facade**: all public re-exports live in `api.rs`.
-   Wire types remain `pub` but are only reachable through the facade, not through
-   `execution::gate::LiquidityGateInput`. (Phase 2 makes them `pub(crate)`.)
+   Wire types remain `pub` in their source files but are **not re-exported** in
+   `api.rs` — they become unreachable to external crates because their parent
+   modules are private (`mod`, not `pub mod`). (Phase 2 makes them `pub(crate)`.)
 3. **Fast feedback**: gate unit tests move next to the code (`#[cfg(test)]`), running
    in `verify.sh quick` (`--lib`).
 4. **Contract-only integration tests**: `crates/soldier_core/tests/` imports only
@@ -153,7 +154,7 @@ Phase 2 introduces contract input types that replace these structs, enabling
 ```rust
 // crates/soldier_core/src/execution/api.rs
 //
-// 44 symbols. Each justified by production consumer or contract integration
+// 47 symbols. Each justified by production consumer or contract integration
 // test that survives the test-move step.
 
 //! # Execution Pipeline — Public API
@@ -168,17 +169,16 @@ Phase 2 introduces contract input types that replace these structs, enabling
 //! RULE: crates/soldier_core/tests/* may only import from this facade.
 //! Anything needing gate-internal types belongs in #[cfg(test)] unit tests.
 
-// ── Chokepoint Boundary (10 symbols) ──
+// ── Chokepoint Boundary (13 symbols) ──
 pub use super::build_order_intent::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult,
     GateResults, GateStep, RecordedBeforeDispatchGate,
+    build_gate_results,
     build_order_intent, build_order_intent_with_wal_gate,
     build_order_intent_with_optional_wal_gate,
     build_order_intent_with_reject_reason_code,
 };
-// CUT: ChokeMetrics (all consumers in must-move tests)
 // CUT: GateSequenceResult, gate_sequence_total (sole consumer test_gate_ordering → must-move)
-// CUT: build_gate_results (zero external consumers)
 
 // ── Reject Reason (4 symbols) ──
 pub use super::reject_reason::{
@@ -231,7 +231,7 @@ are private; `pub` → `pub(crate)` deferred to Phase 2:
 
 | Category | Types excluded from facade | Reason |
 |----------|--------------------------|--------|
-| **Chokepoint internals** | `ChokeMetrics`, `GateSequenceResult`, `gate_sequence_total`, `build_gate_results` | All consumers in must-move tests or zero consumers |
+| **Chokepoint internals** | `GateSequenceResult`, `gate_sequence_total` | Sole consumer test_gate_ordering → must-move |
 | **Pipeline types** | `PipelineResult`, `GateOutcome`, `IntentPipelineInput`, `IntentPipelineMetrics`, `QuantizePipelineInput`, `evaluate_intent_pipeline` | Return type / input of excluded functions; zero surviving consumers |
 | **Assembly wiring** | `AssembledPipelineParams`, `SizingParams`, `assemble_sizing`, `choke_intent_to_dispatch`, `evaluate_assembled_pipeline`, `AssemblySizingError`, `AssembledSizing` | Internal pipeline wiring |
 | **OPEN runtime wiring** | `OpenRuntimeInput`, `OpenRuntimeMetrics`, `OpenRuntimeOutput`, `build_open_intent_with_assembly`, `build_open_order_intent_runtime`, `settle_pending_on_tlsm_terminal` | Internal pipeline wiring |
@@ -368,15 +368,37 @@ let result = evaluate_intent_pipeline(&input, &mut metrics);
 
 // AFTER (uses facade-only chokepoint surface):
 use soldier_core::execution::{
-    build_order_intent_with_wal_gate, GateResults, RejectReasonCode, ChokeResult, ...
+    build_gate_results, build_order_intent_with_optional_wal_gate,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateStep,
 };
-let result = build_order_intent_with_wal_gate(&gate_results);
+use soldier_core::risk::RiskState;
+
+let gate_results = build_gate_results(
+    true, true, true, true, true, true, true, true, true, None, None,
+);
+let mut metrics = ChokeMetrics::new();
+let result = build_order_intent_with_optional_wal_gate(
+    ChokeIntentClass::Open,
+    RiskState::Degraded,
+    &mut metrics,
+    &gate_results,
+    None, // no WAL adapter → fail-closed for OPEN
+);
+
+match result {
+    ChokeResult::Rejected { reason, .. } => {
+        assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
+    }
+    other => panic!("expected rejection, got {other:?}"),
+}
 ```
 
-**Pipeline-level assertions that test internal gate wiring** (e.g., "missing
+**Key limitation:** Chokepoint functions return `ChokeRejectReason` (pass/fail +
+high-level reason), not gate-internal reject details like `LiquidityGateNoL2`.
+Pipeline-level assertions that test specific gate reject reasons (e.g., "missing
 `LiquidityGateInput` → `LiquidityGateNoL2`", "missing `NetEdgeInput` →
-`NetEdgeMissingInput`") are valuable but belong in `pipeline.rs` `#[cfg(test)]`
-unit tests, not in integration tests.
+`NetEdgeMissingInput`") are valuable but must move to `pipeline.rs` `#[cfg(test)]`
+unit tests — they cannot be expressed through the chokepoint surface.
 
 The 4 hash tests (GI-020) use `compute_intent_hash()` from `idempotency` — these
 are already facade-clean and stay unchanged.
@@ -427,10 +449,11 @@ Problem: `verify.sh quick` runs `cargo test --workspace --lib`, which skips
 `crates/soldier_core/tests/`. After this refactor, only contract tests remain
 there, but they're still invisible to the fast loop.
 
-**Fix: Add a `smoke` lane to `verify.sh quick`, immediately after `--lib`.**
+**Fix: Add a `smoke` lane to `plans/lib/rust_gates.sh` (quick branch),
+immediately after the existing `cargo test --workspace --lib --locked` line.**
 
 ```bash
-# verify.sh quick — add after the existing `cargo test --workspace --lib --locked` line:
+# plans/lib/rust_gates.sh — quick branch, add after `cargo test --workspace --lib --locked`:
 
 # ── Smoke contract tests (facade-only integration tests) ──
 cargo test -p soldier_core --test adversarial_gi_enforcement
