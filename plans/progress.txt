@@ -713,3 +713,10 @@ Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_workflow_
 Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; plans/tests/test_preflight_fixture_profiles.sh; reviews/premortems/RUNBOOK_PREMORTEM_RECON.md; docs/recon/artifact_field_contract.md; artifacts/verify/ (latest full run in this worktree).
 Notes: Assumption recorded: implemented “Part C” from `docs/recon/S14_WORKFLOW_HARDENING_MASTER_PLAN.md` in dedicated branch from updated `origin/main`, despite current `plans/prd.json` S14-004 text describing a different workflow follow-up.
 Next: Open PR for Phase C recon bundle portability and request clean-checkout CI verification.
+Story: PR #135 review remediation
+Date: 2026-02-26 22:35:55 UTC
+Summary: Addressed review findings by removing `eval`-based scope collection from recon bundle export, enforcing strict `--verify-run` token validation, adding symlink-component traversal blocking for import payload/destination paths, extending `test_recon_bundle` with command-injection and symlink payload adversarial cases, and reverting runtime-generated artifacts from the PR diff.
+Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_preflight_fixture_profiles.sh; bash plans/tests/test_workflow_allowlist_coverage.sh.
+Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; var/runtime/runtime_state.json (reverted); artifacts/phase0/meta_test_runtime/* (removed from branch diff).
+Notes: Review-scope assumption: security fixes prioritized as blocking P1 before any additional feature adjustments.
+Next: Commit remediation patch, push branch, and update PR #135.

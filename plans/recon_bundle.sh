@@ -101,8 +101,7 @@ is_allowed_scope_path() {
 
 append_scope_files() {
   local list_file="$1"
-  local find_expr="$2"
-  local scope_desc="$3"
+  local scope_desc="$2"
   local found=0
   local rel=""
 
@@ -112,9 +111,34 @@ append_scope_files() {
     [[ -n "$rel" ]] || continue
     printf '%s\n' "$rel" >> "$list_file"
     found=1
-  done < <(eval "$find_expr" | LC_ALL=C sort)
+  done
 
   [[ "$found" -eq 1 ]] || fail "missing required export scope: $scope_desc"
+}
+
+assert_no_symlink_components() {
+  local base="$1"
+  local rel="$2"
+  local label="$3"
+  local rest="$rel"
+  local part=""
+  local cur="$base"
+
+  [[ ! -L "$base" ]] || fail "$label contains symlink component: $rel"
+
+  while [[ -n "$rest" ]]; do
+    if [[ "$rest" == */* ]]; then
+      part="${rest%%/*}"
+      rest="${rest#*/}"
+    else
+      part="$rest"
+      rest=""
+    fi
+    cur="$cur/$part"
+    if [[ -L "$cur" ]]; then
+      fail "$label contains symlink component: $rel"
+    fi
+  done
 }
 
 build_export_bundle() {
@@ -140,13 +164,23 @@ build_export_bundle() {
   files_list="$(mktemp)"
   file_rows="$(mktemp)"
 
-  append_scope_files "$files_list" "find reviews/reconciliations/$slice -type f 2>/dev/null || true" "reviews/reconciliations/$slice/**"
-  append_scope_files "$files_list" "find .wf/receipts -type f -path '.wf/receipts/${slice}-*/*' 2>/dev/null || true" ".wf/receipts/${slice}-*/**"
-  append_scope_files "$files_list" "find .wf/recon_scope_lock -type f -name '${slice}-*.scope_lock.json' 2>/dev/null || true" ".wf/recon_scope_lock/${slice}-*.scope_lock.json"
-  append_scope_files "$files_list" "find artifacts/story -type f -path 'artifacts/story/${slice}-*/*' 2>/dev/null || true" "artifacts/story/${slice}-*/**"
+  append_scope_files "$files_list" "reviews/reconciliations/$slice/**" < <(
+    find "reviews/reconciliations/$slice" -type f 2>/dev/null | LC_ALL=C sort
+  )
+  append_scope_files "$files_list" ".wf/receipts/${slice}-*/**" < <(
+    find .wf/receipts -type f -path ".wf/receipts/${slice}-*/*" 2>/dev/null | LC_ALL=C sort
+  )
+  append_scope_files "$files_list" ".wf/recon_scope_lock/${slice}-*.scope_lock.json" < <(
+    find .wf/recon_scope_lock -type f -name "${slice}-*.scope_lock.json" 2>/dev/null | LC_ALL=C sort
+  )
+  append_scope_files "$files_list" "artifacts/story/${slice}-*/**" < <(
+    find artifacts/story -type f -path "artifacts/story/${slice}-*/*" 2>/dev/null | LC_ALL=C sort
+  )
 
   if [[ -n "$verify_run" ]]; then
-    append_scope_files "$files_list" "find artifacts/verify/$verify_run -type f 2>/dev/null || true" "artifacts/verify/$verify_run/**"
+    append_scope_files "$files_list" "artifacts/verify/$verify_run/**" < <(
+      find "artifacts/verify/$verify_run" -type f 2>/dev/null | LC_ALL=C sort
+    )
   fi
 
   sort -u "$files_list" -o "$files_list"
@@ -269,6 +303,7 @@ import_bundle_payload() {
   [[ -d "$bundle_dir" ]] || fail "bundle directory not found: $bundle_dir"
   [[ -f "$manifest" ]] || fail "bundle manifest not found: $manifest"
   [[ -d "$payload_root" ]] || fail "bundle payload directory not found: $payload_root"
+  [[ ! -L "$payload_root" ]] || fail "bundle payload directory must not be symlink: $payload_root"
   jq empty "$manifest" >/dev/null 2>&1 || fail "bundle manifest is not valid json: $manifest"
   validate_manifest_structure "$manifest"
 
@@ -296,6 +331,7 @@ import_bundle_payload() {
     [[ -n "$rel" ]] || continue
     assert_safe_rel_path "$rel"
     is_allowed_scope_path "$rel" "$slice_id" "$verify_run_id" || fail "unsafe manifest path outside allowed scope: $rel"
+    assert_no_symlink_components "$payload_root" "$rel" "payload path"
 
     payload_file="$payload_root/$rel"
     [[ -e "$payload_file" ]] || fail "missing payload file: $rel"
@@ -320,6 +356,7 @@ import_bundle_payload() {
   while IFS= read -r rel; do
     [[ -n "$rel" ]] || continue
     payload_file="$payload_root/$rel"
+    assert_no_symlink_components "$ROOT" "$rel" "destination path"
     mkdir -p "$(dirname "$ROOT/$rel")"
     if [[ -L "$ROOT/$rel" ]]; then
       fail "destination path is symlink: $rel"
@@ -387,6 +424,10 @@ run_export() {
 
   [[ -n "$slice" ]] || fail "missing required --slice <S#>"
   [[ "$slice" =~ ^S[0-9]+$ ]] || fail "invalid --slice '$slice' (expected S<digits>)"
+  if [[ -n "$verify_run" ]]; then
+    [[ "$verify_run" =~ ^[A-Za-z0-9._-]+$ ]] \
+      || fail "invalid --verify-run '$verify_run' (expected [A-Za-z0-9._-]+)"
+  fi
 
   if [[ -z "$bundle_id" ]]; then
     utc_stamp="$(date -u +%Y%m%dT%H%M%SZ)"

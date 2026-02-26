@@ -169,6 +169,51 @@ expect_fail "unsafe path blocks import" \
   "unsafe manifest path" \
   bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh import --bundle '$unsafe_dir' --allow-head-mismatch --dry-run"
 
+injection_probe="$tmp_dir/injection_probe"
+rm -f "$injection_probe"
+expect_fail "verify-run injection is rejected" \
+  "invalid --verify-run" \
+  bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh export --slice S14 --verify-run '.; touch $injection_probe; #' --bundle-id inj-verify-run --out-root '$tmp_dir/inj_out'"
+[[ ! -f "$injection_probe" ]] || fail "verify-run injection probe should not execute"
+
+symlink_bundle="$tmp_dir/symlink_bundle"
+mkdir -p "$symlink_bundle/payload"
+outside_payload="$tmp_dir/outside_payload"
+mkdir -p "$outside_payload/reconciliations/S14"
+printf 'outside payload\n' > "$outside_payload/reconciliations/S14/pwn.txt"
+ln -s "$outside_payload" "$symlink_bundle/payload/reviews"
+
+symlink_sha="$(shasum -a 256 "$outside_payload/reconciliations/S14/pwn.txt" | awk '{print $1}')"
+symlink_size="$(wc -c < "$outside_payload/reconciliations/S14/pwn.txt" | tr -d '[:space:]')"
+fixture_head="$(git -C "$fixture_repo" rev-parse HEAD)"
+jq -n \
+  --arg schema_version "recon_bundle.v1" \
+  --arg bundle_id "symlink-probe" \
+  --arg slice_id "S14" \
+  --arg source_head_sha "$fixture_head" \
+  --arg created_at_utc "2026-02-26T00:00:00Z" \
+  --arg path "reviews/reconciliations/S14/pwn.txt" \
+  --arg sha256 "$symlink_sha" \
+  --argjson size_bytes "$symlink_size" \
+  '{
+    schema_version: $schema_version,
+    bundle_id: $bundle_id,
+    slice_id: $slice_id,
+    source_head_sha: $source_head_sha,
+    created_at_utc: $created_at_utc,
+    files: [
+      {
+        path: $path,
+        sha256: $sha256,
+        size_bytes: $size_bytes
+      }
+    ]
+  }' > "$symlink_bundle/bundle.manifest.json"
+
+expect_fail "symlinked payload path blocks import" \
+  "payload path contains symlink component" \
+  bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh import --bundle '$symlink_bundle' --allow-head-mismatch --dry-run"
+
 missing_scope_repo="$tmp_dir/missing_scope_repo"
 build_fixture_repo "$missing_scope_repo"
 copy_script_into_fixture "$missing_scope_repo"
