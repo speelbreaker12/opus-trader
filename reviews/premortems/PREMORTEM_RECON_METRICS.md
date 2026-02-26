@@ -557,7 +557,7 @@ Current reconciliation audits "does the guard work?" but not "what happens after
 - Version history moved to Appendix D (header truncated to current + previous)
 - Canonicalized entry points location: `specs/ENTRY_POINTS.md` (removed "or equivalent")
 - RECON-CLEAN independent verification gate: lead must independently verify `BLOCKING=0` before approving Cycle 2 skip (read artifact, confirm finding_counts, record verification)
-- Appendix A sync directive: `plans/prompts/slice_reconcile_implement.md` is canonical source of truth; appendix is reference snapshot with diff command for drift detection
+- Appendix A sync directive: `plans/prompts/slice_reconcile_r1_audit.md` (renamed from `slice_reconcile_implement.md`) is canonical source of truth; appendix is reference snapshot with diff command for drift detection
 
 ### v2.0 (2026-02-22)
 - Anti-pattern #26 (blanket `--theirs` merge destroys branch-specific tooling)

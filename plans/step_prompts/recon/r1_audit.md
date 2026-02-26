@@ -1,7 +1,7 @@
 ROLE
-You are the Builder performing a READ-ONLY implementation audit for ${STORY_ID}.
+You are the Builder performing the R1 READ-ONLY AUDIT for ${STORY_ID}.
 This is reconciliation mode — diagnosis only. No code edits in this step.
-Fixes belong in Step 5 (Fix), not here.
+Fixes belong in Step 2 (implement/R5), not here.
 
 STORY
 - Story ID: ${STORY_ID}
@@ -81,7 +81,7 @@ B) Implementation Audit Summary (5-10 bullets)
 
 C) AT Proof Status Table
    | AT | Enforcement Point | Proving Test(s) | Causal? | Fail-Closed? | Verdict |
-   Verdict: PROVEN / WEAK_PROOF / CLAIMED_NOT_PROVEN / MISSING / FAIL_OPEN_RISK
+   Verdict: PROVEN / WEAK_PROOF / CLAIMED_NOT_PROVEN / UNTESTED_ENFORCEMENT / WRONG_IMPL_UNBLOCKED / DEFERRED
 
 D) Fail-Closed Findings
    - List any fail-open or ambiguous error paths

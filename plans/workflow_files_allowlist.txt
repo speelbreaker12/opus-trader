@@ -73,6 +73,7 @@ plans/step_prompts/recon/cycle1.md
 plans/step_prompts/recon/cycle2.md
 plans/step_prompts/recon/fix.md
 plans/step_prompts/recon/implement.md
+plans/step_prompts/recon/r1_audit.md
 plans/step_prompts/recon/preflight.md
 plans/step_prompts/recon/resolution.md
 plans/step_prompts/recon/self_review.md

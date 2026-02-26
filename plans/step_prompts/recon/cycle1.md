@@ -74,7 +74,7 @@ A proof_graph.json skeleton has been generated at:
 
 For each AT entry in the `ats[]` array, fill the `at_verdict` block:
   "at_verdict": {
-    "verdict": "PROVEN_INTEGRATED|PROVEN_UNIT|WEAK_PROOF|CLAIMED_NOT_PROVEN|UNTESTED_ENFORCEMENT|WRONG_IMPL_UNBLOCKED|INVALID_REF|FAIL_OPEN_RISK|MISSING|DEFERRED",
+    "verdict": "PROVEN_INTEGRATED|PROVEN_UNIT|WEAK_PROOF|CLAIMED_NOT_PROVEN|UNTESTED_ENFORCEMENT|WRONG_IMPL_UNBLOCKED|DEFERRED",
     "severity": "BLOCKING|HARDENING|INFO",
     "rationale": "One sentence explaining your verdict"
   }

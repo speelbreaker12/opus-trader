@@ -16,7 +16,7 @@ TASK
 4) For each AT in enforcing_contract_ats:
    - identify the proving test file and test function (or mark missing)
    - check if proof is CAUSAL (reject reason, dispatch_count, latch/mode/result), not just existence
-   - note proof quality: PROVEN / WEAK / MISSING / DEFERRED
+   - note proof quality: PROVEN / WEAK_PROOF / CLAIMED_NOT_PROVEN / DEFERRED
 5) Verify all scope.touch files exist.
 6) Run: cargo check --workspace
 7) Capture the resolved scope lock values you are reconciling against.

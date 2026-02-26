@@ -1,9 +1,8 @@
-# STEP: IMPLEMENT (RECONCILIATION AUDIT MODE)
+# STEP: R1 READ-ONLY AUDIT (Appendix A derived copy)
 
 ## ROLE
 
-You are the Builder in RECONCILIATION mode.
-This step is named "implement" for workflow compatibility, but in recon mode it is a **READ-ONLY implementation audit**.
+You are the Builder in RECONCILIATION mode running **Phase R1: read-only implementation audit**.
 Do NOT write or modify production code, tests, PRD, or review artifacts in this step.
 
 ## STORY
@@ -41,23 +40,18 @@ Reason: MISSING_ARTIFACT: <filename or description>
 ```
 Do not proceed. Do not guess or hallucinate the content of missing artifacts.
 
-**Item 2 (recon preflight) is OPTIONAL when the premortem (item 1) exists.** The preflight's
-value is as a surrogate when no premortem was written. When the premortem exists, it is already
-your primary audit checklist and the preflight adds marginal value. If the preflight exists, read
-it for additional context. If it does not exist and the premortem does, proceed without it.
+**Item 2 (recon preflight) is OPTIONAL when the premortem (item 1) exists.** When the premortem
+exists, it is already your primary audit checklist and the preflight adds marginal value. If the
+preflight exists, read it for additional context. If it does not exist and the premortem does,
+proceed without it.
 
 **Item 3 (prior postmortems) is OPTIONAL.** If no postmortem exists for this story, proceed
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.
 
-**PREMORTEM FALLBACK RULE** (item 1 only): If `reviews/premortems/${STORY_ID}_premortem.md` does not exist:
-- Use the Step 1 recon preflight artifact as the **surrogate premortem**. It contains the
-  contract-to-AT-to-test proof audit, which covers the core reconciliation checks (§1 clause audit,
-  §6 proof plan equivalents).
-- Skip premortem-specific checks (§2 assumptions, §4 decisions, §5 wrong impls) — these sections
-  don't exist in the surrogate. Note in the output: `PREMORTEM_ABSENT: using recon preflight as surrogate.`
-- The surrogate mode produces a narrower audit (enforcement + causal proof + fail-closed only).
-  Mark the story for **retro-premortem** creation if it is safety-critical (MED/HIGH risk).
-- Do NOT hallucinate premortem content. Do NOT invent §5 wrong impls from imagination.
+**PREMORTEM HARD RULE** (item 1 only): If `reviews/premortems/${STORY_ID}_premortem.md` does not exist:
+- **STOP.** Output `NO-GO: PREMORTEM_MISSING`. Do not proceed.
+- Write the premortem first using Mode A (Premortem Authoring) before entering reconciliation.
+- Do NOT guess or hallucinate premortem content. There is no surrogate or fallback path for R1.
 
 ## HARD GATE
 
