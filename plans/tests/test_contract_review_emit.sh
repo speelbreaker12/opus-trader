@@ -25,8 +25,16 @@ blocked_out="$tmp_dir/contract_review_blocked.json"
 [[ "$(jq -r '.pass_flip_check.decision_on_pass_flip' "$blocked_out")" == "BLOCKED" ]] \
   || fail "default pass_flip_check.decision_on_pass_flip must be BLOCKED"
 
+set +e
+pass_without_opt_in_output="$("$EMIT" --out "$tmp_dir/pass_without_opt_in.json" --decision PASS --story-id S14-003 2>&1)"
+pass_without_opt_in_rc=$?
+set -e
+[[ "$pass_without_opt_in_rc" -ne 0 ]] || fail "PASS without explicit opt-in should fail"
+printf '%s\n' "$pass_without_opt_in_output" | grep -Fq "requires --allow-pass-decision" \
+  || fail "missing PASS opt-in diagnostic"
+
 pass_out="$tmp_dir/contract_review_pass.json"
-"$EMIT" --out "$pass_out" --decision PASS --story-id S14-003
+"$EMIT" --out "$pass_out" --decision PASS --allow-pass-decision --story-id S14-003
 [[ -f "$pass_out" ]] || fail "pass output not created"
 "$VALIDATE" "$pass_out"
 [[ "$(jq -r '.decision' "$pass_out")" == "PASS" ]] \

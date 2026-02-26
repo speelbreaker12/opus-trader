@@ -10,6 +10,7 @@ DECISION="BLOCKED"
 STORY_ID="VERIFY_FULL"
 CONFIDENCE="low"
 REQUESTED_MARK_PASS_ID=""
+ALLOW_PASS_DECISION=0
 
 usage() {
   cat <<'USAGE'
@@ -18,6 +19,7 @@ Usage: plans/contract_review_emit.sh --out <path> [options]
 Options:
   --out <path>                 Required output JSON path.
   --decision PASS|FAIL|BLOCKED Decision to emit (default: BLOCKED).
+  --allow-pass-decision        Required when --decision PASS is used.
   --story-id <id>              selected_story_id value (default: VERIFY_FULL).
   --requested-pass-id <id>     pass_flip_check.requested_mark_pass_id
                                (default: same as --story-id).
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --decision=*)
       DECISION="${1#*=}"
+      shift
+      ;;
+    --allow-pass-decision)
+      ALLOW_PASS_DECISION=1
       shift
       ;;
     --story-id)
@@ -93,6 +99,11 @@ case "$DECISION" in
     exit 2
     ;;
 esac
+
+if [[ "$DECISION" == "PASS" && "$ALLOW_PASS_DECISION" -ne 1 ]]; then
+  echo "FAIL: decision PASS requires --allow-pass-decision" >&2
+  exit 2
+fi
 
 if [[ -z "$REQUESTED_MARK_PASS_ID" ]]; then
   REQUESTED_MARK_PASS_ID="$STORY_ID"

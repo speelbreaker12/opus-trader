@@ -381,8 +381,6 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
-ensure_python
-
 if [[ "$MODE" == "full" ]]; then
   log "00b) contract review generate"
   run_logged_or_exit "contract_review_generate" "$CONTRACT_REVIEW_TIMEOUT" \
@@ -392,6 +390,8 @@ if [[ "$MODE" == "full" ]]; then
   run_logged_or_exit "contract_review_validate" "$CONTRACT_REVIEW_TIMEOUT" \
     ./plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"
 fi
+
+ensure_python
 
 log "01) preflight"
 run_logged_or_exit "preflight" "$PREFLIGHT_TIMEOUT" env POSTMORTEM_GATE=0 PREFLIGHT_FIXTURE_MODE="$MODE" ./plans/preflight.sh
