@@ -578,19 +578,63 @@ After Step 3 (below), normalize these paths back to `soldier_core::execution::{.
 and is the canonical import style.
 
 **Step 2: Move internal tests + rewrite GI tests (one commit per module).**
-Start with the simplest (single-gate tests like `test_pricer.rs`), end with complex
-multi-gate tests. Split `tests/common/mod.rs` builders per-module into `#[cfg(test)]`
-blocks. Delete `common/mod.rs` last. Rewrite `adversarial_gi_enforcement.rs` to use
+Split `tests/common/mod.rs` builders per-module into `#[cfg(test)]` blocks.
+Delete `common/mod.rs` last. Rewrite `adversarial_gi_enforcement.rs` to use
 chokepoint surface only (see §4a); move pipeline-level assertions into `pipeline.rs`
 unit tests. Once all test files that call `with_intent_trace_ids` /
 `take_execution_metric_lines` are moved, change both to `pub(crate)` (see §1).
 Each move is a standalone commit. Verify with `cargo test --workspace` after each.
+
+**Module ordering** (low-coupling → high-coupling, prevents dependency tangles):
+
+1. `label`, `order_size` (leaf modules, no internal cross-deps)
+2. `gate` (liquidity), `gates` (net edge), `pricer`, `quantize`, `preflight`
+3. `base_gates`, `inventory_skew`, `post_only_guard`
+4. `dispatch_map`, `intent_assembly`
+5. `pipeline`, `open_runtime` (highest fan-in — depend on most other modules)
+6. Splitters: `test_static_rejection_counters`, `test_rejection_side_effects`
+7. Property tests (`prop_*.rs`)
 
 **Why Step 2 before Step 3:** Old re-exports still exist in `mod.rs`, so the
 remaining integration tests (`test_tlsm.rs`, `test_atomic_group.rs`, etc.) continue
 to compile via `soldier_core::execution::LiquidityGateInput` even while must-move
 tests are being relocated. Moving tests first eliminates all consumers of non-facade
 re-exports, making Step 3 safe.
+
+**Step 2.5: Fix internal sibling imports (single commit).**
+Several internal modules import sibling types through bare `super::{...}`, which
+resolves through `mod.rs` re-exports today. After Step 3 replaces those re-exports
+with `pub use api::*` (contract types only), bare `super::{LiquidityGateInput}`
+will break because wire types are not in the facade.
+
+**Files that need fixing** (verified against current codebase):
+- `pipeline.rs:16–22` — `use super::{ ChokeIntentClass, LiquidityGateInput, ... }` (~20 symbols)
+- `open_runtime.rs:19–26` — `use super::{ ChokeIntentClass, LiquidityGateInput, ... }` (~25 symbols)
+- `open_runtime.rs:14` — `use super::DispatchConsistencyProof;`
+- `base_gates.rs:9` — `use super::{ChokeIntentClass, DispatchConsistencyProof};`
+- `intent_assembly.rs:18` — `use super::{ChokeIntentClass, ChokeRejectReason, ...};`
+
+**Fix (mechanical, zero behavior change):** Replace bare `super::{Symbol}` with
+explicit sibling paths `super::<submodule>::Symbol`:
+
+```rust
+// BEFORE (resolves through mod.rs re-exports):
+use super::{LiquidityGateInput, evaluate_liquidity_gate, ChokeIntentClass};
+
+// AFTER (direct sibling imports — survives re-export removal):
+use super::gate::{LiquidityGateInput, evaluate_liquidity_gate};
+use super::build_order_intent::ChokeIntentClass;
+```
+
+Imports already using `super::<submodule>::...` (e.g., `super::gate_outcome::GateOutcome`,
+`super::reject_reason::RejectReasonCode`) are already correct and need no changes.
+
+Verify: `cargo test -p soldier_core --lib && cargo test --workspace`.
+
+**Why Step 2.5 before Step 3:** Without this, Step 3's re-export deletion breaks
+internal compilation. `pipeline.rs` and `open_runtime.rs` are the canonical examples
+— they import ~45 symbols through bare `super::` that would vanish when the old
+re-export blocks are replaced with `pub use api::*`.
 
 **Step 3: Flip re-exports — old blocks → `pub use api::*` (single commit).**
 Delete the 19 `pub use` blocks from `mod.rs` and replace with `pub use api::*;`.
