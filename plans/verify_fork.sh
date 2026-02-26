@@ -250,16 +250,16 @@ status_fixture_path_hash() {
   elif command -v shasum >/dev/null 2>&1; then
     hash="$(printf '%s' "$fixture_path" | shasum -a 256 | awk '{print $1}')"
   elif command -v python3 >/dev/null 2>&1; then
-    hash="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())' <<< "$fixture_path")"
+    hash="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
   elif command -v python >/dev/null 2>&1; then
-    hash="$(python -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())' <<< "$fixture_path")"
+    hash="$(python -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
   elif command -v cksum >/dev/null 2>&1; then
     hash="$(printf '%s' "$fixture_path" | cksum | awk '{print $1}')"
     hash="cksum_${hash}"
   else
     local len="${#fixture_path}"
     local fallback_slug
-    fallback_slug="$(printf '%s' "$fixture_path" | tr '/.[:space:]' '_' | tr -cd 'A-Za-z0-9_-')"
+    fallback_slug="$(printf '%s' "$fixture_path" | tr '/.[[:space:]]' '_' | tr -cd 'A-Za-z0-9_-')"
     [[ -z "$fallback_slug" ]] && fallback_slug="no_path"
     hash="$(printf '%s_%s' "$len" "$fallback_slug")"
   fi
@@ -297,13 +297,21 @@ run_logged_nonblocking_gate() {
   shift 2
 
   local rc=0
+  local had_errexit=0
+  case $- in
+    *e*) had_errexit=1 ;;
+  esac
+
   set +e
   if RUN_LOGGED_SUPPRESS_TIMEOUT_FAIL=1 RUN_LOGGED_SKIP_FAILED_GATE=1 run_logged "$gate_name" "$timeout" "$@"; then
     rc=0
   else
     rc=$?
   fi
-  set -e
+
+  if (( had_errexit == 1 )); then
+    set -e
+  fi
 
   if [[ "$rc" != "0" ]]; then
     local warn_file="${VERIFY_ARTIFACTS_DIR}/${gate_name}.warn"

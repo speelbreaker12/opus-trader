@@ -47,7 +47,9 @@ extract_fn() {
   ' "$VERIFY"
 }
 
-tmp_fns="$(mktemp -d)/verify_fork_fns.sh"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+tmp_fns="$tmp_dir/verify_fork_fns.sh"
 fn_defs="$(extract_fn status_fixture_path_hash)
 $(extract_fn status_fixture_gate_name)
 $(extract_fn run_logged_nonblocking_gate)"
@@ -75,7 +77,8 @@ if [[ "$gate1" == *"/"* || "$gate1" == *".."* ]]; then
   fail "status fixture gate name contains unsafe characters: $gate1"
 fi
 
-artifact_dir="$(mktemp -d)"
+artifact_dir="$tmp_dir/artifacts"
+mkdir -p "$artifact_dir"
 VERIFY_ARTIFACTS_DIR="$artifact_dir"
 run_logged_nonblocking_gate "status_fixture_test_gate" 1s bash -c "exit 7"
 if [[ ! -f "$artifact_dir/status_fixture_test_gate.warn" ]]; then
@@ -84,7 +87,5 @@ fi
 if ! grep -Fq "failed in quick mode with rc=7" "$artifact_dir/status_fixture_test_gate.warn"; then
   fail "run_logged_nonblocking_gate .warn artifact content missing"
 fi
-
-rm -rf "${tmp_fns%/verify_fork_fns.sh}"
 
 echo "PASS: verify fork guardrails test"
