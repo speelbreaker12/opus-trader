@@ -3,7 +3,7 @@
 ## CONTEXT
 - `plans/prd.json` → story entry: `scope.touch` file list + AT references
 - `specs/CONTRACT.md` → sections referenced by scope.touch files
-- `artifacts/story/<ID>/premortem.md`
+- `reviews/premortems/<ID>_premortem.md`
 
 ## ACTION
 - Read each scope.touch file
