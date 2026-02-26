@@ -7,11 +7,11 @@ set -euo pipefail
 # receipt chain, then advances. Builder never sees future steps.
 #
 # Usage:
-#   ./plans/step_supervisor.sh <STORY_ID> next
-#   ./plans/step_supervisor.sh <STORY_ID> prompt            # prints prompt for next step
-#   ./plans/step_supervisor.sh <STORY_ID> run               # validates + writes receipt
-#   ./plans/step_supervisor.sh <STORY_ID> status            # shows receipt chain
-#   ./plans/step_supervisor.sh <STORY_ID> reset             # deletes receipts for story
+#   ./plans/archive/step_supervisor.sh <STORY_ID> next
+#   ./plans/archive/step_supervisor.sh <STORY_ID> prompt            # prints prompt for next step
+#   ./plans/archive/step_supervisor.sh <STORY_ID> run               # validates + writes receipt
+#   ./plans/archive/step_supervisor.sh <STORY_ID> status            # shows receipt chain
+#   ./plans/archive/step_supervisor.sh <STORY_ID> reset             # deletes receipts for story
 #
 # Environment:
 #   STEP_SUPERVISOR_BASE_BRANCH  — required for prompt variable substitution

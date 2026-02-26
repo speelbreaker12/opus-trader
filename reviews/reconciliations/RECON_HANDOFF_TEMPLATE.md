@@ -332,7 +332,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 #### Step 9 · pass
 
-- Reference: RUNBOOK §4 (Pass-Flip Gate — 12 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
+- Reference: RUNBOOK §4 (Pass-Flip Gate — 14 checks) · POLICY §3.9 · run: `./plans/prd_set_pass.sh {{STORY_ID}} true`
 - Status: {{NOT_STARTED / COMPLETE / SKIPPED-GREEN}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/08_pass.json`
 - Path: {{GREEN — no re-flip / YELLOW — prd_set_pass.sh re-run}}
@@ -341,7 +341,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 > **Step 9 debrief** · `§0: CLEAN` to skip §1–§11.
 > - §0 outcome + workstream: {{e.g. "CLEAN" · or "prd_set_pass.sh failed — contract_review.json decision=CONDITIONAL not PASS · workstream: pass-flip gate"}}
-> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 12 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
+> - §1 constraint (exploit · subordinate · elevate): {{e.g. "Exploit: run prd_set_pass.sh --dry-run first · Sub: don't flip until all 14 checks are green · Elevate: clarify acceptable decision values in POLICY §3.9"}}
 > - §2 evidence & proof: {{prd_set_pass.sh output, contract_review.json decision field, PRD entry after flip}}
 > - §3 guesses & assumptions: {{e.g. "Assumed CONDITIONAL would pass the gate — only PASS does"}}
 > - §4 friction (top 3): {{e.g. "1) Gate error message doesn't name the failing check 2) GREEN path still requires prd_set_pass.sh — non-obvious 3) n/a"}}

@@ -399,9 +399,10 @@ read_cycle1_path() {
         return 1
         ;;
       *)
-        # Unrecognized or missing signal — fail-closed
-        echo "WF_STEP: unrecognized PATH signal in $ledger: '$first_line'" >&2
-        return 1
+        # Unrecognized signal in canonical path — fall back for legacy artifacts.
+        echo "WF_STEP: unrecognized PATH signal in $ledger: '$first_line'; falling back to legacy findings detection" >&2
+        cycle1_had_zero_findings "$art_dir"
+        return $?
         ;;
     esac
   fi
@@ -556,6 +557,7 @@ case "$STEP" in
       "$story_art/${STORY}_reconciliation.json" \
       "$story_art/evidence_ledger.json" \
       "$story_art/evidence_ledger.md" \
+      "$story_art/preflight/audit.md" \
       "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" \
       "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json"; do
       if [[ -f "$candidate" ]]; then
@@ -571,6 +573,7 @@ case "$STEP" in
       echo "    - $story_art/${STORY}_reconciliation.json" >&2
       echo "    - $story_art/evidence_ledger.json" >&2
       echo "    - $story_art/evidence_ledger.md" >&2
+      echo "    - $story_art/preflight/audit.md" >&2
       echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" >&2
       echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json" >&2
       echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
@@ -679,7 +682,18 @@ case "$STEP" in
     for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         while IFS= read -r f; do
-          if grep -qm1 '^Review basis: FIX_DIFF' "$f" 2>/dev/null; then
+          sidecar="${f%.md}.sidecar.json"
+          if [[ -f "$sidecar" ]]; then
+            sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
+            case "$sidecar_basis" in
+              FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)")
+                c2_basis_count=$((c2_basis_count + 1))
+                continue
+                ;;
+            esac
+          fi
+          # Legacy fallback: parse canonical review basis line in markdown header.
+          if grep -Eqm1 '^[[:space:]-]*Review basis:[[:space:]]*FIX_DIFF([[:space:]]*\+[[:space:]]*AT_REGRESSION[[:space:]]*\(Cycle 2\))?[[:space:]]*$' "$f" 2>/dev/null; then
             c2_basis_count=$((c2_basis_count + 1))
           fi
         done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
