@@ -87,7 +87,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 #### Step 5 · fix (R7a+R7b+R7c reviews → R7c-fix)
 
 - Reference: RUNBOOK §3 → R7a/R7b/R7c
-- Status: NOT_STARTED
+- Status: COMPLETE
 - Receipt: `.wf/receipts/S1-005/04_fix.json`
 
 ### S1-007
@@ -110,7 +110,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 
 - Reference: RUNBOOK §3 → R5b
 - Status: COMPLETE
-- Receipt: `.wf/receipts/S1-010/02_self_review.json`
+- Receipt: `.wf/receipts/S1-007/02_self_review.json`
 
 #### Step 4 · cycle1 (R2+R3+R4+R4b — external review)
 
