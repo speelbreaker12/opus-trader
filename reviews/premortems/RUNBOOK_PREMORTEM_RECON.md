@@ -1,5 +1,9 @@
 # Premortem + Reconciliation Runbook
 
+> **REFERENCE ONLY.** Not required for normal execution.
+> For step-by-step execution prompts, use `plans/step_prompts/recon/<step>.md`.
+> For the debrief policy and card index, see `plans/step_prompts/recon/INDEX.md`.
+
 > Operator instructions only. For verdict definitions and gate rules, see [POLICY](PREMORTEM_RECON_POLICY.md). For anti-patterns and lessons, see [ANTIPATTERNS](PREMORTEM_RECON_ANTIPATTERNS.md). For metrics and rationale, see [METRICS](PREMORTEM_RECON_METRICS.md).
 
 ---
