@@ -520,12 +520,16 @@ case "$STEP" in
 
     # Evidence ledger check (v3.0): verify R1 output exists before Cycle 1
     # Accepts multiple naming patterns: canonical (<ID>_reconciliation.md), legacy (evidence_ledger.*), or preflight artifacts
+    # Also checks slice-level recon dir (reviews/reconciliations/<SLICE>/) for stories that store ledgers there
+    slice_id="${STORY%%-*}"
     evidence_found=false
     for candidate in \
       "$story_art/${STORY}_reconciliation.md" \
       "$story_art/${STORY}_reconciliation.json" \
       "$story_art/evidence_ledger.json" \
-      "$story_art/evidence_ledger.md"; do
+      "$story_art/evidence_ledger.md" \
+      "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" \
+      "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json"; do
       if [[ -f "$candidate" ]]; then
         evidence_found=true
         break
@@ -539,6 +543,8 @@ case "$STEP" in
       echo "    - $story_art/${STORY}_reconciliation.json" >&2
       echo "    - $story_art/evidence_ledger.json" >&2
       echo "    - $story_art/evidence_ledger.md" >&2
+      echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" >&2
+      echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json" >&2
       echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
       exit 6
     fi
