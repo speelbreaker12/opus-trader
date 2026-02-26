@@ -8,6 +8,7 @@ docs/contract_anchors.md
 docs/contract_kernel.json
 docs/validation_rules.md
 plans/aggregate_proofs.sh
+plans/artifact_lint.sh
 plans/autofix.sh
 plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_skip_entrypoint.sh
@@ -80,6 +81,7 @@ plans/story_verify_allowlist_lint.sh
 plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
+plans/tests/test_artifact_lint.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh

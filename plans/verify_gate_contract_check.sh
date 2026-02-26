@@ -56,6 +56,7 @@ full_section="$(extract_section "$DOC" "#### FULL (story completion)" "### 7.5 L
 # Docs: quick gate coverage.
 quick_tokens=(
   preflight
+  artifact_lint
   contract_profiles
   at_profile_parity
   at_coverage_report
@@ -86,6 +87,7 @@ done
 
 # Docs: full-only gate coverage.
 full_tokens=(
+  artifact_lint
   crossref_gate
   contract_coverage
   rust_clippy
@@ -102,6 +104,7 @@ done
 # Verify implementation: contract/spec/status gates.
 verify_tokens=(
   'run_logged_or_exit "preflight"'
+  'run_logged_or_exit "artifact_lint"'
   'run_logged_or_exit "contract_profiles"'
   'run_logged_or_exit "at_profile_parity"'
   'run_logged_or_exit "at_coverage_report"'
