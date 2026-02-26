@@ -693,3 +693,9 @@ Commands: ./plans/premortem_gate.sh S1-*; plans/premortem_ready.sh S1-*; WF_RECO
 Evidence: reviews/reconciliations/S1/HANDOFF.md; .wf/receipts/S1-*/; artifacts/verify/20260225_185554/verify.meta.json; artifacts/story/S1-*/{evidence_ledger.md,review_resolution.md,codex/000_recon_zero_findings_review.md,self_review/*}.
 Notes: All S1 stories now have 8 wf_step receipts (00..07). `wf_step pass` reports ready-for-pass for every S1 story.
 Next: If any explicit pass flip operation is still required operationally, run `plans/prd_set_pass.sh` per story against full verify artifacts.
+Story: S14 process-backlog formalization (S14-003..S14-007)
+Date: 2026-02-26 08:15:00 UTC
+Summary: Converted the open S0 reconciliation process-improvement backlog (5 items: P1/P2) into explicit PRD stories with deterministic scope, owner notes, acceptance criteria, verify commands, and fail-closed loss modes. Updated S0 handoff backlog statuses to track these new story IDs.
+Commands: ./plans/prd_schema_check.sh plans/prd.json; jq '.items[] | select(.id|test("^S14-00[3-7]$"))' plans/prd.json; rg 'tracked: `S14-00[3-7]`' reviews/reconciliations/S0/HANDOFF.md.
+Evidence: plans/prd.json (stories S14-003..S14-007); reviews/reconciliations/S0/HANDOFF.md (Process Backlog status mappings).
+Next: execute S14-003..S14-007 in order and close Process Backlog statuses from tracked -> complete with artifact links.
