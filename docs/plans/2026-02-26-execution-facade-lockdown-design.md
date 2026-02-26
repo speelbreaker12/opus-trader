@@ -113,7 +113,7 @@ Public re-exports live in `api.rs`. No new public exports may be added outside
 `take_execution_metric_lines()` are currently `pub fn` in `mod.rs`, but their
 only callers are integration tests in `soldier_core/tests/` (4 test files — all
 in the "must move" table). Zero callers in `soldier_infra`. Zero production callers.
-**These are not contract.** In Step 3, when those test files move to `#[cfg(test)]`
+**These are not contract.** In Step 2, when those test files move to `#[cfg(test)]`
 unit tests, change both functions to `pub(crate)`. The moved tests retain access
 (same crate). `emit_execution_metric_line` is already `pub(crate)` and stays.
 
@@ -122,9 +122,9 @@ unit tests, change both functions to `pub(crate)`. The moved tests retain access
 **Phase 1 contract has two tiers:**
 
 - **Execution contract** = chokepoint boundary (`build_order_intent*`, `ChokeResult`,
-  `GateResults`, `RejectReasonCode`, `GateOutcome`) + lifecycle primitives needed by
+  `GateResults`, `RejectReasonCode`) + lifecycle primitives needed by
   `soldier_infra` and contract-level integration tests (`Tlsm*`, `AtomicGroup*`,
-  `Label*`, `Side`, `DispatchRequest`, `OrderSize`, `RecordedBeforeDispatchGate`).
+  `Label*`, `Side`, `OrderSize`, `RecordedBeforeDispatchGate`).
 - **Pipeline contract** = none. Pipeline wiring (`evaluate_intent_pipeline`,
   `IntentPipelineInput`, gate wire types, assembly params) is internal. Unit-tested
   only. Not in the facade.
@@ -153,7 +153,7 @@ Phase 2 introduces contract input types that replace these structs, enabling
 ```rust
 // crates/soldier_core/src/execution/api.rs
 //
-// 43 symbols. Each justified by production consumer or contract integration
+// 44 symbols. Each justified by production consumer or contract integration
 // test that survives the test-move step.
 
 //! # Execution Pipeline — Public API
@@ -168,7 +168,7 @@ Phase 2 introduces contract input types that replace these structs, enabling
 //! RULE: crates/soldier_core/tests/* may only import from this facade.
 //! Anything needing gate-internal types belongs in #[cfg(test)] unit tests.
 
-// ── Chokepoint Boundary (8 symbols) ──
+// ── Chokepoint Boundary (10 symbols) ──
 pub use super::build_order_intent::{
     ChokeIntentClass, ChokeRejectReason, ChokeResult,
     GateResults, GateStep, RecordedBeforeDispatchGate,
@@ -186,8 +186,10 @@ pub use super::reject_reason::{
     reject_reason_registry, reject_reason_registry_contains,
 };
 // CUT: reject_reason_from_chokepoint (zero external consumers)
-// CUT: GateOutcome (sole consumer test_gate_outcome → must-move)
 // CUT: PipelineResult (return type of excluded evaluate_intent_pipeline)
+
+// ── Gate Outcome ──
+// CUT: GateOutcome (sole consumer test_gate_outcome → must-move; source: gate_outcome module)
 
 // ── Domain Primitives (4 symbols) ──
 pub use super::quantize::Side;
@@ -203,7 +205,7 @@ pub use super::label::{
 };
 // CUT: ParsedLabel (zero external consumers)
 
-// ── Group Atomicity (12 symbols) ──
+// ── Group Atomicity (11 symbols) ──
 pub use super::group::{
     AtomicGroup, GroupConfig, GroupError, GroupLock,
     GroupState, GroupStateTransition, InMemoryGroupPersistence, LegResult,
@@ -294,7 +296,7 @@ it tests. These tests immediately start running in `verify.sh quick`.
 | `tests/test_intent_assembly.rs` | `src/execution/intent_assembly.rs` `#[cfg(test)] mod tests` |
 | `tests/test_intent_pipeline.rs` | `src/execution/pipeline.rs` `#[cfg(test)] mod tests` |
 | `tests/test_open_runtime_wiring.rs` | `src/execution/open_runtime.rs` `#[cfg(test)] mod tests` |
-| `tests/test_static_rejection_counters.rs` | Split across source modules (each counter → its gate file) |
+| `tests/test_static_rejection_counters.rs` | Split — see counter mapping table below |
 | `tests/test_rejection_side_effects.rs` | Split: gate parts → gate files, pipeline parts → `pipeline.rs` |
 | `tests/test_gate_ordering.rs` | `src/execution/build_order_intent.rs` `#[cfg(test)] mod tests` |
 | `tests/test_intent_determinism.rs` | Move: uses `PricerInput`, `QuantizeConstraints` directly |
@@ -307,6 +309,23 @@ it tests. These tests immediately start running in `verify.sh quick`.
 | `tests/prop_label.rs` | `src/execution/label.rs` `#[cfg(test)]` |
 | `tests/prop_tlsm.rs` | `src/execution/tlsm.rs` `#[cfg(test)]` |
 | `tests/prop_pipeline_gi001.rs` | `src/execution/pipeline.rs` `#[cfg(test)]` |
+
+**`test_static_rejection_counters.rs` split mapping:**
+
+| Counter tests (fn names) | Target module | Counter function |
+|--------------------------|---------------|------------------|
+| `test_inventory_skew_*` (3 tests) | `src/execution/inventory_skew.rs` | `inventory_skew_reject_total` |
+| `test_pricer_*` (2 tests) | `src/execution/pricer.rs` | `pricer_reject_total` |
+| `test_quantize_*` (3 tests) | `src/execution/quantize.rs` | `quantize_reject_total` |
+| `test_post_only_*` (3 tests) | `src/execution/post_only_guard.rs` | `post_only_reject_total` |
+| `test_group_*` (3 tests) | `src/execution/group.rs` | `group_lock_timeout_total`, `group_mixed_failed_total`, `group_persist_fail_total` |
+| `test_fee_staleness_*` (3 tests) | **Keep in `tests/`** — uses `risk` module, not execution internals |
+| `test_margin_gate_*` (2 tests) | **Keep in `tests/`** — uses `risk` module |
+| `test_pending_exposure_*` (2 tests) | **Keep in `tests/`** — uses `risk` module |
+| `test_exposure_budget_*` (3 tests) | **Keep in `tests/`** — uses `risk` module |
+
+After the split, rename the remaining integration test file to
+`tests/test_static_rejection_counters_risk.rs` (10 tests, risk-only imports).
 
 **Tests that stay in `tests/`** (use only contract types):
 
@@ -448,10 +467,10 @@ in `wal.rs`. This type stays in the public facade. Zero breakage.
 ### 8a. Architectural Scan Tests — Required Updates
 
 `test_dispatch_chokepoint.rs` contains 9 architectural constraint tests that use
-string matching on source files. Two will break after this refactor:
+string matching on source files. One will break after this refactor:
 
 **`test_chokepoint_reexported_from_execution` (line 308–322):**
-Asserts `mod.rs` contains `"pub mod build_order_intent"`. After Step 2, this becomes
+Asserts `mod.rs` contains `"pub mod build_order_intent"`. After Step 4, this becomes
 `mod build_order_intent` — test fails.
 
 **Fix:** Replace string-match with compile-time contract check:
@@ -468,14 +487,13 @@ fn chokepoint_is_publicly_reachable() {
 **`test_dispatch_chokepoint_no_direct_exchange_client_usage` (line 137–197):**
 Scans for 6 forbidden dispatch symbols (`DispatchRequest`, `dispatch_map::`, etc.)
 and whitelists 4 files: `dispatch_map.rs`, `build_order_intent.rs`,
-`intent_assembly.rs`, `mod.rs`. After Step 1c, `api.rs` will contain
-`pub use super::dispatch_map::{DispatchRequest, ...}` — the scan will flag it as
-a violation.
+`intent_assembly.rs`, `mod.rs`. After Step 3, `mod.rs` no longer contains these
+symbols (old re-exports deleted). After Step 4, `api.rs` exists but does **not**
+contain dispatch symbols (they are CUT from the facade — see §2). The scan will
+not flag either file. The existing `mod.rs` whitelist entry becomes inert but
+harmless. **No whitelist change is required.**
 
-**Fix:** Add `execution/api.rs` to the whitelist alongside `mod.rs`. Both are
-re-export surfaces, not call sites.
-
-These fixes belong in Step 2 (same commit as the `pub mod` → `mod` flip).
+These fixes belong in Step 4 (same commit as the `pub mod` → `mod` flip).
 
 ### 9. Proof Step — Compiler Enforcement
 
@@ -491,8 +509,8 @@ Facade-level imports work for contract types:
 
 ```rust
 use soldier_core::execution::Side;              // OK — in api.rs
-use soldier_core::execution::GateOutcome;       // OK — in api.rs
 use soldier_core::execution::RejectReasonCode;  // OK — in api.rs
+use soldier_core::execution::Tlsm;              // OK — in api.rs
 ```
 
 **Phase 1 limitation:** Wire types not in `api.rs` (like `LiquidityGateInput`) are
@@ -516,6 +534,10 @@ The only metrics that could be contract-level are aggregate ones surfaced throug
 ### 11. Migration Order
 
 Each step is a standalone commit for clean bisection. Steps must be done in order.
+**Every intermediate commit must compile and pass `cargo test --workspace`.**
+
+**Rollback:** Each step is a single atomic commit. Rollback is `git revert <commit>`.
+No migration state files or cleanup needed.
 
 **Step 1a: Add `api.rs` skeleton (single commit).**
 Create `api.rs` with contract-type re-exports. Add `pub mod api;` to `mod.rs`.
@@ -528,40 +550,53 @@ through the old re-exports. Zero behavioral change.
 Update integration tests that will stay in `tests/` to import from
 `soldier_core::execution::api::{...}` instead of `soldier_core::execution::{...}`.
 This proves the facade is correct before forcing everyone through it.
+After Step 3 (below), normalize these paths back to `soldier_core::execution::{...}`
+— once `pub use api::*` is active, the shorter path resolves through the facade
+and is the canonical import style.
 
-**Step 1c: Flip re-exports — old blocks → `pub use api::*` (single commit).**
-Delete the 18 `pub use` blocks from `mod.rs` and replace with `pub use api::*;`.
-Now `execution::Side` routes through `api.rs`. Must be atomic — cannot have
-both the old blocks and `pub use api::*` in the same compilation unit.
-
-**Step 2: Flip module visibility — `pub mod` → `mod` (single commit).**
-Change all 19 `pub mod` declarations to `mod` (except `api`). Fix any external
-imports that used deep module paths (e.g., `execution::gate::...` → `execution::...`).
-Wire types remain `pub` in their source files. `pub` → `pub(crate)` is **not** done
-here (see §3 — deferred to Phase 2).
-
-**Step 3: Move internal tests + rewrite GI tests (one commit per module).**
+**Step 2: Move internal tests + rewrite GI tests (one commit per module).**
 Start with the simplest (single-gate tests like `test_pricer.rs`), end with complex
 multi-gate tests. Split `tests/common/mod.rs` builders per-module into `#[cfg(test)]`
 blocks. Delete `common/mod.rs` last. Rewrite `adversarial_gi_enforcement.rs` to use
 chokepoint surface only (see §4a); move pipeline-level assertions into `pipeline.rs`
 unit tests. Once all test files that call `with_intent_trace_ids` /
 `take_execution_metric_lines` are moved, change both to `pub(crate)` (see §1).
-Each move is a standalone commit. Verify with `cargo test --lib` after each.
+Each move is a standalone commit. Verify with `cargo test --workspace` after each.
 
-**Step 4: Add smoke lane to `verify.sh quick` (single commit).**
+**Why Step 2 before Step 3:** Old re-exports still exist in `mod.rs`, so the
+remaining integration tests (`test_tlsm.rs`, `test_atomic_group.rs`, etc.) continue
+to compile via `soldier_core::execution::LiquidityGateInput` even while must-move
+tests are being relocated. Moving tests first eliminates all consumers of non-facade
+re-exports, making Step 3 safe.
+
+**Step 3: Flip re-exports — old blocks → `pub use api::*` (single commit).**
+Delete the 19 `pub use` blocks from `mod.rs` and replace with `pub use api::*;`.
+Now `execution::Side` routes through `api.rs`. Must be atomic — cannot have
+both the old blocks and `pub use api::*` in the same compilation unit.
+All consumers of non-facade symbols were moved in Step 2, so nothing breaks.
+Normalize Step 1b's `::api::` paths back to `execution::{...}` in this commit.
+
+**Step 4: Flip module visibility — `pub mod` → `mod` + fix architectural tests (single commit).**
+Change all 19 `pub mod` declarations to `mod` (except `api`). Fix any external
+imports that used deep module paths (e.g., `execution::gate::...` → `execution::...`).
+Wire types remain `pub` in their source files. `pub` → `pub(crate)` is **not** done
+here (see §3 — deferred to Phase 2).
+Also update `test_dispatch_chokepoint.rs` (see §8a): replace
+`test_chokepoint_reexported_from_execution` string match with compile-time
+contract check.
+
+**Step 5: Add smoke lane to `verify.sh quick` (single commit).**
 After `cargo test --workspace --lib`, run highest-value contract tests:
-`adversarial_gi_enforcement`, `test_reject_reason`, `test_tlsm`.
+`adversarial_gi_enforcement`, `test_dispatch_chokepoint`,
+`test_reject_reason`, `test_tlsm`.
 
-**Step 5: Add enforcement gate + fix architectural tests (single commit).**
+**Step 6: Add enforcement gate (single commit).**
 Add a lint script or compile-fail test that asserts:
 - Only one `pub mod` in `execution/mod.rs`: `api`
 - No external crate imports `execution::<submodule>::...` (deep paths)
-This prevents backsliding. Also update `test_dispatch_chokepoint.rs` (see §8a):
-replace `test_chokepoint_reexported_from_execution` string match with compile-time
-contract check, and add `api.rs` to the dispatch symbol scan whitelist.
+This prevents backsliding.
 
-**Step 6: Verify.**
+**Step 7: Verify.**
 `verify.sh quick` (now runs gate unit tests + smoke contract tests), then
 `verify.sh full`.
 
