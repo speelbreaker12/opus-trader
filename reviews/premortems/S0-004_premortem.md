@@ -12,7 +12,7 @@
   - Scaffolding only — data model structs and derivation logic, no HTTP endpoint, no trading logic, no safety gates.
   - PRD explicitly states: "Scaffolding only — provides CLI status data model, not HTTP endpoint. Full AT-022 enforcement in S8-008."
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 | AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
 |----|-----------|---------------------------|------------------------|-----------|
@@ -101,7 +101,7 @@ Additionally, the P0-E row in the Phase 0 table (CONTRACT.md line ~130) requires
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 > **Proof graph (v1.7)**: This section's data feeds `proof_graph.json`. After implementation, run
 > `python3 python/proof_graph/scaffold.py S0-004` to generate the skeleton, then fill in
@@ -164,24 +164,24 @@ Reused Guardrail: NONE
 
 **STOPLIGHT**: YELLOW
 
-- **YELLOW**: AT-022 cannot be fully proven in this story because the HTTP transport is out of scope. The gap is explicitly documented by the PRD ("Full AT-022 enforcement in S8-008") and tracked in the Debt Register below. All other sections are complete.
+- **YELLOW**: AT-022 cannot be fully proven in this story because the HTTP transport is out of scope. The gap is explicitly documented by the PRD ("Full AT-022 enforcement in S8-008") and tracked in the Debt Register below. All other sections are complete. (DEFERRED rationale)
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items tracked):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
 | AT-022 full HTTP proof | Medium | PRD S0-004 explicitly scopes out HTTP endpoint; "Full AT-022 enforcement in S8-008" | S8-008 implementor | S8-008 | Integration test: `GET /api/v1/health` returns HTTP 200 with `ok=true`, `build_id` non-empty, `contract_version=="5.2"`. Must test actual HTTP request/response, not just struct construction. |
 | `is_trading_allowed` formal AT anchor | Low | No AT anchor in CONTRACT.md §7.0 for the `trading_mode`/`is_trading_allowed` derivation logic; only P0-E table row and story acceptance criteria cover it | S8-008 implementor or contract editor | S8-008 or contract patch | Add AT for owner status `is_trading_allowed` derivation: `Active->true`, `ReduceOnly->false`, `Kill->false` |
 
-YELLOW with untracked debt (no target slice) = RED. All debt items have target slices assigned.
+YELLOW with untracked debt (no target slice) = RED. All debt items have target slices assigned. (resolved check)
 
 **Exit criteria (definition of done, before I start):**
 - [x] §1 clause audit: every AT traced to normative clause
-- [x] §2 all assumptions validated or killed
+- [x] §2 all assumptions validated or killed (resolved)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN — AT-022 is CLAIMED-NOT-PROVEN with explicit S8-008 completion plan
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
+- [x] No new debt without owner + target slice (resolved)

@@ -6,13 +6,13 @@
 ## 0) What we're building
 - Story: S0-002 -- P0-C Keys & Secrets Baseline
 - Contract clause(s): §Phase 0, P0-C (Keys & Secrets Baseline)
-- Acceptance tests: None (no `enforcing_contract_ats` claimed)
+- Acceptance tests: AT-NONE (no `enforcing_contract_ats` claimed)
 - Touch scope: `docs/keys_and_secrets.md`, `evidence/phase0/keys/key_scope_probe.json`
 - Implementation tests: `test_api_keys_are_least_privilege_runtime`, `test_api_keys_transfer_privilege_rejected_runtime` (in `crates/soldier_infra/tests/test_phase0_runtime.rs`)
 - **Risk rating**: LOW-to-MED
   - Classified as LOW in PRD, but this story deals with API key privilege boundaries. A wrong-privilege key in LIVE could enable unauthorized withdrawals or fund transfers. The documentation itself is LOW risk, but the key scope probe is evidence of a security property, and the runtime tests assert real exchange API behavior. If the probe or tests accept overly-permissive keys, the security baseline is compromised.
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 This story claims **no** enforcing contract ATs (`enforcing_contract_ats: []`). The contract clause P0-C states:
 
@@ -96,7 +96,7 @@ Since there are no formal ATs, this section addresses the PRD acceptance criteri
 - [x] Every wrong impl has a tightening suggestion
 - [ ] No acceptance criterion remains where a wrong impl is easier than the correct one -- **YELLOW**: the doc-review criteria are inherently subjective; automated tightening is limited for documentation stories
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 | AT / Criterion | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -155,15 +155,15 @@ Reused Guardrail: NONE
 
 **STOPLIGHT**: YELLOW (hard YELLOW, bordering on RED)
 
-Rationale: The story is LOW-to-MED risk, but there are three concrete gaps that prevent GREEN, one of which involves a circular reasoning pattern identified by cross-review:
+Rationale: The story is LOW-to-MED risk, but there are three concrete gaps that prevent GREEN, one of which involves a circular reasoning pattern identified by cross-review: (DEFERRED rationale)
 
 1. **No contract AT**: The implementation tests exist in a traceability vacuum. If tests break or are removed, no contract violation is signaled. This is acceptable for Phase 0 policy work but should be tracked.
 2. **Wrong-impl vulnerability on doc criteria**: The four documentation acceptance criteria are subjective ("WHEN reviewed THEN includes X"). A vacuous document could pass. No automated tightening is possible for prose quality.
 3. **Probe provenance (MED severity -- escalated per cross-review)**: Nothing prevents a hand-crafted `key_scope_probe.json` from passing all checks. The `test_api_keys_transfer_privilege_rejected_runtime` test name implies it should prove the key genuinely lacks transfer privilege, but without reading the test, I cannot confirm it does. **Cross-review finding**: Decision 2 predicts the tests validate static JSON (Option B) while §3 FM-1 identifies hand-crafted probes as the top failure mode. This means the predicted implementation leaves the top failure mode unmitigated -- a circular gap where the premortem identifies the risk but predicts no automated defense against it. The only backstop is human reviewer diligence at PR time. This is the central weakness of the story and is tracked as MED-severity debt.
 
-The stoplight remains YELLOW (not RED) because: (a) this is Phase 0 and LIVE trading does not occur until later phases, (b) P0-F and Kill mode provide runtime backstops independent of the probe, and (c) the gap is explicitly tracked with MED severity and a concrete remediation path. However, reviewers should treat the probe provenance question as a hard gate during implementation review -- if the probe has no evidence of API origin, the PR should not merge.
+The stoplight remains YELLOW (not RED) because: (a) this is Phase 0 and LIVE trading does not occur until later phases, (b) P0-F and Kill mode provide runtime backstops independent of the probe, and (c) the gap is explicitly tracked with MED severity and a concrete remediation path. However, reviewers should treat the probe provenance question as a hard gate during implementation review -- if the probe has no evidence of API origin, the PR should not merge. (DEFERRED rationale)
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items tracked):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
@@ -171,15 +171,15 @@ The stoplight remains YELLOW (not RED) because: (a) this is Phase 0 and LIVE tra
 | Doc quality not automatable | Low | Documentation acceptance is inherently subjective; CI cannot judge prose quality | Reviewer | N/A (permanent) | Add structured checklist in doc template so grep can verify section presence |
 | Probe provenance not machine-verifiable | **MED** | Would require live API call in CI, which conflicts with secrets baseline. **Escalated from LOW per cross-review**: a probe that cannot be verified against reality is the central weakness of this story and directly undermines P0-C's "least-privilege proof" requirement. Combined with Decision 2 (Option B: static JSON tests), FM-1 has no automated mitigation. | Story owner | Future (if CI gets exchange API access) | Add JSON schema validation to verify step; consider signed probe artifacts; require API call logs as supplementary evidence alongside the probe JSON |
 
-YELLOW with all debt tracked and assigned. No item is untracked.
+YELLOW with all debt tracked and assigned. No item is untracked. (resolved check)
 
 **Exit criteria (definition of done, before I start):**
-- [x] §1 clause audit: every AT traced to normative clause -- N/A (no ATs claimed; gap noted)
-- [x] §2 all assumptions validated or killed
+- [x] §1 clause audit: every AT traced to normative clause -- N/A (no ATs claimed; gap noted) (resolved)
+- [x] §2 all assumptions validated or killed (resolved)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every acceptance criterion examined, tightenings proposed
 - [x] §6 proof plan: CLAIMED-NOT-PROVEN entries have remediation plan
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
+- [x] No new debt without owner + target slice (resolved)

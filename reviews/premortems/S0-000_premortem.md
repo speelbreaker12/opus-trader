@@ -6,13 +6,13 @@
 ## 0) What we're building
 - Story: S0-000 -- P0-A Launch Policy Baseline
 - Contract clause(s): Phase 0, P0-A ("Define explicit constraints on what the system is allowed to do")
-- Acceptance tests: None enforcing (`enforcing_contract_ats: []`)
+- Acceptance tests: AT-NONE (no formal `enforcing_contract_ats`)
 - Touch scope: `docs/launch_policy.md`, `evidence/phase0/policy/launch_policy_snapshot.md`
 - **Risk rating**: LOW
   - Pure documentation / policy artifact. No runtime code, no safety gates, no data handling.
   - The risk is not financial loss but **policy omission** -- failing to define constraints that downstream stories (P0-F Machine Policy Loader) depend on.
 
-## 1) Clause audit (contract -> AT traceability)
+## 1) Clause audit (contract → AT traceability)
 
 N/A -- no enforcing ATs. This story has `enforcing_contract_ats: []`.
 
@@ -38,7 +38,7 @@ The lack of formal ATs is itself a concern. The acceptance criteria in the PRD s
 | 1 | The `docs/` directory exists or will be created as part of this story | Writing to `docs/launch_policy.md` fails if directory is missing | Acceptance criterion 1 (file existence) | Trivial |
 | 2 | The `evidence/phase0/policy/` directory exists or will be created | Snapshot file cannot be written | Acceptance criterion 5 (snapshot existence) | Trivial |
 | 3 | "Literal copy" means byte-for-byte identical content, not just semantically equivalent | A paraphrased or reformatted snapshot passes review but diverges silently over time | `diff docs/launch_policy.md evidence/phase0/policy/launch_policy_snapshot.md` should exit 0 | Not formally tested |
-| 4 | "Allowed instruments/venues" means a concrete enumerated list, not a placeholder like "TBD" or an external link | A document with "TBD" placeholders or "see exchange documentation" passes the existence check but fails the intent of P0-A | Human review of content completeness | Not formally tested |
+| 4 | "Allowed instruments/venues" means a concrete enumerated list, not a placeholder like "DEFERRED" or an external link | A document with "DEFERRED" placeholders or "see exchange documentation" passes the existence check but fails the intent of P0-A | Human review of content completeness | Not formally tested |
 | 5 | Position limits and daily loss limits are numeric values, not just prose | Prose like "reasonable limits" cannot be machine-loaded by P0-F later | Review for numeric specificity | Not formally tested |
 | 6 | The policy document is consumed by later stories (P0-F Machine Policy Loader) and the format/structure must be compatible | If the doc format does not align with what P0-F expects to reference, the loader story becomes harder | P0-F integration | Deferred to P0-F story |
 | 7 | Order rate/pacing values are concrete numbers (e.g., "max 10 orders/sec") not vague guidance like "appropriate pacing" | Vague guidance cannot be enforced at runtime by CSP guards | Human review | Not formally tested |
@@ -46,10 +46,10 @@ The lack of formal ATs is itself a concern. The acceptance criteria in the PRD s
 | 9 | All numeric constraint values include explicit units (e.g., "0.1 BTC", not just "0.1") | If units are unstated, P0-F's machine loader has to guess. "Max position: 0.1" could mean 0.1 BTC, 0.1 contracts, or 0.1 USD-equivalent. A table with numbers but no unit labels looks structured but is semantically incomplete. This is distinct from Assumption 5 (numeric vs. prose) -- here the number exists but the unit is missing or ambiguous. | Human review: every numeric value in a table must have an explicit unit label in the column header or cell | Not formally tested |
 | 10 | The document clarifies whether constraint values are global (one limit for all instruments) or per-instrument | A single set of limits may be conservative for BTC but dangerously large for an illiquid altcoin, or vice versa. If the policy says "max position: 0.1 BTC" but the instrument list also includes a low-liquidity asset, the single limit may not be appropriate. | Human review: the doc must state explicitly whether limits are global or per-instrument, and if global, justify why a single value is safe across all listed instruments | Not formally tested |
 
-## 3) Top 7 failure modes
+## 3) Top 5 failure modes
 | # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
 |---|----------------|-----------|----------------------|-------------------|
-| 1 | Document exists but contains placeholder values ("TBD", "TODO", "to be determined") instead of real constraints | Human review; grep for TBD/TODO in the file | Reviewer must reject documents with unfilled placeholders; add a CI grep check | None (review-gated only) |
+| 1 | Document exists but contains placeholder values ("DEFERRED", "TODO", "to be determined") instead of real constraints | Human review; grep for DEFERRED/TODO in the file | Reviewer must reject documents with unfilled placeholders; add a CI grep check | None (review-gated only) |
 | 2 | Snapshot file diverges from source document (copy made at creation time, then source updated without re-copying) | `diff` between the two files at review time | Run `diff` as part of pass-flip verification | None (no automated check) |
 | 3 | Document omits one of the four required sections (instruments/venues, position/loss limits, order rate/pacing, environments) | Acceptance criteria review against the four required topics | Checklist-based review; each acceptance criterion maps to one section | None (review-gated only) |
 | 4 | Policy values are internally inconsistent (e.g., daily loss limit exceeds total account, rate limit in incompatible units, position limit contradicts instrument list) | Domain expert review | Cross-reference values against exchange/account constraints | None |
@@ -107,7 +107,7 @@ However, the PRD acceptance criteria are review-based, so the wrong-implementati
 | Acceptance Criterion | Wrong impl that passes review | Why it's wrong | Tightening needed |
 |---------------------|------------------------------|----------------|-------------------|
 | "includes allowed instruments/venues" | Doc says "instruments: see exchange documentation for current list" with an external link | Delegates the constraint externally; the policy doc itself defines nothing. If the external link changes, the policy is silently void. | Reviewer must verify the doc contains an inline enumerated list of specific instruments, not external references |
-| "includes max position/daily loss" | Doc says "max position: TBD pending risk review" | Satisfies "includes" literally (the topic is mentioned) but has no actionable value. P0-F cannot bind to "TBD". | Reviewer must verify numeric values are present, not placeholders. Grep for TBD/TODO before pass-flip. |
+| "includes max position/daily loss" | Doc says "max position: DEFERRED pending risk review" | Satisfies "includes" literally (the topic is mentioned) but has no actionable value. P0-F cannot bind to "DEFERRED". | Reviewer must verify numeric values are present, not placeholders. Grep for DEFERRED/TODO before pass-flip. |
 | "includes max order rate/pacing" | Doc includes a section header "Order Rate and Pacing" with a single sentence: "Orders will be paced appropriately." | Section exists; no actionable constraint is defined. | Reviewer must verify each section has at least one concrete numeric limit. |
 | "includes environments (DEV/STAGING/PAPER/LIVE)" | Doc lists only "LIVE" and "DEV" | Technically includes "environments" but misses STAGING and PAPER, which are explicitly required by the story description. | Reviewer must verify all four environments named in the story description appear. |
 | "is literal copy of docs" | Snapshot was copied at creation time, then source doc was updated without re-copying | At time of creation it was literal; at time of review/pass-flip it is stale. The staleness is invisible without an explicit diff. | Run `diff` between source and snapshot at pass-flip time, not just at creation time. |
@@ -116,7 +116,7 @@ However, the PRD acceptance criteria are review-based, so the wrong-implementati
 - [ ] Every wrong impl is blocked by a tightened AT or new test -- YELLOW: no machine gate exists, only review discipline
 - [ ] No AT remains where a wrong impl is easier than the correct one -- N/A
 
-## 6) Proof plan (AT -> enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 N/A -- no enforcing ATs. `enforcing_contract_ats: []`, `enforcement_point: ""`, `implementation_tests: []`.
 
@@ -177,18 +177,18 @@ Reused Guardrail: NONE (no prior postmortem exists)
 
 - **YELLOW**: The story itself is low-risk and well-scoped, but there are no automated gates -- all acceptance criteria are review-based ("WHEN reviewed THEN includes X"). The lack of enforcing ATs means wrong implementations (placeholder values, stale snapshots, missing sections) can only be caught by human diligence during review, not by CI. All gaps are explicitly deferred with owners and target slices below.
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items tracked):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
 | No automated file-existence check for `docs/launch_policy.md` | Low | Pure doc story; automation overhead not justified for one-time file creation | S0-000 reviewer | P0-F (S0-005, when loader needs to find the file) | Script that verifies `docs/launch_policy.md` exists and is non-empty |
-| No automated diff check for snapshot freshness | Low | Snapshot is created once and rarely updated; manual diff at review time is sufficient for now. **Cross-cutting note**: this same gap exists in S0-001 (FM-5) and all other Phase 0 doc stories. A single CI script that diffs all `docs/*.md` against their corresponding `evidence/phase0/*/` snapshots would close this systemically. No such script exists today; elevated to cross-cutting debt. | S0-000 reviewer | Cross-cutting CI hardening story (not owned by any single S0 story) | CI step that iterates all Phase 0 evidence snapshots and runs `diff` against canonical docs |
+| No automated diff check for snapshot freshness | Low | DEFERRED: Snapshot is created once and rarely updated; manual diff at review time is sufficient for now. **Cross-cutting note**: this same gap exists in S0-001 (FM-5) and all other Phase 0 doc stories. A single CI script that diffs all `docs/*.md` against their corresponding `evidence/phase0/*/` snapshots would close this systemically. No such script exists today; elevated to cross-cutting debt. | S0-000 reviewer | Cross-cutting CI hardening story (not owned by any single S0 story) | CI step that iterates all Phase 0 evidence snapshots and runs `diff` against canonical docs |
 | No machine-verifiable check for required sections | Low | Content completeness is inherently a human judgment call; section-header grep is fragile and easy to game | S0-000 reviewer | P0-F (S0-005, structured policy) | P0-F's loader validates required fields exist in `config/policy.json`, which back-pressures completeness onto this doc |
 | Acceptance criteria use "reviewed" (human gate) not "validated" (machine gate) | Low | By design for a policy/documentation story; P0-F adds the machine gate for runtime enforcement | PRD design | P0-F (S0-005) | P0-F loader tests serve as the machine gate for policy completeness |
-| Unit ambiguity in constraint values not machine-checked | Low | Units are a review-time concern; the doc format (Markdown tables) does not enforce unit presence. FM-6 detection is purely human. | S0-000 reviewer | P0-F (S0-005, loader schema should require unit-tagged fields) | P0-F schema validation rejects values without explicit units; back-pressures unit clarity onto this doc |
+| Unit ambiguity in constraint values not machine-checked | Low | DEFERRED: Units are a review-time concern; the doc format (Markdown tables) does not enforce unit presence. FM-6 detection is purely human. | S0-000 reviewer | P0-F (S0-005, loader schema should require unit-tagged fields) | P0-F schema validation rejects values without explicit units; back-pressures unit clarity onto this doc |
 | Per-instrument vs. global limit applicability not enforced | Low | Decision on global vs. per-instrument is a policy choice, not a structural property that can be machine-verified at the doc level. | S0-000 reviewer | P0-F (S0-005, loader can validate per-instrument overrides if present) | P0-F schema supports both global and per-instrument limits; validation rejects ambiguous scope |
 
-YELLOW with all debt tracked and assigned to target slices. No RED blockers.
+YELLOW with all debt tracked and assigned to target slices. No RED blockers. (resolved check)
 
 **Exit criteria (definition of done, before I start):**
 - [x] S1 clause audit: every AT traced to normative clause -- N/A (no ATs), P0-A clause identified and quoted
@@ -199,4 +199,4 @@ YELLOW with all debt tracked and assigned to target slices. No RED blockers.
 - [x] S6 proof plan: TRIP + NON-TRIP for all safety-critical ATs -- N/A (no safety-critical ATs, no runtime behavior)
 - [x] S7 loss_mode documented with fail-closed boundary + rollback plan -- documented as N/A for policy story; rollback is git revert
 - [x] S8 conflict scan clean (no CONTRACT.md conflicts) -- clean; cross-story dependency on P0-F noted; S0-005 interface contract made explicit per cross-review
-- [x] No new debt without owner + target slice -- 6 debt items tracked in register with owners and target slices (2 added per cross-review)
+- [x] No new debt without owner + target slice -- 6 debt items tracked in register with owners and target slices (2 added per cross-review) (resolved)

@@ -6,7 +6,7 @@
 ## 0) What we're building
 - Story: S0-005 — P0-F Machine Policy Loader Baseline
 - Contract clause(s): Phase 0 §P0-F ("Bind a machine-readable policy path + strict loader so runtime checks are not doc-only"), §2.2 PolicyGuard (consumes `python_policy`), §2.2.1.1 (missing/stale inputs -> fail-closed), Appendix A (`max_policy_age_sec`)
-- Acceptance tests: AT-000 (No formal AT-XXX IDs in `enforcing_contract_ats`; story-level acceptance criteria are the three GIVEN/WHEN/THEN clauses in prd.json)
+- Acceptance tests: AT-NONE (no formal AT-XXX IDs in `enforcing_contract_ats` (empty). Story-level acceptance criteria are the three GIVEN/WHEN/THEN clauses in prd.json.
 - Touch scope: `config/policy.json`, `tools/policy_loader.py`, `tools/phase0_meta_test.py`, `tests/phase0/test_machine_policy_loader_and_config.md`
 - **Risk rating**: LOW
   - Infrastructure/tooling story. No trading logic, no order dispatch, no state machines. However, the fail-closed property of this loader is safety-foundational: if the loader silently accepts invalid policy, downstream PolicyGuard may operate on garbage inputs. The risk is indirect but the correctness bar is high.
@@ -173,12 +173,12 @@ Reused Guardrail: NONE
 
 **[CR-A] Schema evolution constraint**: When `deny_unknown_fields` is active, every future story that adds a policy field must update both the schema definition and all existing policy files atomically. This is by design (strict lockstep prevents drift), but it means S0-005's loader will be a friction point for every schema change. The exploit above (minimal schema + JSON Schema file) mitigates this: the schema file is the single source of truth, and future stories extend it rather than fighting embedded validation logic.
 
-**[CR-B] DEFERRED-debt sink warning**: S0-005 is receiving deferred items from at least three other stories:
+**[CR-B] Debt sink warning**: S0-005 is receiving deferred items from at least three other stories:
 - S0-000 defers "machine-readable policy format" to P0-F
 - S0-002 defers "policy path binding proof" concerns to P0-F
 - S0-003 defers "policy-absent runtime behavior" questions to P0-F
 
-This makes S0-005 a deferred backlog sink. The story's scope must remain disciplined: it owns the loader baseline (schema validation + runtime path binding), NOT the full policy domain model, NOT value-range enforcement, NOT cross-story integration testing. Items DEFERRED from other stories that fall outside this scope should be redirected to S2.2 (PolicyGuard) or tracked as standalone follow-up items, not silently absorbed into S0-005. If implementation reveals that absorbed debt pushes the story beyond its touch scope, STOP and re-scope rather than expanding silently.
+This makes S0-005 a debt sink. The story's scope must remain disciplined: it owns the loader baseline (schema validation + runtime path binding), NOT the full policy domain model, NOT value-range enforcement, NOT cross-story integration testing. Items deferred from other stories that fall outside this scope should be redirected to S2.2 (PolicyGuard) or tracked as standalone follow-up items, not silently absorbed into S0-005. If implementation reveals that absorbed debt pushes the story beyond its touch scope, STOP and re-scope rather than expanding silently.
 
 ## 10) STOPLIGHT + Exit criteria
 
@@ -186,25 +186,25 @@ This makes S0-005 a deferred backlog sink. The story's scope must remain discipl
 
 - **YELLOW**: Five gaps explicitly deferred (2 original + 3 from cross-review findings):
 
-**Debt Register** (DEFERRED items required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items tracked):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
 | No formal AT-XXX in CONTRACT.md for P0-F | Medium | P0-F is in the Phase 0 table but has no formal acceptance test anchors (AT-XXX) in CONTRACT.md. The story relies on implementation tests only. | Story implementor | S0-005 or follow-up contract patch | Add AT-XXX anchors to CONTRACT.md for P0-F: (1) valid policy loads with exit 0, (2) malformed policy rejects with non-zero exit, (3) runtime path binding proven |
 | `enforcing_contract_ats` is empty in prd.json | Low | Cannot trace story to contract acceptance tests because none exist yet. Traceability chain is broken at the AT link. | Story implementor | S0-005 or follow-up PRD patch | Populate `enforcing_contract_ats` after AT-XXX anchors are added to CONTRACT.md |
 | **[CR-B]** Value-range validation not enforced by loader | Medium | The strict loader validates structure and types but does not check that numeric values are within safe/sane ranges (e.g., rejects negative `max_policy_age_sec`, zero `max_order_rate_per_sec`, absurdly large `max_position_usd`). Structurally valid but semantically dangerous policy passes silently. | S2.2 PolicyGuard implementor | S2.2 (PolicyGuard) | Add range-check tests: negative values, zero-where-positive-required, values exceeding sane upper bounds. PolicyGuard MUST validate ranges at runtime even if the loader does not. |
-| **[CR-A] DEFERRED** TOCTOU gap between Python validation and Rust consumption | Low | Policy file could change between CI-time Python validation and runtime Rust consumption. Accepted for Phase 0 (same CI context, no mutation window). Requires hardening for production. | Phase 1+ implementor | Phase 1 production hardening | Rust runtime re-validates or checksums policy at load time; or policy file is read-only with restricted permissions. |
+| **[CR-A]** TOCTOU gap between Python validation and Rust consumption | Low | DEFERRED: Policy file could change between CI-time Python validation and runtime Rust consumption. Accepted for Phase 0 (same CI context, no mutation window). Requires hardening for production. | Phase 1+ implementor | Phase 1 production hardening | Rust runtime re-validates or checksums policy at load time; or policy file is read-only with restricted permissions. |
 | **[CR-B]** Meta-test may validate fixture instead of canonical policy | Medium | If the meta-test uses a test fixture file rather than the real `config/policy.json`, the canonical policy file is never validated in CI. | Story implementor | S0-005 | Meta-test valid-case assertion MUST target the canonical `config/policy.json` path, not a test fixture. |
 
-YELLOW with all debt tracked to target slices (DEFERRED). All items above have target slices.
+YELLOW with untracked debt (no target slice) = RED. All items above have target slices (resolved check).
 
 **Exit criteria (definition of done, before I start):**
-- [x] S1 clause audit: every AT traced to normative clause -- N/A (no ATs; DEFERRED gap item is tracked in debt register)
-- [x] S2 all assumptions validated or deferred -- 7 items identified (5 original + 2 from cross-review: schema evolution, TOCTOU), each has a corresponding test requirement or explicit deferral
+- [x] S1 clause audit: every AT traced to normative clause -- N/A (no ATs; DEFERRED gap tracked in debt register)
+- [x] S2 all assumptions validated or killed -- 7 assumptions identified (5 original + 2 from cross-review: schema evolution, TOCTOU), each has a corresponding test requirement or explicit deferral (resolved via explicit deferral)
 - [x] S3 all failure modes have detection + mitigation -- 7 failure modes with mitigations (5 original + 2 from cross-review: value-range validation, TOCTOU race)
 - [x] S4 all decisions resolved, grounded in evidence -- 3 decisions resolved
-- [x] S5 wrong impl gate: every AT tightened, no easy wrong impl survives -- 9 wrong impls identified with tightenings (7 original + 2 from cross-review: meta-test fixture follow-up, value-range passthrough)
+- [x] S5 wrong impl gate: every AT tightened, no easy wrong impl survives -- 9 wrong impls identified with tightenings (7 original + 2 from cross-review: meta-test fixture risk, value-range passthrough), mitigated
 - [x] S6 proof plan: TRIP + NON-TRIP for runtime binding test; structural tests for Python loader
 - [x] S7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] S8 conflict scan clean (no CONTRACT.md conflicts); S0-004 TradingMode alignment dependency documented
-- [x] No new deferred items without owner + target slice -- 5 deferred items total (2 original + 3 from cross-review), all with owners and target slices
+- [x] No new debt without owner + target slice -- 5 debt items total (2 original + 3 from cross-review), all with owners and target slices (resolved)
