@@ -4,6 +4,9 @@
 - Last updated: 2026-02-26
 - Goal: consolidate artifact hardening and reconciliation portability into one executable plan.
 - Execution model: one master plan, multiple scoped PR phases.
+- Phase A: complete in PR #132.
+- Phase B: complete in PR #134.
+- Phase C: complete in PR #135.
 
 ## Locked Decisions
 1. Contract review auto-seed default is `BLOCKED`.
@@ -40,7 +43,7 @@ Delivered in PR #132 (`817ab70`):
    - `plans/tests/test_workflow_allowlist_coverage.sh`
    - `plans/tests/test_artifact_lint.sh`
 
-### Phase B (Next): Contract Review Auto-Seed in Full Verify
+### Phase B (Completed): Contract Review Auto-Seed in Full Verify
 1. Finalize `plans/contract_review_emit.sh`:
    - required: `--out <path>`
    - defaults: `--decision BLOCKED`, `--story-id VERIFY_FULL`
@@ -53,7 +56,7 @@ Delivered in PR #132 (`817ab70`):
    - `specs/WORKFLOW_CONTRACT.md`
    - `docs/PRD_STORY_WORKFLOW.md`
 
-### Phase C (Next): Recon Bundle Portability
+### Phase C (Completed): Recon Bundle Portability
 1. Add `plans/recon_bundle.sh` with:
    - `export --slice <S#> [--verify-run <run_id>] [--bundle-id <id>] [--out-root <path>]`
    - `import --bundle <bundle_dir> [--allow-head-mismatch] [--dry-run]`
@@ -102,6 +105,7 @@ Behavior checks:
 2. Implement Phase B in a dedicated follow-up branch from updated `main`.
 3. Implement Phase C in a dedicated follow-up branch (or stacked on Phase B if simpler).
 4. Keep each phase independently verifiable and reviewable.
+5. Final status: all three phases merged and green in CI on `main` as of 2026-02-26.
 
 ## Boundary Lock (Confirmed)
 
