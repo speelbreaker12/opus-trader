@@ -7,7 +7,7 @@
 ## ACTION
 - Dispatch external review:
   ```
-  plans/review_logged.sh --base <integration_branch> --tool <tool>
+  plans/review_logged.sh <STORY_ID> --base <integration_branch> --tool <tool>
   ```
 - Review basis: **STORY_SCOPE** (review the story's implementation, not git diff)
 - Write `evidence_ledger.md`; **first line must be exactly one of:**
@@ -21,6 +21,6 @@
 
 ## RECEIPT
 ```
-plans/review_logged.sh --base <integration_branch> --tool <tool>
+plans/review_logged.sh <STORY_ID> --base <integration_branch> --tool <tool>
 plans/wf_step.sh <ID> cycle1
 ```
