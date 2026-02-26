@@ -152,6 +152,8 @@ Six checks, evaluated in order:
 
 Run `plans/wf_step.sh ${STORY_ID} <step>` to record step completion. Steps in order: preflight → implement → self_review → cycle1 → fix → cycle2 → resolution → verify_full → pass. Receipts: `.wf/receipts/<ID>/`.
 
+> **Note**: R-phase numbers are a classification scheme, not execution order. The wf_step execution sequence is: preflight(R1) → implement(R5) → self_review(R5b) → cycle1(R2+R3+R4+R4b) → fix(R7a-c) → cycle2(R7d-f) → resolution(R6) → verify_full → pass.
+
 ---
 
 ### R1 — Parallel Reconcile (Read-Only)
@@ -161,7 +163,7 @@ Run `plans/wf_step.sh ${STORY_ID} <step>` to record step completion. Steps in or
 **Inputs (required per story)**:
 - `plans/prd.json` (story entry)
 - `specs/CONTRACT.md` (relevant AT clauses)
-- `reviews/premortems/<STORY_ID>_premortem.md` (or approved fallback preflight artifact)
+- `reviews/premortems/<STORY_ID>_premortem.md`
 - Story `scope.touch` files
 - Proving test files from `implementation_tests[]`
 
@@ -189,7 +191,7 @@ Run `plans/wf_step.sh ${STORY_ID} <step>` to record step completion. Steps in or
 **Output**:
 - `<STORY_ID>_reconciliation.md` (evidence ledger)
 - `<STORY_ID>_reconciliation.json` (sidecar — gate fields only) [Wave 2: JSON-primary `evidence_ledger.json`]
-- Validate: `plans/validate_recon_artifact.sh evidence_ledger <path>` [Wave 2]
+- Validate: `plans/validate_recon_artifact.sh evidence_ledger <path>` # Wave 2 — schema not yet registered; skip until evidence_ledger added to validator
 - `.wf/recon_scope_lock/<STORY_ID>.scope_lock.json` (R1 scope-lock artifact)
 **Receipt**: `plans/wf_step.sh ${STORY_ID} preflight`
 
@@ -812,7 +814,7 @@ After all phases complete (or after R5b.2 Path B skip):
 |---------|-------|
 | `R6_PROOF_GATE` | Story verdict is RECONCILED or RECONCILED-WITH-DEBT |
 | `R6_RUNTIME_ENFORCEMENT_GATE` | Every safety-critical AT is PROVEN-INTEGRATED; PROVEN-UNIT on safety-critical AT blocks pass |
-| `R6_MECHANICAL_GATES` | Workflow receipts present; `verify.sh` passed; `contract_review.json` decision == "PASS"; `loss_mode` populated; R5b receipts verified |
+| `R6_MECHANICAL_GATES` | Workflow receipts present; `verify.sh` passed; `R7A_CONTRACT_REVIEW.json` decision == "PASS" (note: `prd_set_pass.sh` reads `contract_review.json` via `CONTRACT_REVIEW_FILE` env var — after producing R7A output, copy to `artifacts/story/<ID>/contract_review.json` or set `CONTRACT_REVIEW_FILE`); `loss_mode` populated; R5b receipts verified |
 | `R6_PROOF_GRAPH_GATE` | `proof_graph.json` exists; `validate.py --strict` passes; exemptions only via `proof_graph_exempt.txt` |
 | `R6_POSTMORTEM_GATE` | If postmortem required: `postmortem_gate.sh` exits 0. If exempt: `POSTMORTEM_EXEMPT` recorded in R6 summary with reason. |
 
@@ -1118,7 +1120,7 @@ A story is pass-eligible only if ALL conditions are met:
 | External C2 | `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` or `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` passed |
 | Receipts | All 8 workflow receipts present (wf_step.sh chain) |
 | Verify | `verify.sh full` passed with matching HEAD |
-| Contract | `contract_review.json` has `decision: "PASS"` |
+| Contract | `R7A_CONTRACT_REVIEW.json` has `decision: "PASS"` (copy to `artifacts/story/<ID>/contract_review.json` for `prd_set_pass.sh` compatibility, or set `CONTRACT_REVIEW_FILE` env var) |
 | Loss mode | `worst_case`, `fail_closed_cap`, `drift_metric` all populated |
 | Proof graph | `proof_graph.json` validates with `validate.py --strict` (or story in exempt list) |
 | Fail-closed | `fail_closed_coverage.sh` passes (test counts + patterns) |
@@ -1255,13 +1257,53 @@ artifacts/story/<STORY_ID>/
   postmortem.md                              # conditionally required (R6 step 11)
 
 plans/prompts/
-  slice_reconcile_implement.md                # derived copy of Appendix A
+  slice_reconcile_r1_audit.md                 # derived copy of Appendix A (renamed from slice_reconcile_implement.md)
 
 plans/step_prompts/recon/
+  r1_audit.md                                 # R1 read-only audit prompt (renamed from implement.md)
+  implement.md                                # R5 remediation prompt
   self_review.md
   cycle1.md
   cycle2.md
 ```
+
+### 6.1.1 Recon Bundle Portability (Deterministic Export/Import)
+
+Use `plans/recon_bundle.sh` to move slice-core reconciliation evidence between worktrees without manual copy drift.
+
+Canonical export command:
+```bash
+./plans/recon_bundle.sh export \
+  --slice S14 \
+  --verify-run 20260226_120000 \
+  --bundle-id S14_recon_20260226 \
+  --out-root artifacts/recon_bundles
+```
+
+Canonical import command (strict by default):
+```bash
+./plans/recon_bundle.sh import \
+  --bundle artifacts/recon_bundles/S14_recon_20260226
+```
+
+Dry-run validation before write:
+```bash
+./plans/recon_bundle.sh import \
+  --bundle artifacts/recon_bundles/S14_recon_20260226 \
+  --dry-run
+```
+
+Head mismatch policy:
+- Import blocks when `source_head_sha` differs from current `HEAD`.
+- Override only when intentionally importing across different heads:
+  `./plans/recon_bundle.sh import --bundle <dir> --allow-head-mismatch --dry-run`
+
+Bundle payload scope (fail-closed):
+- `reviews/reconciliations/<slice>/**`
+- `.wf/receipts/<slice>-*/**`
+- `.wf/recon_scope_lock/<slice>-*.scope_lock.json`
+- `artifacts/story/<slice>-*/**`
+- Optional `artifacts/verify/<run_id>/**` when `--verify-run` is supplied.
 
 ### 6.2 Provenance Header (Required on All Review Artifacts)
 
@@ -1286,7 +1328,7 @@ Every review artifact (`.md` and `.json`) produced in R1–R7 must include a sta
 | `prompt_style` | Yes | `none` for internal/script |
 | `cycle` | Yes | |
 | `phase_equivalent` | Yes | |
-| `review_basis` | Yes (review phases) | Exact string, e.g. `STORY_SCOPE (Cycle 1)` |
+| `review_basis` | Yes (review phases) | Exact string, e.g. `STORY_SCOPE (Cycle 1)`. JSON enum equivalent: `FIX_DIFF_AT_REGRESSION` (no spaces). Validators match on `FIX_DIFF` prefix. |
 | `story_id` | Yes | Or `BATCH-<ID>` for batch artifacts |
 | `slice_id` | Yes | |
 | `head_commit` | Yes | |

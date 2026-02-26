@@ -19,7 +19,7 @@
 
 ## OUTPUT
 `artifacts/story/<ID>/implement/patch_plan.md`
-→ One entry per gap: classification | AT-ID | what is wrong | proposed fix
+-> One entry per gap: classification | AT-ID | what is wrong | proposed fix
 
 ## RECEIPT
 ```

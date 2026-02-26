@@ -258,10 +258,15 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
+  "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_contract_profile_parity.sh"
+  "plans/tests/test_contract_review_emit.sh"
+  "plans/tests/test_recon_bundle.sh"
+  "plans/tests/test_code_review_expert_guard.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"
   "plans/tests/test_crossref_gate.sh"
+  "plans/tests/test_artifact_lint.sh"
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(

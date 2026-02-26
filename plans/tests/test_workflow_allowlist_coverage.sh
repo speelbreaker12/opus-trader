@@ -27,6 +27,7 @@ dupes="$(sort "$allowlist" | uniq -d || true)"
 [[ -z "$dupes" ]] || fail "duplicate entries: $dupes"
 
 required=(
+  .githooks/pre-commit
   .githooks/pre-push
   .github/pull_request_template.md
   .github/workflows/ci.yml
@@ -37,7 +38,10 @@ required=(
   docs/contract_kernel.json
   docs/validation_rules.md
   plans/autofix.sh
+  plans/artifact_lint.sh
   plans/check_skip_entrypoint.sh
+  plans/code_review_expert_attest.sh
+  plans/code_review_expert_guard.sh
   plans/codex_review_digest.sh
   plans/codex_review_let_pass.sh
   plans/codex_review_logged.sh
@@ -45,6 +49,7 @@ required=(
   plans/contract_check.sh
   plans/contract_coverage_matrix.py
   plans/contract_coverage_promote.sh
+  plans/contract_review_emit.sh
   plans/contract_review_validate.sh
   plans/fork_attestation_mirror.sh
   plans/fork_attestation_remediation_verify.sh
@@ -64,6 +69,7 @@ required=(
   plans/pre_pr_review_gate.sh
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
+  plans/recon_bundle.sh
   plans/review_logged.sh
   plans/review_resolution_template.md
   plans/schemas/fork_attestation_remediation.schema.json
@@ -83,7 +89,10 @@ required=(
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_profile_parity.sh
+  plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
+  plans/tests/test_artifact_lint.sh
+  plans/tests/test_code_review_expert_guard.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
@@ -92,6 +101,7 @@ required=(
   plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
+  plans/tests/test_recon_bundle.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh

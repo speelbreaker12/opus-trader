@@ -32,6 +32,7 @@ doesn't deserve `passes=true`.
 - Reconciliation artifacts go under `reviews/reconciliations/{{SLICE_ID}}/`
 - Story artifacts (proof graph, postmortem) go under `artifacts/story/{{STORY_ID}}/`
 - Receipts track step completion: `.wf/receipts/{{STORY_ID}}/`
+- For cross-worktree portability of slice artifacts, use `plans/recon_bundle.sh` commands documented in `RUNBOOK_PREMORTEM_RECON.md` §6.1.1
 - **Never modify production code outside of Step 2 (implement/R5) and Step 5 (fix/R7c-fix)**
 
 ---
@@ -49,11 +50,11 @@ doesn't deserve `passes=true`.
 > 2. Update the Story Status Matrix row for the story you touched.
 > 3. If the step is a **hard-evidence gate** (Preflight, Self-review, External C1/C2, Verify), fill the Evidence/Proof lines with **PASS/FAIL + paths**.
 >
-> **Debrief blocks are optional** unless:
-> - Status == BLOCKED, or
-> - you hit recurring friction worth promoting to the Process Backlog.
-> On clean runs: write `§0: CLEAN` only and move on.
+> **Clean step = one line**: `Status: COMPLETE · §0: CLEAN · Artifacts: <paths>`
+> **Only expand §§1–11 when** the gate is blocked or you hit friction worth promoting to the Process Backlog.
 > **Skipping when friction exists = the next agent hits the same wall you just hit.**
+>
+> Debrief sections are HANDOFF-specific and not part of RUNBOOK gate checks. They help the next agent; they do not block pass-flip.
 >
 > **Debrief sections at a glance**
 > - §0  One-line outcome + workstream/contract area
@@ -111,13 +112,13 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 |------|----------|--------------------|--------|
 | A Preflight | `reviews/reconciliations/{{SLICE_ID}}/{{STORY_ID}}_reconciliation.md` | (n/a) | {{PASS/FAIL}} |
 | B Self-review | `reviews/reconciliations/{{SLICE_ID}}/R5B_SELF_REVIEW_GATE.json` + `reviews/reconciliations/{{SLICE_ID}}/receipts/r5b_*.json` (count={{N}}) | (n/a) | {{PASS/FAIL}} |
-| C External C1 | `artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL}} |
+| C External C1 | `reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL}} |
 | C2 External C2 | `reviews/reconciliations/{{SLICE_ID}}/external/cycle2/{{STORY_ID}}/R7_EXTERNAL_MANIFEST.json` + sidecar | `./plans/validators/validate_external_manifest.py <manifest>` | {{PASS/FAIL/NA}} |
 | D Verify | `reviews/reconciliations/{{SLICE_ID}}/verify_full/{{STORY_ID}}/verify_tail.txt` + `verify.meta.json` | (n/a) | {{PASS/FAIL}} |
 
 #### Step 1 · preflight (R1 — read-only audit)
 
-- Reference: RUNBOOK §3 → R1 · R1 prompt (canonical): `PREMORTEM_RECONCILIATION_PROCESS.md` Appendix A
+- Reference: RUNBOOK §3 → R1 · R1 prompt: `plans/step_prompts/recon/r1_audit.md` (derived from Appendix A; if absent, fall back to `PREMORTEM_RECONCILIATION_PROCESS.md` Appendix A)
 - Status: {{NOT_STARTED / IN_PROGRESS / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/00_preflight.json`
 - Evidence ledger: `reviews/reconciliations/{{SLICE_ID}}/{{STORY_ID}}_reconciliation.md`
@@ -201,8 +202,8 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Reference: RUNBOOK §3 → R2 (lead eval) · R3 (cross-review + external dual-prompt) · R4 (gap synthesis) · R4b (finding mapping)
 - Status: {{NOT_STARTED / IN_PROGRESS / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/03_cycle1.json`
-- External manifest: `artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json`
-- Manifest validation: `./plans/validators/validate_external_manifest.py artifacts/story/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` — {{PASS/FAIL}}
+- External manifest: `reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json`
+- Manifest validation: `./plans/validators/validate_external_manifest.py reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` — {{PASS/FAIL}}
 - Rerun rule (if fixes applied after C1): new run_id + new manifest sha required: {{YES/NO/NA}}
 - Gap list: `reviews/reconciliations/{{SLICE_ID}}/GAP_LIST.json`
 - External mapping: `reviews/reconciliations/{{SLICE_ID}}/R4B_EXTERNAL_MAPPING.json`

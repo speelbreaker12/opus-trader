@@ -19,8 +19,8 @@
 
 ## OUTPUT
 `artifacts/story/<ID>/preflight/audit.md`
-→ Line 1: `STOPLIGHT: GREEN` (or YELLOW or RED)
-→ Then: AT proof table
+-> Line 1: `STOPLIGHT: GREEN` (or YELLOW or RED)
+-> Then: AT proof table
 
 ## RECEIPT
 ```

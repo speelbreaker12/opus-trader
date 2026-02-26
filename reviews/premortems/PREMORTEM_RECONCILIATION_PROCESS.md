@@ -75,10 +75,14 @@ See [PREMORTEM_RECON_METRICS.md § Changelog](PREMORTEM_RECON_METRICS.md#changel
 
 ---
 
+> **Note**: This file (including Appendix A below) must be present in any branch running reconciliation.
+> If absent, use `plans/step_prompts/recon/r1_audit.md` (for R1 deep audit) or
+> `plans/step_prompts/recon/preflight.md` (for Step 1 preflight) as the dispatch prompts.
+
 # Appendix A: Phase R1 Agent Prompt
 
 > **Source of truth**: This appendix is the canonical location for the R1 prompt.
-> `plans/prompts/slice_reconcile_implement.md` is a derived copy for agent dispatch.
+> `plans/prompts/slice_reconcile_r1_audit.md` is a derived copy for agent dispatch.
 > If they diverge, this file wins.
 >
 > **Scope**: This prompt governs **Phase R1 only**. It is a READ-ONLY audit step.
@@ -127,9 +131,8 @@ Reason: MISSING_ARTIFACT: <filename or description>
 Do not proceed. Do not guess or hallucinate the content of missing artifacts.
 
 **Item 2 (recon preflight) is OPTIONAL when the premortem (item 1) exists.** The preflight's
-value is as a surrogate when no premortem was written. When the premortem exists, it is already
-your primary audit checklist and the preflight adds marginal value. If the preflight exists, read
-it for additional context. If it does not exist and the premortem does, proceed without it.
+value is as additional context when the premortem exists. If the preflight exists, read
+it. If it does not, proceed without it.
 
 **Item 3 (prior postmortems) is OPTIONAL.** If no postmortem exists for this story, proceed
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.

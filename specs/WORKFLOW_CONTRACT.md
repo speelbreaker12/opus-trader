@@ -261,7 +261,8 @@ Goal: fast, repeatable, contract-first.
 
 QUICK must run:
 1) `preflight` (if present; no postmortem enforcement)
-2) Contract/spec validators (the "spec_validators_group"):
+2) `artifact_lint` (fast artifact/schema contract lint for changed/untracked JSON)
+3) Contract/spec validators (the "spec_validators_group"):
    - contract_profiles
    - at_profile_parity
    - at_coverage_report
@@ -275,9 +276,9 @@ QUICK must run:
    - crash_replay_idempotency
    - reconciliation_matrix
    - csp_trace
-3) Status fixtures validation (if `tests/fixtures/status/**` exists): `status_fixture_*`
-4) Doc sync validation: `doc_sync_check`
-5) Stack tests (language-gated by repo contents):
+4) Status fixtures validation (if `tests/fixtures/status/**` exists): `status_fixture_*`
+5) Doc sync validation: `doc_sync_check`
+6) Stack tests (language-gated by repo contents):
    - Rust: `rust_fmt`, `rust_tests_quick`
    - Python: `python_ruff_check`, `python_pytest_quick`
    - Node: `node_lint`, `node_typecheck`, `node_test`
@@ -290,6 +291,9 @@ Goal: "mergeable green" for marking PRD pass.
 
 FULL must run:
 - Everything in QUICK, plus:
+  - `contract_review_generate` (auto-seed `contract_review.json` with fail-closed default decision)
+  - `contract_review_validate` (schema-validate generated `contract_review.json`)
+  - `artifact_lint` in strict full mode (must bind to current verify artifacts dir)
   - `crossref_gate` (marker-based evidence gate in CI mode; strictness controlled by sentinel/env)
   - `contract_coverage`
   - Rust: `rust_clippy`, `rust_tests_full`
@@ -298,6 +302,7 @@ FULL must run:
   - `vendor_docs_lint_rust` (if supported)
 
 FULL is the only gate allowed to justify `passes=true`.
+Auto-seeded `contract_review.json` defaults to `decision=BLOCKED`; pass flip still requires explicit `decision=PASS` per section 8.1.
 
 ### 7.5 Local full is allowed
 In this fork, `verify full` MUST be runnable locally without special allow flags.
