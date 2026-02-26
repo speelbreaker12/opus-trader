@@ -143,8 +143,7 @@
         "slice_id",
         "head_commit",
         "generated_at",
-        "artifact_provenance",
-        "schema_version"
+        "artifact_provenance"
       ],
       "properties": {
         "tool": { "const": "script" },
