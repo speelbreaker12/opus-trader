@@ -720,3 +720,10 @@ Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_preflight
 Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; var/runtime/runtime_state.json (reverted); artifacts/phase0/meta_test_runtime/* (removed from branch diff).
 Notes: Review-scope assumption: security fixes prioritized as blocking P1 before any additional feature adjustments.
 Next: Commit remediation patch, push branch, and update PR #135.
+Story: PR #135 follow-up polish (P3 + handoff discoverability)
+Date: 2026-02-26 22:46:12 UTC
+Summary: Added defensive `--bundle-id` token validation parity with `--verify-run`, expanded recon bundle tests to cover unsafe bundle-id and destination symlink during real (non-dry-run) import, and added recon bundle portability pointer to the reconciliation handoff template quick-orientation section.
+Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_preflight_fixture_profiles.sh.
+Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md.
+Notes: Agreement recorded with review suggestion: this is low-risk consistency hardening rather than a blocker fix.
+Next: Commit, push, and add a short PR #135 note referencing the additional P3 coverage.

@@ -31,6 +31,7 @@ doesn't deserve `passes=true`.
 - Reconciliation artifacts go under `reviews/reconciliations/{{SLICE_ID}}/`
 - Story artifacts (proof graph, postmortem) go under `artifacts/story/{{STORY_ID}}/`
 - Receipts track step completion: `.wf/receipts/{{STORY_ID}}/`
+- For cross-worktree portability of slice artifacts, use `plans/recon_bundle.sh` commands documented in `RUNBOOK_PREMORTEM_RECON.md` §6.1.1
 - **Never modify production code outside of Step 2 (implement/R5) and Step 5 (fix/R7c-fix)**
 
 ---

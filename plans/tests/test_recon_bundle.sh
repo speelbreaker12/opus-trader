@@ -176,6 +176,10 @@ expect_fail "verify-run injection is rejected" \
   bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh export --slice S14 --verify-run '.; touch $injection_probe; #' --bundle-id inj-verify-run --out-root '$tmp_dir/inj_out'"
 [[ ! -f "$injection_probe" ]] || fail "verify-run injection probe should not execute"
 
+expect_fail "bundle-id rejects unsafe characters" \
+  "invalid --bundle-id" \
+  bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh export --slice S14 --bundle-id 'bad id;rm' --out-root '$tmp_dir/bad_bundle_out'"
+
 symlink_bundle="$tmp_dir/symlink_bundle"
 mkdir -p "$symlink_bundle/payload"
 outside_payload="$tmp_dir/outside_payload"
@@ -213,6 +217,14 @@ jq -n \
 expect_fail "symlinked payload path blocks import" \
   "payload path contains symlink component" \
   bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh import --bundle '$symlink_bundle' --allow-head-mismatch --dry-run"
+
+dest_symlink_target="$tmp_dir/destination_symlink_target"
+mkdir -p "$dest_symlink_target"
+rm -rf "$fixture_repo/reviews"
+ln -s "$dest_symlink_target" "$fixture_repo/reviews"
+expect_fail "destination symlink blocks non-dry-run import" \
+  "destination path contains symlink component" \
+  bash -lc "cd '$fixture_repo' && ./plans/recon_bundle.sh import --bundle '$bundle_dir' --allow-head-mismatch"
 
 missing_scope_repo="$tmp_dir/missing_scope_repo"
 build_fixture_repo "$missing_scope_repo"

@@ -433,7 +433,8 @@ run_export() {
     utc_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     bundle_id="recon_${slice}_${utc_stamp}"
   fi
-  [[ "$bundle_id" != */* ]] || fail "bundle_id must not contain '/'"
+  [[ "$bundle_id" =~ ^[A-Za-z0-9._-]+$ ]] \
+    || fail "invalid --bundle-id '$bundle_id' (expected [A-Za-z0-9._-]+)"
 
   build_export_bundle "$slice" "$verify_run" "$bundle_id" "$out_root"
 }
