@@ -261,6 +261,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_recon_bundle.sh"
+  "plans/tests/test_code_review_expert_guard.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"
   "plans/tests/test_crossref_gate.sh"

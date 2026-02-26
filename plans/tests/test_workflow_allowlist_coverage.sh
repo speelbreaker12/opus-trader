@@ -27,6 +27,7 @@ dupes="$(sort "$allowlist" | uniq -d || true)"
 [[ -z "$dupes" ]] || fail "duplicate entries: $dupes"
 
 required=(
+  .githooks/pre-commit
   .githooks/pre-push
   .github/pull_request_template.md
   .github/workflows/ci.yml
@@ -39,6 +40,8 @@ required=(
   plans/autofix.sh
   plans/artifact_lint.sh
   plans/check_skip_entrypoint.sh
+  plans/code_review_expert_attest.sh
+  plans/code_review_expert_guard.sh
   plans/codex_review_digest.sh
   plans/codex_review_let_pass.sh
   plans/codex_review_logged.sh
@@ -89,6 +92,7 @@ required=(
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
+  plans/tests/test_code_review_expert_guard.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh

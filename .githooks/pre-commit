@@ -58,4 +58,7 @@ if [[ -n "$STAGED_RS" ]]; then
   fi
 fi
 
+# 5. Enforce code-review-expert attestation for significant implementation changes
+plans/code_review_expert_guard.sh
+
 echo "Pre-commit checks passed."
