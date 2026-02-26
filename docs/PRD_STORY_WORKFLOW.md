@@ -427,7 +427,8 @@ Generated during or after verify.sh full, placed in the verify artifacts directo
 { "decision": "PASS" }
 ```
 
-This is a human/supervisor judgment artifact — not auto-generated. Create it after confirming contract alignment.
+`verify.sh full` now auto-seeds this artifact with a fail-closed baseline (`decision=BLOCKED`).
+Before pass flip, replace or update it with human/supervisor judgment and ensure `decision=PASS`.
 
 ### Gate checks (all must pass)
 

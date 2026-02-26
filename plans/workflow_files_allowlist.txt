@@ -23,6 +23,7 @@ plans/config/gate_sunsets.sh
 plans/contract_check.sh
 plans/contract_coverage_matrix.py
 plans/contract_coverage_promote.sh
+plans/contract_review_emit.sh
 plans/contract_review_validate.sh
 plans/crossref_burnin_check.sh
 plans/crossref_ci_strict
@@ -85,6 +86,7 @@ plans/tests/test_artifact_lint.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
 plans/tests/test_contract_profile_parity.sh
+plans/tests/test_contract_review_emit.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
 plans/tests/test_doc_sync_check.sh
