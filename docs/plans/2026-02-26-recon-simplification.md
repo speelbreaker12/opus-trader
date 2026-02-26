@@ -628,6 +628,89 @@ git commit -m "recon(simplify): mark RUNBOOK as reference-only"
 
 ---
 
+## Task 12: Add per-agent ToC retrospective to handoff template
+
+The slice reconciliation spans multiple agent sessions due to context limits. Each outgoing agent appends a HANDOFF block to the slice handoff doc. Add the 3-section ToC to that block so constraint patterns accumulate across sessions.
+
+**Files:**
+- Modify: `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md`
+
+**Step 1: Read the end of the HANDOFF section (around line 414–420)**
+
+Confirm the section ends with the Resume command block at line 420.
+
+**Step 2: Append the ToC template after the resume command (after line 420)**
+
+Add this to the end of the file:
+
+````markdown
+
+---
+
+### §1 Constraint (ONE)
+
+> The single biggest constraint that slowed this session. If the session was clean, write "None."
+
+- **How it manifested** (2–3 concrete symptoms):
+  -
+  -
+- **Time/token drain it caused**:
+- **Workaround I used (exploit)**:
+- **Next-agent default behavior (subordinate)**:
+- **Permanent fix proposal (elevate)**:
+- **Smallest increment**:
+- **Validation** (metric, fewer reruns, faster command, fewer flakes):
+
+### §2 Follow-up
+
+> Given what I built, what's the single best follow-up and what 1–3 upgrades are worth considering next?
+
+- Best follow-up:
+- Upgrades worth considering:
+  1.
+  2.
+
+### §3 Enforceable rules
+
+> Given the pain I hit (top sinks + failure modes), what 1–3 rules should we add so the next agent doesn't repeat it?
+
+1.
+2.
+````
+
+**Step 3: Also update the "Source-of-Truth Documents" table (around line 17–25)**
+
+The RUNBOOK row currently says "Your primary reference. Read the section for any step you're about to run."
+
+Update it to:
+
+```
+| **RUNBOOK** — reference for unusual situations | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` | Reference only. Consult for escalation policy, debt register rules, verdict enum. Not required for normal execution. |
+```
+
+Add a new row for INDEX.md above the RUNBOOK row:
+
+```
+| **INDEX** — step cards + debrief policy | `plans/step_prompts/recon/INDEX.md` | Read first. Links to all 8 step cards. Defines debrief policy (GREEN = one line; YELLOW/RED = full ToC). |
+```
+
+**Step 4: Verify the file ends with the §3 block**
+
+```bash
+tail -10 reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md
+```
+
+Expected: ends with the `### §3 Enforceable rules` section.
+
+**Step 5: Commit**
+
+```bash
+git add reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md
+git commit -m "recon(simplify): add per-agent ToC retrospective to handoff template"
+```
+
+---
+
 ## Verification
 
 After all tasks are done, confirm:
@@ -651,4 +734,12 @@ ls plans/step_prompts/recon/INDEX.md
 
 # RUNBOOK has reference header
 head -4 reviews/premortems/RUNBOOK_PREMORTEM_RECON.md
+
+# Handoff template has ToC retrospective
+grep -c "§1 Constraint\|§2 Follow-up\|§3 Enforceable" reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md
+# Expected: 3
+
+# Handoff template has INDEX.md row
+grep -c "INDEX.*step cards" reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md
+# Expected: 1
 ```

@@ -316,6 +316,37 @@ Stated once at the top of the cards index (not in individual cards):
 
 ---
 
+## Handoff Template — Per-Agent ToC Retrospective
+
+The slice reconciliation spans multiple agent sessions (context limits prevent a single agent from completing a full slice). Each outgoing agent appends a HANDOFF block to the slice handoff doc. The ToC retrospective goes at the end of each agent's HANDOFF block — filled before handing off, read by the next agent as context.
+
+The 3-section format:
+
+```markdown
+### §1 Constraint (ONE)
+- How it manifested (2–3 concrete symptoms):
+- Time/token drain it caused:
+- Workaround I used (exploit):
+- Next-agent default behavior (subordinate):
+- Permanent fix proposal (elevate):
+- Smallest increment:
+- Validation (metric, fewer reruns, faster command, fewer flakes):
+
+### §2 Follow-up
+- Best follow-up:
+- Upgrades worth considering: 1. … 2. …
+
+### §3 Enforceable rules
+1.
+2.
+```
+
+Over time the constraint chain across sessions shows exactly where time is bleeding in the process. Stories with repeated `§1` entries pointing to the same gate are candidates for simplification.
+
+The handoff template's Source-of-Truth table is also updated to point to `INDEX.md` as the primary execution reference (not the RUNBOOK).
+
+---
+
 ## Implementation Scope
 
 | File | Change |
@@ -331,5 +362,6 @@ Stated once at the top of the cards index (not in individual cards):
 | `plans/wf_step.sh` | Replace `cycle1_had_zero_findings()` with `read_cycle1_path()` |
 | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` | Add reference-only header |
 | `plans/step_prompts/recon/INDEX.md` (new) | Debrief policy + card index |
+| `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md` | Add §1/§2/§3 ToC to HANDOFF block; update source-of-truth table |
 
-Total files touched: 11. New files: 1.
+Total files touched: 12. New files: 1.
