@@ -22,6 +22,7 @@ Write full §0–§11 ToC debrief using `plans/postmortem_template.md`.
 | 5 cycle2 | cycle2.md | External FIX_DIFF review (1 or 2 dispatches based on PATH) |
 | 6 resolution | resolution.md | Write review_resolution.md + postmortem if YELLOW/RED |
 | 7 verify_full | verify_full.md | Run ./plans/verify.sh full |
+| 8 pass | — | Run prd_set_pass.sh to flip passes=true |
 
 ## Receipt Command
 
