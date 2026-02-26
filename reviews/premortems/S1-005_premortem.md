@@ -113,6 +113,9 @@ For EACH AT claimed by this story:
 - State machine transitions affected: None. Dispatch mapping is a pure function from (OrderSize, InstrumentKind, IntentClass) -> outbound request.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Dependencies on S1-004 (OrderSize struct) and S1-009 (dispatch map discovery). Need the OrderSize API to write the mapping function, and the discovery report to understand current gaps.
 - Exploit: Can implement against the CONTRACT.md spec directly with the OrderSize struct shape defined in the contract. Discovery report (S1-009) fills in current-state gaps but the target state is fully specified.
 - Smallest fix that prevents it next time: Ensure OrderSize struct definition is stable before dispatch mapping work begins.

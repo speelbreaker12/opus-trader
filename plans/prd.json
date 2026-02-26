@@ -1422,7 +1422,8 @@
       "scope": {
         "touch": [
           "crates/soldier_infra/src/lib.rs",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/tests/test_config_defaults.rs",
+          "crates/soldier_infra/tests/test_config_init.rs"
         ],
         "create": [
           "crates/soldier_infra/src/config.rs"
@@ -1600,9 +1601,9 @@
       ],
       "scope": {
         "touch": [
-          "crates/soldier_core/src/risk",
-          "crates/soldier_core/src/venue",
-          "crates/soldier_core/tests"
+          "crates/soldier_core/src/risk/instrument_state.rs",
+          "crates/soldier_core/src/venue/lifecycle.rs",
+          "crates/soldier_core/tests/test_expiry_guard.rs"
         ],
         "create": [],
         "avoid": [

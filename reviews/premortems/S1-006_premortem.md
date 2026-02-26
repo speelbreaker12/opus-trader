@@ -79,7 +79,7 @@
 - [x] Every wrong impl is blocked by a tightened AT or new test
 - [x] No AT remains where a wrong impl is easier than the correct one
 
-## 6) Proof plan (AT → enforcement -> tests)
+## 6) Proof plan (AT → enforcement → tests)
 
 | AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
 |----|-------------------|-----------------|-------|-----------|-----------------|-----------|
@@ -109,6 +109,9 @@ Note: This story does not change gate behavior. TRIP/NON-TRIP for the enforcemen
 - State machine transitions affected: None.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Test infrastructure for capturing structured logs and metric increments. May need to set up tracing test subscriber and metrics mock.
 - Exploit: Use `tracing-test` crate for log capture and simple atomic counters with a test wrapper for metric assertions.
 - Smallest fix that prevents it next time: Establish a project-wide test utilities module for log capture and metric assertion patterns.
@@ -126,6 +129,3 @@ Note: This story does not change gate behavior. TRIP/NON-TRIP for the enforcemen
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
 - [x] No new debt without owner + target slice
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE

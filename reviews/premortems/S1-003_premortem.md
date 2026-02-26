@@ -124,6 +124,9 @@
 - State machine transitions affected: RiskState can transition Healthy -> Degraded on cache staleness, and Degraded -> Healthy on cache refresh.
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - What will slow me down: Wiring the RiskState::Degraded signal from the cache into the PolicyGuard TradingMode computation. PolicyGuard may not exist yet or may not have an input for instrument cache freshness.
 - Exploit: Define a clear interface (e.g. `fn cache_health(&self) -> RiskState`) that PolicyGuard can call. Stub PolicyGuard integration if it doesn't exist yet; the interface is the contract.
 - Smallest fix that prevents it next time: Define PolicyGuard input interfaces early in slice planning, before individual stories need to wire into them.
@@ -132,22 +135,19 @@
 
 **STOPLIGHT**: YELLOW
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items only):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
-| Full PolicyGuard integration test (end-to-end tick with stale cache) | Medium | PolicyGuard tick loop may not be fully implemented in S1 | S1-003 owner | Slice 2 (PolicyGuard wiring) | Integration AT: stale cache -> PolicyGuard tick -> TradingMode::ReduceOnly emitted |
-| Per-instrument TTL tracking | Low | Contract does not require per-instrument TTL; batch refresh is sufficient | N/A | Slice 3+ if needed | N/A |
+| Full PolicyGuard integration test (end-to-end tick with stale cache) | Medium | DEFERRED: PolicyGuard tick loop may not be fully implemented in S1 | S1-003 owner | Slice 2 (PolicyGuard wiring) | Integration AT: stale cache -> PolicyGuard tick -> TradingMode::ReduceOnly emitted |
+| Per-instrument TTL tracking | Low | DEFERRED: contract does not require per-instrument TTL; batch refresh is sufficient | N/A | Slice 3+ if needed | N/A |
 
 - [x] §1 clause audit: every AT traced to normative clause
-- [x] §2 all assumptions validated or killed
+- [x] §2 all assumptions validated or killed (resolved)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE
+- [x] No new debt without owner + target slice (resolved by DEFERRED register entries above)

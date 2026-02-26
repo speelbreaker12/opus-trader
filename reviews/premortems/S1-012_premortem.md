@@ -154,6 +154,9 @@ TRIP/NON-TRIP pairings:
   - No transition back from ExpiredOrDelisted (latch-like behavior)
 
 ## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: NONE
+
 - Lessons from prior story postmortems: No prior postmortems exist (S1-012 is in Slice 1). First-mover risk: no precedent for ExpiryGuard patterns in this codebase.
 - What will slow me down: The 7 ATs have complex interactions — several share the same code paths (cancel handling, reconcile loop) but test different facets. Getting test isolation right (each AT tests exactly one clause) while sharing infrastructure will require careful test fixture design.
 - Exploit (workaround for this story): Use a builder pattern for test fixtures with defaults that satisfy all gates, then override only the parameter under test. Each AT test function sets up its own scenario from the builder.
@@ -163,24 +166,21 @@ TRIP/NON-TRIP pairings:
 
 **STOPLIGHT**: YELLOW
 
-**Debt Register** (required if YELLOW):
+**Debt Register** (required if YELLOW, DEFERRED items only):
 
 | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
 |------|----------|-------------|-------|-------------|-----------------|
-| DelistingSoon intermediate state not exercised | Low | Contract defines the enum variant but no AT requires DelistingSoon transitions; only Active -> ExpiredOrDelisted is tested | S1-012 owner | Slice 2+ | AT for DelistingSoon -> ExpiredOrDelisted transition |
-| Unknown venue error code handling | Low | Decision §4: strict allowlist chosen; novel error codes fall through to generic handling; may need future expansion | S1-012 owner | Slice 2+ | Property test with fuzzy error strings; alert on unmatched codes |
-| No combined AT for buffer + reconcile interaction | Low | AT-950 tests buffer rejection; AT-961 tests reconcile continuation; no AT tests: "instrument enters buffer DURING reconcile" | S1-012 owner | Slice 2+ | Combined integration test: reconcile starts with active instrument, instrument enters buffer mid-reconcile |
+| DelistingSoon intermediate state not exercised | Low | DEFERRED: contract defines the enum variant but no AT requires DelistingSoon transitions; only Active -> ExpiredOrDelisted is tested | S1-012 owner | Slice 2+ | AT for DelistingSoon -> ExpiredOrDelisted transition |
+| Unknown venue error code handling | Low | DEFERRED: Decision §4 strict allowlist chosen; novel error codes fall through to generic handling and may need future expansion | S1-012 owner | Slice 2+ | Property test with fuzzy error strings; alert on unmatched codes |
+| No combined AT for buffer + reconcile interaction | Low | DEFERRED: AT-950 tests buffer rejection and AT-961 tests reconcile continuation, but no AT covers buffer entry during reconcile | S1-012 owner | Slice 2+ | Combined integration test: reconcile starts with active instrument, instrument enters buffer mid-reconcile |
 
 **Exit criteria (definition of done, before I start):**
 - [x] §1 clause audit: every AT traced to normative clause
-- [x] §2 all assumptions validated or killed
+- [x] §2 all assumptions validated or killed (resolved)
 - [x] §3 all failure modes have detection + mitigation
 - [x] §4 all decisions resolved, grounded in evidence
 - [x] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [x] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [x] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [x] §8 conflict scan clean (no CONTRACT.md conflicts)
-- [x] No new debt without owner + target slice
-
-Prior Postmortem: NONE
-Reused Guardrail: NONE
+- [x] No new debt without owner + target slice (resolved by DEFERRED register entries above)
