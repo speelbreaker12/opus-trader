@@ -37,6 +37,7 @@ required=(
   docs/contract_kernel.json
   docs/validation_rules.md
   plans/autofix.sh
+  plans/artifact_lint.sh
   plans/check_skip_entrypoint.sh
   plans/codex_review_digest.sh
   plans/codex_review_let_pass.sh
@@ -84,6 +85,7 @@ required=(
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_profile_parity.sh
   plans/tests/test_adversarial_gate.sh
+  plans/tests/test_artifact_lint.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
