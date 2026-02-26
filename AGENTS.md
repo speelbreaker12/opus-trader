@@ -53,6 +53,22 @@ Then end with: `<promise>COMPLETE</promise>`
 ## Review Coverage
 
 - Use `reviews/REVIEW_CHECKLIST.md` to ensure PR reviews cover evidence, compounding, and workflow-specific gates.
+- After each significant implementation change (behavior changes, multi-file refactors, or workflow/harness logic updates), MUST run the `code-review-expert` skill by default before final verify/merge.
+
+### Default Review Output Format
+
+When asked to "review" a PR/change, default to this compact format:
+1. Severity + short title
+2. File(s)
+3. Problem
+4. Expected fix
+5. Impact
+
+Rules:
+- Keep entries short and scan-friendly.
+- Do not use absolute filesystem paths by default.
+- Use repo-relative file references with line numbers (e.g., `plans/wf_step.sh:520`).
+- Put findings first, ordered by severity (P0 → P1 → P2), then optional test gaps/notes.
 ## PRD Authoring Rules
 
 - MUST run `./plans/prd_gate.sh` (not `prd_lint.sh`) when validating PRDs — lint alone misses schema/ref checks.
