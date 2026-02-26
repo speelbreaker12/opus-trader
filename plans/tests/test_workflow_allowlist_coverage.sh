@@ -46,6 +46,7 @@ required=(
   plans/contract_check.sh
   plans/contract_coverage_matrix.py
   plans/contract_coverage_promote.sh
+  plans/contract_review_emit.sh
   plans/contract_review_validate.sh
   plans/fork_attestation_mirror.sh
   plans/fork_attestation_remediation_verify.sh
@@ -84,6 +85,7 @@ required=(
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_profile_parity.sh
+  plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
   plans/tests/test_guard_no_command_substitution.sh

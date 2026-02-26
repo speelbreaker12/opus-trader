@@ -130,6 +130,7 @@ GATE_INTEGRITY_TIMEOUT="${GATE_INTEGRITY_TIMEOUT:-30s}"
 DOC_SYNC_TIMEOUT="${DOC_SYNC_TIMEOUT:-30s}"
 WORKFLOW_TEST_TIMEOUT="${WORKFLOW_TEST_TIMEOUT:-15m}"
 ARTIFACT_LINT_TIMEOUT="${ARTIFACT_LINT_TIMEOUT:-45s}"
+CONTRACT_REVIEW_TIMEOUT="${CONTRACT_REVIEW_TIMEOUT:-30s}"
 
 VERIFY_RUN_ID="${VERIFY_RUN_ID:-$(date +%Y%m%d_%H%M%S)}"
 VERIFY_ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-$ROOT/artifacts/verify/$VERIFY_RUN_ID}"
@@ -378,6 +379,16 @@ if command -v git >/dev/null 2>&1; then
   if [[ -n "$dirty_status" ]]; then
     warn "Working tree is dirty"
   fi
+fi
+
+if [[ "$MODE" == "full" ]]; then
+  log "00b) contract review generate"
+  run_logged_or_exit "contract_review_generate" "$CONTRACT_REVIEW_TIMEOUT" \
+    ./plans/contract_review_emit.sh --out "$VERIFY_ARTIFACTS_DIR/contract_review.json"
+
+  log "00c) contract review validate"
+  run_logged_or_exit "contract_review_validate" "$CONTRACT_REVIEW_TIMEOUT" \
+    ./plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"
 fi
 
 ensure_python
