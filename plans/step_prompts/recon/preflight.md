@@ -1,38 +1,28 @@
-ROLE
-You are the Builder performing RECONCILIATION PREFLIGHT for ${STORY_ID}.
-This is an audit step. Do NOT write production code in this step.
+# Step 0: preflight
 
-STORY
-- Story ID: ${STORY_ID}
-- Base branch: ${BASE_BRANCH}
-- Current HEAD: ${HEAD}
+## CONTEXT
+- `plans/prd.json` → story entry: `scope.touch` file list + AT references
+- `specs/CONTRACT.md` → sections referenced by scope.touch files
+- `artifacts/story/<ID>/premortem.md`
 
-TASK
-1) Read the PRD entry for ${STORY_ID} in plans/prd.json.
-2) Read the referenced contract clauses / ATs in specs/CONTRACT.md.
-3) Read the prior postmortem: ${PRIOR_POSTMORTEM_PATH}
-   - If not NONE: read section "## 8) Next-Story Startup Note" for carry-forward constraints.
-   - If NONE: no prior postmortem exists.
-4) For each AT in enforcing_contract_ats:
-   - identify the proving test file and test function (or mark missing)
-   - check if proof is CAUSAL (reject reason, dispatch_count, latch/mode/result), not just existence
-   - note proof quality: PROVEN / WEAK / MISSING / DEFERRED
-5) Verify all scope.touch files exist.
-6) Run: cargo check --workspace
-7) Capture the resolved scope lock values you are reconciling against.
-8) Produce an AT proof audit table and a STOPLIGHT verdict for this story.
+## ACTION
+- Read each scope.touch file
+- Build AT proof table: AT-ID | test file:line | verdict (PASS / FAIL / PARTIAL)
+  - PASS: test exists, covers the AT, and would catch a wrong implementation
+  - PARTIAL: test exists but coverage is incomplete or causal proof is weak
+  - FAIL: test missing, wrong, or does not prove the AT claim
+- Assign STOPLIGHT on line 1 of audit.md:
+  - GREEN: all verdicts PASS
+  - YELLOW: any PARTIAL, no FAIL
+  - RED: any FAIL
+- No code edits in this step
 
-OUTPUT ARTIFACTS
-- Scope lock: `.wf/recon_scope_lock/${STORY_ID}.scope_lock.json` (written by wf_step preflight step)
+## OUTPUT
+`artifacts/story/<ID>/preflight/audit.md`
+→ Line 1: `STOPLIGHT: GREEN` (or YELLOW or RED)
+→ Then: AT proof table
 
-OUTPUT
-- AT Proof Audit table: | AT | Test file:line | Causal? | Status | Notes |
-- scope.touch file existence summary
-- Contract alignment notes (including any paper-compliance risk)
-- STOPLIGHT: GREEN / YELLOW / RED
-- End with exact line: READY FOR IMPLEMENT
-
-PROHIBITED
-- Do NOT edit production code
-- Do NOT run plans/wf_step.sh or plans/prd_set_pass.sh
-- Do NOT hand-wave missing tests as "covered elsewhere" without naming exact test files
+## RECEIPT
+```
+plans/wf_step.sh <ID> preflight
+```
