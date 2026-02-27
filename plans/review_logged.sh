@@ -619,7 +619,7 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 # ── Determine model name for provenance ───────────────────────────
 model_name="n/a"
 case "$tool" in
-  codex)  model_name="${CODEX_MODEL:-gpt-4.1}" ;;
+  codex)  model_name="${CODEX_MODEL:-GPT-5.3-Codex}" ;;
   opus)   model_name="claude-opus-4-6" ;;
   kimi)   model_name="kimi-k2.5" ;;
   gemini) model_name="${GEMINI_MODEL:-gemini-3-pro-preview}" ;;

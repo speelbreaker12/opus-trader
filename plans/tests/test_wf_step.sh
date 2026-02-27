@@ -9,6 +9,7 @@ PASS=0
 FAIL=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WF_STEP="$(cd "$SCRIPT_DIR/.." && pwd)/wf_step.sh"
+RECON_PRECHECK="$(cd "$SCRIPT_DIR/.." && pwd)/recon_precheck.sh"
 
 assert_exit() {
   local label="$1" expected="$2" actual="$3"
@@ -75,7 +76,9 @@ mkdir -p artifacts/verify/run_001
 
 # Copy wf_step.sh into this repo
 cp "$WF_STEP" plans/wf_step.sh
+cp "$RECON_PRECHECK" plans/recon_precheck.sh
 chmod +x plans/wf_step.sh
+chmod +x plans/recon_precheck.sh
 
 # Initial commit
 echo "initial" > src.rs
@@ -424,6 +427,14 @@ fi
 
 echo ""
 echo "=== PART 8: Reconciliation mode ==="
+
+mkdir -p reviews/premortems
+cat > reviews/premortems/TEST-001_premortem.md <<'EOF'
+# TEST-001 premortem
+EOF
+cat > reviews/premortems/TEST-002_premortem.md <<'EOF'
+# TEST-002 premortem
+EOF
 
 # ── Test 15: Invalid WF_RECON_MODE rejected ──────────────────────────
 echo "--- Test 15: Invalid WF_RECON_MODE rejected ---"
