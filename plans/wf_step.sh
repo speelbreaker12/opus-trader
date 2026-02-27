@@ -413,14 +413,15 @@ read_cycle1_path() {
 
 verify_cycle1_citations() {
   # Pre-flight citation check for C1 review artifacts before writing cycle1 receipt.
-  # Validate only the most recent artifact per tool directory to avoid stale-history
-  # files blocking the current run.
+  # Select the most recent C1-valid artifact per tool directory to avoid stale-history
+  # files while also ignoring newer C2 artifacts that are not valid for C1 gating.
   local art_dir="$1"
+  local d
   local artifact
   local review_files=()
-  local citations_ok=1
   local verifier="$ROOT/plans/verify_citations.sh"
-  local latest=""
+  local newest=""
+  local best_c1=""
 
   if [[ ! -x "$verifier" ]]; then
     echo "WF_STEP: citation validator missing or not executable at $verifier" >&2
@@ -429,13 +430,24 @@ verify_cycle1_citations() {
 
   for d in "$art_dir/codex" "$art_dir/opus" "$art_dir/kimi"; do
     [[ -d "$d" ]] || continue
-    latest=""
+    newest=""
+    best_c1=""
     while IFS= read -r artifact; do
       [[ -f "$artifact" ]] || continue
-      latest="$artifact"
-    done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | LC_ALL=C sort)
-    if [[ -n "$latest" ]]; then
-      review_files+=("$latest")
+      [[ -z "$newest" ]] && newest="$artifact"
+      if "$verifier" --artifact "$artifact" --mode C1 --json >/dev/null 2>&1; then
+        best_c1="$artifact"
+        break
+      fi
+    done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | LC_ALL=C sort -r)
+
+    if [[ -n "$best_c1" ]]; then
+      review_files+=("$best_c1")
+    elif [[ -n "$newest" ]]; then
+      # Emit deterministic failure diagnostics for the newest candidate in this tool dir.
+      "$verifier" --artifact "$newest" --mode C1 --json >/dev/null 2>&1 || true
+      echo "WF_STEP: citation pre-gate failed for $newest (no C1-valid artifact found in $d)" >&2
+      return 1
     fi
   done
 
@@ -447,12 +459,11 @@ verify_cycle1_citations() {
   for artifact in "${review_files[@]}"; do
     if ! "$verifier" --artifact "$artifact" --mode C1 --json; then
       echo "WF_STEP: citation pre-gate failed for $artifact" >&2
-      citations_ok=0
-      break
+      return 1
     fi
   done
 
-  [[ "$citations_ok" -eq 1 ]]
+  return 0
 }
 
 case "$STEP" in
