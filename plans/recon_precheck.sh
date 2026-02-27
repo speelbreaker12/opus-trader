@@ -119,8 +119,23 @@ if [[ "$ownership_conflicts" -gt 0 ]]; then
   reasons+=("$ownership_conflicts AT ownership conflict(s) found")
 fi
 
+# Recon requires passes=true (reconciliation is only for already-passing stories)
+story_passes=false
+if [[ "$story_found" == "true" ]]; then
+  passes_val="$(jq -r --arg sid "$story_id" '
+    (.items[]? | select(.id == $sid) | .passes) //
+    (.stories[$sid]?.passes) //
+    "false"
+  ' "$prd_file")"
+  if [[ "$passes_val" == "true" ]]; then
+    story_passes=true
+  else
+    reasons+=("story $story_id does not have passes=true (required for recon)")
+  fi
+fi
+
 ready=false
-if [[ "$premortem_exists" == "true" && "$story_found" == "true" && "$ownership_conflicts" -eq 0 ]]; then
+if [[ "$premortem_exists" == "true" && "$story_found" == "true" && "$story_passes" == "true" && "$ownership_conflicts" -eq 0 ]]; then
   ready=true
 fi
 
