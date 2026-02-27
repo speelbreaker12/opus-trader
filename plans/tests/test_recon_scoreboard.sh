@@ -78,9 +78,18 @@ grep -Fq '"step_receipt_head_sha"' "$json_out" || fail "step receipt head debug 
 grep -Fq '"preflight": "'"$head_sha"'"' "$json_out" || fail "preflight head missing from debug map"
 grep -Fq '"implement": "'"$alt_head"'"' "$json_out" || fail "implement head missing from debug map"
 
-# JSON-first PATH source: once ledger JSON exists, scoreboard should prefer it.
+# JSON-first PATH source: derive from evidence_ledger.v1 shape.
 cat > "$artifacts_root/$story_id/evidence_ledger.json" <<'EOF'
-{"schema_version":"evidence_ledger.v1","path":"YELLOW"}
+{
+  "schema_version": "evidence_ledger.v1",
+  "at_verdicts": {
+    "AT-001": {"verdict": "PROVEN"},
+    "AT-002": {"verdict": "CLAIMED_NOT_PROVEN"}
+  },
+  "gaps": [
+    {"gap_id": "GAP-001", "priority": "P2"}
+  ]
+}
 EOF
 
 (
@@ -96,6 +105,25 @@ EOF
 grep -Fq "| $story_id | true | YELLOW |" "$md_out" || fail "expected JSON-ledger PATH override not found"
 grep -Fq '"path_source": "'"$artifacts_root/$story_id/evidence_ledger.json"'"' "$json_out" \
   || fail "expected json path source missing"
+
+# If JSON exists but cannot produce a PATH signal, fallback to markdown PATH line.
+cat > "$artifacts_root/$story_id/evidence_ledger.json" <<'EOF'
+{"schema_version":"evidence_ledger.v1","at_verdicts":{"AT-001":{"verdict":"PROVEN"}},"gaps":"bad-shape"}
+EOF
+
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_id" \
+    --out-md "$md_out" \
+    --out-json "$json_out" \
+    >/dev/null
+)
+
+grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected markdown PATH fallback not found"
+grep -Fq '"path_source": "'"$artifacts_root/$story_id/cycle1/evidence_ledger.md"'"' "$json_out" \
+  || fail "expected markdown path source when json signal is unknown"
 
 # --head should allow scoring against a specific commit-ish.
 (
@@ -184,6 +212,32 @@ grep -Fq "WARN: no stories found for slice 0" "$tmp_dir/strict.err" \
   python3 plans/recon_scoreboard.py --slice 0 --stories "$story_id" --head HEAD~1 >/dev/null
 )
 
+# Wrapper should canonicalize slice directory to S<id> regardless of input format.
+wrapper_repo="$tmp_dir/wrapper_repo"
+mkdir -p "$wrapper_repo/plans"
+git -C "$tmp_dir" init -q wrapper_repo
+git -C "$wrapper_repo" config user.email "test@example.com"
+git -C "$wrapper_repo" config user.name "Wrapper Test"
+cp "$ROOT/plans/recon_scoreboard.py" "$wrapper_repo/plans/recon_scoreboard.py"
+cp "$ROOT/plans/recon_scoreboard.sh" "$wrapper_repo/plans/recon_scoreboard.sh"
+chmod +x "$wrapper_repo/plans/recon_scoreboard.sh"
+cat > "$wrapper_repo/plans/prd.json" <<'EOF'
+{
+  "items": [
+    {"id":"S2-001","slice":2,"passes":true}
+  ]
+}
+EOF
+(
+  cd "$wrapper_repo"
+  git add -A
+  git commit -qm "fixture"
+  WF_RECEIPT_DIR="$tmp_dir/wrapper_receipts" STORY_ARTIFACTS_ROOT="$tmp_dir/wrapper_story_artifacts" \
+    plans/recon_scoreboard.sh 2 --stories S2-001 >/dev/null
+)
+[[ -f "$wrapper_repo/reviews/reconciliations/S2/SCOREBOARD.md" ]] || fail "wrapper did not write canonical S2 markdown output"
+[[ -f "$wrapper_repo/reviews/reconciliations/S2/SCOREBOARD.json" ]] || fail "wrapper did not write canonical S2 json output"
+[[ ! -d "$wrapper_repo/reviews/reconciliations/2" ]] || fail "wrapper should not create non-canonical numeric slice dir"
 set +e
 (
   cd "$ROOT"

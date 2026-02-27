@@ -389,22 +389,20 @@ read_cycle1_path() {
   local art_dir="$1"
   local ledger="$art_dir/cycle1/evidence_ledger.md"
   if [[ -f "$ledger" ]]; then
-    local first_line
-    first_line="$(head -1 "$ledger" 2>/dev/null || true)"
-    case "$first_line" in
-      "PATH: GREEN")
-        return 0
-        ;;
-      "PATH: YELLOW")
-        return 1
-        ;;
-      *)
-        # Unrecognized signal in canonical path — fall back for legacy artifacts.
-        echo "WF_STEP: unrecognized PATH signal in $ledger: '$first_line'; falling back to legacy findings detection" >&2
-        cycle1_had_zero_findings "$art_dir"
-        return $?
-        ;;
-    esac
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -n "$line" ]] || continue
+      if [[ "$line" =~ ^PATH:[[:space:]]*(GREEN|YELLOW)[[:space:]]*$ ]]; then
+        case "${BASH_REMATCH[1]}" in
+          GREEN) return 0 ;;
+          YELLOW) return 1 ;;
+        esac
+      fi
+    done < "$ledger"
+    # Unrecognized/missing PATH signal in canonical path — fall back for legacy artifacts.
+    echo "WF_STEP: unrecognized PATH signal in $ledger; falling back to legacy findings detection" >&2
+    cycle1_had_zero_findings "$art_dir"
+    return $?
   fi
   # No canonical evidence ledger — fall back to legacy text detection for backward compat
   echo "WF_STEP: no cycle1/evidence_ledger.md at $ledger; falling back to legacy findings detection" >&2

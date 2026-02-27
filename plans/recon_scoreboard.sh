@@ -6,8 +6,8 @@ usage() {
 Usage: plans/recon_scoreboard.sh <SLICE_ID> [extra args]
 
 Generates:
-  reviews/reconciliations/<SLICE_ID>/SCOREBOARD.md
-  reviews/reconciliations/<SLICE_ID>/SCOREBOARD.json
+  reviews/reconciliations/S<SLICE_ID>/SCOREBOARD.md
+  reviews/reconciliations/S<SLICE_ID>/SCOREBOARD.json
 EOF
 }
 
@@ -23,6 +23,8 @@ if [[ ! "$SLICE_ID" =~ ^[Ss]?[0-9]+$ ]]; then
   echo "ERROR: invalid slice id '$SLICE_ID' (expected N or SN)" >&2
   exit 2
 fi
+SLICE_NUM="${SLICE_ID#[Ss]}"
+SLICE_ID="S${SLICE_NUM}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASE_OUT_DIR="$ROOT/reviews/reconciliations"

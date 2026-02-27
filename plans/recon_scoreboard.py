@@ -222,6 +222,19 @@ def _receipt_status(receipt_path: Path, score_head: str) -> tuple[str, str | Non
 
 
 def _derive_path_from_ledger_json(payload: dict[str, Any]) -> str:
+    def _has_blocking_gap(gaps: list[Any]) -> bool:
+        return any(
+            isinstance(gap, dict)
+            and (
+                str(gap.get("severity", "")).strip().upper() in {"P0", "P1"}
+                or str(gap.get("priority", "")).strip().upper() in {"P0", "P1"}
+            )
+            for gap in gaps
+        )
+
+    def _is_non_proven(verdict: Any) -> bool:
+        return str(verdict).strip().upper() not in {"PROVEN", "DEFERRED"}
+
     explicit = payload.get("path")
     if isinstance(explicit, str):
         candidate = explicit.strip().upper()
@@ -239,14 +252,17 @@ def _derive_path_from_ledger_json(payload: dict[str, Any]) -> str:
     has_typed_at_evidence = isinstance(at_evidence, list)
     has_typed_gaps = isinstance(gaps, list)
     if has_typed_at_evidence and has_typed_gaps:
-        has_blocking_gap = any(
-            isinstance(gap, dict) and str(gap.get("severity", "")).strip().upper() in {"P0", "P1"}
-            for gap in gaps
-        )
+        has_blocking_gap = _has_blocking_gap(gaps)
+        has_non_proven_verdict = any(isinstance(entry, dict) and _is_non_proven(entry.get("verdict")) for entry in at_evidence)
+        return "YELLOW" if (has_blocking_gap or has_non_proven_verdict) else "GREEN"
+
+    at_verdicts = payload.get("at_verdicts")
+    if isinstance(at_verdicts, dict) and has_typed_gaps:
+        has_blocking_gap = _has_blocking_gap(gaps)
         has_non_proven_verdict = any(
-            isinstance(entry, dict)
-            and str(entry.get("verdict", "")).strip().upper() not in {"PROVEN", "DEFERRED"}
-            for entry in at_evidence
+            (isinstance(entry, dict) and _is_non_proven(entry.get("verdict")))
+            or (not isinstance(entry, dict) and _is_non_proven(entry))
+            for entry in at_verdicts.values()
         )
         return "YELLOW" if (has_blocking_gap or has_non_proven_verdict) else "GREEN"
     # If at_evidence/gaps are present but malformed, heuristic inference is skipped and
@@ -305,8 +321,9 @@ def _ledger_candidates(root: Path, story_artifacts_root: Path, story_id: str, st
 def _resolve_path_signal(root: Path, story_artifacts_root: Path, story_id: str, story_slice: str) -> tuple[str, str]:
     candidates = _ledger_candidates(root, story_artifacts_root, story_id, story_slice)
     existing_json = [p for p in candidates if p.suffix == ".json" and p.exists()]
+    first_json_path = ""
     if existing_json:
-        first_json_path = existing_json[0]
+        first_json_path = str(existing_json[0])
         for ledger_path in existing_json:
             try:
                 with open(ledger_path, "r", encoding="utf-8") as handle:
@@ -318,15 +335,21 @@ def _resolve_path_signal(root: Path, story_artifacts_root: Path, story_id: str, 
             signal = _derive_path_from_ledger_json(payload)
             if signal in PATH_VALUES:
                 return signal, str(ledger_path)
-        return "UNKNOWN", str(first_json_path)
 
+    first_markdown_path = ""
     for ledger_path in candidates:
         if ledger_path.suffix != ".md" or not ledger_path.exists():
             continue
+        if not first_markdown_path:
+            first_markdown_path = str(ledger_path)
         signal = _read_path_signal_from_markdown(ledger_path)
         if signal in PATH_VALUES:
             return signal, str(ledger_path)
-        return "UNKNOWN", str(ledger_path)
+
+    if first_json_path:
+        return "UNKNOWN", first_json_path
+    if first_markdown_path:
+        return "UNKNOWN", first_markdown_path
 
     return "UNKNOWN", ""
 
