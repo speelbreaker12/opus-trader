@@ -82,7 +82,7 @@ Six checks, evaluated in order:
 | 2 | All sections §0-§10 present | `NO-GO: SECTIONS_MISSING` (delegates to `premortem_gate.sh`) | Stop |
 | 3 | STOPLIGHT != RED | `NO-GO: STOPLIGHT_RED` | Stop |
 | 4 | If STOPLIGHT is YELLOW: every gap marked DEFERRED or FIX IN STEP 5 | `NO-GO: UNRESOLVED_YELLOW_GAPS` | Stop |
-| 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
+| 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories globally across PRD) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
 | 6 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT` | Stop (also enforced by §1.1) |
 
 **Exit 0** = proceed. **Exit 1** = blocked (fix premortem first).
@@ -173,7 +173,7 @@ Six checks, evaluated in order:
 - [ ] All flagged fixes applied
 - [ ] No new contradictions introduced
 - [ ] STOPLIGHT honest (no GREEN with unresolved assumptions)
-- [ ] AT ownership unambiguous (no AT claimed as primary by 2+ stories)
+- [ ] AT ownership unambiguous (no AT claimed as primary by 2+ stories globally across PRD)
 - [ ] Enforcement points reference true modules
 
 **Output**: `phase7_verify_report.json` + `PREMORTEM_READY=true`

@@ -14,7 +14,7 @@ set -euo pipefail
 #   1. reviews/premortems/${STORY_ID}_premortem.md exists
 #   2. premortem_gate.sh passes (sections present, no placeholders)
 #   3. STOPLIGHT != RED
-#   4. No AT ownership conflicts (no AT claimed as primary by 2+ stories)
+#   4. No AT ownership conflicts (no AT claimed as primary by 2+ stories globally)
 #
 # Output (--json): premortem_ready.json matching specs/schemas/recon/premortem_ready.schema.json
 
@@ -198,8 +198,7 @@ if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
         (.enforcing_contract_ats // [])
       end;
 
-    (.items[]? | select(.id == $sid) | .slice // null) as $target_slice
-    | ([.items[]? | select((.slice // null) == $target_slice) | {id, claims: (owner_claims | map(tostring))}] ) as $stories
+    ([.items[]? | {id, claims: (owner_claims | map(tostring))}] ) as $stories
     | ($stories[]? | select(.id == $sid) | .claims // []) as $my_claims
     | [
         $my_claims[] as $at
