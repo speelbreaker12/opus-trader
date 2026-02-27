@@ -21,6 +21,10 @@ Options:
                      generic  = code-quality focus (SOLID, naming, doc, types)
                      enriched = contract-proof focus (ATs, premortem, fail-closed)
                      Run both for maximum coverage.
+  --timeout-seconds N
+                     Max seconds for external review command. Defaults:
+                     opus=600 (900 for --files), kimi=600, codex=0 (600 for --files).
+                     Use 0 to disable timeout.
   --proof-graph      Generate per-reviewer proof_graph.json skeleton (requires --prompt enriched)
   --commit REF       Review a specific commit (default: HEAD)
   --base REF         Review diff from base to HEAD
@@ -86,6 +90,38 @@ json_int() {
   else
     echo 0
   fi
+}
+
+max_int() {
+  local max=0
+  local v
+  for v in "$@"; do
+    v="$(json_int "$v")"
+    if [[ "$v" -gt "$max" ]]; then
+      max="$v"
+    fi
+  done
+  echo "$max"
+}
+
+count_findings_for_severity() {
+  local sev="$1"
+  local bullet heading severity_cell summary_row plain
+
+  # Common reviewer output forms:
+  # - [P1] ...
+  # ### P1-High ...
+  # | **Severity** | P1 ... |
+  # | 1 | **P1** | ...
+  bullet="$(safe_count "^[[:space:]]*[-*][[:space:]]*\\[$sev\\]" 0)"
+  heading="$(safe_count "^[[:space:]]*#{1,6}[[:space:]]*$sev([[:space:]:-]|$)" 0)"
+  severity_cell="$(safe_count "^[[:space:]]*\\|[[:space:]]*\\*{0,2}Severity\\*{0,2}[[:space:]]*\\|[[:space:]]*\\*{0,2}$sev\\*{0,2}([[:space:]|]|$)" 0)"
+  summary_row="$(safe_count "^[[:space:]]*\\|[[:space:]]*[0-9]+[[:space:]]*\\|[[:space:]]*\\*{0,2}$sev\\*{0,2}[[:space:]]*\\|" 0)"
+  plain="$(safe_count "^[[:space:]]*$sev[-:][[:space:]]" 0)"
+
+  # Use max across formats to avoid double-counting the same finding
+  # in both detailed and summary sections.
+  max_int "$bullet" "$heading" "$severity_cell" "$summary_row" "$plain"
 }
 
 count_review_citations() {
@@ -226,6 +262,7 @@ shift
 tool=""
 prompt_style="enriched"
 proof_graph=false
+timeout_seconds_override=""
 mode="commit"
 commit="HEAD"
 base=""
@@ -247,6 +284,10 @@ while [[ $# -gt 0 ]]; do
     --proof-graph)
       proof_graph=true
       shift 1
+      ;;
+    --timeout-seconds)
+      timeout_seconds_override="${2:?missing timeout seconds}"
+      shift 2
       ;;
     --commit)
       mode="commit"
@@ -318,6 +359,11 @@ if [[ "$mode" == "base" && -z "$base" ]]; then
   exit 2
 fi
 
+if [[ -n "$timeout_seconds_override" ]] && [[ ! "$timeout_seconds_override" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --timeout-seconds must be a non-negative integer" >&2
+  exit 2
+fi
+
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: not in a git repo" >&2; exit 2; }
 cd "$root"
 
@@ -337,6 +383,39 @@ case "$tool" in
     ;;
 esac
 
+if [[ -n "$timeout_seconds_override" ]]; then
+  timeout_seconds="$timeout_seconds_override"
+else
+  case "$tool" in
+    codex)
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_CODEX_FILES_TIMEOUT_SECONDS:-600}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_TIMEOUT_SECONDS:-0}"
+      fi
+      ;;
+    opus)
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_OPUS_FILES_TIMEOUT_SECONDS:-900}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_OPUS_TIMEOUT_SECONDS:-600}"
+      fi
+      ;;
+    kimi)
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_KIMI_FILES_TIMEOUT_SECONDS:-600}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_KIMI_TIMEOUT_SECONDS:-600}"
+      fi
+      ;;
+  esac
+fi
+
+if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: timeout seconds must be a non-negative integer" >&2
+  exit 2
+fi
+
 if [[ "$out_root" = /* ]]; then
   outdir="$out_root/$story/$tool"
 else
@@ -354,6 +433,11 @@ canonical_name="${tool}.${prompt_style}.md"
 outfile="$outdir/${canonical_name}"
 legacy_name="${stamp}_review.md"
 legacy_file="$outdir/${legacy_name}"
+sidecar_file="${outfile%.md}.sidecar.json"
+
+# Always clear previous sidecar up front so stale metadata cannot survive
+# a failed/hard-gated run.
+rm -f "$sidecar_file" 2>/dev/null || true
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
 head_sha="$(git rev-parse HEAD 2>/dev/null || echo "?")"
@@ -435,9 +519,14 @@ Focus on:
 
 For each finding, include:
 - File path and line number
+- At least one explicit evidence citation token in the exact format \`path/to/file.ext:line\`
 - Severity level (P0-P3)
 - Description of the issue
 - Suggested fix
+
+Hard requirement:
+- Every finding must contain at least one \`path/to/file.ext:line\` citation.
+- If you report no findings, output \`NO_FINDINGS\` and list at least 3 reviewed citations.
 
 Title: $title
 
@@ -469,10 +558,15 @@ PRIORITIES (check in this order)
 
 For each finding, include:
 - File path and line number
+- At least one explicit evidence citation token in the exact format \`path/to/file.ext:line\`
 - Severity level (P0-Critical, P1-High, P2-Medium, P3-Low)
 - Which PRIORITY it falls under (1-7)
 - Description of the issue
 - Suggested fix
+
+Hard requirement:
+- Every finding must contain at least one \`path/to/file.ext:line\` citation.
+- If you report no findings, output \`NO_FINDINGS\` and list at least 3 reviewed citations.
 
 Title: $title
 
@@ -599,16 +693,37 @@ cleanup() {
 trap cleanup EXIT
 
 start_epoch="$(date +%s)"
+timeout_cmd=()
+if [[ "$timeout_seconds" -gt 0 ]]; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_cmd=("timeout" "$timeout_seconds")
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_cmd=("gtimeout" "$timeout_seconds")
+  else
+    echo "ERROR: timeout requested but neither 'timeout' nor 'gtimeout' is available in PATH" >&2
+    exit 2
+  fi
+fi
+
+run_cmd=("${cmd[@]}")
+if [[ ${#timeout_cmd[@]} -gt 0 ]]; then
+  run_cmd=("${timeout_cmd[@]}" "${cmd[@]}")
+fi
+
+timed_out=false
 set +e
 if [[ -n "$prompt_tmp" ]]; then
-  # opus/kimi/gemini always, codex exec (--files mode): pipe prompt via stdin
-  "${cmd[@]}" < "$prompt_tmp" 2>&1 | tee "$transcript_tmp"
+  # opus always, kimi always, codex exec (--files mode): pipe prompt via stdin
+  "${run_cmd[@]}" < "$prompt_tmp" 2>&1 | tee "$transcript_tmp"
 else
   # codex review (built-in diff modes): no stdin
-  "${cmd[@]}" 2>&1 | tee "$transcript_tmp"
+  "${run_cmd[@]}" 2>&1 | tee "$transcript_tmp"
 fi
 rc="${PIPESTATUS[0]}"
 set -e
+if [[ "$timeout_seconds" -gt 0 && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
+  timed_out=true
+fi
 end_epoch="$(date +%s)"
 duration_seconds="$((end_epoch - start_epoch))"
 
@@ -696,6 +811,11 @@ slice_id="${slice_id:-UNKNOWN}"
     echo "- Proof graph: $pg_skeleton"
   fi
   echo "- Command: ${cmd[*]}"
+  if [[ ${#timeout_cmd[@]} -gt 0 ]]; then
+    echo "- Timeout Wrapper: ${timeout_cmd[*]}"
+  fi
+  echo "- Timeout Seconds: $timeout_seconds"
+  echo "- Timed Out: $timed_out"
   echo "- Artifact Provenance: logger-v2"
   echo "- Generator Script: plans/review_logged.sh"
   echo "- Command Exit Code: $rc"
@@ -709,11 +829,11 @@ cat "$transcript_tmp" >> "$outfile"
 echo "<<<REVIEW_TRANSCRIPT_END>>>" >> "$outfile"
 
 # Emit structured findings summary for deterministic gate parsing.
-# Counts P0-P3 by matching "| P<N>" or "P<N>:" or "**P<N>**" patterns in transcript.
-# Falls back to 999 if counting fails (fail-closed: assume findings exist).
-p0="$(safe_count '\\bP0\\b' 999)"
-p1="$(safe_count '\\bP1\\b' 999)"
-p2="$(safe_count '\\bP2\\b' 999)"
+# Counts by finding-like line formats, then takes max across formats to avoid
+# double-counting when a review includes both detailed and summary sections.
+p0="$(count_findings_for_severity "P0")"
+p1="$(count_findings_for_severity "P1")"
+p2="$(count_findings_for_severity "P2")"
 echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
 
 # ── Extract review_meta for deterministic gate checks ────────────────
@@ -776,6 +896,12 @@ fi
 # Artifact is still written (for debugging), but exit code is nonzero on failure.
 gate_exit=0
 
+if [[ "$timed_out" == "true" ]]; then
+  echo "HARD_GATE_FAIL: Review command timed out after ${timeout_seconds}s" >&2
+  echo "HARD_GATE: REVIEW_COMMAND_TIMEOUT (exit 7)" >> "$outfile"
+  gate_exit=7
+fi
+
 # Gate 1: Missing "Review basis:" line in artifact (exit 3)
 # Checks full artifact (header + transcript). Script injects basis in provenance
 # header; gate validates it survived the write.
@@ -814,7 +940,6 @@ if [[ "$gate_exit" -eq 0 ]]; then
   sidecar_schema="$root/specs/schemas/recon/review_artifact_sidecar.schema.json"
   validator="$root/plans/validate_recon_artifact.sh"
   if [[ -f "$sidecar_schema" && -x "$validator" ]]; then
-    sidecar_file="${outfile%.md}.sidecar.json"
     # Use provenance fields computed earlier (authoritative, not transcript-extracted)
     citations_ct="$(count_review_citations)"
     citations_ct="$(json_int "$citations_ct")"
@@ -883,8 +1008,12 @@ canonical_name="${tool}.${prompt_style}.md"
 canonical_path="$outdir/$canonical_name"
 
 # Overwrite any previous canonical file for this tool+prompt combo
-cp "$outfile" "$canonical_path"
-echo "Normalized: $canonical_path" >&2
+if [[ "$outfile" != "$canonical_path" ]]; then
+  cp "$outfile" "$canonical_path"
+  echo "Normalized: $canonical_path" >&2
+else
+  echo "Normalized: $canonical_path (already canonical)" >&2
+fi
 
 echo "Saved $(ucfirst "$tool") review: $outfile (canonical: $canonical_name)" >&2
 exit "$rc"
