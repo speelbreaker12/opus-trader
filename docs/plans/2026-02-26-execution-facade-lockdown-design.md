@@ -379,9 +379,10 @@ use process-global static atomics (e.g., `AtomicU64`). Integration test files ge
 separate binaries with isolated memory. Unit tests under `--lib` share a single binary
 with parallel threads — meaning counter assertions like `assert_eq!(counter, 1)` will
 flake when another thread's rejection increments the same global.
-**Fix per counter test:** Either (a) use `serial_test` crate to serialize counter tests,
-or (b) read the counter before and after the operation and assert on the **delta**
-(`assert_eq!(after - before, 1)`), not the absolute value.
+**Fix per counter test:** Use delta assertions — read the counter before and after the
+operation and assert on the **delta** (`assert_eq!(after - before, 1)`), not the
+absolute value. This is mandated over `serial_test` to avoid a new crate dependency
+and ensure consistency across all gate modules.
 
 **`test_static_rejection_counters.rs` split mapping:**
 
@@ -429,10 +430,38 @@ This test currently calls `evaluate_intent_pipeline()` directly and imports
 wire types (`LiquidityGateInput`, `NetEdgeInput`, `PricerInput`). This contradicts
 "pipeline wiring is not contract."
 
-**Fix: rewrite to chokepoint-level contract surface.**
+**Fix: rewrite to chokepoint-level contract surface using strangler fig approach.**
+
+To prevent coverage gaps, add new chokepoint-level tests alongside existing pipeline
+tests first (both run, verify coverage), THEN remove old tests. This is the safest
+migration path for the highest-value contract tests.
 
 The 15 pipeline tests (GI-001, GI-002, GI-004, GI-009, GI-017) must be rewritten
-to exercise the contract through chokepoint functions:
+to exercise the contract through chokepoint functions.
+
+**Assertion-level migration mapping:**
+
+| Current test fn | Key assertion | Moves to | Notes |
+|----------------|---------------|----------|-------|
+| `gi_001_blocks_open_when_risk_degraded` | `ChokeRejectReason::RiskStateNotHealthy` | chokepoint (stays) | intent_class=Open, risk_state=Degraded |
+| `gi_001_blocks_open_when_risk_maintenance` | `ChokeRejectReason::RiskStateNotHealthy` | chokepoint (stays) | intent_class=Open, risk_state=Maintenance |
+| `gi_001_blocks_open_when_risk_kill` | `ChokeRejectReason::RiskStateNotHealthy` | chokepoint (stays) | intent_class=Open, risk_state=Kill |
+| `gi_001_allows_open_when_risk_healthy` | `ChokeResult::Approved` | chokepoint (stays) | baseline: all gates pass |
+| `gi_002_open_class_applies_risk_state_gate` | `RiskStateNotHealthy` | chokepoint (stays) | Open + Degraded → reject |
+| `gi_002_close_class_skips_risk_state_gate` | no `MarginHeadroomRejectOpens` | chokepoint (stays) | Close + Degraded → not rejected by risk |
+| `gi_002_cancel_only_always_approved` | `Approved`, trace=[DispatchAuth] | chokepoint (stays) | CancelOnly + Kill → approved |
+| `gi_004_blocks_open_without_wal_recorded` | `GateStep::RecordedBeforeDispatch` reject | chokepoint (stays) | use FailingWalGate stub |
+| `gi_004_allows_open_with_wal_recorded` | `Approved`, trace has WAL step | chokepoint (stays) | use StubWalGate |
+| `gi_009_blocks_open_when_fee_cache_missing` | `FeeCacheCheck` reject | chokepoint (stays) | `fee_cache_passed: false` in gate_results |
+| `gi_009_blocks_open_when_fee_cache_hard_stale` | rejected | chokepoint (stays) | `fee_cache_passed: false` |
+| `gi_009_allows_open_when_fee_cache_fresh` | `Approved` | chokepoint (stays) | `fee_cache_passed: true` |
+| `gi_017_close_bypasses_liquidity_gate` | not rejected by liquidity codes | chokepoint (stays) | Close + `liquidity_gate_passed: false` → still approved |
+| `gi_017_close_bypasses_net_edge_gate` | not rejected by net edge codes | chokepoint (stays) | Close + `net_edge_passed: false` → still approved |
+| `gi_017_open_fails_without_liquidity` | `reject_reason_code == LiquidityGateNoL2` | **pipeline.rs unit test** | Asserts pipeline-specific reject reason unavailable at chokepoint level |
+
+**Key insight:** All tests except `gi_017_open_fails_without_liquidity` can be fully
+expressed at chokepoint level. That one test asserts `LiquidityGateNoL2` (a gate-internal
+reject reason), so it moves to `pipeline.rs` `#[cfg(test)]`.
 
 ```rust
 // BEFORE (calls excluded pipeline entrypoint):
@@ -870,6 +899,7 @@ types only), any internal import that relied on a now-cut re-export (like
 | `use crate::execution::Symbol;` where Symbol is not in `api.rs` | **Must fix** — goes through `mod.rs` |
 
 **Files that need fixing** (verified against current codebase):
+- `pipeline.rs:7` — `use crate::execution::DispatchConsistencyProof;` (full path through mod.rs)
 - `pipeline.rs:16–22` — `use super::{ ChokeIntentClass, LiquidityGateInput, ... }` (~20 symbols)
 - `open_runtime.rs:19–26` — `use super::{ ChokeIntentClass, LiquidityGateInput, ... }` (~28 symbols)
 - `open_runtime.rs:14` — `use super::DispatchConsistencyProof;`
@@ -895,9 +925,11 @@ Imports already using `super::<submodule>::...` (e.g., `super::gate_outcome::Gat
 `super::reject_reason::RejectReasonCode`) are already correct and need no changes.
 
 **Proof commands — run before Step 3 to confirm no stale internal imports remain.**
-Note: these regex commands may miss multiline `use super::{` blocks. The authoritative
-check is `cargo check -p soldier_core` after temporarily replacing the old re-export
-blocks with `pub use api::*` in a scratch commit. If it compiles, all imports are fixed.
+**WARNING: Do NOT rely on the regex commands below.** They miss single-symbol imports
+like `use super::DispatchConsistencyProof;` (no brace) and multiline blocks.
+**The authoritative check is `cargo check -p soldier_core`** after temporarily
+replacing the old re-export blocks with `pub use api::*` in a scratch commit. If it
+compiles, all imports are fixed.
 ```bash
 # These must return zero matches (or only facade-safe symbols):
 rg -n 'use (crate::execution|super)::\{' crates/soldier_core/src/execution/ \
@@ -1074,7 +1106,8 @@ requires building contract input types first (see §12).
 ## Non-Goals
 
 - Changing any runtime behavior
-- Adding new tests (moved tests preserve existing coverage)
+- Adding new test *functionality* beyond existing coverage (moved and rewritten
+  tests preserve existing coverage at equivalent or higher abstraction levels)
 - Modifying CONTRACT.md or specs
 - Touching `soldier_infra` module structure
 - Building `ExecutionEngine` (Phase 2)
