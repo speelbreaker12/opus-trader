@@ -35,7 +35,7 @@ Modes:
   opus  --commit/--base/--uncommitted: uses `claude --print` with review prompt (stdin)
   opus  --files:                       uses `claude --print` with file contents (stdin)
   kimi  (all modes):                   uses `kimi --print` with review prompt (stdin)
-  gemini (all modes):                  uses `gemini -o text -p ""` with review prompt (stdin)
+  gemini (all modes):                  uses `gemini -o text -p <prompt>` (prompt via -p flag, not stdin)
 
 Artifacts:
   - artifacts/story/<ID>/<tool>/<tool>.<style>.md  (canonical)
@@ -578,10 +578,11 @@ case "$tool" in
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
 
+    local gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
     # -p <content> activates headless mode with the prompt inline.
     # Gemini CLI requires a PTY for stdin piping, so we pass the prompt
     # via the -p flag instead (reads file into shell arg).
-    cmd=("gemini" "-o" "text" "-m" "gemini-3-pro-preview" "-p" "$(<"$prompt_tmp")")
+    cmd=("gemini" "-o" "text" "-m" "$gemini_model" "-p" "$(<"$prompt_tmp")")
     prompt_tmp=""  # clear so the stdin-piping path is skipped
     if [[ ${#extra[@]} -gt 0 ]]; then
       cmd+=("${extra[@]}")
@@ -621,7 +622,7 @@ case "$tool" in
   codex)  model_name="${CODEX_MODEL:-gpt-4.1}" ;;
   opus)   model_name="claude-opus-4-6" ;;
   kimi)   model_name="kimi-k2.5" ;;
-  gemini) model_name="gemini-3-pro-preview" ;;
+  gemini) model_name="${GEMINI_MODEL:-gemini-3-pro-preview}" ;;
 esac
 
 # ── Determine cycle and phase equivalent from context ─────────────
