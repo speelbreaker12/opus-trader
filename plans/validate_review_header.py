@@ -28,7 +28,7 @@ FULL_FIELDS = MANDATORY_FIELDS | {
     "base_commit", "generated_at", "artifact_provenance", "schema_version",
 }
 
-VALID_TOOLS = {"codex", "opus", "kimi", "internal", "script"}
+VALID_TOOLS = {"codex", "opus", "kimi", "gemini", "internal", "script"}
 VALID_PROMPT_STYLES = {"generic", "enriched", "none"}
 VALID_CYCLES = {"C1", "C2", "SELF", "NONE"}
 VALID_PHASES = {

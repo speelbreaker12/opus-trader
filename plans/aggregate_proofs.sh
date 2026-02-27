@@ -36,7 +36,7 @@ fi
 
 # Known reviewer tool names (prevents accidental aggregation of non-reviewer dirs).
 # Keep in sync with the tool case-statement in review_logged.sh (~line 232).
-KNOWN_TOOLS="codex opus kimi"
+KNOWN_TOOLS="codex opus kimi gemini"
 
 # Guard: base must exist (init.py must have been run)
 if [[ ! -f "$BASE" ]]; then

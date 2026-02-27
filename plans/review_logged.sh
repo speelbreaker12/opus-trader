@@ -13,10 +13,10 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  plans/review_logged.sh STORY_ID --tool <codex|opus|kimi> [options] [-- <extra tool args>]
+  plans/review_logged.sh STORY_ID --tool <codex|opus|kimi|gemini> [options] [-- <extra tool args>]
 
 Options:
-  --tool TOOL        Required: codex, opus, or kimi
+  --tool TOOL        Required: codex, opus, kimi, or gemini
   --prompt STYLE     Prompt style: generic or enriched (default: enriched)
                      generic  = code-quality focus (SOLID, naming, doc, types)
                      enriched = contract-proof focus (ATs, premortem, fail-closed)
@@ -35,6 +35,7 @@ Modes:
   opus  --commit/--base/--uncommitted: uses `claude --print` with review prompt (stdin)
   opus  --files:                       uses `claude --print` with file contents (stdin)
   kimi  (all modes):                   uses `kimi --print` with review prompt (stdin)
+  gemini (all modes):                  uses `gemini -o text -p ""` with review prompt (stdin)
 
 Artifacts:
   - artifacts/story/<ID>/<tool>/<tool>.<style>.md  (canonical)
@@ -47,6 +48,7 @@ Examples:
   plans/review_logged.sh S1-004 --tool opus --prompt generic --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool opus --proof-graph --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool kimi --base main
+  plans/review_logged.sh S1-004 --tool gemini --base main
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
 EOF
 }
@@ -285,10 +287,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$tool" ]] || { echo "ERROR: --tool is required (codex, opus, or kimi)" >&2; exit 2; }
+[[ -n "$tool" ]] || { echo "ERROR: --tool is required (codex, opus, kimi, or gemini)" >&2; exit 2; }
 case "$tool" in
-  codex|opus|kimi) ;;
-  *) echo "ERROR: unknown tool '$tool' (expected: codex, opus, or kimi)" >&2; exit 2 ;;
+  codex|opus|kimi|gemini) ;;
+  *) echo "ERROR: unknown tool '$tool' (expected: codex, opus, kimi, or gemini)" >&2; exit 2 ;;
 esac
 case "$prompt_style" in
   generic|enriched) ;;
@@ -302,7 +304,7 @@ if [[ "$proof_graph" == "true" ]]; then
     exit 2
   fi
   if [[ "$tool" == "codex" && "$mode" != "files" ]]; then
-    echo "ERROR: --proof-graph requires --tool opus|kimi or --tool codex --files (codex diff mode bypasses prompt injection)" >&2
+    echo "ERROR: --proof-graph requires --tool opus|kimi|gemini or --tool codex --files (codex diff mode bypasses prompt injection)" >&2
     exit 2
   fi
 fi
@@ -329,6 +331,9 @@ case "$tool" in
     ;;
   kimi)
     command -v kimi >/dev/null 2>&1 || { echo "ERROR: kimi CLI not found in PATH" >&2; exit 2; }
+    ;;
+  gemini)
+    command -v gemini >/dev/null 2>&1 || { echo "ERROR: gemini CLI not found in PATH" >&2; exit 2; }
     ;;
 esac
 
@@ -381,7 +386,7 @@ fi
 diff_context=""
 review_context_label="Diff"
 codex_exec_mode=false
-if [[ "$tool" == "opus" || "$tool" == "kimi" || ("$tool" == "codex" && "$mode" == "files") ]]; then
+if [[ "$tool" == "opus" || "$tool" == "kimi" || "$tool" == "gemini" || ("$tool" == "codex" && "$mode" == "files") ]]; then
   case "$mode" in
     commit)
       resolved="$(git rev-parse "${commit}^{commit}" 2>/dev/null || true)"
@@ -406,7 +411,7 @@ if [[ "$tool" == "opus" || "$tool" == "kimi" || ("$tool" == "codex" && "$mode" =
   [[ "$mode" == "files" ]] && review_context_label="Files to review"
 fi
 
-# ── Build review prompt (shared by opus and kimi) ─────────────────
+# ── Build review prompt (shared by opus, kimi, and gemini) ─────────────────
 build_review_prompt() {
   local style="$1"
   local ctx_label="$2"
@@ -568,6 +573,17 @@ case "$tool" in
       cmd+=("${extra[@]}")
     fi
     ;;
+
+  gemini)
+    prompt_tmp="$(mktemp)"
+    build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
+
+    # -p "" activates headless mode; stdin provides the prompt
+    cmd=("gemini" "-o" "text" "-m" "gemini-3.1" "-p" "")
+    if [[ ${#extra[@]} -gt 0 ]]; then
+      cmd+=("${extra[@]}")
+    fi
+    ;;
 esac
 
 # ── Run review command ──────────────────────────────────────────────
@@ -581,7 +597,7 @@ trap cleanup EXIT
 start_epoch="$(date +%s)"
 set +e
 if [[ -n "$prompt_tmp" ]]; then
-  # opus always, kimi always, codex exec (--files mode): pipe prompt via stdin
+  # opus/kimi/gemini always, codex exec (--files mode): pipe prompt via stdin
   "${cmd[@]}" < "$prompt_tmp" 2>&1 | tee "$transcript_tmp"
 else
   # codex review (built-in diff modes): no stdin
@@ -599,9 +615,10 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 # ── Determine model name for provenance ───────────────────────────
 model_name="n/a"
 case "$tool" in
-  codex) model_name="${CODEX_MODEL:-gpt-4.1}" ;;
-  opus)  model_name="claude-opus-4-6" ;;
-  kimi)  model_name="kimi-k2.5" ;;
+  codex)  model_name="${CODEX_MODEL:-gpt-4.1}" ;;
+  opus)   model_name="claude-opus-4-6" ;;
+  kimi)   model_name="kimi-k2.5" ;;
+  gemini) model_name="gemini-3.1" ;;
 esac
 
 # ── Determine cycle and phase equivalent from context ─────────────

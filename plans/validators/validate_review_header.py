@@ -46,7 +46,7 @@ from lib_review_artifacts import (  # noqa: E402
 VERSION = "v1"
 VALIDATOR_NAME = "validate_review_header"
 
-VALID_TOOLS = {"codex", "opus", "kimi", "script"}
+VALID_TOOLS = {"codex", "opus", "kimi", "gemini", "script"}
 VALID_PROMPT_STYLES = {"generic", "enriched", "none"}
 VALID_CYCLES = {"C1", "C2", "SELF", "NONE"}
 VALID_PHASES = {

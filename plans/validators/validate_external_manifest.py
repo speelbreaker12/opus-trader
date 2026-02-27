@@ -64,7 +64,7 @@ HEXSHA_RE = _LIB_HEXSHA_RE
 SHA256_RE = _LIB_SHA256_RE
 ISO8601Z_RE = _LIB_ISO8601Z_RE
 
-VALID_TOOLS = {"codex", "opus", "kimi"}
+VALID_TOOLS = {"codex", "opus", "kimi", "gemini"}
 VALID_PROMPT_STYLES = {"generic", "enriched"}
 
 REQUIRED_COMBOS_DEFAULT = [
@@ -72,6 +72,8 @@ REQUIRED_COMBOS_DEFAULT = [
     ("codex", "generic"),
     ("kimi", "enriched"),
     ("kimi", "generic"),
+    ("gemini", "enriched"),
+    ("gemini", "generic"),
 ]
 
 R3_MANIFEST_PROV_REQUIRED = [

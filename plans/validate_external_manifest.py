@@ -198,7 +198,7 @@ def validate_review_provenance_r3(prov: Any, ctx: str) -> list[str]:
         "generated_at", "artifact_provenance",
     ]
     errors += _check_required(prov, req, ctx)
-    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(prov, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(prov, "cycle", "C1", ctx)
     errors += _check_enum(prov, "phase_equivalent", ["R1", "R3"], ctx)
@@ -222,7 +222,7 @@ def validate_review_provenance_r7(prov: Any, ctx: str) -> list[str]:
         "base_commit", "generated_at", "artifact_provenance",
     ]
     errors += _check_required(prov, req, ctx)
-    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(prov, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(prov, "cycle", "C2", ctx)
     errors += _check_const(prov, "phase_equivalent", "R7d", ctx)
@@ -247,7 +247,7 @@ def validate_review_entry_r3(entry: Any, idx: int, check_files: bool, manifest_d
     if not isinstance(entry, dict):
         return [f"{ctx}: must be an object"]
     errors += _check_required(entry, R3_REVIEW_ENTRY_REQUIRED, ctx)
-    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(entry, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(entry, "cycle", "C1", ctx)
     errors += _check_enum(entry, "phase_equivalent", ["R1", "R3"], ctx)
@@ -284,7 +284,7 @@ def validate_review_entry_r7(entry: Any, idx: int, check_files: bool, manifest_d
     if not isinstance(entry, dict):
         return [f"{ctx}: must be an object"]
     errors += _check_required(entry, R7_REVIEW_ENTRY_REQUIRED, ctx)
-    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi"], ctx)
+    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(entry, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(entry, "cycle", "C2", ctx)
     errors += _check_const(entry, "phase_equivalent", "R7d", ctx)
@@ -501,7 +501,7 @@ def check_required_combos(reviews: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-VALID_TOOLS = {"codex", "opus", "kimi"}
+VALID_TOOLS = {"codex", "opus", "kimi", "gemini"}
 VALID_PROMPT_STYLES = {"generic", "enriched"}
 
 

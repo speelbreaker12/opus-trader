@@ -11,7 +11,7 @@ set -euo pipefail
 #
 # Options:
 #   --tools <list>     Comma-separated tools (default: codex,opus)
-#                      Available: codex, opus, kimi
+#                      Available: codex, opus, kimi, gemini
 #   --base <REF>       Base ref for diff (passed through to review_logged.sh)
 #   --commit <REF>     Commit ref (passed through)
 #   --files <LIST>     Files list (passed through)
@@ -88,8 +88,8 @@ done
 IFS=',' read -ra TOOL_LIST <<< "$TOOLS"
 for t in "${TOOL_LIST[@]}"; do
   case "$t" in
-    codex|opus|kimi) ;;
-    *) die "unknown tool: $t (expected: codex, opus, kimi)" ;;
+    codex|opus|kimi|gemini) ;;
+    *) die "unknown tool: $t (expected: codex, opus, kimi, gemini)" ;;
   esac
 done
 
