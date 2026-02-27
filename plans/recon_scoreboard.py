@@ -31,6 +31,7 @@ STEPS: tuple[str, ...] = (
 STATUS_DONE = "DONE"
 STATUS_STALE = "STALE"
 STATUS_MISSING = "MISSING"
+PATH_VALUES = {"GREEN", "YELLOW"}
 
 GLYPHS = {
     STATUS_DONE: "✓",
@@ -41,7 +42,6 @@ GLYPHS = {
 PATH_RE = re.compile(r"^PATH:\s*(GREEN|YELLOW)\s*$")
 SLICE_RE = re.compile(r"^(?:S|s)?(\d+)$")
 STORY_ID_RE = re.compile(r"^S(\d+)-(\d+)$", re.IGNORECASE)
-HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
 
 @dataclass(frozen=True)
@@ -72,6 +72,20 @@ def _head_commit(root: Path) -> str:
     )
     if result.returncode != 0:
         raise RuntimeError("unable to determine git HEAD")
+    return result.stdout.strip()
+
+
+def _resolve_score_head(root: Path, value: str | None) -> str:
+    if value is None:
+        return _head_commit(root)
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--verify", value],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"unable to resolve --head '{value}'")
     return result.stdout.strip()
 
 
@@ -183,25 +197,60 @@ def _story_artifacts_root(root: Path) -> Path:
     return root / p
 
 
-def _receipt_status(receipt_path: Path, head_commit: str) -> str:
+def _receipt_status(receipt_path: Path, score_head: str) -> tuple[str, str | None]:
     if not receipt_path.exists():
-        return STATUS_MISSING
+        return STATUS_MISSING, None
     try:
         with open(receipt_path, "r", encoding="utf-8") as handle:
             payload = json.load(handle)
     except (OSError, json.JSONDecodeError):
-        return STATUS_MISSING
+        return STATUS_MISSING, None
 
     if not isinstance(payload, dict):
-        return STATUS_MISSING
+        return STATUS_MISSING, None
 
     receipt_head = payload.get("head_sha")
-    if isinstance(receipt_head, str) and receipt_head == head_commit:
-        return STATUS_DONE
-    return STATUS_STALE
+    if not isinstance(receipt_head, str):
+        return STATUS_MISSING, None
+    if receipt_head == score_head:
+        return STATUS_DONE, receipt_head
+    return STATUS_STALE, receipt_head
 
 
-def _read_path_signal(ledger_path: Path) -> str:
+def _derive_path_from_ledger_json(payload: dict[str, Any]) -> str:
+    explicit = payload.get("path")
+    if isinstance(explicit, str):
+        candidate = explicit.strip().upper()
+        if candidate in PATH_VALUES:
+            return candidate
+
+    stoplight = payload.get("stoplight")
+    if isinstance(stoplight, str):
+        stoplight = stoplight.strip().upper()
+    else:
+        stoplight = ""
+
+    at_evidence = payload.get("at_evidence")
+    gaps = payload.get("gaps")
+    if isinstance(at_evidence, list) and isinstance(gaps, list):
+        has_blocking_gap = any(
+            isinstance(gap, dict) and str(gap.get("severity", "")).strip().upper() in {"P0", "P1"}
+            for gap in gaps
+        )
+        has_non_proven_verdict = any(
+            isinstance(entry, dict)
+            and str(entry.get("verdict", "")).strip().upper() not in {"PROVEN", "DEFERRED"}
+            for entry in at_evidence
+        )
+        return "YELLOW" if (has_blocking_gap or has_non_proven_verdict) else "GREEN"
+
+    if stoplight in PATH_VALUES:
+        return stoplight
+
+    return "UNKNOWN"
+
+
+def _read_path_signal_from_markdown(ledger_path: Path) -> str:
     if not ledger_path.exists():
         return "UNKNOWN"
 
@@ -220,56 +269,57 @@ def _read_path_signal(ledger_path: Path) -> str:
     return "UNKNOWN"
 
 
-def _read_path_signal_json(ledger_path: Path) -> str:
-    try:
-        with open(ledger_path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return "UNKNOWN"
-
-    if not isinstance(data, dict):
-        return "UNKNOWN"
-
-    explicit_path = data.get("path")
-    if isinstance(explicit_path, str) and explicit_path in {"GREEN", "YELLOW"}:
-        return explicit_path
-
-    stoplight = data.get("stoplight")
-    if isinstance(stoplight, str):
-        if stoplight == "GREEN":
-            return "GREEN"
-        if stoplight in {"YELLOW", "RED"}:
-            return "YELLOW"
-    return "UNKNOWN"
-
-
-def _path_candidates(root: Path, story_id: str, slice_id: str, story_artifacts_root: Path) -> list[Path]:
-    slice_token = f"S{slice_id}"
-    return [
-        story_artifacts_root / story_id / "cycle1" / "evidence_ledger.md",
-        story_artifacts_root / story_id / f"{story_id}_reconciliation.md",
-        story_artifacts_root / story_id / f"{story_id}_reconciliation.json",
-        story_artifacts_root / story_id / "evidence_ledger.md",
+def _ledger_candidates(root: Path, story_artifacts_root: Path, story_id: str, story_slice: str) -> list[Path]:
+    slice_token = f"S{story_slice}"
+    candidates = [
+        story_artifacts_root / story_id / "cycle1" / "evidence_ledger.json",
         story_artifacts_root / story_id / "evidence_ledger.json",
+        story_artifacts_root / story_id / f"{story_id}_reconciliation.json",
+        root / "reviews" / "reconciliations" / slice_token / f"{story_id}_reconciliation.json",
+        story_artifacts_root / story_id / "cycle1" / "evidence_ledger.md",
+        story_artifacts_root / story_id / "evidence_ledger.md",
+        story_artifacts_root / story_id / f"{story_id}_reconciliation.md",
         story_artifacts_root / story_id / "preflight" / "audit.md",
         root / "reviews" / "reconciliations" / slice_token / f"{story_id}_reconciliation.md",
-        root / "reviews" / "reconciliations" / slice_token / f"{story_id}_reconciliation.json",
     ]
 
-
-def _resolve_path_signal(root: Path, story_id: str, slice_id: str, story_artifacts_root: Path) -> str:
-    for candidate in _path_candidates(root, story_id, slice_id, story_artifacts_root):
-        if not candidate.exists():
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+    for candidate in candidates:
+        if candidate in seen:
             continue
-        if candidate.suffix == ".md":
-            signal = _read_path_signal(candidate)
-        elif candidate.suffix == ".json":
-            signal = _read_path_signal_json(candidate)
-        else:
-            signal = "UNKNOWN"
-        if signal != "UNKNOWN":
-            return signal
-    return "UNKNOWN"
+        seen.add(candidate)
+        ordered.append(candidate)
+    return ordered
+
+
+def _resolve_path_signal(root: Path, story_artifacts_root: Path, story_id: str, story_slice: str) -> tuple[str, str]:
+    candidates = _ledger_candidates(root, story_artifacts_root, story_id, story_slice)
+    existing_json = [p for p in candidates if p.suffix == ".json" and p.exists()]
+    if existing_json:
+        first_json_path = existing_json[0]
+        for ledger_path in existing_json:
+            try:
+                with open(ledger_path, "r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            signal = _derive_path_from_ledger_json(payload)
+            if signal in PATH_VALUES:
+                return signal, str(ledger_path)
+        return "UNKNOWN", str(first_json_path)
+
+    for ledger_path in candidates:
+        if ledger_path.suffix != ".md" or not ledger_path.exists():
+            continue
+        signal = _read_path_signal_from_markdown(ledger_path)
+        if signal in PATH_VALUES:
+            return signal, str(ledger_path)
+        return "UNKNOWN", str(ledger_path)
+
+    return "UNKNOWN", ""
 
 
 def _derive_pass_status(step_status: dict[str, str]) -> str:
@@ -333,7 +383,7 @@ def build_scoreboard(
     root: Path,
     slice_id: str,
     stories_filter: set[str] | None,
-    head_commit: str,
+    score_head: str | None,
 ) -> tuple[str, dict[str, Any], bool]:
     prd_path = root / "plans" / "prd.json"
     story_entries = _load_prd_stories(prd_path, slice_id)
@@ -341,6 +391,8 @@ def build_scoreboard(
     if stories_filter is not None:
         story_entries = [entry for entry in story_entries if entry.story_id in stories_filter]
 
+    repo_head_commit = _head_commit(root)
+    resolved_score_head = _resolve_score_head(root, score_head)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     story_artifacts_root = _story_artifacts_root(root)
@@ -351,10 +403,13 @@ def build_scoreboard(
     for entry in story_entries:
         receipt_dir = _receipt_dir_for_story(root, entry.story_id)
         step_status: dict[str, str] = {}
+        step_receipt_head_sha: dict[str, str] = {}
         for index, step in enumerate(STEPS[:-1]):
             receipt_path = receipt_dir / f"{index:02d}_{step}.json"
-            status = _receipt_status(receipt_path, head_commit)
+            status, receipt_head_sha = _receipt_status(receipt_path, resolved_score_head)
             step_status[step] = status
+            if receipt_head_sha:
+                step_receipt_head_sha[step] = receipt_head_sha
             if status != STATUS_DONE:
                 all_done = False
 
@@ -364,23 +419,26 @@ def build_scoreboard(
             all_done = False
 
         story_slice = _story_slice_id(entry.story_id, slice_id)
-        path_signal = _resolve_path_signal(root, entry.story_id, story_slice, story_artifacts_root)
+        path_signal, path_source = _resolve_path_signal(root, story_artifacts_root, entry.story_id, story_slice)
 
         story_payloads.append(
             {
                 "story_id": entry.story_id,
                 "passes": entry.passes,
                 "path": path_signal,
-                "head": head_commit,
+                "path_source": path_source,
+                "head": resolved_score_head,
                 "steps": step_status,
+                "step_receipt_head_sha": step_receipt_head_sha,
             }
         )
 
-    markdown = _render_markdown(slice_id, generated_at, head_commit, story_payloads)
+    markdown = _render_markdown(slice_id, generated_at, resolved_score_head, story_payloads)
     json_payload: dict[str, Any] = {
         "slice": int(slice_id),
         "generated_at": generated_at,
-        "head_commit": head_commit,
+        "head_commit": resolved_score_head,
+        "repo_head_commit": repo_head_commit,
         "stories": story_payloads,
     }
     return markdown, json_payload, all_done
@@ -394,13 +452,13 @@ def _write_text(path: Path, content: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate reconciliation scoreboard for a slice")
     parser.add_argument("--slice", required=True, help="Slice number/id (e.g. 2 or S2)")
+    parser.add_argument(
+        "--head",
+        help="Compare receipt head_sha values against this commit-ish (default: current HEAD)",
+    )
     parser.add_argument("--out-md", help="Write markdown output to PATH")
     parser.add_argument("--out-json", help="Write JSON summary output to PATH")
     parser.add_argument("--stories", help="Optional comma-separated story filter (e.g. S2-001,S2-002)")
-    parser.add_argument(
-        "--head",
-        help="Commit SHA to score receipts against (defaults to current HEAD)",
-    )
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -412,10 +470,7 @@ def main(argv: list[str] | None = None) -> int:
         slice_id = _normalize_slice(args.slice)
         root = _repo_root()
         stories_filter = _parse_story_filter(args.stories)
-        head_commit = args.head if args.head is not None else _head_commit(root)
-        if not HEXSHA_RE.match(head_commit):
-            raise ValueError(f"invalid --head value: {head_commit!r} (expected git SHA)")
-        markdown, json_payload, all_done = build_scoreboard(root, slice_id, stories_filter, head_commit)
+        markdown, json_payload, all_done = build_scoreboard(root, slice_id, stories_filter, args.head)
     except (RuntimeError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

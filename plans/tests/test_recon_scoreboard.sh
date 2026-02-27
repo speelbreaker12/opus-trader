@@ -20,17 +20,23 @@ story_receipts="$receipt_root/$story_id"
 mkdir -p "$story_receipts"
 
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
+alt_head="$(git -C "$ROOT" rev-parse HEAD~1 2>/dev/null || echo "$head_sha")"
 
 cat > "$story_receipts/00_preflight.json" <<EOF
 {"story_id":"$story_id","step_name":"preflight","head_sha":"$head_sha"}
 EOF
 
-cat > "$story_receipts/01_implement.json" <<'EOF'
-{"story_id":"S0-000","step_name":"implement","head_sha":"deadbeef"}
+cat > "$story_receipts/01_implement.json" <<EOF
+{"story_id":"S0-000","step_name":"implement","head_sha":"$alt_head"}
+EOF
+
+cat > "$story_receipts/02_self_review.json" <<'EOF'
+{"story_id":"S0-000","step_name":"self_review","head_sha":
 EOF
 
 md_out="$tmp_dir/SCOREBOARD.md"
 json_out="$tmp_dir/SCOREBOARD.json"
+json_out_alt_head="$tmp_dir/SCOREBOARD.alt_head.json"
 artifacts_root="$tmp_dir/story_artifacts"
 mkdir -p "$artifacts_root/$story_id/cycle1"
 cat > "$artifacts_root/$story_id/cycle1/evidence_ledger.md" <<'EOF'
@@ -57,12 +63,50 @@ grep -Fq "| Story | passes | PATH | preflight | implement | self_review | cycle1
 grep -Fq "| $story_id |" "$md_out" || fail "story row missing from markdown"
 grep -Fq "✓" "$md_out" || fail "expected DONE glyph not found"
 grep -Fq "!" "$md_out" || fail "expected STALE glyph not found"
-grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected PATH signal not found"
+grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected markdown PATH signal not found"
 
 grep -Fq '"story_id": "S0-000"' "$json_out" || fail "story id missing from json"
 grep -Fq '"implement": "STALE"' "$json_out" || fail "stale status missing from json"
+grep -Fq '"self_review": "MISSING"' "$json_out" || fail "malformed receipt should map to MISSING"
 grep -Fq '"pass": "MISSING"' "$json_out" || fail "pass should be missing when prerequisites are missing"
+grep -Fq '"step_receipt_head_sha"' "$json_out" || fail "step receipt head debug map missing"
+grep -Fq '"preflight": "'"$head_sha"'"' "$json_out" || fail "preflight head missing from debug map"
+grep -Fq '"implement": "'"$alt_head"'"' "$json_out" || fail "implement head missing from debug map"
 
+# JSON-first PATH source: once ledger JSON exists, scoreboard should prefer it.
+cat > "$artifacts_root/$story_id/evidence_ledger.json" <<'EOF'
+{"schema_version":"evidence_ledger.v1","path":"YELLOW"}
+EOF
+
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_id" \
+    --out-md "$md_out" \
+    --out-json "$json_out" \
+    >/dev/null
+)
+
+grep -Fq "| $story_id | true | YELLOW |" "$md_out" || fail "expected JSON-ledger PATH override not found"
+grep -Fq '"path_source": "'"$artifacts_root/$story_id/evidence_ledger.json"'"' "$json_out" \
+  || fail "expected json path source missing"
+
+# --head should allow scoring against a specific commit-ish.
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_id" \
+    --head "$alt_head" \
+    --out-json "$json_out_alt_head" \
+    >/dev/null
+)
+grep -Fq '"head_commit": "'"$alt_head"'"' "$json_out_alt_head" || fail "score head was not applied"
+grep -Fq '"preflight": "STALE"' "$json_out_alt_head" || fail "expected preflight to be stale under --head override"
+grep -Fq '"implement": "DONE"' "$json_out_alt_head" || fail "expected implement to be done under --head override"
+
+# pass should be derived as DONE when preflight..verify_full are DONE.
 story_full="S0-001"
 story_full_receipts="$receipt_root/$story_full"
 mkdir -p "$story_full_receipts"
