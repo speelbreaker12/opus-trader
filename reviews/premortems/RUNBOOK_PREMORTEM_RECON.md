@@ -212,19 +212,6 @@ This keeps continuation deterministic and prevents repeated blocker rediscovery.
 
 If precheck fails, fix it first; do not record the step receipt.
 
-### 3.0.3 Scoreboard PATH Contract (deterministic)
-
-`plans/recon_scoreboard.py` computes PATH using the following precedence:
-1. JSON-first evidence ledger candidates (`evidence_ledger.json` / `<STORY_ID>_reconciliation.json`)
-2. Markdown fallback (`PATH: GREEN|YELLOW`) when JSON exists but is invalid or cannot yield a signal
-
-When using `schema_version: evidence_ledger.v1`, PATH is derived without manual stamping:
-- `PATH=YELLOW` if any `gaps[].priority` (or `gaps[].severity`) is `P0`/`P1`
-- `PATH=YELLOW` if any `at_verdicts[*].verdict` is not `PROVEN`/`DEFERRED`
-- otherwise `PATH=GREEN`
-
-For markdown ledgers, keep `PATH: GREEN|YELLOW` as the first line for prompt compatibility.
-
 ---
 
 ### R1 — Parallel Reconcile (Read-Only)
