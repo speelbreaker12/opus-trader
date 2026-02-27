@@ -44,8 +44,8 @@ json_out_alt_head="$tmp_dir/SCOREBOARD.alt_head.json"
 artifacts_root="$tmp_dir/story_artifacts"
 mkdir -p "$artifacts_root/$story_id/cycle1"
 cat > "$artifacts_root/$story_id/cycle1/evidence_ledger.md" <<'EOF'
-# Evidence Ledger
 PATH: GREEN
+# Evidence Ledger
 EOF
 
 (
@@ -105,6 +105,35 @@ EOF
 grep -Fq "| $story_id | true | YELLOW |" "$md_out" || fail "expected JSON-ledger PATH override not found"
 grep -Fq '"path_source": "'"$artifacts_root/$story_id/evidence_ledger.json"'"' "$json_out" \
   || fail "expected json path source missing"
+
+# evidence_ledger.v1 should derive GREEN when all AT verdicts are PROVEN/DEFERRED
+# and there are no blocking (P0/P1) gaps.
+cat > "$artifacts_root/$story_id/evidence_ledger.json" <<'EOF'
+{
+  "schema_version": "evidence_ledger.v1",
+  "at_verdicts": {
+    "AT-001": {"verdict": "PROVEN"},
+    "AT-002": {"verdict": "DEFERRED"}
+  },
+  "gaps": [
+    {"gap_id": "GAP-001", "priority": "P2"}
+  ]
+}
+EOF
+
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_id" \
+    --out-md "$md_out" \
+    --out-json "$json_out" \
+    >/dev/null
+)
+
+grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected evidence_ledger.v1-derived GREEN path not found"
+grep -Fq '"path_source": "'"$artifacts_root/$story_id/evidence_ledger.json"'"' "$json_out" \
+  || fail "expected json path source for GREEN derivation missing"
 
 # If JSON exists but cannot produce a PATH signal, fallback to markdown PATH line.
 cat > "$artifacts_root/$story_id/evidence_ledger.json" <<'EOF'
@@ -191,6 +220,31 @@ json_path="$tmp_dir/SCOREBOARD_path.json"
 grep -Fq "| $story_path_pref | true | YELLOW |" "$md_path" \
   || fail "JSON PATH source should take precedence over markdown PATH fallback"
 grep -Fq '"path": "YELLOW"' "$json_path" || fail "json summary should report JSON-derived YELLOW path"
+
+# Invalid JSON ledger must not mask markdown fallback.
+story_bad_json="S0-003"
+mkdir -p "$artifacts_root/$story_bad_json/cycle1"
+cat > "$artifacts_root/$story_bad_json/evidence_ledger.json" <<'EOF'
+{ this is not valid json
+EOF
+cat > "$artifacts_root/$story_bad_json/cycle1/evidence_ledger.md" <<'EOF'
+PATH: GREEN
+EOF
+md_bad="$tmp_dir/SCOREBOARD_badjson.md"
+json_bad="$tmp_dir/SCOREBOARD_badjson.json"
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_bad_json" \
+    --out-md "$md_bad" \
+    --out-json "$json_bad" \
+    >/dev/null
+)
+grep -Fq "| $story_bad_json | true | GREEN |" "$md_bad" \
+  || fail "invalid JSON ledger must not mask markdown PATH fallback"
+grep -Fq '"path_source": "'"$artifacts_root/$story_bad_json/cycle1/evidence_ledger.md"'"' "$json_bad" \
+  || fail "expected markdown path_source when json parse fails"
 
 set +e
 (
