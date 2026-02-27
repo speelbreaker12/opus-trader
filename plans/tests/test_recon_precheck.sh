@@ -58,8 +58,8 @@ echo "$out_conflict" | grep -q "AT ownership conflict" || fail "ownership confli
 cat > plans/prd.json <<'EOF'
 {
   "items": [
-    { "id": "S3-000", "passes": true, "primary_owner_for": ["AT-004"] },
-    { "id": "S3-002", "passes": true, "primary_owner_for": ["AT-005"] }
+    { "id": "S3-000", "primary_owner_for": ["AT-004"] },
+    { "id": "S3-002", "primary_owner_for": ["AT-005"] }
   ]
 }
 EOF
@@ -90,8 +90,8 @@ echo "$out_missing_story" | grep -q "story not found in plans/prd.json" || fail 
 cat > plans/prd.json <<'EOF'
 {
   "stories": {
-    "L2-000": { "passes": true, "primary_owner_for": ["AT-900"] },
-    "L2-001": { "passes": true, "primary_owner_for": ["AT-901"] }
+    "L2-000": { "primary_owner_for": ["AT-900"] },
+    "L2-001": { "primary_owner_for": ["AT-901"] }
   }
 }
 EOF

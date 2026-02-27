@@ -111,16 +111,6 @@ if [[ "$STOP_ON_BLOCKER" -eq 1 && "$RUN_SEQUENCE" -ne 1 ]]; then
   die "--stop-on-blocker requires --run-sequence"
 fi
 
-# Validate --run-sequence conflicts early (before status/reset/check-only exit)
-if [[ "$RUN_SEQUENCE" -eq 1 ]]; then
-  if [[ "$STATUS_MODE" -eq 1 || "$RESET_MODE" -eq 1 || "$CHECK_ONLY" -eq 1 ]]; then
-    die "--run-sequence cannot be combined with --status, --reset, or --check-only"
-  fi
-  if [[ "$DRY_RUN" -eq 1 ]]; then
-    die "--run-sequence cannot be combined with --dry-run (dry-run skips receipt writes, blocking subsequent steps)"
-  fi
-fi
-
 # Security: STORY_ID validation (prevent path traversal)
 if [[ ! "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
   die "invalid STORY_ID '$STORY' — must match ^[A-Za-z0-9][A-Za-z0-9_-]*\$"
@@ -347,6 +337,9 @@ if [[ "$STATUS_MODE" -eq 0 && "$RESET_MODE" -eq 0 && "$RUN_SEQUENCE" -eq 0 ]]; t
 fi
 
 if [[ "$RUN_SEQUENCE" -eq 1 ]]; then
+  if [[ "$STATUS_MODE" -eq 1 || "$RESET_MODE" -eq 1 || "$CHECK_ONLY" -eq 1 ]]; then
+    die "--run-sequence cannot be combined with --status, --reset, or --check-only"
+  fi
   if [[ -n "$STEP" ]]; then
     step_is_valid "$STEP" || die "unknown step: $STEP (valid: ${STEPS[*]})"
   else
@@ -359,6 +352,9 @@ if [[ "$RUN_SEQUENCE" -eq 1 ]]; then
   for i in $(seq "$start_idx" "$end_idx"); do
     seq_step="${STEPS[$i]}"
     child_cmd=(bash "$ROOT/plans/wf_step.sh" "$STORY" "$seq_step")
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      child_cmd+=(--dry-run)
+    fi
     echo "WF_STEP ORCH: running step '$seq_step' for $STORY" >&2
     set +e
     "${child_cmd[@]}"
