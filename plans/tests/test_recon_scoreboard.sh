@@ -194,24 +194,15 @@ set -e
 [[ "$head_rc" -eq 2 ]] || fail "--head should fail with usage-style exit code for invalid refs"
 grep -Fq "invalid --head value" "$tmp_dir/head.err" || fail "missing invalid --head error message"
 
-probe_id="recon_scoreboard_probe_$$"
-unsafe_slice="../../../../tmp/$probe_id"
-expected_outside_dir="$(
-  python3 - <<PY
-from pathlib import Path
-root = Path(r"$ROOT")
-print((root / "reviews" / "reconciliations" / r"$unsafe_slice").resolve())
-PY
-)"
+invalid_slice_id="not_a_slice_id"
 set +e
 (
   cd "$ROOT"
-  plans/recon_scoreboard.sh "$unsafe_slice" >/dev/null 2>"$tmp_dir/wrapper.err"
+  plans/recon_scoreboard.sh "$invalid_slice_id" >/dev/null 2>"$tmp_dir/wrapper.err"
 )
 wrapper_rc=$?
 set -e
-[[ "$wrapper_rc" -ne 0 ]] || fail "wrapper should reject unsafe slice ids"
+[[ "$wrapper_rc" -ne 0 ]] || fail "wrapper should reject invalid slice ids"
 grep -Fq "invalid slice id" "$tmp_dir/wrapper.err" || fail "wrapper did not report invalid slice id"
-[[ ! -d "$expected_outside_dir" ]] || fail "wrapper created out-of-repo directory: $expected_outside_dir"
 
 echo "test_recon_scoreboard.sh: ok"

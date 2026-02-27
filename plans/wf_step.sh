@@ -436,6 +436,8 @@ verify_cycle1_citations() {
     while IFS= read -r artifact; do
       [[ -f "$artifact" ]] || continue
       [[ -z "$newest" ]] && newest="$artifact"
+      # Newest-first scan: keep searching until first C1-valid artifact so a malformed/newer
+      # file does not mask an older valid C1 report in the same tool directory.
       if "$verifier" --artifact "$artifact" --mode C1 --json >/dev/null 2>&1; then
         best_c1="$artifact"
         break

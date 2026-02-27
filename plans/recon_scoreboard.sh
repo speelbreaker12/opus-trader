@@ -25,7 +25,26 @@ if [[ ! "$SLICE_ID" =~ ^[Ss]?[0-9]+$ ]]; then
 fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="$ROOT/reviews/reconciliations/$SLICE_ID"
+BASE_OUT_DIR="$ROOT/reviews/reconciliations"
+OUT_DIR="$BASE_OUT_DIR/$SLICE_ID"
+RESOLVED_OUT_DIR="$(
+  python3 - "$BASE_OUT_DIR" "$OUT_DIR" <<'PY'
+from pathlib import Path
+import sys
+
+base = Path(sys.argv[1]).resolve()
+out = Path(sys.argv[2]).resolve()
+try:
+    out.relative_to(base)
+except ValueError:
+    raise SystemExit(1)
+print(out)
+PY
+)" || {
+  echo "ERROR: resolved output dir escapes reviews/reconciliations: $OUT_DIR" >&2
+  exit 2
+}
+OUT_DIR="$RESOLVED_OUT_DIR"
 OUT_MD="$OUT_DIR/SCOREBOARD.md"
 OUT_JSON="$OUT_DIR/SCOREBOARD.json"
 

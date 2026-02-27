@@ -175,6 +175,8 @@ def _load_prd_stories(prd_path: Path, slice_id: str) -> list[StoryEntry]:
 
 
 def _receipt_dir_for_story(root: Path, story_id: str) -> Path:
+    # Support both a root override (legacy harness) and a direct story-dir override.
+    # If both are set, WF_RECEIPTS_ROOT wins because it always requires per-story joining.
     env_root = os.getenv("WF_RECEIPTS_ROOT")
     if env_root:
         return Path(env_root) / story_id
@@ -234,7 +236,9 @@ def _derive_path_from_ledger_json(payload: dict[str, Any]) -> str:
 
     at_evidence = payload.get("at_evidence")
     gaps = payload.get("gaps")
-    if isinstance(at_evidence, list) and isinstance(gaps, list):
+    has_typed_at_evidence = isinstance(at_evidence, list)
+    has_typed_gaps = isinstance(gaps, list)
+    if has_typed_at_evidence and has_typed_gaps:
         has_blocking_gap = any(
             isinstance(gap, dict) and str(gap.get("severity", "")).strip().upper() in {"P0", "P1"}
             for gap in gaps
@@ -245,7 +249,8 @@ def _derive_path_from_ledger_json(payload: dict[str, Any]) -> str:
             for entry in at_evidence
         )
         return "YELLOW" if (has_blocking_gap or has_non_proven_verdict) else "GREEN"
-
+    # If at_evidence/gaps are present but malformed, heuristic inference is skipped and
+    # we fall back to explicit JSON signals (path/stoplight) below.
     if stoplight == "GREEN":
         return "GREEN"
     if stoplight in {"YELLOW", "RED"}:
