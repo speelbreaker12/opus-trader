@@ -46,7 +46,7 @@ doesn't deserve `passes=true`.
 ---
 
 > **Step update discipline (fast, mandatory)**
-> 1. After every step: update the step header lines (Status / Receipt / Gate / key artifact paths).
+> 1. After every step attempt (pass or fail): update the step header lines (Status / Receipt / Gate / key artifact paths).
 > 2. Update the Story Status Matrix row for the story you touched.
 > 3. If the step is a **hard-evidence gate** (Preflight, Self-review, External C1/C2, Verify), fill the Evidence/Proof lines with **PASS/FAIL + paths**.
 >
@@ -105,6 +105,7 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 ### {{STORY_ID}}
 
 **Premortem**: `reviews/premortems/{{STORY_ID}}_premortem.md` — STOPLIGHT: {{GREEN/YELLOW/RED}}
+**Risk routing**: `risk_tier={{low/med/high}}` · `routing={{full/low-risk-heuristic}}` · `escalated_to_full={{true/false}}` {{trigger if true}}
 
 #### Hard Evidence Summary (fail-closed gates only)
 
@@ -204,6 +205,8 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Receipt: `.wf/receipts/{{STORY_ID}}/03_cycle1.json`
 - External manifest: `reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json`
 - Manifest validation: `./plans/validators/validate_external_manifest.py reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` — {{PASS/FAIL}}
+- Tools run: {{e.g. codex,kimi / codex,opus,kimi}}
+- Tool omissions + reason: {{none / opus unavailable / quota / intentional tradeoff}}
 - Rerun rule (if fixes applied after C1): new run_id + new manifest sha required: {{YES/NO/NA}}
 - Gap list: `reviews/reconciliations/{{SLICE_ID}}/GAP_LIST.json`
 - External mapping: `reviews/reconciliations/{{SLICE_ID}}/R4B_EXTERNAL_MAPPING.json`
@@ -261,6 +264,9 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Recon relaxation: {{min_reviews_relaxed_to_1 / n/a}}
 - External manifest C2: `reviews/reconciliations/{{SLICE_ID}}/external/cycle2/{{STORY_ID}}/R7_EXTERNAL_MANIFEST.json`
 - Manifest validation C2: `./plans/validators/validate_external_manifest.py <manifest>` — {{PASS/FAIL/NA}}
+- C2 review basis evidence: {{artifact path containing `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`}}
+- Tools run: {{e.g. codex / codex,kimi / codex,opus,kimi}}
+- Tool omissions + reason: {{none / opus unavailable / quota / intentional tradeoff}}
 - Scope: {{FIX_DIFF / FULL_STORY}} (must match proof)
 - Devils advocate: `reviews/reconciliations/{{SLICE_ID}}/R7E_DEVILS_ADVOCATE.md`
 - Debt register: `reviews/reconciliations/{{SLICE_ID}}/DEBT_REGISTER.json` {{valid / invalid / pending}} — R7f failures block pass-flip (Step 9), not this receipt
@@ -313,7 +319,9 @@ Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · 
 - Status: {{NOT_STARTED / COMPLETE / BLOCKED}}
 - Receipt: `.wf/receipts/{{STORY_ID}}/07_verify_full.json`
 - verify.meta.json HEAD: {{sha}}
+- Latest verify artifact dir: `artifacts/verify/{{run_id}}/`
 - verify output tail: `reviews/reconciliations/{{SLICE_ID}}/verify_full/{{STORY_ID}}/verify_tail.txt` {{exists/missing}}
+- FAILED_GATE: {{none / <gate_name>}}
 - Result: {{PASS / FAIL}}
 
 > **Step 8 debrief** · `§0: CLEAN` to skip §1–§11.

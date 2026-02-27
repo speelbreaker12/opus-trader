@@ -1,0 +1,14 @@
+{
+  "schema_version": "lead_eval_sidecar.v1",
+  "head_commit": "a106eb983ee2d744e3a3f94eddf2b3f39de1a43d",
+  "created_at": "2026-02-26T23:15:00Z",
+  "markdown_sha256": "7f8c238857fa127500c96741c38258be6393cc94633798d4b56ebaeb22762c3c",
+  "markdown_path": "reviews/reconciliations/S2/R2_LEAD_EVAL.md",
+  "story_ids": ["S2-001"],
+  "citation_checks_performed": 4,
+  "verdict_overrides": [],
+  "red_flags": [],
+  "overall_ratings": {
+    "S2-001": "PASS_WITH_ISSUES"
+  }
+}

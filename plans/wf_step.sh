@@ -413,11 +413,14 @@ read_cycle1_path() {
 
 verify_cycle1_citations() {
   # Pre-flight citation check for C1 review artifacts before writing cycle1 receipt.
+  # Validate only the most recent artifact per tool directory to avoid stale-history
+  # files blocking the current run.
   local art_dir="$1"
   local artifact
   local review_files=()
   local citations_ok=1
   local verifier="$ROOT/plans/verify_citations.sh"
+  local latest=""
 
   if [[ ! -x "$verifier" ]]; then
     echo "WF_STEP: citation validator missing or not executable at $verifier" >&2
@@ -425,11 +428,14 @@ verify_cycle1_citations() {
   fi
 
   for d in "$art_dir/codex" "$art_dir/opus" "$art_dir/kimi"; do
-    if [[ -d "$d" ]]; then
-      while IFS= read -r artifact; do
-        [[ -f "$artifact" ]] || continue
-        review_files+=("$artifact")
-      done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | LC_ALL=C sort)
+    [[ -d "$d" ]] || continue
+    latest=""
+    while IFS= read -r artifact; do
+      [[ -f "$artifact" ]] || continue
+      latest="$artifact"
+    done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | LC_ALL=C sort)
+    if [[ -n "$latest" ]]; then
+      review_files+=("$latest")
     fi
   done
 
@@ -547,37 +553,39 @@ case "$STEP" in
       exit 3
     fi
 
-    # Evidence ledger check (v3.0): verify R1 output exists before Cycle 1
-    # Accepts multiple naming patterns: canonical (<ID>_reconciliation.md), legacy (evidence_ledger.*), or preflight artifacts
-    # Also checks slice-level recon dir (reviews/reconciliations/<SLICE>/) for stories that store ledgers there
-    slice_id="${STORY%%-*}"
-    evidence_found=false
-    for candidate in \
-      "$story_art/${STORY}_reconciliation.md" \
-      "$story_art/${STORY}_reconciliation.json" \
-      "$story_art/evidence_ledger.json" \
-      "$story_art/evidence_ledger.md" \
-      "$story_art/preflight/audit.md" \
-      "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" \
-      "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json"; do
-      if [[ -f "$candidate" ]]; then
-        evidence_found=true
-        break
+    # Evidence ledger readiness check (v3.0): verify R1 output exists before Cycle 1.
+    # Prefer the dedicated helper for deterministic path checks + scaffold guidance.
+    ledger_helper="$ROOT/plans/recon_evidence_ledger.sh"
+    if [[ -x "$ledger_helper" ]]; then
+      if ! ledger_check_output="$("$ledger_helper" "$STORY" --check 2>&1)"; then
+        echo "$ledger_check_output" >&2
+        echo "WF_STEP: cycle1 blocked — evidence ledger readiness check failed for $STORY" >&2
+        echo "  Run: $ledger_helper $STORY --scaffold" >&2
+        echo "  Then replace scaffold placeholders with real evidence before recording cycle1." >&2
+        exit 6
       fi
-    done
-    if [[ "$evidence_found" == "false" ]]; then
-      # No canonical evidence ledger found — fail hard (no wildcard fallback)
-      echo "WF_STEP: no evidence ledger found for $STORY" >&2
-      echo "  Expected one of:" >&2
-      echo "    - $story_art/${STORY}_reconciliation.md" >&2
-      echo "    - $story_art/${STORY}_reconciliation.json" >&2
-      echo "    - $story_art/evidence_ledger.json" >&2
-      echo "    - $story_art/evidence_ledger.md" >&2
-      echo "    - $story_art/preflight/audit.md" >&2
-      echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" >&2
-      echo "    - $ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json" >&2
-      echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
-      exit 6
+    else
+      # Legacy fallback: deterministic file checks if helper is unavailable.
+      slice_id="${STORY%%-*}"
+      evidence_found=false
+      for candidate in \
+        "$story_art/${STORY}_reconciliation.md" \
+        "$story_art/${STORY}_reconciliation.json" \
+        "$story_art/evidence_ledger.json" \
+        "$story_art/evidence_ledger.md" \
+        "$story_art/preflight/audit.md" \
+        "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.md" \
+        "$ROOT/reviews/reconciliations/$slice_id/${STORY}_reconciliation.json"; do
+        if [[ -f "$candidate" ]]; then
+          evidence_found=true
+          break
+        fi
+      done
+      if [[ "$evidence_found" == "false" ]]; then
+        echo "WF_STEP: no evidence ledger found for $STORY" >&2
+        echo "  Run Phase R1 (preflight/implement) before recording cycle1 receipt" >&2
+        exit 6
+      fi
     fi
 
     # Hard citation gate: all cycle1 reviews must pass pre-existing citation checks.

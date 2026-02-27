@@ -28,16 +28,42 @@ require_heading() {
   grep -Fxq -- "$heading" "$file" || die "missing required heading: $heading"
 }
 
+# Accept minor typography variants for legacy premortems while preserving section intent.
+require_heading_any() {
+  local file="$1"
+  local canonical="$2"
+  shift 2
+  local heading=""
+  if grep -Fxq -- "$canonical" "$file"; then
+    return 0
+  fi
+  for heading in "$@"; do
+    if grep -Fxq -- "$heading" "$file"; then
+      return 0
+    fi
+  done
+  die "missing required heading: $canonical"
+}
+
 # Extract section content between a heading and the next ## heading (or EOF)
 section_content() {
   local file="$1" heading="$2"
   sed -n "/^${heading}/,/^## [0-9]/{/^## /d; p;}" "$file" | grep -v '^[[:space:]]*$' || true
 }
 
+# Extract by section number to avoid brittle heading-text dependencies.
+section_number_content() {
+  local file="$1" section_num="$2"
+  sed -n "/^## ${section_num})/,/^## [0-9]/{/^## /d; p;}" "$file" | grep -v '^[[:space:]]*$' || true
+}
+
 # Count non-empty, non-header rows in a markdown table (lines starting with |, excluding |---|)
 table_rows() {
   local content="$1"
-  echo "$content" | grep -E '^\|' | grep -vcE '^\|[-| ]+\|$' 2>/dev/null || echo 0
+  echo "$content" | awk '
+    /^\|/ && $0 !~ /^\|[-| ]+\|$/ { count++ }
+    END { print count + 0 }
+  '
 }
 
 # --- args ---
@@ -82,12 +108,18 @@ grep -Eq '^\*\*STOPLIGHT\*\*: (GREEN|YELLOW|RED)' "$pm" || die "missing or inval
 
 # --- required section headings (§0-§10) ---
 require_heading "$pm" "## 0) What we're building"
-require_heading "$pm" "## 1) Clause audit (contract → AT traceability)"
+require_heading_any "$pm" \
+  "## 1) Clause audit (contract → AT traceability)" \
+  "## 1) Clause audit (contract -> AT traceability)"
 require_heading "$pm" "## 2) Assumptions (each must become a test or get killed)"
-require_heading "$pm" "## 3) Top 5 failure modes"
+require_heading_any "$pm" \
+  "## 3) Top 5 failure modes" \
+  "## 3) Top 7 failure modes"
 require_heading "$pm" "## 4) Open decisions (resolve before coding)"
 require_heading "$pm" "## 5) Wrong implementation gate"
-require_heading "$pm" "## 6) Proof plan (AT → enforcement → tests)"
+require_heading_any "$pm" \
+  "## 6) Proof plan (AT → enforcement → tests)" \
+  "## 6) Proof plan (AT -> enforcement -> tests)"
 require_heading "$pm" "## 7) Economic risk (loss_mode)"
 require_heading "$pm" "## 8) Conflict scan & hot zones"
 require_heading "$pm" "## 9) Constraint I expect to hit"
@@ -107,7 +139,7 @@ if [[ "$rows" -lt 1 ]]; then
 fi
 
 # --- §3: Failure modes table has at least 3 rows ---
-s3=$(section_content "$pm" "## 3) Top 5 failure modes")
+s3=$(section_number_content "$pm" "3")
 rows=$(table_rows "$s3")
 if [[ "$rows" -lt 3 ]]; then
   die "§3 failure modes table has $rows rows (need at least 3)"
