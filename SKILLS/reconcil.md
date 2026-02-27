@@ -31,8 +31,9 @@ ls reviews/reconciliations/*/HANDOFF.md 2>/dev/null
    `COMPLETE` or `IN_PROGRESS` for any remaining `{{...}}` tokens. Fill them with real values
    from artifacts on disk or from work already done this session.
 
-2. **Update the status matrix** at the top — make sure every story's step symbols (`·` `→` `✓` `✗`)
-   reflect the actual current state.
+2. **Update the status matrix** at the top:
+   - Run `plans/recon_scoreboard.sh <SLICE_ID>` to generate `SCOREBOARD.md`/`SCOREBOARD.json`.
+   - Paste the `SCOREBOARD.md` table into the Story Status Matrix section (or link it).
 
 3. **Rewrite the HANDOFF section** at the bottom — always overwrite it with the current position:
    - Stopped at: current story + step
