@@ -87,6 +87,12 @@ doesn't deserve `passes=true`.
 ## Story Status Matrix
 
 Fill as you go. Symbols: `·` not started · `→` in progress · `✓` done · `✗` blocked
+Refresh this matrix from `plans/recon_scoreboard.sh <SLICE_ID>` each time you update handoff.
+
+PATH signal notes (for scoreboard consistency):
+- Prefer JSON-first evidence ledgers (`evidence_ledger.json` / `<STORY_ID>_reconciliation.json`).
+- If JSON is invalid/unusable, scoreboard falls back to markdown `PATH:` scanning.
+- Keep markdown ledgers with `PATH: GREEN|YELLOW` as the first line for prompt compatibility.
 
 | Story | preflight | implement | self_review | cycle1 | fix | cycle2 | resolution | verify_full | pass |
 |-------|-----------|-----------|-------------|--------|-----|--------|------------|-------------|------|

@@ -34,6 +34,10 @@ ls reviews/reconciliations/*/HANDOFF.md 2>/dev/null
 2. **Update the status matrix** at the top:
    - Run `plans/recon_scoreboard.sh <SLICE_ID>` to generate `SCOREBOARD.md`/`SCOREBOARD.json`.
    - Paste the `SCOREBOARD.md` table into the Story Status Matrix section (or link it).
+   - Keep reconciliation PATH sources deterministic:
+     - Prefer `evidence_ledger.json` when present (JSON-first).
+     - If JSON cannot yield GREEN/YELLOW (invalid/unusable), rely on markdown `PATH:` fallback.
+     - Keep markdown ledgers with `PATH: GREEN|YELLOW` as the first line for prompt compatibility.
 
 3. **Rewrite the HANDOFF section** at the bottom — always overwrite it with the current position:
    - Stopped at: current story + step
