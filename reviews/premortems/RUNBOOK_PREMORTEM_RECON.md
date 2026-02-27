@@ -21,6 +21,38 @@
 
 ---
 
+## 0b) LOW-Risk Routing Heuristic (Advisory, No Gate Exemptions)
+
+Use this to reduce operator churn on clearly low-risk stories. This section does **not** weaken required gates, receipts, or pass-flip checks.
+
+### LOW-risk screen (all must be true)
+
+| # | Criterion | Quick check |
+|---|-----------|-------------|
+| 1 | Story risk is `low` in PRD | `jq -r '.items[] | select(.id=="<STORY_ID>") | .risk' plans/prd.json` |
+| 2 | Scope is pure/typed logic (no runtime mutable state or I/O) | inspect `scope.touch` + enforcement callsites |
+| 3 | Scope does not include safety-critical subsystems | confirm no TradingMode / RiskState / WAL / replay / dispatcher control paths |
+| 4 | R1 found no P0 gaps | check evidence ledger gap table |
+
+If any criterion fails, treat as FULL rigor immediately.
+
+### Escalation triggers (immediate FULL rigor)
+
+Any one trigger flips the story to FULL operating mode for remaining steps:
+1. R1 finds a P0 gap.
+2. External review finds P0/P1 gap.
+3. Fix step touches production code in safety-critical paths.
+4. New cross-story/shared-primitive coupling is discovered.
+
+### Required routing note
+
+Record routing decision and escalation events in handoff Step 1 notes:
+- `risk_tier: <low|med|high>`
+- `routing: <full|low-risk-heuristic>`
+- `escalated_to_full: <true|false>` and trigger if true.
+
+---
+
 ## 1) Hard Gates (Before Any Work)
 
 ### 1.1 Required Inputs
@@ -50,7 +82,7 @@ Six checks, evaluated in order:
 | 2 | All sections §0-§10 present | `NO-GO: SECTIONS_MISSING` (delegates to `premortem_gate.sh`) | Stop |
 | 3 | STOPLIGHT != RED | `NO-GO: STOPLIGHT_RED` | Stop |
 | 4 | If STOPLIGHT is YELLOW: every gap marked DEFERRED or FIX IN STEP 5 | `NO-GO: UNRESOLVED_YELLOW_GAPS` | Stop |
-| 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
+| 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories globally across PRD) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
 | 6 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT` | Stop (also enforced by §1.1) |
 
 **Exit 0** = proceed. **Exit 1** = blocked (fix premortem first).
@@ -141,7 +173,7 @@ Six checks, evaluated in order:
 - [ ] All flagged fixes applied
 - [ ] No new contradictions introduced
 - [ ] STOPLIGHT honest (no GREEN with unresolved assumptions)
-- [ ] AT ownership unambiguous (no AT claimed as primary by 2+ stories)
+- [ ] AT ownership unambiguous (no AT claimed as primary by 2+ stories globally across PRD)
 - [ ] Enforcement points reference true modules
 
 **Output**: `phase7_verify_report.json` + `PREMORTEM_READY=true`
@@ -153,6 +185,26 @@ Six checks, evaluated in order:
 Run `plans/wf_step.sh ${STORY_ID} <step>` to record step completion. Steps in order: preflight → implement → self_review → cycle1 → fix → cycle2 → resolution → verify_full → pass. Receipts: `.wf/receipts/<ID>/`.
 
 > **Note**: R-phase numbers are a classification scheme, not execution order. The wf_step execution sequence is: preflight(R1) → implement(R5) → self_review(R5b) → cycle1(R2+R3+R4+R4b) → fix(R7a-c) → cycle2(R7d-f) → resolution(R6) → verify_full → pass.
+
+### 3.0.1 Operator Cadence (mandatory)
+
+After **every** wf_step attempt (pass or fail), update handoff before continuing:
+1. Update story matrix symbol for the current step (`·` / `→` / `✓` / `✗`).
+2. Update step header lines (`Status`, `Receipt`, `Gate`, key artifacts).
+3. If blocked, record exact command + exit code + first failing line.
+4. Rewrite HANDOFF footer (`Stopped at`, `What happened`, `Must read`, `Next steps`, `Resume command`).
+
+This keeps continuation deterministic and prevents repeated blocker rediscovery.
+
+### 3.0.2 Fast Preconditions (run before expensive gates)
+
+| Target step | Precheck command | Expected |
+|-------------|------------------|----------|
+| `cycle1` | `plans/recon_evidence_ledger.sh <STORY_ID> --check` | Exit 0; evidence ledger present |
+| `cycle2` | `WF_RECON_MODE=1 plans/wf_step.sh <STORY_ID> cycle2 --dry-run` | Exit 0; basis/coverage checks pass |
+| `verify_full` | `./plans/verify.sh full` | Exit 0; latest verify artifact has no `FAILED_GATE` |
+
+If precheck fails, fix it first; do not record the step receipt.
 
 ---
 
@@ -297,6 +349,16 @@ plans/review_logged.sh <STORY_ID> --tool codex --prompt generic  --base <BASE_BR
 ```
 Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommended 2+.
 When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refresh.sh` (slice-start default) to avoid unnecessary reruns.
+
+**Tool coverage policy (explicit)**:
+- Gate minimum: 1 tool.
+- Operational default: 2 tools (`codex` + `kimi`).
+- `opus` is strongly recommended when available.
+- If `opus` is omitted, record the reason in Step 4 notes/handoff (quota, access, outage, or explicit risk tradeoff).
+
+**Artifact recency rule**:
+- Use the latest artifact per tool/prompt combination for gating decisions.
+- Do not let stale historical artifacts override newer valid artifacts.
 
 **Artifact requirements**:
 - `review_logged.sh` outputs are normalized into canonical filenames (see [§6 Canonical Directory Layout](#6-artifact-layout--provenance)):
@@ -937,6 +999,11 @@ plans/review_logged.sh <STORY_ID> --tool <tool> --prompt <style> --base <BASE_BR
 ```
 Repeat with additional tools as needed. Minimum 1 combo; dual-combo requires both styles.
 
+**Tool coverage policy (Cycle 2)**:
+- Honor `cycle2_path.required_combinations` in the manifest.
+- If `opus` is not in required combinations, omission is allowed but must be documented in handoff notes.
+- If `opus` is required and unavailable, block with explicit reason; do not silently downgrade combinations.
+
 **Required scope**: FIX_DIFF + AT_REGRESSION (not story-scope)
 **Required basis line**: `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`
 **Must verify**: gaps actually closed, no regressions, tests real/compiling/non-phantom
@@ -1119,7 +1186,7 @@ A story is pass-eligible only if ALL conditions are met:
 | External C1 | `R3_EXTERNAL_C1_COMPLETE` passed; all findings mapped (R4b) |
 | External C2 | `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_DUAL_COMBO` or `R7D_EXTERNAL_REVIEWS_C2_COMPLETE_RECON_CLEAN_SINGLE` passed |
 | Receipts | All 8 workflow receipts present (wf_step.sh chain) |
-| Verify | `verify.sh full` passed with matching HEAD |
+| Verify | `verify.sh full` passed with matching HEAD and no `FAILED_GATE` marker in latest verify artifact |
 | Contract | `R7A_CONTRACT_REVIEW.json` has `decision: "PASS"` (copy to `artifacts/story/<ID>/contract_review.json` for `prd_set_pass.sh` compatibility, or set `CONTRACT_REVIEW_FILE` env var) |
 | Loss mode | `worst_case`, `fail_closed_cap`, `drift_metric` all populated |
 | Proof graph | `proof_graph.json` validates with `validate.py --strict` (or story in exempt list) |
@@ -1127,6 +1194,8 @@ A story is pass-eligible only if ALL conditions are met:
 | Postmortem | If required: `postmortem_gate.sh` passes. If exempt: `POSTMORTEM_EXEMPT` in R6 summary. |
 | R7 exit | All R7 exit conditions met |
 > **Tip (verify_full timeout)**: If `verify.sh full` times out during preflight, set `PREFLIGHT_TIMEOUT=1200 ./plans/verify.sh full`. Default full-mode timeout is 1800s; override for slower machines or large workspaces.
+>
+> **Tip (verify_full triage)**: If Step 8 still fails after a full run, inspect latest verify artifact (`artifacts/verify/<run_id>/`). If `FAILED_GATE` exists, resolve that gate first; do not continue to pass-flip.
 
 
 If any condition fails: **`prd_set_pass.sh` is blocked.**
@@ -1140,7 +1209,7 @@ If any condition fails: **`prd_set_pass.sh` is blocked.**
 3. **No DEFERRED without debt entry** — schema-validated, not prose
 4. **No "code is better" divergence** without evidence + lead approval
 5. **No blanket `--theirs`** on tooling/prompt files without merge-base diff inspection
-6. **No single-prompt reviews in Cycle 1** — always both generic + enriched per tool; Cycle 2 follows manifest mode (`dual_combo` or `recon_clean_single`)
+6. **No single-prompt reviews in Cycle 1** — always both generic + enriched per tool; Cycle 2 follows manifest mode (`dual_combo` or `recon_clean_single`); if a configured tool is intentionally omitted (for example, `opus` unavailable), record reason in handoff
 7. **No RECON-CLEAN without lead sign-off** on blocking-finding claim
 8. **No fake citations** — file:line must contain enforcement/test, not whitespace
 9. **No Cycle 2 without R5b gate** — `R5B_SELF_REVIEW_PROVEN` must pass first

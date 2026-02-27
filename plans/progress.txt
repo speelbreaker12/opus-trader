@@ -727,3 +727,31 @@ Commands: bash plans/tests/test_recon_bundle.sh; bash plans/tests/test_preflight
 Evidence: plans/recon_bundle.sh; plans/tests/test_recon_bundle.sh; reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md.
 Notes: Agreement recorded with review suggestion: this is low-risk consistency hardening rather than a blocker fix.
 Next: Commit, push, and add a short PR #135 note referencing the additional P3 coverage.
+Story: S2-000 reconciliation dry-run continuation (all 3 improvements applied)
+Date: 2026-02-27 00:47:30 UTC
+Summary: Completed the three requested follow-ups: (1) evidence-ledger readiness helper wired into cycle1, (2) explicit ownership metadata handling for shared/primary ATs, and (3) supervised wf_step continuation from Step 1 through Step 8 with handoff updates per step. Step 6 cycle2 unblocked by adding a valid C2 FIX_DIFF review artifact. Step 7 resolution passed. Step 8 verify_full remains blocked on FAILED_GATE from full verify preflight.
+Commands: WF_RECON_MODE=1 plans/wf_step.sh S2-000 cycle2; WF_RECON_MODE=1 plans/wf_step.sh S2-000 resolution; WF_RECON_MODE=1 plans/wf_step.sh S2-000 verify_full; ./plans/verify.sh full; python3 plans/validators/validate_review_header.py --artifact artifacts/story/S2-000/codex/20260227T191500Z_review.md --expect-cycle C2 --format json --strict.
+Evidence: artifacts/story/S2-000/codex/20260227T191500Z_review.md; .wf/receipts/S2-000/05_cycle2.json; .wf/receipts/S2-000/06_resolution.json; reviews/reconciliations/S2/S2-000_step6_report.md; reviews/reconciliations/S2/S2-000_step7_report.md; reviews/reconciliations/S2/S2-000_step8_report.md; reviews/reconciliations/S2/HANDOFF.md; artifacts/verify/20260226_184151/preflight.log.
+Notes: Full verify failed in preflight due fixture tests (`plans/tests/test_artifact_lint.sh`, `plans/tests/test_prd_set_pass.sh`), producing `FAILED_GATE` and blocking wf_step Step 8.
+Next: Fix failing preflight fixture tests, rerun `./plans/verify.sh full`, then rerun `WF_RECON_MODE=1 plans/wf_step.sh S2-000 verify_full` and `plans/wf_step.sh S2-000 pass`.
+Story: S2-000 Step 8 blocker update (verify_full)
+Date: 2026-02-27 00:54:20 UTC
+Summary: Cleared initial preflight blocker by adding required schema fields to S2 reconciliation artifacts (`systemic_gaps`, `priority_summary`, `unmapped_count`, `unmapped_p0_p1_count`). `plans/tests/test_artifact_lint.sh` is now PASS. Re-ran `./plans/verify.sh full`; latest blocker shifted to `rust_fmt` on `crates/soldier_core/tests/test_idempotency.rs`.
+Commands: bash plans/tests/test_artifact_lint.sh; ./plans/verify.sh full; WF_RECON_MODE=1 plans/wf_step.sh S2-000 verify_full --dry-run.
+Evidence: reviews/reconciliations/S2/GAP_LIST.json; reviews/reconciliations/S2/R4B_EXTERNAL_MAPPING.json; artifacts/verify/20260226_185444/rust_fmt.log; reviews/reconciliations/S2/S2-000_step8_report.md; reviews/reconciliations/S2/HANDOFF.md.
+Notes: Step 8 remains blocked because latest full verify has `FAILED_GATE` (`rust_fmt`).
+Next: decide whether to format the modified test file in this worktree or rely on clean-checkout CI verify.
+Story: Reconciliation runbook hardening draft (post S2 dry-run)
+Date: 2026-02-27 01:08:10 UTC
+Summary: Drafted runbook/template updates to codify dry-run lessons: mandatory handoff updates after every wf_step attempt, fast preconditions for cycle1/cycle2/verify_full, explicit external tool coverage policy (including opus omission disclosure), stale-artifact recency rule, and verify_full FAILED_GATE triage expectations.
+Commands: apply_patch (RUNBOOK_PREMORTEM_RECON.md, RECON_HANDOFF_TEMPLATE.md, SKILLS/reconcil.md); rg validation of inserted sections.
+Evidence: reviews/premortems/RUNBOOK_PREMORTEM_RECON.md; reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md; SKILLS/reconcil.md.
+Notes: Documentation-only draft; no workflow script logic changed in this step.
+Next: If accepted, mirror these policy-level changes into wf_step/tooling gates where enforcement is currently advisory.
+Story: LOW-risk fast-path draft cherry-pick (safe subset)
+Date: 2026-02-27 01:13:50 UTC
+Summary: Cherry-picked compatible parts from /tmp/RUNBOOK_LOW_RISK_FAST_PATH.md into official docs without weakening gates: added advisory LOW-risk routing heuristic, escalation triggers, and required routing note in runbook; added risk-routing line to reconciliation handoff template.
+Commands: apply_patch (reviews/premortems/RUNBOOK_PREMORTEM_RECON.md, reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md); rg validation.
+Evidence: reviews/premortems/RUNBOOK_PREMORTEM_RECON.md; reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md.
+Notes: Intentionally did not import gate exemptions/phase skips from draft because they conflict with current enforced workflow gates.
+Next: If desired, implement full LITE path behind explicit workflow gates and schema changes in a separate tracked story.

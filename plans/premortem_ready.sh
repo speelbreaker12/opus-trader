@@ -14,7 +14,7 @@ set -euo pipefail
 #   1. reviews/premortems/${STORY_ID}_premortem.md exists
 #   2. premortem_gate.sh passes (sections present, no placeholders)
 #   3. STOPLIGHT != RED
-#   4. No AT ownership conflicts (no AT claimed as primary by 2+ stories)
+#   4. No AT ownership conflicts (no AT claimed as primary by 2+ stories globally)
 #
 # Output (--json): premortem_ready.json matching specs/schemas/recon/premortem_ready.schema.json
 
@@ -61,6 +61,7 @@ cd "$repo_root"
 
 PREMORTEM_PATH="reviews/premortems/${story_id}_premortem.md"
 reasons=()
+premortem_gate_detail=""
 
 # ---- Check 1: premortem file exists ----
 premortem_exists=false
@@ -73,19 +74,23 @@ fi
 # ---- Check 2: premortem_gate.sh passes ----
 premortem_gate_exit_code=127
 if [[ -x "plans/premortem_gate.sh" ]]; then
-  if plans/premortem_gate.sh "$story_id" >/dev/null 2>&1; then
+  if premortem_gate_output="$(plans/premortem_gate.sh "$story_id" 2>&1)"; then
     premortem_gate_exit_code=0
   else
     premortem_gate_exit_code=$?
     reasons+=("premortem_gate.sh failed with exit code $premortem_gate_exit_code")
+    premortem_gate_detail="$(printf '%s\n' "$premortem_gate_output" | head -n 1 || true)"
+    [[ -n "$premortem_gate_detail" ]] && reasons+=("premortem_gate detail: $premortem_gate_detail")
   fi
 elif [[ -f "plans/premortem_gate.sh" ]]; then
   # File exists but not executable — try running via bash
-  if bash plans/premortem_gate.sh "$story_id" >/dev/null 2>&1; then
+  if premortem_gate_output="$(bash plans/premortem_gate.sh "$story_id" 2>&1)"; then
     premortem_gate_exit_code=0
   else
     premortem_gate_exit_code=$?
     reasons+=("premortem_gate.sh failed with exit code $premortem_gate_exit_code")
+    premortem_gate_detail="$(printf '%s\n' "$premortem_gate_output" | head -n 1 || true)"
+    [[ -n "$premortem_gate_detail" ]] && reasons+=("premortem_gate detail: $premortem_gate_detail")
   fi
 else
   # Script doesn't exist — fail-closed (missing gate = cannot validate)
@@ -120,7 +125,9 @@ else
 fi
 
 # ---- Check 4: YELLOW gap disposition ----
-# POLICY §3.2 check 4: If STOPLIGHT is YELLOW, every gap must be marked DEFERRED or FIX IN STEP 5
+# POLICY §3.2 check 4 (pragmatic parsing): if STOPLIGHT is YELLOW, unresolved debt rows
+# in the §10 Debt/Deferral Register block the story. A row is considered resolved for entry if it has
+# either explicit "FIX IN STEP 5" or a non-empty "Why deferred" reason.
 yellow_gaps_ok=true
 if [[ "$premortem_exists" == "true" && "$stoplight" == "YELLOW" ]]; then
   # Extract §10 content (between "## 10)" and EOF or next "## ")
@@ -130,65 +137,121 @@ if [[ "$premortem_exists" == "true" && "$stoplight" == "YELLOW" ]]; then
     s10_content="$(sed -n '/^## 10)/,$p' "$PREMORTEM_PATH" 2>/dev/null || true)"
   fi
 
-  # Look for gap/concern lines that are NOT marked DEFERRED or FIX IN STEP 5
-  # Gap items typically appear as bullet points or table rows in §10
+  # Evaluate only Debt Register rows to avoid false positives from explanatory prose/checklists.
   unresolved_yellow_gaps=0
+  debt_register_rows=0
+  in_debt_register=false
   while IFS= read -r line; do
-    # Skip empty lines, headers, and the STOPLIGHT line itself
-    [[ -z "$line" ]] && continue
-    [[ "$line" =~ ^## ]] && continue
-    [[ "$line" =~ STOPLIGHT ]] && continue
-    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    [[ "$line" =~ ^##[[:space:]] ]] && break
+    if [[ "$line" =~ ^\*\*(Debt|Deferral)[[:space:]]Register\*\* ]]; then
+      in_debt_register=true
+      continue
+    fi
+    [[ "$in_debt_register" == "true" ]] || continue
 
-    # Check bullet/list items that look like gaps/concerns
-    if echo "$line" | grep -qiE '(gap|concern|risk|blocker|assumption|debt|open)' 2>/dev/null; then
-      if ! echo "$line" | grep -qiE '(DEFERRED|FIX IN STEP 5|resolved|closed|mitigated)' 2>/dev/null; then
+    # Only process table rows after Debt Register heading.
+    [[ "$line" =~ ^\| ]] || continue
+    # Skip separator/header rows.
+    if echo "$line" | grep -qE '^\|[-|[:space:]]+\|$' 2>/dev/null; then
+      continue
+    fi
+    if echo "$line" | grep -qiE '^\|[[:space:]]*Item[[:space:]]*\|' 2>/dev/null; then
+      continue
+    fi
+
+    debt_register_rows=$((debt_register_rows + 1))
+
+    # Parse "Why deferred" column (3rd content column in a 6-column table).
+    IFS='|' read -r _ col_item col_severity col_why col_owner col_target col_proof _ <<< "$line"
+    why_deferred="$(echo "${col_why:-}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    if echo "$line" | grep -qiE 'FIX IN STEP 5' 2>/dev/null; then
+      continue
+    fi
+    if [[ -z "$why_deferred" ]]; then
         unresolved_yellow_gaps=$((unresolved_yellow_gaps + 1))
-      fi
     fi
   done <<< "$s10_content"
 
-  if [[ $unresolved_yellow_gaps -gt 0 ]]; then
+  if [[ $debt_register_rows -eq 0 ]]; then
     yellow_gaps_ok=false
-    reasons+=("STOPLIGHT is YELLOW with $unresolved_yellow_gaps unresolved gap(s) not marked DEFERRED or FIX IN STEP 5")
+    reasons+=("STOPLIGHT is YELLOW but §10 Debt/Deferral Register has no gap rows")
+  elif [[ $unresolved_yellow_gaps -gt 0 ]]; then
+    yellow_gaps_ok=false
+    reasons+=("STOPLIGHT is YELLOW with $unresolved_yellow_gaps unresolved debt row(s) (missing Why deferred/FIX IN STEP 5)")
   fi
+
 fi
 
 # ---- Check 5: AT ownership conflicts ----
 ownership_conflicts=0
 ownership_conflict_details=()
-if [[ "$premortem_exists" == "true" ]]; then
-  # Extract AT-IDs from this story's section 1 table
-  # Get content between "## 1)" heading and next "## " heading
-  s1_content="$(sed -n '/^## 1)/,/^## [0-9]/{/^## [0-9]/!p;}' "$PREMORTEM_PATH" 2>/dev/null || true)"
+ownership_conflict_human=()
+if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
+  # Determine ownership from PRD metadata:
+  # - If primary_owner_for key exists, use it (even if empty: explicit shared-only story)
+  # - Else fallback to enforcing_contract_ats for legacy stories
+  conflict_json="$(jq -c --arg sid "$story_id" '
+    def owner_claims:
+      if (has("primary_owner_for") and (.primary_owner_for != null)) then
+        (.primary_owner_for // [])
+      else
+        (.enforcing_contract_ats // [])
+      end;
 
-  # Extract AT-IDs from table rows (lines starting with |)
+    ([.items[]? | {id, claims: (owner_claims | map(tostring))}] ) as $stories
+    | ($stories[]? | select(.id == $sid) | .claims // []) as $my_claims
+    | [
+        $my_claims[] as $at
+        | {at_id: $at, claiming_stories: [$stories[] | select((.claims // []) | index($at)) | .id]}
+        | select((.claiming_stories | length) > 1)
+      ]
+  ' plans/prd.json 2>/dev/null || echo "[]")"
+
+  if ! echo "$conflict_json" | jq -e . >/dev/null 2>&1; then
+    conflict_json="[]"
+  fi
+
+  ownership_conflicts="$(echo "$conflict_json" | jq -r 'length' 2>/dev/null || echo 0)"
+  if [[ -z "$ownership_conflicts" || "$ownership_conflicts" == "null" ]]; then
+    ownership_conflicts=0
+  fi
+
+  if [[ "$ownership_conflicts" -gt 0 ]]; then
+    reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+
+    while IFS= read -r obj; do
+      [[ -n "$obj" ]] && ownership_conflict_details+=("$obj")
+    done < <(echo "$conflict_json" | jq -c '.[]' 2>/dev/null)
+
+    while IFS= read -r detail; do
+      [[ -n "$detail" ]] && ownership_conflict_human+=("$detail")
+    done < <(echo "$conflict_json" | jq -r '.[] | "\(.at_id) -> \(.claiming_stories | join(", "))"' 2>/dev/null)
+  fi
+elif [[ "$premortem_exists" == "true" ]]; then
+  # Legacy fallback when jq is unavailable: infer ownership from premortem section 1.
+  s1_content="$(sed -n '/^## 1)/,/^## [0-9]/{/^## [0-9]/!p;}' "$PREMORTEM_PATH" 2>/dev/null || true)"
   my_ats=()
   while IFS= read -r at_id; do
     [[ -n "$at_id" ]] && my_ats+=("$at_id")
   done < <(echo "$s1_content" | grep -E '^\|' | grep -oE 'AT-[0-9]+' | sort -u)
 
-  # Check each AT against other premortems
-  # Build structured conflict details: {at_id, claiming_stories[]}
   if [[ ${#my_ats[@]} -gt 0 ]]; then
     for at_id in "${my_ats[@]}"; do
       claimants="$story_id"
       for other_pm in reviews/premortems/*_premortem.md; do
         [[ "$other_pm" == "$PREMORTEM_PATH" ]] && continue
         [[ -f "$other_pm" ]] || continue
-
         other_s1="$(sed -n '/^## 1)/,/^## [0-9]/{/^## [0-9]/!p;}' "$other_pm" 2>/dev/null || true)"
-
         if echo "$other_s1" | grep -E '^\|' | grep -qF "$at_id" 2>/dev/null; then
           other_story="$(basename "$other_pm" _premortem.md)"
           claimants="${claimants},$other_story"
         fi
       done
-
       comma_count="$(echo "$claimants" | tr -cd ',' | wc -c | tr -d '[:space:]')"
       if [[ "$comma_count" -gt 0 ]]; then
         ownership_conflicts=$((ownership_conflicts + 1))
         ownership_conflict_details+=("{\"at_id\":\"$at_id\",\"claiming_stories\":[\"${claimants//,/\",\"}\"]}")
+        ownership_conflict_human+=("$at_id -> ${claimants//,/, }")
       fi
     done
   fi
@@ -251,11 +314,11 @@ if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
     context_files_ok=false
     reasons+=("story $story_id not found in plans/prd.json")
   else
-    # Check scope.touch files exist
+    # Check scope.touch paths exist (files or directories; globs validated by prd_lint)
     while IFS= read -r touch_file; do
-      if [[ -n "$touch_file" && ! -f "$touch_file" ]]; then
+      if [[ -n "$touch_file" && ! -e "$touch_file" ]]; then
         context_files_ok=false
-        reasons+=("scope.touch file missing: $touch_file")
+        reasons+=("scope.touch path missing: $touch_file")
       fi
     done < <(echo "$prd_entry" | jq -r '.scope.touch[]? // empty' 2>/dev/null)
   fi
@@ -387,5 +450,11 @@ else
   for reason in "${reasons[@]}"; do
     echo "  - $reason" >&2
   done
+  if [[ ${#ownership_conflict_human[@]} -gt 0 ]]; then
+    echo "  - ownership conflict details:" >&2
+    for detail in "${ownership_conflict_human[@]}"; do
+      echo "      * $detail" >&2
+    done
+  fi
   exit 1
 fi
