@@ -246,8 +246,10 @@ def _derive_path_from_ledger_json(payload: dict[str, Any]) -> str:
         )
         return "YELLOW" if (has_blocking_gap or has_non_proven_verdict) else "GREEN"
 
-    if stoplight in PATH_VALUES:
-        return stoplight
+    if stoplight == "GREEN":
+        return "GREEN"
+    if stoplight in {"YELLOW", "RED"}:
+        return "YELLOW"
 
     return "UNKNOWN"
 
