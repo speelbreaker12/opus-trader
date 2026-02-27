@@ -372,17 +372,44 @@ cargo test --workspace --all-features --locked
 ```
 
 Proptests stay unignored and always run. Quick stays quick (32 cases adds ~2s).
-Full stays complete (1000 cases, same as today).
+Full stays complete (1000 cases — `rust_gates.sh` already sets this in full mode).
+Quick mode today runs **zero** prop test cases (they live in `tests/`, skipped by
+`--lib`). After migration, quick runs 32 per file — strictly better coverage.
 
 **Global counter race condition:** Counter functions like `inventory_skew_reject_total()`
 use process-global static atomics (e.g., `AtomicU64`). Integration test files get
 separate binaries with isolated memory. Unit tests under `--lib` share a single binary
 with parallel threads — meaning counter assertions like `assert_eq!(counter, 1)` will
 flake when another thread's rejection increments the same global.
-**Fix per counter test:** Use delta assertions — read the counter before and after the
-operation and assert on the **delta** (`assert_eq!(after - before, 1)`), not the
-absolute value. This is mandated over `serial_test` to avoid a new crate dependency
-and ensure consistency across all gate modules.
+**Fix: Global test lock for counter assertions (zero dependencies).**
+
+Add a single `Mutex` in each gate module's `#[cfg(test)]` block. Any test that
+reads or asserts global counter values must hold the lock. This serializes only
+counter tests (microsecond operations) — all other tests remain parallel.
+
+```rust
+// In each gate module's #[cfg(test)] block:
+#[cfg(test)]
+static METRICS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+fn test_reject_increments_counter() {
+    let _g = METRICS_TEST_LOCK.lock().unwrap();
+    let before = inventory_skew_reject_total();
+    // ... trigger rejection ...
+    assert_eq!(inventory_skew_reject_total() - before, 1);
+}
+```
+
+**Why not delta assertions alone?** Delta assertions (`after - before`) reduce
+flake probability but don't eliminate it — a parallel thread can increment between
+the `before` read and the operation. The `Mutex` makes counter tests deterministic
+with zero new crate dependencies. Serialization cost is negligible (counter tests
+are microsecond operations).
+
+**Why not `serial_test` crate?** Adds a dependency for something a stdlib `Mutex`
+handles. If the project later adopts `serial_test` for other reasons, these locks
+can be replaced with `#[serial]` attributes.
 
 **`test_static_rejection_counters.rs` split mapping:**
 
@@ -407,7 +434,7 @@ After the split, rename the remaining integration test file to
 |----------------------|-------------|
 | `tests/test_tlsm.rs` | TLSM types are contract-level. **Partial rewrite needed:** imports `ooo_count`, `ooo_total` (CUT from facade, §10 metrics rule). Move metric-asserting tests to `tlsm.rs` `#[cfg(test)]` unit tests; keep only lifecycle/contract tests in this file. |
 | `tests/test_atomic_group.rs` | Group types are contract-level. **Rewrite required:** `persist_before_dispatch`, `GroupPersistence`, and `InMemoryGroupPersistence` are all CUT from the facade. Move `persist_before_dispatch_success_records_group` and `persist_before_dispatch_failure_must_abort` to `group.rs` `#[cfg(test)]` unit tests (where `InMemoryGroupPersistence` remains accessible). Keep only contract-level tests in this file: lock behavior (`try_acquire_group_lock`), state transitions (`GroupState`, `GroupStateTransition`), atomicity invariants. |
-| `tests/test_reject_reason.rs` | RejectReasonCode is contract-level. **Minor fix needed:** imports `common::gate_results_all_passing` — replace with `test_stubs::gate_results_all_passing()` (see §4b) before `common/mod.rs` is deleted in Step 2. |
+| `tests/test_reject_reason.rs` | RejectReasonCode is contract-level. **Minor fix needed:** imports `common::gate_results_all_passing` — replace with `test_stubs::gate_results_all_passing_failclosed_wal()` (see §4b) before `common/mod.rs` is deleted in Step 2. |
 | `tests/adversarial_gi_enforcement.rs` | Highest-value contract test. **Must be rewritten in this migration** (see §4a below). Currently calls `evaluate_intent_pipeline()` directly (excluded from facade) and depends on `common::base_open_input()` which constructs `IntentPipelineInput` with internal wire types. Rewrite to use chokepoint surface only (`build_order_intent_with_*`, `GateResults`, `RejectReasonCode`). Pipeline-level assertions (e.g., "missing liquidity input → LiquidityGateNoL2") move to `pipeline.rs` unit tests. |
 | `tests/test_dispatch_chokepoint.rs` | Architectural constraint test (file scanning) |
 | `tests/test_idempotency.rs` | Uses `idempotency` module, not execution internals |
@@ -420,7 +447,7 @@ After the split, rename the remaining integration test file to
 | `tests/test_instrument_kind_mapping.rs` | Uses `venue` module |
 | `tests/test_instrument_cache_ttl.rs` | Uses `venue` module |
 | `tests/test_expiry_guard.rs` | Uses `venue` module |
-| `tests/test_recorded_before_dispatch_gate.rs` | Uses `RecordedBeforeDispatchGate` (public). **Minor fix needed:** imports `common::gate_results_all_passing` — replace with `test_stubs::gate_results_all_passing()` (see §4b) before `common/mod.rs` is deleted in Step 2. |
+| `tests/test_recorded_before_dispatch_gate.rs` | Uses `RecordedBeforeDispatchGate` (public). **Minor fix needed:** imports `common::gate_results_all_passing` — replace with `test_stubs::gate_results_all_passing_failclosed_wal()` (see §4b) before `common/mod.rs` is deleted in Step 2. |
 
 ### 4a. `adversarial_gi_enforcement.rs` — Chokepoint-Level Rewrite
 
@@ -523,6 +550,44 @@ specific gate reject reasons (e.g., "missing `LiquidityGateInput` →
 valuable but must move to `pipeline.rs` `#[cfg(test)]` unit tests — they
 cannot be expressed through the chokepoint surface.
 
+**Two-layer coverage requirement (MANDATORY — prevents spec holes):**
+
+The current `adversarial_gi_enforcement.rs` tests the full pipeline: domain inputs
+→ bool derivation → chokepoint decision. The rewrite splits this into two layers
+that **both** must have test coverage:
+
+| Layer | What it proves | Where tested | Example |
+|-------|---------------|-------------|---------|
+| **Layer 1: Bool derivation** | Domain inputs → correct bool in `GateResults` | `pipeline.rs`, `base_gates.rs`, or individual gate `#[cfg(test)]` unit tests | "stale `FeeCacheSnapshot` → `fee_cache_passed = false`" |
+| **Layer 2: Bool consumption** | `GateResults` bools → correct chokepoint accept/reject | `adversarial_gi_enforcement.rs` (facade-only) | "`fee_cache_passed = false` → reject at `GateStep::FeeCacheCheck`" |
+
+Without Layer 1, the pipeline could compute `fee_cache_passed = true` on a stale
+snapshot and no test would catch it — the chokepoint test would pass because it
+only sees pre-built booleans.
+
+**Required Layer 1 unit tests per GI guard** (in `pipeline.rs` or `base_gates.rs`
+`#[cfg(test)]`):
+
+| GI guard | Bool field | Derivation module | Required Layer 1 unit test |
+|----------|-----------|-------------------|---------------------------|
+| GI-001/002 | N/A | `risk_state` is a direct input to chokepoint, not derived from `GateResults` | Not needed — Layer 2 suffices |
+| GI-004 | `wal_recorded` | WAL gate trait (`record_before_dispatch()`) | Covered by `StubWalGate`/`FailingWalGate` at chokepoint level — the trait contract IS the derivation |
+| GI-009 | `fee_cache_passed` | `base_gates.rs` → `evaluate_fee_staleness()` | **Must add**: stale snapshot → `fee_cache_passed = false`; fresh → `true` |
+| GI-009 | `expiry_guard_passed` | `base_gates.rs` → expiry check | **Must add**: expired instrument → `false`; valid → `true` |
+| GI-017 | `liquidity_gate_passed` | `pipeline.rs`/`open_runtime.rs` → `evaluate_liquidity_gate()` | Existing gate tests cover derivation; **must add** pipeline-level: `None` input → `liquidity_gate_passed = false` |
+| GI-017 | `net_edge_passed` | `pipeline.rs`/`open_runtime.rs` → `evaluate_net_edge()` | Same as liquidity: **must add** pipeline-level `None` input → `false` |
+| — | `preflight_passed` | `base_gates.rs` → `preflight_intent()` | Covered by existing `test_preflight.rs` moves |
+| — | `quantize_passed` | `base_gates.rs` → `quantize()` | Covered by existing `test_quantize.rs` moves |
+| — | `pricer_passed` | `pipeline.rs`/`open_runtime.rs` → `compute_limit_price()` | Covered by existing `test_pricer.rs` moves |
+
+**Implementation rule for Step 2:** When moving a GI test from pipeline-level to
+chokepoint-level, the implementer MUST verify that a Layer 1 unit test exists for
+every bool that the old test was implicitly deriving. If no Layer 1 test exists,
+write one in the derivation module's `#[cfg(test)]` before removing the old
+pipeline-level test. The strangler fig sub-commit `2-gi-a` MUST include both the
+new chokepoint test AND any required Layer 1 tests; sub-commit `2-gi-b` may only
+remove old tests after both layers are proven.
+
 The 4 hash tests (GI-020) use `compute_intent_hash()` from `idempotency` — these
 are already facade-clean and stay unchanged.
 
@@ -534,7 +599,9 @@ facade-compliant test implementations. **This module may only import from the fa
 
 ```rust
 // crates/soldier_core/tests/test_stubs.rs
-use soldier_core::execution::RecordedBeforeDispatchGate;
+use soldier_core::execution::{
+    build_gate_results, GateResults, RecordedBeforeDispatchGate,
+};
 
 /// Stub WAL gate for contract-level tests that need the WAL-safe path.
 pub struct StubWalGate;
@@ -542,13 +609,29 @@ impl RecordedBeforeDispatchGate for StubWalGate {
     fn record_before_dispatch(&mut self) -> Result<(), String> { Ok(()) }
 }
 
-/// All-passing gate results for tests that don't care about individual gates.
-pub fn gate_results_all_passing() -> soldier_core::execution::GateResults {
-    soldier_core::execution::build_gate_results(
-        true, true, true, true, true, true, true, true,
-        false, // wal_recorded — overridden by wal_gate adapter at runtime;
-               // set false so tests that forget to pass a StubWalGate fail-closed
-        None, None,
+/// Failing WAL gate for GI-004 tests that verify WAL rejection.
+pub struct FailingWalGate;
+impl RecordedBeforeDispatchGate for FailingWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        Err("wal append failed".to_string())
+    }
+}
+
+/// All-passing gate results with fail-closed WAL.
+/// WAL field is `false` so tests that forget to pass a StubWalGate fail-closed.
+pub fn gate_results_all_passing_failclosed_wal() -> GateResults {
+    build_gate_results(
+        true,  // preflight_passed
+        true,  // quantize_passed
+        true,  // dispatch_consistency_passed
+        true,  // fee_cache_passed
+        true,  // expiry_guard_passed
+        true,  // liquidity_gate_passed
+        true,  // net_edge_passed
+        true,  // pricer_passed
+        false, // wal_recorded — overridden by wal_gate adapter at runtime
+        None,  // requested_qty
+        None,  // max_dispatch_qty
     )
 }
 ```
@@ -642,15 +725,19 @@ directly elevated.
 
 ### 8. Cross-Crate Impact
 
-**Production code (`soldier_infra`):** Two files import from execution:
-- `wal.rs`: `RecordedBeforeDispatchGate`
-- `store/ledger.rs`: `TlsmTransitionSink`, `PersistedTransition`, `TlsmState`
+**Production code (`soldier_infra`):** Two files import 4 unique symbols:
+- `src/wal.rs`: `RecordedBeforeDispatchGate`
+- `src/store/ledger.rs`: `TlsmTransitionSink` (trait impl), `PersistedTransition`,
+  `TlsmState` (fully-qualified `soldier_core::execution::TlsmState::*` in
+  `map_core_tlsm_state`)
 
-All five types are in the facade. Zero breakage.
+All 4 symbols are in the facade. Zero breakage.
 
-**Integration tests (`soldier_infra/tests/`):**
-- `test_dispatch_durability.rs` — uses `RecordedBeforeDispatchGate` (public). No change.
-- `test_ledger_replay.rs` — uses `Tlsm`, `TlsmEvent`, `TlsmState`, `TransitionResult` (all public). No change.
+**Integration tests (`soldier_infra/tests/`):** Two files import 5 unique symbols:
+- `test_dispatch_durability.rs` — `RecordedBeforeDispatchGate`. No change.
+- `test_ledger_replay.rs` — `Tlsm`, `TlsmEvent`, `TlsmState`, `TransitionResult`. No change.
+
+Total: 7 unique symbols across 4 files, all facade-level.
 
 ### 8a. Architectural Scan Tests — Required Updates
 
@@ -830,12 +917,17 @@ cargo test --workspace --lib                                 # no regressions
 
 **Step 2: Move internal tests + rewrite GI tests + fix staying-test CUT imports (one commit per module).**
 Split `tests/common/mod.rs` builders per-module into `#[cfg(test)]` blocks.
-Rewrite `adversarial_gi_enforcement.rs` to use chokepoint surface only (see §4a);
-move pipeline-level assertions into `pipeline.rs` unit tests.
+Rewrite `adversarial_gi_enforcement.rs` using **strangler fig** (two sub-commits):
+  - **2-gi-a:** Add new chokepoint-level test functions alongside existing pipeline
+    tests. Both old and new tests run. Verify coverage parity (`cargo test -p
+    soldier_core --test adversarial_gi_enforcement` — all old + new tests pass).
+  - **2-gi-b:** Remove old pipeline-level tests. Move `gi_017_open_fails_without_liquidity`
+    (pipeline-specific assertion) into `pipeline.rs` `#[cfg(test)]` unit tests.
+This two-phase approach prevents coverage gaps in the highest-value contract test.
 **Before deleting `common/mod.rs`**, create `tests/test_stubs.rs` (see §4b) and fix
 staying tests that depend on common/:
 - `test_reject_reason.rs`, `test_recorded_before_dispatch_gate.rs`: replace
-  `common::gate_results_all_passing()` with `test_stubs::gate_results_all_passing()`.
+  `common::gate_results_all_passing()` with `test_stubs::gate_results_all_passing_failclosed_wal()`.
 - `adversarial_gi_enforcement.rs`: replace inline `StubWalGate` with
   `test_stubs::StubWalGate`.
 Then delete `common/mod.rs`.
@@ -897,6 +989,7 @@ types only), any internal import that relied on a now-cut re-export (like
 | `use super::<submodule>::Symbol;` | Correct — direct sibling import |
 | `use super::{Symbol, ...};` where Symbol is defined in a sibling | **Must fix** — goes through `mod.rs` |
 | `use crate::execution::Symbol;` where Symbol is not in `api.rs` | **Must fix** — goes through `mod.rs` |
+| `use crate::execution::<submodule>::Symbol;` | Safe — submodule path survives Steps 3+4 |
 
 **Files that need fixing** (verified against current codebase):
 - `pipeline.rs:7` — `use crate::execution::DispatchConsistencyProof;` (full path through mod.rs)
@@ -907,6 +1000,12 @@ types only), any internal import that relied on a now-cut re-export (like
 - `intent_assembly.rs:18` — `use super::{ChokeIntentClass, ChokeRejectReason, ...};`
 - `dispatch_map.rs` — `use crate::execution::OrderSize;` (facade-safe but should normalize to `use super::order_size::OrderSize;`)
 - Any file using `use crate::execution::<non-facade-symbol>;`
+
+**Files that do NOT need fixing** (submodule paths — survive re-export removal):
+- `base_gates.rs:10–15` — `use crate::execution::build_order_intent::GateStep;` etc. (6 imports via `crate::execution::MODULE::Symbol` — the submodule path resolves through module visibility, not re-exports)
+- `post_only_guard.rs:11` — `use crate::execution::quantize::Side;` (same pattern)
+
+These will appear in the proof regex output; ignore them.
 
 **Fix (mechanical, zero behavior change):** Replace with explicit sibling paths:
 
@@ -931,11 +1030,9 @@ like `use super::DispatchConsistencyProof;` (no brace) and multiline blocks.
 replacing the old re-export blocks with `pub use api::*` in a scratch commit. If it
 compiles, all imports are fixed.
 ```bash
-# These must return zero matches (or only facade-safe symbols):
-rg -n 'use (crate::execution|super)::\{' crates/soldier_core/src/execution/ \
-  | grep -v 'use super::\w\+::' \
-  | grep -v '#\[cfg(test)\]'
-rg -n 'use crate::execution::' crates/soldier_core/src/execution/
+# These are inventory commands (manually inspect output):
+rg -n '^\s*use\s+super::\{' crates/soldier_core/src/execution/
+rg -n '^\s*use\s+crate::execution::' crates/soldier_core/src/execution/
 ```
 
 Green checks:
@@ -947,6 +1044,12 @@ cargo test --workspace             # full workspace passes
 ! rg 'use super::\{.*LiquidityGateInput' crates/soldier_core/src/execution/open_runtime.rs
 # Verify no crate::execution:: imports of non-facade symbols:
 ! rg 'use crate::execution::DispatchConsistencyProof' crates/soldier_core/src/execution/
+# AUTHORITATIVE CHECK — temporarily swap re-exports, verify compilation:
+# (scratch commit on a throwaway branch, revert after)
+# In mod.rs: delete old `pub use` blocks, add `pub use api::*;`
+# Then:
+cargo check -p soldier_core        # must compile — proves all internal imports survive
+# Revert the scratch commit before proceeding to Step 3.
 ```
 
 **Why Step 2.5 before Step 3:** Without this, Step 3's re-export deletion breaks
@@ -979,6 +1082,23 @@ Also update `test_dispatch_chokepoint.rs` (see §8a): replace
 `test_chokepoint_reexported_from_execution` string match with compile-time
 contract check.
 
+**Deprecated `build_order_intent()` in moved tests:** ~94 callsites across must-move
+files (`test_gate_ordering.rs` alone has 44) use the deprecated `build_order_intent()`
+which bypasses WAL. When these tests move into `#[cfg(test)]` unit tests, clippy
+`-D warnings` will flag every call. **Fix per moved test module:** Add
+`#[allow(deprecated)]` on the `mod tests` block (not individual callsites — too noisy):
+```rust
+#[cfg(test)]
+#[allow(deprecated)] // Uses build_order_intent() — migrate to WAL-safe in Phase 2
+mod tests {
+    use super::*;
+    // ... moved tests ...
+}
+```
+This is tech debt, not a safety gap — the deprecated function still works, it just
+bypasses WAL recording. Phase 2 migrates these callsites to
+`build_order_intent_with_wal_gate` as part of the contract input type work.
+
 **Dead-code warning trap:** Once modules become private, `pub fn` items whose only
 callers are `#[cfg(test)]` code will trigger `dead_code` warnings during
 `cargo build` (no test cfg). Since `verify.sh full` uses `-D warnings`, these become
@@ -993,11 +1113,15 @@ hard errors. Functions affected include `gate_sequence_total`, counter functions
 Green checks:
 ```bash
 cargo test --workspace                    # compiles and passes
+# Verify zero dead_code warnings (catches functions the explicit list missed):
+cargo build --workspace 2>&1 | (! grep 'dead_code')
 # Verify only api is pub mod:
 rg '^pub mod' crates/soldier_core/src/execution/mod.rs
 # Should output exactly one line: "pub mod api;"
-# Verify no banned deep imports outside execution/ (allows execution::api::):
-! rg -n '^\s*use\s+soldier_core::execution::(?!api::)[a-z_]+::' crates/ \
+# Verify no banned deep module imports outside execution/.
+# Anchored to `use` statements; [a-z_] matches module names (snake_case),
+# not type names (PascalCase like TlsmState::Created).
+! rg -n '^\s*(pub\s+)?use\s+soldier_core::execution::[a-z_][a-z0-9_]*::' crates/ \
   --type rust \
   -g'!crates/soldier_core/src/execution/**' \
   -g'!crates/soldier_core/tests/test_facade_completeness.rs'
@@ -1047,12 +1171,15 @@ if echo "$PUB_MODS" | rg -v 'pub mod api;' | rg -q '.'; then
   exit 1
 fi
 
-# 2) Ban deep imports outside execution/ (allows execution::api::)
-if rg -n '^\s*use\s+soldier_core::execution::(?!api::)[a-z_]+::' crates/ \
+# 2) Ban deep module imports outside execution/
+# Anchored to `use`/`pub use` statements to avoid false positives on
+# legitimate enum variant paths (e.g., TlsmState::Created).
+# [a-z_] matches module names (snake_case), not type names (PascalCase).
+if rg -n '^\s*(pub\s+)?use\s+soldier_core::execution::[a-z_][a-z0-9_]*::' crates/ \
   --type rust \
   -g'!crates/soldier_core/src/execution/**' \
   -g'!crates/soldier_core/tests/test_facade_completeness.rs'; then
-  echo "Found banned deep execution imports"
+  echo "Found banned deep execution module imports"
   exit 1
 fi
 
