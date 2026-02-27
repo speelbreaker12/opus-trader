@@ -312,19 +312,13 @@ fn gi_017_close_bypasses_liquidity_gate() {
 
     let result = evaluate_intent_pipeline(&input, &mut metrics);
 
-    // Close intent MUST NOT be rejected with liquidity gate codes
+    // Close must bypass OPEN-only gates and remain dispatchable.
     assert!(
-        result.reject_reason_code != Some(RejectReasonCode::LiquidityGateNoL2),
-        "GI-017: Close intent was blocked by LiquidityGate"
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "GI-017: Close intent should be approved when Liquidity input is missing, got {:?}",
+        result.decision
     );
-    assert!(
-        result.reject_reason_code != Some(RejectReasonCode::ExpectedSlippageTooHigh),
-        "GI-017: Close intent was blocked by slippage check"
-    );
-    assert!(
-        result.reject_reason_code != Some(RejectReasonCode::InsufficientDepthWithinBudget),
-        "GI-017: Close intent was blocked by depth check"
-    );
+    assert_eq!(result.reject_reason_code, None);
 }
 
 #[test]
@@ -341,13 +335,95 @@ fn gi_017_close_bypasses_net_edge_gate() {
     let result = evaluate_intent_pipeline(&input, &mut metrics);
 
     assert!(
-        result.reject_reason_code != Some(RejectReasonCode::NetEdgeTooLow),
-        "GI-017: Close intent was blocked by NetEdge"
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "GI-017: Close intent should be approved when NetEdge input is missing, got {:?}",
+        result.decision
     );
+    assert_eq!(result.reject_reason_code, None);
+}
+
+#[test]
+fn gi_017_close_bypasses_pricer_gate() {
+    let mut input = common::base_open_input();
+    let mut metrics = IntentPipelineMetrics::new();
+
+    // Set up condition that would fail pricer gate for Open
+    input.pricer = None; // Missing pricer input → PricerInputMissing for Open
+
+    // Change to Close intent
+    input.intent_class = ChokeIntentClass::Close;
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
     assert!(
-        result.reject_reason_code != Some(RejectReasonCode::NetEdgeInputMissing),
-        "GI-017: Close intent was blocked by missing NetEdge input"
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "GI-017: Close intent should be approved when Pricer input is missing, got {:?}",
+        result.decision
     );
+    assert_eq!(result.reject_reason_code, None);
+}
+
+#[test]
+fn gi_017_hedge_bypasses_liquidity_gate() {
+    let mut input = common::base_open_input();
+    let mut metrics = IntentPipelineMetrics::new();
+
+    // Set up condition that would fail liquidity gate for Open
+    input.liquidity = None; // Missing L2 → LiquidityGateNoL2 for Open
+
+    // Change to Hedge intent
+    input.intent_class = ChokeIntentClass::Hedge;
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "GI-017: Hedge intent should be approved when Liquidity input is missing, got {:?}",
+        result.decision
+    );
+    assert_eq!(result.reject_reason_code, None);
+}
+
+#[test]
+fn gi_017_hedge_bypasses_net_edge_gate() {
+    let mut input = common::base_open_input();
+    let mut metrics = IntentPipelineMetrics::new();
+
+    // Set up condition that would fail net edge gate for Open
+    input.net_edge = None; // Missing → NetEdgeInputMissing for Open
+
+    // Change to Hedge intent
+    input.intent_class = ChokeIntentClass::Hedge;
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "GI-017: Hedge intent should be approved when NetEdge input is missing, got {:?}",
+        result.decision
+    );
+    assert_eq!(result.reject_reason_code, None);
+}
+
+#[test]
+fn gi_017_hedge_bypasses_pricer_gate() {
+    let mut input = common::base_open_input();
+    let mut metrics = IntentPipelineMetrics::new();
+
+    // Set up condition that would fail pricer gate for Open
+    input.pricer = None; // Missing pricer input → PricerInputMissing for Open
+
+    // Change to Hedge intent
+    input.intent_class = ChokeIntentClass::Hedge;
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Approved { .. }),
+        "GI-017: Hedge intent should be approved when Pricer input is missing, got {:?}",
+        result.decision
+    );
+    assert_eq!(result.reject_reason_code, None);
 }
 
 #[test]
