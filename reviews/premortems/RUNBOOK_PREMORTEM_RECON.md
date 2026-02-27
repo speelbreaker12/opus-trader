@@ -184,6 +184,12 @@ Six checks, evaluated in order:
 
 Run `plans/wf_step.sh ${STORY_ID} <step>` to record step completion. Steps in order: preflight → implement → self_review → cycle1 → fix → cycle2 → resolution → verify_full → pass. Receipts: `.wf/receipts/<ID>/`.
 
+Before any recon step, run the hard precheck:
+- `plans/recon_precheck.sh ${STORY_ID}`
+
+For scripted full-step execution, use sequence mode:
+- `WF_RECON_MODE=1 plans/wf_step.sh ${STORY_ID} --run-sequence --stop-on-blocker`
+
 > **Note**: R-phase numbers are a classification scheme, not execution order. The wf_step execution sequence is: preflight(R1) → implement(R5) → self_review(R5b) → cycle1(R2+R3+R4+R4b) → fix(R7a-c) → cycle2(R7d-f) → resolution(R6) → verify_full → pass.
 
 ### 3.0.1 Operator Cadence (mandatory)
