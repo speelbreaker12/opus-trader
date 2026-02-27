@@ -66,6 +66,7 @@ assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_profile_parity.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_review_emit.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_bundle.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_recon_scoreboard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_code_review_expert_guard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_roadmap_evidence_audit.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_crossref_invariants.sh"
@@ -102,7 +103,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "21" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 21)"
+[[ "$smoke_count" == "22" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 22)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"

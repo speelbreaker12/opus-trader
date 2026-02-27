@@ -41,6 +41,7 @@ GLYPHS = {
 PATH_RE = re.compile(r"^PATH:\s*(GREEN|YELLOW)\s*$")
 SLICE_RE = re.compile(r"^(?:S|s)?(\d+)$")
 STORY_ID_RE = re.compile(r"^S(\d+)-(\d+)$", re.IGNORECASE)
+HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,13 @@ def _normalize_slice(value: str) -> str:
     if not match:
         raise ValueError(f"invalid slice value: {value!r} (expected N or SN)")
     return match.group(1)
+
+
+def _story_slice_id(story_id: str, default_slice_id: str) -> str:
+    match = STORY_ID_RE.match(story_id)
+    if match:
+        return match.group(1)
+    return default_slice_id
 
 
 def _slice_matches(story_slice: Any, target_slice: str) -> bool:
@@ -212,6 +220,72 @@ def _read_path_signal(ledger_path: Path) -> str:
     return "UNKNOWN"
 
 
+def _read_path_signal_json(ledger_path: Path) -> str:
+    try:
+        with open(ledger_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return "UNKNOWN"
+
+    if not isinstance(data, dict):
+        return "UNKNOWN"
+
+    explicit_path = data.get("path")
+    if isinstance(explicit_path, str) and explicit_path in {"GREEN", "YELLOW"}:
+        return explicit_path
+
+    stoplight = data.get("stoplight")
+    if isinstance(stoplight, str):
+        if stoplight == "GREEN":
+            return "GREEN"
+        if stoplight in {"YELLOW", "RED"}:
+            return "YELLOW"
+    return "UNKNOWN"
+
+
+def _path_candidates(root: Path, story_id: str, slice_id: str, story_artifacts_root: Path) -> list[Path]:
+    slice_token = f"S{slice_id}"
+    return [
+        story_artifacts_root / story_id / "cycle1" / "evidence_ledger.md",
+        story_artifacts_root / story_id / f"{story_id}_reconciliation.md",
+        story_artifacts_root / story_id / f"{story_id}_reconciliation.json",
+        story_artifacts_root / story_id / "evidence_ledger.md",
+        story_artifacts_root / story_id / "evidence_ledger.json",
+        story_artifacts_root / story_id / "preflight" / "audit.md",
+        root / "reviews" / "reconciliations" / slice_token / f"{story_id}_reconciliation.md",
+        root / "reviews" / "reconciliations" / slice_token / f"{story_id}_reconciliation.json",
+    ]
+
+
+def _resolve_path_signal(root: Path, story_id: str, slice_id: str, story_artifacts_root: Path) -> str:
+    for candidate in _path_candidates(root, story_id, slice_id, story_artifacts_root):
+        if not candidate.exists():
+            continue
+        if candidate.suffix == ".md":
+            signal = _read_path_signal(candidate)
+        elif candidate.suffix == ".json":
+            signal = _read_path_signal_json(candidate)
+        else:
+            signal = "UNKNOWN"
+        if signal != "UNKNOWN":
+            return signal
+    return "UNKNOWN"
+
+
+def _derive_pass_status(step_status: dict[str, str]) -> str:
+    """Derive pass status from the 8 prerequisite workflow steps.
+
+    wf_step.sh `pass` is a gate check and does not write 08_pass.json.
+    """
+    prereq_steps = STEPS[:-1]
+    prereq_statuses = [step_status[s] for s in prereq_steps]
+    if any(status == STATUS_MISSING for status in prereq_statuses):
+        return STATUS_MISSING
+    if any(status == STATUS_STALE for status in prereq_statuses):
+        return STATUS_STALE
+    return STATUS_DONE
+
+
 def _markdown_table_row(cells: list[str]) -> str:
     return "| " + " | ".join(cells) + " |"
 
@@ -259,6 +333,7 @@ def build_scoreboard(
     root: Path,
     slice_id: str,
     stories_filter: set[str] | None,
+    head_commit: str,
 ) -> tuple[str, dict[str, Any], bool]:
     prd_path = root / "plans" / "prd.json"
     story_entries = _load_prd_stories(prd_path, slice_id)
@@ -266,7 +341,6 @@ def build_scoreboard(
     if stories_filter is not None:
         story_entries = [entry for entry in story_entries if entry.story_id in stories_filter]
 
-    head_commit = _head_commit(root)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     story_artifacts_root = _story_artifacts_root(root)
@@ -277,15 +351,20 @@ def build_scoreboard(
     for entry in story_entries:
         receipt_dir = _receipt_dir_for_story(root, entry.story_id)
         step_status: dict[str, str] = {}
-        for index, step in enumerate(STEPS):
+        for index, step in enumerate(STEPS[:-1]):
             receipt_path = receipt_dir / f"{index:02d}_{step}.json"
             status = _receipt_status(receipt_path, head_commit)
             step_status[step] = status
             if status != STATUS_DONE:
                 all_done = False
 
-        ledger_path = story_artifacts_root / entry.story_id / "cycle1" / "evidence_ledger.md"
-        path_signal = _read_path_signal(ledger_path)
+        pass_status = _derive_pass_status(step_status)
+        step_status["pass"] = pass_status
+        if pass_status != STATUS_DONE:
+            all_done = False
+
+        story_slice = _story_slice_id(entry.story_id, slice_id)
+        path_signal = _resolve_path_signal(root, entry.story_id, story_slice, story_artifacts_root)
 
         story_payloads.append(
             {
@@ -319,6 +398,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out-json", help="Write JSON summary output to PATH")
     parser.add_argument("--stories", help="Optional comma-separated story filter (e.g. S2-001,S2-002)")
     parser.add_argument(
+        "--head",
+        help="Commit SHA to score receipts against (defaults to current HEAD)",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Exit non-zero if any selected story has missing/stale step receipts",
@@ -329,7 +412,10 @@ def main(argv: list[str] | None = None) -> int:
         slice_id = _normalize_slice(args.slice)
         root = _repo_root()
         stories_filter = _parse_story_filter(args.stories)
-        markdown, json_payload, all_done = build_scoreboard(root, slice_id, stories_filter)
+        head_commit = args.head if args.head is not None else _head_commit(root)
+        if not HEXSHA_RE.match(head_commit):
+            raise ValueError(f"invalid --head value: {head_commit!r} (expected git SHA)")
+        markdown, json_payload, all_done = build_scoreboard(root, slice_id, stories_filter, head_commit)
     except (RuntimeError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -61,6 +61,36 @@ grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected PATH signal 
 
 grep -Fq '"story_id": "S0-000"' "$json_out" || fail "story id missing from json"
 grep -Fq '"implement": "STALE"' "$json_out" || fail "stale status missing from json"
+grep -Fq '"pass": "MISSING"' "$json_out" || fail "pass should be missing when prerequisites are missing"
+
+story_full="S0-001"
+story_full_receipts="$receipt_root/$story_full"
+mkdir -p "$story_full_receipts"
+steps=(preflight implement self_review cycle1 fix cycle2 resolution verify_full)
+for i in "${!steps[@]}"; do
+  step="${steps[$i]}"
+  file="$story_full_receipts/$(printf '%02d_%s.json' "$i" "$step")"
+  cat > "$file" <<EOF
+{"story_id":"$story_full","step_name":"$step","head_sha":"$head_sha"}
+EOF
+done
+
+md_full="$tmp_dir/SCOREBOARD_full.md"
+json_full="$tmp_dir/SCOREBOARD_full.json"
+artifacts_root_empty="$tmp_dir/story_artifacts_empty"
+mkdir -p "$artifacts_root_empty"
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root_empty" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_full" \
+    --out-md "$md_full" \
+    --out-json "$json_full" \
+    >/dev/null
+)
+grep -Fq "| $story_full | true | UNKNOWN | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |" "$md_full" \
+  || fail "pass should be derived as DONE when preflight..verify_full are DONE"
+grep -Fq '"pass": "DONE"' "$json_full" || fail "json pass should be DONE for complete prerequisite chain"
 
 set +e
 (
