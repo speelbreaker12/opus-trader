@@ -70,6 +70,7 @@ required=(
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
   plans/recon_bundle.sh
+  plans/recon_precheck.sh
   plans/review_logged.sh
   plans/review_resolution_template.md
   plans/schemas/fork_attestation_remediation.schema.json
@@ -102,11 +103,13 @@ required=(
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_recon_bundle.sh
+  plans/tests/test_recon_precheck.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_findings_guard.sh
+  plans/tests/test_wf_step_stop_on_blocker.sh
   plans/tests/test_workflow_quick_step.sh
   plans/tests/test_toggle_policy_check.sh
   plans/verify.sh

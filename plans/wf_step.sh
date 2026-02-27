@@ -5,7 +5,9 @@ set -euo pipefail
 #
 # Tracks which steps are done, enforces ordering, writes simple JSON receipts.
 #
-# Usage: plans/wf_step.sh <STORY_ID> <step> [options]
+# Usage:
+#   plans/wf_step.sh <STORY_ID> <step> [options]
+#   plans/wf_step.sh <STORY_ID> --run-sequence [--stop-on-blocker] [options]
 #
 # Steps (in order — each requires the previous receipt):
 #   preflight      — record HEAD as baseline
@@ -21,6 +23,9 @@ set -euo pipefail
 # Options:
 #   --check-only   Exit 0 if step receipt exists, non-zero if not (no validation, no writing)
 #   --dry-run      Validate prerequisites but don't write receipt
+#   --run-sequence Run ordered steps from <step> (or preflight if omitted) to pass
+#   --stop-on-blocker
+#                 Only valid with --run-sequence; stop at first non-zero step
 #   --status       Show current receipt chain status
 #   --reset        Delete all receipts for this story (requires --yes)
 #
@@ -38,6 +43,7 @@ STEPS=(preflight implement self_review cycle1 fix cycle2 resolution verify_full 
 usage() {
   cat <<'EOF'
 Usage: plans/wf_step.sh <STORY_ID> <step> [--dry-run|--status|--reset]
+       plans/wf_step.sh <STORY_ID> --run-sequence [--stop-on-blocker] [<step>] [--dry-run]
 
 Steps (in order):
   preflight      Record HEAD as baseline
@@ -53,6 +59,9 @@ Steps (in order):
 Options:
   --check-only   Check if step receipt exists (exit 0=yes, 1=no)
   --dry-run      Validate only, don't write receipt
+  --run-sequence Run ordered steps from <step> (or preflight) through pass
+  --stop-on-blocker
+                Stop sequence mode at first non-zero step exit
   --status       Show receipt chain status
   --reset        Delete all receipts for story (requires --yes)
 EOF
@@ -66,6 +75,8 @@ fail() { echo "WF_STEP BLOCKED: $*" >&2; exit 1; }
 STORY="${1:-}"
 CHECK_ONLY=0
 DRY_RUN=0
+RUN_SEQUENCE=0
+STOP_ON_BLOCKER=0
 STATUS_MODE=0
 RESET_MODE=0
 YES=0
@@ -76,6 +87,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --check-only)   CHECK_ONLY=1 ;;
     --dry-run)      DRY_RUN=1 ;;
+    --run-sequence) RUN_SEQUENCE=1 ;;
+    --stop-on-blocker) STOP_ON_BLOCKER=1 ;;
     --status)       STATUS_MODE=1 ;;
     --reset)        RESET_MODE=1 ;;
     --yes)          YES=1 ;;
@@ -93,6 +106,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$STORY" ]] || { usage >&2; exit 2; }
+
+if [[ "$STOP_ON_BLOCKER" -eq 1 && "$RUN_SEQUENCE" -ne 1 ]]; then
+  die "--stop-on-blocker requires --run-sequence"
+fi
 
 # Security: STORY_ID validation (prevent path traversal)
 if [[ ! "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
@@ -244,6 +261,19 @@ validate_receipt_story_ids() {
   done
 }
 
+run_recon_precheck() {
+  local step_name="$1"
+  local precheck_script="$ROOT/plans/recon_precheck.sh"
+  if [[ ! -x "$precheck_script" ]]; then
+    echo "WF_STEP: recon precheck missing or not executable at $precheck_script" >&2
+    return 1
+  fi
+  if ! "$precheck_script" "$STORY"; then
+    echo "WF_STEP: recon precheck failed for $STORY before step '$step_name'" >&2
+    return 1
+  fi
+}
+
 # ── Status mode ─────────────────────────────────────────────────────
 
 if [[ "$STATUS_MODE" -eq 1 ]]; then
@@ -301,13 +331,54 @@ fi
 
 # ── Validate step name (not required for --status/--reset) ──────────
 
-if [[ "$STATUS_MODE" -eq 0 && "$RESET_MODE" -eq 0 ]]; then
+if [[ "$STATUS_MODE" -eq 0 && "$RESET_MODE" -eq 0 && "$RUN_SEQUENCE" -eq 0 ]]; then
   [[ -n "$STEP" ]] || { usage >&2; exit 2; }
   step_is_valid "$STEP" || die "unknown step: $STEP (valid: ${STEPS[*]})"
 fi
 
+if [[ "$RUN_SEQUENCE" -eq 1 ]]; then
+  if [[ "$STATUS_MODE" -eq 1 || "$RESET_MODE" -eq 1 || "$CHECK_ONLY" -eq 1 ]]; then
+    die "--run-sequence cannot be combined with --status, --reset, or --check-only"
+  fi
+  if [[ -n "$STEP" ]]; then
+    step_is_valid "$STEP" || die "unknown step: $STEP (valid: ${STEPS[*]})"
+  else
+    STEP="preflight"
+  fi
+
+  start_idx="$(step_index "$STEP")"
+  end_idx="$(( ${#STEPS[@]} - 1 ))"
+  seq_rc=0
+  for i in $(seq "$start_idx" "$end_idx"); do
+    seq_step="${STEPS[$i]}"
+    child_cmd=(bash "$ROOT/plans/wf_step.sh" "$STORY" "$seq_step")
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      child_cmd+=(--dry-run)
+    fi
+    echo "WF_STEP ORCH: running step '$seq_step' for $STORY" >&2
+    set +e
+    "${child_cmd[@]}"
+    rc=$?
+    set -e
+    if [[ "$rc" -ne 0 ]]; then
+      seq_rc="$rc"
+      if [[ "$STOP_ON_BLOCKER" -eq 1 ]]; then
+        echo "WF_STEP ORCH: stop-on-blocker active — halted at step '$seq_step' (exit=$rc)" >&2
+        exit "$rc"
+      fi
+    fi
+  done
+  exit "$seq_rc"
+fi
+
 HEAD_SHA="$(git rev-parse HEAD)"
 STEP_IDX="$(step_index "$STEP")"
+
+if [[ "$WF_RECON_MODE" -eq 1 ]]; then
+  if ! run_recon_precheck "$STEP"; then
+    exit 3
+  fi
+fi
 
 # ── Validate prerequisites (previous receipts must exist) ───────────
 
