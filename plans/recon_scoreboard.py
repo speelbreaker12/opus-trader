@@ -32,6 +32,7 @@ STATUS_DONE = "DONE"
 STATUS_STALE = "STALE"
 STATUS_MISSING = "MISSING"
 PATH_VALUES = {"GREEN", "YELLOW"}
+HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
 GLYPHS = {
     STATUS_DONE: "✓",
@@ -76,16 +77,15 @@ def _head_commit(root: Path) -> str:
 
 
 def _resolve_score_head(root: Path, value: str | None) -> str:
-    if value is None:
-        return _head_commit(root)
+    ref = "HEAD" if value is None else value
     result = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "--verify", value],
+        ["git", "-C", str(root), "rev-parse", "--verify", f"{ref}^{{commit}}"],
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"unable to resolve --head '{value}'")
+        raise RuntimeError(f"invalid --head value: {value!r} (not a valid commit-ish)")
     return result.stdout.strip()
 
 
@@ -211,6 +211,8 @@ def _receipt_status(receipt_path: Path, score_head: str) -> tuple[str, str | Non
 
     receipt_head = payload.get("head_sha")
     if not isinstance(receipt_head, str):
+        return STATUS_MISSING, None
+    if not HEXSHA_RE.match(receipt_head):
         return STATUS_MISSING, None
     if receipt_head == score_head:
         return STATUS_DONE, receipt_head

@@ -34,6 +34,10 @@ cat > "$story_receipts/02_self_review.json" <<'EOF'
 {"story_id":"S0-000","step_name":"self_review","head_sha":
 EOF
 
+cat > "$story_receipts/03_cycle1.json" <<'EOF'
+{"story_id":"S0-000","step_name":"cycle1","head_sha":"not-a-hex-sha"}
+EOF
+
 md_out="$tmp_dir/SCOREBOARD.md"
 json_out="$tmp_dir/SCOREBOARD.json"
 json_out_alt_head="$tmp_dir/SCOREBOARD.alt_head.json"
@@ -68,6 +72,7 @@ grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected markdown PAT
 grep -Fq '"story_id": "S0-000"' "$json_out" || fail "story id missing from json"
 grep -Fq '"implement": "STALE"' "$json_out" || fail "stale status missing from json"
 grep -Fq '"self_review": "MISSING"' "$json_out" || fail "malformed receipt should map to MISSING"
+grep -Fq '"cycle1": "MISSING"' "$json_out" || fail "non-hex receipt head_sha should map to MISSING"
 grep -Fq '"pass": "MISSING"' "$json_out" || fail "pass should be missing when prerequisites are missing"
 grep -Fq '"step_receipt_head_sha"' "$json_out" || fail "step receipt head debug map missing"
 grep -Fq '"preflight": "'"$head_sha"'"' "$json_out" || fail "preflight head missing from debug map"
@@ -136,6 +141,29 @@ grep -Fq "| $story_full | true | UNKNOWN | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | �
   || fail "pass should be derived as DONE when preflight..verify_full are DONE"
 grep -Fq '"pass": "DONE"' "$json_full" || fail "json pass should be DONE for complete prerequisite chain"
 
+story_path_pref="S0-002"
+mkdir -p "$artifacts_root/$story_path_pref/cycle1"
+cat > "$artifacts_root/$story_path_pref/cycle1/evidence_ledger.md" <<'EOF'
+PATH: GREEN
+EOF
+cat > "$artifacts_root/$story_path_pref/evidence_ledger.json" <<'EOF'
+{"schema_version":"evidence_ledger.v1","stoplight":"RED"}
+EOF
+md_path="$tmp_dir/SCOREBOARD_path.md"
+json_path="$tmp_dir/SCOREBOARD_path.json"
+(
+  cd "$ROOT"
+  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+    --slice 0 \
+    --stories "$story_path_pref" \
+    --out-md "$md_path" \
+    --out-json "$json_path" \
+    >/dev/null
+)
+grep -Fq "| $story_path_pref | true | YELLOW |" "$md_path" \
+  || fail "JSON PATH source should take precedence over markdown PATH fallback"
+grep -Fq '"path": "YELLOW"' "$json_path" || fail "json summary should report JSON-derived YELLOW path"
+
 set +e
 (
   cd "$ROOT"
@@ -146,6 +174,25 @@ set -e
 [[ "$strict_rc" -eq 1 ]] || fail "--strict should fail closed when no stories are selected"
 grep -Fq "WARN: no stories found for slice 0" "$tmp_dir/strict.err" \
   || fail "missing strict-mode warning for empty story selection"
+
+(
+  cd "$ROOT"
+  python3 plans/recon_scoreboard.py --slice 0 --stories "$story_id" --head HEAD >/dev/null
+)
+(
+  cd "$ROOT"
+  python3 plans/recon_scoreboard.py --slice 0 --stories "$story_id" --head HEAD~1 >/dev/null
+)
+
+set +e
+(
+  cd "$ROOT"
+  python3 plans/recon_scoreboard.py --slice 0 --stories "$story_id" --head not-a-real-ref >/dev/null 2>"$tmp_dir/head.err"
+)
+head_rc=$?
+set -e
+[[ "$head_rc" -eq 2 ]] || fail "--head should fail with usage-style exit code for invalid refs"
+grep -Fq "invalid --head value" "$tmp_dir/head.err" || fail "missing invalid --head error message"
 
 probe_id="recon_scoreboard_probe_$$"
 unsafe_slice="../../../../tmp/$probe_id"
