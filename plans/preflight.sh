@@ -263,6 +263,8 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_recon_bundle.sh"
   "plans/tests/test_recon_scoreboard.sh"
+  "plans/tests/test_recon_evidence_ledger.sh"
+  "plans/tests/test_premortem_ready_ownership_conflict.sh"
   "plans/tests/test_code_review_expert_guard.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"
