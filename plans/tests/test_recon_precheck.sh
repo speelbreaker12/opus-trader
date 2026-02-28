@@ -175,6 +175,7 @@ echo "$out_stale" | grep -q "process doc(s) differ from main" || fail "stale-doc
 # JSON mode should include stale_docs array
 json_stale="$(plans/recon_precheck.sh S3-000 --json)"
 echo "$json_stale" | jq -e '.stale_docs | length > 0' >/dev/null || fail "json stale_docs should be non-empty"
+echo "$json_stale" | jq -e '.stale_docs | index("plans/step_prompts/recon/INDEX.md")' >/dev/null || fail "json stale_docs should contain INDEX.md"
 echo "$json_stale" | jq -e '.ready == true' >/dev/null || fail "json ready should still be true with stale docs"
 
 echo "test_recon_precheck.sh: ok"

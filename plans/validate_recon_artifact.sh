@@ -221,7 +221,7 @@ case "$schema_name" in
     if [[ -n "$basis" ]]; then
       case "$basis" in
         STORY_SCOPE|FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)") ;;
-        *) errors+=("review_basis '$basis' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION") ;;
+        *) errors+=("review_basis '$basis' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION, 'FIX_DIFF + AT_REGRESSION (Cycle 2)'") ;;
       esac
     fi
     ;;
@@ -239,7 +239,7 @@ case "$schema_name" in
     if [[ -n "$rb" ]]; then
       case "$rb" in
         STORY_SCOPE|FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)") ;;
-        *) errors+=("review_basis '$rb' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION") ;;
+        *) errors+=("review_basis '$rb' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION, 'FIX_DIFF + AT_REGRESSION (Cycle 2)'") ;;
       esac
     fi
     # finding_counts must have P0, P1, P2, INFO

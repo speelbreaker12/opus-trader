@@ -27,7 +27,8 @@
     "story_id": { "type": "string", "minLength": 1 },
     "review_basis": {
       "type": "string",
-      "enum": ["STORY_SCOPE", "FIX_DIFF_AT_REGRESSION"]
+      "enum": ["STORY_SCOPE", "FIX_DIFF_AT_REGRESSION", "FIX_DIFF + AT_REGRESSION (Cycle 2)"],
+      "$comment": "JSON-short forms preferred; human-readable alias accepted for compatibility with review_logged.sh markdown output"
     },
     "review_basis_cycle": {
       "type": "integer",
