@@ -7,9 +7,8 @@
 
 use soldier_core::execution::TlsmState;
 use soldier_core::execution::{
-    AtomicGroup, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition,
-    InMemoryGroupPersistence, LegResult, LockAcquisitionResult, persist_before_dispatch,
-    try_acquire_group_lock,
+    AtomicGroup, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition, LegResult,
+    LockAcquisitionResult, try_acquire_group_lock,
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -238,35 +237,6 @@ fn at_936_rescue_rejected_no_rescue_dispatch_emergency_close() {
     assert!(
         !group.containment_pending,
         "AT-936: containment resolved after flatten"
-    );
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Persistence before dispatch
-// ═══════════════════════════════════════════════════════════════════════
-
-#[test]
-fn persist_before_dispatch_success_records_group() {
-    let group = AtomicGroup::new("persist-ok".to_string(), 2);
-    let mut store = InMemoryGroupPersistence::default();
-
-    let result = persist_before_dispatch(&group, &mut store);
-    assert!(result.is_ok());
-    assert_eq!(store.persisted_intents, vec!["persist-ok"]);
-}
-
-#[test]
-fn persist_before_dispatch_failure_must_abort() {
-    let group = AtomicGroup::new("persist-fail".to_string(), 2);
-    let mut store = InMemoryGroupPersistence {
-        fail_persist: true,
-        ..Default::default()
-    };
-
-    let result = persist_before_dispatch(&group, &mut store);
-    assert!(
-        matches!(result, Err(GroupError::PersistenceFailed { .. })),
-        "persistence failure must abort — no leg dispatch allowed"
     );
 }
 

@@ -3,6 +3,10 @@
 //! Gates 1-6 are evaluated via the shared `evaluate_base_gates()` to
 //! eliminate dual-orchestration drift risk with `pipeline.rs` (Q1).
 
+use crate::execution::{
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep, Tlsm,
+    build_gate_results, build_order_intent_with_wal_gate,
+};
 use crate::risk::{
     ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult, MarginGateDecision,
     MarginGateInput, MarginGateMetrics, MarginGateMode, PendingExposureBook,
@@ -11,19 +15,20 @@ use crate::risk::{
     evaluate_margin_headroom_gate,
 };
 
-use super::DispatchConsistencyProof;
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
 use super::build_order_intent::PrecomputedWalGate;
-use super::intent_assembly::{SizingParams, assemble_sizing};
-use super::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    IntentClass, InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason,
-    InventorySkewResult, LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics,
-    MismatchMetrics, NetEdgeInput, NetEdgeMetrics, NetEdgeResult, PricerInput, PricerMetrics,
-    PricerResult, Tlsm, build_gate_results, build_order_intent_with_wal_gate, compute_limit_price,
-    evaluate_inventory_skew, evaluate_liquidity_gate, evaluate_net_edge,
+use super::dispatch_map::{DispatchConsistencyProof, IntentClass, MismatchMetrics};
+use super::gate::{
+    LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate,
 };
+use super::gates::{NetEdgeInput, NetEdgeMetrics, NetEdgeResult, evaluate_net_edge};
+use super::intent_assembly::{SizingParams, assemble_sizing};
+use super::inventory_skew::{
+    InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
+    evaluate_inventory_skew,
+};
+use super::pricer::{PricerInput, PricerMetrics, PricerResult, compute_limit_price};
 use crate::venue::types::InstrumentKindInput;
 
 const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
@@ -396,6 +401,7 @@ pub fn settle_pending_on_tlsm_terminal(
 ///
 /// Assembly failure is fail-closed: `dispatch_consistency` is set to
 /// `failed()` and risk state is degraded.
+#[allow(dead_code)]
 pub fn build_open_intent_with_assembly(
     assembly_meta: &InstrumentKindInput,
     sizing_params: &SizingParams,
@@ -440,3 +446,7 @@ pub fn build_open_intent_with_assembly(
         runtime_metrics,
     )
 }
+
+#[cfg(test)]
+#[path = "open_runtime_wiring_tests.rs"]
+mod open_runtime_wiring_tests;

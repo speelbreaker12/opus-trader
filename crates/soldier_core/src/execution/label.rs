@@ -118,3 +118,11 @@ pub fn derive_gid12(group_id: &str) -> String {
     let no_dashes: String = group_id.chars().filter(|c| *c != '-').collect();
     no_dashes[..12.min(no_dashes.len())].to_string()
 }
+
+#[cfg(test)]
+#[path = "label_tests.rs"]
+mod label_tests;
+
+#[cfg(test)]
+#[path = "label_prop_tests.rs"]
+mod label_prop_tests;

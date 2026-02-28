@@ -38,7 +38,29 @@ if [[ "${MODE:-}" == "full" ]]; then
   export PROPTEST_CASES
   run_logged_or_exit "rust_tests_full" "$RUST_TEST_TIMEOUT" cargo test --workspace --all-features --locked
 else
+  # In quick mode, keep proptests lightweight for fast feedback.
+  PROPTEST_CASES="${PROPTEST_CASES:-32}"
+  if [[ ! "$PROPTEST_CASES" =~ ^[0-9]+$ ]]; then
+    warn "PROPTEST_CASES=$PROPTEST_CASES is not numeric, defaulting to 32"
+    PROPTEST_CASES=32
+  elif [[ "$PROPTEST_CASES" -gt 1000 ]]; then
+    warn "PROPTEST_CASES=$PROPTEST_CASES exceeds quick-mode max (1000), capping"
+    PROPTEST_CASES=1000
+  fi
+  export PROPTEST_CASES
+
   run_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo test --workspace --lib --locked
+
+  # Smoke contract tests: ensure facade-level integration contracts remain green in quick mode.
+  run_logged_or_exit "rust_tests_smoke" "$RUST_TEST_TIMEOUT" \
+    cargo test -p soldier_core --locked \
+      --test test_facade_completeness \
+      --test adversarial_gi_enforcement \
+      --test test_dispatch_chokepoint \
+      --test test_reject_reason \
+      --test test_tlsm
 fi
+
+run_logged_or_exit "execution_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_execution_facade.sh
 
 echo "✓ rust gates passed"

@@ -10,7 +10,7 @@
 //! rejected before dispatch. The caller maps the rejection to
 //! `RiskState::Degraded` in runtime policy.
 
-use crate::execution::OrderSize;
+use super::order_size::OrderSize;
 use crate::risk::RiskState;
 use crate::venue::InstrumentKind;
 
@@ -131,6 +131,7 @@ impl DispatchConsistencyProof {
 
     /// Test-only bypass: caller asserts consistency without structural proof.
     #[cfg(test)]
+    #[allow(dead_code)]
     pub fn unchecked(passed: bool) -> Self {
         Self(passed)
     }
@@ -287,3 +288,7 @@ pub fn validate_and_dispatch(
         risk_state: RiskState::Healthy,
     })
 }
+
+#[cfg(test)]
+#[path = "dispatch_map_tests.rs"]
+mod dispatch_map_tests;

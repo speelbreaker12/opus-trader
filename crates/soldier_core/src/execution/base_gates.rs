@@ -6,13 +6,13 @@
 //! Returns a `BaseGatesPassed` proof token that cannot be constructed externally,
 //! guaranteeing that downstream gates only run after gates 1-6 pass.
 
-use super::{ChokeIntentClass, DispatchConsistencyProof};
-use crate::execution::build_order_intent::GateStep;
-use crate::execution::gate_outcome::GateOutcome;
-use crate::execution::pipeline::QuantizePipelineInput;
-use crate::execution::preflight::{PreflightInput, PreflightMetrics, preflight_intent};
-use crate::execution::quantize::{QuantizeMetrics, QuantizedValues, quantize};
-use crate::execution::reject_reason::RejectReasonCode;
+use super::build_order_intent::{ChokeIntentClass, GateStep};
+use super::dispatch_map::DispatchConsistencyProof;
+use super::gate_outcome::GateOutcome;
+use super::pipeline::QuantizePipelineInput;
+use super::preflight::{PreflightInput, PreflightMetrics, preflight_intent};
+use super::quantize::{QuantizeMetrics, QuantizedValues, quantize};
+use super::reject_reason::RejectReasonCode;
 use crate::risk::{
     FeeCacheSnapshot, FeeEvaluation, FeeMetrics, FeeStalenessConfig, RiskState,
     evaluate_fee_staleness,
@@ -401,3 +401,85 @@ pub fn evaluate_base_gates(
         lifecycle_intent,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::execution::preflight::OrderType;
+    use crate::execution::quantize::{QuantizeConstraints, Side};
+    use crate::venue::InstrumentKind;
+
+    fn base_input_with_fee_snapshot(fee_snapshot: FeeCacheSnapshot) -> BaseGatesInput<'static> {
+        BaseGatesInput {
+            intent_class: ChokeIntentClass::Open,
+            risk_state: RiskState::Healthy,
+            preflight: PreflightInput {
+                instrument_kind: InstrumentKind::Option,
+                order_type: OrderType::Limit,
+                has_trigger: false,
+                linked_order_type: None,
+                linked_orders_allowed: false,
+                post_only_input: None,
+            },
+            venue_capabilities: VenueCapabilities::default(),
+            bot_feature_flags: BotFeatureFlags::default(),
+            quantize: QuantizePipelineInput {
+                raw_qty: 1.0,
+                raw_limit_price: 100.0,
+                side: Side::Buy,
+                constraints: QuantizeConstraints {
+                    tick_size: 0.1,
+                    amount_step: 0.1,
+                    min_amount: 0.1,
+                },
+            },
+            dispatch_consistency: DispatchConsistencyProof::no_contracts(),
+            fee_snapshot,
+            fee_config: FeeStalenessConfig::default(),
+            expiry_guard: Some(ExpiryGuardInput {
+                now_ms: 1_000_000,
+                expiration_timestamp_ms: Some(2_000_000),
+                expiry_delist_buffer_s: 60,
+                intent: LifecycleIntent::Open,
+                instrument_kind: Some(InstrumentKind::LinearFuture),
+            }),
+        }
+    }
+
+    #[test]
+    fn test_fee_cache_stale_snapshot_fails() {
+        let input = base_input_with_fee_snapshot(FeeCacheSnapshot {
+            fee_rate: 0.0005,
+            fee_model_cached_at_ts_ms: None,
+            now_ms: 1_010_000,
+        });
+        let mut metrics = BaseGatesMetrics::new();
+
+        let rejection = evaluate_base_gates(&input, &mut metrics)
+            .expect_err("missing fee cache timestamp must fail-closed at the FeeCacheCheck gate");
+        let legacy = BaseGatesLegacy::from(&rejection);
+
+        assert_eq!(rejection.gate, GateStep::FeeCacheCheck);
+        assert!(!legacy.fee_cache_passed);
+    }
+
+    #[test]
+    fn test_fee_cache_fresh_snapshot_passes() {
+        let input = base_input_with_fee_snapshot(FeeCacheSnapshot {
+            fee_rate: 0.0005,
+            fee_model_cached_at_ts_ms: Some(1_009_000),
+            now_ms: 1_010_000,
+        });
+        let mut metrics = BaseGatesMetrics::new();
+
+        let proof = evaluate_base_gates(&input, &mut metrics)
+            .expect("fresh fee cache snapshot should pass base gates");
+        let legacy = BaseGatesLegacy::from(&proof);
+
+        assert!(legacy.fee_cache_passed);
+    }
+}
+
+#[cfg(test)]
+#[path = "base_gates_tests.rs"]
+mod base_gates_tests;

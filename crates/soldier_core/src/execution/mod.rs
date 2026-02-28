@@ -8,120 +8,76 @@ const MAX_EXECUTION_METRIC_LINES: usize = 4096;
 // ─── Metric name constants ─────────────────────────────────────────────
 // Shared across modules to prevent string-literal drift.
 pub(crate) const METRIC_GATE_SEQUENCE_TOTAL: &str = "gate_sequence_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_LIQUIDITY_GATE_REJECT: &str = "liquidity_gate_reject_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_NET_EDGE_REJECT: &str = "net_edge_reject_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_EXPECTED_SLIPPAGE_BPS: &str = "expected_slippage_bps";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_QUANTIZE_REJECT: &str = "quantize_reject_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_PRICER_REJECT: &str = "pricer_reject_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_INVENTORY_SKEW_REJECT: &str = "inventory_skew_reject_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_POST_ONLY_REJECT: &str = "post_only_reject_total";
 pub(crate) const METRIC_FEE_STALENESS_REJECT: &str = "fee_staleness_hard_stale_total";
 pub(crate) const METRIC_MARGIN_GATE_REJECT: &str = "margin_gate_reject_total";
 pub(crate) const METRIC_PENDING_EXPOSURE_REJECT: &str = "pending_exposure_reject_total";
 pub(crate) const METRIC_EXPOSURE_BUDGET_REJECT: &str = "exposure_budget_reject_total";
 pub(crate) const METRIC_GROUP_LOCK_TIMEOUT: &str = "group_lock_timeout_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_GROUP_PERSIST_FAIL: &str = "group_persist_fail_total";
 pub(crate) const METRIC_GROUP_MIXED_FAILED: &str = "group_mixed_failed_total";
 #[allow(dead_code)] // Reserved for expiry guard instrumentation
 pub(crate) const METRIC_EXPIRY_GUARD_REJECT: &str = "expiry_guard_reject_total";
+#[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_PREFLIGHT_REJECT: &str = "preflight_reject_total";
 
-pub mod base_gates;
-pub mod build_order_intent;
-pub mod dispatch_map;
-pub mod gate;
-pub mod gate_outcome;
-pub mod gates;
-pub mod group;
-pub mod intent_assembly;
-pub mod inventory_skew;
-pub mod label;
-pub mod open_runtime;
-pub mod order_size;
-pub mod pipeline;
-pub mod post_only_guard;
-pub mod preflight;
-pub mod pricer;
-pub mod quantize;
-pub mod reject_reason;
-pub mod tlsm;
+pub mod api;
 
-pub use base_gates::{
-    BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, BaseGatesPassed, BaseGatesRejection,
-    evaluate_base_gates,
-};
-#[allow(deprecated)]
-pub use build_order_intent::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults,
-    GateSequenceResult, GateStep, RecordedBeforeDispatchGate, build_gate_results,
-    build_order_intent, build_order_intent_with_optional_wal_gate,
-    build_order_intent_with_reject_reason_code, build_order_intent_with_wal_gate,
-    gate_sequence_total,
-};
-pub use dispatch_map::{
-    CONTRACTS_AMOUNT_MATCH_TOLERANCE, DispatchConsistencyProof, DispatchMapError, DispatchRequest,
-    IntentClass, MismatchMetrics, ValidatedDispatch, map_to_dispatch, validate_and_dispatch,
-};
-pub use gate::{
-    GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateDecision, LiquidityGateInput,
-    LiquidityGateMetadata, LiquidityGateMetrics, LiquidityGateRejectReason, LiquidityGateResult,
-    evaluate_liquidity_gate, expected_slippage_bps_samples, liquidity_gate_reject_total,
-};
-pub use gate_outcome::GateOutcome;
-pub use gates::{
-    NetEdgeInput, NetEdgeMetrics, NetEdgeRejectReason, NetEdgeResult, evaluate_net_edge,
-    net_edge_reject_total,
-};
-pub use group::{
-    AtomicGroup, GroupConfig, GroupError, GroupLock, GroupPersistence, GroupState,
-    GroupStateTransition, InMemoryGroupPersistence, LegResult, LockAcquisitionResult,
-    group_lock_timeout_total, group_mixed_failed_total, group_persist_fail_total,
-    persist_before_dispatch, try_acquire_group_lock,
-};
-pub use intent_assembly::{
-    AssembledPipelineParams, AssembledSizing, AssemblySizingError, SizingParams, assemble_sizing,
-    choke_intent_to_dispatch, evaluate_assembled_pipeline,
-};
-pub use inventory_skew::{
-    InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
-    evaluate_inventory_skew, inventory_skew_reject_total,
-};
-pub use label::{
-    LABEL_MAX_LEN, LabelError, LabelInput, ParsedLabel, decode_label, derive_gid12, derive_sid8,
-    encode_label,
-};
-pub use open_runtime::{
-    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_intent_with_assembly,
-    build_open_order_intent_runtime, settle_pending_on_tlsm_terminal,
-};
-pub use order_size::{OrderSize, OrderSizeError, OrderSizeInput, build_order_size};
-pub use pipeline::{
-    IntentPipelineInput, IntentPipelineMetrics, PipelineResult, QuantizePipelineInput,
-    evaluate_intent_pipeline,
-};
-pub use post_only_guard::{
-    PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only, post_only_reject_total,
-};
-pub use preflight::{
-    OrderType, PreflightInput, PreflightMetrics, PreflightReject, PreflightResult,
-    preflight_intent, preflight_reject_total,
-};
-pub use pricer::{
-    PricerInput, PricerMetrics, PricerRejectReason, PricerResult, compute_limit_price,
-    pricer_reject_total,
-};
-pub use quantize::{
-    QuantizeConstraints, QuantizeError, QuantizeMetrics, QuantizeStaticRejectReason,
-    QuantizedValues, Side, quantize, quantize_reject_total,
-};
-pub use reject_reason::{
-    GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
-    reject_reason_registry_contains,
-};
-pub use tlsm::{
-    NoopTransitionSink, OooCategory, PersistedTransition, Tlsm, TlsmError, TlsmEvent, TlsmState,
-    TlsmTransitionSink, TransitionResult, ooo_count, ooo_total,
-};
+// NOTE: During Phase-1 facade lockdown these modules are intentionally private.
+// Keep `dead_code` allowances item-scoped so dead-symbol drift remains visible.
+#[cfg_attr(not(test), allow(dead_code))]
+mod base_gates;
+#[cfg_attr(not(test), allow(dead_code))]
+mod build_order_intent;
+#[cfg_attr(not(test), allow(dead_code))]
+mod dispatch_map;
+#[cfg_attr(not(test), allow(dead_code))]
+mod gate;
+#[cfg_attr(not(test), allow(dead_code))]
+mod gate_outcome;
+#[cfg_attr(not(test), allow(dead_code))]
+mod gates;
+#[cfg_attr(not(test), allow(dead_code))]
+mod group;
+#[cfg_attr(not(test), allow(dead_code))]
+mod intent_assembly;
+#[cfg_attr(not(test), allow(dead_code))]
+mod inventory_skew;
+#[cfg_attr(not(test), allow(dead_code))]
+mod label;
+#[cfg_attr(not(test), allow(dead_code))]
+mod open_runtime;
+#[cfg_attr(not(test), allow(dead_code))]
+mod order_size;
+#[cfg_attr(not(test), allow(dead_code))]
+mod pipeline;
+#[cfg_attr(not(test), allow(dead_code))]
+mod post_only_guard;
+#[cfg_attr(not(test), allow(dead_code))]
+mod preflight;
+#[cfg_attr(not(test), allow(dead_code))]
+mod pricer;
+#[cfg_attr(not(test), allow(dead_code))]
+mod quantize;
+mod reject_reason;
+#[cfg_attr(not(test), allow(dead_code))]
+mod tlsm;
+
+pub use api::*;
 
 #[derive(Debug, Clone)]
 struct ExecutionTraceIds {
@@ -134,7 +90,11 @@ thread_local! {
     static EXECUTION_METRIC_LINES: RefCell<VecDeque<String>> = const { RefCell::new(VecDeque::new()) };
 }
 
-pub fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
+#[cfg(test)]
+pub(crate) static METRICS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[allow(dead_code)] // Phase-1 facade lockdown: currently consumed by unit/integration tests.
+pub(crate) fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
 where
     F: FnOnce() -> R,
 {
@@ -160,7 +120,8 @@ where
     })
 }
 
-pub fn take_execution_metric_lines() -> Vec<String> {
+#[allow(dead_code)] // Phase-1 facade lockdown: currently consumed by unit/integration tests.
+pub(crate) fn take_execution_metric_lines() -> Vec<String> {
     EXECUTION_METRIC_LINES.with(|cell| cell.borrow_mut().drain(..).collect())
 }
 
@@ -205,4 +166,23 @@ mod tests {
             "execution metric buffer should be bounded"
         );
     }
+}
+
+#[cfg(test)]
+mod api_completeness_tests {
+    #[allow(unused_imports)]
+    use super::api::{
+        AtomicGroup, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult,
+        GateRejectCodes, GateResults, GateStep, GroupConfig, GroupError, GroupLock, GroupState,
+        GroupStateTransition, LABEL_MAX_LEN, LabelError, LabelInput, LegResult,
+        LockAcquisitionResult, OooCategory, OrderSize, PersistedTransition,
+        RecordedBeforeDispatchGate, RejectReasonCode, Side, Tlsm, TlsmError, TlsmEvent, TlsmState,
+        TlsmTransitionSink, TransitionResult, build_gate_results,
+        build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate, derive_gid12,
+        derive_sid8, encode_label, reject_reason_registry, reject_reason_registry_contains,
+        try_acquire_group_lock,
+    };
+
+    #[test]
+    fn api_module_exports_all_facade_symbols() {}
 }

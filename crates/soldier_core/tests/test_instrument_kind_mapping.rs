@@ -179,51 +179,6 @@ fn test_option_priority_over_future_when_both_set() {
     assert_eq!(derive_instrument_kind(&input), None);
 }
 
-// ─── PRD S1-002: instrument metadata affects sizing output ───────────────
-
-/// PRD S1-002: Prove instrument metadata actually affects sizing output.
-///
-/// Causality proof: changing metadata changes the sizing outcome (not just
-/// field equality). Verifies the InstrumentKindInput abstraction layer feeds
-/// into build_order_size correctly.
-#[test]
-fn test_instrument_metadata_uses_get_instruments() {
-    use soldier_core::execution::{OrderSizeInput, build_order_size};
-
-    // Same canonical_qty and index_price, but different instrument_kind
-    let option_input = OrderSizeInput {
-        instrument_kind: InstrumentKind::Option,
-        canonical_qty: 1.0,
-        index_price: 50000.0,
-        contract_multiplier: None,
-    };
-    let perp_input = OrderSizeInput {
-        instrument_kind: InstrumentKind::Perpetual,
-        canonical_qty: 1.0,
-        index_price: 50000.0,
-        contract_multiplier: None,
-    };
-
-    let option_size = build_order_size(&option_input).expect("option sizing");
-    let perp_size = build_order_size(&perp_input).expect("perp sizing");
-
-    // Option: canonical = qty_coin, qty_usd = None (AT-277)
-    assert!(option_size.qty_coin.is_some(), "option must have qty_coin");
-    assert!(
-        option_size.qty_usd.is_none(),
-        "option must NOT have qty_usd (AT-277)"
-    );
-
-    // Perpetual: canonical = qty_usd, qty_usd = Some
-    assert!(perp_size.qty_usd.is_some(), "perp must have qty_usd");
-
-    // Different notional_usd proves the instrument_kind metadata affected output
-    assert_ne!(
-        option_size.notional_usd, perp_size.notional_usd,
-        "different instrument_kind must produce different notional_usd"
-    );
-}
-
 // ─── GAP-002-1: get_instruments shape ────────────────────────────────────
 
 /// GAP-002-1: Table-driven test covering realistic get_instruments payloads.

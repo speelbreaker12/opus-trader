@@ -177,6 +177,7 @@ impl QuantizeMetrics {
     }
 
     /// Current value of `quantization_reject_invalid_input_total`.
+    #[allow(dead_code)]
     pub fn reject_invalid_input_total(&self) -> u64 {
         self.reject_invalid_input_total
     }
@@ -337,3 +338,11 @@ pub fn quantize(
         price_ticks,
     })
 }
+
+#[cfg(test)]
+#[path = "quantize_tests.rs"]
+mod quantize_tests;
+
+#[cfg(test)]
+#[path = "quantize_prop_tests.rs"]
+mod quantize_prop_tests;

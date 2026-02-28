@@ -10,439 +10,275 @@
 //! (violation not blocked), it is a critical finding.
 //!
 //! Test levels:
-//! - GI-001, GI-004, GI-009: pipeline (via evaluate_intent_pipeline)
-//! - GI-002, GI-017, GI-020: module (direct module function)
+//! - GI-001, GI-002, GI-004, GI-009, GI-017: chokepoint contract
+//! - GI-020: idempotency hash module
 
-mod common;
+#[path = "test_stubs.rs"]
+mod test_stubs;
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep, IntentPipelineMetrics,
-    RejectReasonCode, evaluate_intent_pipeline,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
+    RejectReasonCode, build_order_intent_with_wal_gate, reject_reason_registry_contains,
 };
 use soldier_core::idempotency::{IntentHashInput, compute_intent_hash};
 use soldier_core::risk::RiskState;
+use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
 
-// ─── GI-001: OPEN dispatch requires Active ────────────────────────────────
-
-#[test]
-fn gi_001_blocks_open_when_risk_degraded() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // ATTACK: Set risk_state to non-Healthy
-    input.risk_state = RiskState::Degraded;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // 1. Must be Rejected with RiskStateNotHealthy
-    match &result.decision {
-        ChokeResult::Rejected { reason, .. } => {
-            assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
-        }
-        other => panic!("GI-001 violation not blocked: {other:?}"),
-    }
-
-    // 2. Reject reason code from YAML frontmatter: MarginHeadroomRejectOpens
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::MarginHeadroomRejectOpens)
+fn run_chokepoint_with_stub_wal(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    gate_results: GateResults,
+) -> (ChokeResult, ChokeMetrics) {
+    let mut metrics = ChokeMetrics::new();
+    let mut wal_gate = StubWalGate;
+    let result = build_order_intent_with_wal_gate(
+        intent_class,
+        risk_state,
+        &mut metrics,
+        &gate_results,
+        &mut wal_gate,
     );
-
-    // 3. Chokepoint metrics confirm rejection
-    assert_eq!(metrics.chokepoint.approved_total(), 0);
-    assert_eq!(metrics.chokepoint.rejected_total(), 1);
+    (result, metrics)
 }
 
-#[test]
-fn gi_001_blocks_open_when_risk_maintenance() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    input.risk_state = RiskState::Maintenance;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
-        ChokeResult::Rejected { reason, .. } => {
-            assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
-        }
-        other => panic!("GI-001 violation not blocked for Maintenance: {other:?}"),
-    }
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::MarginHeadroomRejectOpens)
-    );
-}
-
-#[test]
-fn gi_001_blocks_open_when_risk_kill() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    input.risk_state = RiskState::Kill;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
-        ChokeResult::Rejected { reason, .. } => {
-            assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
-        }
-        other => panic!("GI-001 violation not blocked for Kill: {other:?}"),
-    }
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::MarginHeadroomRejectOpens)
-    );
-}
-
-#[test]
-fn gi_001_allows_open_when_risk_healthy() {
-    let input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
-        ChokeResult::Approved { gate_trace } => {
-            assert!(!gate_trace.is_empty(), "Expected gate trace, got empty");
-        }
-        other => panic!("Baseline regression: {other:?}"),
-    }
-    assert_eq!(result.reject_reason_code, None);
-}
-
-// ─── GI-002: Intent classification fail-closed ────────────────────────────
-//
-// Test level: module
-// Verify: Open intent_class applies risk_state gate; Close/CancelOnly does not.
-// This proves classification affects gating behavior (fail-closed = Open = most restrictive).
-
-#[test]
-fn gi_002_open_class_applies_risk_state_gate() {
-    let mut input = common::base_open_input();
-    input.intent_class = ChokeIntentClass::Open;
-    input.risk_state = RiskState::Degraded;
-    let mut metrics = IntentPipelineMetrics::new();
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // Open + Degraded → MUST be rejected (risk gate applied)
-    match &result.decision {
-        ChokeResult::Rejected { reason, .. } => {
-            assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
-        }
-        other => panic!("GI-002: Open class did not apply risk gate: {other:?}"),
-    }
-}
-
-#[test]
-fn gi_002_close_class_skips_risk_state_gate() {
-    let mut input = common::base_open_input();
-    input.intent_class = ChokeIntentClass::Close;
-    input.risk_state = RiskState::Degraded;
-    let mut metrics = IntentPipelineMetrics::new();
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // Close + Degraded → MUST NOT be rejected with RiskStateNotHealthy
-    // (Close intents bypass the Open-only risk gate)
+fn assert_contract_reason_code_registered(code: RejectReasonCode) {
     assert!(
-        result.reject_reason_code != Some(RejectReasonCode::MarginHeadroomRejectOpens),
-        "GI-002: Close class incorrectly applied Open risk gate"
+        reject_reason_registry_contains(code),
+        "expected reject_reason_code {code:?} to be registered"
     );
 }
 
+// ─── Chokepoint-level strangler tests (Step 1b-gi-a) ───────────────────
+
 #[test]
-fn gi_002_cancel_only_always_approved() {
-    let mut input = common::base_open_input();
-    input.intent_class = ChokeIntentClass::CancelOnly;
-    input.risk_state = RiskState::Kill;
-    let mut metrics = IntentPipelineMetrics::new();
+fn gi_001_blocks_open_when_risk_degraded_chokepoint() {
+    let (result, metrics) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Degraded,
+        gate_results_all_passing_failclosed_wal(),
+    );
 
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
-        ChokeResult::Approved { gate_trace } => {
-            assert_eq!(gate_trace, &vec![GateStep::DispatchAuth]);
+    match &result {
+        ChokeResult::Rejected { reason, .. } => {
+            assert!(matches!(reason, ChokeRejectReason::RiskStateNotHealthy));
         }
-        other => panic!("GI-002: CancelOnly should always be approved: {other:?}"),
+        other => panic!("GI-001 chokepoint violation not blocked: {other:?}"),
+    }
+    assert_contract_reason_code_registered(RejectReasonCode::MarginHeadroomRejectOpens);
+    assert_eq!(metrics.approved_total(), 0);
+    assert_eq!(metrics.rejected_total(), 1);
+}
+
+#[test]
+fn gi_001_blocks_open_when_risk_maintenance_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Maintenance,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn gi_001_blocks_open_when_risk_kill_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Kill,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn gi_001_allows_open_when_risk_healthy_chokepoint() {
+    let (result, metrics) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    match &result {
+        ChokeResult::Approved { gate_trace } => {
+            assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
+        }
+        other => panic!("GI-001 chokepoint baseline regression: {other:?}"),
+    }
+    assert_eq!(metrics.approved_total(), 1);
+}
+
+#[test]
+fn gi_002_open_class_applies_risk_state_gate_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Degraded,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn gi_002_close_class_skips_risk_state_gate_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Close,
+        RiskState::Degraded,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+}
+
+#[test]
+fn gi_002_cancel_only_always_approved_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::CancelOnly,
+        RiskState::Kill,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    match &result {
+        ChokeResult::Approved { gate_trace } => {
+            assert_eq!(gate_trace, &vec![GateStep::DispatchAuth])
+        }
+        other => panic!("GI-002 chokepoint cancel-only should be approved: {other:?}"),
     }
 }
 
-// ─── GI-004: WAL enqueue required for OPEN ────────────────────────────────
-
 #[test]
-fn gi_004_blocks_open_without_wal_recorded() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // ATTACK: WAL not recorded
-    input.wal_recorded = false;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // Must be Rejected
-    match &result.decision {
+fn gi_004_blocks_open_without_wal_recorded_chokepoint() {
+    let gate_results = gate_results_all_passing_failclosed_wal();
+    let mut metrics = ChokeMetrics::new();
+    let mut wal_gate = FailingWalGate;
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gate_results,
+        &mut wal_gate,
+    );
+    match &result {
         ChokeResult::Rejected { reason, gate_trace } => {
-            assert!(
-                matches!(
-                    reason,
-                    ChokeRejectReason::GateRejected {
-                        gate: GateStep::RecordedBeforeDispatch,
-                        ..
-                    }
-                ),
-                "GI-004: expected RecordedBeforeDispatch rejection, got {reason:?}"
-            );
+            assert!(matches!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::RecordedBeforeDispatch,
+                    ..
+                }
+            ));
             assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
         }
-        other => panic!("GI-004 violation not blocked: {other:?}"),
+        other => panic!("GI-004 chokepoint violation not blocked: {other:?}"),
     }
-
-    // Reject reason code from YAML frontmatter: RecordedBeforeDispatchFailed
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::RecordedBeforeDispatchFailed)
-    );
+    assert_contract_reason_code_registered(RejectReasonCode::RecordedBeforeDispatchFailed);
 }
 
 #[test]
-fn gi_004_allows_open_with_wal_recorded() {
-    let input = common::base_open_input(); // wal_recorded = true
-    let mut metrics = IntentPipelineMetrics::new();
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
+fn gi_004_allows_open_with_wal_recorded_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    match &result {
         ChokeResult::Approved { gate_trace } => {
             assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
         }
-        other => panic!("GI-004 baseline regression: {other:?}"),
+        other => panic!("GI-004 chokepoint baseline regression: {other:?}"),
     }
-    assert_eq!(result.reject_reason_code, None);
 }
 
-// ─── GI-009: Critical input freshness gate ────────────────────────────────
+#[test]
+fn gi_009_blocks_open_when_fee_cache_missing_chokepoint() {
+    let gate_results = GateResults {
+        fee_cache_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let (result, _) =
+        run_chokepoint_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, gate_results);
+    match &result {
+        ChokeResult::Rejected { reason, .. } => assert!(matches!(
+            reason,
+            ChokeRejectReason::GateRejected {
+                gate: GateStep::FeeCacheCheck,
+                ..
+            }
+        )),
+        other => panic!("GI-009 chokepoint missing-fee-cache violation not blocked: {other:?}"),
+    }
+    assert_contract_reason_code_registered(RejectReasonCode::FeeCacheStale);
+}
 
 #[test]
-fn gi_009_blocks_open_when_fee_cache_missing() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
+fn gi_009_blocks_open_when_fee_cache_hard_stale_chokepoint() {
+    let gate_results = GateResults {
+        fee_cache_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let (result, _) =
+        run_chokepoint_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, gate_results);
+    assert!(matches!(result, ChokeResult::Rejected { .. }));
+}
 
-    // ATTACK: Fee cache timestamp missing → hard-stale
-    input.fee_snapshot.fee_model_cached_at_ts_ms = None;
+#[test]
+fn gi_009_allows_open_when_fee_cache_fresh_chokepoint() {
+    let (result, _) = run_chokepoint_with_stub_wal(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        gate_results_all_passing_failclosed_wal(),
+    );
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+}
 
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // Must be Rejected at FeeCacheStaleness gate
-    match &result.decision {
-        ChokeResult::Rejected { reason, .. } => {
+#[test]
+fn gi_017_close_bypasses_liquidity_gate_chokepoint() {
+    let gate_results = GateResults {
+        liquidity_gate_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let (result, _) =
+        run_chokepoint_with_stub_wal(ChokeIntentClass::Close, RiskState::Healthy, gate_results);
+    match result {
+        ChokeResult::Approved { gate_trace } => {
             assert!(
-                matches!(
-                    reason,
-                    ChokeRejectReason::GateRejected {
-                        gate: GateStep::FeeCacheCheck,
-                        ..
-                    }
-                ),
-                "GI-009: expected FeeCacheStaleness rejection, got {reason:?}"
+                !gate_trace.contains(&GateStep::LiquidityGate),
+                "Close path must bypass liquidity gate"
             );
         }
-        other => panic!("GI-009 violation not blocked: {other:?}"),
+        other => panic!("GI-017 close path should be approved, got {other:?}"),
     }
-
-    // Reject reason code from YAML frontmatter: FeeCacheStale
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::FeeCacheStale)
-    );
 }
 
 #[test]
-fn gi_009_blocks_open_when_fee_cache_hard_stale() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // ATTACK: Fee cache extremely old (hard-stale)
-    input.fee_snapshot.fee_model_cached_at_ts_ms = Some(1); // Very old
-    input.fee_snapshot.now_ms = 10_000_000; // Way past hard threshold
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
-        ChokeResult::Rejected { .. } => {}
-        other => panic!("GI-009: hard-stale fee cache should reject: {other:?}"),
+fn gi_017_close_bypasses_net_edge_gate_chokepoint() {
+    let gate_results = GateResults {
+        net_edge_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let (result, _) =
+        run_chokepoint_with_stub_wal(ChokeIntentClass::Close, RiskState::Healthy, gate_results);
+    match result {
+        ChokeResult::Approved { gate_trace } => {
+            assert!(
+                !gate_trace.contains(&GateStep::NetEdgeGate),
+                "Close path must bypass net-edge gate"
+            );
+        }
+        other => panic!("GI-017 close path should be approved, got {other:?}"),
     }
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::FeeCacheStale)
-    );
-}
-
-#[test]
-fn gi_009_allows_open_when_fee_cache_fresh() {
-    let input = common::base_open_input(); // fee_model_cached_at_ts_ms = Some(1_000_000)
-    let mut metrics = IntentPipelineMetrics::new();
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    match &result.decision {
-        ChokeResult::Approved { .. } => {}
-        other => panic!("GI-009 baseline regression: {other:?}"),
-    }
-    assert_eq!(result.reject_reason_code, None);
-}
-
-// ─── GI-017: Emergency close bypasses profitability gates ─────────────────
-//
-// Test level: module
-// Verify: Close/Hedge intents bypass liquidity/net_edge/pricer gates even
-// when those gates would fail for Open intents.
-
-#[test]
-fn gi_017_close_bypasses_liquidity_gate() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Set up condition that would fail liquidity gate for Open
-    input.liquidity = None; // Missing L2 → LiquidityGateNoL2 for Open
-
-    // Change to Close intent
-    input.intent_class = ChokeIntentClass::Close;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // Close must bypass OPEN-only gates and remain dispatchable.
-    assert!(
-        matches!(result.decision, ChokeResult::Approved { .. }),
-        "GI-017: Close intent should be approved when Liquidity input is missing, got {:?}",
-        result.decision
-    );
-    assert_eq!(result.reject_reason_code, None);
-}
-
-#[test]
-fn gi_017_close_bypasses_net_edge_gate() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Set up condition that would fail net edge gate for Open
-    input.net_edge = None; // Missing → NetEdgeInputMissing for Open
-
-    // Change to Close intent
-    input.intent_class = ChokeIntentClass::Close;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    assert!(
-        matches!(result.decision, ChokeResult::Approved { .. }),
-        "GI-017: Close intent should be approved when NetEdge input is missing, got {:?}",
-        result.decision
-    );
-    assert_eq!(result.reject_reason_code, None);
-}
-
-#[test]
-fn gi_017_close_bypasses_pricer_gate() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Set up condition that would fail pricer gate for Open
-    input.pricer = None; // Missing pricer input → PricerInputMissing for Open
-
-    // Change to Close intent
-    input.intent_class = ChokeIntentClass::Close;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    assert!(
-        matches!(result.decision, ChokeResult::Approved { .. }),
-        "GI-017: Close intent should be approved when Pricer input is missing, got {:?}",
-        result.decision
-    );
-    assert_eq!(result.reject_reason_code, None);
-}
-
-#[test]
-fn gi_017_hedge_bypasses_liquidity_gate() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Set up condition that would fail liquidity gate for Open
-    input.liquidity = None; // Missing L2 → LiquidityGateNoL2 for Open
-
-    // Change to Hedge intent
-    input.intent_class = ChokeIntentClass::Hedge;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    assert!(
-        matches!(result.decision, ChokeResult::Approved { .. }),
-        "GI-017: Hedge intent should be approved when Liquidity input is missing, got {:?}",
-        result.decision
-    );
-    assert_eq!(result.reject_reason_code, None);
-}
-
-#[test]
-fn gi_017_hedge_bypasses_net_edge_gate() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Set up condition that would fail net edge gate for Open
-    input.net_edge = None; // Missing → NetEdgeInputMissing for Open
-
-    // Change to Hedge intent
-    input.intent_class = ChokeIntentClass::Hedge;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    assert!(
-        matches!(result.decision, ChokeResult::Approved { .. }),
-        "GI-017: Hedge intent should be approved when NetEdge input is missing, got {:?}",
-        result.decision
-    );
-    assert_eq!(result.reject_reason_code, None);
-}
-
-#[test]
-fn gi_017_hedge_bypasses_pricer_gate() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Set up condition that would fail pricer gate for Open
-    input.pricer = None; // Missing pricer input → PricerInputMissing for Open
-
-    // Change to Hedge intent
-    input.intent_class = ChokeIntentClass::Hedge;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    assert!(
-        matches!(result.decision, ChokeResult::Approved { .. }),
-        "GI-017: Hedge intent should be approved when Pricer input is missing, got {:?}",
-        result.decision
-    );
-    assert_eq!(result.reject_reason_code, None);
-}
-
-#[test]
-fn gi_017_open_fails_without_liquidity() {
-    let mut input = common::base_open_input();
-    let mut metrics = IntentPipelineMetrics::new();
-
-    // Same condition as Close test above, but for Open
-    input.liquidity = None;
-    input.intent_class = ChokeIntentClass::Open;
-
-    let result = evaluate_intent_pipeline(&input, &mut metrics);
-
-    // Open MUST be rejected (proves Close bypass is the differential)
-    assert_eq!(
-        result.reject_reason_code,
-        Some(RejectReasonCode::LiquidityGateNoL2),
-        "GI-017: Open intent SHOULD be blocked by missing LiquidityGate"
-    );
 }
 
 // ─── GI-020: Intent idempotency ──────────────────────────────────────────

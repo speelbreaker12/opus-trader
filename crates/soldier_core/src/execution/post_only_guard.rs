@@ -162,3 +162,7 @@ pub fn check_post_only(input: &PostOnlyInput, metrics: &mut PostOnlyMetrics) -> 
         PostOnlyResult::Allowed
     }
 }
+
+#[cfg(test)]
+#[path = "post_only_guard_tests.rs"]
+mod post_only_guard_tests;
