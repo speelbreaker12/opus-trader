@@ -213,11 +213,14 @@ case "$schema_name" in
     fi
     ;;
   review_receipt)
-    # review_basis must be one of the allowed values
+    # review_basis canonical forms:
+    #   JSON-short: STORY_SCOPE | FIX_DIFF_AT_REGRESSION
+    #   Human-readable: STORY_SCOPE (Cycle 1) | FIX_DIFF + AT_REGRESSION (Cycle 2)
+    # Both are accepted. review_logged.sh emits JSON-short in sidecars, human in markdown.
     basis="$(jq -re '.review_basis // empty' "$artifact_path" 2>/dev/null || true)"
     if [[ -n "$basis" ]]; then
       case "$basis" in
-        STORY_SCOPE|FIX_DIFF_AT_REGRESSION) ;;
+        STORY_SCOPE|FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)") ;;
         *) errors+=("review_basis '$basis' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION") ;;
       esac
     fi
@@ -231,11 +234,11 @@ case "$schema_name" in
         *) errors+=("review_type '$rt' not in allowed values") ;;
       esac
     fi
-    # review_basis must be one of the allowed values
+    # review_basis: accepts both JSON-short and human-readable forms (see review_receipt above)
     rb="$(jq -re '.review_basis // empty' "$artifact_path" 2>/dev/null || true)"
     if [[ -n "$rb" ]]; then
       case "$rb" in
-        STORY_SCOPE|FIX_DIFF_AT_REGRESSION) ;;
+        STORY_SCOPE|FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)") ;;
         *) errors+=("review_basis '$rb' not in allowed values: STORY_SCOPE, FIX_DIFF_AT_REGRESSION") ;;
       esac
     fi

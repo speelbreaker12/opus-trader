@@ -142,4 +142,39 @@ set -e
 [[ "$rc_bad_prd" -eq 2 ]] || fail "expected malformed PRD to fail setup (exit 2), got $rc_bad_prd"
 echo "$out_bad_prd" | grep -q "failed to parse ownership conflict data" || fail "malformed PRD parse error not reported"
 
+# --- stale-docs warning test ---
+# Restore valid PRD and premortem for S3-000
+cat > plans/prd.json <<'EOF'
+{
+  "items": [
+    { "id": "S3-000", "primary_owner_for": ["AT-004"] },
+    { "id": "S3-002", "primary_owner_for": ["AT-005"] }
+  ]
+}
+EOF
+
+# Create a key process doc on main that differs from HEAD
+mkdir -p plans/step_prompts/recon
+echo "v1" > plans/step_prompts/recon/INDEX.md
+git add -A
+git commit -q -m "add process doc v1"
+
+# Now modify it on a new branch (simulates worktree divergence)
+git checkout -q -b test-stale
+echo "v2" > plans/step_prompts/recon/INDEX.md
+git add -A
+git commit -q -m "modify process doc v2"
+
+set +e
+out_stale="$(plans/recon_precheck.sh S3-000 2>&1)"
+rc_stale=$?
+set -e
+[[ "$rc_stale" -eq 0 ]] || fail "expected stale-docs to still pass (exit 0), got $rc_stale"
+echo "$out_stale" | grep -q "process doc(s) differ from main" || fail "stale-docs warning not emitted"
+
+# JSON mode should include stale_docs array
+json_stale="$(plans/recon_precheck.sh S3-000 --json)"
+echo "$json_stale" | jq -e '.stale_docs | length > 0' >/dev/null || fail "json stale_docs should be non-empty"
+echo "$json_stale" | jq -e '.ready == true' >/dev/null || fail "json ready should still be true with stale docs"
+
 echo "test_recon_precheck.sh: ok"

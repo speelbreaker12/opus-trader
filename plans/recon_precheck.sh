@@ -119,6 +119,30 @@ if [[ "$ownership_conflicts" -gt 0 ]]; then
   reasons+=("$ownership_conflicts AT ownership conflict(s) found")
 fi
 
+# ==== Stale-docs check (warning only, does not block) ====
+stale_docs=()
+for doc in \
+  "plans/step_prompts/recon/INDEX.md" \
+  "plans/prompts/slice_reconcile_r1_audit.md" \
+  "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md" \
+  "reviews/premortems/PREMORTEM_RECON_POLICY.md" \
+  "plans/wf_step.sh"; do
+  if [[ -f "$doc" ]] && git cat-file -e "main:$doc" 2>/dev/null; then
+    main_hash="$(git rev-parse "main:$doc" 2>/dev/null || true)"
+    local_hash="$(git rev-parse "HEAD:$doc" 2>/dev/null || true)"
+    if [[ -n "$main_hash" && -n "$local_hash" && "$main_hash" != "$local_hash" ]]; then
+      stale_docs+=("$doc")
+    fi
+  fi
+done
+
+if [[ ${#stale_docs[@]} -gt 0 && "$json_mode" -ne 1 ]]; then
+  echo "WARN: ${#stale_docs[@]} process doc(s) differ from main — consider \`git merge main\` before proceeding" >&2
+  for sd in "${stale_docs[@]}"; do
+    echo "  - $sd" >&2
+  done
+fi
+
 ready=false
 if [[ "$premortem_exists" == "true" && "$story_found" == "true" && "$ownership_conflicts" -eq 0 ]]; then
   ready=true
@@ -136,6 +160,7 @@ if [[ "$json_mode" -eq 1 ]]; then
     --argjson ownership_conflict_details "$conflict_json" \
     --argjson reasons "$(printf '%s\n' "${reasons[@]:-}" | jq -R -s 'split("\n") | map(select(length>0))')" \
     --argjson ready "$ready" \
+    --argjson stale_docs "$(printf '%s\n' "${stale_docs[@]:-}" | jq -R -s 'split("\n") | map(select(length>0))')" \
     '{
       schema_version: $schema_version,
       head_commit: $head_commit,
@@ -146,7 +171,8 @@ if [[ "$json_mode" -eq 1 ]]; then
       premortem_exists: $premortem_exists,
       ownership_conflicts: $ownership_conflicts,
       ownership_conflict_details: $ownership_conflict_details,
-      reasons: $reasons
+      reasons: $reasons,
+      stale_docs: $stale_docs
     }'
 fi
 
