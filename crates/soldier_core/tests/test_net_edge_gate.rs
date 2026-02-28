@@ -299,9 +299,17 @@ fn test_net_edge_emits_structured_reject_metric_line() {
             ..
         }
     ));
+    assert_eq!(
+        metrics.reject_input_missing(),
+        1,
+        "this evaluation should increment missing-input rejects exactly once"
+    );
 
     let after = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
-    assert_eq!(after, before + 1);
+    assert!(
+        after > before,
+        "counter should increment: before={before}, after={after}"
+    );
 
     let lines = take_execution_metric_lines();
     assert!(
