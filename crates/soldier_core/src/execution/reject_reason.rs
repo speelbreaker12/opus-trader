@@ -12,14 +12,15 @@ pub enum RejectReasonCode {
     LiquidityGateNoL2,
     EmergencyCloseNoPrice,
     ExpectedSlippageTooHigh,
-    InsufficientDepthWithinBudget,
-    FeeCacheStale,
-    RecordedBeforeDispatchFailed,
     NetEdgeTooLow,
     NetEdgeInputMissing,
     PricerInputMissing,
     PricerInputInvalid,
     GateCascadeSkip,
+    InsufficientDepthWithinBudget,
+    FeeCacheStale,
+    RecordedBeforeDispatchFailed,
+    AssemblyFailed,
     InventorySkew,
     InventorySkewDeltaLimitMissing,
     PendingExposureBudgetExceeded,
@@ -35,7 +36,6 @@ pub enum RejectReasonCode {
     InstrumentExpiredOrDelisted,
     FeedbackLoopGuardActive,
     LabelTooLong,
-    AssemblyFailed,
 }
 
 /// Typed per-gate rejection codes produced by real gate evaluators.
@@ -70,14 +70,15 @@ impl RejectReasonCode {
             RejectReasonCode::LiquidityGateNoL2 => "LiquidityGateNoL2",
             RejectReasonCode::EmergencyCloseNoPrice => "EmergencyCloseNoPrice",
             RejectReasonCode::ExpectedSlippageTooHigh => "ExpectedSlippageTooHigh",
-            RejectReasonCode::InsufficientDepthWithinBudget => "InsufficientDepthWithinBudget",
-            RejectReasonCode::FeeCacheStale => "FeeCacheStale",
-            RejectReasonCode::RecordedBeforeDispatchFailed => "RecordedBeforeDispatchFailed",
             RejectReasonCode::NetEdgeTooLow => "NetEdgeTooLow",
             RejectReasonCode::NetEdgeInputMissing => "NetEdgeInputMissing",
             RejectReasonCode::PricerInputMissing => "PricerInputMissing",
             RejectReasonCode::PricerInputInvalid => "PricerInputInvalid",
             RejectReasonCode::GateCascadeSkip => "GateCascadeSkip",
+            RejectReasonCode::InsufficientDepthWithinBudget => "InsufficientDepthWithinBudget",
+            RejectReasonCode::FeeCacheStale => "FeeCacheStale",
+            RejectReasonCode::RecordedBeforeDispatchFailed => "RecordedBeforeDispatchFailed",
+            RejectReasonCode::AssemblyFailed => "AssemblyFailed",
             RejectReasonCode::InventorySkew => "InventorySkew",
             RejectReasonCode::InventorySkewDeltaLimitMissing => "InventorySkewDeltaLimitMissing",
             RejectReasonCode::PendingExposureBudgetExceeded => "PendingExposureBudgetExceeded",
@@ -95,7 +96,6 @@ impl RejectReasonCode {
             RejectReasonCode::InstrumentExpiredOrDelisted => "InstrumentExpiredOrDelisted",
             RejectReasonCode::FeedbackLoopGuardActive => "FeedbackLoopGuardActive",
             RejectReasonCode::LabelTooLong => "LabelTooLong",
-            RejectReasonCode::AssemblyFailed => "AssemblyFailed",
         }
     }
 }
@@ -107,14 +107,15 @@ const REGISTRY: &[RejectReasonCode] = &[
     RejectReasonCode::LiquidityGateNoL2,
     RejectReasonCode::EmergencyCloseNoPrice,
     RejectReasonCode::ExpectedSlippageTooHigh,
-    RejectReasonCode::InsufficientDepthWithinBudget,
-    RejectReasonCode::FeeCacheStale,
-    RejectReasonCode::RecordedBeforeDispatchFailed,
     RejectReasonCode::NetEdgeTooLow,
     RejectReasonCode::NetEdgeInputMissing,
     RejectReasonCode::PricerInputMissing,
     RejectReasonCode::PricerInputInvalid,
     RejectReasonCode::GateCascadeSkip,
+    RejectReasonCode::InsufficientDepthWithinBudget,
+    RejectReasonCode::FeeCacheStale,
+    RejectReasonCode::RecordedBeforeDispatchFailed,
+    RejectReasonCode::AssemblyFailed,
     RejectReasonCode::InventorySkew,
     RejectReasonCode::InventorySkewDeltaLimitMissing,
     RejectReasonCode::PendingExposureBudgetExceeded,
@@ -130,7 +131,6 @@ const REGISTRY: &[RejectReasonCode] = &[
     RejectReasonCode::InstrumentExpiredOrDelisted,
     RejectReasonCode::FeedbackLoopGuardActive,
     RejectReasonCode::LabelTooLong,
-    RejectReasonCode::AssemblyFailed,
 ];
 
 pub fn reject_reason_registry() -> &'static [RejectReasonCode] {
@@ -210,5 +210,75 @@ pub fn reject_reason_from_chokepoint(
             ..
         } => RejectReasonCode::MarginHeadroomRejectOpens,
         ChokeRejectReason::AssemblyFailed => RejectReasonCode::AssemblyFailed,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+    use std::collections::BTreeSet;
+
+    #[derive(Debug, Deserialize)]
+    struct Manifest {
+        registries: Registries,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Registries {
+        #[serde(rename = "RejectReasonCode")]
+        reject_reason_code: RejectReasonCodeRegistry,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct RejectReasonCodeRegistry {
+        values: Vec<String>,
+    }
+
+    fn manifest_reject_reason_codes() -> Vec<String> {
+        let manifest: Manifest = serde_json::from_str(include_str!(
+            "../../../../specs/status/status_reason_registries_manifest.json"
+        ))
+        .expect("status reason manifest must parse");
+
+        manifest.registries.reject_reason_code.values
+    }
+
+    #[test]
+    fn manifest_reject_reason_codes_match_rust_registry() {
+        let manifest_codes = manifest_reject_reason_codes();
+        let rust_codes: Vec<String> = reject_reason_registry()
+            .iter()
+            .map(|code| code.as_str().to_owned())
+            .collect();
+
+        assert_eq!(
+            rust_codes, manifest_codes,
+            "Rust RejectReasonCode registry drifted from specs/status/status_reason_registries_manifest.json",
+        );
+    }
+
+    #[test]
+    fn manifest_reject_reason_codes_are_unique() {
+        let manifest_codes = manifest_reject_reason_codes();
+        let unique: BTreeSet<_> = manifest_codes.iter().cloned().collect();
+
+        assert_eq!(
+            unique.len(),
+            manifest_codes.len(),
+            "Manifest RejectReasonCode values must be unique",
+        );
+    }
+
+    #[test]
+    fn manifest_lookup_uses_pascal_case_not_serde_wire_format() {
+        let code = RejectReasonCode::NetEdgeTooLow;
+
+        assert_eq!(code.as_str(), "NetEdgeTooLow");
+        assert_eq!(
+            serde_json::to_string(&code).expect("reject reason code must serialize"),
+            "\"NET_EDGE_TOO_LOW\"",
+        );
+        assert_ne!(code.as_str(), "NET_EDGE_TOO_LOW");
     }
 }
