@@ -1,6 +1,7 @@
 //! CI tests proving the single dispatch chokepoint invariant.
 //!
-//! CONTRACT.md CSP.5.2: All dispatch must route through `build_order_intent()`.
+//! CONTRACT.md CSP.5.2: All dispatch must route through the
+//! WAL-safe chokepoint wrappers in `build_order_intent.rs`.
 //! These tests scan source code to enforce architectural constraints.
 //!
 //! AT-935: No module other than build_order_intent.rs may construct ChokeResult::Approved.
@@ -298,7 +299,7 @@ fn test_no_direct_gate_results_construction_in_production() {
     );
 }
 
-// ─── Test: Chokepoint module exists and exports build_order_intent ────────
+// ─── Test: Chokepoint module exists and exports WAL-safe entrypoints ──────
 
 #[test]
 fn test_chokepoint_module_exists() {
@@ -312,8 +313,12 @@ fn test_chokepoint_module_exists() {
     let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
 
     assert!(
-        content.contains("pub fn build_order_intent("),
-        "Chokepoint must export build_order_intent() as pub fn"
+        content.contains("pub fn build_order_intent_with_wal_gate("),
+        "Chokepoint must export build_order_intent_with_wal_gate() as pub fn"
+    );
+    assert!(
+        content.contains("pub fn build_order_intent_with_optional_wal_gate("),
+        "Chokepoint must export build_order_intent_with_optional_wal_gate() as pub fn"
     );
 
     // Verify it's the single chokepoint — must reference CSP.5.2

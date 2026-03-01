@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MOD="${LINT_EXECUTION_FACADE_MOD:-$ROOT/crates/soldier_core/src/execution/mod.rs}"
 API="${LINT_EXECUTION_FACADE_API:-$ROOT/crates/soldier_core/src/execution/api.rs}"
 ALLOWLIST="${LINT_EXECUTION_FACADE_ALLOWLIST:-$ROOT/plans/execution_facade_symbols.txt}"
+SCAN_ROOT="${LINT_EXECUTION_FACADE_SCAN_ROOT:-$ROOT/crates}"
 
 cleanup_tmp() {
   [[ -n "${tmp_expected:-}" && -f "${tmp_expected:-}" ]] && rm -f "$tmp_expected"
@@ -354,5 +355,47 @@ do
     exit 1
   fi
 done
+
+# 5) Forbid deep execution imports outside the execution internals.
+# Allowed facade imports look like `...::execution::Type` (2 segments).
+# Forbidden deep imports look like `...::execution::<submodule>::Type` (3+ segments).
+if [[ -d "$SCAN_ROOT" ]]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "FAIL: python3 is required to lint deep execution imports"
+    exit 1
+  fi
+
+  deep_import_violations="$(
+    python3 - "$SCAN_ROOT" <<'PY'
+import pathlib
+import re
+import sys
+
+scan_root = pathlib.Path(sys.argv[1]).resolve()
+stmt_re = re.compile(r'^\s*(?:pub\s+)?use\b.*?;', re.M | re.S)
+deep_re = re.compile(r'\bexecution::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*')
+deep_grouped_re = re.compile(r'\bexecution::\{[^;]*\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*')
+
+for path in sorted(scan_root.rglob("*.rs")):
+    rel = path.relative_to(scan_root).as_posix()
+    if rel.startswith("soldier_core/src/execution/"):
+        continue
+
+    text = path.read_text(encoding="utf-8")
+    for match in stmt_re.finditer(text):
+        statement = " ".join(match.group(0).split())
+        if deep_re.search(statement) or deep_grouped_re.search(statement):
+            line = text.count("\n", 0, match.start()) + 1
+            print(f"{rel}:{line}: {statement}")
+PY
+  )"
+
+  if [[ -n "$deep_import_violations" ]]; then
+    echo "FAIL: deep execution imports are forbidden outside soldier_core/src/execution."
+    echo "Use facade imports (execution::<Symbol>) instead of execution::<submodule>::<Symbol>."
+    echo "$deep_import_violations"
+    exit 1
+  fi
+fi
 
 echo "✓ execution facade lint passed"

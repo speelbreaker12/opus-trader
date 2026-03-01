@@ -851,9 +851,11 @@ Green checks:
 git checkout -b refactor/execution-facade-lockdown
 ./plans/verify.sh quick   # must pass
 ./plans/verify.sh full    # must pass
-rg 'execution::\w+::' crates/ --type rust -c > /tmp/deep-import-baseline.txt
-# baseline file exists and is non-empty
-test -s /tmp/deep-import-baseline.txt
+rg -n --pcre2 '^\s*(pub\s+)?use\s+[^;]*execution::[A-Za-z0-9_]+::[A-Za-z0-9_]+' \
+  crates/ --type rust -g'!crates/soldier_core/src/execution/**' \
+  > /tmp/deep-import-baseline.txt
+# baseline file exists (it may be empty if tree is already clean)
+test -f /tmp/deep-import-baseline.txt
 ```
 
 **Step 1a: Add `api.rs` skeleton + compile-check test (single commit).**

@@ -21,6 +21,14 @@ trap 'rm -rf "$tmp_dir"' EXIT
 mod_file="$tmp_dir/mod.rs"
 api_file="$tmp_dir/api.rs"
 allowlist_file="$tmp_dir/execution_facade_symbols.txt"
+scan_root="$tmp_dir/crates"
+
+mkdir -p "$scan_root/soldier_core/src/execution"
+mkdir -p "$scan_root/soldier_core/src/consumer"
+
+cat > "$scan_root/soldier_core/src/consumer/facade_only.rs" <<'EOF'
+use crate::execution::Side;
+EOF
 
 cat > "$mod_file" <<'EOF'
 mod api;
@@ -45,6 +53,7 @@ EOF
 LINT_EXECUTION_FACADE_MOD="$mod_file" \
 LINT_EXECUTION_FACADE_API="$api_file" \
 LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
 bash "$SCRIPT" >/dev/null
 pass "exact facade export set passes"
 
@@ -81,6 +90,7 @@ EOF
 LINT_EXECUTION_FACADE_MOD="$mod_file" \
 LINT_EXECUTION_FACADE_API="$api_file" \
 LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
 bash "$SCRIPT" >/dev/null
 pass "nested grouped facade export set passes"
 
@@ -98,6 +108,7 @@ nested_out="$(
   LINT_EXECUTION_FACADE_MOD="$mod_file" \
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
   bash "$SCRIPT" 2>&1
 )"
 nested_rc=$?
@@ -121,6 +132,7 @@ extra_out="$(
   LINT_EXECUTION_FACADE_MOD="$mod_file" \
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
   bash "$SCRIPT" 2>&1
 )"
 extra_rc=$?
@@ -141,6 +153,7 @@ missing_out="$(
   LINT_EXECUTION_FACADE_MOD="$mod_file" \
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
   bash "$SCRIPT" 2>&1
 )"
 missing_rc=$?
@@ -149,5 +162,33 @@ set -e
 echo "$missing_out" | grep -Fq "allowlisted exports missing" || fail "missing missing-export diagnostic"
 echo "$missing_out" | grep -Fq "Beta" || fail "missing symbol should be named in diagnostic"
 pass "missing export fails exact-set lint"
+
+# 4) Deep execution import outside execution internals must fail.
+cat > "$api_file" <<'EOF'
+pub use super::foo::{
+    Alpha,
+    Beta,
+};
+pub use super::bar::Gamma;
+EOF
+
+cat > "$scan_root/soldier_core/src/consumer/deep_import.rs" <<'EOF'
+use crate::execution::gate::LiquidityGateInput;
+EOF
+
+set +e
+deep_out="$(
+  LINT_EXECUTION_FACADE_MOD="$mod_file" \
+  LINT_EXECUTION_FACADE_API="$api_file" \
+  LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  bash "$SCRIPT" 2>&1
+)"
+deep_rc=$?
+set -e
+[[ $deep_rc -ne 0 ]] || fail "deep execution import should fail lint"
+echo "$deep_out" | grep -Fq "deep execution imports are forbidden" || fail "missing deep-import diagnostic"
+echo "$deep_out" | grep -Fq "consumer/deep_import.rs" || fail "deep-import location should be reported"
+pass "deep execution import fails lint"
 
 echo "PASS: lint_execution_facade exact-set fixtures"
