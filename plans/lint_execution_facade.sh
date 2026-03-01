@@ -21,20 +21,24 @@ if [[ ! -f "$API" ]]; then
   exit 1
 fi
 
-# 1) execution/mod.rs must expose exactly one public module: `pub mod api;`
-API_PUB_MOD_COUNT="$(rg -c '^\s*pub\s+mod\s+api\s*;' "$MOD" || true)"
-if [[ "$API_PUB_MOD_COUNT" -ne 1 ]]; then
-  echo "FAIL: execution/mod.rs must contain exactly one 'pub mod api;' line, found $API_PUB_MOD_COUNT"
-  rg -n '^\s*pub(\s*\([^)]*\))?\s+mod\s+' "$MOD" || true
+# 1) execution/mod.rs must keep api private: `mod api;` (not `pub mod api;`).
+if rg -q '^\s*pub(\s*\([^)]*\))?\s+mod\s+api\s*;' "$MOD"; then
+  echo "FAIL: execution/mod.rs must not expose 'pub mod api;'"
+  exit 1
+fi
+
+API_PRIVATE_MOD_COUNT="$(rg -c '^\s*mod\s+api\s*;' "$MOD" || true)"
+if [[ "$API_PRIVATE_MOD_COUNT" -ne 1 ]]; then
+  echo "FAIL: execution/mod.rs must contain exactly one private 'mod api;' line, found $API_PRIVATE_MOD_COUNT"
+  rg -n '^\s*(pub(\s*\([^)]*\))?\s+)?mod\s+' "$MOD" || true
   exit 1
 fi
 
 UNEXPECTED_PUB_MODS="$(
-  rg -n '^\s*pub(\s*\([^)]*\))?\s+mod\s+' "$MOD" \
-    | rg -v 'pub\s+mod\s+api\s*;' || true
+  rg -n '^\s*pub(\s*\([^)]*\))?\s+mod\s+' "$MOD" || true
 )"
 if [[ -n "$UNEXPECTED_PUB_MODS" ]]; then
-  echo "Found unexpected public module declarations in execution/mod.rs:"
+  echo "Found unexpected public module declarations in execution/mod.rs (facade modules must stay private):"
   echo "$UNEXPECTED_PUB_MODS"
   exit 1
 fi

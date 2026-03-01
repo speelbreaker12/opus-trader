@@ -35,7 +35,7 @@ pub(crate) const METRIC_EXPIRY_GUARD_REJECT: &str = "expiry_guard_reject_total";
 #[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_PREFLIGHT_REJECT: &str = "preflight_reject_total";
 
-pub mod api;
+mod api;
 
 // NOTE: During Phase-1 facade lockdown these modules are intentionally private.
 // Keep `dead_code` allowances item-scoped so dead-symbol drift remains visible.
@@ -179,8 +179,8 @@ mod api_completeness_tests {
         RecordedBeforeDispatchGate, RejectReasonCode, Side, Tlsm, TlsmError, TlsmEvent, TlsmState,
         TlsmTransitionSink, TransitionResult, build_gate_results,
         build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate, derive_gid12,
-        derive_sid8, encode_label, reject_reason_registry, reject_reason_registry_contains,
-        try_acquire_group_lock,
+        derive_sid8, encode_label, reject_reason_from_chokepoint, reject_reason_registry,
+        reject_reason_registry_contains, try_acquire_group_lock,
     };
 
     #[test]

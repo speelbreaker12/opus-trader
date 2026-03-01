@@ -5,9 +5,9 @@ mod test_stubs;
 use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
-    reject_reason_registry, reject_reason_registry_contains,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
+    GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
+    reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
 };
 use soldier_core::risk::RiskState;
 
@@ -44,9 +44,11 @@ fn test_reject_reason_present_on_pre_dispatch_reject() {
             ..
         }
     ));
-    assert!(reject_reason_registry_contains(
-        RejectReasonCode::MarginHeadroomRejectOpens
-    ));
+    let mapped = reject_reason_from_chokepoint(
+        &ChokeRejectReason::RiskStateNotHealthy,
+        &GateRejectCodes::default(),
+    );
+    assert_eq!(mapped, RejectReasonCode::MarginHeadroomRejectOpens);
 }
 
 #[test]
@@ -90,16 +92,26 @@ fn test_fee_cache_check_surfaces_fee_cache_gate_step() {
     let result =
         build_chokepoint_result_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, &gates);
 
+    let reason = match result {
+        ChokeResult::Rejected { reason, .. } => reason,
+        other => panic!("expected rejection, got {other:?}"),
+    };
     assert!(matches!(
-        result,
-        ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
-                gate: GateStep::FeeCacheCheck,
-                ..
-            },
+        reason,
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::FeeCacheCheck,
             ..
         }
     ));
+
+    let mapped = reject_reason_from_chokepoint(
+        &reason,
+        &GateRejectCodes {
+            fee_cache: Some(RejectReasonCode::FeeCacheStale),
+            ..GateRejectCodes::default()
+        },
+    );
+    assert_eq!(mapped, RejectReasonCode::FeeCacheStale);
 }
 
 #[test]
@@ -114,16 +126,57 @@ fn test_recorded_before_dispatch_surfaces_wal_gate_step() {
         &mut wal_gate,
     );
 
+    let reason = match result {
+        ChokeResult::Rejected { reason, .. } => reason,
+        other => panic!("expected rejection, got {other:?}"),
+    };
     assert!(matches!(
-        result,
-        ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
-                gate: GateStep::RecordedBeforeDispatch,
-                ..
-            },
+        reason,
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::RecordedBeforeDispatch,
             ..
         }
     ));
+
+    let mapped = reject_reason_from_chokepoint(
+        &reason,
+        &GateRejectCodes {
+            recorded_before_dispatch: Some(RejectReasonCode::RecordedBeforeDispatchFailed),
+            ..GateRejectCodes::default()
+        },
+    );
+    assert_eq!(mapped, RejectReasonCode::RecordedBeforeDispatchFailed);
+}
+
+#[test]
+fn test_preflight_gate_rejection_maps_to_specific_reason_code() {
+    let gates = GateResults {
+        preflight_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let result =
+        build_chokepoint_result_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, &gates);
+
+    let reason = match result {
+        ChokeResult::Rejected { reason, .. } => reason,
+        other => panic!("expected rejection, got {other:?}"),
+    };
+    assert!(matches!(
+        reason,
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::Preflight,
+            ..
+        }
+    ));
+
+    let mapped = reject_reason_from_chokepoint(
+        &reason,
+        &GateRejectCodes {
+            preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
+            ..GateRejectCodes::default()
+        },
+    );
+    assert_eq!(mapped, RejectReasonCode::OrderTypeMarketForbidden);
 }
 
 #[test]

@@ -23,7 +23,7 @@ api_file="$tmp_dir/api.rs"
 allowlist_file="$tmp_dir/execution_facade_symbols.txt"
 
 cat > "$mod_file" <<'EOF'
-pub mod api;
+mod api;
 pub use api::*;
 EOF
 
@@ -47,6 +47,31 @@ LINT_EXECUTION_FACADE_API="$api_file" \
 LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
 bash "$SCRIPT" >/dev/null
 pass "exact facade export set passes"
+
+# 1a) Public api module declaration must fail (semver leak guard).
+cat > "$mod_file" <<'EOF'
+pub mod api;
+pub use api::*;
+EOF
+
+set +e
+public_mod_out="$(
+  LINT_EXECUTION_FACADE_MOD="$mod_file" \
+  LINT_EXECUTION_FACADE_API="$api_file" \
+  LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  bash "$SCRIPT" 2>&1
+)"
+public_mod_rc=$?
+set -e
+[[ $public_mod_rc -ne 0 ]] || fail "public api module declaration should fail facade lint"
+echo "$public_mod_out" | grep -Fq "must not expose 'pub mod api;'" || fail "missing public-module diagnostic"
+pass "public api module declaration fails facade lint"
+
+# Restore private module fixture for subsequent checks.
+cat > "$mod_file" <<'EOF'
+mod api;
+pub use api::*;
+EOF
 
 # 1b) Nested grouped re-exports should also pass.
 cat > "$api_file" <<'EOF'

@@ -37,6 +37,7 @@ build_order_intent_with_wal_gate
 derive_gid12
 derive_sid8
 encode_label
+reject_reason_from_chokepoint
 reject_reason_registry
 reject_reason_registry_contains
 try_acquire_group_lock

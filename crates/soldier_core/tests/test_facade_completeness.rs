@@ -9,8 +9,8 @@ use soldier_core::execution::{
     OrderSize, PersistedTransition, RecordedBeforeDispatchGate, RejectReasonCode, Side, Tlsm,
     TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult, build_gate_results,
     build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate, derive_gid12,
-    derive_sid8, encode_label, reject_reason_registry, reject_reason_registry_contains,
-    try_acquire_group_lock,
+    derive_sid8, encode_label, reject_reason_from_chokepoint, reject_reason_registry,
+    reject_reason_registry_contains, try_acquire_group_lock,
 };
 
 #[test]
@@ -41,4 +41,10 @@ fn facade_symbols_reachable() {
         reject_reason_registry_contains(RejectReasonCode::RecordedBeforeDispatchFailed),
         "expected RecordedBeforeDispatchFailed in facade reject reason registry"
     );
+
+    let mapped = reject_reason_from_chokepoint(
+        &ChokeRejectReason::RiskStateNotHealthy,
+        &GateRejectCodes::default(),
+    );
+    assert_eq!(mapped, RejectReasonCode::MarginHeadroomRejectOpens);
 }

@@ -12,7 +12,8 @@ pub use super::build_order_intent::{
 
 // Reject reason (5)
 pub use super::reject_reason::{
-    GateRejectCodes, RejectReasonCode, reject_reason_registry, reject_reason_registry_contains,
+    GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint, reject_reason_registry,
+    reject_reason_registry_contains,
 };
 
 // Domain primitives (2)
