@@ -211,6 +211,30 @@ has_active_conflict() {
   return 0
 }
 
+current_changed_files() {
+  {
+    git diff --name-only 2>/dev/null || true
+    git diff --cached --name-only 2>/dev/null || true
+    git ls-files --others --exclude-standard 2>/dev/null || true
+  } | awk 'NF' | LC_ALL=C sort -u
+}
+
+path_is_production_code() {
+  local path="$1"
+  case "$path" in
+    crates/*)
+      case "$path" in
+        */tests/*) return 1 ;;
+      esac
+      return 0
+      ;;
+    src/*|python/*|Cargo.toml|Cargo.lock)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 story_is_passed_in_prd() {
   local sid="$1"
   local row
@@ -313,6 +337,10 @@ classify_failure_category() {
   fi
   if [[ "$lowered" == *"context loss"* || "$lowered" == *"lost context"* ]]; then
     echo "CONTEXT_LOSS"
+    return 0
+  fi
+  if [[ "$lowered" == *"non_write_step_prod_edit_blocked"* || "$lowered" == *"forbidden production-code changes"* ]]; then
+    echo "CEREMONY"
     return 0
   fi
   echo "TOOLING"
@@ -447,7 +475,15 @@ fi
 
 printf '%s\t%s\n' "$run_root" "$$" > "$lock_file"
 lock_owned=1
+changed_before_file=""
+changed_after_file=""
+changed_new_file=""
 cleanup() {
+  local f
+  for f in "${changed_before_file:-}" "${changed_after_file:-}" "${changed_new_file:-}"; do
+    [[ -n "$f" ]] || continue
+    rm -f "$f"
+  done
   if [[ "${lock_owned:-0}" -eq 1 && -f "$lock_file" ]]; then
     local current_lock
     local current_root
@@ -533,6 +569,10 @@ head_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 start_at="$(iso_now)"
 commands_run=()
 premortem_out="$run_root/logs/${step_name}_attempt${attempt_no}.premortem.log"
+changed_before_file="$(mktemp)"
+changed_after_file="$(mktemp)"
+changed_new_file="$(mktemp)"
+current_changed_files > "$changed_before_file"
 
 if [[ "$mode" == "B" ]]; then
   commands_run+=("$PREMORTEM_READY_SCRIPT $story_id")
@@ -556,6 +596,33 @@ if [[ "$status" == "PASS" ]]; then
   set -e
   if [[ "$step_rc" -ne 0 ]]; then
     status="BLOCKED"
+  fi
+fi
+
+if [[ "$status" == "PASS" && "$step_name" != "implement" && "$step_name" != "fix" ]]; then
+  illegal_paths=()
+  current_changed_files > "$changed_after_file"
+  comm -13 "$changed_before_file" "$changed_after_file" > "$changed_new_file" || true
+  while IFS= read -r changed_path; do
+    [[ -n "$changed_path" ]] || continue
+    if path_is_production_code "$changed_path"; then
+      illegal_paths+=("$changed_path")
+    fi
+  done < "$changed_new_file"
+
+  if [[ "${#illegal_paths[@]}" -gt 0 ]]; then
+    status="BLOCKED"
+    step_kind="gate"
+    step_rc=7
+    {
+      echo ""
+      echo "NON_WRITE_STEP_PROD_EDIT_BLOCKED"
+      echo "Step '$step_name' is non-write. Production code changes are only allowed in implement/fix."
+      echo "Forbidden production-code changes:"
+      for p in "${illegal_paths[@]}"; do
+        echo "  - $p"
+      done
+    } >> "$log_path"
   fi
 fi
 end_at="$(iso_now)"

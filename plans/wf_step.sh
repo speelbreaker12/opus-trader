@@ -247,6 +247,136 @@ check_review_logged_sidecar_patch() {
   [[ "$missing" -eq 0 ]]
 }
 
+sha256_file() {
+  local path="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$path" | awk '{print $1}'
+    return 0
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" | awk '{print $1}'
+    return 0
+  fi
+  return 1
+}
+
+is_fix_diff_basis() {
+  local basis="$1"
+  case "$basis" in
+    FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)") return 0 ;;
+  esac
+  return 1
+}
+
+verify_review_artifact_provenance() {
+  # Ensure artifacts used for cycle gates are produced by review_logged-style output
+  # with sidecar provenance and logger marker.
+  local artifact="$1"
+  local allowed_phases="${2:-R3|R7}"
+  local required_basis="${3:-any}" # any | story_scope | fix_diff
+  local sidecar="${artifact%.md}.sidecar.json"
+  local schema_version review_type basis_line_present phase_eq sidecar_basis sidecar_tool
+  local sidecar_md_sha actual_md_sha sidecar_md_path artifact_abs phase_ok=1
+
+  if [[ ! -f "$sidecar" ]]; then
+    echo "WF_STEP: provenance sidecar missing for $artifact (expected $sidecar)" >&2
+    return 1
+  fi
+  if ! jq empty "$sidecar" >/dev/null 2>&1; then
+    echo "WF_STEP: provenance sidecar is not valid JSON: $sidecar" >&2
+    return 1
+  fi
+
+  schema_version="$(jq -r '.schema_version // empty' "$sidecar" 2>/dev/null || true)"
+  review_type="$(jq -r '.review_type // empty' "$sidecar" 2>/dev/null || true)"
+  basis_line_present="$(jq -r '.basis_line_present // empty' "$sidecar" 2>/dev/null || true)"
+  phase_eq="$(jq -r '.phase_equivalent // empty' "$sidecar" 2>/dev/null || true)"
+  sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
+  sidecar_tool="$(jq -r '.tool // empty' "$sidecar" 2>/dev/null || true)"
+  sidecar_md_sha="$(jq -r '.markdown_sha256 // empty' "$sidecar" 2>/dev/null || true)"
+  sidecar_md_path="$(jq -r '.markdown_path // empty' "$sidecar" 2>/dev/null || true)"
+
+  if [[ "$schema_version" != "review_artifact_sidecar.v1" ]]; then
+    echo "WF_STEP: provenance sidecar schema_version must be review_artifact_sidecar.v1: $sidecar" >&2
+    return 1
+  fi
+  if [[ "$review_type" != "external" ]]; then
+    echo "WF_STEP: provenance sidecar review_type must be external: $sidecar" >&2
+    return 1
+  fi
+  if [[ "$basis_line_present" != "true" ]]; then
+    echo "WF_STEP: provenance sidecar basis_line_present must be true: $sidecar" >&2
+    return 1
+  fi
+
+  phase_ok=1
+  for p in ${allowed_phases//|/ }; do
+    if [[ "$phase_eq" == "$p" ]]; then
+      phase_ok=0
+      break
+    fi
+  done
+  if [[ "$phase_ok" -ne 0 ]]; then
+    echo "WF_STEP: provenance sidecar phase_equivalent '$phase_eq' not in [$allowed_phases]: $sidecar" >&2
+    return 1
+  fi
+
+  case "$required_basis" in
+    any) ;;
+    story_scope)
+      if [[ "$sidecar_basis" != "STORY_SCOPE" ]]; then
+        echo "WF_STEP: provenance sidecar review_basis must be STORY_SCOPE for C1: $sidecar" >&2
+        return 1
+      fi
+      ;;
+    fix_diff)
+      if ! is_fix_diff_basis "$sidecar_basis"; then
+        echo "WF_STEP: provenance sidecar review_basis must be FIX_DIFF for C2: $sidecar" >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "WF_STEP: internal error — unknown required provenance basis: $required_basis" >&2
+      return 1
+      ;;
+  esac
+
+  actual_md_sha="$(sha256_file "$artifact" 2>/dev/null || true)"
+  if [[ -z "$actual_md_sha" ]]; then
+    echo "WF_STEP: unable to compute markdown sha256 for $artifact" >&2
+    return 1
+  fi
+  if [[ "$sidecar_md_sha" != "$actual_md_sha" ]]; then
+    echo "WF_STEP: provenance sidecar markdown_sha256 mismatch for $artifact" >&2
+    return 1
+  fi
+
+  artifact_abs="$artifact"
+  if [[ "$artifact_abs" != /* ]]; then
+    artifact_abs="$ROOT/$artifact_abs"
+  fi
+  if [[ -n "$sidecar_md_path" && "$sidecar_md_path" != "$artifact" && "$sidecar_md_path" != "$artifact_abs" ]]; then
+    if [[ ! -e "$sidecar_md_path" || ! "$sidecar_md_path" -ef "$artifact" ]]; then
+      echo "WF_STEP: provenance sidecar markdown_path mismatch for $artifact" >&2
+      return 1
+    fi
+  fi
+
+  local expected_tool
+  expected_tool="$(basename "$(dirname "$artifact")")"
+  if [[ -z "$sidecar_tool" || "$sidecar_tool" == "null" || "$sidecar_tool" != "$expected_tool" ]]; then
+    echo "WF_STEP: provenance sidecar tool mismatch for $artifact (expected $expected_tool)" >&2
+    return 1
+  fi
+
+  if ! grep -Eq 'artifact_provenance:[[:space:]]*"logger-v2"' "$artifact" 2>/dev/null; then
+    echo "WF_STEP: review artifact missing logger-v2 provenance marker: $artifact" >&2
+    return 1
+  fi
+
+  return 0
+}
+
 validate_receipt_story_ids() {
   local f
   local recorded_story
@@ -492,6 +622,8 @@ verify_cycle1_citations() {
   local newest=""
   local best_c1=""
   local verifier_output=""
+  local saw_artifact=0
+  local saw_provenance=0
 
   if [[ ! -x "$verifier" ]]; then
     echo "WF_STEP: citation validator missing or not executable at $verifier" >&2
@@ -502,9 +634,16 @@ verify_cycle1_citations() {
     [[ -d "$d" ]] || continue
     newest=""
     best_c1=""
+    saw_artifact=0
+    saw_provenance=0
     while IFS= read -r artifact; do
       [[ -f "$artifact" ]] || continue
+      saw_artifact=1
       [[ -z "$newest" ]] && newest="$artifact"
+      if ! verify_review_artifact_provenance "$artifact" "R3" "story_scope"; then
+        continue
+      fi
+      saw_provenance=1
       # Newest-first scan: keep searching until first C1-valid artifact so a malformed/newer
       # file does not mask an older valid C1 report in the same tool directory.
       if "$verifier" --artifact "$artifact" --mode C1 --json >/dev/null 2>&1; then
@@ -515,6 +654,10 @@ verify_cycle1_citations() {
 
     if [[ -n "$best_c1" ]]; then
       review_files+=("$best_c1")
+    elif [[ "$saw_artifact" -eq 1 && "$saw_provenance" -eq 0 ]]; then
+      echo "WF_STEP: no provenance-valid C1 review artifact found in $d" >&2
+      echo "  External cycle1 reviews must be generated by review_logged.sh (logger-v2 + sidecar)." >&2
+      return 1
     elif [[ -n "$newest" ]]; then
       # Emit deterministic failure diagnostics for the newest candidate in this tool dir.
       verifier_output="$("$verifier" --artifact "$newest" --mode C1 --json 2>&1 || true)"
@@ -757,44 +900,33 @@ case "$STEP" in
       fi
     fi
     review_count=0
-    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
-      if [[ -d "$d" ]]; then
-        # Count both canonical and legacy artifacts, excluding symlinks
-        c="$(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | wc -l | tr -d '[:space:]')"
-        review_count=$((review_count + c))
-      fi
-    done
-    if [[ "$review_count" -lt "$min_reviews" ]]; then
-      echo "WF_STEP: need at least $min_reviews review artifacts in $story_art/{codex,opus,kimi}/" >&2
-      exit 3
-    fi
-    # Basis-label check: verify >=1 artifact has FIX_DIFF review basis.
-    # Without this, C1 artifacts (STORY_SCOPE basis) satisfy the cycle2 gate spuriously.
     c2_basis_count=0
     for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         while IFS= read -r f; do
-          sidecar="${f%.md}.sidecar.json"
-          if [[ -f "$sidecar" ]]; then
-            sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
-            case "$sidecar_basis" in
-              FIX_DIFF_AT_REGRESSION|"FIX_DIFF + AT_REGRESSION (Cycle 2)")
-                c2_basis_count=$((c2_basis_count + 1))
-                continue
-                ;;
-            esac
+          if ! verify_review_artifact_provenance "$f" "R3|R7" "any"; then
+            continue
           fi
-          # Legacy fallback: parse canonical review basis line in markdown header.
-          if grep -Eqm1 '^[[:space:]-]*Review basis:[[:space:]]*FIX_DIFF([[:space:]]*\+[[:space:]]*AT_REGRESSION[[:space:]]*\(Cycle 2\))?[[:space:]]*$' "$f" 2>/dev/null; then
+          review_count=$((review_count + 1))
+          sidecar="${f%.md}.sidecar.json"
+          sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
+          sidecar_phase="$(jq -r '.phase_equivalent // empty' "$sidecar" 2>/dev/null || true)"
+          if [[ "$sidecar_phase" == "R7" ]] && is_fix_diff_basis "$sidecar_basis"; then
             c2_basis_count=$((c2_basis_count + 1))
           fi
         done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
       fi
     done
+    if [[ "$review_count" -lt "$min_reviews" ]]; then
+      echo "WF_STEP: need at least $min_reviews provenance-valid review artifacts in $story_art/{codex,opus,kimi}/" >&2
+      echo "  Artifacts must come from review_logged.sh (logger-v2 + sidecar)." >&2
+      exit 3
+    fi
+    # Basis-label check: verify >=1 provenance-valid R7 artifact has FIX_DIFF review basis.
     if [[ "$c2_basis_count" -lt 1 ]]; then
-      echo "WF_STEP: cycle2 gate requires >=1 review artifact with 'FIX_DIFF' review basis — none found" >&2
+      echo "WF_STEP: cycle2 gate requires >=1 provenance-valid R7 artifact with 'FIX_DIFF' review basis — none found" >&2
       echo "  in $story_art/{codex,opus,kimi}/" >&2
-      echo "  C1 artifacts (STORY_SCOPE basis) do not satisfy this gate." >&2
+      echo "  C1 artifacts (R3 / STORY_SCOPE) do not satisfy this gate." >&2
       echo "  Run cycle2 reviews via review_logged.sh --cycle C2 before recording this receipt." >&2
       exit 3
     fi
