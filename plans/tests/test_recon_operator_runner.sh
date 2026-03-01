@@ -96,6 +96,20 @@ if [[ "$story" == "S2-002" && "$step" == "preflight" ]]; then
 JSON
   exit 0
 fi
+if [[ "$story" == "S2-002" && "$step" == "self_review" ]]; then
+  head_sha="$(git rev-parse HEAD 2>/dev/null || echo deadbee)"
+  ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  receipt=".wf/receipts/$story/02_self_review.json"
+  mkdir -p "$(dirname "$receipt")"
+  if [[ "${FORCE_ILLEGAL_EDIT:-0}" == "1" ]]; then
+    mkdir -p crates/soldier_core/src
+    echo "// forbidden edit from non-write step" > crates/soldier_core/src/non_write_forbidden.rs
+  fi
+  cat > "$receipt" <<JSON
+{"story_id":"$story","head_sha":"$head_sha","timestamp_utc":"$ts"}
+JSON
+  exit 0
+fi
 echo "wf_step blocked for $story/$step" >&2
 exit 3
 EOF
@@ -141,7 +155,17 @@ trace_root_ok="$(find "$repo/.wf/trace/S2-002" -mindepth 1 -maxdepth 1 -type d |
 [[ -f "$trace_root_ok/step_timing.jsonl" ]] || fail "step_timing.jsonl missing for S2-002"
 grep -Fq '"step":"preflight"' "$trace_root_ok/step_timing.jsonl" || fail "preflight timing entry missing for S2-002"
 
-# Scenario B: explicit blocked story + scoreboard failure should be fail-soft:
+# Scenario B: stale ACTIVE_RUN lock with dead pid should be cleaned and not block run.
+stale_run="$repo/.wf/trace/S2-002/stale-run"
+mkdir -p "$stale_run"
+printf '%s\t%s\n' "$stale_run" "999999" > "$repo/.wf/trace/S2-002/ACTIVE_RUN"
+(
+  cd "$repo"
+  plans/recon_operator_run.sh --story S2-002 --step preflight --mode B >/dev/null
+)
+[[ ! -f "$repo/.wf/trace/S2-002/ACTIVE_RUN" ]] || fail "stale ACTIVE_RUN lock should be removed after successful run"
+
+# Scenario C: explicit blocked story + scoreboard failure should be fail-soft:
 # still emit trace artifacts and handoff hook, while exiting non-zero.
 set +e
 (
@@ -167,7 +191,29 @@ grep -Fq "Operator Hook Update" "$repo/reviews/reconciliations/S2/HANDOFF.md" \
 calls_count="$(wc -l < "$repo/.scoreboard_calls.log" | tr -d '[:space:]')"
 [[ "$calls_count" -ge 2 ]] || fail "expected at least 2 scoreboard hook calls, got $calls_count"
 
-# Scenario C: no eligible stories should provide diagnostics, not generic-only error.
+# Scenario D: non-write step must fail closed if it introduces production code edits.
+set +e
+(
+  cd "$repo"
+  FORCE_ILLEGAL_EDIT=1 plans/recon_operator_run.sh --story S2-002 --step self_review --mode B >/dev/null 2>&1
+)
+illegal_rc=$?
+set -e
+[[ "$illegal_rc" -ne 0 ]] || fail "expected illegal non-write production edit to block run"
+
+trace_root_illegal="$(find "$repo/.wf/trace/S2-002" -mindepth 1 -maxdepth 1 -type d | while IFS= read -r d; do
+  [[ -f "$d/step_timing.jsonl" ]] || continue
+  if grep -Fq '"step":"self_review"' "$d/step_timing.jsonl"; then
+    echo "$d"
+  fi
+done | LC_ALL=C sort | tail -n 1 || true)"
+[[ -n "$trace_root_illegal" ]] || fail "trace root missing for illegal non-write edit run"
+illegal_log="$trace_root_illegal/logs/self_review_attempt1.log"
+[[ -f "$illegal_log" ]] || fail "expected illegal self_review log at $illegal_log"
+grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_log" || fail "missing illegal non-write guard marker"
+grep -Fq '"category":"CEREMONY"' "$trace_root_illegal/failures.jsonl" || fail "illegal non-write run should classify as CEREMONY"
+
+# Scenario E: no eligible stories should provide diagnostics, not generic-only error.
 set +e
 (
   cd "$repo"
