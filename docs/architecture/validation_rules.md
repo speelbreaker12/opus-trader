@@ -7,15 +7,15 @@ All rules are deterministic, enforceable, and contract-backed. Each gate specifi
 
 ---
 
-## VR-001: F1 Certification Gate
+## VR-001: Runtime Binding Gate
 
 **Gate ID:** VR-001  
-**Trigger:** `artifacts/F1_CERT.json` missing OR `status != PASS` OR `now - generated_ts_ms > f1_cert_max_age_s` (default 24h)  
+**Trigger:** `artifacts/RUNTIME_BINDING_CERT.json` missing OR `status != PASS` OR `now - generated_ts_ms > f1_cert_max_age_s` (default 24h); while `runtime.contract_version == "5.2"` only, legacy `artifacts/F1_CERT.json` MAY be used if canonical file is missing  
 **Enforcement point:** `PolicyGuard.get_effective_mode()` (soldier/core/policy/guard.rs)  
 **Allowed actions:** Close, Hedge, Cancel  
 **Forbidden actions:** Open  
-**Failure mode:** ReduceOnly until F1_CERT is valid  
-**Contract citation:** §2.2.1 (line 648) — "missing OR stale OR FAIL => TradingMode MUST be ReduceOnly"
+**Failure mode:** ReduceOnly until runtime binding cert is valid  
+**Contract citation:** §2.2.1 — runtime binding cert missing/stale/invalid => TradingMode MUST be ReduceOnly
 
 ---
 

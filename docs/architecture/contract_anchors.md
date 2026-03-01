@@ -16,11 +16,11 @@ Every anchor claim is proved by a contract citation. Unproved claims have been r
 
 ---
 
-## Anchor-002: Runtime F1 Certification Gate
+## Anchor-002: Runtime Binding Gate
 
 **Anchor ID:** Anchor-002  
-**Claim:** Missing, stale, or FAIL F1_CERT blocks all OPEN intents via ReduceOnly enforcement.  
-**Proof:** §2.2.1 (line 648) — "missing OR stale OR FAIL => TradingMode MUST be ReduceOnly"  
+**Claim:** Missing, stale, or invalid runtime binding cert blocks all OPEN intents via ReduceOnly enforcement.  
+**Proof:** §2.2.1 — runtime binding cert missing/stale/invalid => TradingMode MUST be ReduceOnly.  
 **Implication:** Certification freshness window defaults to 24h; no caching last-known-good and no grace periods.
 
 ---
