@@ -267,3 +267,7 @@ pub fn preflight_intent(
 
     PreflightResult::Allowed
 }
+
+#[cfg(test)]
+#[path = "preflight_tests.rs"]
+mod preflight_tests;

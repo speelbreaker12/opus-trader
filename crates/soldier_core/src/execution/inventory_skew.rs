@@ -246,3 +246,7 @@ pub fn evaluate_inventory_skew(
         adjusted_limit_price,
     }
 }
+
+#[cfg(test)]
+#[path = "inventory_skew_tests.rs"]
+mod inventory_skew_tests;

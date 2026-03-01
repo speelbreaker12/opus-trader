@@ -236,3 +236,7 @@ pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> 
         net_edge_usd: net_edge,
     }
 }
+
+#[cfg(test)]
+#[path = "pricer_tests.rs"]
+mod pricer_tests;

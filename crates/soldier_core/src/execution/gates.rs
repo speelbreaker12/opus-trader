@@ -219,3 +219,11 @@ pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> 
     metrics.record_allowed();
     NetEdgeResult::Allowed { net_edge_usd }
 }
+
+#[cfg(test)]
+#[path = "gates_tests.rs"]
+mod gates_tests;
+
+#[cfg(test)]
+#[path = "gates_prop_net_edge_tests.rs"]
+mod gates_prop_net_edge_tests;

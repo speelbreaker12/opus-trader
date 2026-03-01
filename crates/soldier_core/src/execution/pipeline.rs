@@ -4,22 +4,24 @@
 //! the shared base gate evaluator (gates 1-6) then OPEN-specific gates (7-10),
 //! and finally the chokepoint gate-order evaluator.
 
-use crate::execution::DispatchConsistencyProof;
+use crate::execution::{
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, Side, build_gate_results,
+    build_order_intent_with_wal_gate,
+};
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
 use super::build_order_intent::PrecomputedWalGate;
+use super::dispatch_map::DispatchConsistencyProof;
+use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
 use super::gate_outcome::GateOutcome;
+use super::gates::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
+use super::preflight::{PreflightInput, PreflightMetrics};
+use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
+use super::quantize::{QuantizeConstraints, QuantizeMetrics};
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
-use super::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, LiquidityGateInput,
-    LiquidityGateMetrics, NetEdgeInput, NetEdgeMetrics, PreflightInput, PreflightMetrics,
-    PricerInput, PricerMetrics, QuantizeConstraints, QuantizeMetrics, Side, build_gate_results,
-    build_order_intent_with_wal_gate, compute_limit_price, evaluate_liquidity_gate,
-    evaluate_net_edge,
-};
 
 /// Quantize inputs required by the execution pipeline.
 #[derive(Debug, Clone)]
@@ -285,3 +287,136 @@ pub fn evaluate_intent_pipeline(
         reject_reason_code,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::execution::preflight::OrderType;
+    use crate::execution::quantize::Side;
+    use crate::venue::{InstrumentKind, LifecycleIntent};
+
+    fn base_open_input() -> IntentPipelineInput<'static> {
+        IntentPipelineInput {
+            intent_class: ChokeIntentClass::Open,
+            risk_state: RiskState::Healthy,
+            preflight: PreflightInput {
+                instrument_kind: InstrumentKind::Option,
+                order_type: OrderType::Limit,
+                has_trigger: false,
+                linked_order_type: None,
+                linked_orders_allowed: false,
+                post_only_input: None,
+            },
+            venue_capabilities: VenueCapabilities::default(),
+            bot_feature_flags: BotFeatureFlags::default(),
+            quantize: QuantizePipelineInput {
+                raw_qty: 1.0,
+                raw_limit_price: 100.0,
+                side: Side::Buy,
+                constraints: QuantizeConstraints {
+                    tick_size: 0.1,
+                    amount_step: 0.1,
+                    min_amount: 0.1,
+                },
+            },
+            dispatch_consistency: DispatchConsistencyProof::no_contracts(),
+            fee_snapshot: FeeCacheSnapshot {
+                fee_rate: 0.0005,
+                fee_model_cached_at_ts_ms: Some(1_000_000),
+                now_ms: 1_010_000,
+            },
+            fee_config: FeeStalenessConfig::default(),
+            expiry_guard: Some(ExpiryGuardInput {
+                now_ms: 1_000_000,
+                expiration_timestamp_ms: Some(2_000_000),
+                expiry_delist_buffer_s: 60,
+                intent: LifecycleIntent::Open,
+                instrument_kind: Some(InstrumentKind::LinearFuture),
+            }),
+            liquidity: Some(LiquidityGateInput {
+                order_qty: 1.0,
+                is_buy: true,
+                intent_class: crate::execution::gate::GateIntentClass::Open,
+                is_marketable: true,
+                l2_snapshot: Some(crate::execution::gate::L2BookSnapshot {
+                    asks: vec![crate::execution::gate::L2Level {
+                        price: 100.0,
+                        qty: 10.0,
+                    }],
+                    bids: vec![],
+                    timestamp_ms: 1_009_000,
+                }),
+                now_ms: 1_010_000,
+                l2_book_snapshot_max_age_ms: 5_000,
+                max_slippage_bps: 10.0,
+            }),
+            net_edge: Some(NetEdgeInput {
+                gross_edge_usd: Some(10.0),
+                fee_usd: Some(2.0),
+                expected_slippage_usd: Some(1.0),
+                min_edge_usd: Some(2.0),
+            }),
+            pricer: Some(PricerInput {
+                fair_price: 100.0,
+                gross_edge_usd: 10.0,
+                min_edge_usd: 2.0,
+                fee_estimate_usd: 2.0,
+                qty: 1.0,
+                side: Side::Buy,
+            }),
+            wal_recorded: true,
+            requested_qty: Some(1.0),
+            max_dispatch_qty: Some(1.0),
+        }
+    }
+
+    #[test]
+    fn test_none_liquidity_input_fails() {
+        let mut input = base_open_input();
+        input.liquidity = None;
+        let mut metrics = IntentPipelineMetrics::new();
+
+        let result = evaluate_intent_pipeline(&input, &mut metrics);
+        assert_eq!(
+            result.reject_reason_code,
+            Some(RejectReasonCode::LiquidityGateNoL2)
+        );
+    }
+
+    #[test]
+    fn test_none_net_edge_input_fails() {
+        let mut input = base_open_input();
+        input.net_edge = None;
+        let mut metrics = IntentPipelineMetrics::new();
+
+        let result = evaluate_intent_pipeline(&input, &mut metrics);
+        assert_eq!(
+            result.reject_reason_code,
+            Some(RejectReasonCode::NetEdgeInputMissing)
+        );
+    }
+}
+
+#[cfg(test)]
+#[path = "pipeline_integration_tests.rs"]
+mod pipeline_integration_tests;
+
+#[cfg(test)]
+#[path = "pipeline_intent_determinism_tests.rs"]
+mod pipeline_intent_determinism_tests;
+
+#[cfg(test)]
+#[path = "pipeline_intent_id_propagation_tests.rs"]
+mod pipeline_intent_id_propagation_tests;
+
+#[cfg(test)]
+#[path = "pipeline_missing_config_tests.rs"]
+mod pipeline_missing_config_tests;
+
+#[cfg(test)]
+#[path = "pipeline_prop_gi001_tests.rs"]
+mod pipeline_prop_gi001_tests;
+
+#[cfg(test)]
+#[path = "pipeline_rejection_side_effects_tests.rs"]
+mod pipeline_rejection_side_effects_tests;

@@ -755,3 +755,29 @@ Commands: apply_patch (reviews/premortems/RUNBOOK_PREMORTEM_RECON.md, reviews/re
 Evidence: reviews/premortems/RUNBOOK_PREMORTEM_RECON.md; reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md.
 Notes: Intentionally did not import gate exemptions/phase skips from draft because they conflict with current enforced workflow gates.
 Next: If desired, implement full LITE path behind explicit workflow gates and schema changes in a separate tracked story.
+Story: execution-facade-lockdown
+Date: 2026-02-28
+Summary: Created next-agent handoff in plans/pause.md after opening PR #142; recorded branch/PR state, latest commits, verify evidence, and explicit next actions (CI checks, review flow, verify gates).
+Commands: gh pr view 142 --json number,url,state,mergeStateStatus,reviewDecision,headRefName,baseRefName,title; ./plans/verify.sh quick; ./plans/verify.sh full.
+Evidence: plans/pause.md (2026-02-28 section); artifacts/verify/20260228_171627; artifacts/verify/20260228_172938; https://github.com/speelbreaker12/opus-trader/pull/142.
+Next: Next agent monitors PR checks/reviews, applies requested changes on refactor/execution-facade-lockdown, reruns verify quick/full, and updates PR.
+Story: execution-facade-lockdown
+Date: 2026-02-28
+Summary: Added dedicated handoff document at plans/handoff_next_agent.md for immediate next-agent resume context.
+Commands: apply_patch (add plans/handoff_next_agent.md).
+Evidence: plans/handoff_next_agent.md.
+Next: Continue PR #142 review-response loop on refactor/execution-facade-lockdown.
+Story: execution-facade-lockdown doc alignment follow-up
+Date: 2026-02-28 23:10:00 UTC
+Summary: Implemented strict design-alignment follow-up: made `execution::api` public module (`pub mod api`), tightened facade lint to require only that public module, removed `reject_reason_from_chokepoint` from facade/symbol allowlist, rewrote integration tests to assert chokepoint reasons/gate-steps instead of helper mapping, moved shared test stubs to `tests/test_stubs.rs`, restored `test_tlsm.rs` as real facade-level integration tests, removed extra quick-smoke test (`test_atomic_group`), and normalized remaining production import paths in execution modules.
+Commands: cargo fmt --all; bash plans/tests/test_lint_execution_facade.sh; bash plans/lint_execution_facade.sh; cargo test -p soldier_core --locked --test test_facade_completeness --test adversarial_gi_enforcement --test test_reject_reason --test test_tlsm; GATE_INTEGRITY_TIMEOUT=120s ./plans/verify.sh quick; VERIFY_PARALLEL=0 GATE_INTEGRITY_TIMEOUT=120s ./plans/verify.sh full.
+Evidence: crates/soldier_core/src/execution/{mod.rs,api.rs,base_gates.rs,dispatch_map.rs,intent_assembly.rs}; crates/soldier_core/tests/{adversarial_gi_enforcement.rs,test_reject_reason.rs,test_gate_outcome.rs,test_tlsm.rs,test_facade_completeness.rs,test_recorded_before_dispatch_gate.rs,test_stubs.rs}; plans/{lint_execution_facade.sh,execution_facade_symbols.txt}; plans/lib/rust_gates.sh; plans/tests/test_lint_execution_facade.sh; artifacts/verify/20260228_164320/verify.meta.json; artifacts/verify/20260228_170330/verify.meta.json.
+Notes: Full verify run is recorded as status=ok in `artifacts/verify/20260228_170330/verify.meta.json` with no `FAILED_GATE` marker.
+Next: Run `code-review-expert`, commit this patchset, push branch, and update PR #142.
+Story: execution-facade-lockdown adversarial semantic restore
+Date: 2026-02-28 23:45:00 UTC
+Summary: Restored GI semantic reason-code assertions in `adversarial_gi_enforcement.rs` for GI-001/GI-004/GI-009 so the adversarial gate no longer emits non-blocking errors scheduled to become blocking after the sunset date.
+Commands: cargo fmt --all; cargo test -p soldier_core --locked --test adversarial_gi_enforcement; VERIFY_ARTIFACTS_DIR="$(mktemp -d)" ROOT="$(pwd)" bash plans/lib/adversarial_gate.sh; ./plans/verify.sh full.
+Evidence: crates/soldier_core/tests/adversarial_gi_enforcement.rs; artifacts/verify/20260228_172938/verify.meta.json; artifacts/verify/20260228_172938/adversarial_report.json.
+Notes: `./plans/verify.sh full` passed with adversarial gate clean (no GI semantic findings).
+Next: stage intended files (excluding runtime/artifact noise), run `./plans/code_review_expert_attest.sh`, commit, push, and update PR #142.

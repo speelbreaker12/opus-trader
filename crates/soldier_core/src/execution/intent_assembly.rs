@@ -3,6 +3,7 @@
 //! Wires `derive_instrument_kind`, `build_order_size`, and `validate_and_dispatch`
 //! into a single production-path function that feeds `evaluate_intent_pipeline`.
 
+use super::build_order_intent::{ChokeIntentClass, ChokeRejectReason, ChokeResult};
 use super::dispatch_map::{
     DispatchConsistencyProof, IntentClass, MismatchMetrics, validate_and_dispatch,
 };
@@ -15,7 +16,7 @@ use super::pipeline::{
 };
 use super::preflight::PreflightInput;
 use super::pricer::PricerInput;
-use super::{ChokeIntentClass, ChokeRejectReason, ChokeResult, RejectReasonCode};
+use super::reject_reason::RejectReasonCode;
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, InstrumentKind, VenueCapabilities,
@@ -280,3 +281,7 @@ pub fn evaluate_assembled_pipeline(
     // Step 5: Evaluate the full gate pipeline.
     evaluate_intent_pipeline(&pipeline_input, metrics)
 }
+
+#[cfg(test)]
+#[path = "intent_assembly_tests.rs"]
+mod intent_assembly_tests;

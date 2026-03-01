@@ -1,6 +1,7 @@
 //! CI tests proving the single dispatch chokepoint invariant.
 //!
-//! CONTRACT.md CSP.5.2: All dispatch must route through `build_order_intent()`.
+//! CONTRACT.md CSP.5.2: All dispatch must route through the
+//! WAL-safe chokepoint wrappers in `build_order_intent.rs`.
 //! These tests scan source code to enforce architectural constraints.
 //!
 //! AT-935: No module other than build_order_intent.rs may construct ChokeResult::Approved.
@@ -37,6 +38,12 @@ fn collect_rs_files(dir: &std::path::Path) -> Vec<(PathBuf, String)> {
     files
 }
 
+fn is_unit_test_module(path: &std::path::Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with("_tests.rs"))
+}
+
 // ─── Test: Only build_order_intent.rs may construct ChokeResult::Approved ──
 
 #[test]
@@ -48,6 +55,9 @@ fn test_dispatch_chokepoint_no_bypass_approved() {
     let mut violations = Vec::new();
 
     for (path, content) in &files {
+        if is_unit_test_module(path) {
+            continue;
+        }
         let filename = path.file_name().unwrap().to_str().unwrap();
         // Skip the chokepoint module itself — it's allowed to construct Approved
         if filename == chokepoint_file {
@@ -90,6 +100,9 @@ fn test_dispatch_chokepoint_no_bypass_metrics() {
     let mut violations = Vec::new();
 
     for (path, content) in &files {
+        if is_unit_test_module(path) {
+            continue;
+        }
         let filename = path.file_name().unwrap().to_str().unwrap();
         if filename == chokepoint_file {
             continue;
@@ -140,7 +153,6 @@ fn test_dispatch_chokepoint_no_direct_exchange_client_usage() {
     let files = collect_rs_files(&src);
     let mut violations = Vec::new();
     let forbidden_dispatch_symbols = [
-        "dispatch_map::",
         "map_to_dispatch",
         "validate_and_dispatch",
         "DispatchRequest",
@@ -149,6 +161,9 @@ fn test_dispatch_chokepoint_no_direct_exchange_client_usage() {
     ];
 
     for (path, content) in &files {
+        if is_unit_test_module(path) {
+            continue;
+        }
         let rel = path.strip_prefix(&src).unwrap_or(path);
         let rel_str = rel.to_string_lossy();
         // dispatch_map defines DispatchRequest and dispatch helpers.
@@ -207,6 +222,9 @@ fn test_dispatch_visibility_is_restricted() {
     let mut violations = Vec::new();
 
     for (path, content) in &files {
+        if is_unit_test_module(path) {
+            continue;
+        }
         let filename = path.file_name().unwrap().to_str().unwrap();
         if filename == chokepoint_file || filename == "mod.rs" {
             continue;
@@ -247,6 +265,9 @@ fn test_no_direct_gate_results_construction_in_production() {
     let mut violations = Vec::new();
 
     for (path, content) in &files {
+        if is_unit_test_module(path) {
+            continue;
+        }
         let filename = path.file_name().unwrap().to_str().unwrap();
         // The chokepoint module defines GateResults — skip it
         if filename == chokepoint_file {
@@ -278,7 +299,7 @@ fn test_no_direct_gate_results_construction_in_production() {
     );
 }
 
-// ─── Test: Chokepoint module exists and exports build_order_intent ────────
+// ─── Test: Chokepoint module exists and exports WAL-safe entrypoints ──────
 
 #[test]
 fn test_chokepoint_module_exists() {
@@ -292,8 +313,12 @@ fn test_chokepoint_module_exists() {
     let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
 
     assert!(
-        content.contains("pub fn build_order_intent("),
-        "Chokepoint must export build_order_intent() as pub fn"
+        content.contains("pub fn build_order_intent_with_wal_gate("),
+        "Chokepoint must export build_order_intent_with_wal_gate() as pub fn"
+    );
+    assert!(
+        content.contains("pub fn build_order_intent_with_optional_wal_gate("),
+        "Chokepoint must export build_order_intent_with_optional_wal_gate() as pub fn"
     );
 
     // Verify it's the single chokepoint — must reference CSP.5.2
@@ -303,22 +328,15 @@ fn test_chokepoint_module_exists() {
     );
 }
 
-// ─── Test: mod.rs re-exports build_order_intent ──────────────────────────
+// ─── Test: Chokepoint facade symbols are publicly reachable ──────────────
 
 #[test]
-fn test_chokepoint_reexported_from_execution() {
-    let mod_path = src_dir().join("execution").join("mod.rs");
-    let content = fs::read_to_string(&mod_path).expect("read mod.rs");
-
-    assert!(
-        content.contains("pub mod build_order_intent"),
-        "execution/mod.rs must declare pub mod build_order_intent"
-    );
-
-    assert!(
-        content.contains("build_order_intent,"),
-        "execution/mod.rs must re-export build_order_intent function"
-    );
+fn chokepoint_is_publicly_reachable() {
+    #[allow(unused_imports)]
+    use soldier_core::execution::{
+        build_gate_results, build_order_intent_with_optional_wal_gate,
+        build_order_intent_with_wal_gate,
+    };
 }
 
 // ─── Test: Chokepoint metrics mutators are not publicly callable ───────

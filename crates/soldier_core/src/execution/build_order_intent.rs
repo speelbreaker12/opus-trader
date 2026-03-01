@@ -204,6 +204,7 @@ impl Default for ChokeMetrics {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GateSequenceResult {
+    #[allow(dead_code)] // Covered in non-test builds; retained for completeness symmetry.
     Allowed,
     Rejected,
 }
@@ -475,6 +476,7 @@ fn build_order_intent_internal(
 #[deprecated(
     note = "Wraps deprecated build_order_intent(); use build_order_intent_with_wal_gate() instead"
 )]
+#[allow(dead_code)]
 pub fn build_order_intent_with_reject_reason_code(
     intent_class: ChokeIntentClass,
     risk_state: RiskState,
@@ -594,3 +596,7 @@ pub fn build_gate_results(
         max_dispatch_qty,
     }
 }
+
+#[cfg(test)]
+#[path = "build_order_intent_gate_ordering_tests.rs"]
+mod build_order_intent_gate_ordering_tests;

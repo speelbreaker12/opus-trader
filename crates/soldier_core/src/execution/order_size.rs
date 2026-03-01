@@ -162,3 +162,7 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
         }
     }
 }
+
+#[cfg(test)]
+#[path = "order_size_tests.rs"]
+mod order_size_tests;

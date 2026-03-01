@@ -470,3 +470,7 @@ impl Default for Tlsm {
         Self::new()
     }
 }
+
+#[cfg(test)]
+#[path = "tlsm_tests.rs"]
+mod tlsm_tests;

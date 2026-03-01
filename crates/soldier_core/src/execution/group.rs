@@ -124,6 +124,7 @@ impl Default for GroupConfig {
 /// dispatch. If persistence fails, MUST abort and MUST NOT submit any leg orders."
 pub trait GroupPersistence {
     fn persist_group_intent(&mut self, group_id: &str) -> Result<(), String>;
+    #[allow(dead_code)]
     fn mark_group_state(&mut self, group_id: &str, state: GroupState) -> Result<(), String>;
 }
 
@@ -131,6 +132,7 @@ pub trait GroupPersistence {
 #[derive(Debug, Default)]
 pub struct InMemoryGroupPersistence {
     pub persisted_intents: Vec<String>,
+    #[allow(dead_code)]
     pub state_transitions: Vec<(String, GroupState)>,
     pub fail_persist: bool,
 }
@@ -510,6 +512,12 @@ mod tests {
         GroupConfig::default()
     }
 
+    fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
+        crate::execution::METRICS_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+    }
+
     // ─── AT-116: Leg A filled, Leg B rejected → MixedFailed ─────────────
 
     #[test]
@@ -711,6 +719,84 @@ mod tests {
         let result = persist_before_dispatch(&group, &mut store);
         assert!(matches!(result, Err(GroupError::PersistenceFailed { .. })));
         // No leg dispatch should occur after this error
+    }
+
+    #[test]
+    fn static_counter_lock_timeout_increments() {
+        let _guard = metrics_lock();
+        let before = group_lock_timeout_total();
+        let config = GroupConfig {
+            group_lock_max_wait_ms: 0,
+            ..Default::default()
+        };
+        let mut lock = GroupLock::new();
+        let _ = lock.try_acquire();
+        let _result = try_acquire_group_lock(&mut lock, &config);
+        let after = group_lock_timeout_total();
+        assert!(
+            after > before,
+            "counter should increment: before={before}, after={after}"
+        );
+    }
+
+    #[test]
+    fn static_counter_persist_fail_increments() {
+        let _guard = metrics_lock();
+        let before = group_persist_fail_total();
+        let group = AtomicGroup::new("grp-counter-persist".to_string(), 2);
+        let mut store = InMemoryGroupPersistence {
+            fail_persist: true,
+            ..Default::default()
+        };
+        let result = persist_before_dispatch(&group, &mut store);
+        assert!(result.is_err());
+        let after = group_persist_fail_total();
+        assert!(
+            after > before,
+            "counter should increment: before={before}, after={after}"
+        );
+    }
+
+    #[test]
+    fn static_counter_mixed_failed_increments() {
+        let _guard = metrics_lock();
+        let before = group_mixed_failed_total();
+        let config = GroupConfig::default();
+        let mut group = AtomicGroup::new("grp-counter-mixed".to_string(), 2);
+        group.mark_dispatched().expect("dispatch should succeed");
+
+        let _ = group.apply_leg_result(
+            LegResult {
+                leg_idx: 0,
+                requested_qty: 1.0,
+                filled_qty: 1.0,
+                rejected: false,
+                unfilled: false,
+                tlsm_state: TlsmState::Filled,
+            },
+            &config,
+        );
+
+        let transition = group.apply_leg_result(
+            LegResult {
+                leg_idx: 1,
+                requested_qty: 1.0,
+                filled_qty: 0.0,
+                rejected: true,
+                unfilled: false,
+                tlsm_state: TlsmState::Failed,
+            },
+            &config,
+        );
+        assert!(matches!(
+            transition,
+            GroupStateTransition::EnteredMixedFailed { .. }
+        ));
+        let after = group_mixed_failed_total();
+        assert!(
+            after > before,
+            "counter should increment: before={before}, after={after}"
+        );
     }
 
     // ─── State transition validation ────────────────────────────────────

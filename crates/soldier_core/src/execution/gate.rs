@@ -691,3 +691,11 @@ pub fn evaluate_liquidity_gate(
         },
     }
 }
+
+#[cfg(test)]
+#[path = "gate_tests.rs"]
+mod gate_tests;
+
+#[cfg(test)]
+#[path = "gate_prop_liquidity_tests.rs"]
+mod gate_prop_liquidity_tests;

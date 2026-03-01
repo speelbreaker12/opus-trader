@@ -204,3 +204,7 @@ impl GateOutcome {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "gate_outcome_tests.rs"]
+mod gate_outcome_tests;

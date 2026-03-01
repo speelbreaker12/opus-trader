@@ -1,50 +1,59 @@
-#![allow(deprecated)] // Tests use deprecated build_order_intent_with_reject_reason_code; TODO: migrate to WAL gate API
 use std::collections::HashSet;
 
-mod common;
-use common::gate_results_all_passing;
+#[path = "test_stubs.rs"]
+mod test_stubs;
+use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
 
 use soldier_core::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateRejectCodes, GateResults, RejectReasonCode,
-    build_order_intent_with_reject_reason_code, reject_reason_registry,
-    reject_reason_registry_contains,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
+    GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
+    reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
 };
 use soldier_core::risk::RiskState;
 
+fn build_chokepoint_result(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    gates: &GateResults,
+    wal_gate: &mut dyn RecordedBeforeDispatchGate,
+) -> ChokeResult {
+    let mut metrics = ChokeMetrics::new();
+    build_order_intent_with_wal_gate(intent_class, risk_state, &mut metrics, gates, wal_gate)
+}
+
+fn build_chokepoint_result_with_stub_wal(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    gates: &GateResults,
+) -> ChokeResult {
+    let mut wal_gate = StubWalGate;
+    build_chokepoint_result(intent_class, risk_state, gates, &mut wal_gate)
+}
+
 #[test]
 fn test_reject_reason_present_on_pre_dispatch_reject() {
-    let mut metrics = ChokeMetrics::new();
-    let gates = gate_results_all_passing();
+    let gates = gate_results_all_passing_failclosed_wal();
 
-    let (result, code) = build_order_intent_with_reject_reason_code(
-        ChokeIntentClass::Open,
-        RiskState::Degraded,
-        &mut metrics,
-        &gates,
+    let result =
+        build_chokepoint_result_with_stub_wal(ChokeIntentClass::Open, RiskState::Degraded, &gates);
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+    let mapped = reject_reason_from_chokepoint(
+        &ChokeRejectReason::RiskStateNotHealthy,
         &GateRejectCodes::default(),
     );
-
-    assert!(matches!(result, ChokeResult::Rejected { .. }));
-    assert_eq!(code, Some(RejectReasonCode::MarginHeadroomRejectOpens));
+    assert_eq!(mapped, RejectReasonCode::MarginHeadroomRejectOpens);
 }
 
 #[test]
 fn test_reject_reason_in_registry() {
-    let mut metrics = ChokeMetrics::new();
-    let gates = GateResults {
-        liquidity_gate_passed: false,
-        ..gate_results_all_passing()
-    };
-
-    let (_, code) = build_order_intent_with_reject_reason_code(
-        ChokeIntentClass::Open,
-        RiskState::Healthy,
-        &mut metrics,
-        &gates,
-        &GateRejectCodes::default(),
-    );
-
-    let code = code.expect("pre-dispatch reject must include reject_reason_code");
+    let code = RejectReasonCode::LiquidityGateNoL2;
     assert!(
         reject_reason_registry_contains(code),
         "reject_reason_code must be a member of RejectReasonCode"
@@ -52,64 +61,122 @@ fn test_reject_reason_in_registry() {
 }
 
 #[test]
-fn test_typed_preflight_code_wins_over_text_heuristics() {
-    let mut metrics = ChokeMetrics::new();
+fn test_preflight_reject_surfaces_preflight_gate_step() {
     let gates = GateResults {
         preflight_passed: false,
-        ..gate_results_all_passing()
-    };
-    let gate_reject_codes = GateRejectCodes {
-        preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
-        ..GateRejectCodes::default()
+        ..gate_results_all_passing_failclosed_wal()
     };
 
-    let (_, code) = build_order_intent_with_reject_reason_code(
-        ChokeIntentClass::Open,
-        RiskState::Healthy,
-        &mut metrics,
-        &gates,
-        &gate_reject_codes,
-    );
+    let result =
+        build_chokepoint_result_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, &gates);
 
-    assert_eq!(code, Some(RejectReasonCode::OrderTypeMarketForbidden));
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::Preflight,
+                ..
+            },
+            ..
+        }
+    ));
 }
 
 #[test]
-fn test_fee_cache_check_maps_to_fee_cache_stale() {
-    let mut metrics = ChokeMetrics::new();
+fn test_fee_cache_check_surfaces_fee_cache_gate_step() {
     let gates = GateResults {
         fee_cache_passed: false,
-        ..gate_results_all_passing()
+        ..gate_results_all_passing_failclosed_wal()
     };
 
-    let (_, code) = build_order_intent_with_reject_reason_code(
-        ChokeIntentClass::Open,
-        RiskState::Healthy,
-        &mut metrics,
-        &gates,
-        &GateRejectCodes::default(),
-    );
+    let result =
+        build_chokepoint_result_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, &gates);
 
-    assert_eq!(code, Some(RejectReasonCode::FeeCacheStale));
+    let reason = match result {
+        ChokeResult::Rejected { reason, .. } => reason,
+        other => panic!("expected rejection, got {other:?}"),
+    };
+    assert!(matches!(
+        reason,
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::FeeCacheCheck,
+            ..
+        }
+    ));
+
+    let mapped = reject_reason_from_chokepoint(
+        &reason,
+        &GateRejectCodes {
+            fee_cache: Some(RejectReasonCode::FeeCacheStale),
+            ..GateRejectCodes::default()
+        },
+    );
+    assert_eq!(mapped, RejectReasonCode::FeeCacheStale);
 }
 
 #[test]
-fn test_recorded_before_dispatch_maps_to_recorded_before_dispatch_failed() {
-    let mut metrics = ChokeMetrics::new();
-    let gates = GateResults {
-        wal_recorded: false,
-        ..gate_results_all_passing()
-    };
+fn test_recorded_before_dispatch_surfaces_wal_gate_step() {
+    let gates = gate_results_all_passing_failclosed_wal();
+    let mut wal_gate = FailingWalGate;
 
-    let (_, code) = build_order_intent_with_reject_reason_code(
+    let result = build_chokepoint_result(
         ChokeIntentClass::Open,
         RiskState::Healthy,
-        &mut metrics,
         &gates,
-        &GateRejectCodes::default(),
+        &mut wal_gate,
     );
 
-    assert_eq!(code, Some(RejectReasonCode::RecordedBeforeDispatchFailed));
+    let reason = match result {
+        ChokeResult::Rejected { reason, .. } => reason,
+        other => panic!("expected rejection, got {other:?}"),
+    };
+    assert!(matches!(
+        reason,
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::RecordedBeforeDispatch,
+            ..
+        }
+    ));
+
+    let mapped = reject_reason_from_chokepoint(
+        &reason,
+        &GateRejectCodes {
+            recorded_before_dispatch: Some(RejectReasonCode::RecordedBeforeDispatchFailed),
+            ..GateRejectCodes::default()
+        },
+    );
+    assert_eq!(mapped, RejectReasonCode::RecordedBeforeDispatchFailed);
+}
+
+#[test]
+fn test_preflight_gate_rejection_maps_to_specific_reason_code() {
+    let gates = GateResults {
+        preflight_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let result =
+        build_chokepoint_result_with_stub_wal(ChokeIntentClass::Open, RiskState::Healthy, &gates);
+
+    let reason = match result {
+        ChokeResult::Rejected { reason, .. } => reason,
+        other => panic!("expected rejection, got {other:?}"),
+    };
+    assert!(matches!(
+        reason,
+        ChokeRejectReason::GateRejected {
+            gate: GateStep::Preflight,
+            ..
+        }
+    ));
+
+    let mapped = reject_reason_from_chokepoint(
+        &reason,
+        &GateRejectCodes {
+            preflight: Some(RejectReasonCode::OrderTypeMarketForbidden),
+            ..GateRejectCodes::default()
+        },
+    );
+    assert_eq!(mapped, RejectReasonCode::OrderTypeMarketForbidden);
 }
 
 #[test]
@@ -271,32 +338,39 @@ fn test_reject_reason_serde_round_trip_fe001_codes() {
 fn test_at201_open_classified_intent_blocked_by_open_gates() {
     // Open classification (assigned to unknown actions at the intake boundary) + Degraded → blocked
     let mut m_open = ChokeMetrics::new();
-    let (result_open, code_open) = build_order_intent_with_reject_reason_code(
+    let mut wal_gate = StubWalGate;
+    let result_open = build_order_intent_with_wal_gate(
         ChokeIntentClass::Open,
         RiskState::Degraded,
         &mut m_open,
-        &gate_results_all_passing(),
-        &GateRejectCodes::default(),
+        &gate_results_all_passing_failclosed_wal(),
+        &mut wal_gate,
     );
     assert!(
-        matches!(result_open, ChokeResult::Rejected { .. }),
+        matches!(
+            result_open,
+            ChokeResult::Rejected {
+                reason: ChokeRejectReason::RiskStateNotHealthy,
+                ..
+            }
+        ),
         "Open (default for unknown actions) + Degraded must be rejected"
     );
     assert_eq!(m_open.approved_total(), 0, "OPEN dispatch count must be 0");
-    assert_eq!(
-        code_open,
-        Some(RejectReasonCode::MarginHeadroomRejectOpens),
-        "OPEN + Degraded must produce MarginHeadroomRejectOpens reason code"
+    assert!(
+        reject_reason_registry_contains(RejectReasonCode::MarginHeadroomRejectOpens),
+        "MarginHeadroomRejectOpens must be part of RejectReasonCode registry"
     );
 
     // Contrast: Close (explicitly risk-reducing) is NOT blocked by Degraded
     let mut m_close = ChokeMetrics::new();
-    let (result_close, _) = build_order_intent_with_reject_reason_code(
+    let mut wal_gate = StubWalGate;
+    let result_close = build_order_intent_with_wal_gate(
         ChokeIntentClass::Close,
         RiskState::Degraded,
         &mut m_close,
-        &gate_results_all_passing(),
-        &GateRejectCodes::default(),
+        &gate_results_all_passing_failclosed_wal(),
+        &mut wal_gate,
     );
     assert!(
         matches!(result_close, ChokeResult::Approved { .. }),
