@@ -7,7 +7,8 @@ set -euo pipefail
 #
 # Schema names: gap_list, verify_result, review_receipt, phase_mapping,
 #               premortem_ready, lead_eval_sidecar, self_review_sidecar,
-#               review_artifact_sidecar, r3_external_manifest, r7_external_manifest
+#               review_artifact_sidecar, r3_external_manifest, r7_external_manifest,
+#               recon_step_report, recon_trace_receipt
 #
 # Exit codes:
 #   0 = valid
@@ -31,7 +32,8 @@ Usage: plans/validate_recon_artifact.sh <schema_name> <artifact.json>
 Schema names:
   gap_list, verify_result, review_receipt, phase_mapping,
   premortem_ready, lead_eval_sidecar, self_review_sidecar,
-  review_artifact_sidecar, r3_external_manifest, r7_external_manifest
+  review_artifact_sidecar, r3_external_manifest, r7_external_manifest,
+  recon_step_report, recon_trace_receipt
 
 Exit codes:
   0 = valid
@@ -52,7 +54,7 @@ if [[ -z "$schema_name" || -z "$artifact_path" ]]; then
 fi
 
 # Validate schema_name is known
-known_schemas="gap_list verify_result review_receipt phase_mapping premortem_ready lead_eval_sidecar self_review_sidecar review_artifact_sidecar r3_external_manifest r7_external_manifest"
+known_schemas="gap_list verify_result review_receipt phase_mapping premortem_ready lead_eval_sidecar self_review_sidecar review_artifact_sidecar r3_external_manifest r7_external_manifest recon_step_report recon_trace_receipt"
 schema_valid=false
 for s in $known_schemas; do
   if [[ "$s" == "$schema_name" ]]; then
@@ -190,6 +192,12 @@ r3_external_manifest)
     ;;
   r7_external_manifest)
     required_fields=("story_id" "cycle" "review_basis" "base_commit" "tools" "validation_status")
+    ;;
+  recon_step_report)
+    required_fields=("story_id" "step_name" "step_index" "status" "commands_run" "files_changed" "strongest_evidence" "not_done")
+    ;;
+  recon_trace_receipt)
+    required_fields=("run_id" "story_id" "slice_id" "step_name" "step_index" "start_at" "end_at" "duration_seconds" "retries" "result" "attempt" "wf_receipt_path" "wf_receipt_sha256" "step_report_path" "step_report_sha256")
     ;;
 esac
 
@@ -331,6 +339,63 @@ case "$schema_name" in
     tool_count="$(jq -re '.tools | length' "$artifact_path" 2>/dev/null || echo 0)"
     if [[ "$tool_count" -lt 1 ]]; then
       errors+=("tools array must have at least 1 entry")
+    fi
+    ;;
+  recon_step_report)
+    step_name="$(jq -re '.step_name // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$step_name" ]]; then
+      case "$step_name" in
+        preflight|implement|self_review|cycle1|fix|cycle2|resolution|verify_full|pass) ;;
+        *) errors+=("step_name '$step_name' not in allowed values") ;;
+      esac
+    fi
+    status="$(jq -re '.status // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$status" ]]; then
+      case "$status" in
+        PASS|FAIL|BLOCKED) ;;
+        *) errors+=("status '$status' not in allowed values: PASS, FAIL, BLOCKED") ;;
+      esac
+    fi
+    cmds_len="$(jq -re '.commands_run | length' "$artifact_path" 2>/dev/null || echo 0)"
+    if [[ "$cmds_len" -lt 1 ]]; then
+      errors+=("commands_run must contain at least one command")
+    fi
+    files_len="$(jq -re '.files_changed | length' "$artifact_path" 2>/dev/null || echo 0)"
+    if [[ "$files_len" -lt 1 ]]; then
+      errors+=("files_changed must contain at least one path")
+    fi
+    strongest="$(jq -re '.strongest_evidence // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -z "$strongest" || "$strongest" =~ ^[[:space:]]*(n/a|na|unknown|tbd|todo)?[[:space:]]*$ ]]; then
+      errors+=("strongest_evidence is empty or hand-wavy")
+    fi
+    not_done="$(jq -re '.not_done // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -z "$not_done" ]]; then
+      errors+=("not_done is required (forced admission; use 'none' if fully complete)")
+    fi
+    ;;
+  recon_trace_receipt)
+    result="$(jq -re '.result // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$result" ]]; then
+      case "$result" in
+        PASS|FAIL|BLOCKED) ;;
+        *) errors+=("result '$result' not in allowed values: PASS, FAIL, BLOCKED") ;;
+      esac
+    fi
+    attempt="$(jq -re '.attempt // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$attempt" && ! "$attempt" =~ ^[0-9]+$ ]]; then
+      errors+=("attempt '$attempt' is not an integer >= 1")
+    elif [[ -n "$attempt" && "$attempt" -lt 1 ]]; then
+      errors+=("attempt '$attempt' must be >= 1")
+    fi
+    for f in wf_receipt_sha256 step_report_sha256; do
+      sha="$(jq -re ".$f // empty" "$artifact_path" 2>/dev/null || true)"
+      if [[ -n "$sha" && ! "$sha" =~ ^[0-9a-f]{64}$ ]]; then
+        errors+=("$f '$sha' is not a valid 64-char lowercase hex sha256")
+      fi
+    done
+    log_sha="$(jq -re '.log_sha256 // empty' "$artifact_path" 2>/dev/null || true)"
+    if [[ -n "$log_sha" && ! "$log_sha" =~ ^[0-9a-f]{64}$ ]]; then
+      errors+=("log_sha256 '$log_sha' is not a valid 64-char lowercase hex sha256")
     fi
     ;;
 esac

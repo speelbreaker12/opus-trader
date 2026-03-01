@@ -36,6 +36,21 @@ doesn't deserve `passes=true`.
 - For cross-worktree portability of slice artifacts, use `plans/recon_bundle.sh` commands documented in `RUNBOOK_PREMORTEM_RECON.md` §6.1.1
 - **Never modify production code outside of Step 2 (implement/R5) and Step 5 (fix/R7c-fix)**
 
+### Operator / Executor Mode (when enabled)
+
+- Operator:
+  - orchestrates steps, validates receipts/artifacts, updates handoff + scoreboard, decides GO/NO-GO
+  - runs external reviewers (C1/C2) independently from executor
+- Executor:
+  - performs current step work
+  - provides mandatory step report with forced admissions
+
+Mandatory step report fields (fail-closed if missing/hand-wavy):
+1. exact commands run
+2. files created/modified
+3. strongest evidence produced (one item)
+4. what was not done that step required (forced admission)
+
 ---
 
 > **How to use this file**

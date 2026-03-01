@@ -31,6 +31,7 @@ STEPS: tuple[str, ...] = (
 STATUS_DONE = "DONE"
 STATUS_STALE = "STALE"
 STATUS_MISSING = "MISSING"
+STATUS_BLOCKED = "BLOCKED"
 PATH_VALUES = {"GREEN", "YELLOW"}
 HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
@@ -38,6 +39,7 @@ GLYPHS = {
     STATUS_DONE: "✓",
     STATUS_STALE: "!",
     STATUS_MISSING: "·",
+    STATUS_BLOCKED: "x",
 }
 
 PATH_RE = re.compile(r"^PATH:\s*(GREEN|YELLOW)\s*$")
@@ -193,6 +195,14 @@ def _receipt_dir_for_story(root: Path, story_id: str) -> Path:
 
 def _story_artifacts_root(root: Path) -> Path:
     raw = os.getenv("STORY_ARTIFACTS_ROOT", "artifacts/story")
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    return root / p
+
+
+def _trace_root(root: Path) -> Path:
+    raw = os.getenv("WF_TRACE_ROOT", ".wf/trace")
     p = Path(raw)
     if p.is_absolute():
         return p
@@ -361,11 +371,59 @@ def _derive_pass_status(step_status: dict[str, str]) -> str:
     """
     prereq_steps = STEPS[:-1]
     prereq_statuses = [step_status[s] for s in prereq_steps]
+    if any(status == STATUS_BLOCKED for status in prereq_statuses):
+        return STATUS_BLOCKED
     if any(status == STATUS_MISSING for status in prereq_statuses):
         return STATUS_MISSING
     if any(status == STATUS_STALE for status in prereq_statuses):
         return STATUS_STALE
     return STATUS_DONE
+
+
+def _latest_blocked_attempt(root: Path, story_id: str, step: str) -> dict[str, str] | None:
+    story_trace_dir = _trace_root(root) / story_id
+    if not story_trace_dir.is_dir():
+        return None
+
+    best: dict[str, str] | None = None
+    best_key: tuple[str, str] | None = None
+
+    for run_dir in sorted(story_trace_dir.iterdir()):
+        if not run_dir.is_dir():
+            continue
+        ledger = run_dir / "step_timing.jsonl"
+        if not ledger.is_file():
+            continue
+        try:
+            with open(ledger, "r", encoding="utf-8") as handle:
+                for raw in handle:
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        payload = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    if payload.get("step") != step:
+                        continue
+                    if str(payload.get("status", "")).upper() != STATUS_BLOCKED:
+                        continue
+                    ts = str(payload.get("ts_end") or payload.get("ts_start") or "")
+                    candidate = {
+                        "trace_id": run_dir.name,
+                        "ts": ts,
+                        "log_path": str(payload.get("log_path", "")),
+                    }
+                    key = (ts, run_dir.name)
+                    if best_key is None or key > best_key:
+                        best = candidate
+                        best_key = key
+        except OSError:
+            continue
+
+    return best
 
 
 def _markdown_table_row(cells: list[str]) -> str:
@@ -383,6 +441,7 @@ def _render_markdown(
     lines.append("")
     lines.append(f"Generated: {generated_at}")
     lines.append(f"HEAD: `{head_commit}`")
+    lines.append("Legend: ✓ DONE, ! STALE, x BLOCKED, · MISSING")
     lines.append("")
 
     headers = [
@@ -436,9 +495,15 @@ def build_scoreboard(
         receipt_dir = _receipt_dir_for_story(root, entry.story_id)
         step_status: dict[str, str] = {}
         step_receipt_head_sha: dict[str, str] = {}
+        step_blocked_attempts: dict[str, dict[str, str]] = {}
         for index, step in enumerate(STEPS[:-1]):
             receipt_path = receipt_dir / f"{index:02d}_{step}.json"
             status, receipt_head_sha = _receipt_status(receipt_path, resolved_score_head)
+            if status == STATUS_MISSING:
+                blocked_meta = _latest_blocked_attempt(root, entry.story_id, step)
+                if blocked_meta is not None:
+                    status = STATUS_BLOCKED
+                    step_blocked_attempts[step] = blocked_meta
             step_status[step] = status
             if receipt_head_sha:
                 step_receipt_head_sha[step] = receipt_head_sha
@@ -462,6 +527,7 @@ def build_scoreboard(
                 "head": resolved_score_head,
                 "steps": step_status,
                 "step_receipt_head_sha": step_receipt_head_sha,
+                "step_blocked_attempts": step_blocked_attempts,
             }
         )
 

@@ -59,7 +59,10 @@ plans/pre_pr_review_gate.sh
 plans/preflight.sh
 plans/readme_ci_parity_check.sh
 plans/recon_bundle.sh
+plans/recon_operator_run.sh
 plans/recon_precheck.sh
+plans/recon_run_card_template.md
+plans/recon_trace.sh
 plans/review_logged.sh
 plans/review_resolution_template.md
 plans/schemas/crossref_execution_invariants.schema.json
@@ -106,8 +109,13 @@ plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
 plans/tests/test_recon_bundle.sh
+plans/tests/test_recon_operator_runner.sh
+plans/tests/test_recon_operator_trace.sh
 plans/tests/test_recon_precheck.sh
 plans/tests/test_review_logged_proof_graph.sh
+plans/tests/test_review_logged_timeout_binary_unavailable.sh
+plans/tests/test_review_logged_timeout_fallback.sh
+plans/tests/test_review_logged_timeout_retry_noncodex.sh
 plans/tests/test_roadmap_evidence_audit.sh
 plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh
@@ -120,6 +128,7 @@ plans/tests/test_workflow_allowlist_coverage.sh
 plans/tests/test_workflow_quick_step.sh
 plans/toggle_policy_check.sh
 plans/validate_crossref_invariants.py
+plans/validate_recon_step_report.py
 plans/verify.sh
 plans/verify_day.sh
 plans/verify_fork.sh
@@ -153,6 +162,8 @@ specs/SOURCE_OF_TRUTH.md
 specs/TRACE.yaml
 specs/WORKFLOW_CONTRACT.md
 specs/WORKFLOW_CONTRACT_RALPH.md
+specs/schemas/recon/recon_step_report.schema.json
+specs/schemas/recon/recon_trace_receipt.schema.json
 specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
 tools/at_coverage_report.py
 tools/at_parser.py

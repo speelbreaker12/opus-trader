@@ -18,6 +18,8 @@ story_id="S0-000"
 receipt_root="$tmp_dir/receipts"
 story_receipts="$receipt_root/$story_id"
 mkdir -p "$story_receipts"
+trace_root="$tmp_dir/trace"
+mkdir -p "$trace_root/$story_id/20260101T000000Z-$story_id"
 
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 alt_head="$(git -C "$ROOT" rev-parse HEAD~1 2>/dev/null || echo "$head_sha")"
@@ -38,6 +40,10 @@ cat > "$story_receipts/03_cycle1.json" <<'EOF'
 {"story_id":"S0-000","step_name":"cycle1","head_sha":"not-a-hex-sha"}
 EOF
 
+cat > "$trace_root/$story_id/20260101T000000Z-$story_id/step_timing.jsonl" <<'EOF'
+{"story_id":"S0-000","trace_id":"20260101T000000Z-S0-000","step":"fix","attempt":1,"kind":"gate","ts_start":"2026-01-01T00:00:00Z","ts_end":"2026-01-01T00:00:05Z","duration_s":5,"exit_code":1,"status":"BLOCKED","log_path":".wf/trace/S0-000/20260101T000000Z-S0-000/logs/fix_attempt1.log"}
+EOF
+
 md_out="$tmp_dir/SCOREBOARD.md"
 json_out="$tmp_dir/SCOREBOARD.json"
 json_out_alt_head="$tmp_dir/SCOREBOARD.alt_head.json"
@@ -50,7 +56,7 @@ EOF
 
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_id" \
     --out-md "$md_out" \
@@ -67,13 +73,16 @@ grep -Fq "| Story | passes | PATH | preflight | implement | self_review | cycle1
 grep -Fq "| $story_id |" "$md_out" || fail "story row missing from markdown"
 grep -Fq "✓" "$md_out" || fail "expected DONE glyph not found"
 grep -Fq "!" "$md_out" || fail "expected STALE glyph not found"
+grep -Fq "x" "$md_out" || fail "expected BLOCKED glyph not found"
 grep -Fq "| $story_id | true | GREEN |" "$md_out" || fail "expected markdown PATH signal not found"
 
 grep -Fq '"story_id": "S0-000"' "$json_out" || fail "story id missing from json"
 grep -Fq '"implement": "STALE"' "$json_out" || fail "stale status missing from json"
 grep -Fq '"self_review": "MISSING"' "$json_out" || fail "malformed receipt should map to MISSING"
 grep -Fq '"cycle1": "MISSING"' "$json_out" || fail "non-hex receipt head_sha should map to MISSING"
-grep -Fq '"pass": "MISSING"' "$json_out" || fail "pass should be missing when prerequisites are missing"
+grep -Fq '"fix": "BLOCKED"' "$json_out" || fail "blocked trace attempt should surface as BLOCKED"
+grep -Fq '"pass": "BLOCKED"' "$json_out" || fail "pass should be blocked when prerequisite step is blocked"
+grep -Fq '"step_blocked_attempts"' "$json_out" || fail "blocked attempt metadata map missing"
 grep -Fq '"step_receipt_head_sha"' "$json_out" || fail "step receipt head debug map missing"
 grep -Fq '"preflight": "'"$head_sha"'"' "$json_out" || fail "preflight head missing from debug map"
 grep -Fq '"implement": "'"$alt_head"'"' "$json_out" || fail "implement head missing from debug map"
@@ -94,7 +103,7 @@ EOF
 
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_id" \
     --out-md "$md_out" \
@@ -123,7 +132,7 @@ EOF
 
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_id" \
     --out-md "$md_out" \
@@ -142,7 +151,7 @@ EOF
 
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_id" \
     --out-md "$md_out" \
@@ -157,7 +166,7 @@ grep -Fq '"path_source": "'"$artifacts_root/$story_id/cycle1/evidence_ledger.md"
 # --head should allow scoring against a specific commit-ish.
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_id" \
     --head "$alt_head" \
@@ -187,7 +196,7 @@ artifacts_root_empty="$tmp_dir/story_artifacts_empty"
 mkdir -p "$artifacts_root_empty"
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root_empty" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root_empty" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_full" \
     --out-md "$md_full" \
@@ -210,7 +219,7 @@ md_path="$tmp_dir/SCOREBOARD_path.md"
 json_path="$tmp_dir/SCOREBOARD_path.json"
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_path_pref" \
     --out-md "$md_path" \
@@ -234,7 +243,7 @@ md_bad="$tmp_dir/SCOREBOARD_badjson.md"
 json_bad="$tmp_dir/SCOREBOARD_badjson.json"
 (
   cd "$ROOT"
-  WF_RECEIPT_DIR="$receipt_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
+  WF_RECEIPT_DIR="$receipt_root" WF_TRACE_ROOT="$trace_root" STORY_ARTIFACTS_ROOT="$artifacts_root" python3 plans/recon_scoreboard.py \
     --slice 0 \
     --stories "$story_bad_json" \
     --out-md "$md_bad" \

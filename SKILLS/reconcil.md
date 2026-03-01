@@ -67,3 +67,19 @@ to the exact section of the governing doc. Read that section if you are unsure h
 
 For the canonical mapping between `wf_step.sh` steps and reconciliation phases (R1–R7), always
 use the table in `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` §3 as the single source of truth.
+
+---
+
+## Two-agent mode (recommended for medium/high-risk stories)
+
+If running with operator/executor separation:
+- Operator skill: `SKILLS/recon_operator.md`
+- Executor skill: `SKILLS/recon-executor.md` (or equivalent executor prompt)
+
+Operator owns external reviews and all gate decisions. Executor runs step commands and emits strict
+step closeout blocks only.
+
+When users ask for supervised reconciliation, delegate to `/recon_operator` for the run orchestration
+and use this skill for handoff/scoreboard hygiene.
+
+Operator runs should use `plans/recon_operator_run.sh` as the default command entrypoint.
