@@ -174,6 +174,12 @@ Legend: `·` not started, `→` in progress, `✓` passed, `✗` blocked/failed
   - Resolved by adding a valid C2 artifact with FIX_DIFF basis:
     - `artifacts/story/S2-000/codex/20260227T191500Z_review.md`
   - Run remained on GREEN path (`min_reviews=1`) due `fix.code_changed=false`.
+  - External rerun with all 3 tools logged in:
+    - `reviews/reconciliations/S2/S2-000_step6_all3_external_review_rerun.md`
+  - Post-fix scoped rerun (all 3 tools) logged in:
+    - `reviews/reconciliations/S2/S2-000_step6_all3_external_review_rerun_after_fixes.md`
+  - Final hardening rerun (all 3 tools) logged in:
+    - `reviews/reconciliations/S2/S2-000_step6_all3_external_review_rerun_round2.md`
 
 ### S2-000 — Step 7 (resolution)
 

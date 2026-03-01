@@ -212,19 +212,6 @@ This keeps continuation deterministic and prevents repeated blocker rediscovery.
 
 If precheck fails, fix it first; do not record the step receipt.
 
-### 3.0.3 Scoreboard PATH Contract (deterministic)
-
-`plans/recon_scoreboard.py` computes PATH using the following precedence:
-1. JSON-first evidence ledger candidates (`evidence_ledger.json` / `<STORY_ID>_reconciliation.json`)
-2. Markdown fallback (`PATH: GREEN|YELLOW`) when JSON exists but is invalid or cannot yield a signal
-
-When using `schema_version: evidence_ledger.v1`, PATH is derived without manual stamping:
-- `PATH=YELLOW` if any `gaps[].priority` (or `gaps[].severity`) is `P0`/`P1`
-- `PATH=YELLOW` if any `at_verdicts[*].verdict` is not `PROVEN`/`DEFERRED`
-- otherwise `PATH=GREEN`
-
-For markdown ledgers, keep `PATH: GREEN|YELLOW` as the first line for prompt compatibility.
-
 ---
 
 ### R1 — Parallel Reconcile (Read-Only)
@@ -369,6 +356,10 @@ plans/review_logged.sh <STORY_ID> --tool codex --prompt generic  --base <BASE_BR
 Repeat with additional tools as available (opus, kimi). Minimum 1 tool, recommended 2+.
 When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refresh.sh` (slice-start default) to avoid unnecessary reruns.
 
+**Timeout defaults and overrides**:
+- `review_logged.sh` defaults: `codex` diff-mode = no timeout (`0`), `codex --files` = `600s`, `kimi` = `600s`, `opus` = `600s` (`900s` for `--files`).
+- Override per run with `--timeout-seconds <N>`.
+
 **Tool coverage policy (explicit)**:
 - Gate minimum: 1 tool.
 - Operational default: 2 tools (`codex` + `kimi`).
@@ -384,6 +375,8 @@ When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refr
   - `<tool>.enriched.md` and `<tool>.generic.md` per tool
 - Per-story manifest: `R3_EXTERNAL_MANIFEST.json` (source of truth, gate artifact)
 - Per-story rendered summary: `R3_EXTERNAL_MANIFEST.md` (human-readable companion)
+- Reviewer output must include explicit `path/to/file.ext:line` citations per finding; `NO_FINDINGS` responses must still include at least 3 reviewed citations.
+- Sidecar behavior is fail-closed: sidecar is regenerated only on successful gate completion; failed runs (for example timeout) may leave no sidecar by design.
 
 **JSON-first requirement**:
 - `R3_EXTERNAL_MANIFEST.json` is the machine source; render `.md` from JSON via `plans/render_external_manifest.py`.
@@ -429,6 +422,11 @@ When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refr
   - `3` — infrastructure / I/O failure
 
 **Blocking if**: missing basis line, pre-existing citation checks, or phase-mapping label checks (`exit 1`); malformed invocation/input (`exit 2`); or I/O/infra failure (`exit 3`)
+
+**Operational triage (review_logged exit codes)**:
+- `exit 4`: missing required pre-existing citations (typically reviewer output quality issue; rerun after enforcing citation format).
+- `exit 7`: review command timeout (`HARD_GATE: REVIEW_COMMAND_TIMEOUT`); increase timeout or reduce prompt scope and rerun.
+- For any nonzero exit, do not reuse old sidecar files as proof.
 
 #### R3 Gate Checks
 
@@ -1018,6 +1016,10 @@ plans/review_logged.sh <STORY_ID> --tool <tool> --prompt <style> --base <BASE_BR
 ```
 Repeat with additional tools as needed. Minimum 1 combo; dual-combo requires both styles.
 
+**Timeout defaults and overrides**:
+- Defaults match Cycle 1 (`codex` diff-mode `0`, `codex --files` `600`, `kimi` `600`, `opus` `600/900` for files mode).
+- Use `--timeout-seconds <N>` when infrastructure/model latency requires more headroom.
+
 **Tool coverage policy (Cycle 2)**:
 - Honor `cycle2_path.required_combinations` in the manifest.
 - If `opus` is not in required combinations, omission is allowed but must be documented in handoff notes.
@@ -1032,6 +1034,8 @@ Repeat with additional tools as needed. Minimum 1 combo; dual-combo requires bot
 - Per-story manifest: `R7_EXTERNAL_MANIFEST.json` (source of truth, gate artifact)
 - Per-story rendered summary: `R7_EXTERNAL_MANIFEST.md` (human-readable companion)
 - Render companions from `plans/render_external_manifest.py`; do not hand-edit.
+- Reviewer output must include explicit `path/to/file.ext:line` citations per finding; `NO_FINDINGS` requires at least 3 reviewed citations.
+- Sidecar behavior is fail-closed: failed runs can intentionally leave no sidecar file.
 
 **`R7_EXTERNAL_MANIFEST.json` schema (required fields)**:
 ```json

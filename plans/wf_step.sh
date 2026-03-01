@@ -491,7 +491,6 @@ verify_cycle1_citations() {
   local verifier="$ROOT/plans/verify_citations.sh"
   local newest=""
   local best_c1=""
-  local verifier_output=""
 
   if [[ ! -x "$verifier" ]]; then
     echo "WF_STEP: citation validator missing or not executable at $verifier" >&2
@@ -505,8 +504,6 @@ verify_cycle1_citations() {
     while IFS= read -r artifact; do
       [[ -f "$artifact" ]] || continue
       [[ -z "$newest" ]] && newest="$artifact"
-      # Newest-first scan: keep searching until first C1-valid artifact so a malformed/newer
-      # file does not mask an older valid C1 report in the same tool directory.
       if "$verifier" --artifact "$artifact" --mode C1 --json >/dev/null 2>&1; then
         best_c1="$artifact"
         break
@@ -517,8 +514,7 @@ verify_cycle1_citations() {
       review_files+=("$best_c1")
     elif [[ -n "$newest" ]]; then
       # Emit deterministic failure diagnostics for the newest candidate in this tool dir.
-      verifier_output="$("$verifier" --artifact "$newest" --mode C1 --json 2>&1 || true)"
-      [[ -n "$verifier_output" ]] && echo "$verifier_output" >&2
+      "$verifier" --artifact "$newest" --mode C1 --json >/dev/null 2>&1 || true
       echo "WF_STEP: citation pre-gate failed for $newest (no C1-valid artifact found in $d)" >&2
       return 1
     fi
