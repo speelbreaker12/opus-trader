@@ -28,7 +28,7 @@ This Patch Summary is non-normative; see §0.0 for normative scope.
 - /status required fields: see §7.0 acceptance tests.
 
 > [!WARNING]
-> **v5.2 F1_CERT Binding Requirement:** This version introduces F1_CERT binding validation (§2.2.1). ALL components that produce or consume `contract_version` MUST be updated to `5.2` in lockstep (F1 cert generator, runtime binary, PolicyGuard). Mismatched versions will force `TradingMode::ReduceOnly` until aligned.
+> **v5.2 Runtime Binding Requirement:** This version introduces runtime binding validation via `artifacts/RUNTIME_BINDING_CERT.json` (§2.2.1). ALL components that produce or consume `contract_version` MUST be updated to `5.2` in lockstep (binding cert generator, runtime binary, PolicyGuard). Mismatched versions force `TradingMode::ReduceOnly` until aligned.
 
 ---
 
@@ -39,10 +39,11 @@ This Patch Summary is non-normative; see §0.0 for normative scope.
 **Applied:** 2026-01-25  
 **Objective:** Make CSP isolation mechanically enforceable and reduce the spec → code gap.
 
-- **§0.Z.2.5 CSP Minimal Implementation Checklist** — Defines the smallest contract surface required to claim CSP.
+- **§0.Z.2.5 CSP Compliance Rule** — Defines tag-driven CSP compliance and precedence over roadmap/checklist text.
 - **§0.Z.7 Profile Isolation** — Defines `supported_profiles`/`enforced_profile`, mandates runtime + compile-time separation (CSP_ONLY build), and prohibits GOP inputs from affecting CSP safety decisions.
 - **§0.Z.9 CSP-Only CI Gate** — Requires CI to prove CSP isolation via CSP_ONLY build/test gates.
-- **§2.2.1.1 Critical Input Freshness** — Clarifies “critical inputs” are profile-scoped (GOP-only inputs are not critical in CSP).
+- **§0.Z.10 Numeric Sanity Guard** — Enforces fail-closed handling for invalid CSP numerics and explicit GOP-numeric isolation under `enforced_profile == CSP`.
+- **§2.2.1.2 Critical Input Freshness** — Clarifies “critical inputs” are profile-scoped (GOP-only inputs are not critical in CSP).
 - **§2.2.3 Axis Resolver** — Gates EvidenceChainState predicates on `enforced_profile != CSP`.
 - **§7.0 /status Observability** — Adds required fields `supported_profiles` and `enforced_profile`; clarifies GOP extension key behavior under CSP.
 
@@ -92,7 +93,7 @@ For any **new guard** (a rule, latch, monitor, or gate) that can block an OPEN, 
 - **RiskState** (health/cause layer): `Healthy | Degraded | Maintenance | Kill`
 - **TradingMode** (enforcement layer): `Active | ReduceOnly | Kill`  
   Resolved by PolicyGuard each tick from RiskState, policy staleness, watchdog, exchange health, fee cache staleness, and Cortex overrides.
-  **Runtime F1 Gate in PolicyGuard (HARD, runtime enforcement):** See §2.2.1 for canonical specification. Summary: F1_CERT missing/stale/invalid → ReduceOnly (blocks opens; allows closes/hedges/cancels).
+  **Runtime Binding Gate in PolicyGuard (HARD, runtime enforcement):** See §2.2.1 for canonical specification. Summary: runtime binding cert missing/stale/invalid → ReduceOnly (blocks opens; allows closes/hedges/cancels).
 - **TradingMode (term usage):** The term `TradingMode` refers exclusively to the PolicyGuard enum `Active | ReduceOnly | Kill`.
 - **ExecutionStyle** (execution tactics layer): `Sniper` (IOC limit-only execution policy).
   - ExecutionStyle governs order construction and execution tactics only.
@@ -127,7 +128,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 | **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
 | **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
 | **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
-| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner status output returning `ok`, `build_id`, `contract_version`, `trading_mode`, `is_trading_allowed` | `docs/health_endpoint.md`, passing tests |
+| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner status output returning `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (and optional deprecated alias `is_trading_allowed`) | `docs/health_endpoint.md`, passing tests |
 | **P0-F** | Machine Policy Loader Baseline | Bind a machine-readable policy path + strict loader so runtime checks are not doc-only | `config/policy.json`, `tools/policy_loader.py`, passing tests |
 
 **Anchors (for PRD traceability):**
@@ -138,7 +139,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `is_trading_allowed`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -342,21 +343,19 @@ are mandatory for any implementation that trades live.
 
 Failure of any CSP-tagged test MUST block deployment.
 
-#### **0.Z.2.5 CSP Minimal Implementation Checklist (Normative)**
+#### **0.Z.2.5 CSP Compliance Rule (Normative)**
 
-To claim CSP compliance, an implementation MUST implement the following contract surfaces:
+To claim CSP compliance, an implementation MUST satisfy:
 
-- §1.1 — Identity / Label Schema / Intent Hash stability
-- §2.4 — WAL / intent ledger (RecordedBeforeDispatch)
-- §2.2.1 — Runtime F1 Certification Gate (binding enforcement of build_id, runtime_config_hash, and contract_version; fail-closed to ReduceOnly)
-- §2.2.3 — TradingMode computation + enforcement
-- §2.2.4 — OpenPermissionLatch semantics (CP-001)
-- §3.4 — Continuous 3-way reconciliation (restart + WS gap + session termination recovery)
-- §3.1 — Deterministic Emergency Close / containment (bounded + deterministic)
-- §7.0 — `/api/v1/status` minimum safety fields (including `supported_profiles` and `enforced_profile`)
+1. All §0.Z.2.2 invariants (A through H).
+2. All sections and acceptance tests tagged `Profile: CSP`.
+3. The §0.Z.5–§0.Z.10 enforcement and isolation rules (profile tagging, declaration of compliance, profile isolation, CSP_ONLY CI gate, and Numeric Sanity Guard).
 
-All other sections are OPTIONAL for CSP.
-If implemented, they MUST NOT negate CSP guarantees.
+**Precedence rule:** If roadmap phases, patch summaries, checklists, or other informative text conflict with a `Profile: CSP` requirement, the `Profile: CSP` requirement controls.
+
+**Phase rule:** Roadmap phases are implementation milestones only; they do not weaken or override CSP compliance requirements.
+
+If implemented, GOP-only sections MUST NOT negate CSP guarantees.
 
 ### **0.Z.3 Governance & Optimization Profile (GOP)**
 
@@ -552,6 +551,14 @@ AT-991
 - Pass criteria: OPEN is permitted (or denied only by CSP gates).  
 - Fail criteria: OPEN blocked by GOP health while `enforced_profile == CSP`.
 
+Profile: CSP
+AT-1218
+- Given: `enforced_profile == CSP`, GOP evidence systems (TruthCapsule/Decision Snapshot/Replay) are absent or disabled by build/runtime configuration, and all CSP gates pass.
+- When: PolicyGuard computes TradingMode and an OPEN intent is evaluated.
+- Then: CSP runtime behavior remains correct (no GOP dependency): TradingMode and OPEN legality are determined only by CSP inputs.
+- Pass criteria: OPEN dispatch eligibility matches CSP gates exactly; no GOP-absence-induced block.
+- Fail criteria: OPEN is blocked or TradingMode degrades solely due to missing GOP systems under CSP.
+
 Profile: GOP
 AT-992  
 - Given: `enforced_profile != CSP` and EvidenceChainState != GREEN.  
@@ -610,6 +617,38 @@ AT-1057
 - Then: (a) all `Profile: CSP` acceptance tests MUST pass, and (b) no `Profile: GOP` acceptance test may execute in this pipeline.  
 - Pass criteria: all CSP tests pass; runner reports 0 GOP tests executed; job exits 0.  
 - Fail criteria: any CSP test fails, or any GOP test is executed in `test:csp_only`.
+
+### **0.Z.10 Numeric Sanity Guard (Normative)**
+Profile: CSP
+
+All numeric inputs used for CSP safety enforcement MUST be finite and parseable.
+
+- For any CSP safety-critical numeric input (e.g., margin utilization, disk utilization, watchdog timing, session-termination state inputs), missing/unparseable/non-finite values MUST fail closed:
+  - `TradingMode` MUST be at most `ReduceOnly`,
+  - OPEN intents MUST be blocked,
+  - `mode_reasons` MUST include `REDUCEONLY_INPUT_MISSING_OR_STALE`.
+- Numeric sanitation MUST run before axis resolution and must be deterministic.
+
+**CSP/GOP isolation hard rule:**
+- Under `enforced_profile == CSP`, invalid numerics from GOP-only subsystems (SVI/replay/attribution/evidence analytics) MUST NOT influence CSP safety decisions.
+- GOP-only numeric faults under CSP MAY be logged and MAY disable GOP features, but MUST NOT change:
+  - `TradingMode`,
+  - `OpenPermissionLatch`,
+  - legality of risk-reducing actions.
+
+AT-1219
+- Given: `enforced_profile == CSP`, all CSP safety-critical inputs are healthy, and a GOP-only numeric input becomes non-finite (`NaN`/`Inf`) or unparseable.
+- When: PolicyGuard computes `TradingMode` and OPEN legality for that tick.
+- Then: CSP safety decisions are unchanged by the GOP-only numeric fault.
+- Pass criteria: `TradingMode`/OPEN legality are identical with and without the GOP-only fault.
+- Fail criteria: TradingMode degrades or OPEN is blocked solely due to a GOP-only numeric fault while `enforced_profile == CSP`.
+
+AT-1221
+- Given: a CSP safety-critical numeric input is missing/unparseable/non-finite.
+- When: PolicyGuard computes `TradingMode`.
+- Then: `TradingMode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`.
+- Pass criteria: OPEN dispatch count remains 0 until inputs recover.
+- Fail criteria: TradingMode Active or OPEN dispatch occurs with invalid CSP safety inputs.
 
 ## Deribit Venue Facts Addendum (Artifact-Backed)
 
@@ -877,8 +916,8 @@ AT-920
 
 **Deribit Constraint:** `label` must be <= 64 chars. (Hard limit)
 
-**Rule:** All outbound orders to Deribit MUST use the `s4:` format. For `s4` labels, truncation MUST NOT occur; if a computed label would exceed 64 chars, the intent MUST be rejected before dispatch and `RiskState` MUST become `Degraded`.
-Rejections for label-length overflow MUST use `Rejected(LabelTooLong)`.
+**Rule:** All outbound orders to Deribit MUST use the `s4:` format. For `s4` labels, truncation MUST NOT occur. Because the canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape is fixed and <= 64 chars, any overflow indicates a schema regression; such intents MUST be rejected before dispatch and `RiskState` MUST become `Degraded`.
+Rejections for schema/length violations MUST use `Rejected(LabelTooLong)` (or a stricter schema reject code if defined).
 
 **Legacy Documentation Format (non-sent):** `s4:{strat_id}:{group_id}:{leg_idx}:{intent_hash}`  
 This expanded format is for human-readable logs and internal documentation only. It MUST NOT be sent to the exchange.
@@ -891,15 +930,20 @@ This expanded format is for human-readable logs and internal documentation only.
 
 **Algorithm:**
 1) Parse label → extract `{sid8, gid12, leg_idx, ih16}`.
-2) Candidate set = all local intents where:
+2) Primary candidate set = all local intents where:
+   - `sid8` matches,
+   - `gid12` matches,
+   - `leg_idx` matches,
+   - `ih16` matches (full short identity).
+3) If primary candidate set size == 1 → match.
+4) Else use legacy/repair fallback candidate set where:
    - `gid12` matches AND `leg_idx` matches.
-3) If candidate set size == 1 → match.
-4) Else disambiguate using the following tie-breakers in order:
-   A) `ih16` match (first 16 chars of intent_hash)
-   B) instrument match
-   C) side match
-   D) qty_q match
-5) If still ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+5) If fallback candidate size == 1 → match.
+6) Else disambiguate fallback candidates using tie-breakers in order:
+   A) instrument match
+   B) side match
+   C) qty_q match
+7) If still ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
 
 **Acceptance Tests (REQUIRED):**
 AT-216
@@ -912,23 +956,23 @@ AT-216
 AT-217
 - Given: two intents share the same `gid12` and `leg_idx`.
 - When: the label matcher disambiguates using tie-breakers.
-- Then: it resolves using `ih16` + instrument + side; if still ambiguous, `RiskState::Degraded` and opens blocked.
-- Pass criteria: deterministic match when tie-breakers suffice; Degraded + opens blocked on unresolved ambiguity.
+- Then: it first attempts full `sid8+gid12+leg_idx+ih16` identity match; if no unique full match, it uses legacy fallback tie-breakers; if still ambiguous, `RiskState::Degraded` and opens blocked.
+- Pass criteria: deterministic match with full identity when available; deterministic fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
 - Fail criteria: ambiguous mapping accepted or opens proceed without Degraded on unresolved ambiguity.
 
 AT-041
-- Given: a generated `s4` label would exceed 64 chars.
-- When: the system attempts to create an OrderIntent.
+- Given: an outbound label candidate does not conform to canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape (wrong segment count, wrong token widths, or invalid characters).
+- When: the system validates label schema before dispatch.
 - Then: the intent is rejected before dispatch and `RiskState==Degraded`.
-- Pass criteria: no order is sent; `/status` shows `RiskState::Degraded`; `mode_reasons` includes a label-length reason code if defined.
-- Fail criteria: any order dispatch occurs or `RiskState` remains Active.
+- Pass criteria: no order is sent; schema violation is logged deterministically.
+- Fail criteria: non-conforming label is dispatched.
 
 AT-921
-- Given: a generated `s4` label would exceed 64 chars.
-- When: the system attempts to create an OrderIntent.
-- Then: the intent is rejected with `Rejected(LabelTooLong)` and no dispatch occurs.
-- Pass criteria: rejection reason matches; dispatch count remains 0; `RiskState==Degraded`.
-- Fail criteria: dispatch occurs or reason missing/mismatched.
+- Given: an outbound label uses an unknown label version prefix (not `s4:`).
+- When: pre-dispatch label validation runs.
+- Then: the intent is rejected with a deterministic reject reason (`Rejected(LabelTooLong)` or stricter schema-version reject code if defined) and no dispatch occurs.
+- Pass criteria: rejection reason is present and dispatch count remains 0.
+- Fail criteria: unknown-version label is dispatched.
 
 
 
@@ -946,8 +990,8 @@ AT-343
 - Fail criteria: hash differs solely due to wall-clock time.
 
 AT-933
-- Given: a WS reconnect occurs and the exchange still has open orders for an existing `group_id`.
-- When: the system re-fetches open orders and matches by `group_id`.
+- Given: a WS reconnect occurs and the exchange still has open orders with canonical `s4` labels.
+- When: the system re-fetches open orders and matches using full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`) with legacy fallback per §1.1.2.
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
 - Fail criteria: duplicate dispatch occurs or orders are treated as missing.
@@ -1338,6 +1382,13 @@ AT-421
 - Pass criteria: cancel proceeds; close/hedge is rejected.
 - Fail criteria: close/hedge proceeds or cancel is blocked.
 
+AT-1216
+- Given: `L2BookSnapshot` is present, parseable, and fresh; expected slippage is <= `max_slippage_bps`; all non-liquidity gates are forced pass.
+- When: Liquidity Gate evaluates an OPEN intent.
+- Then: the intent is allowed through Liquidity Gate and proceeds to dispatch.
+- Pass criteria: dispatch count increases by 1 and no liquidity reject reason is emitted.
+- Fail criteria: intent is rejected by Liquidity Gate despite valid/fresh L2 and in-budget slippage.
+
 
 
 ### **1.4 Fee-Aware IOC Limit Pricer (No Market Orders)**
@@ -1645,7 +1696,7 @@ AT-208
   - Reject any non-null `linked_order_type` unless `linked_orders_supported == true` **and** feature flag `ENABLE_LINKED_ORDERS_FOR_BOT == true`, with `Rejected(LinkedOrderTypeForbidden)`.
 
 **Linked orders gating variables (contract-bound definitions):**
-- `linked_orders_supported` (bool): MUST be `false` for v5.1 (see Deribit Venue Facts Addendum F-08: VERIFIED (NOT SUPPORTED)).
+- `linked_orders_supported` (bool): MUST be `false` for v5.2 (see Deribit Venue Facts Addendum F-08: VERIFIED (NOT SUPPORTED)).
 - `ENABLE_LINKED_ORDERS_FOR_BOT` (bool): runtime config feature flag; default `false` (fail-closed if missing/unset).
 
 AT-1099
@@ -1806,7 +1857,7 @@ AT-230
 - `now_ms` (local monotonic‑epoch milliseconds used for staleness calculations)
 - `cortex_override` (effective max-severity across §2.3 producers; see §2.3)
 
-- `f1_cert` (from `artifacts/F1_CERT.json`: `{status, generated_ts_ms, build_id, runtime_config_hash, contract_version}`)
+- `runtime_binding_cert` (from `artifacts/RUNTIME_BINDING_CERT.json`: `{status, generated_ts_ms, build_id, runtime_config_hash, contract_version}`; legacy transition alias `artifacts/F1_CERT.json` is accepted when canonical file is absent)
 - `fee_model_cache_age_s` (from §4.2)
 - `risk_state` (Healthy | Degraded | Maintenance | Kill)
 - `enforced_profile` (enum: CSP | GOP | FULL; from runtime config; GOP-only gates apply when `enforced_profile != CSP`)
@@ -1814,9 +1865,9 @@ AT-230
 - `evidence_chain_state` (EvidenceChainState; from §2.2.2 EvidenceGuard; required only when `enforced_profile != CSP`)
 - `policy_age_sec` (derived: `(now_ms - python_policy_generated_ts_ms) / 1000`)
 - `mm_util` (float; maintenance margin utilization; from §1.4.3 Margin Headroom Gate)
-- `mm_util_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `mm_util`; see §2.2.1.1 and §7.0)
+- `mm_util_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `mm_util`; see §2.2.1.2 and §7.0)
 - `disk_used_pct` (float; ratio in [0,1], where 0.80 means 80% used; from §7.2 Disk Watermarks)
-- `disk_used_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `disk_used_pct`; see §2.2.1.1 and §7.0)
+- `disk_used_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `disk_used_pct`; see §2.2.1.2 and §7.0)
 - `disk_used_pct_secondary` (float; independent source for corroboration; see §2.2.3.1.2)
 - `disk_used_secondary_last_update_ts_ms` (monotonic‑epoch ms; freshness timestamp for `disk_used_pct_secondary`)
 - `emergency_reduceonly_active` (bool; true if `POST /api/v1/emergency/reduce_only` is latched/cooldown active)
@@ -1825,8 +1876,15 @@ AT-230
   - Invariant: While true, PolicyGuard MUST compute `TradingMode::ReduceOnly` (see §2.2.3 Axis Resolver).
 - `open_permission_blocked_latch` (bool; from §2.2.4 CP-001)
 - `open_permission_reason_codes` (OpenPermissionReasonCode[]; from §2.2.4 CP-001)
-- `rate_limit_session_kill_active` (bool; true if 10028/session termination occurred and reconciliation has not cleared)
-- `10028_count_5m` (int; rolling 5m count used for session termination corroboration; see §7.0)
+- `session_termination_active` (bool; true if 10028/session termination occurred and reconciliation has not cleared)
+- `10028_count_5m` (int; rolling 5m count used for observability, alerting, and release metrics; see §7.0)
+
+**Field rename transition (P2):**
+`rate_limit_session_kill_active` is renamed to `session_termination_active` in v5.2-P2.
+- Implementations MUST accept both field names during the transition release.
+- `/status` MUST emit the new name (`session_termination_active`).
+- `/status` MAY additionally emit the old name as a deprecated alias for one release cycle.
+- The old name MUST be removed in the next contract version after v5.2-P2.
 
 #### **2.2.0 PolicyGuard Input Snapshot Coherency (Atomic Snapshot + Memory Order)**
 Profile: CSP
@@ -1872,60 +1930,88 @@ AT-1054
 - Pass criteria: no interleaving yields Active.
 - Fail criteria: any interleaving yields Active (indicating a torn snapshot and/or missing Acquire/Release ordering).
 
-#### **2.2.1 Runtime F1 Certification Gate (HARD, runtime enforcement)**
-- PolicyGuard MUST read `artifacts/F1_CERT.json`.
+#### **2.2.1 Runtime Binding Gate (HARD, runtime enforcement)**
+- PolicyGuard MUST read `artifacts/RUNTIME_BINDING_CERT.json` as the canonical runtime-binding artifact.
+- Transition compatibility: if canonical artifact is missing, PolicyGuard MAY read legacy `artifacts/F1_CERT.json` for one transition version after v5.2-P2.
 - Required schema (minimum keys): `{ status, generated_ts_ms, build_id, runtime_config_hash, contract_version }`.
   - `build_id`: immutable build identifier for the running binary (e.g., git commit SHA).
   - `runtime_config_hash`: `sha256` hex of canonicalized runtime config (see below).
   - `contract_version`: MUST equal the canonical `contract_version` literal in Definitions.
   - `policy_hash_at_cert_time` MAY be included for observability only and MUST NOT be used as a runtime validity gate.
 - Freshness window: default 24h (configurable). If missing OR stale OR FAIL => TradingMode MUST be ReduceOnly.
-- Binding (Canary hardening): if any of these do not match runtime, F1_CERT MUST be treated as INVALID (ReduceOnly):
-  - `F1_CERT.build_id != runtime.build_id`
-  - `F1_CERT.runtime_config_hash != runtime.runtime_config_hash`
-  - `F1_CERT.contract_version != runtime.contract_version`
-- While in ReduceOnly due to F1 invalidity: allow only closes/hedges/cancels; block all opens.
+- Binding hardening: if any of these do not match runtime, runtime binding cert MUST be treated as INVALID (ReduceOnly):
+  - `cert.build_id != runtime.build_id`
+  - `cert.runtime_config_hash != runtime.runtime_config_hash`
+  - `cert.contract_version != runtime.contract_version`
+- While in ReduceOnly due to runtime-binding invalidity: allow only closes/hedges/cancels; block all opens.
 - This rule is strict: no caching last-known-good and no grace periods.
+
+#### **2.2.1.1 Promotion Certification (non-runtime gate)**
+- Promotion certification is a release-governance artifact and MUST NOT be used as a runtime safety prerequisite.
+- Artifact: `artifacts/F1_PROMOTION_CERT.json` (produced by §8 release gates).
+- Required for stage promotion paths (Shadow -> Testnet -> Live).
+- Not required for CSP runtime enforcement when runtime binding cert is valid.
 
 **Acceptance Tests (REQUIRED):**
 
 AT-020
-- Given: F1_CERT.status == PASS but `build_id` OR `runtime_config_hash` OR `contract_version` mismatches runtime.
+- Given: runtime binding cert `status == PASS` but `build_id` OR `runtime_config_hash` OR `contract_version` mismatches runtime.
 - When: TradingMode is computed.
 - Then: TradingMode MUST be ReduceOnly and OPEN must be blocked.
 - Pass criteria: `/status.trading_mode == ReduceOnly` and OPEN does not dispatch.
 - Fail criteria: `trading_mode` Active or OPEN dispatch occurs.
 
 AT-021
-- Given: F1_CERT was valid previously, then becomes missing OR stale OR FAIL.
+- Given: runtime binding cert was valid previously, then becomes missing OR stale OR FAIL.
 - When: TradingMode is computed.
 - Then: TradingMode MUST be ReduceOnly (no "last-known-good" bypass).
 - Pass criteria: `/status.trading_mode == ReduceOnly` and OPEN does not dispatch.
-- Fail criteria: `trading_mode` Active while F1_CERT is missing/stale/FAIL.
+- Fail criteria: `trading_mode` Active while runtime binding cert is missing/stale/FAIL.
 
 AT-012
-- Given: F1_CERT has `contract_version="5.2"` and runtime `contract_version` is `"5.2"`.
-- When: PolicyGuard validates F1_CERT binding checks.
+- Given: runtime binding cert has `contract_version="5.2"` and runtime `contract_version` is `"5.2"`.
+- When: PolicyGuard validates binding checks.
 - Then: `contract_version` comparison passes (no ReduceOnly due to formatting mismatch).
 - Pass criteria: TradingMode not forced to ReduceOnly due solely to `contract_version` formatting.
 - Fail criteria: ReduceOnly occurs due to "header string vs numeric string" mismatch.
 
 AT-410
-- Given: F1_CERT.status == PASS with matching build_id/runtime_config_hash/contract_version, but `policy_hash_at_cert_time` differs from current policy hash.
+- Given: runtime binding cert `status == PASS` with matching build_id/runtime_config_hash/contract_version, but `policy_hash_at_cert_time` differs from current policy hash.
 - When: TradingMode is computed.
 - Then: TradingMode is not forced to ReduceOnly due solely to `policy_hash_at_cert_time`.
 - Pass criteria: TradingMode remains Active if no other gates are active.
 - Fail criteria: ReduceOnly occurs with only `policy_hash_at_cert_time` mismatching.
 
 AT-423
-- Given: `artifacts/F1_CERT.json` on disk contains a PASS cert with matching build_id/runtime_config_hash/contract_version.
+- Given: `artifacts/RUNTIME_BINDING_CERT.json` (or transition alias `artifacts/F1_CERT.json`) on disk contains a PASS cert with matching build_id/runtime_config_hash/contract_version.
 - When: the file is modified on disk to `status="FAIL"` or deleted, and PolicyGuard computes TradingMode on the next tick.
-- Then: TradingMode MUST be ReduceOnly and `/status.f1_cert.status` reflects FAIL or MISSING.
+- Then: TradingMode MUST be ReduceOnly and `/status.runtime_binding_state` reflects FAIL or MISSING.
 - Pass criteria: `/status.trading_mode == ReduceOnly` within one tick and OPEN does not dispatch.
-- Fail criteria: `trading_mode` Active or `/status.f1_cert.status` remains PASS after the file change.
+- Fail criteria: `trading_mode` Active or `/status.runtime_binding_state` remains PASS after the file change.
+
+AT-1202
+- Given: valid `artifacts/RUNTIME_BINDING_CERT.json`, `enforced_profile == CSP`, and no promotion cert.
+- When: TradingMode is computed with all other gates passing.
+- Then: runtime binding gate allows Active; promotion cert absence does not force ReduceOnly.
+- Pass criteria: Active permitted under CSP when runtime binding is valid.
+- Fail criteria: ReduceOnly forced solely because promotion cert is missing.
+
+AT-1203
+- Given: runtime binding cert is missing/invalid under any profile.
+- When: TradingMode is computed.
+- Then: TradingMode MUST be ReduceOnly.
+- Pass criteria: OPEN blocked until runtime binding cert becomes valid.
+- Fail criteria: Active while runtime binding cert is invalid.
+
+AT-1209
+- Given: runtime binding cert is valid, but promotion transition is attempted without valid `artifacts/F1_PROMOTION_CERT.json`.
+- When: release/promotion gate evaluates.
+- Then: stage promotion fails closed.
+- Pass criteria: promotion blocked until promotion cert is valid.
+- Fail criteria: promotion proceeds without valid promotion cert.
 
 **Acceptance Tests (References):**
-- AT-003 in §7.0 validates `/status` F1_CERT fields.
+- AT-003 in §7.0 validates `/status` runtime binding fields.
 
 
 **Canonical hashing rule (non-negotiable):**
@@ -1942,7 +2028,7 @@ AT-113
 - Fail criteria: formatting-only changes alter the hash and cause F1 binding mismatch.
 
 
-#### **2.2.1.1 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)**
+#### **2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)**
 
 **Rule (non-negotiable):**
 PolicyGuard MUST NOT return `TradingMode::Active` if any critical safety input required for Kill/ReduceOnly decisions is missing or stale.
@@ -1980,7 +2066,7 @@ AT-112
 - Fail criteria: TradingMode Active (or OPEN dispatch) when an axis-resolver input is missing/unparseable.
 
 AT-348
-- Given: `rate_limit_session_kill_active` is missing or unparseable.
+- Given: `session_termination_active` is missing or unparseable.
 - When: PolicyGuard computes `TradingMode`.
 - Then: `TradingMode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`.
 - Pass criteria: OPEN does not dispatch.
@@ -2174,13 +2260,13 @@ PolicyGuard SHALL compute TradingMode from three independent health axes:
 |---|---|---|---|
 | WAL write failure | SystemIntegrityAxis | CapitalRiskAxis | Restart/idempotency correctness compromised |
 | Ledger corruption | SystemIntegrityAxis | CapitalRiskAxis | Reconciliation correctness compromised |
-| Exchange session termination (`rate_limit_session_kill_active`) | SystemIntegrityAxis | CapitalRiskAxis | Containment reliability uncertain |
+| Exchange session termination (`session_termination_active`) | SystemIntegrityAxis | CapitalRiskAxis | Containment reliability uncertain |
 
 ---
 
 ##### **2.2.3.1.2 Kill Trigger Corroboration (Non‑Capital)**
 
-To reduce single‑signal corruption risk, the following **non‑capital** Kill triggers require corroboration.  
+To reduce single‑signal corruption risk, the following **non‑capital** Kill triggers require corroboration.
 If the primary predicate is true but corroboration is missing/false, the trigger MUST NOT contribute to `SystemIntegrityAxis == FAILING`; instead PolicyGuard MUST force **ReduceOnly** with the specified reason code(s).
 
 **Confirmed predicates (Normative):**
@@ -2190,12 +2276,17 @@ If the primary predicate is true but corroboration is missing/false, the trigger
 - **Disk Kill (confirmed):**  
   `disk_used_pct >= disk_kill_pct` **AND** `disk_used_pct_secondary >= disk_kill_pct`,  
   with both timestamps fresh per `disk_used_max_age_ms`.
-- **Session Termination Kill (confirmed):**  
-  `rate_limit_session_kill_active == true` **AND** `10028_count_5m >= rate_limit_kill_min_10028`.
+- **Session Termination Kill (authoritative):**
+  `session_termination_active == true`.
+  This signal is authoritative and does NOT require corroboration by rolling counts.
 
 **Unconfirmed behavior (Non‑Negotiable):**
 - If the primary predicate is true but confirmation fails, PolicyGuard MUST compute `TradingMode = ReduceOnly`
   and include the appropriate `REDUCEONLY_*_UNCONFIRMED` reason code.
+
+**Session-termination clarification (Normative):**
+- `10028_count_5m` remains an observability/release metric.
+- `10028_count_5m` MUST NOT gate session-termination Kill decisions.
 
 **Scope guard:** These corroboration rules do **NOT** apply to capital‑critical Kill triggers (`mm_util >= mm_util_kill`, `risk_state == Kill`).
 
@@ -2222,7 +2313,7 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 - `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
 
 **SystemIntegrityAxis** (correctness / containment reliability)
-- Inputs: `watchdog_last_heartbeat_ts_ms`, `loop_tick_last_ts_ms`, `disk_used_pct`, `disk_used_pct_secondary`, `rate_limit_session_kill_active`, `10028_count_5m`, plus all reduce-only gates below.
+- Inputs: `watchdog_last_heartbeat_ts_ms`, `loop_tick_last_ts_ms`, `disk_used_pct`, `disk_used_pct_secondary`, `session_termination_active`, plus all reduce-only gates below.
 - `FAILING` if ANY are true:
   - Watchdog Kill confirmed (per §2.2.3.1.2)
   - Disk Kill confirmed (per §2.2.3.1.2)
@@ -2232,14 +2323,13 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
   - `emergency_reduceonly_active == true`
   - `open_permission_blocked_latch == true`
   - `EvidenceChainState != GREEN` (§2.2.2) when `enforced_profile != CSP`
-  - F1_CERT invalid/missing/stale/FAIL (§2.2.1)
+  - Runtime binding cert invalid/missing/stale/FAIL (§2.2.1)
   - `cortex_override == ForceReduceOnly`
   - `fee_model_cache_age_s > fee_model_hard_stale_s` (§4.2)
   - `policy_age_sec > max_policy_age_sec` (Appendix A: `max_policy_age_sec`)
-  - Any critical PolicyGuard input missing/unparseable/stale per §2.2.1.1
+  - Any critical PolicyGuard input missing/unparseable/stale per §2.2.1.2
   - Watchdog Kill unconfirmed (per §2.2.3.1.2)
   - Disk Kill unconfirmed (per §2.2.3.1.2)
-  - Session Termination Kill unconfirmed (per §2.2.3.1.2)
 - `HEALTHY` otherwise.
 
 ---
@@ -2351,17 +2441,17 @@ ReduceOnly-tier:
 2. `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`
 3. `REDUCEONLY_OPEN_PERMISSION_LATCHED`
 4. `REDUCEONLY_BUNKER_MODE_ACTIVE`
-5. `REDUCEONLY_F1_CERT_INVALID`
-6. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`
-7. `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`
-8. `REDUCEONLY_FEE_MODEL_HARD_STALE`
-9. `REDUCEONLY_RISKSTATE_DEGRADED`
-10. `REDUCEONLY_POLICY_STALE`
-11. `REDUCEONLY_MARGIN_MM_UTIL_HIGH`
-12. `REDUCEONLY_INPUT_MISSING_OR_STALE`
-13. `REDUCEONLY_WATCHDOG_UNCONFIRMED`
-14. `REDUCEONLY_DISK_KILL_UNCONFIRMED`
-15. `REDUCEONLY_SESSION_KILL_UNCONFIRMED`
+5. `REDUCEONLY_RUNTIME_BINDING_INVALID`
+6. `REDUCEONLY_F1_CERT_INVALID` (deprecated alias for runtime-binding invalidity; if emitted, semantics MUST match item 5)
+7. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`
+8. `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`
+9. `REDUCEONLY_FEE_MODEL_HARD_STALE`
+10. `REDUCEONLY_RISKSTATE_DEGRADED`
+11. `REDUCEONLY_POLICY_STALE`
+12. `REDUCEONLY_MARGIN_MM_UTIL_HIGH`
+13. `REDUCEONLY_INPUT_MISSING_OR_STALE`
+14. `REDUCEONLY_WATCHDOG_UNCONFIRMED`
+15. `REDUCEONLY_DISK_KILL_UNCONFIRMED`
 
 **Reason Derivation Rules (Non-Negotiable):**
 - PolicyGuard MUST evaluate all relevant predicates every tick.
@@ -2400,7 +2490,7 @@ Containment actions MUST be:
 Containment MUST be attempted even if:
 - `EvidenceChainState != GREEN`,
 - WAL is degraded,
-- `rate_limit_session_kill_active == true`,
+- `session_termination_active == true`,
 - `disk_used_pct >= disk_kill_pct`,
 - `bunker_mode_active == true`,
 - or watchdog staleness is the trigger cause.
@@ -2559,7 +2649,7 @@ AT-340
 
 **Session Termination Does Not Forbid Containment**
 AT-346
-- Given: `rate_limit_session_kill_active == true`, `10028_count_5m >= rate_limit_kill_min_10028`, and open exposure exists.
+- Given: `session_termination_active == true` and open exposure exists.
 - When: TradingMode is computed and Kill containment runs.
 - Then: containment actions are permitted/attempted; OPEN remains blocked.
 - Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
@@ -2597,11 +2687,11 @@ AT-1067
 - Fail criteria: Kill computed without corroboration.
 
 AT-1068
-- Given: `rate_limit_session_kill_active == true` but `10028_count_5m < rate_limit_kill_min_10028` (or missing).
+- Given: `session_termination_active` is missing or unparseable.
 - When: TradingMode is computed.
-- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_SESSION_KILL_UNCONFIRMED`.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`.
 - Pass criteria: ReduceOnly enforced; no Kill.
-- Fail criteria: Kill computed without corroboration.
+- Fail criteria: TradingMode Active (or OPEN dispatch) when the session-termination signal is missing/unparseable.
 
 AT-1069
 - Given: confirmed kill predicates per §2.2.3.1.2 (watchdog, disk, or session termination).
@@ -2623,7 +2713,7 @@ Profile: CSP
 **State fields:**
 - `open_permission_blocked_latch` (bool; `true` means OPEN blocked)
 - `open_permission_reason_codes` (`OpenPermissionReasonCode[]`; MUST be `[]` iff `open_permission_blocked_latch == false`)
-- `open_permission_requires_reconcile` (bool; MUST equal `open_permission_blocked_latch` for v5.1 - all reason codes are reconcile-class)
+- `open_permission_requires_reconcile` (bool; MUST equal `open_permission_blocked_latch` for v5.2 - all reason codes are reconcile-class)
 
 **Acceptance Tests (References):**
 - AT-027 in §7.0 validates `/status` latch field invariants.
@@ -2653,13 +2743,13 @@ AT-1100
 - `INVENTORY_MISMATCH_RECONCILE_REQUIRED`
 - `SESSION_TERMINATION_RECONCILE_REQUIRED`
 
-**Hard rule:** F1_CERT and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes` (they are cleared by cert/evidence recovery, not reconciliation).
+**Hard rule:** Runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes` (they are cleared by cert/evidence recovery, not reconciliation).
 
 **Acceptance Tests (REQUIRED):**
 AT-010
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED`.
 - When: the system evaluates an OPEN intent for dispatch.
-- Then: no OPEN order is dispatched; CLOSE/HEDGE/CANCEL intents remain dispatchable, except risk-increasing cancels/replaces are rejected (per §2.2.5), subject to Kill semantics in §2.2.3 in §2.2.3.
+- Then: no OPEN order is dispatched; CLOSE/HEDGE/CANCEL intents remain dispatchable, except risk-increasing cancels/replaces are rejected (per §2.2.5), subject to Kill semantics in §2.2.3.
 - Pass criteria: OPEN dispatch count remains 0; CLOSE/HEDGE/CANCEL dispatch is permitted; risk-increasing cancel/replace is rejected.
 - Fail criteria: any OPEN is dispatched while the latch is true.
 
@@ -2692,9 +2782,9 @@ AT-110
 - Fail criteria: any order placement dispatch occurs while `reduce_only` is missing and latch is true.
 
 AT-411
-- Given: F1_CERT is missing/stale/FAIL OR (`EvidenceChainState != GREEN` and `enforced_profile != CSP`), and no reconcile-class triggers are active.
+- Given: runtime binding cert is missing/stale/FAIL OR (`EvidenceChainState != GREEN` and `enforced_profile != CSP`), and no reconcile-class triggers are active.
 - When: `open_permission_reason_codes` are computed.
-- Then: `open_permission_reason_codes` does not include F1_CERT or EvidenceChain failures, and `open_permission_blocked_latch` is unchanged.
+- Then: `open_permission_reason_codes` does not include runtime-binding or EvidenceChain failures, and `open_permission_blocked_latch` is unchanged.
 - Pass criteria: no F1/Evidence codes in reason list; latch not set without a reconcile trigger.
 - Fail criteria: any F1/Evidence code appears or latch is set without a reconcile trigger.
 
@@ -3039,18 +3129,23 @@ Profile: CSP
 * Write every TLSM transition immediately (append-only).  
 * On startup, replay ledger into in-memory state and reconcile with exchange.
 
-**Persistence levels (latency-aware):**
-- **RecordedBeforeDispatch:** intent is recorded (e.g., in-memory WAL buffer) before dispatch.
-- **DurableBeforeDispatch:** durability barrier reached (fsync marker or equivalent) before dispatch.
+**Persistence states (latency-aware):**
+- **WALQueueAccepted:** intent enqueue to the WAL writer queue succeeded.
+- **WALRecorded:** WAL writer appended the intent and returned a commit identifier / LSN.
+- **WALDurable:** durability barrier reached (fsync marker or equivalent), when configured.
 
-**Dispatch rule:** RecordedBeforeDispatch is **mandatory**. DurableBeforeDispatch is required when the
-durability barrier is configured/required by the subsystem.
+**Dispatch rule (non-negotiable):**
+- OPEN dispatch requires **WALRecorded**.
+- **WALQueueAccepted alone is insufficient** for OPEN dispatch.
+- If a subsystem is configured for durable-before-dispatch, OPEN dispatch additionally requires **WALDurable**.
 
 #### **2.4.1 WAL Writer Isolation (Hot Loop Protection)**
 
 - The hot loop MUST NOT block on WAL disk I/O.
-- WAL appends MUST go through a bounded in-memory queue; `RecordedBeforeDispatch` means the enqueue succeeds.
+- WAL appends MUST go through a bounded in-memory queue; enqueue success is `WALQueueAccepted`.
+- The WAL writer MUST publish a deterministic `WALRecorded` acknowledgment (commit id / LSN) used by the dispatch gate.
 - If the WAL queue is full or enqueue fails, the system MUST fail-closed for OPEN intents (block OPENs / ReduceOnly) and MUST continue ticking.
+- If `WALRecorded` cannot be obtained for an OPEN intent, the system MUST fail-closed (no OPEN dispatch).
 - An enqueue failure MUST increment `wal_write_errors` (treated as a WAL write failure for EvidenceGuard).
 - The system MUST expose WAL queue telemetry in `/status`:
   - `wal_queue_depth` (current items in the WAL queue)
@@ -3082,7 +3177,7 @@ AT-234
 - Fail criteria: fill missed or TLSM not updated.
 
 AT-935
-- Given: a crash occurs after RecordedBeforeDispatch succeeds (WAL intent record durable), but before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
+- Given: a crash occurs after `WALRecorded` succeeds (commit id/LSN issued), but before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
 - When: the system restarts (twice), and on each restart it replays WAL and completes reconciliation (label/open-order + trade reconciliation) before attempting dispatch.
 - Then: on the first restart, it must dispatch the intent **exactly once**, record `sent_ts`, and proceed; on the second restart, it must NOT dispatch again (since WAL no longer indicates "unsent").
 - Pass criteria: across two restarts, total dispatch count == 1; `sent_ts` becomes non-null after restart #1; restart #2 performs reconcile and produces 0 dispatches for that intent.
@@ -3097,10 +3192,17 @@ AT-940
 
 AT-906
 - Given: WAL appends use a bounded queue of capacity N, and the WAL writer is stalled so the queue reaches N items.
-- When: an OPEN intent is evaluated and the system attempts RecordedBeforeDispatch enqueue.
+- When: an OPEN intent is evaluated and the system attempts `WALQueueAccepted` enqueue (a prerequisite for `RecordedBeforeDispatch`).
 - Then: the OPEN intent is rejected before dispatch, `wal_write_errors` increments, and the hot loop continues ticking.
 - Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked until enqueue succeeds.
 - Fail criteria: hot loop blocks, an OPEN dispatch occurs without a successful enqueue, `wal_write_errors` does not increment, or opens remain allowed while enqueue fails.
+
+AT-1215
+- Given: `WALQueueAccepted` and `WALRecorded` succeed for an OPEN intent, all other OPEN gates are forced pass, and the intent is evaluated exactly once.
+- When: dispatch authorization runs.
+- Then: exactly one OPEN dispatch attempt occurs.
+- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`.
+- Fail criteria: dispatch count is 0 despite successful WAL recording, or >1 for the same intent.
 
 Profile: GOP
 AT-969
@@ -3157,8 +3259,12 @@ Profile: CSP
 **Price Source (Deterministic, fail-closed):**
 - Primary: `L2BookSnapshot` best bid/ask when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
 - Fallback: `L1TickerSnapshot` best bid/ask (REST/WS ticker) when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
+- Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available:
+  - reduce-only BUY close uses quantized venue `max_price`,
+  - reduce-only SELL close uses quantized venue `min_price`.
+  - This fallback MUST use bounded IOC attempts only and MUST remain monotonic risk-reducing.
 - The `best` price in step 1 uses the selected source (asks for buy, bids for sell).
-- If no valid source (missing/unparseable/stale or inverted bid/ask), emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.
+- If no valid source is available from L2/L1 and no valid venue band is available (missing/unparseable/unquantizable metadata), emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.
 
 **Algorithm (Deterministic, 3 tries):**
 1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`).
@@ -3227,9 +3333,16 @@ AT-937
 AT-938
 - Given: `L2BookSnapshot` is missing/unparseable/stale and no fresh `L1TickerSnapshot` is available.
 - When: emergency close runs.
+- Then: IOC close attempts are submitted using emergency venue-band fallback pricing (`max_price` for reduce-only BUY, `min_price` for reduce-only SELL), quantized to tick.
+- Pass criteria: at least one bounded IOC attempt is dispatched using venue-band fallback pricing.
+- Fail criteria: dispatch is blocked despite valid venue-band metadata, or fallback violates reduce-only/monotonic rules.
+
+AT-1217
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and venue band metadata is missing/unparseable/unquantizable.
+- When: emergency close runs.
 - Then: no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
 - Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
-- Fail criteria: any dispatch occurs or rejection reason is missing/mismatched.
+- Fail criteria: any dispatch occurs without a valid fallback price source, or rejection reason is missing/mismatched.
 
 
 ### **3.2 Smart Watchdog**
@@ -3308,7 +3421,7 @@ AT-133
   - preserve `CANCEL`/`HEDGE`/`EMERGENCY_CLOSE`
   - OPEN rejections under brownout MUST use `Rejected(RateLimitBrownout)`.
 - On `too_many_requests` / `code 10028` (session termination):
-  1. Set `rate_limit_session_kill_active = true`
+  1. Set `session_termination_active = true`
   2. PolicyGuard MUST compute `TradingMode::Kill` within one tick
   3. Set Open Permission Latch reason: `SESSION_TERMINATION_RECONCILE_REQUIRED`
   4. Reconnect/backoff and run full reconcile before any trading resumes
@@ -3317,7 +3430,7 @@ AT-133
 1. If bucket empty: wait required time (async sleep). Never panic.
 2. On observed 429: enter `RiskState::Degraded`, slow loops automatically, and reduce non-critical traffic.
 3. On `too_many_requests` / `code 10028` OR "session terminated":
-   - Set `rate_limit_session_kill_active = true`
+   - Set `session_termination_active = true`
    - PolicyGuard computes `TradingMode::Kill` immediately (no opens, no replaces)
    - Set Open Permission Latch reason: `SESSION_TERMINATION_RECONCILE_REQUIRED`
    - Exponential backoff, then **reconnect**
@@ -3800,10 +3913,10 @@ AT-1114
 - Fail criteria: poll interval consistently deviates from 60s, or no polls occur within the window.
 
 
-### **4.3 Trade Attribution Schema (Realized Friction Truth)**
+### **4.3 Time Drift Safety Gate**
 Profile: CSP
 
-**Council Weakness Covered:** Self-improving open loop \+ time handling / drift. **Where:** `soldier/core/analytics/attribution.rs` **Requirement:** Every trade must log projected edge vs realized execution friction with timestamps to measure drift. **Key Fields:** `exchange_ts`, `local_send_ts`, `local_recv_ts`, `drift_ms = local_recv_ts - exchange_ts`. **Rules:**
+**Council Weakness Covered:** time handling / drift safety. **Where:** `soldier/core/analytics/attribution.rs` (or equivalent time-drift guard path). **Safety requirement:** time drift beyond threshold must force a safety downgrade regardless of attribution completeness. **Key safety fields:** `exchange_ts`, `local_recv_ts`, `drift_ms = local_recv_ts - exchange_ts`. **Rules:**
 
 * If `drift_ms` exceeds `time_drift_threshold_ms` (default: **50ms**, configurable), the system MUST set `RiskState::Degraded` and PolicyGuard MUST compute `TradingMode::ReduceOnly` via the canonical `risk_state == Degraded` trigger (see §2.2.3).
 * Require **chrony/NTP** running as an operational prerequisite.
@@ -3833,7 +3946,8 @@ AT-108
 - Fail criteria: `trading_mode` Active while drift violation persists.
 
 
-**Parquet Row (Minimum):**
+Profile: GOP
+**Attribution Parquet Row (GOP minimum):**
 - group_id, leg_idx, strategy_id
 - truth_capsule_id
 - fair_price_at_signal, limit_price_sent, fill_price
@@ -3967,7 +4081,7 @@ AT-1047
 
 - `truth_capsule_id`, `group_id`, `leg_idx`, `intent_hash`, `strategy_id`, `policy_hash`
 - **Snapshot references:**
-  - `decision_snapshot_id` (decision-time L2 top‑N; REQUIRED). This is the canonical field; `l2_snapshot_id` is legacy and MUST NOT be emitted in v5.1 outputs.
+  - `decision_snapshot_id` (decision-time L2 top‑N; REQUIRED). This is the canonical field; `l2_snapshot_id` is legacy and MUST NOT be emitted in v5.2 outputs.
   - `snapshot_bundle_id` (optional: richer bundle if present)
   - `exchange_ts`, `local_ts`, `drift_ms`
 - **Model state references:**
@@ -4377,29 +4491,39 @@ AT-973
 ## **6\. Implementation Roadmap v4.0**
 Profile: GOP
 
-### **Phase 1: The Foundation (Panic-Free)**
+### **Phase 1: Foundation (Non-Deployable)**
 
-* TLSM & `s4:` labeling schema.  
-* **Durable intent ledger** (WAL) setup.  
-* **Liquidity Gate** implementation.
+* Instrument metadata + canonical quantization.
+* `s4:` label schema + parser.
+* TLSM core.
+* WAL append pipeline and queue plumbing.
+* `/health` + minimal owner status scaffolding.
 
-### **Phase 2: The Guardrails (Safety)**
+**Phase-1 rule:** Completion of Phase 1 is an implementation milestone only; it is **not** a CSP compliance claim and **not** live-trading readiness.
 
-* Emergency Close & **Rate limiter**.  
-* **Continuous reconciliation** \+ WS gap detection.  
-* **Policy Fallback Ladder** (Dead Man’s Switch).
+### **Phase 2: CSP Safety Kernel (First Deployable Phase)**
 
-### **Phase 3: The Data Loop (Optimization)**
+* Runtime binding gate enforcement.
+* PolicyGuard / TradingMode axis resolver.
+* OpenPermissionLatch + reconciliation clear rules.
+* Continuous 3-way reconciliation + WS gap/session-termination handling.
+* Deterministic emergency containment (bounded close + hedge fallback + venue-band fallback).
+* Margin headroom, order-type preflight, exchange health, and liquidity safety gates.
 
-* **Attribution schema** \+ time drift \+ chrony integration.  
-* **Fill simulator** \+ shadow mode deployment.
-* **Decision Snapshots (required)** + optional Tick/L2 archive writer (rolling 72h) for deeper diagnostics / research replay.
+**Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests.
 
-### **Phase 4: Live Fire**
+### **Phase 3: GOP Data Loop**
 
-* ExecutionStyle: Sniper (IOC limit-only execution policy).  
-* TradingMode remains governed exclusively by PolicyGuard.  
-* Monitoring: Watch `Atomic Naked Events` (Grafana).
+* Truth Capsule + Decision Snapshot capture.
+* Attribution completeness and decomposition.
+* Replay gatekeeper + canary logic.
+* Optimization loop controls.
+
+### **Phase 4: Promotion & Live Operations**
+
+* Promotion certification artifact for stage transitions.
+* Shadow -> Testnet -> Live progression rules and abort hooks.
+* Live operational guardrails and incident/rollback discipline.
 
 ---
 
@@ -4451,20 +4575,23 @@ AT-022
 - `supported_profiles` (string[]; set of profiles this build can enforce at runtime; MUST include `CSP`)
 - `enforced_profile` (string enum: `CSP|GOP|FULL`; current runtime enforced profile)
 - `trading_mode`, `risk_state`, `bunker_mode_active`
+- `opens_globally_permitted` (bool; canonical derived field for OPEN eligibility: `trading_mode == Active && open_permission_blocked_latch == false`)
+- `is_trading_allowed` (deprecated alias; if emitted, MUST equal `opens_globally_permitted`; MAY be emitted for one transition version and MUST be removed in the next contract version after v5.2)
 - `connectivity_degraded` (bool; true iff `bunker_mode_active == true` OR `open_permission_reason_codes` contains `RESTART_RECONCILE_REQUIRED`, `WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, or `SESSION_TERMINATION_RECONCILE_REQUIRED`)
 - `policy_age_sec`, `last_policy_update_ts` (monotonic‑epoch ms; MUST equal `python_policy_generated_ts_ms` from PolicyGuard inputs)
-- `f1_cert_state` + `f1_cert_expires_at`
-- `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.1)
+- `runtime_binding_state` + `runtime_binding_expires_at` (legacy aliases `f1_cert_state` + `f1_cert_expires_at` MAY be emitted for one transition version)
+- `disk_used_pct` (ratio in [0,1]), `disk_used_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.2)
 - `disk_used_pct_secondary`, `disk_used_secondary_last_update_ts_ms` (monotonic‑epoch ms; corroboration source)
-- `mm_util`, `mm_util_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.1)
+- `mm_util`, `mm_util_last_update_ts_ms` (monotonic‑epoch ms; see §2.2.1.2)
 - `loop_tick_last_ts_ms` (monotonic‑epoch ms; corroboration source)
 - `atomic_naked_events_24h`, `429_count_5m`, `10028_count_5m`
+- `session_termination_active` (bool; true iff a `10028` / session-termination event has occurred and reconciliation has not yet cleared it)
 - `wal_queue_depth`, `wal_queue_capacity`, `wal_queue_enqueue_failures` (see §2.4.1)
 - `deribit_http_p95_ms`, `ws_event_lag_ms`
 - `mode_reasons` (ModeReasonCode[]; authoritative explanation of `trading_mode` for this tick; MUST be `[]` iff `trading_mode == Active`)
 - `open_permission_blocked_latch` (bool; true means OPEN blocked; CLOSE/HEDGE/CANCEL allowed only as permitted by §2.2.5)
 - `open_permission_reason_codes` (OpenPermissionReasonCode[]; MUST be [] iff `open_permission_blocked_latch == false`)
-- `open_permission_requires_reconcile` (bool; MUST equal `open_permission_blocked_latch` for v5.1 - all reason codes are reconcile-class)
+- `open_permission_requires_reconcile` (bool; MUST equal `open_permission_blocked_latch` for v5.2 - all reason codes are reconcile-class)
 
 **/status response MUST include (GOP extension keys; required when GOP/FULL is enforced):**
 - `evidence_chain_state`
@@ -4502,31 +4629,32 @@ AT-1117
 
 
 
-**/status F1_CERT fields (contract-bound semantics):**
-- `f1_cert_state` (string enum; derived by PolicyGuard):
-  - `PASS`: F1_CERT present, within freshness window, and binding matches runtime (§2.2.1).
-  - `FAIL`: F1_CERT present but `f1_cert.status == "FAIL"`.
-  - `STALE`: F1_CERT present but `now_ms - f1_cert.generated_ts_ms > (f1_cert_freshness_window_s * 1000)`.
-  - `MISSING`: F1_CERT missing/unreadable/unparseable.
-  - `INVALID`: F1_CERT present but binding check fails (build_id/runtime_config_hash/contract_version mismatch).
-- `f1_cert_expires_at` (epoch ms):
-  - If F1_CERT is present and parseable: `f1_cert.generated_ts_ms + (f1_cert_freshness_window_s * 1000)`.
-  - If F1_CERT is missing/unparseable: MUST be `null`.
+**/status runtime binding fields (contract-bound semantics):**
+- `runtime_binding_state` (string enum; derived by PolicyGuard):
+  - `PASS`: runtime binding cert present, within freshness window, and binding matches runtime (§2.2.1).
+  - `FAIL`: runtime binding cert present but `status == "FAIL"`.
+  - `STALE`: runtime binding cert present but `now_ms - generated_ts_ms > (f1_cert_freshness_window_s * 1000)`.
+  - `MISSING`: runtime binding cert missing/unreadable/unparseable.
+  - `INVALID`: runtime binding cert present but binding check fails (build_id/runtime_config_hash/contract_version mismatch).
+- `runtime_binding_expires_at` (epoch ms):
+  - If runtime binding cert is present and parseable: `generated_ts_ms + (f1_cert_freshness_window_s * 1000)`.
+  - If runtime binding cert is missing/unparseable: MUST be `null`.
+- Transition compatibility: implementations MAY emit `f1_cert_state` and `f1_cert_expires_at` as aliases for one transition version; if emitted, values MUST equal the runtime-binding fields.
 
 **Acceptance Test (REQUIRED):**
 AT-003
-- Given: F1_CERT is present with `status="PASS"`, `generated_ts_ms=T0`, and `f1_cert_freshness_window_s=86400`.
+- Given: runtime binding cert is present with `status="PASS"`, `generated_ts_ms=T0`, and `f1_cert_freshness_window_s=86400`.
 - When: `GET /api/v1/status` is queried at `now_ms=T0+1000`.
-- Then: `f1_cert_state=="PASS"` and `f1_cert_expires_at==T0+(86400*1000)`.
+- Then: `runtime_binding_state=="PASS"` and `runtime_binding_expires_at==T0+(86400*1000)`.
 - Pass criteria: response contains both keys and the computed values exactly.
-- Fail criteria: keys missing, `f1_cert_state != "PASS"`, or `f1_cert_expires_at` not equal to the computed expiry.
+- Fail criteria: keys missing, `runtime_binding_state != "PASS"`, or `runtime_binding_expires_at` not equal to the computed expiry.
 
 AT-412
-- Given: F1_CERT is missing or unparseable.
+- Given: runtime binding cert is missing or unparseable.
 - When: `GET /api/v1/status`.
-- Then: `f1_cert_state=="MISSING"` and `f1_cert_expires_at==null`.
-- Pass criteria: both fields present with `f1_cert_expires_at` null.
-- Fail criteria: `f1_cert_expires_at` non-null, missing, or state inconsistent.
+- Then: `runtime_binding_state=="MISSING"` and `runtime_binding_expires_at==null`.
+- Pass criteria: both fields present with `runtime_binding_expires_at` null.
+- Fail criteria: `runtime_binding_expires_at` non-null, missing, or state inconsistent.
 
 **Security:** This endpoint MUST NOT allow changing risk. No “set Active” endpoints in this patch.
 
@@ -4565,11 +4693,18 @@ AT-405
 - Pass criteria: value equals 1.
 - Fail criteria: missing or not 1.
 
+AT-1220
+- Given: `/status` is fetched under each combination of `trading_mode ∈ {Active, ReduceOnly, Kill}` and `open_permission_blocked_latch ∈ {true,false}`.
+- When: `opens_globally_permitted` is read.
+- Then: `opens_globally_permitted == (trading_mode == Active && open_permission_blocked_latch == false)`.
+- Pass criteria: derived value matches expression for all tested states; if `is_trading_allowed` is present, it equals `opens_globally_permitted`.
+- Fail criteria: derived value mismatch for any state or deprecated alias diverges from canonical field.
+
 AT-419
 - Given: `/status` is fetched.
 - When: rate-limit counters are read.
-- Then: `429_count_5m` and `10028_count_5m` exist.
-- Pass criteria: both keys present.
+- Then: `429_count_5m`, `10028_count_5m`, and `session_termination_active` exist.
+- Pass criteria: all three keys present.
 - Fail criteria: any key missing.
 
 AT-927
@@ -4905,14 +5040,14 @@ AT-942
 
 ---
 
-## **8. Release Gates (F1 Certification Checklist — HARD PASS/FAIL)**
+## **8. Release Gates (Promotion Certification Checklist — HARD PASS/FAIL)**
 Profile: GOP
 
 This checklist is a **hard release gate**. No version may be promoted
 (Shadow → Testnet → Live) unless an automated cert run produces:
 
-- `artifacts/F1_CERT.json` with `"status": "PASS"`
-- and a human-readable `artifacts/F1_CERT.md` summary
+- `artifacts/F1_PROMOTION_CERT.json` with `"status": "PASS"`
+- and a human-readable `artifacts/F1_PROMOTION_CERT.md` summary
 
 ### **8.1 Measurable Metrics (PASS/FAIL)**
 Metrics must be computed over the last **24h** window for Shadow and Testnet.
@@ -4977,7 +5112,7 @@ All must pass in CI before any deployment:
 - `test_instrument_cache_ttl_s_expires_after_3600s()` → AT-279.
 - `test_inventory_skew_k_and_tick_penalty_max_adjust_prices()` → AT-281, AT-282.
 - `test_rescue_cross_spread_ticks_uses_2_ticks_default()` → AT-283.
-- `test_f1_cert_freshness_window_s_forces_reduceonly_after_86400s()` → AT-294.
+- `test_runtime_binding_freshness_window_forces_reduceonly_after_86400s()` → AT-294.
 - `test_mm_util_max_age_ms_forces_reduceonly_after_30000ms()` → AT-295.
 - `test_disk_used_max_age_ms_forces_reduceonly_after_30000ms()` → AT-296.
 - `test_watchdog_kill_s_triggers_kill_after_10s_no_health_report()` → AT-297.
@@ -5058,14 +5193,14 @@ Policy staging in §5.3 is mandatory. Promotion requires:
 - Stage 1 (Testnet micro-canary) PASS for 2–6h
 - Any abort trigger → rollback + ReduceOnly cooldown
 
-### **8.4 Certification Artifact (Hard Gate Implementation)**
+### **8.4 Promotion Certification Artifact (Hard Gate Implementation)**
 **Where:**
 - `python/tools/f1_certify.py`
-- outputs `artifacts/F1_CERT.json` and `artifacts/F1_CERT.md`
-- `artifacts/F1_CERT.json` MUST include (minimum): `{ status, generated_ts_ms, build_id, runtime_config_hash, contract_version }` (see §2.2.1).
+- outputs `artifacts/F1_PROMOTION_CERT.json` and `artifacts/F1_PROMOTION_CERT.md`
+- `artifacts/F1_PROMOTION_CERT.json` MUST include (minimum): `{ status, generated_ts_ms, build_id, runtime_config_hash, contract_version }` (see §2.2.1.1).
 
 **Example CI command:**
-- Run: `python python/tools/f1_certify.py --window=24h --out=artifacts/F1_CERT.json`
+- Run: `python python/tools/f1_certify.py --window=24h --out=artifacts/F1_PROMOTION_CERT.json`
 - Block release unless `status == PASS`.
 
 **Acceptance Test (REQUIRED):**
@@ -5353,20 +5488,20 @@ AT-959
 
 ---
 
-### **A.2.1 F1 Certification & Critical Inputs**
+### **A.2.1 Runtime Binding & Critical Inputs**
 
-**`f1_cert_freshness_window_s`** (§2.2.1 Runtime F1 Certification Gate)
+**`f1_cert_freshness_window_s`** (§2.2.1 Runtime Binding Gate; legacy key name retained for compatibility)
 - **Default**: `86400` seconds (24 hours)
-- **Purpose**: TTL for F1_CERT validity; stale cert triggers ReduceOnly.
+- **Purpose**: TTL for runtime-binding cert validity; stale cert triggers ReduceOnly.
 - **Rationale**: 24h aligns with daily certification cadence and allows weekend/holiday tolerance.
 AT-294
-- Given: `now - F1_CERT.generated_ts_ms > 86400000ms`.
-- When: F1_CERT freshness is evaluated.
+- Given: `now - runtime_binding_cert.generated_ts_ms > 86400000ms`.
+- When: runtime-binding freshness is evaluated.
 - Then: ReduceOnly is forced.
 - Pass criteria: ReduceOnly enforced.
 - Fail criteria: remains Active.
 
-**`mm_util_max_age_ms`** (§2.2.1.1 PolicyGuard Critical Input Freshness)
+**`mm_util_max_age_ms`** (§2.2.1.2 PolicyGuard Critical Input Freshness)
 - **Default**: `30000` milliseconds (30 seconds)
 - **Purpose**: Max staleness for margin utilization metric before forcing ReduceOnly.
 - **Rationale**: 30s provides reasonable tolerance for API latency while ensuring timely margin risk detection.
@@ -5377,7 +5512,7 @@ AT-295
 - Pass criteria: OPEN blocked; CLOSE allowed.
 - Fail criteria: OPEN allowed or CLOSE blocked.
 
-**`disk_used_max_age_ms`** (§2.2.1.1 PolicyGuard Critical Input Freshness)
+**`disk_used_max_age_ms`** (§2.2.1.2 PolicyGuard Critical Input Freshness)
 - **Default**: `30000` milliseconds (30 seconds)
 - **Purpose**: Max staleness for disk usage metric before forcing ReduceOnly.
 - **Rationale**: 30s balances system monitoring overhead with integrity protection.
@@ -5796,7 +5931,7 @@ AT-325
 **`parquet_analytics_retention_days`** (§7.2 Retention Policy)
 - **Default**: `30` days
 - **Purpose**: Retention window for Parquet analytics (attribution + truth capsules).
-- **Rationale**: 30 days provides month-over-month analysis capability for Governor tuning and F1 certification metrics.
+- **Rationale**: 30 days provides month-over-month analysis capability for Governor tuning and promotion-certification metrics.
 AT-326
 - Given: Parquet analytics older than 30 days.
 - When: retention reclaim runs.
@@ -5819,11 +5954,10 @@ AT-326
 | `spread_max_bps` | `25` | bps | §2.3 |
 | `depth_min` | `300_000` | USD | §2.3, §4.1 |
 | `f1_cert_freshness_window_s` | `86400` | sec | §2.2.1 |
-| `mm_util_max_age_ms` | `30000` | ms | §2.2.1.1 |
-| `disk_used_max_age_ms` | `30000` | ms | §2.2.1.1 |
+| `mm_util_max_age_ms` | `30000` | ms | §2.2.1.2 |
+| `disk_used_max_age_ms` | `30000` | ms | §2.2.1.2 |
 | `evidenceguard_counters_max_age_ms` | `60000` | ms | §2.2.2 |
 | `watchdog_kill_s` | `10` | sec | §2.2.3 |
-| `rate_limit_kill_min_10028` | `3` | count | §2.2.3.1.2 |
 | `cancel_open_batch_max` | `50` | count | §2.2.3.4.1 |
 | `cancel_open_budget_ms` | `200` | ms | §2.2.3.4.1 |
 | `emergency_reduceonly_cooldown_s` | `300` | sec | §2.2, §3.2 |
@@ -5888,7 +6022,7 @@ Profile: CSP
 
 This appendix is an extracted restatement of the **Core Safety Profile (CSP)** runtime safety requirements.
 
-**Normative intent:** A system that satisfies every requirement in this appendix, **and** satisfies the CSP enforcement mechanics in §0.Z.5–§0.Z.9 (profile tagging, declaration of compliance, profile isolation, and CSP_ONLY CI gate), **and** passes all `Profile: CSP` acceptance tests, is **SAFE TO TRADE** — even if governance/analytics/optimization subsystems are absent, degraded, or disabled.
+**Normative intent:** A system that satisfies every requirement in this appendix, **and** satisfies the CSP enforcement mechanics in §0.Z.5–§0.Z.10 (profile tagging, declaration of compliance, profile isolation, CSP_ONLY CI gate, and Numeric Sanity Guard), **and** passes all `Profile: CSP` acceptance tests, is **SAFE TO TRADE** — even if governance/analytics/optimization subsystems are absent, degraded, or disabled.
 
 ### **CSP.0 Scope**
 
@@ -5914,13 +6048,14 @@ The following definitions are authoritative within this appendix:
 
 - **Dispatch**: an outbound network attempt to the venue (REST, WS-RPC, or other venue API) that may place/amend/cancel an order.
 
-- **RecordedBeforeDispatch**: the property that a risk-increasing intent has been recorded before dispatch according to §2.4:
-  - the intent has been accepted by the WAL append path (bounded in-memory WAL queue enqueue succeeds) before any dispatch attempt, and
-  - the hot loop does not block on WAL disk I/O.
+- **RecordedBeforeDispatch**: the property that a risk-increasing intent has reached `WALRecorded` before dispatch according to §2.4:
+  - enqueue (`WALQueueAccepted`) succeeds,
+  - WAL writer append acknowledgment (`WALRecorded`) is received before any OPEN dispatch attempt,
+  - and the hot loop does not block on WAL disk I/O.
 
 - **DurableBeforeDispatch**: the property that a configured durability barrier (fsync marker or equivalent) has been reached before dispatch when a subsystem requires it (§2.4).
 
-- **WAL (Write-Ahead Log)**: the append-only intent ledger that is persisted to a crash-safe store. `RecordedBeforeDispatch` corresponds to successful enqueue into the WAL writer queue (§2.4.1); `DurableBeforeDispatch` corresponds to reaching the configured durability barrier before dispatch (§2.4).
+- **WAL (Write-Ahead Log)**: the append-only intent ledger that is persisted to a crash-safe store. `WALQueueAccepted` is queue enqueue success; `WALRecorded` is writer append acknowledgment (commit id/LSN); `DurableBeforeDispatch` corresponds to reaching the configured durability barrier before dispatch (§2.4).
 
 - **Reconciliation**: the post-restart (or post-gap) procedure that joins:
   - WAL intents,
@@ -6022,11 +6157,11 @@ TradingMode MUST be computed deterministically (panic-free) at a bounded cadence
   - OPEN and any risk-increasing action are forbidden,
   - only risk-reducing actions are permitted.
 
-#### **CSP.5.3 Safety-Critical Prerequisite: Runtime F1 Certification Gate**
+#### **CSP.5.3 Safety-Critical Prerequisite: Runtime Binding Gate**
 
-A runtime F1 certification state (F1_CERT) MUST be enforced such that:
-- missing/stale/invalid/mismatched F1_CERT → TradingMode MUST be at most `ReduceOnly` (OPEN blocked; risk-reducing actions permitted).
-- F1_CERT failures MUST be treated as CSP safety inputs (not governance inputs).
+A runtime binding-cert state MUST be enforced such that:
+- missing/stale/invalid/mismatched runtime binding cert → TradingMode MUST be at most `ReduceOnly` (OPEN blocked; risk-reducing actions permitted).
+- runtime binding cert failures MUST be treated as CSP safety inputs (not governance inputs).
 
 (Implementation details are venue- and repo-specific; the observable enforcement semantics above are the CSP requirement.)
 
@@ -6054,6 +6189,12 @@ Emergency containment MUST be:
 - bounded (finite retries / bounded time),
 - deterministic (no unbounded oscillation),
 - monotonic with respect to exposure (never increases risk).
+
+Emergency close pricing MUST use a deterministic fallback ladder:
+- fresh L2 best bid/ask,
+- else fresh L1 ticker best bid/ask,
+- else venue-band fallback (`max_price` for reduce-only buys, `min_price` for reduce-only sells),
+- else fail closed with `EmergencyCloseNoPrice`.
 
 ### **CSP.8 Timebase Authority (Safety-Critical)**
 
@@ -6137,20 +6278,20 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.2.1 Stable Intent Identity** | §1.1.1 (quantize → hash; “no wall-clock in hash”)<br>§1.1.2 (s4 label fields include ih16)<br>Definitions (`intent_hash`, `group_id`, `leg_idx`) | AT-343 (hash not time-dependent)<br>AT-218 (deterministic hash across codepaths)<br>AT-219 (safe rounding direction prior to hash)<br>AT-216 (s4 label length/parse correctness) |
 | **CSP.2.2 Deduplication Rule** | §2.4 (Trade-ID Idempotency Registry block; “append trade_id to WAL first”)<br>§3.4 (REST sweeper before WS replay; reconcile ordering)<br>§1.1.2 (label collision-safe matching) | AT-269 (REST sweeper then WS duplicate ignored)<br>AT-270 (duplicate WS trade is NOOP)<br>AT-933 (WS reconnect does not duplicate dispatch)<br>AT-941 (crash during reconciliation → idempotent rerun; no dupes) |
 | **CSP.3 RecordedBeforeDispatch (WAL) (group)** | §0.Z.2.2, item B (RecordedBeforeDispatch invariant)<br>§2.4 (Durable Intent Ledger rules)<br>§2.4.1 (WAL writer isolation; queue semantics) | AT-935 (RecordedBeforeDispatch + restart → dispatch exactly once)<br>AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)<br>AT-233 / AT-234 (crash + restart reconcile; no resend; detect fill)<br>AT-925 (hot-loop output queue backpressure → ReduceOnly) |
-| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (RecordedBeforeDispatch = enqueue succeeds) | AT-935 (recorded unsent survives crash; sent once after reconcile)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
+| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (`RecordedBeforeDispatch` requires `WALRecorded`; `WALQueueAccepted` alone is insufficient) | AT-935 (recorded unsent survives crash; sent once after reconcile)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
 | **CSP.3.2 WAL Degradation Semantics** | §2.4.1 (enqueue fail → fail-closed for OPEN; continue ticking)<br>§2.2.3.4 (dispatch authorization: OPEN blocked in ReduceOnly/Kill) | AT-906 (OPEN blocked on WAL queue full)<br>AT-925 (no hot-loop stall; ReduceOnly under backpressure)<br>AT-1049 (exposed ⇒ at least one risk-reducing dispatch permitted) |
-| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 (restart dispatch exactly once)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 (session termination → latch + kill + reconcile)<br>AT-941 (crash during reconciliation → safe restart) |
+| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 / AT-1215 (recorded intent dispatches exactly once; no duplicate send)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 / AT-346 (session termination → latch + kill + reconcile + containment permitted)<br>AT-941 (crash during reconciliation → safe restart) |
 | **CSP.4.1 Restart Safety** | §2.4 (startup replay + reconcile before dispatch)<br>§2.2.4 (startup latch set) | AT-233 / AT-234 (restart reconcile; no dupes; fill recovery)<br>AT-430 (startup latch defaults to RESTART_RECONCILE_REQUIRED) |
 | **CSP.4.2 No Duplicate Sends** | §2.4 (no resend unless reconcile proves unsent)<br>§1.1.2 (label matching to detect in-flight orders)<br>§3.4 (reconcile ordering; REST snapshots) | AT-935 (no duplicate send across restarts)<br>AT-940 (ACK lost locally → recover via reconcile; no resend)<br>AT-933 (WS reconnect: treat existing orders as in-flight; no dupes) |
-| **CSP.4.3 WS Gap / Session Termination** | §3.4 (channel continuity + corrective actions; zombie socket rule)<br>§2.2.4 (latch reasons WS_* and SESSION_TERMINATION_*)<br>§3.3 (10028/session termination handling) | AT-271 / AT-408 (book gap → latch WS_BOOK_GAP_*)<br>AT-272 / AT-202 (trade gap → latch WS_TRADES_GAP_*)<br>AT-947 (zombie socket → latch WS_DATA_STALE_*)<br>AT-409 / AT-240 (session termination → latch + Kill + reconcile) |
+| **CSP.4.3 WS Gap / Session Termination** | §3.4 (channel continuity + corrective actions; zombie socket rule)<br>§2.2.4 (latch reasons WS_* and SESSION_TERMINATION_*)<br>§3.3 (10028/session termination handling) | AT-271 / AT-408 (book gap → latch WS_BOOK_GAP_*)<br>AT-272 / AT-202 (trade gap → latch WS_TRADES_GAP_*)<br>AT-947 (zombie socket → latch WS_DATA_STALE_*)<br>AT-409 / AT-240 / AT-346 (session termination → latch + Kill + reconcile while containment remains legal) |
 | **CSP.5 TradingMode Semantics & Enforcement (group)** | Definitions (`TradingMode`, `ModeReasonCode`, etc.)<br>§2.2.3 (TradingMode computation + dispatch authorization + reason-code registry)<br>§2.2.4/§2.2.5 (latch + cancel/replace legality) | AT-1050 / AT-1051 / AT-1052 (axis isolation tests)<br>AT-1053 (resolver monotonicity property)<br>AT-010 / AT-402 (OPEN blocked under latch; risk-increasing cancel/replace blocked)<br>AT-024 / AT-025 / AT-026 (mode_reason invariants) |
 | **CSP.5.1 TradingMode states** | Definitions (TradingMode enum)<br>§2.2.3 (resolver output + reason tiers) | AT-1050–AT-1053 (resolver correctness / monotonicity)<br>AT-024 (Active ⇒ mode_reasons empty) |
 | **CSP.5.2 Enforcement rules (OPEN gating, ReduceOnly, Kill)** | §2.2.3.4 (dispatch authorization rules)<br>§2.2.4 (OPEN blocked under reconcile latch)<br>§2.2.5 (cancel/replace permission rules) | AT-010 (OPEN blocked; CLOSE/HEDGE allowed under latch)<br>AT-1055 (reduce_only=true is not an OPEN intent)<br>AT-338 (Kill containment is mandatory when exposed) |
-| **CSP.5.3 Runtime F1 Certification Gate** | §2.2.1 (F1_CERT semantics, binding, freshness)<br>§7.0 (`/status` F1 fields) | AT-003 / AT-412 (`/status` f1_cert_state/expires invariants)<br>AT-423 (F1 file changes reflected next tick)<br>AT-012 (contract_version string binding)<br>AT-113 (runtime_config_hash canonicalization) |
+| **CSP.5.3 Runtime Binding Gate** | §2.2.1 (runtime-binding semantics, binding, freshness)<br>§7.0 (`/status` runtime binding fields) | AT-003 / AT-412 (`/status` runtime_binding_state/expires invariants)<br>AT-423 (runtime binding file changes reflected next tick)<br>AT-012 (contract_version string binding)<br>AT-113 (runtime_config_hash canonicalization) |
 | **CSP.6 Capital Supremacy Invariant** | §0.Z.2.2, item F (capital supremacy invariant)<br>§2.2.3.6 (Kill semantics: containment must remain legal under exposure)<br>§3.1 (emergency close) | AT-1049 (no-deadlock-under-exposure)<br>AT-338 / AT-339 / AT-340 (Kill containment required; not blocked by disk/evidence/WAL)<br>AT-346 / AT-347 / AT-013 (containment allowed under session/watchdog/bunker) |
-| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 (price source fallback; fail-closed on no price)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
-| **CSP.8 Timebase Authority** | §0.Z.2.2, item H (monotonic interval requirement; clock uncertainty semantics)<br>§2.2.1.1 (freshness checks for critical inputs)<br>§7.0 (policy_age_sec calculation + status invariants) | AT-001 / AT-112 / AT-349 / AT-350 / AT-413 (missing/stale inputs force ReduceOnly)<br>AT-406 (policy_age_sec arithmetic correctness)<br>*(No dedicated AT yet for “wall-clock MUST NOT trigger Kill”; add if desired.)* |
-| **CSP.9 Profile Isolation** | §0.Z.7 (runtime + compile-time isolation)<br>§2.2.2 (EvidenceGuard "NOT_ENFORCED" when CSP)<br>§2.2.1.1 (critical inputs are profile-scoped)<br>§5.2 (Replay Gatekeeper CSP isolation)<br>§7.0 (status: omit/NOT_ENFORCED GOP keys when CSP) | AT-990 (CSP_ONLY build boots; GOP absent/NOT_ENFORCED)<br>AT-991 (GOP unhealthy must not affect CSP decisions)<br>AT-992 (GOP enforcement when enforced_profile != CSP)<br>AT-1070 (CSP isolation from replay/snapshot failures) |
+| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 / AT-1217 (L2/L1/venue-band fallback ladder; fail-closed only when all sources invalid)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
+| **CSP.8 Timebase Authority** | §0.Z.2.2, item H (monotonic interval requirement; clock uncertainty semantics)<br>§2.2.1.2 (freshness checks for critical inputs)<br>§7.0 (policy_age_sec calculation + status invariants) | AT-001 / AT-112 / AT-349 / AT-350 / AT-413 (missing/stale inputs force ReduceOnly)<br>AT-406 (policy_age_sec arithmetic correctness)<br>*(No dedicated AT yet for “wall-clock MUST NOT trigger Kill”; add if desired.)* |
+| **CSP.9 Profile Isolation** | §0.Z.7 (runtime + compile-time isolation)<br>§0.Z.10 (numeric isolation under CSP)<br>§2.2.2 (EvidenceGuard "NOT_ENFORCED" when CSP)<br>§2.2.1.2 (critical inputs are profile-scoped)<br>§5.2 (Replay Gatekeeper CSP isolation)<br>§7.0 (status: omit/NOT_ENFORCED GOP keys when CSP) | AT-990 (CSP_ONLY build boots; GOP absent/NOT_ENFORCED)<br>AT-991 / AT-1218 (GOP unhealthy or absent must not affect CSP decisions)<br>AT-992 (GOP enforcement when enforced_profile != CSP)<br>AT-1070 / AT-1219 (CSP isolation from replay/snapshot and GOP-only numeric faults) |
 | **CSP.10 CSP_ONLY Build/Test Mode** | §0.Z.7.3 (CSP_ONLY build requirement)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.9.1 (meta-ATs) | AT-1056 (CI build:csp_only succeeds)<br>AT-1057 (CI test:csp_only runs only CSP tests; all pass)<br>AT-990 (runtime sanity: CSP_ONLY build starts; GOP not enforced) |
 | **CSP.11 Explicit Non-Requirements** | §0.Z.2.3 (CSP explicit non-requirements)<br>§0.Z.3.3 (GOP failures must not violate CSP guarantees)<br>§0.Z.7.2 (GOP failures MUST NOT alter CSP decisions when CSP enforced) | AT-991 (CSP decisions unaffected by GOP health when CSP enforced) |
-| **CSP.12 Acceptance Tests (CSP gating)** | §0.Z.5 (profile tagging rules)<br>§0.Z.9 (CSP-only CI gate)<br>§8 (release gates reference CSP/GOP status) | AT-1057 (ensures CSP-only pipeline executes only CSP tests)<br>AT-023 (status completeness for operators/CI) |
+| **CSP.12 Acceptance Tests (CSP gating)** | §0.Z.5 (profile tagging rules)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.10 (Numeric Sanity Guard)<br>§8 (release gates reference CSP/GOP status) | AT-1057 (ensures CSP-only pipeline executes only CSP tests)<br>AT-023 (status completeness for operators/CI)<br>AT-1219 (GOP numeric faults isolated under CSP) |
