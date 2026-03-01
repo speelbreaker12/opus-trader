@@ -30,6 +30,25 @@ shift || true
 mode="check"
 output_path=""
 
+is_placeholder_ledger() {
+  local path="$1"
+  if [[ ! -f "$path" ]]; then
+    return 1
+  fi
+
+  # Fail closed on known scaffold placeholders.
+  if grep -Fq "AT-UNKNOWN" "$path"; then
+    return 0
+  fi
+  if grep -Fq "Replace with real evidence before cycle1" "$path"; then
+    return 0
+  fi
+  if grep -Fq "Replace with evidence-backed gap list entry." "$path"; then
+    return 0
+  fi
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check) mode="check"; shift ;;
@@ -72,7 +91,15 @@ candidate_paths=(
 )
 
 found_path=""
+placeholder_path=""
 for p in "${candidate_paths[@]}"; do
+  if [[ ! -f "$p" ]]; then
+    continue
+  fi
+  if is_placeholder_ledger "$p"; then
+    [[ -z "$placeholder_path" ]] && placeholder_path="$p"
+    continue
+  fi
   if [[ -f "$p" ]]; then
     found_path="$p"
     break
@@ -83,6 +110,11 @@ if [[ "$mode" == "check" ]]; then
   if [[ -n "$found_path" ]]; then
     echo "OK: evidence ledger found for $story_id at $found_path"
     exit 0
+  fi
+  if [[ -n "$placeholder_path" ]]; then
+    echo "FAIL: evidence ledger for $story_id is scaffold placeholder content at $placeholder_path" >&2
+    echo "Replace scaffold placeholders with real AT evidence before cycle1." >&2
+    exit 1
   fi
   echo "FAIL: no evidence ledger found for $story_id" >&2
   echo "Expected one of:" >&2

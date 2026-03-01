@@ -44,7 +44,7 @@ test_proof_graph_codex_diff_rejected() {
   set -e
 
   [[ $rc -eq 2 ]] || fail "proof-graph+codex should exit 2, got $rc"
-  echo "$output" | grep -q "requires --tool opus|kimi or --tool codex --files" \
+  echo "$output" | grep -q "requires --tool opus|kimi|gemini or --tool codex --files" \
     || fail "proof-graph+codex: expected tool guard message. Output: $output"
   pass "--proof-graph + --tool codex (no --files) → exit 2"
 }
@@ -54,10 +54,27 @@ test_proof_graph_codex_diff_rejected() {
 # the exit should NOT be caused by the --proof-graph guards.
 
 test_proof_graph_valid_combo_passes_guard() {
+  local tmp_dir mock_bin
+  tmp_dir="$(mktemp -d)"
+  mock_bin="$tmp_dir/bin"
+  mkdir -p "$mock_bin"
+
+  cat > "$mock_bin/claude" <<'MOCK_CLAUDE'
+#!/usr/bin/env bash
+cat >/dev/null
+echo "NO_FINDINGS"
+echo "plans/review_logged.sh:1"
+echo "plans/review_logged.sh:2"
+echo "plans/review_logged.sh:3"
+exit 0
+MOCK_CLAUDE
+  chmod +x "$mock_bin/claude"
+
   set +e
-  output="$(bash "$SCRIPT" FAKE-001 --tool opus --prompt enriched --uncommitted --proof-graph 2>&1)"
+  output="$(PATH="$mock_bin:$PATH" bash "$SCRIPT" FAKE-001 --tool opus --prompt enriched --uncommitted --proof-graph 2>&1)"
   rc=$?
   set -e
+  rm -rf "$tmp_dir"
 
   # The guard messages should NOT appear
   if echo "$output" | grep -q "requires --prompt enriched"; then

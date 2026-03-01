@@ -192,14 +192,13 @@ if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
   # - Else fallback to enforcing_contract_ats for legacy stories
   conflict_json="$(jq -c --arg sid "$story_id" '
     def owner_claims:
-      if has("primary_owner_for") then
+      if (has("primary_owner_for") and (.primary_owner_for != null)) then
         (.primary_owner_for // [])
       else
         (.enforcing_contract_ats // [])
       end;
 
-    (.items[]? | select(.id == $sid) | .slice // null) as $target_slice
-    | ([.items[]? | select((.slice // null) == $target_slice) | {id, claims: (owner_claims | map(tostring))}] ) as $stories
+    ([.items[]? | {id, claims: (owner_claims | map(tostring))}] ) as $stories
     | ($stories[]? | select(.id == $sid) | .claims // []) as $my_claims
     | [
         $my_claims[] as $at
