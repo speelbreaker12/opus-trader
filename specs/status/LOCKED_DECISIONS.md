@@ -15,6 +15,17 @@ open_permission_blocked_latch == true
        mode_reasons MUST contain "REDUCEONLY_OPEN_PERMISSION_LATCHED"
 ```
 
+Versioned extension rule (future contract versions only):
+```
+contract_version >= 5.3
+  ⇒ registries.DecisionALatchReasonCode MUST define exactly one explicit code
+  ⇒ that code MUST also appear in ModeReasonCode.ReduceOnly
+  ⇒ if trading_mode == ReduceOnly and latch=true:
+       mode_reasons MUST contain that explicit code
+```
+
+No heuristic/substring matching is allowed for Decision A in any version.
+
 ### Why This Exists
 Without this rule, a system could claim `trading_mode=Active` while secretly blocking all OPEN intents via the latch. This creates a **truth fork**: the dashboard says "Active" but the system refuses to trade.
 
@@ -32,6 +43,8 @@ This decision closes that gap:
 - `tools/validate_status.py` checks this (tag: `[DECISION-A]`)
 - CI fails if latch=true with trading_mode=Active
 - CI fails if latch=true with ReduceOnly but missing REDUCEONLY_OPEN_PERMISSION_LATCHED
+- For contract_version >= 5.3, CI also fails when
+  `registries.DecisionALatchReasonCode` is missing/ambiguous/out-of-tier
 
 ---
 
