@@ -98,6 +98,7 @@ required=(
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
   plans/tests/test_code_review_expert_guard.sh
+  plans/tests/test_fail_closed_gate_map_paths.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
@@ -120,6 +121,7 @@ required=(
   plans/tests/test_slice_review_gate.sh
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_findings_guard.sh
+  plans/tests/test_rust_gates_smoke_targets.sh
   plans/tests/test_wf_step_stop_on_blocker.sh
   plans/tests/test_wf_step_review_provenance.sh
   plans/tests/test_workflow_quick_step.sh
