@@ -689,6 +689,12 @@ else
   warn "status fixtures directory missing: tests/fixtures/status"
 fi
 
+log "13b) status reason leak guard"
+run_logged_or_exit "status_reason_leak_guard" "$SPEC_LINT_TIMEOUT" \
+  "$PYTHON_BIN" tools/check_status_reason_string_leaks.py \
+  --manifest specs/status/status_reason_registries_manifest.json \
+  --scan-root crates
+
 if [[ -f Cargo.toml ]]; then
   if [[ -f specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml && -f tools/vendor_docs_lint_rust.py ]]; then
     log "14) vendor docs lint"
