@@ -272,8 +272,11 @@
 
   "codegen": {
     "description": "Instructions for code generation from this manifest.",
-    "rust_enum_crate": "soldier_core::policy::reason_codes",
-    "typescript_enum_path": "src/types/reason_codes.ts",
-    "python_enum_path": "python/types/reason_codes.py"
+    "generator": "tools/generate_reason_codes.py",
+    "outputs": {
+      "rust_status": "crates/soldier_core/src/status_codes_generated.rs",
+      "rust_reject": "crates/soldier_core/src/execution/reject_reason_generated.rs",
+      "python": "tools/generated_status_reason_codes.py"
+    }
   }
 }

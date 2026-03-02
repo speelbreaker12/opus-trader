@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-tools/validate_status.py (v3)
+tools/validate_status.py (v4)
 
-Contract-enforced /status validator for CSP.
+Contract-enforced /status validator for CSP + Phase 0/1 foundation status-lite.
 
 Validates:
   - JSONSchema (Draft 2020-12)
-  - CSP minimum keys presence
-  - Manifest registry membership (tier purity, enum membership)
-  - Latch invariants + Decision A (latch ⇒ ¬Active + REDUCEONLY_OPEN_PERMISSION_LATCHED)
-  - Mode reason ordering (subsequence of manifest tier list)
-  - owner_view schema lock
+  - Phase-aware contract checks:
+      - Phase 2+ (CSP): minimum keys, manifest membership, tier/order, latch invariants
+      - Phase 0/1 (foundation): status-lite shape + forbidden Phase-2+ authority fields
+  - owner_view schema lock (CSP payloads)
 
 Usage:
   # Validate live /status (runtime, allows extra keys)
@@ -31,6 +30,8 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import functools
+import importlib.util
 import json
 import sys
 import urllib.request
@@ -94,6 +95,8 @@ FOUNDATION_FORBIDDEN_KEYS = frozenset([
     "open_permission_reason_codes",
     "open_permission_requires_reconcile",
 ])
+
+GENERATED_STATUS_CODES_PATH = Path(__file__).with_name("generated_status_reason_codes.py")
 
 
 def eprint(*args: Any) -> None:
@@ -163,6 +166,36 @@ def normalize_code_list(value: Any) -> list[str]:
     return []
 
 
+@functools.lru_cache(maxsize=1)
+def load_generated_status_module() -> Any | None:
+    if not GENERATED_STATUS_CODES_PATH.exists():
+        return None
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "generated_status_reason_codes_runtime",
+            GENERATED_STATUS_CODES_PATH,
+        )
+        if spec is None or spec.loader is None:
+            return None
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+def decision_a_canonical_latch_reason() -> str:
+    module = load_generated_status_module()
+    if module is not None:
+        token = getattr(module, "DECISION_A_CANONICAL_LATCH_REASON", None)
+        if isinstance(token, str) and token:
+            return token
+    # Fallback keeps isolated --help copies robust when generated module is absent.
+    return "REDUCEONLY_OPEN_PERMISSION_LATCHED"
+
+
 def is_subsequence_in_order(seq: list[str], ordered_universe: list[str]) -> bool:
     """True iff seq preserves relative order of ordered_universe."""
     if not all(isinstance(v, str) for v in seq):
@@ -198,7 +231,7 @@ def resolve_decision_a_latch_reason(
     - contract_version >= 5.3: manifest must provide exactly one explicit
       DecisionALatchReasonCode value, and it must be in ReduceOnly reasons.
     """
-    canonical = "REDUCEONLY_OPEN_PERMISSION_LATCHED"
+    canonical = decision_a_canonical_latch_reason()
     parsed_version = parse_contract_version(manifest_contract_version)
 
     if parsed_version is not None and parsed_version >= (5, 3):
