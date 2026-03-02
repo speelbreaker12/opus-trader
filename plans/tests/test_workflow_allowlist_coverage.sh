@@ -134,6 +134,7 @@ required=(
   plans/lib/node_gates.sh
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
+  plans/lib/status_reason_codegen_gate.sh
   plans/lib/verify_checkpoint.sh
   plans/ci/requirements-crossref.txt
   plans/ci/requirements-verify.txt

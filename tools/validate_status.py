@@ -37,6 +37,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from generated_status_reason_codes import (
+    DECISION_A_LATCH_REASON,
+    OPEN_PERMISSION_REASON_CODES,
+)
+
 # CSP Minimum Keys (contract-mandated, must always exist)
 CSP_MINIMUM_KEYS = frozenset([
     "status_schema_version",
@@ -168,7 +173,6 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
     mode_regs = regs.get("ModeReasonCode", {})
     reduce_only_reasons = normalize_code_list(mode_regs.get("ReduceOnly", []))
     kill_reasons = normalize_code_list(mode_regs.get("Kill", []))
-    open_perm_reasons = normalize_code_list(regs.get("OpenPermissionReasonCode", []))
     manifest_contract_version = manifest.get("contract_version", "5.2")
 
     trading_mode = status.get("trading_mode")
@@ -245,10 +249,13 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
         # Decision A: latch=true ⇒ REDUCEONLY_OPEN_PERMISSION_LATCHED in mode_reasons
         # (unless already in Kill mode, which is more severe)
         if trading_mode == "ReduceOnly":
-            if not isinstance(mode_reasons, list) or "REDUCEONLY_OPEN_PERMISSION_LATCHED" not in mode_reasons:
+            if (
+                not isinstance(mode_reasons, list)
+                or DECISION_A_LATCH_REASON not in mode_reasons
+            ):
                 errs.append(
                     "[DECISION-A] latch=true with trading_mode='ReduceOnly' requires "
-                    "'REDUCEONLY_OPEN_PERMISSION_LATCHED' in mode_reasons"
+                    f"'{DECISION_A_LATCH_REASON}' in mode_reasons"
                 )
 
     elif latch is False:
@@ -267,7 +274,7 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
 
     # 6. Latch reason membership
     if isinstance(latch_reasons, list):
-        bad = [c for c in latch_reasons if c not in open_perm_reasons]
+        bad = [c for c in latch_reasons if c not in OPEN_PERMISSION_REASON_CODES]
         if bad:
             errs.append(
                 f"[ENUM] Unknown open_permission_reason_codes (not in manifest): {bad}"

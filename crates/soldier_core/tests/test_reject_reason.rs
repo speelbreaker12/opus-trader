@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 #[path = "test_stubs.rs"]
 mod test_stubs;
 use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
@@ -7,7 +5,7 @@ use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclose
 use soldier_core::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
     GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
-    reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
+    reject_reason_from_chokepoint, reject_reason_registry_contains,
 };
 use soldier_core::risk::RiskState;
 
@@ -180,109 +178,21 @@ fn test_preflight_gate_rejection_maps_to_specific_reason_code() {
 }
 
 #[test]
-fn test_registry_contains_contract_minimum_set() {
-    let registry_tokens: HashSet<&'static str> = reject_reason_registry()
-        .iter()
-        .map(|code| code.as_str())
-        .collect();
-
-    let minimum = [
-        "TooSmallAfterQuantization",
-        "InstrumentMetadataMissing",
-        "ChurnBreakerActive",
-        "LiquidityGateNoL2",
-        "EmergencyCloseNoPrice",
-        "ExpectedSlippageTooHigh",
-        "NetEdgeTooLow",
-        "NetEdgeInputMissing",
-        "PricerInputMissing",
-        "PricerInputInvalid",
-        "GateCascadeSkip",
-        "InsufficientDepthWithinBudget",
-        "FeeCacheStale",
-        "RecordedBeforeDispatchFailed",
-        "AssemblyFailed",
-        "InventorySkew",
-        "InventorySkewDeltaLimitMissing",
-        "PendingExposureBudgetExceeded",
-        "GlobalExposureBudgetExceeded",
-        "ContractsAmountMismatch",
-        "MarginHeadroomRejectOpens",
-        "OrderTypeMarketForbidden",
-        "OrderTypeStopForbidden",
-        "LinkedOrderTypeForbidden",
-        "PostOnlyWouldCross",
-        "RiskIncreasingCancelReplaceForbidden",
-        "RateLimitBrownout",
-        "InstrumentExpiredOrDelisted",
-        "FeedbackLoopGuardActive",
-        "LabelTooLong",
-    ];
-
-    for token in minimum {
+fn all_generated_reject_reason_codes_round_trip() {
+    for code in RejectReasonCode::ALL {
         assert!(
-            registry_tokens.contains(token),
-            "RejectReasonCode registry missing contract token {token}"
+            reject_reason_registry_contains(*code),
+            "RejectReasonCode::ALL member must be in registry: {code:?}"
         );
+
+        let json = serde_json::to_string(code).expect("serialize reject reason");
+        let back: RejectReasonCode =
+            serde_json::from_str(&json).expect("deserialize reject reason");
+        assert_eq!(*code, back, "serde round-trip mismatch for {code:?}");
+
+        assert!(!code.as_str().is_empty(), "empty as_str() for {code:?}");
+        assert!(!code.wire_str().is_empty(), "empty wire_str() for {code:?}");
     }
-}
-
-/// Verify every enum variant is in REGISTRY and vice versa.
-///
-/// NOTE: If you add a new `RejectReasonCode` variant, add it here too.
-/// The size assertion at the end catches missing entries.
-#[test]
-fn test_registry_contains_all_enum_variants() {
-    let all_variants = [
-        RejectReasonCode::TooSmallAfterQuantization,
-        RejectReasonCode::InstrumentMetadataMissing,
-        RejectReasonCode::ChurnBreakerActive,
-        RejectReasonCode::LiquidityGateNoL2,
-        RejectReasonCode::EmergencyCloseNoPrice,
-        RejectReasonCode::ExpectedSlippageTooHigh,
-        RejectReasonCode::InsufficientDepthWithinBudget,
-        RejectReasonCode::FeeCacheStale,
-        RejectReasonCode::RecordedBeforeDispatchFailed,
-        RejectReasonCode::NetEdgeTooLow,
-        RejectReasonCode::NetEdgeInputMissing,
-        RejectReasonCode::PricerInputMissing,
-        RejectReasonCode::PricerInputInvalid,
-        RejectReasonCode::GateCascadeSkip,
-        RejectReasonCode::InventorySkew,
-        RejectReasonCode::InventorySkewDeltaLimitMissing,
-        RejectReasonCode::PendingExposureBudgetExceeded,
-        RejectReasonCode::GlobalExposureBudgetExceeded,
-        RejectReasonCode::ContractsAmountMismatch,
-        RejectReasonCode::MarginHeadroomRejectOpens,
-        RejectReasonCode::OrderTypeMarketForbidden,
-        RejectReasonCode::OrderTypeStopForbidden,
-        RejectReasonCode::LinkedOrderTypeForbidden,
-        RejectReasonCode::PostOnlyWouldCross,
-        RejectReasonCode::RiskIncreasingCancelReplaceForbidden,
-        RejectReasonCode::RateLimitBrownout,
-        RejectReasonCode::InstrumentExpiredOrDelisted,
-        RejectReasonCode::FeedbackLoopGuardActive,
-        RejectReasonCode::LabelTooLong,
-        RejectReasonCode::AssemblyFailed,
-    ];
-
-    let registry = reject_reason_registry();
-
-    for variant in &all_variants {
-        assert!(
-            registry.contains(variant),
-            "REGISTRY missing enum variant: {:?}",
-            variant
-        );
-    }
-
-    assert_eq!(
-        registry.len(),
-        all_variants.len(),
-        "REGISTRY size mismatch: registry has {} entries but enum has {} variants",
-        registry.len(),
-        all_variants.len()
-    );
 }
 
 #[test]
@@ -381,55 +291,4 @@ fn test_at201_open_classified_intent_blocked_by_open_gates() {
         1,
         "CLOSE dispatch count must be 1"
     );
-}
-
-#[test]
-fn test_as_str_matches_serde_output_for_all_variants() {
-    let all_variants = [
-        RejectReasonCode::TooSmallAfterQuantization,
-        RejectReasonCode::InstrumentMetadataMissing,
-        RejectReasonCode::ChurnBreakerActive,
-        RejectReasonCode::LiquidityGateNoL2,
-        RejectReasonCode::EmergencyCloseNoPrice,
-        RejectReasonCode::ExpectedSlippageTooHigh,
-        RejectReasonCode::InsufficientDepthWithinBudget,
-        RejectReasonCode::FeeCacheStale,
-        RejectReasonCode::RecordedBeforeDispatchFailed,
-        RejectReasonCode::NetEdgeTooLow,
-        RejectReasonCode::NetEdgeInputMissing,
-        RejectReasonCode::PricerInputMissing,
-        RejectReasonCode::PricerInputInvalid,
-        RejectReasonCode::GateCascadeSkip,
-        RejectReasonCode::InventorySkew,
-        RejectReasonCode::InventorySkewDeltaLimitMissing,
-        RejectReasonCode::PendingExposureBudgetExceeded,
-        RejectReasonCode::GlobalExposureBudgetExceeded,
-        RejectReasonCode::ContractsAmountMismatch,
-        RejectReasonCode::MarginHeadroomRejectOpens,
-        RejectReasonCode::OrderTypeMarketForbidden,
-        RejectReasonCode::OrderTypeStopForbidden,
-        RejectReasonCode::LinkedOrderTypeForbidden,
-        RejectReasonCode::PostOnlyWouldCross,
-        RejectReasonCode::RiskIncreasingCancelReplaceForbidden,
-        RejectReasonCode::RateLimitBrownout,
-        RejectReasonCode::InstrumentExpiredOrDelisted,
-        RejectReasonCode::FeedbackLoopGuardActive,
-        RejectReasonCode::LabelTooLong,
-        RejectReasonCode::AssemblyFailed,
-    ];
-
-    for code in &all_variants {
-        let as_str = code.as_str();
-        assert!(!as_str.is_empty(), "as_str() returned empty for {:?}", code);
-
-        let json = serde_json::to_string(code)
-            .unwrap_or_else(|e| panic!("serde serialization failed for {:?}: {}", code, e));
-        let deserialized: RejectReasonCode = serde_json::from_str(&json)
-            .unwrap_or_else(|e| panic!("serde deserialization failed for {:?}: {}", code, e));
-        assert_eq!(
-            *code, deserialized,
-            "serde round-trip mismatch for {:?}",
-            code
-        );
-    }
 }
