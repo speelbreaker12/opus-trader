@@ -3634,6 +3634,7 @@
       "implementation_tests": [
         "crates/soldier_core/tests/test_gate_ordering.rs::test_at501_open_all_gates_pass_trace_order"
       ],
+      "primary_owner_for": [],
       "loss_mode": {
         "worst_case": "gate ordering wrong → dispatch before all checks → safety gate bypassed",
         "fail_closed_cap": "DispatcherChokepoint rejects intent; fail-closed to no-dispatch",
