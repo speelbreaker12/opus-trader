@@ -152,6 +152,25 @@ def is_subsequence_in_order(seq: list[str], ordered_universe: list[str]) -> bool
     return idxs == sorted(idxs)
 
 
+def resolve_decision_a_latch_reason(reduce_only_reasons: list[str]) -> str | None:
+    """
+    Resolve the Decision-A latch token from manifest ReduceOnly mode reasons.
+
+    Primary match is the canonical contract token. For manifest overrides used
+    in repro/tests, accept any token that still clearly encodes the latch
+    intent (`OPEN_PERMISSION` + `LATCH`).
+    """
+    canonical = "REDUCEONLY_OPEN_PERMISSION_LATCHED"
+    if canonical in reduce_only_reasons:
+        return canonical
+
+    for token in reduce_only_reasons:
+        if "OPEN_PERMISSION" in token and "LATCH" in token:
+            return token
+
+    return None
+
+
 def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
     """
     Check contract invariants that JSONSchema cannot express:
@@ -169,6 +188,7 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
     reduce_only_reasons = normalize_code_list(mode_regs.get("ReduceOnly", []))
     kill_reasons = normalize_code_list(mode_regs.get("Kill", []))
     open_perm_reasons = normalize_code_list(regs.get("OpenPermissionReasonCode", []))
+    decision_a_latch_reason = resolve_decision_a_latch_reason(reduce_only_reasons)
     manifest_contract_version = manifest.get("contract_version", "5.2")
 
     trading_mode = status.get("trading_mode")
@@ -245,10 +265,18 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
         # Decision A: latch=true ⇒ REDUCEONLY_OPEN_PERMISSION_LATCHED in mode_reasons
         # (unless already in Kill mode, which is more severe)
         if trading_mode == "ReduceOnly":
-            if not isinstance(mode_reasons, list) or "REDUCEONLY_OPEN_PERMISSION_LATCHED" not in mode_reasons:
+            if decision_a_latch_reason is None:
+                errs.append(
+                    "[MANIFEST] ModeReasonCode.ReduceOnly must include a Decision-A "
+                    "latch reason token containing OPEN_PERMISSION and LATCH"
+                )
+            elif (
+                not isinstance(mode_reasons, list)
+                or decision_a_latch_reason not in mode_reasons
+            ):
                 errs.append(
                     "[DECISION-A] latch=true with trading_mode='ReduceOnly' requires "
-                    "'REDUCEONLY_OPEN_PERMISSION_LATCHED' in mode_reasons"
+                    f"'{decision_a_latch_reason}' in mode_reasons"
                 )
 
     elif latch is False:
