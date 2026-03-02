@@ -1,13 +1,13 @@
-#[path = "test_stubs.rs"]
-mod test_stubs;
-use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
+use super::test_support_tests::{
+    FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
+};
 
-use soldier_core::execution::{
+use crate::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
     GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
     reject_reason_from_chokepoint, reject_reason_registry_contains,
 };
-use soldier_core::risk::RiskState;
+use crate::risk::RiskState;
 
 fn build_chokepoint_result(
     intent_class: ChokeIntentClass,
