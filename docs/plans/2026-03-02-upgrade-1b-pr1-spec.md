@@ -88,9 +88,14 @@ pub struct OpenMetadata {
 | Variant | Gate 10 (`RecordedBeforeDispatch`) Rule | Expected Behavior |
 |---|---|---|
 | Open | Mandatory | WAL failure rejects (`RecordedBeforeDispatchFailed`) |
-| Close | Attempted, non-blocking | WAL failure warns; does not block by itself |
-| Hedge | Attempted, non-blocking | WAL failure warns; does not block by itself |
+| Close | Compatibility shim (`wal_recorded` signal), non-blocking | WAL false/warn path does not block by itself |
+| Hedge | Compatibility shim (`wal_recorded` signal), non-blocking | WAL false/warn path does not block by itself |
 | CancelOnly | Not consulted (short-circuit) | no WAL gate dependency |
+
+PR1 compatibility note:
+- Open uses runtime path behavior as authoritative.
+- Close/Hedge retain compatibility semantics from legacy pipeline/chokepoint wiring.
+- Mandatory adapter-owned WAL attempt semantics for non-Open variants are deferred to PR2+.
 
 ## 5) Output Parity Checklist (Must Pass)
 
@@ -107,6 +112,14 @@ For each variant, compare `ExecutionEngine::evaluate` vs direct legacy call:
   - `adjusted_min_edge_usd`
   - `mode_hint` (transitional; audit-driven)
 - Fail-closed behavior for missing open runtime dependency is deterministic
+
+Open runtime override reason-code mapping (deterministic, required):
+
+| Open reject detail string | `RejectReasonCode` |
+|---|---|
+| `PENDING_EXPOSURE_OVERFILL` | `PendingExposureBudgetExceeded` |
+| `PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED` | `PendingExposureBudgetExceeded` |
+| `GLOBAL_EXPOSURE_BUDGET_REJECT` | `GlobalExposureBudgetExceeded` |
 
 ## 6) Consumer Audit (Before Metadata Contraction)
 
@@ -150,8 +163,12 @@ PR4:
 
 Required:
 
-1. Engine parity tests for Open/Close/Hedge/CancelOnly.
-2. WAL-path parity scenario coverage.
+1. Engine parity tests for Open/Close/Hedge/CancelOnly using branch-complete matrix:
+   - Open: approve + reject
+   - Close: approve + reject
+   - Hedge: approve + reject
+   - CancelOnly: cancel short-circuit + WAL-signal scenario
+2. WAL-path parity scenario coverage for each applicable variant.
 3. Consumer audit output in PR notes.
 4. Targeted execution tests green.
 5. Verify gate run recorded (local or CI clean checkout).
