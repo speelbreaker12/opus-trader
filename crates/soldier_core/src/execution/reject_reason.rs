@@ -2,41 +2,11 @@
 
 use super::build_order_intent::{ChokeRejectReason, GateStep};
 
-/// Contract token for pre-dispatch rejection causes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum RejectReasonCode {
-    TooSmallAfterQuantization,
-    InstrumentMetadataMissing,
-    ChurnBreakerActive,
-    LiquidityGateNoL2,
-    EmergencyCloseNoPrice,
-    ExpectedSlippageTooHigh,
-    NetEdgeTooLow,
-    NetEdgeInputMissing,
-    PricerInputMissing,
-    PricerInputInvalid,
-    GateCascadeSkip,
-    InsufficientDepthWithinBudget,
-    FeeCacheStale,
-    RecordedBeforeDispatchFailed,
-    AssemblyFailed,
-    InventorySkew,
-    InventorySkewDeltaLimitMissing,
-    PendingExposureBudgetExceeded,
-    GlobalExposureBudgetExceeded,
-    ContractsAmountMismatch,
-    MarginHeadroomRejectOpens,
-    OrderTypeMarketForbidden,
-    OrderTypeStopForbidden,
-    LinkedOrderTypeForbidden,
-    PostOnlyWouldCross,
-    RiskIncreasingCancelReplaceForbidden,
-    RateLimitBrownout,
-    InstrumentExpiredOrDelisted,
-    FeedbackLoopGuardActive,
-    LabelTooLong,
+mod generated {
+    include!("reject_reason_generated.rs");
 }
+
+pub use generated::RejectReasonCode;
 
 /// Typed per-gate rejection codes produced by real gate evaluators.
 ///
@@ -55,90 +25,12 @@ pub struct GateRejectCodes {
     pub pricer: Option<RejectReasonCode>,
 }
 
-impl RejectReasonCode {
-    /// PascalCase variant name for log messages and registry lookups.
-    ///
-    /// NOTE: serde serializes as SCREAMING_SNAKE_CASE (`NET_EDGE_TOO_LOW`), while
-    /// `as_str()` returns PascalCase (`NetEdgeTooLow`). These are intentionally
-    /// different formats for different audiences. `as_str()` is used only in tests
-    /// and internal diagnostics; serde is the sole wire-format serialization path.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            RejectReasonCode::TooSmallAfterQuantization => "TooSmallAfterQuantization",
-            RejectReasonCode::InstrumentMetadataMissing => "InstrumentMetadataMissing",
-            RejectReasonCode::ChurnBreakerActive => "ChurnBreakerActive",
-            RejectReasonCode::LiquidityGateNoL2 => "LiquidityGateNoL2",
-            RejectReasonCode::EmergencyCloseNoPrice => "EmergencyCloseNoPrice",
-            RejectReasonCode::ExpectedSlippageTooHigh => "ExpectedSlippageTooHigh",
-            RejectReasonCode::NetEdgeTooLow => "NetEdgeTooLow",
-            RejectReasonCode::NetEdgeInputMissing => "NetEdgeInputMissing",
-            RejectReasonCode::PricerInputMissing => "PricerInputMissing",
-            RejectReasonCode::PricerInputInvalid => "PricerInputInvalid",
-            RejectReasonCode::GateCascadeSkip => "GateCascadeSkip",
-            RejectReasonCode::InsufficientDepthWithinBudget => "InsufficientDepthWithinBudget",
-            RejectReasonCode::FeeCacheStale => "FeeCacheStale",
-            RejectReasonCode::RecordedBeforeDispatchFailed => "RecordedBeforeDispatchFailed",
-            RejectReasonCode::AssemblyFailed => "AssemblyFailed",
-            RejectReasonCode::InventorySkew => "InventorySkew",
-            RejectReasonCode::InventorySkewDeltaLimitMissing => "InventorySkewDeltaLimitMissing",
-            RejectReasonCode::PendingExposureBudgetExceeded => "PendingExposureBudgetExceeded",
-            RejectReasonCode::GlobalExposureBudgetExceeded => "GlobalExposureBudgetExceeded",
-            RejectReasonCode::ContractsAmountMismatch => "ContractsAmountMismatch",
-            RejectReasonCode::MarginHeadroomRejectOpens => "MarginHeadroomRejectOpens",
-            RejectReasonCode::OrderTypeMarketForbidden => "OrderTypeMarketForbidden",
-            RejectReasonCode::OrderTypeStopForbidden => "OrderTypeStopForbidden",
-            RejectReasonCode::LinkedOrderTypeForbidden => "LinkedOrderTypeForbidden",
-            RejectReasonCode::PostOnlyWouldCross => "PostOnlyWouldCross",
-            RejectReasonCode::RiskIncreasingCancelReplaceForbidden => {
-                "RiskIncreasingCancelReplaceForbidden"
-            }
-            RejectReasonCode::RateLimitBrownout => "RateLimitBrownout",
-            RejectReasonCode::InstrumentExpiredOrDelisted => "InstrumentExpiredOrDelisted",
-            RejectReasonCode::FeedbackLoopGuardActive => "FeedbackLoopGuardActive",
-            RejectReasonCode::LabelTooLong => "LabelTooLong",
-        }
-    }
-}
-
-const REGISTRY: &[RejectReasonCode] = &[
-    RejectReasonCode::TooSmallAfterQuantization,
-    RejectReasonCode::InstrumentMetadataMissing,
-    RejectReasonCode::ChurnBreakerActive,
-    RejectReasonCode::LiquidityGateNoL2,
-    RejectReasonCode::EmergencyCloseNoPrice,
-    RejectReasonCode::ExpectedSlippageTooHigh,
-    RejectReasonCode::NetEdgeTooLow,
-    RejectReasonCode::NetEdgeInputMissing,
-    RejectReasonCode::PricerInputMissing,
-    RejectReasonCode::PricerInputInvalid,
-    RejectReasonCode::GateCascadeSkip,
-    RejectReasonCode::InsufficientDepthWithinBudget,
-    RejectReasonCode::FeeCacheStale,
-    RejectReasonCode::RecordedBeforeDispatchFailed,
-    RejectReasonCode::AssemblyFailed,
-    RejectReasonCode::InventorySkew,
-    RejectReasonCode::InventorySkewDeltaLimitMissing,
-    RejectReasonCode::PendingExposureBudgetExceeded,
-    RejectReasonCode::GlobalExposureBudgetExceeded,
-    RejectReasonCode::ContractsAmountMismatch,
-    RejectReasonCode::MarginHeadroomRejectOpens,
-    RejectReasonCode::OrderTypeMarketForbidden,
-    RejectReasonCode::OrderTypeStopForbidden,
-    RejectReasonCode::LinkedOrderTypeForbidden,
-    RejectReasonCode::PostOnlyWouldCross,
-    RejectReasonCode::RiskIncreasingCancelReplaceForbidden,
-    RejectReasonCode::RateLimitBrownout,
-    RejectReasonCode::InstrumentExpiredOrDelisted,
-    RejectReasonCode::FeedbackLoopGuardActive,
-    RejectReasonCode::LabelTooLong,
-];
-
 pub fn reject_reason_registry() -> &'static [RejectReasonCode] {
-    REGISTRY
+    RejectReasonCode::ALL
 }
 
 pub fn reject_reason_registry_contains(code: RejectReasonCode) -> bool {
-    REGISTRY.contains(&code)
+    RejectReasonCode::ALL.contains(&code)
 }
 
 /// Map chokepoint rejection output to a contract registry token.
