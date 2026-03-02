@@ -781,3 +781,17 @@ Commands: cargo fmt --all; cargo test -p soldier_core --locked --test adversaria
 Evidence: crates/soldier_core/tests/adversarial_gi_enforcement.rs; artifacts/verify/20260228_172938/verify.meta.json; artifacts/verify/20260228_172938/adversarial_report.json.
 Notes: `./plans/verify.sh full` passed with adversarial gate clean (no GI semantic findings).
 Next: stage intended files (excluding runtime/artifact noise), run `./plans/code_review_expert_attest.sh`, commit, push, and update PR #142.
+Story: workflow-maintenance
+Date: 2026-03-01 23:25:34 UTC
+Summary: Fixed cycle2 provenance phase alignment to accept canonical R7d (legacy R7 tolerated), hardened recon non-write production-edit guard to detect same-file mutations on already-dirty paths via content fingerprints, and ensured NON_WRITE_STEP_PROD_EDIT_BLOCKED marker/CEREMONY classification are emitted even when wf_step already failed.
+Commands: bash plans/tests/test_wf_step_review_provenance.sh; bash plans/tests/test_recon_operator_runner.sh; ./plans/verify.sh quick; PREFLIGHT_TIMEOUT=1200s ./plans/workflow_verify.sh; bash -n plans/recon_operator_run.sh plans/wf_step.sh plans/tests/test_recon_operator_runner.sh plans/tests/test_wf_step_review_provenance.sh.
+Evidence: plans/wf_step.sh; plans/recon_operator_run.sh; plans/tests/test_wf_step_review_provenance.sh; plans/tests/test_recon_operator_runner.sh; artifacts/verify/20260301_170247; artifacts/verify/20260301_171952.
+Notes: workflow_verify required PREFLIGHT_TIMEOUT override in this environment due preflight runtime variance.
+Next: If desired, add a dedicated legacy-compat regression asserting cycle2 still accepts R7 sidecars in addition to canonical R7d.
+Story: CONTRACT Phase-1 hardening (sizing model + canonical quantization + label reject codes)
+Date: 2026-03-02 01:46:48 UTC
+Summary: Tightened CONTRACT Phase-1 sections by adding enforceable domain primitives (InstrumentFamily/AmountSemantics/InstrumentMeta, OrderSizeInput union, NormalizedOrderSize), replacing float-ambiguous idempotency hashing with canonical integer-quantized serialization (`qty_steps`, `price_ticks`, canonical_intent_bytes), strengthening Phase-1 WAL roadmap/exit wording to require WALRecorded semantics and restart replay, and adding precise reject reason codes (`InvalidLabelSchema`, `UnknownLabelVersion`, `MixedCanonicalSizeFields`) with aligned AT text.
+Commands: PREFLIGHT_TIMEOUT=1200s ./plans/verify.sh quick; bash plans/tests/test_review_logged_timeout_fallback.sh; bash plans/verify_gate_contract_check.sh.
+Evidence: specs/CONTRACT.md; plans/progress.txt.
+Notes: `./plans/verify.sh quick` failed in preflight on `plans/tests/test_review_logged_timeout_fallback.sh` during the gate run, but the fixture test passes when run directly and `verify_gate_contract_check.sh` passes.
+Next: Re-run `./plans/verify.sh quick` in a cleaner/stabler session, then run `./plans/verify.sh full` before any pass/merge action.
