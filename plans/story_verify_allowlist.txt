@@ -100,3 +100,9 @@ cargo test -p soldier_core --test test_inventory_skew
 cargo test -p soldier_core --test test_margin_gate
 cargo test -p soldier_core --test test_pending_exposure
 cargo test -p soldier_core --test test_reject_reason
+cargo test -p soldier_core
+bash plans/verify_mechanical.sh
+bash plans/tests/test_prd_set_pass.sh
+bash plans/tests/test_review_logged_proof_graph.sh
+bash plans/tests/test_verify_timeout_policy.sh
+bash plans/tests/test_wf_step.sh

@@ -128,7 +128,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 | **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
 | **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
 | **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
-| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner status output returning `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (and optional deprecated alias `is_trading_allowed`) | `docs/health_endpoint.md`, passing tests |
+| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and a **status-lite** owner output returning `service_up`, `build_id`, `contract_version`, `dispatch_enabled=false`, `phase=foundation` | `docs/health_endpoint.md`, passing tests |
 | **P0-F** | Machine Policy Loader Baseline | Bind a machine-readable policy path + strict loader so runtime checks are not doc-only | `config/policy.json`, `tools/policy_loader.py`, passing tests |
 
 **Anchors (for PRD traceability):**
@@ -139,7 +139,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a status-lite owner signal (`service_up`, `dispatch_enabled=false`, `phase=foundation`) and explicitly does **not** claim canonical TradingMode/latch semantics before Phase 2.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -1938,6 +1938,11 @@ AT-1054
   - `runtime_config_hash`: `sha256` hex of canonicalized runtime config (see below).
   - `contract_version`: MUST equal the canonical `contract_version` literal in Definitions.
   - `policy_hash_at_cert_time` MAY be included for observability only and MUST NOT be used as a runtime validity gate.
+- Runtime-binding producer contract (non-negotiable):
+  - Canonical producer path: `python/tools/f1_certify.py`.
+  - Runtime-binding output artifacts: `artifacts/RUNTIME_BINDING_CERT.json` and `artifacts/RUNTIME_BINDING_CERT.md`.
+  - Canonical invocation: `python python/tools/f1_certify.py --window=24h --out=artifacts/RUNTIME_BINDING_CERT.json`.
+  - Runtime OPEN eligibility requires a successful runtime-binding producer run for the running `build_id`/`runtime_config_hash`/`contract_version`.
 - Freshness window: default 24h (configurable). If missing OR stale OR FAIL => TradingMode MUST be ReduceOnly.
 - Binding hardening: if any of these do not match runtime, runtime binding cert MUST be treated as INVALID (ReduceOnly):
   - `cert.build_id != runtime.build_id`
@@ -4497,7 +4502,7 @@ Profile: GOP
 * `s4:` label schema + parser.
 * TLSM core.
 * WAL append pipeline and queue plumbing.
-* `/health` + minimal owner status scaffolding.
+* `/health` + status-lite owner scaffolding (non-authoritative; no TradingMode/latch semantics).
 
 **Phase-1 rule:** Completion of Phase 1 is an implementation milestone only; it is **not** a CSP compliance claim and **not** live-trading readiness.
 
@@ -4570,7 +4575,19 @@ AT-022
 - Pass criteria: response matches required keys/values.
 - Fail criteria: non-200 OR missing keys OR `ok != true`.
 
+**/status response MUST include (Phase 0/1 status-lite contract):**
+- Applies when PolicyGuard + OpenPermissionLatch are not yet implemented (Roadmap Phase 1 / non-deployable foundation).
+- `service_up` (bool; MUST be true when process is up)
+- `build_id` (string)
+- `contract_version` (string)
+- `dispatch_enabled` (bool; MUST be false)
+- `phase` (string literal: `foundation`)
+- During this phase, `/status` MUST NOT emit or claim canonical Phase-2+ fields:
+  `trading_mode`, `opens_globally_permitted`, `is_trading_allowed`, `mode_reasons`,
+  `open_permission_blocked_latch`, `open_permission_reason_codes`, `open_permission_requires_reconcile`.
+
 **/status response MUST include (CSP minimum):**
+- Applies to Phase 2+ only (first deployable CSP phase). Phase 0/1 uses the status-lite contract above.
 - `status_schema_version` (integer; current version = 1)
 - `supported_profiles` (string[]; set of profiles this build can enforce at runtime; MUST include `CSP`)
 - `enforced_profile` (string enum: `CSP|GOP|FULL`; current runtime enforced profile)
@@ -5198,10 +5215,14 @@ Policy staging in §5.3 is mandatory. Promotion requires:
 - `python/tools/f1_certify.py`
 - outputs `artifacts/F1_PROMOTION_CERT.json` and `artifacts/F1_PROMOTION_CERT.md`
 - `artifacts/F1_PROMOTION_CERT.json` MUST include (minimum): `{ status, generated_ts_ms, build_id, runtime_config_hash, contract_version }` (see §2.2.1.1).
+- same producer MUST also support runtime-binding output for PolicyGuard consumption:
+  - `artifacts/RUNTIME_BINDING_CERT.json` and `artifacts/RUNTIME_BINDING_CERT.md` (see §2.2.1 runtime gate semantics).
 
 **Example CI command:**
 - Run: `python python/tools/f1_certify.py --window=24h --out=artifacts/F1_PROMOTION_CERT.json`
 - Block release unless `status == PASS`.
+- Run: `python python/tools/f1_certify.py --window=24h --out=artifacts/RUNTIME_BINDING_CERT.json`
+- Runtime OPEN eligibility remains blocked unless runtime-binding cert validation in §2.2.1 passes.
 
 **Acceptance Test (REQUIRED):**
 AT-266
@@ -5760,7 +5781,7 @@ AT-313
 - Pass criteria: OPEN dispatch count remains 0; at least one risk-reducing dispatch attempt occurs while exposure ≠ 0.
 - Fail criteria: any OPEN dispatch occurs, or the system hard-stops with exposure by forbidding all dispatch.
 Profile: CSP
-**`time_drift_threshold_ms`** (§4.3 Trade Attribution Schema)
+**`time_drift_threshold_ms`** (§4.3 Time Drift Safety Gate)
 - **Default**: `50` milliseconds
 - **Purpose**: Maximum tolerable clock drift before forcing ReduceOnly; prevents attribution corruption and execution timing errors.
 - **Rationale**: Aligns with §8.1 Time Drift gate (p99_clock_drift ≤ 50ms). Tight threshold ensures reliable timestamps for slippage measurement and replay.
