@@ -17,6 +17,25 @@ assert_contains_line() {
   fi
 }
 
+line_number_for() {
+  local needle="$1"
+  local line
+  line="$(grep -nF "$needle" "$VERIFY" | head -n1 | cut -d: -f1 || true)"
+  [[ -n "$line" ]] || fail "missing expected guardrail token: $needle"
+  echo "$line"
+}
+
+assert_line_before() {
+  local first="$1"
+  local second="$2"
+  local first_line second_line
+  first_line="$(line_number_for "$first")"
+  second_line="$(line_number_for "$second")"
+  if (( first_line >= second_line )); then
+    fail "unexpected guardrail order: '$first' (line $first_line) must appear before '$second' (line $second_line)"
+  fi
+}
+
 [[ -f "$VERIFY" ]] || fail "missing verify script: $VERIFY"
 
 # Guardrail: status fixture gate names must use deterministic hash-based naming helper.
@@ -39,6 +58,7 @@ assert_contains_line 'run_logged_or_exit "fail_closed_coverage"'
 assert_contains_line 'log "13b) status reason leak guard"'
 assert_contains_line 'run_logged_or_exit "status_reason_leak_guard"'
 assert_contains_line 'tools/check_status_reason_string_leaks.py'
+assert_line_before 'log "13) status fixtures"' 'log "13b) status reason leak guard"'
 
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
