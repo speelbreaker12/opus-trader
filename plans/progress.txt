@@ -218,6 +218,12 @@ Summary: Added fail-closed legacy layout guard and verify quick/full contract-pa
 Commands: ./plans/legacy_layout_guard.sh; ./plans/verify_gate_contract_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/legacy_layout_guard.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/verify_fork.sh; reviews/postmortems/*.md; artifacts/verify/20260208_142926.
 Next: None.
+Story: workflow-maintenance
+Date: 2026-03-02
+Summary: Restored Decision-A exact-token enforcement for contract_version <= 5.2 in tools/validate_status.py, removed substring latch-token heuristic, and added explicit manifest-driven DecisionALatchReasonCode path for contract_version >= 5.3 with strict single-code + in-tier checks; updated status docs and regression tests.
+Commands: python3 -m pytest -q tests/test_validate_status_manifest_override.py; python3 -m py_compile tools/validate_status.py; ./plans/verify.sh quick (preflight timeout after dirty-tree warning); bash plans/tests/test_review_logged_timeout_binary_unavailable.sh; bash plans/tests/test_recon_operator_runner.sh.
+Evidence: tools/validate_status.py; tests/test_validate_status_manifest_override.py; specs/status/LOCKED_DECISIONS.md; specs/status/README.md; artifacts/verify/20260302_155633; artifacts/verify/20260302_160548; artifacts/verify/20260302_161435.
+Next: Use CI clean-checkout verify (recommended) or clean local tree and rerun ./plans/verify.sh quick/full before merge.
 Story: S0-R5-remediation
 Date: 2026-02-24
 Summary: Remediated slice-0 P0/P1 reconciliation gaps in `stoic-cli` and phase0 runtime tests: fail-closed on missing runtime state after prior initialization, scope bypass closure for keys-check (`all`/`withdraw`/`margin`), and added coverage for state deletion, health command behavior, status build_id/contract_version, and REDUCE_ONLY `is_trading_allowed=false`.
@@ -795,3 +801,10 @@ Commands: PREFLIGHT_TIMEOUT=1200s ./plans/verify.sh quick; bash plans/tests/test
 Evidence: specs/CONTRACT.md; plans/progress.txt.
 Notes: `./plans/verify.sh quick` failed in preflight on `plans/tests/test_review_logged_timeout_fallback.sh` during the gate run, but the fixture test passes when run directly and `verify_gate_contract_check.sh` passes.
 Next: Re-run `./plans/verify.sh quick` in a cleaner/stabler session, then run `./plans/verify.sh full` before any pass/merge action.
+Story: execution-engine-pr1
+Date: 2026-03-02
+Summary: Implemented real ExecutionEngine delegation (Open->open_runtime, Close/Hedge/CancelOnly->pipeline), added variant-specific engine inputs/runtime, and parity tests comparing legacy paths vs engine decisions.
+Commands: cargo test --lib --package soldier_core execution::engine -- --nocapture; cargo test --lib --package soldier_core execution:: --quiet; ./plans/verify.sh quick (failed at preflight timeout)
+Evidence: crates/soldier_core/src/execution/engine.rs; crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260302_162603/preflight.log
+Open questions: verify quick preflight currently times out at 300s in this dirty local workspace; may need rerun in CI/clean tree for a green workflow gate.
+Next: run clean-tree or CI quick/full verify, then proceed to output normalization phase.
