@@ -333,7 +333,7 @@ fn test_chokepoint_module_exists() {
 #[test]
 fn chokepoint_is_publicly_reachable() {
     #[allow(unused_imports)]
-    use soldier_core::execution::{
+    use crate::execution::{
         build_gate_results, build_order_intent_with_optional_wal_gate,
         build_order_intent_with_wal_gate,
     };

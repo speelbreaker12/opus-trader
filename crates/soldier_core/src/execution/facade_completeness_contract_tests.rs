@@ -2,7 +2,7 @@
 //! `soldier_core::execution::{...}`.
 
 #[allow(unused_imports)]
-use soldier_core::execution::{
+use crate::execution::{
     AtomicGroup, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes,
     GateResults, GateStep, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition,
     LABEL_MAX_LEN, LabelError, LabelInput, LegResult, LockAcquisitionResult, OooCategory,

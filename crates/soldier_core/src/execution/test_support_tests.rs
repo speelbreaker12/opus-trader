@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use soldier_core::execution::{GateResults, RecordedBeforeDispatchGate, build_gate_results};
+use crate::execution::{GateResults, RecordedBeforeDispatchGate, build_gate_results};
 
 /// Stub WAL gate for contract-level tests that need the WAL-safe path.
 pub struct StubWalGate;
