@@ -2293,9 +2293,9 @@
         ]
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_present_on_pre_dispatch_reject",
-        "crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_in_registry",
-        "crates/soldier_core/tests/test_reject_reason.rs::test_registry_contains_contract_minimum_set"
+        "crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_present_on_pre_dispatch_reject",
+        "crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_in_registry",
+        "crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_registry_contains_contract_minimum_set"
       ],
       "loss_mode": {
         "worst_case": "reject reason missing from registry → unclassified rejection → debugging impossible",
@@ -3690,7 +3690,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_dispatch_chokepoint.rs::test_dispatch_chokepoint_no_bypass_approved"
+        "crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs::test_dispatch_chokepoint_no_bypass_approved"
       ],
       "partial_coverage_notes": {
         "AT-925": "partial: architectural chokepoint proof (exchange client visibility restriction). PolicyGuard ReduceOnly forcing under WAL backpressure deferred to S8.1c. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
