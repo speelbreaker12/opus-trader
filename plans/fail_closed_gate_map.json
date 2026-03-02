@@ -8,5 +8,5 @@
   "liquidity_gate": ["test_liquidity_gate.rs", "test_missing_config.rs"],
   "net_edge": ["test_net_edge_gate.rs", "test_missing_config.rs"],
   "pricer": ["test_pricer.rs", "test_missing_config.rs"],
-  "recorded_before_dispatch": ["test_recorded_before_dispatch_gate.rs"]
+  "recorded_before_dispatch": ["src/execution/recorded_before_dispatch_gate_tests.rs"]
 }

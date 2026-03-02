@@ -13,7 +13,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 GATE_MAP="$ROOT/plans/fail_closed_gate_map.json"
-TEST_DIR="$ROOT/crates/soldier_core/tests"
+SOLDIER_CORE_DIR="$ROOT/crates/soldier_core"
+DEFAULT_TEST_DIR="$SOLDIER_CORE_DIR/tests"
 BUILD_ORDER_INTENT="$ROOT/crates/soldier_core/src/execution/build_order_intent.rs"
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 1; }
@@ -68,7 +69,18 @@ check_gate() {
   # Validate all test files exist
   local all_test_content=""
   while IFS= read -r tf; do
-    local full_path="$TEST_DIR/$tf"
+    if [[ "$tf" == /* || "$tf" == *".."* ]]; then
+      echo "FAIL: gate '$gate_name' has unsafe test path entry: $tf" >&2
+      failures=$((failures + 1))
+      return
+    fi
+
+    local full_path
+    if [[ "$tf" == */* ]]; then
+      full_path="$SOLDIER_CORE_DIR/$tf"
+    else
+      full_path="$DEFAULT_TEST_DIR/$tf"
+    fi
     if [[ ! -f "$full_path" ]]; then
       echo "FAIL: gate '$gate_name' test file not found: $full_path" >&2
       failures=$((failures + 1))
