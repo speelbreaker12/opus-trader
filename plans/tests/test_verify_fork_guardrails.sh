@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERIFY="$ROOT/plans/verify_fork.sh"
+VERIFY_WRAPPER="$ROOT/plans/verify.sh"
 VERIFY_UTILS="$ROOT/plans/lib/verify_utils.sh"
 
 fail() {
@@ -17,7 +18,27 @@ assert_contains_line() {
   fi
 }
 
+line_number_for() {
+  local needle="$1"
+  local line
+  line="$(grep -nF "$needle" "$VERIFY" | head -n1 | cut -d: -f1 || true)"
+  [[ -n "$line" ]] || fail "missing expected guardrail token: $needle"
+  echo "$line"
+}
+
+assert_line_before() {
+  local first="$1"
+  local second="$2"
+  local first_line second_line
+  first_line="$(line_number_for "$first")"
+  second_line="$(line_number_for "$second")"
+  if (( first_line >= second_line )); then
+    fail "unexpected guardrail order: '$first' (line $first_line) must appear before '$second' (line $second_line)"
+  fi
+}
+
 [[ -f "$VERIFY" ]] || fail "missing verify script: $VERIFY"
+[[ -f "$VERIFY_WRAPPER" ]] || fail "missing verify wrapper: $VERIFY_WRAPPER"
 
 # Guardrail: status fixture gate names must use deterministic hash-based naming helper.
 assert_contains_line 'status_fixture_path_hash()'
@@ -35,6 +56,24 @@ assert_contains_line 'RUN_LOGGED_SKIP_FAILED_GATE=1'
 assert_contains_line '"${VERIFY_ARTIFACTS_DIR}/${gate_name}.warn"'
 assert_contains_line 'run_logged_or_exit "fail_closed_coverage"'
 
+# Guardrail: status reason leak checker must be wired after status fixtures.
+assert_contains_line 'log "12f) status reason codegen"'
+assert_contains_line 'bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"'
+assert_line_before 'log "12f) status reason codegen"' 'log "13) status fixtures"'
+assert_contains_line 'log "13b) status reason leak guard"'
+assert_contains_line 'run_logged_or_exit "status_reason_leak_guard"'
+assert_contains_line 'tools/check_status_reason_string_leaks.py'
+assert_contains_line 'status_reason_owner_allow_path="crates/soldier_core/src/status_codes_generated.rs"'
+assert_contains_line 'status_reason_leak_cmd+=(--allow-path "$status_reason_owner_allow_path")'
+assert_line_before 'log "13) status fixtures"' 'log "13b) status reason leak guard"'
+
+# Guardrail: duplicate LAG-ID check must run in both serial and parallel spec validators.
+assert_contains_line 'start_parallel_gate "contract_impl_lag_ids"'
+assert_contains_line 'run_logged_or_exit "contract_impl_lag_ids"'
+assert_contains_line 'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
+assert_line_before 'run_logged_or_exit "contract_crossrefs"' 'run_logged_or_exit "contract_impl_lag_ids"'
+assert_line_before 'run_logged_or_exit "contract_impl_lag_ids"' 'run_logged_or_exit "arch_flows"'
+
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
   local fn_name="$1"
@@ -48,7 +87,8 @@ extract_fn() {
 }
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
+tmp_verify_wrapper_root="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir" "$tmp_verify_wrapper_root"' EXIT
 tmp_fns="$tmp_dir/verify_fork_fns.sh"
 fn_defs="$(extract_fn status_fixture_path_hash)
 $(extract_fn status_fixture_gate_name)
@@ -87,5 +127,26 @@ fi
 if ! grep -Fq "failed in quick mode with rc=7" "$artifact_dir/status_fixture_test_gate.warn"; then
   fail "run_logged_nonblocking_gate .warn artifact content missing"
 fi
+
+# Wrapper-level integration proof: plans/verify.sh must delegate to verify_fork.sh and
+# forward the selected mode argument.
+mkdir -p "$tmp_verify_wrapper_root/plans"
+cp "$VERIFY_WRAPPER" "$tmp_verify_wrapper_root/plans/verify.sh"
+cat > "$tmp_verify_wrapper_root/plans/verify_fork.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" > "$VERIFY_WRAPPER_ARGS_FILE"
+exit 0
+EOF
+chmod +x "$tmp_verify_wrapper_root/plans/verify.sh" "$tmp_verify_wrapper_root/plans/verify_fork.sh"
+
+verify_wrapper_args_file="$tmp_verify_wrapper_root/verify_wrapper.args"
+VERIFY_WRAPPER_ARGS_FILE="$verify_wrapper_args_file" \
+  "$tmp_verify_wrapper_root/plans/verify.sh" quick >/dev/null 2>&1 \
+  || fail "verify wrapper fixture invocation failed"
+[[ -f "$verify_wrapper_args_file" ]] || fail "verify wrapper did not delegate to verify_fork fixture"
+verify_wrapper_args="$(cat "$verify_wrapper_args_file")"
+[[ "$verify_wrapper_args" == "quick" ]] \
+  || fail "verify wrapper must forward quick mode to verify_fork (got '$verify_wrapper_args')"
 
 echo "PASS: verify fork guardrails test"

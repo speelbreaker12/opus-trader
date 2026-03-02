@@ -598,6 +598,8 @@ if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   parallel_group_reset
   start_parallel_gate "contract_crossrefs" "$SPEC_LINT_TIMEOUT" \
     "$PYTHON_BIN" scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs
+  start_parallel_gate "contract_impl_lag_ids" "$SPEC_LINT_TIMEOUT" \
+    "$PYTHON_BIN" tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md
   start_parallel_gate "arch_flows" "$SPEC_LINT_TIMEOUT" \
     "$PYTHON_BIN" scripts/check_arch_flows.py --contract specs/CONTRACT.md --flows specs/flows/ARCH_FLOWS.yaml --strict
   start_parallel_gate "state_machines" "$SPEC_LINT_TIMEOUT" \
@@ -618,6 +620,10 @@ else
   log "04) contract crossrefs"
   run_logged_or_exit "contract_crossrefs" "$SPEC_LINT_TIMEOUT" \
     "$PYTHON_BIN" scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs
+
+  log "04b) contract impl lag IDs"
+  run_logged_or_exit "contract_impl_lag_ids" "$SPEC_LINT_TIMEOUT" \
+    "$PYTHON_BIN" tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md
 
   log "05) arch flows"
   run_logged_or_exit "arch_flows" "$SPEC_LINT_TIMEOUT" \
@@ -657,6 +663,11 @@ else
   fi
 fi
 
+if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
+  log "12f) status reason codegen"
+  bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
+fi
+
 if [[ -d tests/fixtures/status ]]; then
   log "13) status fixtures"
   fixture_count=0
@@ -688,6 +699,20 @@ if [[ -d tests/fixtures/status ]]; then
 else
   warn "status fixtures directory missing: tests/fixtures/status"
 fi
+
+log "13b) status reason leak guard"
+status_reason_leak_cmd=(
+  "$PYTHON_BIN" tools/check_status_reason_string_leaks.py
+  --manifest specs/status/status_reason_registries_manifest.json
+  --scan-root crates
+)
+# Owner allow-path first: canonical generated module may contain registry literals by design.
+status_reason_owner_allow_path="crates/soldier_core/src/status_codes_generated.rs"
+if [[ -f "$status_reason_owner_allow_path" ]]; then
+  status_reason_leak_cmd+=(--allow-path "$status_reason_owner_allow_path")
+fi
+run_logged_or_exit "status_reason_leak_guard" "$SPEC_LINT_TIMEOUT" \
+  "${status_reason_leak_cmd[@]}"
 
 if [[ -f Cargo.toml ]]; then
   if [[ -f specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml && -f tools/vendor_docs_lint_rust.py ]]; then
