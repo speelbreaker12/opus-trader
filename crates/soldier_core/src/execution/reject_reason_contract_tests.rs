@@ -75,6 +75,21 @@ fn test_reject_reason_in_registry() {
 }
 
 #[test]
+fn test_registry_contains_contract_minimum_set() {
+    let minimum_contract_codes = [
+        RejectReasonCode::MarginHeadroomRejectOpens,
+        RejectReasonCode::RecordedBeforeDispatchFailed,
+        RejectReasonCode::LiquidityGateNoL2,
+    ];
+    for code in minimum_contract_codes {
+        assert!(
+            reject_reason_registry_contains(code),
+            "contract minimum reject reason code must be registered: {code:?}"
+        );
+    }
+}
+
+#[test]
 fn test_preflight_reject_surfaces_preflight_gate_step() {
     let gates = GateResults {
         preflight_passed: false,
