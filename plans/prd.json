@@ -2251,7 +2251,7 @@
         "touch": [
           "crates/soldier_core/src/execution/reject_reason.rs",
           "crates/soldier_core/src/execution/mod.rs",
-          "crates/soldier_core/tests/test_reject_reason.rs"
+          "crates/soldier_core/src/execution/reject_reason_contract_tests.rs"
         ],
         "create": [],
         "avoid": [
@@ -2266,17 +2266,17 @@
       "steps": [
         "Map S2.5 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S2.5 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S2.5: crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_present_on_pre_dispatch_reject, crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_in_registry, crates/soldier_core/tests/test_reject_reason.rs::test_registry_contains_contract_minimum_set.",
+        "Add/adjust targeted tests for S2.5: crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_present_on_pre_dispatch_reject, crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_in_registry, crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_registry_contains_contract_minimum_set.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
       "verify": [
         "./plans/verify.sh",
         "cargo test --workspace",
-        "cargo test -p soldier_core --test test_reject_reason"
+        "cargo test -p soldier_core --lib reject_reason_contract_tests"
       ],
       "evidence": [
-        "cargo test -p soldier_core --test test_reject_reason output",
+        "cargo test -p soldier_core --lib reject_reason_contract_tests output",
         "PRD entry S2-004 records contract AT and test mappings for this story."
       ],
       "dependencies": [
@@ -3662,7 +3662,7 @@
       ],
       "scope": {
         "touch": [
-          "crates/soldier_core/tests/test_dispatch_chokepoint.rs",
+          "crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs",
           "docs/dispatch_chokepoint.md"
         ],
         "create": [],
@@ -3676,7 +3676,7 @@
         "GIVEN docs/dispatch_chokepoint.md exists WHEN reviewed THEN it names the exact module, function, and exchange client type."
       ],
       "steps": [
-        "Create crates/soldier_core/tests/test_dispatch_chokepoint.rs with AST/grep checks for exchange client usage.",
+        "Create crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs with AST/grep checks for exchange client usage.",
         "Implement test_dispatch_chokepoint_no_direct_exchange_client_usage that fails if exchange client constructed outside chokepoint.",
         "Implement test_dispatch_visibility_is_restricted that fails if dispatch fn is not pub(crate).",
         "Create docs/dispatch_chokepoint.md documenting the chokepoint module, function, and normative statement.",
@@ -3684,7 +3684,7 @@
       ],
       "verify": [
         "./plans/verify.sh",
-        "cargo test -p soldier_core --test test_dispatch_chokepoint"
+        "cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests"
       ],
       "evidence": [
         "cargo test output showing test_dispatch_chokepoint_no_direct_exchange_client_usage PASS",
