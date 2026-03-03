@@ -36,6 +36,42 @@ exit 0
 EOF
 chmod +x "$mock_bin/kimi"
 
+# Provide a deterministic timeout wrapper so this fixture does not depend on
+# host timeout/gtimeout behavior under parallel preflight load.
+cat > "$mock_bin/timeout" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+limit="${1:-}"
+shift || true
+[[ -n "$limit" ]] || exit 125
+
+"$@" &
+cmd_pid="$!"
+(
+  sleep "$limit"
+  kill -TERM "$cmd_pid" 2>/dev/null || true
+  sleep 0.1
+  kill -KILL "$cmd_pid" 2>/dev/null || true
+) &
+watchdog_pid="$!"
+
+set +e
+wait "$cmd_pid"
+rc=$?
+set -e
+
+kill "$watchdog_pid" 2>/dev/null || true
+wait "$watchdog_pid" 2>/dev/null || true
+
+case "$rc" in
+  143|137) exit 124 ;;
+  *) exit "$rc" ;;
+esac
+EOF
+chmod +x "$mock_bin/timeout"
+ln -sf timeout "$mock_bin/gtimeout"
+
 story="S9-TIMEOUT-FAILCLOSED-KIMI"
 out_root="$tmp_dir/out"
 
