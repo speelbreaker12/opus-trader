@@ -1,9 +1,9 @@
-//! Parity tests: legacy orchestration paths vs `ExecutionEngine::evaluate`.
+//! Parity tests: legacy orchestration paths vs `ExecutionEngine::decide`.
 
 use super::{
-    open_runtime_to_decision, pipeline_result_to_decision, CancelOnlyExecutionInput,
-    CloseExecutionInput, ExecutionDecision, ExecutionEngine, ExecutionInput, ExecutionRuntime,
-    HedgeExecutionInput, OpenExecutionInput,
+    CancelOnlyExecutionInput, CloseExecutionInput, ExecutionDecision, ExecutionEngine,
+    ExecutionInput, ExecutionRuntime, HedgeExecutionInput, OpenExecutionInput,
+    open_runtime_to_decision, pipeline_result_to_decision,
 };
 use crate::execution::base_gates::BaseGatesInput;
 use crate::execution::build_order_intent::{
@@ -14,10 +14,10 @@ use crate::execution::gate::{GateIntentClass, L2BookSnapshot, L2Level, Liquidity
 use crate::execution::gates::NetEdgeInput;
 use crate::execution::inventory_skew::InventorySkewInput;
 use crate::execution::open_runtime::{
-    build_open_order_intent_runtime, OpenRuntimeInput, OpenRuntimeMetrics,
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 use crate::execution::pipeline::{
-    evaluate_intent_pipeline, IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput,
+    IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput, evaluate_intent_pipeline,
 };
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
@@ -248,6 +248,30 @@ fn legacy_open_decision(
     open_runtime_to_decision(&output, &gate_reject_codes)
 }
 
+fn assert_approved_with_recorded_before_dispatch(decision: &ExecutionDecision) {
+    match decision {
+        ExecutionDecision::Approved { gate_trace, .. } => {
+            assert!(
+                gate_trace.contains(&GateStep::RecordedBeforeDispatch),
+                "expected trace to include RecordedBeforeDispatch, got {gate_trace:?}"
+            );
+        }
+        other => panic!("expected approved decision, got {other:?}"),
+    }
+}
+
+fn assert_approved_without_recorded_before_dispatch(decision: &ExecutionDecision) {
+    match decision {
+        ExecutionDecision::Approved { gate_trace, .. } => {
+            assert!(
+                !gate_trace.contains(&GateStep::RecordedBeforeDispatch),
+                "expected trace to exclude RecordedBeforeDispatch, got {gate_trace:?}"
+            );
+        }
+        other => panic!("expected approved decision, got {other:?}"),
+    }
+}
+
 #[test]
 fn engine_open_approved_matches_legacy_path() {
     let input = base_open_input();
@@ -263,7 +287,7 @@ fn engine_open_approved_matches_legacy_path() {
         gate_reject_codes: gate_codes,
     });
     let mut runtime = ExecutionRuntime::new(Some(&engine_book));
-    let delegated = engine.evaluate(&engine_input, &mut runtime);
+    let delegated = engine.decide(&engine_input, &mut runtime);
 
     assert_eq!(delegated, legacy);
     match delegated {
@@ -295,7 +319,7 @@ fn engine_open_rejected_matches_legacy_code_and_step() {
         gate_reject_codes: gate_codes,
     });
     let mut runtime = ExecutionRuntime::new(Some(&engine_book));
-    let delegated = engine.evaluate(&engine_input, &mut runtime);
+    let delegated = engine.decide(&engine_input, &mut runtime);
 
     assert_eq!(delegated, legacy);
     assert!(matches!(
@@ -303,13 +327,67 @@ fn engine_open_rejected_matches_legacy_code_and_step() {
         ExecutionDecision::Rejected {
             code: RejectReasonCode::GlobalExposureBudgetExceeded,
             step: GateStep::LiquidityGate,
-            ..
-        }
+            detail,
+        } if detail == "GLOBAL_EXPOSURE_BUDGET_REJECT"
     ));
 }
 
 #[test]
-fn engine_close_matches_legacy_pipeline_path() {
+fn engine_open_rejected_pending_exposure_overfill_maps_to_expected_reason_code() {
+    let input = base_open_input();
+    let legacy_book = make_pending_book(5.0);
+    let engine_book = make_pending_book(5.0);
+    let gate_codes = GateRejectCodes::default();
+
+    let legacy = legacy_open_decision(&input, &legacy_book, gate_codes);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Open(OpenExecutionInput {
+        input,
+        gate_reject_codes: gate_codes,
+    });
+    let mut runtime = ExecutionRuntime::new(Some(&engine_book));
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert!(matches!(
+        delegated,
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::PendingExposureBudgetExceeded,
+            step: GateStep::LiquidityGate,
+            detail,
+        } if detail == "PENDING_EXPOSURE_OVERFILL"
+    ));
+}
+
+#[test]
+fn engine_open_rejected_unregistered_instrument_maps_to_expected_reason_code() {
+    let input = base_open_input();
+    let legacy_book = PendingExposureBook::new(None);
+    let engine_book = PendingExposureBook::new(None);
+    let gate_codes = GateRejectCodes::default();
+
+    let legacy = legacy_open_decision(&input, &legacy_book, gate_codes);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Open(OpenExecutionInput {
+        input,
+        gate_reject_codes: gate_codes,
+    });
+    let mut runtime = ExecutionRuntime::new(Some(&engine_book));
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert!(matches!(
+        delegated,
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::PendingExposureBudgetExceeded,
+            step: GateStep::LiquidityGate,
+            detail,
+        } if detail == "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED"
+    ));
+}
+
+#[test]
+fn engine_close_approved_matches_legacy_pipeline_path() {
     let mut input = base_pipeline_input();
     input.intent_class = ChokeIntentClass::Close;
     input.risk_state = RiskState::Degraded;
@@ -318,22 +396,23 @@ fn engine_close_matches_legacy_pipeline_path() {
     let engine = ExecutionEngine::new();
     let engine_input = ExecutionInput::Close(CloseExecutionInput { input });
     let mut runtime = ExecutionRuntime::default();
-    let delegated = engine.evaluate(&engine_input, &mut runtime);
+    let delegated = engine.decide(&engine_input, &mut runtime);
 
     assert_eq!(delegated, legacy);
+    assert_approved_with_recorded_before_dispatch(&delegated);
 }
 
 #[test]
-fn engine_hedge_reject_matches_legacy_pipeline_path() {
+fn engine_close_rejected_matches_legacy_pipeline_path() {
     let mut input = base_pipeline_input();
-    input.intent_class = ChokeIntentClass::Hedge;
+    input.intent_class = ChokeIntentClass::Close;
     input.quantize.raw_qty = 0.01;
 
     let legacy = legacy_pipeline_decision(&input);
     let engine = ExecutionEngine::new();
-    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { input });
+    let engine_input = ExecutionInput::Close(CloseExecutionInput { input });
     let mut runtime = ExecutionRuntime::default();
-    let delegated = engine.evaluate(&engine_input, &mut runtime);
+    let delegated = engine.decide(&engine_input, &mut runtime);
 
     assert_eq!(delegated, legacy);
     assert!(matches!(
@@ -347,7 +426,93 @@ fn engine_hedge_reject_matches_legacy_pipeline_path() {
 }
 
 #[test]
-fn engine_cancel_only_rejects_wal_failure_like_legacy_pipeline() {
+fn engine_hedge_approved_matches_legacy_pipeline_path() {
+    let mut input = base_pipeline_input();
+    input.intent_class = ChokeIntentClass::Hedge;
+    input.risk_state = RiskState::Degraded;
+
+    let legacy = legacy_pipeline_decision(&input);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { input });
+    let mut runtime = ExecutionRuntime::default();
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert_approved_with_recorded_before_dispatch(&delegated);
+}
+
+#[test]
+fn engine_hedge_reject_matches_legacy_pipeline_path() {
+    let mut input = base_pipeline_input();
+    input.intent_class = ChokeIntentClass::Hedge;
+    input.quantize.raw_qty = 0.01;
+
+    let legacy = legacy_pipeline_decision(&input);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { input });
+    let mut runtime = ExecutionRuntime::default();
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert!(matches!(
+        delegated,
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::TooSmallAfterQuantization,
+            step: GateStep::Quantize,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn engine_close_wal_signal_false_is_non_blocking_and_matches_legacy_pipeline_path() {
+    let mut input = base_pipeline_input();
+    input.intent_class = ChokeIntentClass::Close;
+    input.wal_recorded = false;
+
+    let legacy = legacy_pipeline_decision(&input);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Close(CloseExecutionInput { input });
+    let mut runtime = ExecutionRuntime::default();
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert_approved_with_recorded_before_dispatch(&delegated);
+}
+
+#[test]
+fn engine_hedge_wal_signal_false_is_non_blocking_and_matches_legacy_pipeline_path() {
+    let mut input = base_pipeline_input();
+    input.intent_class = ChokeIntentClass::Hedge;
+    input.wal_recorded = false;
+
+    let legacy = legacy_pipeline_decision(&input);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { input });
+    let mut runtime = ExecutionRuntime::default();
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert_approved_with_recorded_before_dispatch(&delegated);
+}
+
+#[test]
+fn engine_cancel_only_short_circuit_is_approved_and_skips_recorded_before_dispatch() {
+    let mut input = base_pipeline_input();
+    input.intent_class = ChokeIntentClass::CancelOnly;
+
+    let legacy = legacy_pipeline_decision(&input);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::CancelOnly(CancelOnlyExecutionInput { input });
+    let mut runtime = ExecutionRuntime::default();
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy);
+    assert_approved_without_recorded_before_dispatch(&delegated);
+}
+
+#[test]
+fn engine_cancel_only_wal_signal_false_matches_short_circuit_and_skips_recorded_before_dispatch() {
     let mut input = base_pipeline_input();
     input.intent_class = ChokeIntentClass::CancelOnly;
     input.wal_recorded = false;
@@ -356,9 +521,10 @@ fn engine_cancel_only_rejects_wal_failure_like_legacy_pipeline() {
     let engine = ExecutionEngine::new();
     let engine_input = ExecutionInput::CancelOnly(CancelOnlyExecutionInput { input });
     let mut runtime = ExecutionRuntime::default();
-    let delegated = engine.evaluate(&engine_input, &mut runtime);
+    let delegated = engine.decide(&engine_input, &mut runtime);
 
     assert_eq!(delegated, legacy);
+    assert_approved_without_recorded_before_dispatch(&delegated);
 }
 
 #[test]
@@ -369,13 +535,161 @@ fn engine_open_without_pending_book_is_fail_closed() {
         gate_reject_codes: GateRejectCodes::default(),
     });
     let mut runtime = ExecutionRuntime::default();
-    let decision = engine.evaluate(&input, &mut runtime);
+    let decision = engine.decide(&input, &mut runtime);
 
     assert!(matches!(
         decision,
         ExecutionDecision::Rejected {
             code: RejectReasonCode::AssemblyFailed,
             step: GateStep::LiquidityGate,
+            detail,
+        } if detail == "missing runtime dependency: pending_exposure_book"
+    ));
+}
+
+#[test]
+fn execution_engine_evaluate_alias_matches_decide() {
+    let input = ExecutionInput::Close(CloseExecutionInput {
+        input: base_pipeline_input(),
+    });
+    let engine = ExecutionEngine::new();
+    let mut runtime_for_decide = ExecutionRuntime::default();
+    let mut runtime_for_evaluate = ExecutionRuntime::default();
+
+    let decide = engine.decide(&input, &mut runtime_for_decide);
+    let evaluate = engine.evaluate(&input, &mut runtime_for_evaluate);
+
+    assert_eq!(evaluate, decide);
+}
+
+#[test]
+fn conversion_helper_open_runtime_liquidity_detail_overrides_reason_code() {
+    let gate_codes = GateRejectCodes {
+        liquidity_gate: Some(RejectReasonCode::LiquidityGateNoL2),
+        ..Default::default()
+    };
+
+    let overfill = OpenRuntimeOutput {
+        choke_result: ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::LiquidityGate,
+                reason: "PENDING_EXPOSURE_OVERFILL".to_string(),
+            },
+            gate_trace: vec![
+                GateStep::DispatchAuth,
+                GateStep::Preflight,
+                GateStep::Quantize,
+                GateStep::DispatchConsistency,
+                GateStep::FeeCacheCheck,
+                GateStep::ExpiryGuard,
+                GateStep::LiquidityGate,
+            ],
+        },
+        gate_results: crate::execution::build_gate_results(
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            Some(1.0),
+            None,
+        ),
+        pending_reservation_id: None,
+        mode_hint: crate::risk::MarginGateMode::Active,
+        effective_risk_state: RiskState::Healthy,
+        adjusted_min_edge_usd: None,
+    };
+    let instrument_not_registered = OpenRuntimeOutput {
+        choke_result: ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::LiquidityGate,
+                reason: "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED".to_string(),
+            },
+            gate_trace: vec![
+                GateStep::DispatchAuth,
+                GateStep::Preflight,
+                GateStep::Quantize,
+                GateStep::DispatchConsistency,
+                GateStep::FeeCacheCheck,
+                GateStep::ExpiryGuard,
+                GateStep::LiquidityGate,
+            ],
+        },
+        gate_results: crate::execution::build_gate_results(
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            Some(1.0),
+            None,
+        ),
+        pending_reservation_id: None,
+        mode_hint: crate::risk::MarginGateMode::Active,
+        effective_risk_state: RiskState::Healthy,
+        adjusted_min_edge_usd: None,
+    };
+    let global_budget_reject = OpenRuntimeOutput {
+        choke_result: ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::LiquidityGate,
+                reason: "GLOBAL_EXPOSURE_BUDGET_REJECT".to_string(),
+            },
+            gate_trace: vec![
+                GateStep::DispatchAuth,
+                GateStep::Preflight,
+                GateStep::Quantize,
+                GateStep::DispatchConsistency,
+                GateStep::FeeCacheCheck,
+                GateStep::ExpiryGuard,
+                GateStep::LiquidityGate,
+            ],
+        },
+        gate_results: crate::execution::build_gate_results(
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            Some(1.0),
+            None,
+        ),
+        pending_reservation_id: None,
+        mode_hint: crate::risk::MarginGateMode::Active,
+        effective_risk_state: RiskState::Healthy,
+        adjusted_min_edge_usd: None,
+    };
+
+    assert!(matches!(
+        open_runtime_to_decision(&overfill, &gate_codes),
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::PendingExposureBudgetExceeded,
+            ..
+        }
+    ));
+    assert!(matches!(
+        open_runtime_to_decision(&instrument_not_registered, &gate_codes),
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::PendingExposureBudgetExceeded,
+            ..
+        }
+    ));
+    assert!(matches!(
+        open_runtime_to_decision(&global_budget_reject, &gate_codes),
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::GlobalExposureBudgetExceeded,
             ..
         }
     ));

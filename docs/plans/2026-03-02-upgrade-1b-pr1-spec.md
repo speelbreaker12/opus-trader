@@ -74,14 +74,20 @@ pub struct OpenMetadata {
 }
 ```
 
+PR1 naming alignment note:
+- PR1 canonical entrypoint method is `ExecutionEngine::decide`.
+- `ExecutionEngine::evaluate` remains a compatibility alias during PR1 migration.
+- The broader 1B end-state naming in `2026-03-01-upgrade-1b-single-execution-entrypoint.md` uses `ExecutionEngine::decide`.
+- No behavior change is introduced by the aliasing.
+
 ## 3) Variant Matrix
 
 | Variant | Engine Path | Legacy Function | Required Runtime Dependency | Notes |
 |---|---|---|---|---|
-| Open | OPEN runtime | `build_open_order_intent_runtime` | `pending_exposure_book` required | fail-closed if dependency missing |
+| Open | OPEN runtime | `build_open_order_intent_runtime` | `pending_exposure_book` required | fail-closed if dependency missing: `Rejected { code: AssemblyFailed, step: LiquidityGate, detail: "missing runtime dependency: pending_exposure_book" }` |
 | Close | Pipeline | `evaluate_intent_pipeline` | none | `intent_class` forced to `Close` |
 | Hedge | Pipeline | `evaluate_intent_pipeline` | none | `intent_class` forced to `Hedge` |
-| CancelOnly | Pipeline/chokepoint | `evaluate_intent_pipeline` | none | preserves cancel-only chokepoint semantics |
+| CancelOnly | Pipeline/chokepoint | `evaluate_intent_pipeline` | none | preserves cancel-only chokepoint semantics; expected trace is short-circuit only (no `RecordedBeforeDispatch`) |
 
 ## 4) WAL Rule Table (PR1)
 
@@ -99,7 +105,7 @@ PR1 compatibility note:
 
 ## 5) Output Parity Checklist (Must Pass)
 
-For each variant, compare `ExecutionEngine::evaluate` vs direct legacy call:
+For each variant, compare `ExecutionEngine::decide` vs direct legacy call:
 
 - Decision parity: `Approved` vs `Rejected`
 - Reject code parity (`RejectReasonCode`)
@@ -111,9 +117,14 @@ For each variant, compare `ExecutionEngine::evaluate` vs direct legacy call:
   - `effective_risk_state`
   - `adjusted_min_edge_usd`
   - `mode_hint` (transitional; audit-driven)
-- Fail-closed behavior for missing open runtime dependency is deterministic
+- Fail-closed behavior for missing open runtime dependency is deterministic:
+  - `code == RejectReasonCode::AssemblyFailed`
+  - `step == GateStep::LiquidityGate`
+  - `detail == "missing runtime dependency: pending_exposure_book"`
 
 Open runtime override reason-code mapping (deterministic, required):
+- Scope guard: apply this table only when OPEN runtime returns `GateRejected` at `GateStep::LiquidityGate`.
+- Outside that guard, mapping falls back to standard chokepoint->registry mapping.
 
 | Open reject detail string | `RejectReasonCode` |
 |---|---|
@@ -167,8 +178,13 @@ Required:
    - Open: approve + reject
    - Close: approve + reject
    - Hedge: approve + reject
-   - CancelOnly: cancel short-circuit + WAL-signal scenario
+   - CancelOnly:
+     - cancel short-circuit scenario -> approved; trace excludes `RecordedBeforeDispatch`
+     - WAL-signal scenario (`wal_recorded=false` signal on input) -> identical outcome to short-circuit (approved; trace excludes `RecordedBeforeDispatch`)
 2. WAL-path parity scenario coverage for each applicable variant.
-3. Consumer audit output in PR notes.
-4. Targeted execution tests green.
-5. Verify gate run recorded (local or CI clean checkout).
+3. PR notes include explicit parity assertions (copy/paste lines):
+   - `Missing pending_exposure_book -> Rejected { code: AssemblyFailed, step: LiquidityGate, detail: "missing runtime dependency: pending_exposure_book" }`
+   - `CancelOnly wal_recorded=false parity: approved and gate_trace excludes RecordedBeforeDispatch`
+4. Consumer audit output in PR notes.
+5. Targeted execution tests green.
+6. Verify gate run recorded (local or CI clean checkout).

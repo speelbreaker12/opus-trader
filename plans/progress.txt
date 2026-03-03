@@ -808,3 +808,17 @@ Commands: cargo test --lib --package soldier_core execution::engine -- --nocaptu
 Evidence: crates/soldier_core/src/execution/engine.rs; crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260302_162603/preflight.log
 Open questions: verify quick preflight currently times out at 300s in this dirty local workspace; may need rerun in CI/clean tree for a green workflow gate.
 Next: run clean-tree or CI quick/full verify, then proceed to output normalization phase.
+Story: execution-engine-pr1
+Date: 2026-03-03 01:19:11 UTC
+Summary: Expanded PR1 parity coverage to full variant matrix (Open/Close/Hedge approve+reject, CancelOnly short-circuit + wal_recorded=false parity), added deterministic assertions for missing pending_exposure_book fail-closed detail and OPEN liquidity override reason-code mapping, and validated evaluate->decide alias behavior.
+Commands: cargo test -p soldier_core engine_parity_tests:: -- --nocapture; cargo fmt --all; ./plans/verify.sh quick; ./plans/legacy_layout_guard.sh; ./plans/readme_ci_parity_check.sh.
+Evidence: crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260302_191243/preflight.log; artifacts/verify/20260302_191243/preflight.rc; artifacts/verify/20260302_191243/verify.meta.json.
+Notes: Targeted parity suite is green (16 tests). `./plans/verify.sh quick` timed out in preflight at 300s (`rc=124`) and reported legacy-layout/README-CI parity failures, but both guard scripts pass when run directly.
+Next: Run clean-checkout CI verify (recommended) or rerun local verify with an approved timeout/clean-tree path before pass/merge.
+Story: execution-engine-pr1
+Date: 2026-03-03 01:36:56 UTC
+Summary: Ran `./plans/verify.sh full` for PR1 verification and captured deterministic preflight blocker set; also ran code-review-expert attestation and isolated failing fixture details.
+Commands: ./plans/verify.sh full; bash plans/tests/test_artifact_lint.sh; bash plans/code_review_expert_attest.sh --help.
+Evidence: artifacts/verify/20260302_191927/preflight.log; artifacts/verify/20260302_191927/preflight.rc; artifacts/verify/20260302_191927/FAILED_GATE.
+Notes: Full verify stopped at preflight (`rc=2`, `FAILED_GATE=preflight`) due missing fixture scripts (`plans/tests/test_review_logged_timeout_fallback.sh`, `plans/tests/test_review_logged_timeout_retry_noncodex.sh`, `plans/tests/test_review_logged_timeout_binary_unavailable.sh`) and `test_artifact_lint.sh` failure (`recon_step_report`/`recon_trace_receipt` schema rows missing).
+Next: Resolve/restore the missing fixture scripts and artifact-lint matrix entries (or confirm expected fixture profile), then rerun `./plans/verify.sh full`.

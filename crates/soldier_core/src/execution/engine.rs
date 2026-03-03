@@ -5,14 +5,14 @@
 //! - CLOSE/HEDGE/CANCEL_ONLY -> `evaluate_intent_pipeline`
 
 use crate::execution::open_runtime::{
-    build_open_order_intent_runtime, OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput,
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 use crate::execution::pipeline::{
-    evaluate_intent_pipeline, IntentPipelineInput, IntentPipelineMetrics,
+    IntentPipelineInput, IntentPipelineMetrics, evaluate_intent_pipeline,
 };
 use crate::execution::{
-    reject_reason_from_chokepoint, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult,
-    GateRejectCodes, GateStep, RejectReasonCode,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateStep,
+    RejectReasonCode, reject_reason_from_chokepoint,
 };
 use crate::risk::{MarginGateMode, PendingExposureBook, ReservationId, RiskState};
 
@@ -105,7 +105,7 @@ impl ExecutionEngine {
         Self
     }
 
-    pub fn evaluate<'a>(
+    pub fn decide<'a>(
         &self,
         input: &ExecutionInput<'a>,
         runtime: &mut ExecutionRuntime<'a>,
@@ -145,6 +145,15 @@ impl ExecutionEngine {
                 runtime,
             ),
         }
+    }
+
+    /// Compatibility alias kept during Upgrade 1B transition.
+    pub fn evaluate<'a>(
+        &self,
+        input: &ExecutionInput<'a>,
+        runtime: &mut ExecutionRuntime<'a>,
+    ) -> ExecutionDecision {
+        self.decide(input, runtime)
     }
 
     fn evaluate_pipeline_variant<'a>(

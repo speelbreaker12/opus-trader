@@ -178,14 +178,13 @@ mod api_completeness_tests {
         ChokeResult, CloseExecutionInput, ExecutionDecision, ExecutionEngine, ExecutionInput,
         ExecutionRuntime, GateRejectCodes, GateResults, GateStep, GroupConfig, GroupError,
         GroupLock, GroupState, GroupStateTransition, HedgeExecutionInput, LABEL_MAX_LEN,
-        LabelError, LabelInput, LegResult, LockAcquisitionResult, OooCategory,
-        OpenExecutionInput, OpenMetadata, OrderSize, PersistedTransition,
-        RecordedBeforeDispatchGate, RejectReasonCode, Side, Tlsm, TlsmError, TlsmEvent, TlsmState,
-        TlsmTransitionSink, TransitionResult, build_gate_results,
-        build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate, derive_gid12,
-        derive_sid8, encode_label, open_runtime_to_decision, pipeline_result_to_decision,
-        reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
-        try_acquire_group_lock,
+        LabelError, LabelInput, LegResult, LockAcquisitionResult, OooCategory, OpenExecutionInput,
+        OpenMetadata, OrderSize, PersistedTransition, RecordedBeforeDispatchGate, RejectReasonCode,
+        Side, Tlsm, TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
+        build_gate_results, build_order_intent_with_optional_wal_gate,
+        build_order_intent_with_wal_gate, derive_gid12, derive_sid8, encode_label,
+        open_runtime_to_decision, pipeline_result_to_decision, reject_reason_from_chokepoint,
+        reject_reason_registry, reject_reason_registry_contains, try_acquire_group_lock,
     };
 
     #[test]
