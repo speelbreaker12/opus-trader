@@ -21,6 +21,7 @@ class SetupError(RuntimeError):
 
 
 LAG_HEADING_RE = re.compile(r"^\s*##\s+(LAG-\d+)\b")
+FENCE_RE = re.compile(r"^\s*([`~]{3,})")
 
 
 def eprint(*args: object) -> None:
@@ -46,13 +47,35 @@ def read_lines(path: Path) -> list[str]:
         raise SetupError(f"path is not a file: {path}")
     try:
         return path.read_text(encoding="utf-8").splitlines()
+    except UnicodeError as ex:
+        raise SetupError(f"failed to decode '{path}' as UTF-8: {ex}") from ex
     except OSError as ex:
         raise SetupError(f"failed to read '{path}': {ex}") from ex
 
 
 def collect_lag_ids(lines: list[str]) -> dict[str, list[int]]:
     lag_lines: dict[str, list[int]] = {}
+    in_fence = False
+    fence_char = ""
+    fence_len = 0
+
     for lineno, line in enumerate(lines, start=1):
+        fence_match = FENCE_RE.match(line)
+        if fence_match:
+            fence = fence_match.group(1)
+            if not in_fence:
+                in_fence = True
+                fence_char = fence[0]
+                fence_len = len(fence)
+            elif fence[0] == fence_char and len(fence) >= fence_len:
+                in_fence = False
+                fence_char = ""
+                fence_len = 0
+            continue
+
+        if in_fence:
+            continue
+
         match = LAG_HEADING_RE.match(line)
         if not match:
             continue

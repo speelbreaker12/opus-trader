@@ -87,8 +87,36 @@ class CheckLagIdsTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("OK: no duplicate LAG IDs found", proc.stdout)
 
+    def test_ignores_lag_ids_inside_fenced_code_blocks(self) -> None:
+        doc = self.root / "lag.md"
+        doc.write_text(
+            textwrap.dedent(
+                """\
+                # Lag
+                ## LAG-001 — real heading
+                ```md
+                ## LAG-001 — example in fenced code
+                ```
+                ## LAG-002 — another real heading
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        proc = self.run_checker(doc)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("OK: no duplicate LAG IDs found", proc.stdout)
+
     def test_missing_file_is_setup_error(self) -> None:
         proc = self.run_checker(self.root / "missing.md")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("FAIL: SETUP ERROR:", proc.stderr)
+
+    def test_invalid_utf8_file_is_setup_error(self) -> None:
+        doc = self.root / "lag.md"
+        doc.write_bytes(b"\xff\xfe\x00")
+
+        proc = self.run_checker(doc)
         self.assertEqual(proc.returncode, 2)
         self.assertIn("FAIL: SETUP ERROR:", proc.stderr)
 
