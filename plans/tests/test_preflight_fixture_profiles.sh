@@ -59,6 +59,16 @@ full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=0'
+assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET" -eq 0 ]]; then'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT=360'
+assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
+assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
+assert_contains_line 'start_ns="$(now_monotonic_ns)"'
+assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))'
+assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
+assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
 
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
@@ -88,6 +98,8 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_prd_ref_check_status_lite_markers.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
 # Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
@@ -114,7 +126,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "33" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 33)"
+[[ "$smoke_count" == "35" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 35)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"

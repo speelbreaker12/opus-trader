@@ -68,11 +68,11 @@ No runtime bypass switches: contract safety gates MUST NOT be disable-able via r
 Plan extras must be labeled SAFE_EXTRA or RISKY_EXTRA; this plan currently contains no extras (contract-required items only).  
 New endpoint ⇒ endpoint-level test (at least one) in the Story plan.  
 Single chokepoint: all order construction routes through crates/soldier\_core/execution/build\_order\_intent.rs::build\_order\_intent().  
-Phase 1 Dispatch Authorization Rule (Temporary):  
-1\) Every network dispatch attempt MUST go through build\_order\_intent() (single chokepoint).  
-2\) If RiskState != Healthy OR any hard gate fails (WAL enqueue failure, label invalid, stale critical input already modeled in Phase 1), then OPEN dispatch MUST be blocked (dispatch count remains 0).  
-3\) CLOSE/HEDGE/CANCEL MAY still dispatch (unless separately blocked by existing Phase 1 rules).  
-PolicyGuard-derived TradingMode enforcement begins in Phase 2 (Slice 8\); this temporary rule is superseded by PolicyGuard's full precedence ladder.  
+Phase 1 Dispatch Rule (Hard, non-deployable):  
+1\) Every potential network dispatch path MUST go through build\_order\_intent() (single chokepoint).  
+2\) While `phase == foundation`, exchange order dispatch MUST be compile-time disabled or runtime blocked before any network send; `/status.dispatch_enabled` MUST remain `false`.  
+3\) Phase-1 gate logic still runs and must prove deterministic fail-closed outcomes, but no external venue OPEN/CLOSE/HEDGE/CANCEL send is allowed in this phase.  
+PolicyGuard-derived TradingMode and canonical open-permission semantics begin in Phase 2 (Slice 8\).  
 2\) Per‑Phase Plans (A–G)  
 PHASE 1 — Foundation (Slices 1–5)  
 A) Phase Objective  
@@ -91,6 +91,11 @@ All tests listed in Slices 1–5 pass in CI.
 test\_gate\_ordering\_call\_log proves ordered gates: preflight→quantize→fee→liquidity→net\_edge→…→WAL→dispatch.  
 test\_phase1\_degraded\_blocks\_opens proves: Given RiskState::Degraded, when an OPEN intent is evaluated for dispatch, then it is blocked (0 dispatches).  
 test\_ledger\_replay\_no\_resend\_after\_crash proves no duplicate sends after restart.  
+Foundation owner-status contract is proven in Phase 1 with explicit scope boundaries:  
+- In-scope keys: `/health` includes `{ok, build_id, contract_version}` and foundation `/status` includes exactly `{service_up, build_id, contract_version, dispatch_enabled=false, phase=foundation}`.  
+- Out-of-scope in Phase 1 status-lite: canonical authority/status schema fields (`status_schema_version`, `supported_profiles`, `enforced_profile`, `trading_mode`, `risk_state`, `bunker_mode_active`, `mode_reasons`, `open_permission_*`, `policy_age_sec`, `last_policy_update_ts`, `python_policy_generated_ts_ms`, `f1_cert_*`, queue/latency counters).  
+- Required AT slice coverage in Phase 1: AT-022 + AT-1230.  
+- Hard rule: while `phase == foundation`, every `/status` payload MUST keep `dispatch_enabled == false`.  
 E) Slices Breakdown (Phase 1\)  
 Slice 1 — Instrument Units \+ Dispatcher Invariants  
 Slice intent: Encode Deribit sizing semantics to prevent 10–100× exposure errors.
@@ -168,15 +173,15 @@ Appendix A Default Tests mapping:
 - test\_tick\_l2\_retention\_hours\_deletes\_after\_72h() -> crates/soldier\_infra/tests/test\_retention.rs::test\_tick\_l2\_retention\_hours\_deletes\_after\_72h
 - test\_parquet\_analytics\_retention\_days\_deletes\_after\_30\_days() -> crates/soldier\_infra/tests/test\_retention.rs::test\_parquet\_analytics\_retention\_days\_deletes\_after\_30\_days
 
-S1.1 — InstrumentKind derivation \+ instrument cache TTL (fail‑closed)  
+S1.1 — InstrumentMeta normalization \+ instrument cache TTL (fail‑closed)  
 Allowed paths (globs):  
 crates/soldier\_core/venue/\*\*  
 crates/soldier\_infra/deribit/public/\*\*  
 crates/soldier\_core/risk/state.rs  
 New/changed endpoints: none  
 Acceptance criteria:  
-InstrumentKind derives option|linear\_future|inverse\_future|perpetual from venue metadata.  
-Linear perpetuals (USDC‑margined) map to linear\_future for sizing.  
+Normalize venue metadata to `InstrumentMeta { instrument_family, amount_semantics: AmountSemantics, tick_size, amount_step, min_amount, contract_size_usd? }` before sizing/quantization logic.  
+`instrument_kind` may exist as compatibility metadata only; sizing/quantization/dispatch branches MUST use `AmountSemantics` as the canonical discriminator.  
 Instrument cache TTL breach sets RiskState::Degraded (opens blocked by Phase 1 dispatch authorization rule) and emits a structured log.  
 Quantization inputs `tick_size`, `amount_step`, `min_amount`, and `contract_multiplier` MUST come from `/public/get_instruments` metadata (no hardcoded defaults).  
 Tests:  
@@ -194,41 +199,41 @@ Observability hooks: counters instrument\_cache\_hits\_total, instrument\_cache\
 - `test_instrument_metadata_uses_get_instruments()`  
 - `test_instrument_cache_ttl_blocks_opens_allows_closes()`  
 
-**Reason**: C-1.0-INSTKIND-001, C-8.2-TEST_SUITE-001  
+**Reason**: C-1.0-INSTRUMENTMETA-001, C-8.2-TEST_SUITE-001  
 Contract AT coverage (traceability assignment): AT-279, AT-333.
 
 
-S1.2 — OrderSize canonical sizing \+ notional invariant  
+S1.2 — OrderSizeInput + NormalizedOrderSize invariants  
 Allowed paths: crates/soldier\_core/execution/order\_size.rs  
 New/changed endpoints: none  
 Acceptance criteria:  
-OrderSize { contracts, qty\_coin, qty\_usd, notional\_usd } implemented exactly.  
-Canonical units:  
-option|linear\_future: canonical qty\_coin  
-perpetual|inverse\_future: canonical qty\_usd  
-notional\_usd always populated deterministically.  
-Explicit identifiers: `instrument_kind`, `qty_coin`, `qty_usd`; for `instrument_kind == option`, `qty_usd` MUST be unset.  
+`OrderSizeInput` is a mutually exclusive canonical input union: `CoinQty | UsdQty | Contracts`.  
+`NormalizedOrderSize` is the canonical execution sizing model and contains `canonical_size_kind` plus canonical+derived deterministic fields (`notional_usd` always populated).  
+Mixed canonical input is rejected before dispatch with `Rejected(MixedCanonicalSizeFields)` and `RiskState::Degraded`.  
+Canonical sizing is driven by `InstrumentMeta.amount_semantics` (`AmountSemantics`), not legacy `InstrumentKind` routing; option-family instruments (`amount_semantics == coin`) must not accept canonical USD input.  
 Tests:  
 crates/soldier\_core/tests/test\_order\_size.rs::test\_order\_size\_option\_perp\_canonical\_amount (AT-277)
+crates/soldier\_core/tests/test\_order\_size.rs::test\_mixed\_canonical\_size\_fields\_rejected (AT-1097)
 Evidence artifacts: none  
 Rollout \+ rollback: core library; rollback via revert commit only.  
-Observability hooks: debug log OrderSizeComputed{instrument\_kind, notional\_usd}.  
+Observability hooks: debug log OrderSizeComputed{instrument\_family, amount\_semantics, canonical\_size\_kind, notional\_usd}.  
 
 **Threshold**: Set `contracts_amount_match_tolerance = 0.001` and enforce: if both contracts-derived amount and canonical amount exist and mismatch beyond tolerance ⇒ reject + RiskState::Degraded.  
 If both `contracts` and `amount` are provided, they MUST match within tolerance (contract_multiplier-based check).  
 
 **Required test alias**: Add/alias `test_atomic_qty_epsilon_tolerates_float_noise_but_rejects_mismatch()` (AT-280).
 
-**Reason**: C-1.0-ORDER_SIZE-001, C-8.2-TEST_SUITE-001  
+**Reason**: C-1.0-ORDER_SIZE_INPUT_NORMALIZED-001, C-8.2-TEST_SUITE-001  
 Contract AT coverage (traceability assignment): AT-278.
 
 
-S1.3 — Dispatcher amount mapping \+ mismatch reject→Degraded  
+S1.3 — Dispatcher canonical amount mapping \+ mismatch reject→Degraded  
 Allowed paths: crates/soldier\_core/execution/dispatch\_map.rs  
 New/changed endpoints: none  
 Acceptance criteria:  
 Outbound Deribit request sends exactly one canonical amount.  
 If both contracts and canonical amount exist and mismatch ⇒ reject intent and set RiskState::Degraded.  
+Outbound amount selection is based on normalized canonical size (`canonical_size_kind` / `amount_semantics`), not on legacy `instrument_kind` heuristics.  
 Outbound Deribit reduce_only flag MUST be set from intent classification:  
 - CLOSE/HEDGE intents -> reduce_only=true  
 - OPEN intents -> reduce_only=false or omitted  
@@ -304,6 +309,8 @@ Allowed paths: crates/soldier\_core/execution/label.rs
 New/changed endpoints: none  
 Acceptance criteria:  
 s4:{sid8}:{gid12}:{li}:{ih16}; max 64 chars.  
+`sid8` encoding is fixed: first 8 lowercase RFC4648 base32 (no padding) chars of big-endian `xxhash64(strategy_id_utf8_bytes)`.  
+`ih16` encoding is fixed: lowercase zero-padded 16-char hex of `intent_hash` from canonical integer quantization bytes.  
 All outbound orders to Deribit MUST use the s4: format (no exceptions).  
 Truncation MUST NOT occur; if computed s4 label would exceed 64 chars, hard-reject before any API call.  
 Hard rule (contract §1.1): Expanded (human-readable) label format is for logs only and MUST NOT be sent to the exchange.  
@@ -315,13 +322,15 @@ crates/soldier\_core/tests/test\_label.rs::test\_label\_rejects\_over\_64\_no\_t
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
 Observability hooks: counter label\_truncated\_total.  
-S2.4 — Label match disambiguation; ambiguity→Degraded  
+S2.4 — Label full-identity match; unresolved→Degraded  
 Allowed paths: crates/soldier\_core/recovery/label\_match.rs  
 New/changed endpoints: none  
 Acceptance criteria:  
-Matching algorithm per contract tie-breakers; ambiguity triggers RiskState::Degraded and sets “opens blocked” latch (wired later).  
+Matching uses full parsed short identity `{sid8, gid12, leg_idx, ih16}`.  
+Tie-breaker ladders are not allowed in this phase; matching is full-identity exact-match only.  
+If full-identity candidate set size is not exactly one (none or >1), fail closed: set `RiskState::Degraded`, block opens, and require reconcile path.  
 Tests:  
-crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_disambiguation (AT-217; must cover tie-breakers)  
+crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_full\_identity\_unique\_or\_fail\_closed (AT-217)  
 crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_ambiguous\_degrades  
 crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_ambiguity\_sets\_degraded\_and\_blocks\_open (AT-217; unresolved ambiguity => Degraded + opens blocked)  
 Evidence artifacts: none  
@@ -430,7 +439,7 @@ Contract AT coverage (traceability assignment): AT-933.
 S4.2 — TLSM out‑of‑order events (fill-before-ack)  
 Allowed paths: crates/soldier\_core/execution/state.rs, crates/soldier\_core/execution/tlsm.rs  
 New/changed endpoints: none  
-Acceptance criteria: never panics; converges to correct terminal state; WAL records transitions.  
+Acceptance criteria: never panics; converges to correct terminal states `{Filled, Canceled, Failed}`; WAL records transitions.  
 Tests: crates/soldier\_core/tests/test\_tlsm.rs::test\_tlsm\_fill\_before\_ack\_no\_panic (AT-230)
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
@@ -1070,6 +1079,7 @@ Add wrapper test with exact required name: test_health_endpoint_returns_minimal_
 Allowed paths: crates/soldier\_infra/http/{router.rs,health.rs}  
 New endpoint: GET /api/v1/health  
 Required endpoint-level tests: yes  
+Phase boundary note: AT-022 + AT-1230 foundation status-lite ownership is Phase 1 scope; this Phase 2 slice extends owner control-plane behavior (watchdog heartbeat + steady-state hardening) without replacing Phase 1 coverage.  
 Acceptance criteria: HTTP 200 JSON includes keys (contract §7.0):  
 - ok (bool; MUST be true when process is up)  
 - build\_id (string)  
@@ -1608,4 +1618,3 @@ S13.1 → S13.3 (replay pass required before canary)
 S13.2 \+ S13.4 \+ S13.5 \+ S14.* must be in place before any “enable full-scale/prod” decision.  
 Phase 2 CSP micro-live decision requires S8.2 \+ S8.8 \+ S8.11 \+ S8.12 evidence (runtime F1/profile/corroboration/CSP_ONLY CI).  
 G) De-scope line (Phase 4\)
-

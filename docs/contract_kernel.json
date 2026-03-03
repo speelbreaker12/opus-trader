@@ -76,7 +76,7 @@
       "contract_ref": "\u00a77.1.3",
       "id": "Anchor-009",
       "proof": {
-        "line": 4975,
+        "line": 4980,
         "section": "\u00a77.1.3"
       },
       "title": "AGGRESSIVE Patches Require Human Approval"
@@ -209,15 +209,15 @@
     }
   ],
   "contract_version": "5.2",
-  "generated_at_utc": "2026-03-03T20:34:38Z",
+  "generated_at_utc": "2026-03-03T22:14:19Z",
   "kernel_version": 3,
   "sources": {
     "anchors_path": "docs/architecture/contract_anchors.md",
     "anchors_sha256": "6e09b14a5e2a090020019517765caf3154bfb2ada5937910c82b04d07136749c",
     "contract_path": "specs/CONTRACT.md",
-    "contract_sha256": "d4772f29b6ec0821503062484ad9ecab3d0b781bd5686389823d9fd355afa560",
+    "contract_sha256": "f90ff0b46989678fc2a2fbe3b312623e80bb121066cfd35441ecfecde2375b8a",
     "plan_path": "specs/IMPLEMENTATION_PLAN.md",
-    "plan_sha256": "b2996664ee9a016dc8aafef5335ca9a6bf3440c8e9f372662aea49e808716eec",
+    "plan_sha256": "ebf9700e25374b9b477cb0f57d3fb9f06e5e13a7e08a3545bd4953c98fa4f905",
     "rules_path": "docs/architecture/validation_rules.md",
     "rules_sha256": "b9a73134377b38a44a7eec4b9f2f308efa7dce5393f31168da793065d30c7672"
   },

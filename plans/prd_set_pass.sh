@@ -185,6 +185,24 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
+  # Required artifact-backed gate proofs for pass flips.
+  required_gate_artifacts=(
+    "preflight.rc"
+    "fail_closed_coverage.rc"
+  )
+  for required_gate_rc in "${required_gate_artifacts[@]}"; do
+    required_gate_path="$ARTIFACTS_DIR/$required_gate_rc"
+    if [[ ! -f "$required_gate_path" ]]; then
+      echo "ERROR: missing required gate artifact: $required_gate_path" >&2
+      exit 4
+    fi
+    required_rc_val="$(tr -d '[:space:]' < "$required_gate_path" 2>/dev/null || true)"
+    if [[ "$required_rc_val" != "0" ]]; then
+      echo "ERROR: required gate artifact is non-zero: $required_gate_path (${required_rc_val:-<empty>})" >&2
+      exit 4
+    fi
+  done
+
   # ── Contract review ───────────────────────────────────────────────
   if [[ -z "$CONTRACT_REVIEW_FILE" ]]; then
     CONTRACT_REVIEW_FILE="$ARTIFACTS_DIR/contract_review.json"

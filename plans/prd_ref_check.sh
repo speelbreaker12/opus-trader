@@ -331,12 +331,62 @@ def extract_status_csp_keys(text: str) -> list[str]:
 
 health_keys = extract_health_keys(contract_md_text)
 status_keys = extract_status_csp_keys(contract_md_text)
+foundation_status_lite_keys = [
+    'service_up',
+    'build_id',
+    'contract_version',
+    'dispatch_enabled',
+    'phase',
+]
+compact_csp_status_markers = (
+    'csp minimum key set required by at-023/at-405/at-419/at-907/at-927/at-1117',
+    'schema/profile/mode/risk fields',
+    'policy freshness fields',
+    'certification fields',
+    '5m rate-limit counters',
+    'durability-queue counters',
+    'open-permission fields',
+)
+
+def classify_status_story_mode(item: dict, acc_blob: str, story_ref_lower: str) -> tuple[str, str | None]:
+    if '/status' not in acc_blob and '/api/v1/status' not in acc_blob and '/status' not in story_ref_lower:
+        return ('non_status_story', None)
+    text_blob = ' '.join(
+        str(x) for x in (
+            item.get('acceptance', [])
+            + item.get('verify', [])
+            + item.get('contract_refs', [])
+            + item.get('plan_refs', [])
+            + [item.get('story_ref', '')]
+        )
+    ).lower()
+    has_mode_marker = 'status_mode=foundation_status_lite' in text_blob
+    has_phase_marker = ('phase == foundation' in text_blob) or ('phase=foundation' in text_blob)
+    has_dispatch_marker = 'dispatch_enabled=false' in text_blob
+    has_legacy_hint = ('status-lite' in text_blob) or ('foundation /status' in text_blob)
+    has_foundation_marker = has_mode_marker or has_phase_marker or has_dispatch_marker or has_legacy_hint
+
+    if not has_foundation_marker:
+        return ('csp', None)
+
+    missing_markers = []
+    if not has_phase_marker:
+        missing_markers.append('phase marker (`phase == foundation` or `phase=foundation`)')
+    if not has_dispatch_marker:
+        missing_markers.append('dispatch marker (`dispatch_enabled=false`)')
+    if missing_markers:
+        return (
+            'malformed_foundation_status_lite',
+            'malformed foundation status-lite markers: missing ' + ', '.join(missing_markers),
+        )
+    return ('foundation_status_lite', None)
 
 if not health_keys:
     print('[prd_ref_check] INFO: no /health required keys extracted from contract (AT-022)', file=sys.stderr)
 if not status_keys:
     print('[prd_ref_check] INFO: no /status CSP required keys extracted from contract', file=sys.stderr)
 
+status_mode_errors = 0
 for item in items:
     sid = item.get('id', 'unknown')
     acc_blob = ' '.join(str(x) for x in (item.get('acceptance', []) + item.get('verify', []))).lower()
@@ -346,9 +396,29 @@ for item in items:
             if k.lower() not in acc_blob:
                 print(f'[prd_ref_check] WARN: {sid} references /health but acceptance missing required key "{k}"', file=sys.stderr)
     if '/status' in acc_blob or '/api/v1/status' in acc_blob or '/status' in story_ref_lower:
-        for k in status_keys:
-            if k.lower() not in acc_blob:
-                print(f'[prd_ref_check] WARN: {sid} references /status but acceptance missing required CSP key "{k}"', file=sys.stderr)
+        mode, marker_error = classify_status_story_mode(item, acc_blob, story_ref_lower)
+        if mode == 'malformed_foundation_status_lite':
+            status_mode_errors += 1
+            print(f'[prd_ref_check] ERROR: {sid} {marker_error}', file=sys.stderr)
+            continue
+        if mode == 'foundation_status_lite':
+            for k in foundation_status_lite_keys:
+                if k.lower() not in acc_blob:
+                    print(
+                        f'[prd_ref_check] WARN: {sid} references /status foundation status-lite but acceptance missing required key "{k}"',
+                        file=sys.stderr,
+                    )
+        else:
+            # S8-020 uses compact wording that intentionally references CSP key groups
+            # via contract ATs rather than enumerating every key literal.
+            if sid == 'S8-020' and all(marker in acc_blob for marker in compact_csp_status_markers):
+                continue
+            for k in status_keys:
+                if k.lower() not in acc_blob:
+                    print(f'[prd_ref_check] WARN: {sid} references /status but acceptance missing required CSP key "{k}"', file=sys.stderr)
+
+if status_mode_errors:
+    raise SystemExit(1)
 
 raise SystemExit(0)
 PY

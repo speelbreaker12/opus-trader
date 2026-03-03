@@ -4653,16 +4653,21 @@ AT-022
 - Pass criteria: response matches required keys/values.
 - Fail criteria: non-200 OR missing keys OR `ok != true`.
 
-**/status response MUST include (Phase 0/1 status-lite contract):**
+**Foundation status-lite mode (Phase 0/1 bootstrap only):**
 - Applies when PolicyGuard + OpenPermissionLatch are not yet implemented (Roadmap Phase 1 / non-deployable foundation).
-- `service_up` (bool; MUST be true when process is up)
-- `build_id` (string)
-- `contract_version` (string)
-- `dispatch_enabled` (bool; MUST be false)
-- `phase` (string literal: `foundation`)
+- While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
+- In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation`.
 - During this phase, `/status` MUST NOT emit or claim canonical Phase-2+ fields:
   `trading_mode`, `opens_globally_permitted`, `is_trading_allowed`, `mode_reasons`,
   `open_permission_blocked_latch`, `open_permission_reason_codes`, `open_permission_requires_reconcile`.
+- CSP minimum `/status` keys are required after foundation mode exits.
+
+AT-1230
+- Given: runtime is in foundation mode (`phase == foundation`).
+- When: `GET /api/v1/status`.
+- Then: response includes only `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, and `phase`; with `dispatch_enabled == false` and `phase == foundation`.
+- Pass criteria: all required foundation keys present with exact invariants and no additional CSP authority keys.
+- Fail criteria: missing required foundation keys, invariant mismatch, or presence of CSP authority keys while in foundation mode.
 
 **/status response MUST include (CSP minimum):**
 - Applies to Phase 2+ only (first deployable CSP phase). Phase 0/1 uses the status-lite contract above.

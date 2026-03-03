@@ -125,6 +125,7 @@ EOF
 EOF
 
   printf '0\n' > "$case_dir/artifacts/preflight.rc"
+  printf '0\n' > "$case_dir/artifacts/fail_closed_coverage.rc"
   cat > "$case_dir/artifacts/contract_review.json" <<'EOF'
 {
   "decision": "PASS"
@@ -382,5 +383,28 @@ set -e
 [[ "$no_review_rc" -eq 4 ]] || fail "expected exit 4 for missing review artifacts, got $no_review_rc"
 echo "$no_review_output" | grep -Fq "no review artifact for HEAD=" || fail "missing inline review check diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$no_review_case/prd.json" >/dev/null || fail "passes changed despite missing review artifacts"
+
+# ── Test 9: fail_closed_coverage gate must be proven in verify artifacts ──
+missing_fc_rc_case="$tmp_dir/missing_fail_closed_rc"
+mkdir -p "$missing_fc_rc_case"
+setup_case "$missing_fc_rc_case" "$head_sha"
+rm -f "$missing_fc_rc_case/artifacts/fail_closed_coverage.rc"
+
+set +e
+missing_fc_rc_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$missing_fc_rc_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$missing_fc_rc_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$missing_fc_rc_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$missing_fc_rc_case/artifacts/contract_review.json" 2>&1
+)"
+missing_fc_rc_status=$?
+set -e
+
+[[ "$missing_fc_rc_status" -eq 4 ]] || fail "expected exit 4 for missing fail_closed_coverage.rc, got $missing_fc_rc_status"
+echo "$missing_fc_rc_output" | grep -Fq "missing required gate artifact" || fail "missing fail_closed_coverage artifact diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite missing fail_closed_coverage.rc"
 
 echo "PASS: prd_set_pass"
