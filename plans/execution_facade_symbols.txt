@@ -2,10 +2,16 @@
 # Keep one symbol per line; count is enforced by plans/lint_execution_facade.sh.
 
 AtomicGroup
+CancelOnlyExecutionInput
 ChokeIntentClass
 ChokeMetrics
 ChokeRejectReason
 ChokeResult
+CloseExecutionInput
+ExecutionDecision
+ExecutionEngine
+ExecutionInput
+ExecutionRuntime
 GateRejectCodes
 GateResults
 GateStep
@@ -14,6 +20,7 @@ GroupError
 GroupLock
 GroupState
 GroupStateTransition
+HedgeExecutionInput
 LABEL_MAX_LEN
 LabelError
 LabelInput
@@ -21,6 +28,8 @@ LegResult
 LockAcquisitionResult
 OooCategory
 OrderSize
+OpenExecutionInput
+OpenMetadata
 PersistedTransition
 RecordedBeforeDispatchGate
 RejectReasonCode
@@ -37,6 +46,8 @@ build_order_intent_with_wal_gate
 derive_gid12
 derive_sid8
 encode_label
+open_runtime_to_decision
+pipeline_result_to_decision
 reject_reason_from_chokepoint
 reject_reason_registry
 reject_reason_registry_contains
