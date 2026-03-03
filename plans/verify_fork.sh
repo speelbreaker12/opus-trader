@@ -105,7 +105,9 @@ PREFLIGHT_TIMEOUT_WAS_SET=0
 if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then
   PREFLIGHT_TIMEOUT_WAS_SET=1
 fi
-PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-300s}"
+# Quick-mode preflight runs smoke fixture suites that can exceed 300s under
+# normal parallel load; use a safer default while still allowing env override.
+PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-900s}"
 if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then
   PREFLIGHT_TIMEOUT="1800s"
 fi

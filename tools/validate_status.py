@@ -210,37 +210,54 @@ def is_subsequence_in_order(seq: list[str], ordered_universe: list[str]) -> bool
     return idxs == sorted(idxs)
 
 
-def parse_contract_version(version: Any) -> tuple[int, int] | None:
-    if not isinstance(version, str):
-        return None
-    parts = version.split(".")
-    if len(parts) != 2 or not all(part.isdigit() for part in parts):
-        return None
-    return int(parts[0]), int(parts[1])
+def resolve_open_permission_semantics_version(status: dict[str, Any]) -> tuple[int | None, list[str]]:
+    errs: list[str] = []
+    status_schema_version = status.get("status_schema_version")
+    semantics_version = status.get("open_permission_semantics_version")
+
+    if status_schema_version not in (1, 2):
+        errs.append("[SEMANTICS] status_schema_version must be 1 or 2")
+        return None, errs
+
+    if status_schema_version == 1:
+        if semantics_version is None:
+            return 1, errs
+        if semantics_version != 1:
+            errs.append(
+                "[SEMANTICS] status_schema_version=1 requires "
+                "open_permission_semantics_version to be omitted or 1"
+            )
+        return 1, errs
+
+    if semantics_version != 2:
+        errs.append(
+            "[SEMANTICS] status_schema_version=2 requires "
+            "open_permission_semantics_version=2"
+        )
+    return 2, errs
 
 
 def resolve_decision_a_latch_reason(
-    manifest_contract_version: Any,
+    open_permission_semantics_version: int | None,
     reduce_only_reasons: list[str],
     decision_a_registry: Any,
 ) -> tuple[str | None, str | None]:
     """
-    Resolve Decision-A latch token with contract-version semantics.
+    Resolve Decision-A latch token with status-semantics versioning.
 
-    - contract_version <= 5.2: exact canonical token is required.
-    - contract_version >= 5.3: manifest must provide exactly one explicit
+    - Semantics v1: exact canonical token is required.
+    - Semantics v2+: manifest must provide exactly one explicit
       DecisionALatchReasonCode value, and it must be in ReduceOnly reasons.
     """
     canonical = decision_a_canonical_latch_reason()
-    parsed_version = parse_contract_version(manifest_contract_version)
 
-    if parsed_version is not None and parsed_version >= (5, 3):
+    if open_permission_semantics_version is not None and open_permission_semantics_version >= 2:
         explicit_codes = normalize_code_list(decision_a_registry)
         if len(explicit_codes) != 1:
             return (
                 None,
                 "[MANIFEST] registries.DecisionALatchReasonCode must define "
-                "exactly one code for contract_version >= 5.3",
+                "exactly one code for status_schema_version >= 2 semantics",
             )
 
         explicit_code = explicit_codes[0]
@@ -256,7 +273,7 @@ def resolve_decision_a_latch_reason(
         return (
             None,
             "[MANIFEST] ModeReasonCode.ReduceOnly must include "
-            "'REDUCEONLY_OPEN_PERMISSION_LATCHED' for contract_version <= 5.2",
+            "'REDUCEONLY_OPEN_PERMISSION_LATCHED' for status_schema_version=1 semantics",
         )
     return canonical, None
 
@@ -326,6 +343,7 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
     - ReduceOnly/Kill ⇒ mode_reasons non-empty
     - Tier purity and ordering
     - Latch invariants + Decision A
+    - status_schema_version/open_permission_semantics_version coherence
     - Enum membership
     """
     errs: list[str] = []
@@ -336,8 +354,12 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
     kill_reasons = normalize_code_list(mode_regs.get("Kill", []))
     open_perm_reasons = normalize_code_list(regs.get("OpenPermissionReasonCode", []))
     manifest_contract_version = manifest.get("contract_version", "5.2")
+    open_permission_semantics_version, semantics_errors = resolve_open_permission_semantics_version(
+        status
+    )
+    errs.extend(semantics_errors)
     decision_a_latch_reason, decision_a_manifest_error = resolve_decision_a_latch_reason(
-        manifest_contract_version=manifest_contract_version,
+        open_permission_semantics_version=open_permission_semantics_version,
         reduce_only_reasons=reduce_only_reasons,
         decision_a_registry=regs.get("DecisionALatchReasonCode"),
     )

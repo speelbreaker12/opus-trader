@@ -2,13 +2,12 @@ use std::collections::HashSet;
 
 #[path = "test_stubs.rs"]
 mod test_stubs;
-use test_stubs::{gate_results_all_passing_failclosed_wal, FailingWalGate, StubWalGate};
+use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
 
 use soldier_core::execution::{
-    build_order_intent_with_wal_gate, reject_reason_from_chokepoint, reject_reason_registry,
-    reject_reason_registry_contains, ChokeIntentClass, ChokeMetrics, ChokeRejectReason,
-    ChokeResult, GateRejectCodes, GateResults, GateStep, RecordedBeforeDispatchGate,
-    RejectReasonCode,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
+    GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
+    reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
 };
 use soldier_core::risk::RiskState;
 
@@ -195,6 +194,24 @@ fn test_registry_contains_all_generated_enum_variants() {
         registry.len(),
         "generated reject reason registry contains duplicate as_str tokens"
     );
+}
+
+#[test]
+fn test_registry_contains_contract_minimum_set() {
+    // Mechanical verify expects this contract-minimum anchor test name.
+    // Keep the set small and representative of OPEN gate, fee gate, and WAL gate coverage.
+    let required = [
+        RejectReasonCode::MarginHeadroomRejectOpens,
+        RejectReasonCode::OrderTypeMarketForbidden,
+        RejectReasonCode::FeeCacheStale,
+        RejectReasonCode::RecordedBeforeDispatchFailed,
+    ];
+    for code in required {
+        assert!(
+            reject_reason_registry_contains(code),
+            "reject_reason_registry missing required contract code {code:?}"
+        );
+    }
 }
 
 #[test]

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ralph.internal/schemas/status_reason_registries_manifest.json",
-  "schema_version": 3,
+  "schema_version": 4,
   "contract_version": "5.2",
   "description": "Single source of truth for /status reason codes, display strings, and unblock conditions.",
 
@@ -86,6 +86,12 @@
           "unblock": { "type": "AUTO", "condition": "Reconciliation succeeds + latch clears" }
         },
         {
+          "code": "REDUCEONLY_OPEN_PERMISSION_LATCHED_V2",
+          "display": "Open-permission latch is set (schema v2 semantics).",
+          "latched": true,
+          "unblock": { "type": "AUTO", "condition": "Reconciliation succeeds + latch clears" }
+        },
+        {
           "code": "REDUCEONLY_BUNKER_MODE_ACTIVE",
           "display": "Connectivity/jitter risk (Bunker mode).",
           "latched": false,
@@ -158,6 +164,11 @@
           "unblock": { "type": "AUTO", "condition": "Session predicate confirmed safe" }
         }
       ]
+    },
+
+    "DecisionALatchReasonCode": {
+      "description": "Single explicit Decision-A latch token for status schema version 2+ semantics.",
+      "code": "REDUCEONLY_OPEN_PERMISSION_LATCHED_V2"
     },
 
     "OpenPermissionReasonCode": {

@@ -822,3 +822,21 @@ Commands: ./plans/verify.sh full; bash plans/tests/test_artifact_lint.sh; bash p
 Evidence: artifacts/verify/20260302_191927/preflight.log; artifacts/verify/20260302_191927/preflight.rc; artifacts/verify/20260302_191927/FAILED_GATE.
 Notes: Full verify stopped at preflight (`rc=2`, `FAILED_GATE=preflight`) due missing fixture scripts (`plans/tests/test_review_logged_timeout_fallback.sh`, `plans/tests/test_review_logged_timeout_retry_noncodex.sh`, `plans/tests/test_review_logged_timeout_binary_unavailable.sh`) and `test_artifact_lint.sh` failure (`recon_step_report`/`recon_trace_receipt` schema rows missing).
 Next: Resolve/restore the missing fixture scripts and artifact-lint matrix entries (or confirm expected fixture profile), then rerun `./plans/verify.sh full`.
+Story: status-semantics-v2-followup
+Date: 2026-03-03 01:39:12 UTC
+Summary: Completed status semantics v1/v2 validator+schema alignment, switched Decision-A resolution to status semantics versioning, updated status docs/contract wording, and regenerated status reason-code artifacts for new v2 latch token.
+Commands: python3 tools/generate_reason_codes.py --write; python3 tools/generate_reason_codes.py --check; python3 -m pytest -q tests/test_validate_status_manifest_override.py tests/test_validate_status_semantics_versioning.py; python3 tools/validate_status.py --file tests/fixtures/status_semantics/* --schema python/schemas/status_csp_min.schema.json --strict; python3 tools/validate_status.py --file tests/fixtures/status_semantics/* --schema python/schemas/status_csp_exact.schema.json --strict; python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; ./plans/verify.sh quick.
+Evidence: targeted pytest passed (15/15); validator CLI pass/fail fixture matrix behaved as expected for both CSP schemas; codegen check passed; contract crossref check passed.
+Notes: ./plans/verify.sh quick exited with preflight timeout (rc=124) at artifacts/verify/20260302_192823/preflight.log with FAILED_GATE=preflight.
+Story: status-semantics-v2-followup
+Date: 2026-03-03 01:48:12 UTC
+Summary: Reran ./plans/verify.sh quick per follow-up; preflight failed (rc=2) with missing fixture test scripts plus artifact-lint fixture failure.
+Commands: ./plans/verify.sh quick; bash plans/tests/test_artifact_lint.sh.
+Evidence: artifacts/verify/20260302_194228/FAILED_GATE=preflight; preflight.rc=2; preflight.log reports 44 passed / 4 failed / 1 warning; test_artifact_lint.sh reports missing matrix tokens recon_step_report and recon_trace_receipt.
+Story: status-semantics-v2-followup
+Date: 2026-03-03 02:43:59 UTC
+Summary: Ran full workflow verification after status semantics/schema/validator and preflight fixture guardrail fixes; full verify completed successfully with no FAILED_GATE marker.
+Commands: ./plans/verify.sh full.
+Evidence: artifacts/verify/20260302_203601/verify.meta.json (status=ok); artifacts/verify/20260302_203601 (gate logs and timing summary).
+Notes: Dirty-tree warning was non-blocking in this run; all enforced full gates passed, including preflight, mechanical verification, rust gates, and adversarial invariants.
+Next: If this branch is intended for pass flip, run plans/prd_set_pass.sh with the required story artifacts and then proceed to review/merge flow.
