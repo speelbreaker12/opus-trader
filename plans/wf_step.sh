@@ -866,6 +866,7 @@ case "$STEP" in
 
   cycle2)
     min_reviews=2
+    require_r7_reviews=0
     # Prefer manifest-driven C2 mode when available; legacy fallback uses recon mode signals.
     manifest_cycle2_path="$story_art/external/cycle2/$STORY/R7_EXTERNAL_MANIFEST.json"
     cycle2_mode=""
@@ -874,9 +875,11 @@ case "$STEP" in
       case "$cycle2_mode" in
         ""|null)
           echo "WF_STEP: cycle2_path.mode missing in $manifest_cycle2_path; assuming dual_combo for legacy compatibility"
+          require_r7_reviews=1
           ;;
         dual_combo)
           echo "WF_STEP: cycle2_path.mode=dual_combo for $STORY -> requiring full dual-style cycle2 coverage"
+          require_r7_reviews=1
           ;;
         recon_clean_single)
           min_reviews=1
@@ -900,6 +903,7 @@ case "$STEP" in
       fi
     fi
     review_count=0
+    r7_review_count=0
     c2_basis_count=0
     for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
@@ -911,13 +915,22 @@ case "$STEP" in
           sidecar="${f%.md}.sidecar.json"
           sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
           sidecar_phase="$(jq -r '.phase_equivalent // empty' "$sidecar" 2>/dev/null || true)"
-          if [[ "$sidecar_phase" == "R7" ]] && is_fix_diff_basis "$sidecar_basis"; then
-            c2_basis_count=$((c2_basis_count + 1))
+          if [[ "$sidecar_phase" == "R7" ]]; then
+            r7_review_count=$((r7_review_count + 1))
+            if is_fix_diff_basis "$sidecar_basis"; then
+              c2_basis_count=$((c2_basis_count + 1))
+            fi
           fi
         done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
       fi
     done
-    if [[ "$review_count" -lt "$min_reviews" ]]; then
+    if [[ "$require_r7_reviews" -eq 1 ]]; then
+      if [[ "$r7_review_count" -lt "$min_reviews" ]]; then
+        echo "WF_STEP: need at least $min_reviews provenance-valid R7 review artifacts in $story_art/{codex,opus,kimi}/" >&2
+        echo "  C1 artifacts (R3 / STORY_SCOPE) do not satisfy dual_combo cycle2 coverage." >&2
+        exit 3
+      fi
+    elif [[ "$review_count" -lt "$min_reviews" ]]; then
       echo "WF_STEP: need at least $min_reviews provenance-valid review artifacts in $story_art/{codex,opus,kimi}/" >&2
       echo "  Artifacts must come from review_logged.sh (logger-v2 + sidecar)." >&2
       exit 3

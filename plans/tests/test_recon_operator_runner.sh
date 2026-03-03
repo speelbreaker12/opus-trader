@@ -105,6 +105,10 @@ if [[ "$story" == "S2-002" && "$step" == "self_review" ]]; then
     mkdir -p crates/soldier_core/src
     echo "// forbidden edit from non-write step" > crates/soldier_core/src/non_write_forbidden.rs
   fi
+  if [[ "${FORCE_ILLEGAL_EDIT_EXISTING:-0}" == "1" ]]; then
+    mkdir -p crates/soldier_core/src
+    echo "// forbidden append on pre-existing dirty file" >> crates/soldier_core/src/preexisting_dirty.rs
+  fi
   cat > "$receipt" <<JSON
 {"story_id":"$story","head_sha":"$head_sha","timestamp_utc":"$ts"}
 JSON
@@ -213,7 +217,30 @@ illegal_log="$trace_root_illegal/logs/self_review_attempt1.log"
 grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_log" || fail "missing illegal non-write guard marker"
 grep -Fq '"category":"CEREMONY"' "$trace_root_illegal/failures.jsonl" || fail "illegal non-write run should classify as CEREMONY"
 
-# Scenario E: no eligible stories should provide diagnostics, not generic-only error.
+# Scenario E: non-write step must fail closed when editing an already-dirty production file.
+echo "// dirty before self_review run" > "$repo/crates/soldier_core/src/preexisting_dirty.rs"
+set +e
+(
+  cd "$repo"
+  FORCE_ILLEGAL_EDIT_EXISTING=1 plans/recon_operator_run.sh --story S2-002 --step self_review --mode B >/dev/null 2>&1
+)
+illegal_existing_rc=$?
+set -e
+[[ "$illegal_existing_rc" -ne 0 ]] || fail "expected dirty-path illegal non-write production edit to block run"
+
+trace_root_illegal_existing="$(find "$repo/.wf/trace/S2-002" -mindepth 1 -maxdepth 1 -type d | while IFS= read -r d; do
+  [[ -f "$d/step_timing.jsonl" ]] || continue
+  if grep -Fq '"step":"self_review"' "$d/step_timing.jsonl"; then
+    echo "$d"
+  fi
+done | LC_ALL=C sort | tail -n 1 || true)"
+[[ -n "$trace_root_illegal_existing" ]] || fail "trace root missing for dirty-path illegal non-write edit run"
+illegal_existing_log="$trace_root_illegal_existing/logs/self_review_attempt1.log"
+[[ -f "$illegal_existing_log" ]] || fail "expected dirty-path illegal self_review log at $illegal_existing_log"
+grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_existing_log" || fail "missing dirty-path illegal non-write guard marker"
+grep -Fq '"category":"CEREMONY"' "$trace_root_illegal_existing/failures.jsonl" || fail "dirty-path illegal non-write run should classify as CEREMONY"
+
+# Scenario F: no eligible stories should provide diagnostics, not generic-only error.
 set +e
 (
   cd "$repo"
