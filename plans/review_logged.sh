@@ -161,6 +161,45 @@ ucfirst() { echo "$1" | awk '{print toupper(substr($0,1,1)) substr($0,2)}'; }
 # Portable lowercase (zsh lacks ${var,,})
 lcase() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 
+# Resolve a usable timeout wrapper binary.
+# A PATH hit alone is insufficient: fixture shims may exist but be non-functional.
+_timeout_bin_cached=""
+_timeout_bin_checked=0
+timeout_bin() {
+  if [[ "$_timeout_bin_checked" -eq 1 ]]; then
+    echo "$_timeout_bin_cached"
+    return 0
+  fi
+
+  local candidate=""
+  for candidate in timeout gtimeout; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      # Probe usability. Broken fixture shims exit non-zero here.
+      if "$candidate" 1 bash -c 'exit 0' >/dev/null 2>&1; then
+        _timeout_bin_cached="$candidate"
+        break
+      fi
+    fi
+  done
+  _timeout_bin_checked=1
+  echo "$_timeout_bin_cached"
+}
+
+# Normalize model aliases to codex CLI-compatible model ids.
+resolve_codex_cli_model() {
+  local raw="${1:-gpt-5-codex}"
+  local normalized
+  normalized="$(echo "$raw" | tr '[:upper:]' '[:lower:]')"
+  case "$normalized" in
+    gpt-5.3-codex|gpt-5-codex)
+      echo "gpt-5-codex"
+      ;;
+    *)
+      echo "$normalized"
+      ;;
+  esac
+}
+
 # ── Build enriched review context from prd.json + CONTRACT.md + premortem ──
 # Returns enriched text on stdout; empty string if prd.json absent.
 build_enriched_context() {
@@ -263,6 +302,7 @@ tool=""
 prompt_style="enriched"
 proof_graph=false
 timeout_seconds_override=""
+timeout_retry_seconds="${REVIEW_LOG_TIMEOUT_RETRY_SECONDS:-240}"
 mode="commit"
 commit="HEAD"
 base=""
@@ -361,6 +401,10 @@ fi
 
 if [[ -n "$timeout_seconds_override" ]] && [[ ! "$timeout_seconds_override" =~ ^[0-9]+$ ]]; then
   echo "ERROR: --timeout-seconds must be a non-negative integer" >&2
+  exit 2
+fi
+if [[ ! "$timeout_retry_seconds" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: REVIEW_LOG_TIMEOUT_RETRY_SECONDS must be a non-negative integer" >&2
   exit 2
 fi
 
@@ -692,36 +736,101 @@ cleanup() {
 }
 trap cleanup EXIT
 
-start_epoch="$(date +%s)"
-timeout_cmd=()
-if [[ "$timeout_seconds" -gt 0 ]]; then
-  if command -v timeout >/dev/null 2>&1; then
-    timeout_cmd=("timeout" "$timeout_seconds")
-  elif command -v gtimeout >/dev/null 2>&1; then
-    timeout_cmd=("gtimeout" "$timeout_seconds")
+initial_cmd_text="${cmd[*]}"
+timeout_triggered=false
+timeout_fallback_kind="none"
+timed_out_attempts=0
+codex_exec_fallback_used=false
+codex_exec_model=""
+last_run_used_timeout=false
+timeout_wrapper=""
+timeout_unavailable_warned=false
+
+run_review_once() {
+  local per_attempt_timeout="$1"
+  local tb
+  tb="$(timeout_bin)"
+  last_run_used_timeout=false
+  timeout_wrapper=""
+
+  if [[ "$per_attempt_timeout" -gt 0 && -z "$tb" && "$timeout_unavailable_warned" == "false" ]]; then
+    echo "[review_logged] WARN: timeout requested (${per_attempt_timeout}s) but no usable timeout wrapper found; continuing without timeout" \
+      | tee -a "$transcript_tmp" >&2
+    timeout_unavailable_warned=true
+  fi
+
+  if [[ -n "$prompt_tmp" ]]; then
+    # opus/kimi always, codex exec (--files mode or timeout fallback): pipe prompt via stdin
+    if [[ "$per_attempt_timeout" -gt 0 && -n "$tb" ]]; then
+      last_run_used_timeout=true
+      timeout_wrapper="$tb $per_attempt_timeout"
+      "$tb" "$per_attempt_timeout" "${cmd[@]}" < "$prompt_tmp" 2>&1 | tee -a "$transcript_tmp"
+    else
+      "${cmd[@]}" < "$prompt_tmp" 2>&1 | tee -a "$transcript_tmp"
+    fi
   else
-    echo "ERROR: timeout requested but neither 'timeout' nor 'gtimeout' is available in PATH" >&2
-    exit 2
+    # codex review (built-in diff modes), gemini inline prompt: no stdin
+    if [[ "$per_attempt_timeout" -gt 0 && -n "$tb" ]]; then
+      last_run_used_timeout=true
+      timeout_wrapper="$tb $per_attempt_timeout"
+      "$tb" "$per_attempt_timeout" "${cmd[@]}" 2>&1 | tee -a "$transcript_tmp"
+    else
+      "${cmd[@]}" 2>&1 | tee -a "$transcript_tmp"
+    fi
+  fi
+  return "${PIPESTATUS[0]}"
+}
+
+start_epoch="$(date +%s)"
+: > "$transcript_tmp"
+set +e
+run_review_once "$timeout_seconds"
+rc="$?"
+if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
+  timeout_triggered=true
+  timed_out_attempts=$((timed_out_attempts + 1))
+fi
+
+# Retry once with a larger timeout for non-codex tools.
+if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) \
+      && "$tool" != "codex" && "$timeout_retry_seconds" -gt "$timeout_seconds" ]]; then
+  timeout_fallback_kind="timeout_retry"
+  echo "[review_logged] timeout after ${timeout_seconds}s; retrying with ${timeout_retry_seconds}s" \
+    | tee -a "$transcript_tmp" >&2
+  run_review_once "$timeout_retry_seconds"
+  rc="$?"
+  if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
+    timed_out_attempts=$((timed_out_attempts + 1))
   fi
 fi
 
-run_cmd=("${cmd[@]}")
-if [[ ${#timeout_cmd[@]} -gt 0 ]]; then
-  run_cmd=("${timeout_cmd[@]}" "${cmd[@]}")
+# Codex diff-review fallback: if codex review timed out, retry once via codex exec.
+if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) \
+      && "$tool" == "codex" && "$mode" != "files" ]]; then
+  timeout_fallback_kind="codex_exec_after_timeout"
+  codex_exec_fallback_used=true
+  if [[ -z "$prompt_tmp" ]]; then
+    prompt_tmp="$(mktemp)"
+    build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
+  fi
+  codex_exec_model="$(resolve_codex_cli_model "${CODEX_MODEL:-GPT-5.3-Codex}")"
+  cmd=("codex" "exec" "--model" "$codex_exec_model")
+  if [[ ${#extra[@]} -gt 0 ]]; then
+    cmd+=("${extra[@]}")
+  fi
+  codex_exec_mode=true
+  echo "[review_logged] codex review timed out; falling back to codex exec (${codex_exec_model})" \
+    | tee -a "$transcript_tmp" >&2
+  run_review_once "$timeout_seconds"
+  rc="$?"
+  if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
+    timed_out_attempts=$((timed_out_attempts + 1))
+  fi
 fi
+set -e
 
 timed_out=false
-set +e
-if [[ -n "$prompt_tmp" ]]; then
-  # opus always, kimi always, codex exec (--files mode): pipe prompt via stdin
-  "${run_cmd[@]}" < "$prompt_tmp" 2>&1 | tee "$transcript_tmp"
-else
-  # codex review (built-in diff modes): no stdin
-  "${run_cmd[@]}" 2>&1 | tee "$transcript_tmp"
-fi
-rc="${PIPESTATUS[0]}"
-set -e
-if [[ "$timeout_seconds" -gt 0 && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
+if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
   timed_out=true
 fi
 end_epoch="$(date +%s)"
@@ -734,7 +843,13 @@ transcript_bytes="$(wc -c < "$transcript_tmp" | tr -d '[:space:]')"
 # ── Determine model name for provenance ───────────────────────────
 model_name="n/a"
 case "$tool" in
-  codex)  model_name="${CODEX_MODEL:-GPT-5.3-Codex}" ;;
+  codex)
+    if [[ "$codex_exec_fallback_used" == "true" && -n "$codex_exec_model" ]]; then
+      model_name="$codex_exec_model"
+    else
+      model_name="${CODEX_MODEL:-GPT-5.3-Codex}"
+    fi
+    ;;
   opus)   model_name="claude-opus-4-6" ;;
   kimi)   model_name="kimi-k2.5" ;;
   gemini) model_name="${GEMINI_MODEL:-gemini-3-pro-preview}" ;;
@@ -810,11 +925,16 @@ slice_id="${slice_id:-UNKNOWN}"
   if [[ "$proof_graph" == "true" ]]; then
     echo "- Proof graph: $pg_skeleton"
   fi
+  echo "- Initial Command: ${initial_cmd_text}"
   echo "- Command: ${cmd[*]}"
-  if [[ ${#timeout_cmd[@]} -gt 0 ]]; then
-    echo "- Timeout Wrapper: ${timeout_cmd[*]}"
+  if [[ -n "$timeout_wrapper" ]]; then
+    echo "- Timeout Wrapper: $timeout_wrapper"
   fi
   echo "- Timeout Seconds: $timeout_seconds"
+  echo "- Timeout Retry Seconds: $timeout_retry_seconds"
+  echo "- Timeout Triggered: $timeout_triggered"
+  echo "- Timeout Attempts: $timed_out_attempts"
+  echo "- Timeout Fallback Kind: $timeout_fallback_kind"
   echo "- Timed Out: $timed_out"
   echo "- Artifact Provenance: logger-v2"
   echo "- Generator Script: plans/review_logged.sh"
@@ -831,9 +951,17 @@ echo "<<<REVIEW_TRANSCRIPT_END>>>" >> "$outfile"
 # Emit structured findings summary for deterministic gate parsing.
 # Counts by finding-like line formats, then takes max across formats to avoid
 # double-counting when a review includes both detailed and summary sections.
-p0="$(count_findings_for_severity "P0")"
-p1="$(count_findings_for_severity "P1")"
-p2="$(count_findings_for_severity "P2")"
+citation_count_for_summary="$(count_review_citations)"
+if [[ "$citation_count_for_summary" -eq 0 ]]; then
+  # Fail-closed: empty/no-citation transcripts are not trustworthy for finding counts.
+  p0=999
+  p1=999
+  p2=999
+else
+  p0="$(count_findings_for_severity "P0")"
+  p1="$(count_findings_for_severity "P1")"
+  p2="$(count_findings_for_severity "P2")"
+fi
 echo "FINDINGS_SUMMARY: P0=$p0 P1=$p1 P2=$p2" >> "$outfile"
 
 # ── Extract review_meta for deterministic gate checks ────────────────
