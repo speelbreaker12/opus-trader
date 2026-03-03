@@ -1,83 +1,53 @@
 # Story verify command allowlist (exact match per line).
-# Add or update entries as needed; require human review via RPH_ALLOW_HARNESS_EDIT=1.
-
-bash -n plans/verify.sh
+# Auto-synced to plans/prd.json verify[] (excluding ./plans/verify.sh).
 bash plans/tests/test_pr_gate.sh
+bash plans/tests/test_prd_set_pass.sh
+bash plans/tests/test_review_logged_proof_graph.sh
+bash plans/tests/test_verify_timeout_policy.sh
+bash plans/tests/test_wf_step.sh
 bash plans/tests/test_workflow_allowlist_coverage.sh
+bash plans/verify_mechanical.sh
 cargo test --workspace
-cargo test -p soldier_infra
+cargo test -p soldier_core
+cargo test -p soldier_core --test test_capabilities
+cargo test -p soldier_core --test test_dispatch_chokepoint
 cargo test -p soldier_core --test test_dispatch_map
+cargo test -p soldier_core --test test_exposure_budget
+cargo test -p soldier_core --test test_fee_staleness
+cargo test -p soldier_core --test test_gate_ordering
 cargo test -p soldier_core --test test_idempotency
 cargo test -p soldier_core --test test_instrument_cache_ttl
-cargo test -p soldier_core --test test_instrument_cache_ttl test_instrument_cache_ttl_blocks_opens_allows_closes
-cargo test -p soldier_core --test test_instrument_cache_ttl test_stale_instrument_cache_sets_degraded
 cargo test -p soldier_core --test test_instrument_kind_mapping
+cargo test -p soldier_core --test test_intent_determinism
+cargo test -p soldier_core --test test_intent_id_propagation
+cargo test -p soldier_core --test test_inventory_skew
 cargo test -p soldier_core --test test_label
 cargo test -p soldier_core --test test_label_match
-cargo test -p soldier_core --test test_order_size
-cargo test -p soldier_core --test test_quantize
-cargo test -p soldier_core --test test_preflight
-cargo test -p soldier_core --test test_post_only_guard
-cargo test -p soldier_core --test test_capabilities
 cargo test -p soldier_core --test test_liquidity_gate
-cargo test -p soldier_core --test test_fee_staleness
-cargo test -p soldier_infra --test test_fee_cache
-cargo test -p soldier_core --test test_net_edge_gate
-cargo test -p soldier_core --test test_pricer
-cargo test -p soldier_core --test test_tlsm
-cargo test -p soldier_core --test test_gate_ordering
-cargo test -p soldier_core --test test_dispatch_chokepoint
-cargo test -p soldier_core --test test_intent_determinism
-cargo test -p soldier_core --test test_rejection_side_effects
-cargo test -p soldier_core --test test_intent_id_propagation
+cargo test -p soldier_core --test test_margin_gate
 cargo test -p soldier_core --test test_missing_config
-cargo test -p soldier_infra --test test_ledger_replay
-cargo test -p soldier_infra --test test_trade_id_registry
-cargo test -p soldier_infra --test test_dispatch_durability
+cargo test -p soldier_core --test test_net_edge_gate
+cargo test -p soldier_core --test test_order_size
+cargo test -p soldier_core --test test_pending_exposure
+cargo test -p soldier_core --test test_post_only_guard
+cargo test -p soldier_core --test test_preflight
+cargo test -p soldier_core --test test_pricer
+cargo test -p soldier_core --test test_quantize
+cargo test -p soldier_core --test test_reject_reason
+cargo test -p soldier_core --test test_rejection_side_effects
+cargo test -p soldier_core --test test_tlsm
+cargo test -p soldier_infra
 cargo test -p soldier_infra --test test_config_defaults
 cargo test -p soldier_infra --test test_crash_mid_intent
+cargo test -p soldier_infra --test test_dispatch_durability
+cargo test -p soldier_infra --test test_fee_cache
+cargo test -p soldier_infra --test test_http_status
+cargo test -p soldier_infra --test test_ledger_replay
 cargo test -p soldier_infra --test test_phase0_runtime test_status_command_behavior_runtime -- --exact
-rg -n "cargo test --workspace" plans/verify.sh
-rg -n "check_vq_evidence.py" plans/verify.sh
-test -f docs/order_size_discovery.md
-rg -n "OrderSize" docs/order_size_discovery.md
-test -f docs/dispatch_map_discovery.md
-rg -n "dispatch" docs/dispatch_map_discovery.md
-
-# Phase 0 documentation evidence checks
-test -s docs/launch_policy.md
-test -s evidence/phase0/policy/launch_policy_snapshot.md
-test -s docs/env_matrix.md
-test -s evidence/phase0/env/env_matrix_snapshot.md
-test -s docs/keys_and_secrets.md
-test -s docs/break_glass_runbook.md
-test -s evidence/phase0/break_glass/runbook_snapshot.md
-test -s evidence/phase0/break_glass/drill.md
-test -s evidence/phase0/break_glass/log_excerpt.txt
-test -s docs/health_endpoint.md
-cargo test -p soldier_infra --test test_health
-python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.json'))"
-python3 tools/phase0_meta_test.py --root .
-python3 tools/policy_loader.py --policy config/policy.json
-test -f tools/release_gate.py
-
-# Phase 2 gap-closure ATs (first batch: critical+high)
-cargo test at_1072 at_1073
-cargo test at_1074 at_1075
-cargo test at_1076
-cargo test at_1077 at_1079 at_1080
-cargo test at_1078 at_1081
-cargo test at_1082
-cargo test at_1083 at_1084
-cargo test at_1085
-cargo test at_1086
-cargo test at_1087
-cargo test at_1088
-cargo test at_1089 at_1091
-cargo test at_1090 at_1094
-cargo test at_1092 at_1093
-
-# Phase 2 gap-closure ATs (second batch: moderate)
+cargo test -p soldier_infra --test test_trade_id_registry
+cargo test AT_1115 AT_1116
+cargo test AT_1119 AT_1122
+cargo test AT_1120 AT_1121
 cargo test at_1095 at_1096
 cargo test at_1097 at_1099
 cargo test at_1098 at_1100
@@ -88,21 +58,22 @@ cargo test at_1106 at_1114
 cargo test at_1107 at_1110
 cargo test at_1108 at_1109
 cargo test at_1111 at_1123
-cargo test AT_1115 AT_1116
 cargo test at_1117
 cargo test at_1118
-cargo test AT_1119 AT_1122
-cargo test AT_1120 AT_1121
-
-# Targeted story verify commands (added by audit fix)
-cargo test -p soldier_core --test test_exposure_budget
-cargo test -p soldier_core --test test_inventory_skew
-cargo test -p soldier_core --test test_margin_gate
-cargo test -p soldier_core --test test_pending_exposure
-cargo test -p soldier_core --test test_reject_reason
-cargo test -p soldier_core
-bash plans/verify_mechanical.sh
-bash plans/tests/test_prd_set_pass.sh
-bash plans/tests/test_review_logged_proof_graph.sh
-bash plans/tests/test_verify_timeout_policy.sh
-bash plans/tests/test_wf_step.sh
+python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.json'))"
+python3 tools/phase0_meta_test.py --root .
+python3 tools/policy_loader.py --policy config/policy.json
+rg -n "OrderSize" docs/order_size_discovery.md
+rg -n "dispatch" docs/dispatch_map_discovery.md
+test -f docs/dispatch_map_discovery.md
+test -f docs/order_size_discovery.md
+test -f tools/release_gate.py
+test -s docs/break_glass_runbook.md
+test -s docs/env_matrix.md
+test -s docs/keys_and_secrets.md
+test -s docs/launch_policy.md
+test -s evidence/phase0/break_glass/drill.md
+test -s evidence/phase0/break_glass/log_excerpt.txt
+test -s evidence/phase0/break_glass/runbook_snapshot.md
+test -s evidence/phase0/env/env_matrix_snapshot.md
+test -s evidence/phase0/policy/launch_policy_snapshot.md
