@@ -15,7 +15,6 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
 mkdir -p "$repo/plans/tests" "$repo/specs"
-PINNED_FIXTURE_MODE="smoke"
 
 cp "$SOURCE_PREFLIGHT" "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
@@ -93,7 +92,6 @@ invalid_log="$tmp_dir/invalid_timeout.log"
 set +e
 (
   cd "$repo"
-  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=5s \
   ./plans/preflight.sh >"$invalid_log" 2>&1
@@ -103,27 +101,6 @@ set -e
 [[ "$invalid_rc" -eq 2 ]] || fail "expected invalid timeout input to fail-closed with rc=2, got $invalid_rc"
 grep -Fq "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='5s'" "$invalid_log" \
   || fail "missing invalid timeout diagnostics"
-
-(
-  cd "$repo"
-  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
-  PREFLIGHT_NO_CACHE=1 \
-  ./plans/preflight.sh >/dev/null 2>&1
-)
-
-cached_invalid_log="$tmp_dir/cached_invalid_timeout.log"
-set +e
-(
-  cd "$repo"
-  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT=bad \
-  ./plans/preflight.sh >"$cached_invalid_log" 2>&1
-)
-cached_invalid_rc=$?
-set -e
-[[ "$cached_invalid_rc" -eq 2 ]] || fail "expected invalid timeout to fail-closed with cached fixtures, got $cached_invalid_rc"
-grep -Fq "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='bad'" "$cached_invalid_log" \
-  || fail "missing cached invalid-timeout diagnostics"
 
 mock_bin="$tmp_dir/mock_bin"
 mkdir -p "$mock_bin"
@@ -164,7 +141,6 @@ timed_log="$tmp_dir/timed_fixture.log"
 set +e
 (
   cd "$repo"
-  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
   PATH="$mock_bin:$PATH" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=1 \
@@ -181,7 +157,6 @@ no_timeout_log="$tmp_dir/no_timeout_wrapper.log"
 set +e
 (
   cd "$repo"
-  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
   DUMMY_EXIT_CODE=124 \
@@ -200,7 +175,6 @@ wrapper_enabled_124_log="$tmp_dir/wrapper_enabled_124.log"
 set +e
 (
   cd "$repo"
-  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
   PATH="$mock_bin:$PATH" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=10 \
