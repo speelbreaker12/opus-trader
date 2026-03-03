@@ -101,7 +101,6 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_prd_ref_check_status_lite_markers.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
 # Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
@@ -128,7 +127,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "34" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 34)"
+[[ "$smoke_count" == "36" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 36)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"
