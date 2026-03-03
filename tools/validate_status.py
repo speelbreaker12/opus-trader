@@ -273,7 +273,7 @@ def resolve_decision_a_latch_reason(
         return (
             None,
             "[MANIFEST] ModeReasonCode.ReduceOnly must include "
-            "'REDUCEONLY_OPEN_PERMISSION_LATCHED' for status_schema_version=1 semantics",
+            f"'{canonical}' for status_schema_version=1 semantics",
         )
     return canonical, None
 

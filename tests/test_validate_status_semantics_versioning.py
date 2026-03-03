@@ -36,13 +36,13 @@ def test_legacy_v1_fixture_passes() -> None:
 def test_legacy_v1_active_when_latched_fails() -> None:
     proc = _run_validator_fixture(FIXTURE_DIR / "legacy_v1_fail_active_when_latched.json")
     assert proc.returncode == 1
-    assert "Latch=true prohibits Active mode" in proc.stderr or "latch=true prohibits" in proc.stderr
+    assert "[DECISION-A] latch=true prohibits trading_mode='Active'" in proc.stderr
 
 
 def test_legacy_v1_reason_without_latch_fails() -> None:
     proc = _run_validator_fixture(FIXTURE_DIR / "legacy_v1_fail_reason_without_latch.json")
     assert proc.returncode == 1
-    assert "latch=false requires empty reason codes" in proc.stderr or "latch=false requires open_permission_reason_codes=[]" in proc.stderr
+    assert "[LATCH] latch=false requires open_permission_reason_codes=[]" in proc.stderr
 
 
 def test_v2_manifest_latch_reason_fixture_passes() -> None:

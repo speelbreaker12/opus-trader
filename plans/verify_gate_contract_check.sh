@@ -128,7 +128,7 @@ verify_tokens=(
   'run_logged_or_exit "csp_trace"'
   'status_fixture_'
   'log "12f) status reason codegen"'
-  'bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"'
+  'run_logged_or_exit "status_reason_codegen"'
   'run_logged_or_exit "doc_sync_check"'
 )
 

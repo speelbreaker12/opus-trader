@@ -667,7 +667,9 @@ fi
 
 if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
   log "12f) status reason codegen"
-  bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
+  run_logged_or_exit "status_reason_codegen" "$SPEC_LINT_TIMEOUT" \
+    env VERIFY_ARTIFACTS_DIR="$VERIFY_ARTIFACTS_DIR" \
+    bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
 fi
 
 if [[ -d tests/fixtures/status ]]; then
@@ -702,19 +704,23 @@ else
   warn "status fixtures directory missing: tests/fixtures/status"
 fi
 
-log "13b) status reason leak guard"
-status_reason_leak_cmd=(
-  "$PYTHON_BIN" tools/check_status_reason_string_leaks.py
-  --manifest specs/status/status_reason_registries_manifest.json
-  --scan-root crates
-)
-# Owner allow-path first: canonical generated module may contain registry literals by design.
-status_reason_owner_allow_path="crates/soldier_core/src/status_codes_generated.rs"
-if [[ -f "$status_reason_owner_allow_path" ]]; then
-  status_reason_leak_cmd+=(--allow-path "$status_reason_owner_allow_path")
+if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
+  log "13b) status reason leak guard"
+  status_reason_leak_cmd=(
+    "$PYTHON_BIN" tools/check_status_reason_string_leaks.py
+    --manifest specs/status/status_reason_registries_manifest.json
+    --scan-root crates
+  )
+  # Owner allow-path first: canonical generated module may contain registry literals by design.
+  status_reason_owner_allow_path="crates/soldier_core/src/status_codes_generated.rs"
+  if [[ -f "$status_reason_owner_allow_path" ]]; then
+    status_reason_leak_cmd+=(--allow-path "$status_reason_owner_allow_path")
+  fi
+  run_logged_or_exit "status_reason_leak_guard" "$SPEC_LINT_TIMEOUT" \
+    "${status_reason_leak_cmd[@]}"
+else
+  warn "status reason leak guard skipped (missing specs/status/status_reason_registries_manifest.json)"
 fi
-run_logged_or_exit "status_reason_leak_guard" "$SPEC_LINT_TIMEOUT" \
-  "${status_reason_leak_cmd[@]}"
 
 if [[ -f Cargo.toml ]]; then
   if [[ -f specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml && -f tools/vendor_docs_lint_rust.py ]]; then
