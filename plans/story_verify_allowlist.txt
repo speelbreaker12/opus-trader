@@ -26,7 +26,7 @@ cargo test -p soldier_core --test test_net_edge_gate
 cargo test -p soldier_core --test test_pricer
 cargo test -p soldier_core --test test_tlsm
 cargo test -p soldier_core --test test_gate_ordering
-cargo test -p soldier_core --test test_dispatch_chokepoint
+cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests
 cargo test -p soldier_core --test test_intent_determinism
 cargo test -p soldier_core --test test_rejection_side_effects
 cargo test -p soldier_core --test test_intent_id_propagation
@@ -99,7 +99,7 @@ cargo test -p soldier_core --test test_exposure_budget
 cargo test -p soldier_core --test test_inventory_skew
 cargo test -p soldier_core --test test_margin_gate
 cargo test -p soldier_core --test test_pending_exposure
-cargo test -p soldier_core --test test_reject_reason
+cargo test -p soldier_core --lib reject_reason_contract_tests
 cargo test -p soldier_core
 bash plans/verify_mechanical.sh
 bash plans/tests/test_prd_set_pass.sh
