@@ -328,10 +328,10 @@ fn test_chokepoint_module_exists() {
     );
 }
 
-// ─── Test: Chokepoint facade symbols are publicly reachable ──────────────
+// ─── Test: Chokepoint symbols are reachable via the execution facade ─────
 
 #[test]
-fn chokepoint_is_publicly_reachable() {
+fn chokepoint_symbols_reachable_via_execution_facade() {
     #[allow(unused_imports)]
     use crate::execution::{
         build_gate_results, build_order_intent_with_optional_wal_gate,

@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use soldier_core::risk::RiskState;
+
 #[allow(unused_imports)]
 use soldier_core::execution::{
     AtomicGroup, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes,
@@ -17,30 +19,64 @@ use soldier_core::execution::{
     reject_reason_registry_contains, try_acquire_group_lock,
 };
 
-fn extract_symbol_set(file_path: &Path, anchor: &str) -> BTreeSet<String> {
-    let content = fs::read_to_string(file_path)
-        .unwrap_or_else(|err| panic!("failed to read {}: {err}", file_path.display()));
+fn parse_use_block_symbols(block: &str) -> BTreeSet<String> {
+    let without_line_comments = block
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
 
-    let start = content.find(anchor).unwrap_or_else(|| {
-        panic!(
-            "failed to find anchor `{anchor}` in {}",
-            file_path.display()
-        )
-    });
-    let rest = &content[start + anchor.len()..];
-    let end = rest.find("};").unwrap_or_else(|| {
-        panic!(
-            "failed to find end of use block after anchor `{anchor}` in {}",
-            file_path.display()
-        )
-    });
-
-    rest[..end]
+    without_line_comments
         .split(',')
         .map(str::trim)
         .filter(|symbol| !symbol.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+fn extract_symbol_set(file_path: &Path, anchor: &str) -> BTreeSet<String> {
+    let content = fs::read_to_string(file_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", file_path.display()));
+
+    let mut parsed_sets = Vec::new();
+    let mut search_offset = 0usize;
+
+    while let Some(relative_start) = content[search_offset..].find(anchor) {
+        let start = search_offset + relative_start + anchor.len();
+        let rest = &content[start..];
+        if let Some(end) = rest.find("};") {
+            parsed_sets.push(parse_use_block_symbols(&rest[..end]));
+            search_offset = start + end + 2;
+        } else {
+            // Ignore non-block occurrences (for example, anchor text in string literals).
+            search_offset = start + 1;
+        }
+    }
+
+    parsed_sets
+        .into_iter()
+        .max_by_key(|set| set.len())
+        .unwrap_or_else(|| {
+            panic!(
+                "failed to find anchor `{anchor}` in {}",
+                file_path.display()
+            )
+        })
+}
+
+fn write_temp_source_file(contents: &str) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before UNIX_EPOCH")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "facade_symbol_extract_{}_{}.rs",
+        std::process::id(),
+        nanos
+    ));
+    fs::write(&path, contents)
+        .unwrap_or_else(|err| panic!("failed to write {}: {err}", path.display()));
+    path
 }
 
 fn assert_facade_symbol_lists_in_sync() {
@@ -112,9 +148,116 @@ fn execution_chokepoint_symbols_publicly_reachable() {
         build_gate_results, build_order_intent_with_optional_wal_gate,
         build_order_intent_with_wal_gate,
     };
+
+    struct StubWalGate;
+
+    impl RecordedBeforeDispatchGate for StubWalGate {
+        fn record_before_dispatch(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    let mut metrics = ChokeMetrics::new();
+    let gates = build_gate_results(
+        true,  // preflight_passed
+        true,  // quantize_passed
+        true,  // dispatch_consistency_passed
+        true,  // fee_cache_passed
+        true,  // expiry_guard_passed
+        true,  // liquidity_gate_passed
+        true,  // net_edge_passed
+        true,  // pricer_passed
+        false, // wal_recorded (ignored by explicit wal gate path below)
+        None,  // requested_qty
+        None,  // max_dispatch_qty
+    );
+    let mut wal_gate = StubWalGate;
+
+    let with_wal_gate = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+    assert!(
+        matches!(with_wal_gate, ChokeResult::Approved { .. }),
+        "explicit WAL gate path should approve when gate recording succeeds"
+    );
+
+    let missing_wal_gate = build_order_intent_with_optional_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        None,
+    );
+    assert!(
+        matches!(
+            missing_wal_gate,
+            ChokeResult::Rejected {
+                reason: ChokeRejectReason::GateRejected {
+                    gate: GateStep::RecordedBeforeDispatch,
+                    ..
+                },
+                ..
+            }
+        ),
+        "optional WAL path should fail-closed when adapter is omitted for OPEN intents"
+    );
 }
 
 #[test]
 fn facade_symbol_lists_stay_in_sync() {
     assert_facade_symbol_lists_in_sync();
+}
+
+#[test]
+fn extract_symbol_set_prefers_largest_use_block_when_anchor_repeats() {
+    let path = write_temp_source_file(
+        r#"
+use soldier_core::execution::{build_gate_results,};
+
+fn nested() {
+    use soldier_core::execution::{
+        build_gate_results,
+        build_order_intent_with_wal_gate,
+    };
+}
+"#,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = [
+        "build_gate_results".to_string(),
+        "build_order_intent_with_wal_gate".to_string(),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(symbols, expected);
+}
+
+#[test]
+fn extract_symbol_set_ignores_inline_comments() {
+    let path = write_temp_source_file(
+        r#"
+use soldier_core::execution::{
+    build_gate_results, // shared in both contract + external smoke tests
+    build_order_intent_with_wal_gate, // compile-only reachability check
+};
+"#,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = [
+        "build_gate_results".to_string(),
+        "build_order_intent_with_wal_gate".to_string(),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(symbols, expected);
 }

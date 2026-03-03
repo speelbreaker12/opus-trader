@@ -13,7 +13,7 @@
 //! - GI-001, GI-002, GI-004, GI-009, GI-017: chokepoint contract
 //! - GI-020: idempotency hash module
 
-use super::test_support_tests::{
+use super::test_support_helpers_tests::{
     FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
 };
 use crate::execution::{

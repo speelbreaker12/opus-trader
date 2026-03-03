@@ -14,7 +14,7 @@ use crate::execution::{
 };
 
 #[test]
-fn facade_symbols_reachable() {
+fn facade_symbols_reachable_via_execution_facade() {
     let gates = build_gate_results(
         true,
         true,
