@@ -106,11 +106,19 @@ Single source of truth for:
 - `TradingMode` enum: `Active`, `ReduceOnly`, `Kill`
 - `DeploymentEnvironment` enum: `DEV`, `STAGING`, `PAPER`, `LIVE`
 - `ModeReasonCode` by tier (Kill, ReduceOnly)
+- `DecisionALatchReasonCode` (contract_version >= 5.3 only; explicit single-code Decision-A latch token)
 - `OpenPermissionReasonCode` for latch states
 - `RejectReasonCode` for intent-level rejections
 - `OwnerStateCode` for dashboard display
 - Display strings for owner-readable messages
 - Ordering/precedence rules
+
+Decision-A version semantics:
+- `contract_version <= 5.2`: Decision A is exact-token locked to
+  `REDUCEONLY_OPEN_PERMISSION_LATCHED`.
+- `contract_version >= 5.3`: Decision A token can be manifest-driven only via
+  explicit `registries.DecisionALatchReasonCode`; heuristic substring matching
+  is forbidden.
 
 If you change a reason code:
 1. Update this manifest

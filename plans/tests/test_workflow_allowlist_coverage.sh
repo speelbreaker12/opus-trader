@@ -118,6 +118,7 @@ required=(
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_wf_step_stop_on_blocker.sh
+  plans/tests/test_wf_step_review_provenance.sh
   plans/tests/test_workflow_quick_step.sh
   plans/tests/test_toggle_policy_check.sh
   plans/verify.sh

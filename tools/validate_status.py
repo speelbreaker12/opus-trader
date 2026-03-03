@@ -37,6 +37,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+DEFAULT_CSP_SCHEMA_PATH = "python/schemas/status_csp_min.schema.json"
+DEFAULT_FOUNDATION_SCHEMA_PATH = "python/schemas/status_foundation.schema.json"
+
 # CSP Minimum Keys (contract-mandated, must always exist)
 CSP_MINIMUM_KEYS = frozenset([
     "status_schema_version",
@@ -72,6 +75,24 @@ CSP_MINIMUM_KEYS = frozenset([
     "10028_count_5m",
     "deribit_http_p95_ms",
     "ws_event_lag_ms",
+])
+
+FOUNDATION_REQUIRED_KEYS = frozenset([
+    "service_up",
+    "build_id",
+    "contract_version",
+    "dispatch_enabled",
+    "phase",
+])
+
+FOUNDATION_FORBIDDEN_KEYS = frozenset([
+    "trading_mode",
+    "opens_globally_permitted",
+    "is_trading_allowed",
+    "mode_reasons",
+    "open_permission_blocked_latch",
+    "open_permission_reason_codes",
+    "open_permission_requires_reconcile",
 ])
 
 
@@ -119,6 +140,10 @@ def check_minimum_keys(status: dict[str, Any]) -> list[str]:
     return []
 
 
+def is_foundation_status(status: dict[str, Any]) -> bool:
+    return status.get("phase") == "foundation"
+
+
 def normalize_code_list(value: Any) -> list[str]:
     if isinstance(value, dict):
         if "values" in value:
@@ -152,6 +177,114 @@ def is_subsequence_in_order(seq: list[str], ordered_universe: list[str]) -> bool
     return idxs == sorted(idxs)
 
 
+def parse_contract_version(version: Any) -> tuple[int, int] | None:
+    if not isinstance(version, str):
+        return None
+    parts = version.split(".")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        return None
+    return int(parts[0]), int(parts[1])
+
+
+def resolve_decision_a_latch_reason(
+    manifest_contract_version: Any,
+    reduce_only_reasons: list[str],
+    decision_a_registry: Any,
+) -> tuple[str | None, str | None]:
+    """
+    Resolve Decision-A latch token with contract-version semantics.
+
+    - contract_version <= 5.2: exact canonical token is required.
+    - contract_version >= 5.3: manifest must provide exactly one explicit
+      DecisionALatchReasonCode value, and it must be in ReduceOnly reasons.
+    """
+    canonical = "REDUCEONLY_OPEN_PERMISSION_LATCHED"
+    parsed_version = parse_contract_version(manifest_contract_version)
+
+    if parsed_version is not None and parsed_version >= (5, 3):
+        explicit_codes = normalize_code_list(decision_a_registry)
+        if len(explicit_codes) != 1:
+            return (
+                None,
+                "[MANIFEST] registries.DecisionALatchReasonCode must define "
+                "exactly one code for contract_version >= 5.3",
+            )
+
+        explicit_code = explicit_codes[0]
+        if explicit_code not in reduce_only_reasons:
+            return (
+                None,
+                "[MANIFEST] registries.DecisionALatchReasonCode must also be "
+                "present in ModeReasonCode.ReduceOnly",
+            )
+        return explicit_code, None
+
+    if canonical not in reduce_only_reasons:
+        return (
+            None,
+            "[MANIFEST] ModeReasonCode.ReduceOnly must include "
+            "'REDUCEONLY_OPEN_PERMISSION_LATCHED' for contract_version <= 5.2",
+        )
+    return canonical, None
+
+
+def check_foundation_status_contract(status: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
+    """
+    Validate Phase 0/1 status-lite payload contract.
+
+    Required:
+      - service_up, build_id, contract_version, dispatch_enabled, phase
+      - dispatch_enabled == false
+      - phase == "foundation"
+
+    Forbidden in foundation phase:
+      trading_mode, opens_globally_permitted, is_trading_allowed, mode_reasons,
+      open_permission_blocked_latch, open_permission_reason_codes,
+      open_permission_requires_reconcile
+    """
+    errs: list[str] = []
+
+    missing = FOUNDATION_REQUIRED_KEYS - set(status.keys())
+    if missing:
+        errs.extend(
+            f"[FOUNDATION] Missing required key: {k}" for k in sorted(missing)
+        )
+
+    if status.get("phase") != "foundation":
+        errs.append(
+            f"[FOUNDATION] phase must be 'foundation' (got {status.get('phase')!r})"
+        )
+
+    dispatch_enabled = status.get("dispatch_enabled")
+    if not isinstance(dispatch_enabled, bool):
+        errs.append(
+            f"[FOUNDATION] dispatch_enabled must be boolean (got {type(dispatch_enabled).__name__})"
+        )
+    elif dispatch_enabled:
+        errs.append(
+            "[FOUNDATION] dispatch_enabled must be false while phase='foundation'"
+        )
+
+    service_up = status.get("service_up")
+    if not isinstance(service_up, bool):
+        errs.append(
+            f"[FOUNDATION] service_up must be boolean (got {type(service_up).__name__})"
+        )
+
+    for key in sorted(FOUNDATION_FORBIDDEN_KEYS):
+        if key in status:
+            errs.append(f"[FOUNDATION] phase='foundation' forbids field '{key}'")
+
+    manifest_contract_version = manifest.get("contract_version", "5.2")
+    if status.get("contract_version") != manifest_contract_version:
+        errs.append(
+            f"[CONTRACT] Version mismatch: status has '{status.get('contract_version')}', "
+            f"manifest requires '{manifest_contract_version}'"
+        )
+
+    return errs
+
+
 def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
     """
     Check contract invariants that JSONSchema cannot express:
@@ -170,6 +303,11 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
     kill_reasons = normalize_code_list(mode_regs.get("Kill", []))
     open_perm_reasons = normalize_code_list(regs.get("OpenPermissionReasonCode", []))
     manifest_contract_version = manifest.get("contract_version", "5.2")
+    decision_a_latch_reason, decision_a_manifest_error = resolve_decision_a_latch_reason(
+        manifest_contract_version=manifest_contract_version,
+        reduce_only_reasons=reduce_only_reasons,
+        decision_a_registry=regs.get("DecisionALatchReasonCode"),
+    )
 
     trading_mode = status.get("trading_mode")
     mode_reasons = status.get("mode_reasons", [])
@@ -183,6 +321,8 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
             f"[CONTRACT] Version mismatch: status has '{status.get('contract_version')}', "
             f"manifest requires '{manifest_contract_version}'"
         )
+    if decision_a_manifest_error is not None:
+        errs.append(decision_a_manifest_error)
 
     # 2. Active ⇒ mode_reasons == []
     if trading_mode == "Active" and mode_reasons != []:
@@ -244,11 +384,11 @@ def check_contract_invariants(status: dict[str, Any], manifest: dict[str, Any]) 
 
         # Decision A: latch=true ⇒ REDUCEONLY_OPEN_PERMISSION_LATCHED in mode_reasons
         # (unless already in Kill mode, which is more severe)
-        if trading_mode == "ReduceOnly":
-            if not isinstance(mode_reasons, list) or "REDUCEONLY_OPEN_PERMISSION_LATCHED" not in mode_reasons:
+        if trading_mode == "ReduceOnly" and decision_a_latch_reason is not None:
+            if not isinstance(mode_reasons, list) or decision_a_latch_reason not in mode_reasons:
                 errs.append(
                     "[DECISION-A] latch=true with trading_mode='ReduceOnly' requires "
-                    "'REDUCEONLY_OPEN_PERMISSION_LATCHED' in mode_reasons"
+                    f"'{decision_a_latch_reason}' in mode_reasons"
                 )
 
     elif latch is False:
@@ -314,8 +454,22 @@ Examples:
     ap.add_argument("--file", help="Read status from file")
     ap.add_argument(
         "--schema",
-        default="python/schemas/status_csp_min.schema.json",
-        help="Path to JSONSchema (default: %(default)s)",
+        default=None,
+        help=(
+            "Path to JSONSchema. If omitted, phase-aware defaults apply: "
+            f"foundation -> {DEFAULT_FOUNDATION_SCHEMA_PATH}, "
+            f"otherwise -> {DEFAULT_CSP_SCHEMA_PATH}"
+        ),
+    )
+    ap.add_argument(
+        "--schema-csp",
+        default=DEFAULT_CSP_SCHEMA_PATH,
+        help="Default schema path for CSP status payloads (default: %(default)s)",
+    )
+    ap.add_argument(
+        "--schema-foundation",
+        default=DEFAULT_FOUNDATION_SCHEMA_PATH,
+        help="Default schema path for phase='foundation' payloads (default: %(default)s)",
     )
     ap.add_argument(
         "--manifest",
@@ -346,10 +500,30 @@ Examples:
             eprint("Error: provide exactly one of --url or --file")
         return 2
 
-    # Check required files exist
-    schema_path = Path(args.schema)
+    # Load status
+    try:
+        if args.url:
+            status = fetch_json_url(args.url, args.timeout)
+        else:
+            status = load_json_file(Path(args.file))
+    except Exception as ex:
+        if not args.quiet:
+            eprint(f"Error loading status: {ex}")
+        return 2
+
+    # Resolve phase-aware schema path
+    if args.schema:
+        schema_path = Path(args.schema)
+    else:
+        schema_path = (
+            Path(args.schema_foundation)
+            if is_foundation_status(status)
+            else Path(args.schema_csp)
+        )
+
     manifest_path = Path(args.manifest)
 
+    # Check required files exist
     if not schema_path.exists():
         if not args.quiet:
             eprint(f"Error: schema not found: {schema_path}")
@@ -368,17 +542,6 @@ Examples:
             eprint(f"Error loading schema/manifest: {ex}")
         return 2
 
-    # Load status
-    try:
-        if args.url:
-            status = fetch_json_url(args.url, args.timeout)
-        else:
-            status = load_json_file(Path(args.file))
-    except Exception as ex:
-        if not args.quiet:
-            eprint(f"Error loading status: {ex}")
-        return 2
-
     # Run all checks
     errors: list[str] = []
 
@@ -392,11 +555,12 @@ Examples:
         return 2
     errors.extend(schema_errors)
 
-    # 2. CSP minimum keys
-    errors.extend(check_minimum_keys(status))
-
-    # 3. Contract invariants
-    errors.extend(check_contract_invariants(status, manifest))
+    # 2-3. Phase-aware contract checks
+    if is_foundation_status(status):
+        errors.extend(check_foundation_status_contract(status, manifest))
+    else:
+        errors.extend(check_minimum_keys(status))
+        errors.extend(check_contract_invariants(status, manifest))
 
     # 4. Strict mode: no extra keys
     if args.strict:

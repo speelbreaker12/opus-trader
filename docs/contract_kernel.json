@@ -31,7 +31,7 @@
       "contract_ref": "\u00a74.3.2",
       "id": "Anchor-004",
       "proof": {
-        "line": 3896,
+        "line": 4015,
         "section": "\u00a74.3.2"
       },
       "title": "TruthCapsule Timing (RecordedBeforeDispatch)"
@@ -76,7 +76,7 @@
       "contract_ref": "\u00a77.1.3",
       "id": "Anchor-009",
       "proof": {
-        "line": 4741,
+        "line": 4893,
         "section": "\u00a77.1.3"
       },
       "title": "AGGRESSIVE Patches Require Human Approval"
@@ -85,7 +85,7 @@
       "contract_ref": "\u00a72.3.2",
       "id": "Anchor-010",
       "proof": {
-        "line": 629,
+        "line": 668,
         "section": "\u00a72.3.2"
       },
       "title": "Bunker Mode on Network Jitter"
@@ -103,7 +103,7 @@
       "contract_ref": "\u00a75.3",
       "id": "Anchor-012",
       "proof": {
-        "line": 4170,
+        "line": 4289,
         "section": "\u00a75.3"
       },
       "title": "Canary Rollout Abort Triggers Rollback"
@@ -112,7 +112,7 @@
       "contract_ref": "\u00a71.4.4",
       "id": "Anchor-013",
       "proof": {
-        "line": 621,
+        "line": 660,
         "section": "\u00a71.4.4"
       },
       "title": "No Market Orders Policy"
@@ -121,7 +121,7 @@
       "contract_ref": "\u00a73.1",
       "id": "Anchor-014",
       "proof": {
-        "line": 355,
+        "line": 362,
         "section": "\u00a73.1"
       },
       "title": "Emergency Close Has Hedge Fallback"
@@ -130,7 +130,7 @@
       "contract_ref": "\u00a73.2",
       "id": "Anchor-015",
       "proof": {
-        "line": 375,
+        "line": 374,
         "section": "\u00a73.2"
       },
       "title": "Watchdog Triggers ReduceOnly via POST Endpoint"
@@ -139,7 +139,7 @@
       "contract_ref": "\u00a72.3.1",
       "id": "Anchor-016",
       "proof": {
-        "line": 1820,
+        "line": 1871,
         "section": "\u00a72.3.1"
       },
       "title": "Exchange Health Monitor Blocks Opens Before Maintenance"
@@ -148,7 +148,7 @@
       "contract_ref": "\u00a71.2.2",
       "id": "Anchor-017",
       "proof": {
-        "line": 1192,
+        "line": 1236,
         "section": "\u00a71.2.2"
       },
       "title": "Atomic Churn Circuit Breaker Prevents Fee Death-Spiral"
@@ -157,7 +157,7 @@
       "contract_ref": "\u00a71.4.2.1",
       "id": "Anchor-018",
       "proof": {
-        "line": 1444,
+        "line": 1495,
         "section": "\u00a71.4.2.1"
       },
       "title": "Pending Exposure Reservation Prevents Double-Spend"
@@ -166,7 +166,7 @@
       "contract_ref": "\u00a73.4",
       "id": "Anchor-019",
       "proof": {
-        "line": 354,
+        "line": 412,
         "section": "\u00a73.4"
       },
       "title": "WS Continuity Breaks Trigger Degraded + Snapshot Rebuild"
@@ -202,7 +202,7 @@
       "contract_ref": "\u00a71.4.4",
       "id": "Anchor-023",
       "proof": {
-        "line": 621,
+        "line": 660,
         "section": "\u00a71.4.4"
       },
       "title": "Order-Type Preflight Guards (Artifact-Backed)"
@@ -215,7 +215,7 @@
     "anchors_path": "docs/architecture/contract_anchors.md",
     "anchors_sha256": "6e09b14a5e2a090020019517765caf3154bfb2ada5937910c82b04d07136749c",
     "contract_path": "specs/CONTRACT.md",
-    "contract_sha256": "aae1d3815317b5d63ec553a260fdb0c70fd38c6c1cfb368e5315822927e8a850",
+    "contract_sha256": "fa20c5456af114b52eec4b03a5353bf66c2cab4f443acbc027fffd351a557461",
     "plan_path": "specs/IMPLEMENTATION_PLAN.md",
     "plan_sha256": "ebf9700e25374b9b477cb0f57d3fb9f06e5e13a7e08a3545bd4953c98fa4f905",
     "rules_path": "docs/architecture/validation_rules.md",

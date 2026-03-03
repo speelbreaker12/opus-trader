@@ -3,6 +3,13 @@
 //! This file defines the intended public surface for `soldier_core::execution`.
 //! Symbols not re-exported here are implementation details.
 
+// Execution engine (11)
+pub use super::engine::{
+    CancelOnlyExecutionInput, CloseExecutionInput, ExecutionDecision, ExecutionEngine,
+    ExecutionInput, ExecutionRuntime, HedgeExecutionInput, OpenExecutionInput, OpenMetadata,
+    open_runtime_to_decision, pipeline_result_to_decision,
+};
+
 // Chokepoint boundary (10)
 pub use super::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,

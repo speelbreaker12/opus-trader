@@ -218,6 +218,12 @@ Summary: Added fail-closed legacy layout guard and verify quick/full contract-pa
 Commands: ./plans/legacy_layout_guard.sh; ./plans/verify_gate_contract_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/legacy_layout_guard.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/verify_fork.sh; reviews/postmortems/*.md; artifacts/verify/20260208_142926.
 Next: None.
+Story: workflow-maintenance
+Date: 2026-03-02
+Summary: Restored Decision-A exact-token enforcement for contract_version <= 5.2 in tools/validate_status.py, removed substring latch-token heuristic, and added explicit manifest-driven DecisionALatchReasonCode path for contract_version >= 5.3 with strict single-code + in-tier checks; updated status docs and regression tests.
+Commands: python3 -m pytest -q tests/test_validate_status_manifest_override.py; python3 -m py_compile tools/validate_status.py; ./plans/verify.sh quick (preflight timeout after dirty-tree warning); bash plans/tests/test_review_logged_timeout_binary_unavailable.sh; bash plans/tests/test_recon_operator_runner.sh.
+Evidence: tools/validate_status.py; tests/test_validate_status_manifest_override.py; specs/status/LOCKED_DECISIONS.md; specs/status/README.md; artifacts/verify/20260302_155633; artifacts/verify/20260302_160548; artifacts/verify/20260302_161435.
+Next: Use CI clean-checkout verify (recommended) or clean local tree and rerun ./plans/verify.sh quick/full before merge.
 Story: S0-R5-remediation
 Date: 2026-02-24
 Summary: Remediated slice-0 P0/P1 reconciliation gaps in `stoic-cli` and phase0 runtime tests: fail-closed on missing runtime state after prior initialization, scope bypass closure for keys-check (`all`/`withdraw`/`margin`), and added coverage for state deletion, health command behavior, status build_id/contract_version, and REDUCE_ONLY `is_trading_allowed=false`.
@@ -781,3 +787,38 @@ Commands: cargo fmt --all; cargo test -p soldier_core --locked --test adversaria
 Evidence: crates/soldier_core/tests/adversarial_gi_enforcement.rs; artifacts/verify/20260228_172938/verify.meta.json; artifacts/verify/20260228_172938/adversarial_report.json.
 Notes: `./plans/verify.sh full` passed with adversarial gate clean (no GI semantic findings).
 Next: stage intended files (excluding runtime/artifact noise), run `./plans/code_review_expert_attest.sh`, commit, push, and update PR #142.
+Story: workflow-maintenance
+Date: 2026-03-01 23:25:34 UTC
+Summary: Fixed cycle2 provenance phase alignment to accept canonical R7d (legacy R7 tolerated), hardened recon non-write production-edit guard to detect same-file mutations on already-dirty paths via content fingerprints, and ensured NON_WRITE_STEP_PROD_EDIT_BLOCKED marker/CEREMONY classification are emitted even when wf_step already failed.
+Commands: bash plans/tests/test_wf_step_review_provenance.sh; bash plans/tests/test_recon_operator_runner.sh; ./plans/verify.sh quick; PREFLIGHT_TIMEOUT=1200s ./plans/workflow_verify.sh; bash -n plans/recon_operator_run.sh plans/wf_step.sh plans/tests/test_recon_operator_runner.sh plans/tests/test_wf_step_review_provenance.sh.
+Evidence: plans/wf_step.sh; plans/recon_operator_run.sh; plans/tests/test_wf_step_review_provenance.sh; plans/tests/test_recon_operator_runner.sh; artifacts/verify/20260301_170247; artifacts/verify/20260301_171952.
+Notes: workflow_verify required PREFLIGHT_TIMEOUT override in this environment due preflight runtime variance.
+Next: If desired, add a dedicated legacy-compat regression asserting cycle2 still accepts R7 sidecars in addition to canonical R7d.
+Story: CONTRACT Phase-1 hardening (sizing model + canonical quantization + label reject codes)
+Date: 2026-03-02 01:46:48 UTC
+Summary: Tightened CONTRACT Phase-1 sections by adding enforceable domain primitives (InstrumentFamily/AmountSemantics/InstrumentMeta, OrderSizeInput union, NormalizedOrderSize), replacing float-ambiguous idempotency hashing with canonical integer-quantized serialization (`qty_steps`, `price_ticks`, canonical_intent_bytes), strengthening Phase-1 WAL roadmap/exit wording to require WALRecorded semantics and restart replay, and adding precise reject reason codes (`InvalidLabelSchema`, `UnknownLabelVersion`, `MixedCanonicalSizeFields`) with aligned AT text.
+Commands: PREFLIGHT_TIMEOUT=1200s ./plans/verify.sh quick; bash plans/tests/test_review_logged_timeout_fallback.sh; bash plans/verify_gate_contract_check.sh.
+Evidence: specs/CONTRACT.md; plans/progress.txt.
+Notes: `./plans/verify.sh quick` failed in preflight on `plans/tests/test_review_logged_timeout_fallback.sh` during the gate run, but the fixture test passes when run directly and `verify_gate_contract_check.sh` passes.
+Next: Re-run `./plans/verify.sh quick` in a cleaner/stabler session, then run `./plans/verify.sh full` before any pass/merge action.
+Story: execution-engine-pr1
+Date: 2026-03-02
+Summary: Implemented real ExecutionEngine delegation (Open->open_runtime, Close/Hedge/CancelOnly->pipeline), added variant-specific engine inputs/runtime, and parity tests comparing legacy paths vs engine decisions.
+Commands: cargo test --lib --package soldier_core execution::engine -- --nocapture; cargo test --lib --package soldier_core execution:: --quiet; ./plans/verify.sh quick (failed at preflight timeout)
+Evidence: crates/soldier_core/src/execution/engine.rs; crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260302_162603/preflight.log
+Open questions: verify quick preflight currently times out at 300s in this dirty local workspace; may need rerun in CI/clean tree for a green workflow gate.
+Next: run clean-tree or CI quick/full verify, then proceed to output normalization phase.
+Story: execution-engine-pr1
+Date: 2026-03-03 01:19:11 UTC
+Summary: Expanded PR1 parity coverage to full variant matrix (Open/Close/Hedge approve+reject, CancelOnly short-circuit + wal_recorded=false parity), added deterministic assertions for missing pending_exposure_book fail-closed detail and OPEN liquidity override reason-code mapping, and validated evaluate->decide alias behavior.
+Commands: cargo test -p soldier_core engine_parity_tests:: -- --nocapture; cargo fmt --all; ./plans/verify.sh quick; ./plans/legacy_layout_guard.sh; ./plans/readme_ci_parity_check.sh.
+Evidence: crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260302_191243/preflight.log; artifacts/verify/20260302_191243/preflight.rc; artifacts/verify/20260302_191243/verify.meta.json.
+Notes: Targeted parity suite is green (16 tests). `./plans/verify.sh quick` timed out in preflight at 300s (`rc=124`) and reported legacy-layout/README-CI parity failures, but both guard scripts pass when run directly.
+Next: Run clean-checkout CI verify (recommended) or rerun local verify with an approved timeout/clean-tree path before pass/merge.
+Story: execution-engine-pr1
+Date: 2026-03-03 01:36:56 UTC
+Summary: Ran `./plans/verify.sh full` for PR1 verification and captured deterministic preflight blocker set; also ran code-review-expert attestation and isolated failing fixture details.
+Commands: ./plans/verify.sh full; bash plans/tests/test_artifact_lint.sh; bash plans/code_review_expert_attest.sh --help.
+Evidence: artifacts/verify/20260302_191927/preflight.log; artifacts/verify/20260302_191927/preflight.rc; artifacts/verify/20260302_191927/FAILED_GATE.
+Notes: Full verify stopped at preflight (`rc=2`, `FAILED_GATE=preflight`) due missing fixture scripts (`plans/tests/test_review_logged_timeout_fallback.sh`, `plans/tests/test_review_logged_timeout_retry_noncodex.sh`, `plans/tests/test_review_logged_timeout_binary_unavailable.sh`) and `test_artifact_lint.sh` failure (`recon_step_report`/`recon_trace_receipt` schema rows missing).
+Next: Resolve/restore the missing fixture scripts and artifact-lint matrix entries (or confirm expected fixture profile), then rerun `./plans/verify.sh full`.
