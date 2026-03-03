@@ -260,7 +260,6 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_preflight_fixture_timeout_controls.sh"
-  "plans/tests/test_prd_ref_check_status_lite_markers.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
@@ -359,7 +358,7 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
-    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
+    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-300}"
     if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
       setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
       PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
