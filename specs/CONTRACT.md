@@ -4571,6 +4571,18 @@ AT-022
 - Pass criteria: response matches required keys/values.
 - Fail criteria: non-200 OR missing keys OR `ok != true`.
 
+**Foundation status-lite mode (Phase 1 bootstrap only):**
+- While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
+- In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation`.
+- CSP minimum `/status` keys are required after foundation mode exits.
+
+AT-1230
+- Given: runtime is in foundation mode (`phase == foundation`).
+- When: `GET /api/v1/status`.
+- Then: response includes only `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, and `phase`; with `dispatch_enabled == false` and `phase == foundation`.
+- Pass criteria: all required foundation keys present with exact invariants and no additional CSP authority keys.
+- Fail criteria: missing required foundation keys, invariant mismatch, or presence of CSP authority keys while in foundation mode.
+
 **/status response MUST include (CSP minimum):**
 - `status_schema_version` (integer; current version = 1)
 - `supported_profiles` (string[]; set of profiles this build can enforce at runtime; MUST include `CSP`)
