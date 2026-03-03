@@ -809,3 +809,10 @@ Commands: ./plans/prd_gate.sh; jq duplicate-id audit scripts; gh pr view 149 --j
 Evidence: plans/prd.json; PR #149 checks at head 6864eae; plans/prd_gate_help.md output comparison (before: duplicate/path errors; after: unresolved ref-check errors only).
 Notes: This follow-up satisfies the requested duplicate-ID and missing-path cleanup; remaining `prd_gate` failures are unresolved contract/plan references (`prd_ref_check`) and pre-existing warnings.
 Next: Push this PRD cleanup and decide whether to address remaining `prd_ref_check` unresolved references in a separate scoped patch.
+Story: PR #149 unresolved prd_ref_check reference cleanup
+Date: 2026-03-03 14:58:36 UTC
+Summary: Resolved remaining `prd_ref_check` blockers by replacing non-resolvable legacy/workflow/handoff ref strings in PRD items (S6-006, S6-011, S6-012, S14-003..S14-007) with anchors/headings that exist in `specs/CONTRACT.md` and `specs/IMPLEMENTATION_PLAN.md`.
+Commands: ./plans/prd_gate.sh; jq targeted item updates in plans/prd.json.
+Evidence: plans/prd.json; plans/prd_gate.sh output (`PRD gate OK`).
+Notes: Gate now passes with warnings only; no unresolved contract_ref/plan_ref errors remain.
+Next: Commit/push patch to PR #149 branch and monitor CI checks on updated head.

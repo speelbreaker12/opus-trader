@@ -4122,7 +4122,7 @@
       "contract_refs": [
         "AT-935",
         "AT-233",
-        "2.4 — WAL / intent ledger (RecordedBeforeDispatch)"
+        "§2.4 Durable Intent Ledger (WAL Truth Source)"
       ],
       "plan_refs": [
         "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
@@ -4604,8 +4604,9 @@
         "§1.4.2"
       ],
       "plan_refs": [
-        "Slice 5 S5.1/S5.4",
-        "Slice 6 S6.1"
+        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)",
+        "S5.4 — IOC limit pricer clamp (guarantee min edge at limit)",
+        "S6.1 — Inventory skew gate"
       ],
       "scope": {
         "touch": [
@@ -4687,7 +4688,7 @@
         "§1.3"
       ],
       "plan_refs": [
-        "Slice 5 S5.1"
+        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)"
       ],
       "scope": {
         "touch": [
@@ -10898,11 +10899,12 @@
       "category": "policy",
       "description": "Codify the verify_full timeout policy in the reconciliation runbook so full verify runs are invoked with explicit timeout guardrails and avoid silent 900s defaults.",
       "contract_refs": [
-        "specs/WORKFLOW_CONTRACT.md (Fail-closed default)",
-        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 verify_full"
+        "§0.Y Verification Harness (Non-Negotiable)",
+        "§2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)"
       ],
       "plan_refs": [
-        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #1"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -10996,11 +10998,12 @@
       "category": "policy",
       "description": "Harden cycle1 review logging by validating sidecar JSON deterministically before cycle1 receipt success is allowed.",
       "contract_refs": [
-        "specs/WORKFLOW_CONTRACT.md (Fail-closed default)",
-        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 cycle1"
+        "§0.Y Verification Harness (Non-Negotiable)",
+        "§2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)"
       ],
       "plan_refs": [
-        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #2"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11094,11 +11097,11 @@
       "category": "policy",
       "description": "Require per-finding closure entries in R5b self-review gate artifacts so UNPROVEN decisions cannot persist without explicit closure accounting.",
       "contract_refs": [
-        "specs/WORKFLOW_CONTRACT.md (Manual story discipline)",
-        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 R5b"
+        "§0.Y Verification Harness (Non-Negotiable)"
       ],
       "plan_refs": [
-        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #3"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11192,11 +11195,12 @@
       "category": "policy",
       "description": "Restrict mechanical callsite enforcement checks to production source paths so test-only symbols do not trigger false blockers during full verify.",
       "contract_refs": [
-        "specs/WORKFLOW_CONTRACT.md (Verification satisfaction + fail-closed)",
-        "plans/verify_fork.sh mechanical_verification gate"
+        "§0.Y Verification Harness (Non-Negotiable)",
+        "§2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)"
       ],
       "plan_refs": [
-        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #4"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11289,11 +11293,11 @@
       "category": "policy",
       "description": "Emit an explicit next-step prompt after cycle1 receipt write so operators do not stall between cycle1 and fix in reconciliation loops.",
       "contract_refs": [
-        "specs/WORKFLOW_CONTRACT.md (Manual story discipline)",
-        "plans/wf_step.sh cycle1 step contract"
+        "§0.Y Verification Harness (Non-Negotiable)"
       ],
       "plan_refs": [
-        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #5"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
