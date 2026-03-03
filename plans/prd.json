@@ -374,7 +374,7 @@
       "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-E Health Endpoint",
       "category": "infra",
-      "description": "Implement minimal Phase-0/1 health + status-lite owner outputs: `/health` returns `ok/build_id/contract_version`; foundation `/status` returns `service_up/build_id/contract_version/dispatch_enabled=false/phase=foundation` with no canonical Phase-2+ authority fields.",
+      "description": "Implement minimal Phase-0/1 health + status-lite owner outputs: `/api/v1/health` returns `ok/build_id/contract_version`; foundation `/status` returns `service_up/build_id/contract_version/dispatch_enabled=false/phase=foundation` with no canonical Phase-2+ authority fields.",
       "contract_refs": [
         "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)",
         "AT-022",
