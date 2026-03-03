@@ -57,6 +57,8 @@ After each wf_step attempt (pass or fail), immediately update handoff before run
 1. Story matrix symbol for that step.
 2. Step block `Status / Receipt / Gate` + key artifact paths.
 3. For blocked steps, command + exit code + first failing line.
+4. For external review steps (`cycle1`, `cycle2`), record per-tool outcomes:
+   command, exit code, `timed_out` true/false, artifact path, and sidecar present/absent.
 
 ---
 

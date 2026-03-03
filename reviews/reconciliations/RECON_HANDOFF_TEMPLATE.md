@@ -193,6 +193,7 @@ PATH signal notes (for scoreboard consistency):
 - Manifest validation: `./plans/validators/validate_external_manifest.py reviews/reconciliations/{{SLICE_ID}}/external/cycle1/{{STORY_ID}}/R3_EXTERNAL_MANIFEST.json` — {{PASS/FAIL}}
 - Tools run: {{e.g. codex,kimi / codex,opus,kimi}}
 - Tool omissions + reason: {{none / opus unavailable / quota / intentional tradeoff}}
+- Per-tool run evidence (required): {{for each tool include command, exit code, timed_out true/false, artifact path, sidecar present/absent}}
 - Rerun rule (if fixes applied after C1): new run_id + new manifest sha required: {{YES/NO/NA}}
 - Gap list: `reviews/reconciliations/{{SLICE_ID}}/GAP_LIST.json`
 - External mapping: `reviews/reconciliations/{{SLICE_ID}}/R4B_EXTERNAL_MAPPING.json`
@@ -229,6 +230,7 @@ PATH signal notes (for scoreboard consistency):
 - C2 review basis evidence: {{artifact path containing `Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)`}}
 - Tools run: {{e.g. codex / codex,kimi / codex,opus,kimi}}
 - Tool omissions + reason: {{none / opus unavailable / quota / intentional tradeoff}}
+- Per-tool run evidence (required): {{for each tool include command, exit code, timed_out true/false, artifact path, sidecar present/absent}}
 - Scope: {{FIX_DIFF / FULL_STORY}} (must match proof)
 - Devils advocate: `reviews/reconciliations/{{SLICE_ID}}/R7E_DEVILS_ADVOCATE.md`
 - Debt register: `reviews/reconciliations/{{SLICE_ID}}/DEBT_REGISTER.json` {{valid / invalid / pending}} — R7f failures block pass-flip (Step 9), not this receipt

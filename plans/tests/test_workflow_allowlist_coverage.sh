@@ -134,6 +134,7 @@ required=(
   plans/lib/node_gates.sh
   plans/lib/python_gates.sh
   plans/lib/rust_gates.sh
+  plans/lib/status_reason_codegen_gate.sh
   plans/lib/verify_checkpoint.sh
   plans/ci/requirements-crossref.txt
   plans/ci/requirements-verify.txt
@@ -153,7 +154,9 @@ required=(
   plans/validate_crossref_invariants.py
   tools/at_coverage_report.py
   tools/at_parser.py
+  tools/check_lag_ids.py
   tools/roadmap_evidence_audit.py
+  tools/tests/test_check_lag_ids.py
   scripts/build_contract_kernel.py
   scripts/check_arch_flows.py
   scripts/check_contract_crossrefs.py
