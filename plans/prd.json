@@ -374,13 +374,15 @@
       "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-E Health Endpoint",
       "category": "infra",
-      "description": "Implement minimal Phase-0 health and owner status output (ok/build_id/contract_version/trading_mode/is_trading_allowed). Scaffolding only — provides CLI status data model, not HTTP endpoint. Full AT-022 enforcement in S8-008.",
+      "description": "Implement minimal Phase-0/1 health + status-lite owner outputs: `/health` returns `ok/build_id/contract_version`; foundation `/status` returns `service_up/build_id/contract_version/dispatch_enabled=false/phase=foundation` with no canonical Phase-2+ authority fields.",
       "contract_refs": [
-        "P0-E Health + Owner Status Scaffolding",
-        "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)"
+        "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)",
+        "AT-022",
+        "AT-1230"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Global Non‑Negotiables (apply to ALL stories)",
+        "PHASE 1 — Foundation (Slices 1–5) / D) Exit Criteria (measurable/testable)"
       ],
       "scope": {
         "touch": [
@@ -391,17 +393,17 @@
         "avoid": []
       },
       "acceptance": [
-        "GIVEN the service is running WHEN `./stoic-cli health` is executed THEN payload includes ok=true, build_id, and contract_version. (Phase-0 scaffolding; transport enforcement in S8.9)",
-        "GIVEN Phase-0 owner status is requested WHEN status command runs THEN payload includes trading_mode and is_trading_allowed.",
-        "GIVEN TradingMode is Active WHEN owner status is emitted THEN is_trading_allowed=true.",
-        "GIVEN TradingMode is ReduceOnly or Kill WHEN owner status is emitted THEN is_trading_allowed=false."
+        "GIVEN the service is running WHEN `/api/v1/health` is queried THEN payload includes `ok=true`, `build_id`, and `contract_version` (AT-022).",
+        "GIVEN `phase == foundation` WHEN `/status` is queried THEN payload includes only `service_up`, `build_id`, `contract_version`, `dispatch_enabled=false`, and `phase=foundation`.",
+        "GIVEN `phase == foundation` WHEN `/status` is inspected THEN canonical Phase-2+ authority fields are absent and status-lite scope is preserved (AT-1230).",
+        "GIVEN any Phase-0/1 run WHEN `/status` is emitted THEN `dispatch_enabled` remains `false`."
       ],
       "steps": [
-        "Update docs/health_endpoint.md with the minimal Phase-0 payload fields and examples.",
-        "Implement `./stoic-cli health` payload keys: ok, build_id, contract_version.",
-        "Implement owner status output keys: trading_mode and is_trading_allowed.",
-        "Wire status command behavior so is_trading_allowed derives from TradingMode deterministically.",
-        "Add/adjust runtime tests to assert healthy and unhealthy payload semantics.",
+        "Update docs/health_endpoint.md with minimal `/health` and foundation `/status` examples.",
+        "Implement `/health` payload keys: `ok`, `build_id`, `contract_version`.",
+        "Implement foundation `/status` payload keys: `service_up`, `build_id`, `contract_version`, `dispatch_enabled=false`, `phase=foundation`.",
+        "Ensure foundation `/status` does not emit canonical Phase-2+ authority fields while in status-lite mode.",
+        "Add/adjust runtime tests to assert status-lite semantics and forbidden-field absence.",
         "Run targeted tests and verify outputs."
       ],
       "verify": [
@@ -419,11 +421,10 @@
       "needs_human_decision": false,
       "passes": true,
       "contract_must_evidence": [],
-      "partial_coverage_notes": {
-        "AT-022": "Phase-0 implements CLI-only health/status payload scaffolding; HTTP transport endpoint enforcement is deferred to S8.9."
-      },
+      "partial_coverage_notes": {},
       "enforcing_contract_ats": [
-        "AT-022"
+        "AT-022",
+        "AT-1230"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -438,17 +439,24 @@
         "metrics": [],
         "status_fields": [
           "ok",
+          "service_up",
           "build_id",
           "contract_version",
-          "trading_mode",
-          "is_trading_allowed"
+          "dispatch_enabled",
+          "phase"
         ],
-        "status_contract_ats": []
+        "status_contract_ats": [
+          "AT-022",
+          "AT-1230"
+        ]
       },
       "implementation_tests": [
         "crates/soldier_infra/tests/test_phase0_runtime.rs::test_status_command_behavior_runtime"
       ],
-      "primary_owner_for": [],
+      "primary_owner_for": [
+        "AT-022",
+        "AT-1230"
+      ],
       "loss_mode": {
         "worst_case": "health endpoint returns stale/wrong status → operator trusts bad state → delayed incident response",
         "fail_closed_cap": "StatusEndpoint health check; no direct trading impact",
@@ -549,8 +557,8 @@
       "category": "infra",
       "description": "Initialize the Rust workspace with soldier_core and soldier_infra crates.",
       "contract_refs": [
-        "CONTRACT.md 0.X Repository Layout & Canonical Module Mapping (Non-Negotiable)",
-        "CONTRACT.md AT-905"
+        "§0.X Repository Layout & Canonical Module Mapping (Non-Negotiable)",
+        "AT-905"
       ],
       "plan_refs": [
         "IMPLEMENTATION_PLAN.md C) Entry Criteria"
@@ -624,14 +632,16 @@
       "phase": 1,
       "slice": 1,
       "slice_ref": "Slice 1 — Instrument Units \\+ Dispatcher Invariants",
-      "story_ref": "S1.1 InstrumentKind and RiskState",
+      "story_ref": "S1.1 InstrumentMeta normalization and RiskState",
       "category": "execution",
-      "description": "Implement InstrumentKind derivation and RiskState enum per contract definitions.",
+      "description": "Implement InstrumentMeta normalization (instrument_family + AmountSemantics + quantization fields) and RiskState enum per contract definitions.",
       "contract_refs": [
-        "CONTRACT.md AT-333"
+        "§1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract) — MUST implement",
+        "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+        "AT-333"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentMeta normalization + instrument cache TTL"
       ],
       "scope": {
         "touch": [
@@ -650,17 +660,17 @@
         "create": []
       },
       "acceptance": [
-        "GIVEN Deribit metadata for a USDC-margined perpetual WHEN deriving InstrumentKind THEN it returns linear_future.",
-        "GIVEN metadata for option, perpetual, inverse_future, and linear_future instruments WHEN deriving InstrumentKind THEN it maps to the contract enum values.",
-        "GIVEN instrument metadata from /public/get_instruments WHEN mapping to internal fields THEN tick_size, amount_step, min_amount, and contract_multiplier match the fetched values (test_instrument_metadata_uses_get_instruments).",
+        "GIVEN Deribit metadata WHEN normalized THEN InstrumentMeta includes instrument_family, amount_semantics, tick_size, amount_step, min_amount, and optional contract_size_usd.",
+        "GIVEN legacy `instrument_kind` is present WHEN mapping to InstrumentMeta THEN it is compatibility metadata only and sizing/quantization branches on AmountSemantics.",
+        "GIVEN instrument metadata from /public/get_instruments WHEN mapping to internal fields THEN tick_size, amount_step, min_amount, and contract-size fields match fetched values (test_instrument_metadata_uses_get_instruments).",
         "GIVEN the RiskState enum WHEN compiled THEN it includes Healthy, Degraded, Maintenance, and Kill variants."
       ],
       "steps": [
-        "Define the RiskState enum in crates/soldier_core/risk/state.rs with the contract variants.",
-        "Define the InstrumentKind enum in crates/soldier_core/venue/types.rs with contract values.",
-        "Implement conversion logic from Deribit instrument metadata to InstrumentKind, including linear perpetual → linear_future and metadata field passthrough.",
-        "Add unit tests in crates/soldier_core/tests/test_instrument_kind_mapping.rs for mapping behavior and metadata passthrough (test_instrument_metadata_uses_get_instruments).",
-        "Wire any required imports so the new enums are accessible where used."
+        "Define/confirm RiskState enum in crates/soldier_core/risk/state.rs with the contract variants.",
+        "Define InstrumentMeta normalization in crates/soldier_core/src/venue/types.rs with instrument_family + AmountSemantics + quantization fields.",
+        "Implement conversion logic from Deribit metadata into InstrumentMeta (including linear perpetual sizing semantics via AmountSemantics).",
+        "Add unit tests in crates/soldier_core/tests/test_instrument_kind_mapping.rs for InstrumentMeta normalization and metadata passthrough (test_instrument_metadata_uses_get_instruments).",
+        "Wire any required imports so InstrumentMeta and RiskState are available at intended call sites."
       ],
       "verify": [
         "./plans/verify.sh",
@@ -679,9 +689,9 @@
       "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
-          "quote": "CONTRACT.md instrument_kind: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).",
-          "location": "CONTRACT.md instrument_kind: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).",
-          "anchor": "CONTRACT.md instrument_kind: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata)."
+          "quote": "§1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract) — MUST implement",
+          "location": "specs/CONTRACT.md",
+          "anchor": "§1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract) — MUST implement"
         }
       ],
       "enforcing_contract_ats": [
@@ -690,7 +700,7 @@
       "reason_codes": {
         "type": "RejectReason",
         "values": [
-          "ContractsAmountMismatch"
+          "InstrumentMetadataMissing"
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
@@ -707,7 +717,7 @@
         "AT-333"
       ],
       "loss_mode": {
-        "worst_case": "wrong InstrumentKind derivation → wrong sizing/risk path → mispriced order dispatched",
+        "worst_case": "wrong InstrumentMeta normalization → wrong sizing/risk path → mispriced order dispatched",
         "fail_closed_cap": "DispatcherChokepoint rejects intent; fail-closed to no-dispatch",
         "drift_metric": "N/A — type derivation, no runtime metric"
       }
@@ -722,12 +732,12 @@
       "category": "risk",
       "description": "Enforce InstrumentCache TTL and degrade RiskState on stale metadata.",
       "contract_refs": [
-        "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-        "CONTRACT.md AT-104",
+        "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+        "AT-104",
         "VR-013"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentMeta normalization + instrument cache TTL"
       ],
       "scope": {
         "touch": [
@@ -776,9 +786,9 @@
       "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
-          "quote": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-          "location": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-          "anchor": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement"
+          "quote": "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+          "location": "specs/CONTRACT.md",
+          "anchor": "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement"
         }
       ],
       "enforcing_contract_ats": [
@@ -831,15 +841,17 @@
       "phase": 1,
       "slice": 1,
       "slice_ref": "Slice 1 — Instrument Units \\+ Dispatcher Invariants",
-      "story_ref": "S1.2 OrderSize canonical sizing",
+      "story_ref": "S1.2 OrderSizeInput + NormalizedOrderSize",
       "category": "execution",
-      "description": "Implement OrderSize canonical sizing with deterministic notional_usd using the discovery report.",
+      "description": "Implement OrderSizeInput (mutually exclusive canonical input union) and NormalizedOrderSize (canonical + derived deterministic fields).",
       "contract_refs": [
-        "CONTRACT.md OrderSize struct (MUST implement):",
-        "CONTRACT.md 1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract)"
+        "§1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract) — MUST implement",
+        "OrderSize struct (MUST implement):",
+        "AT-277",
+        "AT-1097"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.2 — OrderSize canonical sizing + notional invariant"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.2 — OrderSizeInput + NormalizedOrderSize invariants"
       ],
       "scope": {
         "touch": [
@@ -855,20 +867,19 @@
         "create": []
       },
       "acceptance": [
-        "GIVEN instrument_kind option or linear_future WHEN building OrderSize THEN qty_coin is canonical and notional_usd = qty_coin * index_price.",
-        "GIVEN instrument_kind option WHEN building OrderSize THEN qty_usd is unset.",
-        "GIVEN instrument_kind perpetual or inverse_future WHEN building OrderSize THEN qty_usd is canonical and notional_usd = qty_usd.",
-        "GIVEN any OrderSize WHEN built THEN notional_usd is always populated and internal fields are consistent with the contract invariants."
+        "GIVEN a strategy size input WHEN parsing THEN exactly one canonical OrderSizeInput variant is accepted (`CoinQty | UsdQty | Contracts`).",
+        "GIVEN mixed canonical input (qty_coin + qty_usd) WHEN validating THEN reject with Rejected(MixedCanonicalSizeFields) and set RiskState::Degraded (AT-1097).",
+        "GIVEN InstrumentMeta.AmountSemantics WHEN normalizing size THEN canonical field and derived fields in NormalizedOrderSize are deterministic.",
+        "GIVEN any normalized size WHEN built THEN notional_usd is always populated and internal fields are consistent with contract invariants."
       ],
       "steps": [
         "Review docs/order_size_discovery.md for current gaps and proposed tests.",
-        "Create crates/soldier_core/execution/order_size.rs if missing.",
-        "Define the OrderSize struct with contracts, qty_coin, qty_usd, and notional_usd.",
-        "Implement a constructor/builder that computes canonical units based on InstrumentKind.",
-        "Ensure option sizing uses qty_coin and leaves qty_usd unset.",
-        "Populate notional_usd deterministically using index_price for coin-sized instruments.",
-        "Add a debug log OrderSizeComputed{instrument_kind, notional_usd}.",
-        "Add unit tests in crates/soldier_core/tests/test_order_size.rs for canonical sizing."
+        "Create/update crates/soldier_core/execution/order_size.rs.",
+        "Define OrderSizeInput union and NormalizedOrderSize struct with canonical_size_kind + derived deterministic fields.",
+        "Implement normalization logic from OrderSizeInput + InstrumentMeta to deterministic notional and derived fields.",
+        "Reject mixed canonical sizing with Rejected(MixedCanonicalSizeFields) + RiskState::Degraded.",
+        "Add a debug log OrderSizeComputed{instrument_family, amount_semantics, canonical_size_kind, notional_usd}.",
+        "Add unit tests in crates/soldier_core/tests/test_order_size.rs for canonical sizing and mixed-input rejection."
       ],
       "verify": [
         "./plans/verify.sh",
@@ -888,18 +899,19 @@
       "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
-          "quote": "CONTRACT.md OrderSize struct (MUST implement):",
-          "location": "CONTRACT.md OrderSize struct (MUST implement):",
-          "anchor": "CONTRACT.md OrderSize struct (MUST implement):"
+          "quote": "OrderSize struct (MUST implement):",
+          "location": "specs/CONTRACT.md",
+          "anchor": "OrderSize struct (MUST implement):"
         }
       ],
       "enforcing_contract_ats": [
-        "AT-277"
+        "AT-277",
+        "AT-1097"
       ],
       "reason_codes": {
         "type": "RejectReason",
         "values": [
-          "TooSmallAfterQuantization"
+          "MixedCanonicalSizeFields"
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
@@ -920,7 +932,8 @@
         "crates/soldier_core/tests/test_order_size.rs::test_at277_option_sizing"
       ],
       "primary_owner_for": [
-        "AT-277"
+        "AT-277",
+        "AT-1097"
       ],
       "loss_mode": {
         "worst_case": "wrong canonical sizing → order size incorrect → unintended position size",
@@ -936,12 +949,12 @@
       "slice_ref": "Slice 1 — Instrument Units \\+ Dispatcher Invariants",
       "story_ref": "S1.3 Dispatcher amount mapping",
       "category": "execution",
-      "description": "Map OrderSize to Deribit request amounts using the discovery report.",
+      "description": "Map NormalizedOrderSize to Deribit request amounts using canonical_size_kind/amount_semantics, with fail-closed mismatch behavior.",
       "contract_refs": [
-        "CONTRACT.md Dispatcher Rules (Deribit request mapping):"
+        "Dispatcher Rules (Deribit request mapping):"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher amount mapping + mismatch reject→Degraded"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher canonical amount mapping + mismatch reject→Degraded"
       ],
       "scope": {
         "touch": [
@@ -957,19 +970,18 @@
         "create": []
       },
       "acceptance": [
-        "GIVEN option or linear_future OrderSize WHEN mapping to an outbound Deribit request THEN it sets exactly one amount field using qty_coin.",
-        "GIVEN perpetual or inverse_future OrderSize WHEN mapping to an outbound Deribit request THEN it sets exactly one amount field using qty_usd.",
-        "GIVEN any OrderSize WHEN mapping THEN exactly one canonical amount field is set and the other is unset.",
+        "GIVEN normalized size with amount_semantics==coin WHEN mapping to outbound request THEN exactly one canonical amount is sent using qty_coin.",
+        "GIVEN normalized size with amount_semantics==usd WHEN mapping to outbound request THEN exactly one canonical amount is sent using qty_usd.",
+        "GIVEN any normalized size WHEN mapping THEN exactly one canonical outbound amount field is set; conflicting amount/contract mappings fail closed.",
         "GIVEN intent classification CLOSE/HEDGE WHEN mapping THEN reduce_only=true; GIVEN OPEN THEN reduce_only=false or omitted."
       ],
       "steps": [
         "Review docs/dispatch_map_discovery.md for current gaps and proposed tests.",
-        "Create or update crates/soldier_core/execution/dispatch_map.rs with OrderSize mapping logic.",
-        "Implement the rule: exactly one canonical amount field is sent per instrument_kind.",
-        "Ensure outbound request uses qty_coin for option/linear_future and qty_usd for perpetual/inverse_future.",
+        "Create or update crates/soldier_core/execution/dispatch_map.rs with normalized-size mapping logic.",
+        "Implement canonical outbound amount selection by canonical_size_kind/amount_semantics (not legacy instrument_kind-only branching).",
         "Map reduce_only from intent classification only (CLOSE/HEDGE=true, OPEN=false or omitted).",
-        "Add unit tests in crates/soldier_core/tests/test_dispatch_map.rs for amount field selection.",
-        "Add a negative test asserting no second amount field is set."
+        "Add unit tests in crates/soldier_core/tests/test_dispatch_map.rs for canonical outbound amount field selection.",
+        "Add a negative test asserting conflicting outbound amount fields are rejected."
       ],
       "verify": [
         "./plans/verify.sh",
@@ -990,9 +1002,9 @@
       "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
-          "quote": "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
-          "location": "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
-          "anchor": "CONTRACT.md Dispatcher Rules (Deribit request mapping):"
+          "quote": "Dispatcher Rules (Deribit request mapping):",
+          "location": "specs/CONTRACT.md",
+          "anchor": "Dispatcher Rules (Deribit request mapping):"
         }
       ],
       "enforcing_contract_ats": [
@@ -1030,11 +1042,11 @@
       "category": "risk",
       "description": "Add required TTL observability hooks for instrument cache freshness.",
       "contract_refs": [
-        "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+        "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
         "VR-013"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentMeta normalization + instrument cache TTL"
       ],
       "scope": {
         "touch": [
@@ -1084,9 +1096,9 @@
       "scope_note": "AT enforcement is unit-level only, pending integration in a later slice",
       "contract_must_evidence": [
         {
-          "quote": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-          "location": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
-          "anchor": "CONTRACT.md 1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement"
+          "quote": "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement",
+          "location": "specs/CONTRACT.md",
+          "anchor": "§1.0.X Instrument Metadata Freshness (Instrument Cache TTL) — MUST implement"
         }
       ],
       "enforcing_contract_ats": [
@@ -1143,10 +1155,10 @@
       "category": "execution",
       "description": "Reject contract/amount mismatches and emit mismatch metrics.",
       "contract_refs": [
-        "CONTRACT.md AT-920"
+        "AT-920"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher amount mapping + mismatch reject→Degraded"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher canonical amount mapping + mismatch reject→Degraded"
       ],
       "scope": {
         "touch": [
@@ -1195,9 +1207,9 @@
       "passes": true,
       "contract_must_evidence": [
         {
-          "quote": "CONTRACT.md If a mismatch is detected: **reject the intent** and set `RiskState::Degraded`",
-          "location": "CONTRACT.md If a mismatch is detected: **reject the intent** and set `RiskState::Degraded`",
-          "anchor": "CONTRACT.md If a mismatch is detected: **reject the intent** and set `RiskState::Degraded`"
+          "quote": "If a mismatch is detected: **reject the intent** and set `RiskState::Degraded`",
+          "location": "specs/CONTRACT.md",
+          "anchor": "If a mismatch is detected: **reject the intent** and set `RiskState::Degraded`"
         }
       ],
       "enforcing_contract_ats": [
@@ -1245,15 +1257,15 @@
       "slice_ref": "Slice 1 — Instrument Units \\+ Dispatcher Invariants",
       "story_ref": "S1.2 OrderSize discovery",
       "category": "qa",
-      "description": "Discover current OrderSize logic and document gaps vs contract before implementation.",
+      "description": "Discover current OrderSizeInput/NormalizedOrderSize logic and document gaps vs contract before implementation.",
       "contract_refs": [
-        "CONTRACT.md 1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract)",
-        "CONTRACT.md OrderSize struct (MUST implement):",
+        "§1.0 Instrument Units & Notional Invariants (Deribit Quantity Contract) — MUST implement",
+        "OrderSize struct (MUST implement):",
         "Anchor-021",
         "VR-024"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.2 — OrderSize canonical sizing + notional invariant"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.2 — OrderSizeInput + NormalizedOrderSize invariants"
       ],
       "scope": {
         "touch": [
@@ -1263,15 +1275,15 @@
         "create": []
       },
       "acceptance": [
-        "GIVEN the current OrderSize implementation WHEN inspected THEN docs/order_size_discovery.md lists current fields, call sites, and gaps vs the contract OrderSize struct.",
-        "GIVEN contract unit invariants WHEN inspected THEN docs/order_size_discovery.md lists required tests to add for canonical sizing.",
-        "GIVEN the discovery report WHEN reviewed THEN it names the minimal implementation diff needed for OrderSize canonical sizing."
+        "GIVEN the current sizing implementation WHEN inspected THEN docs/order_size_discovery.md lists current fields, call sites, and gaps vs InstrumentMeta + AmountSemantics + OrderSizeInput + NormalizedOrderSize contract types.",
+        "GIVEN contract unit invariants WHEN inspected THEN docs/order_size_discovery.md lists required tests for canonical sizing and mixed-canonical rejection.",
+        "GIVEN the discovery report WHEN reviewed THEN it names the minimal implementation diff needed for OrderSizeInput/NormalizedOrderSize alignment."
       ],
       "steps": [
         "Locate current OrderSize logic and any related helpers in the codebase.",
         "Identify call sites that construct OrderSize or size fields.",
-        "Draft docs/order_size_discovery.md with: current fields, gaps vs contract, and proposed tests.",
-        "List the minimal diff required to align OrderSize with contract invariants.",
+        "Draft docs/order_size_discovery.md with: current fields, gaps vs contract, and proposed tests (including MixedCanonicalSizeFields rejection).",
+        "List the minimal diff required to align InstrumentMeta/AmountSemantics and OrderSizeInput/NormalizedOrderSize with contract invariants.",
         "Keep the report scoped to OrderSize and sizing invariants only."
       ],
       "verify": [
@@ -1287,10 +1299,16 @@
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "OrderSize struct (MUST implement):",
+          "location": "specs/CONTRACT.md",
+          "anchor": "OrderSize struct (MUST implement):"
+        }
+      ],
       "enforcing_contract_ats": [
         "AT-277",
-        "AT-920"
+        "AT-1097"
       ],
       "reason_codes": {
         "type": "",
@@ -1320,12 +1338,12 @@
       "category": "qa",
       "description": "Discover current dispatcher mapping logic and document gaps vs contract before implementation.",
       "contract_refs": [
-        "CONTRACT.md Dispatcher Rules (Deribit request mapping):",
+        "Dispatcher Rules (Deribit request mapping):",
         "Anchor-021",
         "VR-024"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher amount mapping + mismatch reject→Degraded"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.3 — Dispatcher canonical amount mapping + mismatch reject→Degraded"
       ],
       "scope": {
         "touch": [
@@ -1395,9 +1413,9 @@
       "category": "infra",
       "description": "Apply Appendix A safety-critical defaults in infra config and verify missing-value behavior.",
       "contract_refs": [
-        "CONTRACT.md Appendix A: Configuration Defaults (Safety-Critical Thresholds)",
-        "CONTRACT.md AT-341",
-        "CONTRACT.md AT-040",
+        "§Appendix A: Configuration Defaults (Safety-Critical Thresholds)",
+        "AT-341",
+        "AT-040",
         "Anchor-001",
         "Anchor-002",
         "Anchor-003",
@@ -1428,6 +1446,7 @@
       "scope": {
         "touch": [
           "crates/soldier_infra/src/lib.rs",
+          "crates/soldier_infra/src/config.rs",
           "crates/soldier_infra/tests/test_config_defaults.rs",
           "crates/soldier_infra/tests/test_config_init.rs"
         ],
@@ -1514,10 +1533,10 @@
       "category": "infra",
       "description": "Define Deribit public instrument structs for metadata mapping.",
       "contract_refs": [
-        "CONTRACT.md AT-333"
+        "AT-333"
       ],
       "plan_refs": [
-        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentKind derivation + instrument cache TTL"
+        "IMPLEMENTATION_PLAN.md Slice 1 — Instrument Units + Dispatcher Invariants / S1.1 — InstrumentMeta normalization + instrument cache TTL"
       ],
       "scope": {
         "touch": [
@@ -1710,7 +1729,7 @@
       "category": "infra",
       "description": "Add a workflow harness script that auto-detects current-branch PR and fail-closes on non-mergeable CI/review states, with deterministic fixture coverage.",
       "contract_refs": [
-        "CONTRACT.md 0.Z.9 CSP-Only CI Gate",
+        "§0.Z.9 CSP-Only CI Gate (Normative)",
         "AT-1056",
         "AT-1057"
       ],
@@ -2004,7 +2023,7 @@
       "slice_ref": "Slice 2 — Quantization \\+ Labeling \\+ Idempotency",
       "story_ref": "S2.3 Compact label schema",
       "category": "durability",
-      "description": "Implement compact label encode/decode with 64-character limit enforcement.",
+      "description": "Implement compact label encode/decode with exact sid8/ih16 encoding, schema errors, non-sent s4doc labels, and 64-character limit enforcement.",
       "contract_refs": [
         "CONTRACT.md §1.1 Labeling & Idempotency Contract",
         "AT-216",
@@ -2028,14 +2047,18 @@
         "create": []
       },
       "acceptance": [
-        "GIVEN strat_id, group_id, leg_idx, and intent_hash WHEN encoding THEN the label matches s4:{sid8}:{gid12}:{li}:{ih16} and is ≤ 64 chars.",
+        "GIVEN strat_id, group_id, leg_idx, and intent_hash WHEN encoding THEN the label matches s4:{sid8}:{gid12}:{li}:{ih16} and is ≤ 64 chars, where sid8 is first 8 lowercase RFC4648 base32 chars (no padding) of big-endian xxhash64(strat_id_utf8_bytes) and ih16 is lowercase zero-padded 16-hex from canonical intent_hash bytes.",
         "GIVEN a compact label WHEN decoding THEN sid8, gid12, leg_idx, and ih16 are parsed correctly.",
+        "GIVEN a label candidate has invalid segment shape/version/charset WHEN validating THEN reject with Rejected(InvalidLabelSchema) or Rejected(UnknownLabelVersion) before dispatch.",
+        "GIVEN expanded documentation labels are generated WHEN inspected THEN they use `s4doc:` prefix and are never sent to exchange APIs.",
         "GIVEN a computed s4 label would exceed 64 chars WHEN encoding THEN the intent is rejected with Rejected(LabelTooLong), RiskState::Degraded is set, and no dispatch occurs (no truncation)."
       ],
       "steps": [
-        "Implement label encoding in crates/soldier_core/src/execution/label.rs to produce sid8, gid12, and ih16.",
+        "Implement label encoding in crates/soldier_core/src/execution/label.rs to produce sid8, gid12, and ih16 using the exact contract algorithms.",
         "Enforce the ≤64 character limit; if the computed label would exceed 64 chars, reject with LabelTooLong and set RiskState::Degraded (no truncation).",
         "Implement label decoding to parse sid8, gid12, leg_idx, and ih16.",
+        "Implement schema/version validation for InvalidLabelSchema and UnknownLabelVersion.",
+        "Ensure expanded documentation labels use `s4doc:` prefix and are never sent to exchange.",
         "Add unit tests in crates/soldier_core/tests/test_label.rs for length limits and parsing.",
         "Ensure encode/decode round-trips for valid inputs."
       ],
@@ -2070,6 +2093,8 @@
       "reason_codes": {
         "type": "RejectReason",
         "values": [
+          "InvalidLabelSchema",
+          "UnknownLabelVersion",
           "LabelTooLong"
         ]
       },
@@ -2104,12 +2129,11 @@
       "phase": 1,
       "slice": 2,
       "slice_ref": "Slice 2 — Quantization \\+ Labeling \\+ Idempotency",
-      "story_ref": "S2.4 Label match disambiguation",
+      "story_ref": "S2.4 Label full-identity match",
       "category": "risk",
-      "description": "Disambiguate label matches deterministically and degrade on ambiguity.",
+      "description": "Match labels by full parsed short identity and fail closed on none-or-many candidates.",
       "contract_refs": [
         "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
-        "AT-022",
         "Anchor-001",
         "Anchor-019",
         "VR-021",
@@ -2118,7 +2142,7 @@
       ],
       "plan_refs": [
         "Slice 2 — Quantization + Labeling + Idempotency",
-        "S2.4 — Label match disambiguation; ambiguity→Degraded"
+        "S2.4 — Label full-identity match; unresolved→Degraded"
       ],
       "scope": {
         "touch": [
@@ -2132,16 +2156,17 @@
         ]
       },
       "acceptance": [
-        "GIVEN multiple intents sharing gid12 and leg_idx WHEN matching THEN tie-breakers are applied in order: ih16, instrument, side, qty_q.",
-        "GIVEN ambiguity remains after tie-breakers WHEN matching THEN RiskState::Degraded is returned and no intent is matched (fail-closed).",
-        "GIVEN a single clear candidate WHEN matching THEN the matched intent is returned deterministically."
+        "GIVEN a parsed label WHEN matching THEN candidate selection requires full parsed short identity `{sid8, gid12, leg_idx, ih16}`.",
+        "GIVEN more than one candidate shares partial fields WHEN matching THEN tie-breaker ladders are not used; only full parsed identity is valid.",
+        "GIVEN candidate set size is not exactly one (none or >1) WHEN matching THEN RiskState::Degraded is returned and opens are blocked (fail-closed).",
+        "GIVEN exactly one full-identity candidate WHEN matching THEN the matched intent is returned deterministically."
       ],
       "steps": [
         "Parse labels into sid8, gid12, leg_idx, and ih16 in crates/soldier_core/src/recovery/label_match.rs.",
-        "Build the candidate set by gid12 and leg_idx.",
-        "Apply the tie-breakers in the contract order: ih16, instrument, side, qty_q.",
+        "Build the candidate set using full parsed short identity keys (sid8, gid12, leg_idx, ih16).",
+        "Do not implement tie-breaker ladders; unresolved none-or-many candidate sets must fail closed.",
         "On unresolved ambiguity, return a Degraded outcome and increment label_match_ambiguity_total.",
-        "Add unit tests in crates/soldier_core/tests/test_label_match.rs for disambiguation and ambiguity cases.",
+        "Add unit tests in crates/soldier_core/tests/test_label_match.rs for unique full-identity match and unresolved cases.",
         "Ensure the matching result is deterministic for identical inputs."
       ],
       "verify": [
@@ -2163,7 +2188,7 @@
         {
           "quote": "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
           "location": "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
-          "anchor": "AT-022"
+          "anchor": "AT-217"
         }
       ],
       "enforcing_contract_ats": [
@@ -2191,7 +2216,7 @@
           "risk_state"
         ],
         "status_contract_ats": [
-          "AT-022"
+          "AT-217"
         ]
       },
       "implementation_tests": [
@@ -2713,8 +2738,7 @@
         "AT-233",
         "AT-234",
         "AT-925",
-        "AT-940",
-        "AT-1215"
+        "AT-940"
       ],
       "reason_codes": {
         "type": "RejectReason",
@@ -2765,7 +2789,7 @@
       "slice_ref": "Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry",
       "story_ref": "S4.2 TLSM out-of-order events",
       "category": "execution",
-      "description": "Handle fill-before-ack and out-of-order TLSM events without panic.",
+      "description": "Handle fill-before-ack and out-of-order TLSM events without panic, with terminal state set fixed to {Filled, Canceled, Failed}.",
       "contract_refs": [
         "CONTRACT.md 2.1 Trade Lifecycle State Machine (TLSM)",
         "CONTRACT.md 2.4 Durable Intent Ledger (WAL Truth Source)",
@@ -2800,13 +2824,14 @@
       },
       "acceptance": [
         "GIVEN a fill arrives before an ack WHEN processing TLSM events THEN no panic occurs and the final state is Filled.",
-        "GIVEN out-of-order TLSM events WHEN applied THEN transitions converge to the correct terminal state deterministically.",
+        "GIVEN out-of-order TLSM events WHEN applied THEN transitions converge deterministically to one of {Filled, Canceled, Failed}.",
         "GIVEN TLSM transitions are applied WHEN events process THEN each transition is appended to the durable ledger immediately."
       ],
       "steps": [
         "Create crates/soldier_core/src/execution/state.rs and tlsm.rs to model TLSM transitions.",
         "Wire TLSM modules into crates/soldier_core/src/execution/mod.rs.",
         "Implement out-of-order handling (fill-before-ack) without panics.",
+        "Keep TLSM terminal enum/set strict: Filled, Canceled, Failed only.",
         "Append each transition to WAL via the infra ledger adapter.",
         "Add unit tests in crates/soldier_core/tests/test_tlsm.rs for fill-before-ack behavior."
       ],
@@ -3140,8 +3165,7 @@
         "AT-344",
         "AT-909",
         "AT-421",
-        "AT-317",
-        "AT-1216"
+        "AT-317"
       ],
       "reason_codes": {
         "type": "RejectReason",
@@ -4123,7 +4147,7 @@
       "contract_refs": [
         "AT-935",
         "AT-233",
-        "2.4 Durable Intent Ledger (WAL Truth Source)"
+        "2.4 — WAL / intent ledger (RecordedBeforeDispatch)"
       ],
       "plan_refs": [
         "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
@@ -4605,9 +4629,8 @@
         "§1.4.2"
       ],
       "plan_refs": [
-        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)",
-        "S5.4 — IOC limit pricer clamp (guarantee min edge at limit)",
-        "S6.1 — Inventory skew gate"
+        "Slice 5 S5.1/S5.4",
+        "Slice 6 S6.1"
       ],
       "scope": {
         "touch": [
@@ -4617,6 +4640,7 @@
           "crates/soldier_core/tests/test_inventory_skew.rs",
           "crates/soldier_core/tests/test_pricer.rs",
           "crates/soldier_core/tests/test_open_runtime_wiring.rs",
+          "crates/soldier_core/tests/common/mod.rs",
           "crates/soldier_core/tests/test_rejection_side_effects.rs",
           "crates/soldier_core/tests/test_intent_determinism.rs",
           "crates/soldier_core/tests/test_missing_config.rs",
@@ -4689,7 +4713,7 @@
         "§1.3"
       ],
       "plan_refs": [
-        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)"
+        "Slice 5 S5.1"
       ],
       "scope": {
         "touch": [
@@ -5065,8 +5089,7 @@
         "AT-203",
         "AT-237",
         "AT-937",
-        "AT-938",
-        "AT-1217"
+        "AT-938"
       ],
       "reason_codes": {
         "type": "RejectReason",
@@ -5525,7 +5548,7 @@
       }
     },
     {
-      "id": "S7-511",
+      "id": "S7-011",
       "priority": 200,
       "phase": 2,
       "slice": 7,
@@ -5696,9 +5719,7 @@
         "AT-348",
         "AT-349",
         "AT-350",
-        "AT-413",
-        "AT-1202",
-        "AT-1203"
+        "AT-413"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -6739,8 +6760,7 @@
         "AT-336",
         "AT-410",
         "AT-423",
-        "AT-1055",
-        "AT-1221"
+        "AT-1055"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -6875,9 +6895,7 @@
         "AT-931",
         "AT-337",
         "AT-918",
-        "AT-925",
-        "AT-1218",
-        "AT-1219"
+        "AT-925"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -7009,8 +7027,7 @@
         "AT-003",
         "AT-412",
         "AT-029",
-        "AT-967",
-        "AT-1220"
+        "AT-967"
       ],
       "reason_codes": {
         "type": "",
@@ -7193,7 +7210,7 @@
       "loss_mode": {
         "worst_case": "/status allows POST → state mutation via read endpoint → unexpected mode change",
         "fail_closed_cap": "StatusEndpoint rejects non-GET; no state mutation possible",
-        "drift_metric": "status_semantics_validation_fail_total and decision_a_latch_token_mismatch_total"
+        "drift_metric": ""
       }
     },
     {
@@ -10378,7 +10395,7 @@
       }
     },
     {
-      "id": "S8-519",
+      "id": "S8-019",
       "priority": 200,
       "phase": 2,
       "slice": 8,
@@ -10471,7 +10488,7 @@
       }
     },
     {
-      "id": "S9-500",
+      "id": "S9-000",
       "priority": 100,
       "phase": 2,
       "slice": 9,
@@ -10584,7 +10601,7 @@
       }
     },
     {
-      "id": "S9-501",
+      "id": "S9-001",
       "priority": 99,
       "phase": 2,
       "slice": 9,
@@ -10683,7 +10700,7 @@
       }
     },
     {
-      "id": "S9-502",
+      "id": "S9-002",
       "priority": 98,
       "phase": 2,
       "slice": 9,
@@ -10783,7 +10800,7 @@
       }
     },
     {
-      "id": "S9-503",
+      "id": "S9-003",
       "priority": 97,
       "phase": 2,
       "slice": 9,
@@ -10906,7 +10923,7 @@
       }
     },
     {
-      "id": "S9-504",
+      "id": "S9-004",
       "priority": 96,
       "phase": 2,
       "slice": 9,
@@ -11024,7 +11041,7 @@
       }
     },
     {
-      "id": "S9-505",
+      "id": "S9-005",
       "priority": 95,
       "phase": 2,
       "slice": 9,
@@ -11133,7 +11150,7 @@
       }
     },
     {
-      "id": "S9-509",
+      "id": "S9-009",
       "priority": 200,
       "phase": 2,
       "slice": 9,
@@ -11221,7 +11238,7 @@
       }
     },
     {
-      "id": "S9-510",
+      "id": "S9-010",
       "priority": 200,
       "phase": 2,
       "slice": 9,
@@ -11311,7 +11328,7 @@
       }
     },
     {
-      "id": "S9-511",
+      "id": "S9-011",
       "priority": 200,
       "phase": 2,
       "slice": 9,
@@ -11400,7 +11417,7 @@
       }
     },
     {
-      "id": "S9-512",
+      "id": "S9-012",
       "priority": 200,
       "phase": 2,
       "slice": 9,
@@ -11501,7 +11518,7 @@
       }
     },
     {
-      "id": "S9-513",
+      "id": "S9-013",
       "priority": 200,
       "phase": 2,
       "slice": 9,
@@ -11591,7 +11608,7 @@
       }
     },
     {
-      "id": "S10-500",
+      "id": "S10-000",
       "priority": 100,
       "phase": 3,
       "slice": 10,
@@ -11698,7 +11715,7 @@
       }
     },
     {
-      "id": "S10-501",
+      "id": "S10-001",
       "priority": 99,
       "phase": 3,
       "slice": 10,
@@ -11806,7 +11823,7 @@
       }
     },
     {
-      "id": "S10-502",
+      "id": "S10-002",
       "priority": 98,
       "phase": 3,
       "slice": 10,
@@ -11905,7 +11922,7 @@
       }
     },
     {
-      "id": "S10-503",
+      "id": "S10-003",
       "priority": 97,
       "phase": 3,
       "slice": 10,
@@ -11989,7 +12006,7 @@
       }
     },
     {
-      "id": "S10-504",
+      "id": "S10-004",
       "priority": 96,
       "phase": 3,
       "slice": 10,
@@ -12094,7 +12111,7 @@
       }
     },
     {
-      "id": "S10-506",
+      "id": "S10-006",
       "priority": 200,
       "phase": 3,
       "slice": 10,
@@ -12185,7 +12202,7 @@
       }
     },
     {
-      "id": "S10-507",
+      "id": "S10-007",
       "priority": 200,
       "phase": 3,
       "slice": 10,
@@ -12276,7 +12293,7 @@
       }
     },
     {
-      "id": "S10-508",
+      "id": "S10-008",
       "priority": 200,
       "phase": 3,
       "slice": 10,
@@ -12363,7 +12380,7 @@
       }
     },
     {
-      "id": "S11-500",
+      "id": "S11-000",
       "priority": 100,
       "phase": 3,
       "slice": 11,
@@ -12460,7 +12477,7 @@
       }
     },
     {
-      "id": "S11-501",
+      "id": "S11-001",
       "priority": 99,
       "phase": 3,
       "slice": 11,
@@ -12565,7 +12582,7 @@
       }
     },
     {
-      "id": "S11-502",
+      "id": "S11-002",
       "priority": 98,
       "phase": 3,
       "slice": 11,
@@ -12656,7 +12673,7 @@
       }
     },
     {
-      "id": "S11-503",
+      "id": "S11-003",
       "priority": 200,
       "phase": 3,
       "slice": 11,
@@ -12763,7 +12780,7 @@
       }
     },
     {
-      "id": "S12-500",
+      "id": "S12-000",
       "priority": 100,
       "phase": 3,
       "slice": 12,
@@ -12868,7 +12885,7 @@
       }
     },
     {
-      "id": "S12-501",
+      "id": "S12-001",
       "priority": 99,
       "phase": 3,
       "slice": 12,
@@ -12964,7 +12981,7 @@
       }
     },
     {
-      "id": "S12-502",
+      "id": "S12-002",
       "priority": 200,
       "phase": 3,
       "slice": 12,
@@ -13067,7 +13084,7 @@
       }
     },
     {
-      "id": "S13-500",
+      "id": "S13-000",
       "priority": 100,
       "phase": 4,
       "slice": 13,
@@ -13215,7 +13232,7 @@
       }
     },
     {
-      "id": "S13-502",
+      "id": "S13-002",
       "priority": 98,
       "phase": 4,
       "slice": 13,
@@ -13349,7 +13366,7 @@
       }
     },
     {
-      "id": "S13-503",
+      "id": "S13-003",
       "priority": 97,
       "phase": 4,
       "slice": 13,
@@ -13452,7 +13469,7 @@
       }
     },
     {
-      "id": "S13-504",
+      "id": "S13-004",
       "priority": 96,
       "phase": 4,
       "slice": 13,
@@ -13937,8 +13954,7 @@
         "AT-329",
         "AT-330",
         "AT-331",
-        "AT-332",
-        "AT-1209"
+        "AT-332"
       ],
       "reason_codes": {
         "type": "RejectReason",
@@ -14184,10 +14200,11 @@
       "category": "policy",
       "description": "Codify the verify_full timeout policy in the reconciliation runbook so full verify runs are invoked with explicit timeout guardrails and avoid silent 900s defaults.",
       "contract_refs": [
-        "0.Z.2.2 CSP Mandatory Invariants (Non-Negotiable)"
+        "specs/WORKFLOW_CONTRACT.md (Fail-closed default)",
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 verify_full"
       ],
       "plan_refs": [
-        "Slice 14 — GOP Optimization Cycle"
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #1"
       ],
       "scope": {
         "touch": [
@@ -14281,10 +14298,11 @@
       "category": "policy",
       "description": "Harden cycle1 review logging by validating sidecar JSON deterministically before cycle1 receipt success is allowed.",
       "contract_refs": [
-        "0.Z.2.2 CSP Mandatory Invariants (Non-Negotiable)"
+        "specs/WORKFLOW_CONTRACT.md (Fail-closed default)",
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 cycle1"
       ],
       "plan_refs": [
-        "Slice 14 — GOP Optimization Cycle"
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #2"
       ],
       "scope": {
         "touch": [
@@ -14378,10 +14396,11 @@
       "category": "policy",
       "description": "Require per-finding closure entries in R5b self-review gate artifacts so UNPROVEN decisions cannot persist without explicit closure accounting.",
       "contract_refs": [
-        "0.Z.2.2 CSP Mandatory Invariants (Non-Negotiable)"
+        "specs/WORKFLOW_CONTRACT.md (Manual story discipline)",
+        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md §3 R5b"
       ],
       "plan_refs": [
-        "Slice 14 — GOP Optimization Cycle"
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #3"
       ],
       "scope": {
         "touch": [
@@ -14475,10 +14494,11 @@
       "category": "policy",
       "description": "Restrict mechanical callsite enforcement checks to production source paths so test-only symbols do not trigger false blockers during full verify.",
       "contract_refs": [
-        "0.Z.2.2 CSP Mandatory Invariants (Non-Negotiable)"
+        "specs/WORKFLOW_CONTRACT.md (Verification satisfaction + fail-closed)",
+        "plans/verify_fork.sh mechanical_verification gate"
       ],
       "plan_refs": [
-        "Slice 14 — GOP Optimization Cycle"
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #4"
       ],
       "scope": {
         "touch": [
@@ -14571,10 +14591,11 @@
       "category": "policy",
       "description": "Emit an explicit next-step prompt after cycle1 receipt write so operators do not stall between cycle1 and fix in reconciliation loops.",
       "contract_refs": [
-        "0.Z.2.2 CSP Mandatory Invariants (Non-Negotiable)"
+        "specs/WORKFLOW_CONTRACT.md (Manual story discipline)",
+        "plans/wf_step.sh cycle1 step contract"
       ],
       "plan_refs": [
-        "Slice 14 — GOP Optimization Cycle"
+        "reviews/reconciliations/S0/HANDOFF.md Process Backlog #5"
       ],
       "scope": {
         "touch": [
