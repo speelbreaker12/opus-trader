@@ -802,3 +802,10 @@ Commands: cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests; c
 Evidence: plans/story_verify_allowlist.txt; plans/prd.json; crates/soldier_core/src/execution/build_order_intent.rs; artifacts/verify/20260303_083644/verify.meta.json
 Notes: `prd_gate.sh` remains failing globally due pre-existing duplicate-id/legacy-path issues, but this change removed two missing-path failures (`S2-004 test_reject_reason.rs`, `S6-000 test_dispatch_chokepoint.rs`) observed on baseline commit 6f69cde.
 Next: Push patch to PR #149 and rely on PR CI for clean-checkout verify evidence.
+Story: PR #149 global PRD lint debt reduction (duplicate IDs + path validity)
+Date: 2026-03-03 09:02:00 UTC
+Summary: Removed 32 exact duplicate PRD item entries (S7-011, S8-019, S9-*, S10-*, S11-*, S12-*, S13-* second copies), moved `S1-010` existing config path from `scope.create` to `scope.touch`, and removed stale missing path `crates/soldier_core/tests/common/mod.rs` from `S6-011` scope.
+Commands: ./plans/prd_gate.sh; jq duplicate-id audit scripts; gh pr view 149 --json statusCheckRollup
+Evidence: plans/prd.json; PR #149 checks at head 6864eae; plans/prd_gate_help.md output comparison (before: duplicate/path errors; after: unresolved ref-check errors only).
+Notes: This follow-up satisfies the requested duplicate-ID and missing-path cleanup; remaining `prd_gate` failures are unresolved contract/plan references (`prd_ref_check`) and pre-existing warnings.
+Next: Push this PRD cleanup and decide whether to address remaining `prd_ref_check` unresolved references in a separate scoped patch.
