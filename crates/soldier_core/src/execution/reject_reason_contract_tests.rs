@@ -30,6 +30,20 @@ fn build_chokepoint_result_with_stub_wal(
     build_chokepoint_result(intent_class, risk_state, gates, &mut wal_gate)
 }
 
+fn serialize_reason_code_or_panic(code: &RejectReasonCode) -> String {
+    match serde_json::to_string(code) {
+        Ok(json) => json,
+        Err(err) => panic!("serialization failed for {code:?}: {err}"),
+    }
+}
+
+fn deserialize_reason_code_or_panic(json: &str, context: &str) -> RejectReasonCode {
+    match serde_json::from_str(json) {
+        Ok(code) => code,
+        Err(err) => panic!("deserialization failed for {context}: {err}"),
+    }
+}
+
 #[test]
 fn test_reject_reason_present_on_pre_dispatch_reject() {
     let gates = gate_results_all_passing_failclosed_wal();
@@ -217,18 +231,17 @@ fn test_registry_contains_contract_minimum_set() {
 #[test]
 fn test_reject_reason_serde_round_trip() {
     let code = RejectReasonCode::NetEdgeTooLow;
-    let json = serde_json::to_string(&code).expect("serialization failed");
+    let json = serialize_reason_code_or_panic(&code);
     assert_eq!(json, r#""NET_EDGE_TOO_LOW""#);
 
-    let deserialized: RejectReasonCode =
-        serde_json::from_str(&json).expect("deserialization failed");
+    let deserialized = deserialize_reason_code_or_panic(&json, "NET_EDGE_TOO_LOW");
     assert_eq!(deserialized, code);
 
     let code2 = RejectReasonCode::InsufficientDepthWithinBudget;
-    let json2 = serde_json::to_string(&code2).expect("serialization failed");
+    let json2 = serialize_reason_code_or_panic(&code2);
     assert_eq!(json2, r#""INSUFFICIENT_DEPTH_WITHIN_BUDGET""#);
-    let deserialized2: RejectReasonCode =
-        serde_json::from_str(&json2).expect("deserialization failed");
+    let deserialized2 =
+        deserialize_reason_code_or_panic(&json2, "INSUFFICIENT_DEPTH_WITHIN_BUDGET");
     assert_eq!(deserialized2, code2);
 }
 
@@ -247,10 +260,9 @@ fn test_reject_reason_serde_round_trip_fe001_codes() {
         (RejectReasonCode::GateCascadeSkip, r#""GATE_CASCADE_SKIP""#),
     ];
     for (code, expected_json) in cases {
-        let json = serde_json::to_string(&code).expect("serialization failed");
+        let json = serialize_reason_code_or_panic(&code);
         assert_eq!(json, expected_json, "serde output mismatch for {code:?}");
-        let deserialized: RejectReasonCode =
-            serde_json::from_str(&json).expect("deserialization failed");
+        let deserialized = deserialize_reason_code_or_panic(&json, code.as_str());
         assert_eq!(deserialized, code, "round-trip mismatch for {code:?}");
     }
 }

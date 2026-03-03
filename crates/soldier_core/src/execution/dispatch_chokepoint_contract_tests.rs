@@ -8,7 +8,7 @@
 //! VR-014: Dispatch function visibility is restricted to the chokepoint module.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const CHOKEPOINT_RELATIVE_PATH: &str = "execution/build_order_intent.rs";
 const APPROVAL_SENTINEL: &str = "record_approved();";
@@ -25,17 +25,38 @@ fn collect_rs_files(dir: &std::path::Path) -> Vec<(PathBuf, String)> {
     if !dir.exists() {
         return files;
     }
-    for entry in fs::read_dir(dir).expect("read_dir failed") {
-        let entry = entry.expect("entry failed");
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => panic!("read_dir failed for {}: {}", dir.display(), err),
+    };
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => panic!("entry failed for {}: {}", dir.display(), err),
+        };
         let path = entry.path();
         if path.is_dir() {
             files.extend(collect_rs_files(&path));
         } else if path.extension().is_some_and(|e| e == "rs") {
-            let content = fs::read_to_string(&path).expect("read file failed");
+            let content = read_file_or_panic(&path, "read file failed");
             files.push((path, content));
         }
     }
     files
+}
+
+fn read_file_or_panic(path: &Path, context: &str) -> String {
+    match fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(err) => panic!("{context} for {}: {}", path.display(), err),
+    }
+}
+
+fn filename_or_panic(path: &Path) -> &str {
+    match path.file_name().and_then(|name| name.to_str()) {
+        Some(filename) => filename,
+        None => panic!("path has no UTF-8 filename: {}", path.display()),
+    }
 }
 
 fn is_unit_test_module(path: &std::path::Path) -> bool {
@@ -58,7 +79,7 @@ fn test_dispatch_chokepoint_no_bypass_approved() {
         if is_unit_test_module(path) {
             continue;
         }
-        let filename = path.file_name().unwrap().to_str().unwrap();
+        let filename = filename_or_panic(path);
         // Skip the chokepoint module itself — it's allowed to construct Approved
         if filename == chokepoint_file {
             continue;
@@ -103,7 +124,7 @@ fn test_dispatch_chokepoint_no_bypass_metrics() {
         if is_unit_test_module(path) {
             continue;
         }
-        let filename = path.file_name().unwrap().to_str().unwrap();
+        let filename = filename_or_panic(path);
         if filename == chokepoint_file {
             continue;
         }
@@ -137,7 +158,7 @@ fn test_dispatch_chokepoint_no_bypass_metrics() {
 #[test]
 fn test_dispatch_chokepoint_approval_sentinel_present() {
     let chokepoint_path = src_dir().join(CHOKEPOINT_RELATIVE_PATH);
-    let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
+    let content = read_file_or_panic(&chokepoint_path, "read chokepoint");
 
     assert!(
         content.contains(APPROVAL_SENTINEL),
@@ -225,7 +246,7 @@ fn test_dispatch_visibility_is_restricted() {
         if is_unit_test_module(path) {
             continue;
         }
-        let filename = path.file_name().unwrap().to_str().unwrap();
+        let filename = filename_or_panic(path);
         if filename == chokepoint_file || filename == "mod.rs" {
             continue;
         }
@@ -268,7 +289,7 @@ fn test_no_direct_gate_results_construction_in_production() {
         if is_unit_test_module(path) {
             continue;
         }
-        let filename = path.file_name().unwrap().to_str().unwrap();
+        let filename = filename_or_panic(path);
         // The chokepoint module defines GateResults — skip it
         if filename == chokepoint_file {
             continue;
@@ -310,7 +331,7 @@ fn test_chokepoint_module_exists() {
         "Chokepoint module must exist at execution/build_order_intent.rs"
     );
 
-    let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
+    let content = read_file_or_panic(&chokepoint_path, "read chokepoint");
 
     assert!(
         content.contains("pub fn build_order_intent_with_wal_gate("),
@@ -344,7 +365,7 @@ fn chokepoint_symbols_reachable_via_execution_facade() {
 #[test]
 fn test_chokepoint_metrics_mutators_not_public() {
     let chokepoint_path = src_dir().join("execution").join("build_order_intent.rs");
-    let content = fs::read_to_string(&chokepoint_path).expect("read chokepoint");
+    let content = read_file_or_panic(&chokepoint_path, "read chokepoint");
 
     assert!(
         !content.contains("pub fn record_approved"),
