@@ -45,6 +45,7 @@ mod base_gates;
 mod build_order_intent;
 #[cfg_attr(not(test), allow(dead_code))]
 mod dispatch_map;
+mod domain_model;
 #[cfg_attr(not(test), allow(dead_code))]
 mod engine;
 #[cfg_attr(not(test), allow(dead_code))]

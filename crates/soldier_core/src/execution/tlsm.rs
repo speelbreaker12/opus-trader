@@ -128,7 +128,9 @@ pub enum TlsmEvent {
     Filled,
     /// Order cancelled.
     Cancelled,
-    /// Order rejected by exchange.
+    /// Order rejected by exchange after send (canonical venue-reject vocabulary).
+    VenueRejected,
+    /// Legacy alias for venue reject (kept for compatibility with existing tests/callers).
     Rejected,
     /// Internal failure.
     Failed,
@@ -343,9 +345,10 @@ impl Tlsm {
             (_, TlsmEvent::Cancelled) => self.transition(from, TlsmState::Cancelled, event, sink),
 
             // Reject from Sent or Created
-            (TlsmState::Created | TlsmState::Sent, TlsmEvent::Rejected) => {
-                self.transition(from, TlsmState::Failed, event, sink)
-            }
+            (
+                TlsmState::Created | TlsmState::Sent,
+                TlsmEvent::VenueRejected | TlsmEvent::Rejected,
+            ) => self.transition(from, TlsmState::Failed, event, sink),
 
             // Failed from any non-terminal state
             (_, TlsmEvent::Failed) => self.transition(from, TlsmState::Failed, event, sink),

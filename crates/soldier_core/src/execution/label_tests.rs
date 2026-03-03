@@ -4,6 +4,7 @@ use crate::execution::{
     build_order_intent_with_optional_wal_gate,
 };
 use crate::risk::RiskState;
+use xxhash_rust::xxh64::xxh64;
 
 trait TestResultExt<T> {
     fn must(self) -> T;
@@ -25,6 +26,32 @@ fn sample_input() -> LabelInput<'static> {
         leg_idx: 0,
         ih16: "deadbeef01234567",
     }
+}
+
+fn rfc4648_base32_nopad_lower(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
+    let mut out = String::new();
+    let mut bit_buffer: u32 = 0;
+    let mut bit_count: u8 = 0;
+
+    for &byte in bytes {
+        bit_buffer = (bit_buffer << 8) | byte as u32;
+        bit_count += 8;
+        while bit_count >= 5 {
+            let shift = bit_count - 5;
+            let idx = ((bit_buffer >> shift) & 0x1f) as usize;
+            out.push(ALPHABET[idx] as char);
+            bit_count -= 5;
+            bit_buffer &= (1u32 << shift) - 1;
+        }
+    }
+
+    if bit_count > 0 {
+        let idx = ((bit_buffer << (5 - bit_count)) & 0x1f) as usize;
+        out.push(ALPHABET[idx] as char);
+    }
+
+    out
 }
 
 fn gate_results_all_passing() -> crate::execution::GateResults {
@@ -185,7 +212,27 @@ fn test_decode_empty_string() {
 fn test_derive_sid8_length() {
     let sid8 = derive_sid8("strangle_btc_low_vol");
     assert_eq!(sid8.len(), 8);
-    assert!(sid8.chars().all(|c| c.is_ascii_hexdigit()));
+    assert!(
+        sid8.chars()
+            .all(|c| c.is_ascii_lowercase() || ('2'..='7').contains(&c))
+    );
+}
+
+#[test]
+fn test_derive_sid8_matches_contract_base32_xxhash64_be() {
+    let strategy_id = "strangle_btc_low_vol";
+    let hash = xxh64(strategy_id.as_bytes(), 0);
+    let expected = rfc4648_base32_nopad_lower(&hash.to_be_bytes())[..8].to_string();
+
+    let sid8 = derive_sid8(strategy_id);
+    assert_eq!(
+        sid8, expected,
+        "sid8 must follow CONTRACT.md: base32(xxhash64_be) first 8 chars"
+    );
+    assert!(
+        sid8.chars()
+            .all(|c| c.is_ascii_lowercase() || ('2'..='7').contains(&c))
+    );
 }
 
 #[test]

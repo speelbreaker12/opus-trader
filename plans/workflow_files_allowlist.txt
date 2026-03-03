@@ -170,10 +170,12 @@ specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml
 tools/at_coverage_report.py
 tools/at_parser.py
 tools/check_lag_ids.py
+tools/check_status_reason_string_leaks.py
 tools/ci/check_contract_profile_map_parity.py
 tools/ci/check_contract_profiles.py
 tools/ci/lint_pr_template_sections.py
 tools/roadmap_evidence_audit.py
 tools/tests/test_check_lag_ids.py
+tools/tests/test_status_reason_string_leaks.py
 tools/vendor_docs_lint_rust.py
 verify.sh

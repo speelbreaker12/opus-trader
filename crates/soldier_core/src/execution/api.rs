@@ -23,7 +23,7 @@ pub use super::reject_reason::{
     reject_reason_registry_contains,
 };
 
-// Domain primitives (2)
+// Domain primitives (1)
 pub use super::order_size::OrderSize;
 pub use super::quantize::Side;
 

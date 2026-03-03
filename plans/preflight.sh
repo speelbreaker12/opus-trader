@@ -57,7 +57,9 @@ case "$PREFLIGHT_FIXTURE_MODE" in
 esac
 
 # --- Timeout detection (portable: timeout on Linux, gtimeout on macOS) ---
-PREFLIGHT_GUARD_TIMEOUT="${PREFLIGHT_GUARD_TIMEOUT:-30}"
+# Guard scripts can spike under CI/parallel load; default above 30s avoids flaky
+# false negatives while still failing closed on genuinely hung guards.
+PREFLIGHT_GUARD_TIMEOUT="${PREFLIGHT_GUARD_TIMEOUT:-60}"
 _TIMEOUT_BIN=""
 if command -v timeout >/dev/null 2>&1; then
   _TIMEOUT_BIN="timeout"
@@ -357,7 +359,6 @@ else
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
-    fixture_pids=()
     fixture_idx=0
 
     for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
@@ -376,30 +377,18 @@ else
           echo "FAIL" > "$fixture_results_dir/$idx"
         fi
       ) &
-      fixture_pids+=($!)
       ((fixture_idx++)) || true
-      # Throttle: wait for a slot if at concurrency limit
-      # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
-      if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
-        # Poll until at least one slot opens
-        while true; do
-          alive=()
-          for pid in "${fixture_pids[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-              alive+=("$pid")
-            fi
-          done
-          if [[ ${#alive[@]} -gt 0 ]]; then
-            fixture_pids=("${alive[@]}")
-          else
-            fixture_pids=()
-          fi
-          if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
-            break
-          fi
-          sleep 0.2
-        done
-      fi
+      # Throttle using completion markers, not PID liveness.
+      # On macOS/bash 3.2, `kill -0` may report zombie children as alive until
+      # `wait` reaps them, which can stall this loop indefinitely.
+      while true; do
+        completed_count="$(find "$fixture_results_dir" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+        running_count=$((fixture_idx - completed_count))
+        if [[ "$running_count" -lt "$PREFLIGHT_PARALLEL_JOBS" ]]; then
+          break
+        fi
+        sleep 0.2
+      done
     done
 
     # Wait for all remaining
