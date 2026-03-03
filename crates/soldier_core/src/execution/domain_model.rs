@@ -61,10 +61,12 @@ pub struct NormalizedOrderSize {
 
 /// Integer count of amount-step units for canonical quantity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[allow(dead_code)] // Reserved for integer-hash canonicalization wiring.
 pub struct QuantizedQtySteps(pub i64);
 
 /// Integer count of tick-size units for canonical price.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[allow(dead_code)] // Reserved for integer-hash canonicalization wiring.
 pub struct QuantizedPriceTicks(pub i64);
 
 /// Deterministic 64-bit intent identity.

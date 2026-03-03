@@ -58,7 +58,7 @@ assert_contains_line 'run_logged_or_exit "fail_closed_coverage"'
 
 # Guardrail: status reason leak checker must be wired after status fixtures.
 assert_contains_line 'log "12f) status reason codegen"'
-assert_contains_line 'bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"'
+assert_contains_line 'run_logged_or_exit "status_reason_codegen"'
 assert_line_before 'log "12f) status reason codegen"' 'log "13) status fixtures"'
 assert_contains_line 'log "13b) status reason leak guard"'
 assert_contains_line 'run_logged_or_exit "status_reason_leak_guard"'

@@ -45,6 +45,7 @@ def _base_manifest() -> dict:
 
 def _base_status() -> dict:
   return {
+    "status_schema_version": 1,
     "contract_version": "5.2",
     "trading_mode": "ReduceOnly",
     "mode_reasons": ["REDUCEONLY_OPEN_PERMISSION_LATCHED"],
@@ -105,14 +106,14 @@ def test_decision_a_v52_requires_canonical_latch_reason() -> None:
   ), errors
 
 
-def test_decision_a_v53_uses_explicit_manifest_latch_reason() -> None:
+def test_decision_a_v2_uses_explicit_manifest_latch_reason() -> None:
   validator = _load_validator_module()
   manifest = _base_manifest()
   status = _base_status()
 
   custom_latch_reason = "REDUCEONLY_OPEN_PERMISSION_ALT_LATCH_REASON"
-  manifest["contract_version"] = "5.3"
-  status["contract_version"] = "5.3"
+  status["status_schema_version"] = 2
+  status["open_permission_semantics_version"] = 2
   manifest["registries"]["ModeReasonCode"]["ReduceOnly"] = [custom_latch_reason]
   manifest["registries"]["DecisionALatchReasonCode"] = {
     "code": custom_latch_reason,
@@ -123,14 +124,14 @@ def test_decision_a_v53_uses_explicit_manifest_latch_reason() -> None:
   assert not errors, errors
 
 
-def test_decision_a_v53_requires_explicit_manifest_latch_reason() -> None:
+def test_decision_a_v2_requires_explicit_manifest_latch_reason() -> None:
   validator = _load_validator_module()
   manifest = _base_manifest()
   status = _base_status()
 
   custom_latch_reason = "REDUCEONLY_OPEN_PERMISSION_ALT_LATCH_REASON"
-  manifest["contract_version"] = "5.3"
-  status["contract_version"] = "5.3"
+  status["status_schema_version"] = 2
+  status["open_permission_semantics_version"] = 2
   manifest["registries"]["ModeReasonCode"]["ReduceOnly"] = [custom_latch_reason]
   status["mode_reasons"] = [custom_latch_reason]
 

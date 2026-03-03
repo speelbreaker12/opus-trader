@@ -4666,7 +4666,8 @@ AT-022
 
 **/status response MUST include (CSP minimum):**
 - Applies to Phase 2+ only (first deployable CSP phase). Phase 0/1 uses the status-lite contract above.
-- `status_schema_version` (integer; current version = 1)
+- `status_schema_version` (integer; supported semantics versions: `1` (legacy Decision-A token) and `2` (manifest-driven Decision-A token))
+- `open_permission_semantics_version` (integer; optional when `status_schema_version == 1` and if present MUST be `1`; required and MUST be `2` when `status_schema_version == 2`)
 - `supported_profiles` (string[]; set of profiles this build can enforce at runtime; MUST include `CSP`)
 - `enforced_profile` (string enum: `CSP|GOP|FULL`; current runtime enforced profile)
 - `trading_mode`, `risk_state`, `bunker_mode_active`
@@ -4783,10 +4784,13 @@ AT-407
 
 AT-405
 - Given: `/status` is fetched.
-- When: `status_schema_version` is read.
-- Then: `status_schema_version == 1`.
-- Pass criteria: value equals 1.
-- Fail criteria: missing or not 1.
+- When: `status_schema_version` and `open_permission_semantics_version` are read.
+- Then:
+  - `status_schema_version ∈ {1, 2}`.
+  - If `status_schema_version == 1`, `open_permission_semantics_version` is omitted or equals `1`.
+  - If `status_schema_version == 2`, `open_permission_semantics_version == 2`.
+- Pass criteria: version fields satisfy the semantics constraints above.
+- Fail criteria: missing `status_schema_version`, unsupported `status_schema_version`, or invalid/contradictory `open_permission_semantics_version`.
 
 AT-1220
 - Given: `/status` is fetched under each combination of `trading_mode ∈ {Active, ReduceOnly, Kill}` and `open_permission_blocked_latch ∈ {true,false}`.

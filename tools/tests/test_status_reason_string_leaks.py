@@ -108,6 +108,24 @@ class StatusReasonStringLeakTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("crates/bad/raw.rs:1:KILL_BETA", proc.stderr)
 
+    def test_fails_for_escaped_literal_match(self) -> None:
+        write_rs(
+            self.root / "crates" / "bad" / "escaped.rs",
+            'const REASON: &str = "\\x4bILL_ALPHA";\n',
+        )
+        proc = self.run_checker()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("crates/bad/escaped.rs:1:KILL_ALPHA", proc.stderr)
+
+    def test_fails_for_unicode_escaped_literal_match(self) -> None:
+        write_rs(
+            self.root / "crates" / "bad" / "unicode_escaped.rs",
+            'const REASON: &str = "\\u{4b}ILL_BETA";\n',
+        )
+        proc = self.run_checker()
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("crates/bad/unicode_escaped.rs:1:KILL_BETA", proc.stderr)
+
     def test_ignores_comment_mentions(self) -> None:
         write_rs(
             self.root / "crates" / "ok" / "comments.rs",

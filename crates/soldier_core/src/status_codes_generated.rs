@@ -138,6 +138,8 @@ pub enum ModeReasonCode {
     ReduceonlyEmergencyReduceonlyActive,
     #[serde(rename = "REDUCEONLY_OPEN_PERMISSION_LATCHED")]
     ReduceonlyOpenPermissionLatched,
+    #[serde(rename = "REDUCEONLY_OPEN_PERMISSION_LATCHED_V2")]
+    ReduceonlyOpenPermissionLatchedV2,
     #[serde(rename = "REDUCEONLY_BUNKER_MODE_ACTIVE")]
     ReduceonlyBunkerModeActive,
     #[serde(rename = "REDUCEONLY_F1_CERT_INVALID")]
@@ -189,6 +191,7 @@ impl ModeReasonCode {
         Self::ReduceonlyRiskstateMaintenance,
         Self::ReduceonlyEmergencyReduceonlyActive,
         Self::ReduceonlyOpenPermissionLatched,
+        Self::ReduceonlyOpenPermissionLatchedV2,
         Self::ReduceonlyBunkerModeActive,
         Self::ReduceonlyF1CertInvalid,
         Self::ReduceonlyEvidenceChainNotGreen,
@@ -214,6 +217,7 @@ impl ModeReasonCode {
             Self::ReduceonlyRiskstateMaintenance => "REDUCEONLY_RISKSTATE_MAINTENANCE",
             Self::ReduceonlyEmergencyReduceonlyActive => "REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE",
             Self::ReduceonlyOpenPermissionLatched => "REDUCEONLY_OPEN_PERMISSION_LATCHED",
+            Self::ReduceonlyOpenPermissionLatchedV2 => "REDUCEONLY_OPEN_PERMISSION_LATCHED_V2",
             Self::ReduceonlyBunkerModeActive => "REDUCEONLY_BUNKER_MODE_ACTIVE",
             Self::ReduceonlyF1CertInvalid => "REDUCEONLY_F1_CERT_INVALID",
             Self::ReduceonlyEvidenceChainNotGreen => "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN",
@@ -305,6 +309,15 @@ impl ModeReasonCode {
             },
             Self::ReduceonlyOpenPermissionLatched => ModeReasonMeta {
                 display: "Open-permission latch is set (reconcile required).",
+                latched: true,
+                unblock: UnblockMeta {
+                    unblock_type: "AUTO",
+                    condition: "Reconciliation succeeds + latch clears",
+                },
+                tier: TradingMode::ReduceOnly,
+            },
+            Self::ReduceonlyOpenPermissionLatchedV2 => ModeReasonMeta {
+                display: "Open-permission latch is set (schema v2 semantics).",
                 latched: true,
                 unblock: UnblockMeta {
                     unblock_type: "AUTO",

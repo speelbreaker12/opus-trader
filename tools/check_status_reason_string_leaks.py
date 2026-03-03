@@ -168,6 +168,104 @@ def is_ident_char(ch: str) -> bool:
     return ch.isalnum() or ch == "_"
 
 
+def is_hex_digit(ch: str) -> bool:
+    return ("0" <= ch <= "9") or ("a" <= ch <= "f") or ("A" <= ch <= "F")
+
+
+def decode_rust_string_literal(raw: str) -> str:
+    decoded: list[str] = []
+    i = 0
+    length = len(raw)
+
+    while i < length:
+        ch = raw[i]
+        if ch != "\\":
+            decoded.append(ch)
+            i += 1
+            continue
+
+        if i + 1 >= length:
+            decoded.append("\\")
+            i += 1
+            continue
+
+        esc = raw[i + 1]
+        if esc == "n":
+            decoded.append("\n")
+            i += 2
+            continue
+        if esc == "r":
+            decoded.append("\r")
+            i += 2
+            continue
+        if esc == "t":
+            decoded.append("\t")
+            i += 2
+            continue
+        if esc == "0":
+            decoded.append("\0")
+            i += 2
+            continue
+        if esc in {'"', "'", "\\"}:
+            decoded.append(esc)
+            i += 2
+            continue
+
+        if esc == "x":
+            if i + 3 < length and is_hex_digit(raw[i + 2]) and is_hex_digit(raw[i + 3]):
+                decoded.append(chr(int(raw[i + 2 : i + 4], 16)))
+                i += 4
+                continue
+            # Preserve fail-closed behavior for malformed escapes by keeping the suffix.
+            decoded.append("x")
+            i += 2
+            continue
+
+        if esc == "u" and i + 2 < length and raw[i + 2] == "{":
+            j = i + 3
+            digits: list[str] = []
+            valid = True
+            while j < length and raw[j] != "}":
+                token = raw[j]
+                if token == "_":
+                    j += 1
+                    continue
+                if not is_hex_digit(token):
+                    valid = False
+                    break
+                digits.append(token)
+                j += 1
+
+            if valid and j < length and raw[j] == "}" and digits:
+                codepoint = int("".join(digits), 16)
+                if 0 <= codepoint <= 0x10FFFF:
+                    decoded.append(chr(codepoint))
+                    i = j + 1
+                    continue
+
+            decoded.append("u")
+            i += 2
+            continue
+
+        # String continuation: backslash + newline + indentation.
+        if esc == "\n":
+            i += 2
+            while i < length and raw[i] in {" ", "\t", "\n", "\r"}:
+                i += 1
+            continue
+        if esc == "\r" and i + 2 < length and raw[i + 2] == "\n":
+            i += 3
+            while i < length and raw[i] in {" ", "\t", "\n", "\r"}:
+                i += 1
+            continue
+
+        # Unknown escapes are preserved as the escaped char to avoid hiding content.
+        decoded.append(esc)
+        i += 2
+
+    return "".join(decoded)
+
+
 def parse_raw_string_at(source: str, index: int, current_line: int) -> tuple[int, str, int, int] | None:
     if index >= len(source):
         return None
@@ -274,7 +372,7 @@ def iter_rust_string_literals(source: str) -> Iterable[tuple[int, str]]:
                     continue
                 if c == '"':
                     i += 1
-                    yield start_line, "".join(value_chars)
+                    yield start_line, decode_rust_string_literal("".join(value_chars))
                     break
                 value_chars.append(c)
                 i += 1

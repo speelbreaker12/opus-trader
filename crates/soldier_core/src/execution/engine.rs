@@ -4,6 +4,7 @@
 //! - OPEN -> `build_open_order_intent_runtime`
 //! - CLOSE/HEDGE/CANCEL_ONLY -> `evaluate_intent_pipeline`
 
+use crate::execution::ChokeResult::{Approved as ChokeApproved, Rejected as ChokeRejected};
 use crate::execution::open_runtime::{
     OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
@@ -46,6 +47,7 @@ pub struct CancelOnlyExecutionInput<'a> {
 
 /// Execution input discriminated by intent class.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)] // Keep borrowed, allocation-free call path in PR1.
 pub enum ExecutionInput<'a> {
     Open(OpenExecutionInput<'a>),
     Close(CloseExecutionInput<'a>),
@@ -187,11 +189,11 @@ pub fn pipeline_result_to_decision(
     gate_reject_codes: &GateRejectCodes,
 ) -> ExecutionDecision {
     match result {
-        ChokeResult::Approved { gate_trace } => ExecutionDecision::Approved {
+        ChokeApproved { gate_trace } => ExecutionDecision::Approved {
             gate_trace,
             open_metadata: None,
         },
-        ChokeResult::Rejected { reason, .. } => {
+        ChokeRejected { reason, .. } => {
             let (step, detail) = extract_step_and_detail(&reason);
             let code = reject_code
                 .unwrap_or_else(|| reject_reason_from_chokepoint(&reason, gate_reject_codes));
@@ -205,7 +207,7 @@ pub fn open_runtime_to_decision(
     gate_reject_codes: &GateRejectCodes,
 ) -> ExecutionDecision {
     match &output.choke_result {
-        ChokeResult::Approved { gate_trace } => ExecutionDecision::Approved {
+        ChokeApproved { gate_trace } => ExecutionDecision::Approved {
             gate_trace: gate_trace.clone(),
             open_metadata: Some(OpenMetadata {
                 pending_reservation_id: output.pending_reservation_id.clone(),
@@ -214,7 +216,7 @@ pub fn open_runtime_to_decision(
                 mode_hint: output.mode_hint,
             }),
         },
-        ChokeResult::Rejected { reason, .. } => {
+        ChokeRejected { reason, .. } => {
             let (step, detail) = extract_step_and_detail(reason);
             let code = map_open_runtime_reject_code(reason, gate_reject_codes);
             ExecutionDecision::Rejected { code, step, detail }

@@ -17,6 +17,7 @@ pub const LABEL_MAX_LEN: usize = 64;
 /// Canonical exchange-wire label prefix.
 pub const EXCHANGE_LABEL_PREFIX: &str = "s4:";
 /// Human-readable documentation prefix (must never be sent to venue).
+#[allow(dead_code)] // Reserved for docs/examples; exchange path must use EXCHANGE_LABEL_PREFIX.
 pub const HUMAN_LABEL_PREFIX: &str = "s4doc:";
 
 /// Input fields for encoding an s4 label.

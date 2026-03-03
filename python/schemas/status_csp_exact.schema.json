@@ -43,13 +43,18 @@
   "properties": {
     "status_schema_version": {
       "type": "integer",
-      "const": 1,
-      "description": "Schema version for forward compatibility. Must be 1 for CSP."
+      "enum": [1, 2],
+      "description": "Schema version for /status contract semantics. 1=legacy Decision-A token, 2=manifest-driven Decision-A token."
     },
     "contract_version": {
       "type": "string",
       "const": "5.2",
       "description": "Contract version this status conforms to. Must match manifest."
+    },
+    "open_permission_semantics_version": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "Open-permission semantic version. Optional for schema v1 (defaults to 1), required as 2 for schema v2."
     },
     "build_id": {
       "type": "string",
@@ -280,6 +285,7 @@
                 "REDUCEONLY_RISKSTATE_MAINTENANCE",
                 "REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE",
                 "REDUCEONLY_OPEN_PERMISSION_LATCHED",
+                "REDUCEONLY_OPEN_PERMISSION_LATCHED_V2",
                 "REDUCEONLY_BUNKER_MODE_ACTIVE",
                 "REDUCEONLY_F1_CERT_INVALID",
                 "REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN",
@@ -293,6 +299,47 @@
                 "REDUCEONLY_DISK_KILL_UNCONFIRMED",
                 "REDUCEONLY_SESSION_KILL_UNCONFIRMED"
               ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status_schema_version": { "const": 1 } },
+        "required": ["status_schema_version"]
+      },
+      "then": {
+        "properties": {
+          "open_permission_semantics_version": {
+            "const": 1,
+            "description": "Schema v1 permits omitted semantics version or explicit 1 only."
+          },
+          "mode_reasons": {
+            "type": "array",
+            "items": {
+              "not": { "const": "REDUCEONLY_OPEN_PERMISSION_LATCHED_V2" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status_schema_version": { "const": 2 } },
+        "required": ["status_schema_version"]
+      },
+      "then": {
+        "required": ["open_permission_semantics_version"],
+        "properties": {
+          "open_permission_semantics_version": {
+            "const": 2,
+            "description": "Schema v2 requires explicit semantics_version=2."
+          },
+          "mode_reasons": {
+            "type": "array",
+            "items": {
+              "not": { "const": "REDUCEONLY_OPEN_PERMISSION_LATCHED" }
             }
           }
         }

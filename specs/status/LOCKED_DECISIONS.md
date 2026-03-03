@@ -5,19 +5,20 @@ Changing them requires contract version bump, schema updates, and full chaos dri
 
 ---
 
-## Decision A: Latch ⇒ ¬Active + REDUCEONLY_OPEN_PERMISSION_LATCHED
+## Decision A: Latch ⇒ ¬Active + Decision-A Latch Token
 
 ### Rule
 ```
 open_permission_blocked_latch == true
   ⇒ trading_mode ∈ {ReduceOnly, Kill}  (never Active)
-  ⇒ if trading_mode == ReduceOnly:
+  ⇒ if trading_mode == ReduceOnly and status_schema_version == 1:
        mode_reasons MUST contain "REDUCEONLY_OPEN_PERMISSION_LATCHED"
 ```
 
-Versioned extension rule (future contract versions only):
+Versioned extension rule (status schema v2 semantics):
 ```
-contract_version >= 5.3
+status_schema_version >= 2
+  ⇒ open_permission_semantics_version MUST be 2
   ⇒ registries.DecisionALatchReasonCode MUST define exactly one explicit code
   ⇒ that code MUST also appear in ModeReasonCode.ReduceOnly
   ⇒ if trading_mode == ReduceOnly and latch=true:
@@ -42,8 +43,9 @@ This decision closes that gap:
 ### Enforcement
 - `tools/validate_status.py` checks this (tag: `[DECISION-A]`)
 - CI fails if latch=true with trading_mode=Active
-- CI fails if latch=true with ReduceOnly but missing REDUCEONLY_OPEN_PERMISSION_LATCHED
-- For contract_version >= 5.3, CI also fails when
+- CI fails if latch=true with ReduceOnly but missing the required
+  Decision-A latch token for active semantics (v1 canonical or v2 explicit)
+- For status_schema_version >= 2 semantics, CI also fails when
   `registries.DecisionALatchReasonCode` is missing/ambiguous/out-of-tier
 
 ---

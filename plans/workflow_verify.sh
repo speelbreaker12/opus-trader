@@ -42,6 +42,7 @@ check_script "plans/stoic_cli_invariant_check.sh"
 check_script "plans/workflow_quick_step.sh"
 check_script "plans/toggle_policy_check.sh"
 check_script "plans/artifact_lint.sh"
+check_script "plans/lib/status_reason_codegen_gate.sh"
 
 ./plans/workflow_contract_gate.sh
 ./plans/verify.sh quick
