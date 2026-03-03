@@ -24,9 +24,23 @@ fn hex_string(len: usize) -> impl Strategy<Value = String> {
     .prop_map(|chars| chars.into_iter().collect::<String>())
 }
 
-/// Strategy for valid sid8 (8 hex chars).
+/// Strategy for base32 strings of a specific length.
+fn base32_string(len: usize) -> impl Strategy<Value = String> {
+    prop::collection::vec(
+        prop::sample::select(
+            &[
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+                'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '2', '3', '4', '5', '6', '7',
+            ][..],
+        ),
+        len,
+    )
+    .prop_map(|chars| chars.into_iter().collect::<String>())
+}
+
+/// Strategy for valid sid8 (8 RFC4648 base32 chars).
 fn sid8_strategy() -> impl Strategy<Value = String> {
-    hex_string(8)
+    base32_string(8)
 }
 
 /// Strategy for valid gid12 (12 hex chars).

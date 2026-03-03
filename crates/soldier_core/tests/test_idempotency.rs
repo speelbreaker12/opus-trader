@@ -6,6 +6,7 @@
 use soldier_core::idempotency::{
     IntentHashInput, compute_intent_hash, format_intent_hash, intent_hash_ih16,
 };
+use xxhash_rust::xxh64::xxh64;
 
 /// Helper to build a standard test input.
 fn sample_input() -> IntentHashInput<'static> {
@@ -17,6 +18,18 @@ fn sample_input() -> IntentHashInput<'static> {
         group_id: "550e8400-e29b-41d4-a716-446655440000",
         leg_idx: 0,
     }
+}
+
+fn canonical_intent_string_v1(input: &IntentHashInput<'_>) -> String {
+    format!(
+        "v1|{}|{}|{}|{}|{}|{}",
+        input.instrument.to_lowercase(),
+        input.side.to_lowercase(),
+        input.qty_steps,
+        input.price_ticks,
+        input.group_id.replace('-', "").to_lowercase(),
+        input.leg_idx
+    )
 }
 
 // ─── AT-218: Deterministic hashing ─────────────────────────────────────
@@ -54,6 +67,26 @@ fn test_at218_two_codepaths_same_hash() {
         compute_intent_hash(&input_a),
         compute_intent_hash(&input_b),
         "independently constructed identical inputs must hash equally"
+    );
+}
+
+#[test]
+fn test_contract_hash_uses_canonical_v1_utf8_serialization() {
+    let input = IntentHashInput {
+        instrument: "BTC-PERPETUAL",
+        side: "BUY",
+        qty_steps: 3000,
+        price_ticks: 100_000,
+        group_id: "550E8400-E29B-41D4-A716-446655440000",
+        leg_idx: 0,
+    };
+
+    let canonical = canonical_intent_string_v1(&input);
+    let expected = xxh64(canonical.as_bytes(), 0);
+    let actual = compute_intent_hash(&input);
+    assert_eq!(
+        actual, expected,
+        "intent hash must be xxhash64 over canonical v1 UTF-8 serialization"
     );
 }
 

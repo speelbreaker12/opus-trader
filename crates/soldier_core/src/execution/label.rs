@@ -2,7 +2,8 @@
 //!
 //! Canonical outbound format: `s4:{sid8}:{gid12}:{li}:{ih16}`
 //!
-//! - `sid8` = first 8 chars of stable strategy id hash
+//! - `sid8` = first 8 lowercase chars of RFC4648 base32 (no padding) over
+//!   xxhash64(strategy_id), with the hash encoded as 8-byte big-endian.
 //! - `gid12` = first 12 chars of group_id (UUID without dashes, truncated)
 //! - `li` = leg_idx (0 or 1)
 //! - `ih16` = 16-hex intent hash
@@ -13,6 +14,10 @@
 
 /// Maximum label length per Deribit constraint.
 pub const LABEL_MAX_LEN: usize = 64;
+/// Canonical exchange-wire label prefix.
+pub const EXCHANGE_LABEL_PREFIX: &str = "s4:";
+/// Human-readable documentation prefix (must never be sent to venue).
+pub const HUMAN_LABEL_PREFIX: &str = "s4doc:";
 
 /// Input fields for encoding an s4 label.
 #[derive(Debug, Clone)]
@@ -68,8 +73,8 @@ pub enum LabelError {
 /// Truncation MUST NOT occur (CONTRACT.md).
 pub fn encode_label(input: &LabelInput<'_>) -> Result<String, LabelError> {
     let label = format!(
-        "s4:{}:{}:{}:{}",
-        input.sid8, input.gid12, input.leg_idx, input.ih16
+        "{}{}:{}:{}:{}",
+        EXCHANGE_LABEL_PREFIX, input.sid8, input.gid12, input.leg_idx, input.ih16
     );
 
     if label.len() > LABEL_MAX_LEN {
@@ -83,7 +88,7 @@ pub fn encode_label(input: &LabelInput<'_>) -> Result<String, LabelError> {
 ///
 /// Expected format: `s4:{sid8}:{gid12}:{li}:{ih16}`
 pub fn decode_label(label: &str) -> Result<ParsedLabel, LabelError> {
-    if !label.starts_with("s4:") {
+    if !label.starts_with(EXCHANGE_LABEL_PREFIX) {
         return Err(LabelError::InvalidPrefix);
     }
 
@@ -105,10 +110,13 @@ pub fn decode_label(label: &str) -> Result<ParsedLabel, LabelError> {
 
 /// Derive `sid8` from a strategy ID string.
 ///
-/// Uses xxhash64 of the strategy ID, then takes the first 8 hex chars.
+/// CONTRACT.md §1.1:
+/// first 8 lowercase chars of RFC4648 base32 (no padding) over
+/// xxhash64(strategy_id) encoded as 8-byte big-endian.
 pub fn derive_sid8(strat_id: &str) -> String {
     let hash = xxhash_rust::xxh64::xxh64(strat_id.as_bytes(), 0);
-    format!("{hash:016x}")[..8].to_string()
+    let base32 = rfc4648_base32_nopad_lower(&hash.to_be_bytes());
+    base32[..8].to_string()
 }
 
 /// Derive `gid12` from a UUID group_id string.
@@ -117,6 +125,32 @@ pub fn derive_sid8(strat_id: &str) -> String {
 pub fn derive_gid12(group_id: &str) -> String {
     let no_dashes: String = group_id.chars().filter(|c| *c != '-').collect();
     no_dashes[..12.min(no_dashes.len())].to_string()
+}
+
+fn rfc4648_base32_nopad_lower(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
+    let mut out = String::new();
+    let mut bit_buffer: u32 = 0;
+    let mut bit_count: u8 = 0;
+
+    for &byte in bytes {
+        bit_buffer = (bit_buffer << 8) | byte as u32;
+        bit_count += 8;
+        while bit_count >= 5 {
+            let shift = bit_count - 5;
+            let idx = ((bit_buffer >> shift) & 0x1f) as usize;
+            out.push(ALPHABET[idx] as char);
+            bit_count -= 5;
+            bit_buffer &= (1u32 << shift) - 1;
+        }
+    }
+
+    if bit_count > 0 {
+        let idx = ((bit_buffer << (5 - bit_count)) & 0x1f) as usize;
+        out.push(ALPHABET[idx] as char);
+    }
+
+    out
 }
 
 #[cfg(test)]
