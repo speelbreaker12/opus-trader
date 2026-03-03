@@ -109,7 +109,9 @@ required=(
   plans/tests/test_recon_operator_runner.sh
   plans/tests/test_recon_operator_trace.sh
   plans/tests/test_recon_precheck.sh
-  plans/tests/test_review_logged.sh
+  plans/tests/test_review_logged_timeout_binary_unavailable.sh
+  plans/tests/test_review_logged_timeout_fallback.sh
+  plans/tests/test_review_logged_timeout_retry_noncodex.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh
