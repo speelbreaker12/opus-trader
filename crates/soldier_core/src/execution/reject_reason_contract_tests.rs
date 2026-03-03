@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::test_support_tests::{
+use super::test_support_helpers_tests::{
     FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
 };
 

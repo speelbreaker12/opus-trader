@@ -92,7 +92,7 @@ mod recorded_before_dispatch_gate_tests;
 #[cfg(test)]
 mod reject_reason_contract_tests;
 #[cfg(test)]
-mod test_support_tests;
+mod test_support_helpers_tests;
 
 pub use api::*;
 

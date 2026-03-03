@@ -1,6 +1,6 @@
 //! Tests for runtime RecordedBeforeDispatch gate helpers.
 
-use super::test_support_tests::gate_results_all_passing_failclosed_wal;
+use super::test_support_helpers_tests::gate_results_all_passing_failclosed_wal;
 
 use crate::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
