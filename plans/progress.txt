@@ -795,3 +795,10 @@ Commands: cargo fmt --all -- crates/soldier_core/tests/test_execution_facade_pub
 Evidence: crates/soldier_core/tests/test_execution_facade_public.rs; artifacts/verify/20260302_195725/verify.meta.json
 Notes: Local quick verify again failed with preflight timeout (300s) after fixture profile smoke passed, consistent with prior instability in this branch line.
 Next: Push fix to PR #149 branch, then rely on clean-checkout CI verify evidence for merge gating.
+Story: PR #149 stale test-target reference cleanup
+Date: 2026-03-03 08:52:00 UTC
+Summary: Fixed stale references to removed integration tests by updating story verify allowlist and PRD story commands/scopes to unit-test module targets (`dispatch_chokepoint_contract_tests`, `reject_reason_contract_tests`), and corrected the stale chokepoint invariant comment in build_order_intent.rs.
+Commands: cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests; cargo test -p soldier_core --lib reject_reason_contract_tests; ./plans/prd_gate.sh; ./plans/workflow_verify.sh
+Evidence: plans/story_verify_allowlist.txt; plans/prd.json; crates/soldier_core/src/execution/build_order_intent.rs; artifacts/verify/20260303_083644/verify.meta.json
+Notes: `prd_gate.sh` remains failing globally due pre-existing duplicate-id/legacy-path issues, but this change removed two missing-path failures (`S2-004 test_reject_reason.rs`, `S6-000 test_dispatch_chokepoint.rs`) observed on baseline commit 6f69cde.
+Next: Push patch to PR #149 and rely on PR CI for clean-checkout verify evidence.
