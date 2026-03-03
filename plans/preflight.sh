@@ -259,6 +259,8 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_workflow_quick_step.sh"
   "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
+  "plans/tests/test_preflight_fixture_timeout_controls.sh"
+  "plans/tests/test_prd_ref_check_status_lite_markers.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
@@ -357,6 +359,11 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
+    if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
+      setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
+      PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
+    fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()
@@ -364,7 +371,7 @@ else
 
     for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
       if [[ ! -f "$fixture_test" ]]; then
-        echo "MISSING" > "$fixture_results_dir/$fixture_idx"
+        echo "MISSING|0|127" > "$fixture_results_dir/$fixture_idx"
         ((fixture_idx++)) || true
         continue
       fi
@@ -372,11 +379,32 @@ else
       # idx captured by value in the subshell fork.
       idx=$fixture_idx
       (
-        if bash "$fixture_test" >/dev/null 2>&1; then
-          echo "PASS" > "$fixture_results_dir/$idx"
+        start_epoch="$(date +%s)"
+        used_timeout=0
+        if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
+          used_timeout=1
+          if "$_TIMEOUT_BIN" "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" bash "$fixture_test" >/dev/null 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
         else
-          echo "FAIL" > "$fixture_results_dir/$idx"
+          if bash "$fixture_test" >/dev/null 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
         fi
+        end_epoch="$(date +%s)"
+        duration_s=$((end_epoch - start_epoch))
+        status="FAIL"
+        if [[ "$rc" -eq 0 ]]; then
+          status="PASS"
+        elif [[ "$used_timeout" -eq 1 ]] && [[ "$rc" -eq 124 || "$rc" -eq 137 ]] \
+          && [[ "$duration_s" -ge "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" ]]; then
+          status="TIMEOUT"
+        fi
+        echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"
       ) &
       fixture_pids+=($!)
       ((fixture_idx++)) || true
@@ -411,11 +439,24 @@ else
     _fixture_all_passed=1
     fixture_idx=0
     for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
-      result="$(cat "$fixture_results_dir/$fixture_idx" 2>/dev/null || echo "MISSING")"
-      case "$result" in
-        PASS) pass "Fixture test: $(basename "$fixture_test")" ;;
+      result="$(cat "$fixture_results_dir/$fixture_idx" 2>/dev/null || echo "MISSING|0|127")"
+      status="${result%%|*}"
+      if [[ "$status" == "$result" ]]; then
+        duration_s=0
+        rc=127
+      else
+        rest="${result#*|}"
+        duration_s="${rest%%|*}"
+        rc="${rest##*|}"
+      fi
+      case "$status" in
+        PASS) pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)" ;;
         FAIL)
-          fail "Fixture test failed: $fixture_test (run 'bash $fixture_test' for details)"
+          fail "Fixture test failed: $fixture_test (rc=$rc, ${duration_s}s; run 'bash $fixture_test' for details)"
+          _fixture_all_passed=0
+          ;;
+        TIMEOUT)
+          fail "Fixture test timed out: $fixture_test (${duration_s}s, limit=${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s, rc=$rc)"
           _fixture_all_passed=0
           ;;
         MISSING)
