@@ -15,8 +15,10 @@ fn sample_meta(semantics: AmountSemantics) -> InstrumentMeta {
 #[test]
 fn normalize_coin_qty_with_coin_semantics() {
     let meta = sample_meta(AmountSemantics::Coin);
-    let out = normalize_order_size(&meta, OrderSizeInput::CoinQty(0.5), 100_000.0)
-        .expect("coin semantics must accept CoinQty");
+    let out = match normalize_order_size(&meta, OrderSizeInput::CoinQty(0.5), 100_000.0) {
+        Ok(value) => value,
+        Err(err) => panic!("coin semantics must accept CoinQty: {err:?}"),
+    };
 
     assert_eq!(out.canonical_size_kind, CanonicalSizeKind::CoinQty);
     assert_eq!(out.qty_coin, Some(0.5));
@@ -27,8 +29,10 @@ fn normalize_coin_qty_with_coin_semantics() {
 #[test]
 fn normalize_usd_qty_with_usd_semantics() {
     let meta = sample_meta(AmountSemantics::Usd);
-    let out = normalize_order_size(&meta, OrderSizeInput::UsdQty(30_000.0), 100_000.0)
-        .expect("usd semantics must accept UsdQty");
+    let out = match normalize_order_size(&meta, OrderSizeInput::UsdQty(30_000.0), 100_000.0) {
+        Ok(value) => value,
+        Err(err) => panic!("usd semantics must accept UsdQty: {err:?}"),
+    };
 
     assert_eq!(out.canonical_size_kind, CanonicalSizeKind::UsdQty);
     assert_eq!(out.qty_usd, Some(30_000.0));

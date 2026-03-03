@@ -153,8 +153,10 @@ required=(
   tools/at_coverage_report.py
   tools/at_parser.py
   tools/check_lag_ids.py
+  tools/check_status_reason_string_leaks.py
   tools/roadmap_evidence_audit.py
   tools/tests/test_check_lag_ids.py
+  tools/tests/test_status_reason_string_leaks.py
   scripts/build_contract_kernel.py
   scripts/check_arch_flows.py
   scripts/check_contract_crossrefs.py
