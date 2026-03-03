@@ -788,3 +788,10 @@ Commands: cargo fmt --all -- crates/soldier_core/src/execution/mod.rs crates/sol
 Evidence: crates/soldier_core/tests/test_execution_facade_public.rs; crates/soldier_core/src/execution/test_support_helpers_tests.rs; crates/soldier_core/src/execution/mod.rs; artifacts/verify/20260302_191406; artifacts/verify/20260302_191951; artifacts/verify/20260302_192856.
 Notes: Local `./plans/verify.sh quick` repeatedly hit preflight timeout at 300s with child fixture jobs terminated (SIGTERM) after fixture profile smoke passed; this appears as wall-clock harness instability in this worktree rather than deterministic content failure.
 Next: Rely on clean-checkout CI `./plans/verify.sh quick` evidence for merge gating, then run final review/merge flow if green.
+Story: PR #149 facade extractor hardening follow-up
+Date: 2026-03-03 02:15:00 UTC
+Summary: Replaced top-level symbol extraction scanner with a persistent lexical state machine that tracks block comments, quoted strings, chars, and multiline raw strings so facade anchor detection cannot be hijacked by fixture literals/comments. Added regression tests covering block-comment and multiline raw-string anchor text.
+Commands: cargo fmt --all -- crates/soldier_core/tests/test_execution_facade_public.rs; cargo test -p soldier_core --test test_execution_facade_public; ./plans/verify.sh quick
+Evidence: crates/soldier_core/tests/test_execution_facade_public.rs; artifacts/verify/20260302_195725/verify.meta.json
+Notes: Local quick verify again failed with preflight timeout (300s) after fixture profile smoke passed, consistent with prior instability in this branch line.
+Next: Push fix to PR #149 branch, then rely on clean-checkout CI verify evidence for merge gating.
