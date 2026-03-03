@@ -1,15 +1,13 @@
 //! Tests for runtime RecordedBeforeDispatch gate helpers.
 
-#[path = "test_stubs.rs"]
-mod test_stubs;
-use test_stubs::gate_results_all_passing_failclosed_wal;
+use super::test_support_helpers_tests::gate_results_all_passing_failclosed_wal;
 
-use soldier_core::execution::{
+use crate::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     RecordedBeforeDispatchGate, build_order_intent_with_optional_wal_gate,
     build_order_intent_with_wal_gate,
 };
-use soldier_core::risk::RiskState;
+use crate::risk::RiskState;
 
 struct StubWalGate {
     should_succeed: bool,

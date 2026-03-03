@@ -567,7 +567,7 @@ impl GateResults {
 /// Construct gate results inside the chokepoint module.
 ///
 /// Keeping `GateResults` construction here preserves the single-boundary
-/// invariant enforced by `test_dispatch_chokepoint`.
+/// invariant enforced by `dispatch_chokepoint_contract_tests`.
 #[allow(clippy::too_many_arguments)]
 pub fn build_gate_results(
     preflight_passed: bool,

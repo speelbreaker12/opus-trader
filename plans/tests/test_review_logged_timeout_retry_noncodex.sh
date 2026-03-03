@@ -18,13 +18,7 @@ mock_bin="$tmp_dir/bin"
 mkdir -p "$mock_bin"
 state_file="$tmp_dir/kimi_call_count.txt"
 
-# Deterministic timeout-retry fixture:
-# - Every invocation emits a citation immediately.
-# - Then sleeps 2s.
-#   * initial attempt (timeout=1s) is killed by timeout wrapper
-#   * retry attempt (timeout=10s) completes successfully
-#
-# This avoids racey dependence on first-attempt side effects under load.
+# Kimi should fail closed on timeout with no retry path.
 cat > "$mock_bin/kimi" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -37,32 +31,34 @@ fi
 count=$((count + 1))
 echo "$count" > "$state_file"
 
-echo "src/mock_timeout_retry.rs:7"
 sleep 2
 exit 0
 EOF
 chmod +x "$mock_bin/kimi"
 
-story="S9-TIMEOUT-RETRY"
+story="S9-TIMEOUT-FAILCLOSED-KIMI"
 out_root="$tmp_dir/out"
 
+set +e
 PATH="$mock_bin:$PATH" \
 TEST_KIMI_STATE_FILE="$state_file" \
-REVIEW_LOG_TIMEOUT_RETRY_SECONDS=10 \
 bash "$SCRIPT" "$story" \
   --tool kimi \
   --commit HEAD \
   --timeout-seconds 1 \
   --out-root "$out_root" \
-  --title "fixture timeout retry" >/dev/null
+  --title "fixture timeout fail-closed kimi" >/dev/null 2>&1
+rc=$?
+set -e
 
 review_file="$out_root/$story/kimi/kimi.enriched.md"
 [[ -f "$review_file" ]] || fail "missing review artifact: $review_file"
+[[ "$rc" -eq 7 ]] || fail "expected timeout hard-gate exit 7, got $rc"
 
-grep -Fq -- "- Timeout Triggered: true" "$review_file" || fail "timeout trigger metadata missing"
-grep -Fq -- "- Timeout Retry Seconds: 10" "$review_file" || fail "timeout retry metadata missing"
-grep -Fq -- "- Timeout Fallback Kind: timeout_retry" "$review_file" || fail "timeout retry fallback kind missing"
-grep -Fq -- "- Timeout Attempts: 1" "$review_file" || fail "timeout attempts should be 1"
-grep -Fq -- "src/mock_timeout_retry.rs:7" "$review_file" || fail "retry transcript citation missing"
+grep -Fq -- "- Timeout Seconds: 1" "$review_file" || fail "timeout metadata missing"
+grep -Fq -- "- Timed Out: true" "$review_file" || fail "timed_out marker missing"
+grep -Fq -- "HARD_GATE: REVIEW_COMMAND_TIMEOUT (exit 7)" "$review_file" || fail "timeout hard-gate marker missing"
+
+[[ "$(cat "$state_file")" == "1" ]] || fail "expected kimi to be invoked once"
 
 echo "test_review_logged_timeout_retry_noncodex.sh: ok"

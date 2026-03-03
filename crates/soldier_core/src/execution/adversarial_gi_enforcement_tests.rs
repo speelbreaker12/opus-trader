@@ -13,16 +13,15 @@
 //! - GI-001, GI-002, GI-004, GI-009, GI-017: chokepoint contract
 //! - GI-020: idempotency hash module
 
-#[path = "test_stubs.rs"]
-mod test_stubs;
-
-use soldier_core::execution::{
+use super::test_support_helpers_tests::{
+    FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
+};
+use crate::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
     RejectReasonCode, build_order_intent_with_wal_gate, reject_reason_registry_contains,
 };
-use soldier_core::idempotency::{IntentHashInput, compute_intent_hash};
-use soldier_core::risk::RiskState;
-use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
+use crate::idempotency::{IntentHashInput, compute_intent_hash};
+use crate::risk::RiskState;
 
 fn run_chokepoint_with_stub_wal(
     intent_class: ChokeIntentClass,

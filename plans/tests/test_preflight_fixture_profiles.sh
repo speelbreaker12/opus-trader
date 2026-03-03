@@ -63,6 +63,8 @@ assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_fallback.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
@@ -114,7 +116,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "33" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 33)"
+[[ "$smoke_count" == "35" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 35)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"

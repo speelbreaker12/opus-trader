@@ -2,7 +2,7 @@
 //! `soldier_core::execution::{...}`.
 
 #[allow(unused_imports)]
-use soldier_core::execution::{
+use crate::execution::{
     AtomicGroup, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes,
     GateResults, GateStep, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition,
     LABEL_MAX_LEN, LabelError, LabelInput, LegResult, LockAcquisitionResult, OooCategory,
@@ -14,7 +14,7 @@ use soldier_core::execution::{
 };
 
 #[test]
-fn facade_symbols_reachable() {
+fn facade_symbols_reachable_via_execution_facade() {
     let gates = build_gate_results(
         true,
         true,

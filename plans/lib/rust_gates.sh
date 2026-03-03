@@ -54,10 +54,7 @@ else
   # Smoke contract tests: ensure facade-level integration contracts remain green in quick mode.
   run_logged_or_exit "rust_tests_smoke" "$RUST_TEST_TIMEOUT" \
     cargo test -p soldier_core --locked \
-      --test test_facade_completeness \
-      --test adversarial_gi_enforcement \
-      --test test_dispatch_chokepoint \
-      --test test_reject_reason \
+      --test test_execution_facade_public \
       --test test_tlsm
 fi
 

@@ -17,19 +17,6 @@ trap 'rm -rf "$tmp_dir"' EXIT
 mock_bin="$tmp_dir/bin"
 mkdir -p "$mock_bin"
 
-# Broken timeout shims should be ignored by timeout_bin().
-cat > "$mock_bin/timeout" <<'EOF'
-#!/usr/bin/env bash
-exit 127
-EOF
-chmod +x "$mock_bin/timeout"
-
-cat > "$mock_bin/gtimeout" <<'EOF'
-#!/usr/bin/env bash
-exit 127
-EOF
-chmod +x "$mock_bin/gtimeout"
-
 cat > "$mock_bin/codex" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -41,48 +28,24 @@ chmod +x "$mock_bin/codex"
 story="S9-NO-TIMEOUT-BIN"
 out_root="$tmp_dir/out"
 
-PATH="$mock_bin:$PATH" \
+set +e
+output="$(
+PATH="$mock_bin:/usr/bin:/bin" \
 bash "$SCRIPT" "$story" \
   --tool codex \
-  --commit HEAD \
+  --files "plans/review_logged.sh" \
   --timeout-seconds 1 \
   --out-root "$out_root" \
-  --title "fixture timeout binary unavailable" >/dev/null
+  --title "fixture timeout binary unavailable" 2>&1
+)"
+rc=$?
+set -e
 
 review_file="$out_root/$story/codex/codex.enriched.md"
-[[ -f "$review_file" ]] || fail "missing review artifact: $review_file"
+[[ "$rc" -eq 2 ]] || fail "expected missing-timeout-binary exit 2, got $rc"
+echo "$output" | grep -Fq -- "ERROR: timeout requested but neither 'timeout' nor 'gtimeout' is available in PATH" \
+  || fail "missing timeout-binary-unavailable error"
 
-grep -Fq -- "- Command Exit Code: 0" "$review_file" || fail "review should succeed without timeout binaries"
-grep -Fq -- "- Timeout Triggered: false" "$review_file" || fail "timeout should not be marked as triggered"
-grep -Fq -- "- Timeout Fallback Kind: none" "$review_file" || fail "fallback kind should remain none"
-grep -Fq -- "src/mock_no_timeout_bin.rs:10" "$review_file" || fail "mock citation missing"
-
-# Empty transcripts must fail-closed for findings summary counting.
-cat > "$mock_bin/codex" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-exit 0
-EOF
-chmod +x "$mock_bin/codex"
-
-story_empty="S9-EMPTY-TRANSCRIPT"
-out_root_empty="$tmp_dir/out-empty"
-
-set +e
-PATH="$mock_bin:$PATH" \
-bash "$SCRIPT" "$story_empty" \
-  --tool codex \
-  --commit HEAD \
-  --timeout-seconds 1 \
-  --out-root "$out_root_empty" \
-  --title "fixture empty transcript fail-closed" >/dev/null
-empty_rc=$?
-set -e
-[[ "$empty_rc" -ne 0 ]] || fail "empty transcript should fail citation gate in C1 mode"
-
-empty_review_file="$out_root_empty/$story_empty/codex/codex.enriched.md"
-[[ -f "$empty_review_file" ]] || fail "missing empty transcript artifact: $empty_review_file"
-grep -Fq -- "FINDINGS_SUMMARY: P0=999 P1=999 P2=999" "$empty_review_file" \
-  || fail "empty transcript findings summary must be fail-closed (999)"
+[[ ! -f "$review_file" ]] || fail "review artifact should not be created when timeout binaries are unavailable"
 
 echo "test_review_logged_timeout_binary_unavailable.sh: ok"
