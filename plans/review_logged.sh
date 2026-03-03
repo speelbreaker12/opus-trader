@@ -744,7 +744,6 @@ codex_exec_fallback_used=false
 codex_exec_model=""
 last_run_used_timeout=false
 timeout_wrapper=""
-timeout_unavailable_warned=false
 
 run_review_once() {
   local per_attempt_timeout="$1"
@@ -752,12 +751,6 @@ run_review_once() {
   tb="$(timeout_bin)"
   last_run_used_timeout=false
   timeout_wrapper=""
-
-  if [[ "$per_attempt_timeout" -gt 0 && -z "$tb" && "$timeout_unavailable_warned" == "false" ]]; then
-    echo "[review_logged] WARN: timeout requested (${per_attempt_timeout}s) but no usable timeout wrapper found; continuing without timeout" \
-      | tee -a "$transcript_tmp" >&2
-    timeout_unavailable_warned=true
-  fi
 
   if [[ -n "$prompt_tmp" ]]; then
     # opus/kimi always, codex exec (--files mode or timeout fallback): pipe prompt via stdin
@@ -781,6 +774,11 @@ run_review_once() {
   return "${PIPESTATUS[0]}"
 }
 
+if [[ "$timeout_seconds" -gt 0 ]] && [[ -z "$(timeout_bin)" ]]; then
+  echo "ERROR: timeout requested but neither 'timeout' nor 'gtimeout' is available in PATH" >&2
+  exit 2
+fi
+
 start_epoch="$(date +%s)"
 : > "$transcript_tmp"
 set +e
@@ -792,18 +790,6 @@ if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]
 fi
 
 # Retry once with a larger timeout for non-codex tools.
-if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) \
-      && "$tool" != "codex" && "$timeout_retry_seconds" -gt "$timeout_seconds" ]]; then
-  timeout_fallback_kind="timeout_retry"
-  echo "[review_logged] timeout after ${timeout_seconds}s; retrying with ${timeout_retry_seconds}s" \
-    | tee -a "$transcript_tmp" >&2
-  run_review_once "$timeout_retry_seconds"
-  rc="$?"
-  if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) ]]; then
-    timed_out_attempts=$((timed_out_attempts + 1))
-  fi
-fi
-
 # Codex diff-review fallback: if codex review timed out, retry once via codex exec.
 if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) \
       && "$tool" == "codex" && "$mode" != "files" ]]; then
