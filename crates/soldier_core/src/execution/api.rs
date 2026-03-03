@@ -23,19 +23,13 @@ pub use super::reject_reason::{
     reject_reason_registry_contains,
 };
 
-// Domain primitives (2)
-pub use super::domain_model::{
-    AmountSemantics, CanonicalSizeKind, DomainModelError, InstrumentFamily, InstrumentMeta,
-    IntentId, NormalizedOrderSize, OrderSizeInput, QuantizedPriceTicks, QuantizedQtySteps,
-    normalize_order_size,
-};
+// Domain primitives (1)
 pub use super::order_size::OrderSize;
 pub use super::quantize::Side;
 
-// Label (8)
+// Label (6)
 pub use super::label::{
-    EXCHANGE_LABEL_PREFIX, HUMAN_LABEL_PREFIX, LABEL_MAX_LEN, LabelError, LabelInput, derive_gid12,
-    derive_sid8, encode_label,
+    LABEL_MAX_LEN, LabelError, LabelInput, derive_gid12, derive_sid8, encode_label,
 };
 
 // Group atomicity (9)
