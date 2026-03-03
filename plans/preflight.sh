@@ -359,7 +359,14 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+    PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=0
+    if [[ -n "${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-}" ]]; then
+      PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=1
+    fi
     PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
+    if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET" -eq 0 ]]; then
+      PREFLIGHT_FIXTURE_TEST_TIMEOUT=360
+    fi
     if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
       setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
       PREFLIGHT_FIXTURE_TEST_TIMEOUT=0

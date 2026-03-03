@@ -15,6 +15,7 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
 mkdir -p "$repo/plans/tests" "$repo/specs"
+TEST_PREFLIGHT_FIXTURE_MODE="smoke"
 
 cp "$SOURCE_PREFLIGHT" "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
@@ -92,6 +93,7 @@ invalid_log="$tmp_dir/invalid_timeout.log"
 set +e
 (
   cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$TEST_PREFLIGHT_FIXTURE_MODE" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=5s \
   ./plans/preflight.sh >"$invalid_log" 2>&1
@@ -141,6 +143,7 @@ timed_log="$tmp_dir/timed_fixture.log"
 set +e
 (
   cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$TEST_PREFLIGHT_FIXTURE_MODE" \
   PATH="$mock_bin:$PATH" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=1 \
@@ -157,6 +160,7 @@ no_timeout_log="$tmp_dir/no_timeout_wrapper.log"
 set +e
 (
   cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$TEST_PREFLIGHT_FIXTURE_MODE" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
   DUMMY_EXIT_CODE=124 \
@@ -175,6 +179,7 @@ wrapper_enabled_124_log="$tmp_dir/wrapper_enabled_124.log"
 set +e
 (
   cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$TEST_PREFLIGHT_FIXTURE_MODE" \
   PATH="$mock_bin:$PATH" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_FIXTURE_TEST_TIMEOUT=10 \
