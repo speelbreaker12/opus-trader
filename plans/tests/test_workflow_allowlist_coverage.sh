@@ -56,6 +56,7 @@ required=(
   plans/init.sh
   plans/legacy_layout_guard.sh
   plans/lib/adversarial_gate.sh
+  plans/lib/hash_utils.sh
   plans/pr_gate.sh
   plans/prd_audit_check.sh
   plans/prd_audit_merge.py

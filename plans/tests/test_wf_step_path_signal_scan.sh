@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WF_STEP_SRC="$ROOT/plans/wf_step.sh"
+HASH_UTILS_SRC="$ROOT/plans/lib/hash_utils.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -10,6 +11,7 @@ fail() {
 }
 
 [[ -x "$WF_STEP_SRC" ]] || fail "missing executable script: $WF_STEP_SRC"
+[[ -f "$HASH_UTILS_SRC" ]] || fail "missing hash utils helper: $HASH_UTILS_SRC"
 command -v jq >/dev/null 2>&1 || fail "jq is required for this test"
 
 tmp_dir="$(mktemp -d)"
@@ -20,8 +22,9 @@ git -C "$tmp_dir" init -q repo
 git -C "$repo" config user.email "test@example.com"
 git -C "$repo" config user.name "WF Step Test"
 
-mkdir -p "$repo/plans" "$repo/.wf/receipts/S1-001" "$repo/artifacts/story/S1-001/cycle1"
+mkdir -p "$repo/plans" "$repo/plans/lib" "$repo/.wf/receipts/S1-001" "$repo/artifacts/story/S1-001/cycle1"
 cp "$WF_STEP_SRC" "$repo/plans/wf_step.sh"
+cp "$HASH_UTILS_SRC" "$repo/plans/lib/hash_utils.sh"
 chmod +x "$repo/plans/wf_step.sh"
 
 cat > "$repo/base.txt" <<'EOF'

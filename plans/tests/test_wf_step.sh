@@ -10,6 +10,7 @@ FAIL=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WF_STEP="$(cd "$SCRIPT_DIR/.." && pwd)/wf_step.sh"
 RECON_PRECHECK="$(cd "$SCRIPT_DIR/.." && pwd)/recon_precheck.sh"
+HASH_UTILS="$(cd "$SCRIPT_DIR/.." && pwd)/lib/hash_utils.sh"
 
 assert_exit() {
   local label="$1" expected="$2" actual="$3"
@@ -69,14 +70,31 @@ git config user.email "test@test.com"
 git config user.name "Test"
 
 # Create minimal structure
-mkdir -p plans artifacts/story/TEST-001/self_review
+mkdir -p plans plans/lib artifacts/story/TEST-001/self_review
 mkdir -p artifacts/story/TEST-001/codex
 mkdir -p artifacts/story/TEST-001/opus
 mkdir -p artifacts/verify/run_001
 
+# Seed minimal PRD scope so preflight scope-lock can succeed.
+cat > plans/prd.json <<'PRD'
+{
+  "items": [
+    {
+      "id": "TEST-001",
+      "scope": {
+        "allow": [
+          "feature.rs"
+        ]
+      }
+    }
+  ]
+}
+PRD
+
 # Copy wf_step.sh into this repo
 cp "$WF_STEP" plans/wf_step.sh
 cp "$RECON_PRECHECK" plans/recon_precheck.sh
+cp "$HASH_UTILS" plans/lib/hash_utils.sh
 chmod +x plans/wf_step.sh
 chmod +x plans/recon_precheck.sh
 

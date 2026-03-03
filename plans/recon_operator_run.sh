@@ -27,6 +27,10 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   exit 2
 }
 cd "$ROOT"
+if ! source "$ROOT/plans/lib/hash_utils.sh"; then
+  echo "ERROR: missing hash utils helper: $ROOT/plans/lib/hash_utils.sh" >&2
+  exit 2
+fi
 
 TRACE_SCRIPT="${RECON_OPERATOR_TRACE_CMD:-plans/recon_trace.sh}"
 PREMORTEM_READY_SCRIPT="${RECON_OPERATOR_PREMORTEM_READY_CMD:-plans/premortem_ready.sh}"
@@ -217,19 +221,6 @@ current_changed_files() {
     git diff --cached --name-only 2>/dev/null || true
     git ls-files --others --exclude-standard 2>/dev/null || true
   } | awk 'NF' | LC_ALL=C sort -u
-}
-
-sha256_file() {
-  local path="$1"
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$path" | awk '{print $1}'
-    return 0
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$path" | awk '{print $1}'
-    return 0
-  fi
-  return 1
 }
 
 path_fingerprint() {
