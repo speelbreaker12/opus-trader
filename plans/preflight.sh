@@ -303,6 +303,19 @@ if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
   REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
 fi
 
+PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=0
+if [[ -n "${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-}" ]]; then
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=1
+fi
+PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
+if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET" -eq 0 ]]; then
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=360
+fi
+if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
+  echo "[FAIL] Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds; setup error)" >&2
+  exit 2
+fi
+
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
   pass "Fixture tests skipped (mode=none)"
 else
@@ -359,21 +372,22 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
-    PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=0
-    if [[ -n "${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-}" ]]; then
-      PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=1
-    fi
-    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
-    if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET" -eq 0 ]]; then
-      PREFLIGHT_FIXTURE_TEST_TIMEOUT=360
-    fi
-    if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
-      PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
-    fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_idx=0
+
+    now_monotonic_ns() {
+      if command -v python3 >/dev/null 2>&1; then
+        python3 - <<'PY'
+import time
+print(time.monotonic_ns())
+PY
+      elif command -v perl >/dev/null 2>&1; then
+        perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000000000'
+      else
+        printf '%s000000000\n' "$(date +%s)"
+      fi
+    }
 
     for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
       if [[ ! -f "$fixture_test" ]]; then
@@ -385,7 +399,7 @@ else
       # idx captured by value in the subshell fork.
       idx=$fixture_idx
       (
-        start_epoch="$(date +%s)"
+        start_ns="$(now_monotonic_ns)"
         used_timeout=0
         if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
           used_timeout=1
@@ -401,13 +415,18 @@ else
             rc=$?
           fi
         fi
-        end_epoch="$(date +%s)"
-        duration_s=$((end_epoch - start_epoch))
+        end_ns="$(now_monotonic_ns)"
+        duration_ns=$((end_ns - start_ns))
+        if [[ "$duration_ns" -lt 0 ]]; then
+          duration_ns=0
+        fi
+        duration_s=$((duration_ns / 1000000000))
+        timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))
         status="FAIL"
         if [[ "$rc" -eq 0 ]]; then
           status="PASS"
         elif [[ "$used_timeout" -eq 1 ]] && [[ "$rc" -eq 124 || "$rc" -eq 137 ]] \
-          && [[ "$duration_s" -ge "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" ]]; then
+          && [[ "$duration_ns" -ge "$timeout_ns" ]]; then
           status="TIMEOUT"
         fi
         echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"

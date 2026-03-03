@@ -65,7 +65,8 @@ assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_F
 assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT=360'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
 assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
-assert_contains_line 'start_epoch="$(date +%s)"'
+assert_contains_line 'start_ns="$(now_monotonic_ns)"'
+assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
 
