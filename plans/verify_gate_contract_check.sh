@@ -9,13 +9,14 @@ VERIFY="plans/verify_fork.sh"
 RUST_GATES="plans/lib/rust_gates.sh"
 PY_GATES="plans/lib/python_gates.sh"
 NODE_GATES="plans/lib/node_gates.sh"
+STATUS_REASON_CODEGEN_GATE="plans/lib/status_reason_codegen_gate.sh"
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
 
-for f in "$DOC" "$VERIFY" "$RUST_GATES" "$PY_GATES" "$NODE_GATES"; do
+for f in "$DOC" "$VERIFY" "$RUST_GATES" "$PY_GATES" "$NODE_GATES" "$STATUS_REASON_CODEGEN_GATE"; do
   [[ -f "$f" ]] || fail "missing required file: $f"
 done
 
@@ -115,6 +116,8 @@ verify_tokens=(
   'run_logged_or_exit "crossref_invariants"'
   'run_logged_or_exit "crossref_gate"'
   'run_logged_or_exit "contract_crossrefs"'
+  'start_parallel_gate "contract_impl_lag_ids"'
+  'run_logged_or_exit "contract_impl_lag_ids"'
   'run_logged_or_exit "arch_flows"'
   'run_logged_or_exit "state_machines"'
   'run_logged_or_exit "global_invariants"'
@@ -124,6 +127,8 @@ verify_tokens=(
   'run_logged_or_exit "reconciliation_matrix"'
   'run_logged_or_exit "csp_trace"'
   'status_fixture_'
+  'log "12f) status reason codegen"'
+  'bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"'
   'run_logged_or_exit "doc_sync_check"'
 )
 
@@ -139,6 +144,7 @@ require_code_token "$VERIFY" 'tools/ci/check_contract_profile_map_parity.py'
 require_code_token "$VERIFY" 'tools/at_coverage_report.py'
 require_code_token "$VERIFY" 'plans/validate_crossref_invariants.py'
 require_code_token "$VERIFY" './plans/crossref_gate.sh'
+require_code_token "$VERIFY" 'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
 require_code_token "$VERIFY" 'Skipping contract_coverage in quick mode (full-only gate)'
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_CI_SENTINEL'
 require_code_token "$VERIFY" 'CONTRACT_COVERAGE_STRICT_EFFECTIVE'
