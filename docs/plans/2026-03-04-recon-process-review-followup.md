@@ -20,7 +20,15 @@
 ```bash
 STORY_ID=<PRD_STORY_ID>
 BASELINE_SHA="$(git rev-parse origin/main)"
+export CODEX_MODEL="GPT-5.3-Codex"
+export GEMINI_MODEL="gemini-3-pro-preview"
 ```
+
+**External reviewer model set (canonical):**
+- `codex`: `CODEX_MODEL=GPT-5.3-Codex` (used by review provenance and codex-exec fallback path)
+- `opus`: `claude-opus-4-6` (fixed in `review_logged.sh`)
+- `kimi`: `k2.5` (fixed in `review_logged.sh`)
+- `gemini`: `GEMINI_MODEL=gemini-3-pro-preview` (default in `review_logged.sh`)
 
 **Verification policy (applies to every `./plans/verify.sh ...` call):**
 1. If `git status --porcelain` is clean, run verify locally as written.
@@ -31,12 +39,13 @@ BASELINE_SHA="$(git rev-parse origin/main)"
 
 **Significant commit checkpoint (required before each commit that stages `plans/*.sh`):**
 ```bash
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "<TASK_TITLE>"
-# If Codex CLI is unavailable, run:
-# plans/opus_review_logged.sh "$STORY_ID" --uncommitted --title "<TASK_TITLE>"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" \
+  --tools codex,opus,kimi,gemini \
+  --uncommitted \
+  --prompt enriched
 ./plans/code_review_expert_attest.sh
 ```
-Expected: review artifact is written under `artifacts/story/<STORY_ID>/codex/` (or `opus/`) and attestation matches staged tree.
+Expected: review artifacts are written under `artifacts/story/<STORY_ID>/{codex,opus,kimi,gemini}/` and attestation matches staged tree.
 
 ---
 
@@ -145,7 +154,7 @@ Expected: tests and quick verify pass.
 
 ```bash
 # Required for significant staged `plans/*.sh` changes:
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 2: prd_set_pass dry-run gate preview"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt enriched
 ./plans/code_review_expert_attest.sh
 
 git add plans/prd_set_pass.sh \
@@ -205,7 +214,7 @@ Expected: pass.
 
 ```bash
 # Required for significant staged `plans/*.sh` changes:
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 2B: prd stale-doc-ref cleanup and guard"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt enriched
 ./plans/code_review_expert_attest.sh
 
 git add plans/prd.json \
@@ -265,7 +274,7 @@ Expected: all pass.
 
 ```bash
 # Required for significant staged `plans/*.sh` changes:
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 3: recon prompt guard gate"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt enriched
 ./plans/code_review_expert_attest.sh
 
 git add plans/recon_prompt_guard.sh \
@@ -337,7 +346,7 @@ Expected: pass.
 
 ```bash
 # Required for significant staged `plans/*.sh` changes:
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 4: evidence ledger json-first"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt enriched
 ./plans/code_review_expert_attest.sh
 
 git add plans/recon_evidence_ledger.sh \
@@ -414,7 +423,7 @@ plans/tests/test_workflow_allowlist_coverage.sh
 Then:
 ```bash
 # Required for significant staged `plans/*.sh` changes:
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 5: recon doc budget gate"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt enriched
 ./plans/code_review_expert_attest.sh
 
 git add plans/recon_doc_budget.sh \
@@ -439,14 +448,13 @@ git commit -m "workflow: add recon documentation budget gate"
 **Step 1: Run final review loop checkpoints (before full verify)**
 
 ```bash
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 6: final Codex review (1)"
-plans/opus_review_logged.sh "$STORY_ID" --uncommitted --title "Task 6: final secondary review"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt enriched
 ./plans/verify.sh quick
-plans/codex_review_logged.sh "$STORY_ID" --uncommitted --title "Task 6: final Codex review (2)"
+CODEX_MODEL="$CODEX_MODEL" GEMINI_MODEL="$GEMINI_MODEL" plans/parallel_review.sh "$STORY_ID" --tools codex,opus,kimi,gemini --uncommitted --prompt generic
 ./plans/code_review_expert_attest.sh
 ./plans/verify.sh quick
 ```
-Expected: review artifacts exist under `artifacts/story/<STORY_ID>/{codex,opus}/` for current HEAD and attestation matches staged tree.
+Expected: review artifacts exist under `artifacts/story/<STORY_ID>/{codex,opus,kimi,gemini}/` for current HEAD and attestation matches staged tree. Pass gating still requires codex/opus evidence.
 
 **Step 2: Prepare final verify run ID and close action register fields**
 
