@@ -1,5 +1,11 @@
 # Recon Simplification Implementation Plan
 
+> **Status note (2026-03-04):** This is a historical implementation plan.
+> Current reconciliation execution authority is `reviews/reconciliations/PROTOCOL.md`
+> and `reviews/reconciliations/REFERENCE.md`. The active handoff format uses
+> `RECON_HANDOFF_TEMPLATE.md` "Step Log" entries plus mandatory HANDOFF updates, not
+> the retired per-step `§0–§11` debrief structure described below.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Replace 8 verbose recon step prompts with 8 slim cards and add a PATH signal to eliminate fragile text detection in wf_step.sh.

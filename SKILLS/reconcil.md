@@ -67,8 +67,8 @@ After each wf_step attempt (pass or fail), immediately update handoff before run
 Do not improvise the process. Every step block in the HANDOFF has a `Reference:` line pointing
 to the exact section of the governing doc. Read that section if you are unsure how to run the step.
 
-For the canonical mapping between `wf_step.sh` steps and reconciliation phases (R1–R7), always
-use the table in `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` §3 as the single source of truth.
+For canonical step order and gate expectations, use
+`reviews/reconciliations/PROTOCOL.md` as the single source of truth.
 
 ---
 

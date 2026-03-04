@@ -7,14 +7,14 @@
 
 Historically: full orchestration spec for premortem authoring (Mode A) and reconciliation audit (Mode B).
 
-**Current usage (v3.1)**: this file is a thin redirect. The single source of truth for
+**Current usage**: this file is a thin redirect. The single source of truth for
 reconciliation steps and gates is:
 
 - `/reconcil` skill (`SKILLS/reconcil.md`) for orchestration
-- `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` §3 for step mapping
-- `reviews/premortems/PREMORTEM_RECON_POLICY.md` for verdicts and gates
+- `reviews/reconciliations/PROTOCOL.md` for step mapping and gates
+- `reviews/reconciliations/REFERENCE.md` for anti-patterns and escalation
 
-Do **not** implement new workflows by editing this file; update the Runbook/Policy instead.
+Do **not** implement new workflows by editing this file; update PROTOCOL/REFERENCE instead.
 
 ## When to use
 
@@ -25,6 +25,7 @@ For actual execution in this repo:
 
 - **Preferred**: run `/reconcil <STORY_ID>` (Claude Code skill).
 - **Receipts**: use `plans/wf_step.sh <STORY_ID> <step>` for `preflight → implement → self_review → cycle1 → fix → cycle2 → resolution → verify_full → pass`.
+- **Handoff cadence**: after each `wf_step` attempt (pass or fail), update `reviews/reconciliations/<SLICE_ID>/HANDOFF.md` before the next command.
 
 ---
 

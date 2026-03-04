@@ -108,6 +108,7 @@ required=(
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_recon_bundle.sh
+  plans/tests/test_recon_handoff_sources.sh
   plans/tests/test_preflight_fixture_timeout_controls.sh
   plans/tests/test_recon_operator_runner.sh
   plans/tests/test_recon_operator_trace.sh
