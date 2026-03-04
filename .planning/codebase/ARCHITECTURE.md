@@ -1,149 +1,109 @@
-# Architecture
+# Architecture Map
 
-**Analysis Date:** 2026-02-25
+**Analysis date:** 2026-03-04  
+**Scope:** runtime trading engine, durability adapters, status publication sidecar, and verification/workflow harness.
 
-## Pattern Overview
+## 1) System shape
+- The repo is a contract-first monolith with a split runtime core/infrastructure boundary in Rust: `crates/soldier_core` and `crates/soldier_infra` (`Cargo.toml`).
+- Trading decision logic is concentrated in `soldier_core::execution` and exposed through a constrained facade in `crates/soldier_core/src/execution/api.rs`.
+- Infra concerns (bootstrap, WAL, trade-id registry, Deribit DTOs) are kept in `crates/soldier_infra/src/*` and intentionally depend on `soldier_core`, not the reverse (`crates/soldier_infra/Cargo.toml`).
+- Operational governance is implemented as a separate control plane in `plans/verify_fork.sh` + `plans/lib/*.sh`, with `plans/verify.sh` as a thin wrapper.
+- Status publication is sidecar-style: transform/validate in Python (`dashboard/publisher/*.py`) and persist/query in Convex TypeScript (`dashboard/convex/*.ts`).
 
-**Overall:** Layered trading runtime with durable execution pipeline and separate dashboard sidecar
+## 2) Architectural patterns
+- **Layered core + adapter boundary:** policy/gates in `crates/soldier_core/src/execution/*`, persistence/venue IO shapes in `crates/soldier_infra/src/*`.
+- **Single chokepoint dispatch model:** gate order and final allow/reject authority in `crates/soldier_core/src/execution/build_order_intent.rs`.
+- **Fail-closed safety model:** missing or invalid inputs reject by default in modules like `preflight.rs`, `quantize.rs`, `gates.rs`, and `store/ledger.rs`.
+- **Proof-token APIs for anti-bypass:** internal proofs such as `BaseGatesPassed` (`base_gates.rs`) and `DispatchConsistencyProof` (`dispatch_map.rs`) make unsafe shortcuts harder.
+- **Artifact-backed workflow gating:** verify writes deterministic gate artifacts to `artifacts/verify/<run_id>/` (`plans/verify_fork.sh`, `plans/lib/verify_utils.sh`).
 
-**Key Characteristics:**
-- Workspace-level separation between domain execution and infrastructure adapters
-- Intent-to-command pipeline with explicit preflight and gate stages
-- Durable WAL + ledger replay and idempotency handling
-- Mixed-language operations: Rust core + Python publisher + Convex/TypeScript status API + verification harness
+## 3) Module boundaries
 
-## Layers
+### 3.1 Core runtime boundary (`soldier_core`)
+- Public crate boundary in `crates/soldier_core/src/lib.rs`.
+- Execution facade in `crates/soldier_core/src/execution/api.rs`; most execution modules remain private behind `mod.rs` to prevent uncontrolled surface growth (`crates/soldier_core/src/execution/mod.rs`).
+- Gate orchestration split:
+  - Shared gates 1-6: `crates/soldier_core/src/execution/base_gates.rs`.
+  - OPEN runtime wiring: `crates/soldier_core/src/execution/open_runtime.rs`.
+  - Non-OPEN pipeline path: `crates/soldier_core/src/execution/pipeline.rs`.
+  - Single engine entrypoint: `crates/soldier_core/src/execution/engine.rs`.
+- Adjacent domain modules:
+  - Risk: `crates/soldier_core/src/risk/mod.rs`.
+  - Venue capabilities/lifecycle: `crates/soldier_core/src/venue/mod.rs`.
+  - Idempotency hash primitives: `crates/soldier_core/src/idempotency/mod.rs`.
+  - Recovery matching: `crates/soldier_core/src/recovery/mod.rs`.
 
-**Execution Core (`soldier_core`):**
-- Purpose: Owns trading intent assembly, policy checks, dispatch decisions, and execution orchestration
-- Contains: `crates/soldier_core/src/execution/pipeline.rs`, `crates/soldier_core/src/execution/intent_assembly.rs`, `crates/soldier_core/src/execution/dispatch_map.rs`, `crates/soldier_core/src/execution/base_gates.rs`, `crates/soldier_core/src/execution/open_runtime.rs`, and module exports in `crates/soldier_core/src/lib.rs`
-- Depends on: Risk, venue, recovery, and idempotency modules in `crates/soldier_core/src`
-- Used by: `crates/soldier_infra/src` integration layer and external runtime hosts
+### 3.2 Infrastructure boundary (`soldier_infra`)
+- Public exports from `crates/soldier_infra/src/lib.rs`.
+- Startup and wiring: `crates/soldier_infra/src/bootstrap.rs`.
+- Config/default resolution from contract Appendix A: `crates/soldier_infra/src/config.rs`.
+- Durable persistence boundary:
+  - WAL adapter + gate-10 bridge: `crates/soldier_infra/src/wal.rs`.
+  - Ledger store + replay: `crates/soldier_infra/src/store/ledger.rs`.
+  - Trade-id idempotency registry: `crates/soldier_infra/src/store/trade_id_registry.rs`.
+- Venue DTO mapping for Deribit metadata: `crates/soldier_infra/src/deribit/public/mod.rs`.
 
-**Risk & Validation Layer (`soldier_core::risk`):**
-- Purpose: Applies preflight and risk constraints before dispatch
-- Contains: `crates/soldier_core/src/risk/mod.rs` and risk types referenced by execution flow
-- Depends on: Execution context and intent metadata
-- Used by: Core gate pipeline (`crates/soldier_core/src/execution/*`)
+### 3.3 Workflow/control-plane boundary
+- Stable entrypoint wrapper: `plans/verify.sh`.
+- Canonical gate orchestration: `plans/verify_fork.sh`.
+- Shared gate execution/logging primitives: `plans/lib/verify_utils.sh`.
+- Language-specific execution gates:
+  - Rust: `plans/lib/rust_gates.sh`
+  - Python: `plans/lib/python_gates.sh`
+  - Node: `plans/lib/node_gates.sh`
+- Pass mutation guardrail: `plans/prd_set_pass.sh`.
+- Step receipt state machine: `plans/wf_step.sh`.
 
-**Venue Abstraction Layer:**
-- Purpose: Keeps execution policy separated from exchange-specific protocol mapping
-- Contains: Venue traits/types in `crates/soldier_core/src/venue/mod.rs`, protocol adapters in `crates/soldier_infra/src/deribit/public/mod.rs` and `crates/soldier_infra/src/deribit/mod.rs`
-- Depends on: Canonical execution payloads from core
-- Used by: Dispatcher and bootstrap wiring
+## 4) Data and control flow
 
-**Persistence and Recovery Layer (`soldier_infra`):**
-- Purpose: Provides startup coordination, durable write-ahead storage, and deterministic recovery
-- Contains: `crates/soldier_infra/src/wal.rs`, `crates/soldier_infra/src/store/ledger.rs`, `crates/soldier_infra/src/store/trade_id_registry.rs`, and recovery integration in `crates/soldier_core/src/recovery/mod.rs`
-- Depends on: Runtime state updates from execution and id generation
-- Used by: bootstrap flow, replay/restore flows, and idempotency enforcement
+### 4.1 OPEN trading decision path
+1. Caller enters via `ExecutionEngine::decide` (`crates/soldier_core/src/execution/engine.rs`).
+2. OPEN uses `build_open_order_intent_runtime` (`open_runtime.rs`).
+3. Shared gates 1-6 run in `evaluate_base_gates` (`base_gates.rs`).
+4. OPEN-only checks run: pending exposure, global exposure budget, liquidity, net-edge, pricer (`open_runtime.rs`, `risk/*`, `gate.rs`, `gates.rs`, `pricer.rs`).
+5. Chokepoint gate order + WAL gate authority resolve in `build_order_intent_with_wal_gate` (`build_order_intent.rs`).
+6. Engine maps chokepoint outcome into `ExecutionDecision` (`engine.rs`).
 
-**Bootstrap and Configuration Layer:**
-- Purpose: Owns environment parsing and runtime assembly
-- Contains: `crates/soldier_infra/src/config.rs` and bootstrap entrypoints in `crates/soldier_infra/src/bootstrap.rs`
-- Depends on: Config sources, filesystem, and runtime dependencies
-- Used by: external startup process and tests
+### 4.2 CLOSE/HEDGE/CANCEL path
+1. Input routes through `evaluate_pipeline_variant` in `engine.rs`.
+2. Pipeline executes `evaluate_intent_pipeline` (`pipeline.rs`) after assembly in `intent_assembly.rs` where relevant.
+3. Cancel-only short-circuits intentionally to avoid blocking cancels on assembly failures (`intent_assembly.rs`, `base_gates.rs`).
 
-**Observability Layer (Dashboard + Publisher):**
-- Purpose: Accept status updates, persist, and expose operational state
-- Contains: HTTP endpoint and data model in `dashboard/convex/http.ts`, `dashboard/convex/schema.ts`, `dashboard/convex/status.ts`; publisher/transform/state/spool pipeline in `dashboard/publisher/publisher.py`, `dashboard/publisher/transform.py`, `dashboard/publisher/state.py`, `dashboard/publisher/spool.py`; validation in `dashboard/convex/validators.ts`
-- Depends on: runtime status snapshots and external API credentials
-- Used by: operators, monitoring, and post-incident review
+### 4.3 Durability/restart path
+1. Startup calls `bootstrap_storage`/`bootstrap_full` (`crates/soldier_infra/src/bootstrap.rs`).
+2. WAL and registry are initialized with durable paths under `{data_dir}/wal` (`bootstrap.rs`).
+3. Replay output (`ReplayOutcome`) is returned and must drive startup latch decisions (documented in `bootstrap.rs`).
+4. Runtime append path uses `WalLedger::append` and gate adapter `DurableWalGate` (`store/ledger.rs`, `wal.rs`).
 
-## Data Flow
+### 4.4 Verification flow (engineering control path)
+1. `./plans/verify.sh [quick|full]` delegates to `plans/verify_fork.sh`.
+2. `verify_fork.sh` runs contract/spec validators, status/schema checks, and language gates, with partial parallelization.
+3. Each gate writes `<gate>.log`, `<gate>.rc`, `<gate>.time`, optional `FAILED_GATE`, and `verify.meta.json` in `artifacts/verify/<run_id>/`.
+4. `plans/prd_set_pass.sh` consumes those artifacts before allowing `passes=true` in `plans/prd.json`.
 
-**Trading Intent Processing:**
+### 4.5 Status publication flow
+1. Runtime snapshot is read/validated/normalized in `dashboard/publisher/transform.py`.
+2. Publisher loop handles retry/spool/state in `dashboard/publisher/publisher.py`, `spool.py`, `state.py`.
+3. Convex mutation stores deduped snapshots in `dashboard/convex/status.ts` with shape constraints in `dashboard/convex/status_contract.ts` and schema table in `dashboard/convex/schema.ts`.
+4. Contract validator tooling for status fixtures/liveness lives in `tools/validate_status.py`.
 
-1. External orchestrator passes an intent into the core execution path (`crates/soldier_core/src/execution/*`).
-2. The request is normalized and assembled in `crates/soldier_core/src/execution/intent_assembly.rs`.
-3. Core runtime context is prepared via `crates/soldier_core/src/execution/open_runtime.rs`.
-4. `crates/soldier_core/src/execution/pipeline.rs` executes ordered stages, including preflight and checks from `crates/soldier_core/src/execution/base_gates.rs`.
-5. Risk and recovery-aware decisioning is applied (`crates/soldier_core/src/risk/mod.rs`, `crates/soldier_core/src/recovery/mod.rs`).
-6. `crates/soldier_core/src/execution/dispatch_map.rs` resolves dispatch target/format, with labeling via `crates/soldier_core/src/execution/label.rs`.
-7. Venue-specific handling uses infrastructure integration in `crates/soldier_infra/src/deribit/*`.
-8. Idempotency and durability hooks record intent/results through `crates/soldier_infra/src/store/trade_id_registry.rs` and `crates/soldier_infra/src/wal.rs` with replay storage in `crates/soldier_infra/src/store/ledger.rs`.
+## 5) Entrypoints to plan around
+- `plans/verify.sh` -> canonical local/CI verification wrapper.
+- `plans/verify_fork.sh` -> authoritative gate sequence.
+- `crates/soldier_core/src/execution/engine.rs` -> runtime decision entrypoint.
+- `crates/soldier_infra/src/bootstrap.rs` -> startup assembly + replay checkpoint.
+- `dashboard/publisher/publisher.py` -> status sidecar process entrypoint.
+- `dashboard/convex/status.ts` -> status write/query API boundary.
 
-**Status Publication Flow (Operational):**
+## 6) Key abstractions
+- `ExecutionInput` / `ExecutionDecision` (`engine.rs`) define the top-level runtime API.
+- `ChokeResult`, `GateStep`, and `GateResults` (`build_order_intent.rs`) encode deterministic gate sequencing.
+- `BaseGatesPassed` proof token (`base_gates.rs`) and `DispatchConsistencyProof` (`dispatch_map.rs`) encode validated invariants.
+- `RecordedBeforeDispatchGate` trait (`build_order_intent.rs`) separates chokepoint logic from concrete persistence implementation.
+- `WalLedger`, `ReplayOutcome`, `TradeIdRegistry` (`store/ledger.rs`, `store/trade_id_registry.rs`) represent durability + idempotency state.
+- Receipt artifacts under `.wf/receipts/<story_id>/` (`plans/wf_step.sh`) encode workflow step completion.
 
-1. Runtime status is transformed in `dashboard/publisher/transform.py`.
-2. Validation and dedupe occur in `dashboard/publisher/state.py` and `dashboard/publisher/spool.py`.
-3. Publication is done by `dashboard/publisher/publisher.py` to Convex endpoint `dashboard/convex/http.ts`.
-4. Convex writes status records via `dashboard/convex/status.ts` using schema from `dashboard/convex/schema.ts`.
-
-**State Management:**
-- Stateful persistence is durable and append-oriented (`crates/soldier_infra/src/store/ledger.rs`, `crates/soldier_infra/src/wal.rs`) with explicit bootstrap/restart recovery.
-- Runtime operational state for dashboard publishing is persisted in `dashboard/publisher/state.py` / `dashboard/publisher/spool.py`.
-- In-memory-only state and orchestration behavior are not fully exposed in this repo (`Not detected`).
-
-## Key Abstractions
-
-**Pipeline:**
-- Purpose: Encapsulates ordered processing of an order/intent.
-- Examples: `crates/soldier_core/src/execution/pipeline.rs`, `crates/soldier_core/src/execution/intent_assembly.rs`
-- Pattern: layered stage pipeline
-
-**Gate:**
-- Purpose: Small, composable validation stage with fail-fast behavior.
-- Examples: `crates/soldier_core/src/execution/base_gates.rs`
-- Pattern: guard/chain-of-responsibility
-
-**Label + Dispatch Mapping:**
-- Purpose: Tagging and routing logic for different execution targets.
-- Examples: `crates/soldier_core/src/execution/label.rs`, `crates/soldier_core/src/execution/dispatch_map.rs`
-- Pattern: mapping table + strategy-based dispatch
-
-**Durability Log:**
-- Purpose: Reliable recovery and restartability.
-- Examples: `crates/soldier_infra/src/wal.rs`, `crates/soldier_infra/src/store/ledger.rs`, `crates/soldier_core/src/recovery/mod.rs`
-- Pattern: write-ahead append + replay
-
-## Entry Points
-
-**Rust Runtime Setup:**
-- Location: `crates/soldier_infra/src/bootstrap.rs`
-- Triggers: external startup code calling bootstrap functions
-- Responsibilities: initialize persistence, load config, and assemble core/infrastructure wiring
-
-**Status Ingestion API:**
-- Location: `dashboard/convex/http.ts`
-- Triggers: HTTP POST to `/status`
-- Responsibilities: validate request auth, parse payload, route to status mutation
-
-**Publisher Daemon:**
-- Location: `dashboard/publisher/publisher.py`
-- Triggers: runtime/manual execution of the publisher process
-- Responsibilities: read spooled state, retry delivery, post updates to Convex
-
-**Verification Orchestrator:**
-- Location: `plans/verify.sh`
-- Triggers: developer/runner invocation
-- Responsibilities: orchestrate contract, lint, and workflow gates
-
-## Error Handling
-
-**Strategy:** Typed `Result`/error propagation at Rust boundaries and explicit fail-closed checks at durability checkpoints; publisher uses explicit retry and logging on transient failures.
-
-**Patterns:**
-- `Result`-oriented control flow in core and infra modules (`crates/soldier_core/src/execution/pipeline.rs`, `crates/soldier_infra/src/bootstrap.rs`)
-- Validation-first handling (`crates/soldier_core/src/risk/mod.rs`, `dashboard/convex/http.ts`, `dashboard/publisher/transform.py`, `dashboard/publisher/validators` equivalent in `dashboard/convex/validators.ts`)
-- Durable-operation guardrails through WAL/ledger write paths in `crates/soldier_infra/src/wal.rs` and `crates/soldier_infra/src/store/ledger.rs`
-- Authentication/authorization rejection in HTTP entry `dashboard/convex/http.ts`
-
-## Cross-Cutting Concerns
-
-**Logging:**
-- Not detected as a centralized package; logging/logging-style behavior appears inline and module-local (e.g., publisher output and verify tooling scripts).
-
-**Validation:**
-- Boundary validation is present at multiple layers: `dashboard/convex/validators.ts`, payload transform in `dashboard/publisher/transform.py`, and runtime preflight/gates in `crates/soldier_core/src/execution/base_gates.rs`.
-
-**Authentication:**
-- `dashboard/convex/http.ts` uses bearer/secret validation for inbound status posts.
-
-**Durability:**
-- Managed through explicit WAL + ledger + trade-id registry in `crates/soldier_infra/src/wal.rs`, `crates/soldier_infra/src/store/ledger.rs`, `crates/soldier_infra/src/store/trade_id_registry.rs`.
-
----
-
-*Architecture analysis: 2026-02-25*
-*Update when major patterns change*
+## 7) Planning hotspots
+- Gate ordering and reject-code semantics are tightly coupled across `base_gates.rs`, `pipeline.rs`, `open_runtime.rs`, and `reject_reason.rs`.
+- Any persistence behavior change should be planned across `wal.rs`, `store/ledger.rs`, `bootstrap.rs`, and contract assertions in `specs/CONTRACT.md`.
+- Workflow changes must preserve wrapper/thin-entrypoint assumptions in `plans/verify.sh` and artifact contracts in `plans/prd_set_pass.sh`.
