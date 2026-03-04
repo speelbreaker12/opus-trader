@@ -58,7 +58,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 2 | Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md (all tasks complete) | 2026-03-04 | 4a824b7 | [2-execute-ci-enforcement-hardening-from-us](./quick/2-execute-ci-enforcement-hardening-from-us/) |
+| 2 | Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md (all tasks complete) | 2026-03-04 | b947645 | [2-execute-ci-enforcement-hardening-from-us](./quick/2-execute-ci-enforcement-hardening-from-us/) |
 
 ## Session Continuity
 
