@@ -6,7 +6,7 @@ Execute CI enforcement hardening from `/Users/admin/.claude/plans/witty-juggling
 ## Execution Result
 - Task 1: Complete
 - Task 2: Complete
-- Task 3: Blocked (expected fail-closed gate)
+- Task 3: Complete
 
 ## Task Evidence
 
@@ -35,7 +35,7 @@ Verification result:
 - CODEOWNERS assertions: pass (14 owner rules + key path presence)
 
 ### Task 3: Branch-Protection Apply + Verify
-Blocked by fail-closed gate.
+Completed.
 
 Scripts added:
 - `scripts/ci_enforcement/apply_branch_protection.sh`
@@ -43,21 +43,17 @@ Scripts added:
 
 Execution:
 - `bash scripts/ci_enforcement/apply_branch_protection.sh --repo speelbreaker12/opus-trader --branch main --check-only` → pass (patch body emitted)
-- `bash scripts/ci_enforcement/apply_branch_protection.sh --repo speelbreaker12/opus-trader --branch main` → blocked
+- `.github/CODEOWNERS` landed on remote `main` (commit `999ab56`)
+- `bash scripts/ci_enforcement/preflight_snapshot.sh --repo speelbreaker12/opus-trader --branch main` → pass
+- `bash scripts/ci_enforcement/apply_branch_protection.sh --repo speelbreaker12/opus-trader --branch main` → pass
+- `bash scripts/ci_enforcement/verify_branch_protection.sh --repo speelbreaker12/opus-trader --branch main` → pass
 
-Block reason:
-- `ABORT: CODEOWNERS missing on main`
-
-Interpretation:
-- This is expected fail-closed behavior. Code-owner review enforcement is intentionally blocked until `.github/CODEOWNERS` exists on remote `main`.
+Result:
+- Branch protection now enforces required checks (`verify`, `crossref-gate` with `app_id:15368`), code-owner reviews, and admin enforcement.
 
 ## Repo Verification
 - Ran `./plans/verify.sh quick`
 - Outcome: `VERIFY OK (mode=quick)`
 
-## Follow-up Required to Finish Task 3
-1. Merge `.github/CODEOWNERS` to remote `main`.
-2. Re-run:
-   - `bash scripts/ci_enforcement/apply_branch_protection.sh --repo speelbreaker12/opus-trader --branch main`
-   - `bash scripts/ci_enforcement/verify_branch_protection.sh --repo speelbreaker12/opus-trader --branch main`
-
+## Follow-up
+No immediate follow-up required for Task 3.

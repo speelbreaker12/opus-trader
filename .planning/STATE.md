@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Phase: 1 of 1 (Foundation)
 Plan: 1 of 2 in current phase
 Status: Ready to execute
-Last activity: 2026-03-04 — Completed quick task 2: Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md (Task 3 blocked fail-closed pending CODEOWNERS on main).
+Last activity: 2026-03-04 — Completed quick task 2: Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md, including live branch-protection apply + verify.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -58,7 +58,7 @@ None yet.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 2 | Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md (Task 3 blocked pending CODEOWNERS on main) | 2026-03-04 | 4a824b7 | [2-execute-ci-enforcement-hardening-from-us](./quick/2-execute-ci-enforcement-hardening-from-us/) |
+| 2 | Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md (all tasks complete) | 2026-03-04 | 4a824b7 | [2-execute-ci-enforcement-hardening-from-us](./quick/2-execute-ci-enforcement-hardening-from-us/) |
 
 ## Session Continuity
 
