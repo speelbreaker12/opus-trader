@@ -10934,7 +10934,7 @@
       ],
       "scope": {
         "touch": [
-          "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md",
+          "reviews/reconciliations/PROTOCOL.md",
           "plans/tests/test_verify_timeout_policy.sh"
         ],
         "create": [],
@@ -10961,7 +10961,7 @@
         "bash plans/tests/test_verify_timeout_policy.sh"
       ],
       "evidence": [
-        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md updated verify_full command line",
+        "reviews/reconciliations/PROTOCOL.md updated verify_full command line",
         "plans/tests/test_verify_timeout_policy.sh output"
       ],
       "dependencies": [],
@@ -11006,7 +11006,7 @@
         "plans/tests/test_verify_timeout_policy.sh"
       ],
       "primary_owner_for": [
-        "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md"
+        "reviews/reconciliations/PROTOCOL.md"
       ],
       "loss_mode": {
         "worst_case": "verify_full silently times out and reconciliation is incorrectly treated as complete",
@@ -11131,8 +11131,8 @@
       ],
       "scope": {
         "touch": [
-          "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md",
-          "reviews/premortems/PREMORTEM_RECON_POLICY.md",
+          "reviews/reconciliations/PROTOCOL.md",
+          "reviews/reconciliations/REFERENCE.md",
           "plans/validate_recon_artifact.sh"
         ],
         "create": [],
@@ -11169,7 +11169,7 @@
       "contract_must_evidence": [
         {
           "quote": "No DEFERRED without validated debt entry; fail-closed on ambiguous reconciliation evidence.",
-          "location": "reviews/premortems/PREMORTEM_RECON_POLICY.md",
+          "location": "reviews/reconciliations/PROTOCOL.md",
           "anchor": "R5B_SELF_REVIEW_PROVEN"
         }
       ],
@@ -11203,7 +11203,7 @@
         "plans/tests/test_prd_set_pass.sh"
       ],
       "primary_owner_for": [
-        "reviews/premortems/PREMORTEM_RECON_POLICY.md"
+        "reviews/reconciliations/PROTOCOL.md"
       ],
       "loss_mode": {
         "worst_case": "unclosed high-severity findings are treated as reconciled and pass slips through",

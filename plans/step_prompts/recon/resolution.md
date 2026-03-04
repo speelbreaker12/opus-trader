@@ -1,7 +1,7 @@
 # Step 6: resolution
 
 ## CONTEXT
-- `artifacts/story/<ID>/cycle1/evidence_ledger.md`
+- `artifacts/story/<ID>/evidence_ledger.json`
 - `artifacts/story/<ID>/<tool>/` → cycle2 artifacts (identified by `Review basis: FIX_DIFF` in content)
 - `artifacts/story/<ID>/fix/fix_summary.md` (PATH signal)
 

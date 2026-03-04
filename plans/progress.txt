@@ -840,3 +840,41 @@ Commands: ./plans/verify.sh full.
 Evidence: artifacts/verify/20260302_203601/verify.meta.json (status=ok); artifacts/verify/20260302_203601 (gate logs and timing summary).
 Notes: Dirty-tree warning was non-blocking in this run; all enforced full gates passed, including preflight, mechanical verification, rust gates, and adversarial invariants.
 Next: If this branch is intended for pass flip, run plans/prd_set_pass.sh with the required story artifacts and then proceed to review/merge flow.
+Story: workflow-maintenance
+Date: 2026-03-04 19:24:28 UTC
+Summary: Started recon process review follow-up batch in dedicated worktree branch `slice1/recon-process-followup-20260304`; regenerated RECON_PROCESS_REVIEW appendix against immutable baseline `c61926518538be615947eb96d07084a76e57074a`, created dated action register, and recorded ToC operating focus for this batch.
+Constraint: verification feedback loop speed under workflow-harness churn (secondary pressure: reconciliation documentation overhead).
+Exploit strategy: keep the existing 9-step pipeline unchanged, prioritize deterministic guard/test additions with quick-gate feedback, and bundle related workflow-harness edits before each verify pass.
+Batch scope: Task 1 baseline freeze + Tasks 2/2B/3/4/5 implementation from docs/plans/2026-03-04-recon-process-review-followup.md, then final closure verify/review wrappers.
+Baseline SHA: c61926518538be615947eb96d07084a76e57074a
+Commands: ./plans/generate_recon_review_appendix.sh --commit c61926518538be615947eb96d07084a76e57074a --date 2026-03-04 --update-doc reviews/reconciliations/RECON_PROCESS_REVIEW.md.
+Evidence: reviews/reconciliations/RECON_PROCESS_REVIEW.md; reviews/reconciliations/RECON_PROCESS_ACTION_REGISTER_2026-03-04.md; plans/progress.txt.
+Next: run ./plans/verify.sh quick for Task 1 checkpoint, then commit baseline freeze artifacts.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 21:45:30 UTC
+Summary: Completed Tasks 4-5-7 from docs/plans/2026-03-04-recon-process-review-followup.md. Delivered JSON-first evidence ledger gating (`plans/recon_evidence_ledger.sh` + `wf_step` PATH ingestion), added deterministic reconciliation docs budget gate (`plans/recon_doc_budget.sh`) wired into verify, and swept active workflow stale premortem references in `plans/recon_precheck.sh` and `.claude/commands/reconcil.md`.
+Commands: bash plans/tests/test_recon_evidence_ledger.sh; bash plans/tests/test_wf_step_path_signal_scan.sh; bash plans/tests/test_wf_step.sh; bash plans/tests/test_recon_doc_budget.sh; bash plans/tests/test_verify_fork_guardrails.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; PREFLIGHT_FIXTURE_TEST_TIMEOUT=480 ./plans/workflow_verify.sh.
+Evidence: commits 3ab0a84, 6c48e5b, fd506dc; artifacts/verify/20260304_151535/; artifacts/verify/20260304_153553/; artifacts/verify/20260304_154022/.
+Notes: Verification policy (dirty tree): local quick verifies after review wrapper runs were executed with untracked review artifacts present (no VERIFY_ALLOW_DIRTY override). Selected path: [RECOMMENDED] rely on CI verify on PR clean checkout before merge.
+Next: Run final closure full verify with fixed run id `recon_followup_20260304T214215Z`, then pre-PR wrappers (`pre_pr_review_gate` / `pr_gate`) and dry-run pass gate preview.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 21:46:10 UTC
+Summary: Ran required external review wrappers in parallel for enriched and generic prompts using `workflow-maintenance` artifact namespace. Runs completed deterministically but failed citation hard-gates for codex/opus/kimi (`exit=4`) and gemini transport (`exit=1`), while still producing review artifacts/logs used for diagnostics.
+Commands: CODEX_MODEL="GPT-5.3-Codex" GEMINI_MODEL="gemini-3-pro-preview" plans/parallel_review.sh workflow-maintenance --tools codex,opus,kimi,gemini --uncommitted --prompt enriched -- --timeout-seconds 120; CODEX_MODEL="GPT-5.3-Codex" GEMINI_MODEL="gemini-3-pro-preview" plans/parallel_review.sh workflow-maintenance --tools codex,opus,kimi,gemini --uncommitted --prompt generic -- --timeout-seconds 120; ./plans/code_review_expert_attest.sh.
+Evidence: artifacts/story/workflow-maintenance/review_logs/; artifacts/story/workflow-maintenance/codex/; artifacts/story/workflow-maintenance/opus/; artifacts/story/workflow-maintenance/kimi/; .git/worktrees/wt_recon_process_followup_20260304/code_review_expert.attest.
+Notes: Hard-gate failures are quality-of-review-output issues (missing file:line citations), not harness regressions.
+Next: finalize metadata commit, run `VERIFY_RUN_ID=recon_followup_20260304T214215Z ./plans/verify.sh full`, and execute pre-PR wrapper attempts.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 22:04:55 UTC
+Summary: Completed Task 6 closure execution for follow-up batch: full verify run `recon_followup_20260304T214215Z` finished green (no FAILED_GATE; all gate rc files are 0), `pre_pr_review_gate` passed with explicit story branch binding, and closure wrappers were attempted to completion.
+Commands: VERIFY_RUN_ID=recon_followup_20260304T214215Z ./plans/verify.sh full; ./plans/pre_pr_review_gate.sh workflow-maintenance --head \"<HEAD>\" --branch story/workflow-maintenance/recon-process-followup-20260304; ./plans/pr_gate.sh --wait --story workflow-maintenance; VERIFY_ARTIFACTS_DIR=artifacts/verify/recon_followup_20260304T214215Z ./plans/prd_set_pass.sh workflow-maintenance true --dry-run.
+Evidence: artifacts/verify/recon_followup_20260304T214215Z/verify.meta.json; artifacts/verify/recon_followup_20260304T214215Z/wf_test_pr_gate.log; plans/progress.txt.
+Notes: `pr_gate` returned `ERROR: no PR found for current branch` (exit 1). `prd_set_pass --dry-run` returned `ERROR: task id not found in PRD: workflow-maintenance` (exit 3), confirming this closure batch is workflow-maintenance/process work rather than a PRD story pass-flip candidate.
+Next: Open/push PR for `slice1/recon-process-followup-20260304` if PR-gate execution is required, or run pass-gate dry-run against an actual PRD story ID only.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 22:38:44 UTC
+Summary: Addressed all open PR #163 review findings: hardened evidence ledger verdict validation (trim+uppercase normalization, explicit verdict allowlist, fail-closed unknown verdict rejection), added compatibility for legacy evidence_ledger.v1 object-map payloads (including nested evidence_ledger wrapper), expanded stale recon token lint to include PREMORTEM_RECONCILIATION_PROCESS, fixed duplicate S14-005 scope.touch entry in PRD, and recorded explicit REC-11 sunset tracking for legacy PATH fallback removal.
+Commands: bash plans/tests/test_recon_evidence_ledger.sh; bash plans/tests/test_prd_lint.sh; bash plans/tests/test_wf_step_path_signal_scan.sh; ./plans/verify.sh quick; ./plans/code_review_expert_attest.sh.
+Evidence: plans/recon_evidence_ledger.sh; plans/prd_lint.sh; plans/prd.json; plans/tests/test_recon_evidence_ledger.sh; plans/tests/test_prd_lint.sh; reviews/reconciliations/RECON_PROCESS_ACTION_REGISTER_2026-03-04.md; artifacts/verify/20260304_163123/verify.meta.json.
+Notes: Quick verify passed green for run_id 20260304_163123 with no FAILED_GATE marker.
+Next: Commit/push this patchset to PR #163 branch and rerun ./plans/pr_gate.sh --wait --story workflow-maintenance --pr 163 to confirm inline bot comment enforcement passes with updated paths.

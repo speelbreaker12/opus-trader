@@ -71,10 +71,13 @@ required=(
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
   plans/recon_bundle.sh
+  plans/recon_doc_budget.sh
+  plans/recon_evidence_ledger.sh
   plans/recon_operator_run.sh
   plans/recon_run_card_template.md
   plans/recon_trace.sh
   plans/recon_precheck.sh
+  plans/recon_prompt_guard.sh
   plans/review_logged.sh
   plans/review_resolution_template.md
   plans/schemas/fork_attestation_remediation.schema.json
@@ -108,11 +111,14 @@ required=(
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_recon_bundle.sh
+  plans/tests/test_recon_doc_budget.sh
+  plans/tests/test_recon_evidence_ledger.sh
   plans/tests/test_recon_handoff_sources.sh
   plans/tests/test_preflight_fixture_timeout_controls.sh
   plans/tests/test_recon_operator_runner.sh
   plans/tests/test_recon_operator_trace.sh
   plans/tests/test_recon_precheck.sh
+  plans/tests/test_recon_prompt_guard.sh
   plans/tests/test_review_logged_timeout_binary_unavailable.sh
   plans/tests/test_review_logged_timeout_fallback.sh
   plans/tests/test_review_logged_timeout_retry_noncodex.sh
@@ -122,8 +128,9 @@ required=(
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_findings_guard.sh
   plans/tests/test_rust_gates_smoke_targets.sh
-  plans/tests/test_wf_step_stop_on_blocker.sh
+  plans/tests/test_wf_step_path_signal_scan.sh
   plans/tests/test_wf_step_review_provenance.sh
+  plans/tests/test_wf_step_stop_on_blocker.sh
   plans/tests/test_workflow_quick_step.sh
   plans/tests/test_toggle_policy_check.sh
   plans/verify.sh

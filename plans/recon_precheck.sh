@@ -124,8 +124,9 @@ stale_docs=()
 for doc in \
   "plans/step_prompts/recon/INDEX.md" \
   "plans/prompts/slice_reconcile_r1_audit.md" \
-  "reviews/premortems/RUNBOOK_PREMORTEM_RECON.md" \
-  "reviews/premortems/PREMORTEM_RECON_POLICY.md" \
+  "reviews/reconciliations/PROTOCOL.md" \
+  "reviews/reconciliations/REFERENCE.md" \
+  "reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md" \
   "plans/wf_step.sh"; do
   if [[ -f "$doc" ]] && git cat-file -e "main:$doc" 2>/dev/null; then
     main_hash="$(git rev-parse "main:$doc" 2>/dev/null || true)"
