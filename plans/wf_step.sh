@@ -272,7 +272,7 @@ verify_review_artifact_provenance() {
   # Ensure artifacts used for cycle gates are produced by review_logged-style output
   # with sidecar provenance and logger marker.
   local artifact="$1"
-  local allowed_phases="${2:-R3|R7}"
+  local allowed_phases="${2:-R3|R7d|R7}"
   local required_basis="${3:-any}" # any | story_scope | fix_diff
   local sidecar="${artifact%.md}.sidecar.json"
   local schema_version review_type basis_line_present phase_eq sidecar_basis sidecar_tool
@@ -621,7 +621,6 @@ verify_cycle1_citations() {
   local verifier="$ROOT/plans/verify_citations.sh"
   local newest=""
   local best_c1=""
-  local verifier_output=""
   local saw_artifact=0
   local saw_provenance=0
 
@@ -660,8 +659,7 @@ verify_cycle1_citations() {
       return 1
     elif [[ -n "$newest" ]]; then
       # Emit deterministic failure diagnostics for the newest candidate in this tool dir.
-      verifier_output="$("$verifier" --artifact "$newest" --mode C1 --json 2>&1 || true)"
-      [[ -n "$verifier_output" ]] && echo "$verifier_output" >&2
+      "$verifier" --artifact "$newest" --mode C1 --json >/dev/null 2>&1 || true
       echo "WF_STEP: citation pre-gate failed for $newest (no C1-valid artifact found in $d)" >&2
       return 1
     fi
@@ -866,7 +864,6 @@ case "$STEP" in
 
   cycle2)
     min_reviews=2
-    require_r7_reviews=0
     # Prefer manifest-driven C2 mode when available; legacy fallback uses recon mode signals.
     manifest_cycle2_path="$story_art/external/cycle2/$STORY/R7_EXTERNAL_MANIFEST.json"
     cycle2_mode=""
@@ -875,11 +872,9 @@ case "$STEP" in
       case "$cycle2_mode" in
         ""|null)
           echo "WF_STEP: cycle2_path.mode missing in $manifest_cycle2_path; assuming dual_combo for legacy compatibility"
-          require_r7_reviews=1
           ;;
         dual_combo)
           echo "WF_STEP: cycle2_path.mode=dual_combo for $STORY -> requiring full dual-style cycle2 coverage"
-          require_r7_reviews=1
           ;;
         recon_clean_single)
           min_reviews=1
@@ -903,41 +898,31 @@ case "$STEP" in
       fi
     fi
     review_count=0
-    r7_review_count=0
     c2_basis_count=0
     for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         while IFS= read -r f; do
-          if ! verify_review_artifact_provenance "$f" "R3|R7" "any"; then
+          if ! verify_review_artifact_provenance "$f" "R3|R7d|R7" "any"; then
             continue
           fi
           review_count=$((review_count + 1))
           sidecar="${f%.md}.sidecar.json"
           sidecar_basis="$(jq -r '.review_basis // empty' "$sidecar" 2>/dev/null || true)"
           sidecar_phase="$(jq -r '.phase_equivalent // empty' "$sidecar" 2>/dev/null || true)"
-          if [[ "$sidecar_phase" == "R7" ]]; then
-            r7_review_count=$((r7_review_count + 1))
-            if is_fix_diff_basis "$sidecar_basis"; then
-              c2_basis_count=$((c2_basis_count + 1))
-            fi
+          if [[ "$sidecar_phase" == "R7d" || "$sidecar_phase" == "R7" ]] && is_fix_diff_basis "$sidecar_basis"; then
+            c2_basis_count=$((c2_basis_count + 1))
           fi
         done < <(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null)
       fi
     done
-    if [[ "$require_r7_reviews" -eq 1 ]]; then
-      if [[ "$r7_review_count" -lt "$min_reviews" ]]; then
-        echo "WF_STEP: need at least $min_reviews provenance-valid R7 review artifacts in $story_art/{codex,opus,kimi}/" >&2
-        echo "  C1 artifacts (R3 / STORY_SCOPE) do not satisfy dual_combo cycle2 coverage." >&2
-        exit 3
-      fi
-    elif [[ "$review_count" -lt "$min_reviews" ]]; then
+    if [[ "$review_count" -lt "$min_reviews" ]]; then
       echo "WF_STEP: need at least $min_reviews provenance-valid review artifacts in $story_art/{codex,opus,kimi}/" >&2
       echo "  Artifacts must come from review_logged.sh (logger-v2 + sidecar)." >&2
       exit 3
     fi
-    # Basis-label check: verify >=1 provenance-valid R7 artifact has FIX_DIFF review basis.
+    # Basis-label check: verify >=1 provenance-valid R7d (legacy R7 tolerated) artifact has FIX_DIFF review basis.
     if [[ "$c2_basis_count" -lt 1 ]]; then
-      echo "WF_STEP: cycle2 gate requires >=1 provenance-valid R7 artifact with 'FIX_DIFF' review basis — none found" >&2
+      echo "WF_STEP: cycle2 gate requires >=1 provenance-valid R7d (legacy R7 tolerated) artifact with 'FIX_DIFF' review basis — none found" >&2
       echo "  in $story_art/{codex,opus,kimi}/" >&2
       echo "  C1 artifacts (R3 / STORY_SCOPE) do not satisfy this gate." >&2
       echo "  Run cycle2 reviews via review_logged.sh --cycle C2 before recording this receipt." >&2

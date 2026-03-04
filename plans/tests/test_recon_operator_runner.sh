@@ -41,6 +41,13 @@ cp "$STEP_REPORT_SCHEMA" "$repo/specs/schemas/recon/recon_step_report.schema.jso
 cp "$TRACE_RECEIPT_SCHEMA" "$repo/specs/schemas/recon/recon_trace_receipt.schema.json"
 chmod +x "$repo/plans/recon_operator_run.sh" "$repo/plans/recon_trace.sh" "$repo/plans/validate_recon_artifact.sh"
 
+grep -Fq 'for f in "${changed_before_fingerprints_file:-}" "${changed_after_fingerprints_file:-}" "${changed_delta_file:-}"; do' \
+  "$repo/plans/recon_operator_run.sh" \
+  || fail "cleanup() must delete fingerprint temp files"
+if grep -Fq 'for f in "${changed_before_file:-}" "${changed_after_file:-}" "${changed_new_file:-}"; do' "$repo/plans/recon_operator_run.sh"; then
+  fail "cleanup() must not reference stale temp-file variable names"
+fi
+
 cat > "$repo/plans/prd.json" <<'EOF'
 {
   "items": [
@@ -101,13 +108,17 @@ if [[ "$story" == "S2-002" && "$step" == "self_review" ]]; then
   ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   receipt=".wf/receipts/$story/02_self_review.json"
   mkdir -p "$(dirname "$receipt")"
+  mkdir -p crates/soldier_core/src
   if [[ "${FORCE_ILLEGAL_EDIT:-0}" == "1" ]]; then
-    mkdir -p crates/soldier_core/src
     echo "// forbidden edit from non-write step" > crates/soldier_core/src/non_write_forbidden.rs
   fi
-  if [[ "${FORCE_ILLEGAL_EDIT_EXISTING:-0}" == "1" ]]; then
-    mkdir -p crates/soldier_core/src
-    echo "// forbidden append on pre-existing dirty file" >> crates/soldier_core/src/preexisting_dirty.rs
+  if [[ "${FORCE_ILLEGAL_EDIT_MUTATE_DIRTY:-0}" == "1" ]]; then
+    echo "// forbidden same-file mutation from non-write step" >> crates/soldier_core/src/lib.rs
+  fi
+  if [[ "${FORCE_ILLEGAL_EDIT_AND_FAIL:-0}" == "1" ]]; then
+    echo "// forbidden mutation on failing non-write step" >> crates/soldier_core/src/lib.rs
+    echo "wf_step blocked after illegal production edit" >&2
+    exit 3
   fi
   cat > "$receipt" <<JSON
 {"story_id":"$story","head_sha":"$head_sha","timestamp_utc":"$ts"}
@@ -135,6 +146,8 @@ EOF
 chmod +x "$repo/plans/recon_scoreboard.sh"
 
 echo "seed" > "$repo/seed.txt"
+mkdir -p "$repo/crates/soldier_core/src"
+echo "// baseline production file" > "$repo/crates/soldier_core/src/lib.rs"
 (
   cd "$repo"
   git add -A
@@ -217,30 +230,55 @@ illegal_log="$trace_root_illegal/logs/self_review_attempt1.log"
 grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_log" || fail "missing illegal non-write guard marker"
 grep -Fq '"category":"CEREMONY"' "$trace_root_illegal/failures.jsonl" || fail "illegal non-write run should classify as CEREMONY"
 
-# Scenario E: non-write step must fail closed when editing an already-dirty production file.
-echo "// dirty before self_review run" > "$repo/crates/soldier_core/src/preexisting_dirty.rs"
+# Scenario E: non-write step must fail when mutating an already-dirty production file.
+(
+  cd "$repo"
+  echo "// preexisting dirty change before self_review" >> crates/soldier_core/src/lib.rs
+)
 set +e
 (
   cd "$repo"
-  FORCE_ILLEGAL_EDIT_EXISTING=1 plans/recon_operator_run.sh --story S2-002 --step self_review --mode B >/dev/null 2>&1
+  FORCE_ILLEGAL_EDIT_MUTATE_DIRTY=1 plans/recon_operator_run.sh --story S2-002 --step self_review --mode B >/dev/null 2>&1
 )
-illegal_existing_rc=$?
+illegal_dirty_rc=$?
 set -e
-[[ "$illegal_existing_rc" -ne 0 ]] || fail "expected dirty-path illegal non-write production edit to block run"
+[[ "$illegal_dirty_rc" -ne 0 ]] || fail "expected illegal same-file mutation on already-dirty production file to block run"
 
-trace_root_illegal_existing="$(find "$repo/.wf/trace/S2-002" -mindepth 1 -maxdepth 1 -type d | while IFS= read -r d; do
+trace_root_illegal_dirty="$(find "$repo/.wf/trace/S2-002" -mindepth 1 -maxdepth 1 -type d | while IFS= read -r d; do
   [[ -f "$d/step_timing.jsonl" ]] || continue
   if grep -Fq '"step":"self_review"' "$d/step_timing.jsonl"; then
     echo "$d"
   fi
 done | LC_ALL=C sort | tail -n 1 || true)"
-[[ -n "$trace_root_illegal_existing" ]] || fail "trace root missing for dirty-path illegal non-write edit run"
-illegal_existing_log="$trace_root_illegal_existing/logs/self_review_attempt1.log"
-[[ -f "$illegal_existing_log" ]] || fail "expected dirty-path illegal self_review log at $illegal_existing_log"
-grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_existing_log" || fail "missing dirty-path illegal non-write guard marker"
-grep -Fq '"category":"CEREMONY"' "$trace_root_illegal_existing/failures.jsonl" || fail "dirty-path illegal non-write run should classify as CEREMONY"
+[[ -n "$trace_root_illegal_dirty" ]] || fail "trace root missing for already-dirty illegal edit run"
+illegal_dirty_log="$trace_root_illegal_dirty/logs/self_review_attempt1.log"
+[[ -f "$illegal_dirty_log" ]] || fail "expected illegal same-file self_review log at $illegal_dirty_log"
+grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_dirty_log" || fail "missing illegal same-file non-write guard marker"
+grep -Fq '"category":"CEREMONY"' "$trace_root_illegal_dirty/failures.jsonl" || fail "illegal same-file non-write run should classify as CEREMONY"
 
-# Scenario F: no eligible stories should provide diagnostics, not generic-only error.
+# Scenario F: non-write step failing after production edit must still record marker/classification.
+set +e
+(
+  cd "$repo"
+  FORCE_ILLEGAL_EDIT_AND_FAIL=1 plans/recon_operator_run.sh --story S2-002 --step self_review --mode B >/dev/null 2>&1
+)
+illegal_fail_rc=$?
+set -e
+[[ "$illegal_fail_rc" -ne 0 ]] || fail "expected illegal production edit on failing self_review step to block run"
+
+trace_root_illegal_fail="$(find "$repo/.wf/trace/S2-002" -mindepth 1 -maxdepth 1 -type d | while IFS= read -r d; do
+  [[ -f "$d/step_timing.jsonl" ]] || continue
+  if grep -Fq '"step":"self_review"' "$d/step_timing.jsonl"; then
+    echo "$d"
+  fi
+done | LC_ALL=C sort | tail -n 1 || true)"
+[[ -n "$trace_root_illegal_fail" ]] || fail "trace root missing for failing-step illegal edit run"
+illegal_fail_log="$trace_root_illegal_fail/logs/self_review_attempt1.log"
+[[ -f "$illegal_fail_log" ]] || fail "expected failing-step illegal self_review log at $illegal_fail_log"
+grep -Fq "NON_WRITE_STEP_PROD_EDIT_BLOCKED" "$illegal_fail_log" || fail "missing illegal failing-step non-write guard marker"
+grep -Fq '"category":"CEREMONY"' "$trace_root_illegal_fail/failures.jsonl" || fail "failing-step illegal non-write run should classify as CEREMONY"
+
+# Scenario G: no eligible stories should provide diagnostics, not generic-only error.
 set +e
 (
   cd "$repo"
