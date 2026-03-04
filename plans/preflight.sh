@@ -405,6 +405,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_preflight_fixture_timeout_controls.sh"
+  "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
