@@ -35,7 +35,7 @@ extract_section() {
 require_doc_token() {
   local section_text="$1"
   local token="$2"
-  if ! printf '%s\n' "$section_text" | grep -Fq "$token"; then
+  if ! grep -Fq -- "$token" <<< "$section_text"; then
     fail "workflow contract missing token '$token' in expected gate section"
   fi
 }

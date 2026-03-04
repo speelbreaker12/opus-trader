@@ -89,7 +89,8 @@ assert_contains_line 'setup_fail "Shell syntax aggregate setup failed while writ
 assert_contains_line '# Authoritative check: every plans/*.sh file must parse on its own.'
 assert_contains_line 'if ! bash -n "$f" >/dev/null 2>&1; then'
 assert_contains_line 'if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then'
-assert_contains_line 'if git diff --quiet --cached -- && git diff --quiet -- && ! git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts | grep -q .; then'
+assert_contains_line '&& untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null)" \'
+assert_contains_line '&& [[ -z "$untracked_scoped" ]]; then'
 assert_contains_line 'git ls-files -- plans specs SKILLS tools scripts'
 assert_contains_line 'Falling back to full fixture hash scan'
 

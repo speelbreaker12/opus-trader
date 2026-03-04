@@ -516,9 +516,13 @@ else
     local fast_file_list=""
     local fast_hash=""
     local fallback_hash=""
+    local untracked_scoped=""
 
     if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      if git diff --quiet --cached -- && git diff --quiet -- && ! git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts | grep -q .; then
+      if git diff --quiet --cached -- \
+        && git diff --quiet -- \
+        && untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null)" \
+        && [[ -z "$untracked_scoped" ]]; then
         fast_file_list="$(git ls-files -- plans specs SKILLS tools scripts 2>/dev/null || true)"
         if [[ -n "$fast_file_list" ]]; then
           fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"

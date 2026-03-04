@@ -79,6 +79,12 @@ run_expect_missing_token() {
 }
 
 # Regression guard: require non-pipeline literal token check to avoid pipefail/SIGPIPE false negatives.
+if grep -Fq -- "printf '%s\\n' \"\$section_text\" | grep -Fq" "$gate_check_file"; then
+  fail "require_doc_token must not use printf|grep pipeline"
+fi
+grep -Fq -- "grep -Fq -- \"\$token\" <<< \"\$section_text\"" "$gate_check_file" \
+  || fail "require_doc_token literal non-pipeline grep check missing"
+
 if grep -Fq -- "printf '%s\\n' \"\$file_content\" | grep -Fq" "$gate_check_file"; then
   fail "require_code_token must not use printf|grep pipeline"
 fi
