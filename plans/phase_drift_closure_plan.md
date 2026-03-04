@@ -43,9 +43,9 @@ Eliminate definition-of-done drift in governance documents and verification expe
 3. Health/status split resolution (authority + schema boundaries):
 - Make `docs/health_endpoint.md` HTTP-canonical and align enum casing to `Active|ReduceOnly|Kill`.
 - Add an explicit authority matrix for status surfaces:
-  - Surface A (Phase 0 owner-status scaffolding): minimum required fields and alias behavior.
-  - Surface B (foundation status-lite): exact allowed key set and invariants while `phase == foundation`.
-  - Surface C (CSP minimum status): canonical authority keys required after foundation mode exits.
+  - Foundation status-lite (phase bootstrap): exact allowed key set and invariants.
+  - CSP-minimum status: canonical authority keys required after foundation mode exits.
+  - Phase 0 owner-status scaffolding: minimum required fields and alias behavior.
 - Reconcile all references to this matrix across `specs/CONTRACT.md`, `specs/IMPLEMENTATION_PLAN.md`, and `docs/health_endpoint.md` so field scope/casing cannot drift.
 - Keep CLI as operator convenience surface, not transport authority.
 4. Verify contract alignment:
@@ -75,9 +75,6 @@ Eliminate definition-of-done drift in governance documents and verification expe
 - `bash plans/tests/test_contract_change_ledger.sh`
 - `./plans/verify.sh quick`
 - `./plans/verify.sh full`
-- `rg -n "owner: admin|prepared_by: admin" docs/launch_policy.md`
-- `rg -n "Appendix CONTRACT_CHANGE_LEDGER|CCL-20260304-PR1-01" specs/CONTRACT.md`
-- `rg -n "contract_change_ledger" plans/verify_fork.sh plans/preflight.sh plans/tests/test_preflight_fixture_profiles.sh plans/tests/test_verify_fork_guardrails.sh`
 - Confirm contract/doc sync gates pass (crossrefs, coverage, phase1 meta-test, contract-change-ledger checker).
 
 ---
