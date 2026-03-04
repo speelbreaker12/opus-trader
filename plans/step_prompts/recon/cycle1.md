@@ -17,14 +17,16 @@
   - Exit `4`: missing required citations. Fix reviewer output quality and rerun.
   - Exit `7`: timeout hard-gate. Increase timeout or reduce prompt/file scope and rerun.
 - Sidecar rule: failed runs can intentionally leave no sidecar; do not reuse stale sidecars as evidence.
-- Write `evidence_ledger.md`; **first line must be exactly one of:**
-  - `PATH: GREEN` — 0 BLOCKING findings (P0 or P1)
-  - `PATH: YELLOW` — any BLOCKING findings exist
-- List all findings after the PATH line: severity | AT-ID | what is wrong
+- Write canonical JSON ledger at `artifacts/story/<ID>/evidence_ledger.json`:
+  - `path`: `GREEN` (0 BLOCKING findings) or `YELLOW` (any P0/P1 finding)
+  - `at_verdicts[]`: one row per AT in `enforcing_contract_ats[]`
+  - required row fields: `at_id`, `verdict`, `enforcement`, `test`, `notes`
+  - for `verdict=PROVEN`, `enforcement` and `test` must include `file:line` citations
+- Keep markdown ledgers as read-only legacy compatibility only; do not create new `.md` ledger files.
 
 ## OUTPUT
 - `artifacts/story/<ID>/<tool>/` → review artifact from review_logged.sh
-- `artifacts/story/<ID>/cycle1/evidence_ledger.md` → PATH signal + findings
+- `artifacts/story/<ID>/evidence_ledger.json` → canonical PATH signal + AT verdict coverage
 
 ## RECEIPT
 ```
