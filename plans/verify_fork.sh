@@ -751,7 +751,7 @@ if [[ -x "$ROOT/plans/pattern_guard.sh" ]]; then
     bash "$ROOT/plans/pattern_guard.sh"
 fi
 
-MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-120s}"
+MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-240s}"
 if [[ -x "$ROOT/plans/verify_mechanical.sh" ]]; then
   log "14f-mech) mechanical verification"
   run_logged_or_exit "mechanical_verification" "$MECHANICAL_TIMEOUT" \

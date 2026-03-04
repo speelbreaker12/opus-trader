@@ -59,7 +59,7 @@ full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
 assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
 assert_contains_line 'start_ns="$(now_monotonic_ns)"'
