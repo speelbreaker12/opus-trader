@@ -1,5 +1,11 @@
 # Reconciliation Process Simplification — Design
 
+> **Status note (2026-03-04):** This design record is historical context.
+> Current reconciliation execution authority is `reviews/reconciliations/PROTOCOL.md`
+> and `reviews/reconciliations/REFERENCE.md`. The active handoff format is
+> `RECON_HANDOFF_TEMPLATE.md` with "Step Log" + mandatory HANDOFF updates, and it
+> supersedes the older `§0–§11` debrief framing described here.
+
 **Date**: 2026-02-26
 **Status**: Approved
 
