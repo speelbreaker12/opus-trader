@@ -39,6 +39,7 @@ required=(
   docs/validation_rules.md
   plans/autofix.sh
   plans/artifact_lint.sh
+  plans/check_contract_change_ledger.sh
   plans/check_skip_entrypoint.sh
   plans/code_review_expert_attest.sh
   plans/code_review_expert_guard.sh
@@ -96,6 +97,7 @@ required=(
   plans/story_verify_allowlist_suggest.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
+  plans/tests/test_contract_change_ledger.sh
   plans/tests/test_contract_profile_parity.sh
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh

@@ -8,8 +8,8 @@
 - policy_version: 1.1
 - contract_version_target: 5.2
 - effective_date_utc: 2026-01-27
-- owner: [FILL]
-- prepared_by: [FILL]
+- owner: admin
+- prepared_by: admin
 - last_updated_utc: 2026-02-09T00:00:00Z
 
 ---

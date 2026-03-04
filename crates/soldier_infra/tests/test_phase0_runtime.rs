@@ -618,7 +618,11 @@ fn test_status_command_behavior_runtime() {
     );
     assert_eq!(
         healthy_payload["trading_mode"],
-        Value::String("ACTIVE".to_string())
+        Value::String("Active".to_string())
+    );
+    assert_eq!(
+        healthy_payload["opens_globally_permitted"],
+        Value::Bool(true)
     );
     assert_eq!(healthy_payload["is_trading_allowed"], Value::Bool(true));
 
@@ -657,12 +661,16 @@ fn test_status_command_behavior_runtime() {
     let reduce_only_payload = parse_stdout_json(&reduce_only_status_out);
     assert_eq!(
         reduce_only_payload["trading_mode"],
-        Value::String("REDUCE_ONLY".to_string())
+        Value::String("ReduceOnly".to_string())
+    );
+    assert_eq!(
+        reduce_only_payload["opens_globally_permitted"],
+        Value::Bool(false)
     );
     assert_eq!(
         reduce_only_payload["is_trading_allowed"],
         Value::Bool(false),
-        "REDUCE_ONLY must not be reported as trading-allowed"
+        "ReduceOnly must not be reported as trading-allowed"
     );
 
     let missing_policy = root.join("config/missing_policy_for_status_test.json");
@@ -691,7 +699,11 @@ fn test_status_command_behavior_runtime() {
     );
     assert_eq!(
         unhealthy_payload["trading_mode"],
-        Value::String("KILL".to_string())
+        Value::String("Kill".to_string())
+    );
+    assert_eq!(
+        unhealthy_payload["opens_globally_permitted"],
+        Value::Bool(false)
     );
     assert_eq!(unhealthy_payload["is_trading_allowed"], Value::Bool(false));
     let errs = unhealthy_payload["errors"]
@@ -845,7 +857,11 @@ fn test_break_glass_command_path_runtime() {
     let status_after_kill_payload = parse_stdout_json(&status_after_kill);
     assert_eq!(
         status_after_kill_payload["trading_mode"],
-        Value::String("KILL".to_string())
+        Value::String("Kill".to_string())
+    );
+    assert_eq!(
+        status_after_kill_payload["opens_globally_permitted"],
+        Value::Bool(false)
     );
     assert_eq!(
         status_after_kill_payload["is_trading_allowed"],
@@ -962,7 +978,11 @@ fn test_break_glass_state_file_deletion_fails_closed_runtime() {
     assert_eq!(status_payload["ok"], Value::Bool(false));
     assert_eq!(
         status_payload["trading_mode"],
-        Value::String("KILL".to_string())
+        Value::String("Kill".to_string())
+    );
+    assert_eq!(
+        status_payload["opens_globally_permitted"],
+        Value::Bool(false)
     );
     assert_eq!(status_payload["is_trading_allowed"], Value::Bool(false));
     let errs = status_payload["errors"]
@@ -1026,7 +1046,11 @@ fn test_break_glass_state_file_and_marker_deletion_fails_closed_runtime() {
     assert_eq!(status_payload["ok"], Value::Bool(false));
     assert_eq!(
         status_payload["trading_mode"],
-        Value::String("KILL".to_string())
+        Value::String("Kill".to_string())
+    );
+    assert_eq!(
+        status_payload["opens_globally_permitted"],
+        Value::Bool(false)
     );
     assert_eq!(status_payload["is_trading_allowed"], Value::Bool(false));
     let status_errs = status_payload["errors"]
@@ -1143,9 +1167,10 @@ fn test_runtime_state_path_outside_repo_rejected() {
     assert_eq!(payload["ok"], Value::Bool(false));
     assert_eq!(
         payload["trading_mode"],
-        Value::String("KILL".to_string()),
-        "status should fail closed to KILL when runtime path is invalid"
+        Value::String("Kill".to_string()),
+        "status should fail closed to Kill when runtime path is invalid"
     );
+    assert_eq!(payload["opens_globally_permitted"], Value::Bool(false));
     let errs = payload["errors"]
         .as_array()
         .expect("errors array expected on invalid runtime path");
@@ -1185,7 +1210,8 @@ fn test_runtime_state_path_outside_repo_allowed_with_explicit_opt_in() {
     );
     let payload = parse_stdout_json(&out);
     assert_eq!(payload["ok"], Value::Bool(true));
-    assert_eq!(payload["trading_mode"], Value::String("ACTIVE".to_string()));
+    assert_eq!(payload["trading_mode"], Value::String("Active".to_string()));
+    assert_eq!(payload["opens_globally_permitted"], Value::Bool(true));
     let runtime_state_path = payload["runtime_state_path"]
         .as_str()
         .expect("runtime_state_path should be present");
@@ -1546,7 +1572,8 @@ fn test_runtime_state_schema_mismatch_fails_closed() {
     );
     let payload = parse_stdout_json(&out);
     assert_eq!(payload["ok"], Value::Bool(false));
-    assert_eq!(payload["trading_mode"], Value::String("KILL".to_string()));
+    assert_eq!(payload["trading_mode"], Value::String("Kill".to_string()));
+    assert_eq!(payload["opens_globally_permitted"], Value::Bool(false));
     let errs = payload["errors"]
         .as_array()
         .expect("errors array expected on schema mismatch");
@@ -1599,7 +1626,8 @@ fn test_runtime_state_null_schema_fails_closed() {
     );
     let payload = parse_stdout_json(&out);
     assert_eq!(payload["ok"], Value::Bool(false));
-    assert_eq!(payload["trading_mode"], Value::String("KILL".to_string()));
+    assert_eq!(payload["trading_mode"], Value::String("Kill".to_string()));
+    assert_eq!(payload["opens_globally_permitted"], Value::Bool(false));
     let errs = payload["errors"]
         .as_array()
         .expect("errors array expected on null schema");
@@ -1653,7 +1681,11 @@ fn test_legacy_runtime_state_without_schema_is_migrated() {
     assert_eq!(status_payload["ok"], Value::Bool(true));
     assert_eq!(
         status_payload["trading_mode"],
-        Value::String("ACTIVE".to_string())
+        Value::String("Active".to_string())
+    );
+    assert_eq!(
+        status_payload["opens_globally_permitted"],
+        Value::Bool(true)
     );
 
     let open_out = run_cli(

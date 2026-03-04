@@ -18,6 +18,13 @@ assert_contains_line() {
   fi
 }
 
+assert_not_contains_line() {
+  local needle="$1"
+  if grep -Fq "$needle" "$VERIFY"; then
+    fail "unexpected fail-open token present: $needle"
+  fi
+}
+
 line_number_for() {
   local needle="$1"
   local line
@@ -73,6 +80,15 @@ assert_contains_line 'run_logged_or_exit "contract_impl_lag_ids"'
 assert_contains_line 'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
 assert_line_before 'run_logged_or_exit "contract_crossrefs"' 'run_logged_or_exit "contract_impl_lag_ids"'
 assert_line_before 'run_logged_or_exit "contract_impl_lag_ids"' 'run_logged_or_exit "arch_flows"'
+
+# Guardrail: CONTRACT.md mutations must be protected by contract-change ledger gate.
+assert_contains_line 'log "02a) contract change ledger"'
+assert_contains_line 'run_logged_or_exit "contract_change_ledger"'
+assert_contains_line 'bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md'
+assert_contains_line '"$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md'
+assert_not_contains_line 'warn "contract_change_ledger skipped (missing plans/check_contract_change_ledger.sh)"'
+assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger"'
+assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
 
 # Guardrail: recon prompt invariants must be enforced between gate integrity and doc sync.
 assert_contains_line 'log "14cc) recon prompt guard"'

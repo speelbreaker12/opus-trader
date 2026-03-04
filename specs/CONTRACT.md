@@ -120,7 +120,7 @@ AT-1055
 
 ## **Phase 0: Operational Prerequisites (Non-Negotiable)**
 
-Before any code implementation begins, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
+Before live-trading enablement, any CSP compliance claim, or promotion beyond foundation into Phase 2+ operation, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
 
 | ID | Item | Purpose | Evidence Required |
 |----|------|---------|-------------------|
@@ -139,7 +139,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before live-trading enablement and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -4557,6 +4557,19 @@ Profile: CSP
 - `GET /api/v1/status` (read-only)
 - `GET /api/v1/health` (read-only; minimal external watchdog primitive)
 
+**Status authority matrix (normative):**
+- **Surface A: Phase 0 owner-status scaffolding (operator convenience surface).**
+  - May be exposed via CLI and local operator tooling.
+  - MUST include `trading_mode` + `opens_globally_permitted`.
+  - `is_trading_allowed` MAY be emitted as deprecated alias and MUST equal `opens_globally_permitted`.
+  - Canonical `trading_mode` values are `Active|ReduceOnly|Kill`; legacy uppercase aliases (`ACTIVE|REDUCE_ONLY|KILL`) are transitional and MUST map one-to-one.
+- **Surface B: Foundation status-lite (`phase == foundation`).**
+  - Governs `GET /api/v1/status` shape while in Phase 1 bootstrap mode.
+  - MUST include only the bootstrap keys and invariants listed under AT-1230.
+- **Surface C: CSP minimum status (`phase != foundation`).**
+  - Governs authoritative `GET /api/v1/status` schema once foundation mode exits.
+  - MUST include the CSP minimum keys listed below.
+
 **/health response MUST include (minimum):**
 - `ok` (bool; MUST be true when process is up)
 - `build_id` (string)
@@ -6308,3 +6321,15 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.10 CSP_ONLY Build/Test Mode** | §0.Z.7.3 (CSP_ONLY build requirement)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.9.1 (meta-ATs) | AT-1056 (CI build:csp_only succeeds)<br>AT-1057 (CI test:csp_only runs only CSP tests; all pass)<br>AT-990 (runtime sanity: CSP_ONLY build starts; GOP not enforced) |
 | **CSP.11 Explicit Non-Requirements** | §0.Z.2.3 (CSP explicit non-requirements)<br>§0.Z.3.3 (GOP failures must not violate CSP guarantees)<br>§0.Z.7.2 (GOP failures MUST NOT alter CSP decisions when CSP enforced) | AT-991 (CSP decisions unaffected by GOP health when CSP enforced) |
 | **CSP.12 Acceptance Tests (CSP gating)** | §0.Z.5 (profile tagging rules)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.10 (Numeric Sanity Guard)<br>§8 (release gates reference CSP/GOP status) | AT-1057 (ensures CSP-only pipeline executes only CSP tests)<br>AT-023 (status completeness for operators/CI)<br>AT-1219 (GOP numeric faults isolated under CSP) |
+
+## **Appendix CONTRACT_CHANGE_LEDGER (Normative, Mandatory)**
+Profile: CSP
+
+Any mutation to `specs/CONTRACT.md` MUST add a new dated ledger row in this appendix.
+Ledger entries are append-only: existing rows MUST NOT be edited or deleted.
+Corrections MUST be recorded as additional rows.
+`plans/check_contract_change_ledger.sh` is the fail-closed enforcement gate wired into `./plans/verify.sh`.
+
+| date_utc | change_id | sections_touched | change_type | summary | rationale | AT/VR refs | story/pr |
+|---|---|---|---|---|---|---|---|
+| 2026-03-04 | CCL-20260304-PR1-01 | Phase 0 prerequisites; §7.0 status authority matrix; Phase 1 boundary clarifications | clarification | Enforce Phase 0/Phase 1 authority boundaries and canonical status surface semantics | Remove doc/contract drift and bind status authority to explicit surfaces | AT-022; AT-1230 | PR1/task1-task2 |

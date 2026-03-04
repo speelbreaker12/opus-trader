@@ -12,6 +12,7 @@ plans/aggregate_proofs.sh
 plans/artifact_lint.sh
 plans/autofix.sh
 plans/check_checkpoint_fingerprint_manifest.sh
+plans/check_contract_change_ledger.sh
 plans/check_skip_entrypoint.sh
 plans/checkpoint_dependency_manifest.json
 plans/checkpoint_fingerprint_env_manifest.txt
@@ -100,6 +101,7 @@ plans/tests/test_artifact_lint.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
+plans/tests/test_contract_change_ledger.sh
 plans/tests/test_contract_profile_parity.sh
 plans/tests/test_contract_review_emit.sh
 plans/tests/test_crossref_gate.sh

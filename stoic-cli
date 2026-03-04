@@ -39,6 +39,11 @@ DEFAULT_KEY_SCOPE_PROBE = ROOT / "evidence" / "phase0" / "keys" / "key_scope_pro
 DEFAULT_RUNTIME_STATE_PATH = ROOT / "artifacts" / "phase0" / "runtime_state.json"
 DEFAULT_RUNTIME_STATE_V1_PATH = ROOT / "var" / "runtime" / "runtime_state.json"
 RUNTIME_MODES = {"ACTIVE", "REDUCE_ONLY", "KILL"}
+RUNTIME_MODE_ALIASES = {
+    "ACTIVE": "ACTIVE",
+    "REDUCEONLY": "REDUCE_ONLY",
+    "KILL": "KILL",
+}
 RUNTIME_STATE_SCHEMA_VERSION = 1
 RUNTIME_STATE_V1_SCHEMA_VERSION = "runtime_state.v1"
 RUNTIME_STATE_V1_PUBLISH_INTERVAL_S = 2
@@ -197,9 +202,7 @@ def _runtime_state_initialized(path: Path) -> bool:
 
 
 def _default_runtime_state(*, trading_mode: str = "ACTIVE", reason: str = "") -> Dict[str, Any]:
-    mode = str(trading_mode).upper()
-    if mode not in RUNTIME_MODES:
-        mode = "KILL"
+    mode = _normalize_runtime_mode(trading_mode)
     pending_orders: list[Dict[str, Any]] = []
     orders_in_flight = 0 if mode == "KILL" else len(pending_orders)
     return {
@@ -275,14 +278,15 @@ def _load_runtime_state(path: Path) -> tuple[Dict[str, Any], list[str]]:
             ],
         )
 
-    mode = str(obj.get("trading_mode", default_state["trading_mode"])).upper()
-    if mode not in RUNTIME_MODES:
+    raw_mode = obj.get("trading_mode", default_state["trading_mode"])
+    mode = _try_normalize_runtime_mode(raw_mode)
+    if mode is None:
         return (
             _default_runtime_state(
                 trading_mode="KILL",
                 reason="runtime_state_invalid_mode",
             ),
-            [f"runtime_state: invalid trading_mode={mode!r}"],
+            [f"runtime_state: invalid trading_mode={raw_mode!r}"],
         )
 
     orders_in_flight = obj.get("orders_in_flight", default_state["orders_in_flight"])
@@ -588,8 +592,31 @@ def _max_pending_orders() -> int:
     return value
 
 
+def _normalize_runtime_mode(mode: str) -> str:
+    normalized = _try_normalize_runtime_mode(mode)
+    if normalized is None:
+        return "KILL"
+    return normalized
+
+
+def _try_normalize_runtime_mode(mode: Any) -> Optional[str]:
+    alias_key = re.sub(r"[^A-Z0-9]+", "", str(mode).strip().upper())
+    if not alias_key:
+        return None
+    return RUNTIME_MODE_ALIASES.get(alias_key)
+
+
+def _canonical_runtime_mode(mode: str) -> str:
+    normalized = _normalize_runtime_mode(mode)
+    return {
+        "ACTIVE": "Active",
+        "REDUCE_ONLY": "ReduceOnly",
+        "KILL": "Kill",
+    }[normalized]
+
+
 def _is_trading_allowed_mode(mode: str) -> bool:
-    return mode == "ACTIVE"
+    return _normalize_runtime_mode(mode) == "ACTIVE"
 
 
 def _load_policy_with_validation(policy_path: Path) -> tuple[Optional[Dict[str, Any]], list[str]]:
@@ -643,13 +670,16 @@ def _status_payload(
     state: Dict[str, Any],
     detailed: bool,
 ) -> Dict[str, Any]:
+    canonical_mode = _canonical_runtime_mode(trading_mode)
+    opens_globally_permitted = _is_trading_allowed_mode(trading_mode)
     payload: Dict[str, Any] = {
         "ok": ok,
         "build_id": build_id,
         "contract_version": contract_version,
         "timestamp_utc": _utc_now_iso(),
-        "trading_mode": trading_mode,
-        "is_trading_allowed": _is_trading_allowed_mode(trading_mode),
+        "trading_mode": canonical_mode,
+        "opens_globally_permitted": opens_globally_permitted,
+        "is_trading_allowed": opens_globally_permitted,
         "orders_in_flight": int(state.get("orders_in_flight", 0)),
         "pending_orders": len(state.get("pending_orders", [])),
         "last_transition_reason": str(state.get("last_transition_reason", "")),
@@ -665,6 +695,7 @@ def _status_payload(
 def _print_status_text(payload: Dict[str, Any], detailed: bool) -> None:
     print(f"ok: {str(payload.get('ok', False)).lower()}")
     print(f"trading_mode: {payload.get('trading_mode', 'UNKNOWN')}")
+    print(f"opens_globally_permitted: {str(payload.get('opens_globally_permitted', False)).lower()}")
     print(f"is_trading_allowed: {str(payload.get('is_trading_allowed', False)).lower()}")
     print(f"orders_in_flight: {payload.get('orders_in_flight', 0)}")
     print(f"pending_orders: {payload.get('pending_orders', 0)}")

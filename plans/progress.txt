@@ -840,6 +840,20 @@ Commands: ./plans/verify.sh full.
 Evidence: artifacts/verify/20260302_203601/verify.meta.json (status=ok); artifacts/verify/20260302_203601 (gate logs and timing summary).
 Notes: Dirty-tree warning was non-blocking in this run; all enforced full gates passed, including preflight, mechanical verification, rust gates, and adversarial invariants.
 Next: If this branch is intended for pass flip, run plans/prd_set_pass.sh with the required story artifacts and then proceed to review/merge flow.
+Story: PR #161 drift-closure fail-closed hardening + handoff
+Date: 2026-03-04 22:11:46 UTC
+Summary: Finalized PR #161 with fail-closed contract-ledger enforcement (no -x skip path, no HEAD~1 fallback), explicit append-only contract wording, status-schema/runtime-test alignment, workflow allowlist coverage, and contract-kernel refresh. Wrote next-agent handoff in plans/pause.md.
+Commands: bash plans/tests/test_contract_change_ledger.sh; bash plans/tests/test_verify_fork_guardrails.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; python3 tools/phase0_meta_test.py --root .; cargo test -p soldier_infra --test test_phase0_runtime; ./plans/verify.sh quick; gh pr checks 161 --watch --interval 10.
+Evidence: artifacts/verify/20260304_160045/verify.meta.json; plans/check_contract_change_ledger.sh; plans/tests/test_contract_change_ledger.sh; specs/CONTRACT.md; docs/contract_kernel.json; plans/pause.md.
+Notes: PR #161 head is b09bd42 with green CI. Latent helper inconsistency remains in stoic-cli _normalize_runtime_mode for canonical input "ReduceOnly" if round-tripped; not currently CI-blocking.
+Next: Merge PR #161 unless user requests normalizer follow-up patch before merge.
+Story: PR #161 stoic-cli runtime mode normalization follow-up
+Date: 2026-03-04 23:05:00 UTC
+Summary: Fixed runtime mode alias normalization to canonical internal tokens (`ACTIVE|REDUCE_ONLY|KILL`) using an alias map/key normalizer, updated runtime-state loading to validate/normalize aliases while preserving fail-closed rejection for unknown mode strings, and added direct regression coverage for title-case/snake-case/hyphenated/unknown inputs.
+Commands: python3 -m pytest tests/test_stoic_cli_mode_normalization.py -q; python3 -m pytest tests/test_stoic_cli_mode_normalization.py tests/test_stoic_cli_runtime_state_v1.py -q; ./plans/verify.sh quick; cargo test -p soldier_core --test test_execution_facade_public -- --nocapture.
+Evidence: stoic-cli; tests/test_stoic_cli_mode_normalization.py; artifacts/verify/20260304_162837/verify.meta.json.
+Notes: First quick verify attempt (`artifacts/verify/20260304_162312`) failed on a transient `test_execution_facade_public` failure; targeted rerun and second quick verify were green.
+Next: Push these follow-up commits on PR #161 and re-run CI checks before merge.
 Story: workflow-maintenance
 Date: 2026-03-04 19:24:28 UTC
 Summary: Started recon process review follow-up batch in dedicated worktree branch `slice1/recon-process-followup-20260304`; regenerated RECON_PROCESS_REVIEW appendix against immutable baseline `c61926518538be615947eb96d07084a76e57074a`, created dated action register, and recorded ToC operating focus for this batch.
