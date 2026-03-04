@@ -184,4 +184,37 @@ write_sidecar "$cycle2_artifact" "R7d" "FIX_DIFF_AT_REGRESSION" "opus" "$story" 
 )
 [[ -f "$repo/.wf/receipts/$story/05_cycle2.json" ]] || fail "cycle2 receipt should be written with provenance-valid C1+C2 artifacts"
 
+# Dual-combo mode must require R7d/R7-only review count; C1 (R3) artifacts do not count.
+rm -f "$repo/.wf/receipts/$story/05_cycle2.json"
+mkdir -p "$repo/artifacts/story/$story/external/cycle2/$story"
+cat > "$repo/artifacts/story/$story/external/cycle2/$story/R7_EXTERNAL_MANIFEST.json" <<'MANIFEST'
+{
+  "cycle2_path": {
+    "mode": "dual_combo"
+  }
+}
+MANIFEST
+
+set +e
+dual_combo_fail_out="$(cd "$repo" && bash plans/wf_step.sh "$story" cycle2 2>&1)"
+dual_combo_fail_rc=$?
+set -e
+[[ "$dual_combo_fail_rc" -eq 3 ]] || fail "dual_combo cycle2 should fail with only one R7d/R7 artifact, got $dual_combo_fail_rc"
+printf '%s\n' "$dual_combo_fail_out" | grep -Fq "provenance-valid R7d (legacy R7 tolerated) review artifacts" || fail "dual_combo cycle2 missing R7d-count failure message"
+
+second_cycle2_artifact="$repo/artifacts/story/$story/codex/20260301_c2_review.md"
+cat > "$second_cycle2_artifact" <<'C2B'
+Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)
+Phase equivalent: R7d
+artifact_provenance: "logger-v2"
+FINDINGS_SUMMARY: P0=0 P1=0 P2=0
+C2B
+write_sidecar "$second_cycle2_artifact" "R7d" "FIX_DIFF_AT_REGRESSION" "codex" "$story" "$head_sha"
+
+(
+  cd "$repo"
+  bash plans/wf_step.sh "$story" cycle2 >/dev/null
+)
+[[ -f "$repo/.wf/receipts/$story/05_cycle2.json" ]] || fail "dual_combo cycle2 receipt should be written after two R7d/R7 artifacts"
+
 echo "test_wf_step_review_provenance.sh: ok"
