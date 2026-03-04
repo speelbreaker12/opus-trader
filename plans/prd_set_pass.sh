@@ -3,9 +3,10 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: ./plans/prd_set_pass.sh <task_id> <true|false> [--artifacts-dir <dir>] [--contract-review <file>]
+Usage: ./plans/prd_set_pass.sh <task_id> <true|false> [--artifacts-dir <dir>] [--contract-review <file>] [--dry-run]
 
 If --artifacts-dir is omitted, the latest artifacts/verify/<run_id>/ directory is used.
+If --dry-run is set, all validation checks run and diagnostics are emitted, but plans/prd.json is not modified.
 
 Rules for passes=true:
   - verify.meta.json must exist and report mode=full
@@ -34,6 +35,7 @@ shift $(( $# >= 2 ? 2 : $# ))
 PRD_FILE="${PRD_FILE:-plans/prd.json}"
 ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-}"
 CONTRACT_REVIEW_FILE=""
+DRY_RUN=0
 
 if [[ -z "$ARTIFACTS_DIR" ]]; then
   ARTIFACTS_DIR="$(ls -dt "$ROOT"/artifacts/verify/*/ 2>/dev/null | head -n 1 || true)"
@@ -49,6 +51,10 @@ while [[ $# -gt 0 ]]; do
     --contract-review)
       CONTRACT_REVIEW_FILE="${2:-}"
       shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
       ;;
     -h|--help)
       usage
@@ -318,18 +324,23 @@ if [[ -x "$ext_gate" ]]; then
   fi
 fi
 
+if [[ "$STATUS" == "true" ]]; then
+  final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; exit 4; }
+  if [[ "$final_head_sha" != "$HEAD_SHA" ]]; then
+    echo "ERROR: HEAD changed during pass flip validation (initial=$HEAD_SHA current=$final_head_sha)" >&2
+    exit 4
+  fi
+fi
+
+if [[ "$DRY_RUN" == "1" ]]; then
+  echo "DRY-RUN: validation passed for task $ID (requested passes=$STATUS)"
+  exit 0
+fi
+
 tmp="$(mktemp)"
 jq --arg id "$ID" --argjson status "$STATUS" '
   .items = (.items | map(if .id == $id then .passes = $status else . end))
 ' "$PRD_FILE" > "$tmp"
-if [[ "$STATUS" == "true" ]]; then
-  final_head_sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "ERROR: failed to re-read current HEAD before pass flip" >&2; rm -f "$tmp"; exit 4; }
-  if [[ "$final_head_sha" != "$HEAD_SHA" ]]; then
-    echo "ERROR: HEAD changed during pass flip validation (initial=$HEAD_SHA current=$final_head_sha)" >&2
-    rm -f "$tmp"
-    exit 4
-  fi
-fi
 mv "$tmp" "$PRD_FILE"
 
 echo "Updated task $ID: passes=$STATUS"

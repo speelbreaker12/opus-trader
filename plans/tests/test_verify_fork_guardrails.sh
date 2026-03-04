@@ -90,6 +90,17 @@ assert_not_contains_line 'warn "contract_change_ledger skipped (missing plans/ch
 assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger"'
 assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
 
+# Guardrail: recon prompt invariants must be enforced between gate integrity and doc sync.
+assert_contains_line 'log "14cc) recon prompt guard"'
+assert_contains_line 'run_logged_or_exit "recon_prompt_guard"'
+assert_contains_line 'bash "$ROOT/plans/recon_prompt_guard.sh"'
+assert_line_before 'log "14c) gate integrity lint"' 'log "14cc) recon prompt guard"'
+assert_contains_line 'log "14cd) recon doc budget"'
+assert_contains_line 'run_logged_or_exit "recon_doc_budget"'
+assert_contains_line 'bash "$ROOT/plans/recon_doc_budget.sh"'
+assert_line_before 'log "14cc) recon prompt guard"' 'log "14cd) recon doc budget"'
+assert_line_before 'log "14cd) recon doc budget"' 'log "14d) doc sync check"'
+
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
   local fn_name="$1"

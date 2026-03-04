@@ -500,4 +500,48 @@ set -e
 echo "$failed_pg_output" | grep -Fq "proof graph gate failed for $story_id" || fail "missing proof graph non-20 failure diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$failed_pg_case/prd.json" >/dev/null || fail "passes changed despite non-zero/non-20 proof graph artifact"
 
+# ── Test 14: --dry-run executes pass checks and does not mutate PRD ─
+dry_run_case="$tmp_dir/dry_run_success"
+mkdir -p "$dry_run_case"
+setup_case "$dry_run_case" "$head_sha"
+
+dry_run_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$dry_run_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$dry_run_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$dry_run_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$dry_run_case/artifacts/contract_review.json" \
+  --dry-run
+)"
+
+echo "$dry_run_output" | grep -Fq "DRY-RUN: validation passed for task $story_id (requested passes=true)" || fail "missing dry-run success diagnostic"
+echo "$dry_run_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "dry-run should execute full validation path"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$dry_run_case/prd.json" >/dev/null || fail "dry-run should not mutate passes field"
+
+# ── Test 15: --dry-run fails on broken gates and still avoids mutation ─
+dry_run_fail_case="$tmp_dir/dry_run_fail"
+mkdir -p "$dry_run_fail_case"
+setup_case "$dry_run_fail_case" "$head_sha"
+rm -f "$dry_run_fail_case/artifacts/fail_closed_coverage.rc"
+
+set +e
+dry_run_fail_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$dry_run_fail_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$dry_run_fail_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$dry_run_fail_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$dry_run_fail_case/artifacts/contract_review.json" \
+  --dry-run 2>&1
+)"
+dry_run_fail_rc=$?
+set -e
+
+[[ "$dry_run_fail_rc" -eq 4 ]] || fail "expected exit 4 for dry-run gate failure, got $dry_run_fail_rc"
+echo "$dry_run_fail_output" | grep -Fq "missing required gate artifact" || fail "missing dry-run gate failure diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$dry_run_fail_case/prd.json" >/dev/null || fail "dry-run failure should not mutate passes field"
+
 echo "PASS: prd_set_pass"

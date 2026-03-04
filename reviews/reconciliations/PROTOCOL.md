@@ -15,6 +15,7 @@ Non-negotiables:
 - `plans/wf_step.sh` is the execution order authority.
 - `plans/prd_set_pass.sh` is the pass-flip authority.
 - Reconciliation is fail-closed: missing required artifacts or failed gates block progression.
+- PRD machine-consumed path fields must not use legacy `reviews/premortems/*` docs; use `reviews/reconciliations/PROTOCOL.md` and `reviews/reconciliations/REFERENCE.md` (enforced by `prd_lint.sh` as `STALE_RECON_DOC_REF`).
 - **Handoff is mandatory for all stories and all steps**. After every step attempt (pass or fail), update the active handoff before continuing.
 
 Canonical references:
@@ -101,13 +102,42 @@ Every review artifact must include one of:
 - `./plans/verify.sh full` must pass at current HEAD.
 
 ### 4.8 Pass Flip
-`./plans/prd_set_pass.sh <STORY_ID> true` must pass all enforced checks, including:
+Default preview (no mutation):
+
+```bash
+VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
+  ./plans/prd_set_pass.sh <STORY_ID> true --dry-run
+```
+
+Mutation path (only after preview is green):
+
+```bash
+VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
+  ./plans/prd_set_pass.sh <STORY_ID> true
+```
+
+`prd_set_pass.sh` must pass all enforced checks, including:
 - verify artifacts with matching HEAD
 - required review artifacts
 - receipt chain requirements
 - contract review / proof graph / fail-closed constraints as enforced by script
 
 `plans/prd_set_pass.sh` script output is authoritative for exact check set.
+
+### 4.9 Reconciliation Process-Doc Budget
+- Verify enforces `plans/recon_doc_budget.sh` to prevent process-doc sprawl.
+- Required docs:
+  - `reviews/reconciliations/PROTOCOL.md`
+  - `reviews/reconciliations/REFERENCE.md`
+  - `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md`
+- Default budget: `RECON_DOC_BUDGET_MAX_LINES=650`.
+- Threshold must be a non-negative integer; invalid values fail closed.
+- Override policy for thresholds above `650`:
+  - In CI: override attempts are ignored (hard-enforced at `650`).
+  - Locally: requires explicit owner approval entries in `plans/progress.txt`:
+    - `RECON_DOC_BUDGET_OVERRIDE_APPROVED_BY: <owner>`
+    - `RECON_DOC_BUDGET_OVERRIDE_REASON: <rationale>`
+    - `RECON_DOC_BUDGET_OVERRIDE_EXPIRES: YYYY-MM-DD`
 
 ---
 

@@ -572,29 +572,103 @@ cycle1_had_zero_findings() {
 }
 
 read_cycle1_path() {
-  # Reads the explicit PATH: GREEN / PATH: YELLOW signal written by the cycle1 agent.
-  # Returns 0 (green/zero-findings) if PATH: GREEN, 1 otherwise.
-  # Falls back to cycle1_had_zero_findings() for pre-existing artifacts without the signal.
+  # Reads the explicit PATH signal from the cycle1 ledger.
+  # Canonical source is JSON-first: artifacts/story/<ID>/evidence_ledger.json.
+  # Returns 0 for PATH GREEN, 1 otherwise (YELLOW/RED or inferred findings).
   local art_dir="$1"
-  local ledger="$art_dir/cycle1/evidence_ledger.md"
-  if [[ -f "$ledger" ]]; then
+  local canonical_json="$art_dir/evidence_ledger.json"
+  local legacy_json="$art_dir/${STORY}_reconciliation.json"
+  local legacy_md=""
+  local path_signal=""
+
+  path_signal_from_json() {
+    local ledger_json="$1"
+    local signal=""
+    if ! command -v jq >/dev/null 2>&1; then
+      printf '%s' ""
+      return 0
+    fi
+    signal="$(jq -r '
+      def norm:
+        if . == null then ""
+        else (tostring | ascii_upcase | gsub("^[[:space:]]+|[[:space:]]+$"; ""))
+        end;
+      [
+        .path,
+        .path_signal,
+        .cycle1.path,
+        .cycle1.path_signal,
+        .status.path,
+        .review.path
+      ]
+      | map(norm)
+      | map(select(. != ""))
+      | .[0] // ""
+    ' "$ledger_json" 2>/dev/null || true)"
+    case "$signal" in
+      GREEN|YELLOW|RED) printf '%s' "$signal" ;;
+      *) printf '%s' "" ;;
+    esac
+  }
+
+  path_signal_from_markdown() {
+    local ledger_md="$1"
     local line
     while IFS= read -r line || [[ -n "$line" ]]; do
       [[ -n "$line" ]] || continue
-      if [[ "$line" =~ ^PATH:[[:space:]]*(GREEN|YELLOW)[[:space:]]*$ ]]; then
-        case "${BASH_REMATCH[1]}" in
-          GREEN) return 0 ;;
-          YELLOW) return 1 ;;
-        esac
+      if [[ "$line" =~ ^PATH:[[:space:]]*(GREEN|YELLOW|RED)[[:space:]]*$ ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+        return 0
       fi
-    done < "$ledger"
-    # Unrecognized/missing PATH signal in canonical path — fall back for legacy artifacts.
-    echo "WF_STEP: unrecognized PATH signal in $ledger; falling back to legacy findings detection" >&2
-    cycle1_had_zero_findings "$art_dir"
-    return $?
+    done < "$ledger_md"
+    printf '%s' ""
+  }
+
+  if [[ -f "$canonical_json" ]]; then
+    path_signal="$(path_signal_from_json "$canonical_json")"
+    case "$path_signal" in
+      GREEN) return 0 ;;
+      YELLOW|RED) return 1 ;;
+    esac
+    echo "WF_STEP: unrecognized PATH signal in $canonical_json; falling back to legacy findings detection" >&2
   fi
-  # No canonical evidence ledger — fall back to legacy text detection for backward compat
-  echo "WF_STEP: no cycle1/evidence_ledger.md at $ledger; falling back to legacy findings detection" >&2
+
+  if [[ -f "$legacy_json" ]]; then
+    path_signal="$(path_signal_from_json "$legacy_json")"
+    case "$path_signal" in
+      GREEN)
+        echo "WF_STEP: using legacy JSON PATH signal at $legacy_json; migrate to artifacts/story/$STORY/evidence_ledger.json" >&2
+        return 0
+        ;;
+      YELLOW|RED)
+        echo "WF_STEP: using legacy JSON PATH signal at $legacy_json; migrate to artifacts/story/$STORY/evidence_ledger.json" >&2
+        return 1
+        ;;
+    esac
+    echo "WF_STEP: unrecognized PATH signal in legacy JSON ledger $legacy_json; falling back to legacy findings detection" >&2
+  fi
+
+  for legacy_md in \
+    "$art_dir/cycle1/evidence_ledger.md" \
+    "$art_dir/evidence_ledger.md" \
+    "$art_dir/${STORY}_reconciliation.md"; do
+    [[ -f "$legacy_md" ]] || continue
+    path_signal="$(path_signal_from_markdown "$legacy_md")"
+    case "$path_signal" in
+      GREEN)
+        echo "WF_STEP: using legacy markdown PATH signal at $legacy_md; migrate to artifacts/story/$STORY/evidence_ledger.json" >&2
+        return 0
+        ;;
+      YELLOW|RED)
+        echo "WF_STEP: using legacy markdown PATH signal at $legacy_md; migrate to artifacts/story/$STORY/evidence_ledger.json" >&2
+        return 1
+        ;;
+    esac
+    echo "WF_STEP: unrecognized PATH signal in $legacy_md; falling back to legacy findings detection" >&2
+    break
+  done
+
+  echo "WF_STEP: no JSON PATH signal ledger found for $STORY; falling back to legacy findings detection" >&2
   cycle1_had_zero_findings "$art_dir"
 }
 
