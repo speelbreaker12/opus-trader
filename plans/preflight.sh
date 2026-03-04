@@ -322,52 +322,43 @@ done
 # Tier 2: Fast checks (<30s)
 # =============================================================================
 
-# 4. Shell syntax: aggregate parse signal + authoritative per-file parse
+# 4. Shell syntax: authoritative per-file parse (fail-closed on setup errors)
 SHELL_SYNTAX_OK=1
 SHELL_ERRORS=()
 if compgen -G "plans/*.sh" >/dev/null; then
-  SHELL_AGGREGATE_PARSE_OK=0
-  SHELL_SYNTAX_AGGREGATE_FILE=""
-  if ! SHELL_SYNTAX_AGGREGATE_FILE="$(mktemp 2>/dev/null)"; then
-    SHELL_SYNTAX_AGGREGATE_FILE=""
+  SHELL_SYNTAX_CHECKER=""
+  if ! SHELL_SYNTAX_CHECKER="$(command -v bash 2>/dev/null)"; then
+    SHELL_SYNTAX_CHECKER=""
   fi
-  if [[ -z "$SHELL_SYNTAX_AGGREGATE_FILE" ]]; then
-    setup_fail "Shell syntax aggregate setup failed (mktemp)"
-    SHELL_ERRORS+=("<aggregate-setup>")
+  if [[ -z "$SHELL_SYNTAX_CHECKER" ]]; then
+    setup_fail "Shell syntax setup failed (missing bash)"
+    SHELL_ERRORS+=("<shell-syntax-setup>")
     SHELL_SYNTAX_OK=0
   else
-    _preflight_cleanup_dirs+=("$SHELL_SYNTAX_AGGREGATE_FILE")
+    # Authoritative check: every plans/*.sh file must parse on its own.
     for f in plans/*.sh; do
-      cat "$f" >> "$SHELL_SYNTAX_AGGREGATE_FILE" || {
-        setup_fail "Shell syntax aggregate setup failed while reading $f"
-        SHELL_ERRORS+=("<aggregate-setup>")
-        SHELL_SYNTAX_OK=0
-        break
-      }
-      printf '\n' >> "$SHELL_SYNTAX_AGGREGATE_FILE" || {
-        setup_fail "Shell syntax aggregate setup failed while writing separator for $f"
-        SHELL_ERRORS+=("<aggregate-setup>")
-        SHELL_SYNTAX_OK=0
-        break
-      }
-    done
-
-    if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then
-      if bash -n "$SHELL_SYNTAX_AGGREGATE_FILE" >/dev/null 2>&1; then
-        SHELL_AGGREGATE_PARSE_OK=1
+      if "$SHELL_SYNTAX_CHECKER" -n "$f" >/dev/null 2>&1; then
+        _shell_syntax_rc=0
       else
-        SHELL_AGGREGATE_PARSE_OK=0
+        _shell_syntax_rc=$?
       fi
-    fi
+      if [[ "$_shell_syntax_rc" -eq 0 ]]; then
+        continue
+      fi
+      case "$_shell_syntax_rc" in
+        2)
+          SHELL_SYNTAX_OK=0
+          SHELL_ERRORS+=("$f")
+          ;;
+        *)
+          setup_fail "Shell syntax setup failed while checking $f (bash -n rc=$_shell_syntax_rc)"
+          SHELL_ERRORS+=("<shell-syntax-setup>")
+          SHELL_SYNTAX_OK=0
+          break
+          ;;
+      esac
+    done
   fi
-
-  # Authoritative check: every plans/*.sh file must parse on its own.
-  for f in plans/*.sh; do
-    if ! bash -n "$f" >/dev/null 2>&1; then
-      SHELL_SYNTAX_OK=0
-      SHELL_ERRORS+=("$f")
-    fi
-  done
 fi
 
 if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then

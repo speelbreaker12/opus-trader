@@ -54,49 +54,39 @@ EOF
 
 mock_bin="$tmp_dir/mock_bin"
 mkdir -p "$mock_bin"
-real_mktemp_path="$(command -v mktemp)"
-cat > "$mock_bin/mktemp" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
+real_bash_path="$(command -v bash)"
+cat > "$mock_bin/bash" <<'EOF'
+#!/bin/sh
+set -eu
 
-state_file="${MOCK_MKTEMP_STATE:?}"
-real_mktemp="${REAL_MKTEMP:?}"
+real_bash="${REAL_BASH:?}"
 
-count=0
-if [[ -f "$state_file" ]]; then
-  count="$(cat "$state_file")"
-fi
-count=$((count + 1))
-printf '%s\n' "$count" > "$state_file"
-
-# First mktemp call in preflight is for guard logs and should succeed.
-# Second mktemp call is shell syntax aggregate temp-file setup and is fault-injected.
-if [[ "$count" -eq 2 ]]; then
-  echo "mock mktemp failure (shell syntax aggregate setup)" >&2
-  exit 1
+# Guard scripts should still run; only shell syntax checks are fault-injected.
+if [ "${1:-}" = "-n" ]; then
+  echo "mock bash failure (shell syntax checker setup)" >&2
+  exit 127
 fi
 
-exec "$real_mktemp" "$@"
+exec "$real_bash" "$@"
 EOF
-chmod +x "$mock_bin/mktemp"
+chmod +x "$mock_bin/bash"
 
 log_file="$tmp_dir/preflight_mktemp_fail.log"
 set +e
 (
   cd "$repo"
   PATH="$mock_bin:$PATH" \
-  MOCK_MKTEMP_STATE="$tmp_dir/mktemp_state" \
-  REAL_MKTEMP="$real_mktemp_path" \
+  REAL_BASH="$real_bash_path" \
   PREFLIGHT_FIXTURE_MODE=none \
   POSTMORTEM_GATE=0 \
-  ./plans/preflight.sh >"$log_file" 2>&1
+  "$real_bash_path" ./plans/preflight.sh >"$log_file" 2>&1
 )
 rc=$?
 set -e
 
-[[ "$rc" -eq 2 ]] || fail "expected rc=2 on shell syntax aggregate mktemp setup failure, got $rc"
-grep -Fq "Shell syntax aggregate setup failed (mktemp)" "$log_file" \
-  || fail "missing setup-fail diagnostic for aggregate mktemp failure"
+[[ "$rc" -eq 2 ]] || fail "expected rc=2 on shell syntax checker setup failure, got $rc"
+grep -Fq "Shell syntax setup failed while checking" "$log_file" \
+  || fail "missing setup-fail diagnostic for shell syntax checker setup failure"
 grep -Fq "Shell syntax errors in:" "$log_file" \
   || fail "missing shell syntax failure contract message"
 grep -Fq "preflight:" "$log_file" \
