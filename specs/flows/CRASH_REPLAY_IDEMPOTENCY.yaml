@@ -48,6 +48,17 @@ crash_points:
     acceptance_tests: ["AT-940"]
     where: ["soldier/core/execution/state.rs", "soldier/core/recovery/label_match.rs"]
 
+  - id: CR-1231
+    scenario: crash_after_close_intent_record_before_completion
+    contract_refs:
+      sections: ["2.4"]
+      notes: "AT-1231 defines restart-safe CLOSE/HEDGE classification via persisted reduce_only."
+    required_post_restart:
+      - "MUST preserve reduce_only classifier from WAL for in-flight intents."
+      - "MUST classify recovered reduce_only=true intents as non-OPEN."
+    acceptance_tests: ["AT-1231"]
+    where: ["soldier/infra/store/ledger.rs"]
+
   - id: CR-941
     scenario: crash_during_reconciliation
     contract_refs:

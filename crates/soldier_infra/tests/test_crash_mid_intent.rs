@@ -15,12 +15,23 @@ use soldier_infra::wal::{BarrierMetrics, WalBarrierConfig, durable_append};
 
 /// Create a test intent record.
 fn test_intent(hash: &str, state: TlsState, sent_ts: u64) -> IntentRecord {
+    test_intent_with_reduce_only(hash, state, sent_ts, false)
+}
+
+/// Create a test intent record with explicit persisted classifier.
+fn test_intent_with_reduce_only(
+    hash: &str,
+    state: TlsState,
+    sent_ts: u64,
+    reduce_only: bool,
+) -> IntentRecord {
     IntentRecord {
         intent_hash: hash.to_string(),
         group_id: "group-001".to_string(),
         leg_idx: 0,
         instrument: "BTC-PERPETUAL".to_string(),
         side: "buy".to_string(),
+        reduce_only,
         qty_q: 1.0,
         limit_price_q: 50000.0,
         tls_state: state,
@@ -100,6 +111,33 @@ fn test_crash_after_dispatch_detected_on_replay() {
 
     // Correct behavior: query exchange for this order's status,
     // update WAL accordingly. Do NOT re-send.
+}
+
+#[test]
+fn test_restart_preserves_reduce_only_classifier_for_recovered_close_intent() {
+    let mut ledger = WalLedger::new(100);
+    let mut lm = LedgerMetrics::new();
+    let mut bm = BarrierMetrics::new();
+    let config = WalBarrierConfig::default();
+
+    // Simulate a CLOSE/HEDGE-class in-flight intent persisted before crash.
+    let intent = test_intent_with_reduce_only("intent-close-001", TlsState::Sent, 2000, true);
+    durable_append(&mut ledger, intent, &config, &mut lm, &mut bm).unwrap();
+
+    // === SIMULATED CRASH AND RESTART ===
+    let replay = ledger.replay();
+    assert_eq!(replay.in_flight_count, 1);
+    assert!(
+        replay
+            .in_flight_hashes
+            .contains(&"intent-close-001".to_string())
+    );
+
+    let recovered = ledger.get("intent-close-001").expect("record must exist");
+    assert!(
+        recovered.reduce_only,
+        "recovered intent must remain CLOSE/HEDGE-class, not OPEN"
+    );
 }
 
 // ─── Terminal states are NOT in-flight ───────────────────────────────────
