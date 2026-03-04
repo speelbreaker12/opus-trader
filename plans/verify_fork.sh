@@ -665,7 +665,8 @@ fi
 
 if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
   log "12f) status reason codegen"
-  bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
+  run_logged_or_exit "status_reason_codegen" "$SPEC_LINT_TIMEOUT" \
+    env STATUS_REASON_CODEGEN_DIRECT=1 bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
 fi
 
 if [[ -d tests/fixtures/status ]]; then

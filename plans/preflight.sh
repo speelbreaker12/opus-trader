@@ -65,6 +65,33 @@ elif command -v gtimeout >/dev/null 2>&1; then
   _TIMEOUT_BIN="gtimeout"
 fi
 
+now_monotonic_ns() {
+  local ns=""
+
+  ns="$(date +%s%N 2>/dev/null || true)"
+  if [[ "$ns" =~ ^[0-9]+$ ]] && [[ ${#ns} -gt 10 ]]; then
+    echo "$ns"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import time; print(time.monotonic_ns())'
+    return 0
+  fi
+
+  if command -v python >/dev/null 2>&1; then
+    python -c 'import time; print(int(time.monotonic() * 1000000000))'
+    return 0
+  fi
+
+  if command -v perl >/dev/null 2>&1; then
+    perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+    return 0
+  fi
+
+  printf '%s000000000\n' "$(date +%s)"
+}
+
 # --- Counters ---
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -305,12 +332,23 @@ if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
 else
   pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
 
+  PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
+  if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
+    setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
+    PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
+    PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
+  fi
+
   # --- Fixture cache ---
   # Cache key = SHA256 of all workflow/tool/spec files that fixture tests depend on.
   # Broad scope prevents stale cache from missed dependencies.
   PREFLIGHT_NO_CACHE="${PREFLIGHT_NO_CACHE:-0}"
   # --strict implies thoroughness: disable cache to ensure all tests actually run
   if [[ "$STRICT_MODE" == "1" ]]; then
+    PREFLIGHT_NO_CACHE=1
+  fi
+  if [[ "$PREFLIGHT_FIXTURE_TIMEOUT_INVALID" == "1" ]]; then
     PREFLIGHT_NO_CACHE=1
   fi
   _cache_dir="$ROOT/.cache"
@@ -325,14 +363,14 @@ else
     #   tools/, scripts/. This prevents stale cache when non-code config
     #   files (allowlists, evidence sources, workflow contract, etc.) change.
     {
-      find plans -maxdepth 1 -type f 2>/dev/null
-      find plans/lib -name '*.sh' -type f 2>/dev/null
-      find plans/tests -name '*.sh' -type f 2>/dev/null
-      find plans/config -type f 2>/dev/null
-      find specs -type f 2>/dev/null
-      find SKILLS -type f 2>/dev/null
-      find tools -name '*.py' -type f 2>/dev/null
-      find scripts -name '*.py' -type f 2>/dev/null
+      [[ -d plans ]] && find plans -maxdepth 1 -type f 2>/dev/null
+      [[ -d plans/lib ]] && find plans/lib -name '*.sh' -type f 2>/dev/null
+      [[ -d plans/tests ]] && find plans/tests -name '*.sh' -type f 2>/dev/null
+      [[ -d plans/config ]] && find plans/config -type f 2>/dev/null
+      [[ -d specs ]] && find specs -type f 2>/dev/null
+      [[ -d SKILLS ]] && find SKILLS -type f 2>/dev/null
+      [[ -d tools ]] && find tools -name '*.py' -type f 2>/dev/null
+      [[ -d scripts ]] && find scripts -name '*.py' -type f 2>/dev/null
     } | LC_ALL=C sort -u | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1
   }
 
@@ -356,15 +394,11 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
-    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
-    if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
-      PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
-    fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()
     fixture_idx=0
+    timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))
 
     for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
       if [[ ! -f "$fixture_test" ]]; then
@@ -376,7 +410,7 @@ else
       # idx captured by value in the subshell fork.
       idx=$fixture_idx
       (
-        start_epoch="$(date +%s)"
+        start_ns="$(now_monotonic_ns)"
         used_timeout=0
         if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
           used_timeout=1
@@ -392,13 +426,18 @@ else
             rc=$?
           fi
         fi
-        end_epoch="$(date +%s)"
-        duration_s=$((end_epoch - start_epoch))
+        end_ns="$(now_monotonic_ns)"
+        if [[ "$start_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" -ge "$start_ns" ]]; then
+          duration_ns=$((end_ns - start_ns))
+        else
+          duration_ns=0
+        fi
+        duration_s=$((duration_ns / 1000000000))
         status="FAIL"
         if [[ "$rc" -eq 0 ]]; then
           status="PASS"
         elif [[ "$used_timeout" -eq 1 ]] && [[ "$rc" -eq 124 || "$rc" -eq 137 ]] \
-          && [[ "$duration_s" -ge "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" ]]; then
+          && [[ "$duration_ns" -ge "$timeout_ns" ]]; then
           status="TIMEOUT"
         fi
         echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"
