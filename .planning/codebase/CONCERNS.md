@@ -1,98 +1,111 @@
-# Codebase Concerns
+# Codebase Concerns Map
 
-**Analysis Date:** 2026-02-25
+**Analysis Date:** 2026-03-04  
+**Focus:** concerns/risk  
+**Scope:** `/Users/admin/Desktop/opus-trader`
 
-## Tech Debt
+## Priority Risk Queue (Planning-First)
 
-**Execution path still marked as test-only assumptions:**
-- Issue: `crates/soldier_core/src/venue/types.rs` (`derive_instrument_kind`), `crates/soldier_core/src/venue/cache.rs` (`opens_blocked`), and `crates/soldier_core/src/execution/order_size.rs` (`build_order_size`) still carry comments indicating they are only called from unit tests.
-- Why: The comments likely outlived refactors and may no longer match actual callsites in production flow.
-- Impact: Misleading assumptions can hide missing production validation and reduce confidence when modifying sizing/cache/order intent behavior.
-- Fix approach: Verify true callsites, add production-level tests, and either remove the comments or split test-only and production logic explicitly.
+| Priority | Concern | Why it matters | Evidence |
+|---|---|---|---|
+| P0 | WAL gate still has bypass-prone migration path | Dispatch safety depends on recorded-before-dispatch; shimmed precomputed booleans can drift from real append behavior | `crates/soldier_core/src/execution/build_order_intent.rs` (`PrecomputedWalGate` TODO), `crates/soldier_core/src/execution/pipeline.rs` (migration TODO), `crates/soldier_core/src/execution/open_runtime.rs` |
+| P0 | Production order assembly path appears not fully wired | Critical sizing/dispatch consistency code is marked as not yet production-wired; behavior may differ between tests and live flow | `crates/soldier_core/src/execution/open_runtime.rs` (`build_open_intent_with_assembly` TODO), `crates/soldier_core/src/venue/types.rs`, `crates/soldier_core/src/execution/order_size.rs`, `crates/soldier_core/src/venue/cache.rs` |
+| P1 | Workflow gate in CI is explicitly disabled | One of the intended PR enforcement gates is not running in CI, reducing prevention of process regressions | `.github/workflows/ci.yml` (`prd-story-gate` job has `if: false && ...`) |
+| P1 | Security boundary on status endpoint is basic and leak-prone | Auth check and error handling are functional but can expose internals and lack hardened comparison | `dashboard/convex/http.ts` |
+| P1 | Local verification tolerates dirty trees by default | Creates false confidence risk where local pass does not represent clean-checkout behavior | `plans/verify_fork.sh` (dirty tree warns only), `plans/progress.txt` (repeated dirty-tree notes) |
+| P2 | High script/gate surface area increases maintenance fragility | Many coupled shell gates increase chance of accidental breakage and slower feedback loops | `plans/verify_fork.sh`, `plans/preflight.sh`, `plans/verify_gate_contract_check.sh`, `plans/workflow_contract_gate.sh` |
 
-**WAL gate migration is partially implemented:**
-- Issue: `crates/soldier_core/src/execution/open_runtime.rs` uses a precomputed-WAL path with `TODO` in `assemble_order`, while `crates/soldier_core/src/execution/build_order_intent.rs` and `crates/soldier_core/src/execution/pipeline.rs` document migration work for gate outcome converters.
-- Why: Legacy and new paths coexist during transition.
-- Impact: Increases cognitive load and risks divergence between durable WAL behavior and intent construction logic.
-- Fix approach: Complete migration to the new gate pipeline, remove transition shims, and assert behavior parity with targeted regression tests.
+## Technical Debt
 
-## Known Bugs
+1. Transitional execution wiring remains in-place instead of a single canonical path.
+- Evidence: `crates/soldier_core/src/execution/build_order_intent.rs`, `crates/soldier_core/src/execution/pipeline.rs`, `crates/soldier_core/src/execution/open_runtime.rs`.
+- Risk: behavior drift across call paths and harder reasoning during incidents.
 
-**Not detected.**
+2. Test-only annotations remain on logic that should be core runtime behavior.
+- Evidence: `crates/soldier_core/src/venue/types.rs`, `crates/soldier_core/src/venue/cache.rs`, `crates/soldier_core/src/execution/order_size.rs`.
+- Risk: production path may not exercise contract-critical transformations.
 
-## Security Considerations
+3. Risk book internals rely on interior mutability with panic-based invariant assumptions.
+- Evidence: `crates/soldier_core/src/risk/pending_exposure.rs` (`RefCell`, multiple `expect(...)` in runtime methods).
+- Risk: rare state drift turns into runtime panic instead of recoverable rejection.
 
-**API auth handling is not robustly hardened:**
-- Risk: `dashboard/convex/http.ts` performs direct bearer-token style checks via environment-provided secret in handler path, with no timing-hardening or structured authorization abstraction.
-- Current mitigation: Straightforward equality checks and explicit failure paths in handler.
-- Recommendations: Use a constant-time comparison helper and centralized auth middleware; add rotation/rotation-failure monitoring and rotate secrets periodically.
+## Likely Bug Candidates
 
-**Potential SQL edge-case in retention cleanup path:**
-- Risk: `dashboard/publisher/spool.py` builds a retention query with variable-length placeholders from `keep_ids` for `DELETE` filtering.
-- Current mitigation: Standard parameterized placeholder construction is used.
-- Recommendations: Add explicit guard + deterministic test for the empty-list case and add bound checks around statement shape generation.
+1. `CancelOnly` assumptions can panic on future path expansion.
+- Evidence: `crates/soldier_core/src/execution/gate.rs` uses `unreachable!("handled above")` in live gate logic.
+- Risk: enum flow changes can convert logic mistakes into process crash.
 
-## Performance Bottlenecks
+2. Reservation settle mismatch paths can leak accounting signal and only log.
+- Evidence: `crates/soldier_core/src/execution/open_runtime.rs` settle failure logs TLSM/book desync; `crates/soldier_core/src/risk/pending_exposure.rs` contains mismatch and reverse-map error branches.
+- Risk: hard-to-debug latent exposure accounting discrepancies.
 
-**Open-address and instrument map hot path allocation pressure:**
-- Problem: `crates/soldier_core/src/risk/pending_exposure.rs` notes `TODO(PX-3)` about interning `instrument_id` to reduce allocation pressure.
-- Measurement: Not detected (no benchmarks provided).
-- Cause: Hash lookups and map churn around instrument identifiers can add avoidable overhead in high-frequency path.
-- Improvement path: Implement interning in that hot path and add a benchmark/profiler baseline before/after.
+3. Caller-side downgrade semantics for dispatch mismatch are partly documented in tests.
+- Evidence: `crates/soldier_core/src/execution/dispatch_map_tests.rs` contains TODO for production wiring assertion.
+- Risk: production caller may regress without direct guard.
 
-**Not detected additional bottlenecks with quantified measurements.**
+## Security Concerns
 
-## Fragile Areas
+1. Bearer token compare is plain string equality.
+- Evidence: `dashboard/convex/http.ts` (`provided !== expected`).
+- Risk: lacks constant-time compare hardening.
 
-**Panic-on-variant assumptions in liquidity gate logic:**
-- Why fragile: `crates/soldier_core/src/execution/gate.rs` uses `unreachable!` for `CancelOnly` branches and relies on variant assumptions across variants.
-- Common failures: Unexpected variants or future expansion can crash process paths that were assumed impossible.
-- Safe modification: Replace hard assumptions with explicit fallbacks or clear guarded error returns.
-- Test coverage: Minimal if path is difficult to execute in normal tests.
+2. Error payloads include raw exception messages.
+- Evidence: `dashboard/convex/http.ts` returns `${message}` in 422/500 branches.
+- Risk: internal details may leak to clients/log consumers.
 
-**Invariant-heavy panic paths in production:**
-- Why fragile: `crates/soldier_core/src/risk/pending_exposure.rs` has multiple `debug_assert` plus `expect` on production state transitions (instrument/position lookups).
-- Common failures: State drift or malformed runtime updates can produce panics instead of recoverable errors.
-- Safe modification: Convert to typed state-machine states or structured validation errors before unwrap/expect.
-- Test coverage: Missing tests for recovery/error paths and malformed-state resilience.
+3. Static analysis coverage is uneven by language.
+- Evidence: `.github/workflows/codeql.yml` scans `python` only.
+- Risk: Rust/TypeScript security smells rely on other gates and human review.
 
-**Migration shim complexity in order-intent assembly:**
-- Why fragile: `crates/soldier_core/src/execution/build_order_intent.rs` and `crates/soldier_core/src/execution/pipeline.rs` keep shim logic and TODO-driven deprecations.
-- Common failures: Gate outcome semantics can diverge between legacy and migrated paths.
-- Safe modification: Delete legacy branch after full parity checks and keep one canonical path.
-- Test coverage: Add golden tests comparing both outputs until parity is formally proven and remove transition code.
+## Performance Risks
 
-## Scaling Limits
+1. Durable WAL path can become throughput bottleneck under fsync or writer pressure.
+- Evidence: `crates/soldier_infra/src/store/ledger.rs` (bounded channel + barrier timeout), `crates/soldier_infra/src/wal.rs` (append waits barrier timing).
+- Risk: queue saturation produces write failures/fail-closed rejects during bursts.
 
-**Not detected.**
+2. Pending exposure map uses cloned string keys in hot paths.
+- Evidence: `crates/soldier_core/src/risk/pending_exposure.rs` TODO(PX-3).
+- Risk: avoidable allocation pressure in high-frequency reserve/settle loops.
 
-## Dependencies at Risk
+3. Spool retention creates dynamic `NOT IN (...)` deletion sets.
+- Evidence: `dashboard/publisher/spool.py` (`apply_retention`, dynamic placeholder generation from `keep_ids`).
+- Risk: large outbox history can increase SQL/CPU/memory churn.
 
-**Not detected.**
+## Fragile Workflow Areas
 
-## Missing Critical Features
+1. Critical process gate is present but off in CI.
+- Evidence: `.github/workflows/ci.yml` (`prd-story-gate`).
 
-**Formalize WAL persistence contract for order submission:**
-- Problem: `crates/soldier_core/src/execution/open_runtime.rs` TODO indicates production wiring remains pending for order submission entrypoints.
-- Current workaround: Existing migration/deprecated code paths are used.
-- Blocks: Full confidence in durable, production-consistent WAL-backed order routing.
-- Implementation complexity: Medium; requires finishing gate/intent wiring and adding integration assertions.
+2. Dirty-tree behavior is warning-only despite policy emphasis on clean verification.
+- Evidence: `plans/verify_fork.sh`, policy text in `AGENTS.md`, many dirty-tree notes in `plans/progress.txt`.
 
-**Not detected additional feature gaps.**
+3. Pattern scanning is diff-based, not repository-global.
+- Evidence: `plans/pattern_guard.sh` uses `git diff "$BASE_REF"...HEAD`.
+- Risk: pre-existing or non-diff surfaces can bypass guard.
 
-## Test Coverage Gaps
+4. Workflow contract gate depends on token/text presence heuristics.
+- Evidence: `plans/verify_gate_contract_check.sh`, `plans/workflow_contract_gate.sh`.
+- Risk: semantic drift can pass if token checks still match.
 
-**Potentially stale "unit tests only" assumptions unverified in production paths:**
-- What's not tested: Real production callpaths for `derive_instrument_kind`, `opens_blocked`, `build_order_size`, and related gate outcome conversions.
-- Risk: Changes may pass unit tests while breaking live execution logic.
-- Priority: High
-- Difficulty to test: Requires end-to-end fixtures for venue/open-runtime/execution pipelines.
+## Missing Guardrails
 
-**WAL migration and panic paths lack dedicated regression coverage:**
-- What's not tested: Behavior parity between legacy and migrated gate handling, plus malformed-state/edge-case paths in `crates/soldier_core/src/risk/pending_exposure.rs`.
-- Risk: Undetected correctness regressions and runtime panics under rare states.
-- Priority: High
-- Difficulty to test: Requires synthetic malformed-state generators and property-style checks.
+1. No enforced gate proving production path uses `build_open_intent_with_assembly`.
+- Evidence: `crates/soldier_core/src/execution/open_runtime.rs` TODO; no obvious verify gate asserting this wiring.
 
-*Concerns audit: 2026-02-25*
-*Update as issues are fixed or new ones discovered*
+2. No explicit guard failing when test-only TODO markers remain in core dispatch path.
+- Evidence: TODO markers in `crates/soldier_core/src/venue/types.rs`, `crates/soldier_core/src/venue/cache.rs`, `crates/soldier_core/src/execution/order_size.rs`.
+
+3. No mandatory constant-time secret compare helper for API auth.
+- Evidence: `dashboard/convex/http.ts`.
+
+4. No CI parity gate requiring PRD story-gate job to be enabled.
+- Evidence: `.github/workflows/ci.yml`.
+
+## Suggested Planning Buckets
+
+- **Bucket A (Safety First):** remove precomputed WAL shim path and enforce real gate adapter usage everywhere (`crates/soldier_core/src/execution/*`, `crates/soldier_infra/src/wal.rs`).
+- **Bucket B (Production Wiring):** complete assembly-path wiring and add contract test proving runtime use (`crates/soldier_core/src/execution/open_runtime.rs`, `crates/soldier_core/src/execution/dispatch_map_tests.rs`).
+- **Bucket C (Workflow Integrity):** re-enable CI PRD story gate and add self-check that it cannot be disabled silently (`.github/workflows/ci.yml`, `plans/verify_gate_contract_check.sh`).
+- **Bucket D (Security Hardening):** constant-time auth compare + response message sanitization (`dashboard/convex/http.ts`).
+
+*Update this map after each safety/workflow merge that changes risk posture.*
