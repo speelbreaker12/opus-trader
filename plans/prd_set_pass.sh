@@ -13,6 +13,7 @@ Rules for passes=true:
   - verify.meta.json head_sha must equal current HEAD
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
+  - preflight.rc must exist and be 0 in artifacts dir
   - fail_closed_coverage.rc must exist and be 0 in artifacts dir
   - contract review file must exist and contain decision=PASS
   - at least one review artifact must exist for current HEAD (codex/ or opus/)
@@ -195,6 +196,20 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
   if [[ "$bad_rc" -ne 0 ]]; then
+    exit 4
+  fi
+
+  # Require explicit proof that preflight gate passed in full verify
+  # artifacts. This keeps pass flips fail-closed when preflight evidence is
+  # missing, even if other gate artifacts exist.
+  preflight_rc_file="$ARTIFACTS_DIR/preflight.rc"
+  if [[ ! -f "$preflight_rc_file" ]]; then
+    echo "ERROR: missing required gate artifact: $preflight_rc_file" >&2
+    exit 4
+  fi
+  preflight_rc_val="$(tr -d '[:space:]' < "$preflight_rc_file" 2>/dev/null || true)"
+  if [[ "$preflight_rc_val" != "0" ]]; then
+    echo "ERROR: preflight gate did not pass in verify artifacts ($preflight_rc_file=$preflight_rc_val)" >&2
     exit 4
   fi
 
