@@ -96,6 +96,7 @@ assert_contains_line 'Falling back to full fixture hash scan'
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_verify_gate_contract_check_batching.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_fallback.sh"

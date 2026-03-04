@@ -41,9 +41,10 @@ require_doc_token() {
 }
 
 require_code_token() {
-  local file="$1"
-  local token="$2"
-  if ! grep -Fq "$token" "$file"; then
+  local file_content="$1"
+  local file="$2"
+  local token="$3"
+  if ! printf '%s\n' "$file_content" | grep -Fq "$token"; then
     fail "missing code token '$token' in $file"
   fi
 }
@@ -132,31 +133,37 @@ verify_tokens=(
   'run_logged_or_exit "doc_sync_check"'
 )
 
+VERIFY_CONTENT="$(<"$VERIFY")"
 for token in "${verify_tokens[@]}"; do
-  require_code_token "$VERIFY" "$token"
+  require_code_token "$VERIFY_CONTENT" "$VERIFY" "$token"
 done
 
-require_code_token "$VERIFY" 'run_logged_or_exit "contract_coverage"'
-require_code_token "$VERIFY" './plans/contract_review_emit.sh --out "$VERIFY_ARTIFACTS_DIR/contract_review.json"'
-require_code_token "$VERIFY" './plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"'
-require_code_token "$VERIFY" 'tools/ci/check_contract_profiles.py'
-require_code_token "$VERIFY" 'tools/ci/check_contract_profile_map_parity.py'
-require_code_token "$VERIFY" 'tools/at_coverage_report.py'
-require_code_token "$VERIFY" 'plans/validate_crossref_invariants.py'
-require_code_token "$VERIFY" './plans/crossref_gate.sh'
-require_code_token "$VERIFY" 'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
-require_code_token "$VERIFY" 'Skipping contract_coverage in quick mode (full-only gate)'
-require_code_token "$VERIFY" 'CONTRACT_COVERAGE_CI_SENTINEL'
-require_code_token "$VERIFY" 'CONTRACT_COVERAGE_STRICT_EFFECTIVE'
-require_code_token "$VERIFY" 'CROSSREF_CI_STRICT_SENTINEL'
-require_code_token "$VERIFY" 'CROSSREF_STRICT_EFFECTIVE'
-require_code_token "$VERIFY" 'crossref_strict=1 (sentinel/env enabled)'
-require_code_token "$VERIFY" 'Skipping crossref_gate in quick mode (full-only gate)'
-require_code_token "$VERIFY" 'env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE"'
-require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
-require_code_token "$VERIFY" 'PREFLIGHT_TIMEOUT_WAS_SET=0'
-require_code_token "$VERIFY" 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then'
-require_code_token "$VERIFY" 'run_logged_or_exit "slice_completion_enforce"'
+verify_extra_tokens=(
+  'run_logged_or_exit "contract_coverage"'
+  './plans/contract_review_emit.sh --out "$VERIFY_ARTIFACTS_DIR/contract_review.json"'
+  './plans/contract_review_validate.sh "$VERIFY_ARTIFACTS_DIR/contract_review.json"'
+  'tools/ci/check_contract_profiles.py'
+  'tools/ci/check_contract_profile_map_parity.py'
+  'tools/at_coverage_report.py'
+  'plans/validate_crossref_invariants.py'
+  './plans/crossref_gate.sh'
+  'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
+  'Skipping contract_coverage in quick mode (full-only gate)'
+  'CONTRACT_COVERAGE_CI_SENTINEL'
+  'CONTRACT_COVERAGE_STRICT_EFFECTIVE'
+  'CROSSREF_CI_STRICT_SENTINEL'
+  'CROSSREF_STRICT_EFFECTIVE'
+  'crossref_strict=1 (sentinel/env enabled)'
+  'Skipping crossref_gate in quick mode (full-only gate)'
+  'env CONTRACT_COVERAGE_STRICT="$CONTRACT_COVERAGE_STRICT_EFFECTIVE"'
+  'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
+  'PREFLIGHT_TIMEOUT_WAS_SET=0'
+  'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then'
+  'run_logged_or_exit "slice_completion_enforce"'
+)
+for token in "${verify_extra_tokens[@]}"; do
+  require_code_token "$VERIFY_CONTENT" "$VERIFY" "$token"
+done
 
 # Stack gate scripts: ensure quick/full gate names are present.
 rust_tokens=(
@@ -165,8 +172,9 @@ rust_tokens=(
   'run_logged_or_exit "rust_tests_full"'
   'run_logged_or_exit "rust_tests_quick"'
 )
+RUST_GATES_CONTENT="$(<"$RUST_GATES")"
 for token in "${rust_tokens[@]}"; do
-  require_code_token "$RUST_GATES" "$token"
+  require_code_token "$RUST_GATES_CONTENT" "$RUST_GATES" "$token"
 done
 
 py_tokens=(
@@ -175,8 +183,9 @@ py_tokens=(
   'run_logged_or_exit "python_pytest_full"'
   'run_logged "python_mypy"'
 )
+PY_GATES_CONTENT="$(<"$PY_GATES")"
 for token in "${py_tokens[@]}"; do
-  require_code_token "$PY_GATES" "$token"
+  require_code_token "$PY_GATES_CONTENT" "$PY_GATES" "$token"
 done
 
 node_tokens=(
@@ -184,8 +193,9 @@ node_tokens=(
   'run_logged_or_exit "node_typecheck"'
   'run_logged_or_exit "node_test"'
 )
+NODE_GATES_CONTENT="$(<"$NODE_GATES")"
 for token in "${node_tokens[@]}"; do
-  require_code_token "$NODE_GATES" "$token"
+  require_code_token "$NODE_GATES_CONTENT" "$NODE_GATES" "$token"
 done
 
 echo "PASS: verify gate contract check"

@@ -414,6 +414,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
+  "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"
   "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_contract_profile_parity.sh"
