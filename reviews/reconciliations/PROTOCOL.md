@@ -101,7 +101,21 @@ Every review artifact must include one of:
 - `./plans/verify.sh full` must pass at current HEAD.
 
 ### 4.8 Pass Flip
-`./plans/prd_set_pass.sh <STORY_ID> true` must pass all enforced checks, including:
+Default preview (no mutation):
+
+```bash
+VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
+  ./plans/prd_set_pass.sh <STORY_ID> true --dry-run
+```
+
+Mutation path (only after preview is green):
+
+```bash
+VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
+  ./plans/prd_set_pass.sh <STORY_ID> true
+```
+
+`prd_set_pass.sh` must pass all enforced checks, including:
 - verify artifacts with matching HEAD
 - required review artifacts
 - receipt chain requirements
