@@ -71,6 +71,7 @@ required=(
   plans/preflight.sh
   plans/readme_ci_parity_check.sh
   plans/recon_bundle.sh
+  plans/recon_doc_budget.sh
   plans/recon_evidence_ledger.sh
   plans/recon_operator_run.sh
   plans/recon_run_card_template.md
@@ -110,6 +111,7 @@ required=(
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_recon_bundle.sh
+  plans/tests/test_recon_doc_budget.sh
   plans/tests/test_recon_evidence_ledger.sh
   plans/tests/test_recon_handoff_sources.sh
   plans/tests/test_preflight_fixture_timeout_controls.sh
