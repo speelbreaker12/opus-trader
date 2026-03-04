@@ -208,12 +208,12 @@ on_exit() {
 }
 trap 'on_exit $?' EXIT
 
-should_enable_csp_strict() {
+compute_csp_strict_changed_files() {
   local base_ref="$1"
   local changed=""
-
   if ! command -v git >/dev/null 2>&1; then
-    return 1
+    printf '%s\n' ""
+    return 0
   fi
 
   if git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
@@ -224,48 +224,91 @@ should_enable_csp_strict() {
         git diff --name-only 2>/dev/null || true
       } | sed '/^$/d' | sort -u
     )"
-  else
-    changed="$(
-      {
-        git diff --name-only --cached 2>/dev/null || true
-        git diff --name-only 2>/dev/null || true
-      } | sed '/^$/d' | sort -u
-    )"
+    printf '%s\n' "$changed"
+    return 0
   fi
 
-  if [[ -z "$changed" ]]; then
+  changed="$(
+    {
+      git diff --name-only --cached 2>/dev/null || true
+      git diff --name-only 2>/dev/null || true
+    } | sed '/^$/d' | sort -u
+  )"
+  printf '%s\n' "$changed"
+}
+
+CSP_STRICT_CHANGED_FILES_CACHE_READY=0
+CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF=""
+CSP_STRICT_CHANGED_FILES_CACHE=""
+
+should_enable_csp_strict() {
+  local base_ref="$1"
+
+  if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then
+    CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"
+    CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF="$base_ref"
+    CSP_STRICT_CHANGED_FILES_CACHE_READY=1
+  fi
+
+  if [[ -z "$CSP_STRICT_CHANGED_FILES_CACHE" ]]; then
     return 1
   fi
 
-  if echo "$changed" | grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$'; then
+  if echo "$CSP_STRICT_CHANGED_FILES_CACHE" | grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$'; then
     return 0
   fi
 
   return 1
 }
 
+detect_status_fixture_hash_backend() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s\n' "sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then
+    printf '%s\n' "shasum"
+  elif command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "python3"
+  elif command -v python >/dev/null 2>&1; then
+    printf '%s\n' "python"
+  elif command -v cksum >/dev/null 2>&1; then
+    printf '%s\n' "cksum"
+  else
+    printf '%s\n' "fallback"
+  fi
+}
+
+STATUS_FIXTURE_HASH_BACKEND="$(detect_status_fixture_hash_backend)"
+
 status_fixture_path_hash() {
   local fixture_path="$1"
   local hash=""
+  local len
+  local fallback_slug
 
-  if command -v sha256sum >/dev/null 2>&1; then
-    hash="$(printf '%s' "$fixture_path" | sha256sum | awk '{print $1}')"
-  elif command -v shasum >/dev/null 2>&1; then
-    hash="$(printf '%s' "$fixture_path" | shasum -a 256 | awk '{print $1}')"
-  elif command -v python3 >/dev/null 2>&1; then
-    hash="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
-  elif command -v python >/dev/null 2>&1; then
-    hash="$(python -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
-  elif command -v cksum >/dev/null 2>&1; then
-    hash="$(printf '%s' "$fixture_path" | cksum | awk '{print $1}')"
-    hash="cksum_${hash}"
-  else
-    local len="${#fixture_path}"
-    local fallback_slug
-    fallback_slug="$(printf '%s' "$fixture_path" | tr '/.[[:space:]]' '_' | tr -cd 'A-Za-z0-9_-')"
-    [[ -z "$fallback_slug" ]] && fallback_slug="no_path"
-    hash="$(printf '%s_%s' "$len" "$fallback_slug")"
-  fi
+  case "$STATUS_FIXTURE_HASH_BACKEND" in
+    sha256sum)
+      hash="$(printf '%s' "$fixture_path" | sha256sum | awk '{print $1}')"
+      ;;
+    shasum)
+      hash="$(printf '%s' "$fixture_path" | shasum -a 256 | awk '{print $1}')"
+      ;;
+    python3)
+      hash="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
+      ;;
+    python)
+      hash="$(python -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode("utf-8")).hexdigest())' "$fixture_path")"
+      ;;
+    cksum)
+      hash="$(printf '%s' "$fixture_path" | cksum | awk '{print $1}')"
+      hash="cksum_${hash}"
+      ;;
+    *)
+      len="${#fixture_path}"
+      fallback_slug="$(printf '%s' "$fixture_path" | tr '/.[[:space:]]' '_' | tr -cd 'A-Za-z0-9_-')"
+      [[ -z "$fallback_slug" ]] && fallback_slug="no_path"
+      hash="$(printf '%s_%s' "$len" "$fallback_slug")"
+      ;;
+  esac
 
   hash="$(printf '%s' "$hash" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
   if [[ -z "$hash" ]]; then
@@ -446,6 +489,33 @@ detect_node_pm() {
     NODE_PM="yarn"
   fi
   export NODE_PM
+}
+
+emit_timing_and_warn_summary() {
+  local f=""
+  local name=""
+  local elapsed=""
+  local wf=""
+  local warn_payload=""
+
+  log "Timing Summary"
+  for f in "$VERIFY_ARTIFACTS_DIR"/*.time; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    name="${name%.time}"
+    elapsed=""
+    IFS= read -r elapsed < "$f" || elapsed=""
+    echo "  $name: ${elapsed}s"
+  done
+
+  # Show any warn-only gate findings
+  for wf in "$VERIFY_ARTIFACTS_DIR"/*.warn; do
+    [[ -f "$wf" ]] || continue
+    name="${wf##*/}"
+    name="${name%.warn}"
+    warn_payload="$(<"$wf")"
+    warn "$name: $warn_payload"
+  done
 }
 
 log "0) Verify context"
@@ -877,19 +947,6 @@ if [[ "$MODE" == "full" ]]; then
     bash "$ROOT/plans/lib/adversarial_gate.sh"
 fi
 
-log "Timing Summary"
-for f in "$VERIFY_ARTIFACTS_DIR"/*.time; do
-  [[ -f "$f" ]] || continue
-  name="$(basename "$f" .time)"
-  elapsed="$(cat "$f")"
-  echo "  $name: ${elapsed}s"
-done
-
-# Show any warn-only gate findings
-for wf in "$VERIFY_ARTIFACTS_DIR"/*.warn; do
-  [[ -f "$wf" ]] || continue
-  name="$(basename "$wf" .warn)"
-  warn "$name: $(cat "$wf")"
-done
+emit_timing_and_warn_summary
 
 log "VERIFY OK (mode=$MODE)"
