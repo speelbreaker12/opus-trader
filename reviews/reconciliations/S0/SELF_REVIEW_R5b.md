@@ -12,7 +12,7 @@ This refresh reflects implementation and contract updates already made after the
 
 - `plans/prd.json`/`docs/health_endpoint.md` now define S0 health/status as CLI-only.
 - `stoic-cli` now resolves dispatch mode from runtime state.
-- Key/probe checks now validate required metadata (`env`, `exchange`, `key_id`, `timestamp_utc`, `operator`).
+- Key/probe checks now hard-fail malformed metadata (`env`, `exchange`, `key_id`, `timestamp_utc`, `operator`) and malformed `scopes` values prior to privilege checks.
 - Runtime marker writes are atomic + fsync-backed.
 - Validator harness pathing and pass-gate metadata checks were hardened in this remediation pass.
 
@@ -27,8 +27,8 @@ This refresh reflects implementation and contract updates already made after the
 
 ## Severity Rollup
 
-- **P1 blockers**: 4
-- **P2 blockers**: 10
+- **P1 blockers**: 3
+- **P2 blockers**: 15
 - **P0 blockers**: 0
 - **Status**: UNPROVEN (P1 findings unresolved)
 
@@ -51,6 +51,7 @@ This refresh reflects implementation and contract updates already made after the
 | Severity | Evidence | Finding |
 |---|---|---|
 | P1 | plans/prd.json:1471-1474,1470s / S0-005 | enforcing_contract_ats includes ATs not actually enforced in slice scope |
+| P2 | stoic-cli:205-216 / stoic-cli:323-325 | State marker durability concerns in fail-closed recovery path (two-file deletion boundary now treated as `P2` residual risk). |
 | P2 | docs/launch_policy.md:11-12 | Unfilled ownership placeholders |
 | P2 | tools/policy_loader.py:146-161 | Missing upper bounds for critical policy values |
 
@@ -74,7 +75,6 @@ This refresh reflects implementation and contract updates already made after the
 
 | Severity | Evidence | Finding |
 |---|---|---|
-| P1 | stoic-cli:996-1003 | keys-check permissive/malformed probe inputs can bypass intended privilege checks. |
 | P2 | crates/soldier_infra/tests/test_phase0_runtime.rs:200-273 | Key privilege tests are not sufficiently isolated for precise causal proof |
 
 ## Premortem Cross-Check (runbook §2/§4/§5/§6/§10)
@@ -94,8 +94,8 @@ This refresh reflects implementation and contract updates already made after the
 
 ## Remediation Notes
 
-- `R5B_SELF_REVIEW` remains blocked until the remaining P1 items are fixed or explicitly deferred with debt entries.
-- Priority order: (`1`) strategic traceability gap in S0-005, (`2`) AT-022 transport/deployment scope alignment, (`3`) launch policy metadata ownership/version sync.
+- `R5B_SELF_REVIEW` remains UNPROVEN because PR-1 / SR-1 remain unresolved but mapped to explicit debt deferrals in Cycle2.
+- Current priority order: (`1`) strategic traceability gap in S0-005, (`2`) AT-022 transport/deployment scope alignment, (`3`) launch policy metadata ownership/version sync.
 - Completed in this pass:
   - Added `plans/tests/test_story_review_gate.sh` to satisfy full-verify harness path expectations.
   - Added explicit workflow receipt completeness checks (path + required `*.json` files + metadata) in `plans/prd_set_pass.sh`.
@@ -119,7 +119,6 @@ This refresh reflects implementation and contract updates already made after the
 |---|---|
 | specs/CONTRACT.md:4442-4447 | AT-022 health endpoint contract requires transport endpoint coverage |
 | docs/health_endpoint.md:16-19 | S0 health endpoint contract intent has been documented as CLI-only |
-| stoic-cli:996-1003 | Privilege bypass via malformed key-check inputs |
 | stoic-cli:362-385,437-466 | S0-004 health/status AT mapping remains endpoint-oriented |
 | plans/prd.json:366-385 | S0-004 scope traceability still references infra surface not directly aligned with current enforcement path |
 | plans/prd.json:460-536 | S0-005 contract metadata coverage and ownership alignment |

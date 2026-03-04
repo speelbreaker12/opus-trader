@@ -43,7 +43,7 @@
       "receipt_path": "reviews/reconciliations/S0/receipts/r5b_devils_advocate.json"
     }
   ],
-  "total_blockers": 11,
+  "total_blockers": 18,
   "premortem_crosscheck": {
     "s2": "CHECKED",
     "s4": "CHECKED",

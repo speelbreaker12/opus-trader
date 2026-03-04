@@ -304,6 +304,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_premortem_ready_ownership_conflict.sh"
   "plans/tests/test_wf_step_stop_on_blocker.sh"
   "plans/tests/test_wf_step_path_signal_scan.sh"
+  "plans/tests/test_wf_step_review_provenance.sh"
   "plans/tests/test_code_review_expert_guard.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"

@@ -13,18 +13,12 @@
   ],
   "finding_counts": {
     "P0": 0,
-    "P1": 1,
+    "P1": 0,
     "P2": 2,
     "INFO": 0
   },
-  "summary": "Mutation/attack-surface review identifies malformed-key/probe handling and test isolation gaps that can undercut causal proof on privilege handling.",
+  "summary": "Mutation/attack-surface review identifies remaining privilege proof isolation and transport-deferral proof gaps.",
   "findings": [
-    {
-      "severity": "P1",
-      "id": "DA-1",
-      "evidence": "stoic-cli:996-1003",
-      "description": "keys-check permissive/malformed probe inputs can bypass intended privilege checks."
-    },
     {
       "severity": "P2",
       "id": "DA-2",
@@ -39,7 +33,6 @@
     }
   ],
   "evidence_refs": [
-    "stoic-cli:996-1003",
     "crates/soldier_infra/tests/test_phase0_runtime.rs:200-273",
     "stoic-cli:362-385",
     "crates/soldier_infra/tests/test_phase0_runtime.rs:632-696"
