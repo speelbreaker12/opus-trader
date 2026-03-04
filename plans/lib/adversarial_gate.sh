@@ -96,7 +96,10 @@ fi
 
 # IDs targeted by adversarial tests
 shopt -s nullglob
-test_files=("$ROOT/crates/soldier_core/tests/adversarial_"*.rs)
+test_files=(
+  "$ROOT/crates/soldier_core/tests/adversarial_"*.rs
+  "$ROOT/crates/soldier_core/src/execution/adversarial_"*.rs
+)
 shopt -u nullglob
 
 if [[ ${#test_files[@]} -eq 0 ]]; then
