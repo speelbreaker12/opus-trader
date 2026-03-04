@@ -232,6 +232,36 @@ sha256_file() {
   return 1
 }
 
+path_fingerprint() {
+  local path="$1"
+  local digest=""
+  if [[ ! -e "$path" ]]; then
+    echo "__MISSING__"
+    return 0
+  fi
+  if [[ -d "$path" ]]; then
+    echo "__DIR__"
+    return 0
+  fi
+  digest="$(sha256_file "$path" 2>/dev/null || true)"
+  if [[ -n "$digest" ]]; then
+    echo "$digest"
+    return 0
+  fi
+  echo "__UNHASHABLE__"
+  return 0
+}
+
+current_production_fingerprints() {
+  local changed_path
+  while IFS= read -r changed_path; do
+    [[ -n "$changed_path" ]] || continue
+    if path_is_production_code "$changed_path"; then
+      printf '%s\t%s\n' "$changed_path" "$(path_fingerprint "$changed_path")"
+    fi
+  done < <(current_changed_files)
+}
+
 path_is_production_code() {
   local path="$1"
   case "$path" in
@@ -246,33 +276,6 @@ path_is_production_code() {
       ;;
   esac
   return 1
-}
-
-snapshot_changed_production_hashes() {
-  local out_file="$1"
-  local changed_path
-  local content_hash
-  : > "$out_file"
-  while IFS= read -r changed_path; do
-    [[ -n "$changed_path" ]] || continue
-    if ! path_is_production_code "$changed_path"; then
-      continue
-    fi
-    if [[ -f "$changed_path" ]]; then
-      content_hash="$(sha256_file "$changed_path" 2>/dev/null || true)"
-      if [[ -z "$content_hash" ]]; then
-        content_hash="__HASH_UNAVAILABLE__"
-      fi
-    elif [[ -e "$changed_path" ]]; then
-      content_hash="__NONREGULAR__"
-    else
-      content_hash="__MISSING__"
-    fi
-    printf '%s\t%s\n' "$changed_path" "$content_hash" >> "$out_file"
-  done < <(current_changed_files)
-  if [[ -s "$out_file" ]]; then
-    LC_ALL=C sort -u "$out_file" -o "$out_file"
-  fi
 }
 
 story_is_passed_in_prd() {
@@ -515,14 +518,12 @@ fi
 
 printf '%s\t%s\n' "$run_root" "$$" > "$lock_file"
 lock_owned=1
-changed_before_file=""
-changed_after_file=""
-changed_new_file=""
-changed_before_prod_hashes_file=""
-changed_after_prod_hashes_file=""
+changed_before_fingerprints_file=""
+changed_after_fingerprints_file=""
+changed_delta_file=""
 cleanup() {
   local f
-  for f in "${changed_before_file:-}" "${changed_after_file:-}" "${changed_new_file:-}" "${changed_before_prod_hashes_file:-}" "${changed_after_prod_hashes_file:-}"; do
+  for f in "${changed_before_fingerprints_file:-}" "${changed_after_fingerprints_file:-}" "${changed_delta_file:-}"; do
     [[ -n "$f" ]] || continue
     rm -f "$f"
   done
@@ -611,13 +612,10 @@ head_commit="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 start_at="$(iso_now)"
 commands_run=()
 premortem_out="$run_root/logs/${step_name}_attempt${attempt_no}.premortem.log"
-changed_before_file="$(mktemp)"
-changed_after_file="$(mktemp)"
-changed_new_file="$(mktemp)"
-changed_before_prod_hashes_file="$(mktemp)"
-changed_after_prod_hashes_file="$(mktemp)"
-current_changed_files > "$changed_before_file"
-snapshot_changed_production_hashes "$changed_before_prod_hashes_file"
+changed_before_fingerprints_file="$(mktemp)"
+changed_after_fingerprints_file="$(mktemp)"
+changed_delta_file="$(mktemp)"
+current_production_fingerprints > "$changed_before_fingerprints_file"
 
 if [[ "$mode" == "B" ]]; then
   commands_run+=("$PREMORTEM_READY_SCRIPT $story_id")
@@ -644,50 +642,58 @@ if [[ "$status" == "PASS" ]]; then
   fi
 fi
 
-if [[ "$status" == "PASS" && "$step_name" != "implement" && "$step_name" != "fix" ]]; then
+if [[ "$step_name" != "implement" && "$step_name" != "fix" ]]; then
+  guard_prior_status="$status"
+  guard_prior_rc="$step_rc"
   illegal_paths=()
-  current_changed_files > "$changed_after_file"
-  snapshot_changed_production_hashes "$changed_after_prod_hashes_file"
-  comm -13 "$changed_before_file" "$changed_after_file" > "$changed_new_file" || true
+  current_production_fingerprints > "$changed_after_fingerprints_file"
+  awk -F '\t' '
+    NR==FNR { before[$1]=$2; before_seen[$1]=1; next }
+    { after[$1]=$2; after_seen[$1]=1 }
+    END {
+      for (p in after_seen) {
+        if (!(p in before_seen) || before[p] != after[p]) {
+          print p
+        }
+      }
+      for (p in before_seen) {
+        if (!(p in after_seen)) {
+          print p
+        }
+      }
+    }
+  ' "$changed_before_fingerprints_file" "$changed_after_fingerprints_file" | LC_ALL=C sort -u > "$changed_delta_file"
   while IFS= read -r changed_path; do
     [[ -n "$changed_path" ]] || continue
     if path_is_production_code "$changed_path"; then
       illegal_paths+=("$changed_path")
     fi
-  done < "$changed_new_file"
-
-  while IFS=$'\t' read -r changed_path before_hash; do
-    [[ -n "$changed_path" ]] || continue
-    after_hash="$(awk -F '\t' -v p="$changed_path" '$1==p {print $2; exit}' "$changed_after_prod_hashes_file" 2>/dev/null || true)"
-    [[ -n "$after_hash" ]] || continue
-    if [[ "$before_hash" == "__HASH_UNAVAILABLE__" || "$after_hash" == "__HASH_UNAVAILABLE__" ]]; then
-      illegal_paths+=("$changed_path")
-      continue
-    fi
-    if [[ "$before_hash" != "$after_hash" ]]; then
-      illegal_paths+=("$changed_path")
-    fi
-  done < "$changed_before_prod_hashes_file"
+  done < "$changed_delta_file"
 
   if [[ "${#illegal_paths[@]}" -gt 0 ]]; then
-    unique_illegal_paths_file="$(mktemp)"
-    printf '%s\n' "${illegal_paths[@]}" | awk 'NF && !seen[$0]++' > "$unique_illegal_paths_file"
-    illegal_paths=()
-    while IFS= read -r changed_path; do
-      [[ -n "$changed_path" ]] || continue
-      illegal_paths+=("$changed_path")
-    done < "$unique_illegal_paths_file"
-    rm -f "$unique_illegal_paths_file"
-  fi
-
-  if [[ "${#illegal_paths[@]}" -gt 0 ]]; then
+    quarantined_wf_receipt=""
+    if [[ -f "$wf_receipt_expected" ]]; then
+      quarantined_wf_receipt="$run_root/receipts/${step_name}_attempt${attempt_no}.wf_receipt_pre_guard.json"
+      cp "$wf_receipt_expected" "$quarantined_wf_receipt"
+      rm -f "$wf_receipt_expected"
+    fi
     status="BLOCKED"
     step_kind="gate"
-    step_rc=7
+    if [[ "$guard_prior_status" == "PASS" ]]; then
+      step_rc=7
+    fi
     {
       echo ""
       echo "NON_WRITE_STEP_PROD_EDIT_BLOCKED"
       echo "Step '$step_name' is non-write. Production code changes are only allowed in implement/fix."
+      if [[ "$guard_prior_status" != "PASS" ]]; then
+        echo "Prior step status was $guard_prior_status (exit=$guard_prior_rc); non-write production edit guard also triggered."
+      fi
+      if [[ -n "$quarantined_wf_receipt" ]]; then
+        echo "Removed optimistic workflow receipt to keep receipt chain fail-closed:"
+        echo "  - removed: $wf_receipt_expected"
+        echo "  - quarantined copy: $quarantined_wf_receipt"
+      fi
       echo "Forbidden production-code changes:"
       for p in "${illegal_paths[@]}"; do
         echo "  - $p"
