@@ -120,7 +120,7 @@ AT-1055
 
 ## **Phase 0: Operational Prerequisites (Non-Negotiable)**
 
-Before any code implementation begins, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
+Before live-trading enablement, any CSP compliance claim, or promotion beyond foundation into Phase 2+ operation, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
 
 | ID | Item | Purpose | Evidence Required |
 |----|------|---------|-------------------|
@@ -139,7 +139,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before live-trading enablement and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -4556,6 +4556,19 @@ Profile: CSP
 **Endpoints:**
 - `GET /api/v1/status` (read-only)
 - `GET /api/v1/health` (read-only; minimal external watchdog primitive)
+
+**Status authority matrix (normative):**
+- **Surface A: Phase 0 owner-status scaffolding (operator convenience surface).**
+  - May be exposed via CLI and local operator tooling.
+  - MUST include `trading_mode` + `opens_globally_permitted`.
+  - `is_trading_allowed` MAY be emitted as deprecated alias and MUST equal `opens_globally_permitted`.
+  - Canonical `trading_mode` values are `Active|ReduceOnly|Kill`; legacy uppercase aliases (`ACTIVE|REDUCE_ONLY|KILL`) are transitional and MUST map one-to-one.
+- **Surface B: Foundation status-lite (`phase == foundation`).**
+  - Governs `GET /api/v1/status` shape while in Phase 1 bootstrap mode.
+  - MUST include only the bootstrap keys and invariants listed under AT-1230.
+- **Surface C: CSP minimum status (`phase != foundation`).**
+  - Governs authoritative `GET /api/v1/status` schema once foundation mode exits.
+  - MUST include the CSP minimum keys listed below.
 
 **/health response MUST include (minimum):**
 - `ok` (bool; MUST be true when process is up)

@@ -1,14 +1,29 @@
 # Health + Owner Status (Phase 0)
 
 > **Purpose:** Minimal operator commands to verify both liveness and authority state.
-> Phase 0 provides CLI-only health and owner status scaffolding.
-> Transport-level `/api/v1/health` and `/api/v1/status` are deferred; this story proves payload shape and policy binding only.
+> Payload semantics are anchored to canonical HTTP authority surfaces (`/api/v1/health` and `/api/v1/status`).
+> CLI is an operator convenience surface and MUST NOT redefine HTTP authority/status schema rules.
 
 ## Metadata
 - doc_id: HEALTH-001
 - version: 1.1
 - contract_version_target: 5.2
 - last_updated_utc: 2026-02-10T16:30:00Z
+
+---
+
+## Status Authority Matrix (Normative for this doc)
+
+| Surface | Transport | Applies When | Required Shape |
+|-------|------|-------------|----------------|
+| Phase 0 owner-status scaffolding | CLI (`./stoic-cli status`) | Phase 0 ops baseline | `trading_mode`, `opens_globally_permitted`; optional alias `is_trading_allowed` (must equal canonical field) |
+| Foundation status-lite | HTTP `GET /api/v1/status` | `phase == foundation` | Exactly `{service_up, build_id, contract_version, dispatch_enabled, phase}` with `dispatch_enabled=false`, `phase=foundation` |
+| CSP minimum status | HTTP `GET /api/v1/status` | `phase != foundation` | Full CSP minimum keys from `specs/CONTRACT.md` §7.0 |
+| Health minimum | HTTP `GET /api/v1/health` and CLI health parity | Any phase | `{ok, build_id, contract_version}` |
+
+Notes:
+- This matrix is aligned to `specs/CONTRACT.md` §7.0.
+- Phase 1 completion is not a CSP minimum status compliance claim.
 
 ---
 
@@ -24,7 +39,7 @@ Implementation note:
 
 ---
 
-## Required Fields (minimal)
+## Required Fields (Phase 0 Owner-Status Scaffolding)
 
 ### Health fields
 | Field | Type | Description |
@@ -40,8 +55,9 @@ Implementation note:
 | `ok` | boolean | `true` if status checks pass |
 | `build_id` | string | Git commit SHA or build identifier |
 | `contract_version` | string | Version of CONTRACT.md (e.g., "5.2") |
-| `trading_mode` | string | Current mode (`ACTIVE`, `REDUCE_ONLY`, `KILL`) |
-| `is_trading_allowed` | boolean | `true` only when mode allows new OPEN risk |
+| `trading_mode` | string | Current mode (`Active`, `ReduceOnly`, `Kill`) |
+| `opens_globally_permitted` | boolean | Canonical OPEN-eligibility field for this surface |
+| `is_trading_allowed` | boolean | Deprecated alias; if emitted, MUST equal `opens_globally_permitted` |
 | `orders_in_flight` | integer | Simulated in-flight order count |
 | `pending_orders` | integer | Simulated pending order count |
 | `runtime_state_path` | string/null | Resolved runtime state file path used by command |
@@ -79,7 +95,8 @@ Implementation note:
   "build_id": "abc123def",
   "contract_version": "5.2",
   "timestamp_utc": "2026-01-27T14:00:00Z",
-  "trading_mode": "KILL",
+  "trading_mode": "Kill",
+  "opens_globally_permitted": false,
   "is_trading_allowed": false,
   "orders_in_flight": 0,
   "pending_orders": 0,
@@ -152,7 +169,7 @@ fi
 ### JSON Parsing
 ```bash
 ./stoic-cli health --format json | jq '.ok'
-./stoic-cli status --format json | jq '.trading_mode,.is_trading_allowed'
+./stoic-cli status --format json | jq '.trading_mode,.opens_globally_permitted,.is_trading_allowed'
 ```
 
 ### External Runtime State Override (explicit break-glass only)
@@ -172,7 +189,7 @@ STOIC_UNSAFE_EXTERNAL_STATE_ACK=I_UNDERSTAND \
 STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli health --format json
 echo $?  # 1 = unhealthy (policy load failure)
 STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli status --format json
-# status shows trading_mode=KILL and is_trading_allowed=false
+# status shows trading_mode=Kill and opens_globally_permitted=false
 ```
 
 ---
@@ -182,7 +199,8 @@ STOIC_POLICY_PATH=./config/missing_policy.json ./stoic-cli status --format json
 - [x] Health command implemented
 - [x] Status command implemented
 - [x] Health returns required fields (ok, build_id, contract_version)
-- [x] Status returns required fields (ok, build_id, contract_version, trading_mode, is_trading_allowed, timestamp_utc)
+- [x] Status returns required fields (ok, build_id, contract_version, trading_mode, opens_globally_permitted, timestamp_utc)
+- [x] If `is_trading_allowed` is emitted, it equals `opens_globally_permitted`
 - [x] Fail-closed behavior verified on missing policy
 
 **owner_signature:** admin

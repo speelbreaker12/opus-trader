@@ -9,6 +9,7 @@ Phase 1 exists to prove mechanical correctness of intent construction and dispat
 
 This phase does not prove strategy quality.
 It proves that the execution core is deterministic, fail-closed, and restart-safe.
+Phase 1 completion remains an implementation milestone only and is not a CSP minimum-status or live-trading readiness claim.
 
 ## What Phase 1 Must Prove
 
@@ -26,12 +27,13 @@ By Phase 1 completion, it must be mechanically impossible to:
 - `docs/critical_config_keys.md`
 - `evidence/phase1/README.md`
 - `evidence/phase1/ci_links.md`
-- `evidence/phase1/restart_loop/restart_100_cycles.log`
 - `evidence/phase1/determinism/intent_hashes.txt`
 - `evidence/phase1/no_side_effects/rejection_cases.md`
 - `evidence/phase1/traceability/sample_rejection_log.txt`
 - `evidence/phase1/config_fail_closed/missing_keys_matrix.json`
 - `evidence/phase1/crash_mid_intent/auto_test_passed.txt` or `evidence/phase1/crash_mid_intent/drill.md`
+
+Planned future (non-gating in current Phase 1): `evidence/phase1/restart_loop/restart_100_cycles.log`
 
 ## Required Gate Set (P1-A .. P1-G)
 
