@@ -126,6 +126,7 @@ EOF
 
   printf '0\n' > "$case_dir/artifacts/preflight.rc"
   printf '0\n' > "$case_dir/artifacts/fail_closed_coverage.rc"
+  printf '0\n' > "$case_dir/artifacts/proof_graph_${story_id}.rc"
   cat > "$case_dir/artifacts/contract_review.json" <<'EOF'
 {
   "decision": "PASS"
@@ -406,5 +407,97 @@ set -e
 [[ "$missing_fc_rc_status" -eq 4 ]] || fail "expected exit 4 for missing fail_closed_coverage.rc, got $missing_fc_rc_status"
 echo "$missing_fc_rc_output" | grep -Fq "missing required gate artifact" || fail "missing fail_closed_coverage artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite missing fail_closed_coverage.rc"
+
+# ── Test 10: non-zero fail_closed_coverage.rc blocks pass flip ───────
+nonzero_fc_rc_case="$tmp_dir/nonzero_fail_closed_rc"
+mkdir -p "$nonzero_fc_rc_case"
+setup_case "$nonzero_fc_rc_case" "$head_sha"
+printf '1\n' > "$nonzero_fc_rc_case/artifacts/fail_closed_coverage.rc"
+
+set +e
+nonzero_fc_rc_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$nonzero_fc_rc_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$nonzero_fc_rc_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$nonzero_fc_rc_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$nonzero_fc_rc_case/artifacts/contract_review.json" 2>&1
+)"
+nonzero_fc_rc_status=$?
+set -e
+
+[[ "$nonzero_fc_rc_status" -eq 4 ]] || fail "expected exit 4 for non-zero fail_closed_coverage.rc, got $nonzero_fc_rc_status"
+echo "$nonzero_fc_rc_output" | grep -Fq "non-zero gate rc in" || fail "missing non-zero gate rc diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$nonzero_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite non-zero fail_closed_coverage.rc"
+
+# ── Test 11: proof graph gate must be proven in verify artifacts ─────
+missing_pg_rc_case="$tmp_dir/missing_proof_graph_rc"
+mkdir -p "$missing_pg_rc_case"
+setup_case "$missing_pg_rc_case" "$head_sha"
+rm -f "$missing_pg_rc_case/artifacts/proof_graph_${story_id}.rc"
+
+set +e
+missing_pg_rc_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$missing_pg_rc_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$missing_pg_rc_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$missing_pg_rc_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$missing_pg_rc_case/artifacts/contract_review.json" 2>&1
+)"
+missing_pg_rc_status=$?
+set -e
+
+[[ "$missing_pg_rc_status" -eq 4 ]] || fail "expected exit 4 for missing proof graph gate artifact, got $missing_pg_rc_status"
+echo "$missing_pg_rc_output" | grep -Fq "missing required proof graph gate artifact" || fail "missing proof graph gate artifact diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_pg_rc_case/prd.json" >/dev/null || fail "passes changed despite missing proof graph gate artifact"
+
+# ── Test 12: proof graph TRADING HALT artifact propagates exit 20 ────
+halt_pg_case="$tmp_dir/proof_graph_halt"
+mkdir -p "$halt_pg_case"
+setup_case "$halt_pg_case" "$head_sha"
+printf '20\n' > "$halt_pg_case/artifacts/proof_graph_${story_id}.rc"
+
+set +e
+halt_pg_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$halt_pg_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$halt_pg_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$halt_pg_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$halt_pg_case/artifacts/contract_review.json" 2>&1
+)"
+halt_pg_status=$?
+set -e
+
+[[ "$halt_pg_status" -eq 20 ]] || fail "expected exit 20 for proof graph trading halt artifact, got $halt_pg_status"
+echo "$halt_pg_output" | grep -Fq "proof graph triggered TRADING HALT" || fail "missing proof graph trading halt diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$halt_pg_case/prd.json" >/dev/null || fail "passes changed despite proof graph trading halt artifact"
+
+# ── Test 13: proof graph non-zero/non-20 artifact maps to exit 10 ───
+failed_pg_case="$tmp_dir/proof_graph_fail_non20"
+mkdir -p "$failed_pg_case"
+setup_case "$failed_pg_case" "$head_sha"
+printf '7\n' > "$failed_pg_case/artifacts/proof_graph_${story_id}.rc"
+
+set +e
+failed_pg_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$failed_pg_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$failed_pg_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$failed_pg_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$failed_pg_case/artifacts/contract_review.json" 2>&1
+)"
+failed_pg_status=$?
+set -e
+
+[[ "$failed_pg_status" -eq 10 ]] || fail "expected exit 10 for non-zero/non-20 proof graph artifact, got $failed_pg_status"
+echo "$failed_pg_output" | grep -Fq "proof graph gate failed for $story_id" || fail "missing proof graph non-20 failure diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$failed_pg_case/prd.json" >/dev/null || fail "passes changed despite non-zero/non-20 proof graph artifact"
 
 echo "PASS: prd_set_pass"

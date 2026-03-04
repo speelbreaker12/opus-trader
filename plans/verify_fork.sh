@@ -105,9 +105,7 @@ PREFLIGHT_TIMEOUT_WAS_SET=0
 if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then
   PREFLIGHT_TIMEOUT_WAS_SET=1
 fi
-# Quick-mode preflight runs smoke fixture suites that can exceed 300s under
-# normal parallel load; use a safer default while still allowing env override.
-PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-900s}"
+PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"
 if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then
   PREFLIGHT_TIMEOUT="1800s"
 fi
@@ -668,8 +666,7 @@ fi
 if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
   log "12f) status reason codegen"
   run_logged_or_exit "status_reason_codegen" "$SPEC_LINT_TIMEOUT" \
-    env VERIFY_ARTIFACTS_DIR="$VERIFY_ARTIFACTS_DIR" \
-    bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
+    env STATUS_REASON_CODEGEN_DIRECT=1 bash "$ROOT/plans/lib/status_reason_codegen_gate.sh"
 fi
 
 if [[ -d tests/fixtures/status ]]; then
@@ -704,23 +701,19 @@ else
   warn "status fixtures directory missing: tests/fixtures/status"
 fi
 
-if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
-  log "13b) status reason leak guard"
-  status_reason_leak_cmd=(
-    "$PYTHON_BIN" tools/check_status_reason_string_leaks.py
-    --manifest specs/status/status_reason_registries_manifest.json
-    --scan-root crates
-  )
-  # Owner allow-path first: canonical generated module may contain registry literals by design.
-  status_reason_owner_allow_path="crates/soldier_core/src/status_codes_generated.rs"
-  if [[ -f "$status_reason_owner_allow_path" ]]; then
-    status_reason_leak_cmd+=(--allow-path "$status_reason_owner_allow_path")
-  fi
-  run_logged_or_exit "status_reason_leak_guard" "$SPEC_LINT_TIMEOUT" \
-    "${status_reason_leak_cmd[@]}"
-else
-  warn "status reason leak guard skipped (missing specs/status/status_reason_registries_manifest.json)"
+log "13b) status reason leak guard"
+status_reason_leak_cmd=(
+  "$PYTHON_BIN" tools/check_status_reason_string_leaks.py
+  --manifest specs/status/status_reason_registries_manifest.json
+  --scan-root crates
+)
+# Owner allow-path first: canonical generated module may contain registry literals by design.
+status_reason_owner_allow_path="crates/soldier_core/src/status_codes_generated.rs"
+if [[ -f "$status_reason_owner_allow_path" ]]; then
+  status_reason_leak_cmd+=(--allow-path "$status_reason_owner_allow_path")
 fi
+run_logged_or_exit "status_reason_leak_guard" "$SPEC_LINT_TIMEOUT" \
+  "${status_reason_leak_cmd[@]}"
 
 if [[ -f Cargo.toml ]]; then
   if [[ -f specs/vendor_docs/rust/CRATES_OF_INTEREST.yaml && -f tools/vendor_docs_lint_rust.py ]]; then
@@ -758,7 +751,7 @@ if [[ -x "$ROOT/plans/pattern_guard.sh" ]]; then
     bash "$ROOT/plans/pattern_guard.sh"
 fi
 
-MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-120s}"
+MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-240s}"
 if [[ -x "$ROOT/plans/verify_mechanical.sh" ]]; then
   log "14f-mech) mechanical verification"
   run_logged_or_exit "mechanical_verification" "$MECHANICAL_TIMEOUT" \

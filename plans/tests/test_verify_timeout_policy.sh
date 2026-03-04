@@ -20,11 +20,12 @@ assert_contains_line() {
 
 assert_contains_line 'PREFLIGHT_TIMEOUT_WAS_SET=0'
 assert_contains_line 'if [[ -n "${PREFLIGHT_TIMEOUT:-}" ]]; then'
-assert_contains_line 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-900s}"'
+assert_contains_line 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"'
 assert_contains_line 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then'
 assert_contains_line 'PREFLIGHT_TIMEOUT="1800s"'
+assert_contains_line 'MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-240s}"'
 
-line_default="$(grep -nF 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-900s}"' "$VERIFY" | head -n1 | cut -d: -f1)"
+line_default="$(grep -nF 'PREFLIGHT_TIMEOUT="${PREFLIGHT_TIMEOUT:-600s}"' "$VERIFY" | head -n1 | cut -d: -f1)"
 line_full_override="$(grep -nF 'if [[ "$MODE" == "full" && "$PREFLIGHT_TIMEOUT_WAS_SET" -eq 0 ]]; then' "$VERIFY" | head -n1 | cut -d: -f1)"
 
 [[ -n "$line_default" && -n "$line_full_override" ]] || fail "unable to determine timeout line ordering"

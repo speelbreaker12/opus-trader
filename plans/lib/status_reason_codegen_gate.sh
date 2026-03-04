@@ -26,6 +26,11 @@ fi
 
 mkdir -p "$VERIFY_ARTIFACTS_DIR"
 
+if [[ "${STATUS_REASON_CODEGEN_DIRECT:-0}" == "1" ]]; then
+  "$PYTHON_BIN" "$ROOT/tools/generate_reason_codes.py" --check
+  exit 0
+fi
+
 log "status reason-code generation drift"
 run_logged_or_exit "status_reason_codegen" "$SPEC_LINT_TIMEOUT" \
   "$PYTHON_BIN" "$ROOT/tools/generate_reason_codes.py" --check

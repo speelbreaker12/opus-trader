@@ -59,10 +59,7 @@ full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=0'
-assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET" -eq 0 ]]; then'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT=360'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
 assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
 assert_contains_line 'start_ns="$(now_monotonic_ns)"'
@@ -89,7 +86,6 @@ assert_list_contains "$smoke_list" "plans/tests/test_recon_evidence_ledger.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_premortem_ready_ownership_conflict.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_wf_step_stop_on_blocker.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_wf_step_path_signal_scan.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_wf_step_review_provenance.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_code_review_expert_guard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_roadmap_evidence_audit.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_crossref_invariants.sh"

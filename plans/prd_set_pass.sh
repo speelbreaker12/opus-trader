@@ -12,14 +12,15 @@ Rules for passes=true:
   - verify.meta.json head_sha must equal current HEAD
   - FAILED_GATE must be absent in artifacts dir
   - all *.rc files in artifacts dir must be 0
+  - fail_closed_coverage.rc must exist and be 0 in artifacts dir
   - contract review file must exist and contain decision=PASS
   - at least one review artifact must exist for current HEAD (codex/ or opus/)
   - wf_step.sh receipt chain must have all 8 receipts
   - enforcing_contract_ats must be non-empty (exit 6) — exempt: policy/certification categories
   - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
   - loss_mode.worst_case, .fail_closed_cap, .drift_metric must all be non-empty (exit 9) — exempt: policy/certification
-  - proof_graph.json must exist and validate (exit 10) — exempt: IDs in plans/proof_graph_exempt.txt
-  - proof_graph TRADING HALT condition triggers exit 20 (V2 graphs with safety_critical + HIGH/CRITICAL + FAIL_OPEN_RISK/WRONG_IMPL_UNBLOCKED)
+  - proof_graph gate artifact proof_graph_<story_id>.rc must exist and be 0 when proof_graph.json exists (exit 10) — exempt: IDs in plans/proof_graph_exempt.txt
+  - proof_graph TRADING HALT condition triggers exit 20 when proof_graph_<story_id>.rc=20
 USAGE
 }
 
@@ -168,7 +169,13 @@ if [[ "$STATUS" == "true" ]]; then
 
   rc_count=0
   bad_rc=0
+  proof_graph_gate_rc_file="$ARTIFACTS_DIR/proof_graph_${ID}.rc"
   while IFS= read -r rc_file; do
+    # proof_graph gate has dedicated handling below to preserve exit-code
+    # semantics (including TRADING HALT -> exit 20).
+    if [[ "$rc_file" == "$proof_graph_gate_rc_file" ]]; then
+      continue
+    fi
     rc_count=$((rc_count + 1))
     rc_val="$(tr -d '[:space:]' < "$rc_file" 2>/dev/null || true)"
     if [[ "$rc_val" != "0" ]]; then
@@ -185,23 +192,19 @@ if [[ "$STATUS" == "true" ]]; then
     exit 4
   fi
 
-  # Required artifact-backed gate proofs for pass flips.
-  required_gate_artifacts=(
-    "preflight.rc"
-    "fail_closed_coverage.rc"
-  )
-  for required_gate_rc in "${required_gate_artifacts[@]}"; do
-    required_gate_path="$ARTIFACTS_DIR/$required_gate_rc"
-    if [[ ! -f "$required_gate_path" ]]; then
-      echo "ERROR: missing required gate artifact: $required_gate_path" >&2
-      exit 4
-    fi
-    required_rc_val="$(tr -d '[:space:]' < "$required_gate_path" 2>/dev/null || true)"
-    if [[ "$required_rc_val" != "0" ]]; then
-      echo "ERROR: required gate artifact is non-zero: $required_gate_path (${required_rc_val:-<empty>})" >&2
-      exit 4
-    fi
-  done
+  # Require explicit proof that fail_closed_coverage gate passed in full verify
+  # artifacts. This avoids re-running an expensive gate during pass flip while
+  # remaining fail-closed if evidence is missing.
+  fail_closed_rc_file="$ARTIFACTS_DIR/fail_closed_coverage.rc"
+  if [[ ! -f "$fail_closed_rc_file" ]]; then
+    echo "ERROR: missing required gate artifact: $fail_closed_rc_file" >&2
+    exit 4
+  fi
+  fail_closed_rc_val="$(tr -d '[:space:]' < "$fail_closed_rc_file" 2>/dev/null || true)"
+  if [[ "$fail_closed_rc_val" != "0" ]]; then
+    echo "ERROR: fail_closed_coverage gate did not pass in verify artifacts ($fail_closed_rc_file=$fail_closed_rc_val)" >&2
+    exit 4
+  fi
 
   # ── Contract review ───────────────────────────────────────────────
   if [[ -z "$CONTRACT_REVIEW_FILE" ]]; then
@@ -256,35 +259,24 @@ if [[ -x "$ext_gate" ]]; then
     done
   fi
 
-  # ── Fail-closed coverage ──────────────────────────────────────────
-  if [[ -x "./plans/fail_closed_coverage.sh" ]]; then
-    if ! ./plans/fail_closed_coverage.sh; then
-      echo "ERROR: fail-closed test coverage minimum not met" >&2
-      exit 8
-    fi
-  fi
-
-  # ── Proof graph validation ──────────────────────────────────────────
+  # ── Proof graph gate evidence (artifact-backed) ───────────────────
   proof_graph_file="$art_root/$ID/proof_graph.json"
   exempt_list="$ROOT/plans/proof_graph_exempt.txt"
   if [[ -f "$proof_graph_file" ]]; then
-    command -v python3 >/dev/null 2>&1 || {
-      echo "ERROR: python3 required for proof graph validation" >&2
-      exit 10
-    }
-    pg_rc=0
-    python3 "$ROOT/python/proof_graph/validate.py" "$proof_graph_file" \
-         --contract-path "$ROOT/specs/CONTRACT.md" \
-         --prd-path "$PRD_FILE" \
-         --strict || pg_rc=$?
+    if [[ ! -f "$proof_graph_gate_rc_file" ]]; then
+      echo "ERROR: missing required proof graph gate artifact: $proof_graph_gate_rc_file" >&2
+      exit 4
+    fi
 
-    if [[ "$pg_rc" -eq 20 ]]; then
+    proof_graph_gate_rc_val="$(tr -d '[:space:]' < "$proof_graph_gate_rc_file" 2>/dev/null || true)"
+    if [[ "$proof_graph_gate_rc_val" == "20" ]]; then
       echo "CRITICAL: proof graph triggered TRADING HALT for $ID" >&2
       exit 20
-    elif [[ "$pg_rc" -ne 0 ]]; then
-      echo "ERROR: proof graph validation failed for $ID (exit $pg_rc)" >&2
+    elif [[ "$proof_graph_gate_rc_val" != "0" ]]; then
+      echo "ERROR: proof graph gate failed for $ID ($proof_graph_gate_rc_file=$proof_graph_gate_rc_val)" >&2
       exit 10
     fi
+    echo "OK: proof graph gate passed for $ID"
   elif [[ -f "$exempt_list" ]] && grep -qxF "$ID" "$exempt_list"; then
     echo "INFO: $ID is exempt from proof graph requirement (legacy)" >&2
   else

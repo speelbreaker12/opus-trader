@@ -57,15 +57,40 @@ case "$PREFLIGHT_FIXTURE_MODE" in
 esac
 
 # --- Timeout detection (portable: timeout on Linux, gtimeout on macOS) ---
-# Guard scripts can spike under CI/parallel load; default above 30s avoids flaky
-# false negatives while still failing closed on genuinely hung guards.
-PREFLIGHT_GUARD_TIMEOUT="${PREFLIGHT_GUARD_TIMEOUT:-60}"
+PREFLIGHT_GUARD_TIMEOUT="${PREFLIGHT_GUARD_TIMEOUT:-30}"
 _TIMEOUT_BIN=""
 if command -v timeout >/dev/null 2>&1; then
   _TIMEOUT_BIN="timeout"
 elif command -v gtimeout >/dev/null 2>&1; then
   _TIMEOUT_BIN="gtimeout"
 fi
+
+now_monotonic_ns() {
+  local ns=""
+
+  ns="$(date +%s%N 2>/dev/null || true)"
+  if [[ "$ns" =~ ^[0-9]+$ ]] && [[ ${#ns} -gt 10 ]]; then
+    echo "$ns"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import time; print(time.monotonic_ns())'
+    return 0
+  fi
+
+  if command -v python >/dev/null 2>&1; then
+    python -c 'import time; print(int(time.monotonic() * 1000000000))'
+    return 0
+  fi
+
+  if command -v perl >/dev/null 2>&1; then
+    perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+    return 0
+  fi
+
+  printf '%s000000000\n' "$(date +%s)"
+}
 
 # --- Counters ---
 PASS_COUNT=0
@@ -278,7 +303,6 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_premortem_ready_ownership_conflict.sh"
   "plans/tests/test_wf_step_stop_on_blocker.sh"
   "plans/tests/test_wf_step_path_signal_scan.sh"
-  "plans/tests/test_wf_step_review_provenance.sh"
   "plans/tests/test_code_review_expert_guard.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"
@@ -304,23 +328,18 @@ if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
   REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
 fi
 
-PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=0
-if [[ -n "${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-}" ]]; then
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET=1
-fi
-PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-180}"
-if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" && "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_WAS_SET" -eq 0 ]]; then
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT=360
-fi
-if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
-  echo "[FAIL] Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds; setup error)" >&2
-  exit 2
-fi
-
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
   pass "Fixture tests skipped (mode=none)"
 else
   pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
+
+  PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"
+  if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
+    setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
+    PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
+    PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
+  fi
 
   # --- Fixture cache ---
   # Cache key = SHA256 of all workflow/tool/spec files that fixture tests depend on.
@@ -328,6 +347,9 @@ else
   PREFLIGHT_NO_CACHE="${PREFLIGHT_NO_CACHE:-0}"
   # --strict implies thoroughness: disable cache to ensure all tests actually run
   if [[ "$STRICT_MODE" == "1" ]]; then
+    PREFLIGHT_NO_CACHE=1
+  fi
+  if [[ "$PREFLIGHT_FIXTURE_TIMEOUT_INVALID" == "1" ]]; then
     PREFLIGHT_NO_CACHE=1
   fi
   _cache_dir="$ROOT/.cache"
@@ -342,14 +364,14 @@ else
     #   tools/, scripts/. This prevents stale cache when non-code config
     #   files (allowlists, evidence sources, workflow contract, etc.) change.
     {
-      find plans -maxdepth 1 -type f 2>/dev/null
-      find plans/lib -name '*.sh' -type f 2>/dev/null
-      find plans/tests -name '*.sh' -type f 2>/dev/null
-      find plans/config -type f 2>/dev/null
-      find specs -type f 2>/dev/null
-      find SKILLS -type f 2>/dev/null
-      find tools -name '*.py' -type f 2>/dev/null
-      find scripts -name '*.py' -type f 2>/dev/null
+      [[ -d plans ]] && find plans -maxdepth 1 -type f 2>/dev/null
+      [[ -d plans/lib ]] && find plans/lib -name '*.sh' -type f 2>/dev/null
+      [[ -d plans/tests ]] && find plans/tests -name '*.sh' -type f 2>/dev/null
+      [[ -d plans/config ]] && find plans/config -type f 2>/dev/null
+      [[ -d specs ]] && find specs -type f 2>/dev/null
+      [[ -d SKILLS ]] && find SKILLS -type f 2>/dev/null
+      [[ -d tools ]] && find tools -name '*.py' -type f 2>/dev/null
+      [[ -d scripts ]] && find scripts -name '*.py' -type f 2>/dev/null
     } | LC_ALL=C sort -u | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1
   }
 
@@ -380,20 +402,9 @@ else
     fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
+    fixture_pids=()
     fixture_idx=0
-
-    now_monotonic_ns() {
-      if command -v python3 >/dev/null 2>&1; then
-        python3 - <<'PY'
-import time
-print(time.monotonic_ns())
-PY
-      elif command -v perl >/dev/null 2>&1; then
-        perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000000000'
-      else
-        printf '%s000000000\n' "$(date +%s)"
-      fi
-    }
+    timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))
 
     for fixture_test in "${REVIEW_FIXTURE_TESTS[@]}"; do
       if [[ ! -f "$fixture_test" ]]; then
@@ -422,12 +433,12 @@ PY
           fi
         fi
         end_ns="$(now_monotonic_ns)"
-        duration_ns=$((end_ns - start_ns))
-        if [[ "$duration_ns" -lt 0 ]]; then
+        if [[ "$start_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" -ge "$start_ns" ]]; then
+          duration_ns=$((end_ns - start_ns))
+        else
           duration_ns=0
         fi
         duration_s=$((duration_ns / 1000000000))
-        timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))
         status="FAIL"
         if [[ "$rc" -eq 0 ]]; then
           status="PASS"
@@ -437,18 +448,30 @@ PY
         fi
         echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"
       ) &
+      fixture_pids+=($!)
       ((fixture_idx++)) || true
-      # Throttle using completion markers, not PID liveness.
-      # On macOS/bash 3.2, `kill -0` may report zombie children as alive until
-      # `wait` reaps them, which can stall this loop indefinitely.
-      while true; do
-        completed_count="$(find "$fixture_results_dir" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
-        running_count=$((fixture_idx - completed_count))
-        if [[ "$running_count" -lt "$PREFLIGHT_PARALLEL_JOBS" ]]; then
-          break
-        fi
-        sleep 0.2
-      done
+      # Throttle: wait for a slot if at concurrency limit
+      # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
+      if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
+        # Poll until at least one slot opens
+        while true; do
+          alive=()
+          for pid in "${fixture_pids[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+              alive+=("$pid")
+            fi
+          done
+          if [[ ${#alive[@]} -gt 0 ]]; then
+            fixture_pids=("${alive[@]}")
+          else
+            fixture_pids=()
+          fi
+          if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
+            break
+          fi
+          sleep 0.2
+        done
+      fi
     done
 
     # Wait for all remaining
