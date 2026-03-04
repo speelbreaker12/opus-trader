@@ -1,5 +1,43 @@
 # Pause Note (optional)
 
+## 2026-03-04 - PR #161 drift-closure handoff
+
+- Date: 2026-03-04 22:11:46 UTC
+- Branch/worktree: `pr-161-review` at `/tmp/opus-pr-review/pr-161`
+- PR: #161 `PR1: close phase drift with contract/doc/verify alignment`
+  - URL: https://github.com/speelbreaker12/opus-trader/pull/161
+  - Head branch: `gsd/pr1-task1-drift-closure`
+  - Latest pushed SHA: `b09bd42`
+- Scope completed in this session:
+  - Made contract-change-ledger gate truly fail-closed in verify runner (no executable-bit skip path).
+  - Aligned Phase-0 status payload/runtime tests with canonical fields:
+    `trading_mode=Active|ReduceOnly|Kill`, `opens_globally_permitted`, and alias parity with `is_trading_allowed`.
+  - Added workflow allowlist coverage for new ledger gate files.
+  - Removed `HEAD~1` fallback from `plans/check_contract_change_ledger.sh`; unresolved `--base-ref` now hard-fails.
+  - Added regression test for unresolved base ref fail-closed path.
+  - Updated contract appendix wording to explicitly require append-only ledger rows.
+  - Regenerated `docs/contract_kernel.json` after contract text updates.
+- Verification evidence:
+  - Local:
+    - `bash plans/tests/test_contract_change_ledger.sh` PASS
+    - `bash plans/tests/test_verify_fork_guardrails.sh` PASS
+    - `bash plans/tests/test_workflow_allowlist_coverage.sh` PASS
+    - `python3 tools/phase0_meta_test.py --root .` PASS
+    - `cargo test -p soldier_infra --test test_phase0_runtime` PASS
+    - `./plans/verify.sh quick` PASS (`artifacts/verify/20260304_160045/verify.meta.json`)
+  - CI on PR #161 (for head `b09bd42`): all required checks green
+    - `verify`, `crossref-gate`, `phase1-snapshot-isolation-smoke`,
+      `Analyze (python)` x2, `Analyze (javascript-typescript)`, `CodeQL`
+- Follow-up resolved (2026-03-04):
+  - `stoic-cli` normalizer now maps alias spellings (title-case/snake-case/hyphenated) into
+    internal tokens `ACTIVE|REDUCE_ONLY|KILL` with fail-closed fallback for unknown inputs.
+  - Added direct regression coverage in `tests/test_stoic_cli_mode_normalization.py` and reran
+    quick verify successfully (`artifacts/verify/20260304_162837/verify.meta.json`).
+- Next agent default actions:
+  1. Push this final follow-up patch on PR #161.
+  2. Re-check CI status and merge if green.
+  3. Keep runtime artifact noise out of commits (`var/runtime/runtime_state.json`, `artifacts/phase0/meta_test_runtime/*`).
+
 ## 2026-02-28 - execution-facade-lockdown doc-alignment implementation
 
 - Date: 2026-02-28 23:10:00 UTC
