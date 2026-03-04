@@ -65,31 +65,64 @@ elif command -v gtimeout >/dev/null 2>&1; then
   _TIMEOUT_BIN="gtimeout"
 fi
 
-now_monotonic_ns() {
+supports_wait_n() {
+  if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
+    return 1
+  fi
+  if [[ "${BASH_VERSINFO[0]:-0}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]:-0}" -lt 3 ]]; then
+    return 1
+  fi
+  help wait 2>/dev/null | grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)'
+}
+
+select_monotonic_backend() {
   local ns=""
 
   ns="$(date +%s%N 2>/dev/null || true)"
   if [[ "$ns" =~ ^[0-9]+$ ]] && [[ ${#ns} -gt 10 ]]; then
-    echo "$ns"
+    echo "date_ns"
     return 0
   fi
 
   if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import time; print(time.monotonic_ns())'
+    echo "python3"
     return 0
   fi
 
   if command -v python >/dev/null 2>&1; then
-    python -c 'import time; print(int(time.monotonic() * 1000000000))'
+    echo "python"
     return 0
   fi
 
   if command -v perl >/dev/null 2>&1; then
-    perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+    echo "perl"
     return 0
   fi
 
-  printf '%s000000000\n' "$(date +%s)"
+  echo "epoch_seconds"
+}
+
+MONOTONIC_BACKEND="$(select_monotonic_backend)"
+MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"
+
+now_monotonic_ns() {
+  case "$MONOTONIC_BACKEND" in
+    date_ns)
+      date +%s%N 2>/dev/null || printf '%s000000000\n' "$(date +%s)"
+      ;;
+    python3)
+      python3 -c 'import time; print(time.monotonic_ns())'
+      ;;
+    python)
+      python -c 'import time; print(int(time.monotonic() * 1000000000))'
+      ;;
+    perl)
+      perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+      ;;
+    *)
+      printf '%s000000000\n' "$(date +%s)"
+      ;;
+  esac
 }
 
 # --- Counters ---
@@ -118,6 +151,59 @@ setup_fail() {
 warn() {
   echo "[WARN] $*" >&2
   ((WARN_COUNT++)) || true
+}
+
+PREFLIGHT_WAIT_N_MODE="${PREFLIGHT_WAIT_N_MODE:-auto}"
+case "$PREFLIGHT_WAIT_N_MODE" in
+  auto|force_on|force_off) ;;
+  *)
+    setup_fail "Invalid PREFLIGHT_WAIT_N_MODE='$PREFLIGHT_WAIT_N_MODE' (expected auto|force_on|force_off)"
+    ;;
+esac
+
+PREFLIGHT_WAIT_N_SUPPORTED=0
+if supports_wait_n; then
+  PREFLIGHT_WAIT_N_SUPPORTED=1
+fi
+
+PREFLIGHT_WAIT_N_USE=0
+if [[ "$PREFLIGHT_WAIT_N_MODE" == "force_on" ]]; then
+  if [[ "$PREFLIGHT_WAIT_N_SUPPORTED" == "1" ]]; then
+    PREFLIGHT_WAIT_N_USE=1
+  else
+    setup_fail "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support"
+  fi
+elif [[ "$PREFLIGHT_WAIT_N_MODE" == "force_off" ]]; then
+  PREFLIGHT_WAIT_N_USE=0
+elif [[ "$PREFLIGHT_WAIT_N_SUPPORTED" == "1" ]]; then
+  PREFLIGHT_WAIT_N_USE=1
+fi
+
+prune_fixture_pids_once() {
+  local alive=()
+  local pid=""
+  for pid in "${fixture_pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      alive+=("$pid")
+    fi
+  done
+  fixture_pids=("${alive[@]}")
+}
+
+wait_for_fixture_slot() {
+  if [[ "$PREFLIGHT_WAIT_N_USE" == "1" ]]; then
+    wait -n 2>/dev/null || true
+    prune_fixture_pids_once
+    return 0
+  fi
+
+  while true; do
+    prune_fixture_pids_once
+    if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
+      break
+    fi
+    sleep 0.2
+  done
 }
 
 # =============================================================================
@@ -236,16 +322,48 @@ done
 # Tier 2: Fast checks (<30s)
 # =============================================================================
 
-# 4. Shell syntax: bash -n plans/*.sh
+# 4. Shell syntax: aggregate parse first, then per-file pinpoint on failure
 SHELL_SYNTAX_OK=1
 SHELL_ERRORS=()
 if compgen -G "plans/*.sh" >/dev/null; then
-  for f in plans/*.sh; do
-    if ! bash -n "$f" 2>/dev/null; then
-      SHELL_SYNTAX_OK=0
-      SHELL_ERRORS+=("$f")
+  SHELL_SYNTAX_AGGREGATE_FILE=""
+  if ! SHELL_SYNTAX_AGGREGATE_FILE="$(mktemp 2>/dev/null)"; then
+    SHELL_SYNTAX_AGGREGATE_FILE=""
+  fi
+  if [[ -z "$SHELL_SYNTAX_AGGREGATE_FILE" ]]; then
+    setup_fail "Shell syntax aggregate setup failed (mktemp)"
+    SHELL_ERRORS+=("<aggregate-setup>")
+    SHELL_SYNTAX_OK=0
+  else
+    _preflight_cleanup_dirs+=("$SHELL_SYNTAX_AGGREGATE_FILE")
+    for f in plans/*.sh; do
+      cat "$f" >> "$SHELL_SYNTAX_AGGREGATE_FILE" || {
+        setup_fail "Shell syntax aggregate setup failed while reading $f"
+        SHELL_ERRORS+=("<aggregate-setup>")
+        SHELL_SYNTAX_OK=0
+        break
+      }
+      printf '\n' >> "$SHELL_SYNTAX_AGGREGATE_FILE" || {
+        setup_fail "Shell syntax aggregate setup failed while writing separator for $f"
+        SHELL_ERRORS+=("<aggregate-setup>")
+        SHELL_SYNTAX_OK=0
+        break
+      }
+    done
+
+    if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then
+      if bash -n "$SHELL_SYNTAX_AGGREGATE_FILE" >/dev/null 2>&1; then
+        SHELL_SYNTAX_OK=1
+      else
+        SHELL_SYNTAX_OK=0
+        for f in plans/*.sh; do
+          if ! bash -n "$f" >/dev/null 2>&1; then
+            SHELL_ERRORS+=("$f")
+          fi
+        done
+      fi
     fi
-  done
+  fi
 fi
 
 if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then
@@ -359,9 +477,18 @@ else
   _cache_file="$_cache_dir/preflight_fixtures_${PREFLIGHT_FIXTURE_MODE}.hash"
   _cache_hit=0
 
-  _compute_fixture_hash() {
-    # Deterministic: sorted file list, content-addressed.
-    # Uses xargs to batch shasum calls (avoids per-file process spawn).
+  _compute_fixture_hash_from_list() {
+    local _file_list="$1"
+    printf '%s\n' "$_file_list" \
+      | LC_ALL=C sort -u \
+      | sed '/^$/d' \
+      | xargs shasum -a 256 2>/dev/null \
+      | shasum -a 256 \
+      | cut -d' ' -f1
+  }
+
+  _compute_fixture_hash_fallback() {
+    # Deterministic fallback: sorted file list, content-addressed.
     # Broad scope: includes all files that fixture tests may depend on —
     #   plans/ (all file types: .sh, .json, .txt, .md), specs/, SKILLS/,
     #   tools/, scripts/. This prevents stale cache when non-code config
@@ -376,6 +503,34 @@ else
       [[ -d tools ]] && find tools -name '*.py' -type f 2>/dev/null
       [[ -d scripts ]] && find scripts -name '*.py' -type f 2>/dev/null
     } | LC_ALL=C sort -u | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1
+  }
+
+  _compute_fixture_hash() {
+    local fast_file_list=""
+    local fast_hash=""
+    local fallback_hash=""
+
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      if git diff --quiet --cached -- && git diff --quiet -- && ! git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts | grep -q .; then
+        fast_file_list="$(git ls-files -- plans specs SKILLS tools scripts 2>/dev/null || true)"
+        if [[ -n "$fast_file_list" ]]; then
+          fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"
+          if [[ -n "$fast_hash" ]]; then
+            echo "$fast_hash"
+            return 0
+          fi
+        fi
+      fi
+    fi
+
+    # Falling back to full fixture hash scan
+    fallback_hash="$(_compute_fixture_hash_fallback)"
+    if [[ -n "$fallback_hash" ]]; then
+      echo "$fallback_hash"
+      return 0
+    fi
+
+    printf '%s\n' "preflight-fixture-hash-empty" | shasum -a 256 | cut -d' ' -f1
   }
 
   # Validate shasum is available (fail-closed: if missing, skip cache entirely)
@@ -453,27 +608,10 @@ else
       ) &
       fixture_pids+=($!)
       ((fixture_idx++)) || true
-      # Throttle: wait for a slot if at concurrency limit
-      # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
+      # Throttle: wait for a slot if at concurrency limit.
+      # wait -n is used when available/allowed; polling remains the fallback.
       if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
-        # Poll until at least one slot opens
-        while true; do
-          alive=()
-          for pid in "${fixture_pids[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-              alive+=("$pid")
-            fi
-          done
-          if [[ ${#alive[@]} -gt 0 ]]; then
-            fixture_pids=("${alive[@]}")
-          else
-            fixture_pids=()
-          fi
-          if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
-            break
-          fi
-          sleep 0.2
-        done
+        wait_for_fixture_slot
       fi
     done
 

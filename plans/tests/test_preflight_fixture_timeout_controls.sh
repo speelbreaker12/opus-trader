@@ -89,6 +89,48 @@ EOF
   git config user.email "fixture@example.com"
 )
 
+invalid_wait_mode_log="$tmp_dir/invalid_wait_mode.log"
+set +e
+(
+  cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_WAIT_N_MODE=broken \
+  ./plans/preflight.sh >"$invalid_wait_mode_log" 2>&1
+)
+invalid_wait_mode_rc=$?
+set -e
+[[ "$invalid_wait_mode_rc" -eq 2 ]] || fail "expected invalid wait mode to fail-closed with rc=2, got $invalid_wait_mode_rc"
+grep -Fq "Invalid PREFLIGHT_WAIT_N_MODE='broken'" "$invalid_wait_mode_log" \
+  || fail "missing invalid wait-mode diagnostics"
+
+mock_no_wait_n_env="$tmp_dir/mock_no_wait_n_env.sh"
+cat > "$mock_no_wait_n_env" <<'EOF'
+help() {
+  if [[ "${1:-}" == "wait" ]]; then
+    printf '%s\n' "wait: wait [id ...]"
+    return 0
+  fi
+  builtin help "$@"
+}
+EOF
+
+force_on_unsupported_log="$tmp_dir/force_on_unsupported.log"
+set +e
+(
+  cd "$repo"
+  BASH_ENV="$mock_no_wait_n_env" \
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_WAIT_N_MODE=force_on \
+  ./plans/preflight.sh >"$force_on_unsupported_log" 2>&1
+)
+force_on_unsupported_rc=$?
+set -e
+[[ "$force_on_unsupported_rc" -eq 2 ]] || fail "expected force_on without wait -n support to fail-closed with rc=2, got $force_on_unsupported_rc"
+grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log" \
+  || fail "missing force_on unsupported diagnostics"
+
 invalid_log="$tmp_dir/invalid_timeout.log"
 set +e
 (
