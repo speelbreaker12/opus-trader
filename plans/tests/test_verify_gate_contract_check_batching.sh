@@ -33,6 +33,27 @@ chmod +x "$repo/plans/verify_gate_contract_check.sh"
 verify_file="$repo/plans/verify_fork.sh"
 verify_file_backup="$tmp_dir/verify_fork.original.sh"
 cp "$verify_file" "$verify_file_backup"
+gate_check_file="$repo/plans/verify_gate_contract_check.sh"
+
+mutate_verify_file() {
+  local target="$1"
+  local old_token="$2"
+  local new_token="$3"
+
+  command -v python3 >/dev/null 2>&1 \
+    || fail "python3 is required for deterministic fixture mutation"
+
+  python3 - "$target" "$old_token" "$new_token" <<'PY'
+import sys
+
+path, old_token, new_token = sys.argv[1:]
+with open(path, "r", encoding="utf-8") as handle:
+    content = handle.read()
+content = content.replace(old_token, new_token)
+with open(path, "w", encoding="utf-8") as handle:
+    handle.write(content)
+PY
+}
 
 run_expect_missing_token() {
   local expected_token="$1"
@@ -57,10 +78,22 @@ run_expect_missing_token() {
     || fail "unexpected failure line: '$first_line' (expected '$expected_line')"
 }
 
+# Regression guard: require non-pipeline literal token check to avoid pipefail/SIGPIPE false negatives.
+if grep -Fq -- "printf '%s\\n' \"\$file_content\" | grep -Fq" "$gate_check_file"; then
+  fail "require_code_token must not use printf|grep pipeline"
+fi
+grep -Fq -- "grep -Fq -- \"\$token\" <<< \"\$file_content\"" "$gate_check_file" \
+  || fail "require_code_token literal non-pipeline grep check missing"
+
 # Case A: remove first and second ordered verify tokens.
 # Must fail-first on the first token in the original deterministic order.
 cp "$verify_file_backup" "$verify_file"
-perl -0pi -e 's/run_logged_or_exit "contract_review_generate"/run_logged_or_exit "__removed_contract_review_generate"/g; s/run_logged_or_exit "contract_review_validate"/run_logged_or_exit "__removed_contract_review_validate"/g' "$verify_file"
+mutate_verify_file "$verify_file" \
+  'run_logged_or_exit "contract_review_generate"' \
+  'run_logged_or_exit "__removed_contract_review_generate"'
+mutate_verify_file "$verify_file" \
+  'run_logged_or_exit "contract_review_validate"' \
+  'run_logged_or_exit "__removed_contract_review_validate"'
 
 run_expect_missing_token 'run_logged_or_exit "contract_review_generate"'
 run_expect_missing_token 'run_logged_or_exit "contract_review_generate"'
@@ -68,7 +101,9 @@ run_expect_missing_token 'run_logged_or_exit "contract_review_generate"'
 # Case B: remove only the second ordered verify token.
 # Must keep exact failure message contract unchanged.
 cp "$verify_file_backup" "$verify_file"
-perl -0pi -e 's/run_logged_or_exit "contract_review_validate"/run_logged_or_exit "__removed_contract_review_validate"/g' "$verify_file"
+mutate_verify_file "$verify_file" \
+  'run_logged_or_exit "contract_review_validate"' \
+  'run_logged_or_exit "__removed_contract_review_validate"'
 
 run_expect_missing_token 'run_logged_or_exit "contract_review_validate"'
 

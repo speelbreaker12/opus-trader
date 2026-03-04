@@ -44,7 +44,7 @@ require_code_token() {
   local file_content="$1"
   local file="$2"
   local token="$3"
-  if ! printf '%s\n' "$file_content" | grep -Fq "$token"; then
+  if ! grep -Fq -- "$token" <<< "$file_content"; then
     fail "missing code token '$token' in $file"
   fi
 }
