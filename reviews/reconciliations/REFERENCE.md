@@ -2,6 +2,25 @@
 
 > Use this for anti-patterns, escalation, and examples.
 > For execution steps and gates, see [PROTOCOL.md](PROTOCOL.md).
+> This file is intentionally concise; detailed operational policy remains in legacy recon policy/runbook docs until migration parity is complete.
+
+---
+
+## 0) Detailed Policy Sources (Temporary)
+
+Use this reference for fast operator orientation. For detailed execution policy that has not yet been migrated here, use:
+- `reviews/premortems/PREMORTEM_RECON_POLICY.md`
+  - per-AT verdict definitions (`PROVEN`, `WEAK_PROOF`, `CLAIMED_NOT_PROVEN`, `UNTESTED_ENFORCEMENT`, `WRONG_IMPL_UNBLOCKED`, `DEFERRED`)
+  - story verdict definitions
+  - per-AT evidence checklist and fail-closed invalid-input categories
+  - debt register schema/required fields and deferred-gap mapping rules
+- `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md`
+  - external review minimum coverage policy (tool/prompt combinations)
+  - timeout defaults and retry expectations
+  - pass-flip troubleshooting check details
+- `reviews/premortems/PREMORTEM_RECON_METRICS.md`
+  - worked code examples (TRIP/NON-TRIP, golden vectors, debt entry examples)
+  - historical lessons learned and process signal notes
 
 ---
 
