@@ -496,6 +496,14 @@ if [[ -f "docs/contract_kernel.json" ]]; then
     "$PYTHON_BIN" scripts/check_contract_kernel.py --kernel docs/contract_kernel.json
 fi
 
+if [[ -x "$ROOT/plans/check_contract_change_ledger.sh" ]]; then
+  log "02a) contract change ledger"
+  run_logged_or_exit "contract_change_ledger" "$CONTRACT_KERNEL_TIMEOUT" \
+    "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md
+else
+  warn "contract_change_ledger skipped (missing plans/check_contract_change_ledger.sh)"
+fi
+
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   log "02b-02e) profile/invariant gates (parallel)"
   parallel_group_reset

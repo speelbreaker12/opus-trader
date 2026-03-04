@@ -74,6 +74,13 @@ assert_contains_line 'tools/check_lag_ids.py --file docs/CONTRACT_IMPL_LAG.md'
 assert_line_before 'run_logged_or_exit "contract_crossrefs"' 'run_logged_or_exit "contract_impl_lag_ids"'
 assert_line_before 'run_logged_or_exit "contract_impl_lag_ids"' 'run_logged_or_exit "arch_flows"'
 
+# Guardrail: CONTRACT.md mutations must be protected by contract-change ledger gate.
+assert_contains_line 'log "02a) contract change ledger"'
+assert_contains_line 'run_logged_or_exit "contract_change_ledger"'
+assert_contains_line '"$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md'
+assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger"'
+assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
+
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
   local fn_name="$1"
