@@ -1,8 +1,30 @@
 # Reconciliation Protocol
 
-> Single source of truth for reconciliation execution.
+> Execution-order authority for reconciliation workflow.
 > Current decision: **one full pipeline for all stories** (no tier routing).
 > For anti-patterns and worked examples, see [REFERENCE.md](REFERENCE.md).
+
+---
+
+## 0) Authority Boundary (Current)
+
+This file is authoritative for:
+- step order and step intent (`wf_step.sh` alignment)
+- gate progression and fail-closed workflow behavior
+- handoff cadence and required operator flow
+
+Until migration parity is complete, these detailed policy surfaces remain authoritative in legacy docs:
+- Verdict taxonomy (per-AT + story verdicts): `reviews/premortems/PREMORTEM_RECON_POLICY.md`
+- Per-AT proof checklist + fail-closed invalid-input categories: `reviews/premortems/PREMORTEM_RECON_POLICY.md`
+- Debt register required fields and validation rules: `reviews/premortems/PREMORTEM_RECON_POLICY.md`
+- External review minimum coverage (tool/prompt combos, timeout defaults): `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md`
+- Extended worked examples and lessons learned: `reviews/premortems/PREMORTEM_RECON_METRICS.md`
+
+Precedence when conflicts exist:
+1. `specs/WORKFLOW_CONTRACT.md`
+2. `plans/wf_step.sh` and `plans/prd_set_pass.sh`
+3. this protocol
+4. legacy recon policy/runbook docs listed above
 
 ---
 
@@ -116,11 +138,15 @@ VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
   ./plans/prd_set_pass.sh <STORY_ID> true
 ```
 
-`prd_set_pass.sh` must pass all enforced checks, including:
-- verify artifacts with matching HEAD
-- required review artifacts
-- receipt chain requirements
-- contract review / proof graph / fail-closed constraints as enforced by script
+`./plans/prd_set_pass.sh <STORY_ID> true` must pass all enforced checks, including:
+- verify artifacts exist, are full-mode, and match current HEAD
+- no `FAILED_GATE` marker and no non-zero `*.rc` gate artifact
+- required gate artifacts are present and green: `preflight.rc`, `fail_closed_coverage.rc`
+- contract review artifact exists and has `decision=PASS`
+- review provenance exists for current HEAD under `artifacts/story/<STORY_ID>/{codex,opus}`
+- wf_step receipt chain is complete for required receipts
+- PRD fields satisfy pass preconditions (`enforcing_contract_ats`, `enforcement_point`, `loss_mode.*`) for non-policy/non-certification stories
+- proof-graph gate artifact semantics are satisfied when proof graph exists (`proof_graph_<story_id>.rc`, including halt semantics)
 
 `plans/prd_set_pass.sh` script output is authoritative for exact check set.
 
