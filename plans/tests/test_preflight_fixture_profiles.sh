@@ -70,6 +70,8 @@ assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duratio
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_fallback.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
@@ -95,7 +97,6 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_prd_ref_check_status_lite_markers.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
 # Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
@@ -122,7 +123,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "34" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 34)"
+[[ "$smoke_count" == "36" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 36)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"

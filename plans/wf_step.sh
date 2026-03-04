@@ -127,6 +127,7 @@ fi
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not in a git repo"
 cd "$ROOT"
+source "$ROOT/plans/lib/hash_utils.sh" || die "missing hash utils helper: $ROOT/plans/lib/hash_utils.sh"
 
 RECEIPT_DIR="${WF_RECEIPT_DIR:-$ROOT/.wf/receipts/$STORY}"
 mkdir -p "$RECEIPT_DIR"
@@ -245,19 +246,6 @@ check_review_logged_sidecar_patch() {
     fi
   done
   [[ "$missing" -eq 0 ]]
-}
-
-sha256_file() {
-  local path="$1"
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$path" | awk '{print $1}'
-    return 0
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$path" | awk '{print $1}'
-    return 0
-  fi
-  return 1
 }
 
 is_fix_diff_basis() {

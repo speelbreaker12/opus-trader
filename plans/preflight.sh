@@ -287,10 +287,11 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_preflight_fixture_timeout_controls.sh"
-  "plans/tests/test_prd_ref_check_status_lite_markers.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
+  "plans/tests/test_fail_closed_gate_map_paths.sh"
+  "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_recon_bundle.sh"
@@ -394,6 +395,11 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-300}"
+    if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
+      setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
+      PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
+    fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()

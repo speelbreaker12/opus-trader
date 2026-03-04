@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WF_STEP_SRC="$ROOT/plans/wf_step.sh"
 REVIEW_LOGGED_SRC="$ROOT/plans/review_logged.sh"
+HASH_UTILS_SRC="$ROOT/plans/lib/hash_utils.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -61,13 +62,14 @@ JSON
 
 [[ -x "$WF_STEP_SRC" ]] || fail "missing executable wf_step: $WF_STEP_SRC"
 [[ -f "$REVIEW_LOGGED_SRC" ]] || fail "missing review_logged source: $REVIEW_LOGGED_SRC"
+[[ -f "$HASH_UTILS_SRC" ]] || fail "missing hash utils source: $HASH_UTILS_SRC"
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
-mkdir -p "$repo/plans" "$repo/.wf/receipts/S9-000" "$repo/artifacts/story/S9-000/codex" "$repo/artifacts/story/S9-000/opus"
+mkdir -p "$repo/plans" "$repo/plans/lib" "$repo/.wf/receipts/S9-000" "$repo/artifacts/story/S9-000/codex" "$repo/artifacts/story/S9-000/opus"
 
 (
   cd "$tmp_dir"
@@ -78,6 +80,7 @@ git -C "$repo" config user.name "Test"
 
 cp "$WF_STEP_SRC" "$repo/plans/wf_step.sh"
 cp "$REVIEW_LOGGED_SRC" "$repo/plans/review_logged.sh"
+cp "$HASH_UTILS_SRC" "$repo/plans/lib/hash_utils.sh"
 chmod +x "$repo/plans/wf_step.sh"
 
 cat > "$repo/plans/verify_citations.sh" <<'VC'

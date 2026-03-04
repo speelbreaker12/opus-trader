@@ -85,4 +85,33 @@ empty_review_file="$out_root_empty/$story_empty/codex/codex.enriched.md"
 grep -Fq -- "FINDINGS_SUMMARY: P0=999 P1=999 P2=999" "$empty_review_file" \
   || fail "empty transcript findings summary must be fail-closed (999)"
 
+# Empty transcripts must fail-closed for findings summary counting.
+cat > "$mock_bin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
+chmod +x "$mock_bin/codex"
+
+story_empty="S9-EMPTY-TRANSCRIPT"
+out_root_empty="$tmp_dir/out-empty"
+
+set +e
+PATH="$mock_bin:$PATH" \
+bash "$SCRIPT" "$story_empty" \
+  --tool codex \
+  --files "plans/review_logged.sh" \
+  --prompt enriched \
+  --timeout-seconds 0 \
+  --out-root "$out_root_empty" \
+  --title "fixture empty transcript fail-closed" >/dev/null
+empty_rc=$?
+set -e
+[[ "$empty_rc" -ne 0 ]] || fail "empty transcript should fail citation gate in C1 mode"
+
+empty_review_file="$out_root_empty/$story_empty/codex/codex.enriched.md"
+[[ -f "$empty_review_file" ]] || fail "missing empty transcript artifact: $empty_review_file"
+grep -Fq -- "FINDINGS_SUMMARY: P0=999 P1=999 P2=999" "$empty_review_file" \
+  || fail "empty transcript findings summary must be fail-closed (999)"
+
 echo "test_review_logged_timeout_binary_unavailable.sh: ok"

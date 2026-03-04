@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WF_STEP="$ROOT/plans/wf_step.sh"
 RECON_PRECHECK="$ROOT/plans/recon_precheck.sh"
+HASH_UTILS="$ROOT/plans/lib/hash_utils.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -12,6 +13,7 @@ fail() {
 
 [[ -f "$WF_STEP" ]] || fail "missing script: $WF_STEP"
 [[ -f "$RECON_PRECHECK" ]] || fail "missing script: $RECON_PRECHECK"
+[[ -f "$HASH_UTILS" ]] || fail "missing helper: $HASH_UTILS"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -21,9 +23,10 @@ git init -q
 git config user.email "test@example.com"
 git config user.name "Test"
 
-mkdir -p plans artifacts/story/S3-000/self_review artifacts/story/S3-000/codex artifacts/verify/run_001
+mkdir -p plans plans/lib artifacts/story/S3-000/self_review artifacts/story/S3-000/codex artifacts/verify/run_001
 cp "$WF_STEP" plans/wf_step.sh
 cp "$RECON_PRECHECK" plans/recon_precheck.sh
+cp "$HASH_UTILS" plans/lib/hash_utils.sh
 chmod +x plans/wf_step.sh plans/recon_precheck.sh
 
 echo "seed" > seed.txt

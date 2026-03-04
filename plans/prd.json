@@ -2251,7 +2251,7 @@
         "touch": [
           "crates/soldier_core/src/execution/reject_reason.rs",
           "crates/soldier_core/src/execution/mod.rs",
-          "crates/soldier_core/tests/test_reject_reason.rs"
+          "crates/soldier_core/src/execution/reject_reason_contract_tests.rs"
         ],
         "create": [],
         "avoid": [
@@ -2266,17 +2266,17 @@
       "steps": [
         "Map S2.5 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S2.5 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S2.5: crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_present_on_pre_dispatch_reject, crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_in_registry, crates/soldier_core/tests/test_reject_reason.rs::test_registry_contains_contract_minimum_set.",
+        "Add/adjust targeted tests for S2.5: crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_present_on_pre_dispatch_reject, crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_in_registry, crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_registry_contains_contract_minimum_set.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
       "verify": [
         "./plans/verify.sh",
         "cargo test --workspace",
-        "cargo test -p soldier_core --test test_reject_reason"
+        "cargo test -p soldier_core --lib reject_reason_contract_tests"
       ],
       "evidence": [
-        "cargo test -p soldier_core --test test_reject_reason output",
+        "cargo test -p soldier_core --lib reject_reason_contract_tests output",
         "PRD entry S2-004 records contract AT and test mappings for this story."
       ],
       "dependencies": [
@@ -2316,9 +2316,9 @@
         ]
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_present_on_pre_dispatch_reject",
-        "crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_in_registry",
-        "crates/soldier_core/tests/test_reject_reason.rs::test_registry_contains_contract_minimum_set"
+        "crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_present_on_pre_dispatch_reject",
+        "crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_reject_reason_in_registry",
+        "crates/soldier_core/src/execution/reject_reason_contract_tests.rs::test_registry_contains_contract_minimum_set"
       ],
       "loss_mode": {
         "worst_case": "reject reason missing from registry → unclassified rejection → debugging impossible",
@@ -3634,6 +3634,7 @@
       "implementation_tests": [
         "crates/soldier_core/tests/test_gate_ordering.rs::test_at501_open_all_gates_pass_trace_order"
       ],
+      "primary_owner_for": [],
       "loss_mode": {
         "worst_case": "gate ordering wrong → dispatch before all checks → safety gate bypassed",
         "fail_closed_cap": "DispatcherChokepoint rejects intent; fail-closed to no-dispatch",
@@ -3661,7 +3662,7 @@
       ],
       "scope": {
         "touch": [
-          "crates/soldier_core/tests/test_dispatch_chokepoint.rs",
+          "crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs",
           "docs/dispatch_chokepoint.md"
         ],
         "create": [],
@@ -3675,7 +3676,7 @@
         "GIVEN docs/dispatch_chokepoint.md exists WHEN reviewed THEN it names the exact module, function, and exchange client type."
       ],
       "steps": [
-        "Create crates/soldier_core/tests/test_dispatch_chokepoint.rs with AST/grep checks for exchange client usage.",
+        "Create crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs with AST/grep checks for exchange client usage.",
         "Implement test_dispatch_chokepoint_no_direct_exchange_client_usage that fails if exchange client constructed outside chokepoint.",
         "Implement test_dispatch_visibility_is_restricted that fails if dispatch fn is not pub(crate).",
         "Create docs/dispatch_chokepoint.md documenting the chokepoint module, function, and normative statement.",
@@ -3683,7 +3684,7 @@
       ],
       "verify": [
         "./plans/verify.sh",
-        "cargo test -p soldier_core --test test_dispatch_chokepoint"
+        "cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests"
       ],
       "evidence": [
         "cargo test output showing test_dispatch_chokepoint_no_direct_exchange_client_usage PASS",
@@ -3714,7 +3715,7 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_dispatch_chokepoint.rs::test_dispatch_chokepoint_no_bypass_approved"
+        "crates/soldier_core/src/execution/dispatch_chokepoint_contract_tests.rs::test_dispatch_chokepoint_no_bypass_approved"
       ],
       "partial_coverage_notes": {
         "AT-925": "partial: architectural chokepoint proof (exchange client visibility restriction). PolicyGuard ReduceOnly forcing under WAL backpressure deferred to S8.1c. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table."
@@ -4147,7 +4148,7 @@
       "contract_refs": [
         "AT-935",
         "AT-233",
-        "2.4 — WAL / intent ledger (RecordedBeforeDispatch)"
+        "§2.4 Durable Intent Ledger (WAL Truth Source)"
       ],
       "plan_refs": [
         "Phase 1 — Foundation (Panic‑Free Deterministic Intents)"
@@ -4629,8 +4630,9 @@
         "§1.4.2"
       ],
       "plan_refs": [
-        "Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer",
-        "Slice 6 — Inventory Skew + Pending Exposure + Global Budget + Margin Gate"
+        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)",
+        "S5.4 — IOC limit pricer clamp (guarantee min edge at limit)",
+        "S6.1 — Inventory skew gate"
       ],
       "scope": {
         "touch": [
@@ -4645,9 +4647,7 @@
           "crates/soldier_core/tests/test_missing_config.rs",
           "crates/soldier_core/tests/test_intent_id_propagation.rs"
         ],
-        "create": [
-          "crates/soldier_core/tests/common/mod.rs"
-        ],
+        "create": [],
         "avoid": []
       },
       "acceptance": [
@@ -4714,7 +4714,7 @@
         "§1.3"
       ],
       "plan_refs": [
-        "Slice 5 — Liquidity Gate + Fee Model + Net Edge + Gate Ordering + Pricer"
+        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)"
       ],
       "scope": {
         "touch": [
@@ -5581,10 +5581,10 @@
       },
       "acceptance": [
         "missing/stale/FAIL => ReduceOnly; no grace; no caching last-known-good.",
-        "GIVEN the certification artifact has `contract_version=\"5.2\"` and runtime `contract_version` is `\"5.2\"`. WHEN trading-mode resolver validates artifact binding checks. THEN `contract_version` comparison passes (no ReduceOnly due to formatting mismatch). (AT-012).",
-        "GIVEN certification artifact status is PASS but `build_id` OR `runtime_config_hash` OR `contract_version` mismatches runtime. WHEN TradingMode is computed. THEN TradingMode MUST be ReduceOnly and OPEN must be blocked. (AT-020).",
-        "GIVEN the certification artifact was valid previously, then becomes missing OR stale OR FAIL. WHEN TradingMode is computed. THEN TradingMode MUST be ReduceOnly (no \"last-known-good\" bypass). (AT-021).",
-        "GIVEN `now - cert_generated_ts_ms > 86400000ms`. WHEN certification artifact freshness is evaluated. THEN ReduceOnly is forced. (AT-294).",
+        "GIVEN F1_CERT has `contract_version=\"5.2\"` and runtime `contract_version` is `\"5.2\"`. WHEN trading-mode resolver validates F1_CERT binding checks. THEN `contract_version` comparison passes (no ReduceOnly due to formatting mismatch). (AT-012).",
+        "GIVEN F1_CERT.status == PASS but `build_id` OR `runtime_config_hash` OR `contract_version` mismatches runtime. WHEN TradingMode is computed. THEN TradingMode MUST be ReduceOnly and OPEN must be blocked. (AT-020).",
+        "GIVEN F1_CERT was valid previously, then becomes missing OR stale OR FAIL. WHEN TradingMode is computed. THEN TradingMode MUST be ReduceOnly (no \"last-known-good\" bypass). (AT-021).",
+        "GIVEN `now - F1_CERT.generated_ts_ms > 86400000ms`. WHEN F1_CERT freshness is evaluated. THEN ReduceOnly is forced. (AT-294).",
         "GIVEN `rate_limit_session_kill_active` is missing or unparseable. WHEN trading-mode resolver computes `TradingMode`. THEN `TradingMode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`. (AT-348).",
         "GIVEN `mm_util` is present but `mm_util_last_update_ts_ms` is missing or unparseable, and all other gates would allow `Trad... WHEN trading-mode resolver computes `TradingMode`. THEN `TradingMode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`. (AT-349).",
         "GIVEN `disk_used_pct` is present but `disk_used_last_update_ts_ms` is missing or unparseable, and all other gates would all... WHEN trading-mode resolver computes `TradingMode`. THEN `TradingMode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`. (AT-350).",
@@ -6081,7 +6081,7 @@
         ]
       },
       "acceptance": [
-        "GIVEN exchange maintenance is announced within 60 minutes via /public/get_announcements. WHEN Exchange Health Monitor evaluates. THEN RiskState is set to Maintenance, mode resolver forces ReduceOnly, owner status payload reports risk_state=Maintenance, and OPEN intents are blocked.",
+        "GIVEN exchange maintenance is announced within 60 minutes via /public/get_announcements. WHEN Exchange Health Monitor evaluates. THEN RiskState is set to Maintenance, mode resolver forces ReduceOnly, /api/v1/status reports risk_state=Maintenance, and OPEN intents are blocked.",
         "GIVEN `/public/get_announcements` endpoint is unreachable for >= `exchange_health_stale_s`. WHEN Exchange Health Monitor evaluates status. THEN `cortex_override = ForceReduceOnly` and OPEN intents are blocked. (AT-204).",
         "GIVEN `ws_event_lag_ms > bunker_jitter_threshold_ms` (or any other bunker entry condition from §2.3.2 rules). WHEN Network Jitter Monitor evaluates bunker mode. THEN `bunker_mode_active = true`, trading-mode resolver computes `TradingMode = ReduceOnly`, OPEN intents are blocked, CLOSE/HEDGE/C... (AT-209).",
         "GIVEN `/public/get_announcements` indicates maintenance starting in 30 minutes. WHEN Exchange Health Monitor evaluates announcements. THEN opens are blocked and closes allowed. (AT-232).",
@@ -6105,9 +6105,7 @@
         "cargo test -p soldier_core --test test_exchange_health output",
         "PRD entry S8-005 records contract AT and test mappings for this story."
       ],
-      "dependencies": [
-        "S8-020"
-      ],
+      "dependencies": [],
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
@@ -6272,7 +6270,9 @@
       "category": "hardening",
       "description": "Implement S8.9 (Owner endpoint: GET /api/v1/health (minimal, read-only)) with contract-aligned behavior and deterministic tests.",
       "contract_refs": [
-        "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)",
+        "TradingMode",
+        "ReduceOnly",
+        "Open Permission Latch",
         "AT-022"
       ],
       "plan_refs": [
@@ -6298,7 +6298,7 @@
         "Map S8.9 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S8.9 logic in the smallest practical surface area while preserving fail-closed behavior.",
         "Add/adjust targeted tests for S8.9: crates/soldier_infra/tests/test_http_health.rs::test_health_endpoint_returns_minimal_payload.",
-        "Wire watchdog heartbeat side-effect and observability fields required for operator-visible diagnostics.",
+        "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
       "verify": [
@@ -6316,8 +6316,8 @@
       "passes": false,
       "contract_must_evidence": [
         {
-          "quote": "/health response MUST include (minimum): ok, build_id, contract_version.",
-          "location": "specs/CONTRACT.md",
+          "quote": "S8.9 contract tests must pass before enabling OPEN behavior.",
+          "location": "specs/IMPLEMENTATION_PLAN.md:1007",
           "anchor": "AT-022"
         }
       ],
@@ -6333,9 +6333,8 @@
       "observability": {
         "metrics": [],
         "status_fields": [
-          "ok",
-          "build_id",
-          "contract_version"
+          "trading_mode",
+          "risk_state"
         ],
         "status_contract_ats": [
           "AT-022"
@@ -6757,8 +6756,8 @@
       },
       "acceptance": [
         "GIVEN multiple resolver inputs are read within one tick. WHEN the axis resolver reads its input snapshot. THEN all inputs are read atomically within one tick boundary; memory ordering prevents torn reads across input fields (AT-1054).",
-        "GIVEN EvidenceChainState is not GREEN. WHEN the policy resolver evaluates GOP gates. THEN TradingMode is ReduceOnly with REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN.",
-        "GIVEN a confirmed Kill trigger fires (RiskState Kill, margin critical, rate-limit session termination, disk watermark Kill, cortex force Kill). WHEN the policy resolver evaluates. THEN TradingMode is Kill with the corresponding KILL_* reason code."
+        "GIVEN EvidenceChainState is not GREEN. WHEN PolicyGuard evaluates GOP gates. THEN TradingMode is ReduceOnly with REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN.",
+        "GIVEN a confirmed Kill trigger fires (RiskState Kill, margin critical, rate-limit session termination, disk watermark Kill, cortex force Kill). WHEN PolicyGuard evaluates. THEN TradingMode is Kill with the corresponding KILL_* reason code."
       ],
       "steps": [
         "Implement evidence chain (GOP) gating: block opens when EvidenceChainState != GREEN.",
@@ -6864,9 +6863,9 @@
       "phase": 2,
       "slice": 8,
       "slice_ref": "Slice 8 — PolicyGuard \\+ Cortex \\+ Exchange Health \\+ Bunker/Evidence/F1 \\+ Owner Endpoints (Patch D)",
-      "story_ref": "S8.8a — Owner status schema & F1 certification",
+      "story_ref": "S8.8a — /status Response Schema & F1 Certification",
       "category": "hardening",
-      "description": "Implement owner status schema: required CSP minimum keys, certification state fields, WAL/rate-limit counters, and F1 cert integration.",
+      "description": "Implement /status endpoint schema: required CSP minimum keys, certification state fields, WAL/rate-limit counters, and F1 cert integration.",
       "contract_refs": [
         "TradingMode",
         "AT-023",
@@ -6894,9 +6893,9 @@
         ]
       },
       "acceptance": [
-        "GIVEN service is running WHEN the owner status endpoint is called THEN HTTP 200 response includes the schema fields required for this slice and AT-023.",
-        "GIVEN certification artifact is present and fresh WHEN owner status data is produced THEN certification state and expiration timestamp satisfy AT-003 deterministic value checks.",
-        "GIVEN owner status data is produced WHEN durability-queue and rate-limit fields are inspected THEN queue depth/capacity/enqueue-failure counters, rate_limit_* counters, and schema_version are present and correctly typed per AT-927/AT-967."
+        "GIVEN service is running WHEN GET /api/v1/status is called THEN HTTP 200 response includes all required CSP minimum keys from contract §7.0 and AT-023.",
+        "GIVEN certification artifact is present and fresh WHEN GET /api/v1/status is called THEN certification state and expiration timestamp satisfy AT-003 deterministic value checks.",
+        "GIVEN GET /api/v1/status is called WHEN WAL and rate-limit fields are inspected THEN wal_queue_depth, rate_limit_* counters, and schema_version are present and correctly typed per AT-927/AT-967."
       ],
       "steps": [
         "Implement /status endpoint returning all required CSP minimum keys per AT-023.",
@@ -6988,9 +6987,9 @@
       "phase": 2,
       "slice": 8,
       "slice_ref": "Slice 8 — PolicyGuard \\+ Cortex \\+ Exchange Health \\+ Bunker/Evidence/F1 \\+ Owner Endpoints (Patch D)",
-      "story_ref": "S8.8b — Owner status semantics & HTTP enforcement",
+      "story_ref": "S8.8b — /status Semantics & HTTP Enforcement",
       "category": "hardening",
-      "description": "Implement owner status semantics: mode_reasons rendering, latch invariants, policy timestamps, connectivity_degraded, and HTTP method rejection.",
+      "description": "Implement /status endpoint semantics: mode_reasons rendering, latch invariants, policy timestamps, connectivity_degraded, and HTTP method rejection.",
       "contract_refs": [
         "TradingMode",
         "ReduceOnly",
@@ -7026,9 +7025,9 @@
         ]
       },
       "acceptance": [
-        "GIVEN non-GET method (POST) is sent to the owner status endpoint WHEN evaluated THEN request is rejected with 4xx/405 and TradingMode/RiskState remain unchanged.",
-        "GIVEN TradingMode is Active WHEN owner status is fetched THEN mode_reasons is empty array per AT-024.",
-        "GIVEN TradingMode is ReduceOnly with latch active WHEN owner status is fetched THEN open_permission_latch is true and mode_reasons includes the latch reason code per AT-351."
+        "GIVEN non-GET method (POST) is sent to /api/v1/status WHEN evaluated THEN request is rejected with 4xx/405 and TradingMode/RiskState remain unchanged.",
+        "GIVEN TradingMode is Active WHEN /status is fetched THEN mode_reasons is empty array per AT-024.",
+        "GIVEN TradingMode is ReduceOnly with latch active WHEN /status is fetched THEN open_permission_latch is true and mode_reasons includes the latch reason code per AT-351."
       ],
       "steps": [
         "Implement mode_reasons rendering: empty array when Active, populated with reason codes otherwise.",
@@ -7126,9 +7125,9 @@
       "phase": 2,
       "slice": 8,
       "slice_ref": "Slice 8 — PolicyGuard \\+ Cortex \\+ Exchange Health \\+ Bunker/Evidence/F1 \\+ Owner Endpoints (Patch D)",
-      "story_ref": "S8.8 — Owner status GOP isolation enforcement",
+      "story_ref": "S8.8 — /status GOP isolation enforcement",
       "category": "hardening",
-      "description": "Enforce owner-status GOP isolation: no GOP keys appear under CSP section, and no false GOP enforcement claims in status output.",
+      "description": "Enforce /status GOP isolation: no GOP keys appear under CSP section, and no false GOP enforcement claims in status output.",
       "contract_refs": [
         "AT-1115",
         "AT-1116"
@@ -7148,9 +7147,9 @@
         ]
       },
       "acceptance": [
-        "GIVEN owner status is queried WHEN CSP section is returned THEN no GOP-specific keys are present in the CSP section (AT-1115).",
-        "GIVEN owner status is queried WHEN GOP section is returned THEN no false enforcement claims are made for unenforced GOP features (AT-1116).",
-        "GIVEN a GOP feature is disabled WHEN owner status is queried THEN the GOP section correctly reflects the disabled state without leaking into CSP."
+        "GIVEN the /status endpoint is queried WHEN CSP section is returned THEN no GOP-specific keys are present in the CSP section (AT-1115).",
+        "GIVEN the /status endpoint is queried WHEN GOP section is returned THEN no false enforcement claims are made for unenforced GOP features (AT-1116).",
+        "GIVEN a GOP feature is disabled WHEN /status is queried THEN the GOP section correctly reflects the disabled state without leaking into CSP."
       ],
       "steps": [
         "Audit /status endpoint output for GOP key leakage into CSP section.",
@@ -7168,9 +7167,7 @@
         "cargo test output for AT-1115 and AT-1116",
         "PRD entry S8-019 records contract AT and test mappings for this story."
       ],
-      "dependencies": [
-        "S8-020"
-      ],
+      "dependencies": [],
       "est_size": "XS",
       "risk": "low",
       "needs_human_decision": false,
@@ -7212,141 +7209,6 @@
       "loss_mode": {
         "worst_case": "GOP keys leak into CSP /status → profile isolation violated → certification failure",
         "fail_closed_cap": "StatusEndpoint filters GOP keys from CSP section; isolation enforced",
-        "drift_metric": ""
-      }
-    },
-    {
-      "id": "S8-020",
-      "priority": 92,
-      "phase": 2,
-      "slice": 8,
-      "slice_ref": "Slice 8 — PolicyGuard \\+ Cortex \\+ Exchange Health \\+ Bunker/Evidence/F1 \\+ Owner Endpoints (Patch D)",
-      "story_ref": "S8.8c — Foundation exit /status CSP parity",
-      "category": "hardening",
-      "description": "Implement explicit foundation-exit `/status` transition: when `phase != foundation`, `/status` must satisfy full CSP minimum schema and authority semantics (status-lite keys are not a substitute).",
-      "contract_refs": [
-        "§7.0 Owner Control Plane Endpoints (Read-Only, Owner-Grade)",
-        "AT-023",
-        "AT-405",
-        "AT-419",
-        "AT-907",
-        "AT-927",
-        "AT-1117",
-        "AT-1230"
-      ],
-      "plan_refs": [
-        "Slice 8 — PolicyGuard + Cortex + Exchange Health + Bunker/Evidence/F1 + Owner Endpoints (Patch D)",
-        "S8.8 — Owner endpoint: GET /api/v1/status (Patch D)",
-        "PHASE 1 — Foundation (Slices 1–5) / D) Exit Criteria (measurable/testable)"
-      ],
-      "scope": {
-        "touch": [
-          "crates/soldier_infra/src",
-          "crates/soldier_infra/tests",
-          "docs/health_endpoint.md"
-        ],
-        "create": [],
-        "avoid": [
-          "plans/**"
-        ]
-      },
-      "acceptance": [
-        "GIVEN `phase != foundation` WHEN `/api/v1/status` is queried THEN response includes the CSP minimum key set required by AT-023/AT-405/AT-419/AT-907/AT-927/AT-1117, including schema/profile/mode/risk fields, policy freshness fields, certification fields, disk+margin freshness fields, 5m rate-limit counters, durability-queue counters, connectivity metrics, and open-permission fields.",
-        "GIVEN foundation mode exits WHEN `/status` is queried in steady state THEN bootstrap-only keys do not bypass CSP schema requirements and CSP parity remains enforced.",
-        "GIVEN `/status` is queried post-foundation WHEN invariants are checked THEN `status_schema_version == 1`, `429_count_5m` and `10028_count_5m` are present, and durability-queue invariants (`0 <= queue_depth <= queue_capacity`, `queue_capacity > 0`) hold."
-      ],
-      "steps": [
-        "Add explicit transition logic from foundation status-lite to full CSP status schema in status response assembly.",
-        "Ensure post-foundation responses always emit CSP minimum keys and authority semantics.",
-        "Add/adjust endpoint tests covering foundation-exit transition and full-key presence invariants.",
-        "Update status documentation to call out foundation-exit parity behavior and key expectations.",
-        "Run verification commands and archive artifact evidence before setting passes=true."
-      ],
-      "verify": [
-        "./plans/verify.sh",
-        "cargo test -p soldier_infra --test test_http_status"
-      ],
-      "evidence": [
-        "cargo test -p soldier_infra --test test_http_status output",
-        "PRD entry S8-020 records foundation-exit /status CSP parity obligations."
-      ],
-      "dependencies": [
-        "S0-004",
-        "S8-013",
-        "S8-014"
-      ],
-      "est_size": "S",
-      "risk": "med",
-      "needs_human_decision": false,
-      "passes": false,
-      "contract_must_evidence": [
-        {
-          "quote": "AT-023",
-          "location": "specs/CONTRACT.md",
-          "anchor": "AT-023"
-        }
-      ],
-      "enforcing_contract_ats": [
-        "AT-023",
-        "AT-405",
-        "AT-419",
-        "AT-907",
-        "AT-927",
-        "AT-1117"
-      ],
-      "reason_codes": {
-        "type": "ModeReasonCode",
-        "values": [
-          "POLICY_ACTIVE"
-        ]
-      },
-      "enforcement_point": "StatusEndpoint",
-      "failure_mode": [
-        "missing"
-      ],
-      "observability": {
-        "metrics": [
-          {
-            "name": "status_csp_parity_checks_total",
-            "type": "counter",
-            "unit": "count",
-            "labels": [
-              "result"
-            ]
-          }
-        ],
-        "status_fields": [
-          "status_schema_version",
-          "trading_mode",
-          "risk_state",
-          "open_permission_blocked_latch",
-          "open_permission_reason_codes"
-        ],
-        "status_contract_ats": [
-          "AT-023",
-          "AT-405",
-          "AT-419",
-          "AT-907",
-          "AT-927",
-          "AT-1117"
-        ]
-      },
-      "implementation_tests": [
-        "crates/soldier_infra/tests/test_http_status.rs::test_status_includes_all_required_fields",
-        "crates/soldier_infra/tests/test_http_status.rs::test_status_wal_queue_invariants",
-        "crates/soldier_infra/tests/test_http_status.rs::test_status_rate_limit_counters_present"
-      ],
-      "primary_owner_for": [
-        "AT-023",
-        "AT-405",
-        "AT-419",
-        "AT-907",
-        "AT-927",
-        "AT-1117"
-      ],
-      "loss_mode": {
-        "worst_case": "post-foundation /status omits CSP keys → operator uses incomplete authority state",
-        "fail_closed_cap": "StatusEndpoint enforces full CSP schema after foundation exit",
         "drift_metric": ""
       }
     },
@@ -7592,7 +7454,7 @@
       },
       "acceptance": [
         "GIVEN a WS channel detects a sequence gap (non-monotonic trade_seq or mismatched prevChangeId). WHEN continuity handling runs. THEN RiskState is set to Degraded, resubscribe is triggered, and a full snapshot rebuild is initiated.",
-        "GIVEN a WS trades stream gap is detected (trade_seq non-monotonic). WHEN the system evaluates permissions for an OPEN intent. THEN OPEN is blocked and `open_permission_reason_codes` includes `WS_TRADES_GAP_RECONCILE_REQUIRED`. (AT-202).",
+        "GIVEN a WS trades stream gap is detected (trade_seq non-monotonic). WHEN the system evaluates permissions for an OPEN intent. THEN OPEN is blocked and `/status.open_permission_reason_codes` includes `WS_TRADES_GAP_RECONCILE_REQUIRED`. (AT-202).",
         "GIVEN an incremental book update where `prevChangeId != last_changeId`. WHEN WS continuity handling runs. THEN immediate Degraded → resubscribe + full snapshot rebuild → opens remain paused until rebuild completes. (AT-271).",
         "GIVEN trades feed where `trade_seq` jumps (gap) for an instrument. WHEN WS continuity handling runs. THEN Degraded → REST trade pull + reconcile → no duplicate processing; only then resume. (AT-272).",
         "GIVEN an incremental book update where `prevChangeId != last_changeId`. WHEN WS continuity handling runs. THEN `open_permission_blocked_latch == true` and `open_permission_reason_codes` includes `WS_BOOK_GAP_RECONCILE_REQUIRED`. (AT-408)."
@@ -7612,9 +7474,7 @@
         "cargo test -p soldier_core --test test_ws_gap output",
         "PRD entry S9-002 records contract AT and test mappings for this story."
       ],
-      "dependencies": [
-        "S8-020"
-      ],
+      "dependencies": [],
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
@@ -7702,7 +7562,7 @@
         "GIVEN open_permission_blocked_latch is true. WHEN an OPEN intent is evaluated for dispatch. THEN the OPEN is blocked; CLOSE/HEDGE/CANCEL intents remain dispatchable (subject to cancel/replace permission rules §2.2.5). (AT-010)",
         "GIVEN open_permission_blocked_latch state is queried. WHEN the latch is false. THEN open_permission_reason_codes MUST be empty ([]); when the latch is true, reason_codes MUST be non-empty. (AT-917)",
         "GIVEN open_permission_blocked_latch is true for a reconcile-class reason. WHEN reconciliation succeeds (ledger matches exchange by label, positions within epsilon, no missing trades in lookback). THEN the latch clears and opens may proceed if TradingMode is Active. (AT-011)",
-        "GIVEN a condition that would set certification or EvidenceChain failure reasons. WHEN open_permission_reason_codes is evaluated. THEN certification and EvidenceChain failures MUST NOT appear in open_permission_reason_codes; they are cleared by cert/evidence recovery, not reconciliation. (AT-411)"
+        "GIVEN a condition that would set F1_CERT or EvidenceChain failure reasons. WHEN open_permission_reason_codes is evaluated. THEN F1_CERT and EvidenceChain failures MUST NOT appear in open_permission_reason_codes; they are cleared by cert/evidence recovery, not reconciliation. (AT-411)"
       ],
       "steps": [
         "Map S9.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7803,8 +7663,7 @@
         "AT-121",
         "AT-122",
         "AT-123",
-        "AT-124",
-        "AT-933"
+        "AT-124"
       ],
       "plan_refs": [
         "Slice 9 — Rate Limit Circuit Breaker + WS Gaps + Reconcile + Zombie Sweeper",
@@ -7858,8 +7717,7 @@
         "AT-122",
         "AT-123",
         "AT-124",
-        "AT-303",
-        "AT-933"
+        "AT-303"
       ],
       "reason_codes": {
         "type": "RejectReason",
@@ -8045,8 +7903,8 @@
       },
       "acceptance": [
         "GIVEN the same intent inputs WHEN idempotency key is generated twice THEN the keys are identical (deterministic, no RNG) (AT-1095).",
-        "GIVEN a durability-log entry is appended WHEN a crash occurs mid-write THEN on recovery the log contains only complete entries (append-only, crash-safe) (AT-1096).",
-        "GIVEN the durability log is restored after crash WHEN incomplete trailing entries exist THEN they are safely truncated without data corruption."
+        "GIVEN a WAL entry is appended WHEN a crash occurs mid-write THEN on recovery the WAL contains only complete entries (append-only, crash-safe) (AT-1096).",
+        "GIVEN the WAL is replayed after crash WHEN incomplete entries exist THEN they are safely truncated without data corruption."
       ],
       "steps": [
         "Audit idempotency key generation for any RNG usage and replace with deterministic derivation.",
@@ -8390,9 +8248,9 @@
       "phase": 2,
       "slice": 9,
       "slice_ref": "Slice 9 — Rate Limit Circuit Breaker \\+ WS Gaps \\+ Reconcile \\+ Zombie Sweeper",
-      "story_ref": "S9.1 — Non-5m rate limit counters excluded from owner status",
+      "story_ref": "S9.1 — Non-5m rate limit counters excluded from /status",
       "category": "hardening",
-      "description": "Ensure non-5m rate limit counters do not appear in owner status output.",
+      "description": "Ensure non-5m rate limit counters do not appear in /status endpoint output.",
       "contract_refs": [
         "AT-1117"
       ],
@@ -8411,15 +8269,15 @@
         ]
       },
       "acceptance": [
-        "GIVEN owner status is queried WHEN rate limit counters are included THEN only 5m window counters appear (AT-1117).",
-        "GIVEN a non-5m rate limit counter exists internally WHEN owner status serializes THEN the non-5m counter is excluded from output.",
-        "GIVEN only 5m rate limit counters exist WHEN owner status is queried THEN all 5m counters are present."
+        "GIVEN the /status endpoint is queried WHEN rate limit counters are included THEN only 5m window counters appear (AT-1117).",
+        "GIVEN a non-5m rate limit counter exists internally WHEN /status serializes THEN the non-5m counter is excluded from output.",
+        "GIVEN only 5m rate limit counters exist WHEN /status is queried THEN all 5m counters are present."
       ],
       "steps": [
-        "Audit owner-status serialization for rate limit counter inclusion.",
-        "Add filter to exclude non-5m rate limit counters from owner-status output.",
-        "Add test proving non-5m counters are absent from owner status (AT-1117).",
-        "Add test proving 5m counters remain present in owner status.",
+        "Audit /status serialization for rate limit counter inclusion.",
+        "Add filter to exclude non-5m rate limit counters from /status output.",
+        "Add test proving non-5m counters are absent from /status (AT-1117).",
+        "Add test proving 5m counters remain present in /status.",
         "Validate filter does not affect internal counter tracking.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -8431,9 +8289,7 @@
         "cargo test output for AT-1117",
         "PRD entry S9-013 records contract AT and test mappings for this story."
       ],
-      "dependencies": [
-        "S8-020"
-      ],
+      "dependencies": [],
       "est_size": "XS",
       "risk": "low",
       "needs_human_decision": false,
@@ -8904,7 +8760,7 @@
         ]
       },
       "acceptance": [
-        "GIVEN drift_ms exceeds time_drift_threshold_ms. WHEN the time drift gate evaluates. THEN RiskState is set to Degraded, mode resolver forces ReduceOnly, and owner status exposes the drift violation.",
+        "GIVEN drift_ms exceeds time_drift_threshold_ms. WHEN the time drift gate evaluates. THEN RiskState is set to Degraded, mode resolver forces ReduceOnly, and /api/v1/status exposes the drift violation.",
         "GIVEN `drift_ms > time_drift_threshold_ms`. WHEN trading-mode resolver computes TradingMode with RiskState reflecting the drift violation. THEN `trading_mode==ReduceOnly` and `mode_reasons` includes `REDUCEONLY_RISKSTATE_DEGRADED`. (AT-108).",
         "GIVEN `drift_ms > 50ms`. WHEN time drift gate evaluates. THEN trading-mode resolver forces ReduceOnly until time sync restored. (AT-314)."
       ],
@@ -8923,9 +8779,7 @@
         "cargo test -p soldier_core --test test_time_drift output",
         "PRD entry S10-004 records contract AT and test mappings for this story."
       ],
-      "dependencies": [
-        "S8-020"
-      ],
+      "dependencies": [],
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
@@ -9991,20 +9845,20 @@
         ]
       },
       "acceptance": [
-        "GIVEN the historical-simulation gate is invoked for a policy patch. WHEN it evaluates the last 48h window. THEN Decision Snapshots are required, quality/apply modes are computed from coverage, tighten-only classifier is enforced, haircut is applied to dispatch size, and dd_limit must be explicitly provided.",
-        "GIVEN `snapshot_coverage_pct == 95%` and Decision Snapshots are readable. WHEN the historical-simulation gate runs. THEN quality is GOOD and apply_mode is APPLY. (AT-002).",
-        "GIVEN the historical-simulation gate is invoked and `dd_limit` is missing or unparseable. WHEN the gate evaluates max_drawdown_usd. THEN the gate HARD FAILS and the patch remains blocked (last stable policy stays active). (AT-034).",
+        "GIVEN the Replay Gatekeeper is invoked for a policy patch. WHEN it evaluates the 48h replay window. THEN Decision Snapshots are required, QualityState and ApplyMode are computed from coverage, tighten-only classifier is enforced, haircut is applied to dispatch size, and dd_limit must be explicitly provided.",
+        "GIVEN `snapshot_coverage_pct == 95%` and Decision Snapshots are readable. WHEN Replay Gatekeeper runs. THEN `ReplayQuality == GOOD` and `ReplayApplyMode == APPLY`. (AT-002).",
+        "GIVEN Replay Gatekeeper is invoked and `dd_limit` is missing or unparseable. WHEN the gate evaluates `replay_max_drawdown_usd`. THEN the gate HARD FAILS and the patch remains blocked (last stable policy stays active). (AT-034).",
         "GIVEN a safety-critical gate references a required parameter that has no Appendix A default (e.g., `dd_limit` in §5.2). WHEN that parameter is missing or unparseable at runtime. THEN the gate MUST fail-closed (block policy application / rollout) and surface a deterministic reason. (AT-040).",
-        "GIVEN `snapshot_coverage_pct < 80%` OR Decision Snapshots are unreadable/unwritable. WHEN the historical-simulation gate runs. THEN quality is BROKEN and apply_mode is SHADOW_ONLY. (AT-1062).",
-        "GIVEN quality is DEGRADED and a patch includes a loosening delta OR any parameter not in the tightening table. WHEN the historical-simulation gate evaluates the patch. THEN the patch MUST NOT be applied (shadow-only or explicit reject). (AT-1064).",
-        "GIVEN `enforced_profile == CSP` AND any of the following conditions: `snapshot_coverag... WHEN the system evaluates TradingMode and OPEN eligibility.... THEN `TradingMode` MUST NOT be forced to ReduceOnly/Kill solely due to snapshot-quality checks. (AT-1070).",
+        "GIVEN `snapshot_coverage_pct < 80%` OR Decision Snapshots are unreadable/unwritable. WHEN Replay Gatekeeper runs. THEN `ReplayQuality == BROKEN` and `ReplayApplyMode == SHADOW_ONLY`. (AT-1062).",
+        "GIVEN `ReplayQuality == DEGRADED` and a patch includes a loosening delta OR any parameter not in the tightening table. WHEN Replay Gatekeeper evaluates the patch. THEN the patch MUST NOT be applied (shadow-only or explicit reject). (AT-1064).",
+        "GIVEN `enforced_profile == CSP` AND any of the following conditions: `snapshot_coverag... WHEN the system evaluates TradingMode and OPEN eligibility.... THEN `TradingMode` MUST NOT be forced to ReduceOnly/Kill solely due to replay/snapsho... (AT-1070).",
         "GIVEN an order/intent is dispatched. WHEN Decision Snapshot linkage is checked. THEN it MUST join via `decision_snapshot_id`. (AT-256).",
-        "GIVEN `snapshot_coverage_pct = 90` (DEGRADED), Decision Snapshots are readable, `open_... WHEN the historical-simulation gate runs and the patch is applied.... THEN quality is DEGRADED, apply_mode is APPLY_WITH_HAIRCUT, and OPEN dispatch sizing is haircut-adjusted. (AT-257).",
-        "GIVEN disk watermark pauses full tick/L2 archives. WHEN the historical-simulation gate evaluates inputs. THEN it continues using Decision Snapshots and MUST NOT force `RiskState::Degraded` solely due to archive pause. (AT-258).",
-        "GIVEN a policy passes historical-sim pre-penalty checks and quality is GOOD. WHEN the historical-simulation gate completes. THEN it approves the patch for rollout (still subject to canary staging §5.3). (AT-259).",
-        "GIVEN the historical-simulation gate evaluates the last 48h window. WHEN `snapshot_coverage_pct == 90%`. THEN quality is DEGRADED and apply_mode is APPLY_WITH_HAIRCUT. (AT-324).",
-        "GIVEN `atomic_naked_events > 0` in evaluation telemetry. WHEN the historical-simulation gate runs. THEN it MUST FAIL and the patch remains blocked. (AT-431).",
-        "GIVEN `net_pnl_penalized <= 0` after realism penalty is applied. WHEN the historical-simulation gate runs. THEN it MUST FAIL and the patch remains blocked. (AT-432)."
+        "GIVEN `snapshot_coverage_pct = 90` (DEGRADED), Decision Snapshots are readable, `open_... WHEN Replay Gatekeeper runs and the patch is applied.... THEN `ReplayQuality == DEGRADED`, `ReplayApplyMode == APPLY_WITH_HAIRCUT`, and OPEN d... (AT-257).",
+        "GIVEN disk watermark pauses full tick/L2 archives. WHEN Replay Gatekeeper evaluates inputs. THEN it continues using Decision Snapshots and MUST NOT force `RiskState::Degraded` solely due to archive pause. (AT-258).",
+        "GIVEN a policy passes replay pre-penalty checks and `ReplayQuality == GOOD`. WHEN Replay Gatekeeper completes. THEN it approves the patch for rollout (still subject to canary staging §5.3). (AT-259).",
+        "GIVEN Replay Gatekeeper evaluates the last 48h window. WHEN `snapshot_coverage_pct == 90%`. THEN `ReplayQuality == DEGRADED` and `ReplayApplyMode == APPLY_WITH_HAIRCUT`. (AT-324).",
+        "GIVEN `replay_atomic_naked_events > 0`. WHEN Replay Gatekeeper runs. THEN it MUST FAIL and the patch remains blocked. (AT-431).",
+        "GIVEN `replay_net_pnl_penalized <= 0` after realism penalty is applied. WHEN Replay Gatekeeper runs. THEN it MUST FAIL and the patch remains blocked. (AT-432)."
       ],
       "steps": [
         "Map S13.1 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -10141,8 +9995,8 @@
         "GIVEN canary rollout runs with `pnl_floor` configured and observed `net_pnl_usd < pnl_floor`. WHEN the abort evaluator runs. THEN immediate rollback occurs and ReduceOnly cooldown is enforced. (AT-434).",
         "GIVEN canary rollout runs and EvidenceChainState != GREEN continuously for `canary_evidence_abort_s + 1` seconds. WHEN the abort evaluator runs. THEN immediate rollback occurs and ReduceOnly cooldown is enforced. (AT-435).",
         "GIVEN `atomic_naked_events > 0` during canary. WHEN the abort evaluator runs. THEN immediate rollback occurs and ReduceOnly cooldown is enforced. (AT-436).",
-        "GIVEN `canary_evidence_abort_s < (evidence_window_s + evidence_global_cooldown_s)`. WHEN canary preflight evaluates the patch for promotion. THEN preflight MUST FAIL (fail-closed) and the patch MUST NOT start canary; log `CanaryEvidenceAbortMisconfigured`. (AT-972).",
-        "GIVEN `canary_evidence_abort_s = (evidence_window_s + evidence_global_cooldown_s) + 30`, and EvidenceChainState bec... WHEN the abort evaluator runs across the event. THEN canary MUST NOT abort solely due to this transient evidence incident. (AT-973)."
+        "GIVEN `canary_evidence_abort_s < (evidenceguard_window_s + evidenceguard_global_cooldown)`. WHEN canary preflight evaluates the patch for promotion. THEN preflight MUST FAIL (fail-closed) and the patch MUST NOT start canary; log `CanaryEvidenceAbortMisconfigured`. (AT-972).",
+        "GIVEN `canary_evidence_abort_s = (evidenceguard_window_s + evidenceguard_global_cooldown) + 30`, and EvidenceChainState bec... WHEN the abort evaluator runs across the event. THEN canary MUST NOT abort solely due to this transient evidence incident. (AT-973)."
       ],
       "steps": [
         "Map S13.3 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -10375,7 +10229,7 @@
         "GIVEN the repository is at a clean commit. WHEN the CI job `build:csp_only` builds the workspace in CSP_ONLY mode (GOP feature set disabled; reference invocation: `cargo build --no-default-features --features csp_only`). THEN the build MUST succeed. (AT-1056).",
         "GIVEN the workspace is built in CSP_ONLY mode (no GOP feature set).... WHEN the CI job `test:csp_only` runs the CSP acceptance suite in ... THEN (a) all `Profile: CSP` acceptance tests MUST pass, and (b) no `Profile: GOP` acc... (AT-1057).",
         "GIVEN two runtime config JSON inputs that are semantically identical but differ only in key order and whitespace. WHEN `runtime_config_hash` is computed for both. THEN both hashes MUST be identical. (AT-113).",
-        "GIVEN the repo is built in CSP_ONLY build mode (GOP feature set disabled). WHEN the binary is started with a CSP config. THEN it MUST start, and owner status reports `enforced_profile == CSP` while GOP subsystems are `NOT_ENFORCED` or absent. (AT-990)."
+        "GIVEN the repo is built in CSP_ONLY build mode (GOP feature set disabled). WHEN the binary is started with a CSP config. THEN it MUST start, and `/status.enforced_profile == CSP` and GOP subsystems are `NOT_ENFORCED` or absent. (AT-990)."
       ],
       "steps": [
         "Map S13.5 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -10393,9 +10247,7 @@
         "python -m pytest python/tests/test_f1_certify.py::test_runtime_config_hash_canonicalization output",
         "PRD entry S13-004 records contract AT and test mappings for this story."
       ],
-      "dependencies": [
-        "S8-020"
-      ],
+      "dependencies": [],
       "est_size": "S",
       "risk": "med",
       "needs_human_decision": false,
@@ -10618,12 +10470,7 @@
         "AT-931",
         "AT-337",
         "AT-918",
-        "AT-925",
-        "AT-262",
-        "AT-311",
-        "AT-312",
-        "AT-313",
-        "AT-942"
+        "AT-925"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -11078,10 +10925,12 @@
       "category": "policy",
       "description": "Codify the verify_full timeout policy in the reconciliation runbook so full verify runs are invoked with explicit timeout guardrails and avoid silent 900s defaults.",
       "contract_refs": [
-        "§6. Implementation Roadmap v4.0"
+        "§0.Y Verification Harness (Non-Negotiable)",
+        "§2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11175,10 +11024,12 @@
       "category": "policy",
       "description": "Harden cycle1 review logging by validating sidecar JSON deterministically before cycle1 receipt success is allowed.",
       "contract_refs": [
-        "§6. Implementation Roadmap v4.0"
+        "§0.Y Verification Harness (Non-Negotiable)",
+        "§2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11272,10 +11123,11 @@
       "category": "policy",
       "description": "Require per-finding closure entries in R5b self-review gate artifacts so UNPROVEN decisions cannot persist without explicit closure accounting.",
       "contract_refs": [
-        "§6. Implementation Roadmap v4.0"
+        "§0.Y Verification Harness (Non-Negotiable)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11369,10 +11221,12 @@
       "category": "policy",
       "description": "Restrict mechanical callsite enforcement checks to production source paths so test-only symbols do not trigger false blockers during full verify.",
       "contract_refs": [
-        "§6. Implementation Roadmap v4.0"
+        "§0.Y Verification Harness (Non-Negotiable)",
+        "§2.2.1.2 PolicyGuard Critical Input Freshness (Missing/Stale → Fail-Closed for Opens)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [
@@ -11465,10 +11319,11 @@
       "category": "policy",
       "description": "Emit an explicit next-step prompt after cycle1 receipt write so operators do not stall between cycle1 and fix in reconciliation loops.",
       "contract_refs": [
-        "§6. Implementation Roadmap v4.0"
+        "§0.Y Verification Harness (Non-Negotiable)"
       ],
       "plan_refs": [
-        "Global Non‑Negotiables (apply to ALL stories)"
+        "Slice 14 — GOP Optimization Cycle (Contract §5.1)",
+        "S14.2 — Governor clamps + approval coupling for apply path"
       ],
       "scope": {
         "touch": [

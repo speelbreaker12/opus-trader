@@ -40,6 +40,7 @@ plans/global_manual_allowlist.json
 plans/init.sh
 plans/legacy_layout_guard.sh
 plans/lib/adversarial_gate.sh
+plans/lib/hash_utils.sh
 plans/lib/node_gates.sh
 plans/lib/python_gates.sh
 plans/lib/rust_gates.sh
@@ -101,12 +102,12 @@ plans/tests/test_contract_review_emit.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
 plans/tests/test_doc_sync_check.sh
+plans/tests/test_fail_closed_gate_map_paths.sh
 plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
-plans/tests/test_prd_ref_check_status_lite_markers.sh
 plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
@@ -120,6 +121,7 @@ plans/tests/test_review_logged_timeout_binary_unavailable.sh
 plans/tests/test_review_logged_timeout_fallback.sh
 plans/tests/test_review_logged_timeout_retry_noncodex.sh
 plans/tests/test_roadmap_evidence_audit.sh
+plans/tests/test_rust_gates_smoke_targets.sh
 plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh
 plans/tests/test_slice_review_gate.sh

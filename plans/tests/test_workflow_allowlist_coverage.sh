@@ -56,6 +56,7 @@ required=(
   plans/init.sh
   plans/legacy_layout_guard.sh
   plans/lib/adversarial_gate.sh
+  plans/lib/hash_utils.sh
   plans/pr_gate.sh
   plans/prd_audit_check.sh
   plans/prd_audit_merge.py
@@ -97,12 +98,12 @@ required=(
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
   plans/tests/test_code_review_expert_guard.sh
+  plans/tests/test_fail_closed_gate_map_paths.sh
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
-  plans/tests/test_prd_ref_check_status_lite_markers.sh
   plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
@@ -119,6 +120,7 @@ required=(
   plans/tests/test_slice_review_gate.sh
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_findings_guard.sh
+  plans/tests/test_rust_gates_smoke_targets.sh
   plans/tests/test_wf_step_stop_on_blocker.sh
   plans/tests/test_wf_step_review_provenance.sh
   plans/tests/test_workflow_quick_step.sh
