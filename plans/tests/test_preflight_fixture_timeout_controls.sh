@@ -127,9 +127,83 @@ set +e
 )
 force_on_unsupported_rc=$?
 set -e
-[[ "$force_on_unsupported_rc" -eq 2 ]] || fail "expected force_on without wait -n support to fail-closed with rc=2, got $force_on_unsupported_rc"
-grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log" \
-  || fail "missing force_on unsupported diagnostics"
+
+native_wait_n_supported=0
+if bash -lc '
+  major="${BASH_VERSINFO[0]:-0}"
+  minor="${BASH_VERSINFO[1]:-0}"
+  if [[ "$major" -lt 4 ]]; then
+    exit 1
+  fi
+  if [[ "$major" -eq 4 && "$minor" -lt 3 ]]; then
+    exit 1
+  fi
+  builtin help wait 2>/dev/null | grep -Eq '"'"'(^|[[:space:]])-n([[:space:][:punct:]]|$)'"'"'
+' >/dev/null 2>&1; then
+  native_wait_n_supported=1
+fi
+
+if [[ "$native_wait_n_supported" -eq 1 ]]; then
+  [[ "$force_on_unsupported_rc" -eq 0 ]] \
+    || fail "expected force_on to succeed when native wait -n exists (help() spoofed), got rc=$force_on_unsupported_rc"
+  if grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log"; then
+    fail "force_on should not report wait -n unsupported when native support exists"
+  fi
+else
+  [[ "$force_on_unsupported_rc" -eq 2 ]] \
+    || fail "expected force_on without wait -n support to fail-closed with rc=2, got $force_on_unsupported_rc"
+  grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log" \
+    || fail "missing force_on unsupported diagnostics"
+fi
+
+mock_fast_hash_git_bin="$tmp_dir/mock_fast_hash_git_bin"
+mkdir -p "$mock_fast_hash_git_bin"
+cat > "$mock_fast_hash_git_bin/git" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+real_git="$(
+  command -v git
+)"
+if [[ "\${1:-}" == "diff" && "\${2:-}" == "--quiet" ]]; then
+  exit 0
+fi
+if [[ "\${1:-}" == "ls-files" ]]; then
+  if [[ "\${2:-}" == "--others" ]]; then
+    exit 0
+  fi
+  if [[ "\${2:-}" == "--" ]]; then
+    # Degenerate fast-path list: helper must reject this and fallback.
+    printf '   \\n'
+    exit 0
+  fi
+fi
+exec "\$real_git" "\$@"
+EOF
+chmod +x "$mock_fast_hash_git_bin/git"
+
+mkdir -p "$repo/.cache"
+printf '%s\n' 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' \
+  > "$repo/.cache/preflight_fixtures_smoke.hash"
+
+degenerate_fast_hash_log="$tmp_dir/degenerate_fast_hash.log"
+set +e
+(
+  cd "$repo"
+  PATH="$mock_fast_hash_git_bin:$PATH" \
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=0 \
+  DUMMY_EXIT_CODE=1 \
+  ./plans/preflight.sh >"$degenerate_fast_hash_log" 2>&1
+)
+degenerate_fast_hash_rc=$?
+set -e
+[[ "$degenerate_fast_hash_rc" -eq 1 ]] \
+  || fail "expected degenerate fast hash input to fallback and run fixture (rc=1), got $degenerate_fast_hash_rc"
+if grep -Fq "Fixture tests (cached, 1 tests)" "$degenerate_fast_hash_log"; then
+  fail "degenerate fast hash must not produce a cached fixture skip"
+fi
+grep -Fq "Fixture test failed: plans/tests/test_dummy_sleep.sh (rc=1" "$degenerate_fast_hash_log" \
+  || fail "expected failing fixture to run after fast-hash rejection"
 
 invalid_log="$tmp_dir/invalid_timeout.log"
 set +e

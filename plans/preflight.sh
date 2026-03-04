@@ -72,7 +72,15 @@ supports_wait_n() {
   if [[ "${BASH_VERSINFO[0]:-0}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]:-0}" -lt 3 ]]; then
     return 1
   fi
-  help wait 2>/dev/null | grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)'
+  # Use the builtin explicitly so BASH_ENV function shadowing cannot spoof
+  # wait -n support detection.
+  if builtin help wait >/dev/null 2>&1; then
+    builtin help wait 2>/dev/null | grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)'
+    return $?
+  fi
+  # If help text is unavailable on an otherwise compatible bash version,
+  # trust version gating above.
+  return 0
 }
 
 select_monotonic_backend() {
@@ -477,12 +485,28 @@ else
 
   _compute_fixture_hash_from_list() {
     local _file_list="$1"
-    printf '%s\n' "$_file_list" \
-      | LC_ALL=C sort -u \
-      | sed '/^$/d' \
-      | xargs shasum -a 256 2>/dev/null \
-      | shasum -a 256 \
-      | cut -d' ' -f1
+    local _normalized_list=""
+    local _path=""
+    local _hash=""
+
+    _normalized_list="$(printf '%s\n' "$_file_list" | LC_ALL=C sort -u | sed '/^[[:space:]]*$/d')" || return 1
+    [[ -n "$_normalized_list" ]] || return 1
+
+    # Fast-path input must resolve to real files; otherwise fail and use fallback
+    # hash scan instead of trusting a potentially degenerate hash.
+    while IFS= read -r _path; do
+      [[ -f "$_path" ]] || return 1
+    done <<< "$_normalized_list"
+
+    _hash="$(
+      printf '%s\n' "$_normalized_list" \
+        | xargs shasum -a 256 2>/dev/null \
+        | shasum -a 256 \
+        | cut -d' ' -f1
+    )" || return 1
+
+    [[ "$_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+    printf '%s\n' "$_hash"
   }
 
   _compute_fixture_hash_fallback() {
@@ -516,10 +540,11 @@ else
         && [[ -z "$untracked_scoped" ]]; then
         fast_file_list="$(git ls-files -- plans specs SKILLS tools scripts 2>/dev/null || true)"
         if [[ -n "$fast_file_list" ]]; then
-          fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"
-          if [[ -n "$fast_hash" ]]; then
-            echo "$fast_hash"
-            return 0
+          if fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"; then
+            if [[ "$fast_hash" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "$fast_hash"
+              return 0
+            fi
           fi
         fi
       fi

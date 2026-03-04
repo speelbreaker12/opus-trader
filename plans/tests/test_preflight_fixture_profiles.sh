@@ -62,6 +62,9 @@ assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_
 assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
 assert_contains_line 'supports_wait_n() {'
+assert_contains_line 'if builtin help wait >/dev/null 2>&1; then'
+assert_contains_line 'builtin help wait 2>/dev/null | grep -Eq '"'"'(^|[[:space:]])-n([[:space:][:punct:]]|$)'"'"''
+assert_contains_line 'return 0'
 assert_contains_line 'PREFLIGHT_WAIT_N_MODE="${PREFLIGHT_WAIT_N_MODE:-auto}"'
 assert_contains_line 'case "$PREFLIGHT_WAIT_N_MODE" in'
 assert_contains_line 'auto|force_on|force_off) ;;'
@@ -91,6 +94,10 @@ assert_contains_line 'if command -v git >/dev/null 2>&1 && git rev-parse --is-in
 assert_contains_line '&& untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null)" \'
 assert_contains_line '&& [[ -z "$untracked_scoped" ]]; then'
 assert_contains_line 'git ls-files -- plans specs SKILLS tools scripts'
+assert_contains_line '_normalized_list="$(printf '"'"'%s\n'"'"' "$_file_list" | LC_ALL=C sort -u | sed '"'"'/^[[:space:]]*$/d'"'"')" || return 1'
+assert_contains_line 'while IFS= read -r _path; do'
+assert_contains_line '[[ -f "$_path" ]] || return 1'
+assert_contains_line 'if fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"; then'
 assert_contains_line 'Falling back to full fixture hash scan'
 
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
@@ -155,7 +162,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "38" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 38)"
+[[ "$smoke_count" == "40" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 40)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"
