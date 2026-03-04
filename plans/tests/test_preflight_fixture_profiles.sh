@@ -86,6 +86,8 @@ assert_contains_line 'cat "$f" >> "$SHELL_SYNTAX_AGGREGATE_FILE" || {'
 assert_contains_line 'setup_fail "Shell syntax aggregate setup failed while reading $f"'
 assert_contains_line 'printf '"'"'\n'"'"' >> "$SHELL_SYNTAX_AGGREGATE_FILE" || {'
 assert_contains_line 'setup_fail "Shell syntax aggregate setup failed while writing separator for $f"'
+assert_contains_line '# Authoritative check: every plans/*.sh file must parse on its own.'
+assert_contains_line 'if ! bash -n "$f" >/dev/null 2>&1; then'
 assert_contains_line 'if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then'
 assert_contains_line 'if git diff --quiet --cached -- && git diff --quiet -- && ! git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts | grep -q .; then'
 assert_contains_line 'git ls-files -- plans specs SKILLS tools scripts'
@@ -125,6 +127,7 @@ assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
 # Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays

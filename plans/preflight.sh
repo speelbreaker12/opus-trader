@@ -322,10 +322,11 @@ done
 # Tier 2: Fast checks (<30s)
 # =============================================================================
 
-# 4. Shell syntax: aggregate parse first, then per-file pinpoint on failure
+# 4. Shell syntax: aggregate parse signal + authoritative per-file parse
 SHELL_SYNTAX_OK=1
 SHELL_ERRORS=()
 if compgen -G "plans/*.sh" >/dev/null; then
+  SHELL_AGGREGATE_PARSE_OK=0
   SHELL_SYNTAX_AGGREGATE_FILE=""
   if ! SHELL_SYNTAX_AGGREGATE_FILE="$(mktemp 2>/dev/null)"; then
     SHELL_SYNTAX_AGGREGATE_FILE=""
@@ -353,17 +354,20 @@ if compgen -G "plans/*.sh" >/dev/null; then
 
     if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then
       if bash -n "$SHELL_SYNTAX_AGGREGATE_FILE" >/dev/null 2>&1; then
-        SHELL_SYNTAX_OK=1
+        SHELL_AGGREGATE_PARSE_OK=1
       else
-        SHELL_SYNTAX_OK=0
-        for f in plans/*.sh; do
-          if ! bash -n "$f" >/dev/null 2>&1; then
-            SHELL_ERRORS+=("$f")
-          fi
-        done
+        SHELL_AGGREGATE_PARSE_OK=0
       fi
     fi
   fi
+
+  # Authoritative check: every plans/*.sh file must parse on its own.
+  for f in plans/*.sh; do
+    if ! bash -n "$f" >/dev/null 2>&1; then
+      SHELL_SYNTAX_OK=0
+      SHELL_ERRORS+=("$f")
+    fi
+  done
 fi
 
 if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then
@@ -406,6 +410,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_preflight_fixture_timeout_controls.sh"
   "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
+  "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
