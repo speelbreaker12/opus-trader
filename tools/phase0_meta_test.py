@@ -12,7 +12,7 @@ This enforces that Phase 0 is not "paper-only":
 - PAPER environment remains non-trading in env matrix + key-scope probe evidence
 - Break-glass runbook exists + snapshot + executed drill record + logs
 - Health endpoint doc exists + snapshot + executable command behavior
-- Minimal owner status output exists and is executable (`trading_mode`, `is_trading_allowed`)
+- Minimal owner status output exists and is executable (`trading_mode`, `opens_globally_permitted`, `is_trading_allowed`)
 - Minimal Phase-0 test definitions exist with explicit names
 - Code-level Phase-0 runtime integration tests exist and are wired in rust test gates
 - Evidence pack has owner summary + CI links placeholder
@@ -337,8 +337,10 @@ def test_break_glass_kill_blocks_open_allows_reduce(root: Path) -> List[str]:
         if rc != 0 or payload is None:
             errors.append(f"status command failed after kill: rc={rc} details={details}")
             return errors
-        if payload.get("trading_mode") != "KILL":
-            errors.append("status after kill must report trading_mode=KILL")
+        if payload.get("trading_mode") != "Kill":
+            errors.append("status after kill must report trading_mode=Kill")
+        if payload.get("opens_globally_permitted") is not False:
+            errors.append("status after kill must report opens_globally_permitted=false")
         if payload.get("is_trading_allowed") is not False:
             errors.append("status after kill must report is_trading_allowed=false")
 
@@ -748,6 +750,7 @@ def test_status_command_behavior(root: Path) -> List[str]:
             "contract_version",
             "timestamp_utc",
             "trading_mode",
+            "opens_globally_permitted",
             "is_trading_allowed",
             "runtime_state_path",
             "external_runtime_state",
@@ -765,8 +768,10 @@ def test_status_command_behavior(root: Path) -> List[str]:
             return errors
         if payload.get("ok") is not False:
             errors.append("status unhealthy payload must set ok=false")
-        if payload.get("trading_mode") != "KILL":
-            errors.append("status unhealthy payload must force trading_mode=KILL")
+        if payload.get("trading_mode") != "Kill":
+            errors.append("status unhealthy payload must force trading_mode=Kill")
+        if payload.get("opens_globally_permitted") is not False:
+            errors.append("status unhealthy payload must force opens_globally_permitted=false")
         if payload.get("is_trading_allowed") is not False:
             errors.append("status unhealthy payload must force is_trading_allowed=false")
         payload_errors = payload.get("errors")
