@@ -49,9 +49,66 @@ is_placeholder_ledger() {
   return 1
 }
 
+trim_value() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+normalize_verdict() {
+  local value
+  value="$(trim_value "$1")"
+  printf '%s' "$value" | tr '[:lower:]' '[:upper:]'
+}
+
+is_allowed_verdict() {
+  local verdict="$1"
+  case "$verdict" in
+    PROVEN|PROVEN_INTEGRATED|PROVEN_UNIT|WEAK_PROOF|CLAIMED_NOT_PROVEN|UNTESTED_ENFORCEMENT|WRONG_IMPL_UNBLOCKED|FAIL_OPEN_RISK|MISSING|DEFERRED)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 has_file_line_citation() {
   local value="$1"
   [[ "$value" =~ [A-Za-z0-9_./-]+:[0-9]+ ]]
+}
+
+resolve_legacy_symbol_citation() {
+  local value="$1"
+  local file_path=""
+  local symbol=""
+  local line=""
+  local match_line=""
+
+  [[ "$value" == *"::"* ]] || return 1
+
+  file_path="${value%%::*}"
+  symbol="${value##*::}"
+  file_path="$(trim_value "$file_path")"
+  symbol="$(trim_value "$symbol")"
+
+  [[ -n "$file_path" && -n "$symbol" ]] || return 1
+  [[ -f "$file_path" ]] || return 1
+  [[ "$symbol" =~ ^[A-Za-z0-9_]+$ ]] || return 1
+
+  if command -v rg >/dev/null 2>&1; then
+    match_line="$(rg -n -m1 "^[[:space:]]*(fn|def)[[:space:]]+${symbol}([[:space:](]|$)" "$file_path" 2>/dev/null | head -1 || true)"
+  fi
+  if [[ -z "$match_line" ]]; then
+    match_line="$(grep -nE "^[[:space:]]*(fn|def)[[:space:]]+${symbol}([[:space:](]|$)" "$file_path" 2>/dev/null | head -1 || true)"
+  fi
+  [[ -n "$match_line" ]] || return 1
+
+  line="${match_line%%:*}"
+  [[ "$line" =~ ^[0-9]+$ ]] || return 1
+
+  printf '%s:%s' "$file_path" "$line"
 }
 
 emit_ledger_rows() {
@@ -59,8 +116,11 @@ emit_ledger_rows() {
   if [[ "$ledger_path" == *.json ]]; then
     jq -r '
       def as_str: if . == null then "" else tostring end;
-      if (.at_verdicts | type) == "array" then
-        .at_verdicts[]
+      def first_nonempty($vals):
+        ($vals | map(select(. != null and . != "")) | .[0] // "");
+      (.evidence_ledger // .evidence // .) as $root
+      | if (($root.at_verdicts // null) | type) == "array" then
+        $root.at_verdicts[]
         | [
             (.at_id // .at // ""),
             (.verdict // .status // ""),
@@ -68,8 +128,42 @@ emit_ledger_rows() {
             ((.test // .test_ref // "") | as_str)
           ]
         | @tsv
-      elif (.ats | type) == "array" then
-        .ats[]
+      elif (($root.at_verdicts // null) | type) == "object" then
+        ($root.at_verdicts | to_entries[]?)
+        | [
+            (.key // ""),
+            (.value.verdict // .value.status // ""),
+            (
+              first_nonempty([
+                (if ((.value.enforcement_file // null) != null and (.value.enforcement_line // null) != null)
+                  then ((.value.enforcement_file | as_str) + ":" + (.value.enforcement_line | as_str))
+                  else ""
+                 end),
+                (.value.enforcement // ""),
+                (.value.enforcement_point // ""),
+                (.value.enforcement_ref // "")
+              ])
+              | as_str
+            ),
+            (
+              first_nonempty([
+                (if ((.value.proving_tests // null) | type) == "array" and ((.value.proving_tests // []) | length) > 0
+                  then (.value.proving_tests[0] // "")
+                  else ""
+                 end),
+                (if ((.value.tests // null) | type) == "array" and ((.value.tests // []) | length) > 0
+                  then (.value.tests[0].test_name // .value.tests[0].name // .value.tests[0].test // "")
+                  else ""
+                 end),
+                (.value.test // ""),
+                (.value.test_ref // "")
+              ])
+              | as_str
+            )
+          ]
+        | @tsv
+      elif (($root.ats // null) | type) == "array" then
+        $root.ats[]
         | [
             (.at_id // .at // ""),
             (.at_verdict.verdict // .verdict // ""),
@@ -133,17 +227,42 @@ validate_ledger_against_prd() {
 
   if [[ -n "$ledger_rows" ]]; then
     while IFS=$'\t' read -r at verdict enforcement test_ref; do
+      local normalized_verdict=""
+      local enforcement_citation=""
+      local test_citation=""
+      local resolved_legacy=""
+
       [[ -z "$at" ]] && continue
-      if [[ -z "$verdict" ]]; then
+      normalized_verdict="$(normalize_verdict "$verdict")"
+      if [[ -z "$normalized_verdict" ]]; then
         echo "FAIL: evidence ledger row for $at has empty verdict at $ledger_path" >&2
         return 1
       fi
-      if [[ "$verdict" == "PROVEN" ]]; then
-        if ! has_file_line_citation "$enforcement"; then
+      if ! is_allowed_verdict "$normalized_verdict"; then
+        echo "FAIL: evidence ledger row for $at has unknown verdict '$verdict' (normalized '$normalized_verdict') at $ledger_path" >&2
+        return 1
+      fi
+
+      if [[ "$normalized_verdict" == "PROVEN" ]]; then
+        enforcement_citation="$(trim_value "$enforcement")"
+        test_citation="$(trim_value "$test_ref")"
+
+        if ! has_file_line_citation "$enforcement_citation"; then
+          if resolved_legacy="$(resolve_legacy_symbol_citation "$enforcement_citation")"; then
+            enforcement_citation="$resolved_legacy"
+          fi
+        fi
+        if ! has_file_line_citation "$enforcement_citation"; then
           echo "FAIL: PROVEN row for $at missing enforcement file:line citation at $ledger_path" >&2
           return 1
         fi
-        if ! has_file_line_citation "$test_ref"; then
+
+        if ! has_file_line_citation "$test_citation"; then
+          if resolved_legacy="$(resolve_legacy_symbol_citation "$test_citation")"; then
+            test_citation="$resolved_legacy"
+          fi
+        fi
+        if ! has_file_line_citation "$test_citation"; then
           echo "FAIL: PROVEN row for $at missing test file:line citation at $ledger_path" >&2
           return 1
         fi

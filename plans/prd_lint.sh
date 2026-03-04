@@ -66,7 +66,7 @@ report_warn() {
   warnings_json+=("{\"code\":\"$(json_escape "$code")\",\"id\":\"$(json_escape "$id")\",\"message\":\"$(json_escape "$message")\"}")
 }
 
-stale_recon_doc_re='RUNBOOK_PREMORTEM_RECON|PREMORTEM_RECON_POLICY|PREMORTEM_RECON_ANTIPATTERNS|PREMORTEM_RECON_METRICS'
+stale_recon_doc_re='RUNBOOK_PREMORTEM_RECON|PREMORTEM_RECONCILIATION_PROCESS|PREMORTEM_RECON_POLICY|PREMORTEM_RECON_ANTIPATTERNS|PREMORTEM_RECON_METRICS'
 
 check_stale_recon_ref() {
   local item_id="$1"

@@ -568,6 +568,71 @@ if ! echo "$output" | grep -q "STALE_RECON_DOC_REF"; then
   exit 1
 fi
 
+# Test 7b: PREMORTEM_RECONCILIATION_PROCESS token is also blocked in path fields.
+cat <<'JSON' > plans/prd_stale_recon_paths_v2.json
+{
+  "project": "LintFixture",
+  "source": {
+    "implementation_plan_path": "IMPLEMENTATION_PLAN.md",
+    "contract_path": "CONTRACT.md"
+  },
+  "rules": {
+    "one_story_per_iteration": true,
+    "one_commit_per_story": true,
+    "no_prd_rewrite": true,
+    "passes_only_flips_after_verify_green": true
+  },
+  "items": [
+    {
+      "id": "S1-010",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "slice_ref": "Slice 1",
+      "story_ref": "Stale recon path guard v2",
+      "category": "acceptance",
+      "description": "Additional stale premortem token must fail closed.",
+      "contract_refs": ["CONTRACT.md 0.Y Verification Harness (Non-Negotiable)"],
+      "plan_refs": ["Test harness configured (cargo test --workspace)."],
+      "scope": { "touch": ["reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md"], "avoid": [] },
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": ["./plans/verify.sh", "bash -n plans/verify.sh"],
+      "evidence": ["bash -n plans/verify.sh output"],
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [],
+      "reason_codes": { "type": "", "values": [] },
+      "enforcement_point": "",
+      "failure_mode": [],
+      "loss_mode": { "worst_case": "test worst case", "fail_closed_cap": "test cap", "drift_metric": "test metric" },
+      "observability": { "metrics": [], "status_fields": [], "status_contract_ats": [] },
+      "implementation_tests": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+touch reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md
+
+set +e
+output=$(PRD_LINT_ALLOW_SCHEMA_BYPASS=1 "$lint_script" "plans/prd_stale_recon_paths_v2.json" 2>&1)
+status=$?
+set -e
+if [[ $status -ne 2 ]]; then
+  echo "Expected stale recon path v2 lint failure exit code 2, got $status"
+  echo "$output"
+  exit 1
+fi
+if ! echo "$output" | grep -q "STALE_RECON_DOC_REF"; then
+  echo "Expected v2 output to contain STALE_RECON_DOC_REF"
+  echo "$output"
+  exit 1
+fi
+
 # Test 8: stale tokens in narrative fields remain allowed
 cat <<'JSON' > plans/prd_stale_recon_narrative_ok.json
 {

@@ -871,3 +871,10 @@ Commands: VERIFY_RUN_ID=recon_followup_20260304T214215Z ./plans/verify.sh full; 
 Evidence: artifacts/verify/recon_followup_20260304T214215Z/verify.meta.json; artifacts/verify/recon_followup_20260304T214215Z/wf_test_pr_gate.log; plans/progress.txt.
 Notes: `pr_gate` returned `ERROR: no PR found for current branch` (exit 1). `prd_set_pass --dry-run` returned `ERROR: task id not found in PRD: workflow-maintenance` (exit 3), confirming this closure batch is workflow-maintenance/process work rather than a PRD story pass-flip candidate.
 Next: Open/push PR for `slice1/recon-process-followup-20260304` if PR-gate execution is required, or run pass-gate dry-run against an actual PRD story ID only.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 22:38:44 UTC
+Summary: Addressed all open PR #163 review findings: hardened evidence ledger verdict validation (trim+uppercase normalization, explicit verdict allowlist, fail-closed unknown verdict rejection), added compatibility for legacy evidence_ledger.v1 object-map payloads (including nested evidence_ledger wrapper), expanded stale recon token lint to include PREMORTEM_RECONCILIATION_PROCESS, fixed duplicate S14-005 scope.touch entry in PRD, and recorded explicit REC-11 sunset tracking for legacy PATH fallback removal.
+Commands: bash plans/tests/test_recon_evidence_ledger.sh; bash plans/tests/test_prd_lint.sh; bash plans/tests/test_wf_step_path_signal_scan.sh; ./plans/verify.sh quick; ./plans/code_review_expert_attest.sh.
+Evidence: plans/recon_evidence_ledger.sh; plans/prd_lint.sh; plans/prd.json; plans/tests/test_recon_evidence_ledger.sh; plans/tests/test_prd_lint.sh; reviews/reconciliations/RECON_PROCESS_ACTION_REGISTER_2026-03-04.md; artifacts/verify/20260304_163123/verify.meta.json.
+Notes: Quick verify passed green for run_id 20260304_163123 with no FAILED_GATE marker.
+Next: Commit/push this patchset to PR #163 branch and rerun ./plans/pr_gate.sh --wait --story workflow-maintenance --pr 163 to confirm inline bot comment enforcement passes with updated paths.

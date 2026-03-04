@@ -11132,7 +11132,7 @@
       "scope": {
         "touch": [
           "reviews/reconciliations/PROTOCOL.md",
-          "reviews/reconciliations/PROTOCOL.md",
+          "reviews/reconciliations/REFERENCE.md",
           "plans/validate_recon_artifact.sh"
         ],
         "create": [],
