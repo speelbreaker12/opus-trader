@@ -15,6 +15,7 @@ Non-negotiables:
 - `plans/wf_step.sh` is the execution order authority.
 - `plans/prd_set_pass.sh` is the pass-flip authority.
 - Reconciliation is fail-closed: missing required artifacts or failed gates block progression.
+- PRD machine-consumed path fields must not use legacy `reviews/premortems/*` docs; use `reviews/reconciliations/PROTOCOL.md` and `reviews/reconciliations/REFERENCE.md` (enforced by `prd_lint.sh` as `STALE_RECON_DOC_REF`).
 - **Handoff is mandatory for all stories and all steps**. After every step attempt (pass or fail), update the active handoff before continuing.
 
 Canonical references:

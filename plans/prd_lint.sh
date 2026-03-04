@@ -66,6 +66,18 @@ report_warn() {
   warnings_json+=("{\"code\":\"$(json_escape "$code")\",\"id\":\"$(json_escape "$id")\",\"message\":\"$(json_escape "$message")\"}")
 }
 
+stale_recon_doc_re='RUNBOOK_PREMORTEM_RECON|PREMORTEM_RECON_POLICY|PREMORTEM_RECON_ANTIPATTERNS|PREMORTEM_RECON_METRICS'
+
+check_stale_recon_ref() {
+  local item_id="$1"
+  local field="$2"
+  local value="$3"
+  [[ -z "$value" ]] && return 0
+  if [[ "$value" =~ $stale_recon_doc_re ]]; then
+    report_error STALE_RECON_DOC_REF "$item_id" "stale premortem doc token in ${field}: ${value} (use reviews/reconciliations/PROTOCOL.md or reviews/reconciliations/REFERENCE.md)"
+  fi
+}
+
 # Error context helpers - show story id, field, and fix guidance
 context_link() {
   echo "  See: specs/WORKFLOW_CONTRACT.md (PRD validation rules)"
@@ -219,6 +231,11 @@ if [[ -z "$repo_root" ]]; then
   report_error NO_GIT_ROOT GLOBAL "Unable to resolve git repo root"
   finish
 fi
+
+source_impl_path="$(jq -r '.source.implementation_plan_path // empty' "$prd_file")"
+source_contract_path="$(jq -r '.source.contract_path // empty' "$prd_file")"
+check_stale_recon_ref "GLOBAL" "source.implementation_plan_path" "$source_impl_path"
+check_stale_recon_ref "GLOBAL" "source.contract_path" "$source_contract_path"
 
 # Keep string matching in-process and case-insensitive to avoid heavy subprocess usage.
 shopt -s nocasematch
@@ -401,7 +418,11 @@ if ! items_stream="$(jq -r '
       ((if (.scope.avoid | type) == "array" then .scope.avoid else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
       ((if (.scope.create | type) == "array" then .scope.create else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
       ((if (.contract_refs | type) == "array" then .contract_refs else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
-      ((if (.contract_must_evidence | type) == "array" then .contract_must_evidence else [] end) | map(.quote // "" | tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " "))
+      ((if (.contract_must_evidence | type) == "array" then .contract_must_evidence else [] end) | map(.quote // "" | tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.verify | type) == "array" then .verify else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.evidence | type) == "array" then .evidence else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.primary_owner_for | type) == "array" then .primary_owner_for else [] end) | map(tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " ")),
+      ((if (.contract_must_evidence | type) == "array" then .contract_must_evidence else [] end) | map(.location // "" | tostring) | join("\u001f") | gsub("[\u001e\t\r\n]+"; " "))
     ]
   | map(tostring | gsub("\u001e"; " "))
   | join("\u001e")
@@ -418,7 +439,7 @@ idx=0
 while IFS= read -r item_meta; do
   [[ -z "$item_meta" ]] && continue
 
-  IFS=$'\x1e' read -r item_id item_category item_text gate_required id_ok slice_ok passes_ok needs_human_ok desc_ok acceptance_ok verify_ok scope_touch_ok touch_count has_scope_create scope_create_ok has_contract_refs_non_null contract_refs_array_ok contract_refs_is_array has_dependencies_non_null dependencies_is_array verify_is_array verify_has_verify_sh scope_touch_is_array scope_avoid_is_array contract_refs_nonempty acceptance_nonempty contract_refs acceptance_refs contract_evidence_count enforcing_ats_count reason_type reason_values_count enforcement_point metrics_count status_fields_count status_ats_count failure_mode_count impl_tests_count touch_paths_raw avoid_paths_raw create_paths_raw contract_refs_raw quotes_raw <<< "$item_meta"
+  IFS=$'\x1e' read -r item_id item_category item_text gate_required id_ok slice_ok passes_ok needs_human_ok desc_ok acceptance_ok verify_ok scope_touch_ok touch_count has_scope_create scope_create_ok has_contract_refs_non_null contract_refs_array_ok contract_refs_is_array has_dependencies_non_null dependencies_is_array verify_is_array verify_has_verify_sh scope_touch_is_array scope_avoid_is_array contract_refs_nonempty acceptance_nonempty contract_refs acceptance_refs contract_evidence_count enforcing_ats_count reason_type reason_values_count enforcement_point metrics_count status_fields_count status_ats_count failure_mode_count impl_tests_count touch_paths_raw avoid_paths_raw create_paths_raw contract_refs_raw quotes_raw verify_paths_raw evidence_paths_raw owner_paths_raw contract_locations_raw <<< "$item_meta"
 
   if [[ -z "$item_id" ]]; then
     item_id="ITEM_$idx"
@@ -454,6 +475,48 @@ while IFS= read -r item_meta; do
   if [[ "$scope_avoid_is_array" == "true" && -n "$avoid_paths_raw" ]]; then
     IFS=$'\x1f' read -r -a avoid_paths <<< "$avoid_paths_raw"
   fi
+
+  verify_paths=()
+  if [[ -n "$verify_paths_raw" ]]; then
+    IFS=$'\x1f' read -r -a verify_paths <<< "$verify_paths_raw"
+  fi
+
+  evidence_paths=()
+  if [[ -n "$evidence_paths_raw" ]]; then
+    IFS=$'\x1f' read -r -a evidence_paths <<< "$evidence_paths_raw"
+  fi
+
+  owner_paths=()
+  if [[ -n "$owner_paths_raw" ]]; then
+    IFS=$'\x1f' read -r -a owner_paths <<< "$owner_paths_raw"
+  fi
+
+  contract_locations=()
+  if [[ -n "$contract_locations_raw" ]]; then
+    IFS=$'\x1f' read -r -a contract_locations <<< "$contract_locations_raw"
+  fi
+
+  for stale_touch in "${touch_paths[@]}"; do
+    check_stale_recon_ref "$item_id" "scope.touch" "$stale_touch"
+  done
+  for stale_avoid in "${avoid_paths[@]}"; do
+    check_stale_recon_ref "$item_id" "scope.avoid" "$stale_avoid"
+  done
+  for stale_create in "${create_paths[@]}"; do
+    check_stale_recon_ref "$item_id" "scope.create" "$stale_create"
+  done
+  for stale_verify in "${verify_paths[@]}"; do
+    check_stale_recon_ref "$item_id" "verify" "$stale_verify"
+  done
+  for stale_evidence in "${evidence_paths[@]}"; do
+    check_stale_recon_ref "$item_id" "evidence" "$stale_evidence"
+  done
+  for stale_owner in "${owner_paths[@]}"; do
+    check_stale_recon_ref "$item_id" "primary_owner_for" "$stale_owner"
+  done
+  for stale_contract_location in "${contract_locations[@]}"; do
+    check_stale_recon_ref "$item_id" "contract_must_evidence.location" "$stale_contract_location"
+  done
 
   if ! [[ "$touch_count" =~ ^[0-9]+$ ]]; then
     touch_count=0
