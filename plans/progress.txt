@@ -850,3 +850,17 @@ Baseline SHA: c61926518538be615947eb96d07084a76e57074a
 Commands: ./plans/generate_recon_review_appendix.sh --commit c61926518538be615947eb96d07084a76e57074a --date 2026-03-04 --update-doc reviews/reconciliations/RECON_PROCESS_REVIEW.md.
 Evidence: reviews/reconciliations/RECON_PROCESS_REVIEW.md; reviews/reconciliations/RECON_PROCESS_ACTION_REGISTER_2026-03-04.md; plans/progress.txt.
 Next: run ./plans/verify.sh quick for Task 1 checkpoint, then commit baseline freeze artifacts.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 21:45:30 UTC
+Summary: Completed Tasks 4-5-7 from docs/plans/2026-03-04-recon-process-review-followup.md. Delivered JSON-first evidence ledger gating (`plans/recon_evidence_ledger.sh` + `wf_step` PATH ingestion), added deterministic reconciliation docs budget gate (`plans/recon_doc_budget.sh`) wired into verify, and swept active workflow stale premortem references in `plans/recon_precheck.sh` and `.claude/commands/reconcil.md`.
+Commands: bash plans/tests/test_recon_evidence_ledger.sh; bash plans/tests/test_wf_step_path_signal_scan.sh; bash plans/tests/test_wf_step.sh; bash plans/tests/test_recon_doc_budget.sh; bash plans/tests/test_verify_fork_guardrails.sh; bash plans/tests/test_workflow_allowlist_coverage.sh; PREFLIGHT_FIXTURE_TEST_TIMEOUT=480 ./plans/workflow_verify.sh.
+Evidence: commits 3ab0a84, 6c48e5b, fd506dc; artifacts/verify/20260304_151535/; artifacts/verify/20260304_153553/; artifacts/verify/20260304_154022/.
+Notes: Verification policy (dirty tree): local quick verifies after review wrapper runs were executed with untracked review artifacts present (no VERIFY_ALLOW_DIRTY override). Selected path: [RECOMMENDED] rely on CI verify on PR clean checkout before merge.
+Next: Run final closure full verify with fixed run id `recon_followup_20260304T214215Z`, then pre-PR wrappers (`pre_pr_review_gate` / `pr_gate`) and dry-run pass gate preview.
+Story: workflow-maintenance (recon process review follow-up)
+Date: 2026-03-04 21:46:10 UTC
+Summary: Ran required external review wrappers in parallel for enriched and generic prompts using `workflow-maintenance` artifact namespace. Runs completed deterministically but failed citation hard-gates for codex/opus/kimi (`exit=4`) and gemini transport (`exit=1`), while still producing review artifacts/logs used for diagnostics.
+Commands: CODEX_MODEL="GPT-5.3-Codex" GEMINI_MODEL="gemini-3-pro-preview" plans/parallel_review.sh workflow-maintenance --tools codex,opus,kimi,gemini --uncommitted --prompt enriched -- --timeout-seconds 120; CODEX_MODEL="GPT-5.3-Codex" GEMINI_MODEL="gemini-3-pro-preview" plans/parallel_review.sh workflow-maintenance --tools codex,opus,kimi,gemini --uncommitted --prompt generic -- --timeout-seconds 120; ./plans/code_review_expert_attest.sh.
+Evidence: artifacts/story/workflow-maintenance/review_logs/; artifacts/story/workflow-maintenance/codex/; artifacts/story/workflow-maintenance/opus/; artifacts/story/workflow-maintenance/kimi/; .git/worktrees/wt_recon_process_followup_20260304/code_review_expert.attest.
+Notes: Hard-gate failures are quality-of-review-output issues (missing file:line citations), not harness regressions.
+Next: finalize metadata commit, run `VERIFY_RUN_ID=recon_followup_20260304T214215Z ./plans/verify.sh full`, and execute pre-PR wrapper attempts.
