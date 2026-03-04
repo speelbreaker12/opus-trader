@@ -75,6 +75,9 @@ Eliminate definition-of-done drift in governance documents and verification expe
 - `bash plans/tests/test_contract_change_ledger.sh`
 - `./plans/verify.sh quick`
 - `./plans/verify.sh full`
+- `rg -n "owner: admin|prepared_by: admin" docs/launch_policy.md`
+- `rg -n "Appendix CONTRACT_CHANGE_LEDGER|CCL-20260304-PR1-01" specs/CONTRACT.md`
+- `rg -n "contract_change_ledger" plans/verify_fork.sh plans/preflight.sh plans/tests/test_preflight_fixture_profiles.sh plans/tests/test_verify_fork_guardrails.sh`
 - Confirm contract/doc sync gates pass (crossrefs, coverage, phase1 meta-test, contract-change-ledger checker).
 
 ---
