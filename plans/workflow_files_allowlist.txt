@@ -63,6 +63,7 @@ plans/readme_ci_parity_check.sh
 plans/recon_bundle.sh
 plans/recon_operator_run.sh
 plans/recon_precheck.sh
+plans/recon_prompt_guard.sh
 plans/recon_run_card_template.md
 plans/recon_trace.sh
 plans/review_logged.sh
@@ -117,6 +118,7 @@ plans/tests/test_recon_handoff_sources.sh
 plans/tests/test_recon_operator_runner.sh
 plans/tests/test_recon_operator_trace.sh
 plans/tests/test_recon_precheck.sh
+plans/tests/test_recon_prompt_guard.sh
 plans/tests/test_review_logged_proof_graph.sh
 plans/tests/test_review_logged_timeout_binary_unavailable.sh
 plans/tests/test_review_logged_timeout_fallback.sh

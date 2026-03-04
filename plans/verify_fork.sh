@@ -738,6 +738,14 @@ else
   warn "gate_integrity skipped (missing scripts/check_gate_integrity.py)"
 fi
 
+if [[ -x "$ROOT/plans/recon_prompt_guard.sh" ]]; then
+  log "14cc) recon prompt guard"
+  run_logged_or_exit "recon_prompt_guard" "$GATE_INTEGRITY_TIMEOUT" \
+    bash "$ROOT/plans/recon_prompt_guard.sh"
+else
+  warn "recon_prompt_guard skipped (missing plans/recon_prompt_guard.sh)"
+fi
+
 if [[ "${DOC_SYNC_GATE:-1}" != "0" ]]; then
   log "14d) doc sync check"
   run_logged_or_exit "doc_sync_check" "$DOC_SYNC_TIMEOUT" \

@@ -34,5 +34,6 @@ If the step failed its gate, the script will tell you what is missing.
 
 ## Reference
 
-For unusual situations, escalation policy, debt register rules, and verdict enum:
-`reviews/premortems/RUNBOOK_PREMORTEM_RECON.md`
+For execution order, gates, and escalation guidance:
+- `reviews/reconciliations/PROTOCOL.md`
+- `reviews/reconciliations/REFERENCE.md`
