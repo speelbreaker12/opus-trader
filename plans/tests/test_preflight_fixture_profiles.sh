@@ -78,6 +78,7 @@ assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_binar
 assert_list_contains "$smoke_list" "plans/tests/test_contract_profile_parity.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_review_emit.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_bundle.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_recon_handoff_sources.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_precheck.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_operator_trace.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_operator_runner.sh"

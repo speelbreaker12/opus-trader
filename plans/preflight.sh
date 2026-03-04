@@ -295,6 +295,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_recon_bundle.sh"
+  "plans/tests/test_recon_handoff_sources.sh"
   "plans/tests/test_recon_precheck.sh"
   "plans/tests/test_recon_operator_trace.sh"
   "plans/tests/test_recon_operator_runner.sh"
