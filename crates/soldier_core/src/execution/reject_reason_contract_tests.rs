@@ -1,13 +1,15 @@
-#[path = "test_stubs.rs"]
-mod test_stubs;
-use test_stubs::{FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal};
+use std::collections::HashSet;
 
-use soldier_core::execution::{
+use super::test_support_helpers_tests::{
+    FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
+};
+
+use crate::execution::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
     GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
-    reject_reason_from_chokepoint, reject_reason_registry_contains,
+    reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
 };
-use soldier_core::risk::RiskState;
+use crate::risk::RiskState;
 
 fn build_chokepoint_result(
     intent_class: ChokeIntentClass,
@@ -26,6 +28,20 @@ fn build_chokepoint_result_with_stub_wal(
 ) -> ChokeResult {
     let mut wal_gate = StubWalGate;
     build_chokepoint_result(intent_class, risk_state, gates, &mut wal_gate)
+}
+
+fn serialize_reason_code_or_panic(code: &RejectReasonCode) -> String {
+    match serde_json::to_string(code) {
+        Ok(json) => json,
+        Err(err) => panic!("serialization failed for {code:?}: {err}"),
+    }
+}
+
+fn deserialize_reason_code_or_panic(json: &str, context: &str) -> RejectReasonCode {
+    match serde_json::from_str(json) {
+        Ok(code) => code,
+        Err(err) => panic!("deserialization failed for {context}: {err}"),
+    }
 }
 
 #[test]
@@ -178,38 +194,54 @@ fn test_preflight_gate_rejection_maps_to_specific_reason_code() {
 }
 
 #[test]
-fn all_generated_reject_reason_codes_round_trip() {
-    for code in RejectReasonCode::ALL {
+fn test_registry_contains_all_generated_enum_variants() {
+    let registry = reject_reason_registry();
+    assert_eq!(
+        registry,
+        RejectReasonCode::ALL,
+        "reject_reason_registry must expose generated RejectReasonCode::ALL"
+    );
+
+    let unique: HashSet<&'static str> = registry.iter().map(|code| code.as_str()).collect();
+    assert_eq!(
+        unique.len(),
+        registry.len(),
+        "generated reject reason registry contains duplicate as_str tokens"
+    );
+}
+
+#[test]
+fn test_registry_contains_contract_minimum_set() {
+    // Mechanical verify expects this contract-minimum anchor test name.
+    // Keep the set small and representative of OPEN gate, fee gate, and WAL gate coverage.
+    let required = [
+        RejectReasonCode::MarginHeadroomRejectOpens,
+        RejectReasonCode::OrderTypeMarketForbidden,
+        RejectReasonCode::FeeCacheStale,
+        RejectReasonCode::RecordedBeforeDispatchFailed,
+    ];
+    for code in required {
         assert!(
-            reject_reason_registry_contains(*code),
-            "RejectReasonCode::ALL member must be in registry: {code:?}"
+            reject_reason_registry_contains(code),
+            "reject_reason_registry missing required contract code {code:?}"
         );
-
-        let json = serde_json::to_string(code).expect("serialize reject reason");
-        let back: RejectReasonCode =
-            serde_json::from_str(&json).expect("deserialize reject reason");
-        assert_eq!(*code, back, "serde round-trip mismatch for {code:?}");
-
-        assert!(!code.as_str().is_empty(), "empty as_str() for {code:?}");
-        assert!(!code.wire_str().is_empty(), "empty wire_str() for {code:?}");
     }
 }
 
 #[test]
 fn test_reject_reason_serde_round_trip() {
     let code = RejectReasonCode::NetEdgeTooLow;
-    let json = serde_json::to_string(&code).expect("serialization failed");
+    let json = serialize_reason_code_or_panic(&code);
     assert_eq!(json, r#""NET_EDGE_TOO_LOW""#);
 
-    let deserialized: RejectReasonCode =
-        serde_json::from_str(&json).expect("deserialization failed");
+    let deserialized = deserialize_reason_code_or_panic(&json, "NET_EDGE_TOO_LOW");
     assert_eq!(deserialized, code);
 
     let code2 = RejectReasonCode::InsufficientDepthWithinBudget;
-    let json2 = serde_json::to_string(&code2).expect("serialization failed");
+    let json2 = serialize_reason_code_or_panic(&code2);
     assert_eq!(json2, r#""INSUFFICIENT_DEPTH_WITHIN_BUDGET""#);
-    let deserialized2: RejectReasonCode =
-        serde_json::from_str(&json2).expect("deserialization failed");
+    let deserialized2 =
+        deserialize_reason_code_or_panic(&json2, "INSUFFICIENT_DEPTH_WITHIN_BUDGET");
     assert_eq!(deserialized2, code2);
 }
 
@@ -228,27 +260,10 @@ fn test_reject_reason_serde_round_trip_fe001_codes() {
         (RejectReasonCode::GateCascadeSkip, r#""GATE_CASCADE_SKIP""#),
     ];
     for (code, expected_json) in cases {
-        let json = serde_json::to_string(&code).expect("serialization failed");
+        let json = serialize_reason_code_or_panic(&code);
         assert_eq!(json, expected_json, "serde output mismatch for {code:?}");
-        let deserialized: RejectReasonCode =
-            serde_json::from_str(&json).expect("deserialization failed");
+        let deserialized = deserialize_reason_code_or_panic(&json, code.as_str());
         assert_eq!(deserialized, code, "round-trip mismatch for {code:?}");
-    }
-}
-
-#[test]
-fn test_registry_contains_contract_minimum_set() {
-    let required = [
-        RejectReasonCode::MarginHeadroomRejectOpens,
-        RejectReasonCode::OrderTypeMarketForbidden,
-        RejectReasonCode::FeeCacheStale,
-        RejectReasonCode::RecordedBeforeDispatchFailed,
-    ];
-    for code in required {
-        assert!(
-            reject_reason_registry_contains(code),
-            "reject_reason_registry missing required contract code {code:?}"
-        );
     }
 }
 
@@ -307,4 +322,27 @@ fn test_at201_open_classified_intent_blocked_by_open_gates() {
         1,
         "CLOSE dispatch count must be 1"
     );
+}
+
+#[test]
+fn test_as_str_matches_serde_output_for_all_variants() {
+    for code in RejectReasonCode::ALL {
+        let as_str = code.as_str();
+        assert!(!as_str.is_empty(), "as_str() returned empty for {:?}", code);
+        assert!(
+            !code.wire_str().is_empty(),
+            "wire_str() returned empty for {:?}",
+            code
+        );
+
+        let json = serde_json::to_string(code)
+            .unwrap_or_else(|e| panic!("serde serialization failed for {:?}: {}", code, e));
+        let deserialized: RejectReasonCode = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("serde deserialization failed for {:?}: {}", code, e));
+        assert_eq!(
+            *code, deserialized,
+            "serde round-trip mismatch for {:?}",
+            code
+        );
+    }
 }

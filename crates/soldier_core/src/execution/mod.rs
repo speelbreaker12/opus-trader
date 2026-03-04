@@ -81,6 +81,19 @@ mod reject_reason;
 #[cfg_attr(not(test), allow(dead_code))]
 mod tlsm;
 
+#[cfg(test)]
+mod adversarial_gi_enforcement_tests;
+#[cfg(test)]
+mod dispatch_chokepoint_contract_tests;
+#[cfg(test)]
+mod facade_completeness_contract_tests;
+#[cfg(test)]
+mod recorded_before_dispatch_gate_tests;
+#[cfg(test)]
+mod reject_reason_contract_tests;
+#[cfg(test)]
+mod test_support_helpers_tests;
+
 pub use api::*;
 
 #[derive(Debug, Clone)]

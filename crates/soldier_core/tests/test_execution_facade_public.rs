@@ -1,0 +1,460 @@
+//! External-surface smoke tests for `soldier_core::execution`.
+//! These must import through `soldier_core::...` (integration test context).
+
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use soldier_core::risk::RiskState;
+
+#[allow(unused_imports)]
+use soldier_core::execution::{
+    AtomicGroup, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes,
+    GateResults, GateStep, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition,
+    LABEL_MAX_LEN, LabelError, LabelInput, LegResult, LockAcquisitionResult, OooCategory,
+    OrderSize, PersistedTransition, RecordedBeforeDispatchGate, RejectReasonCode, Side, Tlsm,
+    TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult, build_gate_results,
+    build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate, derive_gid12,
+    derive_sid8, encode_label, reject_reason_from_chokepoint, reject_reason_registry,
+    reject_reason_registry_contains, try_acquire_group_lock,
+};
+
+fn parse_use_block_symbols(block: &str) -> BTreeSet<String> {
+    let without_line_comments = block
+        .lines()
+        .map(|line| line.split("//").next().unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    without_line_comments
+        .split(',')
+        .map(str::trim)
+        .filter(|symbol| !symbol.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+#[derive(Default)]
+struct ScopeScanState {
+    depth: usize,
+    in_block_comment: bool,
+    in_string: bool,
+    in_char: bool,
+    raw_string_hashes: Option<usize>,
+}
+
+fn try_start_raw_string(bytes: &[u8], idx: usize) -> Option<(usize, usize)> {
+    let mut cursor = idx;
+
+    if bytes.get(cursor) == Some(&b'b') {
+        cursor += 1;
+        if bytes.get(cursor) != Some(&b'r') {
+            return None;
+        }
+        cursor += 1;
+    } else if bytes.get(cursor) == Some(&b'r') && bytes.get(cursor + 1) == Some(&b'b') {
+        cursor += 2;
+    } else if bytes.get(cursor) == Some(&b'r') {
+        cursor += 1;
+    } else {
+        return None;
+    }
+
+    let mut hashes = 0usize;
+    while bytes.get(cursor) == Some(&b'#') {
+        hashes += 1;
+        cursor += 1;
+    }
+
+    if bytes.get(cursor) == Some(&b'"') {
+        Some((hashes, cursor - idx + 1))
+    } else {
+        None
+    }
+}
+
+fn update_scope_depth(line: &str, state: &mut ScopeScanState) {
+    let bytes = line.as_bytes();
+    let mut idx = 0usize;
+
+    while idx < bytes.len() {
+        if let Some(hashes) = state.raw_string_hashes {
+            if bytes[idx] == b'"'
+                && idx + 1 + hashes <= bytes.len()
+                && bytes[idx + 1..idx + 1 + hashes]
+                    .iter()
+                    .all(|ch| *ch == b'#')
+            {
+                state.raw_string_hashes = None;
+                idx += 1 + hashes;
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if state.in_block_comment {
+            if idx + 1 < bytes.len() && bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
+                state.in_block_comment = false;
+                idx += 2;
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if state.in_string {
+            if bytes[idx] == b'\\' && idx + 1 < bytes.len() {
+                idx += 2;
+                continue;
+            }
+            if bytes[idx] == b'"' {
+                state.in_string = false;
+            }
+            idx += 1;
+            continue;
+        }
+
+        if state.in_char {
+            if bytes[idx] == b'\\' && idx + 1 < bytes.len() {
+                idx += 2;
+                continue;
+            }
+            if bytes[idx] == b'\'' {
+                state.in_char = false;
+            }
+            idx += 1;
+            continue;
+        }
+
+        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'/' {
+            break;
+        }
+        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
+            state.in_block_comment = true;
+            idx += 2;
+            continue;
+        }
+
+        if let Some((hashes, consumed)) = try_start_raw_string(bytes, idx) {
+            state.raw_string_hashes = Some(hashes);
+            idx += consumed;
+            continue;
+        }
+
+        match bytes[idx] {
+            b'"' => state.in_string = true,
+            b'\'' => state.in_char = true,
+            b'{' => state.depth += 1,
+            b'}' => state.depth = state.depth.saturating_sub(1),
+            _ => {}
+        }
+        idx += 1;
+    }
+}
+
+fn extract_symbol_set(file_path: &Path, anchor: &str) -> BTreeSet<String> {
+    let content = fs::read_to_string(file_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", file_path.display()));
+
+    let mut state = ScopeScanState::default();
+    let mut lines = content.lines();
+
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_start();
+        if state.depth == 0
+            && !state.in_block_comment
+            && state.raw_string_hashes.is_none()
+            && !state.in_string
+            && !state.in_char
+            && trimmed.starts_with(anchor)
+        {
+            let mut block = String::new();
+            let start = line
+                .find(anchor)
+                .unwrap_or_else(|| panic!("anchor `{anchor}` vanished in {}", file_path.display()))
+                + anchor.len();
+            block.push_str(&line[start..]);
+            block.push('\n');
+
+            while !block.contains("};") {
+                let next = lines.next().unwrap_or_else(|| {
+                    panic!(
+                        "failed to find end of use block after anchor `{anchor}` in {}",
+                        file_path.display()
+                    )
+                });
+                block.push_str(next);
+                block.push('\n');
+            }
+
+            let end = block.find("};").unwrap_or_else(|| {
+                panic!(
+                    "failed to find end of use block after anchor `{anchor}` in {}",
+                    file_path.display()
+                )
+            });
+            return parse_use_block_symbols(&block[..end]);
+        }
+
+        update_scope_depth(line, &mut state);
+    }
+
+    panic!(
+        "failed to find top-level anchor `{anchor}` in {}",
+        file_path.display()
+    );
+}
+
+fn write_temp_source_file(contents: &str) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before UNIX_EPOCH")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "facade_symbol_extract_{}_{}.rs",
+        std::process::id(),
+        nanos
+    ));
+    fs::write(&path, contents)
+        .unwrap_or_else(|err| panic!("failed to write {}: {err}", path.display()));
+    path
+}
+
+fn assert_facade_symbol_lists_in_sync() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let unit_test_file = manifest_dir.join("src/execution/facade_completeness_contract_tests.rs");
+    let integration_test_file = manifest_dir.join("tests/test_execution_facade_public.rs");
+
+    let unit_symbols = extract_symbol_set(&unit_test_file, "use crate::execution::{");
+    let integration_symbols =
+        extract_symbol_set(&integration_test_file, "use soldier_core::execution::{");
+
+    let missing_in_integration: Vec<String> = unit_symbols
+        .difference(&integration_symbols)
+        .cloned()
+        .collect();
+    let missing_in_unit: Vec<String> = integration_symbols
+        .difference(&unit_symbols)
+        .cloned()
+        .collect();
+
+    assert!(
+        missing_in_integration.is_empty() && missing_in_unit.is_empty(),
+        "facade symbol lists drifted.\nmissing in integration test: {:?}\nmissing in unit test: {:?}",
+        missing_in_integration,
+        missing_in_unit
+    );
+}
+
+#[test]
+fn execution_facade_symbols_publicly_reachable() {
+    let gates = build_gate_results(
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        Some(1.0),
+        Some(1.0),
+    );
+    assert!(gates.preflight_passed);
+    assert!(gates.pricer_passed);
+    assert!(gates.wal_recorded);
+
+    let registry = reject_reason_registry();
+    assert!(
+        !registry.is_empty(),
+        "reject reason registry must not be empty"
+    );
+    assert!(
+        reject_reason_registry_contains(RejectReasonCode::RecordedBeforeDispatchFailed),
+        "expected RecordedBeforeDispatchFailed in facade reject reason registry"
+    );
+
+    let mapped = reject_reason_from_chokepoint(
+        &ChokeRejectReason::RiskStateNotHealthy,
+        &GateRejectCodes::default(),
+    );
+    assert_eq!(mapped, RejectReasonCode::MarginHeadroomRejectOpens);
+}
+
+#[test]
+fn execution_chokepoint_symbols_publicly_reachable() {
+    #[allow(unused_imports)]
+    use soldier_core::execution::{
+        build_gate_results, build_order_intent_with_optional_wal_gate,
+        build_order_intent_with_wal_gate,
+    };
+
+    struct StubWalGate;
+
+    impl RecordedBeforeDispatchGate for StubWalGate {
+        fn record_before_dispatch(&mut self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    let mut metrics = ChokeMetrics::new();
+    let gates = build_gate_results(
+        true,  // preflight_passed
+        true,  // quantize_passed
+        true,  // dispatch_consistency_passed
+        true,  // fee_cache_passed
+        true,  // expiry_guard_passed
+        true,  // liquidity_gate_passed
+        true,  // net_edge_passed
+        true,  // pricer_passed
+        false, // wal_recorded (ignored by explicit wal gate path below)
+        None,  // requested_qty
+        None,  // max_dispatch_qty
+    );
+    let mut wal_gate = StubWalGate;
+
+    let with_wal_gate = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+    assert!(
+        matches!(with_wal_gate, ChokeResult::Approved { .. }),
+        "explicit WAL gate path should approve when gate recording succeeds"
+    );
+
+    let missing_wal_gate = build_order_intent_with_optional_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        None,
+    );
+    assert!(
+        matches!(
+            missing_wal_gate,
+            ChokeResult::Rejected {
+                reason: ChokeRejectReason::GateRejected {
+                    gate: GateStep::RecordedBeforeDispatch,
+                    ..
+                },
+                ..
+            }
+        ),
+        "optional WAL path should fail-closed when adapter is omitted for OPEN intents"
+    );
+}
+
+#[test]
+fn facade_symbol_lists_stay_in_sync() {
+    assert_facade_symbol_lists_in_sync();
+}
+
+#[test]
+fn extract_symbol_set_prefers_top_level_use_block_when_anchor_repeats() {
+    let path = write_temp_source_file(
+        r#"
+use soldier_core::execution::{build_gate_results,};
+
+fn nested() {
+    use soldier_core::execution::{
+        build_gate_results,
+        build_order_intent_with_wal_gate,
+    };
+}
+"#,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    assert_eq!(symbols, expected);
+}
+
+#[test]
+fn extract_symbol_set_ignores_inline_comments() {
+    let path = write_temp_source_file(
+        r#"
+use soldier_core::execution::{
+    build_gate_results, // shared in both contract + external smoke tests
+    build_order_intent_with_wal_gate, // compile-only reachability check
+};
+"#,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = [
+        "build_gate_results".to_string(),
+        "build_order_intent_with_wal_gate".to_string(),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(symbols, expected);
+}
+
+#[test]
+fn extract_symbol_set_ignores_anchor_text_inside_comments_and_strings() {
+    let path = write_temp_source_file(
+        r#"
+use soldier_core::execution::{build_gate_results,};
+
+// use soldier_core::execution::{build_gate_results, build_order_intent_with_wal_gate,};
+let _fixture = "use soldier_core::execution::{build_gate_results, build_order_intent_with_wal_gate,};";
+"#,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    assert_eq!(symbols, expected);
+}
+
+#[test]
+fn extract_symbol_set_ignores_anchor_text_inside_block_comments() {
+    let path = write_temp_source_file(
+        r#"
+/*
+use soldier_core::execution::{
+    build_gate_results,
+    build_order_intent_with_wal_gate,
+};
+*/
+use soldier_core::execution::{build_gate_results,};
+"#,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    assert_eq!(symbols, expected);
+}
+
+#[test]
+fn extract_symbol_set_ignores_anchor_text_inside_multiline_raw_strings() {
+    let path = write_temp_source_file(
+        r##"
+const FIXTURE: &str = r#"
+use soldier_core::execution::{
+    build_gate_results,
+    build_order_intent_with_wal_gate,
+};
+"#;
+use soldier_core::execution::{build_gate_results,};
+"##,
+    );
+
+    let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
+    let _ = fs::remove_file(&path);
+
+    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    assert_eq!(symbols, expected);
+}

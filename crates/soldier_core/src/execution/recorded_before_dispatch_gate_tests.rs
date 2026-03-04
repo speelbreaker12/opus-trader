@@ -1,0 +1,217 @@
+//! Tests for runtime RecordedBeforeDispatch gate helpers.
+
+use super::test_support_helpers_tests::gate_results_all_passing_failclosed_wal;
+
+use crate::execution::{
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
+    RecordedBeforeDispatchGate, build_order_intent_with_optional_wal_gate,
+    build_order_intent_with_wal_gate,
+};
+use crate::risk::RiskState;
+
+struct StubWalGate {
+    should_succeed: bool,
+    call_count: usize,
+}
+
+impl RecordedBeforeDispatchGate for StubWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        self.call_count += 1;
+        if self.should_succeed {
+            Ok(())
+        } else {
+            Err("wal append failed".to_string())
+        }
+    }
+}
+
+#[test]
+fn test_optional_wal_gate_missing_is_fail_closed() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing_failclosed_wal();
+
+    let result = build_order_intent_with_optional_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        None,
+    );
+
+    match result {
+        ChokeResult::Rejected { reason, .. } => match reason {
+            ChokeRejectReason::GateRejected { gate, .. } => {
+                assert_eq!(gate, GateStep::RecordedBeforeDispatch)
+            }
+            other => panic!("unexpected reject reason: {other:?}"),
+        },
+        other => panic!("expected rejected, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_wal_gate_failure_rejects() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing_failclosed_wal();
+    let mut wal_gate = StubWalGate {
+        should_succeed: false,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(result, ChokeResult::Rejected { .. }));
+    assert_eq!(wal_gate.call_count, 1);
+}
+
+#[test]
+fn test_wal_gate_success_allows() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing_failclosed_wal();
+    let mut wal_gate = StubWalGate {
+        should_succeed: true,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_gate.call_count, 1);
+}
+
+#[test]
+fn test_wal_gate_not_called_when_risk_state_rejects_early() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing_failclosed_wal();
+    let mut wal_gate = StubWalGate {
+        should_succeed: true,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Degraded,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::RiskStateNotHealthy,
+            ..
+        }
+    ));
+    assert_eq!(wal_gate.call_count, 0);
+}
+
+#[test]
+fn test_wal_gate_not_called_when_preflight_rejects_early() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = GateResults {
+        preflight_passed: false,
+        ..gate_results_all_passing_failclosed_wal()
+    };
+    let mut wal_gate = StubWalGate {
+        should_succeed: true,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Open,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(
+        result,
+        ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected { .. },
+            ..
+        }
+    ));
+    assert_eq!(wal_gate.call_count, 0);
+}
+
+// ─── CSP.3.2: WAL failure MUST NOT block CLOSE/HEDGE intents ────────
+
+#[test]
+fn test_close_intent_approved_despite_wal_failure() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing_failclosed_wal();
+    let mut wal_gate = StubWalGate {
+        should_succeed: false,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Close,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_gate.call_count, 1); // Attempted but failure not blocking
+}
+
+#[test]
+fn test_hedge_intent_approved_despite_wal_failure() {
+    let mut metrics = ChokeMetrics::new();
+    let gates = gate_results_all_passing_failclosed_wal();
+    let mut wal_gate = StubWalGate {
+        should_succeed: false,
+        call_count: 0,
+    };
+
+    let result = build_order_intent_with_wal_gate(
+        ChokeIntentClass::Hedge,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        &mut wal_gate,
+    );
+
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(wal_gate.call_count, 1);
+}
+
+#[test]
+fn test_close_intent_approved_when_optional_wal_gate_missing() {
+    let mut metrics = ChokeMetrics::new();
+    let mut gates = gate_results_all_passing_failclosed_wal();
+    gates.wal_recorded = false; // WAL not recorded
+
+    let result = build_order_intent_with_optional_wal_gate(
+        ChokeIntentClass::Close,
+        RiskState::Healthy,
+        &mut metrics,
+        &gates,
+        None,
+    );
+
+    // Close intent must not be blocked by WAL failure (CSP.3.2)
+    assert!(matches!(result, ChokeResult::Approved { .. }));
+}
+
+// GAP-FE-004: PrecomputedWalGate is pub(crate), so direct unit tests are not possible
+// from integration tests. Pipeline-level coverage is in test_intent_pipeline.rs:
+// - test_fe004_pipeline_wal_not_recorded_yields_recorded_before_dispatch_failed
+// The existing test_wal_gate_success_allows / test_wal_gate_failure_rejects cover
+// the same trait interface exercised by PrecomputedWalGate.
