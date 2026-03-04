@@ -80,18 +80,8 @@ For any **new guard** (a rule, latch, monitor, or gate) that can block an OPEN, 
    - specific `cortex_override` value.
 
 
-- **InstrumentFamily**: one of `option | future | perpetual` (product family only).
-- **AmountSemantics**: one of `coin | usd` (sizing semantics only; this is the authoritative sizing discriminator).
-- **InstrumentMeta**: normalized instrument metadata record containing at minimum:
-  `instrument_id`, `instrument_family`, `amount_semantics`, `tick_size`, `amount_step`, `min_amount`, and optional `contract_size_usd`.
-- **instrument_kind**: legacy compatibility alias from venue metadata (`option | linear_future | inverse_future | perpetual`).
-  - `instrument_kind` MAY be reported for compatibility/observability, but sizing/quantization MUST branch on `amount_semantics`, not on `instrument_kind` alone.
-  - Mapping rule (non-negotiable): normalize venue metadata to `InstrumentMeta{instrument_family, amount_semantics}` before sizing logic executes.
-- **OrderSizeInput** (strategy-supplied canonical size): mutually exclusive union `CoinQty | UsdQty | Contracts`.
-- **NormalizedOrderSize** (runtime-normalized): canonical field + derived fields (contracts, qty_coin, qty_usd, notional_usd) with explicit `canonical_size_kind`.
-- **QuantizedQtySteps**: integer count of `amount_step` units for canonical quantity.
-- **QuantizedPriceTicks**: integer count of `tick_size` units for canonical price.
-- **IntentId**: deterministic 64-bit digest (`xxhash64`) over canonical byte serialization (see §1.1.1).
+- **instrument_kind**: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).
+  - **Linear Perpetuals (USDC‑margined)**: treat as `linear_future` for sizing (canonical `qty_coin`), even if their venue symbol says "PERPETUAL".
 - **order_type** (Deribit `type`): `limit | market | stop_limit | stop_market | ...` (venue-specific).
 - **linked_order_type**: Deribit linked/OCO semantics (venue-specific; gated off for this bot).
 - **Aggressive IOC Limit**: a `limit` order with `time_in_force=immediate_or_cancel` and a *bounded* limit price computed from `fair_price` with fee-aware edge-based clamps (see §1.4).
@@ -138,7 +128,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 | **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
 | **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
 | **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
-| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and a **status-lite** owner output returning `service_up`, `build_id`, `contract_version`, `dispatch_enabled=false`, `phase=foundation` | `docs/health_endpoint.md`, passing tests |
+| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner status output returning `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (and optional deprecated alias `is_trading_allowed`) | `docs/health_endpoint.md`, passing tests |
 | **P0-F** | Machine Policy Loader Baseline | Bind a machine-readable policy path + strict loader so runtime checks are not doc-only | `config/policy.json`, `tools/policy_loader.py`, passing tests |
 
 **Anchors (for PRD traceability):**
@@ -149,7 +139,7 @@ Before any code implementation begins, these operational baseline items MUST be 
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a status-lite owner signal (`service_up`, `dispatch_enabled=false`, `phase=foundation`) and explicitly does **not** claim canonical TradingMode/latch semantics before Phase 2.
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -697,55 +687,22 @@ Profile: CSP
 
 **Why this exists:** Unit mismatches are silent PnL killers. Deribit uses **different sizing semantics** across instruments. If we don’t encode these invariants, we will eventually ship a “correct-looking” trade that is 10–100× the intended exposure.
 
-**Domain model (Non-Negotiable):**
-```rust
-pub enum InstrumentFamily { Option, Future, Perpetual }
-pub enum AmountSemantics { Coin, Usd }
-
-pub struct InstrumentMeta {
-  pub instrument_id: String,
-  pub instrument_family: InstrumentFamily,
-  pub amount_semantics: AmountSemantics,
-  pub tick_size: Decimal,
-  pub amount_step: Decimal,
-  pub min_amount: Decimal,
-  pub contract_size_usd: Option<Decimal>,
-}
-
-pub enum OrderSizeInput {
-  CoinQty { qty_coin: Decimal },
-  UsdQty { qty_usd: Decimal },
-  Contracts { contracts: i64 },
-}
-
-pub enum CanonicalSizeKind { CoinQty, UsdQty, Contracts }
-
-pub struct NormalizedOrderSize {
-  pub canonical_size_kind: CanonicalSizeKind,
-  pub contracts: Option<i64>,
-  pub qty_coin: Option<Decimal>,
-  pub qty_usd: Option<Decimal>,
-  pub notional_usd: Decimal,
-}
-```
-
 **Canonical internal units (single source of truth):**
-- `qty_coin` (BTC/ETH): used when `amount_semantics == coin`.
-- `qty_usd` (USD notional): used when `amount_semantics == usd`.
+- `qty_coin` (BTC/ETH): **options + linear futures** sizing.
+- `qty_usd` (USD notional): **perpetual + inverse futures** sizing (Deribit `amount` is USD units for these).
 - `notional_usd`:
   - For coin-sized instruments: `notional_usd = qty_coin * index_price`
   - For USD-sized instruments: `notional_usd = qty_usd`
 
 **Hard Rules (Non‑Negotiable):**
-1. Strategy/caller input MUST be expressed as exactly one `OrderSizeInput` variant (`CoinQty | UsdQty | Contracts`).
-2. Providing more than one canonical size input for a single intent is invalid and MUST be rejected with `Rejected(MixedCanonicalSizeFields)`.
-3. If both `contracts` and `amount` are present after normalization, they **must match** within tolerance:
+1. **Never mix** coin sizing and USD sizing for the *same* intent. One is canonical; the other is derived.
+2. If both `contracts` and `amount` are provided (internally or via strategy output), they **must match** within tolerance:
    - `amount ≈ contracts * contract_multiplier`  
    - `contract_multiplier` is instrument-specific (e.g., inverse futures contract size in USD; options contract multiplier in coin).
    - Tolerance: `abs(amount - contracts * contract_multiplier) / max(abs(amount), epsilon) <= contracts_amount_match_tolerance` where `contracts_amount_match_tolerance = 0.001` (0.1%, default) and `epsilon = 1e-9`.
-4. If a contracts/amount mismatch is detected: **reject the intent** and set `RiskState::Degraded` (this is a wiring bug, not "market noise").
-5. Rejections for contracts/amount mismatch MUST use `Rejected(ContractsAmountMismatch)`.
-6. For `instrument_family == option` (`amount_semantics == coin`), outbound canonical amount MUST be `qty_coin`; `qty_usd` is derived only and MUST NOT be accepted as canonical input.
+3. If a mismatch is detected: **reject the intent** and set `RiskState::Degraded` (this is a wiring bug, not "market noise").
+4. Rejections for contracts/amount mismatch MUST use `Rejected(ContractsAmountMismatch)`.
+5. For `instrument_kind == option`, order size MUST use `qty_coin` (Deribit `amount` in base coin units); `qty_usd` MUST be unset.
 
 **Acceptance Tests (References):**
 - AT-277 (dispatcher mapping validates option sizing and `qty_usd` unset)
@@ -753,7 +710,7 @@ pub struct NormalizedOrderSize {
 AT-1097
 - Given: a single order intent that specifies both `qty_coin` and `qty_usd` as canonical sizing fields (i.e., the intent mixes coin sizing and USD sizing).
 - When: the intent is evaluated for dispatch.
-- Then: the intent MUST be rejected before dispatch with `Rejected(MixedCanonicalSizeFields)` and `RiskState::Degraded` is set; no order is sent to the exchange.
+- Then: the intent MUST be rejected before dispatch with `Rejected(ContractsAmountMismatch)` and `RiskState::Degraded` is set; no order is sent to the exchange.
 - Pass criteria: intent rejected; dispatch count remains 0; `RiskState::Degraded` set.
 - Fail criteria: intent dispatched with mixed sizing, or rejection reason is missing/wrong.
 
@@ -901,44 +858,36 @@ AT-962
 
 
 
-**Order size model (MUST implement):**
+**OrderSize struct (MUST implement):**
 ```rust
-// Canonical input is mutually exclusive.
-pub enum OrderSizeInput {
-  CoinQty { qty_coin: Decimal },
-  UsdQty { qty_usd: Decimal },
-  Contracts { contracts: i64 },
-}
-
-// Runtime-normalized form may contain canonical + derived fields.
-pub struct NormalizedOrderSize {
-  pub canonical_size_kind: CanonicalSizeKind,
-  pub contracts: Option<i64>,
-  pub qty_coin: Option<Decimal>,
-  pub qty_usd: Option<Decimal>,
-  pub notional_usd: Decimal,
+pub struct OrderSize {
+  pub contracts: Option<i64>,     // integer contracts when applicable
+  pub qty_coin: Option<f64>,      // BTC/ETH amount when applicable
+  pub qty_usd: Option<f64>,       // USD amount when applicable
+  pub notional_usd: f64,          // always populated (derived)
 }
 ```
 
 **Dispatcher Rules (Deribit request mapping):**
-- Normalize venue metadata into `InstrumentMeta { instrument_family, amount_semantics, ... }` before sizing.
-- Compute size fields from `OrderSizeInput` + `InstrumentMeta`:
-  - `amount_semantics == coin`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined.
-  - `amount_semantics == usd`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` (if defined) and `qty_coin = qty_usd / index_price`.
+- Determine `instrument_kind` from instrument metadata (`option | linear_future | inverse_future | perpetual`).
+- Compute size fields:
+  - `option | linear_future`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined.
+    - **Linear Perpetuals (USDC‑margined)** are treated as `linear_future`.
+  - `perpetual | inverse_future`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` (if defined) and `qty_coin = qty_usd / index_price`.
 - **Deribit outbound order size field:** always send exactly one canonical “amount” value:
-  - coin semantics → send `amount = qty_coin`
-  - USD semantics → send `amount = qty_usd`
+  - coin instruments → send `amount = qty_coin`
+  - USD-sized instruments → send `amount = qty_usd`
 - If `contracts` exists, it must be consistent with the canonical amount before dispatch (reject if not).
 
 **Acceptance Test (REQUIRED):**
 AT-277
 - Given:
-  1) `InstrumentMeta{instrument_family=option, amount_semantics=coin}` with `OrderSizeInput::CoinQty(0.3)` at `index_price=100_000`
-  2) `InstrumentMeta{instrument_family=future, amount_semantics=usd}` with `OrderSizeInput::UsdQty(30_000)` at `index_price=100_000`
+  1) `instrument_kind=option` with `qty_coin=0.3` at `index_price=100_000`
+  2) `instrument_kind=perpetual` with `qty_usd=30_000` at `index_price=100_000`
 - When: the dispatcher maps request fields.
 - Then:
   - outbound option uses `amount=0.3` (coin), `notional_usd=30_000`, and `qty_usd` is unset
-  - outbound USD-semantic instrument uses `amount=30_000` (USD), `qty_coin=0.3`, `notional_usd=30_000`
+  - outbound perp uses `amount=30_000` (USD), `qty_coin=0.3`, `notional_usd=30_000`
   - if both `contracts` and `amount` are supplied and mismatch → reject + degrade
 - Pass criteria: mapping rules applied; option `qty_usd` unset; mismatches rejected.
 - Fail criteria: incorrect mapping or mismatch allowed.
@@ -960,18 +909,17 @@ AT-920
 
 **Canonical Outbound Format (MUST implement):** `s4:{sid8}:{gid12}:{li}:{ih16}`
 
-- `sid8` = first 8 lowercase chars of RFC4648 base32 (no padding) over `xxhash64(strategy_id_utf8_bytes)` encoded as 8-byte big-endian.
+- `sid8` = first 8 chars of stable strategy id hash (e.g., base32(xxhash(strat_id)))
 - `gid12` = first 12 chars of group_id (uuid without dashes, truncated)
 - `li` = leg_idx (0/1)
-- `ih16` = lowercase zero-padded 16-char hex encoding of `intent_hash` from §1.1.1.
+- `ih16` = 16-hex (or base32) intent hash
 
 **Deribit Constraint:** `label` must be <= 64 chars. (Hard limit)
 
 **Rule:** All outbound orders to Deribit MUST use the `s4:` format. For `s4` labels, truncation MUST NOT occur. Because the canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape is fixed and <= 64 chars, any overflow indicates a schema regression; such intents MUST be rejected before dispatch and `RiskState` MUST become `Degraded`.
-Rejections for label schema violations MUST use `Rejected(InvalidLabelSchema)`.
-Rejections for pure length overflow MUST use `Rejected(LabelTooLong)`.
+Rejections for schema/length violations MUST use `Rejected(LabelTooLong)` (or a stricter schema reject code if defined).
 
-**Legacy Documentation Format (non-sent):** `s4doc:{strat_id}:{group_id}:{leg_idx}:{intent_hash}`  
+**Legacy Documentation Format (non-sent):** `s4:{strat_id}:{group_id}:{leg_idx}:{intent_hash}`  
 This expanded format is for human-readable logs and internal documentation only. It MUST NOT be sent to the exchange.
 
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
@@ -988,7 +936,14 @@ This expanded format is for human-readable logs and internal documentation only.
    - `leg_idx` matches,
    - `ih16` matches (full short identity).
 3) If primary candidate set size == 1 → match.
-4) Else (none or >1) → fail closed: mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+4) Else use legacy/repair fallback candidate set where:
+   - `gid12` matches AND `leg_idx` matches.
+5) If fallback candidate size == 1 → match.
+6) Else disambiguate fallback candidates using tie-breakers in order:
+   A) instrument match
+   B) side match
+   C) qty_q match
+7) If still ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
 
 **Acceptance Tests (REQUIRED):**
 AT-216
@@ -1000,23 +955,23 @@ AT-216
 
 AT-217
 - Given: two intents share the same `gid12` and `leg_idx`.
-- When: the label matcher evaluates full parsed identity.
-- Then: only a unique full `sid8+gid12+leg_idx+ih16` match is accepted; otherwise `RiskState::Degraded` and opens are blocked pending reconcile.
-- Pass criteria: deterministic unique full-identity match, or deterministic fail-closed behavior on ambiguity/no-match.
+- When: the label matcher disambiguates using tie-breakers.
+- Then: it first attempts full `sid8+gid12+leg_idx+ih16` identity match; if no unique full match, it uses legacy fallback tie-breakers; if still ambiguous, `RiskState::Degraded` and opens blocked.
+- Pass criteria: deterministic match with full identity when available; deterministic fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
 - Fail criteria: ambiguous mapping accepted or opens proceed without Degraded on unresolved ambiguity.
 
 AT-041
 - Given: an outbound label candidate does not conform to canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape (wrong segment count, wrong token widths, or invalid characters).
 - When: the system validates label schema before dispatch.
-- Then: the intent is rejected before dispatch with `Rejected(InvalidLabelSchema)` and `RiskState==Degraded`.
-- Pass criteria: no order is sent; schema violation is logged deterministically with `InvalidLabelSchema`.
-- Fail criteria: non-conforming label is dispatched.
+- Then: the intent is rejected before dispatch and `RiskState==Degraded`.
+- Pass criteria: no order is sent; schema violation is logged deterministically; `RiskState==Degraded`.
+- Fail criteria: non-conforming label is dispatched OR schema violation occurs without `RiskState==Degraded`.
 
 AT-921
 - Given: an outbound label uses an unknown label version prefix (not `s4:`).
 - When: pre-dispatch label validation runs.
-- Then: the intent is rejected with `Rejected(UnknownLabelVersion)` and no dispatch occurs.
-- Pass criteria: rejection reason is present and dispatch count remains 0.
+- Then: the intent is rejected with a deterministic reject reason (`Rejected(LabelTooLong)` or stricter schema-version reject code if defined) and no dispatch occurs.
+- Pass criteria: rejection reason is present, `RiskState==Degraded`, and dispatch count remains 0.
 - Fail criteria: unknown-version label is dispatched.
 
 
@@ -1024,11 +979,11 @@ AT-921
 * `strat_id`: Static ID of the running strategy (e.g., `strangle_btc_low_vol`).  
 * `group_id`: UUIDv4 (Shared by all legs in a single atomic attempt).  
 * `leg_idx`: `0` or `1` (Identity within the group).  
-* `intent_hash`: `xxhash64(canonical_intent_bytes)` where `canonical_intent_bytes` are built from integer quantized fields (`qty_steps`, `price_ticks`) per §1.1.1.  
+* `intent_hash`: `xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)` (see §1.1.1 for quantization)  
   **Hard rule:** Do NOT include wall-clock timestamps in the idempotency hash.
 
 AT-343
-- Given: two intents with identical canonical fields (instrument, side, `qty_steps`, `price_ticks`, group_id, leg_idx) evaluated at different wall-clock times.
+- Given: two intents with identical canonical fields (instrument, side, qty_q, limit_price_q, group_id, leg_idx) evaluated at different wall-clock times.
 - When: `intent_hash` is computed for both.
 - Then: the two `intent_hash` values are identical.
 - Pass criteria: `intent_hash(t0) == intent_hash(t1)` for identical canonical fields.
@@ -1036,7 +991,7 @@ AT-343
 
 AT-933
 - Given: a WS reconnect occurs and the exchange still has open orders with canonical `s4` labels.
-- When: the system re-fetches open orders and matches using full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`) per §1.1.2.
+- When: the system re-fetches open orders and matches using full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`) with legacy fallback per §1.1.2.
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
 - Fail criteria: duplicate dispatch occurs or orders are treated as missing.
@@ -1048,31 +1003,28 @@ AT-933
 
 **Where:** `soldier/core/execution/quantize.rs`
 
-**Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`, `side`  
-**Outputs:** `qty_steps`, `price_ticks`, and derived `qty_q`, `limit_price_q` (quantized)
+**Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`  
+**Outputs:** `qty_q`, `limit_price_q` (quantized)
 
 **Rules (Deterministic):**
 - Fetch instrument constraints: `tick_size`, `amount_step`, `min_amount`.
 - If any of `tick_size`, `amount_step`, or `min_amount` is missing or unparseable -> Reject(intent=InstrumentMetadataMissing) and do not dispatch (fail-closed).
-- `qty_steps = floor(raw_qty / amount_step)` (never round up size).
-- `qty_q = qty_steps * amount_step`.
-- `price_ticks` MUST be side-explicit:
-  - BUY: `price_ticks = floor(raw_limit_price / tick_size)` (never pay extra).
-  - SELL: `price_ticks = ceil(raw_limit_price / tick_size)` (never sell cheaper).
-- `limit_price_q = price_ticks * tick_size`.
-- If `qty_q < min_amount` (equivalently, if `qty_steps < ceil(min_amount / amount_step)`) → Reject(intent=TooSmallAfterQuantization).
-- Idempotency hash MUST be computed from canonical integer quantization outputs; do NOT hash floating-point values.
-- Canonical hash serialization (non-negotiable):
-  - `canonical_intent_bytes = UTF8("v1|" + instrument_id_lc + "|" + side_lc + "|" + qty_steps_dec + "|" + price_ticks_dec + "|" + group_id_nodash_lc + "|" + leg_idx_dec)`
-  - `qty_steps_dec`, `price_ticks_dec`, `leg_idx_dec` are base-10 ASCII integers with no leading `+`, no separators, no whitespace.
-  - `intent_hash = xxhash64(canonical_intent_bytes)`.
+- `qty_q = round_down(raw_qty, amount_step)` (never round up size).
+- `limit_price_q = round_to_nearest_tick(raw_limit_price, tick_size)` (or round in the safer direction; see below).
+- If `qty_q < min_amount` → Reject(intent=TooSmallAfterQuantization).
+- Idempotency hash must be computed ONLY from quantized fields:
+  `intent_hash = xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)`
+
+**Safer rounding direction:**
+- For BUY: round `limit_price_q` DOWN (never pay extra).
+- For SELL: round `limit_price_q` UP (never sell cheaper).
 
 **Acceptance Tests (REQUIRED):**
 AT-218
-- Given: two codepaths compute the same intent fields and produce the same `qty_steps` and `price_ticks`.
+- Given: two codepaths compute the same intent fields.
 - When: `intent_hash` is generated.
-- Then: both hashes are identical because canonical serialization bytes are identical.
-- Pass criteria: `intent_hash` equality across codepaths and byte-for-byte equality of canonical serialization input.
+- Then: both hashes are identical.
+- Pass criteria: `intent_hash` equality across codepaths.
 - Fail criteria: hash mismatch for identical inputs.
 
 AT-219
@@ -1105,7 +1057,7 @@ AT-928
 
 **Idempotency Rules (Non-Negotiable):**
 1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
-2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by full parsed `s4` identity (`sid8`,`gid12`,`leg_idx`,`ih16`) per §1.1.2.
+2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by `group_id`.
 3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
 4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute "atomic slippage" per group.
 
@@ -1125,10 +1077,10 @@ AT-1098
 **Council Weakness Covered:** Premature “Complete” + naked events under concurrency.
 
 **Hard Invariant (Non‑Negotiable):**
-- A Group may be marked `Complete` **only if** every leg has reached a terminal TLSM state `{Filled, Canceled, Failed}` **AND**
+- A Group may be marked `Complete` **only if** every leg has reached a terminal TLSM state `{Filled, Canceled, Rejected}` **AND**
   - the group has **no partial fills** and **no fill mismatch** beyond `epsilon` (atomicity restored or no-trade), **AND**
   - **no containment/rescue action is pending**.
-- The **first observed failure** (failed/canceled/unfilled/partial mismatch) must “seed” the group into `MixedFailed` and **must not be overwritten** by later async updates.
+- The **first observed failure** (reject/cancel/unfilled/partial mismatch) must “seed” the group into `MixedFailed` and **must not be overwritten** by later async updates.
 
 **Serialization Rule:**
 - GroupState transitions must be **single-writer** (AtomicGroupExecutor owns state) or protected by a **group‑level lock**.
@@ -1142,7 +1094,7 @@ AT-1098
 
 **Acceptance Test (REQUIRED):**
 AT-220
-- Given: leg events arrive out of order (A fills fast, B fails late).
+- Given: leg events arrive out of order (A fills fast, B rejects late).
 - When: GroupState serialization is evaluated.
 - Then: the group is never recorded `Complete` before B reaches terminal, and the first failure deterministically triggers containment → flatten.
 - Pass criteria: no premature `Complete`; containment triggers on first failure.
@@ -1170,7 +1122,7 @@ pub struct LegResult {
   pub leg_idx: u8,
   pub requested_qty: f64,
   pub filled_qty: f64,     // 0.0 .. requested_qty
-  pub failed: bool,
+  pub rejected: bool,
   pub unfilled: bool,
 }
 
@@ -1245,7 +1197,7 @@ pub async fn execute_atomic_group(&self, group: AtomicGroup) -> Result<()> {
 
 **Acceptance Tests (REQUIRED):**
 AT-116
-- Given: AtomicGroup with Leg A filled and Leg B failed.
+- Given: AtomicGroup with Leg A filled and Leg B rejected.
 - When: group result is evaluated.
 - Then: `GroupState::MixedFailed` is recorded, containment runs, and no new OPENs are dispatched until exposure is neutral.
 - Pass criteria: MixedFailed is recorded and exposure is flattened before any OPEN dispatch.
@@ -1259,7 +1211,7 @@ AT-117
 - Fail criteria: >2 rescue attempts or mismatch persists without flatten.
 
 AT-118
-- Given: mixed-state where one leg is filled and another is failed.
+- Given: mixed-state where one leg is filled and another is rejected.
 - When: containment path executes.
 - Then: §3.1 emergency close runs with bounded attempts, then reduce-only delta hedge if still not neutral, and TradingMode is ReduceOnly.
 - Pass criteria: bounded close attempts then hedge if needed; TradingMode ReduceOnly during exposure.
@@ -1927,12 +1879,12 @@ AT-230
 - `session_termination_active` (bool; true if 10028/session termination occurred and reconciliation has not cleared)
 - `10028_count_5m` (int; rolling 5m count used for observability, alerting, and release metrics; see §7.0)
 
-**Field rename transition (P2):**
-`rate_limit_session_kill_active` is renamed to `session_termination_active` in v5.2-P2.
-- Implementations MUST accept both field names during the transition release.
-- `/status` MUST emit the new name (`session_termination_active`).
-- `/status` MAY additionally emit the old name as a deprecated alias for one release cycle.
-- The old name MUST be removed in the next contract version after v5.2-P2.
+**Field rename transition (contract version 5.2):**
+`rate_limit_session_kill_active` is renamed to `session_termination_active` in contract version `5.2`.
+- Implementations MUST accept both field names while running contract version `5.2`.
+- `/status` MUST emit the new name (`session_termination_active`) in contract version `5.2`.
+- `/status` MAY additionally emit the old name as a deprecated alias only during contract version `5.2`.
+- The old name MUST be removed (MUST NOT appear in requests or responses) in the first contract version strictly greater than `5.2`.
 
 #### **2.2.0 PolicyGuard Input Snapshot Coherency (Atomic Snapshot + Memory Order)**
 Profile: CSP
@@ -1980,17 +1932,12 @@ AT-1054
 
 #### **2.2.1 Runtime Binding Gate (HARD, runtime enforcement)**
 - PolicyGuard MUST read `artifacts/RUNTIME_BINDING_CERT.json` as the canonical runtime-binding artifact.
-- Transition compatibility: if canonical artifact is missing, PolicyGuard MAY read legacy `artifacts/F1_CERT.json` for one transition version after v5.2-P2.
+- Transition compatibility: if canonical artifact is missing, PolicyGuard MAY read legacy `artifacts/F1_CERT.json` only while `runtime.contract_version == "5.2"`; for any other `contract_version`, legacy `F1_CERT.json` MUST be ignored and missing canonical artifact MUST force ReduceOnly.
 - Required schema (minimum keys): `{ status, generated_ts_ms, build_id, runtime_config_hash, contract_version }`.
   - `build_id`: immutable build identifier for the running binary (e.g., git commit SHA).
   - `runtime_config_hash`: `sha256` hex of canonicalized runtime config (see below).
   - `contract_version`: MUST equal the canonical `contract_version` literal in Definitions.
   - `policy_hash_at_cert_time` MAY be included for observability only and MUST NOT be used as a runtime validity gate.
-- Runtime-binding producer contract (non-negotiable):
-  - Canonical producer path: `python/tools/f1_certify.py`.
-  - Runtime-binding output artifacts: `artifacts/RUNTIME_BINDING_CERT.json` and `artifacts/RUNTIME_BINDING_CERT.md`.
-  - Canonical invocation: `python python/tools/f1_certify.py --window=24h --out=artifacts/RUNTIME_BINDING_CERT.json`.
-  - Runtime OPEN eligibility requires a successful runtime-binding producer run for the running `build_id`/`runtime_config_hash`/`contract_version`.
 - Freshness window: default 24h (configurable). If missing OR stale OR FAIL => TradingMode MUST be ReduceOnly.
 - Binding hardening: if any of these do not match runtime, runtime binding cert MUST be treated as INVALID (ReduceOnly):
   - `cert.build_id != runtime.build_id`
@@ -2881,7 +2828,6 @@ Profile: CSP
 **Allowed values (minimal complete set):**
 - `TooSmallAfterQuantization`
 - `InstrumentMetadataMissing`
-- `MixedCanonicalSizeFields`
 - `ChurnBreakerActive`
 - `LiquidityGateNoL2`
 - `EmergencyCloseNoPrice`
@@ -2909,8 +2855,6 @@ Profile: CSP
 - `RateLimitBrownout`
 - `InstrumentExpiredOrDelisted`
 - `FeedbackLoopGuardActive`
-- `InvalidLabelSchema`
-- `UnknownLabelVersion`
 - `LabelTooLong`
 
 **Acceptance Test (REQUIRED):**
@@ -3177,6 +3121,7 @@ AT-963
 
 
 ### **2.4 Durable Intent Ledger (WAL Truth Source)**
+Alias anchor: `§2.4 — WAL / intent ledger (RecordedBeforeDispatch)`.
 Profile: CSP
 
 **Council Weakness Covered:** TLSM duplication \+ messy middle \+ restart correctness. **Requirement:** Redis is not a source of truth. All intents \+ state transitions must be persisted to a crash-safe local WAL (Sled or SQLite). **Where:** `soldier/infra/store/ledger.rs` **Rules:**
@@ -3213,7 +3158,7 @@ Profile: CSP
 - If any such queue is full, the hot loop MUST NOT block and MUST force ReduceOnly until backlog clears.
 
 **Persisted Record (Minimum):**
-- intent_hash, group_id, leg_idx, instrument, side, qty_steps, price_ticks, qty_q, limit_price_q
+- intent_hash, group_id, leg_idx, instrument, side, qty, limit_price
 - tls_state, created_ts, sent_ts, ack_ts, last_fill_ts
 - exchange_order_id (if known), last_trade_id (if known)
 
@@ -4552,37 +4497,10 @@ Profile: GOP
 * Instrument metadata + canonical quantization.
 * `s4:` label schema + parser.
 * TLSM core.
-* Crash-safe WAL with bounded enqueue, `WALRecorded` acknowledgment semantics, restart replay, and dispatch-stub integration.
-* `/health` + status-lite owner scaffolding (non-authoritative; no TradingMode/latch semantics).
+* WAL append pipeline and queue plumbing.
+* `/health` + minimal owner status scaffolding.
 
 **Phase-1 rule:** Completion of Phase 1 is an implementation milestone only; it is **not** a CSP compliance claim and **not** live-trading readiness.
-
-#### **Phase 1 Exit Criteria (Normative)**
-Profile: GOP
-
-**In scope (MUST be implemented and evidenced):**
-- instrument metadata fetch/cache + canonical quantization
-- canonical `s4` label codec (encode + parse + deterministic full-identity matching)
-- TLSM core (`Created -> Sent -> Acked -> PartiallyFilled -> Filled|Canceled|Failed`)
-- crash-safe WAL append path with bounded enqueue + `WALRecorded` gating + restart replay
-- `/health` and Phase 0/1 status-lite owner contract
-
-**Out of scope (MUST NOT be claimed by Phase 1):**
-- PolicyGuard / TradingMode axis resolver
-- OpenPermissionLatch + reconciliation clear rules
-- dispatch authorization semantics for deployable CSP trading
-- deterministic emergency containment as a deployable safety kernel claim
-- any live-trading readiness/compliance claim
-
-**Required acceptance-test slice for Phase 1 completion:**
-- `AT-022` (`/health` minimum contract)
-- `AT-216`, `AT-217`, `AT-041`, `AT-921` (label schema/parse + fail-closed behavior)
-- `AT-218`, `AT-219`, `AT-908`, `AT-926` (quantization and pre-dispatch fail-closed checks)
-- `AT-230` (TLSM out-of-order safety + WAL transition recording)
-
-**Hard rule (non-negotiable):**
-- While `phase == foundation` (Phase 1), exchange order dispatch MUST be compile-time disabled or runtime blocked before any network send.
-- `/status.dispatch_enabled` MUST remain `false` for all Phase 0/1 executions.
 
 ### **Phase 2: CSP Safety Kernel (First Deployable Phase)**
 
@@ -4653,26 +4571,8 @@ AT-022
 - Pass criteria: response matches required keys/values.
 - Fail criteria: non-200 OR missing keys OR `ok != true`.
 
-**Foundation status-lite mode (Phase 0/1 bootstrap only):**
-- Applies when PolicyGuard + OpenPermissionLatch are not yet implemented (Roadmap Phase 1 / non-deployable foundation).
-- While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
-- In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation`.
-- During this phase, `/status` MUST NOT emit or claim canonical Phase-2+ fields:
-  `trading_mode`, `opens_globally_permitted`, `is_trading_allowed`, `mode_reasons`,
-  `open_permission_blocked_latch`, `open_permission_reason_codes`, `open_permission_requires_reconcile`.
-- CSP minimum `/status` keys are required after foundation mode exits.
-
-AT-1230
-- Given: runtime is in foundation mode (`phase == foundation`).
-- When: `GET /api/v1/status`.
-- Then: response includes only `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, and `phase`; with `dispatch_enabled == false` and `phase == foundation`.
-- Pass criteria: all required foundation keys present with exact invariants and no additional CSP authority keys.
-- Fail criteria: missing required foundation keys, invariant mismatch, or presence of CSP authority keys while in foundation mode.
-
 **/status response MUST include (CSP minimum):**
-- Applies to Phase 2+ only (first deployable CSP phase). Phase 0/1 uses the status-lite contract above.
-- `status_schema_version` (integer; supported semantics versions: `1` (legacy Decision-A token) and `2` (manifest-driven Decision-A token))
-- `open_permission_semantics_version` (integer; optional when `status_schema_version == 1` and if present MUST be `1`; required and MUST be `2` when `status_schema_version == 2`)
+- `status_schema_version` (integer; current version = 1)
 - `supported_profiles` (string[]; set of profiles this build can enforce at runtime; MUST include `CSP`)
 - `enforced_profile` (string enum: `CSP|GOP|FULL`; current runtime enforced profile)
 - `trading_mode`, `risk_state`, `bunker_mode_active`
@@ -4789,13 +4689,10 @@ AT-407
 
 AT-405
 - Given: `/status` is fetched.
-- When: `status_schema_version` and `open_permission_semantics_version` are read.
-- Then:
-  - `status_schema_version ∈ {1, 2}`.
-  - If `status_schema_version == 1`, `open_permission_semantics_version` is omitted or equals `1`.
-  - If `status_schema_version == 2`, `open_permission_semantics_version == 2`.
-- Pass criteria: version fields satisfy the semantics constraints above.
-- Fail criteria: missing `status_schema_version`, unsupported `status_schema_version`, or invalid/contradictory `open_permission_semantics_version`.
+- When: `status_schema_version` is read.
+- Then: `status_schema_version == 1`.
+- Pass criteria: value equals 1.
+- Fail criteria: missing or not 1.
 
 AT-1220
 - Given: `/status` is fetched under each combination of `trading_mode ∈ {Active, ReduceOnly, Kill}` and `open_permission_blocked_latch ∈ {true,false}`.
@@ -5254,7 +5151,7 @@ All must pass in CI before any deployment:
 Profile: CSP
 **B) Chaos/Integration Scenarios**
 AT-328
-- Given: Leg A Filled, Leg B Failed.
+- Given: Leg A Filled, Leg B Rejected.
 - When: containment runs.
 - Then: EmergencyFlatten executes within 200ms–1s and exposure is neutralized.
 - Pass criteria: flatten within window; exposure neutralized.
@@ -5302,14 +5199,10 @@ Policy staging in §5.3 is mandatory. Promotion requires:
 - `python/tools/f1_certify.py`
 - outputs `artifacts/F1_PROMOTION_CERT.json` and `artifacts/F1_PROMOTION_CERT.md`
 - `artifacts/F1_PROMOTION_CERT.json` MUST include (minimum): `{ status, generated_ts_ms, build_id, runtime_config_hash, contract_version }` (see §2.2.1.1).
-- same producer MUST also support runtime-binding output for PolicyGuard consumption:
-  - `artifacts/RUNTIME_BINDING_CERT.json` and `artifacts/RUNTIME_BINDING_CERT.md` (see §2.2.1 runtime gate semantics).
 
 **Example CI command:**
 - Run: `python python/tools/f1_certify.py --window=24h --out=artifacts/F1_PROMOTION_CERT.json`
 - Block release unless `status == PASS`.
-- Run: `python python/tools/f1_certify.py --window=24h --out=artifacts/RUNTIME_BINDING_CERT.json`
-- Runtime OPEN eligibility remains blocked unless runtime-binding cert validation in §2.2.1 passes.
 
 **Acceptance Test (REQUIRED):**
 AT-266
@@ -5868,7 +5761,7 @@ AT-313
 - Pass criteria: OPEN dispatch count remains 0; at least one risk-reducing dispatch attempt occurs while exposure ≠ 0.
 - Fail criteria: any OPEN dispatch occurs, or the system hard-stops with exposure by forbidding all dispatch.
 Profile: CSP
-**`time_drift_threshold_ms`** (§4.3 Time Drift Safety Gate)
+**`time_drift_threshold_ms`** (§4.3 Trade Attribution Schema)
 - **Default**: `50` milliseconds
 - **Purpose**: Maximum tolerable clock drift before forcing ReduceOnly; prevents attribution corruption and execution timing errors.
 - **Rationale**: Aligns with §8.1 Time Drift gate (p99_clock_drift ≤ 50ms). Tight threshold ensures reliable timestamps for slippage measurement and replay.
