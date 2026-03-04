@@ -14,7 +14,7 @@ Use the generator script from the repo root:
 ./plans/generate_recon_review_appendix.sh \
   --commit origin/main \
   --date 2026-03-04 \
-  --update-doc /Users/admin/Desktop/opus-trader/reviews/reconciliations/RECON_PROCESS_REVIEW.md
+  --update-doc reviews/reconciliations/RECON_PROCESS_REVIEW.md
 ```
 
 If `--date` is omitted, the script uses current UTC date.
