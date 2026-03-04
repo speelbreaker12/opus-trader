@@ -67,6 +67,11 @@ EOF_CONTRACT
 # Unchanged contract must pass.
 expect_rc 0 bash -lc "cd '$repo' && ./plans/check_contract_change_ledger.sh --base-ref main --contract specs/CONTRACT.md"
 
+# Missing base ref must fail closed (no HEAD~1 fallback).
+expect_rc 2 bash -lc "cd '$repo' && ./plans/check_contract_change_ledger.sh --base-ref does-not-exist --contract specs/CONTRACT.md"
+grep -Fq "unable to resolve merge-base from base ref 'does-not-exist'" "$tmp_dir/err.txt" \
+  || fail "expected missing-base diagnostic"
+
 # Changed contract without new ledger row must fail.
 cat > "$repo/specs/CONTRACT.md" <<'EOF_CONTRACT_CHANGED'
 # CONTRACT fixture

@@ -6326,6 +6326,8 @@ definition points in the main contract and to the most directly relevant accepta
 Profile: CSP
 
 Any mutation to `specs/CONTRACT.md` MUST add a new dated ledger row in this appendix.
+Ledger entries are append-only: existing rows MUST NOT be edited or deleted.
+Corrections MUST be recorded as additional rows.
 `plans/check_contract_change_ledger.sh` is the fail-closed enforcement gate wired into `./plans/verify.sh`.
 
 | date_utc | change_id | sections_touched | change_type | summary | rationale | AT/VR refs | story/pr |

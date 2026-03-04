@@ -80,15 +80,10 @@ resolve_base_commit() {
     fi
   fi
 
-  if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-    echo "HEAD~1"
-    return 0
-  fi
-
   return 1
 }
 
-base_commit="$(resolve_base_commit "$BASE_REF")" || setup_fail "unable to resolve base commit from '$BASE_REF' or HEAD~1"
+base_commit="$(resolve_base_commit "$BASE_REF")" || setup_fail "unable to resolve merge-base from base ref '$BASE_REF'"
 if ! git rev-parse --verify "$base_commit" >/dev/null 2>&1; then
   setup_fail "resolved base commit is invalid: $base_commit"
 fi
