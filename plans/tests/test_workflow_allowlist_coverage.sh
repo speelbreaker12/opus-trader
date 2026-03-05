@@ -39,6 +39,7 @@ required=(
   docs/validation_rules.md
   plans/autofix.sh
   plans/artifact_lint.sh
+  plans/bidi_control_guard.sh
   plans/check_contract_change_ledger.sh
   plans/check_skip_entrypoint.sh
   plans/code_review_expert_attest.sh
@@ -70,6 +71,7 @@ required=(
   plans/prd_set_pass.sh
   plans/pre_pr_review_gate.sh
   plans/preflight.sh
+  plans/premortem_path_guard.sh
   plans/readme_ci_parity_check.sh
   plans/recon_bundle.sh
   plans/recon_doc_budget.sh
@@ -102,6 +104,7 @@ required=(
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
+  plans/tests/test_bidi_control_guard.sh
   plans/tests/test_code_review_expert_guard.sh
   plans/tests/test_fail_closed_gate_map_paths.sh
   plans/tests/test_guard_no_command_substitution.sh
@@ -117,6 +120,7 @@ required=(
   plans/tests/test_recon_evidence_ledger.sh
   plans/tests/test_recon_handoff_sources.sh
   plans/tests/test_preflight_fixture_timeout_controls.sh
+  plans/tests/test_premortem_path_guard.sh
   plans/tests/test_recon_operator_runner.sh
   plans/tests/test_recon_operator_trace.sh
   plans/tests/test_recon_precheck.sh

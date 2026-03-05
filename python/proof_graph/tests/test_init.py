@@ -20,7 +20,6 @@ class TestInitV2(unittest.TestCase):
         self,
         story_id: str,
         premortem_path: Path | None = None,
-        premortem_dir: Path | None = None,
     ) -> dict:
         from python.proof_graph.init import init_v2
 
@@ -30,7 +29,6 @@ class TestInitV2(unittest.TestCase):
             contract_path=CONTRACT,
             output_dir=self.output_dir,
             premortem_path=premortem_path,
-            premortem_dir=premortem_dir,
         )
         return json.loads(out_path.read_text(encoding="utf-8"))
 
@@ -113,27 +111,6 @@ class TestInitV2(unittest.TestCase):
             self.assertEqual(pc.get("section5_wrong_impl_blocked"), "ALL")
             self.assertEqual(pc.get("section4_decision_match"), "YES")
             self.assertEqual(pc.get("section2_assumptions"), "ALL_VALIDATED")
-
-    def test_premortem_legacy_dir_parsing(self):
-        """Legacy premortem dir still works for one-release compatibility."""
-        legacy_dir = Path(self.tmpdir) / "legacy"
-        legacy_dir.mkdir()
-        (legacy_dir / "premortem.md").write_text(
-            "# Premortem\n"
-            "## Section 2\n"
-            "assumptions: PARTIAL\n"
-            "## Section 4\n"
-            "decision match: PARTIAL\n"
-            "## Section 5\n"
-            "wrong impl blocked: PARTIAL\n",
-            encoding="utf-8",
-        )
-        graph = self._init("S1-007", premortem_dir=legacy_dir)
-        for at in graph["ats"]:
-            pc = at["premortem_checks"]
-            self.assertEqual(pc.get("section5_wrong_impl_blocked"), "PARTIAL")
-            self.assertEqual(pc.get("section4_decision_match"), "PARTIAL")
-            self.assertEqual(pc.get("section2_assumptions"), "PARTIAL")
 
     def test_premortem_missing_no_crash(self):
         """When premortem file doesn't exist, premortem fields are absent."""

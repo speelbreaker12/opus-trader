@@ -11,6 +11,7 @@ docs/validation_rules.md
 plans/aggregate_proofs.sh
 plans/artifact_lint.sh
 plans/autofix.sh
+plans/bidi_control_guard.sh
 plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_contract_change_ledger.sh
 plans/check_skip_entrypoint.sh
@@ -60,6 +61,7 @@ plans/prd_preflight.sh
 plans/prd_set_pass.sh
 plans/pre_pr_review_gate.sh
 plans/preflight.sh
+plans/premortem_path_guard.sh
 plans/readme_ci_parity_check.sh
 plans/recon_bundle.sh
 plans/recon_doc_budget.sh
@@ -98,6 +100,7 @@ plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
+plans/tests/test_bidi_control_guard.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
@@ -117,6 +120,7 @@ plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
 plans/tests/test_preflight_fixture_timeout_controls.sh
+plans/tests/test_premortem_path_guard.sh
 plans/tests/test_recon_bundle.sh
 plans/tests/test_recon_doc_budget.sh
 plans/tests/test_recon_evidence_ledger.sh

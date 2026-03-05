@@ -266,6 +266,7 @@ check_file "$CONTRACT_FILE" "Contract spec"
 # Pre-check ensures all scripts exist and are executable before backgrounding (fail-closed).
 PREFLIGHT_GUARD_SCRIPTS=(
   "plans/legacy_layout_guard.sh:Legacy layout guard"
+  "plans/premortem_path_guard.sh:Premortem path canonicalization guard"
   "plans/readme_ci_parity_check.sh:README/CI parity guard"
   "plans/slice_completion_review_guard.sh:Slice completion review guard"
   "plans/story_review_findings_guard.sh:Story findings-review guard"
@@ -440,6 +441,8 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_crossref_invariants.sh"
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
+  "plans/tests/test_bidi_control_guard.sh"
+  "plans/tests/test_premortem_path_guard.sh"
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(
