@@ -502,7 +502,7 @@ For stories reconciled before v1.6, anchors are added during the next reconcilia
 V1+V2 delivers per-story `proof_graph.json` with:
 - **Schema**: Frozen dataclasses with `from_dict()` + deny-unknown-fields, type-safe `_require_bool`/`_require_int` helpers (`schema_version: 1` and `2`)
 - **Validator**: 60 rules (`python/proof_graph/validate.py --strict`) -- enforcement-critical at pass-flip
-- **Scaffolder**: `python/proof_graph/scaffold.py` generates skeleton from prd.json + CONTRACT.md
+- **Initializer**: `python/proof_graph/init.py` generates V2 skeletons from prd.json + `specs/CONTRACT.md` (legacy V1 scaffold tooling remains for historical fixtures)
 - **Gate integration**: `prd_set_pass.sh` validates with `--strict` (exit 1 on validation failure; exit 20 on trading halt)
 - **Legacy exemption**: `plans/proof_graph_exempt.txt` grandfathers existing stories; shrinks via reconciliation
 - **Stdlib-only**: Zero external dependencies

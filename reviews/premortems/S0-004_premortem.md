@@ -103,8 +103,8 @@ Additionally, the P0-E row in the Phase 0 table (CONTRACT.md line ~130) requires
 
 ## 6) Proof plan (AT → enforcement → tests)
 
-> **Proof graph (v1.7)**: This section's data feeds `proof_graph.json`. After implementation, run
-> `python3 python/proof_graph/scaffold.py S0-004` to generate the skeleton, then fill in
+> **Proof graph (v2)**: This section's data feeds `proof_graph.json`. After implementation, run
+> `python3 python/proof_graph/init.py S0-004 --premortem-dir artifacts/story/S0-004/` to generate the skeleton, then fill in
 > verdicts, test names, and wiring status. The validator (`validate.py --strict`) enforces
 > consistency at pass-flip time. See `python/proof_graph/` for schema details.
 
