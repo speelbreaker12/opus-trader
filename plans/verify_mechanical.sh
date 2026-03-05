@@ -229,7 +229,7 @@ CHECKS=$((CHECKS + 1))
 proof_script="$ROOT/plans/tests/test_upgrade_1b_proof.sh"
 if [[ ! -f "$proof_script" ]]; then
   fail "test_upgrade_1b_proof.sh not found — 1B proof gate missing"
-elif bash "$proof_script" 2>&1 | tee /dev/stderr | grep -q "^UPGRADE 1B ARCHITECTURAL PROOF PASSED"; then
+elif bash "$proof_script"; then
   pass "Upgrade 1B architectural proof passed"
 else
   fail "Upgrade 1B architectural proof failed — see output above"

@@ -207,6 +207,7 @@ def test_help_does_not_crash_when_generated_module_is_missing(tmp_path: Path) ->
   ("opens_globally_permitted", False),
   ("open_permission_reason_codes", ["RESTART_RECONCILE_REQUIRED"]),
   ("open_permission_requires_reconcile", True),
+  ("is_trading_allowed", True),
 ])
 def test_foundation_contract_rejects_each_forbidden_csp_key(
   forbidden_key: str,
