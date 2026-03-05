@@ -35,11 +35,10 @@ must_haves:
 ---
 
 <objective>
-Execute CI enforcement hardening from `/Users/admin/.claude/plans/witty-juggling-dongarra.md` with fail-closed safeguards.
+Execute CI enforcement hardening from the owner-provided `witty-juggling-dongarra` plan with fail-closed safeguards.
 </objective>
 
 <context>
-@/Users/admin/.claude/plans/witty-juggling-dongarra.md
 @.planning/STATE.md
 @.github/workflows/ci.yml
 </context>

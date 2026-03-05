@@ -26,6 +26,10 @@ command -v jq >/dev/null || { echo "ABORT: jq not found" >&2; exit 1; }
 
 # Status checks: verify + crossref-gate(app_id 15368)
 CHECKS_JSON=$(gh api "repos/${REPO}/branches/${BRANCH}/protection/required_status_checks")
+echo "$CHECKS_JSON" | jq -e '.strict == true' >/dev/null || {
+  echo "ABORT: required status checks strict mode is not true" >&2
+  exit 1
+}
 echo "$CHECKS_JSON" | jq -e '.checks | any(.[]; .context == "verify")' >/dev/null || {
   echo "ABORT: required check 'verify' missing" >&2
   exit 1

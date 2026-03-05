@@ -1,7 +1,7 @@
 # Quick Task 2 Summary
 
 ## Objective
-Execute CI enforcement hardening from `/Users/admin/.claude/plans/witty-juggling-dongarra.md` with fail-closed safeguards.
+Execute CI enforcement hardening from the owner-provided `witty-juggling-dongarra` plan with fail-closed safeguards.
 
 ## Execution Result
 - Task 1: Complete

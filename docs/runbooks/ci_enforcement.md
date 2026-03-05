@@ -15,6 +15,14 @@ This runbook applies CI governance hardening for `speelbreaker12/opus-trader` fa
 bash scripts/ci_enforcement/preflight_snapshot.sh --repo speelbreaker12/opus-trader --branch main
 ```
 
+Snapshot-only mode:
+
+```bash
+bash scripts/ci_enforcement/preflight_snapshot.sh --repo speelbreaker12/opus-trader --branch main --dry-run
+```
+
+`--dry-run` still reads remote state and writes local snapshot artifacts; it only skips branch-protection write operations.
+
 Expected artifacts:
 - `artifacts/ci_enforcement_backups/protection-raw-<timestamp>.json`
 - `artifacts/ci_enforcement_backups/protection-restore.json`

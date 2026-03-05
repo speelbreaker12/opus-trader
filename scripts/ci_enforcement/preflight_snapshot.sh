@@ -33,7 +33,6 @@ done
 
 command -v gh >/dev/null || { echo "ABORT: gh CLI not found" >&2; exit 1; }
 command -v jq >/dev/null || { echo "ABORT: jq not found" >&2; exit 1; }
-command -v python3 >/dev/null || { echo "ABORT: python3 not found" >&2; exit 1; }
 
 echo "[preflight] gh auth status"
 gh auth status >/dev/null
@@ -64,24 +63,35 @@ fi
 
 echo "[preflight] local crossref-gate job naming check"
 [[ -f .github/workflows/ci.yml ]] || { echo "ABORT: .github/workflows/ci.yml missing" >&2; exit 1; }
-rg -q '^  crossref-gate:' .github/workflows/ci.yml || { echo "ABORT: crossref-gate job name not found in ci.yml" >&2; exit 1; }
+grep -q '^  crossref-gate:' .github/workflows/ci.yml || { echo "ABORT: crossref-gate job name not found in ci.yml" >&2; exit 1; }
 
 echo "[preflight] crossref-gate burn-in evidence check"
 RUN_IDS=$(gh run list --repo "$REPO" --workflow=ci.yml --limit 10 --json databaseId --jq '.[].databaseId')
 FAILURES=0
 SUCCESSES=0
 OBSERVED=0
+PENDING=0
 while IFS= read -r RID; do
   [[ -z "$RID" ]] && continue
-  RESULT=$(gh run view --repo "$REPO" "$RID" --json jobs --jq '.jobs[] | select(.name == "crossref-gate") | .conclusion' 2>/dev/null || true)
+  RESULT=$(gh run view --repo "$REPO" "$RID" --json jobs --jq '[.jobs[] | select(.name == "crossref-gate") | (.conclusion // "pending")] | .[0] // ""' 2>/dev/null || true)
   [[ -z "$RESULT" ]] && continue
-  OBSERVED=$((OBSERVED + 1))
-  if [[ "$RESULT" == "success" ]]; then
-    SUCCESSES=$((SUCCESSES + 1))
-  elif [[ "$RESULT" != "skipped" ]]; then
-    echo "FAIL: crossref-gate run ${RID} concluded: ${RESULT}" >&2
-    FAILURES=$((FAILURES + 1))
-  fi
+  case "$RESULT" in
+    success)
+      SUCCESSES=$((SUCCESSES + 1))
+      OBSERVED=$((OBSERVED + 1))
+      ;;
+    skipped|neutral)
+      OBSERVED=$((OBSERVED + 1))
+      ;;
+    pending|"")
+      PENDING=$((PENDING + 1))
+      ;;
+    *)
+      OBSERVED=$((OBSERVED + 1))
+      echo "FAIL: crossref-gate run ${RID} concluded: ${RESULT}" >&2
+      FAILURES=$((FAILURES + 1))
+      ;;
+  esac
 done <<< "$RUN_IDS"
 
 if [[ "$FAILURES" -gt 0 ]]; then
@@ -93,7 +103,7 @@ if [[ "$SUCCESSES" -lt 3 ]]; then
   exit 1
 fi
 
-echo "[preflight] burn-in OK: successes=${SUCCESSES} observed=${OBSERVED} failures=${FAILURES}"
+echo "[preflight] burn-in OK: successes=${SUCCESSES} observed=${OBSERVED} pending=${PENDING} failures=${FAILURES}"
 
 mkdir -p artifacts/ci_enforcement_backups
 RAW_FILE="artifacts/ci_enforcement_backups/protection-raw-$(date -u +%Y%m%dT%H%M%SZ).json"
@@ -128,10 +138,14 @@ else
 fi
 
 jq --argjson reviews "$REVIEWS_BLOCK" '{
-  required_status_checks: {
-    strict: .required_status_checks.strict,
-    checks: .required_status_checks.checks
-  },
+  required_status_checks: (
+    if .required_status_checks == null then null
+    else {
+      strict: (.required_status_checks.strict // false),
+      checks: (.required_status_checks.checks // [])
+    }
+    end
+  ),
   required_pull_request_reviews: $reviews,
   restrictions: .restrictions,
   enforce_admins: .enforce_admins.enabled,
@@ -146,7 +160,7 @@ jq --argjson reviews "$REVIEWS_BLOCK" '{
 
 BAD_NULLS=$(jq -r '
   [paths(type == "null")] |
-  map(select(. != ["restrictions"] and . != ["required_pull_request_reviews"])) |
+  map(select(. != ["restrictions"] and . != ["required_pull_request_reviews"] and . != ["required_status_checks"])) |
   map(join("."))[]?
 ' "$RESTORE_FILE")
 
@@ -157,7 +171,7 @@ fi
 
 echo "[snapshot] restore payload ready: ${RESTORE_FILE}"
 if [[ "$DRY_RUN" == "1" ]]; then
-  echo "[done] dry-run complete"
+  echo "[done] dry-run snapshot complete (remote state read, local artifacts written, no branch-protection writes)"
 else
   echo "[done] preflight + snapshot complete"
 fi

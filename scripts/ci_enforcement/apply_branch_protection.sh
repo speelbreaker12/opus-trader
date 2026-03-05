@@ -39,7 +39,16 @@ EXISTING=$(gh api "repos/${REPO}/branches/${BRANCH}/protection/required_status_c
 
 BODY=$(jq -n --argjson existing "$EXISTING" '{
   strict: true,
-  checks: (([ $existing[] | select(.context != "crossref-gate") ] + [{"context":"crossref-gate","app_id":15368}]))
+  checks: (
+    (
+      [ $existing[] | select(.context != "verify" and .context != "crossref-gate") ]
+      + [
+        {"context":"verify"},
+        {"context":"crossref-gate","app_id":15368}
+      ]
+    )
+    | unique_by(.context)
+  )
 }')
 
 if [[ "$CHECK_ONLY" == "1" ]]; then
@@ -60,6 +69,11 @@ echo "$BODY" | gh api "repos/${REPO}/branches/${BRANCH}/protection/required_stat
 echo "[apply] required pull request reviews"
 RPR_FILE=$(mktemp)
 RPR_ERR=$(mktemp)
+cleanup_tmp() {
+  rm -f "$RPR_FILE" "$RPR_ERR"
+}
+trap cleanup_tmp EXIT
+
 if gh api "repos/${REPO}/branches/${BRANCH}/protection/required_pull_request_reviews" > "$RPR_FILE" 2>"$RPR_ERR"; then
   RPR_BODY=$(jq '{
     dismiss_stale_reviews: (.dismiss_stale_reviews // false),
@@ -78,7 +92,8 @@ else
 fi
 printf '%s' "$RPR_BODY" | gh api "repos/${REPO}/branches/${BRANCH}/protection/required_pull_request_reviews" --method PATCH --input - >/dev/null
 
-rm -f "$RPR_FILE" "$RPR_ERR"
+trap - EXIT
+cleanup_tmp
 
 echo "[apply] enforce admins"
 gh api "repos/${REPO}/branches/${BRANCH}/protection/enforce_admins" --method POST >/dev/null
