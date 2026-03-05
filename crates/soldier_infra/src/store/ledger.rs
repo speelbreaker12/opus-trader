@@ -46,18 +46,17 @@ pub enum TlsState {
     Filled,
     /// Cancelled (by us or exchange).
     Cancelled,
-    /// Rejected by exchange.
+    /// Dead code — TLSM never produces this state. Use `Failed` for TLSM terminal failures. See CONTRACT §1.2.1.
     ///
     /// **WAL-only state:** The core TLSM maps `TlsmEvent::Rejected` to
     /// `TlsmState::Failed`, so `map_core_tlsm_state` never produces this
-    /// variant.
-    ///
-    /// Legal direct-construction contexts:
-    /// 1) replay of historical WAL records that already contain `Rejected`;
-    /// 2) reconciliation/import paths that intentionally preserve venue-level
-    ///    rejection semantics directly in WAL.
+    /// variant. Retained only for replay of historical WAL records.
     ///
     /// Core TLSM transition sinks MUST NOT emit this variant.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Dead code — TLSM never produces this state. Use `Failed` for TLSM terminal failures. See CONTRACT §1.2.1."
+    )]
     Rejected,
     /// Failed (internal error).
     Failed,

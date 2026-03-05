@@ -70,6 +70,8 @@ pub enum OrderSizeError {
     InvalidNotional(f64),
     /// Computed contracts value overflows i64 range.
     ContractsOverflow { value: f64 },
+    /// Computed contracts value exceeds 2^53, making i64→f64 conversion lossy.
+    ContractsPrecisionLoss { value: f64 },
 }
 
 // TODO(slice-N): Wire into production dispatch — currently only called from unit tests
@@ -116,6 +118,11 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
                     if rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
                         return Err(OrderSizeError::ContractsOverflow { value: rounded });
                     }
+                    // Guard: i64→f64 conversion is lossy for values > 2^53.
+                    // Reject before the cast so downstream float math is precise.
+                    if rounded.abs() > (1i64 << 53) as f64 {
+                        return Err(OrderSizeError::ContractsPrecisionLoss { value: rounded });
+                    }
                     Some(rounded as i64)
                 }
                 None => None,
@@ -147,6 +154,11 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
                     let rounded = (qty_usd / mult).round();
                     if rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
                         return Err(OrderSizeError::ContractsOverflow { value: rounded });
+                    }
+                    // Guard: i64→f64 conversion is lossy for values > 2^53.
+                    // Reject before the cast so downstream float math is precise.
+                    if rounded.abs() > (1i64 << 53) as f64 {
+                        return Err(OrderSizeError::ContractsPrecisionLoss { value: rounded });
                     }
                     Some(rounded as i64)
                 }

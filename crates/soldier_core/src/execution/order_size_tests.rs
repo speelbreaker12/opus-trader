@@ -312,3 +312,58 @@ fn test_order_size_overflow_contracts_returns_err() {
         "expected ContractsOverflow, got {result:?}"
     );
 }
+
+// TODO-13: contracts > 2^53 must be rejected before i64→f64 conversion (precision loss guard)
+
+#[test]
+fn test_contracts_exceeds_f64_precision_limit_rejected_option() {
+    // 2^53 + 1 cannot be represented exactly in f64; i64→f64 conversion is lossy.
+    // canonical_qty / contract_multiplier = (2^53 + 1) * 1.0 = 2^53 + 1 contracts.
+    let contracts_value = (1i64 << 53) + 1;
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: contracts_value as f64, // f64 of 2^53+1 (already imprecise, but still > 2^53)
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsPrecisionLoss { .. })),
+        "contracts exceeding 2^53 must return ContractsPrecisionLoss, got {result:?}"
+    );
+}
+
+#[test]
+fn test_contracts_exceeds_f64_precision_limit_rejected_perpetual() {
+    // Same guard must fire for the Perpetual/InverseFuture arm.
+    let contracts_value = (1i64 << 53) + 1;
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        canonical_qty: contracts_value as f64,
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsPrecisionLoss { .. })),
+        "contracts exceeding 2^53 must return ContractsPrecisionLoss (perpetual), got {result:?}"
+    );
+}
+
+#[test]
+fn test_contracts_at_f64_precision_limit_accepted() {
+    // 2^53 exactly is representable in f64 without loss; must not be rejected.
+    let contracts_value = 1i64 << 53;
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: contracts_value as f64,
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        result.is_ok(),
+        "contracts == 2^53 must be accepted (boundary is exclusive), got {result:?}"
+    );
+    assert_eq!(result.unwrap().contracts, Some(contracts_value));
+}
