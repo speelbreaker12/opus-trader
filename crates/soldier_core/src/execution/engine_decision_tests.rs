@@ -1,13 +1,10 @@
-//! Parity and mapping tests for `ExecutionEngine::decide`.
+//! Tests for `ExecutionEngine::decide` and internal conversion helpers.
 
 use super::*;
 use crate::execution::build_order_intent::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateStep, build_gate_results,
+    ChokeRejectReason, ChokeResult, GateStep, build_gate_results,
 };
-use crate::execution::open_runtime::{
-    OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
-};
-use crate::execution::pipeline::{IntentPipelineMetrics, evaluate_intent_pipeline};
+use crate::execution::open_runtime::OpenRuntimeOutput;
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, MarginGateInput, MarginGateMode, PendingExposureBook,
     ReservationId, RiskState,
@@ -167,57 +164,20 @@ fn make_pending_book(limit: f64) -> PendingExposureBook {
     book
 }
 
-fn legacy_open_decision(
-    input: &OpenExecutionInput<'_>,
-    pending_book: &PendingExposureBook,
-    wal_recorded: bool,
-) -> ExecutionDecision {
-    let legacy_input = build_open_runtime_input(input, wal_recorded);
-    let mut choke_metrics = ChokeMetrics::new();
-    let mut runtime_metrics = OpenRuntimeMetrics::default();
-    let output = build_open_order_intent_runtime(
-        &legacy_input,
-        pending_book,
-        &mut choke_metrics,
-        &mut runtime_metrics,
-    );
-    open_runtime_to_decision(input, &output)
-}
-
-fn legacy_pipeline_decision(
-    input: &ExecutionBaseInput<'_>,
-    intent_class: ChokeIntentClass,
-    wal_recorded: bool,
-) -> ExecutionDecision {
-    let legacy_input = build_pipeline_input(input, intent_class, wal_recorded);
-    let mut metrics = IntentPipelineMetrics::new();
-    let result = evaluate_intent_pipeline(&legacy_input, &mut metrics);
-    pipeline_result_to_decision(
-        result.decision,
-        result.reject_reason_code,
-        input.risk_state,
-        &GateRejectCodes::default(),
-    )
-}
-
 #[test]
-fn engine_open_approved_matches_legacy_path() {
+fn engine_open_approved_with_all_fields() {
     let input = base_open_input();
-    let legacy_book = make_pending_book(100.0);
     let engine_book = make_pending_book(100.0);
-
-    let legacy = legacy_open_decision(&input, &legacy_book, true);
 
     let engine = ExecutionEngine::new();
     let engine_input = ExecutionInput::Open(input);
     let mut wal_gate = OkWalGate { calls: 0 };
     let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
-    let delegated = engine.decide(&engine_input, &mut runtime);
+    let decision = engine.decide(&engine_input, &mut runtime);
 
-    assert_eq!(delegated, legacy);
     assert_eq!(wal_gate.calls, 1, "open path should consult WAL gate once");
 
-    match delegated {
+    match decision {
         ExecutionDecision::Approved(approved) => {
             assert_eq!(approved.effective_risk_state, RiskState::Healthy);
             assert!(approved.pending_reservation_id.is_some());
@@ -232,19 +192,15 @@ fn engine_open_rejected_global_budget_maps_runtime_step() {
     let mut input = base_open_input();
     input.exposure_budget.global_delta_limit_usd = Some(5.0);
 
-    let legacy_book = make_pending_book(100.0);
     let engine_book = make_pending_book(100.0);
-
-    let legacy = legacy_open_decision(&input, &legacy_book, true);
 
     let engine = ExecutionEngine::new();
     let mut wal_gate = OkWalGate { calls: 0 };
     let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
-    let delegated = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
 
-    assert_eq!(delegated, legacy);
     assert!(matches!(
-        delegated,
+        decision,
         ExecutionDecision::Rejected(ExecutionRejection {
             code: RejectReasonCode::GlobalExposureBudgetExceeded,
             step: ExecutionStep::Runtime(RuntimeStep::GlobalExposureBudget),
@@ -256,19 +212,15 @@ fn engine_open_rejected_global_budget_maps_runtime_step() {
 #[test]
 fn engine_open_rejected_pending_exposure_maps_runtime_step() {
     let input = base_open_input();
-    let legacy_book = make_pending_book(5.0);
     let engine_book = make_pending_book(5.0);
-
-    let legacy = legacy_open_decision(&input, &legacy_book, true);
 
     let engine = ExecutionEngine::new();
     let mut wal_gate = OkWalGate { calls: 0 };
     let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
-    let delegated = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
 
-    assert_eq!(delegated, legacy);
     assert!(matches!(
-        delegated,
+        decision,
         ExecutionDecision::Rejected(ExecutionRejection {
             code: RejectReasonCode::PendingExposureBudgetExceeded,
             step: ExecutionStep::Runtime(RuntimeStep::PendingExposure),
@@ -314,37 +266,58 @@ fn engine_open_without_wal_gate_fails_recorded_before_dispatch() {
 }
 
 #[test]
-fn engine_close_wal_failure_is_non_blocking_and_matches_legacy() {
+fn engine_close_wal_failure_is_non_blocking() {
     let base = base_execution_input_with_risk_state(RiskState::Degraded);
-
-    let legacy = legacy_pipeline_decision(&base, ChokeIntentClass::Close, true);
 
     let engine = ExecutionEngine::new();
     let engine_input = ExecutionInput::Close(CloseExecutionInput { base });
     let mut wal_gate = ErrWalGate { calls: 0 };
     let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
-    let delegated = engine.decide(&engine_input, &mut runtime);
+    let decision = engine.decide(&engine_input, &mut runtime);
 
-    assert_eq!(delegated, legacy);
     assert_eq!(wal_gate.calls, 1, "close path should attempt WAL once");
-    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+    assert!(matches!(decision, ExecutionDecision::Approved(_)));
 }
 
 #[test]
-fn engine_hedge_rejected_quantize_matches_legacy() {
+fn engine_close_wal_failure_emits_csp32_visibility_metric() {
+    let _metrics_guard = crate::execution::METRICS_TEST_LOCK
+        .lock()
+        .expect("metrics test lock poisoned");
+    let _ = crate::execution::take_execution_metric_lines();
+
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Close(CloseExecutionInput { base });
+    let mut wal_gate = ErrWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
+
+    let delegated = engine.decide(&engine_input, &mut runtime);
+    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+    assert_eq!(wal_gate.calls, 1, "close path should attempt WAL once");
+
+    let lines = crate::execution::take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
+                && line.contains("intent_class=Close")
+        }),
+        "expected CSP.3.2 non-blocking WAL visibility metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn engine_hedge_rejected_quantize() {
     let mut base = base_execution_input_with_risk_state(RiskState::Degraded);
     base.quantize.raw_qty = 0.01;
-
-    let legacy = legacy_pipeline_decision(&base, ChokeIntentClass::Hedge, true);
 
     let engine = ExecutionEngine::new();
     let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { base });
     let mut runtime = ExecutionRuntime::default();
-    let delegated = engine.decide(&engine_input, &mut runtime);
+    let decision = engine.decide(&engine_input, &mut runtime);
 
-    assert_eq!(delegated, legacy);
     assert!(matches!(
-        delegated,
+        decision,
         ExecutionDecision::Rejected(ExecutionRejection {
             code: RejectReasonCode::TooSmallAfterQuantization,
             step: ExecutionStep::Gate(GateStep::Quantize),
@@ -370,20 +343,6 @@ fn engine_cancel_short_circuits_and_skips_wal() {
         wal_gate.calls, 0,
         "cancel path must not consult recorded-before-dispatch gate"
     );
-}
-
-#[test]
-fn execution_engine_evaluate_alias_matches_decide() {
-    let base = base_execution_input();
-    let input = ExecutionInput::Close(CloseExecutionInput { base });
-    let engine = ExecutionEngine::new();
-    let mut runtime_for_decide = ExecutionRuntime::default();
-    let mut runtime_for_evaluate = ExecutionRuntime::default();
-
-    let decide = engine.decide(&input, &mut runtime_for_decide);
-    let evaluate = engine.evaluate(&input, &mut runtime_for_evaluate);
-
-    assert_eq!(evaluate, decide);
 }
 
 #[test]
