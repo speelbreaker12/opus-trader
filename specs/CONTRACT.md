@@ -3216,6 +3216,14 @@ Profile: CSP
   - `wal_queue_capacity` (max items in the WAL queue)
   - `wal_queue_enqueue_failures` (monotonic counter of failed enqueues)
 
+> **Architecture boundary (Normative):** The fsync/durability barrier MUST execute
+> in the WAL writer task (a separate async task), NOT in the hot loop that calls
+> `RecordedBeforeDispatch`. The hot-loop gate succeeds upon successful **enqueue**
+> into the bounded channel. If the channel is full, the gate MUST fail closed
+> (reject OPEN). The WAL writer task may block on fsync with a bounded timeout;
+> if fsync times out or errors, the writer MUST signal degraded state and the next
+> OPEN gate attempt MUST fail closed.
+
 **Hot-loop output queue backpressure (Non-Negotiable):**
 - All hot-loop output queues (status writer, telemetry, order events) MUST be bounded.
 - If any such queue is full, the hot loop MUST NOT block and MUST force ReduceOnly until backlog clears.
@@ -4565,6 +4573,12 @@ AT-973
 Profile: GOP
 
 ### **Phase 1: Foundation (Non-Deployable)**
+
+> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema,
+> WAL/durable ledger, Liquidity Gate) satisfy **both** `Profile: GOP` (roadmap
+> milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete
+> only when the CSP-scoped acceptance tests for these components pass (see Phase 1
+> AT Subset). Tagging as GOP does not relax CSP obligations for these deliverables.
 
 * Instrument metadata + canonical quantization.
 * `s4:` label schema + parser.

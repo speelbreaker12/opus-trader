@@ -6,9 +6,28 @@
 //! - Fill-before-ack from Sent produces OutOfOrder, not panic.
 //! - Transition count == number of non-Ignored events.
 //! - State after terminal event remains terminal for all future events.
+//!
+//! NOTE: `Tlsm::apply()` is `#[cfg(test)]`-gated on the library and therefore
+//! unavailable here. All state-driving calls use `apply_with_sink` with a local
+//! `NoopSink` helper defined below.
 
 use proptest::prelude::*;
-use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
+use soldier_core::execution::{PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult};
+
+/// Local no-op sink — for test setup only. Production callers must supply a
+/// durable WAL sink.
+struct NoopSink;
+impl TlsmTransitionSink for NoopSink {
+    fn append_transition(&mut self, _t: PersistedTransition) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// Convenience wrapper: drive `sm` through `event` using the local no-op sink.
+fn drive(sm: &mut Tlsm, event: TlsmEvent) -> TransitionResult {
+    sm.apply_with_sink(event, &mut NoopSink)
+        .expect("NoopSink never fails")
+}
 
 fn event_strategy() -> impl Strategy<Value = TlsmEvent> {
     prop_oneof![
@@ -39,7 +58,7 @@ proptest! {
     fn never_panics_on_arbitrary_sequence(events in event_sequence(50)) {
         let mut tlsm = Tlsm::new();
         for event in events {
-            let _ = tlsm.apply(event);
+            let _ = drive(&mut tlsm, event);
         }
     }
 
@@ -53,7 +72,7 @@ proptest! {
 
         // Apply prefix events
         for event in &prefix {
-            let _ = tlsm.apply(event.clone());
+            let _ = drive(&mut tlsm, event.clone());
         }
 
         // If we're in a terminal state, all future events must be Ignored
@@ -62,7 +81,7 @@ proptest! {
             let transition_count_before = tlsm.transition_count();
 
             for event in suffix {
-                let result = tlsm.apply(event);
+                let result = drive(&mut tlsm, event);
                 prop_assert!(
                     matches!(result, TransitionResult::Ignored { .. }),
                     "terminal state {:?} did not ignore event, got {:?}",
@@ -77,14 +96,14 @@ proptest! {
         }
     }
 
-    /// Transition count equals the number of non-Ignored apply() results.
+    /// Transition count equals the number of non-Ignored apply_with_sink() results.
     #[test]
     fn transition_count_matches_non_ignored(events in event_sequence(30)) {
         let mut tlsm = Tlsm::new();
         let mut expected_count = 0_usize;
 
         for event in events {
-            let result = tlsm.apply(event);
+            let result = drive(&mut tlsm, event);
             match result {
                 TransitionResult::Transitioned { .. } | TransitionResult::OutOfOrder { .. } => {
                     expected_count += 1;
@@ -108,13 +127,13 @@ proptest! {
     ]) {
         let mut tlsm = Tlsm::new();
         // Move to Sent state
-        let sent_result = tlsm.apply(TlsmEvent::Sent);
+        let sent_result = drive(&mut tlsm, TlsmEvent::Sent);
         let is_transitioned = matches!(sent_result, TransitionResult::Transitioned { .. });
         prop_assert!(is_transitioned, "Sent should produce Transitioned");
         prop_assert_eq!(tlsm.state(), TlsmState::Sent);
 
         // Fill/PartialFill before Ack should be OutOfOrder
-        let result = tlsm.apply(event);
+        let result = drive(&mut tlsm, event);
         prop_assert!(
             matches!(result, TransitionResult::OutOfOrder { .. }),
             "fill-before-ack should be OutOfOrder, got {:?}", result
@@ -128,7 +147,7 @@ proptest! {
         let mut reached_terminal = false;
 
         for event in events {
-            let _ = tlsm.apply(event);
+            let _ = drive(&mut tlsm, event);
             if tlsm.state().is_terminal() {
                 reached_terminal = true;
             }
@@ -155,7 +174,7 @@ proptest! {
         let mut tlsm = Tlsm::new();
         let events = vec![TlsmEvent::Sent, TlsmEvent::Acked, TlsmEvent::Filled];
         for event in events {
-            let result = tlsm.apply(event);
+            let result = drive(&mut tlsm, event);
             prop_assert!(
                 matches!(result, TransitionResult::Transitioned { .. }),
                 "happy path event should be Transitioned, got {:?}", result

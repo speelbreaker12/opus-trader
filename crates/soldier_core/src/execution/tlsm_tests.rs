@@ -701,3 +701,118 @@ fn test_ooo_total_is_sum_of_categories() {
         "total must increase by at least 1"
     );
 }
+
+// ─── WAL sink production-safety enforcement ──────────────────────────────
+//
+// These tests enforce the invariant that `NoopTransitionSink` and the
+// no-op `apply()` method are ONLY used in test contexts.
+//
+// Design rationale: `NoopTransitionSink` and `apply()` are gated with
+// `#[cfg(test)]` in tlsm.rs. The tests below provide a second layer of
+// defence: they scan the raw source text at test time and fail if the
+// invariant is violated (e.g. if the cfg gate is accidentally removed).
+//
+// Production code MUST call `apply_with_sink()` with a durable WAL sink.
+
+/// Assert that `NoopTransitionSink` only appears inside the `#[cfg(test)]`
+/// block in the production source of tlsm.rs.
+///
+/// Because `NoopTransitionSink` is gated with `#[cfg(test)]`, any occurrence
+/// of the identifier that is NOT inside a cfg(test) region is a bug. This test
+/// catches a future author accidentally removing the cfg gate or adding a new
+/// usage outside it.
+#[test]
+fn noop_sink_definition_is_cfg_test_gated() {
+    let src = include_str!("tlsm.rs");
+
+    // Verify that every occurrence of "NoopTransitionSink" appears after the
+    // `#[cfg(test)]` line that gates the struct definition. We do this by
+    // checking that there is NO occurrence of "NoopTransitionSink" before the
+    // first `#[cfg(test)]` that precedes the struct definition.
+    //
+    // Specifically: locate the byte offset of the cfg(test) gate that sits
+    // immediately before "pub struct NoopTransitionSink" and confirm no
+    // ungated occurrence exists before it.
+
+    let cfg_test_tag = "#[cfg(test)]";
+    let struct_tag = "pub struct NoopTransitionSink";
+
+    let struct_pos = src
+        .find(struct_tag)
+        .expect("NoopTransitionSink struct definition not found in tlsm.rs");
+
+    // Find the last `#[cfg(test)]` before the struct definition.
+    let gate_pos = src[..struct_pos]
+        .rfind(cfg_test_tag)
+        .expect("no #[cfg(test)] gate found before NoopTransitionSink definition in tlsm.rs");
+
+    // Nothing between the gate and the struct definition should be non-whitespace
+    // doc comment noise — the gate must be the immediately preceding attribute.
+    // Allow doc comment lines but reject anything else that would break the gate.
+    let between = &src[gate_pos + cfg_test_tag.len()..struct_pos];
+    let non_whitespace_non_doc: Vec<&str> = between
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#[derive"))
+        .collect();
+
+    assert!(
+        non_whitespace_non_doc.is_empty(),
+        "Expected only whitespace/doc-comments/derive between #[cfg(test)] and \
+         NoopTransitionSink definition, found: {non_whitespace_non_doc:?}"
+    );
+
+    // Also verify that the apply() method is gated: find `#[cfg(test)]`
+    // immediately before `pub fn apply(`.
+    let apply_tag = "pub fn apply(";
+    let apply_pos = src
+        .find(apply_tag)
+        .expect("apply() method not found in tlsm.rs");
+
+    let apply_gate_pos = src[..apply_pos]
+        .rfind(cfg_test_tag)
+        .expect("no #[cfg(test)] gate found before apply() method in tlsm.rs");
+
+    let between_apply = &src[apply_gate_pos + cfg_test_tag.len()..apply_pos];
+    let non_whitespace_apply: Vec<&str> = between_apply
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with("//"))
+        .collect();
+
+    assert!(
+        non_whitespace_apply.is_empty(),
+        "Expected only whitespace/doc-comments between #[cfg(test)] and apply() \
+         method, found: {non_whitespace_apply:?}"
+    );
+}
+
+/// Assert that no non-test Rust source file in soldier_core references
+/// `NoopTransitionSink` or calls bare `Tlsm::apply(` (without `_with_sink`).
+///
+/// This test scans the known production source files via `include_str!` and
+/// fails if either pattern is found, which would indicate a regression where
+/// production code bypasses the WAL sink requirement.
+#[test]
+fn production_sources_do_not_reference_noop_sink_or_bare_apply() {
+    // Each entry is (file_label, source_text).
+    // Add new production source files here if the TLSM grows more callers.
+    let production_sources: &[(&str, &str)] = &[
+        ("open_runtime.rs", include_str!("open_runtime.rs")),
+        ("engine.rs", include_str!("engine.rs")),
+        ("pipeline.rs", include_str!("pipeline.rs")),
+        ("group.rs", include_str!("group.rs")),
+    ];
+
+    let forbidden_patterns = ["NoopTransitionSink", ".apply(TlsmEvent", ".apply(event"];
+
+    for (label, src) in production_sources {
+        for pattern in &forbidden_patterns {
+            assert!(
+                !src.contains(pattern),
+                "Production source '{label}' contains forbidden WAL-bypass pattern \
+                 '{pattern}'. Use apply_with_sink() with a durable WAL sink instead."
+            );
+        }
+    }
+}

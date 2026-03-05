@@ -201,6 +201,7 @@ fn test_real_record_construction_persists_reduce_only_by_intent_class() {
         ("open", LifecycleIntent::Open, false),
         ("close", LifecycleIntent::Close, true),
         ("hedge", LifecycleIntent::Hedge, true),
+        ("cancel", LifecycleIntent::Cancel, true),
     ];
 
     for (label, lifecycle_intent, expected_reduce_only) in cases {
