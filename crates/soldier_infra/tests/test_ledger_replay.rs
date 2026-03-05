@@ -365,6 +365,33 @@ fn test_record_has_all_required_fields() {
     assert_eq!(r.last_trade_id, Some("TR456".to_string()));
 }
 
+#[test]
+fn test_legacy_record_missing_reduce_only_defaults_fail_closed() {
+    let legacy = serde_json::json!({
+        "intent_hash": "legacy-1",
+        "group_id": "group1",
+        "leg_idx": 0,
+        "instrument": "BTC-PERP",
+        "side": "buy",
+        "qty_q": 1.0,
+        "limit_price_q": 50000.0,
+        "tls_state": "Created",
+        "created_ts": 1000,
+        "sent_ts": 0,
+        "ack_ts": 0,
+        "last_fill_ts": 0,
+        "exchange_order_id": null,
+        "last_trade_id": null
+    });
+
+    let parsed: IntentRecord =
+        serde_json::from_value(legacy).expect("legacy record without reduce_only should parse");
+    assert!(
+        parsed.reduce_only,
+        "legacy record missing reduce_only must default fail-closed"
+    );
+}
+
 // ─── TLSM transition validation ──────────────────────────────────────────
 
 #[test]

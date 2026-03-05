@@ -24,6 +24,11 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
+fn default_reduce_only_legacy() -> bool {
+    // Fail-closed for legacy WAL lines missing reduce_only: classify as risk-reducing.
+    true
+}
+
 // ─── TLSM State ─────────────────────────────────────────────────────────
 
 /// Trade Lifecycle State Machine states per CONTRACT.md §2.1.
@@ -132,8 +137,8 @@ pub struct IntentRecord {
     /// `false` => OPEN-class intent.
     ///
     /// Backward compatibility: older WAL lines missing this field default to
-    /// `false` (conservative OPEN classification).
-    #[serde(default)]
+    /// `true` (fail-closed reduce-only classification).
+    #[serde(default = "default_reduce_only_legacy")]
     pub reduce_only: bool,
     /// Quantized quantity.
     pub qty_q: f64,
