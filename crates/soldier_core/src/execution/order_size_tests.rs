@@ -381,5 +381,8 @@ fn test_contracts_at_f64_precision_limit_accepted() {
         result.is_ok(),
         "contracts == 2^53 must be accepted (boundary is exclusive), got {result:?}"
     );
-    assert_eq!(result.unwrap().contracts, Some(contracts_value));
+    assert_eq!(
+        result.as_ref().map(|size| size.contracts),
+        Ok(Some(contracts_value))
+    );
 }

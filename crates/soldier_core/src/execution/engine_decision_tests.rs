@@ -281,9 +281,10 @@ fn engine_close_wal_failure_is_non_blocking() {
 
 #[test]
 fn engine_close_wal_failure_emits_csp32_visibility_metric() {
-    let _metrics_guard = crate::execution::METRICS_TEST_LOCK
-        .lock()
-        .expect("metrics test lock poisoned");
+    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     let _ = crate::execution::take_execution_metric_lines();
 
     let base = base_execution_input_with_risk_state(RiskState::Degraded);
@@ -331,9 +332,10 @@ fn engine_hedge_wal_failure_emits_csp32_visibility_metric() {
     // AT-CSP32-HEDGE: Hedge shares the Close|Hedge branch in pipeline_wal_recorded.
     // A WAL failure must be non-blocking AND must emit a metric line with intent_class=Hedge,
     // proving both branches of the shared path are independently observable.
-    let _metrics_guard = crate::execution::METRICS_TEST_LOCK
-        .lock()
-        .expect("metrics test lock poisoned");
+    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     let _ = crate::execution::take_execution_metric_lines();
 
     let base = base_execution_input_with_risk_state(RiskState::Degraded);
