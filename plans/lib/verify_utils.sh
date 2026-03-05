@@ -133,7 +133,7 @@ run_logged() {
   shift 2
   local logfile="${VERIFY_ARTIFACTS_DIR}/${name}.log"
   local rc=0
-  local start_time end_time elapsed
+  local start_seconds elapsed
 
   if [[ "$ENABLE_TIMEOUTS" == "1" && -n "$duration" && -z "$TIMEOUT_BIN" && "$TIMEOUT_WARNED" == "0" ]]; then
     warn "timeout not available; running without time limits (install coreutils for gtimeout on macOS)"
@@ -141,7 +141,7 @@ run_logged() {
   fi
 
   # Timing instrumentation
-  start_time=$(date +%s)
+  start_seconds=$SECONDS
 
   if [[ "$VERIFY_CONSOLE" == "verbose" ]]; then
     if [[ "$VERIFY_LOG_CAPTURE" == "1" ]]; then
@@ -165,8 +165,7 @@ run_logged() {
   fi
 
   # Timing instrumentation: write elapsed time
-  end_time=$(date +%s)
-  elapsed=$((end_time - start_time))
+  elapsed=$((SECONDS - start_seconds))
   echo "$elapsed" > "${VERIFY_ARTIFACTS_DIR}/${name}.time"
 
   # WRITE .rc FOR ALL GATES (pass or fail) - immediately after rc is known

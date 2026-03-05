@@ -41,6 +41,25 @@ rewrite_fixture_arrays() {
   mv "$tmp_file" "$file"
 }
 
+rewrite_supports_wait_n_to_false() {
+  local file="$1"
+  local tmp_file="$file.tmp"
+  awk '
+    BEGIN {in_fn=0}
+    /^supports_wait_n\(\) \{/ {
+      print "supports_wait_n() {"
+      print "  return 1"
+      print "}"
+      in_fn=1
+      next
+    }
+    in_fn && /^}$/ {in_fn=0; next}
+    in_fn {next}
+    {print}
+  ' "$file" > "$tmp_file"
+  mv "$tmp_file" "$file"
+}
+
 rewrite_fixture_arrays "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
 
@@ -88,6 +107,91 @@ EOF
   git config user.name "fixture"
   git config user.email "fixture@example.com"
 )
+
+invalid_wait_mode_log="$tmp_dir/invalid_wait_mode.log"
+set +e
+(
+  cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_WAIT_N_MODE=broken \
+  ./plans/preflight.sh >"$invalid_wait_mode_log" 2>&1
+)
+invalid_wait_mode_rc=$?
+set -e
+[[ "$invalid_wait_mode_rc" -eq 2 ]] || fail "expected invalid wait mode to fail-closed with rc=2, got $invalid_wait_mode_rc"
+grep -Fq "Invalid PREFLIGHT_WAIT_N_MODE='broken'" "$invalid_wait_mode_log" \
+  || fail "missing invalid wait-mode diagnostics"
+
+force_wait_n_script="$repo/plans/preflight_force_wait_n_unsupported.sh"
+cp "$repo/plans/preflight.sh" "$force_wait_n_script"
+rewrite_supports_wait_n_to_false "$force_wait_n_script"
+chmod +x "$force_wait_n_script"
+
+force_on_unsupported_log="$tmp_dir/force_on_unsupported.log"
+set +e
+(
+  cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_WAIT_N_MODE=force_on \
+  "$force_wait_n_script" >"$force_on_unsupported_log" 2>&1
+)
+force_on_unsupported_rc=$?
+set -e
+[[ "$force_on_unsupported_rc" -eq 2 ]] \
+  || fail "expected force_on without wait -n support to fail-closed with rc=2, got $force_on_unsupported_rc"
+grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log" \
+  || fail "missing force_on unsupported diagnostics"
+
+mock_fast_hash_git_bin="$tmp_dir/mock_fast_hash_git_bin"
+mkdir -p "$mock_fast_hash_git_bin"
+cat > "$mock_fast_hash_git_bin/git" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+real_git="$(
+  command -v git
+)"
+if [[ "\${1:-}" == "diff" && "\${2:-}" == "--quiet" ]]; then
+  exit 0
+fi
+if [[ "\${1:-}" == "ls-files" ]]; then
+  if [[ "\${2:-}" == "--others" ]]; then
+    exit 0
+  fi
+  if [[ "\${2:-}" == "--" ]]; then
+    # Degenerate fast-path list: helper must reject this and fallback.
+    printf '   \\n'
+    exit 0
+  fi
+fi
+exec "\$real_git" "\$@"
+EOF
+chmod +x "$mock_fast_hash_git_bin/git"
+
+mkdir -p "$repo/.cache"
+printf '%s\n' 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' \
+  > "$repo/.cache/preflight_fixtures_smoke.hash"
+
+degenerate_fast_hash_log="$tmp_dir/degenerate_fast_hash.log"
+set +e
+(
+  cd "$repo"
+  PATH="$mock_fast_hash_git_bin:$PATH" \
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=0 \
+  DUMMY_EXIT_CODE=1 \
+  ./plans/preflight.sh >"$degenerate_fast_hash_log" 2>&1
+)
+degenerate_fast_hash_rc=$?
+set -e
+[[ "$degenerate_fast_hash_rc" -eq 1 ]] \
+  || fail "expected degenerate fast hash input to fallback and run fixture (rc=1), got $degenerate_fast_hash_rc"
+if grep -Fq "Fixture tests (cached, 1 tests)" "$degenerate_fast_hash_log"; then
+  fail "degenerate fast hash must not produce a cached fixture skip"
+fi
+grep -Fq "Fixture test failed: plans/tests/test_dummy_sleep.sh (rc=1" "$degenerate_fast_hash_log" \
+  || fail "expected failing fixture to run after fast-hash rejection"
 
 invalid_log="$tmp_dir/invalid_timeout.log"
 set +e

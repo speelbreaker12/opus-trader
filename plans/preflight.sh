@@ -65,31 +65,75 @@ elif command -v gtimeout >/dev/null 2>&1; then
   _TIMEOUT_BIN="gtimeout"
 fi
 
-now_monotonic_ns() {
+supports_wait_n() {
+  local wait_help_text=""
+
+  if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
+    return 1
+  fi
+  if [[ "${BASH_VERSINFO[0]:-0}" -eq 4 ]] && [[ "${BASH_VERSINFO[1]:-0}" -lt 3 ]]; then
+    return 1
+  fi
+  # Use the builtin explicitly so BASH_ENV function shadowing cannot spoof
+  # wait -n support detection.
+  if builtin help wait >/dev/null 2>&1; then
+    wait_help_text="$(builtin help wait 2>/dev/null || true)"
+    grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)' <<< "$wait_help_text"
+    return $?
+  fi
+  # If help text is unavailable on an otherwise compatible bash version,
+  # trust version gating above.
+  return 0
+}
+
+select_monotonic_backend() {
   local ns=""
 
   ns="$(date +%s%N 2>/dev/null || true)"
   if [[ "$ns" =~ ^[0-9]+$ ]] && [[ ${#ns} -gt 10 ]]; then
-    echo "$ns"
+    echo "date_ns"
     return 0
   fi
 
   if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import time; print(time.monotonic_ns())'
+    echo "python3"
     return 0
   fi
 
   if command -v python >/dev/null 2>&1; then
-    python -c 'import time; print(int(time.monotonic() * 1000000000))'
+    echo "python"
     return 0
   fi
 
   if command -v perl >/dev/null 2>&1; then
-    perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+    echo "perl"
     return 0
   fi
 
-  printf '%s000000000\n' "$(date +%s)"
+  echo "epoch_seconds"
+}
+
+MONOTONIC_BACKEND="$(select_monotonic_backend)"
+MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"
+
+now_monotonic_ns() {
+  case "$MONOTONIC_BACKEND" in
+    date_ns)
+      date +%s%N 2>/dev/null || printf '%s000000000\n' "$(date +%s)"
+      ;;
+    python3)
+      python3 -c 'import time; print(time.monotonic_ns())'
+      ;;
+    python)
+      python -c 'import time; print(int(time.monotonic() * 1000000000))'
+      ;;
+    perl)
+      perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+      ;;
+    *)
+      printf '%s000000000\n' "$(date +%s)"
+      ;;
+  esac
 }
 
 # --- Counters ---
@@ -118,6 +162,61 @@ setup_fail() {
 warn() {
   echo "[WARN] $*" >&2
   ((WARN_COUNT++)) || true
+}
+
+PREFLIGHT_WAIT_N_MODE="${PREFLIGHT_WAIT_N_MODE:-auto}"
+case "$PREFLIGHT_WAIT_N_MODE" in
+  auto|force_on|force_off) ;;
+  *)
+    setup_fail "Invalid PREFLIGHT_WAIT_N_MODE='$PREFLIGHT_WAIT_N_MODE' (expected auto|force_on|force_off)"
+    ;;
+esac
+
+PREFLIGHT_WAIT_N_SUPPORTED=0
+if supports_wait_n; then
+  PREFLIGHT_WAIT_N_SUPPORTED=1
+fi
+
+PREFLIGHT_WAIT_N_USE=0
+if [[ "$PREFLIGHT_WAIT_N_MODE" == "force_on" ]]; then
+  if [[ "$PREFLIGHT_WAIT_N_SUPPORTED" == "1" ]]; then
+    PREFLIGHT_WAIT_N_USE=1
+  else
+    setup_fail "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support"
+  fi
+elif [[ "$PREFLIGHT_WAIT_N_MODE" == "force_off" ]]; then
+  PREFLIGHT_WAIT_N_USE=0
+elif [[ "$PREFLIGHT_WAIT_N_SUPPORTED" == "1" ]]; then
+  PREFLIGHT_WAIT_N_USE=1
+fi
+
+prune_fixture_pids_once() {
+  local alive=()
+  local pid=""
+  for pid in "${fixture_pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      alive+=("$pid")
+    fi
+  done
+  fixture_pids=("${alive[@]}")
+}
+
+wait_for_fixture_slot() {
+  if [[ "$PREFLIGHT_WAIT_N_USE" == "1" ]]; then
+    if [[ ${#fixture_pids[@]} -gt 0 ]]; then
+      wait -n "${fixture_pids[@]}" 2>/dev/null || true
+    fi
+    prune_fixture_pids_once
+    return 0
+  fi
+
+  while true; do
+    prune_fixture_pids_once
+    if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
+      break
+    fi
+    sleep 0.2
+  done
 }
 
 # =============================================================================
@@ -236,16 +335,43 @@ done
 # Tier 2: Fast checks (<30s)
 # =============================================================================
 
-# 4. Shell syntax: bash -n plans/*.sh
+# 4. Shell syntax: authoritative per-file parse (fail-closed on setup errors)
 SHELL_SYNTAX_OK=1
 SHELL_ERRORS=()
 if compgen -G "plans/*.sh" >/dev/null; then
-  for f in plans/*.sh; do
-    if ! bash -n "$f" 2>/dev/null; then
-      SHELL_SYNTAX_OK=0
-      SHELL_ERRORS+=("$f")
-    fi
-  done
+  SHELL_SYNTAX_CHECKER=""
+  if ! SHELL_SYNTAX_CHECKER="$(command -v bash 2>/dev/null)"; then
+    SHELL_SYNTAX_CHECKER=""
+  fi
+  if [[ -z "$SHELL_SYNTAX_CHECKER" ]]; then
+    setup_fail "Shell syntax setup failed (missing bash)"
+    SHELL_ERRORS+=("<shell-syntax-setup>")
+    SHELL_SYNTAX_OK=0
+  else
+    # Authoritative check: every plans/*.sh file must parse on its own.
+    for f in plans/*.sh; do
+      if "$SHELL_SYNTAX_CHECKER" -n "$f" >/dev/null 2>&1; then
+        _shell_syntax_rc=0
+      else
+        _shell_syntax_rc=$?
+      fi
+      if [[ "$_shell_syntax_rc" -eq 0 ]]; then
+        continue
+      fi
+      case "$_shell_syntax_rc" in
+        2)
+          SHELL_SYNTAX_OK=0
+          SHELL_ERRORS+=("$f")
+          ;;
+        *)
+          setup_fail "Shell syntax setup failed while checking $f (bash -n rc=$_shell_syntax_rc)"
+          SHELL_ERRORS+=("<shell-syntax-setup>")
+          SHELL_SYNTAX_OK=0
+          break
+          ;;
+      esac
+    done
+  fi
 fi
 
 if [[ "$SHELL_SYNTAX_OK" == "1" ]]; then
@@ -287,9 +413,12 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_preflight_fixture_timeout_controls.sh"
+  "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
+  "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
+  "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"
   "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_contract_profile_parity.sh"
@@ -359,14 +488,36 @@ else
   _cache_file="$_cache_dir/preflight_fixtures_${PREFLIGHT_FIXTURE_MODE}.hash"
   _cache_hit=0
 
-  _compute_fixture_hash() {
-    # Deterministic: sorted file list, content-addressed.
-    # Uses xargs to batch shasum calls (avoids per-file process spawn).
+  _compute_fixture_hash_from_list() {
+    local _file_list="$1"
+    local _normalized_list=""
+    local _hash=""
+
+    _normalized_list="$(printf '%s\n' "$_file_list" | LC_ALL=C sort -u | sed '/^[[:space:]]*$/d')" || return 1
+    [[ -n "$_normalized_list" ]] || return 1
+
+    _hash="$(
+      printf '%s\n' "$_normalized_list" \
+        | xargs shasum -a 256 2>/dev/null \
+        | shasum -a 256 \
+        | cut -d' ' -f1
+    )" || return 1
+
+    [[ "$_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+    printf '%s\n' "$_hash"
+  }
+
+  _compute_fixture_hash_fallback() {
+    local _fallback_file_list=""
+    local _fallback_hash=""
+
+    # Deterministic fallback: sorted file list, content-addressed.
     # Broad scope: includes all files that fixture tests may depend on —
     #   plans/ (all file types: .sh, .json, .txt, .md), specs/, SKILLS/,
     #   tools/, scripts/. This prevents stale cache when non-code config
     #   files (allowlists, evidence sources, workflow contract, etc.) change.
-    {
+    _fallback_file_list="$(
+      {
       [[ -d plans ]] && find plans -maxdepth 1 -type f 2>/dev/null
       [[ -d plans/lib ]] && find plans/lib -name '*.sh' -type f 2>/dev/null
       [[ -d plans/tests ]] && find plans/tests -name '*.sh' -type f 2>/dev/null
@@ -375,7 +526,50 @@ else
       [[ -d SKILLS ]] && find SKILLS -type f 2>/dev/null
       [[ -d tools ]] && find tools -name '*.py' -type f 2>/dev/null
       [[ -d scripts ]] && find scripts -name '*.py' -type f 2>/dev/null
-    } | LC_ALL=C sort -u | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1
+      } | LC_ALL=C sort -u | sed '/^[[:space:]]*$/d'
+    )" || return 1
+    [[ -n "$_fallback_file_list" ]] || return 1
+
+    _fallback_hash="$(
+      printf '%s\n' "$_fallback_file_list" \
+        | xargs shasum -a 256 2>/dev/null \
+        | shasum -a 256 \
+        | cut -d' ' -f1
+    )" || return 1
+    [[ "$_fallback_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+    printf '%s\n' "$_fallback_hash"
+  }
+
+  _compute_fixture_hash() {
+    local fast_file_list=""
+    local fast_hash=""
+    local fallback_hash=""
+    local untracked_scoped=""
+
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      if git diff --quiet --cached -- \
+        && git diff --quiet -- \
+        && untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null)" \
+        && [[ -z "$untracked_scoped" ]]; then
+        fast_file_list="$(git ls-files -- plans specs SKILLS tools scripts 2>/dev/null || true)"
+        if [[ -n "$fast_file_list" ]]; then
+          if fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"; then
+            if [[ "$fast_hash" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "$fast_hash"
+              return 0
+            fi
+          fi
+        fi
+      fi
+    fi
+
+    # Falling back to full fixture hash scan
+    if fallback_hash="$(_compute_fixture_hash_fallback)"; then
+      echo "$fallback_hash"
+      return 0
+    fi
+
+    printf '%s\n' "preflight-fixture-hash-empty" | shasum -a 256 | cut -d' ' -f1
   }
 
   # Validate shasum is available (fail-closed: if missing, skip cache entirely)
@@ -453,27 +647,10 @@ else
       ) &
       fixture_pids+=($!)
       ((fixture_idx++)) || true
-      # Throttle: wait for a slot if at concurrency limit
-      # Uses kill -0 polling (compatible with bash 3.2 which lacks wait -n)
+      # Throttle: wait for a slot if at concurrency limit.
+      # wait -n is used when available/allowed; polling remains the fallback.
       if [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; then
-        # Poll until at least one slot opens
-        while true; do
-          alive=()
-          for pid in "${fixture_pids[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-              alive+=("$pid")
-            fi
-          done
-          if [[ ${#alive[@]} -gt 0 ]]; then
-            fixture_pids=("${alive[@]}")
-          else
-            fixture_pids=()
-          fi
-          if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
-            break
-          fi
-          sleep 0.2
-        done
+        wait_for_fixture_slot
       fi
     done
 

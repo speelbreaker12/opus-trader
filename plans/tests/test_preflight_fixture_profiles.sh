@@ -61,15 +61,50 @@ assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
 assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
+assert_contains_line 'supports_wait_n() {'
+assert_contains_line 'if builtin help wait >/dev/null 2>&1; then'
+assert_contains_line 'wait_help_text="$(builtin help wait 2>/dev/null || true)"'
+assert_contains_line "grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)' <<< \"\$wait_help_text\""
+assert_contains_line 'return 0'
+assert_contains_line 'PREFLIGHT_WAIT_N_MODE="${PREFLIGHT_WAIT_N_MODE:-auto}"'
+assert_contains_line 'case "$PREFLIGHT_WAIT_N_MODE" in'
+assert_contains_line 'auto|force_on|force_off) ;;'
+assert_contains_line 'setup_fail "Invalid PREFLIGHT_WAIT_N_MODE='"'"'$PREFLIGHT_WAIT_N_MODE'"'"' (expected auto|force_on|force_off)"'
+assert_contains_line 'PREFLIGHT_WAIT_N_SUPPORTED=0'
+assert_contains_line 'if supports_wait_n; then'
+assert_contains_line 'if [[ "$PREFLIGHT_WAIT_N_MODE" == "force_on" ]]; then'
+assert_contains_line 'if [[ "$PREFLIGHT_WAIT_N_USE" == "1" ]]; then'
+assert_contains_line 'if [[ ${#fixture_pids[@]} -gt 0 ]]; then'
+assert_contains_line 'wait -n "${fixture_pids[@]}" 2>/dev/null || true'
 assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
+assert_contains_line 'MONOTONIC_BACKEND="$(select_monotonic_backend)"'
+assert_contains_line 'MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"'
 assert_contains_line 'start_ns="$(now_monotonic_ns)"'
 assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
+assert_contains_line 'SHELL_SYNTAX_CHECKER=""'
+assert_contains_line 'if ! SHELL_SYNTAX_CHECKER="$(command -v bash 2>/dev/null)"; then'
+assert_contains_line 'setup_fail "Shell syntax setup failed (missing bash)"'
+assert_contains_line 'for f in plans/*.sh; do'
+assert_contains_line '# Authoritative check: every plans/*.sh file must parse on its own.'
+assert_contains_line 'if "$SHELL_SYNTAX_CHECKER" -n "$f" >/dev/null 2>&1; then'
+assert_contains_line '_shell_syntax_rc=$?'
+assert_contains_line 'case "$_shell_syntax_rc" in'
+assert_contains_line '2)'
+assert_contains_line 'setup_fail "Shell syntax setup failed while checking $f (bash -n rc=$_shell_syntax_rc)"'
+assert_contains_line 'if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then'
+assert_contains_line '&& untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null)" \'
+assert_contains_line '&& [[ -z "$untracked_scoped" ]]; then'
+assert_contains_line 'git ls-files -- plans specs SKILLS tools scripts'
+assert_contains_line '_normalized_list="$(printf '"'"'%s\n'"'"' "$_file_list" | LC_ALL=C sort -u | sed '"'"'/^[[:space:]]*$/d'"'"')" || return 1'
+assert_contains_line 'if fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"; then'
+assert_contains_line 'Falling back to full fixture hash scan'
 
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_verify_gate_contract_check_batching.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_review_logged_timeout_fallback.sh"
@@ -100,6 +135,8 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 
 # Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
@@ -126,7 +163,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "38" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 38)"
+[[ "$smoke_count" == "41" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 41)"
 [[ "$full_only_count" == "8" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 8)"
 
 echo "PASS: preflight fixture profile mapping"
