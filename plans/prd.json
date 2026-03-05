@@ -8681,7 +8681,7 @@
       "steps": [
         "Map S10.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S10.4 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S10.4: python/tests/test_pnl_attribution.py::test_pnl_decomposition_theta_units, python/tests/test_pnl_attribution.py::test_pnl_decomposition_zero_when_no_move.",
+        "Add/adjust targeted tests for S10.4: test_pnl_decomposition_theta_units, test_pnl_decomposition_zero_when_no_move.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -8721,8 +8721,8 @@
         ]
       },
       "implementation_tests": [
-        "python/tests/test_pnl_attribution.py::test_pnl_decomposition_theta_units",
-        "python/tests/test_pnl_attribution.py::test_pnl_decomposition_zero_when_no_move"
+        "test_pnl_decomposition_theta_units",
+        "test_pnl_decomposition_zero_when_no_move"
       ],
       "loss_mode": {
         "worst_case": "PnL decomposition units wrong → theta/vega misinterpreted → wrong risk assessment",
@@ -9863,7 +9863,7 @@
       "steps": [
         "Map S13.1 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S13.1 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S13.1: python/tests/test_replay_gatekeeper.py::test_replay_gatekeeper_penalized_pnl_gate, python/tests/test_replay_gatekeeper.py::test_replay_quality_good_at_95, python/tests/test_replay_gatekeeper.py::test_replay_quality_degraded_applies_haircut_and_tighten_only.",
+        "Add/adjust targeted tests for S13.1: test_replay_gatekeeper_penalized_pnl_gate, test_replay_quality_good_at_95, test_replay_quality_degraded_applies_haircut_and_tighten_only.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -9941,12 +9941,12 @@
         ]
       },
       "implementation_tests": [
-        "python/tests/test_replay_gatekeeper.py::test_replay_gatekeeper_penalized_pnl_gate",
-        "python/tests/test_replay_gatekeeper.py::test_replay_quality_good_at_95",
-        "python/tests/test_replay_gatekeeper.py::test_replay_quality_degraded_applies_haircut_and_tighten_only",
-        "python/tests/test_replay_gatekeeper.py::test_replay_quality_broken_shadow_only",
-        "python/tests/test_replay_gatekeeper.py::test_replay_rejects_loosen_or_unknown_params_in_degraded",
-        "python/tests/test_replay_gatekeeper.py::test_replay_hard_fails_when_dd_limit_missing",
+        "test_replay_gatekeeper_penalized_pnl_gate",
+        "test_replay_quality_good_at_95",
+        "test_replay_quality_degraded_applies_haircut_and_tighten_only",
+        "test_replay_quality_broken_shadow_only",
+        "test_replay_rejects_loosen_or_unknown_params_in_degraded",
+        "test_replay_hard_fails_when_dd_limit_missing",
         "crates/soldier_core/tests/test_dispatch_map.rs::test_open_haircut_mult_applies_to_open_only",
         "crates/soldier_core/tests/test_profile_isolation.rs::test_csp_isolation_from_replay_snapshot_failures"
       ],
@@ -10001,7 +10001,7 @@
       "steps": [
         "Map S13.3 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S13.3 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S13.3: python/tests/test_canary_rollout.py::test_canary_rollout_aborts_on_slippage, python/tests/test_canary_rollout.py::test_canary_rollout_missing_thresholds_aborts, python/tests/test_canary_rollout.py::test_canary_rollout_aborts_when_slippage_exceeds_limit.",
+        "Add/adjust targeted tests for S13.3: test_canary_rollout_aborts_on_slippage, test_canary_rollout_missing_thresholds_aborts, test_canary_rollout_aborts_when_slippage_exceeds_limit.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -10076,13 +10076,13 @@
         ]
       },
       "implementation_tests": [
-        "python/tests/test_canary_rollout.py::test_canary_rollout_aborts_on_slippage",
-        "python/tests/test_canary_rollout.py::test_canary_rollout_missing_thresholds_aborts",
-        "python/tests/test_canary_rollout.py::test_canary_rollout_aborts_when_slippage_exceeds_limit",
-        "python/tests/test_canary_rollout.py::test_canary_rollout_aborts_when_evidence_chain_exceeds_abort_window",
-        "python/tests/test_canary_rollout.py::test_canary_rollout_does_not_abort_on_evidence_chain_threshold",
-        "python/tests/test_canary_rollout.py::test_canary_rollout_fails_preflight_on_miscalibrated_evidence_abort",
-        "python/tests/test_canary_rollout.py::test_canary_rollout_does_not_abort_within_recovery_horizon"
+        "test_canary_rollout_aborts_on_slippage",
+        "test_canary_rollout_missing_thresholds_aborts",
+        "test_canary_rollout_aborts_when_slippage_exceeds_limit",
+        "test_canary_rollout_aborts_when_evidence_chain_exceeds_abort_window",
+        "test_canary_rollout_does_not_abort_on_evidence_chain_threshold",
+        "test_canary_rollout_fails_preflight_on_miscalibrated_evidence_abort",
+        "test_canary_rollout_does_not_abort_within_recovery_horizon"
       ],
       "loss_mode": {
         "worst_case": "canary abort fails → bad patch progresses to full deployment → system-wide regression",
@@ -10128,7 +10128,7 @@
       "steps": [
         "Map S13.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S13.4 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S13.4: python/tests/test_reviewer.py::test_autoreviewer_blocks_aggressive_without_human_approval.",
+        "Add/adjust targeted tests for S13.4: test_autoreviewer_blocks_aggressive_without_human_approval.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -10185,7 +10185,7 @@
         ]
       },
       "implementation_tests": [
-        "python/tests/test_reviewer.py::test_autoreviewer_blocks_aggressive_without_human_approval"
+        "test_autoreviewer_blocks_aggressive_without_human_approval"
       ],
       "loss_mode": {
         "worst_case": "auto-reviewer missing → daily review gaps → issues accumulate undetected",
@@ -10234,7 +10234,7 @@
       "steps": [
         "Map S13.5 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S13.5 logic in the smallest practical surface area while preserving fail-closed behavior.",
-        "Add/adjust targeted tests for S13.5: python/tests/test_f1_certify.py::test_f1_cert_fail_on_atomic_naked_event, python/tests/test_f1_certify.py::test_runtime_config_hash_canonicalization, crates/soldier_core/tests/test_profile_isolation.rs::test_csp_only_build_starts_and_reports_csp.",
+        "Add/adjust targeted tests for S13.5: test_f1_cert_fail_on_atomic_naked_event, test_runtime_config_hash_canonicalization, crates/soldier_core/tests/test_profile_isolation.rs::test_csp_only_build_starts_and_reports_csp.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -10290,8 +10290,8 @@
         ]
       },
       "implementation_tests": [
-        "python/tests/test_f1_certify.py::test_f1_cert_fail_on_atomic_naked_event",
-        "python/tests/test_f1_certify.py::test_runtime_config_hash_canonicalization",
+        "test_f1_cert_fail_on_atomic_naked_event",
+        "test_runtime_config_hash_canonicalization",
         "crates/soldier_core/tests/test_profile_isolation.rs::test_csp_only_build_starts_and_reports_csp"
       ],
       "loss_mode": {
