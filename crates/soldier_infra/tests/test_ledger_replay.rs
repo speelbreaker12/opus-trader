@@ -5,10 +5,26 @@
 //! AT-233: crash after send → no resend on replay.
 //! AT-234: crash after fill → detect fill on replay.
 
-use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
+use soldier_core::execution::{
+    PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
+};
 use soldier_infra::store::{
     IntentRecord, LedgerAppendError, LedgerMetrics, LedgerTransitionSink, TlsState, WalLedger,
 };
+
+/// Local no-op sink for test setup. `Tlsm::apply()` is `#[cfg(test)]`-gated
+/// on the library and unavailable in integration tests.
+struct NoopSink;
+impl TlsmTransitionSink for NoopSink {
+    fn append_transition(&mut self, _t: PersistedTransition) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+fn drive(sm: &mut Tlsm, event: TlsmEvent) -> TransitionResult {
+    sm.apply_with_sink(event, &mut NoopSink)
+        .expect("NoopSink never fails")
+}
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -573,7 +589,7 @@ fn drive_tlsm_to(target: TlsmState) -> Option<Tlsm> {
     for (state, events) in paths {
         if *state == target {
             for event in *events {
-                tlsm.apply(event.clone());
+                drive(&mut tlsm, event.clone());
             }
             assert_eq!(tlsm.state(), target);
             return Some(tlsm);
@@ -613,12 +629,12 @@ fn test_tlsm_wal_whitelist_sync() {
         for event in &all_events {
             let mut tlsm = drive_tlsm_to(from_state)
                 .unwrap_or_else(|| panic!("cannot reach {:?}", from_state));
-            let result = tlsm.apply(event.clone());
+            let result = drive(&mut tlsm, event.clone());
 
             // Extract the to-state if the TLSM accepted the transition.
-            let to_state = match &result {
-                TransitionResult::Transitioned { to, .. } => Some(*to),
-                TransitionResult::OutOfOrder { to, .. } => Some(*to),
+            let to_state = match result {
+                TransitionResult::Transitioned { to, .. } => Some(to),
+                TransitionResult::OutOfOrder { to, .. } => Some(to),
                 TransitionResult::Ignored { .. } => None,
             };
 
@@ -659,6 +675,7 @@ fn test_rejected_is_terminal() {
 }
 
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_rejected_valid_successors() {
     // Created and Sent can transition to Rejected (exchange rejection before ack).
     assert!(TlsState::Created.is_valid_successor(TlsState::Rejected));

@@ -750,10 +750,13 @@ fn noop_sink_definition_is_cfg_test_gated() {
     // doc comment noise — the gate must be the immediately preceding attribute.
     // Allow doc comment lines but reject anything else that would break the gate.
     let between = &src[gate_pos + cfg_test_tag.len()..struct_pos];
+    // Allow whitespace, doc-comments, and ANY attribute (#[...]) between
+    // the cfg gate and the struct definition — only non-attribute, non-comment
+    // tokens would break the gate.
     let non_whitespace_non_doc: Vec<&str> = between
         .lines()
         .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#[derive"))
+        .filter(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#["))
         .collect();
 
     assert!(
@@ -788,31 +791,59 @@ fn noop_sink_definition_is_cfg_test_gated() {
 }
 
 /// Assert that no non-test Rust source file in soldier_core references
-/// `NoopTransitionSink` or calls bare `Tlsm::apply(` (without `_with_sink`).
+/// `NoopTransitionSink` or calls bare `.apply(TlsmEvent`.
 ///
-/// This test scans the known production source files via `include_str!` and
-/// fails if either pattern is found, which would indicate a regression where
-/// production code bypasses the WAL sink requirement.
+/// Uses `std::fs::read_dir` at runtime to scan the entire `src/execution/`
+/// directory automatically — no hardcoded allowlist to maintain. Files whose
+/// names end in `_tests.rs` and `tlsm.rs` itself are excluded (they are the
+/// legitimate homes for the no-op sink and its gate).
 #[test]
 fn production_sources_do_not_reference_noop_sink_or_bare_apply() {
-    // Each entry is (file_label, source_text).
-    // Add new production source files here if the TLSM grows more callers.
-    let production_sources: &[(&str, &str)] = &[
-        ("open_runtime.rs", include_str!("open_runtime.rs")),
-        ("engine.rs", include_str!("engine.rs")),
-        ("pipeline.rs", include_str!("pipeline.rs")),
-        ("group.rs", include_str!("group.rs")),
-    ];
+    use std::fs;
+    use std::path::Path;
 
-    let forbidden_patterns = ["NoopTransitionSink", ".apply(TlsmEvent", ".apply(event"];
+    let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/execution");
+    // Forbidden: using the no-op sink type or calling apply() without _with_sink.
+    // Pattern ".apply(TlsmEvent" is precise enough to only match Tlsm::apply calls
+    // (the argument type is always TlsmEvent at the callsite).
+    let forbidden_patterns = ["NoopTransitionSink", ".apply(TlsmEvent"];
 
-    for (label, src) in production_sources {
+    let mut checked = 0_usize;
+    let entries = fs::read_dir(&src_dir)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", src_dir.display()));
+
+    for entry in entries {
+        let path = entry.expect("dir entry").path();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+
+        // Skip test files and the file that legitimately defines the no-op sink.
+        if name.ends_with("_tests.rs") || name == "tlsm.rs" {
+            continue;
+        }
+        if path.extension().map_or(true, |e| e != "rs") {
+            continue;
+        }
+
+        let src = fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+        checked += 1;
+
         for pattern in &forbidden_patterns {
             assert!(
                 !src.contains(pattern),
-                "Production source '{label}' contains forbidden WAL-bypass pattern \
+                "Production source '{name}' contains forbidden WAL-bypass pattern \
                  '{pattern}'. Use apply_with_sink() with a durable WAL sink instead."
             );
         }
     }
+
+    assert!(
+        checked > 0,
+        "No production source files scanned — check that src/execution/ exists at {}",
+        src_dir.display()
+    );
 }

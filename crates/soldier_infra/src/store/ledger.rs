@@ -62,6 +62,7 @@ pub enum TlsState {
     Failed,
 }
 
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records only
 impl TlsState {
     /// Whether this state is terminal (no further transitions expected).
     pub fn is_terminal(self) -> bool {

@@ -317,12 +317,13 @@ fn test_order_size_overflow_contracts_returns_err() {
 
 #[test]
 fn test_contracts_exceeds_f64_precision_limit_rejected_option() {
-    // 2^53 + 1 cannot be represented exactly in f64; i64→f64 conversion is lossy.
-    // canonical_qty / contract_multiplier = (2^53 + 1) * 1.0 = 2^53 + 1 contracts.
-    let contracts_value = (1i64 << 53) + 1;
+    // Use 2^53 + 2, the next representable f64 above 2^53.
+    // Note: (1i64 << 53) + 1 rounds DOWN to 2^53 in IEEE 754 (odd integers
+    // above 2^53 are not representable); +2 is the first representable value
+    // strictly greater than 2^53, ensuring the precision guard fires.
     let input = OrderSizeInput {
         instrument_kind: InstrumentKind::Option,
-        canonical_qty: contracts_value as f64, // f64 of 2^53+1 (already imprecise, but still > 2^53)
+        canonical_qty: (1i64 << 53) as f64 + 2.0, // first f64 strictly > 2^53
         index_price: 50_000.0,
         contract_multiplier: Some(1.0),
     };
@@ -336,10 +337,9 @@ fn test_contracts_exceeds_f64_precision_limit_rejected_option() {
 #[test]
 fn test_contracts_exceeds_f64_precision_limit_rejected_perpetual() {
     // Same guard must fire for the Perpetual/InverseFuture arm.
-    let contracts_value = (1i64 << 53) + 1;
     let input = OrderSizeInput {
         instrument_kind: InstrumentKind::Perpetual,
-        canonical_qty: contracts_value as f64,
+        canonical_qty: (1i64 << 53) as f64 + 2.0, // first f64 strictly > 2^53
         index_price: 50_000.0,
         contract_multiplier: Some(1.0),
     };
