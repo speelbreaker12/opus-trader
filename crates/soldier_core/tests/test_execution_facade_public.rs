@@ -4,9 +4,12 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
+
+static TEMP_SOURCE_FILE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 #[allow(unused_imports)]
 use soldier_core::execution::{
@@ -215,10 +218,12 @@ fn write_temp_source_file(contents: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system clock before UNIX_EPOCH")
         .as_nanos();
+    let seq = TEMP_SOURCE_FILE_SEQ.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
-        "facade_symbol_extract_{}_{}.rs",
+        "facade_symbol_extract_{}_{}_{}.rs",
         std::process::id(),
-        nanos
+        nanos,
+        seq
     ));
     fs::write(&path, contents)
         .unwrap_or_else(|err| panic!("failed to write {}: {err}", path.display()));

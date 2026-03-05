@@ -537,13 +537,10 @@ fn pipeline_result_to_decision(
     effective_risk_state: RiskState,
     gate_reject_codes: &GateRejectCodes,
 ) -> ExecutionDecision {
+    use ChokeResult::{Approved as ChokeApproved, Rejected as ChokeRejected};
+
     match result {
-        ChokeResult::Approved { .. } => ExecutionDecision::Approved(ApprovedExecution {
-            effective_risk_state,
-            pending_reservation_id: None,
-            adjusted_min_edge_usd: None,
-        }),
-        ChokeResult::Rejected { reason, .. } => {
+        ChokeRejected { reason, .. } => {
             let code = reject_code
                 .unwrap_or_else(|| reject_reason_from_chokepoint(&reason, gate_reject_codes));
             ExecutionDecision::Rejected(ExecutionRejection {
@@ -552,6 +549,11 @@ fn pipeline_result_to_decision(
                 detail: reject_reason_detail(&reason),
             })
         }
+        ChokeApproved { .. } => ExecutionDecision::Approved(ApprovedExecution {
+            effective_risk_state,
+            pending_reservation_id: None,
+            adjusted_min_edge_usd: None,
+        }),
     }
 }
 
@@ -559,16 +561,18 @@ fn open_runtime_to_decision(
     input: &OpenExecutionInput<'_>,
     output: &OpenRuntimeOutput,
 ) -> ExecutionDecision {
+    use ChokeResult::{Approved as ChokeApproved, Rejected as ChokeRejected};
+
     match &output.choke_result {
-        ChokeResult::Approved { .. } => ExecutionDecision::Approved(ApprovedExecution {
-            effective_risk_state: output.effective_risk_state,
-            pending_reservation_id: output.pending_reservation_id.clone(),
-            adjusted_min_edge_usd: output.adjusted_min_edge_usd,
-        }),
-        ChokeResult::Rejected { reason, .. } => ExecutionDecision::Rejected(ExecutionRejection {
+        ChokeRejected { reason, .. } => ExecutionDecision::Rejected(ExecutionRejection {
             code: map_open_runtime_reject_code(reason, &GateRejectCodes::default()),
             step: map_open_rejection_step(input, output, reason),
             detail: reject_reason_detail(reason),
+        }),
+        ChokeApproved { .. } => ExecutionDecision::Approved(ApprovedExecution {
+            effective_risk_state: output.effective_risk_state,
+            pending_reservation_id: output.pending_reservation_id.clone(),
+            adjusted_min_edge_usd: output.adjusted_min_edge_usd,
         }),
     }
 }
