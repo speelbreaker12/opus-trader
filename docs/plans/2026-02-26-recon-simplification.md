@@ -94,7 +94,7 @@ git commit -m "recon(simplify): add INDEX.md with debrief policy and card index"
 ## CONTEXT
 - `plans/prd.json` → story entry: `scope.touch` file list + AT references
 - `specs/CONTRACT.md` → sections referenced by scope.touch files
-- `artifacts/story/<ID>/premortem.md`
+- `reviews/premortems/<ID>_premortem.md`
 
 ## ACTION
 - Read each scope.touch file
@@ -262,7 +262,7 @@ git commit -m "recon(simplify): slim card — self_review"
 
 ## CONTEXT
 - scope.touch files listed in `plans/prd.json` story entry
-- `artifacts/story/<ID>/premortem.md`
+- `reviews/premortems/<ID>_premortem.md`
 
 ## ACTION
 - Dispatch external review:

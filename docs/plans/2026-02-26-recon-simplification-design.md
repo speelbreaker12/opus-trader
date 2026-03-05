@@ -144,7 +144,7 @@ No other changes to the RUNBOOK.
 ## CONTEXT
 - plans/prd.json → story entry + scope.touch file list
 - CONTRACT.md → sections matching scope.touch files
-- artifacts/story/<ID>/premortem.md
+- reviews/premortems/<ID>_premortem.md
 
 ## ACTION
 - Read each scope.touch file
@@ -210,7 +210,7 @@ plans/wf_step.sh <ID> self_review
 ```
 ## CONTEXT
 - scope.touch files (from prd.json story entry)
-- artifacts/story/<ID>/premortem.md
+- reviews/premortems/<ID>_premortem.md
 
 ## ACTION
 - Dispatch: plans/review_logged.sh --base <branch> --tool <tool>

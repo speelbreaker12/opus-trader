@@ -30,6 +30,7 @@ EOF
 }
 
 write_pass_script "$repo/plans/legacy_layout_guard.sh"
+write_pass_script "$repo/plans/premortem_path_guard.sh"
 write_pass_script "$repo/plans/readme_ci_parity_check.sh"
 write_pass_script "$repo/plans/slice_completion_review_guard.sh"
 write_pass_script "$repo/plans/story_review_findings_guard.sh"
