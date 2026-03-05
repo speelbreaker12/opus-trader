@@ -33,10 +33,15 @@ use super::pricer::{PricerInput, PricerMetrics, PricerResult, compute_limit_pric
 use super::tlsm::Tlsm;
 use crate::venue::types::InstrumentKindInput;
 
-const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
-const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
+/// Machine-stable reject-detail tokens consumed by execution-engine mapping.
+///
+/// These are not user-facing messages. Keep them symbolic and deterministic so
+/// `engine::map_open_runtime_reject_code` can map without brittle free-form text parsing.
+pub(crate) const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
+pub(crate) const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
     "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED";
-const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGET_REJECT";
+pub(crate) const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str =
+    "GLOBAL_EXPOSURE_BUDGET_REJECT";
 
 /// OPEN runtime inputs assembled before chokepoint evaluation.
 ///

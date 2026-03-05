@@ -899,3 +899,10 @@ Commands: python3 scripts/build_contract_kernel.py --out docs/contract_kernel.js
 Evidence: specs/CONTRACT.md; docs/contract_kernel.json; artifacts/verify/20260305_091855/verify.meta.json.
 Notes: Initial quick verify run 20260305_091354 failed at contract-kernel source hash mismatch, then passed after kernel regeneration.
 Next: commit and push docs-only contract clarification patch.
+Story: PR #166 follow-up (reject mapping hardening)
+Date: 2026-03-05 15:39:56 UTC
+Summary: Reduced OPEN reject-code mapping fragility by sharing machine-detail constants between open_runtime and engine conversion, documented the invariant, and added parity coverage for unknown-liquidity-detail fallback behavior.
+Commands: cargo fmt --all; cargo test -p soldier_core execution::engine::engine_parity_tests -- --nocapture; ./plans/verify.sh quick.
+Evidence: crates/soldier_core/src/execution/open_runtime.rs; crates/soldier_core/src/execution/engine.rs; crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260305_093200/verify.meta.json.
+Notes: Non-fast-forward push expected on this branch; rebase required before push if remote advanced.
+Next: commit scoped files and push.

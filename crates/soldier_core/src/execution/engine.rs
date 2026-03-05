@@ -574,6 +574,8 @@ fn map_open_runtime_reject_code(
     reason: &ChokeRejectReason,
     gate_reject_codes: &GateRejectCodes,
 ) -> RejectReasonCode {
+    // Invariant: these detail tags are machine constants emitted by
+    // `open_runtime.rs` (not free-form text) and are parity-tested.
     if let ChokeRejectReason::GateRejected {
         gate: GateStep::LiquidityGate,
         reason: detail,
