@@ -148,6 +148,7 @@ plans/tests/test_story_review_findings_guard.sh
 plans/tests/test_toggle_policy_check.sh
 plans/tests/test_wf_step_path_signal_scan.sh
 plans/tests/test_wf_step_review_provenance.sh
+plans/tests/test_upgrade_1b_proof.sh
 plans/tests/test_wf_step_stop_on_blocker.sh
 plans/tests/test_workflow_allowlist_coverage.sh
 plans/tests/test_workflow_quick_step.sh

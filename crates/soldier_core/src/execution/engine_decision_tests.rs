@@ -327,6 +327,36 @@ fn engine_hedge_rejected_quantize() {
 }
 
 #[test]
+fn engine_hedge_wal_failure_emits_csp32_visibility_metric() {
+    // AT-CSP32-HEDGE: Hedge shares the Close|Hedge branch in pipeline_wal_recorded.
+    // A WAL failure must be non-blocking AND must emit a metric line with intent_class=Hedge,
+    // proving both branches of the shared path are independently observable.
+    let _metrics_guard = crate::execution::METRICS_TEST_LOCK
+        .lock()
+        .expect("metrics test lock poisoned");
+    let _ = crate::execution::take_execution_metric_lines();
+
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { base });
+    let mut wal_gate = ErrWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
+
+    let delegated = engine.decide(&engine_input, &mut runtime);
+    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+    assert_eq!(wal_gate.calls, 1, "hedge path should attempt WAL once");
+
+    let lines = crate::execution::take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
+                && line.contains("intent_class=Hedge")
+        }),
+        "expected CSP.3.2 non-blocking WAL visibility metric line for Hedge, got {lines:?}"
+    );
+}
+
+#[test]
 fn engine_cancel_short_circuits_and_skips_wal() {
     let base = base_execution_input();
     let engine = ExecutionEngine::new();
@@ -368,17 +398,27 @@ fn pipeline_assembly_failed_maps_to_runtime_step() {
 }
 
 fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
+    let rejected_gate = match &reason {
+        ChokeRejectReason::GateRejected { gate, .. } => Some(*gate),
+        _ => None,
+    };
+    let mut gate_trace = vec![
+        GateStep::DispatchAuth,
+        GateStep::Preflight,
+        GateStep::Quantize,
+        GateStep::DispatchConsistency,
+        GateStep::FeeCacheCheck,
+        GateStep::ExpiryGuard,
+    ];
+    if let Some(gate) = rejected_gate {
+        if !gate_trace.contains(&gate) {
+            gate_trace.push(gate);
+        }
+    }
     OpenRuntimeOutput {
         choke_result: ChokeResult::Rejected {
             reason,
-            gate_trace: vec![
-                GateStep::DispatchAuth,
-                GateStep::Preflight,
-                GateStep::Quantize,
-                GateStep::DispatchConsistency,
-                GateStep::FeeCacheCheck,
-                GateStep::ExpiryGuard,
-            ],
+            gate_trace,
         },
         gate_results: build_gate_results(
             true,
