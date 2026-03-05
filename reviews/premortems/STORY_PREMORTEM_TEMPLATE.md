@@ -18,6 +18,30 @@
 Before implementation, prove this change cannot create avoidable loss, cannot silently block
 valid profit, and is the simplest fail-closed design satisfying the contract.
 
+Hard-gate questions — must be answered before implementation starts.
+If any answer is NO, UNKNOWN, or NOT PROVEN, implementation is blocked until the gap is resolved or explicitly escalated.
+
+- Loss prevention:
+  Have I proven that this change cannot directly or indirectly create avoidable loss through incorrect orders, widened risk, blocked reductions, stale decisions, reconciliation drift, duplicate actions, or fail-open behavior?
+- Profit preservation:
+  Have I proven that this change will not silently block valid profit by rejecting good trades, delaying valid actions, degrading signal quality, misclassifying intent, or creating unnecessary operational friction?
+- Best design choice:
+  Is this the safest and simplest design currently available for this feature, given the contract, expected edge, and operational constraints?
+- Better alternative check:
+  Did I actively test whether there is a simpler or safer implementation that achieves the same goal with fewer moving parts, less hidden coupling, and lower error surface?
+- Failure-path correctness:
+  Does the design remain correct under bad inputs, stale state, retries, partial failures, exchange/API errors, replay, restart, and reconciliation?
+- Fail-closed enforcement:
+  When uncertain, missing data, or inconsistent state occurs, does the system fail closed in a way that protects capital and preserves the ability to reduce risk?
+- Proof, not belief:
+  Can each critical claim above be tied to a specific contract clause, enforcement point, and verification artifact rather than intuition or prose?
+
+Required answer format:
+- Answer: YES / NO / UNKNOWN
+- Why: one sentence
+- Proof: contract clause(s), enforcement file(s), test/vector/artifact
+- Gap ID: required when answer is NO or UNKNOWN
+
 | Question | Answer (YES/NO/UNKNOWN) | Why (one sentence) | Proof (contract clause(s); enforcement file(s); test/vector/artifact) | Gap ID (required when NO/UNKNOWN) |
 |----------|--------------------------|--------------------|------------------------------------------------------------------------|-----------------------------------|
 | Loss prevention | | | | |

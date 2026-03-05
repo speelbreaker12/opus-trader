@@ -244,6 +244,9 @@ cargo add / cargo rm                  (dependency changes)
 ```
 GATE: GO | NO-GO
 Reason: <one line>
+Trading lens: PASS | BLOCKING | HARDENING
+Trading lens reason: <one line>
+Trading lens evidence: <file:line or artifact pointer>
 ```
 
 ### B) AT AUDIT TABLE
@@ -287,6 +290,26 @@ List any risks discovered:
 - Idempotency gaps
 - Blast radius concerns
 - Silent reject paths (no log, no metric)
+
+#### D1) Trading-System Risk Lens
+
+For this implementation, answer all three:
+- Loss risk: Did the implementation introduce any direct or indirect path to avoidable loss
+  (wrong order behavior, widened exposure, blocked reductions, stale-state execution,
+  duplicate action, reconciliation drift, or fail-open behavior)?
+- Profit-block risk: Did the implementation introduce any path that could silently block valid
+  profit (false rejects, unnecessary restrictions, degraded signal interpretation, or avoidable
+  execution friction)?
+- Simpler-safer alternative: Is there a simpler or safer design that would reduce risk or
+  preserve edge better?
+
+Classify findings as:
+- BLOCKING if they can cause loss, fail-open behavior, or silently prevent valid profit in
+  normal operation.
+- HARDENING if they are improvements but not required for current contract-safe behavior.
+
+For each trading-lens classification, include at least one evidence pointer (`file:line` or
+artifact path). No evidence pointer means the trading-lens line in Section A is invalid.
 
 ### E) REMEDIATION PLAN (ordered, smallest-first)
 

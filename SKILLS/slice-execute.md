@@ -35,6 +35,22 @@ Verify the hard gates:
 
 If the premortem does not exist or has unresolved gates → STOP. Fill the premortem first.
 
+### 0A) Trading-System Implementation Lens
+
+Before writing code, confirm all three statements are true:
+
+- This implementation cannot create avoidable loss through incorrect orders, widened risk,
+  blocked reductions, duplicate actions, stale state, or fail-open behavior.
+- This implementation will not silently block valid profit through false rejects, unnecessary
+  restrictions, bad intent classification, delayed actions, or degraded signal handling.
+- This is still the simplest fail-closed implementation that satisfies the premortem, contract,
+  and expected edge. If a safer or simpler implementation is found during coding, stop and
+  record it as a decision or blocker instead of improvising.
+
+If any statement is not proven, STOP and resolve it through the premortem/decision path before
+continuing. Record the block explicitly (`needs_human_decision=true` in `plans/prd.json` when
+scope/decision clarity is missing, or output a NO-GO blocker reason in this step artifact).
+
 ### 1) Implement Enforcement
 
 For each AT in the story's `enforcing_contract_ats[]`:
@@ -139,6 +155,9 @@ For every AT claimed by this story:
 - [ ] Decisions use real quantities, not proxies (DESIGN_PATTERNS §0.1)?
 - [ ] Premortem §4 wrong impls are blocked by tightened ATs?
 - [ ] Decision record written for any non-obvious design choice?
+- [ ] No implementation path can create avoidable loss through wrong dispatch, widened risk, blocked reduction, duplicate action, or stale-state execution?
+- [ ] No implementation path can silently block valid profit through false reject, unnecessary restriction, or degraded signal handling?
+- [ ] I checked for a simpler safer implementation and did not keep complexity without justification?
 
 ## Output
 
