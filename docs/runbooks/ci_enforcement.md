@@ -5,6 +5,10 @@ This runbook applies CI governance hardening for `speelbreaker12/opus-trader` fa
 ## Preconditions
 
 - `gh` authenticated with repo admin permission.
+- Credential/scopes (minimum):
+  - Classic PAT: `repo` scope (private-repo API access + branch protection endpoints).
+  - Fine-grained PAT: repository `Administration` (read/write), `Actions` (read), and `Contents` (read).
+  - The authenticated user must be a repo admin; `preflight_snapshot.sh` enforces this fail-closed.
 - Local branch includes:
   - `.github/CODEOWNERS`
   - `.github/workflows/ci.yml` with enabled `prd-story-gate`

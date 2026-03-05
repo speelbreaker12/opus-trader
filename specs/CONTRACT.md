@@ -120,7 +120,7 @@ AT-1055
 
 ## **Phase 0: Operational Prerequisites (Non-Negotiable)**
 
-Before any code implementation begins, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
+Before live-trading enablement, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
 
 | ID | Item | Purpose | Evidence Required |
 |----|------|---------|-------------------|
@@ -140,6 +140,19 @@ Before any code implementation begins, these operational baseline items MUST be 
 - P0-F Machine Policy Loader Baseline
 
 **Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys.
+
+**Status authority matrix (Normative):**
+
+| Surface | Phase applicability | Required keys / schema | Authority boundary |
+|---|---|---|---|
+| **P0 owner scaffolding** (CLI/local owner status surfaces) | Phase 0 and early bootstrap operations | `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (optional deprecated alias `is_trading_allowed`) | Owner/operator scaffolding only. MUST NOT claim full `/api/v1/status` contract authority. |
+| **Foundation `/api/v1/status` status-lite** | Only while `phase == foundation` | Exactly `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase` (AT-1230) | Bootstrap status surface only. MUST NOT emit CSP authority keys while in foundation mode. |
+| **CSP minimum `/api/v1/status`** | Required after foundation mode exits; required for live-trading authority | Full CSP minimum key set defined in §7.0 | Canonical runtime authority for TradingMode/open-permission semantics. Release/readiness gates MUST key off this surface once foundation mode exits. |
+
+**Status authority precedence (Normative):**
+1. While `phase == foundation`, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
+2. After foundation mode exits, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
+3. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -1081,6 +1094,7 @@ AT-1098
   - the group has **no partial fills** and **no fill mismatch** beyond `epsilon` (atomicity restored or no-trade), **AND**
   - **no containment/rescue action is pending**.
 - The **first observed failure** (reject/cancel/unfilled/partial mismatch) must “seed” the group into `MixedFailed` and **must not be overwritten** by later async updates.
+- WAL/replay qualifier: the WAL layer additionally preserves `Rejected` as a WAL-only terminal state for venue-level rejections. Replay/recovery MUST treat WAL `Rejected` as terminal even though core TLSM maps `Rejected` events to `Failed`.
 
 **Serialization Rule:**
 - GroupState transitions must be **single-writer** (AtomicGroupExecutor owns state) or protected by a **group‑level lock**.
@@ -6327,3 +6341,5 @@ definition points in the main contract and to the most directly relevant accepta
 |---|---|---|---|---|---|---|---|
 | 2026-03-04 | CCL-2026-03-04-01 | Branch delta vs origin/main (multiple sections and appendices) | Baseline bootstrap | Establish mandatory ledger section required by verify gate 02a for this branch. | Contract differs from base; ledger is now required to keep edits auditable and append-only. | N/A (bootstrap) | local/bootstrap |
 | 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
+| 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
+| 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |

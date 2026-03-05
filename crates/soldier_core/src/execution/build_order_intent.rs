@@ -21,6 +21,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::risk::RiskState;
 use crate::venue::opens_blocked;
 
+use super::dispatch_map::DispatchConsistencyProof;
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
 const REJECT_REASON_PREFLIGHT: &str = "preflight rejected";
@@ -159,6 +160,8 @@ pub struct ChokeMetrics {
     rejected_total: u64,
     /// Rejections due to risk state.
     rejected_risk_state: u64,
+    /// Non-blocking WAL failures for risk-reducing intents (Close/Hedge).
+    wal_nonblocking_allowed_total: u64,
 }
 
 impl ChokeMetrics {
@@ -168,6 +171,7 @@ impl ChokeMetrics {
             approved_total: 0,
             rejected_total: 0,
             rejected_risk_state: 0,
+            wal_nonblocking_allowed_total: 0,
         }
     }
 
@@ -183,6 +187,10 @@ impl ChokeMetrics {
         self.rejected_risk_state += 1;
     }
 
+    fn record_wal_nonblocking_allowed(&mut self) {
+        self.wal_nonblocking_allowed_total += 1;
+    }
+
     pub fn approved_total(&self) -> u64 {
         self.approved_total
     }
@@ -193,6 +201,10 @@ impl ChokeMetrics {
 
     pub fn rejected_risk_state(&self) -> u64 {
         self.rejected_risk_state
+    }
+
+    pub fn wal_nonblocking_allowed_total(&self) -> u64 {
+        self.wal_nonblocking_allowed_total
     }
 }
 
@@ -211,6 +223,7 @@ pub enum GateSequenceResult {
 
 static GATE_SEQUENCE_ALLOWED_TOTAL: AtomicU64 = AtomicU64::new(0);
 static GATE_SEQUENCE_REJECTED_TOTAL: AtomicU64 = AtomicU64::new(0);
+static WAL_NONBLOCKING_ALLOWED_TOTAL: AtomicU64 = AtomicU64::new(0);
 
 pub fn gate_sequence_total(result: GateSequenceResult) -> u64 {
     match result {
@@ -456,6 +469,17 @@ fn build_order_intent_internal(
             );
         }
         // CSP.3.2: WAL failure does not block Close/Hedge, but log for visibility.
+        metrics.record_wal_nonblocking_allowed();
+        WAL_NONBLOCKING_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
+        let source = if wal_error.is_some() {
+            "wal_gate_error"
+        } else {
+            "precomputed_false"
+        };
+        super::emit_execution_metric_line(
+            super::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL,
+            &format!("intent_class={intent_class:?} source={source}"),
+        );
         tracing::warn!(
             intent_class = ?intent_class,
             wal_error = wal_error.as_deref().unwrap_or("precomputed false"),
@@ -595,6 +619,42 @@ pub fn build_gate_results(
         requested_qty,
         max_dispatch_qty,
     }
+}
+
+/// Internal constructor used by production orchestration paths so Gate 4
+/// cannot be driven by a raw bool.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_gate_results_from_dispatch_proof(
+    intent_class: ChokeIntentClass,
+    preflight_passed: bool,
+    quantize_passed: bool,
+    dispatch_consistency: DispatchConsistencyProof,
+    fee_cache_passed: bool,
+    expiry_guard_passed: bool,
+    liquidity_gate_passed: bool,
+    net_edge_passed: bool,
+    pricer_passed: bool,
+    wal_recorded: bool,
+    requested_qty: Option<f64>,
+    max_dispatch_qty: Option<f64>,
+) -> GateResults {
+    let dispatch_consistency_passed = match intent_class {
+        ChokeIntentClass::Open => dispatch_consistency.passed(),
+        ChokeIntentClass::Close | ChokeIntentClass::Hedge | ChokeIntentClass::CancelOnly => true,
+    };
+    build_gate_results(
+        preflight_passed,
+        quantize_passed,
+        dispatch_consistency_passed,
+        fee_cache_passed,
+        expiry_guard_passed,
+        liquidity_gate_passed,
+        net_edge_passed,
+        pricer_passed,
+        wal_recorded,
+        requested_qty,
+        max_dispatch_qty,
+    )
 }
 
 #[cfg(test)]

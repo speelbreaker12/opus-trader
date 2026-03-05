@@ -16,8 +16,9 @@ use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evalu
 use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    build_gate_results, build_order_intent_with_wal_gate,
+    build_order_intent_with_wal_gate,
 };
+use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::dispatch_map::{DispatchConsistencyProof, IntentClass, MismatchMetrics};
 use super::gate::{
     LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate,
@@ -32,10 +33,15 @@ use super::pricer::{PricerInput, PricerMetrics, PricerResult, compute_limit_pric
 use super::tlsm::Tlsm;
 use crate::venue::types::InstrumentKindInput;
 
-const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
-const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
+/// Machine-stable reject-detail tokens consumed by execution-engine mapping.
+///
+/// These are not user-facing messages. Keep them symbolic and deterministic so
+/// `engine::map_open_runtime_reject_code` can map without brittle free-form text parsing.
+pub(crate) const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
+pub(crate) const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
     "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED";
-const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGET_REJECT";
+pub(crate) const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str =
+    "GLOBAL_EXPOSURE_BUDGET_REJECT";
 
 /// OPEN runtime inputs assembled before chokepoint evaluation.
 ///
@@ -120,10 +126,11 @@ pub(crate) fn build_open_order_intent_runtime(
         };
     }
 
-    let mut gate_results = build_gate_results(
+    let mut gate_results = build_gate_results_from_dispatch_proof(
+        ChokeIntentClass::Open,
         legacy.preflight_passed,
         legacy.quantize_passed,
-        legacy.dispatch_consistency_passed,
+        input.base_gates.dispatch_consistency,
         legacy.fee_cache_passed,
         legacy.expiry_guard_passed,
         true,

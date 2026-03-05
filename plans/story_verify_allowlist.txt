@@ -9,8 +9,9 @@ bash plans/tests/test_workflow_allowlist_coverage.sh
 bash plans/verify_mechanical.sh
 cargo test --workspace
 cargo test -p soldier_core
+cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests
+cargo test -p soldier_core --lib reject_reason_contract_tests
 cargo test -p soldier_core --test test_capabilities
-cargo test -p soldier_core --test test_dispatch_chokepoint
 cargo test -p soldier_core --test test_dispatch_map
 cargo test -p soldier_core --test test_exposure_budget
 cargo test -p soldier_core --test test_fee_staleness
@@ -33,7 +34,6 @@ cargo test -p soldier_core --test test_post_only_guard
 cargo test -p soldier_core --test test_preflight
 cargo test -p soldier_core --test test_pricer
 cargo test -p soldier_core --test test_quantize
-cargo test -p soldier_core --test test_reject_reason
 cargo test -p soldier_core --test test_rejection_side_effects
 cargo test -p soldier_core --test test_tlsm
 cargo test -p soldier_infra
@@ -41,7 +41,6 @@ cargo test -p soldier_infra --test test_config_defaults
 cargo test -p soldier_infra --test test_crash_mid_intent
 cargo test -p soldier_infra --test test_dispatch_durability
 cargo test -p soldier_infra --test test_fee_cache
-cargo test -p soldier_infra --test test_http_status
 cargo test -p soldier_infra --test test_ledger_replay
 cargo test -p soldier_infra --test test_phase0_runtime test_status_command_behavior_runtime -- --exact
 cargo test -p soldier_infra --test test_trade_id_registry
@@ -60,6 +59,7 @@ cargo test at_1108 at_1109
 cargo test at_1111 at_1123
 cargo test at_1117
 cargo test at_1118
+python -m pytest -k release_gate
 python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.json'))"
 python3 tools/phase0_meta_test.py --root .
 python3 tools/policy_loader.py --policy config/policy.json
@@ -67,7 +67,6 @@ rg -n "OrderSize" docs/order_size_discovery.md
 rg -n "dispatch" docs/dispatch_map_discovery.md
 test -f docs/dispatch_map_discovery.md
 test -f docs/order_size_discovery.md
-test -f tools/release_gate.py
 test -s docs/break_glass_runbook.md
 test -s docs/env_matrix.md
 test -s docs/keys_and_secrets.md

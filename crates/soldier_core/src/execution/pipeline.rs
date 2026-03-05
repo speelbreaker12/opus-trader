@@ -11,9 +11,9 @@ use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evalu
 #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
 use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, build_gate_results,
-    build_order_intent_with_wal_gate,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, build_order_intent_with_wal_gate,
 };
+use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
 use super::gate_outcome::GateOutcome;
@@ -235,10 +235,11 @@ pub(crate) fn evaluate_intent_pipeline(
     }
 
     // ── Build chokepoint input ──────────────────────────────────────────
-    let gate_results = build_gate_results(
+    let gate_results = build_gate_results_from_dispatch_proof(
+        input.intent_class,
         preflight_passed,
         quantize_passed,
-        dispatch_consistency_passed,
+        input.dispatch_consistency,
         fee_cache_passed,
         expiry_guard_passed,
         liquidity_gate_passed,

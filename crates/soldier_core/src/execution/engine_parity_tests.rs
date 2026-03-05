@@ -14,7 +14,10 @@ use crate::execution::gate::{GateIntentClass, L2BookSnapshot, L2Level, Liquidity
 use crate::execution::gates::NetEdgeInput;
 use crate::execution::inventory_skew::InventorySkewInput;
 use crate::execution::open_runtime::{
-    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
+    OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput,
+    REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT,
+    REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED,
+    REJECT_REASON_PENDING_EXPOSURE_OVERFILL, build_open_order_intent_runtime,
 };
 use crate::execution::pipeline::{
     IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput, evaluate_intent_pipeline,
@@ -573,7 +576,7 @@ fn conversion_helper_open_runtime_liquidity_detail_overrides_reason_code() {
         choke_result: ChokeResult::Rejected {
             reason: ChokeRejectReason::GateRejected {
                 gate: GateStep::LiquidityGate,
-                reason: "PENDING_EXPOSURE_OVERFILL".to_string(),
+                reason: REJECT_REASON_PENDING_EXPOSURE_OVERFILL.to_string(),
             },
             gate_trace: vec![
                 GateStep::DispatchAuth,
@@ -607,7 +610,7 @@ fn conversion_helper_open_runtime_liquidity_detail_overrides_reason_code() {
         choke_result: ChokeResult::Rejected {
             reason: ChokeRejectReason::GateRejected {
                 gate: GateStep::LiquidityGate,
-                reason: "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED".to_string(),
+                reason: REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED.to_string(),
             },
             gate_trace: vec![
                 GateStep::DispatchAuth,
@@ -641,7 +644,7 @@ fn conversion_helper_open_runtime_liquidity_detail_overrides_reason_code() {
         choke_result: ChokeResult::Rejected {
             reason: ChokeRejectReason::GateRejected {
                 gate: GateStep::LiquidityGate,
-                reason: "GLOBAL_EXPOSURE_BUDGET_REJECT".to_string(),
+                reason: REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT.to_string(),
             },
             gate_trace: vec![
                 GateStep::DispatchAuth,
@@ -690,6 +693,56 @@ fn conversion_helper_open_runtime_liquidity_detail_overrides_reason_code() {
         open_runtime_to_decision(&global_budget_reject, &gate_codes),
         ExecutionDecision::Rejected {
             code: RejectReasonCode::GlobalExposureBudgetExceeded,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn conversion_helper_open_runtime_unknown_liquidity_detail_uses_gate_fallback() {
+    let gate_codes = GateRejectCodes {
+        liquidity_gate: Some(RejectReasonCode::LiquidityGateNoL2),
+        ..Default::default()
+    };
+    let output = OpenRuntimeOutput {
+        choke_result: ChokeResult::Rejected {
+            reason: ChokeRejectReason::GateRejected {
+                gate: GateStep::LiquidityGate,
+                reason: "UNEXPECTED_LIQUIDITY_DETAIL".to_string(),
+            },
+            gate_trace: vec![
+                GateStep::DispatchAuth,
+                GateStep::Preflight,
+                GateStep::Quantize,
+                GateStep::DispatchConsistency,
+                GateStep::FeeCacheCheck,
+                GateStep::ExpiryGuard,
+                GateStep::LiquidityGate,
+            ],
+        },
+        gate_results: crate::execution::build_gate_results(
+            true,
+            true,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false,
+            true,
+            Some(1.0),
+            None,
+        ),
+        pending_reservation_id: None,
+        mode_hint: crate::risk::MarginGateMode::Active,
+        effective_risk_state: RiskState::Healthy,
+        adjusted_min_edge_usd: None,
+    };
+
+    assert!(matches!(
+        open_runtime_to_decision(&output, &gate_codes),
+        ExecutionDecision::Rejected {
+            code: RejectReasonCode::LiquidityGateNoL2,
             ..
         }
     ));
