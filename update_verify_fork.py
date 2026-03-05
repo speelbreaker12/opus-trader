@@ -1,5 +1,3 @@
-import sys
-
 filepath = ".worktrees/pr1-task1-drift-closure/plans/verify_fork.sh"
 with open(filepath, "r") as f:
     content = f.read()

@@ -89,6 +89,7 @@ pub struct QuantizeExecutionInput {
 #[derive(Debug, Clone)]
 pub struct OpenExecutionInput<'a> {
     pub base: ExecutionBaseInput<'a>,
+    pub gate_reject_codes: GateRejectCodes,
     pub current_delta: f64,
     pub delta_impact_est: f64,
     pub liquidity: LiquidityExecutionInput,
@@ -557,7 +558,7 @@ fn open_runtime_to_decision(
 
     match &output.choke_result {
         ChokeRejected { reason, .. } => ExecutionDecision::Rejected(ExecutionRejection {
-            code: map_open_runtime_reject_code(reason, &GateRejectCodes::default()),
+            code: map_open_runtime_reject_code(reason, &input.gate_reject_codes),
             step: map_open_rejection_step(input, output, reason),
             detail: reject_reason_detail(reason),
         }),

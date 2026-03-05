@@ -97,6 +97,7 @@ fn open_l2_snapshot() -> ExecutionL2BookSnapshot {
 fn base_open_input() -> OpenExecutionInput<'static> {
     OpenExecutionInput {
         base: base_execution_input(),
+        gate_reject_codes: GateRejectCodes::default(),
         current_delta: 0.0,
         delta_impact_est: 10.0,
         liquidity: LiquidityExecutionInput {
