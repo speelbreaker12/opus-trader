@@ -5,9 +5,11 @@
 //! AT-906: WAL enqueue failure blocks OPEN; hot loop continues.
 
 use soldier_core::execution::RecordedBeforeDispatchGate;
+use soldier_core::venue::LifecycleIntent;
 use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
 use soldier_infra::wal::{
-    BarrierMetrics, DurableAppendResult, DurableWalGate, WalBarrierConfig, durable_append,
+    BarrierMetrics, DurableAppendResult, DurableWalGate, WalBarrierConfig,
+    build_created_intent_record, durable_append,
 };
 
 /// Helper: build a minimal intent record.
@@ -184,6 +186,44 @@ fn test_recorded_before_dispatch_on_success() {
         assert!(
             ledger.get(&hash).is_some(),
             "record must exist after durable_append (fsync={fsync})"
+        );
+    }
+}
+
+#[test]
+fn test_real_record_construction_persists_reduce_only_by_intent_class() {
+    let mut ledger = WalLedger::new(10);
+    let mut lm = LedgerMetrics::new();
+    let mut bm = BarrierMetrics::new();
+    let config = WalBarrierConfig::default();
+
+    let cases = [
+        ("open", LifecycleIntent::Open, false),
+        ("close", LifecycleIntent::Close, true),
+        ("hedge", LifecycleIntent::Hedge, true),
+    ];
+
+    for (label, lifecycle_intent, expected_reduce_only) in cases {
+        let intent_hash = format!("real-path-{label}");
+        let record = build_created_intent_record(
+            &intent_hash,
+            "g-real",
+            0,
+            "BTC-PERP",
+            "buy",
+            lifecycle_intent,
+            1.0,
+            50_000.0,
+            1_000,
+        );
+        durable_append(&mut ledger, record, &config, &mut lm, &mut bm).expect("append should work");
+
+        let persisted = ledger
+            .get(&intent_hash)
+            .expect("record must be persisted in WAL");
+        assert_eq!(
+            persisted.reduce_only, expected_reduce_only,
+            "persisted reduce_only mismatch for {label}"
         );
     }
 }
