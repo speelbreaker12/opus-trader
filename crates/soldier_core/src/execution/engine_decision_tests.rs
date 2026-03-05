@@ -368,17 +368,27 @@ fn pipeline_assembly_failed_maps_to_runtime_step() {
 }
 
 fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
+    let rejected_gate = match &reason {
+        ChokeRejectReason::GateRejected { gate, .. } => Some(*gate),
+        _ => None,
+    };
+    let mut gate_trace = vec![
+        GateStep::DispatchAuth,
+        GateStep::Preflight,
+        GateStep::Quantize,
+        GateStep::DispatchConsistency,
+        GateStep::FeeCacheCheck,
+        GateStep::ExpiryGuard,
+    ];
+    if let Some(gate) = rejected_gate {
+        if !gate_trace.contains(&gate) {
+            gate_trace.push(gate);
+        }
+    }
     OpenRuntimeOutput {
         choke_result: ChokeResult::Rejected {
             reason,
-            gate_trace: vec![
-                GateStep::DispatchAuth,
-                GateStep::Preflight,
-                GateStep::Quantize,
-                GateStep::DispatchConsistency,
-                GateStep::FeeCacheCheck,
-                GateStep::ExpiryGuard,
-            ],
+            gate_trace,
         },
         gate_results: build_gate_results(
             true,
