@@ -284,6 +284,7 @@ fn test_replay_empty_ledger() {
 }
 
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_replay_mixed_states() {
     let mut ledger = WalLedger::new(10);
     let mut m = LedgerMetrics::new();
@@ -298,13 +299,17 @@ fn test_replay_mixed_states() {
     let _ = ledger.append(intent("h4", "g4", 0, TlsState::Cancelled), &mut m);
     // Acked (in-flight)
     let _ = ledger.append(intent("h5", "g5", 0, TlsState::Acked), &mut m);
+    // AT-TLSM-06 partial coverage: Rejected (deprecated WAL-only) is terminal, must not appear in in-flight
+    let _ = ledger.append(intent("h6", "g6", 0, TlsState::Rejected), &mut m);
 
     let outcome = ledger.replay();
-    assert_eq!(outcome.records_replayed, 5);
+    assert_eq!(outcome.records_replayed, 6);
     assert_eq!(outcome.in_flight_count, 3); // Created, Sent, Acked
     assert!(outcome.in_flight_hashes.contains(&"h1".to_string()));
     assert!(outcome.in_flight_hashes.contains(&"h2".to_string()));
     assert!(outcome.in_flight_hashes.contains(&"h5".to_string()));
+    // Rejected is terminal — must NOT appear in in-flight
+    assert!(!outcome.in_flight_hashes.contains(&"h6".to_string()));
 }
 
 // ─── Terminal states ────────────────────────────────────────────────────

@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = ROOT / "tools" / "validate_status.py"
@@ -193,3 +195,40 @@ def test_help_does_not_crash_when_generated_module_is_missing(tmp_path: Path) ->
 
   assert proc.returncode == 0, proc.stderr
   assert "Traceback" not in proc.stderr
+
+
+# AT-P0E-NEG: per-key negative tests for each CSP key forbidden in foundation mode.
+# Each forbidden key, injected individually, must cause check_foundation_status_contract to reject.
+@pytest.mark.parametrize("forbidden_key,sample_value", [
+  ("mode_reasons", ["REDUCEONLY_OPEN_PERMISSION_LATCHED"]),
+  ("open_permission_blocked_latch", True),
+  ("enforced_profile", "CSP"),
+  ("trading_mode", "ReduceOnly"),
+  ("opens_globally_permitted", False),
+  ("open_permission_reason_codes", ["RESTART_RECONCILE_REQUIRED"]),
+  ("open_permission_requires_reconcile", True),
+])
+def test_foundation_contract_rejects_each_forbidden_csp_key(
+  forbidden_key: str,
+  sample_value: object,
+) -> None:
+  """AT-P0E-NEG: foundation-mode response containing a single forbidden CSP key must be rejected."""
+  validator = _load_validator_module()
+  manifest = _base_manifest()
+  # Start from a valid foundation status, then inject exactly one forbidden key.
+  status = _base_foundation_status()
+  status[forbidden_key] = sample_value
+
+  errors = validator.check_foundation_status_contract(status, manifest)
+
+  assert errors, (
+    f"Expected validator to reject foundation status with forbidden key '{forbidden_key}', "
+    f"but no errors were returned"
+  )
+  assert any(
+    f"phase='foundation' forbids field '{forbidden_key}'" in err
+    for err in errors
+  ), (
+    f"Expected error mentioning \"phase='foundation' forbids field '{forbidden_key}'\", "
+    f"got: {errors}"
+  )

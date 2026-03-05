@@ -1883,9 +1883,10 @@ Profile: CSP
 AT-TLSM-02
 - Given: an order intent in `PartiallyFilled` state receives a `Canceled` event.
 - When: TLSM processes the cancel event.
-- Then: the final state is `Canceled` and the partial fill qty is preserved in the WAL record.
-- Pass criteria: state is `Canceled`; partial fill qty in WAL matches the fill that preceded the cancel.
-- Fail criteria: partial fill is lost, state is incorrect, or WAL record is inconsistent.
+- Then: the final state is `Cancelled` and the WAL contains both the `PartiallyFilled` transition and the `Cancelled` transition, in that order.
+- Pass criteria: state is `Cancelled`; WAL records `PartiallyFilled → Cancelled` in sequence.
+- Fail criteria: state is incorrect, or WAL record is missing/out-of-order.
+- Phase 2 note: qty preservation in WAL (partial fill qty matching the fill) is deferred to Phase 2 when `TlsmEvent::PartialFill` gains a qty field.
 
 Profile: CSP
 AT-TLSM-03

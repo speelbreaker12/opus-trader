@@ -530,13 +530,11 @@ fn test_apply_with_sink_emits_transition_records() {
 
     assert_eq!(sink.transitions[1].from, TlsmState::Sent);
     assert_eq!(sink.transitions[1].to, TlsmState::Filled);
-    assert!(
-        sink.transitions[1]
-            .anomaly
-            .as_deref()
-            .unwrap_or("")
-            .contains("fill-before-ack")
-    );
+    assert!(sink.transitions[1]
+        .anomaly
+        .as_deref()
+        .unwrap_or("")
+        .contains("fill-before-ack"));
 }
 
 #[test]
@@ -748,7 +746,10 @@ fn noop_sink_definition_is_cfg_test_gated() {
 
     // Assert the gate is exactly #[cfg(test)], not cfg(any(...)) or feature-gated.
     let gate_text = src[gate_pos..gate_pos + cfg_test_tag.len()].trim();
-    assert_eq!(gate_text, "#[cfg(test)]", "Gate must be exactly #[cfg(test)], not cfg(any(...)) or feature-gated");
+    assert_eq!(
+        gate_text, "#[cfg(test)]",
+        "Gate must be exactly #[cfg(test)], not cfg(any(...)) or feature-gated"
+    );
 
     // Nothing between the gate and the struct definition should be non-whitespace
     // doc comment noise — the gate must be the immediately preceding attribute.
@@ -760,7 +761,9 @@ fn noop_sink_definition_is_cfg_test_gated() {
     let non_whitespace_non_doc: Vec<&str> = between
         .lines()
         .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#["))
+        .filter(|l| {
+            !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#[")
+        })
         .collect();
 
     assert!(
@@ -782,13 +785,18 @@ fn noop_sink_definition_is_cfg_test_gated() {
 
     // Assert the apply gate is exactly #[cfg(test)].
     let apply_gate_text = src[apply_gate_pos..apply_gate_pos + cfg_test_tag.len()].trim();
-    assert_eq!(apply_gate_text, "#[cfg(test)]", "Gate must be exactly #[cfg(test)], not cfg(any(...)) or feature-gated");
+    assert_eq!(
+        apply_gate_text, "#[cfg(test)]",
+        "Gate must be exactly #[cfg(test)], not cfg(any(...)) or feature-gated"
+    );
 
     let between_apply = &src[apply_gate_pos + cfg_test_tag.len()..apply_pos];
     let non_whitespace_apply: Vec<&str> = between_apply
         .lines()
         .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#["))
+        .filter(|l| {
+            !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#[")
+        })
         .collect();
 
     assert!(
@@ -799,7 +807,7 @@ fn noop_sink_definition_is_cfg_test_gated() {
 }
 
 /// Assert that no non-test Rust source file in soldier_core references
-/// `NoopTransitionSink` or calls bare `.apply(TlsmEvent`.
+/// `NoopTransitionSink` or calls bare `.apply(`.
 ///
 /// Recursively walks the entire `src/` directory of soldier_core — no
 /// hardcoded allowlist to maintain. Files whose names end in `_tests.rs`
@@ -827,7 +835,7 @@ fn production_sources_do_not_reference_noop_sink_or_bare_apply() {
 
     let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     // Forbidden: using the no-op sink type or calling apply() without _with_sink.
-    let forbidden_patterns = ["NoopTransitionSink", ".apply(TlsmEvent"];
+    let forbidden_patterns = ["NoopTransitionSink", ".apply("];
 
     let mut all_files = Vec::new();
     collect_rs_files(&src_dir, &mut all_files);
@@ -876,18 +884,14 @@ fn test_at_tlsm_01_full_lifecycle_wal_recorded() {
     sm.apply_with_sink(TlsmEvent::Sent, &mut sink).unwrap();
     sm.apply_with_sink(TlsmEvent::Acked, &mut sink).unwrap();
     sm.apply_with_sink(TlsmEvent::Filled, &mut sink).unwrap();
-    // Created→Sent→Acked→Filled: 3 transitions (Created is initial state, not a transition)
-    // But spec says "Created→Sent→Acked→Filled" = 3 apply calls. Add Created→Sent to make 4.
-    // Re-read: the test asks for 4 entries. Rebuild with explicit Created start.
-    let mut sm2 = Tlsm::new();
-    let mut sink2 = CollectingSink::default();
-    sm2.apply_with_sink(TlsmEvent::Sent, &mut sink2).unwrap();
-    sm2.apply_with_sink(TlsmEvent::Acked, &mut sink2).unwrap();
-    sm2.apply_with_sink(TlsmEvent::Filled, &mut sink2).unwrap();
 
-    // 3 transitions: Created→Sent, Sent→Acked, Acked→Filled
-    assert_eq!(sink2.transitions.len(), 3, "should record 3 WAL entries for Created→Sent→Acked→Filled");
-    assert_eq!(sink2.transitions.last().unwrap().to, TlsmState::Filled);
+    // Created is the initial state, so this lifecycle persists 3 transitions.
+    assert_eq!(
+        sink.transitions.len(),
+        3,
+        "should record 3 WAL entries for Created→Sent→Acked→Filled"
+    );
+    assert_eq!(sink.transitions.last().unwrap().to, TlsmState::Filled);
 }
 
 /// AT-TLSM-01 variant: 4-step lifecycle including PartiallyFilled.
@@ -898,7 +902,8 @@ fn test_at_tlsm_01_four_step_lifecycle_wal_recorded() {
 
     sm.apply_with_sink(TlsmEvent::Sent, &mut sink).unwrap();
     sm.apply_with_sink(TlsmEvent::Acked, &mut sink).unwrap();
-    sm.apply_with_sink(TlsmEvent::PartialFill, &mut sink).unwrap();
+    sm.apply_with_sink(TlsmEvent::PartialFill, &mut sink)
+        .unwrap();
     sm.apply_with_sink(TlsmEvent::Filled, &mut sink).unwrap();
 
     assert_eq!(sink.transitions.len(), 4, "should record 4 WAL entries");
@@ -913,19 +918,31 @@ fn test_at_tlsm_02_cancel_after_partial_wal_preserved() {
 
     sm.apply_with_sink(TlsmEvent::Sent, &mut sink).unwrap();
     sm.apply_with_sink(TlsmEvent::Acked, &mut sink).unwrap();
-    sm.apply_with_sink(TlsmEvent::PartialFill, &mut sink).unwrap();
+    sm.apply_with_sink(TlsmEvent::PartialFill, &mut sink)
+        .unwrap();
     sm.apply_with_sink(TlsmEvent::Cancelled, &mut sink).unwrap();
 
     assert!(
-        sink.transitions.iter().any(|t| t.to == TlsmState::Cancelled),
+        sink.transitions
+            .iter()
+            .any(|t| t.to == TlsmState::Cancelled),
         "WAL must contain Cancelled entry"
     );
     // PartiallyFilled must appear before Cancelled
-    let pf_idx = sink.transitions.iter().position(|t| t.to == TlsmState::PartiallyFilled)
+    let pf_idx = sink
+        .transitions
+        .iter()
+        .position(|t| t.to == TlsmState::PartiallyFilled)
         .expect("WAL must contain PartiallyFilled entry");
-    let cancel_idx = sink.transitions.iter().position(|t| t.to == TlsmState::Cancelled)
+    let cancel_idx = sink
+        .transitions
+        .iter()
+        .position(|t| t.to == TlsmState::Cancelled)
         .expect("WAL must contain Cancelled entry");
-    assert!(pf_idx < cancel_idx, "PartiallyFilled must precede Cancelled in WAL");
+    assert!(
+        pf_idx < cancel_idx,
+        "PartiallyFilled must precede Cancelled in WAL"
+    );
 }
 
 /// AT-TLSM-03: VenueRejected (or Rejected) produces Failed state and WAL entry.
@@ -937,16 +954,22 @@ fn test_at_tlsm_03_venue_rejected_produces_failed() {
     let mut sink = CollectingSink::default();
 
     sm.apply_with_sink(TlsmEvent::Sent, &mut sink).unwrap();
-    sm.apply_with_sink(TlsmEvent::VenueRejected, &mut sink).unwrap();
+    sm.apply_with_sink(TlsmEvent::VenueRejected, &mut sink)
+        .unwrap();
 
-    assert_eq!(sm.state(), TlsmState::Failed, "VenueRejected must produce Failed state");
+    assert_eq!(
+        sm.state(),
+        TlsmState::Failed,
+        "VenueRejected must produce Failed state"
+    );
     assert!(
         sink.transitions.iter().any(|t| t.to == TlsmState::Failed),
         "WAL must contain a Failed entry after VenueRejected"
     );
 }
 
-/// AT-TLSM-03 NON-TRIP: Acked does NOT produce Failed (no false positive).
+/// AT-TLSM-03-NT NON-TRIP: Acked does NOT produce Failed (no false positive).
+// AT-TLSM-03-NT
 #[test]
 fn test_at_tlsm_03_non_trip_acked_does_not_produce_failed() {
     let mut sm = Tlsm::new();
@@ -955,7 +978,11 @@ fn test_at_tlsm_03_non_trip_acked_does_not_produce_failed() {
     sm.apply_with_sink(TlsmEvent::Sent, &mut sink).unwrap();
     sm.apply_with_sink(TlsmEvent::Acked, &mut sink).unwrap();
 
-    assert_eq!(sm.state(), TlsmState::Acked, "Acked must not produce Failed");
+    assert_eq!(
+        sm.state(),
+        TlsmState::Acked,
+        "Acked must not produce Failed"
+    );
     assert!(
         !sink.transitions.iter().any(|t| t.to == TlsmState::Failed),
         "WAL must NOT contain Failed entry after normal Acked"
@@ -988,16 +1015,18 @@ fn test_at_tlsm_04_duplicate_fill_no_additional_wal_entry() {
 /// all events return Ignored and do not add WAL entries.
 #[test]
 fn test_at_tlsm_05_terminal_rejected_immutable() {
-    let all_events = || vec![
-        TlsmEvent::Sent,
-        TlsmEvent::Acked,
-        TlsmEvent::PartialFill,
-        TlsmEvent::Filled,
-        TlsmEvent::Cancelled,
-        TlsmEvent::VenueRejected,
-        TlsmEvent::Rejected,
-        TlsmEvent::Failed,
-    ];
+    let all_events = || {
+        vec![
+            TlsmEvent::Sent,
+            TlsmEvent::Acked,
+            TlsmEvent::PartialFill,
+            TlsmEvent::Filled,
+            TlsmEvent::Cancelled,
+            TlsmEvent::VenueRejected,
+            TlsmEvent::Rejected,
+            TlsmEvent::Failed,
+        ]
+    };
 
     // Helper: drive sm to a terminal state, then verify all events are ignored.
     let check_terminal = |mut sm: Tlsm, label: &str| {
@@ -1023,25 +1052,36 @@ fn test_at_tlsm_05_terminal_rejected_immutable() {
     let mut s = CollectingSink::default();
     sm_filled.apply_with_sink(TlsmEvent::Sent, &mut s).unwrap();
     sm_filled.apply_with_sink(TlsmEvent::Acked, &mut s).unwrap();
-    sm_filled.apply_with_sink(TlsmEvent::Filled, &mut s).unwrap();
+    sm_filled
+        .apply_with_sink(TlsmEvent::Filled, &mut s)
+        .unwrap();
     check_terminal(sm_filled, "Filled");
 
     // Cancelled terminal
     let mut sm_cancelled = Tlsm::new();
     let mut s2 = CollectingSink::default();
-    sm_cancelled.apply_with_sink(TlsmEvent::Sent, &mut s2).unwrap();
-    sm_cancelled.apply_with_sink(TlsmEvent::Cancelled, &mut s2).unwrap();
+    sm_cancelled
+        .apply_with_sink(TlsmEvent::Sent, &mut s2)
+        .unwrap();
+    sm_cancelled
+        .apply_with_sink(TlsmEvent::Cancelled, &mut s2)
+        .unwrap();
     check_terminal(sm_cancelled, "Cancelled");
 
     // Failed terminal
     let mut sm_failed = Tlsm::new();
     let mut s3 = CollectingSink::default();
     sm_failed.apply_with_sink(TlsmEvent::Sent, &mut s3).unwrap();
-    sm_failed.apply_with_sink(TlsmEvent::Failed, &mut s3).unwrap();
+    sm_failed
+        .apply_with_sink(TlsmEvent::Failed, &mut s3)
+        .unwrap();
     check_terminal(sm_failed, "Failed");
 
     // Verify TlsmState::Failed is_terminal() (WAL-replay scenario)
     assert!(TlsmState::Failed.is_terminal(), "Failed must be terminal");
     assert!(TlsmState::Filled.is_terminal(), "Filled must be terminal");
-    assert!(TlsmState::Cancelled.is_terminal(), "Cancelled must be terminal");
+    assert!(
+        TlsmState::Cancelled.is_terminal(),
+        "Cancelled must be terminal"
+    );
 }

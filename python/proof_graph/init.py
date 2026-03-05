@@ -122,14 +122,10 @@ def init_v2(
         else Path("reviews/premortems") / f"{story_id}_premortem.md"
     )
 
-    # Parse premortem sections
-    premortem_vals: dict[str, str | None] = {
-        "section5_wrong_impl_blocked": None,
-        "section4_decision_match": None,
-        "section2_assumptions": None,
-    }
-    if resolved_premortem_path:
-        premortem_vals = _parse_premortem(resolved_premortem_path)
+    # Parse premortem sections. Always call _parse_premortem unconditionally —
+    # resolved_premortem_path is always a Path object (never None/falsy), and
+    # _parse_premortem handles missing files gracefully via `if not premortem_path.is_file(): return result`.
+    premortem_vals: dict[str, str | None] = _parse_premortem(resolved_premortem_path)
 
     # Pre-populate ATs from enforcing_contract_ats
     eca = item.get("enforcing_contract_ats", []) if item else []

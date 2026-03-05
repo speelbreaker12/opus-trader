@@ -25,7 +25,12 @@ use std::thread;
 use std::time::Duration;
 
 fn default_reduce_only_legacy() -> bool {
-    // Fail-closed: legacy WAL records missing reduce_only MUST default to false (OPEN classification) per CONTRACT §2.4. OPEN is the most conservative classification — it applies all OPEN gates on recovery.
+    // Fail-closed: legacy WAL records missing reduce_only MUST default to false (OPEN classification)
+    // per CONTRACT §2.4. OPEN is the most conservative choice — it applies all OPEN gates on recovery.
+    // NOTE: This field is for WAL persistence/audit only. Gate classification derives from IntentClass.
+    // UPGRADE NOTE: If WAL files predate the reduce_only field, records will be reclassified as OPEN
+    // on replay. Monitor logs for this warning after upgrade to verify expected record count.
+    tracing::warn!("WAL replay: legacy record missing reduce_only field, defaulting to false (OPEN classification)");
     false
 }
 
@@ -139,6 +144,10 @@ pub struct IntentRecord {
     ///
     /// Backward compatibility: older WAL lines missing this field default to
     /// `false` (OPEN classification — most conservative, applies all OPEN gates on recovery per CONTRACT §2.4).
+    ///
+    /// NOTE: This field is used for WAL persistence and audit only. Gate classification at
+    /// dispatch time derives `reduce_only` from `IntentClass` at the chokepoint layer —
+    /// NOT from this persisted field. Do NOT use this field for gate decisions.
     #[serde(default = "default_reduce_only_legacy")]
     pub reduce_only: bool,
     /// Quantized quantity.
@@ -968,6 +977,13 @@ fn apply_event(
             let record = latest_by_hash
                 .get_mut(intent_hash)
                 .ok_or_else(|| format!("transition missing intent_hash: {intent_hash}"))?;
+            // Design: WAL replay is intentionally lenient — invalid transitions log a warning
+            // but are applied to preserve replay fidelity for historical WAL files. A strict
+            // rejection here would prevent replaying WAL files written by older versions with
+            // different TLSM rules. All in-flight state is rebuilt from WAL, so a corrupt record
+            // can only cause a phantom in-flight entry, not data loss.
+            // Risk: If a Filled record is followed by a Sent record in a corrupted WAL, the intent
+            // appears in in_flight_hashes as Sent. Monitor logs for "WARN invalid_wal_transition".
             if !record.tls_state.is_valid_successor(*new_state) {
                 tracing::warn!(
                     intent_hash = %intent_hash,
