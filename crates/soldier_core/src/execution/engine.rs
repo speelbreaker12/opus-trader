@@ -107,10 +107,10 @@ impl ExecutionEngine {
         Self
     }
 
-    pub fn decide<'a>(
+    pub fn decide<'input, 'runtime>(
         &self,
-        input: &ExecutionInput<'a>,
-        runtime: &mut ExecutionRuntime<'a>,
+        input: &ExecutionInput<'input>,
+        runtime: &mut ExecutionRuntime<'runtime>,
     ) -> ExecutionDecision {
         match input {
             ExecutionInput::Open(open_input) => {
@@ -131,18 +131,14 @@ impl ExecutionEngine {
                 );
                 open_runtime_to_decision(&output, &open_input.gate_reject_codes)
             }
-            ExecutionInput::Close(close_input) => self.evaluate_pipeline_variant(
-                close_input.input.clone(),
-                ChokeIntentClass::Close,
-                runtime,
-            ),
-            ExecutionInput::Hedge(hedge_input) => self.evaluate_pipeline_variant(
-                hedge_input.input.clone(),
-                ChokeIntentClass::Hedge,
-                runtime,
-            ),
+            ExecutionInput::Close(close_input) => {
+                self.evaluate_pipeline_variant(&close_input.input, ChokeIntentClass::Close, runtime)
+            }
+            ExecutionInput::Hedge(hedge_input) => {
+                self.evaluate_pipeline_variant(&hedge_input.input, ChokeIntentClass::Hedge, runtime)
+            }
             ExecutionInput::CancelOnly(cancel_only_input) => self.evaluate_pipeline_variant(
-                cancel_only_input.input.clone(),
+                &cancel_only_input.input,
                 ChokeIntentClass::CancelOnly,
                 runtime,
             ),
@@ -150,23 +146,28 @@ impl ExecutionEngine {
     }
 
     /// Compatibility alias kept during Upgrade 1B transition.
-    pub fn evaluate<'a>(
+    pub fn evaluate<'input, 'runtime>(
         &self,
-        input: &ExecutionInput<'a>,
-        runtime: &mut ExecutionRuntime<'a>,
+        input: &ExecutionInput<'input>,
+        runtime: &mut ExecutionRuntime<'runtime>,
     ) -> ExecutionDecision {
         self.decide(input, runtime)
     }
 
-    fn evaluate_pipeline_variant<'a>(
+    fn evaluate_pipeline_variant<'input, 'runtime>(
         &self,
-        mut input: IntentPipelineInput<'a>,
+        input: &IntentPipelineInput<'input>,
         intent_class: ChokeIntentClass,
-        runtime: &mut ExecutionRuntime<'a>,
+        runtime: &mut ExecutionRuntime<'runtime>,
     ) -> ExecutionDecision {
-        input.intent_class = intent_class;
         runtime.pipeline_metrics = IntentPipelineMetrics::new();
-        let result = evaluate_intent_pipeline(&input, &mut runtime.pipeline_metrics);
+        let result = if input.intent_class == intent_class {
+            evaluate_intent_pipeline(input, &mut runtime.pipeline_metrics)
+        } else {
+            let mut normalized = input.clone();
+            normalized.intent_class = intent_class;
+            evaluate_intent_pipeline(&normalized, &mut runtime.pipeline_metrics)
+        };
         pipeline_result_to_decision(
             result.decision,
             result.reject_reason_code,

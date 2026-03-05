@@ -17,12 +17,13 @@ use crate::execution::open_runtime::{
     OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 use crate::execution::pipeline::{
-    IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput, evaluate_intent_pipeline,
+    IntentPipelineInput, IntentPipelineMetrics, PipelineResult, QuantizePipelineInput,
+    evaluate_intent_pipeline,
 };
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
 use crate::execution::quantize::{QuantizeConstraints, Side};
-use crate::execution::{GateRejectCodes, RejectReasonCode};
+use crate::execution::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
     PendingExposureBook, ReservationId, RiskState,
@@ -30,6 +31,11 @@ use crate::risk::{
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, InstrumentKind, LifecycleIntent, VenueCapabilities,
 };
+
+const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
+const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
+    "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED";
+const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGET_REJECT";
 
 fn open_l2_snapshot() -> L2BookSnapshot {
     L2BookSnapshot {
@@ -225,11 +231,7 @@ fn base_pipeline_input<'a>() -> IntentPipelineInput<'a> {
 fn legacy_pipeline_decision(input: &IntentPipelineInput<'_>) -> ExecutionDecision {
     let mut metrics = IntentPipelineMetrics::new();
     let result = evaluate_intent_pipeline(input, &mut metrics);
-    pipeline_result_to_decision(
-        result.decision,
-        result.reject_reason_code,
-        &GateRejectCodes::default(),
-    )
+    legacy_pipeline_result_to_decision(result)
 }
 
 fn legacy_open_decision(
@@ -245,7 +247,81 @@ fn legacy_open_decision(
         &mut choke_metrics,
         &mut runtime_metrics,
     );
-    open_runtime_to_decision(&output, &gate_reject_codes)
+    legacy_open_runtime_to_decision(&output, &gate_reject_codes)
+}
+
+fn legacy_pipeline_result_to_decision(result: PipelineResult) -> ExecutionDecision {
+    match result.decision {
+        ChokeResult::Approved { gate_trace } => ExecutionDecision::Approved {
+            gate_trace,
+            open_metadata: None,
+        },
+        ChokeResult::Rejected { reason, .. } => {
+            let (step, detail) = legacy_extract_step_and_detail(&reason);
+            let code = result
+                .reject_reason_code
+                .expect("pipeline rejection must include a reject reason code");
+            ExecutionDecision::Rejected { code, step, detail }
+        }
+    }
+}
+
+fn legacy_open_runtime_to_decision(
+    output: &OpenRuntimeOutput,
+    gate_reject_codes: &GateRejectCodes,
+) -> ExecutionDecision {
+    match &output.choke_result {
+        ChokeResult::Approved { gate_trace } => ExecutionDecision::Approved {
+            gate_trace: gate_trace.clone(),
+            open_metadata: Some(super::OpenMetadata {
+                pending_reservation_id: output.pending_reservation_id.clone(),
+                effective_risk_state: output.effective_risk_state,
+                adjusted_min_edge_usd: output.adjusted_min_edge_usd,
+                mode_hint: output.mode_hint,
+            }),
+        },
+        ChokeResult::Rejected { reason, .. } => {
+            let (step, detail) = legacy_extract_step_and_detail(reason);
+            let code = legacy_map_open_runtime_reject_code(reason, gate_reject_codes);
+            ExecutionDecision::Rejected { code, step, detail }
+        }
+    }
+}
+
+fn legacy_map_open_runtime_reject_code(
+    reason: &ChokeRejectReason,
+    gate_reject_codes: &GateRejectCodes,
+) -> RejectReasonCode {
+    if let ChokeRejectReason::GateRejected {
+        gate: GateStep::LiquidityGate,
+        reason: detail,
+    } = reason
+    {
+        return match detail.as_str() {
+            REJECT_REASON_PENDING_EXPOSURE_OVERFILL
+            | REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED => {
+                RejectReasonCode::PendingExposureBudgetExceeded
+            }
+            REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT => {
+                RejectReasonCode::GlobalExposureBudgetExceeded
+            }
+            _ => reject_reason_from_chokepoint(reason, gate_reject_codes),
+        };
+    }
+
+    reject_reason_from_chokepoint(reason, gate_reject_codes)
+}
+
+fn legacy_extract_step_and_detail(reason: &ChokeRejectReason) -> (GateStep, String) {
+    match reason {
+        ChokeRejectReason::RiskStateNotHealthy => {
+            (GateStep::DispatchAuth, "RiskState not Healthy".to_string())
+        }
+        ChokeRejectReason::GateRejected { gate, reason } => (*gate, reason.clone()),
+        ChokeRejectReason::AssemblyFailed => {
+            (GateStep::DispatchAuth, "Assembly failed".to_string())
+        }
+    }
 }
 
 fn assert_approved_with_recorded_before_dispatch(decision: &ExecutionDecision) {
@@ -423,6 +499,24 @@ fn engine_close_rejected_matches_legacy_pipeline_path() {
             ..
         }
     ));
+}
+
+#[test]
+fn engine_close_forces_intent_class_when_input_variant_mismatches_payload() {
+    let mut input = base_pipeline_input();
+    input.intent_class = ChokeIntentClass::Open;
+    input.risk_state = RiskState::Degraded;
+
+    let mut forced = input.clone();
+    forced.intent_class = ChokeIntentClass::Close;
+    let legacy_forced = legacy_pipeline_decision(&forced);
+
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Close(CloseExecutionInput { input });
+    let mut runtime = ExecutionRuntime::default();
+    let delegated = engine.decide(&engine_input, &mut runtime);
+
+    assert_eq!(delegated, legacy_forced);
 }
 
 #[test]
@@ -711,4 +805,41 @@ fn conversion_helper_pipeline_risk_state_maps_to_margin_headroom() {
             ..
         }
     ));
+}
+
+#[test]
+fn engine_runtime_allows_reuse_across_short_lived_inputs() {
+    let engine = ExecutionEngine::new();
+    let book = make_pending_book(100.0);
+    let mut runtime = ExecutionRuntime::new(Some(&book));
+
+    let first = {
+        let linked_order = String::from("FIRST_LINK");
+        let mut input = base_pipeline_input();
+        input.intent_class = ChokeIntentClass::Close;
+        input.risk_state = RiskState::Degraded;
+        input.preflight.linked_order_type = Some(linked_order.as_str());
+        input.preflight.linked_orders_allowed = true;
+        let legacy = legacy_pipeline_decision(&input);
+        let wrapped = ExecutionInput::Close(CloseExecutionInput { input });
+        let delegated = engine.decide(&wrapped, &mut runtime);
+        assert_eq!(delegated, legacy);
+        delegated
+    };
+
+    let second = {
+        let linked_order = String::from("SECOND_LINK");
+        let mut input = base_pipeline_input();
+        input.intent_class = ChokeIntentClass::Hedge;
+        input.risk_state = RiskState::Degraded;
+        input.preflight.linked_order_type = Some(linked_order.as_str());
+        input.preflight.linked_orders_allowed = true;
+        let legacy = legacy_pipeline_decision(&input);
+        let wrapped = ExecutionInput::Hedge(HedgeExecutionInput { input });
+        let delegated = engine.decide(&wrapped, &mut runtime);
+        assert_eq!(delegated, legacy);
+        delegated
+    };
+
+    drop((first, second));
 }
