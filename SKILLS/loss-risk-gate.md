@@ -38,19 +38,22 @@ For each changed file / function, classify whether it can:
 - Convert a real quantity into a proxy decision
 
 ### 2) Loss-risk audit
-Answer with file:line evidence:
+For each question, answer: `YES | NO | UNKNOWN` + one-sentence reason + proof (contract clause, enforcement file, test/artifact). `UNKNOWN` = treat as `YES`.
+
 - Can this change create avoidable loss through wrong dispatch, widened exposure, duplicate action, stale-state execution, reconciliation drift, or fail-open behavior?
 - Are there missing guards for None / stale / NaN / Inf / contradictory / partial-state inputs?
 - Can a normal-operation path bypass the intended restriction?
+- Does the design remain correct under bad inputs, retries, partial failures, exchange/API errors, replay, restart, and reconciliation?
 
-If yes to any, mark `LOSS_RISK_BLOCKING`.
+If yes (or unknown) to any, mark `LOSS_RISK_BLOCKING`.
 
 ### 3) Profit-block audit
-Answer with file:line evidence:
+Same format: `YES | NO | UNKNOWN` + reason + proof. `UNKNOWN` = treat as `YES`.
+
 - Can this change silently block valid profit through false rejects, unnecessary restrictions, degraded signal interpretation, delayed valid action, or incorrect intent classification?
 - Does the system reject safely **and** specifically, or does it over-block because uncertainty is being handled too crudely?
 
-If yes to any, mark `PROFIT_BLOCK_BLOCKING`.
+If yes (or unknown) to any, mark `PROFIT_BLOCK_BLOCKING`.
 
 ### 4) Simpler-safer alternative audit
 Ask:
@@ -90,6 +93,8 @@ Silent capital-protection logic or silent profit-block logic = blocker.
 ### B) Trading Lens
 `PASS | BLOCKING | HARDENING`
 
+Derivation: `BLOCKING` if any finding is `*_BLOCKING`. `HARDENING` if no blocking findings but fragility noted. `PASS` otherwise. Verdict is `NO-GO` when Trading Lens is `BLOCKING`.
+
 ### C) Economic Risk Findings
 For each finding:
 - Type: `LOSS_RISK_BLOCKING | PROFIT_BLOCK_BLOCKING | HARDENING | INFO`
@@ -106,7 +111,17 @@ For each finding:
 - Simpler/safer alternative:
 - Why current was rejected or must be fixed:
 
-### F) Final gate rule
+### F) Pre-gate confirmation
+Before applying the gate rule, confirm all three:
+1. This change cannot create avoidable loss through incorrect orders, widened risk, blocked reductions, duplicate actions, stale state, or fail-open behavior.
+2. This change will not silently block valid profit through false rejects, unnecessary restrictions, bad intent classification, delayed actions, or degraded signal handling.
+3. This is the simplest fail-closed design that satisfies the contract and expected edge. If a safer or simpler design was found, it is recorded as a blocker, not ignored.
+
+If any statement cannot be confirmed with proof, return `NO-GO`.
+
+### G) Final gate rule
+Return `GO` only when all six audits produce no BLOCKING findings and every safety-critical enforcement point has causal proof.
+
 Return `NO-GO` if any finding shows:
 - avoidable loss risk,
 - silent valid-profit block in normal operation,
@@ -117,5 +132,6 @@ Return `NO-GO` if any finding shows:
 ## Constraints
 - No production edits in this skill
 - No guessing; if you cannot prove safety, it is not safe
+- Proof, not belief: every critical claim must be tied to a specific contract clause, enforcement point, and verification artifact — not intuition or prose
 - Optimize for capital protection first, expected edge preservation second, simplicity third
 - Prefer the smallest fix that removes the economic risk without widening scope
