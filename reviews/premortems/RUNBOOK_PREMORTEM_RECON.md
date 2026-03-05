@@ -83,7 +83,7 @@ Six checks, evaluated in order:
 | 3 | STOPLIGHT != RED | `NO-GO: STOPLIGHT_RED` | Stop |
 | 4 | If STOPLIGHT is YELLOW: every gap marked DEFERRED or FIX IN STEP 5 | `NO-GO: UNRESOLVED_YELLOW_GAPS` | Stop |
 | 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories globally across PRD) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
-| 6 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT` | Stop (also enforced by §1.1) |
+| 6 | Required context files exist (`specs/CONTRACT.md`, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT` | Stop (also enforced by §1.1) |
 
 **Exit 0** = proceed. **Exit 1** = blocked (fix premortem first).
 
@@ -331,7 +331,7 @@ If precheck fails, fix it first; do not record the step receipt.
 
 **Checklist per story**:
 - [ ] AT causal proof (dispatch_count, reject_reason, latch_reason — not just `result.is_err()`)
-- [ ] AT semantic match (re-read at least 1 AT anchor in CONTRACT.md per story)
+- [ ] AT semantic match (re-read at least 1 AT anchor in `specs/CONTRACT.md` per story)
 - [ ] Premortem §4 decisions implemented as chosen
 - [ ] Premortem §5 wrong impls blocked by tightening tests
 - [ ] Premortem §2 assumptions turned into tests or killed
@@ -533,7 +533,7 @@ When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refr
 *Step 2 — Implement:*
 1. Implement code/test/observability fixes for each gap, following the plan
 2. Update evidence ledger rows: GAP → FIXED, add new file:line citations
-3. Generate proof graph: `python3 python/proof_graph/scaffold.py ${STORY_ID}`, populate from evidence ledger verdicts/citations, validate with `python3 python/proof_graph/validate.py --strict artifacts/story/${STORY_ID}/proof_graph.json`
+3. Generate proof graph: `python3 python/proof_graph/init.py ${STORY_ID} --premortem-dir artifacts/story/${STORY_ID}/`, populate from evidence ledger verdicts/citations, validate with `python3 python/proof_graph/validate.py --strict artifacts/story/${STORY_ID}/proof_graph.json`
 4. Run verification commands (at least `verify.sh quick` + targeted tests)
 
 **Output**:
@@ -701,12 +701,12 @@ FOCUS QUESTIONS:
 1. For each AT: does the enforcement point actually enforce what
    the contract clause requires? (Not just "code exists" but
    "code enforces the specific invariant.")
-2. Are there any fail-open paths where CONTRACT.md requires
+2. Are there any fail-open paths where `specs/CONTRACT.md` requires
    fail-closed? Check: missing input, stale input, NaN.
-3. Does the code's behavior match CONTRACT.md exactly, or does
+3. Does the code's behavior match `specs/CONTRACT.md` exactly, or does
    it implement a superset/subset of the requirement?
 4. Any contract clauses in scope that have NO enforcement point?
-5. Is loss_mode consistent with what CONTRACT.md implies about
+5. Is loss_mode consistent with what `specs/CONTRACT.md` implies about
    the severity of this invariant?
 ```
 

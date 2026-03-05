@@ -23,7 +23,7 @@
 | Evidence Ledger | Per-story document produced during reconciliation with file:line citations for every audit check. |
 | Simpler-Than-Correct Gate | A meta-check: "Is there any implementation SIMPLER than the correct one that passes the entire test suite?" If yes, the suite has a mutation gap. Applied in Phase R5b.1 (preliminary, reviewers catch gaps) and definitively in Phase R7e (independent auditor). R5b is defense-in-depth; it does not replace R7e. |
 | Proof Graph | Per-story `proof_graph.json` -- structured JSON mapping each AT to enforcement point, tests, wiring status, observability, and verdict. Validated by `python/proof_graph/validate.py` with 60 rules (43 V1+V2, 17 V2-only). Schema versions 1 and 2. |
-| Story Proof Scope | The minimum context needed to audit a story's contract compliance: PRD item, `enforcing_contract_ats[]`, premortem (especially sections 2/4/5), recon preflight, `scope.touch` files, proving test files from `implementation_tests[]`, relevant CONTRACT.md sections, and direct integration surfaces for causality. |
+| Story Proof Scope | The minimum context needed to audit a story's contract compliance: PRD item, `enforcing_contract_ats[]`, premortem (especially sections 2/4/5), recon preflight, `scope.touch` files, proving test files from `implementation_tests[]`, relevant `specs/CONTRACT.md` sections, and direct integration surfaces for causality. |
 | Review Basis | An explicit label every reviewer must include in their output: `STORY_SCOPE (Cycle 1)` or `FIX_DIFF + AT_REGRESSION (Cycle 2)`. |
 
 ---
@@ -118,7 +118,7 @@ Six checks, evaluated in order:
 | 3 | STOPLIGHT is not RED | `NO-GO: STOPLIGHT_RED` | Stop |
 | 4 | If STOPLIGHT is YELLOW: every gap marked DEFERRED or FIX IN STEP 5 | `NO-GO: UNRESOLVED_YELLOW_GAPS` | Stop |
 | 5 | No AT ownership conflicts (no AT claimed as primary by 2+ stories) | `NO-GO: AT_OWNERSHIP_CONFLICT` | Stop |
-| 6 | Required context files exist (CONTRACT.md, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT: <filename>` | Stop |
+| 6 | Required context files exist (`specs/CONTRACT.md`, prd.json entry, scope.touch files) | `NO-GO: MISSING_ARTIFACT: <filename>` | Stop |
 
 All six are hard stops. If any check fails, reconciliation cannot proceed.
 
@@ -230,7 +230,7 @@ Fifteen checks, all must pass:
 
 - R-001: RECONCILED verdict with BLOCKING contradiction
 - R-004: Stale test SHA
-- R-007: Phantom AT not in CONTRACT.md
+- R-007: Phantom AT not in `specs/CONTRACT.md`
 - R-008: Placeholder detection
 - R-015: FAIL_OPEN_RISK
 - R-016b: Safety-critical AT without TRIP tests
@@ -242,7 +242,7 @@ Fifteen checks, all must pass:
 
 Exit codes: 0 (pass), 1 (validation failure), 2 (usage/schema error), 3 (file/parse error), 20 (trading halt).
 
-Generate skeleton: `python3 python/proof_graph/scaffold.py <ID>`.
+Generate skeleton: `python3 python/proof_graph/init.py <ID> --premortem-dir artifacts/story/<ID>/`.
 
 ---
 
@@ -265,7 +265,7 @@ The default review scope is the story proof scope -- not the diff, not the whole
 4. Recon preflight artifact (AT proof audit from Step 1)
 5. `scope.touch` files -- the actual implementation source code
 6. Proving test files from `implementation_tests[]`
-7. Relevant CONTRACT.md sections only (not the whole contract)
+7. Relevant `specs/CONTRACT.md` sections only (not the whole contract)
 8. Direct integration surfaces only if needed (e.g., PolicyGuard/WAL/TLSM) to validate causality
 
 The framing is "contract-proof audit," not "code review."

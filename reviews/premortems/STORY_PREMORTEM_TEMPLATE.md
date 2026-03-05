@@ -5,7 +5,7 @@
 
 ## 0) What we're building
 - Story:
-- Contract clause(s): §
+- Contract clause(s): `specs/CONTRACT.md` §
 - Acceptance tests: AT-XXX
 - Touch scope: (files/crates)
 - **Risk rating**: LOW / MED / HIGH
@@ -14,7 +14,7 @@
 
 ## 1) Clause audit (contract → AT traceability)
 
-For each `enforcing_contract_ats` claimed by this story, find the AT in CONTRACT.md,
+For each `enforcing_contract_ats` claimed by this story, find the AT in `specs/CONTRACT.md`,
 extract the normative clause, and classify. Skip informational clauses.
 
 | AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
@@ -58,6 +58,7 @@ For each ambiguity, design choice, or spec gap:
 
 - [ ] No unresolved decisions remain
 - [ ] Each decision grounded in evidence (file + line, not memory)
+- [ ] If ambiguity remains, mark blocked (`needs_human_decision=true` in `plans/prd.json`) and STOP
 
 ## 5) Wrong implementation gate
 For EACH AT claimed by this story:
@@ -73,8 +74,8 @@ For EACH AT claimed by this story:
 
 ## 6) Proof plan (AT → enforcement → tests)
 
-> **Proof graph (v1.7)**: This section's data feeds `proof_graph.json`. After implementation, run
-> `python3 python/proof_graph/scaffold.py <STORY_ID>` to generate the skeleton, then fill in
+> **Proof graph (v2)**: This section's data feeds `proof_graph.json`. After implementation, run
+> `python3 python/proof_graph/init.py <STORY_ID> --premortem-dir artifacts/story/<STORY_ID>/` to generate the skeleton, then fill in
 > verdicts, test names, and wiring status. The validator (`validate.py --strict`) enforces
 > consistency at pass-flip time. See `python/proof_graph/` for schema details.
 
@@ -106,7 +107,7 @@ If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined A
 
 ## 8) Conflict scan & hot zones
 - **Invariants/gates impacted**:
-- **If conflict with CONTRACT.md**: STOP — do not proceed until resolved
+- **If conflict with `specs/CONTRACT.md`**: STOP — do not proceed until resolved
 - Files with recent churn or shared ownership:
 - Struct fields I'm assuming exist (verify before coding):
 - State machine transitions affected:
@@ -128,8 +129,8 @@ Reused Guardrail: <one concrete rule carried forward, or NONE if no prior postmo
 **STOPLIGHT**: GREEN / YELLOW / RED
 
 - **GREEN**: All gates pass, proof plan complete, no unresolved ambiguities
-- **YELLOW**: All gaps explicitly deferred in Debt Register below
-- **RED**: Unresolved gates — do not implement
+- **YELLOW**: All non-ambiguity gaps explicitly deferred in Debt Register below
+- **RED**: Unresolved gates or unresolved ambiguity — do not implement
 
 **Debt Register** (required if YELLOW):
 
@@ -138,6 +139,7 @@ Reused Guardrail: <one concrete rule carried forward, or NONE if no prior postmo
 |      |          |             |       |             |                 |
 
 YELLOW with untracked debt (no target slice) = RED.
+Unresolved ambiguity/design choice = RED (set `needs_human_decision=true` and stop).
 
 **Exit criteria (definition of done, before I start):**
 - [ ] §1 clause audit: every AT traced to normative clause
@@ -147,5 +149,5 @@ YELLOW with untracked debt (no target slice) = RED.
 - [ ] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
 - [ ] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [ ] §7 loss_mode documented with fail-closed boundary + rollback plan
-- [ ] §8 conflict scan clean (no CONTRACT.md conflicts)
+- [ ] §8 conflict scan clean (no `specs/CONTRACT.md` conflicts)
 - [ ] No new debt without owner + target slice

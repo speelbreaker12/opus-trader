@@ -156,7 +156,7 @@ This step records HEAD as BASE_HEAD and validates premortem/planning is complete
 
 #### §1 — Clause audit (contract → AT traceability) [HARD GATE]
 
-For each `enforcing_contract_ats` claimed by this story, find the AT in CONTRACT.md,
+For each `enforcing_contract_ats` claimed by this story, find the AT in `specs/CONTRACT.md`,
 extract the normative clause, and classify. Skip informational clauses.
 
 ```
@@ -210,7 +210,7 @@ For EACH AT claimed by this story:
 #### §8 — Conflict scan & hot zones [HARD GATE]
 ```
 - Invariants/gates impacted:
-- If conflict with CONTRACT.md: STOP
+- If conflict with `specs/CONTRACT.md`: STOP
 - Struct fields I'm assuming exist (verify before coding):
 ```
 
@@ -271,7 +271,7 @@ Run the full 5-skill review stack on your implementation (these are Claude Code 
 1. `/pr-review` — SOLID, architecture, removal candidates, security
 2. `/failure-mode-review` — interface crossings, state transitions, what-if analysis
 3. `/strategic-failure-review` — hidden assumptions, complexity-to-benefit, simpler alternatives
-4. `/contract-review` — fail-open hazard filter, CONTRACT.md alignment
+4. `/contract-review` — fail-open hazard filter, `specs/CONTRACT.md` alignment
 5. `/devils-advocate` — mutation testing, simpler-than-correct gate
 
 **Artifacts:**

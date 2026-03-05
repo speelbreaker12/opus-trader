@@ -243,7 +243,7 @@ Anti-patterns are grouped by failure domain for faster lookup during reviews.
 
 **Pattern**: Every downstream layer (evidence ledger, cross-review, external review) inherits the premortem's AT mapping without independently verifying that the AT's actual clause text matches what the code enforces.
 **Risk**: A misattributed AT propagates through all review layers unchallenged. In Slice 1, AT-333 (quantization parameters) was attributed to instrument kind derivation tests — a prerequisite, not the AT itself. All reviewers agreed the test was "PROVEN for AT-333" because they checked internal consistency, not external consistency.
-**Fix**: At least one review layer must re-read the AT anchor text in CONTRACT.md and verify semantic match, not just structural presence. Add to Cycle 1 reviewer checklist: "For one random AT per story, re-read the clause text. Does the enforcement match the literal requirement?"
+**Fix**: At least one review layer must re-read the AT anchor text in `specs/CONTRACT.md` and verify semantic match, not just structural presence. Add to Cycle 1 reviewer checklist: "For one random AT per story, re-read the clause text. Does the enforcement match the literal requirement?"
 **Gate**: No automated gate — reviewer must catch. Consider adding to `validate.py` as a spot-check that AT descriptions match enforcement point names.
 
 ---
@@ -370,7 +370,7 @@ These questions are derived from the anti-patterns above. Include them in Cycle 
 
 ### For each AT citation:
 - [ ] Does the cited `file:line` contain actual enforcement code (not a comment, blank, or helper)? (#12)
-- [ ] Re-read the AT clause text in CONTRACT.md — does the enforcement match the literal requirement? (#18)
+- [ ] Re-read the AT clause text in `specs/CONTRACT.md` — does the enforcement match the literal requirement? (#18)
 - [ ] Is at least one observation cited from pre-existing code (not only the diff)? (#8, #13)
 
 ### For each evidence ledger:
