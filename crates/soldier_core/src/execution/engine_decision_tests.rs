@@ -497,3 +497,27 @@ fn open_runtime_override_reasons_map_to_registry_codes() {
         })
     ));
 }
+
+#[test]
+fn open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes() {
+    let input = base_open_input();
+    let mut input_with_codes = input;
+    input_with_codes.gate_reject_codes = GateRejectCodes {
+        liquidity_gate: Some(RejectReasonCode::LiquidityGateNoL2),
+        ..Default::default()
+    };
+    let output = synthetic_open_output(ChokeRejectReason::GateRejected {
+        gate: GateStep::LiquidityGate,
+        reason: "UNEXPECTED_LIQUIDITY_DETAIL".to_string(),
+    });
+
+    let decision = open_runtime_to_decision(&input_with_codes, &output);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::LiquidityGateNoL2,
+            ..
+        })
+    ));
+}
