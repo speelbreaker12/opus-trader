@@ -262,14 +262,6 @@ impl ExecutionEngine {
         }
     }
 
-    pub fn evaluate<'input, 'runtime>(
-        &self,
-        input: &ExecutionInput<'input>,
-        runtime: &mut ExecutionRuntime<'runtime>,
-    ) -> ExecutionDecision {
-        self.decide(input, runtime)
-    }
-
     fn decide_open<'input, 'runtime>(
         &self,
         input: &OpenExecutionInput<'input>,
@@ -672,4 +664,4 @@ fn reject_reason_detail(reason: &ChokeRejectReason) -> String {
 
 #[cfg(test)]
 #[path = "engine_decision_tests.rs"]
-mod engine_parity_tests;
+mod engine_decision_tests;
