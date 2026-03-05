@@ -77,6 +77,12 @@ This refresh reflects implementation and contract updates already made after the
 |---|---|---|
 | P2 | crates/soldier_infra/tests/test_phase0_runtime.rs:200-273 | Key privilege tests are not sufficiently isolated for precise causal proof |
 
+#### DA-1 disposition (refresh rationale)
+
+- Prior `DA-1` (malformed probe/key metadata permissiveness) was removed after hard-fail validation was added for malformed `env`, `exchange`, `key_id`, `timestamp_utc`, `operator`, and malformed `scopes` before privilege evaluation.
+- Remaining devils-advocate risk in this slice is now test-causality isolation (`DA-2`) and transport-level proof coverage (`DA-3`), both tracked in `r5b_devils_advocate.json`.
+- This is a reclassification/closure-by-fix, not a silent severity drop; residual proof gaps remain explicitly listed as P2.
+
 ## Premortem Cross-Check (runbook §2/§4/§5/§6/§10)
 
 - §2 Assumptions: **PARTIAL**

@@ -8,8 +8,7 @@ Status: READY
 
 | AT | Verdict | Enforcement | Test | Notes |
 |----|---------|-------------|------|-------|
-| AT-015 | PROVEN | crates/soldier_core/src/execution/gates.rs:168::evaluate_net_edge | crates/soldier_core/src/execution/gates_tests.rs:35::test_at015_net_edge_below_min_rejected | Rejects when `net_edge_usd < min_edge_usd` (fail-closed). |
-| AT-932 | PROVEN | crates/soldier_core/src/execution/gates.rs:155::reject_missing | crates/soldier_core/src/execution/gates_tests.rs:139::test_at932_missing_fee_rejected | Missing net-edge inputs map to `NetEdgeInputMissing`. |
+| AT-WF-PREMORTEM-FIRST-001 | PROVEN | plans/wf_step.sh:691-717 (`preflight` enforces `premortem_gate.sh` + `premortem_ready.sh` fail-closed before progression) | reviews/premortems/S5-004_premortem.md:38 proof command + reviews/reconciliations/S5-004/receipts/00_preflight.json | Story progression is blocked until premortem gates pass; once satisfied, preflight receipt is emitted and workflow can advance. |
 
 ## Gaps
 

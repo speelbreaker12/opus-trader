@@ -43,11 +43,10 @@ ls reviews/reconciliations/*/HANDOFF.md 2>/dev/null
 
 | Document | Path |
 |----------|------|
-| Index + R1 prompt (Appendix A) | `reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md` |
-| Runbook — operator instructions | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` |
-| Policy — verdicts, gates, schemas | `reviews/premortems/PREMORTEM_RECON_POLICY.md` |
-| Anti-patterns (26) | `reviews/premortems/PREMORTEM_RECON_ANTIPATTERNS.md` |
-| Metrics + worked examples | `reviews/premortems/PREMORTEM_RECON_METRICS.md` |
+| Protocol — execution order, gates, handoff cadence | `reviews/reconciliations/PROTOCOL.md` |
+| Reference — anti-patterns and worked examples | `reviews/reconciliations/REFERENCE.md` |
+| Handoff template — required status matrix and footer format | `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md` |
+| Step-local prompts | `plans/step_prompts/recon/*.md` |
 
 ---
 

@@ -497,6 +497,10 @@ if [[ -f "docs/contract_kernel.json" ]]; then
     "$PYTHON_BIN" scripts/check_contract_kernel.py --kernel docs/contract_kernel.json
 fi
 
+log "02a) contract change ledger"
+run_logged_or_exit "contract_change_ledger" "$CONTRACT_KERNEL_TIMEOUT" \
+  bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md
+
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   log "02b-02e) profile/invariant gates (parallel)"
   parallel_group_reset
@@ -736,6 +740,22 @@ if [[ -f scripts/check_gate_integrity.py ]]; then
     "$PYTHON_BIN" scripts/check_gate_integrity.py --root "$ROOT"
 else
   warn "gate_integrity skipped (missing scripts/check_gate_integrity.py)"
+fi
+
+if [[ -x "$ROOT/plans/recon_prompt_guard.sh" ]]; then
+  log "14cc) recon prompt guard"
+  run_logged_or_exit "recon_prompt_guard" "$GATE_INTEGRITY_TIMEOUT" \
+    bash "$ROOT/plans/recon_prompt_guard.sh"
+else
+  warn "recon_prompt_guard skipped (missing plans/recon_prompt_guard.sh)"
+fi
+
+if [[ -x "$ROOT/plans/recon_doc_budget.sh" ]]; then
+  log "14cd) recon doc budget"
+  run_logged_or_exit "recon_doc_budget" "$DOC_SYNC_TIMEOUT" \
+    bash "$ROOT/plans/recon_doc_budget.sh"
+else
+  warn "recon_doc_budget skipped (missing plans/recon_doc_budget.sh)"
 fi
 
 if [[ "${DOC_SYNC_GATE:-1}" != "0" ]]; then

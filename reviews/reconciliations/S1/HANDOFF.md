@@ -8,15 +8,19 @@ You are a **Reconciliation Agent** working on `S1`.
 
 Your job is to complete the 9-step reconciliation workflow for the in-scope stories and enforce machine-verifiable proof artifacts.
 
-### Source-of-Truth Documents (read before starting any step you're unfamiliar with)
+### Source-of-Truth Documents (Current)
 
 | Document | Path |
-|----------|------|
-| RUNBOOK | `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md` |
-| POLICY | `reviews/premortems/PREMORTEM_RECON_POLICY.md` |
-| INDEX + R1 prompt | `reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md` |
-| ANTI-PATTERNS | `reviews/premortems/PREMORTEM_RECON_ANTIPATTERNS.md` |
-| METRICS | `reviews/premortems/PREMORTEM_RECON_METRICS.md` |
+|---|---|
+| Protocol | `reviews/reconciliations/PROTOCOL.md` |
+| Reference | `reviews/reconciliations/REFERENCE.md` |
+| Handoff template | `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md` |
+| Workflow contract | `specs/WORKFLOW_CONTRACT.md` |
+| Step tracker | `plans/wf_step.sh` |
+| Verify entrypoint | `plans/verify.sh` |
+| Pass-flip gate | `plans/prd_set_pass.sh` |
+
+Legacy runbook/policy references below are historical context only; execution authority is the block above.
 
 ## Slice Context
 

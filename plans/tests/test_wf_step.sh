@@ -58,6 +58,17 @@ assert_json_field() {
   fi
 }
 
+write_cycle2_sidecar() {
+  local artifact="$1"
+  local sidecar="${artifact%.md}.sidecar.json"
+cat > "$sidecar" <<'EOF'
+{
+  "phase_equivalent": "R7d",
+  "review_basis": "FIX_DIFF + AT_REGRESSION (Cycle 2)"
+}
+EOF
+}
+
 # ── Setup temp git repo ─────────────────────────────────────────────
 
 TMPDIR="$(mktemp -d)"
@@ -73,6 +84,7 @@ git config user.name "Test"
 mkdir -p plans plans/lib artifacts/story/TEST-001/self_review
 mkdir -p artifacts/story/TEST-001/codex
 mkdir -p artifacts/story/TEST-001/opus
+mkdir -p artifacts/story/TEST-001/preflight
 mkdir -p artifacts/verify/run_001
 
 # Seed minimal PRD scope so preflight scope-lock can succeed.
@@ -97,6 +109,26 @@ cp "$RECON_PRECHECK" plans/recon_precheck.sh
 cp "$HASH_UTILS" plans/lib/hash_utils.sh
 chmod +x plans/wf_step.sh
 chmod +x plans/recon_precheck.sh
+
+# This suite focuses on step ordering/state transitions, not sidecar/citation gates.
+# Keep those gates covered in dedicated provenance tests.
+awk '
+  /^case "\$STEP" in$/ {
+    print ""
+    print "# test shim: sequencing-only suite bypasses provenance-specific gates"
+    print "check_review_logged_sidecar_patch() { return 0; }"
+    print "verify_review_artifact_provenance() { return 0; }"
+    print "verify_cycle1_citations() { return 0; }"
+  }
+  { print }
+' plans/wf_step.sh > plans/wf_step.sh.tmp
+mv plans/wf_step.sh.tmp plans/wf_step.sh
+chmod +x plans/wf_step.sh
+
+# Legacy preflight fallback evidence for cycle1 readiness in isolated fixture repo.
+cat > artifacts/story/TEST-001/preflight/audit.md <<'EOF'
+# preflight ledger fixture
+EOF
 
 # Initial commit
 echo "initial" > src.rs
@@ -187,6 +219,7 @@ cat > artifacts/story/TEST-001/codex/20260219_002_review.md <<CYCLE2
 All findings addressed. No new P0/P1.
 <<<REVIEW_TRANSCRIPT_END>>>
 CYCLE2
+write_cycle2_sidecar "artifacts/story/TEST-001/codex/20260219_002_review.md"
 
 set +e; bash plans/wf_step.sh TEST-001 cycle2 > /dev/null 2>&1; rc=$?; set -e
 assert_exit "cycle2 succeeds" 0 "$rc"
@@ -449,9 +482,13 @@ echo "=== PART 8: Reconciliation mode ==="
 mkdir -p reviews/premortems
 cat > reviews/premortems/TEST-001_premortem.md <<'EOF'
 # TEST-001 premortem
+Prior Postmortem: NONE
+Reused Guardrail: NONE
 EOF
 cat > reviews/premortems/TEST-002_premortem.md <<'EOF'
 # TEST-002 premortem
+Prior Postmortem: NONE
+Reused Guardrail: NONE
 EOF
 
 # ── Test 15: Invalid WF_RECON_MODE rejected ──────────────────────────
@@ -470,7 +507,15 @@ bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
 # Create a PRD file with passes=true for TEST-001
 mkdir -p plans
 cat > plans/prd.json <<PRDEOF
-{"items":[{"id":"TEST-001","passes":true}]}
+{
+  "items": [
+    {
+      "id": "TEST-001",
+      "passes": true,
+      "scope": { "allow": ["feature.rs"] }
+    }
+  ]
+}
 PRDEOF
 
 set +e
@@ -520,7 +565,20 @@ echo "--- Test 21: Recon blocked for passes=false ---"
 bash plans/wf_step.sh TEST-002 --reset --yes > /dev/null 2>&1 || true
 # Create PRD with passes=false for TEST-002
 cat > plans/prd.json <<PRDEOF2
-{"items":[{"id":"TEST-001","passes":true},{"id":"TEST-002","passes":false}]}
+{
+  "items": [
+    {
+      "id": "TEST-001",
+      "passes": true,
+      "scope": { "allow": ["feature.rs"] }
+    },
+    {
+      "id": "TEST-002",
+      "passes": false,
+      "scope": { "allow": ["feature.rs"] }
+    }
+  ]
+}
 PRDEOF2
 
 WF_RECEIPT_DIR="$TMPDIR/.wf/receipts/TEST-002" \
@@ -548,6 +606,7 @@ cat > artifacts/story/TEST-001/codex/20260220_recon_review.md <<RECONREV
 - HEAD: $(git rev-parse HEAD)
 0 findings. No issues detected.
 RECONREV
+write_cycle2_sidecar "artifacts/story/TEST-001/codex/20260220_recon_review.md"
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
 
@@ -638,7 +697,20 @@ bash plans/wf_step.sh TEST-001 --reset --yes > /dev/null 2>&1
 
 # Ensure PRD has passes=true for TEST-001
 cat > plans/prd.json <<PRDEOF3
-{"items":[{"id":"TEST-001","passes":true},{"id":"TEST-002","passes":false}]}
+{
+  "items": [
+    {
+      "id": "TEST-001",
+      "passes": true,
+      "scope": { "allow": ["feature.rs"] }
+    },
+    {
+      "id": "TEST-002",
+      "passes": false,
+      "scope": { "allow": ["feature.rs"] }
+    }
+  ]
+}
 PRDEOF3
 
 # Build chain through cycle1 in recon mode
@@ -700,6 +772,7 @@ cat > artifacts/story/TEST-001/codex/20260220_green_review.md <<GREENREV
 - HEAD: $(git rev-parse HEAD)
 0 findings. No issues detected.
 GREENREV
+write_cycle2_sidecar "artifacts/story/TEST-001/codex/20260220_green_review.md"
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 cycle1 > /dev/null 2>&1
 WF_RECON_MODE=1 bash plans/wf_step.sh TEST-001 fix > /dev/null 2>&1
 

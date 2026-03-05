@@ -45,6 +45,20 @@ From `prd_ref_check.sh` (separate script):
 - Find the anchor/VR in `specs/CONTRACT.md`
 - Add the ID in format: `"Anchor-001: Title"` or `"VR-001: Title"`
 
+## Pass-Gate Preview (Dry Run)
+
+Use dry-run to execute all `passes=true` validations without mutating `plans/prd.json`:
+
+```bash
+VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
+  ./plans/prd_set_pass.sh <STORY_ID> true --dry-run
+```
+
+Expected behavior:
+- Returns `0` when the story is passable with provided artifacts.
+- Returns non-zero with the same gate diagnostics as a real pass flip.
+- Leaves `plans/prd.json` unchanged.
+
 ## See Also
 
 - `plans/prd_lint.sh` - PRD linting rules

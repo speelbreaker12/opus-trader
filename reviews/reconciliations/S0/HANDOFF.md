@@ -8,13 +8,19 @@ You are a **Reconciliation Agent** working on `S0`.
 
 You are auditing stories already passed in production-facing PRD work. You are NOT re-implementing from scratch; you are aligning proof artifacts, fixing gaps, and producing verifiable reconciliation evidence.
 
-### Source-of-Truth Documents
+### Source-of-Truth Documents (Current)
 
-- `reviews/premortems/RUNBOOK_PREMORTEM_RECON.md`
-- `reviews/premortems/PREMORTEM_RECON_POLICY.md`
-- `reviews/premortems/PREMORTEM_RECONCILIATION_PROCESS.md`
-- `reviews/premortems/PREMORTEM_RECON_ANTIPATTERNS.md`
-- `reviews/premortems/PREMORTEM_RECON_METRICS.md`
+| Document | Path |
+|---|---|
+| Protocol | `reviews/reconciliations/PROTOCOL.md` |
+| Reference | `reviews/reconciliations/REFERENCE.md` |
+| Handoff template | `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md` |
+| Workflow contract | `specs/WORKFLOW_CONTRACT.md` |
+| Step tracker | `plans/wf_step.sh` |
+| Verify entrypoint | `plans/verify.sh` |
+| Pass-flip gate | `plans/prd_set_pass.sh` |
+
+Legacy runbook/policy docs in this handoff are historical context only; execution authority is the block above.
 
 ## Slice Context
 

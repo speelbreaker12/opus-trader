@@ -8,6 +8,7 @@ artifacts/verify/
 artifacts/story/
 artifacts/autofix/
 artifacts/phase0/runtime_state_tests/
+artifacts/phase0/meta_test_runtime/
 patches/
 .DS_Store
 __pycache__/

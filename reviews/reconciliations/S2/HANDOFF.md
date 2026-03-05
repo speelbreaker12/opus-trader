@@ -4,6 +4,20 @@
 **Status:** Mode A Phase 2 complete
 **Next action:** Phase 3 — Targeted Patch (apply 8 patches from patch list)
 
+## Source-of-Truth Documents (Current)
+
+| Document | Path |
+|---|---|
+| Protocol | `reviews/reconciliations/PROTOCOL.md` |
+| Reference | `reviews/reconciliations/REFERENCE.md` |
+| Handoff template | `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md` |
+| Workflow contract | `specs/WORKFLOW_CONTRACT.md` |
+| Step tracker | `plans/wf_step.sh` |
+| Verify entrypoint | `plans/verify.sh` |
+| Pass-flip gate | `plans/prd_set_pass.sh` |
+
+Legacy runbook/policy references later in this handoff are historical context only; execution authority is the block above.
+
 ## What Was Done
 
 1. Codebase mapping complete (`.planning/codebase/` — 7 docs, committed as `5bfc230`)
