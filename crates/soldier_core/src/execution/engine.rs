@@ -217,6 +217,7 @@ pub enum RuntimeStep {
     Assembly,
 }
 
+#[derive(Default)]
 pub struct ExecutionRuntime<'a> {
     pub wal_gate: Option<&'a mut dyn RecordedBeforeDispatchGate>,
     pub pending_exposure_book: Option<&'a PendingExposureBook>,
@@ -230,15 +231,6 @@ impl<'a> ExecutionRuntime<'a> {
         Self {
             wal_gate,
             pending_exposure_book,
-        }
-    }
-}
-
-impl Default for ExecutionRuntime<'_> {
-    fn default() -> Self {
-        Self {
-            wal_gate: None,
-            pending_exposure_book: None,
         }
     }
 }
@@ -379,7 +371,7 @@ fn build_base_gates_input<'a>(
         },
         fee_snapshot: input.fee_snapshot.clone(),
         fee_config: input.fee_config.clone(),
-        expiry_guard: input.expiry_guard.clone(),
+        expiry_guard: input.expiry_guard,
     }
 }
 
@@ -505,7 +497,7 @@ fn build_pipeline_input<'a>(
         },
         fee_snapshot: input.fee_snapshot.clone(),
         fee_config: input.fee_config.clone(),
-        expiry_guard: input.expiry_guard.clone(),
+        expiry_guard: input.expiry_guard,
         liquidity: None,
         net_edge: None,
         pricer: None,
