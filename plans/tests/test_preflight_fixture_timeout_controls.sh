@@ -41,6 +41,25 @@ rewrite_fixture_arrays() {
   mv "$tmp_file" "$file"
 }
 
+rewrite_supports_wait_n_to_false() {
+  local file="$1"
+  local tmp_file="$file.tmp"
+  awk '
+    BEGIN {in_fn=0}
+    /^supports_wait_n\(\) \{/ {
+      print "supports_wait_n() {"
+      print "  return 1"
+      print "}"
+      in_fn=1
+      next
+    }
+    in_fn && /^}$/ {in_fn=0; next}
+    in_fn {next}
+    {print}
+  ' "$file" > "$tmp_file"
+  mv "$tmp_file" "$file"
+}
+
 rewrite_fixture_arrays "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
 
@@ -104,57 +123,26 @@ set -e
 grep -Fq "Invalid PREFLIGHT_WAIT_N_MODE='broken'" "$invalid_wait_mode_log" \
   || fail "missing invalid wait-mode diagnostics"
 
-mock_no_wait_n_env="$tmp_dir/mock_no_wait_n_env.sh"
-cat > "$mock_no_wait_n_env" <<'EOF'
-help() {
-  if [[ "${1:-}" == "wait" ]]; then
-    printf '%s\n' "wait: wait [id ...]"
-    return 0
-  fi
-  builtin help "$@"
-}
-EOF
+force_wait_n_script="$repo/plans/preflight_force_wait_n_unsupported.sh"
+cp "$repo/plans/preflight.sh" "$force_wait_n_script"
+rewrite_supports_wait_n_to_false "$force_wait_n_script"
+chmod +x "$force_wait_n_script"
 
 force_on_unsupported_log="$tmp_dir/force_on_unsupported.log"
 set +e
 (
   cd "$repo"
-  BASH_ENV="$mock_no_wait_n_env" \
   PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
   PREFLIGHT_NO_CACHE=1 \
   PREFLIGHT_WAIT_N_MODE=force_on \
-  ./plans/preflight.sh >"$force_on_unsupported_log" 2>&1
+  "$force_wait_n_script" >"$force_on_unsupported_log" 2>&1
 )
 force_on_unsupported_rc=$?
 set -e
-
-native_wait_n_supported=0
-if bash -lc '
-  major="${BASH_VERSINFO[0]:-0}"
-  minor="${BASH_VERSINFO[1]:-0}"
-  if [[ "$major" -lt 4 ]]; then
-    exit 1
-  fi
-  if [[ "$major" -eq 4 && "$minor" -lt 3 ]]; then
-    exit 1
-  fi
-  builtin help wait 2>/dev/null | grep -Eq '"'"'(^|[[:space:]])-n([[:space:][:punct:]]|$)'"'"'
-' >/dev/null 2>&1; then
-  native_wait_n_supported=1
-fi
-
-if [[ "$native_wait_n_supported" -eq 1 ]]; then
-  [[ "$force_on_unsupported_rc" -eq 0 ]] \
-    || fail "expected force_on to succeed when native wait -n exists (help() spoofed), got rc=$force_on_unsupported_rc"
-  if grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log"; then
-    fail "force_on should not report wait -n unsupported when native support exists"
-  fi
-else
-  [[ "$force_on_unsupported_rc" -eq 2 ]] \
-    || fail "expected force_on without wait -n support to fail-closed with rc=2, got $force_on_unsupported_rc"
-  grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log" \
-    || fail "missing force_on unsupported diagnostics"
-fi
+[[ "$force_on_unsupported_rc" -eq 2 ]] \
+  || fail "expected force_on without wait -n support to fail-closed with rc=2, got $force_on_unsupported_rc"
+grep -Fq "PREFLIGHT_WAIT_N_MODE=force_on requires wait -n support" "$force_on_unsupported_log" \
+  || fail "missing force_on unsupported diagnostics"
 
 mock_fast_hash_git_bin="$tmp_dir/mock_fast_hash_git_bin"
 mkdir -p "$mock_fast_hash_git_bin"

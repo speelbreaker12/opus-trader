@@ -88,8 +88,15 @@ grep -Fq -- "grep -Fq -- \"\$token\" <<< \"\$section_text\"" "$gate_check_file" 
 if grep -Fq -- "printf '%s\\n' \"\$file_content\" | grep -Fq" "$gate_check_file"; then
   fail "require_code_token must not use printf|grep pipeline"
 fi
-grep -Fq -- "grep -Fq -- \"\$token\" <<< \"\$file_content\"" "$gate_check_file" \
-  || fail "require_code_token literal non-pipeline grep check missing"
+if grep -Fq -- "grep -Fq -- \"\$token\" <<< \"\$file_content\"" "$gate_check_file"; then
+  fail "require_code_token must not spawn grep per token"
+fi
+grep -Fq -- "contains_literal_token() {" "$gate_check_file" \
+  || fail "contains_literal_token helper missing"
+grep -Fq -- "[[ \"\$haystack\" == *\"\$needle\"* ]]" "$gate_check_file" \
+  || fail "contains_literal_token must use bash-native literal substring match"
+grep -Fq -- "if ! contains_literal_token \"\$file_content\" \"\$token\"; then" "$gate_check_file" \
+  || fail "require_code_token must use contains_literal_token helper"
 
 # Case A: remove first and second ordered verify tokens.
 # Must fail-first on the first token in the original deterministic order.

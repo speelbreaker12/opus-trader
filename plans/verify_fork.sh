@@ -212,7 +212,7 @@ compute_csp_strict_changed_files() {
   local base_ref="$1"
   local changed=""
   if ! command -v git >/dev/null 2>&1; then
-    printf '%s\n' ""
+    printf '%s\n' "__CSP_STRICT_STATE__:git_unavailable"
     return 0
   fi
 
@@ -224,16 +224,21 @@ compute_csp_strict_changed_files() {
         git diff --name-only 2>/dev/null || true
       } | sed '/^$/d' | sort -u
     )"
-    printf '%s\n' "$changed"
+  else
+    changed="$(
+      {
+        git diff --name-only --cached 2>/dev/null || true
+        git diff --name-only 2>/dev/null || true
+      } | sed '/^$/d' | sort -u
+    )"
+  fi
+
+  if [[ -z "$changed" ]]; then
+    printf '%s\n' "__CSP_STRICT_STATE__:no_changes"
     return 0
   fi
 
-  changed="$(
-    {
-      git diff --name-only --cached 2>/dev/null || true
-      git diff --name-only 2>/dev/null || true
-    } | sed '/^$/d' | sort -u
-  )"
+  printf '%s\n' "__CSP_STRICT_STATE__:changes_present"
   printf '%s\n' "$changed"
 }
 
@@ -243,6 +248,7 @@ CSP_STRICT_CHANGED_FILES_CACHE=""
 
 should_enable_csp_strict() {
   local base_ref="$1"
+  local cache_state_line=""
 
   if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then
     CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"
@@ -253,6 +259,13 @@ should_enable_csp_strict() {
   if [[ -z "$CSP_STRICT_CHANGED_FILES_CACHE" ]]; then
     return 1
   fi
+
+  cache_state_line="${CSP_STRICT_CHANGED_FILES_CACHE%%$'\n'*}"
+  case "$cache_state_line" in
+    "__CSP_STRICT_STATE__:git_unavailable"|"__CSP_STRICT_STATE__:no_changes")
+      return 1
+      ;;
+  esac
 
   if grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$' <<< "$CSP_STRICT_CHANGED_FILES_CACHE"; then
     return 0

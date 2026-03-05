@@ -44,9 +44,15 @@ require_code_token() {
   local file_content="$1"
   local file="$2"
   local token="$3"
-  if ! grep -Fq -- "$token" <<< "$file_content"; then
+  if ! contains_literal_token "$file_content" "$token"; then
     fail "missing code token '$token' in $file"
   fi
+}
+
+contains_literal_token() {
+  local haystack="$1"
+  local needle="$2"
+  [[ "$haystack" == *"$needle"* ]]
 }
 
 quick_section="$(extract_section "$DOC" "#### QUICK (developer iteration)" "#### FULL (story completion)")"

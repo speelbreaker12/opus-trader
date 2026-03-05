@@ -203,7 +203,9 @@ prune_fixture_pids_once() {
 
 wait_for_fixture_slot() {
   if [[ "$PREFLIGHT_WAIT_N_USE" == "1" ]]; then
-    wait -n 2>/dev/null || true
+    if [[ ${#fixture_pids[@]} -gt 0 ]]; then
+      wait -n "${fixture_pids[@]}" 2>/dev/null || true
+    fi
     prune_fixture_pids_once
     return 0
   fi
@@ -489,17 +491,10 @@ else
   _compute_fixture_hash_from_list() {
     local _file_list="$1"
     local _normalized_list=""
-    local _path=""
     local _hash=""
 
     _normalized_list="$(printf '%s\n' "$_file_list" | LC_ALL=C sort -u | sed '/^[[:space:]]*$/d')" || return 1
     [[ -n "$_normalized_list" ]] || return 1
-
-    # Fast-path input must resolve to real files; otherwise fail and use fallback
-    # hash scan instead of trusting a potentially degenerate hash.
-    while IFS= read -r _path; do
-      [[ -f "$_path" ]] || return 1
-    done <<< "$_normalized_list"
 
     _hash="$(
       printf '%s\n' "$_normalized_list" \
