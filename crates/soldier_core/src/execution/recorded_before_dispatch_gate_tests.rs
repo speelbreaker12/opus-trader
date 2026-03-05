@@ -169,6 +169,7 @@ fn test_close_intent_approved_despite_wal_failure() {
 
     assert!(matches!(result, ChokeResult::Approved { .. }));
     assert_eq!(wal_gate.call_count, 1); // Attempted but failure not blocking
+    assert_eq!(metrics.wal_nonblocking_allowed_total(), 1);
 }
 
 #[test]
@@ -190,6 +191,7 @@ fn test_hedge_intent_approved_despite_wal_failure() {
 
     assert!(matches!(result, ChokeResult::Approved { .. }));
     assert_eq!(wal_gate.call_count, 1);
+    assert_eq!(metrics.wal_nonblocking_allowed_total(), 1);
 }
 
 #[test]
@@ -208,6 +210,7 @@ fn test_close_intent_approved_when_optional_wal_gate_missing() {
 
     // Close intent must not be blocked by WAL failure (CSP.3.2)
     assert!(matches!(result, ChokeResult::Approved { .. }));
+    assert_eq!(metrics.wal_nonblocking_allowed_total(), 1);
 }
 
 // GAP-FE-004: PrecomputedWalGate is pub(crate), so direct unit tests are not possible

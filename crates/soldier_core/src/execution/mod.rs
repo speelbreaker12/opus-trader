@@ -34,6 +34,7 @@ pub(crate) const METRIC_GROUP_MIXED_FAILED: &str = "group_mixed_failed_total";
 pub(crate) const METRIC_EXPIRY_GUARD_REJECT: &str = "expiry_guard_reject_total";
 #[allow(dead_code)] // Phase-1 facade lockdown: consumed by internal modules.
 pub(crate) const METRIC_PREFLIGHT_REJECT: &str = "preflight_reject_total";
+pub(crate) const METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL: &str = "wal_nonblocking_allowed_total";
 
 mod api;
 

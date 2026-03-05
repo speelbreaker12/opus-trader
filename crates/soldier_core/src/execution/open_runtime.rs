@@ -16,8 +16,9 @@ use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evalu
 use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    build_gate_results, build_order_intent_with_wal_gate,
+    build_order_intent_with_wal_gate,
 };
+use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::dispatch_map::{DispatchConsistencyProof, IntentClass, MismatchMetrics};
 use super::gate::{
     LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate,
@@ -120,10 +121,11 @@ pub(crate) fn build_open_order_intent_runtime(
         };
     }
 
-    let mut gate_results = build_gate_results(
+    let mut gate_results = build_gate_results_from_dispatch_proof(
+        ChokeIntentClass::Open,
         legacy.preflight_passed,
         legacy.quantize_passed,
-        legacy.dispatch_consistency_passed,
+        input.base_gates.dispatch_consistency,
         legacy.fee_cache_passed,
         legacy.expiry_guard_passed,
         true,
