@@ -18,12 +18,13 @@ Audit the already-implemented story against the premortem, contract, and PRD cla
 The **premortem is your primary audit checklist** — walk it section by section against the real code.
 Find the real enforcement points, verify fail-closed behavior, verify causal proof quality, verify premortem decisions and wrong-impl tightenings, and produce a remediation plan.
 No edits in this step.
+This audit produces the evidence ledger consumed before the reconciliation `implement` step. Do not skip from this audit directly to `self_review`.
 
 ## READ FIRST (required)
 
 1. **The story premortem**: `reviews/premortems/${STORY_ID}_premortem.md`
    This is your primary audit checklist. Walk §0-§8 against reality.
-2. Recon preflight artifact from Step 1 (contract -> AT -> test proof audit)
+2. Existing R1/preflight evidence for this story, if present (for reruns/comparison)
 3. Prior postmortem(s) for this slice/story (if any)
 4. `specs/CONTRACT.md` (relevant clauses for this story)
 5. `specs/DESIGN_PATTERNS.md` §0 (if present / used in this repo)
@@ -44,10 +45,10 @@ Do not proceed. Do not guess or hallucinate the content of missing artifacts.
 Item 5 (`specs/DESIGN_PATTERNS.md` §0) is conditional. If the file is absent in this repo/story,
 note `DESIGN_PATTERNS_NOT_PRESENT` and continue.
 
-**Item 2 (recon preflight) is OPTIONAL when the premortem (item 1) exists.** When the premortem
-exists, it is already your primary audit checklist and the preflight adds marginal value. If the
-preflight exists, read it for additional context. If it does not exist and the premortem does,
-proceed without it.
+**Item 2 (existing R1/preflight evidence) is OPTIONAL when the premortem (item 1) exists.** When
+the premortem exists, it is already your primary audit checklist and prior audit artifacts add
+marginal context only. If an earlier audit exists, read it for comparison. If it does not exist
+and the premortem does, proceed without it.
 
 **Item 3 (prior postmortems) is OPTIONAL.** If no postmortem exists for this story, proceed
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.
@@ -68,10 +69,11 @@ Open the premortem §10 STOPLIGHT result before doing anything else:
 - **RED**    -> STOP. Do not proceed. Report which blockers must be fixed first.
 - **YELLOW** -> Proceed only if every gap is explicitly marked:
   - DEFERRED (future slice), or
-  - FIX IN STEP 5
+  - FIX IN IMPLEMENT
 - **GREEN**  -> Proceed.
 
-If the recon preflight from Step 1 also has a STOPLIGHT, check it too. The more restrictive gate wins.
+If an existing preflight/audit artifact already exists for this story, check its STOPLIGHT too. The
+more restrictive gate wins.
 
 ## READ-ONLY INTEGRITY CHECK
 
@@ -80,7 +82,7 @@ Run at the **start** of this step:
 git status --porcelain > /tmp/recon_start_status_${STORY_ID}.txt
 ```
 
-Run at the **end** of this step (before writing READY FOR SELF_REVIEW):
+Run at the **end** of this step (before writing READY FOR IMPLEMENT GATE):
 ```bash
 git status --porcelain > /tmp/recon_end_status_${STORY_ID}.txt
 diff /tmp/recon_start_status_${STORY_ID}.txt /tmp/recon_end_status_${STORY_ID}.txt
@@ -196,9 +198,9 @@ Classify every issue as one of:
 
 | Classification | Meaning | When to use |
 |---------------|---------|-------------|
-| **CODE_FIX** | Fix in Step 5 (remediation) | Missing enforcement, fail-open path, unwrap in prod |
-| **TEST_FIX** | Fix in Step 5 (remediation) | Missing TRIP/NON-TRIP, missing golden vector, weak proof |
-| **PRD_FIX** | Fix in Step 5 (remediation) | Wrong `implementation_tests[]`, stale `enforcing_contract_ats[]` |
+| **CODE_FIX** | Fix in follow-up remediation work | Missing enforcement, fail-open path, unwrap in prod |
+| **TEST_FIX** | Fix in follow-up remediation work | Missing TRIP/NON-TRIP, missing golden vector, weak proof |
+| **PRD_FIX** | Fix in follow-up remediation work | Wrong `implementation_tests[]`, stale `enforcing_contract_ats[]` |
 | **DEFERRED** | Future slice | Include owner + target slice |
 | **INFO** | Non-blocking, no action required | Observations, minor style notes, "better design" ideas |
 
@@ -310,7 +312,7 @@ Priority ordering:
 ### FINAL LINE (exact)
 
 ```
-READY FOR SELF_REVIEW
+READY FOR IMPLEMENT GATE
 ```
 
 ---

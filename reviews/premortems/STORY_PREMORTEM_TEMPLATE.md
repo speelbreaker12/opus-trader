@@ -1,6 +1,7 @@
 # Story Premortem: <STORY-ID>
 
 > Reference: `specs/DESIGN_PATTERNS.md` (§0 Principles apply to every section below)
+> Premortem Schema: v2
 > This document replaces both the old premortem and `/slice-preflight`. No production code in this step.
 
 ## 0) What we're building
@@ -11,6 +12,27 @@
 - **Risk rating**: LOW / MED / HIGH
   - HIGH if touching: persistence/replay/idempotency, order placement/funds movement,
     risk limits, auth/keys, or anything that can silently weaken gates.
+
+## Trading Risk Hard Gate
+
+Before implementation, prove this change cannot create avoidable loss, cannot silently block
+valid profit, and is the simplest fail-closed design satisfying the contract.
+
+| Question | Answer (YES/NO/UNKNOWN) | Why (one sentence) | Proof (contract clause(s); enforcement file(s); test/vector/artifact) | Gap ID (required when NO/UNKNOWN) |
+|----------|--------------------------|--------------------|------------------------------------------------------------------------|-----------------------------------|
+| Loss prevention | | | | |
+| Profit preservation | | | | |
+| Best design choice | | | | |
+| Better alternative check | | | | |
+| Failure-path correctness | | | | |
+| Fail-closed enforcement | | | | |
+| Proof, not belief | | | | |
+
+Hard Gate Decision Rule:
+
+- GO only if all 7 answers are YES with concrete proof.
+- YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment.
+- NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim.
 
 ## 1) Clause audit (contract → AT traceability)
 

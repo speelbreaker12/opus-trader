@@ -50,13 +50,20 @@ require_contains "$r1_prompt" "R1 READ-ONLY AUDIT" "READ_ONLY_LABEL_MISSING"
 require_contains "$r1_prompt" "No code edits in this step." "READ_ONLY_GUARD_MISSING"
 require_contains "$r1_prompt" "TASK (read-only" "READ_ONLY_TASK_MISSING"
 require_contains "$r1_prompt" "Do NOT edit production code or tests" "READ_ONLY_PROHIBITION_MISSING"
+require_contains "$r1_prompt" "READY FOR IMPLEMENT GATE" "NEXT_STEP_DRIFT"
 
 require_contains "$r1_appendix_prompt" "read-only implementation audit" "READ_ONLY_LABEL_MISSING"
 require_contains "$r1_appendix_prompt" "Do NOT write or modify production code, tests, PRD, or review artifacts in this step." "READ_ONLY_PROHIBITION_MISSING"
 require_contains "$r1_appendix_prompt" "TASK (READ-ONLY AUDIT)" "READ_ONLY_TASK_MISSING"
+require_contains "$r1_appendix_prompt" "READY FOR IMPLEMENT GATE" "NEXT_STEP_DRIFT"
 
 # R1 surrogate fallback to legacy premortem docs must stay disallowed.
 require_contains "$r1_appendix_prompt" "There is no surrogate or fallback path for R1." "SURROGATE_POLICY_MISSING"
+
+next_step_hits="$(rg -n "READY FOR SELF_REVIEW" "$r1_prompt" "$r1_appendix_prompt" || true)"
+if [[ -n "$next_step_hits" ]]; then
+  fail "NEXT_STEP_DRIFT" "$next_step_hits"
+fi
 
 r1_legacy_hits="$(rg -n "$legacy_re" "$r1_prompt" "$r1_appendix_prompt" || true)"
 if [[ -n "$r1_legacy_hits" ]]; then

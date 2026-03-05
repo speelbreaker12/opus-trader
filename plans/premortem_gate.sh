@@ -66,6 +66,92 @@ table_rows() {
   '
 }
 
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+is_valid_gap_id_list() {
+  local value
+  value="$(trim "$1")"
+  [[ "$value" =~ ^GAP-[A-Za-z0-9-]+([[:space:]]*,[[:space:]]*GAP-[A-Za-z0-9-]+)*$ ]]
+}
+
+validate_trading_risk_hard_gate() {
+  local file="$1"
+  local section=""
+  local question=""
+  local row=""
+  local answer=""
+  local why=""
+  local proof=""
+  local gap_id=""
+
+  grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$file" \
+    || die "missing required heading: ## Trading Risk Hard Gate"
+
+  section="$(
+    sed -n '/^## Trading Risk Hard Gate/,/^## 1)/{ /^## /d; p; }' "$file" \
+      | grep -v '^[[:space:]]*$' || true
+  )"
+  [[ -n "$section" ]] || die "Trading Risk Hard Gate section is empty"
+
+  for question in \
+    "Loss prevention" \
+    "Profit preservation" \
+    "Best design choice" \
+    "Better alternative check" \
+    "Failure-path correctness" \
+    "Fail-closed enforcement" \
+    "Proof, not belief"; do
+    row="$(
+      printf '%s\n' "$section" | awk -F'|' -v q="$question" '
+        function trim_field(s) {
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+          return s
+        }
+        /^\|/ {
+          if (trim_field($2) == q) {
+            print
+            exit
+          }
+        }
+      '
+    )"
+    [[ -n "$row" ]] || die "Trading Risk Hard Gate missing row: $question"
+
+    IFS='|' read -r _ _col_question _col_answer _col_why _col_proof _col_gap _ <<< "$row"
+    answer="$(trim "${_col_answer:-}")"
+    why="$(trim "${_col_why:-}")"
+    proof="$(trim "${_col_proof:-}")"
+    gap_id="$(trim "${_col_gap:-}")"
+
+    [[ "$answer" =~ ^(YES|NO|UNKNOWN)$ ]] \
+      || die "Trading Risk Hard Gate row '$question' has invalid answer '$answer' (expected YES/NO/UNKNOWN)"
+    [[ -n "$why" && "$why" != "-" ]] \
+      || die "Trading Risk Hard Gate row '$question' is missing Why"
+    [[ -n "$proof" && "$proof" != "-" ]] \
+      || die "Trading Risk Hard Gate row '$question' is missing Proof"
+
+    if [[ "$answer" == "NO" || "$answer" == "UNKNOWN" ]]; then
+      if [[ -z "$gap_id" || "$gap_id" == "-" || "$gap_id" == "N/A" || "$gap_id" == "NONE" ]]; then
+        die "Trading Risk Hard Gate row '$question' requires Gap ID for answer $answer"
+      fi
+      is_valid_gap_id_list "$gap_id" \
+        || die "Trading Risk Hard Gate row '$question' has invalid Gap ID list '$gap_id'"
+    fi
+  done
+
+  echo "$section" | grep -Fq "GO only if all 7 answers are YES with concrete proof." \
+    || die "Trading Risk Hard Gate missing GO decision rule"
+  echo "$section" | grep -Fq "YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment." \
+    || die "Trading Risk Hard Gate missing YELLOW decision rule"
+  echo "$section" | grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." \
+    || die "Trading Risk Hard Gate missing NO-GO decision rule"
+}
+
 # --- args ---
 story_id="${1:-}"
 [[ -n "$story_id" ]] || { usage >&2; exit 2; }
@@ -124,6 +210,15 @@ require_heading "$pm" "## 7) Economic risk (loss_mode)"
 require_heading "$pm" "## 8) Conflict scan & hot zones"
 require_heading "$pm" "## 9) Constraint I expect to hit"
 require_heading "$pm" "## 10) STOPLIGHT + Exit criteria"
+
+premortem_schema_v2=false
+if grep -Fq "> Premortem Schema: v2" "$pm"; then
+  premortem_schema_v2=true
+fi
+
+if [[ "$premortem_schema_v2" == "true" ]] || grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$pm"; then
+  validate_trading_risk_hard_gate "$pm"
+fi
 
 # --- §0: Story line filled ---
 s0=$(section_content "$pm" "## 0) What we're building")

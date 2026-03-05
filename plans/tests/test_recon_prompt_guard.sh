@@ -69,4 +69,18 @@ set -e
 [[ "$surrogate_rc" -ne 0 ]] || fail "expected surrogate regression case to fail"
 echo "$surrogate_output" | grep -Fq "SURROGATE_POLICY_MISSING" || fail "missing SURROGATE_POLICY_MISSING diagnostic"
 
+# Case 4: R1 prompt must hand off to implement, not self_review.
+fixture_next_step="$tmp_dir/next_step"
+mk_fixture "$fixture_next_step"
+perl -0pi -e 's/READY FOR IMPLEMENT GATE/READY FOR SELF_REVIEW/g' \
+  "$fixture_next_step/plans/prompts/slice_reconcile_r1_audit.md" \
+  "$fixture_next_step/plans/step_prompts/recon/r1_audit.md"
+
+set +e
+next_step_output="$(RECON_PROMPT_GUARD_ROOT="$fixture_next_step" "$SCRIPT" 2>&1)"
+next_step_rc=$?
+set -e
+[[ "$next_step_rc" -ne 0 ]] || fail "expected next-step drift case to fail"
+echo "$next_step_output" | grep -Fq "NEXT_STEP_DRIFT" || fail "missing NEXT_STEP_DRIFT diagnostic"
+
 echo "PASS: recon prompt guard test"

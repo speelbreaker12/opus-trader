@@ -105,12 +105,21 @@ For every reject/latch/gate path:
 
 ## Hard Gate: Mechanical Verification (Implementation Step)
 
-Before declaring the implementation step done: `./plans/verify_mechanical.sh` must pass.
+Before declaring the implementation step ready for the workflow `implement` receipt: `./plans/verify_mechanical.sh` must pass.
 Any failure = not done.
+
+`./plans/verify_mechanical.sh` is a partial mechanical check: it confirms compileability and validates PRD metadata only for stories that already have `passes=true`.
+It does NOT prove the current in-flight story's new enforcement point or `implementation_tests[]` mapping.
+Use targeted tests plus the full story review loop for story-specific proof.
 
 ## Workflow Verification Handoff (Required Before Final Done/Pass)
 
+This skill covers the implementation step only; it does not replace self-review, external review, resolution, or pass gating.
+See `specs/WORKFLOW_CONTRACT.md` §6 and `docs/PRD_STORY_WORKFLOW.md` for the canonical full story loop.
+
 `verify_mechanical.sh` is necessary but not sufficient for story completion. The full story loop still requires:
+- self-review artifacts for a single `REVIEW_SHA`
+- external review cycles and resolution artifacts for that same `REVIEW_SHA`
 - `./plans/verify.sh quick` during iteration and after review-fix checkpoints
 - `./plans/verify.sh full` before pass-flip
 - `plans/prd_set_pass.sh` for the `passes=true` mutation only after full verify is green

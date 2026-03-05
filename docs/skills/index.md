@@ -18,6 +18,7 @@ Validation command:
 | `/reconcil` | `SKILLS/reconcil.md` |
 | `/review-stack` | `SKILLS/review-stack.md` |
 | `/6` | `SKILLS/6.md` |
+| `/external-review-generic` | `SKILLS/external-review-generic.md` |
 | `/toc` | `SKILLS/toc.md` |
 
 ## Full skill inventory
@@ -31,6 +32,7 @@ Validation command:
 | `/contract-review` | `SKILLS/contract-review.md` | Fast fail-open safety filter for changes. |
 | `copilot-aftercare` | `SKILLS/copilot-aftercare.md` | Copilot review response loop workflow. |
 | `/devils-advocate` | `SKILLS/devils-advocate.md` | Mutation-style test-the-tests review. |
+| `/external-review-generic` | `SKILLS/external-review-generic.md` | Run four generic external reviewers in parallel for a PR, commit, file set, or tracked local diff. |
 | `diff-first-review` | `SKILLS/diff-first-review.md` | Diff-first review discipline. |
 | `/failure-mode-review` | `SKILLS/failure-mode-review.md` | Implementation-level failure path analysis. |
 | `flow-audit-loop` | `SKILLS/flow-audit-loop/SKILL.md` | ACF flow audit loop for contract flow bundles. |

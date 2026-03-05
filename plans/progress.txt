@@ -906,3 +906,17 @@ Commands: cargo fmt --all; cargo test -p soldier_core execution::engine::engine_
 Evidence: crates/soldier_core/src/execution/open_runtime.rs; crates/soldier_core/src/execution/engine.rs; crates/soldier_core/src/execution/engine_parity_tests.rs; artifacts/verify/20260305_093200/verify.meta.json.
 Notes: Non-fast-forward push expected on this branch; rebase required before push if remote advanced.
 Next: commit scoped files and push.
+Story: PR #170 follow-up (verify guard fail-closed + TLSM test cleanup)
+Date: 2026-03-05 19:25:58 UTC
+Summary: Removed execute-bit skip behavior for bidi/recon bash gates by routing them through a shared required-bash helper, added guardrail coverage for chmod -x and missing-script artifact-backed failure, and cleaned the AT-TLSM-01 test/comment flow while broadening the production-source scan from `.apply(TlsmEvent` to bare `.apply(`.
+Commands: bash plans/tests/test_verify_fork_guardrails.sh; cargo test -p soldier_core --lib production_sources_do_not_reference_noop_sink_or_bare_apply; cargo test -p soldier_core --lib test_at_tlsm_01; ./plans/verify.sh quick.
+Evidence: plans/verify_fork.sh; plans/tests/test_verify_fork_guardrails.sh; crates/soldier_core/src/execution/tlsm_tests.rs; artifacts/verify/20260305_131653/.
+Notes: Targeted tests passed. `./plans/verify.sh quick` reached contract kernel after preflight/fixture success, then failed on `sources.contract_sha256 mismatch`, which is outside this patch's write set.
+Next: Regenerate/sync the contract kernel source hash in the owning change, then rerun `./plans/verify.sh quick`.
+Story: PR #170 follow-up (contract kernel sync)
+Date: 2026-03-05 19:40:18 UTC
+Summary: Regenerated `docs/contract_kernel.json` so its `sources.contract_sha256` matches the current `specs/CONTRACT.md`, removing the prior contract-kernel mismatch from the observed quick-verify path.
+Commands: python3 scripts/build_contract_kernel.py --out docs/contract_kernel.json; python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json; ./plans/verify.sh quick; bash plans/tests/test_recon_operator_runner.sh.
+Evidence: docs/contract_kernel.json; artifacts/verify/20260305_132710/verify.meta.json.
+Notes: The rerun of `./plans/verify.sh quick` no longer surfaced the contract-kernel hash mismatch; it failed earlier in preflight because `plans/tests/test_recon_operator_runner.sh` hit its 240s timeout under suite load. The same test passed when rerun in isolation, so the remaining blocker is local preflight timing, not the contract-kernel artifact.
+Next: If you want a green local quick verify, investigate or stabilize the `test_recon_operator_runner.sh` timeout behavior under the full preflight suite, or rely on CI timing evidence from a clean checkout.

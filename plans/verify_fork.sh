@@ -384,6 +384,16 @@ run_logged_nonblocking_gate() {
   return 0
 }
 
+run_required_bash_gate() {
+  local gate_name="$1"
+  local timeout="$2"
+  local gate_label="$3"
+  local script_path="$4"
+
+  log "$gate_label"
+  run_logged_or_exit "$gate_name" "$timeout" bash "$script_path"
+}
+
 VERIFY_PARALLEL="${VERIFY_PARALLEL:-1}"
 case "$VERIFY_PARALLEL" in
   0|1) ;;
@@ -825,25 +835,14 @@ else
   warn "gate_integrity skipped (missing scripts/check_gate_integrity.py)"
 fi
 
-log "14c1) bidi control guard"
-run_logged_or_exit "bidi_control_guard" "$GATE_INTEGRITY_TIMEOUT" \
-  bash "$ROOT/plans/bidi_control_guard.sh"
-
-if [[ -x "$ROOT/plans/recon_prompt_guard.sh" ]]; then
-  log "14cc) recon prompt guard"
-  run_logged_or_exit "recon_prompt_guard" "$GATE_INTEGRITY_TIMEOUT" \
-    bash "$ROOT/plans/recon_prompt_guard.sh"
-else
-  warn "recon_prompt_guard skipped (missing plans/recon_prompt_guard.sh)"
-fi
-
-if [[ -x "$ROOT/plans/recon_doc_budget.sh" ]]; then
-  log "14cd) recon doc budget"
-  run_logged_or_exit "recon_doc_budget" "$DOC_SYNC_TIMEOUT" \
-    bash "$ROOT/plans/recon_doc_budget.sh"
-else
-  warn "recon_doc_budget skipped (missing plans/recon_doc_budget.sh)"
-fi
+run_required_bash_gate "bidi_control_guard" "$GATE_INTEGRITY_TIMEOUT" \
+  "14c1) bidi control guard" "$ROOT/plans/bidi_control_guard.sh"
+run_required_bash_gate "recon_prompt_guard" "$GATE_INTEGRITY_TIMEOUT" \
+  "14cc) recon prompt guard" "$ROOT/plans/recon_prompt_guard.sh"
+run_required_bash_gate "slice_execute_guard" "$GATE_INTEGRITY_TIMEOUT" \
+  "14ccc) slice execute guard" "$ROOT/plans/slice_execute_guard.sh"
+run_required_bash_gate "recon_doc_budget" "$DOC_SYNC_TIMEOUT" \
+  "14cd) recon doc budget" "$ROOT/plans/recon_doc_budget.sh"
 
 if [[ "${DOC_SYNC_GATE:-1}" != "0" ]]; then
   log "14d) doc sync check"
