@@ -262,14 +262,6 @@ impl ExecutionEngine {
         }
     }
 
-    pub fn evaluate<'input, 'runtime>(
-        &self,
-        input: &ExecutionInput<'input>,
-        runtime: &mut ExecutionRuntime<'runtime>,
-    ) -> ExecutionDecision {
-        self.decide(input, runtime)
-    }
-
     fn decide_open<'input, 'runtime>(
         &self,
         input: &OpenExecutionInput<'input>,
@@ -513,12 +505,11 @@ fn pipeline_wal_recorded(
     runtime: &mut ExecutionRuntime<'_>,
 ) -> bool {
     match intent_class {
-        ChokeIntentClass::Close | ChokeIntentClass::Hedge => {
-            if let Some(gate) = runtime.wal_gate.as_deref_mut() {
-                let _ = gate.record_before_dispatch();
-            }
-            true
-        }
+        ChokeIntentClass::Close | ChokeIntentClass::Hedge => runtime
+            .wal_gate
+            .as_deref_mut()
+            .map(|gate| gate.record_before_dispatch().is_ok())
+            .unwrap_or(false),
         ChokeIntentClass::CancelOnly => true,
         ChokeIntentClass::Open => false,
     }
@@ -672,4 +663,4 @@ fn reject_reason_detail(reason: &ChokeRejectReason) -> String {
 
 #[cfg(test)]
 #[path = "engine_decision_tests.rs"]
-mod engine_parity_tests;
+mod engine_decision_tests;
