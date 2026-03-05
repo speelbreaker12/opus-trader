@@ -254,7 +254,7 @@ should_enable_csp_strict() {
     return 1
   fi
 
-  if echo "$CSP_STRICT_CHANGED_FILES_CACHE" | grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$'; then
+  if grep -Eq '(^|/)specs/CONTRACT\.md$|(^|/)specs/TRACE\.yaml$' <<< "$CSP_STRICT_CHANGED_FILES_CACHE"; then
     return 0
   fi
 

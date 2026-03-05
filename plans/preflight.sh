@@ -66,6 +66,8 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 supports_wait_n() {
+  local wait_help_text=""
+
   if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
     return 1
   fi
@@ -75,7 +77,8 @@ supports_wait_n() {
   # Use the builtin explicitly so BASH_ENV function shadowing cannot spoof
   # wait -n support detection.
   if builtin help wait >/dev/null 2>&1; then
-    builtin help wait 2>/dev/null | grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)'
+    wait_help_text="$(builtin help wait 2>/dev/null || true)"
+    grep -Eq '(^|[[:space:]])-n([[:space:][:punct:]]|$)' <<< "$wait_help_text"
     return $?
   fi
   # If help text is unavailable on an otherwise compatible bash version,
@@ -510,12 +513,16 @@ else
   }
 
   _compute_fixture_hash_fallback() {
+    local _fallback_file_list=""
+    local _fallback_hash=""
+
     # Deterministic fallback: sorted file list, content-addressed.
     # Broad scope: includes all files that fixture tests may depend on —
     #   plans/ (all file types: .sh, .json, .txt, .md), specs/, SKILLS/,
     #   tools/, scripts/. This prevents stale cache when non-code config
     #   files (allowlists, evidence sources, workflow contract, etc.) change.
-    {
+    _fallback_file_list="$(
+      {
       [[ -d plans ]] && find plans -maxdepth 1 -type f 2>/dev/null
       [[ -d plans/lib ]] && find plans/lib -name '*.sh' -type f 2>/dev/null
       [[ -d plans/tests ]] && find plans/tests -name '*.sh' -type f 2>/dev/null
@@ -524,7 +531,18 @@ else
       [[ -d SKILLS ]] && find SKILLS -type f 2>/dev/null
       [[ -d tools ]] && find tools -name '*.py' -type f 2>/dev/null
       [[ -d scripts ]] && find scripts -name '*.py' -type f 2>/dev/null
-    } | LC_ALL=C sort -u | xargs shasum -a 256 2>/dev/null | shasum -a 256 | cut -d' ' -f1
+      } | LC_ALL=C sort -u | sed '/^[[:space:]]*$/d'
+    )" || return 1
+    [[ -n "$_fallback_file_list" ]] || return 1
+
+    _fallback_hash="$(
+      printf '%s\n' "$_fallback_file_list" \
+        | xargs shasum -a 256 2>/dev/null \
+        | shasum -a 256 \
+        | cut -d' ' -f1
+    )" || return 1
+    [[ "$_fallback_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
+    printf '%s\n' "$_fallback_hash"
   }
 
   _compute_fixture_hash() {
@@ -551,8 +569,7 @@ else
     fi
 
     # Falling back to full fixture hash scan
-    fallback_hash="$(_compute_fixture_hash_fallback)"
-    if [[ -n "$fallback_hash" ]]; then
+    if fallback_hash="$(_compute_fixture_hash_fallback)"; then
       echo "$fallback_hash"
       return 0
     fi

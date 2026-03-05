@@ -102,7 +102,6 @@ mutate_verify_file "$verify_file" \
   'run_logged_or_exit "__removed_contract_review_validate"'
 
 run_expect_missing_token 'run_logged_or_exit "contract_review_generate"'
-run_expect_missing_token 'run_logged_or_exit "contract_review_generate"'
 
 # Case B: remove only the second ordered verify token.
 # Must keep exact failure message contract unchanged.

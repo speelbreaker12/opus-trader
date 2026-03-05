@@ -66,7 +66,7 @@ assert_contains_line 'compute_csp_strict_changed_files()'
 assert_contains_line 'CSP_STRICT_CHANGED_FILES_CACHE_READY=0'
 assert_contains_line 'if [[ "$CSP_STRICT_CHANGED_FILES_CACHE_READY" == "0" || "$CSP_STRICT_CHANGED_FILES_CACHE_BASE_REF" != "$base_ref" ]]; then'
 assert_contains_line 'CSP_STRICT_CHANGED_FILES_CACHE="$(compute_csp_strict_changed_files "$base_ref")"'
-assert_contains_line 'echo "$CSP_STRICT_CHANGED_FILES_CACHE" | grep -Eq'
+assert_contains_line "grep -Eq '(^|/)specs/CONTRACT\\.md$|(^|/)specs/TRACE\\.yaml$' <<< \"\$CSP_STRICT_CHANGED_FILES_CACHE\""
 
 # Guardrail: quick-mode fail_closed_coverage must be non-blocking and explicit about timeout behavior.
 assert_contains_line 'run_logged_nonblocking_gate "fail_closed_coverage"'
