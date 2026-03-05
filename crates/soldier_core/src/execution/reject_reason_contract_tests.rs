@@ -4,10 +4,14 @@ use super::test_support_helpers_tests::{
     FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
 };
 
+use crate::execution::build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
+    build_order_intent_with_wal_gate,
+};
+use crate::execution::reject_reason::reject_reason_from_chokepoint;
 use crate::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes, GateResults,
-    GateStep, RecordedBeforeDispatchGate, RejectReasonCode, build_order_intent_with_wal_gate,
-    reject_reason_from_chokepoint, reject_reason_registry, reject_reason_registry_contains,
+    GateRejectCodes, RecordedBeforeDispatchGate, RejectReasonCode, reject_reason_registry,
+    reject_reason_registry_contains,
 };
 use crate::risk::RiskState;
 

@@ -60,7 +60,7 @@ pub enum GateIntentClass {
 
 /// Input to the Liquidity Gate evaluator.
 #[derive(Debug, Clone)]
-pub struct LiquidityGateInput {
+pub(crate) struct LiquidityGateInput {
     /// Order quantity to evaluate.
     pub order_qty: f64,
     /// Order side: true = buy, false = sell.
@@ -462,7 +462,7 @@ fn reject_with_metrics(
 /// Missing/stale L2 rejects OPEN and CLOSE/HEDGE order placement (AT-344, AT-909, AT-421).
 /// OPEN depth shortfall within the slippage budget rejects with
 /// InsufficientDepthWithinBudget (AT-222).
-pub fn evaluate_liquidity_gate(
+pub(crate) fn evaluate_liquidity_gate(
     input: &LiquidityGateInput,
     metrics: &mut LiquidityGateMetrics,
 ) -> LiquidityGateResult {

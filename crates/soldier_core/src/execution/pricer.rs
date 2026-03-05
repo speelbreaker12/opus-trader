@@ -22,7 +22,7 @@ use super::quantize::Side;
 
 /// Input to the IOC limit pricer.
 #[derive(Debug, Clone)]
-pub struct PricerInput {
+pub(crate) struct PricerInput {
     /// Fair price from the signal/model.
     pub fair_price: f64,
     /// Gross edge in USD (signal-derived expected profit before costs).
@@ -163,7 +163,10 @@ fn reject_invalid(metrics: &mut PricerMetrics) -> PricerResult {
 ///
 /// CONTRACT.md §1.4: "No Market Orders" — always produce a limit price
 /// that guarantees min_edge_usd at the limit.
-pub fn compute_limit_price(input: &PricerInput, metrics: &mut PricerMetrics) -> PricerResult {
+pub(crate) fn compute_limit_price(
+    input: &PricerInput,
+    metrics: &mut PricerMetrics,
+) -> PricerResult {
     // Standalone fail-closed input validation.
     if !input.fair_price.is_finite()
         || input.fair_price <= 0.0

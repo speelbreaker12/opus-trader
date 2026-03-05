@@ -2,10 +2,10 @@
 
 use super::test_support_helpers_tests::gate_results_all_passing_failclosed_wal;
 
-use crate::execution::{
+use crate::execution::RecordedBeforeDispatchGate;
+use crate::execution::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    RecordedBeforeDispatchGate, build_order_intent_with_optional_wal_gate,
-    build_order_intent_with_wal_gate,
+    build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate,
 };
 use crate::risk::RiskState;
 

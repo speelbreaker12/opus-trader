@@ -16,10 +16,11 @@
 use super::test_support_helpers_tests::{
     FailingWalGate, StubWalGate, gate_results_all_passing_failclosed_wal,
 };
-use crate::execution::{
+use crate::execution::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    RejectReasonCode, build_order_intent_with_wal_gate, reject_reason_registry_contains,
+    build_order_intent_with_wal_gate,
 };
+use crate::execution::{RejectReasonCode, reject_reason_registry_contains};
 use crate::idempotency::{IntentHashInput, compute_intent_hash};
 use crate::risk::RiskState;
 

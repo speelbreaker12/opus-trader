@@ -1,6 +1,6 @@
 use super::*;
-use crate::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, build_gate_results,
+use crate::execution::build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateResults, build_gate_results,
     build_order_intent_with_optional_wal_gate,
 };
 use crate::risk::RiskState;
@@ -54,7 +54,7 @@ fn rfc4648_base32_nopad_lower(bytes: &[u8]) -> String {
     out
 }
 
-fn gate_results_all_passing() -> crate::execution::GateResults {
+fn gate_results_all_passing() -> GateResults {
     build_gate_results(
         true, true, true, true, true, true, true, true, true, None, None,
     )

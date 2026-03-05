@@ -4,28 +4,28 @@
 //! the shared base gate evaluator (gates 1-6) then OPEN-specific gates (7-10),
 //! and finally the chokepoint gate-order evaluator.
 
-use crate::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, Side, build_gate_results,
-    build_order_intent_with_wal_gate,
-};
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
 use super::build_order_intent::PrecomputedWalGate;
+use super::build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, build_gate_results,
+    build_order_intent_with_wal_gate,
+};
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
 use super::gate_outcome::GateOutcome;
 use super::gates::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
 use super::preflight::{PreflightInput, PreflightMetrics};
 use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
-use super::quantize::{QuantizeConstraints, QuantizeMetrics};
+use super::quantize::{QuantizeConstraints, QuantizeMetrics, Side};
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
 /// Quantize inputs required by the execution pipeline.
 #[derive(Debug, Clone)]
-pub struct QuantizePipelineInput {
+pub(crate) struct QuantizePipelineInput {
     pub raw_qty: f64,
     pub raw_limit_price: f64,
     pub side: Side,
@@ -34,7 +34,7 @@ pub struct QuantizePipelineInput {
 
 /// Inputs required to run the end-to-end execution pipeline.
 #[derive(Debug, Clone)]
-pub struct IntentPipelineInput<'a> {
+pub(crate) struct IntentPipelineInput<'a> {
     pub intent_class: ChokeIntentClass,
     pub risk_state: RiskState,
     pub preflight: PreflightInput<'a>,
@@ -76,7 +76,7 @@ impl IntentPipelineMetrics {
 /// The chokepoint module remains the only source of functions that return
 /// `ChokeResult` directly.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PipelineResult {
+pub(crate) struct PipelineResult {
     pub decision: ChokeResult,
     pub reject_reason_code: Option<RejectReasonCode>,
 }
@@ -88,7 +88,7 @@ pub struct PipelineResult {
 ///
 /// Gates 1-6 are evaluated via the shared `evaluate_base_gates()` to
 /// eliminate dual-orchestration drift risk with `open_runtime.rs`.
-pub fn evaluate_intent_pipeline(
+pub(crate) fn evaluate_intent_pipeline(
     input: &IntentPipelineInput<'_>,
     metrics: &mut IntentPipelineMetrics,
 ) -> PipelineResult {
