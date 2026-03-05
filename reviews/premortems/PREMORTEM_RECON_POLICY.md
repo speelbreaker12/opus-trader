@@ -242,7 +242,7 @@ Fifteen checks, all must pass:
 
 Exit codes: 0 (pass), 1 (validation failure), 2 (usage/schema error), 3 (file/parse error), 20 (trading halt).
 
-Generate skeleton: `python3 python/proof_graph/init.py <ID> --premortem-dir artifacts/story/<ID>/`.
+Generate skeleton: `python3 python/proof_graph/init.py <ID> --premortem-path reviews/premortems/<ID>_premortem.md`.
 
 ---
 

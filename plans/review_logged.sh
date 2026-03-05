@@ -659,7 +659,7 @@ if [[ "$proof_graph" == "true" ]]; then
   python3 "$root/python/proof_graph/init.py" "$story" \
     --prd-path "$root/plans/prd.json" \
     --contract-path "$root/specs/CONTRACT.md" \
-    --premortem-dir "$root/artifacts/story/$story/" \
+    --premortem-path "$root/reviews/premortems/${story}_premortem.md" \
     --output-dir "$pg_outdir" >&2
   pg_skeleton="$pg_outdir/proof_graph.json"
   if [[ ! -f "$pg_skeleton" ]]; then

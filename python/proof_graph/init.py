@@ -9,6 +9,7 @@ Usage:
   python3 python/proof_graph/init.py S1-007 \
       [--prd-path plans/prd.json] \
       [--contract-path specs/CONTRACT.md] \
+      [--premortem-path reviews/premortems/S1-007_premortem.md] \
       [--premortem-dir artifacts/story/S1-007/] \
       [--output-dir artifacts/story/S1-007/]
 """
@@ -24,6 +25,10 @@ from pathlib import Path
 from typing import Any
 
 INIT_TOOL_VERSION = "2.0.0"
+
+
+def _warn(msg: str) -> None:
+    print(f"WARN: {msg}", file=sys.stderr)
 
 
 def _git_head_sha() -> str:
@@ -47,8 +52,8 @@ def _load_prd_item(prd_path: Path, story_id: str) -> dict[str, Any] | None:
     return None
 
 
-def _parse_premortem(premortem_dir: Path) -> dict[str, str | None]:
-    """Extract section5/section4/section2 from premortem.md if present.
+def _parse_premortem(premortem_path: Path) -> dict[str, str | None]:
+    """Extract section5/section4/section2 from a premortem file if present.
 
     Returns dict with keys:
       section5_wrong_impl_blocked: "ALL" | "PARTIAL" | "NONE" | None
@@ -61,7 +66,6 @@ def _parse_premortem(premortem_dir: Path) -> dict[str, str | None]:
         "section2_assumptions": None,
     }
 
-    premortem_path = premortem_dir / "premortem.md"
     if not premortem_path.is_file():
         return result
 
@@ -103,6 +107,7 @@ def init_v2(
     prd_path: Path,
     contract_path: Path,
     output_dir: Path,
+    premortem_path: Path | None = None,
     premortem_dir: Path | None = None,
 ) -> Path:
     """Generate a V2 skeleton proof_graph.json and return its path."""
@@ -117,14 +122,45 @@ def init_v2(
     # Determine safety_critical based on category/loss_mode
     safety_critical = category not in ("policy", "certification", "<FILL>")
 
+    # Resolve premortem source path.
+    # Canonical source is reviews/premortems/<STORY_ID>_premortem.md.
+    # Legacy compatibility: artifacts/story/<STORY_ID>/premortem.md for one release.
+    resolved_premortem_path: Path | None = premortem_path
+    if resolved_premortem_path is not None and premortem_dir is not None:
+        _warn(
+            "Both --premortem-path and deprecated --premortem-dir were provided; "
+            "ignoring --premortem-dir."
+        )
+    elif resolved_premortem_path is None and premortem_dir is not None:
+        _warn(
+            "Deprecated flag --premortem-dir used. This legacy mode will be removed "
+            "in the next release. Use --premortem-path "
+            "reviews/premortems/<STORY_ID>_premortem.md."
+        )
+        resolved_premortem_path = premortem_dir / "premortem.md"
+    elif resolved_premortem_path is None:
+        canonical = Path("reviews/premortems") / f"{story_id}_premortem.md"
+        legacy_default = Path("artifacts/story") / story_id / "premortem.md"
+        if canonical.is_file():
+            resolved_premortem_path = canonical
+        elif legacy_default.is_file():
+            _warn(
+                f"Using legacy premortem path {legacy_default}. Migrate to canonical "
+                f"path {canonical}. Legacy auto-fallback will be removed in the next "
+                "release."
+            )
+            resolved_premortem_path = legacy_default
+        else:
+            resolved_premortem_path = canonical
+
     # Parse premortem sections
     premortem_vals: dict[str, str | None] = {
         "section5_wrong_impl_blocked": None,
         "section4_decision_match": None,
         "section2_assumptions": None,
     }
-    if premortem_dir:
-        premortem_vals = _parse_premortem(premortem_dir)
+    if resolved_premortem_path:
+        premortem_vals = _parse_premortem(resolved_premortem_path)
 
     # Pre-populate ATs from enforcing_contract_ats
     eca = item.get("enforcing_contract_ats", []) if item else []
@@ -244,8 +280,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to CONTRACT.md",
     )
     parser.add_argument(
+        "--premortem-path", default=None,
+        help=(
+            "Canonical premortem file path "
+            "(default: reviews/premortems/<ID>_premortem.md)"
+        ),
+    )
+    parser.add_argument(
         "--premortem-dir", default=None,
-        help="Directory containing premortem.md (default: artifacts/story/<ID>/)",
+        help=(
+            "DEPRECATED: Directory containing premortem.md "
+            "(legacy compatibility only; use --premortem-path)"
+        ),
     )
     parser.add_argument(
         "--output-dir", default=None,
@@ -257,16 +303,15 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.output_dir) if args.output_dir
         else Path(f"artifacts/story/{args.story_id}")
     )
-    premortem_dir = (
-        Path(args.premortem_dir) if args.premortem_dir
-        else Path(f"artifacts/story/{args.story_id}")
-    )
+    premortem_path = Path(args.premortem_path) if args.premortem_path else None
+    premortem_dir = Path(args.premortem_dir) if args.premortem_dir else None
 
     out_path = init_v2(
         story_id=args.story_id,
         prd_path=Path(args.prd_path),
         contract_path=Path(args.contract_path),
         output_dir=output_dir,
+        premortem_path=premortem_path,
         premortem_dir=premortem_dir,
     )
     print(f"Initialized V2: {out_path}")
