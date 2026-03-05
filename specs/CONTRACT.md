@@ -1081,6 +1081,7 @@ AT-1098
   - the group has **no partial fills** and **no fill mismatch** beyond `epsilon` (atomicity restored or no-trade), **AND**
   - **no containment/rescue action is pending**.
 - The **first observed failure** (reject/cancel/unfilled/partial mismatch) must “seed” the group into `MixedFailed` and **must not be overwritten** by later async updates.
+- WAL/replay qualifier: the WAL layer additionally preserves `Rejected` as a WAL-only terminal state for venue-level rejections. Replay/recovery MUST treat WAL `Rejected` as terminal even though core TLSM maps `Rejected` events to `Failed`.
 
 **Serialization Rule:**
 - GroupState transitions must be **single-writer** (AtomicGroupExecutor owns state) or protected by a **group‑level lock**.
@@ -6327,3 +6328,4 @@ definition points in the main contract and to the most directly relevant accepta
 |---|---|---|---|---|---|---|---|
 | 2026-03-04 | CCL-2026-03-04-01 | Branch delta vs origin/main (multiple sections and appendices) | Baseline bootstrap | Establish mandatory ledger section required by verify gate 02a for this branch. | Contract differs from base; ledger is now required to keep edits auditable and append-only. | N/A (bootstrap) | local/bootstrap |
 | 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
+| 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
