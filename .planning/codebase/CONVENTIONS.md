@@ -1,126 +1,54 @@
-# Coding Conventions
+# Codebase Conventions (Quality-Focused)
 
-**Analysis Date:** 2026-02-25
+Analysis date: 2026-03-04
 
-## Naming Patterns
+## Scope and Source Files
+- This map is grounded in current implementation and gate scripts, especially `crates/soldier_core/src/lib.rs`, `crates/soldier_infra/src/lib.rs`, `plans/verify_fork.sh`, `plans/lib/verify_utils.sh`, `plans/lib/rust_gates.sh`, `plans/lib/python_gates.sh`, `dashboard/publisher/publisher.py`, and `tools/validate_status.py`.
+- Workflow contract expectations are encoded in `specs/WORKFLOW_CONTRACT.md` and enforced by scripts like `plans/verify_gate_contract_check.sh`.
 
-**Files:**
-- Rust source uses snake_case file names (`order_size.rs`, `quantize.rs`, `ledger.rs`).
-- Rust test files are mainly split into module-level and crate-level suites under `crates/soldier_core/tests/*.rs`, `crates/soldier_infra/tests/*.rs`, and in-module `#[cfg(test)]` blocks in `crates/*/src/*.rs`.
-- Python uses snake_case test module names (`test_rules.py`, `test_init.py`) under `python/proof_graph/tests/`.
-- Dashboard TS file names and source layout are not fully represented; dashboard package is mostly metadata (`dashboard/package.json`, `dashboard/tsconfig.json`).
+## Coding Style Baseline
+- Rust safety posture is explicit: both crate roots set `#![forbid(unsafe_code)]` in `crates/soldier_core/src/lib.rs` and `crates/soldier_infra/src/lib.rs`.
+- Rust formatting is enforced by gate, not convention text: `cargo fmt --all -- --check` in `plans/lib/rust_gates.sh`.
+- Rust warnings are elevated to failures in full verification via `cargo clippy --workspace --all-targets --all-features -- -D warnings` in `plans/lib/rust_gates.sh`.
+- Shell scripts follow strict mode (`set -euo pipefail`) consistently in workflow/harness entrypoints such as `plans/verify.sh`, `plans/verify_fork.sh`, `plans/preflight.sh`, and `plans/prd_set_pass.sh`.
+- Python quality relies on external tools (when present): `ruff check .`, `ruff format --check .`, `pytest -q`, and optional `mypy` in `plans/lib/python_gates.sh`.
 
-**Functions:**
-- Rust and Python functions are `snake_case` (e.g., `resolve_config_value`, `build_order_size`, `test_at908_too_small_rejected`).
-- No special async naming prefix is used.
-- Test function naming is `test_<scenario>` in Rust.
-- Not detected: specific handler naming convention like `handleX`.
+## Naming and Layout Patterns
+- Rust files/modules are `snake_case` and organized by domain boundaries (`crates/soldier_core/src/execution`, `crates/soldier_core/src/risk`, `crates/soldier_infra/src/store`).
+- Rust types use `PascalCase`, constants use `UPPER_SNAKE_CASE` (for example metric tokens in `crates/soldier_core/src/execution/mod.rs`).
+- Test files follow `test_*.rs` / `prop_*.rs` naming under `crates/*/tests/`, with many companion in-module suites under `crates/*/src/**/*_tests.rs`.
+- Python app/test modules use `snake_case` names (`dashboard/publisher/state.py`, `tests/test_publisher_contract.py`, `python/proof_graph/tests/test_rules.py`).
+- Environment variables are consistently uppercase with subsystem prefixes (examples: `VERIFY_*` in `plans/verify_fork.sh`, `STATUS_PUBLISHER_*` in `dashboard/publisher/publisher.py`, `PREFLIGHT_*` in `plans/preflight.sh`).
 
-**Variables:**
-- `snake_case` for local variables and function parameters (`gate_results_all_passing`, `raw_qty`).
-- `UPPER_SNAKE_CASE` for constants in Rust (`EXPECTED_PARAM_COUNT`, `PROPTEST_CASES`, `BOUNDARY_EPS`).
-- No underscore-private naming convention is enforced; private items usually use normal `snake_case`.
+## Implementation Patterns
+- Contract-first traceability is embedded in code comments and test names (e.g., AT references in `crates/soldier_core/src/execution/gate.rs`, `crates/soldier_infra/src/wal.rs`, `crates/soldier_infra/tests/test_async_wal_writer.rs`).
+- “Thin wrapper + canonical implementation” is a repeated pattern:
+  - `verify.sh` delegates to `plans/verify.sh`.
+  - `plans/verify.sh` delegates to `plans/verify_fork.sh`.
+- API surfaces are intentionally explicit via `pub use` facades in `crates/soldier_core/src/execution/mod.rs` and `crates/soldier_infra/src/store/mod.rs`.
+- Compatibility-anchor tests are used to keep workflow/doc-sync checks stable while tests move internally (example: `crates/soldier_core/tests/test_intent_pipeline.rs`).
 
-**Types:**
-- Rust structs/enums/types are `PascalCase` (`GateConfig`, `QuantizeError`, `IntentSize`).
-- Python typed classes in tests and modules follow `PascalCase` (`ValidationContext`, `ProofGraph`, `Input`).
-- No interface/type-alias naming anomalies detected.
+## Error Handling Conventions
+- Fail-closed defaults are standard in runtime-critical paths:
+  - Config resolution rejects missing non-defaulted parameters (`crates/soldier_infra/src/config.rs`).
+  - Durable bootstrapping validates absolute paths/capacities up front (`crates/soldier_infra/src/bootstrap.rs`).
+  - WAL/registry paths use explicit typed error enums (`crates/soldier_infra/src/store/ledger.rs`, `crates/soldier_infra/src/store/trade_id_registry.rs`).
+- Rust code favors typed `Result<T, E>` and domain enums over opaque strings at boundaries.
+- Shell gates use deterministic exits and explicit “hard fail” helpers (`fail`, `die`) in scripts like `plans/verify_fork.sh`, `plans/slice_completion_enforce.sh`, and `plans/contract_review_validate.sh`.
+- Python operational code uses typed exception wrappers with stable error codes (for example `PublisherError` in `dashboard/publisher/publisher.py`).
 
-## Code Style
+## Logging and Diagnostics
+- Runtime Rust logging uses `tracing` with structured fields (examples in `crates/soldier_infra/src/bootstrap.rs`, `crates/soldier_core/src/execution/gate.rs`).
+- Verify/harness logs are artifact-backed by design: each gate writes `<gate>.log`, `<gate>.rc`, `<gate>.time`, plus `FAILED_GATE` and `verify.meta.json` under `artifacts/verify/<run_id>/` (implemented in `plans/lib/verify_utils.sh` and `plans/verify_fork.sh`).
+- Python publisher logs to both file and stderr/stdout stream with unified formatting (`dashboard/publisher/publisher.py`).
 
-**Formatting:**
-- Rust formatting is enforced through `cargo fmt --all -- --check` in verify.
-- No local Rust formatter config file detected (`rustfmt.toml` not detected).
-- Python/JS formatter config not detected for this map scope.
-- Indentation is 4 spaces in Rust and Python.
-- Semicolons are required by Rust compiler/language.
-- Line length appears unconstrained by repo config; observed style keeps lines moderate rather than tightly enforced.
+## Configuration Conventions
+- Safety-critical config defaults are centralized in code, not scattered env parsing (`crates/soldier_infra/src/config.rs`).
+- Schema-first validation is common for status and contract artifacts (`tools/validate_status.py`, `plans/contract_review_validate.sh`).
+- Feature strictness frequently uses sentinel files and env toggles (examples: `CONTRACT_COVERAGE_CI_SENTINEL`, `CROSSREF_CI_STRICT_SENTINEL` in `plans/verify_fork.sh`).
 
-**Linting:**
-- Rust: `cargo clippy` in full verify mode (`cargo clippy --workspace --all-targets --all-features -- -D warnings`).
-- Python: lint/format via `ruff check .` and `ruff format --check .` when `ruff` is available.
-- No repository-wide JS linter is guaranteed; scripts are optional by package lockfile detection.
-
-## Import Organization
-
-**Order:**
-1. Standard library imports.
-2. External crate imports.
-3. Internal crate/module imports (`crate::`, `super::`, `use soldier_core::...`, `use soldier_infra::...`).
-
-**Grouping:**
-- Imports are grouped with blank lines and sorted to keep logical clusters.
-- Type-only imports are generally mixed with other uses (not separated).
-
-**Path Aliases:**
-- Not detected (no consistent path alias usage in the inspected files).
-
-## Error Handling
-
-**Patterns:**
-- Fail-closed by default for invalid/incomplete input (`Result::Err` paths dominate invalid metadata, invalid values, and boundary conditions).
-- Custom error enums and structs are used extensively (`QuantizeError`, `MissingConfigError`).
-- `?` is used for propagation; `match` blocks are used to convert/attach context.
-- Return early on guard failures is common.
-
-**Error Types:**
-- Fail with structured domain errors for business-rule violations and validation failures.
-- Convert to user-facing `io::Error` with explicit context when crossing module boundaries.
-- Parse/contract violations are surfaced via explicit custom reasons/messages.
-
-**Logging:**
-- Structured logs via `tracing` in Rust (e.g., `tracing::warn!(...)`, `tracing::debug!(...)`) with named fields.
-- Not detected: centralized Python logging standardization.
-
-## Logging
-
-**Framework:**
-- Rust: `tracing` crate.
-
-**Patterns:**
-- Use structured key/value logs for warning/error paths.
-- Logs are placed at validation and edge-condition points rather than every line of flow.
-- Avoids ad-hoc `println!` in tested logic where tracing is used.
-
-## Comments
-
-**When to Comment:**
-- Document contract mapping, invariants, and safety rationale with doc comments (`//!`, `///`) before public/critical items.
-- Comments explain non-obvious behavior and boundary conditions.
-
-**JSDoc/TSDoc:**
-- Rust doc comments are heavily used.
-- Not detected: language-specific JSDoc/TSDoc usage (dashboard JS surface is minimal).
-
-**TODO Comments:**
-- `TODO(...)` format observed, often with migration/scope tags (e.g., `TODO(slice-N): ...`).
-- No single mandatory issue-number format policy was detected beyond that pattern.
-
-## Function Design
-
-**Size:**
-- Functions are usually decomposed into small, single-responsibility units.
-- Long functions are avoided where practical.
-
-**Parameters:**
-- Prefer small parameter structs for grouped inputs (`OrderSizeInput`, `QuantizeConstraints`, `IntentPipelineInput`).
-- Prefer simple value params for small constructors.
-
-**Return Values:**
-- Explicit return values are preferred.
-- Validation and conversion functions return `Result<T, E>` when failure is possible.
-- Error variants are handled before side effects.
-
-## Module Design
-
-**Exports:**
-- Rust favors explicit `pub mod` plus `pub use` re-exports.
-- Public modules are grouped under crate roots (`src/lib.rs`, `crates/*/src/lib.rs`).
-
-**Barrel Files:**
-- Barrel-like re-export pattern is standard in Rust (`pub mod ...`, `pub use ...`).
-- Preserve separation between core and infra crate boundaries.
-- No broad namespace wildcards in re-exports observed in sampled files.
-
-*Convention analysis: 2026-02-25*
-*Update when patterns change*
+## Planning Implications
+- Treat `plans/verify.sh` and `plans/verify_fork.sh` as interface/implementation pair; behavior changes belong in `plans/verify_fork.sh`, not wrapper scripts.
+- For workflow/harness edits, preserve deterministic artifact behavior expected by `plans/prd_set_pass.sh` and tested in `plans/tests/test_verify_fork_guardrails.sh`.
+- Preserve fail-closed semantics when introducing new config, gate, or status fields; align changes across runtime code, schema validators, and verify gates (`crates/*`, `tools/validate_status.py`, `plans/verify_fork.sh`).
+- Keep contract traceability explicit by carrying AT/anchor references in tests and comments where behavior is safety-critical (`specs/CONTRACT.md` plus affected module/tests).

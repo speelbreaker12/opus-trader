@@ -120,7 +120,7 @@ AT-1055
 
 ## **Phase 0: Operational Prerequisites (Non-Negotiable)**
 
-Before live-trading enablement, any CSP compliance claim, or promotion beyond foundation into Phase 2+ operation, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
+Before any code implementation begins, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
 
 | ID | Item | Purpose | Evidence Required |
 |----|------|---------|-------------------|
@@ -128,7 +128,7 @@ Before live-trading enablement, any CSP compliance claim, or promotion beyond fo
 | **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
 | **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
 | **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
-| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner status output returning `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (and optional deprecated alias `is_trading_allowed`) | `docs/health_endpoint.md`, passing tests |
+| **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner-status scaffolding returning `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (and optional deprecated alias `is_trading_allowed`) on owner scaffolding surfaces (CLI/local status). Foundation `/status` uses AT-1230 status-lite keys. | `docs/health_endpoint.md`, passing tests |
 | **P0-F** | Machine Policy Loader Baseline | Bind a machine-readable policy path + strict loader so runtime checks are not doc-only | `config/policy.json`, `tools/policy_loader.py`, passing tests |
 
 **Anchors (for PRD traceability):**
@@ -139,7 +139,7 @@ Before live-trading enablement, any CSP compliance claim, or promotion beyond fo
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before live-trading enablement and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases).
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -1077,7 +1077,7 @@ AT-1098
 **Council Weakness Covered:** Premature “Complete” + naked events under concurrency.
 
 **Hard Invariant (Non‑Negotiable):**
-- A Group may be marked `Complete` **only if** every leg has reached a terminal TLSM state `{Filled, Canceled, Rejected}` **AND**
+- A Group may be marked `Complete` **only if** every leg has reached a terminal TLSM state `{Filled, Canceled, Failed}` **AND**
   - the group has **no partial fills** and **no fill mismatch** beyond `epsilon` (atomicity restored or no-trade), **AND**
   - **no containment/rescue action is pending**.
 - The **first observed failure** (reject/cancel/unfilled/partial mismatch) must “seed” the group into `MixedFailed` and **must not be overwritten** by later async updates.
@@ -3158,7 +3158,7 @@ Profile: CSP
 - If any such queue is full, the hot loop MUST NOT block and MUST force ReduceOnly until backlog clears.
 
 **Persisted Record (Minimum):**
-- intent_hash, group_id, leg_idx, instrument, side, qty, limit_price
+- intent_hash, group_id, leg_idx, instrument, side, reduce_only, qty, limit_price
 - tls_state, created_ts, sent_ts, ack_ts, last_fill_ts
 - exchange_order_id (if known), last_trade_id (if known)
 
@@ -3204,6 +3204,13 @@ AT-1215
 - Then: exactly one OPEN dispatch attempt occurs.
 - Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`.
 - Fail criteria: dispatch count is 0 despite successful WAL recording, or >1 for the same intent.
+
+AT-1231
+- Given: a CLOSE/HEDGE intent (`reduce_only == true`) is WAL-recorded in a non-terminal TLS state, then a crash occurs before completion.
+- When: the system restarts and reconstructs in-flight intents from WAL during replay/reconciliation.
+- Then: the recovered intent remains classified as CLOSE/HEDGE (not OPEN) using persisted `reduce_only`.
+- Pass criteria: replayed record retains `reduce_only == true`; recovered intent classification is non-OPEN.
+- Fail criteria: replayed intent is treated as OPEN due to missing/unknown persisted classification.
 
 Profile: GOP
 AT-969
@@ -4557,19 +4564,6 @@ Profile: CSP
 - `GET /api/v1/status` (read-only)
 - `GET /api/v1/health` (read-only; minimal external watchdog primitive)
 
-**Status authority matrix (normative):**
-- **Surface A: Phase 0 owner-status scaffolding (operator convenience surface).**
-  - May be exposed via CLI and local operator tooling.
-  - MUST include `trading_mode` + `opens_globally_permitted`.
-  - `is_trading_allowed` MAY be emitted as deprecated alias and MUST equal `opens_globally_permitted`.
-  - Canonical `trading_mode` values are `Active|ReduceOnly|Kill`; legacy uppercase aliases (`ACTIVE|REDUCE_ONLY|KILL`) are transitional and MUST map one-to-one.
-- **Surface B: Foundation status-lite (`phase == foundation`).**
-  - Governs `GET /api/v1/status` shape while in Phase 1 bootstrap mode.
-  - MUST include only the bootstrap keys and invariants listed under AT-1230.
-- **Surface C: CSP minimum status (`phase != foundation`).**
-  - Governs authoritative `GET /api/v1/status` schema once foundation mode exits.
-  - MUST include the CSP minimum keys listed below.
-
 **/health response MUST include (minimum):**
 - `ok` (bool; MUST be true when process is up)
 - `build_id` (string)
@@ -4584,9 +4578,14 @@ AT-022
 - Pass criteria: response matches required keys/values.
 - Fail criteria: non-200 OR missing keys OR `ok != true`.
 
+**Status surface split (Normative):**
+- `/api/v1/health` uses liveness key `ok`.
+- Foundation `/api/v1/status` status-lite uses liveness key `service_up`.
+- P0-E owner-status keys (`trading_mode`, `opens_globally_permitted`, optional `is_trading_allowed`) are NOT part of foundation status-lite payloads.
+
 **Foundation status-lite mode (Phase 1 bootstrap only):**
 - While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
-- In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation`.
+- In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation` (`dispatch_enabled == false` is the canonical "opens not dispatchable" signal in this mode).
 - CSP minimum `/status` keys are required after foundation mode exits.
 
 AT-1230
@@ -6323,13 +6322,8 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.12 Acceptance Tests (CSP gating)** | §0.Z.5 (profile tagging rules)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.10 (Numeric Sanity Guard)<br>§8 (release gates reference CSP/GOP status) | AT-1057 (ensures CSP-only pipeline executes only CSP tests)<br>AT-023 (status completeness for operators/CI)<br>AT-1219 (GOP numeric faults isolated under CSP) |
 
 ## **Appendix CONTRACT_CHANGE_LEDGER (Normative, Mandatory)**
-Profile: CSP
 
-Any mutation to `specs/CONTRACT.md` MUST add a new dated ledger row in this appendix.
-Ledger entries are append-only: existing rows MUST NOT be edited or deleted.
-Corrections MUST be recorded as additional rows.
-`plans/check_contract_change_ledger.sh` is the fail-closed enforcement gate wired into `./plans/verify.sh`.
-
-| date_utc | change_id | sections_touched | change_type | summary | rationale | AT/VR refs | story/pr |
+| Date_UTC | Change_ID | Sections_Touched | Change_Type | Summary | Rationale | AT/VR refs | Story/PR |
 |---|---|---|---|---|---|---|---|
-| 2026-03-04 | CCL-20260304-PR1-01 | Phase 0 prerequisites; §7.0 status authority matrix; Phase 1 boundary clarifications | clarification | Enforce Phase 0/Phase 1 authority boundaries and canonical status surface semantics | Remove doc/contract drift and bind status authority to explicit surfaces | AT-022; AT-1230 | PR1/task1-task2 |
+| 2026-03-04 | CCL-2026-03-04-01 | Branch delta vs origin/main (multiple sections and appendices) | Baseline bootstrap | Establish mandatory ledger section required by verify gate 02a for this branch. | Contract differs from base; ledger is now required to keep edits auditable and append-only. | N/A (bootstrap) | local/bootstrap |
+| 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |

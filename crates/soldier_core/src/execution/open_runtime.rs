@@ -3,10 +3,6 @@
 //! Gates 1-6 are evaluated via the shared `evaluate_base_gates()` to
 //! eliminate dual-orchestration drift risk with `pipeline.rs` (Q1).
 
-use crate::execution::{
-    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep, Tlsm,
-    build_gate_results, build_order_intent_with_wal_gate,
-};
 use crate::risk::{
     ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetResult, MarginGateDecision,
     MarginGateInput, MarginGateMetrics, MarginGateMode, PendingExposureBook,
@@ -18,6 +14,10 @@ use crate::risk::{
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
 use super::build_order_intent::PrecomputedWalGate;
+use super::build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
+    build_gate_results, build_order_intent_with_wal_gate,
+};
 use super::dispatch_map::{DispatchConsistencyProof, IntentClass, MismatchMetrics};
 use super::gate::{
     LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate,
@@ -29,6 +29,7 @@ use super::inventory_skew::{
     evaluate_inventory_skew,
 };
 use super::pricer::{PricerInput, PricerMetrics, PricerResult, compute_limit_price};
+use super::tlsm::Tlsm;
 use crate::venue::types::InstrumentKindInput;
 
 const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
@@ -42,7 +43,7 @@ const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGE
 /// Previous bool fields (`preflight_passed`, `quantize_passed`, etc.)
 /// are no longer needed — the evaluator computes them from raw inputs.
 #[derive(Debug, Clone)]
-pub struct OpenRuntimeInput<'a> {
+pub(crate) struct OpenRuntimeInput<'a> {
     /// Base gates input (gates 1-6). The shared evaluator computes
     /// preflight_passed, quantize_passed, dispatch_consistency,
     /// fee_cache_passed, and expiry_guard_passed from these inputs.
@@ -81,7 +82,7 @@ pub struct OpenRuntimeMetrics {
 
 /// OPEN runtime output surfaced to tests and callers.
 #[derive(Debug, Clone)]
-pub struct OpenRuntimeOutput {
+pub(crate) struct OpenRuntimeOutput {
     pub choke_result: ChokeResult,
     pub gate_results: GateResults,
     pub pending_reservation_id: Option<ReservationId>,
@@ -91,7 +92,7 @@ pub struct OpenRuntimeOutput {
 }
 
 /// Build an OPEN intent decision by wiring runtime gates before chokepoint.
-pub fn build_open_order_intent_runtime(
+pub(crate) fn build_open_order_intent_runtime(
     input: &OpenRuntimeInput<'_>,
     pending_book: &PendingExposureBook,
     choke_metrics: &mut ChokeMetrics,
@@ -402,7 +403,7 @@ pub fn settle_pending_on_tlsm_terminal(
 /// Assembly failure is fail-closed: `dispatch_consistency` is set to
 /// `failed()` and risk state is degraded.
 #[allow(dead_code)]
-pub fn build_open_intent_with_assembly(
+pub(crate) fn build_open_intent_with_assembly(
     assembly_meta: &InstrumentKindInput,
     sizing_params: &SizingParams,
     input: &OpenRuntimeInput<'_>,

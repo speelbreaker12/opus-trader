@@ -4,18 +4,25 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use soldier_core::risk::RiskState;
+use soldier_core::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
+use soldier_core::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
+
+static TEMP_SOURCE_FILE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 #[allow(unused_imports)]
 use soldier_core::execution::{
-    AtomicGroup, ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateRejectCodes,
-    GateResults, GateStep, GroupConfig, GroupError, GroupLock, GroupState, GroupStateTransition,
-    LABEL_MAX_LEN, LabelError, LabelInput, LegResult, LockAcquisitionResult, OooCategory,
-    OrderSize, PersistedTransition, RecordedBeforeDispatchGate, RejectReasonCode, Side, Tlsm,
-    TlsmError, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult, build_gate_results,
-    build_order_intent_with_optional_wal_gate, build_order_intent_with_wal_gate, derive_gid12,
-    derive_sid8, encode_label, reject_reason_from_chokepoint, reject_reason_registry,
+    ApprovedExecution, AtomicGroup, CancelExecutionInput, CloseExecutionInput, ExecutionBaseInput,
+    ExecutionDecision, ExecutionEngine, ExecutionInput, ExecutionL2BookSnapshot, ExecutionL2Level,
+    ExecutionOrderType, ExecutionPostOnlyInput, ExecutionPreflightInput, ExecutionRejection,
+    ExecutionRuntime, ExecutionStep, GateRejectCodes, GateStep, GroupConfig, GroupError, GroupLock,
+    GroupState, GroupStateTransition, HedgeExecutionInput, InventorySkewExecutionInput,
+    LABEL_MAX_LEN, LabelError, LabelInput, LegResult, LiquidityExecutionInput,
+    LockAcquisitionResult, NetEdgeExecutionInput, OpenExecutionInput, PersistedTransition,
+    PricerExecutionInput, QuantizeExecutionInput, RecordedBeforeDispatchGate, RejectReasonCode,
+    RuntimeStep, Side, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
+    derive_gid12, derive_sid8, encode_label, reject_reason_registry,
     reject_reason_registry_contains, try_acquire_group_lock,
 };
 
@@ -211,10 +218,12 @@ fn write_temp_source_file(contents: &str) -> PathBuf {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system clock before UNIX_EPOCH")
         .as_nanos();
+    let seq = TEMP_SOURCE_FILE_SEQ.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!(
-        "facade_symbol_extract_{}_{}.rs",
+        "facade_symbol_extract_{}_{}_{}.rs",
         std::process::id(),
-        nanos
+        nanos,
+        seq
     ));
     fs::write(&path, contents)
         .unwrap_or_else(|err| panic!("failed to write {}: {err}", path.display()));
@@ -249,22 +258,17 @@ fn assert_facade_symbol_lists_in_sync() {
 
 #[test]
 fn execution_facade_symbols_publicly_reachable() {
-    let gates = build_gate_results(
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        Some(1.0),
-        Some(1.0),
-    );
-    assert!(gates.preflight_passed);
-    assert!(gates.pricer_passed);
-    assert!(gates.wal_recorded);
+    let _snapshot = ExecutionL2BookSnapshot {
+        asks: vec![ExecutionL2Level {
+            price: 100.0,
+            qty: 1.0,
+        }],
+        bids: vec![ExecutionL2Level {
+            price: 99.0,
+            qty: 1.0,
+        }],
+        timestamp_ms: 1,
+    };
 
     let registry = reject_reason_registry();
     assert!(
@@ -276,77 +280,42 @@ fn execution_facade_symbols_publicly_reachable() {
         "expected RecordedBeforeDispatchFailed in facade reject reason registry"
     );
 
-    let mapped = reject_reason_from_chokepoint(
-        &ChokeRejectReason::RiskStateNotHealthy,
-        &GateRejectCodes::default(),
-    );
-    assert_eq!(mapped, RejectReasonCode::MarginHeadroomRejectOpens);
-}
-
-#[test]
-fn execution_chokepoint_symbols_publicly_reachable() {
-    #[allow(unused_imports)]
-    use soldier_core::execution::{
-        build_gate_results, build_order_intent_with_optional_wal_gate,
-        build_order_intent_with_wal_gate,
+    let base = ExecutionBaseInput {
+        risk_state: RiskState::Healthy,
+        preflight: ExecutionPreflightInput {
+            instrument_kind: InstrumentKind::Option,
+            order_type: ExecutionOrderType::Limit,
+            has_trigger: false,
+            linked_order_type: None,
+            linked_orders_allowed: false,
+            post_only: None,
+        },
+        venue_capabilities: VenueCapabilities::default(),
+        bot_feature_flags: BotFeatureFlags::default(),
+        quantize: QuantizeExecutionInput {
+            raw_qty: 1.0,
+            raw_limit_price: 100.0,
+            side: Side::Buy,
+            tick_size: 0.1,
+            amount_step: 0.1,
+            min_amount: 0.1,
+        },
+        dispatch_consistency_passed: true,
+        fee_snapshot: FeeCacheSnapshot {
+            fee_rate: 0.0005,
+            fee_model_cached_at_ts_ms: Some(1_000),
+            now_ms: 1_001,
+        },
+        fee_config: FeeStalenessConfig::default(),
+        expiry_guard: None,
     };
 
-    struct StubWalGate;
-
-    impl RecordedBeforeDispatchGate for StubWalGate {
-        fn record_before_dispatch(&mut self) -> Result<(), String> {
-            Ok(())
-        }
-    }
-
-    let mut metrics = ChokeMetrics::new();
-    let gates = build_gate_results(
-        true,  // preflight_passed
-        true,  // quantize_passed
-        true,  // dispatch_consistency_passed
-        true,  // fee_cache_passed
-        true,  // expiry_guard_passed
-        true,  // liquidity_gate_passed
-        true,  // net_edge_passed
-        true,  // pricer_passed
-        false, // wal_recorded (ignored by explicit wal gate path below)
-        None,  // requested_qty
-        None,  // max_dispatch_qty
+    let mut runtime = ExecutionRuntime::default();
+    let decision = ExecutionEngine::new().decide(
+        &ExecutionInput::Cancel(CancelExecutionInput { base }),
+        &mut runtime,
     );
-    let mut wal_gate = StubWalGate;
-
-    let with_wal_gate = build_order_intent_with_wal_gate(
-        ChokeIntentClass::Open,
-        RiskState::Healthy,
-        &mut metrics,
-        &gates,
-        &mut wal_gate,
-    );
-    assert!(
-        matches!(with_wal_gate, ChokeResult::Approved { .. }),
-        "explicit WAL gate path should approve when gate recording succeeds"
-    );
-
-    let missing_wal_gate = build_order_intent_with_optional_wal_gate(
-        ChokeIntentClass::Open,
-        RiskState::Healthy,
-        &mut metrics,
-        &gates,
-        None,
-    );
-    assert!(
-        matches!(
-            missing_wal_gate,
-            ChokeResult::Rejected {
-                reason: ChokeRejectReason::GateRejected {
-                    gate: GateStep::RecordedBeforeDispatch,
-                    ..
-                },
-                ..
-            }
-        ),
-        "optional WAL path should fail-closed when adapter is omitted for OPEN intents"
-    );
+    assert!(matches!(decision, ExecutionDecision::Approved(_)));
 }
 
 #[test]
@@ -358,12 +327,12 @@ fn facade_symbol_lists_stay_in_sync() {
 fn extract_symbol_set_prefers_top_level_use_block_when_anchor_repeats() {
     let path = write_temp_source_file(
         r#"
-use soldier_core::execution::{build_gate_results,};
+use soldier_core::execution::{ExecutionEngine,};
 
 fn nested() {
     use soldier_core::execution::{
-        build_gate_results,
-        build_order_intent_with_wal_gate,
+        ExecutionEngine,
+        ExecutionInput,
     };
 }
 "#,
@@ -372,7 +341,7 @@ fn nested() {
     let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
     let _ = fs::remove_file(&path);
 
-    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    let expected: BTreeSet<String> = ["ExecutionEngine".to_string()].into_iter().collect();
     assert_eq!(symbols, expected);
 }
 
@@ -381,8 +350,8 @@ fn extract_symbol_set_ignores_inline_comments() {
     let path = write_temp_source_file(
         r#"
 use soldier_core::execution::{
-    build_gate_results, // shared in both contract + external smoke tests
-    build_order_intent_with_wal_gate, // compile-only reachability check
+    ExecutionEngine, // engine entrypoint
+    ExecutionInput, // execution request enum
 };
 "#,
     );
@@ -390,12 +359,9 @@ use soldier_core::execution::{
     let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
     let _ = fs::remove_file(&path);
 
-    let expected: BTreeSet<String> = [
-        "build_gate_results".to_string(),
-        "build_order_intent_with_wal_gate".to_string(),
-    ]
-    .into_iter()
-    .collect();
+    let expected: BTreeSet<String> = ["ExecutionEngine".to_string(), "ExecutionInput".to_string()]
+        .into_iter()
+        .collect();
     assert_eq!(symbols, expected);
 }
 
@@ -403,17 +369,17 @@ use soldier_core::execution::{
 fn extract_symbol_set_ignores_anchor_text_inside_comments_and_strings() {
     let path = write_temp_source_file(
         r#"
-use soldier_core::execution::{build_gate_results,};
+use soldier_core::execution::{ExecutionEngine,};
 
-// use soldier_core::execution::{build_gate_results, build_order_intent_with_wal_gate,};
-let _fixture = "use soldier_core::execution::{build_gate_results, build_order_intent_with_wal_gate,};";
+// use soldier_core::execution::{ExecutionEngine, ExecutionInput,};
+let _fixture = "use soldier_core::execution::{ExecutionEngine, ExecutionInput,};";
 "#,
     );
 
     let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
     let _ = fs::remove_file(&path);
 
-    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    let expected: BTreeSet<String> = ["ExecutionEngine".to_string()].into_iter().collect();
     assert_eq!(symbols, expected);
 }
 
@@ -423,18 +389,18 @@ fn extract_symbol_set_ignores_anchor_text_inside_block_comments() {
         r#"
 /*
 use soldier_core::execution::{
-    build_gate_results,
-    build_order_intent_with_wal_gate,
+    ExecutionEngine,
+    ExecutionInput,
 };
 */
-use soldier_core::execution::{build_gate_results,};
+use soldier_core::execution::{ExecutionEngine,};
 "#,
     );
 
     let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
     let _ = fs::remove_file(&path);
 
-    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    let expected: BTreeSet<String> = ["ExecutionEngine".to_string()].into_iter().collect();
     assert_eq!(symbols, expected);
 }
 
@@ -444,17 +410,17 @@ fn extract_symbol_set_ignores_anchor_text_inside_multiline_raw_strings() {
         r##"
 const FIXTURE: &str = r#"
 use soldier_core::execution::{
-    build_gate_results,
-    build_order_intent_with_wal_gate,
+    ExecutionEngine,
+    ExecutionInput,
 };
 "#;
-use soldier_core::execution::{build_gate_results,};
+use soldier_core::execution::{ExecutionEngine,};
 "##,
     );
 
     let symbols = extract_symbol_set(&path, "use soldier_core::execution::{");
     let _ = fs::remove_file(&path);
 
-    let expected: BTreeSet<String> = ["build_gate_results".to_string()].into_iter().collect();
+    let expected: BTreeSet<String> = ["ExecutionEngine".to_string()].into_iter().collect();
     assert_eq!(symbols, expected);
 }

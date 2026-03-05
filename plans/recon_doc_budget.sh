@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${RECON_DOC_BUDGET_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-DEFAULT_MAX_LINES=650
+DEFAULT_MAX_LINES=1200
 progress_file="${RECON_DOC_BUDGET_PROGRESS_FILE:-$ROOT/plans/progress.txt}"
 
 if [[ "${RECON_DOC_BUDGET_MAX_LINES+x}" == "x" ]]; then

@@ -45,9 +45,14 @@ pub enum TlsState {
     ///
     /// **WAL-only state:** The core TLSM maps `TlsmEvent::Rejected` to
     /// `TlsmState::Failed`, so `map_core_tlsm_state` never produces this
-    /// variant. `TlsState::Rejected` can only be set via direct
-    /// `update_state()` calls on the WAL, preserving the exchange-level
-    /// distinction between rejection and internal failure.
+    /// variant.
+    ///
+    /// Legal direct-construction contexts:
+    /// 1) replay of historical WAL records that already contain `Rejected`;
+    /// 2) reconciliation/import paths that intentionally preserve venue-level
+    ///    rejection semantics directly in WAL.
+    ///
+    /// Core TLSM transition sinks MUST NOT emit this variant.
     Rejected,
     /// Failed (internal error).
     Failed,
@@ -106,7 +111,7 @@ impl TlsState {
 /// Persisted intent record per CONTRACT.md §2.4.
 ///
 /// **Minimum persisted fields:**
-/// intent_hash, group_id, leg_idx, instrument, side, qty, limit_price,
+/// intent_hash, group_id, leg_idx, instrument, side, reduce_only, qty, limit_price,
 /// tls_state, created_ts, sent_ts, ack_ts, last_fill_ts,
 /// exchange_order_id (if known), last_trade_id (if known).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -121,6 +126,15 @@ pub struct IntentRecord {
     pub instrument: String,
     /// Order side ("buy" or "sell").
     pub side: String,
+    /// Persisted intent classifier for restart-safe OPEN vs CLOSE/HEDGE handling.
+    ///
+    /// `true` => risk-reducing intent class (close/hedge semantics).
+    /// `false` => OPEN-class intent.
+    ///
+    /// Backward compatibility: older WAL lines missing this field default to
+    /// `false` (conservative OPEN classification).
+    #[serde(default)]
+    pub reduce_only: bool,
     /// Quantized quantity.
     pub qty_q: f64,
     /// Quantized limit price.

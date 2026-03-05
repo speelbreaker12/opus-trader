@@ -1,106 +1,61 @@
-# External Integrations
+# Integrations Map
 
-**Analysis Date:** 2026-02-25
+**Analysis date:** 2026-03-04  
+**Scope:** External services, broker/API surfaces, auth boundaries, webhooks, and env-driven integration points.
 
-## APIs & External Services
+## 1) External API/services inventory
 
-**Payment Processing:**
-- Not detected
+| Integration | Role | Direction | Auth model | Primary refs |
+|---|---|---|---|---|
+| Deribit | Trading venue / broker + market data source | Outbound | API keys + scope controls (docs/policy) | `docs/env_matrix.md`, `docs/keys_and_secrets.md`, `docs/launch_policy.md`, `specs/vendor_docs/deribit.md`, `crates/soldier_infra/src/deribit/public/mod.rs` |
+| Convex HTTP endpoint | Status ingestion endpoint (`/status`) | Inbound to Convex, outbound from publisher | Bearer token `CONVEX_PUBLISH_SECRET` | `dashboard/convex/http.ts`, `dashboard/publisher/publisher.py` |
+| Convex DB/functions | Status snapshot storage + query API | App-internal (Convex runtime) | Convex internal auth/context | `dashboard/convex/schema.ts`, `dashboard/convex/status.ts`, `dashboard/convex/status_contract.ts` |
+| Claude Code MCP | Dev-time contract lookup/validation server | Local tool integration | Local process + MCP protocol | `python/mcp_server/server.py`, `python/mcp_server/README.md` |
+| GitHub Actions | CI verification and gates | Inbound triggers + outbound checks/artifacts | GitHub token (`github.token`) | `.github/workflows/ci.yml`, `plans/pr_gate.sh` |
 
-**Email/SMS:**
-- Not detected
+## 2) Databases and durable stores
+- Convex tables as primary dashboard status store:
+  - `statusSnapshots`
+  - `latestStatusPointers`
+  - Defined in `dashboard/convex/schema.ts`.
+- Local SQLite spool/outbox for publisher retry durability in `dashboard/publisher/spool.py` (`PRAGMA journal_mode=WAL`, outbox indexes).
+- Local JSON state files:
+  - runtime state defaults in `stoic-cli` (`artifacts/phase0/runtime_state.json`, `var/runtime/runtime_state.json`)
+  - sidecar state in `dashboard/publisher/state.py` (`status_publisher_state.v1`).
 
-**External APIs:**
-- Deribit - trading venue for market/private API access
-  - Integration method: HTTP-based integration (public/private API calls implied by exchange host config)
-  - Auth: Exchange API credentials loaded by environment (`TRADING_ENV`-scoped keying in `docs/env_matrix.md` and startup identity checks in `docs/keys_and_secrets.md`)
-  - Endpoints used: `test.deribit.com` (STAGING) and `www.deribit.com` (PAPER/LIVE) by environment matrix
+## 3) Broker/exchange integration details
+- Exchange modeled is Deribit with environment-separated accounts and URLs in `docs/env_matrix.md`.
+- Public/private endpoint expectations and session/rate-limit rules are documented in `specs/vendor_docs/deribit.md`.
+- Rust infra currently exposes Deribit data-model adapters (instrument + fee/account summary structures) in:
+  - `crates/soldier_infra/src/deribit/public/mod.rs`
+  - `crates/soldier_infra/src/deribit/account_summary.rs`
+- Runtime key-scope validation path is implemented in `stoic-cli` (`keys-check` command against `evidence/phase0/keys/key_scope_probe.json`).
 
-- Convex - status API and data service
-  - Integration method: Convex JS client functions + HTTP function endpoint (`dashboard/convex/http.ts`) and HTTP publish calls in `dashboard/publisher/publisher.py`
-  - Auth: Bearer secret token check against `CONVEX_PUBLISH_SECRET` in inbound function
-  - Endpoints used: Convex publish endpoint configured via `CONVEX_PUBLISH_ENDPOINT`
+## 4) Auth and secrets providers
+- Deribit credentials and environment isolation policy are defined in `docs/env_matrix.md` and `docs/keys_and_secrets.md`.
+- LIVE secret source is documented as Vault; STAGING testnet uses `.env.staging` (gitignored) in `docs/env_matrix.md`.
+- Convex ingest auth is explicit Bearer secret comparison in `dashboard/convex/http.ts` against `process.env.CONVEX_PUBLISH_SECRET`.
+- Publisher attaches Authorization header from `CONVEX_PUBLISH_SECRET` in `dashboard/publisher/publisher.py`.
 
-## Data Storage
+## 5) Webhooks/callback style integrations
+- Webhook-like ingestion endpoint: Convex HTTP route `POST /status` in `dashboard/convex/http.ts`.
+- Publisher delivery path posts snapshot envelopes to `CONVEX_PUBLISH_ENDPOINT` with retries/backoff in `dashboard/publisher/publisher.py`.
+- Retry/error classes (429/5xx/auth/schema) are codified in `dashboard/publisher/publisher.py` and validated in `tests/test_publisher_contract.py`.
 
-**Databases:**
-- Convex - operational status data store (`statusSnapshots`, `latestStatusPointers`)
-  - Connection: environment-configured Convex endpoint
-  - Client: `convex` package from `dashboard/package.json` and Convex functions in `dashboard/convex`
-  - Migrations: none detected
+## 6) Environment/config integration points (high-signal)
+- Trading/runtime env controls in `stoic-cli`:
+  - `STOIC_POLICY_PATH`, `STOIC_RUNTIME_STATE_PATH`, `STOIC_RUNTIME_STATE_V1_PATH`
+  - `STOIC_ALLOW_EXTERNAL_RUNTIME_STATE`, `STOIC_UNSAFE_EXTERNAL_STATE_ACK`, `STOIC_DRILL_MODE`
+  - `STOIC_BUILD_ID`, `STOIC_MAX_PENDING_ORDERS`
+- Publisher env controls in `dashboard/publisher/publisher.py`:
+  - `CONVEX_PUBLISH_ENDPOINT`, `CONVEX_PUBLISH_SECRET`
+  - `STATUS_SOURCE_PATH`, `STATUS_PUBLISHER_*`, `ENVIRONMENT`, `HEAD_COMMIT`
+- Policy/environment matrix control docs:
+  - `docs/env_matrix.md`
+  - `config/policy.json`
+  - `docs/health_endpoint.md`
 
-- SQLite (local file)
-  - Connection: local spool DB path via `STATUS_PUBLISHER_SPOOL_DB_PATH` in publisher
-  - Client: Python stdlib `sqlite3` in `dashboard/publisher/spool.py`
-  - Migrations: none detected
-
-**File Storage:**
-- Not detected
-
-**Caching:**
-- Not detected
-
-## Authentication & Identity
-
-**Auth Provider:**
-- Exchange key scopes and Vault/local env storage (custom runtime auth)
-  - Implementation: environment-driven API credentials with fail-closed environment checks
-  - Token storage: Vault for LIVE; `.env.staging` for STAGING; no LIVE keys in local `.env` by contract
-  - Session management: runtime identity verification against exchange account/subaccount on startup
-
-**OAuth Integrations:**
-- Not detected
-
-## Monitoring & Observability
-
-**Error Tracking:**
-- Not detected
-
-**Analytics:**
-- Not detected
-
-**Logs:**
-- Rust tracing (`tracing` crate) and publisher logs to stdout/stderr
-  - Integration: local process logs (no external collector detected)
-
-## CI/CD & Deployment
-
-**Hosting:**
-- Convex
-  - Deployment: not explicitly documented in repo files
-  - Environment vars: `CONVEX_*` and exchange/runtime vars injected by deployment/runtime environment
-
-**CI Pipeline:**
-- Not detected
-
-## Environment Configuration
-
-**Development:**
-- Required env vars: `TRADING_ENV`, `CONVEX_PUBLISH_ENDPOINT`, `CONVEX_PUBLISH_SECRET`, `STATUS_PUBLISHER_*`
-- Secrets location: Vault policy for LIVE; local env for STAGING testnet keys
-- Mock/stub services: DEV mode is mocked (no private exchange creds)
-
-**Staging:**
-- Uses testnet exchange account and `.env.staging` key source in contract table
-
-**Production:**
-- Uses LIVE exchange account and Vault/IAM-backed secrets for trade keys
-- Live exchange calls allowed only for private endpoints under constrained key scopes
-
-## Webhooks & Callbacks
-
-**Incoming:**
-- Convex
-  - `/status` HTTP endpoint in `dashboard/convex/http.ts` for inbound status posts
-  - Verification: `Authorization: Bearer <CONVEX_PUBLISH_SECRET>` check
-  - Events: status snapshot ingestion and duplicate suppression/validation logic
-
-**Outgoing:**
-- Convex publish callbacks from runtime publisher
-  - Endpoint: `CONVEX_PUBLISH_ENDPOINT` (configured URL)
-  - Retry logic: exponential backoff with local spool/failover in `dashboard/publisher/publisher.py`
-
----
-
-*Integration audit: 2026-02-25*
-*Update when adding/removing external services*
+## 7) Integration boundaries to plan around
+- Deribit network transport is policy/spec-heavy today; much of Rust integration is type/contracts rather than a full live client implementation (`crates/soldier_infra/src/deribit/*` + `specs/vendor_docs/deribit.md`).
+- Status distribution path is intentionally decoupled: runtime state JSON -> publisher normalizer -> Convex ingest (`stoic-cli` + `dashboard/publisher/*` + `dashboard/convex/*`).
+- Secrets management controls are documented and partially enforced in CLI/policy flows; operational enforcement still depends on deployment/Vault setup described in docs.

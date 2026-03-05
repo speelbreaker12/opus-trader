@@ -1,172 +1,91 @@
-# Codebase Structure
+# Structure Map
 
-**Analysis Date:** 2026-02-25
+**Analysis date:** 2026-03-04  
+**Scope:** repository layout, naming/organization conventions, and concern ownership.
 
-## Directory Layout
+## 1) Top-level directory layout
+- `crates/` — Rust workspace runtime code (`soldier_core`, `soldier_infra`).
+- `plans/` — verification + workflow harness scripts, schemas, and harness tests.
+- `specs/` — behavioral contract, workflow contract, flow/state-machine specs.
+- `scripts/` — contract/spec validators and support scripts.
+- `tools/` — status validation, profile checks, coverage/meta checks.
+- `dashboard/` — status storage/query backend (Convex TS) and publisher sidecar (Python).
+- `python/` — MCP server and proof-graph tooling libraries.
+- `tests/` — repository-level tests/fixtures/probes not bound to one Rust crate.
+- `docs/` — architecture/codebase/process documentation.
+- `artifacts/` — generated verify/story outputs; persistent evidence directories.
 
-```
-[project-root]/
-├── .planning/                  # Planning artifacts and generated maps
-│   └── codebase/               # `ARCHITECTURE.md`, `STRUCTURE.md`
-├── crates/                     # Rust workspace crates
-│   ├── soldier_core/           # Core execution/risk/venue domain
-│   │   ├── src/                # `execution`, `risk`, `venue`, `recovery`
-│   │   └── src/store/          # storage abstractions for core-facing data
-│   └── soldier_infra/          # Infrastructure, persistence, bootstrap
-│       ├── src/                # config/bootstrap/wal/store/venue adapters
-│       └── src/store/          # ledger and registry implementations
-├── dashboard/                  # Runtime telemetry and publication
-│   ├── convex/                 # Convex endpoint + schema + status mutations
-│   └── publisher/              # Python publisher/spool/state utilities
-├── docs/                       # Documentation and process guidance
-├── plans/                      # Verification workflow and gate scripts
-├── specs/                      # Contract and workflow specs
-├── tests/                      # Test suites (feature-level mapping not exhaustive)
-├── scripts/                    # Utility scripts
-├── tools/                      # Operational tooling
-├── python/                     # Python helpers
-├── artifacts/                  # Verification artifacts and logs
-└── target/                     # Rust build artifacts
-```
+## 2) Runtime code organization
 
-## Directory Purposes
+### 2.1 Workspace and crate split
+- Workspace membership is declared in `Cargo.toml`.
+- `crates/soldier_core/` contains domain safety/decision logic.
+- `crates/soldier_infra/` contains infra/persistence/adapters and depends on `soldier_core` (`crates/soldier_infra/Cargo.toml`).
 
-**`.planning/`:**
-- Purpose: Stores planning outputs and generated artifacts.
-- Contains: mapping documents and agent-generated deliverables.
-- Key files: `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/STRUCTURE.md`.
-- Subdirectories: `codebase/`.
+### 2.2 `soldier_core` layout
+- Module roots in `crates/soldier_core/src/lib.rs`.
+- Execution subsystem under `crates/soldier_core/src/execution/`.
+- Risk subsystem under `crates/soldier_core/src/risk/`.
+- Venue/capability/lifecycle subsystem under `crates/soldier_core/src/venue/`.
+- Idempotency primitives under `crates/soldier_core/src/idempotency/`.
+- Recovery utilities under `crates/soldier_core/src/recovery/`.
+- Integration tests live in `crates/soldier_core/tests/` and are mostly `test_*.rs` / `prop_*.rs`.
 
-**`crates/`:**
-- Purpose: Primary runtime source code.
-- Contains: Rust crates with clear domain/infrastructure split.
-- Key files: `Cargo.toml`, `crates/soldier_core/Cargo.toml`, `crates/soldier_infra/Cargo.toml`.
-- Subdirectories: `soldier_core/`, `soldier_infra/`.
+### 2.3 `soldier_infra` layout
+- Public crate surface in `crates/soldier_infra/src/lib.rs`.
+- Bootstrap/config in `crates/soldier_infra/src/bootstrap.rs` and `crates/soldier_infra/src/config.rs`.
+- Durable storage in `crates/soldier_infra/src/store/` (`ledger.rs`, `trade_id_registry.rs`, `mod.rs`).
+- WAL adapter in `crates/soldier_infra/src/wal.rs`.
+- Venue-specific DTO/mapping in `crates/soldier_infra/src/deribit/` and `crates/soldier_infra/src/deribit/public/`.
+- Infra tests in `crates/soldier_infra/tests/` with `test_*.rs` naming.
 
-**`crates/soldier_core/`:**
-- Purpose: Core execution engine and policy logic.
-- Contains: `execution`, `risk`, `venue`, `recovery`, `idempotency` modules.
-- Key files: `crates/soldier_core/src/lib.rs`, `crates/soldier_core/src/execution/pipeline.rs`, `crates/soldier_core/src/recovery/mod.rs`.
-- Subdirectories: `crates/soldier_core/src/execution/`, `crates/soldier_core/src/risk/`, `crates/soldier_core/src/venue/`, `crates/soldier_core/src/recovery/`.
+## 3) Workflow and verification organization
+- Canonical verify entrypoint: `plans/verify.sh` (wrapper).
+- Canonical implementation: `plans/verify_fork.sh`.
+- Shared shell helpers: `plans/lib/verify_utils.sh`.
+- Language gate executors: `plans/lib/rust_gates.sh`, `plans/lib/python_gates.sh`, `plans/lib/node_gates.sh`.
+- PRD/workflow state files: `plans/prd.json`, `plans/progress.txt`, `plans/ideas.md`, `plans/pause.md`.
+- Pass flip enforcement: `plans/prd_set_pass.sh`.
+- Workflow step/receipt control: `plans/wf_step.sh` and `.wf/receipts/<story>/`.
+- Harness tests are shell-first in `plans/tests/test_*.sh`; fixture assets live in `plans/tests/fixtures/`.
 
-**`crates/soldier_infra/`:**
-- Purpose: Infrastructure implementation and persistence support.
-- Contains: bootstrap, config, WAL, ledger, trade-id registry, and Deribit integrations.
-- Key files: `crates/soldier_infra/src/bootstrap.rs`, `crates/soldier_infra/src/config.rs`, `crates/soldier_infra/src/wal.rs`, `crates/soldier_infra/src/store/ledger.rs`.
-- Subdirectories: `crates/soldier_infra/src/deribit/`, `crates/soldier_infra/src/store/`.
+## 4) Spec, validation, and policy file organization
+- Runtime behavioral source of truth: `specs/CONTRACT.md`.
+- Workflow source of truth: `specs/WORKFLOW_CONTRACT.md`.
+- Flow-level specs in `specs/flows/*.yaml|*.md`.
+- State-machine specs in `specs/state_machines/*.yaml`.
+- Status registry/spec files in `specs/status/*`.
+- Validator scripts for these specs in `scripts/check_*.py`.
+- Additional policy/meta validation in `tools/*.py` and `tools/ci/*.py`.
 
-**`dashboard/`:**
-- Purpose: Operational observability and status publishing.
-- Contains: Convex backend and Python publisher modules.
-- Key files: `dashboard/convex/http.ts`, `dashboard/convex/status.ts`, `dashboard/publisher/publisher.py`.
-- Subdirectories: `dashboard/convex/`, `dashboard/publisher/`.
+## 5) Status/dashboard structure
+- Convex backend files in `dashboard/convex/` (`schema.ts`, `status.ts`, `status_contract.ts`, `validators.ts`, `http.ts`).
+- Publisher sidecar files in `dashboard/publisher/` (`publisher.py`, `transform.py`, `spool.py`, `state.py`).
+- Contract/status schemas used by validators in `python/schemas/*.json`.
+- Runtime status fixture sets in `tests/fixtures/status/` and `tests/fixtures/status_semantics/`.
 
-**`plans/`:**
-- Purpose: Verification and workflow gate execution.
-- Contains: shell scripts and plan/state config files.
-- Key files: `plans/verify.sh`, `plans/verify_fork.sh`, `plans/preflight.sh`.
-- Subdirectories: not deeply nested for this mapping.
+## 6) Naming and file-pattern conventions
+- Rust modules use `snake_case.rs` and explicit `mod.rs` boundaries (for example `crates/soldier_core/src/execution/mod.rs`).
+- Co-located Rust tests often use `*_tests.rs`; crate integration tests use `test_*.rs` and property tests use `prop_*.rs`.
+- Shell harness scripts use action-oriented names: `verify*.sh`, `*_gate.sh`, `*_check.sh`, `*_logged.sh`.
+- Python validators follow `check_*.py` / `validate_*.py` conventions (`scripts/check_contract_crossrefs.py`, `tools/validate_status.py`).
+- Planning and process docs are uppercase or descriptive markdown (`AGENTS.md`, `ENTRYPOINTS.md`, `REPO_MAP.md`, `plans/README.md`).
 
-**`specs/`:**
-- Purpose: Contracts and workflow requirements consumed by checks.
-- Contains: behavioral definitions and workflow contracts.
-- Key files: `specs/CONTRACT.md`, `specs/WORKFLOW_CONTRACT.md`, `plans/prd.json`.
-- Subdirectories: multiple spec/contract files.
+## 7) Where key concerns live
+- Dispatch gating and reject semantics: `crates/soldier_core/src/execution/*`.
+- Risk thresholds and exposure models: `crates/soldier_core/src/risk/*` + defaults in `crates/soldier_infra/src/config.rs`.
+- Idempotency hash and trade dedup: `crates/soldier_core/src/idempotency/hash.rs`, `crates/soldier_infra/src/store/trade_id_registry.rs`.
+- WAL durability/replay: `crates/soldier_infra/src/wal.rs`, `crates/soldier_infra/src/store/ledger.rs`, `crates/soldier_infra/src/bootstrap.rs`.
+- Workflow contract enforcement: `plans/verify_fork.sh`, `plans/workflow_contract_gate.sh`, `plans/verify_gate_contract_check.sh`.
+- Status shape enforcement: `dashboard/convex/status_contract.ts`, `tools/validate_status.py`, `python/schemas/status_*.schema.json`.
 
-**`docs/`:**
-- Purpose: Knowledge base and process documentation.
-- Contains: architecture/structure maps and standards.
-- Key files: `docs/codebase/architecture.md`, `docs/codebase/structure.md`, `docs/codebase/stack.md`.
-- Subdirectories: `docs/codebase/`, `docs/skills/`.
+## 8) Mutable/generated areas (planning caution)
+- Verify artifacts are written to `artifacts/verify/<run_id>/` (`*.log`, `*.rc`, `*.time`, `FAILED_GATE`, `verify.meta.json`).
+- Story review/proof artifacts are under `artifacts/story/<story_id>/`.
+- Workflow receipts and locks are under `.wf/receipts/` and `.wf/recon_scope_lock/`.
+- Build outputs and caches include `target/`, `.pytest_cache/`, `.ruff_cache/`, and `__pycache__/` directories.
 
-## Key File Locations
-
-**Entry Points:**
-- `crates/soldier_infra/src/bootstrap.rs`: runtime bootstrap and initialization.
-- `dashboard/convex/http.ts`: HTTP entry for status ingestion.
-- `dashboard/publisher/publisher.py`: publisher process entrypoint.
-- `plans/verify.sh`: verification orchestration entrypoint.
-- `crates/soldier_core/src/lib.rs`: core module root exports (`Not detected`: application `main` binary in this repo).
-
-**Configuration:**
-- `Cargo.toml`: workspace configuration.
-- `crates/soldier_infra/src/config.rs`: infra/runtime configuration parsing.
-- `dashboard/convex/http.ts`: request authentication/validation boundary for inbound status posts.
-- `plans/progress.txt`: workflow state tracking.
-
-**Core Logic:**
-- `crates/soldier_core/src/execution/intent_assembly.rs`: canonical input assembly.
-- `crates/soldier_core/src/execution/pipeline.rs`: staged execution pipeline.
-- `crates/soldier_core/src/execution/dispatch_map.rs`: routing decisions.
-- `crates/soldier_infra/src/wal.rs`: durability boundary.
-- `crates/soldier_infra/src/store/ledger.rs`: replayable ledger.
-- `dashboard/publisher/transform.py`: status normalization before publish.
-
-**Testing:**
-- `tests/`: Not detected (directory exists, but test topology not fully mapped in this pass).
-- `crates/*/src` module tests: Not detected (local/unit tests not deeply enumerated in this pass).
-
-**Documentation:**
-- `README.md`: onboarding + behavior overview.
-- `REPO_MAP.md`: repository layout reference.
-- `ENTRYPOINTS.md`: documented entry behavior.
-- `AGENTS.md`: agent-specific instruction envelope.
-
-## Naming Conventions
-
-**Files:**
-- Snake_case for most Rust/TS/Python source files: `intent_assembly.rs`, `status.ts`, `publisher.py`.
-- Uppercase project metadata and policy files: `README.md`, `AGENTS.md`, `CHANGELOG.md` (if present).
-- Shell scripts at top of workflow folder: `verify.sh`, `preflight.sh`.
-
-**Directories:**
-- Snake_case and kebab_case names for package/grouping directories: `soldier_core`, `soldier_infra`, `dashboard`, `plans`.
-- Plural naming for grouped collections: `docs/`, `tests/`, `prompts/` (where present).
-
-**Special Patterns:**
-- `mod.rs` for Rust module entry files.
-- `*.md` for policy/spec artifacts.
-- `*.sh` for executable gate scripts.
-
-## Where to Add New Code
-
-**New Feature:**
-- Primary code: `crates/soldier_core/src/execution/`.
-- Recovery/infrastructure interactions: `crates/soldier_infra/src/`.
-- Tests: `tests/` (or local module tests).
-
-**New Component/Module:**
-- Implementation: `crates/soldier_core/src/<domain>/`.
-- Types/interfaces: same directory as module.
-- Tests: `tests/` or local module test sections.
-
-**New Route/Command:**
-- Definition/handler: `dashboard/convex/http.ts` and `dashboard/convex/status.ts`.
-- Verification of request path: `dashboard/convex/validators.ts`.
-- Tests: Not detected (no dedicated route test folder observed).
-
-**Utilities:**
-- Shared helpers: `crates/soldier_core/src/` and `dashboard/publisher/`.
-- Type definitions: `dashboard/convex/schema.ts`, `crates/soldier_infra/src/`.
-
-## Special Directories
-
-**`artifacts/`:**
-- Purpose: Verification and CI run outputs.
-- Source: `plans/verify.sh` execution.
-- Committed: Not detected (typically generated).
-
-**`target/`:**
-- Purpose: Rust compiler build output.
-- Source: Cargo build/test operations.
-- Committed: No
-
-**`.planning/codebase/`:**
-- Purpose: This mapping output location.
-- Source: generated by this pass using repository templates.
-- Committed: Yes
-
----
-
-*Structure analysis: 2026-02-25*
-*Update when directory structure changes*
+## 9) Practical extension points
+- New runtime gates usually land in `crates/soldier_core/src/execution/` and then wire into `base_gates.rs`, `pipeline.rs`, or `open_runtime.rs`.
+- New durable fields generally require coordinated updates across `store/ledger.rs`, replay/bootstrap paths, and `specs/CONTRACT.md`.
+- New verification checks should be added to `plans/verify_fork.sh` and, if language-specific, to `plans/lib/*_gates.sh` with artifact-backed logging behavior preserved.

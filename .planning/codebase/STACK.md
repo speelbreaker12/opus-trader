@@ -1,87 +1,59 @@
-# Technology Stack
+# Tech Stack Map
 
-**Analysis Date:** 2026-02-25
+**Analysis date:** 2026-03-04  
+**Scope:** Current stack used by runtime code, dashboard sidecar, and verification harness.
 
-## Languages
+## 1) Languages and primary code locations
+- `Rust` (edition `2024`) for core/infra crates in `crates/soldier_core/Cargo.toml` and `crates/soldier_infra/Cargo.toml`.
+- `TypeScript` for Convex data/API layer in `dashboard/convex/http.ts`, `dashboard/convex/status.ts`, `dashboard/convex/schema.ts`.
+- `Python` for operator/runtime tools in `stoic-cli`, `dashboard/publisher/publisher.py`, `tools/validate_status.py`, `python/mcp_server/server.py`.
+- `Bash` for workflow/verification orchestration in `plans/verify.sh`, `plans/verify_fork.sh`, `plans/preflight.sh`.
 
-**Primary:**
-- TypeScript 5.5 - `dashboard/convex` functions and scripts
-- Rust (edition 2024) - core/infrastructure workspace crates in `crates/soldier_core` and `crates/soldier_infra`
-- Python - local MCP server and status publisher tooling
+## 2) Runtime and toolchain baseline
+- Rust workspace root is defined in `Cargo.toml` and lockfile is `Cargo.lock`.
+- CI installs stable Rust toolchain via `.github/workflows/ci.yml` (`dtolnay/rust-toolchain@stable`).
+- Dashboard Node runtime is ESM (`"type": "module"`) in `dashboard/package.json` with TS config in `dashboard/tsconfig.json` (`target: es2022`, `moduleResolution: Bundler`).
+- CI uses Node `20` in `.github/workflows/ci.yml`; dashboard package manager is npm via `dashboard/package-lock.json`.
+- Python runtime is shebang-driven (`#!/usr/bin/env python3`) across `stoic-cli`, `tools/*.py`, and `dashboard/publisher/*.py`.
 
-**Secondary:**
-- Not detected
+## 3) Frameworks and key libraries
+- Convex framework/client in `dashboard/package.json` (`convex`) with schema/mutations in `dashboard/convex/schema.ts` and `dashboard/convex/status.ts`.
+- Rust serialization/observability stack:
+  - `serde` and `serde_json` in `crates/soldier_core/Cargo.toml`, `crates/soldier_infra/Cargo.toml`.
+  - `tracing` in both crate manifests and `tracing-test`/`proptest` in `crates/soldier_core/Cargo.toml`.
+- Rust hashing dependency `xxhash-rust` in `crates/soldier_core/Cargo.toml`.
+- Python MCP SDK dependency in `python/mcp_server/requirements.txt` (`mcp>=1.0.0`).
+- Python status-sidecar persistence uses stdlib `sqlite3` in `dashboard/publisher/spool.py`.
 
-## Runtime
+## 4) Dependency manifests and lock points
+- Rust manifests: `Cargo.toml`, `crates/soldier_core/Cargo.toml`, `crates/soldier_infra/Cargo.toml`.
+- Rust lockfile: `Cargo.lock`.
+- Dashboard manifests: `dashboard/package.json`, `dashboard/package-lock.json`, `dashboard/tsconfig.json`.
+- Python package pins for MCP server: `python/mcp_server/requirements.txt`.
+- CI Python tooling deps: `plans/ci/requirements-verify.txt`, `plans/ci/requirements-crossref.txt`.
 
-**Environment:**
-- Node.js (>=18, inferred from package-lock engine constraints in `dashboard/package-lock.json`)
-- Rust compiler runtime target (as required by workspace crates)
-- Python 3 (in `python/mcp_server/server.py`)
+## 5) Build, lint, and test entrypoints
+- Canonical verify entrypoint is `plans/verify.sh` (thin wrapper) delegating to `plans/verify_fork.sh`.
+- Preflight checks are in `plans/preflight.sh` (schema/self-dep/shell checks and fixture guards).
+- Rust gates in `plans/lib/rust_gates.sh`:
+  - `cargo fmt --all -- --check`
+  - `cargo clippy --workspace --all-targets --all-features -- -D warnings` (full mode)
+  - `cargo test --workspace ... --locked`
+- Python gates in `plans/lib/python_gates.sh` use `ruff`, `pytest`, and optional `mypy`.
+- Node gates in `plans/lib/node_gates.sh` run lint/typecheck/test if root lockfile + scripts are present.
+- CI orchestration is centralized in `.github/workflows/ci.yml` (crossref, verify, and workflow-specific jobs).
 
-**Package Manager:**
-- npm (Node workspace in `dashboard/`)
-- Cargo (Rust workspace)
-- pip (`python/mcp_server/requirements.txt`)
-- Lockfile: `dashboard/package-lock.json` present
+## 6) Configuration surfaces
+- Runtime trading policy lives in `config/policy.json`, validated/loaded by `tools/policy_loader.py` and consumed by `stoic-cli`.
+- Contract/workflow control docs: `specs/CONTRACT.md`, `specs/WORKFLOW_CONTRACT.md`, `plans/prd.json`.
+- Runtime/state schemas:
+  - `python/schemas/runtime_state_v1.schema.json`
+  - `python/schemas/status_csp_min.schema.json`
+- Convex-side validation and schema lock:
+  - `dashboard/convex/status_contract.ts`
+  - `dashboard/convex/validators.ts`
 
-## Frameworks
-
-**Core:**
-- Convex 1.x - backend/data platform and HTTP endpoint layer (`dashboard/convex`)
-
-**Testing:**
-- Rust built-in test harness (`cargo test`) for crates under `crates/` — inferred from dependency usage (`proptest`, test modules)
-- Not detected (for dashboard-side tooling)
-
-**Build/Dev:**
-- TypeScript 5.5 (`dashboard/package.json` / `dashboard/tsconfig.json`)
-- tsx 4.19 (`dashboard/package.json`)
-- Convex CLI via `npx convex`
-- cargo for Rust workspace builds (`Cargo.toml`)
-
-## Key Dependencies
-
-[Only include dependencies critical to understanding the stack - limit to 5-10 most important]
-
-**Critical:**
-- convex ^1.16.0 - status API/runtime + schema/mutations
-- mcp >=1.0.0 - MCP server tooling
-- serde 1.x - serialization for Rust core/infra domain/state
-- tracing 0.1 - runtime observability/logging instrumentation
-- xxhash-rust 0.8 - hashing support used in execution pipeline
-
-**Infrastructure:**
-- proptest 1.x - property testing for Rust behavior checks
-- serde_json 1.x - JSON handling in Rust
-- sqlite3 (Python stdlib `sqlite3`) - local spool persistence in `dashboard/publisher/spool.py`
-
-## Configuration
-
-**Environment:**
-- `.env` pattern is environment-driven (`TRADING_ENV`, `CONVEX_PUBLISH_ENDPOINT`, `CONVEX_PUBLISH_SECRET`, and `STATUS_PUBLISHER_*` vars in publisher docs/code)
-- Secrets policy and source differ by environment (`.env.staging` for STAGING, Vault for LIVE)
-
-**Build:**
-- `dashboard/package.json`
-- `dashboard/package-lock.json`
-- `dashboard/tsconfig.json`
-- `Cargo.toml` (workspace)
-- `crates/soldier_core/Cargo.toml`
-- `crates/soldier_infra/Cargo.toml`
-- `python/mcp_server/requirements.txt`
-
-## Platform Requirements
-
-**Development:**
-- macOS/Linux/Windows not explicitly constrained in code/config
-- Node, Rust, and Python toolchains available
-
-**Production:**
-- Convex-hosted status backend for runtime publishing and querying (`dashboard/convex`)
-- Live trading venue connectivity managed by runtime deployment (Deribit host from `docs/env_matrix.md`)
-
----
-
-*Stack analysis: 2026-02-25*
-*Update after major dependency changes*
+## 7) Practical planning notes
+- Stack is polyglot but centered on Rust domain logic + Python operational tooling; TS/Convex is a focused status publishing surface.
+- Node/Convex code is isolated under `dashboard/`; root verify path is primarily Rust/Python/workflow gates.
+- No container or IaC baseline is present in repo manifests (no `Dockerfile`, no compose, no Terraform files in root map).

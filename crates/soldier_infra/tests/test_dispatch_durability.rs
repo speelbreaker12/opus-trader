@@ -18,6 +18,7 @@ fn intent(hash: &str) -> IntentRecord {
         leg_idx: 0,
         instrument: "BTC-PERP".to_string(),
         side: "buy".to_string(),
+        reduce_only: false,
         qty_q: 1.0,
         limit_price_q: 50000.0,
         tls_state: TlsState::Created,

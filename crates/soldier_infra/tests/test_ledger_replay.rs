@@ -20,6 +20,7 @@ fn intent(hash: &str, group_id: &str, leg_idx: u32, state: TlsState) -> IntentRe
         leg_idx,
         instrument: "BTC-PERP".to_string(),
         side: "buy".to_string(),
+        reduce_only: false,
         qty_q: 1.0,
         limit_price_q: 50000.0,
         tls_state: state,
@@ -334,6 +335,7 @@ fn test_record_has_all_required_fields() {
         leg_idx: 0,
         instrument: "BTC-PERP".to_string(),
         side: "buy".to_string(),
+        reduce_only: true,
         qty_q: 1.0,
         limit_price_q: 50000.0,
         tls_state: TlsState::Created,
@@ -351,6 +353,7 @@ fn test_record_has_all_required_fields() {
     assert_eq!(r.leg_idx, 0);
     assert_eq!(r.instrument, "BTC-PERP");
     assert_eq!(r.side, "buy");
+    assert!(r.reduce_only);
     assert!((r.qty_q - 1.0).abs() < 1e-9);
     assert!((r.limit_price_q - 50000.0).abs() < 1e-9);
     assert_eq!(r.tls_state, TlsState::Created);

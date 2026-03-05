@@ -354,7 +354,7 @@ fn test_chokepoint_module_exists() {
 #[test]
 fn chokepoint_symbols_reachable_via_execution_facade() {
     #[allow(unused_imports)]
-    use crate::execution::{
+    use crate::execution::build_order_intent::{
         build_gate_results, build_order_intent_with_optional_wal_gate,
         build_order_intent_with_wal_gate,
     };

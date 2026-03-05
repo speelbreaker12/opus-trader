@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-use crate::execution::{GateResults, RecordedBeforeDispatchGate, build_gate_results};
+use crate::execution::RecordedBeforeDispatchGate;
+use crate::execution::build_order_intent::{GateResults, build_gate_results};
 
 /// Stub WAL gate for contract-level tests that need the WAL-safe path.
 pub struct StubWalGate;

@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// CONTRACT.md §1.4.1: All fields must be present. Missing/unparseable
 /// -> Rejected(NetEdgeInputMissing).
 #[derive(Debug, Clone)]
-pub struct NetEdgeInput {
+pub(crate) struct NetEdgeInput {
     /// Gross edge in USD (signal-derived expected profit before costs).
     pub gross_edge_usd: Option<f64>,
     /// Estimated fee in USD for this trade.
@@ -167,7 +167,10 @@ fn reject_missing(metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
 /// - `net_edge_usd = gross_edge_usd - fee_usd - expected_slippage_usd`
 /// - Missing inputs -> Rejected(NetEdgeInputMissing) (fail-closed).
 /// - `net_edge_usd < min_edge_usd` -> Rejected(NetEdgeTooLow).
-pub fn evaluate_net_edge(input: &NetEdgeInput, metrics: &mut NetEdgeMetrics) -> NetEdgeResult {
+pub(crate) fn evaluate_net_edge(
+    input: &NetEdgeInput,
+    metrics: &mut NetEdgeMetrics,
+) -> NetEdgeResult {
     // Fail-closed: reject if any input is missing (AT-932)
     let gross = match input.gross_edge_usd {
         Some(v) => v,
