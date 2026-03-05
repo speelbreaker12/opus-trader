@@ -8690,8 +8690,8 @@
         "cargo test --workspace"
       ],
       "evidence": [
-        "python -m pytest python/tests/test_pnl_attribution.py::test_pnl_decomposition_theta_units output",
-        "python -m pytest python/tests/test_pnl_attribution.py::test_pnl_decomposition_zero_when_no_move output",
+        "python -m pytest -k test_pnl_decomposition_theta_units output",
+        "python -m pytest -k test_pnl_decomposition_zero_when_no_move output",
         "PRD entry S10-003 records contract AT and test mappings for this story."
       ],
       "dependencies": [],
@@ -9872,8 +9872,8 @@
         "cargo test --workspace"
       ],
       "evidence": [
-        "python -m pytest python/tests/test_replay_gatekeeper.py::test_replay_gatekeeper_penalized_pnl_gate output",
-        "python -m pytest python/tests/test_replay_gatekeeper.py::test_replay_quality_good_at_95 output",
+        "python -m pytest -k test_replay_gatekeeper_penalized_pnl_gate output",
+        "python -m pytest -k test_replay_quality_good_at_95 output",
         "PRD entry S13-000 records contract AT and test mappings for this story."
       ],
       "dependencies": [],
@@ -10010,8 +10010,8 @@
         "cargo test --workspace"
       ],
       "evidence": [
-        "python -m pytest python/tests/test_canary_rollout.py::test_canary_rollout_aborts_on_slippage output",
-        "python -m pytest python/tests/test_canary_rollout.py::test_canary_rollout_missing_thresholds_aborts output",
+        "python -m pytest -k test_canary_rollout_aborts_on_slippage output",
+        "python -m pytest -k test_canary_rollout_missing_thresholds_aborts output",
         "PRD entry S13-002 records contract AT and test mappings for this story."
       ],
       "dependencies": [],
@@ -10137,7 +10137,7 @@
         "cargo test --workspace"
       ],
       "evidence": [
-        "python -m pytest python/tests/test_reviewer.py::test_autoreviewer_blocks_aggressive_without_human_approval output",
+        "python -m pytest -k test_autoreviewer_blocks_aggressive_without_human_approval output",
         "PRD entry S13-003 records contract AT and test mappings for this story."
       ],
       "dependencies": [],
@@ -10243,8 +10243,8 @@
         "cargo test --workspace"
       ],
       "evidence": [
-        "python -m pytest python/tests/test_f1_certify.py::test_f1_cert_fail_on_atomic_naked_event output",
-        "python -m pytest python/tests/test_f1_certify.py::test_runtime_config_hash_canonicalization output",
+        "python -m pytest -k test_f1_cert_fail_on_atomic_naked_event output",
+        "python -m pytest -k test_runtime_config_hash_canonicalization output",
         "PRD entry S13-004 records contract AT and test mappings for this story."
       ],
       "dependencies": [],
@@ -10652,13 +10652,13 @@
       ],
       "verify": [
         "./plans/verify.sh",
-        "test -f tools/release_gate.py",
+        "python -m pytest -k release_gate",
         "cargo test --workspace"
       ],
       "evidence": [
-        "tools/release_gate.py",
-        "artifacts/F1_CERT.json",
-        "artifacts/F1_CERT.md"
+        "release_gate implementation output",
+        "F1_CERT status artifact output",
+        "F1_CERT summary artifact output"
       ],
       "dependencies": [],
       "est_size": "S",
