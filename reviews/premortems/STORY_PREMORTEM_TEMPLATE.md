@@ -33,6 +33,9 @@ extract the normative clause, and classify. Skip informational clauses.
 | 3 |           |               |                     |            |
 
 ## 3) Top 5 failure modes
+For each enforcement-point input/intermediate, run the fail-closed 6-category sweep:
+`Missing/None`, `NaN/Inf`, `Negative`, `Out-of-domain`, `Corrupt/garbage`, `Narrowing casts`.
+
 | # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
 |---|----------------|-----------|----------------------|-------------------|
 | 1 |                |           |                      |                   |
@@ -40,6 +43,9 @@ extract the normative clause, and classify. Skip informational clauses.
 | 3 |                |           |                      |                   |
 | 4 |                |           |                      |                   |
 | 5 |                |           |                      |                   |
+
+- [ ] 6-category fail-closed sweep completed for each enforcement input/intermediate
+- [ ] Each category has explicit detection + mitigation, or is marked N/A with rationale
 
 ## 4) Open decisions (resolve before coding)
 For each ambiguity, design choice, or spec gap:
@@ -63,12 +69,13 @@ For each ambiguity, design choice, or spec gap:
 ## 5) Wrong implementation gate
 For EACH AT claimed by this story:
 
-| AT | Wrong impl that passes | Why it's wrong | Tightening (new AT / golden vector / property test) |
-|----|----------------------|----------------|---------------------------------------------------|
-|    |                      |                |                                                   |
-|    |                      |                |                                                   |
+| AT | Wrong impl that passes | Easier than correct? (Y/N) | Why it's wrong | Tightening (new AT / golden vector / property test) |
+|----|----------------------|-----------------------------|----------------|---------------------------------------------------|
+|    |                      |                             |                |                                                   |
+|    |                      |                             |                |                                                   |
 
 - [ ] Every AT has at least one wrong impl identified
+- [ ] Any wrong impl marked "Y" (easier) is the highest-priority tightening test
 - [ ] Every wrong impl is blocked by a tightened AT or new test
 - [ ] No AT remains where a wrong impl is easier than the correct one
 
@@ -86,7 +93,7 @@ For each AT, map the full proof chain. Safety-critical ATs MUST have both TRIP a
 |    |                   |                 |       |           |                 |           |
 |    |                   |                 |       |           |                 |           |
 
-Causality proof must be one of: `dispatch_count`, `reject_reason`, `latch_reason`, `cortex_override`.
+Causality proof must be one of: `dispatch_count`, `reject_reason`, `latch_reason`, `mode_transition`, `cortex_override`.
 
 If a test exists in `implementation_tests[]` but doesn't prove the AT → mark **CLAIMED-NOT-PROVEN**.
 If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined AT or note its absence.
@@ -101,13 +108,15 @@ If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined A
 ## 7) Economic risk (loss_mode)
 - **If this fails in prod, worst financial outcome**:
 - **Fail-closed cap on loss** (what restricts exposure):
-- **Drift metric** (what tells us it's going wrong before it blows up):
+- **Drift metric** (exact metric/counter name, or `NONE` — justify):
 - **Loss boundary** (ReduceOnly? Kill? Position limit? Time bound?):
 - **Rollback plan** (how to revert if it fails):
 
 ## 8) Conflict scan & hot zones
 - **Invariants/gates impacted**:
 - **If conflict with `specs/CONTRACT.md`**: STOP — do not proceed until resolved
+- **If touching `specs/CONTRACT.md`**: run `plans/check_contract_change_ledger.sh`; missing ledger row = BLOCKED
+- **If touching workflow/harness paths** (`plans/*`, `specs/WORKFLOW_CONTRACT.md`, `plans/workflow_contract_map.json`): verify workflow-rule alignment; run `./plans/workflow_contract_gate.sh` when applicable
 - Files with recent churn or shared ownership:
 - Struct fields I'm assuming exist (verify before coding):
 - State machine transitions affected:
@@ -134,11 +143,12 @@ Reused Guardrail: <one concrete rule carried forward, or NONE if no prior postmo
 
 **Debt Register** (required if YELLOW):
 
-| Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
-|------|----------|-------------|-------|-------------|-----------------|
-|      |          |             |       |             |                 |
+| gap_id | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
+|--------|------|----------|-------------|-------|-------------|-----------------|
+|        |      |          |             |       |             |                 |
 
-YELLOW with untracked debt (no target slice) = RED.
+`gap_id` format: `GAP-<STORY-ID>-<SEQ>` (or `GAP-SYSTEMIC-<SEQ>` for cross-story debt).
+YELLOW with untracked debt (missing `gap_id` or target slice) = RED.
 Unresolved ambiguity/design choice = RED (set `needs_human_decision=true` and stop).
 
 **Exit criteria (definition of done, before I start):**
@@ -150,4 +160,4 @@ Unresolved ambiguity/design choice = RED (set `needs_human_decision=true` and st
 - [ ] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
 - [ ] §7 loss_mode documented with fail-closed boundary + rollback plan
 - [ ] §8 conflict scan clean (no `specs/CONTRACT.md` conflicts)
-- [ ] No new debt without owner + target slice
+- [ ] No new debt without `gap_id` + owner + target slice

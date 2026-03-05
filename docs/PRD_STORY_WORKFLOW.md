@@ -170,6 +170,9 @@ extract the normative clause, and classify. Skip informational clauses.
 
 #### §3 — Top 5 failure modes [REQUIRED for HIGH/MED risk]
 ```
+For each enforcement-point input/intermediate, run the fail-closed 6-category sweep:
+Missing/None, NaN/Inf, Negative, Out-of-domain, Corrupt/garbage, Narrowing casts.
+
 | # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
 ```
 
@@ -190,7 +193,7 @@ extract the normative clause, and classify. Skip informational clauses.
 For EACH AT claimed by this story:
 
 ```
-| AT | Wrong impl that passes | Why it's wrong | Tightening (new AT / golden vector / property test) |
+| AT | Wrong impl that passes | Easier than correct? (Y/N) | Why it's wrong | Tightening (new AT / golden vector / property test) |
 ```
 
 #### §6 — Proof plan (AT → enforcement → tests) [HARD GATE]
@@ -203,7 +206,7 @@ For EACH AT claimed by this story:
 ```
 - If this fails in prod, worst financial outcome:
 - Fail-closed cap on loss:
-- Drift metric:
+- Drift metric (exact metric/counter name, or NONE — justify):
 - Rollback plan:
 ```
 
@@ -211,6 +214,8 @@ For EACH AT claimed by this story:
 ```
 - Invariants/gates impacted:
 - If conflict with `specs/CONTRACT.md`: STOP
+- If touching `specs/CONTRACT.md`: run `plans/check_contract_change_ledger.sh`; missing ledger row = BLOCKED
+- If touching workflow/harness paths (`plans/*`, `specs/WORKFLOW_CONTRACT.md`, `plans/workflow_contract_map.json`): verify workflow-rule alignment; run `./plans/workflow_contract_gate.sh` when applicable
 - Struct fields I'm assuming exist (verify before coding):
 ```
 
@@ -226,7 +231,9 @@ For EACH AT claimed by this story:
 STOPLIGHT: GREEN / YELLOW / RED
 
 Debt Register (required if YELLOW):
-| Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
+| gap_id | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
+
+gap_id format: `GAP-<STORY-ID>-<SEQ>` (or `GAP-SYSTEMIC-<SEQ>` for cross-story debt)
 ```
 
 ---
@@ -241,7 +248,7 @@ Debt Register (required if YELLOW):
 
 1. **Implement enforcement** — for each AT, follow the proof plan. Fail-closed: uncertain → ReduceOnly, unknown intent → OPEN (most restrictive), latch on bad event.
 
-2. **Add TRIP / NON-TRIP tests** — each safety-critical AT gets both. Each proves causality via `dispatch_count`, `reject_reason`, `latch_reason`, or `cortex_override`.
+2. **Add TRIP / NON-TRIP tests** — each safety-critical AT gets both. Each proves causality via `dispatch_count`, `reject_reason`, `latch_reason`, `mode_transition`, or `cortex_override`.
 
 3. **Fix PRD mapping** — update `implementation_tests[]`, verify `enforcing_contract_ats[]`.
 
