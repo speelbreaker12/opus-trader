@@ -23,7 +23,8 @@ Options:
                      Run both for maximum coverage.
   --timeout-seconds N
                      Max seconds for external review command. Defaults:
-                     opus=600 (900 for --files), kimi=600, codex=0 (600 for --files).
+                     opus=600 (900 for --files), kimi=600, gemini=600,
+                     codex=0 (600 for --files).
                      Use 0 to disable timeout.
   --proof-graph      Generate per-reviewer proof_graph.json skeleton (requires --prompt enriched)
   --commit REF       Review a specific commit (default: HEAD)
@@ -452,6 +453,9 @@ else
         timeout_seconds="${REVIEW_LOGGED_KIMI_TIMEOUT_SECONDS:-600}"
       fi
       ;;
+    gemini)
+      timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-${REVIEW_LOGGED_TIMEOUT_SECONDS:-600}}"
+      ;;
   esac
 fi
 
@@ -716,7 +720,7 @@ case "$tool" in
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
 
-    local gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
+    gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
     # -p <content> activates headless mode with the prompt inline.
     # Gemini CLI requires a PTY for stdin piping, so we pass the prompt
     # via the -p flag instead (reads file into shell arg).

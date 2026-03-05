@@ -38,8 +38,14 @@ shift
 
 printf '%s\n' "$PWD" >> "$mock_root/parallel_pwd.log"
 printf '%s\n' "$run_id" "$@" > "$mock_root/parallel_args.log"
+printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" >> "$mock_root/parallel_review_script.log"
 
 story_dir="$mock_root/artifacts/story/$run_id"
+if [[ -n "${STORY_ARTIFACTS_ROOT:-}" ]]; then
+  story_dir="$STORY_ARTIFACTS_ROOT/$run_id"
+elif [[ "$PWD" != "$mock_root" ]]; then
+  story_dir="$PWD/artifacts/story/$run_id"
+fi
 mkdir -p "$story_dir"
 
 write_artifact() {
@@ -275,6 +281,7 @@ test_pr_mode_resolution() {
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
   assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190"
+  assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
 }

@@ -418,10 +418,7 @@ fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
         }
     }
     OpenRuntimeOutput {
-        choke_result: ChokeResult::Rejected {
-            reason,
-            gate_trace,
-        },
+        choke_result: ChokeResult::Rejected { reason, gate_trace },
         gate_results: build_gate_results(
             true,
             true,

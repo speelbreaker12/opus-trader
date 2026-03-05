@@ -913,3 +913,10 @@ Commands: python3 scripts/build_contract_kernel.py --out docs/contract_kernel.js
 Evidence: docs/contract_kernel.json; plans/preflight.sh; plans/tests/test_preflight_fixture_profiles.sh; artifacts/verify/20260305_132710/verify.meta.json; artifacts/verify/20260305_135608/verify.meta.json.
 Notes: `test_recon_operator_runner.sh` passes in isolation in ~86s, so the timeout was due to smoke-batch contention rather than a deterministic regression. After the fixture reclassification, quick verify cleared preflight and advanced to `contract_change_ledger`, which now blocks because `specs/CONTRACT.md` is dirty without a new ledger row.
 Next: add the required contract change ledger row for the current contract edits or revert those edits, then rerun `./plans/verify.sh quick`.
+Story: PR #170 follow-up (isolated worktree verify)
+Date: 2026-03-05 22:54:33 UTC
+Summary: Replayed the active patchset into an isolated worktree to avoid main-tree file churn, kept the pattern-guard test fixes and workflow/contract sync changes together, and reran quick verify to a green result from the isolated branch.
+Commands: git worktree add .worktrees/pr4-verify-iso-20260305 -b wt/pr4-verify-iso-20260305; git apply /tmp/pr4_verify_iso_20260305.patch; cargo build; ./plans/verify.sh quick.
+Evidence: .worktrees/pr4-verify-iso-20260305; artifacts/verify/20260305_165057/verify.meta.json; plans/preflight.sh; plans/review_logged.sh; specs/CONTRACT.md; specs/flows/ARCH_FLOWS.yaml.
+Notes: The first isolated quick run hit a cold-cache preflight timeout; after `cargo build` warmed the tree, quick verify passed cleanly. `var/runtime/runtime_state.json` changed as a runtime byproduct and should stay out of the commit.
+Next: rerun final review/quick verification in the isolated tree, then commit and push the scoped branch from there.

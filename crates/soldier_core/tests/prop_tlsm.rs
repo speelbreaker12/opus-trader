@@ -12,7 +12,9 @@
 //! `NoopSink` helper defined below.
 
 use proptest::prelude::*;
-use soldier_core::execution::{PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult};
+use soldier_core::execution::{
+    PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
+};
 
 /// Local no-op sink — for test setup only. Production callers must supply a
 /// durable WAL sink.

@@ -32,7 +32,7 @@ set -euo pipefail
 #   plans/parallel_review.sh S1-004 --files "src/gate.rs" --tools opus,kimi --prompt generic
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: not in a git repo" >&2; exit 2; }
-REVIEW_SCRIPT="$ROOT/plans/review_logged.sh"
+REVIEW_SCRIPT="${PARALLEL_REVIEW_REVIEW_SCRIPT:-$ROOT/plans/review_logged.sh}"
 AGGREGATE_SCRIPT="$ROOT/plans/aggregate_proofs.sh"
 
 usage() {

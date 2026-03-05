@@ -243,6 +243,8 @@ parallel_cmd+=("${parallel_mode_args[@]}")
 set +e
 (
   cd "$parallel_cwd"
+  STORY_ARTIFACTS_ROOT="$ROOT/artifacts/story" \
+  PARALLEL_REVIEW_REVIEW_SCRIPT="$ROOT/plans/review_logged.sh" \
   "${parallel_cmd[@]}"
 ) 2>&1 | tee "$dispatch_log"
 parallel_rc="${PIPESTATUS[0]}"
