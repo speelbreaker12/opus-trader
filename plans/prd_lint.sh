@@ -162,6 +162,16 @@ suggest_fix() {
       echo "  2. Fix path typo in prd.json"
       context_link
       ;;
+    STALE_PATH_REF)
+      echo "  Story: $id"
+      echo "  Field: $field"
+      echo "  Path:  $value"
+      echo ""
+      echo "  Possible fixes:"
+      echo "  1. Update the reference to an existing file path"
+      echo "  2. If file was moved, update PRD references to the new location"
+      context_link
+      ;;
     *)
       echo "  Story: $id"
       context_link
@@ -288,6 +298,31 @@ has_glob_chars() {
 normalize_path() {
   local value="$1"
   printf '%s' "${value#./}"
+}
+
+extract_repo_path_refs() {
+  local value="$1"
+  printf '%s\n' "$value" | grep -oE '(\.?[A-Za-z0-9_./-]+/[A-Za-z0-9_./-]+\.(rs|py|sh|md|yaml|yml|toml|json))(::[A-Za-z0-9_:-]+)?' || true
+}
+
+check_path_ref_exists() {
+  local item_id="$1"
+  local field="$2"
+  local ref_token="$3"
+  local ref_path ref_norm
+
+  [[ -z "$ref_token" ]] && return 0
+  ref_path="${ref_token%%::*}"
+  ref_norm="$(normalize_path "$ref_path")"
+
+  case "$ref_norm" in
+    crates/*|plans/*|scripts/*|python/*|specs/*|docs/*|tests/*|tools/*|.github/*|reviews/*|var/*|artifacts/*)
+      if [[ ! -e "$repo_root/$ref_norm" ]]; then
+        report_error STALE_PATH_REF "$item_id" "${field} references missing file path: $ref_norm"
+        suggest_fix STALE_PATH_REF "$item_id" "$field" "$ref_norm"
+      fi
+      ;;
+  esac
 }
 
 python_missing=0
@@ -507,9 +542,17 @@ while IFS= read -r item_meta; do
   done
   for stale_verify in "${verify_paths[@]}"; do
     check_stale_recon_ref "$item_id" "verify" "$stale_verify"
+    while IFS= read -r ref_token; do
+      [[ -z "$ref_token" ]] && continue
+      check_path_ref_exists "$item_id" "verify" "$ref_token"
+    done < <(extract_repo_path_refs "$stale_verify")
   done
   for stale_evidence in "${evidence_paths[@]}"; do
     check_stale_recon_ref "$item_id" "evidence" "$stale_evidence"
+    while IFS= read -r ref_token; do
+      [[ -z "$ref_token" ]] && continue
+      check_path_ref_exists "$item_id" "evidence" "$ref_token"
+    done < <(extract_repo_path_refs "$stale_evidence")
   done
   for stale_owner in "${owner_paths[@]}"; do
     check_stale_recon_ref "$item_id" "primary_owner_for" "$stale_owner"

@@ -697,4 +697,139 @@ if echo "$output" | grep -q "STALE_RECON_DOC_REF"; then
   exit 1
 fi
 
+# Test 9: stale verify/evidence file references fail closed.
+cat <<'JSON' > plans/prd_stale_path_refs.json
+{
+  "project": "LintFixture",
+  "source": {
+    "implementation_plan_path": "IMPLEMENTATION_PLAN.md",
+    "contract_path": "CONTRACT.md"
+  },
+  "rules": {
+    "one_story_per_iteration": true,
+    "one_commit_per_story": true,
+    "no_prd_rewrite": true,
+    "passes_only_flips_after_verify_green": true
+  },
+  "items": [
+    {
+      "id": "S1-011",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "slice_ref": "Slice 1",
+      "story_ref": "Stale path ref",
+      "category": "acceptance",
+      "description": "Stale verify/evidence path references should fail closed.",
+      "contract_refs": ["CONTRACT.md 0.Y Verification Harness (Non-Negotiable)"],
+      "plan_refs": ["Test harness configured (cargo test --workspace)."],
+      "scope": { "touch": ["touch.txt"], "avoid": [] },
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": [
+        "./plans/verify.sh",
+        "crates/soldier_core/tests/test_dispatch_chokepoint.rs::test_dispatch_chokepoint_no_direct_exchange_client_usage"
+      ],
+      "evidence": [
+        "crates/soldier_core/tests/test_reject_reason.rs::test_reject_reason_in_registry output"
+      ],
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [],
+      "reason_codes": { "type": "", "values": [] },
+      "enforcement_point": "",
+      "failure_mode": [],
+      "loss_mode": { "worst_case": "test worst case", "fail_closed_cap": "test cap", "drift_metric": "test metric" },
+      "observability": { "metrics": [], "status_fields": [], "status_contract_ats": [] },
+      "implementation_tests": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+
+set +e
+output=$(PRD_LINT_ALLOW_SCHEMA_BYPASS=1 "$lint_script" "plans/prd_stale_path_refs.json" 2>&1)
+status=$?
+set -e
+if [[ $status -ne 2 ]]; then
+  echo "Expected stale path refs lint failure exit code 2, got $status"
+  echo "$output"
+  exit 1
+fi
+if ! echo "$output" | grep -q "STALE_PATH_REF"; then
+  echo "Expected output to contain STALE_PATH_REF"
+  echo "$output"
+  exit 1
+fi
+
+# Test 9b: valid file references in verify/evidence pass.
+mkdir -p crates/soldier_core/src
+touch crates/soldier_core/src/lib.rs
+cat <<'JSON' > plans/prd_valid_path_refs.json
+{
+  "project": "LintFixture",
+  "source": {
+    "implementation_plan_path": "IMPLEMENTATION_PLAN.md",
+    "contract_path": "CONTRACT.md"
+  },
+  "rules": {
+    "one_story_per_iteration": true,
+    "one_commit_per_story": true,
+    "no_prd_rewrite": true,
+    "passes_only_flips_after_verify_green": true
+  },
+  "items": [
+    {
+      "id": "S1-012",
+      "priority": 1,
+      "phase": 1,
+      "slice": 1,
+      "slice_ref": "Slice 1",
+      "story_ref": "Valid path ref",
+      "category": "acceptance",
+      "description": "Valid verify/evidence path references should pass.",
+      "contract_refs": ["CONTRACT.md 0.Y Verification Harness (Non-Negotiable)"],
+      "plan_refs": ["Test harness configured (cargo test --workspace)."],
+      "scope": { "touch": ["touch.txt"], "avoid": [] },
+      "acceptance": ["a", "b", "c"],
+      "steps": ["1", "2", "3", "4", "5"],
+      "verify": ["./plans/verify.sh", "crates/soldier_core/src/lib.rs::placeholder"],
+      "evidence": ["crates/soldier_core/src/lib.rs output"],
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [],
+      "reason_codes": { "type": "", "values": [] },
+      "enforcement_point": "",
+      "failure_mode": [],
+      "loss_mode": { "worst_case": "test worst case", "fail_closed_cap": "test cap", "drift_metric": "test metric" },
+      "observability": { "metrics": [], "status_fields": [], "status_contract_ats": [] },
+      "implementation_tests": [],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "low",
+      "needs_human_decision": false,
+      "passes": false
+    }
+  ]
+}
+JSON
+
+set +e
+output=$(PRD_LINT_ALLOW_SCHEMA_BYPASS=1 "$lint_script" "plans/prd_valid_path_refs.json" 2>&1)
+status=$?
+set -e
+if [[ $status -ne 0 ]]; then
+  echo "Expected valid path refs fixture to pass lint, got $status"
+  echo "$output"
+  exit 1
+fi
+if echo "$output" | grep -q "STALE_PATH_REF"; then
+  echo "Did not expect STALE_PATH_REF for valid path references"
+  echo "$output"
+  exit 1
+fi
+
 echo "test_prd_lint.sh: ok"

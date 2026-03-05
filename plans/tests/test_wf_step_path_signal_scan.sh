@@ -97,4 +97,42 @@ echo "$legacy_fix_output" | grep -Fq "cycle1 had 0 findings" || fail "legacy mar
 jq -e '.code_changed == false' "$repo/.wf/receipts/S1-002/04_fix.json" >/dev/null \
   || fail "legacy markdown GREEN path should record code_changed=false"
 
+# Strict mode requires canonical JSON path and rejects legacy-only ledgers.
+seed_receipts "S1-003" "$head_sha"
+mkdir -p "$repo/artifacts/story/S1-003/cycle1"
+cat > "$repo/artifacts/story/S1-003/cycle1/evidence_ledger.md" <<'EOF'
+# Legacy cycle1 ledger
+PATH: GREEN
+EOF
+
+set +e
+strict_missing_output="$(
+  cd "$repo" && WF_CYCLE1_PATH_STRICT=1 bash plans/wf_step.sh S1-003 fix 2>&1
+)"
+strict_missing_rc=$?
+set -e
+[[ "$strict_missing_rc" -ne 0 ]] || fail "strict mode should fail when canonical JSON PATH ledger is missing"
+echo "$strict_missing_output" | grep -Fq "canonical cycle1 PATH ledger required" \
+  || fail "strict mode missing canonical-ledger diagnostic"
+
+# Strict mode also rejects malformed canonical PATH signals.
+seed_receipts "S1-004" "$head_sha"
+mkdir -p "$repo/artifacts/story/S1-004"
+cat > "$repo/artifacts/story/S1-004/evidence_ledger.json" <<'EOF'
+{
+  "story_id": "S1-004",
+  "path": "MAYBE"
+}
+EOF
+
+set +e
+strict_invalid_output="$(
+  cd "$repo" && WF_CYCLE1_PATH_STRICT=1 bash plans/wf_step.sh S1-004 fix 2>&1
+)"
+strict_invalid_rc=$?
+set -e
+[[ "$strict_invalid_rc" -ne 0 ]] || fail "strict mode should fail on malformed canonical PATH signal"
+echo "$strict_invalid_output" | grep -Fq "canonical cycle1 PATH signal invalid" \
+  || fail "strict mode invalid-PATH diagnostic missing"
+
 echo "test_wf_step_path_signal_scan.sh: ok"

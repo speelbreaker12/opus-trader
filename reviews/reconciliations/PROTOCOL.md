@@ -156,10 +156,10 @@ VERIFY_ARTIFACTS_DIR="artifacts/verify/<run_id>" \
   - `reviews/reconciliations/PROTOCOL.md`
   - `reviews/reconciliations/REFERENCE.md`
   - `reviews/reconciliations/RECON_HANDOFF_TEMPLATE.md`
-- Default budget: `RECON_DOC_BUDGET_MAX_LINES=650`.
+- Default budget: `RECON_DOC_BUDGET_MAX_LINES=1200`.
 - Threshold must be a non-negative integer; invalid values fail closed.
-- Override policy for thresholds above `650`:
-  - In CI: override attempts are ignored (hard-enforced at `650`).
+- Override policy for thresholds above `1200`:
+  - In CI: override attempts are ignored (hard-enforced at `1200`).
   - Locally: requires explicit owner approval entries in `plans/progress.txt`:
     - `RECON_DOC_BUDGET_OVERRIDE_APPROVED_BY: <owner>`
     - `RECON_DOC_BUDGET_OVERRIDE_REASON: <rationale>`

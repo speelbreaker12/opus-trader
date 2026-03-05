@@ -575,11 +575,18 @@ read_cycle1_path() {
   # Reads the explicit PATH signal from the cycle1 ledger.
   # Canonical source is JSON-first: artifacts/story/<ID>/evidence_ledger.json.
   # Returns 0 for PATH GREEN, 1 otherwise (YELLOW/RED or inferred findings).
+  # Strict mode (WF_CYCLE1_PATH_STRICT=1): require canonical JSON PATH signal only.
   local art_dir="$1"
   local canonical_json="$art_dir/evidence_ledger.json"
   local legacy_json="$art_dir/${STORY}_reconciliation.json"
   local legacy_md=""
   local path_signal=""
+  local strict_mode="${WF_CYCLE1_PATH_STRICT:-0}"
+
+  if [[ "$strict_mode" != "0" && "$strict_mode" != "1" ]]; then
+    echo "WF_STEP: invalid WF_CYCLE1_PATH_STRICT=$strict_mode (expected 0 or 1)" >&2
+    return 1
+  fi
 
   path_signal_from_json() {
     local ledger_json="$1"
@@ -630,7 +637,19 @@ read_cycle1_path() {
       GREEN) return 0 ;;
       YELLOW|RED) return 1 ;;
     esac
+    if [[ "$strict_mode" == "1" ]]; then
+      echo "WF_STEP: canonical cycle1 PATH signal invalid in $canonical_json (expected GREEN|YELLOW|RED)" >&2
+      return 1
+    fi
     echo "WF_STEP: unrecognized PATH signal in $canonical_json; falling back to legacy findings detection" >&2
+  elif [[ "$strict_mode" == "1" ]]; then
+    echo "WF_STEP: canonical cycle1 PATH ledger required at $canonical_json (WF_CYCLE1_PATH_STRICT=1)" >&2
+    return 1
+  fi
+
+  if [[ "$strict_mode" == "1" ]]; then
+    echo "WF_STEP: strict mode forbids legacy PATH sources for $STORY" >&2
+    return 1
   fi
 
   if [[ -f "$legacy_json" ]]; then

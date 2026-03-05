@@ -209,15 +209,15 @@
     }
   ],
   "contract_version": "5.2",
-  "generated_at_utc": "2026-03-04T23:14:54Z",
+  "generated_at_utc": "2026-03-05T00:29:03Z",
   "kernel_version": 3,
   "sources": {
     "anchors_path": "docs/architecture/contract_anchors.md",
     "anchors_sha256": "f219e66f69b1a04d5e47677e2a668bbdfb78a5180a5ea0579fccdb85cfeee86f",
     "contract_path": "specs/CONTRACT.md",
-    "contract_sha256": "2ed84705929aa38734253e0eac645fb7fef816a1607eefe01572476729e7fe9f",
+    "contract_sha256": "14bcd312aae65e17ad35b768d19550213c576f53e0369c716e64f8a2d0acc285",
     "plan_path": "specs/IMPLEMENTATION_PLAN.md",
-    "plan_sha256": "ebf9700e25374b9b477cb0f57d3fb9f06e5e13a7e08a3545bd4953c98fa4f905",
+    "plan_sha256": "a425c26eed92c89f27091f2f35ec368e9437fb3fb8ae5ee7c549ad50ebb3fd50",
     "rules_path": "docs/architecture/validation_rules.md",
     "rules_sha256": "f7c0a50e04363421984554d3e3943409c04e50ac5dd1745fa6f7f214454b2c4a"
   },

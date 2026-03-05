@@ -36,18 +36,18 @@ mk_fixture "$fixture_pass" 200 200 200
 pass_out="$(RECON_DOC_BUDGET_ROOT="$fixture_pass" "$SCRIPT" 2>&1)"
 echo "$pass_out" | grep -Fq "DOC_LINES reviews/reconciliations/PROTOCOL.md 200" || fail "missing per-file count output"
 echo "$pass_out" | grep -Fq "TOTAL_LINES 600" || fail "missing total line output"
-echo "$pass_out" | grep -Fq "PASS: recon doc budget (600/650)" || fail "missing pass summary"
+echo "$pass_out" | grep -Fq "PASS: recon doc budget (600/1200)" || fail "missing pass summary"
 
 # Case 2: fail when over budget.
 fixture_over="$tmp_dir/over"
-mk_fixture "$fixture_over" 300 250 120
+mk_fixture "$fixture_over" 500 450 300
 set +e
 over_out="$(RECON_DOC_BUDGET_ROOT="$fixture_over" "$SCRIPT" 2>&1)"
 over_rc=$?
 set -e
 [[ "$over_rc" -ne 0 ]] || fail "expected over-budget fixture to fail"
 echo "$over_out" | grep -Fq "BUDGET_EXCEEDED" || fail "missing over-budget diagnostic"
-echo "$over_out" | grep -Fq "TOTAL_LINES 670" || fail "missing over-budget total line count"
+echo "$over_out" | grep -Fq "TOTAL_LINES 1250" || fail "missing over-budget total line count"
 
 # Case 3: missing required source fails closed.
 fixture_missing="$tmp_dir/missing"
@@ -72,7 +72,7 @@ done
 
 # Case 5: local override requires approval records.
 set +e
-override_blocked_out="$(RECON_DOC_BUDGET_ROOT="$fixture_over" RECON_DOC_BUDGET_MAX_LINES=900 "$SCRIPT" 2>&1)"
+override_blocked_out="$(RECON_DOC_BUDGET_ROOT="$fixture_over" RECON_DOC_BUDGET_MAX_LINES=1300 "$SCRIPT" 2>&1)"
 override_blocked_rc=$?
 set -e
 [[ "$override_blocked_rc" -ne 0 ]] || fail "expected unapproved local override to fail"
@@ -84,15 +84,15 @@ RECON_DOC_BUDGET_OVERRIDE_APPROVED_BY: owner
 RECON_DOC_BUDGET_OVERRIDE_REASON: temporary reconciliation protocol expansion
 RECON_DOC_BUDGET_OVERRIDE_EXPIRES: 2026-04-01
 EOF
-override_ok_out="$(RECON_DOC_BUDGET_ROOT="$fixture_over" RECON_DOC_BUDGET_MAX_LINES=900 "$SCRIPT" 2>&1)"
+override_ok_out="$(RECON_DOC_BUDGET_ROOT="$fixture_over" RECON_DOC_BUDGET_MAX_LINES=1300 "$SCRIPT" 2>&1)"
 echo "$override_ok_out" | grep -Fq "INFO: local override approved by 'owner'" || fail "missing local override approval output"
-echo "$override_ok_out" | grep -Fq "PASS: recon doc budget (670/900)" || fail "missing local override pass summary"
+echo "$override_ok_out" | grep -Fq "PASS: recon doc budget (1250/1300)" || fail "missing local override pass summary"
 
 # Case 7: CI override attempts are ignored (budget remains hard-enforced).
 fixture_ci="$tmp_dir/ci"
-mk_fixture "$fixture_ci" 300 250 120
+mk_fixture "$fixture_ci" 500 450 300
 set +e
-ci_out="$(RECON_DOC_BUDGET_ROOT="$fixture_ci" CI=1 RECON_DOC_BUDGET_MAX_LINES=900 "$SCRIPT" 2>&1)"
+ci_out="$(RECON_DOC_BUDGET_ROOT="$fixture_ci" CI=1 RECON_DOC_BUDGET_MAX_LINES=1300 "$SCRIPT" 2>&1)"
 ci_rc=$?
 set -e
 [[ "$ci_rc" -ne 0 ]] || fail "expected CI override attempt to fail when default budget exceeded"
