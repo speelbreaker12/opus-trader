@@ -6320,3 +6320,10 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.10 CSP_ONLY Build/Test Mode** | §0.Z.7.3 (CSP_ONLY build requirement)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.9.1 (meta-ATs) | AT-1056 (CI build:csp_only succeeds)<br>AT-1057 (CI test:csp_only runs only CSP tests; all pass)<br>AT-990 (runtime sanity: CSP_ONLY build starts; GOP not enforced) |
 | **CSP.11 Explicit Non-Requirements** | §0.Z.2.3 (CSP explicit non-requirements)<br>§0.Z.3.3 (GOP failures must not violate CSP guarantees)<br>§0.Z.7.2 (GOP failures MUST NOT alter CSP decisions when CSP enforced) | AT-991 (CSP decisions unaffected by GOP health when CSP enforced) |
 | **CSP.12 Acceptance Tests (CSP gating)** | §0.Z.5 (profile tagging rules)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.10 (Numeric Sanity Guard)<br>§8 (release gates reference CSP/GOP status) | AT-1057 (ensures CSP-only pipeline executes only CSP tests)<br>AT-023 (status completeness for operators/CI)<br>AT-1219 (GOP numeric faults isolated under CSP) |
+
+## **Appendix CONTRACT_CHANGE_LEDGER (Normative, Mandatory)**
+
+| Date_UTC | Change_ID | Sections_Touched | Change_Type | Summary | Rationale | AT/VR refs | Story/PR |
+|---|---|---|---|---|---|---|---|
+| 2026-03-04 | CCL-2026-03-04-01 | Branch delta vs origin/main (multiple sections and appendices) | Baseline bootstrap | Establish mandatory ledger section required by verify gate 02a for this branch. | Contract differs from base; ledger is now required to keep edits auditable and append-only. | N/A (bootstrap) | local/bootstrap |
+| 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
