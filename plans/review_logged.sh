@@ -106,22 +106,28 @@ max_int() {
 
 count_findings_for_severity() {
   local sev="$1"
-  local bullet heading severity_cell summary_row plain
+  local bullet heading f_heading severity_cell severity_label summary_row plain numbered_bold
 
   # Common reviewer output forms:
   # - [P1] ...
   # ### P1-High ...
+  # ### F1 — P1 — Priority ...
   # | **Severity** | P1 ... |
   # | 1 | **P1** | ...
+  # - **Severity:** P1-High
+  # 1. **P1 - ...**
   bullet="$(safe_count "^[[:space:]]*[-*][[:space:]]*\\[$sev\\]" 0)"
   heading="$(safe_count "^[[:space:]]*#{1,6}[[:space:]]*$sev([[:space:]:-]|$)" 0)"
+  f_heading="$(safe_count "^[[:space:]]*#{1,6}[[:space:]]*F[-]?[0-9]+.*[[:space:]]$sev([[:space:]]|[-]|$)" 0)"
   severity_cell="$(safe_count "^[[:space:]]*\\|[[:space:]]*\\*{0,2}Severity\\*{0,2}[[:space:]]*\\|[[:space:]]*\\*{0,2}$sev\\*{0,2}([[:space:]|]|$)" 0)"
+  severity_label="$(safe_count "^[[:space:]]*[-*]?[[:space:]]*\\*{0,2}Severity:?\\*{0,2}[[:space:]]*:?[[:space:]]*\\*{0,2}$sev([[:space:]-]|\\*|$)" 0)"
   summary_row="$(safe_count "^[[:space:]]*\\|[[:space:]]*[0-9]+[[:space:]]*\\|[[:space:]]*\\*{0,2}$sev\\*{0,2}[[:space:]]*\\|" 0)"
   plain="$(safe_count "^[[:space:]]*$sev[-:][[:space:]]" 0)"
+  numbered_bold="$(safe_count "^[[:space:]]*[0-9]+[.)][[:space:]]*\\*{1,2}$sev([[:space:]-]|\\*|$)" 0)"
 
   # Use max across formats to avoid double-counting the same finding
   # in both detailed and summary sections.
-  max_int "$bullet" "$heading" "$severity_cell" "$summary_row" "$plain"
+  max_int "$bullet" "$heading" "$f_heading" "$severity_cell" "$severity_label" "$summary_row" "$plain" "$numbered_bold"
 }
 
 count_review_citations() {
@@ -452,6 +458,13 @@ else
         timeout_seconds="${REVIEW_LOGGED_KIMI_TIMEOUT_SECONDS:-600}"
       fi
       ;;
+    gemini)
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_FILES_TIMEOUT_SECONDS:-600}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-600}"
+      fi
+      ;;
   esac
 fi
 
@@ -716,7 +729,7 @@ case "$tool" in
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
 
-    local gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
+    gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
     # -p <content> activates headless mode with the prompt inline.
     # Gemini CLI requires a PTY for stdin piping, so we pass the prompt
     # via the -p flag instead (reads file into shell arg).

@@ -1,55 +1,64 @@
 {
+  "schema_version": "self_review_sidecar.v1",
+  "head_commit": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+  "created_at": "2026-03-05T17:50:48Z",
+  "markdown_sha256": "8fc8463ee034e9439287186862543eeef9be6fa2f6c4cce85c6d703db12d25fa",
+  "markdown_path": "reviews/reconciliations/S2/SELF_REVIEW_R5b.md",
   "story_id": "S2-001",
-  "phase": "R5b",
-  "date": "2026-02-27",
-  "reviewer": "claude-opus-4-6",
-  "mode": "abbreviated",
-  "risk_tier": "LOW",
-  "r5_changes_reviewed": {
-    "new_tests": [
-      "test_golden_vector_xxhash64",
-      "test_hash_uses_only_canonical_fields"
-    ],
-    "prd_metadata_fixes": [
-      "GAP-S2-001-1: AT-201 removed from enforcing_contract_ats and primary_owner_for",
-      "GAP-S2-001-4: implementation_tests expanded from 1 to 16",
-      "GAP-S2-001-5: reason_codes.values cleared"
-    ],
-    "production_code_changes": 0
-  },
-  "checks": {
-    "code_quality": {
-      "verdict": "PASS",
-      "issues": 0,
-      "notes": "No unwrap() in prod. Tests well-structured with clear doc comments."
+  "skills_run": [
+    {
+      "name": "pr-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 2, "P2": 4 },
+      "receipt_path": "artifacts/story/S2-001/codex/codex.generic.md"
     },
-    "contract_alignment": {
-      "verdict": "PASS",
-      "issues": 0,
-      "notes": "All 5 fixes directly match gap descriptions."
+    {
+      "name": "failure-mode-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 1, "P1": 1, "P2": 2 },
+      "receipt_path": "artifacts/story/S2-001/gemini/gemini.enriched.md"
     },
-    "fail_closed": {
-      "verdict": "PASS",
-      "issues": 0,
-      "notes": "No production code modified. No fail-open paths introduced."
+    {
+      "name": "strategic-failure-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 2, "P2": 2 },
+      "receipt_path": "artifacts/story/S2-001/kimi/kimi.enriched.md"
     },
-    "wrong_impl": {
-      "verdict": "PASS",
-      "issues": 0,
-      "notes": "Golden vector pins algorithm. Size assertion + struct literal pins field set. No practical wrong-impl survives."
+    {
+      "name": "contract-review",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 2, "P1": 4, "P2": 2 },
+      "receipt_path": "artifacts/story/S2-001/codex/codex.enriched.md"
+    },
+    {
+      "name": "validator-audit",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 0, "P2": 2 },
+      "receipt_path": "artifacts/story/S2-001/gemini/gemini.generic.md"
+    },
+    {
+      "name": "devils-advocate",
+      "exit_status": "completed",
+      "finding_counts": { "P0": 0, "P1": 2, "P2": 5 },
+      "receipt_path": "artifacts/story/S2-001/opus/opus.enriched.md"
     }
+  ],
+  "total_blockers": 14,
+  "premortem_crosscheck": {
+    "s2": "CHECKED",
+    "s4": "CHECKED",
+    "s5": "CHECKED",
+    "s6": "CHECKED",
+    "s10": "CHECKED"
   },
-  "test_results": {
-    "command": "cargo test -p soldier_core --test test_idempotency",
-    "passed": 16,
-    "failed": 0,
-    "ignored": 0
-  },
-  "working_tree": {
-    "unexpected_dirty_files": 0,
-    "notes": "Dirty files are expected dry-run artifacts and R5 changes."
-  },
-  "gate_verdict": "PASS",
-  "fixes_needed": false,
-  "friction_findings": ["F29", "F30", "F31", "F32", "F33"]
+  "at_proof_gaps": [
+    {
+      "at_id": "AT-201",
+      "description": "Still reported as scope/proof mismatch in external review bundles."
+    },
+    {
+      "at_id": "AT-928",
+      "description": "WAL NOOP causality proof remains externally challenged in this story scope."
+    }
+  ]
 }

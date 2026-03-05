@@ -42,12 +42,46 @@ cat > "$mock_bin/claude" <<'MOCK_CLAUDE'
 #!/usr/bin/env bash
 cat >/dev/null
 sleep 5
-echo "### P1-High: late finding"
+echo "### F-1 - P1 - Priority 2: late finding"
 echo "crates/soldier_core/src/execution/quantize.rs:13"
 exit 0
 MOCK_CLAUDE
 
-chmod +x "$mock_bin/codex" "$mock_bin/kimi" "$mock_bin/claude"
+cat > "$mock_bin/timeout" <<'MOCK_TIMEOUT'
+#!/usr/bin/env bash
+set -euo pipefail
+secs="${1:?missing seconds}"
+shift
+[[ "$secs" =~ ^[0-9]+$ ]] || exit 125
+[[ "$#" -gt 0 ]] || exit 125
+
+# Deterministic fixture behavior:
+# - For probe calls used by timeout_bin() (e.g., `timeout 1 bash -c 'exit 0'`), pass through.
+# - For 1-second invocations, simulate timeout expiry.
+# - For all other invocations, pass through.
+if [[ "$secs" == "1" ]]; then
+  if [[ "${1:-}" == "bash" && "${2:-}" == "-c" ]]; then
+    "$@"
+    exit $?
+  fi
+  exit 124
+fi
+"$@"
+exit $?
+MOCK_TIMEOUT
+
+cat > "$mock_bin/gemini" <<'MOCK_GEMINI'
+#!/usr/bin/env bash
+echo "### Finding 1"
+echo "- **Severity:** P1-High"
+echo "- **Evidence citation:** crates/soldier_core/src/idempotency/hash.rs:43"
+echo
+echo "2. **P2 - Canonical hash drift risk**"
+echo "- **Evidence citation:** crates/soldier_core/tests/test_idempotency.rs:24"
+exit 0
+MOCK_GEMINI
+
+chmod +x "$mock_bin/codex" "$mock_bin/kimi" "$mock_bin/claude" "$mock_bin/gemini" "$mock_bin/timeout"
 
 out_root="$tmp_dir/out"
 
@@ -79,13 +113,28 @@ grep -Fq 'path/to/file.ext:line' "$SCRIPT" \
   || fail "citation hard-requirement text missing from prompt contract"
 pass "prompt contract requires explicit file:line citations"
 
-# 5) Opus timeout should fail-closed with deterministic exit, clear stale sidecar, and mark timeout
+# 5) Gemini run should parse "Severity:" labels and numbered bold severities
+PATH="$mock_bin:$PATH" "$SCRIPT" S2-003 --tool gemini --uncommitted --prompt enriched --out-root "$out_root" >/dev/null
+gemini_md="$out_root/S2-003/gemini/gemini.enriched.md"
+[[ -f "$gemini_md" ]] || fail "gemini artifact missing"
+grep -Fxq "FINDINGS_SUMMARY: P0=0 P1=1 P2=1" "$gemini_md" || fail "gemini findings summary mismatch"
+pass "gemini run parses Severity labels and numbered bold severity findings"
+
+# 6) Opus run should parse heading form "### F1 - P1 - ..."
+PATH="$mock_bin:$PATH" "$SCRIPT" S2-004 --tool opus --uncommitted --prompt enriched --timeout-seconds 0 --out-root "$out_root" >/dev/null
+opus_findings_md="$out_root/S2-004/opus/opus.enriched.md"
+[[ -f "$opus_findings_md" ]] || fail "opus findings artifact missing"
+grep -Fxq "FINDINGS_SUMMARY: P0=0 P1=1 P2=0" "$opus_findings_md" || fail "opus F-heading findings summary mismatch"
+pass "opus run parses F-heading severity format"
+
+# 7) Opus timeout should fail-closed with deterministic exit, clear stale sidecar, and mark timeout
 opus_sidecar="$out_root/S2-002/opus/opus.enriched.sidecar.json"
 mkdir -p "$(dirname "$opus_sidecar")"
 printf '{"stale":true}\n' > "$opus_sidecar"
 
 set +e
-PATH="$mock_bin:$PATH" "$SCRIPT" S2-002 --tool opus --uncommitted --prompt enriched --timeout-seconds 1 --out-root "$out_root" >/dev/null 2>&1
+REVIEW_LOG_TIMEOUT_RETRY_SECONDS=1 PATH="$mock_bin:$PATH" \
+  "$SCRIPT" S2-002 --tool opus --uncommitted --prompt enriched --timeout-seconds 1 --out-root "$out_root" >/dev/null 2>&1
 rc=$?
 set -e
 [[ $rc -eq 7 ]] || fail "opus timeout expected exit 7, got $rc"
