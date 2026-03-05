@@ -310,6 +310,7 @@ fn test_replay_mixed_states() {
 // ─── Terminal states ────────────────────────────────────────────────────
 
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_terminal_states() {
     assert!(TlsState::Filled.is_terminal());
     assert!(TlsState::Cancelled.is_terminal());
@@ -403,8 +404,8 @@ fn test_legacy_record_missing_reduce_only_defaults_fail_closed() {
     let parsed: IntentRecord =
         serde_json::from_value(legacy).expect("legacy record without reduce_only should parse");
     assert!(
-        parsed.reduce_only,
-        "legacy record missing reduce_only must default fail-closed"
+        !parsed.reduce_only,
+        "legacy record missing reduce_only must default to false (OPEN classification) per CONTRACT §2.4"
     );
 }
 
@@ -664,6 +665,7 @@ fn test_tlsm_wal_whitelist_sync() {
 /// events to TlsmState::Failed, but the WAL preserves the distinction.
 /// These tests verify Rejected transitions directly at the WAL level.
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_rejected_is_terminal() {
     assert!(
         !TlsState::Rejected.is_valid_successor(TlsState::Sent),

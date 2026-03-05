@@ -146,6 +146,12 @@ Before live-trading enablement, these operational baseline items MUST be complet
 - In foundation mode, `/api/v1/status` uses the status-lite schema (AT-1230). The equivalent "opens not permitted" signal in foundation mode is `dispatch_enabled: false` (not `opens_globally_permitted`).
 - `/api/v1/health` MUST use the liveness key `ok`. `/api/v1/status` MUST use the liveness key `service_up` (foundation mode) or the full CSP minimum schema (Phase 2+). These keys MUST NOT be swapped or mixed between surfaces.
 
+**AT-P0E-NEG** `Profile: GOP` (Negative assertion)
+Given: The system is running in foundation mode (`dispatch_enabled: false`, `phase: foundation`).
+When: The `/api/v1/status` endpoint is queried.
+Then: The response MUST NOT contain any CSP minimum schema keys, including: `mode_reasons`, `open_permission_blocked_latch`, `enforced_profile`, `trading_mode`, `opens_globally_permitted`.
+Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumers that see them may incorrectly treat them as authoritative, enabling fail-open decisions.
+
 **Status authority matrix (Normative):**
 
 | Surface | Phase applicability | Required keys / schema | Authority boundary |
@@ -1889,6 +1895,11 @@ AT-TLSM-03
 - Pass criteria: state is `Failed`; no panic; WAL records the `VenueRejected`→`Failed` transition.
 - Fail criteria: state is not `Failed`, or the rejection is silently dropped.
 
+**AT-TLSM-03-NT** (NON-TRIP) `Profile: CSP`
+Given: A TLSM in `Sent` state.
+When: `Acked` event is applied.
+Then: State transitions to `Acked` — NOT to `Failed`. The `VenueRejected` handler MUST NOT fire on valid acknowledgements.
+
 Profile: CSP
 AT-TLSM-04
 - Given: an order intent is already in `Filled` state and a second fill event arrives.
@@ -1905,6 +1916,12 @@ AT-TLSM-05
 - Pass criteria: state remains unchanged for all terminal states across all possible subsequent events.
 - Fail criteria: any event causes a transition out of a terminal state.
 
+**AT-TLSM-06** `Profile: CSP`
+Given: The WAL contains a historical record with `tls_state: Rejected` (a venue-level rejection preserved from legacy).
+When: The system restarts and replays the WAL.
+Then: The replayed intent MUST be treated as terminal (`is_terminal() == true`), the pending exposure reservation MUST be released, and NO re-dispatch MUST occur.
+Where: `crates/soldier_infra/src/store/ledger.rs` — `TlsState::Rejected.is_terminal()`.
+Note: `TlsState::Rejected` is WAL-only and `#[deprecated]`; the core TLSM maps `VenueRejected` events to `TlsmState::Failed`. This AT covers only the WAL-replay path.
 
 ### **2.2 PolicyGuard (Single Authoritative TradingMode Resolver)**
 **Goal:** Eliminate conflicting “mode sources” and prevent stale/late policy pushes from re‑enabling risk.
@@ -3234,6 +3251,7 @@ Profile: CSP
 - exchange_order_id (if known), last_trade_id (if known)
 
 **Migration note:** WAL records written before `reduce_only` was added to the minimum field list MUST be treated as `reduce_only = false` (conservative: OPEN classification) for backwards compatibility.
+NOTE: `reduce_only = false` means the intent is classified as OPEN — the most conservative choice, since it applies all OPEN gates on recovery. Do NOT default to `true` (CLOSE/HEDGE): this would bypass OPEN gates for potentially risk-increasing legacy orders.
 
 **Acceptance Tests (REQUIRED):**
 AT-233
@@ -4574,11 +4592,7 @@ Profile: GOP
 
 ### **Phase 1: Foundation (Non-Deployable)**
 
-> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema,
-> WAL/durable ledger, Liquidity Gate) satisfy **both** `Profile: GOP` (roadmap
-> milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete
-> only when the CSP-scoped acceptance tests for these components pass (see Phase 1
-> AT Subset). Tagging as GOP does not relax CSP obligations for these deliverables.
+> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema, WAL/durable ledger, Liquidity Gate) satisfy both `Profile: GOP` (roadmap milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete only when the **Phase 1 AT Subset** (see below) passes. These ATs are CSP-scoped for these specific components but do not constitute full CSP compliance. The GOP tag does not relax CSP obligations for these deliverables.
 
 * Instrument metadata + canonical quantization.
 * `s4:` label schema + parser.
@@ -4606,7 +4620,7 @@ The following acceptance tests MUST pass before Phase 1 is considered complete. 
 - AT-920 (contracts/amount mismatch reject)
 - AT-921 (unknown label prefix reject)
 - AT-926 (instrument metadata missing/unparseable reject)
-- AT-928 (duplicate intent hash is NOOP)
+- AT-928 (duplicate intent hash is NOOP; depends on canonical quantization being correct and must pass before Phase 1 is closed)
 - AT-1097 (mixed coin+USD sizing reject)
 
 **Deferred to Phase 2 (require PolicyGuard/reconciliation):**

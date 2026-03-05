@@ -25,8 +25,8 @@ use std::thread;
 use std::time::Duration;
 
 fn default_reduce_only_legacy() -> bool {
-    // Fail-closed for legacy WAL lines missing reduce_only: classify as risk-reducing.
-    true
+    // Fail-closed: legacy WAL records missing reduce_only MUST default to false (OPEN classification) per CONTRACT §2.4. OPEN is the most conservative classification — it applies all OPEN gates on recovery.
+    false
 }
 
 // ─── TLSM State ─────────────────────────────────────────────────────────
@@ -62,9 +62,9 @@ pub enum TlsState {
     Failed,
 }
 
-#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records only
 impl TlsState {
     /// Whether this state is terminal (no further transitions expected).
+    #[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records only
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
@@ -76,6 +76,7 @@ impl TlsState {
     ///
     /// Valid successors derived from Tlsm::apply() in soldier_core/execution/tlsm.rs — keep in sync.
     /// This is a state-level whitelist (less restrictive than event-based TLSM).
+    #[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records only
     pub fn is_valid_successor(self, to: TlsState) -> bool {
         match self {
             TlsState::Created => matches!(
@@ -137,7 +138,7 @@ pub struct IntentRecord {
     /// `false` => OPEN-class intent.
     ///
     /// Backward compatibility: older WAL lines missing this field default to
-    /// `true` (fail-closed reduce-only classification).
+    /// `false` (OPEN classification — most conservative, applies all OPEN gates on recovery per CONTRACT §2.4).
     #[serde(default = "default_reduce_only_legacy")]
     pub reduce_only: bool,
     /// Quantized quantity.

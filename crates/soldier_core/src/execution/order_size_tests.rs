@@ -351,6 +351,22 @@ fn test_contracts_exceeds_f64_precision_limit_rejected_perpetual() {
 }
 
 #[test]
+fn test_contracts_exceeds_f64_precision_limit_rejected_inverse_future() {
+    // InverseFuture shares the Perpetual code path; explicit coverage documents the invariant.
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::InverseFuture,
+        canonical_qty: (1i64 << 53) as f64 + 2.0, // first f64 strictly > 2^53
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsPrecisionLoss { .. })),
+        "InverseFuture arm must also reject contracts exceeding 2^53, got {result:?}"
+    );
+}
+
+#[test]
 fn test_contracts_at_f64_precision_limit_accepted() {
     // 2^53 exactly is representable in f64 without loss; must not be rejected.
     let contracts_value = 1i64 << 53;
