@@ -12,11 +12,58 @@
 //!
 //! AT-935, AT-906.
 
-use crate::store::{IntentRecord, LedgerAppendError, LedgerMetrics, WalLedger};
+use crate::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
 use soldier_core::execution::RecordedBeforeDispatchGate;
+use soldier_core::venue::LifecycleIntent;
 use std::time::Instant;
 
 // ─── Configuration ──────────────────────────────────────────────────────
+
+/// Derive persisted `reduce_only` classifier from lifecycle intent.
+///
+/// CONTRACT + implementation plan invariant:
+/// - OPEN -> reduce_only=false
+/// - CLOSE/HEDGE/CANCEL -> reduce_only=true
+pub fn reduce_only_from_lifecycle_intent(intent: LifecycleIntent) -> bool {
+    matches!(
+        intent,
+        LifecycleIntent::Close | LifecycleIntent::Hedge | LifecycleIntent::Cancel
+    )
+}
+
+/// Construct a CREATED-state WAL intent record from runtime intent fields.
+///
+/// This is the canonical constructor for newly-persisted pre-dispatch intents.
+/// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
+pub fn build_created_intent_record(
+    intent_hash: &str,
+    group_id: &str,
+    leg_idx: u32,
+    instrument: &str,
+    side: &str,
+    lifecycle_intent: LifecycleIntent,
+    qty_q: f64,
+    limit_price_q: f64,
+    created_ts: u64,
+) -> IntentRecord {
+    IntentRecord {
+        intent_hash: intent_hash.to_string(),
+        group_id: group_id.to_string(),
+        leg_idx,
+        instrument: instrument.to_string(),
+        side: side.to_string(),
+        reduce_only: reduce_only_from_lifecycle_intent(lifecycle_intent),
+        qty_q,
+        limit_price_q,
+        tls_state: TlsState::Created,
+        created_ts,
+        sent_ts: 0,
+        ack_ts: 0,
+        last_fill_ts: 0,
+        exchange_order_id: None,
+        last_trade_id: None,
+    }
+}
 
 /// WAL durability barrier configuration.
 ///
