@@ -513,12 +513,11 @@ fn pipeline_wal_recorded(
     runtime: &mut ExecutionRuntime<'_>,
 ) -> bool {
     match intent_class {
-        ChokeIntentClass::Close | ChokeIntentClass::Hedge => {
-            if let Some(gate) = runtime.wal_gate.as_deref_mut() {
-                let _ = gate.record_before_dispatch();
-            }
-            true
-        }
+        ChokeIntentClass::Close | ChokeIntentClass::Hedge => runtime
+            .wal_gate
+            .as_deref_mut()
+            .map(|gate| gate.record_before_dispatch().is_ok())
+            .unwrap_or(false),
         ChokeIntentClass::CancelOnly => true,
         ChokeIntentClass::Open => false,
     }
