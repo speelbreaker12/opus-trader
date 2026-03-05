@@ -24,7 +24,7 @@ This audit produces the evidence ledger consumed before the reconciliation `impl
 
 1. **The story premortem**: `reviews/premortems/${STORY_ID}_premortem.md`
    This is your primary audit checklist. Walk §0-§8 against reality.
-2. Existing R1/preflight evidence for this story, if present (for reruns/comparison)
+2. Legacy R1/preflight evidence for this story, if present (for reruns/comparison only)
 3. Prior postmortem(s) for this slice/story (if any)
 4. `specs/CONTRACT.md` (relevant clauses for this story)
 5. `specs/DESIGN_PATTERNS.md` §0 (if present / used in this repo)
@@ -45,10 +45,9 @@ Do not proceed. Do not guess or hallucinate the content of missing artifacts.
 Item 5 (`specs/DESIGN_PATTERNS.md` §0) is conditional. If the file is absent in this repo/story,
 note `DESIGN_PATTERNS_NOT_PRESENT` and continue.
 
-**Item 2 (existing R1/preflight evidence) is OPTIONAL when the premortem (item 1) exists.** When
-the premortem exists, it is already your primary audit checklist and prior audit artifacts add
-marginal context only. If an earlier audit exists, read it for comparison. If it does not exist
-and the premortem does, proceed without it.
+**Item 2 (legacy R1/preflight evidence) is OPTIONAL for artifact availability, not review value.**
+If an earlier preflight artifact exists, read it for drift/comparison context. If it does not
+exist and the premortem does, proceed and note in output: `NO_PREFLIGHT_ARTIFACT`.
 
 **Item 3 (prior postmortems) is OPTIONAL.** If no postmortem exists for this story, proceed
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.
@@ -72,7 +71,7 @@ Open the premortem §10 STOPLIGHT result before doing anything else:
   - FIX IN IMPLEMENT
 - **GREEN**  -> Proceed.
 
-If an existing preflight/audit artifact already exists for this story, check its STOPLIGHT too. The
+If a legacy preflight/audit artifact already exists for this story, check its STOPLIGHT too. The
 more restrictive gate wins.
 
 ## READ-ONLY INTEGRITY CHECK
@@ -207,14 +206,28 @@ Classify every issue as one of:
 ### IMPORTANT
 
 - If you discover a "better design," do NOT redesign here. Mark it:
-  - **BLOCKING** if it creates loss/safety risk (must fix now)
+  - **BLOCKING** if it creates loss/safety risk or can silently prevent valid profit in normal operation (must fix now)
   - **HARDENING** if it is an improvement but not required for contract compliance (defer)
 - Decision rule for BLOCKING vs HARDENING:
-  - Fail-open path reachable in **normal operation** (valid inputs, standard flow) -> **BLOCKING**
-  - Fail-open path requires **adversarial or out-of-spec input** to reach -> **HARDENING** (document the assumption about what is out-of-spec)
+  - Fail-open path, avoidable loss path, or silent valid-profit block reachable in **normal operation** (valid inputs, standard flow) -> **BLOCKING**
+  - If the issue requires adversarial or out-of-spec input to trigger, and normal operation remains contract-safe, -> **HARDENING** (document the assumption about what is out-of-spec)
 - Do not conflate "different from premortem prediction" with "wrong."
   The premortem was written before code existed. The code may have found a better path.
   Only flag divergence as a problem when the code violates the contract or is fail-open.
+
+### GATE DECISION RULE
+
+Return `NO-GO` if any of the following is found:
+- `FAIL_OPEN` in a production path
+- `UNWRAP_IN_PROD` in a production path without documented safety rationale
+- Missing enforcement for a safety-critical AT
+- Missing TRIP or NON-TRIP proof for a safety-critical AT
+- `WRONG_IMPL_UNBLOCKED` for a safety-critical AT
+- `SILENT_REJECT` on a path that protects capital or preserves valid profit
+- Trading lens = `BLOCKING`
+
+Trading lens = `BLOCKING` requires `GATE: NO-GO`.
+`GATE: GO` is valid only when trading lens is `PASS` or `HARDENING`.
 
 ---
 
@@ -346,7 +359,7 @@ READY FOR IMPLEMENT GATE
 - Do NOT edit tests
 - Do NOT edit `plans/prd.json`
 - Do NOT create or modify review artifacts
-- Do NOT create new files in any directory
+- Do NOT create new files inside the repository (git-tracked or untracked); temporary files under `/tmp` for the read-only integrity check are allowed
 - Do NOT run `./plans/prd_set_pass.sh`
 - Do NOT claim a fix was applied in this step
 - Do NOT skip the premortem §10 STOPLIGHT gate

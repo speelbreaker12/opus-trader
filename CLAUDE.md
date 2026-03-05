@@ -2,6 +2,10 @@
 
 > This file is read automatically by Claude Code. It defines code quality standards and codebase patterns.
 
+## Trading Risk Hard Gate
+
+Before implementation, prove that the proposed change cannot create avoidable loss, cannot silently block valid profit, and is the simplest fail-closed design that satisfies the contract. Test the choice against stale state, retries, partial failures, replay, reconciliation drift, and venue/API faults. If a safer or simpler design exists, the current design is rejected.
+
 ## Model Selection
 
 | Task Type | Model | Why |
@@ -220,6 +224,7 @@ Canonical catalog (single source of truth): `docs/skills/index.md`.
 | Implement single story | `/slice-execute` | Premortem gate → preflight → implement → golden vectors |
 | Reconcile story (premortem + audit) | `/reconcil` | Mode A/B routing, R1-R7 phases, verdict assignment, 15-check pass gate |
 | Audit after implementation | `/post-impl-audit` | Breaker audit: AT proof, fail-closed, wrong-impl, paper compliance |
+| Economic safety gate (loss/profit-block) | `/loss-risk-gate` | Detects avoidable loss, silent profit blocks, unnecessary complexity in trading paths |
 | Write acceptance test | `/acceptance-test` | Contract alignment |
 | Check contracts (fast) | `/contract-review` | Fail-open hazard filter + workflow alignment (subsumes `/audit`) |
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
