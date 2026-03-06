@@ -97,6 +97,21 @@ def _parse_premortem(premortem_path: Path) -> dict[str, str | None]:
     return result
 
 
+def _repo_root_from_inputs(prd_path: Path, contract_path: Path) -> Path:
+    prd_resolved = prd_path.resolve()
+    if prd_resolved.name == "prd.json" and prd_resolved.parent.name == "plans":
+        return prd_resolved.parent.parent
+
+    contract_resolved = contract_path.resolve()
+    if (
+        contract_resolved.name == "CONTRACT.md"
+        and contract_resolved.parent.name == "specs"
+    ):
+        return contract_resolved.parent.parent
+
+    return Path.cwd()
+
+
 def init_v2(
     story_id: str,
     prd_path: Path,
@@ -116,10 +131,11 @@ def init_v2(
     # Determine safety_critical based on category/loss_mode
     safety_critical = category not in ("policy", "certification", "<FILL>")
 
+    repo_root = _repo_root_from_inputs(prd_path, contract_path)
     resolved_premortem_path = (
         premortem_path
         if premortem_path is not None
-        else Path("reviews/premortems") / f"{story_id}_premortem.md"
+        else repo_root / "reviews" / "premortems" / f"{story_id}_premortem.md"
     )
 
     # Parse premortem sections. Always call _parse_premortem unconditionally —

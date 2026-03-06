@@ -71,7 +71,7 @@ while IFS= read -r -d '' relpath; do
   [[ -f "$relpath" ]] || continue
 
   # Skip binary files (NUL-byte heuristic).
-  if perl -ne 'if (index($_, "\0") >= 0) { exit 0 } END { exit 1 }' \
+  if perl -ne '$binary ||= index($_, "\0") >= 0; END { exit($binary ? 0 : 1) }' \
     "$relpath" >/dev/null 2>&1; then
     continue
   fi

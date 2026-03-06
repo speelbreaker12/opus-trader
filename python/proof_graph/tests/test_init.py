@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -121,6 +122,64 @@ class TestInitV2(unittest.TestCase):
             self.assertNotIn("section5_wrong_impl_blocked", pc)
             self.assertNotIn("section4_decision_match", pc)
             self.assertNotIn("section2_assumptions", pc)
+
+    def test_default_premortem_path_uses_repo_root_not_cwd(self):
+        """Default premortem lookup should follow the repo inputs, not the caller cwd."""
+        from python.proof_graph.init import init_v2
+
+        repo_root = Path(self.tmpdir) / "repo"
+        (repo_root / "plans").mkdir(parents=True)
+        (repo_root / "specs").mkdir()
+        (repo_root / "reviews" / "premortems").mkdir(parents=True)
+
+        (repo_root / "plans" / "prd.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "S9-171",
+                            "category": "execution",
+                            "enforcement_point": "plans/parallel_review.sh",
+                            "scope": {"touch": ["plans/parallel_review.sh"]},
+                            "loss_mode": {"level": "HIGH"},
+                            "enforcing_contract_ats": ["AT-9171"],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (repo_root / "specs" / "CONTRACT.md").write_text("# contract\n", encoding="utf-8")
+        (repo_root / "reviews" / "premortems" / "S9-171_premortem.md").write_text(
+            "# Premortem\n"
+            "## Section 2\n"
+            "assumptions: ALL_VALIDATED\n"
+            "## Section 4\n"
+            "decision match: YES\n"
+            "## Section 5\n"
+            "wrong impl blocked: ALL\n",
+            encoding="utf-8",
+        )
+
+        outside_cwd = Path(self.tmpdir) / "outside"
+        outside_cwd.mkdir()
+        previous_cwd = Path.cwd()
+        try:
+            os.chdir(outside_cwd)
+            out_path = init_v2(
+                story_id="S9-171",
+                prd_path=repo_root / "plans" / "prd.json",
+                contract_path=repo_root / "specs" / "CONTRACT.md",
+                output_dir=self.output_dir,
+            )
+        finally:
+            os.chdir(previous_cwd)
+
+        graph = json.loads(out_path.read_text(encoding="utf-8"))
+        premortem_checks = graph["ats"][0]["premortem_checks"]
+        self.assertEqual(premortem_checks.get("section5_wrong_impl_blocked"), "ALL")
+        self.assertEqual(premortem_checks.get("section4_decision_match"), "YES")
+        self.assertEqual(premortem_checks.get("section2_assumptions"), "ALL_VALIDATED")
 
     def test_unknown_story_id(self):
         """Unknown story still generates a skeleton with <FILL> placeholders."""
