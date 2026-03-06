@@ -217,6 +217,41 @@ assert_file_contains() {
   grep -Fq -- "$pattern" "$file" || fail "expected '$pattern' in $file"
 }
 
+test_python_candidate_must_be_python3_6_or_newer() {
+  setup_mock_env "python_version_guard"
+
+  cat > "$mock_bin/python3" <<'MOCK_PYTHON3'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+exit 99
+MOCK_PYTHON3
+
+  cat > "$mock_bin/python" <<'MOCK_PYTHON'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+exit 99
+MOCK_PYTHON
+  chmod +x "$mock_bin/python3" "$mock_bin/python"
+
+  local output_file="$tmp_dir/python_guard.out"
+  set +e
+  PATH="$mock_bin:$PATH" \
+  EXTERNAL_REVIEW_ROOT="$mock_root" \
+  /bin/bash "$SCRIPT" --help >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "python candidate older than 3.6 should be rejected"
+  assert_file_contains "$output_file" "python3.6+ is required"
+  pass "find_python rejects python candidates that cannot satisfy Python 3.6+"
+}
+
 test_commit_mode_success() {
   setup_mock_env "commit_success"
   run_wrapper all_ok --commit HEAD >/dev/null || fail "commit mode should exit 0"
@@ -421,6 +456,7 @@ MOCK_REVIEW
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
+test_python_candidate_must_be_python3_6_or_newer
 test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
 test_reviewer_failure_preserves_summary
