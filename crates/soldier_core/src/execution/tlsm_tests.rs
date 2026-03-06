@@ -2,7 +2,6 @@
 //!
 //! AT-230: Fill-before-ack is valid reality.
 //! AT-210: Orphan fill (fill-before-send).
-
 use super::*;
 
 trait TestValueExt<T> {

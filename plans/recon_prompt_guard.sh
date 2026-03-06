@@ -18,6 +18,11 @@ fail() {
   exit 1
 }
 
+require_tool() {
+  local tool="$1"
+  command -v "$tool" >/dev/null 2>&1 || fail "MISSING_TOOL" "$tool"
+}
+
 require_file() {
   local path="$1"
   [[ -f "$path" ]] || fail "MISSING_FILE" "$path"
@@ -30,11 +35,33 @@ require_contains() {
   grep -Fq "$pattern" "$path" || fail "$code" "$path missing required token: $pattern"
 }
 
+scan_rg() {
+  local pattern="$1"
+  shift
+  local output=""
+  local rc=0
+
+  set +e
+  output="$(rg -n "$pattern" "$@" 2>&1)"
+  rc=$?
+  set -e
+
+  case "$rc" in
+    0|1)
+      printf '%s' "$output"
+      ;;
+    *)
+      fail "SCANNER_ERROR" "rg rc=$rc pattern=$pattern output=$output"
+      ;;
+  esac
+}
+
 require_file "$r1_prompt"
 require_file "$r1_appendix_prompt"
 require_file "$recon_index"
 require_file "$recon_redirect"
 require_file "$slice_execute_skill"
+require_tool rg
 
 # Canonical source references must remain anchored to PROTOCOL/REFERENCE.
 require_contains "$recon_index" "reviews/reconciliations/PROTOCOL.md" "CANONICAL_REFERENCE_MISSING"
@@ -42,7 +69,7 @@ require_contains "$recon_index" "reviews/reconciliations/REFERENCE.md" "CANONICA
 require_contains "$recon_redirect" "reviews/reconciliations/PROTOCOL.md" "CANONICAL_REFERENCE_MISSING"
 require_contains "$recon_redirect" "reviews/reconciliations/REFERENCE.md" "CANONICAL_REFERENCE_MISSING"
 
-legacy_ref_hits="$(rg -n "$legacy_re" "$recon_index" "$recon_redirect" || true)"
+legacy_ref_hits="$(scan_rg "$legacy_re" "$recon_index" "$recon_redirect")"
 if [[ -n "$legacy_ref_hits" ]]; then
   fail "LEGACY_REFERENCE_DRIFT" "$legacy_ref_hits"
 fi
@@ -70,21 +97,19 @@ require_contains "$slice_execute_skill" "Premortem §5 wrong impls are blocked b
 require_contains "$slice_execute_skill" "GO (premortem STOPLIGHT was GREEN/YELLOW-addressed)" "PREMORTEM_OUTPUT_DRIFT"
 require_contains "$slice_execute_skill" "if the premortem is missing, mechanically invalid, or RED, stop" "PREMORTEM_HARD_CONSTRAINT_DRIFT"
 
-next_step_hits="$(rg -n "READY FOR SELF_REVIEW" "$r1_prompt" "$r1_appendix_prompt" || true)"
+next_step_hits="$(scan_rg "READY FOR SELF_REVIEW" "$r1_prompt" "$r1_appendix_prompt")"
 if [[ -n "$next_step_hits" ]]; then
   fail "NEXT_STEP_DRIFT" "$next_step_hits"
 fi
 
-r1_legacy_hits="$(rg -n "$legacy_re" "$r1_prompt" "$r1_appendix_prompt" || true)"
+r1_legacy_hits="$(scan_rg "$legacy_re" "$r1_prompt" "$r1_appendix_prompt")"
 if [[ -n "$r1_legacy_hits" ]]; then
   fail "R1_SURROGATE_PATH_FOUND" "$r1_legacy_hits"
 fi
 
-preflight_wording_hits="$(
-  rg -n \
-    "preflight was GREEN/YELLOW-addressed|if preflight is missing or RED|Fix preflight gaps first|Do NOT create new files in any directory" \
-    "$slice_execute_skill" "$r1_prompt" "$r1_appendix_prompt" || true
-)"
+preflight_wording_hits="$(scan_rg \
+  "preflight was GREEN/YELLOW-addressed|if preflight is missing or RED|Fix preflight gaps first|Do NOT create new files in any directory" \
+  "$slice_execute_skill" "$r1_prompt" "$r1_appendix_prompt")"
 if [[ -n "$preflight_wording_hits" ]]; then
   fail "PREMORTEM_WORDING_DRIFT" "$preflight_wording_hits"
 fi

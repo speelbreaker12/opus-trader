@@ -221,7 +221,7 @@ echo
 #
 # Verifies the three structural guarantees claimed by Upgrade 1B:
 #   - engine_parity_tests.rs is deleted
-#   - pub fn evaluate alias is absent from engine.rs
+#   - pub fn evaluate alias remains as a deprecated compatibility shim
 #   - api.rs exposes no legacy internal pipeline types
 
 echo "=== Check 4: Upgrade 1B architectural proof ==="

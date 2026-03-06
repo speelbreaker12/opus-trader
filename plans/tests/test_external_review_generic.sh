@@ -112,9 +112,8 @@ set -euo pipefail
 mock_root="${EXTERNAL_REVIEW_ROOT:?}"
 printf '%s\n' "$*" >> "$mock_root/gh.log"
 if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
-  cat <<'EOF'
-{"number":190,"baseRefName":"main","headRefOid":"abc123def456"}
-EOF
+  printf '{"number":190,"baseRefName":"%s","headRefOid":"%s"}\n' \
+    "${MOCK_GH_BASE_REF:-main}" "${MOCK_GH_HEAD_OID:-abc123def456}"
   exit 0
 fi
 echo "unexpected gh args: $*" >&2
@@ -138,7 +137,7 @@ if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "--show-toplevel" ]]; t
 fi
 
 if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "HEAD" ]]; then
-  printf '%s\n' "feedfacefeedfacefeedfacefeedfacefeedface"
+  printf '%s\n' "${MOCK_WORKTREE_HEAD:-${MOCK_GH_HEAD_OID:-abc123def456}}"
   exit 0
 fi
 
@@ -217,11 +216,36 @@ assert_file_contains() {
   grep -Fq -- "$pattern" "$file" || fail "expected '$pattern' in $file"
 }
 
+escape_ere_literal() {
+  local value="$1"
+  python3 - "$value" <<'PY'
+import re
+import sys
+
+print(re.escape(sys.argv[1]))
+PY
+}
+
+assert_file_matches() {
+  local file="$1"
+  local pattern="$2"
+  grep -Eq -- "$pattern" "$file" || fail "expected pattern '$pattern' in $file"
+}
+
+find_single_run_id() {
+  local story_base="$1"
+  local count
+  count="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  [[ "$count" == "1" ]] || fail "expected exactly one run dir under $story_base, found $count"
+  find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;
+}
+
 test_commit_mode_success() {
   setup_mock_env "commit_success"
   run_wrapper all_ok --commit HEAD >/dev/null || fail "commit mode should exit 0"
 
-  local run_id="external_review_generic_20260305T220000Z_commit_HEAD"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local story_dir="$mock_root/artifacts/story/$run_id"
   local status_json="$story_dir/external_review_generic/dispatch_status.json"
   local summary_md="$story_dir/external_review_generic/summary.md"
@@ -229,7 +253,7 @@ test_commit_mode_success() {
   [[ -d "$story_dir" ]] || fail "missing story dir for commit mode"
   [[ -f "$status_json" ]] || fail "missing dispatch status json"
   [[ -f "$summary_md" ]] || fail "missing summary md"
-  [[ "$run_id" =~ ^[A-Za-z0-9_-]+$ ]] || fail "run id must be shell-safe: $run_id"
+  [[ "$run_id" =~ ^external_review_generic_20260305T220000Z_commit_HEAD_[A-Za-z0-9_-]+$ ]] || fail "run id must be unique and shell-safe: $run_id"
 
   assert_file_contains "$mock_root/parallel_args.log" "--commit"
   assert_file_contains "$mock_root/parallel_args.log" "HEAD"
@@ -269,20 +293,23 @@ test_pr_mode_resolution() {
   setup_mock_env "pr_success"
   run_wrapper all_ok PR190 >/dev/null || fail "PR mode should exit 0"
 
-  local run_id="external_review_generic_20260305T220000Z_pr_190"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local story_dir="$mock_root/artifacts/story/$run_id"
+  local status_json="$story_dir/external_review_generic/dispatch_status.json"
   local summary_md="$story_dir/external_review_generic/summary.md"
 
   assert_file_contains "$mock_root/gh.log" "pr view 190 --json number,baseRefName,headRefOid"
-  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190 refs/tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190"
+  assert_file_matches "$mock_root/git.log" 'fetch origin main pull/190/head:refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
+  assert_file_matches "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+ refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" 'update-ref -d refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
-  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190"
+  assert_file_matches "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
+  assert_json_field "$status_json" 'data["resolved_head_oid"] == "abc123def456"'
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
 }
 
@@ -294,7 +321,8 @@ test_reviewer_failure_preserves_summary() {
   set -e
   [[ $rc -ne 0 ]] || fail "reviewer failure should exit non-zero"
 
-  local run_id="external_review_generic_20260305T220000Z_commit_HEAD"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local story_dir="$mock_root/artifacts/story/$run_id"
   local status_json="$story_dir/external_review_generic/dispatch_status.json"
   local summary_md="$story_dir/external_review_generic/summary.md"
@@ -315,7 +343,8 @@ test_missing_success_artifact_is_inconsistent() {
   set -e
   [[ $rc -ne 0 ]] || fail "missing artifact on successful exit should fail wrapper"
 
-  local run_id="external_review_generic_20260305T220000Z_commit_HEAD"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local summary_md="$mock_root/artifacts/story/$run_id/external_review_generic/summary.md"
 
   [[ -f "$summary_md" ]] || fail "summary should still be written on inconsistency"
@@ -324,11 +353,84 @@ test_missing_success_artifact_is_inconsistent() {
   pass "zero-exit reviewer without canonical artifact is treated as inconsistent"
 }
 
+test_pr_mode_head_oid_mismatch_fails_closed() {
+  setup_mock_env "pr_head_mismatch"
+  set +e
+  mismatch_output="$(
+    MOCK_GH_HEAD_OID="abc123def456" \
+    MOCK_WORKTREE_HEAD="deadbeefcaf0" \
+    run_wrapper all_ok PR190 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] || fail "PR mode head mismatch should exit non-zero"
+
+  echo "$mismatch_output" | grep -Fq "resolved PR head OID mismatch" || fail "missing OID mismatch diagnostic"
+  assert_file_matches "$mock_root/git.log" "worktree remove --force $(escape_ere_literal "$mock_root")/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" 'update-ref -d refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
+
+  if [[ -d "$mock_root/artifacts/story" ]] && [[ -n "$(find "$mock_root/artifacts/story" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]]; then
+    fail "OID mismatch should fail before creating review artifacts"
+  fi
+  pass "PR mode fails closed when fetched HEAD does not match resolved PR OID"
+}
+
+test_python2_fallback_rejected() {
+  setup_mock_env "python2_only"
+  cat > "$mock_bin/python3" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat > "$mock_bin/python" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+echo "unexpected python args: $*" >&2
+exit 1
+EOF
+  chmod +x "$mock_bin/python3" "$mock_bin/python"
+  set +e
+  output="$(
+    PATH="$mock_bin:/usr/bin:/bin" \
+    run_wrapper all_ok --commit HEAD 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] || fail "python2-style fallback should fail"
+  echo "$output" | grep -Fq "python3.6+ is required" || fail "missing python version diagnostic"
+  pass "python fallback requires Python 3.6+"
+}
+
+test_run_id_collision_avoided() {
+  setup_mock_env "run_id_collision"
+  run_wrapper all_ok --commit HEAD >/dev/null || fail "first commit run should exit 0"
+  run_wrapper all_ok --commit HEAD >/dev/null || fail "second commit run should exit 0"
+
+  local story_base="$mock_root/artifacts/story"
+  local count
+  count="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  [[ "$count" == "2" ]] || fail "expected two unique run dirs after same-second reruns, found $count"
+
+  local first_run_id
+  local second_run_id
+  first_run_id="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | LC_ALL=C sort | sed -n '1p')"
+  second_run_id="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | LC_ALL=C sort | sed -n '2p')"
+  [[ -n "$first_run_id" && -n "$second_run_id" ]] || fail "expected two run ids"
+  [[ "$first_run_id" != "$second_run_id" ]] || fail "same-second reruns must not reuse RUN_ID"
+  [[ "$first_run_id" =~ ^external_review_generic_20260305T220000Z_commit_HEAD_[A-Za-z0-9_-]+$ ]] || fail "unexpected first run id format: $first_run_id"
+  [[ "$second_run_id" =~ ^external_review_generic_20260305T220000Z_commit_HEAD_[A-Za-z0-9_-]+$ ]] || fail "unexpected second run id format: $second_run_id"
+  pass "same-second reruns allocate distinct RUN_ID values"
+}
+
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
 test_pr_mode_resolution
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
+test_pr_mode_head_oid_mismatch_fails_closed
+test_python2_fallback_rejected
+test_run_id_collision_avoided
 
 echo "PASS: external_review_generic regression fixtures"

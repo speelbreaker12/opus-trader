@@ -262,6 +262,18 @@ impl ExecutionEngine {
         }
     }
 
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use decide(); evaluate() is a compatibility alias."
+    )]
+    pub fn evaluate<'input, 'runtime>(
+        &self,
+        input: &ExecutionInput<'input>,
+        runtime: &mut ExecutionRuntime<'runtime>,
+    ) -> ExecutionDecision {
+        self.decide(input, runtime)
+    }
+
     fn decide_open<'input, 'runtime>(
         &self,
         input: &OpenExecutionInput<'input>,

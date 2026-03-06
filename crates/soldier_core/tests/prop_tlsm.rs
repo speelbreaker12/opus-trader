@@ -7,9 +7,9 @@
 //! - Transition count == number of non-Ignored events.
 //! - State after terminal event remains terminal for all future events.
 //!
-//! NOTE: `Tlsm::apply()` is `#[cfg(test)]`-gated on the library and therefore
-//! unavailable here. All state-driving calls use `apply_with_sink` with a local
-//! `NoopSink` helper defined below.
+//! NOTE: `Tlsm::apply()` is test-only inside the crate. These integration
+//! tests intentionally use `apply_with_sink` with a local `NoopSink` helper
+//! so the sink requirement stays explicit.
 
 use proptest::prelude::*;
 use soldier_core::execution::{

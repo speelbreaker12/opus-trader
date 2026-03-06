@@ -27,6 +27,16 @@ PREMORTEM_PATH_GUARD_ROOT="$fixture" "$SCRIPT" >/dev/null
 legacy_root="artifacts/story"
 legacy_leaf="premortem.md"
 printf 'legacy: %s/%s/%s\n' "$legacy_root" "<ID>" "$legacy_leaf" > "$fixture/docs/bad.md"
+
+set +e
+out="$(PREMORTEM_PATH_GUARD_ROOT="$fixture" "$SCRIPT" 2>&1)"
+rc=$?
+set -e
+
+[[ "$rc" -ne 0 ]] || fail "expected guard to fail on untracked legacy path reference"
+echo "$out" | grep -Fq "FAIL: legacy premortem path reference(s) detected" || fail "missing failure banner for untracked file"
+echo "$out" | grep -Fq "docs/bad.md:1" || fail "missing offending file/line diagnostic for untracked file"
+
 git -C "$fixture" add docs/bad.md
 
 set +e
@@ -34,7 +44,7 @@ out="$(PREMORTEM_PATH_GUARD_ROOT="$fixture" "$SCRIPT" 2>&1)"
 rc=$?
 set -e
 
-[[ "$rc" -ne 0 ]] || fail "expected guard to fail on legacy path reference"
+[[ "$rc" -ne 0 ]] || fail "expected guard to fail on staged legacy path reference"
 echo "$out" | grep -Fq "FAIL: legacy premortem path reference(s) detected" || fail "missing failure banner"
 echo "$out" | grep -Fq "docs/bad.md:1" || fail "missing offending file/line diagnostic"
 echo "$out" | grep -Fq "Canonical path: reviews/premortems/<ID>_premortem.md" || fail "missing canonical path hint"

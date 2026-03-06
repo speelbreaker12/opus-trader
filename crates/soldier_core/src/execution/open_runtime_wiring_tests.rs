@@ -1,5 +1,4 @@
 //! Runtime wiring tests for Slice 6 gate integration at the OPEN chokepoint.
-
 trait TestValueExt<T> {
     fn must(self) -> T;
 }
