@@ -51,4 +51,16 @@ echo "$out" | grep -Fq "FAIL: bidirectional control characters detected" || fail
 echo "$out" | grep -Fq "src/with_bidi.rs:1" || fail "missing offending file/line diagnostic"
 echo "$out" | grep -Fq "falling back to perl scanner" || fail "missing rg->perl fallback warning"
 
+printf 'fn alm() { println!("x \330\234 y"); }\n' > "$fixture/src/with_alm.rs"
+
+set +e
+alm_out="$(
+  PATH="$mock_bin:$PATH" BIDI_CONTROL_GUARD_ROOT="$fixture" "$SCRIPT" 2>&1
+)"
+alm_rc=$?
+set -e
+
+[[ "$alm_rc" -ne 0 ]] || fail "expected bidi guard to fail when U+061C exists"
+echo "$alm_out" | grep -Fq "src/with_alm.rs:1" || fail "missing U+061C offending file/line diagnostic"
+
 echo "PASS: bidi control guard"

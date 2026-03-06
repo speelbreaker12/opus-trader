@@ -132,6 +132,8 @@ validate_trading_risk_hard_gate() {
   local debt_why=""
   local debt_owner=""
   local debt_target=""
+  local blocking_answer=""
+  local blocking_question=""
   local seen_gaps="|"
   local split_gap=""
   local -a trading_gap_ids=()
@@ -193,6 +195,10 @@ validate_trading_risk_hard_gate() {
       fi
       is_valid_gap_id_list "$gap_id" \
         || die "Trading Risk Hard Gate row '$question' has invalid Gap ID list '$gap_id'"
+      if [[ -z "$blocking_answer" ]]; then
+        blocking_answer="$answer"
+        blocking_question="$question"
+      fi
 
       IFS=',' read -r -a split_gap_ids <<< "$gap_id"
       for split_gap in "${split_gap_ids[@]}"; do
@@ -216,6 +222,10 @@ validate_trading_risk_hard_gate() {
     || die "Trading Risk Hard Gate missing YELLOW decision rule"
   grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." <<<"$section" \
     || die "Trading Risk Hard Gate missing NO-GO decision rule"
+
+  if [[ -n "$blocking_answer" ]]; then
+    die "Trading Risk Hard Gate row '$blocking_question' hard gate blocks implementation for answer $blocking_answer"
+  fi
 
   if [[ "$stoplight" == "GREEN" ]] && [[ "$no_count" -gt 0 || "$unknown_count" -gt 0 ]]; then
     die "STOPLIGHT is GREEN but Trading Risk Hard Gate has NO/UNKNOWN answers"

@@ -302,6 +302,7 @@ fn engine_close_wal_failure_emits_csp32_visibility_metric() {
         lines.iter().any(|line| {
             line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
                 && line.contains("intent_class=Close")
+                && line.contains("source=wal_gate_error")
         }),
         "expected CSP.3.2 non-blocking WAL visibility metric line, got {lines:?}"
     );
@@ -385,7 +386,7 @@ fn engine_hedge_without_wal_gate_is_non_blocking() {
 fn engine_hedge_wal_failure_emits_csp32_visibility_metric() {
     // AT-CSP32-HEDGE: Hedge shares the Close|Hedge branch in pipeline_wal_recorded.
     // A WAL failure must be non-blocking AND must emit a metric line with intent_class=Hedge,
-    // proving both branches of the shared path are independently observable.
+    // proving both sides of the shared branch are independently observable.
     let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -407,9 +408,31 @@ fn engine_hedge_wal_failure_emits_csp32_visibility_metric() {
         lines.iter().any(|line| {
             line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
                 && line.contains("intent_class=Hedge")
+                && line.contains("source=wal_gate_error")
         }),
         "expected CSP.3.2 non-blocking WAL visibility metric line for Hedge, got {lines:?}"
     );
+}
+
+#[test]
+fn decide_pipeline_open_fails_closed_instead_of_panicking() {
+    let engine = ExecutionEngine::new();
+    let mut runtime = ExecutionRuntime::default();
+
+    let decision = engine.decide_pipeline(
+        &base_execution_input(),
+        ChokeIntentClass::Open,
+        &mut runtime,
+    );
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::RecordedBeforeDispatchFailed,
+            step: ExecutionStep::Gate(GateStep::RecordedBeforeDispatch),
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -466,10 +489,10 @@ fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
         GateStep::FeeCacheCheck,
         GateStep::ExpiryGuard,
     ];
-    if let Some(gate) = rejected_gate
-        && !gate_trace.contains(&gate)
-    {
-        gate_trace.push(gate);
+    if let Some(gate) = rejected_gate {
+        if !gate_trace.contains(&gate) {
+            gate_trace.push(gate);
+        }
     }
     OpenRuntimeOutput {
         choke_result: ChokeResult::Rejected { reason, gate_trace },

@@ -8,7 +8,7 @@ ROOT_DEFAULT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="${BIDI_CONTROL_GUARD_ROOT:-$ROOT_DEFAULT}"
 cd "$ROOT"
 
-BIDI_REGEX='[\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]'
+BIDI_REGEX='[\x{061C}\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]'
 
 # Fast path: ripgrep with PCRE2 handles UTF-8 safely and skips binaries.
 if command -v rg >/dev/null 2>&1; then
@@ -26,7 +26,7 @@ if command -v rg >/dev/null 2>&1; then
   case "$rg_rc" in
     0)
       echo "FAIL: bidirectional control characters detected" >&2
-      echo "  Forbidden code points: U+200E U+200F U+202A..U+202E U+2066..U+2069" >&2
+      echo "  Forbidden code points: U+061C U+200E U+200F U+202A..U+202E U+2066..U+2069" >&2
       printf '%s\n' "$rg_hits" \
         | awk -F: 'NF >= 2 { print "  " $1 ":" $2 }' \
         | LC_ALL=C sort -u >&2
@@ -113,7 +113,7 @@ done < "$tmp_files"
 
 if [[ "$match_count" -gt 0 ]]; then
   echo "FAIL: bidirectional control characters detected ($match_count occurrence(s))" >&2
-  echo "  Forbidden code points: U+200E U+200F U+202A..U+202E U+2066..U+2069" >&2
+  echo "  Forbidden code points: U+061C U+200E U+200F U+202A..U+202E U+2066..U+2069" >&2
   sed 's/^/  /' "$tmp_hits" >&2
   exit 1
 fi

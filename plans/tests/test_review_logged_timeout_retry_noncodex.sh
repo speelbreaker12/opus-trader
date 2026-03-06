@@ -43,6 +43,24 @@ exit 0
 EOF
 chmod +x "$mock_bin/kimi"
 
+cat > "$mock_bin/gemini" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_file="${TEST_GEMINI_STATE_FILE:?missing TEST_GEMINI_STATE_FILE}"
+count=0
+if [[ -f "$state_file" ]]; then
+  count="$(cat "$state_file" 2>/dev/null || echo 0)"
+fi
+count=$((count + 1))
+echo "$count" > "$state_file"
+
+echo "src/mock_gemini_timeout_retry.rs:11"
+sleep 2
+exit 0
+EOF
+chmod +x "$mock_bin/gemini"
+
 story="S9-TIMEOUT-RETRY"
 out_root="$tmp_dir/out"
 
@@ -64,5 +82,25 @@ grep -Fq -- "- Timeout Retry Seconds: 10" "$review_file" || fail "timeout retry 
 grep -Fq -- "- Timeout Fallback Kind: timeout_retry" "$review_file" || fail "timeout retry fallback kind missing"
 grep -Fq -- "- Timeout Attempts: 1" "$review_file" || fail "timeout attempts should be 1"
 grep -Fq -- "src/mock_timeout_retry.rs:7" "$review_file" || fail "retry transcript citation missing"
+
+gemini_state_file="$tmp_dir/gemini_call_count.txt"
+gemini_story="S9-GEMINI-TIMEOUT-RETRY"
+
+PATH="$mock_bin:$PATH" \
+TEST_GEMINI_STATE_FILE="$gemini_state_file" \
+REVIEW_LOG_TIMEOUT_RETRY_SECONDS=10 \
+REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS=1 \
+bash "$SCRIPT" "$gemini_story" \
+  --tool gemini \
+  --commit HEAD \
+  --out-root "$out_root" \
+  --title "fixture gemini timeout retry" >/dev/null
+
+gemini_review_file="$out_root/$gemini_story/gemini/gemini.enriched.md"
+[[ -f "$gemini_review_file" ]] || fail "missing gemini review artifact: $gemini_review_file"
+grep -Fq -- "- Timeout Triggered: true" "$gemini_review_file" || fail "gemini timeout trigger metadata missing"
+grep -Fq -- "- Timeout Retry Seconds: 10" "$gemini_review_file" || fail "gemini timeout retry metadata missing"
+grep -Fq -- "- Timeout Fallback Kind: timeout_retry" "$gemini_review_file" || fail "gemini timeout retry fallback kind missing"
+grep -Fq -- "src/mock_gemini_timeout_retry.rs:11" "$gemini_review_file" || fail "gemini retry transcript citation missing"
 
 echo "test_review_logged_timeout_retry_noncodex.sh: ok"

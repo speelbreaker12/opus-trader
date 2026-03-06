@@ -149,9 +149,10 @@ status_tsv=""
 dispatch_status_json=""
 summary_md=""
 parallel_review_log=""
+temp_worktree_created=false
 
 cleanup() {
-  if [[ -n "$temp_worktree" ]]; then
+  if [[ "$temp_worktree_created" == "true" && -n "$temp_worktree" ]]; then
     git -C "$ROOT" worktree remove --force "$temp_worktree" >/dev/null 2>&1 || true
   fi
   if [[ -n "$temp_ref" ]]; then
@@ -204,6 +205,7 @@ case "$mode" in
 
     git -C "$ROOT" fetch origin "$resolved_base_ref" "pull/$pr_number/head:$temp_ref"
     git -C "$ROOT" worktree add --detach "$temp_worktree" "$temp_ref"
+    temp_worktree_created=true
     fetched_head_oid="$(git -C "$temp_worktree" rev-parse HEAD)"
     [[ "$fetched_head_oid" == "$resolved_head_oid" ]] || fail "fetched PR head OID does not match GitHub metadata"
 
@@ -256,6 +258,8 @@ parallel_cmd+=("${parallel_mode_args[@]}")
 set +e
 (
   cd "$parallel_cwd"
+  PARALLEL_REVIEW_REVIEW_SCRIPT="$ROOT/plans/review_logged.sh" \
+  STORY_ARTIFACTS_ROOT="$ROOT/artifacts/story" \
   "${parallel_cmd[@]}"
 ) 2>&1 | tee "$dispatch_log"
 parallel_rc="${PIPESTATUS[0]}"

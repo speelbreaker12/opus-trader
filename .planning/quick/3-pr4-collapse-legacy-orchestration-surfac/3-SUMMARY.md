@@ -7,7 +7,6 @@
 > Scope note: this summary covers only the three commits above. The branch also
 > contains separate runtime-behavior and workflow-hardening changes that are not
 > summarized in this quick-task note.
-
 ## What was done
 
 ### Task 1: Delete orphaned file + remove evaluate alias (eb91e42)
