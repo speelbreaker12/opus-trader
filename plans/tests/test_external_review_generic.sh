@@ -21,7 +21,6 @@ trap 'rm -rf "$tmp_dir"' EXIT
 mock_root=""
 mock_bin=""
 mock_worktree_add_mode=""
-mock_gh_require_repo_arg=""
 
 setup_mock_env() {
   local name="$1"
@@ -114,12 +113,6 @@ set -euo pipefail
 mock_root="${EXTERNAL_REVIEW_ROOT:?}"
 printf '%s\n' "$*" >> "$mock_root/gh.log"
 if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
-  if [[ "${MOCK_GH_REQUIRE_REPO_ARG:-0}" == "1" ]]; then
-    if [[ "$*" != *"--repo speelbreaker12/opus-trader"* ]]; then
-      echo "missing --repo speelbreaker12/opus-trader" >&2
-      exit 97
-    fi
-  fi
   cat <<'EOF'
 {"number":190,"baseRefName":"main","headRefOid":"abc123def456"}
 EOF
@@ -147,11 +140,6 @@ fi
 
 if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "HEAD" ]]; then
   printf '%s\n' "feedfacefeedfacefeedfacefeedfacefeedface"
-  exit 0
-fi
-
-if [[ "${args[0]:-}" == "remote" && "${args[1]:-}" == "get-url" && "${args[2]:-}" == "origin" ]]; then
-  printf '%s\n' "git@github.com:speelbreaker12/opus-trader.git"
   exit 0
 fi
 
@@ -207,7 +195,6 @@ run_wrapper() {
   EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
   MOCK_PARALLEL_SCENARIO="$scenario" \
   MOCK_GIT_WORKTREE_ADD_MODE="${mock_worktree_add_mode:-ok}" \
-  MOCK_GH_REQUIRE_REPO_ARG="${mock_gh_require_repo_arg:-0}" \
   "$SCRIPT" "$@" >"$output_file" 2>&1
   rc=$?
   if [[ "$had_errexit" -eq 1 ]]; then
@@ -339,35 +326,45 @@ test_help_text_warns_on_authority_and_scope() {
 
 test_pr_mode_resolution() {
   setup_mock_env "pr_success"
-  mock_worktree_add_mode="ok"
   run_wrapper all_ok PR190 >/dev/null || fail "PR mode should exit 0"
 
   local run_id="external_review_generic_20260305T220000Z_pr_190"
   local story_dir="$mock_root/artifacts/story/$run_id"
   local summary_md="$story_dir/external_review_generic/summary.md"
 
-  assert_file_contains "$mock_root/gh.log" "pr view 190 --repo speelbreaker12/opus-trader --json number,baseRefName,headRefOid"
-  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr_190_20260305T220000Z_"
-  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
-  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
-  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/gh.log" "pr view 190 --json number,baseRefName,headRefOid"
+  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/"
+  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/"
+  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/"
+  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/"
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
-  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/parallel_args.log" "--review-script"
+  assert_file_contains "$mock_root/parallel_args.log" "$mock_root/plans/review_logged.sh"
+  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
 }
 
-test_pr_mode_scopes_gh_to_root_repo() {
-  setup_mock_env "pr_repo_scope"
-  mock_worktree_add_mode="ok"
-  mock_gh_require_repo_arg="1"
+test_pr_mode_uses_unique_temp_refs_per_run() {
+  setup_mock_env "pr_unique_temp_names"
+  run_wrapper all_ok PR190 >/dev/null || fail "first PR run should exit 0"
+  run_wrapper all_ok PR190 >/dev/null || fail "second PR run should exit 0"
 
-  run_wrapper all_ok PR190 >/dev/null || fail "PR mode should resolve PR metadata via the repo rooted at EXTERNAL_REVIEW_ROOT"
+  local fetch_count add_count fetch_first fetch_second add_first add_second
+  fetch_count="$(grep -F "fetch origin main pull/190/head:refs/tmp/external-review/" "$mock_root/git.log" | wc -l | tr -d ' ')"
+  add_count="$(grep -F "worktree add --detach" "$mock_root/git.log" | wc -l | tr -d ' ')"
+  fetch_first="$(grep -F "fetch origin main pull/190/head:refs/tmp/external-review/" "$mock_root/git.log" | sed -n '1p')"
+  fetch_second="$(grep -F "fetch origin main pull/190/head:refs/tmp/external-review/" "$mock_root/git.log" | sed -n '2p')"
+  add_first="$(grep -F "worktree add --detach" "$mock_root/git.log" | sed -n '1p')"
+  add_second="$(grep -F "worktree add --detach" "$mock_root/git.log" | sed -n '2p')"
 
-  assert_file_contains "$mock_root/gh.log" "pr view 190 --repo speelbreaker12/opus-trader --json number,baseRefName,headRefOid"
-  pass "PR mode scopes gh metadata resolution to the root repo instead of caller cwd"
+  [[ "$fetch_count" == "2" ]] || fail "expected two fetches for repeated PR runs"
+  [[ "$add_count" == "2" ]] || fail "expected two worktree adds for repeated PR runs"
+  [[ "$fetch_first" != "$fetch_second" ]] || fail "temp refs must be unique per run"
+  [[ "$add_first" != "$add_second" ]] || fail "temp worktrees must be unique per run"
+  pass "PR mode allocates unique temp refs and worktrees per run"
 }
 
 test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout() {
@@ -557,17 +554,111 @@ MOCK_REVIEW
   pass "parallel_review artifact summary follows STORY_ARTIFACTS_ROOT"
 }
 
+test_parallel_review_proof_aggregation_uses_story_artifacts_root() {
+  local fixture_dir="$tmp_dir/parallel_review_proof_root"
+  local repo="$fixture_dir/repo"
+  local output_file="$fixture_dir/parallel_review_proof.out"
+  local aggregate_log="$fixture_dir/aggregate_root.log"
+  mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story/S9-PG"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="enriched"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool)
+      tool="${2:?missing tool}"
+      shift 2
+      ;;
+    --prompt)
+      prompt="${2:?missing prompt}"
+      shift 2
+      ;;
+    --base|--commit|--files|--timeout-seconds|--out-root|--title)
+      shift 2
+      ;;
+    --uncommitted|--proof-graph)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$tool" ]] || exit 2
+
+story_root="${STORY_ARTIFACTS_ROOT:?}"
+outdir="$story_root/$story/$tool"
+mkdir -p "$outdir"
+cat > "$outdir/$tool.$prompt.md" <<EOF
+# $tool review
+FINDINGS_SUMMARY: P0=0 P1=0 P2=0
+EOF
+MOCK_REVIEW
+
+cat > "$repo/plans/aggregate_proofs.sh" <<'MOCK_AGG'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+printf '%s\n' "${STORY_ARTIFACTS_ROOT:-}" > "${MOCK_AGGREGATE_LOG:?}"
+[[ "${STORY_ARTIFACTS_ROOT:-}" == "${MOCK_EXPECTED_AGGREGATE_ROOT:?}" ]] || {
+  echo "wrong aggregate root: ${STORY_ARTIFACTS_ROOT:-}" >&2
+  exit 33
+}
+touch "${STORY_ARTIFACTS_ROOT}/$story/aggregate.ok"
+MOCK_AGG
+
+  chmod +x "$repo/plans/review_logged.sh" "$repo/plans/aggregate_proofs.sh"
+
+  cat > "$repo/canonical/story/S9-PG/proof_graph.json" <<'EOF'
+{"schema_version":2}
+EOF
+
+  set +e
+  (
+    cd "$repo/.tmp/run"
+    STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
+    MOCK_AGGREGATE_LOG="$aggregate_log" \
+    MOCK_EXPECTED_AGGREGATE_ROOT="$repo/canonical/story" \
+      bash "$repo/plans/parallel_review.sh" S9-PG --base main --tools codex --prompt generic --review-script "$repo/plans/review_logged.sh" --proof-graph
+  ) >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review should propagate custom artifact root into aggregate_proofs.sh"
+  assert_file_contains "$aggregate_log" "$repo/canonical/story"
+  [[ -f "$repo/canonical/story/S9-PG/aggregate.ok" ]] || fail "aggregate_proofs should run against the custom story-artifacts root"
+  pass "parallel_review propagates STORY_ARTIFACTS_ROOT into proof aggregation"
+}
+
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
 test_python_candidate_must_be_python3_6_or_newer
 test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
-test_pr_mode_scopes_gh_to_root_repo
+test_pr_mode_uses_unique_temp_refs_per_run
 test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout
 test_parallel_script_override_keeps_legacy_cli_contract
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
 test_parallel_review_artifact_summary_uses_story_artifacts_root
+test_parallel_review_proof_aggregation_uses_story_artifacts_root
 
 echo "PASS: external_review_generic regression fixtures"
