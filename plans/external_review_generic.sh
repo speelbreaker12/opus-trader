@@ -16,12 +16,14 @@ Behavior:
   --base REF      Review current branch diff vs base.
   --files LIST    Review selected files only.
   no args         Review the current tracked working-tree diff only.
+                  Untracked files are NOT auto-discovered in this mode.
 
 Notes:
   - Runs codex, opus, kimi, and gemini generic reviews in parallel.
   - Writes dispatch_status.json and summary.md under:
       artifacts/story/<RUN_ID>/external_review_generic/
   - Exits 0 only when all four reviewers succeed and summary generation succeeds.
+  - Convenience wrapper only. Not a workflow gate and not pass-authoritative.
 EOF
 }
 
@@ -238,11 +240,14 @@ summary_md="$review_dir/summary.md"
 parallel_review_log="$review_dir/parallel_review.log"
 
 parallel_cmd=("$PARALLEL_SCRIPT" "$RUN_ID" --tools codex,opus,kimi,gemini --prompt generic)
+parallel_cmd+=(--review-script "$ROOT/plans/review_logged.sh")
 parallel_cmd+=("${parallel_mode_args[@]}")
 
 set +e
 (
   cd "$parallel_cwd"
+  STORY_ARTIFACTS_ROOT="$ROOT/artifacts/story" \
+  PARALLEL_REVIEW_REVIEW_SCRIPT="$ROOT/plans/review_logged.sh" \
   "${parallel_cmd[@]}"
 ) 2>&1 | tee "$dispatch_log"
 parallel_rc="${PIPESTATUS[0]}"

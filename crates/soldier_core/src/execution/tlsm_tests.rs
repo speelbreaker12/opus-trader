@@ -530,11 +530,13 @@ fn test_apply_with_sink_emits_transition_records() {
 
     assert_eq!(sink.transitions[1].from, TlsmState::Sent);
     assert_eq!(sink.transitions[1].to, TlsmState::Filled);
-    assert!(sink.transitions[1]
-        .anomaly
-        .as_deref()
-        .unwrap_or("")
-        .contains("fill-before-ack"));
+    assert!(
+        sink.transitions[1]
+            .anomaly
+            .as_deref()
+            .unwrap_or("")
+            .contains("fill-before-ack")
+    );
 }
 
 #[test]

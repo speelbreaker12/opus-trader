@@ -38,8 +38,14 @@ shift
 
 printf '%s\n' "$PWD" >> "$mock_root/parallel_pwd.log"
 printf '%s\n' "$run_id" "$@" > "$mock_root/parallel_args.log"
+printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" >> "$mock_root/parallel_review_script.log"
 
 story_dir="$mock_root/artifacts/story/$run_id"
+if [[ -n "${STORY_ARTIFACTS_ROOT:-}" ]]; then
+  story_dir="$STORY_ARTIFACTS_ROOT/$run_id"
+elif [[ "$PWD" != "$mock_root" ]]; then
+  story_dir="$PWD/artifacts/story/$run_id"
+fi
 mkdir -p "$story_dir"
 
 write_artifact() {
@@ -259,6 +265,16 @@ test_uncommitted_mode_success() {
   pass "no-arg mode reviews tracked uncommitted diff"
 }
 
+test_help_text_warns_on_authority_and_scope() {
+  local help_out="$tmp_dir/external_review_generic.help"
+  "$SCRIPT" --help >"$help_out"
+
+  assert_file_contains "$help_out" "Review the current tracked working-tree diff only."
+  assert_file_contains "$help_out" "Untracked files are NOT auto-discovered in this mode."
+  assert_file_contains "$help_out" "Convenience wrapper only. Not a workflow gate and not pass-authoritative."
+  pass "help text warns that no-arg mode is tracked-only and not a workflow gate"
+}
+
 test_pr_mode_resolution() {
   setup_mock_env "pr_success"
   run_wrapper all_ok PR190 >/dev/null || fail "PR mode should exit 0"
@@ -274,7 +290,10 @@ test_pr_mode_resolution() {
   assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190"
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
+  assert_file_contains "$mock_root/parallel_args.log" "--review-script"
+  assert_file_contains "$mock_root/parallel_args.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190"
+  assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
 }
@@ -317,11 +336,95 @@ test_missing_success_artifact_is_inconsistent() {
   pass "zero-exit reviewer without canonical artifact is treated as inconsistent"
 }
 
+test_parallel_review_artifact_summary_uses_story_artifacts_root() {
+  local fixture_dir="$tmp_dir/parallel_review_artifact_root"
+  local repo="$fixture_dir/repo"
+  local output_file="$fixture_dir/parallel_review.out"
+  mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="enriched"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool)
+      tool="${2:?missing tool}"
+      shift 2
+      ;;
+    --prompt)
+      prompt="${2:?missing prompt}"
+      shift 2
+      ;;
+    --base|--commit|--files|--timeout-seconds|--out-root|--title)
+      shift 2
+      ;;
+    --uncommitted|--proof-graph)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$tool" ]] || exit 2
+
+story_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
+if [[ "$story_root" != /* ]]; then
+  story_root="$PWD/$story_root"
+fi
+
+outdir="$story_root/$story/$tool"
+mkdir -p "$outdir"
+cat > "$outdir/$tool.$prompt.md" <<EOF
+# $tool review
+FINDINGS_SUMMARY: P0=0 P1=1 P2=0
+EOF
+MOCK_REVIEW
+
+  chmod +x "$repo/plans/review_logged.sh"
+
+  set +e
+  (
+    cd "$repo/.tmp/run"
+    STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
+      bash "$repo/plans/parallel_review.sh" S9-ART --base main --tools codex,opus --prompt generic --review-script "$repo/plans/review_logged.sh"
+  ) >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review should succeed with canonical artifact root override"
+  [[ -f "$repo/canonical/story/S9-ART/codex/codex.generic.md" ]] || fail "missing codex artifact in canonical root"
+  [[ -f "$repo/canonical/story/S9-ART/opus/opus.generic.md" ]] || fail "missing opus artifact in canonical root"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/codex/codex.generic.md"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/opus/opus.generic.md"
+  if grep -Fq "not found — review may have failed" "$output_file"; then
+    fail "artifact summary should not report canonical artifacts as missing"
+  fi
+  pass "parallel_review artifact summary follows STORY_ARTIFACTS_ROOT"
+}
+
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
+test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
+test_parallel_review_artifact_summary_uses_story_artifacts_root
 
 echo "PASS: external_review_generic regression fixtures"
