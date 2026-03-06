@@ -829,7 +829,7 @@ fn production_sources_do_not_reference_noop_sink_or_bare_apply() {
             let path = entry.path();
             if path.is_dir() {
                 collect_rs_files(&path, out);
-            } else if path.extension().map_or(false, |e| e == "rs") {
+            } else if path.extension().is_some_and(|e| e == "rs") {
                 out.push(path);
             }
         }

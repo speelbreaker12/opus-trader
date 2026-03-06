@@ -4,12 +4,13 @@
 Detect whether a proposed or implemented change can create avoidable loss, silently block valid profit, widen risk, or preserve unnecessary complexity in an autonomous crypto options trading system.
 
 This skill does **not** replace contract review or AT proof audit.
-It is a specialized economic-safety gate.
+It is an advisory economic-safety review.
+The mechanically enforced workflow gate is the Trading Risk Hard Gate in premortem schema v2, validated by `plans/premortem_gate.sh`.
 
 ## When to use
 - On every PR that touches risk, dispatch, reconciliation, position state, intent classification, market-data freshness, permissions, or fail-closed logic
-- Before `passes=true`
-- After `/slice-execute` and before merge
+- Before `passes=true` or merge when you want an explicit economic-safety review verdict for a safety-critical diff
+- After `/slice-execute` when a second trading-safety read is warranted
 - On suspicious commits that touch safety-critical paths
 
 ## Inputs (must open)
@@ -21,9 +22,10 @@ It is a specialized economic-safety gate.
 - Relevant tests for changed enforcement points
 - Prior postmortem for this story/slice if present
 
-## Hard Gate
-If the premortem is missing, RED, or mechanically invalid → STOP and return `NO-GO`.
+## Review stop conditions
+If the premortem is missing, RED, or mechanically invalid, return `NO-GO`.
 If the story changes safety-critical behavior and there is no causal proof, return `NO-GO`.
+This is a reviewer verdict, not a separate workflow hook; the fail-closed workflow enforcement lives in `plans/premortem_gate.sh`.
 
 ## Task
 

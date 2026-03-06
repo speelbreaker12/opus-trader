@@ -4,6 +4,10 @@
 **Date:** 2026-03-05
 **Commits:** eb91e42, 7f24175, cbc908d
 
+> Scope note: this summary covers only the three commits above. The branch also
+> contains separate runtime-behavior and workflow-hardening changes that are not
+> summarized in this quick-task note.
+
 ## What was done
 
 ### Task 1: Delete orphaned file + remove evaluate alias (eb91e42)
@@ -37,5 +41,5 @@
 ## Net impact
 
 - **-731 lines** (855 removed, 124 added)
-- **No production logic changes** (except removing unused `evaluate` alias)
+- **Within the three commits above, no production logic changes** (except removing unused `evaluate` alias)
 - **+1 test** (gate-fallback coverage)

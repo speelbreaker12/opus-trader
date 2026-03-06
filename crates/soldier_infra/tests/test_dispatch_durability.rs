@@ -8,8 +8,8 @@ use soldier_core::execution::RecordedBeforeDispatchGate;
 use soldier_core::venue::LifecycleIntent;
 use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
 use soldier_infra::wal::{
-    BarrierMetrics, DurableAppendResult, DurableWalGate, WalBarrierConfig,
-    build_created_intent_record, durable_append,
+    BarrierMetrics, CreatedIntentRecordArgs, DurableAppendResult, DurableWalGate, WalBarrierConfig,
+    build_created_intent_record_from_args, durable_append,
 };
 
 /// Helper: build a minimal intent record.
@@ -206,17 +206,17 @@ fn test_real_record_construction_persists_reduce_only_by_intent_class() {
 
     for (label, lifecycle_intent, expected_reduce_only) in cases {
         let intent_hash = format!("real-path-{label}");
-        let record = build_created_intent_record(
-            &intent_hash,
-            "g-real",
-            0,
-            "BTC-PERP",
-            "buy",
+        let record = build_created_intent_record_from_args(CreatedIntentRecordArgs {
+            intent_hash: &intent_hash,
+            group_id: "g-real",
+            leg_idx: 0,
+            instrument: "BTC-PERP",
+            side: "buy",
             lifecycle_intent,
-            1.0,
-            50_000.0,
-            1_000,
-        );
+            qty_q: 1.0,
+            limit_price_q: 50_000.0,
+            created_ts: 1_000,
+        });
         durable_append(&mut ledger, record, &config, &mut lm, &mut bm).expect("append should work");
 
         let persisted = ledger
