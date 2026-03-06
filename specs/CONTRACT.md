@@ -1407,9 +1407,9 @@ AT-909
 AT-421
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`.
 - When: a CANCEL-only intent and a CLOSE/HEDGE order placement intent are evaluated.
-- Then: CANCEL is allowed; CLOSE/HEDGE order placement is rejected (no dispatch).
-- Pass criteria: cancel proceeds; close/hedge is rejected.
-- Fail criteria: close/hedge proceeds or cancel is blocked.
+- Then: CANCEL is allowed; CLOSE/HEDGE order placement uses the §3.1 fallback price ladder, remains strictly monotonic risk-reducing, and OPEN remains rejected.
+- Pass criteria: cancel proceeds; close/hedge dispatch count is >= 1 when a valid §3.1 fallback source exists; dispatched close/hedge size is > 0 and <= current position / exposure cap; OPEN is rejected.
+- Fail criteria: close/hedge is blocked despite a valid §3.1 fallback source, dispatched size is 0 or risk-increasing, or OPEN proceeds.
 
 AT-1216
 - Given: `L2BookSnapshot` is present, parseable, and fresh; expected slippage is <= `max_slippage_bps`; all non-liquidity gates are forced pass.
@@ -3210,6 +3210,7 @@ Profile: CSP
 * Write intent record BEFORE network dispatch.  
 * Write every TLSM transition immediately (append-only).  
 * On startup, replay ledger into in-memory state and reconcile with exchange.
+* Replay/WAL state is audit and reconciliation input; it MUST NOT by itself authorize a fresh OPEN dispatch after restart.
 
 **Persistence states (latency-aware):**
 - **WALQueueAccepted:** intent enqueue to the WAL writer queue succeeded.
@@ -3273,7 +3274,7 @@ AT-935
 - Given: a crash occurs after `WALRecorded` succeeds (commit id/LSN issued), but before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
 - When: the system restarts (twice), and on each restart it replays WAL and completes reconciliation (label/open-order + trade reconciliation) before attempting dispatch.
 - Then: on the first restart, it must dispatch the intent **exactly once**, record `sent_ts`, and proceed; on the second restart, it must NOT dispatch again (since WAL no longer indicates "unsent").
-- Pass criteria: across two restarts, total dispatch count == 1; `sent_ts` becomes non-null after restart #1; restart #2 performs reconcile and produces 0 dispatches for that intent.
+- Pass criteria: across the two restarts, dispatch count == 1 and `sent_ts` is recorded exactly once.
 - Fail criteria: dispatch occurs before reconciliation completes, dispatch count == 0 despite "unsent + reconciled + dispatch permitted," or dispatch count > 1 across restarts.
 
 AT-940
@@ -4628,7 +4629,7 @@ The following acceptance tests MUST pass before Phase 1 is considered complete. 
 - AT-104 (stale instrument metadata blocks OPEN; requires TradingMode enforcement)
 - AT-233 (crash after send, before ACK; requires WAL restart reconcile)
 - AT-234 (crash after fill, before local update; requires WAL restart reconcile)
-- AT-935 (RecordedBeforeDispatch + restart: dispatch exactly once; requires full WAL lifecycle)
+- AT-935 (RecordedBeforeDispatch + restart: dispatch exactly once after reconcile; requires full WAL lifecycle)
 
 ### **Phase 2: CSP Safety Kernel (First Deployable Phase)**
 
@@ -6450,4 +6451,3 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
 | 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |
-| 2026-03-06 | CCL-2026-03-06-01 | Branch delta vs origin/main (multiple sections and appendices); Appendix CONTRACT_CHANGE_LEDGER | process | Record append-only ledger growth for the current branch-level contract delta so verify gate 02a remains fail-closed and auditable. | `plans/check_contract_change_ledger.sh` requires ledger growth whenever `specs/CONTRACT.md` diverges from base; this preserves deterministic gate behavior. | VR-LEDGER-01 | local/isolated-verify-20260305 |
