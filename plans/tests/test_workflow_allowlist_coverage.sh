@@ -98,6 +98,7 @@ required=(
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_change_ledger.sh
+  plans/tests/test_contract_kernel_drift_message.sh
   plans/tests/test_contract_profile_parity.sh
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
