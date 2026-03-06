@@ -283,6 +283,7 @@ summary_md="$review_dir/summary.md"
 parallel_review_log="$review_dir/parallel_review.log"
 
 parallel_cmd=("$PARALLEL_SCRIPT" "$RUN_ID" --tools codex,opus,kimi,gemini --prompt generic)
+parallel_cmd+=(--review-script "$ROOT/plans/review_logged.sh")
 parallel_cmd+=("${parallel_mode_args[@]}")
 
 set +e
