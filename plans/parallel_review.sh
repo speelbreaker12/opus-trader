@@ -274,12 +274,12 @@ if [[ "$PROOF_GRAPH" == "true" && "$NO_AGGREGATE" != "true" && "$any_failed" -eq
 
   # Only aggregate if base graph exists (either pre-existing or just created)
   if [[ -f "$base_pg" ]]; then
-  echo "Running proof graph aggregation..."
-  if [[ -x "$AGGREGATE_SCRIPT" ]]; then
-    set +e
-    STORY_ARTIFACTS_ROOT="$STORY_ARTIFACTS_DIR" "$AGGREGATE_SCRIPT" "$STORY"
-    agg_rc=$?
-    set -e
+    echo "Running proof graph aggregation..."
+    if [[ -x "$AGGREGATE_SCRIPT" ]]; then
+      set +e
+      STORY_ARTIFACTS_ROOT="$STORY_ARTIFACTS_DIR" "$AGGREGATE_SCRIPT" "$STORY"
+      agg_rc=$?
+      set -e
       if [[ $agg_rc -eq 0 ]]; then
         echo "Aggregation: OK"
       elif [[ $agg_rc -eq 20 ]]; then
