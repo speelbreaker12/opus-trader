@@ -10,10 +10,10 @@ use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
 #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
 use super::build_order_intent::PrecomputedWalGate;
+use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, build_order_intent_with_wal_gate,
 };
-use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
 use super::gate_outcome::GateOutcome;

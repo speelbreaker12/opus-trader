@@ -324,9 +324,7 @@ impl ExecutionEngine {
         // approved Close/Hedge intents. Approved means the intent reached Gate
         // 10 (WAL gate), which is the only gate where the absent-gate source
         // matters. Rejections at gates 1-6 make the WAL outcome irrelevant.
-        if outcome == WalRecordOutcome::NoGate
-            && matches!(result.decision, ChokeResult::Approved { .. })
-        {
+        if outcome == WalRecordOutcome::NoGate && result.reject_reason_code.is_none() {
             super::build_order_intent::bump_wal_nonblocking_allowed_total();
             super::emit_execution_metric_line(
                 super::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL,
