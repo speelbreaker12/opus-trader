@@ -53,7 +53,7 @@ Symbols: `·` not started · `→` in progress · `✓` done · `✗` blocked
 
 | Story | Step 1 preflight | Step 2 implement | Step 3 self_review | Step 4 cycle1 | Step 5 fix | Step 6 cycle2 | Step 7 resolution | Step 8 verify_full | Step 9 pass | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
-| S5-000 | ✓ | ✓ | ✓ | → | · | · | · | · | · | — |
+| S5-000 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | → | · | — |
 
 ---
 
@@ -128,37 +128,46 @@ Friction:
 ### Stopped At
 
 - Story: `S5-000`
-- Step: `cycle1` (next — not yet started)
-- Status: Steps 1-3 complete. 8 new tests committed. Ready for external review.
-- HEAD at stop: `fe957da`
+- Step: `verify_full` (next — not yet stamped)
+- Status: Steps 1-7 complete (receipts 00-06). Fmt fix committed. verify.sh full failing on fixture timeouts.
+- HEAD at stop: `6b818e4`
 
 ### What Happened (2-5 bullets)
 
-- Session 1: Steps 1-3 complete (preflight GREEN, implement no-gaps, self_review 6 agents)
-- Session 2: Resumed, confirmed receipt chain, read cycle1 prompt — context ran low before executing
-- 8 new tests committed: AT-317, AT-421 hedge, ExpectedSlippageTooHigh x2, NaN/Inf x4, METRICS_TEST_LOCK
-- YELLOW path (code changes = 8 new tests) — cycle2 needs FIX_DIFF + AT_REGRESSION basis
+- Session 3: Ran 4-model C1 reviews (codex, kimi, opus, gemini). Gemini crashed (API error), other 3 succeeded.
+- Codex found 4 findings (3xP1, 1xP2) — AT-222 reason mismatch (DEFERRED), AT-421 pipeline skip (by design), anchor test paper proof, premortem overstates. All triaged as non-blocking.
+- Kimi: 2xP0 (1 already deferred, 1 FP), 1xP1 (FP — test exists), 1xP2. Opus: CONDITIONAL_PASS, 0 blocking.
+- GREEN path throughout — 0 blocking findings. Steps 4-7 (cycle1, fix, cycle2, resolution) stamped.
+- cargo fmt fix committed (`6b818e4`). verify.sh full fails on fixture test timeouts (240s limit), not code issues.
+- `plans/review_logged.sh` line 719: fixed `local` keyword bug for gemini (uncommitted).
 
 ### Must Read First (ordered)
 
-1. `artifacts/story/S5-000/self_review/FIX_PLAN.md` — 5 TEST_FIX items + 3 DEFERRED
-2. `plans/step_prompts/recon/cycle1.md` — cycle1 step instructions
-3. `reviews/reconciliations/PROTOCOL.md` — gate rules
+1. `artifacts/story/S5-000/review_resolution.md` — full triage table
+2. `artifacts/story/S5-000/evidence_ledger.json` — AT verdicts with file:line citations
+3. `artifacts/story/S5-000/codex/codex.enriched.md` — most substantive review (4 findings)
 
 ### Next Steps (exact commands/actions)
 
-1. Run cycle1 external reviews (both enriched and generic for max coverage):
+1. Commit or stash `plans/review_logged.sh` gemini fix (dirty tree blocks verify)
+2. Run verify.sh full with higher timeouts:
    ```bash
-   plans/review_logged.sh S5-000 --tool opus --prompt enriched --files "crates/soldier_core/src/execution/gate.rs crates/soldier_core/src/execution/gate_tests.rs"
-   plans/review_logged.sh S5-000 --tool opus --prompt generic --files "crates/soldier_core/src/execution/gate.rs crates/soldier_core/src/execution/gate_tests.rs"
+   PREFLIGHT_TIMEOUT=1200 FIXTURE_TIMEOUT=360 ./plans/verify.sh full
    ```
-2. Write evidence ledger: `artifacts/story/S5-000/evidence_ledger.json`
-3. Stamp receipt: `RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 cycle1`
-4. Continue: fix → cycle2 → resolution → verify_full → pass
+3. If verify passes, stamp:
+   ```bash
+   RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 verify_full
+   ```
+4. Stamp pass (GREEN recon = no pass re-flip needed):
+   ```bash
+   RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 pass
+   ```
+5. Update HANDOFF as complete.
 
 ### Open Decisions / Blockers
 
-- YELLOW path (tests added) — cycle2 must use FIX_DIFF + AT_REGRESSION basis, not abbreviated GREEN path
+- verify.sh full fixture timeouts (8 tests hit 240s limit) — need `FIXTURE_TIMEOUT=360` or similar env var
+- `plans/review_logged.sh` gemini fix uncommitted (line 719: `local` → bare assignment)
 - All commands need `RECON_SKIP_OWNERSHIP=1` env var due to AT-222/344/909/421 shared with S6-012
 
 ### Resume Command
