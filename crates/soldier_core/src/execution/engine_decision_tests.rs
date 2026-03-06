@@ -412,10 +412,10 @@ fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
         GateStep::FeeCacheCheck,
         GateStep::ExpiryGuard,
     ];
-    if let Some(gate) = rejected_gate {
-        if !gate_trace.contains(&gate) {
-            gate_trace.push(gate);
-        }
+    if let Some(gate) = rejected_gate
+        && !gate_trace.contains(&gate)
+    {
+        gate_trace.push(gate);
     }
     OpenRuntimeOutput {
         choke_result: ChokeResult::Rejected { reason, gate_trace },

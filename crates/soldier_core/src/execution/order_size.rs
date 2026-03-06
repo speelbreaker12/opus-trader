@@ -39,28 +39,6 @@ pub struct OrderSize {
     pub(crate) notional_usd: f64,
 }
 
-impl OrderSize {
-    /// Returns the integer contracts value, if set.
-    pub fn contracts(&self) -> Option<i64> {
-        self.contracts
-    }
-
-    /// Returns the coin quantity (BTC/ETH), if set.
-    pub fn qty_coin(&self) -> Option<f64> {
-        self.qty_coin
-    }
-
-    /// Returns the USD quantity, if set.
-    pub fn qty_usd(&self) -> Option<f64> {
-        self.qty_usd
-    }
-
-    /// Returns the notional USD value (always set).
-    pub fn notional_usd(&self) -> f64 {
-        self.notional_usd
-    }
-}
-
 /// Input parameters for building an `OrderSize`.
 ///
 /// Decouples construction from any specific venue or strategy struct.
