@@ -93,4 +93,29 @@ grep -Fq -- "- Timeout Seconds: 600" "$gemini_review_file" || fail "gemini defau
 grep -Fq -- "- Command Exit Code: 0" "$gemini_review_file" || fail "gemini default timeout run should succeed"
 grep -Fq -- "src/mock_gemini_default_timeout.rs:9" "$gemini_review_file" || fail "gemini transcript citation missing"
 
+# Gemini should honor the files-specific timeout override in --files mode.
+fixture_file="$tmp_dir/gemini_files_fixture.rs"
+cat > "$fixture_file" <<'EOF'
+fn gemini_files_fixture() {}
+EOF
+
+story_gemini_files="S9-GEMINI-FILES-TIMEOUT"
+out_root_gemini_files="$tmp_dir/out-gemini-files"
+
+PATH="$mock_bin:$PATH" \
+GEMINI_MODEL="gemini-3-pro-preview" \
+REVIEW_LOGGED_GEMINI_FILES_TIMEOUT_SECONDS=321 \
+bash "$SCRIPT" "$story_gemini_files" \
+  --tool gemini \
+  --files "$fixture_file" \
+  --out-root "$out_root_gemini_files" \
+  --title "fixture gemini files timeout" >/dev/null
+
+gemini_files_review_file="$out_root_gemini_files/$story_gemini_files/gemini/gemini.enriched.md"
+[[ -f "$gemini_files_review_file" ]] || fail "missing gemini files review artifact: $gemini_files_review_file"
+
+grep -Fq -- "- Timeout Seconds: 321" "$gemini_files_review_file" || fail "gemini files timeout metadata missing"
+grep -Fq -- "- Command Exit Code: 0" "$gemini_files_review_file" || fail "gemini files timeout run should succeed"
+grep -Fq -- "src/mock_gemini_default_timeout.rs:9" "$gemini_files_review_file" || fail "gemini files transcript citation missing"
+
 echo "test_review_logged_timeout_retry_noncodex.sh: ok"
