@@ -39,7 +39,11 @@ shift
 printf '%s\n' "$PWD" >> "$mock_root/parallel_pwd.log"
 printf '%s\n' "$run_id" "$@" > "$mock_root/parallel_args.log"
 
-story_dir="$mock_root/artifacts/story/$run_id"
+if [[ "$scenario" == "pr_artifacts_in_worktree" ]]; then
+  story_dir="$PWD/artifacts/story/$run_id"
+else
+  story_dir="$mock_root/artifacts/story/$run_id"
+fi
 mkdir -p "$story_dir"
 
 write_artifact() {
@@ -91,6 +95,16 @@ case "$scenario" in
     echo "[done] kimi  exit=0  (1s)"
     echo "[done] gemini  exit=0  (1s)"
     ;;
+  pr_artifacts_in_worktree)
+    write_artifact codex 0 1 0 crates/soldier_core/src/execution/dispatch_map.rs:10
+    write_artifact opus 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
+    write_artifact kimi 0 2 0 crates/soldier_core/src/execution/dispatch_map.rs:30
+    write_artifact gemini 1 0 0 crates/soldier_core/src/execution/dispatch_map.rs:40
+    echo "[done] codex  exit=0  (1s)"
+    echo "[done] opus  exit=0  (1s)"
+    echo "[done] kimi  exit=0  (1s)"
+    echo "[done] gemini  exit=0  (1s)"
+    ;;
   *)
     echo "unknown scenario: $scenario" >&2
     exit 99
@@ -132,7 +146,12 @@ if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "--show-toplevel" ]]; t
 fi
 
 if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "HEAD" ]]; then
-  printf '%s\n' "feedfacefeedfacefeedfacefeedfacefeedface"
+  printf '%s\n' "${MOCK_GIT_HEAD_OID:-abc123def456}"
+  exit 0
+fi
+
+if [[ "${args[0]:-}" == "rev-parse" && $# -ge 1 ]]; then
+  printf '%s\n' "${MOCK_GIT_HEAD_OID:-abc123def456}"
   exit 0
 fi
 
@@ -211,6 +230,14 @@ assert_file_contains() {
   grep -Fq -- "$pattern" "$file" || fail "expected '$pattern' in $file"
 }
 
+assert_file_lacks() {
+  local file="$1"
+  local pattern="$2"
+  if grep -Fq -- "$pattern" "$file"; then
+    fail "did not expect '$pattern' in $file"
+  fi
+}
+
 test_commit_mode_success() {
   setup_mock_env "commit_success"
   run_wrapper all_ok --commit HEAD >/dev/null || fail "commit mode should exit 0"
@@ -268,15 +295,92 @@ test_pr_mode_resolution() {
   local summary_md="$story_dir/external_review_generic/summary.md"
 
   assert_file_contains "$mock_root/gh.log" "pr view 190 --json number,baseRefName,headRefOid"
-  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190 refs/tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190"
+  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr-190-"
+  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190-"
+  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190-"
+  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190-"
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
-  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190"
+  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190-"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
+}
+
+test_pr_mode_copies_artifacts_from_temp_worktree() {
+  setup_mock_env "pr_worktree_artifacts"
+  run_wrapper pr_artifacts_in_worktree PR190 >/dev/null || fail "PR-mode worktree artifacts should be harvested into canonical storage"
+
+  local run_id="external_review_generic_20260305T220000Z_pr_190"
+  local story_dir="$mock_root/artifacts/story/$run_id"
+  local summary_md="$story_dir/external_review_generic/summary.md"
+
+  [[ -f "$story_dir/codex/codex.generic.md" ]] || fail "expected codex artifact to be copied into canonical story dir"
+  [[ -f "$story_dir/gemini/gemini.generic.md" ]] || fail "expected gemini artifact to be copied into canonical story dir"
+  assert_file_contains "$summary_md" "codex | OK | exit=0"
+  assert_file_lacks "$summary_md" "missing canonical artifact"
+  pass "PR mode harvests reviewer artifacts from the detached review worktree before summarizing"
+}
+
+test_pr_mode_uses_unique_temp_refs_and_worktrees() {
+  setup_mock_env "pr_unique_temp"
+  run_wrapper all_ok PR190 >/dev/null || fail "first PR-mode run should exit 0"
+  run_wrapper all_ok PR190 >/dev/null || fail "second PR-mode run should exit 0"
+
+  local fetch_lines worktree_lines
+  fetch_lines="$(grep 'fetch origin main pull/190/head:' "$mock_root/git.log" || true)"
+  worktree_lines="$(grep 'worktree add --detach ' "$mock_root/git.log" || true)"
+
+  local ref1 ref2 wt1 wt2
+  ref1="$(printf '%s\n' "$fetch_lines" | sed -n '1s/.*pull\/190\/head:\(refs\/tmp\/external-review\/[^[:space:]]*\).*/\1/p')"
+  ref2="$(printf '%s\n' "$fetch_lines" | sed -n '2s/.*pull\/190\/head:\(refs\/tmp\/external-review\/[^[:space:]]*\).*/\1/p')"
+  wt1="$(printf '%s\n' "$worktree_lines" | sed -n '1s/.*worktree add --detach \([^[:space:]]*\.tmp\/external-review\/[^[:space:]]*\) .*/\1/p')"
+  wt2="$(printf '%s\n' "$worktree_lines" | sed -n '2s/.*worktree add --detach \([^[:space:]]*\.tmp\/external-review\/[^[:space:]]*\) .*/\1/p')"
+
+  [[ -n "$ref1" && -n "$ref2" ]] || fail "expected two fetched temp refs"
+  [[ -n "$wt1" && -n "$wt2" ]] || fail "expected two temp worktree paths"
+  [[ "$ref1" != "$ref2" ]] || fail "temp PR refs must be unique per run"
+  [[ "$wt1" != "$wt2" ]] || fail "temp worktree paths must be unique per run"
+  pass "PR mode isolates concurrent runs with unique temp refs and worktrees"
+}
+
+test_pr_mode_rejects_head_oid_mismatch() {
+  setup_mock_env "pr_head_oid_mismatch"
+  local output_file="$tmp_dir/pr_head_oid_mismatch.out"
+  set +e
+  PATH="$mock_bin:$PATH" \
+  EXTERNAL_REVIEW_ROOT="$mock_root" \
+  EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
+  MOCK_PARALLEL_SCENARIO="all_ok" \
+  MOCK_GIT_HEAD_OID="deadbeef" \
+  "$SCRIPT" PR190 >"$output_file" 2>&1
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] || fail "PR mode should reject fetched head OID mismatches"
+  grep -Fq "fetched PR head OID does not match GitHub metadata" "$output_file" || fail "missing head OID mismatch diagnostic"
+  pass "PR mode verifies fetched PR head against GitHub metadata"
+}
+
+test_python3_requirement_is_explicit() {
+  setup_mock_env "python_version_gate"
+  cat > "$mock_bin/python" <<'MOCK_PY'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 1
+MOCK_PY
+  chmod +x "$mock_bin/python"
+
+  local output_file="$tmp_dir/python_version_gate.out"
+  set +e
+  PATH="$mock_bin" \
+  EXTERNAL_REVIEW_ROOT="$mock_root" \
+  EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
+  MOCK_PARALLEL_SCENARIO="all_ok" \
+  /bin/bash "$SCRIPT" --commit HEAD >"$output_file" 2>&1
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] || fail "wrapper should fail when only a non-Python-3 'python' is available"
+  grep -Fq "python3 (or python 3) is required" "$output_file" || fail "missing explicit Python 3 requirement diagnostic"
+  pass "wrapper rejects Python 2 style fallbacks with a clear diagnostic"
 }
 
 test_reviewer_failure_preserves_summary() {
@@ -321,6 +425,10 @@ test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
 test_pr_mode_resolution
+test_pr_mode_copies_artifacts_from_temp_worktree
+test_pr_mode_uses_unique_temp_refs_and_worktrees
+test_pr_mode_rejects_head_oid_mismatch
+test_python3_requirement_is_explicit
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
 

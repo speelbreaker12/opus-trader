@@ -37,7 +37,8 @@ echo
 # ── Check 1: engine_parity_tests.rs must NOT exist ──────────────────────────
 
 echo "--- 1. engine_parity_tests.rs is deleted ---"
-if find "$ROOT/crates" -name "engine_parity_tests.rs" | grep -q .; then
+found_parity_test="$(find "$ROOT/crates" -name "engine_parity_tests.rs" -print -quit)"
+if [[ -n "$found_parity_test" ]]; then
     fail "engine_parity_tests.rs still exists — legacy evaluate() test surface not fully removed"
 else
     pass "engine_parity_tests.rs absent"

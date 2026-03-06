@@ -308,6 +308,33 @@ fn engine_close_wal_failure_emits_csp32_visibility_metric() {
 }
 
 #[test]
+fn engine_close_without_wal_gate_is_non_blocking() {
+    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let _ = crate::execution::take_execution_metric_lines();
+
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Close(CloseExecutionInput { base });
+    let mut runtime = ExecutionRuntime::default();
+
+    let delegated = engine.decide(&engine_input, &mut runtime);
+    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+
+    let lines = crate::execution::take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
+                && line.contains("intent_class=Close")
+                && line.contains("source=no_gate_configured")
+        }),
+        "expected CSP.3.2 no-gate metric line for Close, got {lines:?}"
+    );
+}
+
+#[test]
 fn engine_hedge_rejected_quantize() {
     let mut base = base_execution_input_with_risk_state(RiskState::Degraded);
     base.quantize.raw_qty = 0.01;
@@ -325,6 +352,33 @@ fn engine_hedge_rejected_quantize() {
             ..
         })
     ));
+}
+
+#[test]
+fn engine_hedge_without_wal_gate_is_non_blocking() {
+    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let _ = crate::execution::take_execution_metric_lines();
+
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { base });
+    let mut runtime = ExecutionRuntime::default();
+
+    let delegated = engine.decide(&engine_input, &mut runtime);
+    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+
+    let lines = crate::execution::take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
+                && line.contains("intent_class=Hedge")
+                && line.contains("source=no_gate_configured")
+        }),
+        "expected CSP.3.2 no-gate metric line for Hedge, got {lines:?}"
+    );
 }
 
 #[test]

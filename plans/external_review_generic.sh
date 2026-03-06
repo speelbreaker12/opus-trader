@@ -31,14 +31,16 @@ fail() {
 }
 
 find_python() {
-  if command -v python3 >/dev/null 2>&1; then
-    echo "python3"
-    return 0
-  fi
-  if command -v python >/dev/null 2>&1; then
-    echo "python"
-    return 0
-  fi
+  local candidate=""
+  for candidate in python3 python; do
+    if ! command -v "$candidate" >/dev/null 2>&1; then
+      continue
+    fi
+    if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[0] >= 3 else 1)' >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -50,6 +52,13 @@ sanitize_component() {
     raw="value"
   fi
   printf '%s' "$raw"
+}
+
+generate_unique_suffix() {
+  local temp_dir=""
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/external-review.XXXXXX")" || return 1
+  basename "$temp_dir"
+  rmdir "$temp_dir" >/dev/null 2>&1 || true
 }
 
 extract_json_field() {
@@ -78,7 +87,7 @@ fi
 PARALLEL_SCRIPT="${EXTERNAL_REVIEW_PARALLEL_SCRIPT:-$ROOT/plans/parallel_review.sh}"
 [[ -x "$PARALLEL_SCRIPT" ]] || fail "parallel review script not found: $PARALLEL_SCRIPT"
 
-PYTHON_BIN="$(find_python)" || fail "python3 or python is required"
+PYTHON_BIN="$(find_python)" || fail "python3 (or python 3) is required"
 
 requested_target=""
 mode=""
@@ -131,6 +140,7 @@ parallel_mode_args=()
 parallel_cwd="$ROOT"
 resolved_base_ref=""
 resolved_head_oid=""
+fetched_head_oid=""
 pr_metadata_json=""
 temp_ref=""
 temp_worktree=""
@@ -187,12 +197,15 @@ case "$mode" in
     [[ -n "$resolved_base_ref" ]] || fail "failed to resolve baseRefName for PR #$pr_number"
     [[ -n "$resolved_head_oid" ]] || fail "failed to resolve headRefOid for PR #$pr_number"
 
-    temp_ref="refs/tmp/external-review/pr-$pr_number"
-    temp_worktree="$ROOT/.tmp/external-review/pr-$pr_number"
+    unique_suffix="$(generate_unique_suffix)" || fail "failed to generate unique temp suffix"
+    temp_ref="refs/tmp/external-review/pr-$pr_number-$unique_suffix"
+    temp_worktree="$ROOT/.tmp/external-review/pr-$pr_number-$unique_suffix"
     mkdir -p "$(dirname "$temp_worktree")"
 
     git -C "$ROOT" fetch origin "$resolved_base_ref" "pull/$pr_number/head:$temp_ref"
     git -C "$ROOT" worktree add --detach "$temp_worktree" "$temp_ref"
+    fetched_head_oid="$(git -C "$temp_worktree" rev-parse HEAD)"
+    [[ "$fetched_head_oid" == "$resolved_head_oid" ]] || fail "fetched PR head OID does not match GitHub metadata"
 
     parallel_cwd="$temp_worktree"
     parallel_mode_args=(--base "origin/$resolved_base_ref")
@@ -249,6 +262,19 @@ parallel_rc="${PIPESTATUS[0]}"
 set -e
 
 cp "$dispatch_log" "$parallel_review_log"
+
+if [[ "$parallel_cwd" != "$ROOT" ]]; then
+  source_story_dir="$parallel_cwd/artifacts/story/$RUN_ID"
+  dest_story_dir="$ROOT/artifacts/story/$RUN_ID"
+  if [[ -d "$source_story_dir" ]]; then
+    for artifact_dir in codex opus kimi gemini review_logs; do
+      if [[ -e "$source_story_dir/$artifact_dir" ]]; then
+        rm -rf "$dest_story_dir/$artifact_dir"
+        cp -R "$source_story_dir/$artifact_dir" "$dest_story_dir/"
+      fi
+    done
+  fi
+fi
 
 capture_error=0
 for tool in codex opus kimi gemini; do
@@ -413,7 +439,7 @@ for entry in entries:
         "exit_code": exit_code,
         "counts_text": counts_text,
         "note": note,
-        "artifact": str(artifact.relative_to(root)) if artifact.exists() else str(artifact.relative_to(root)),
+        "artifact": str(artifact.relative_to(root)),
     })
 
 dispatch_payload = {

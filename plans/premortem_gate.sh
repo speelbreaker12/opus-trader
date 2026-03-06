@@ -119,7 +119,7 @@ validate_trading_risk_hard_gate() {
   local stoplight="$2"
   local section=""
   local question=""
-  local row=""
+  local row_fields=""
   local answer=""
   local why=""
   local proof=""
@@ -154,27 +154,31 @@ validate_trading_risk_hard_gate() {
     "Failure-path correctness" \
     "Fail-closed enforcement" \
     "Proof, not belief"; do
-    row="$(
+    row_fields="$(
       printf '%s\n' "$section" | awk -F'|' -v q="$question" '
         function trim_field(s) {
           gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
           return s
         }
         /^\|/ {
-          if (trim_field($2) == q) {
-            print
+          start = 2
+          while (start <= NF && trim_field($start) == "") {
+            start++
+          }
+          if (trim_field($start) == q) {
+            print trim_field($(start + 1)) "\t" trim_field($(start + 2)) "\t" trim_field($(start + 3)) "\t" trim_field($(start + 4))
             exit
           }
         }
       '
     )"
-    [[ -n "$row" ]] || die "Trading Risk Hard Gate missing row: $question"
+    [[ -n "$row_fields" ]] || die "Trading Risk Hard Gate missing row: $question"
 
-    IFS='|' read -r _ _col_question _col_answer _col_why _col_proof _col_gap _ <<< "$row"
-    answer="$(trim "${_col_answer:-}")"
-    why="$(trim "${_col_why:-}")"
-    proof="$(trim "${_col_proof:-}")"
-    gap_id="$(trim "${_col_gap:-}")"
+    IFS=$'\t' read -r answer why proof gap_id <<< "$row_fields"
+    answer="$(trim "${answer:-}")"
+    why="$(trim "${why:-}")"
+    proof="$(trim "${proof:-}")"
+    gap_id="$(trim "${gap_id:-}")"
 
     [[ "$answer" =~ ^(YES|NO|UNKNOWN)$ ]] \
       || die "Trading Risk Hard Gate row '$question' has invalid answer '$answer' (expected YES/NO/UNKNOWN)"
@@ -206,11 +210,11 @@ validate_trading_risk_hard_gate() {
     fi
   done
 
-  echo "$section" | grep -Fq "GO only if all 7 answers are YES with concrete proof." \
+  grep -Fq "GO only if all 7 answers are YES with concrete proof." <<<"$section" \
     || die "Trading Risk Hard Gate missing GO decision rule"
-  echo "$section" | grep -Fq "YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment." \
+  grep -Fq "YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment." <<<"$section" \
     || die "Trading Risk Hard Gate missing YELLOW decision rule"
-  echo "$section" | grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." \
+  grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." <<<"$section" \
     || die "Trading Risk Hard Gate missing NO-GO decision rule"
 
   if [[ "$stoplight" == "GREEN" ]] && [[ "$no_count" -gt 0 || "$unknown_count" -gt 0 ]]; then
@@ -334,12 +338,12 @@ fi
 
 # --- §0: Story line filled ---
 s0=$(section_content "$pm" "## 0) What we're building")
-echo "$s0" | grep -Eq '^- Story: .+' || die "§0 missing filled 'Story:' line"
-echo "$s0" | grep -Eq '^- Contract clause' || die "§0 missing 'Contract clause' line"
-echo "$s0" | grep -Eq '^- Acceptance tests: AT-' || die "§0 missing 'Acceptance tests: AT-' line"
+  grep -Eq '^- Story: .+' <<<"$s0" || die "§0 missing filled 'Story:' line"
+  grep -Eq '^- Contract clause' <<<"$s0" || die "§0 missing 'Contract clause' line"
+  grep -Eq '^- Acceptance tests: AT-' <<<"$s0" || die "§0 missing 'Acceptance tests: AT-' line"
 if [[ "$premortem_schema_v2" == "true" || "$has_trading_risk_hard_gate" == "true" ]]; then
-  echo "$s0" | grep -Eq '^- Touch scope: .+' || die "§0 missing filled 'Touch scope:' line"
-  echo "$s0" | grep -Eq '^- \*\*Risk rating\*\*: (LOW|MED|HIGH)([[:space:]]|$)' || die "§0 missing valid 'Risk rating' (LOW/MED/HIGH)"
+  grep -Eq '^- Touch scope: .+' <<<"$s0" || die "§0 missing filled 'Touch scope:' line"
+  grep -Eq '^- \*\*Risk rating\*\*: (LOW|MED|HIGH)([[:space:]]|$)' <<<"$s0" || die "§0 missing valid 'Risk rating' (LOW/MED/HIGH)"
 fi
 
 # --- §1: Clause audit table has rows ---
@@ -382,8 +386,8 @@ done <<< "$ats_clause"
 
 # --- §7: Economic risk has loss content ---
 s7=$(section_content "$pm" "## 7) Economic risk")
-echo "$s7" | grep -Eq 'worst financial outcome' || die "§7 missing 'worst financial outcome' content"
-echo "$s7" | grep -Eq '(Fail-closed cap|fail-closed cap)' || die "§7 missing 'Fail-closed cap' content"
+grep -Eq 'worst financial outcome' <<<"$s7" || die "§7 missing 'worst financial outcome' content"
+grep -Eq '(Fail-closed cap|fail-closed cap)' <<<"$s7" || die "§7 missing 'Fail-closed cap' content"
 
 # --- §9: Carry-forward lines ---
 grep -q '^Prior Postmortem: ' "$pm" || die "§9 missing required line: 'Prior Postmortem: <path or NONE>'"
@@ -391,7 +395,7 @@ grep -q '^Reused Guardrail: ' "$pm" || die "§9 missing required line: 'Reused G
 
 # --- §10: Exit criteria checklist items ---
 s10=$(section_content "$pm" "## 10) STOPLIGHT")
-checklist_count=$(echo "$s10" | grep -cE '^\- \[' 2>/dev/null || echo 0)
+checklist_count=$(grep -cE '^\- \[' <<<"$s10" 2>/dev/null || echo 0)
 if [[ "$checklist_count" -lt 5 ]]; then
   die "§10 exit criteria has $checklist_count checklist items (need at least 5)"
 fi

@@ -30,9 +30,12 @@ fn default_reduce_only_legacy() -> bool {
     // NOTE: This field is for WAL persistence/audit only. Gate classification derives from IntentClass.
     // UPGRADE NOTE: If WAL files predate the reduce_only field, records will be reclassified as OPEN
     // on replay. Monitor logs for this warning after upgrade to verify expected record count.
-    tracing::warn!(
-        "WAL replay: legacy record missing reduce_only field, defaulting to false (OPEN classification)"
-    );
+    static WARNED: AtomicBool = AtomicBool::new(false);
+    if !WARNED.swap(true, Ordering::Relaxed) {
+        tracing::warn!(
+            "WAL replay: legacy record missing reduce_only field, defaulting to false (OPEN classification)"
+        );
+    }
     false
 }
 
