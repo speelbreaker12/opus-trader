@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Upgrade 1B architectural proof: "Legacy Orchestration Surface Collapsed"
+# Upgrade 1B cleanup-boundary proof.
 #
-# Verifies the THREE architectural guarantees claimed by Upgrade 1B:
+# Verifies the THREE cleanup guarantees shipped by the PR4 cleanup slice:
 #
 #   1. engine_parity_tests.rs is gone — the legacy evaluate()-alias test file
 #      does not exist anywhere in the codebase.
@@ -14,9 +14,10 @@
 #      build_open_order_intent_runtime).  If any of these appear in api.rs the
 #      legacy surface has leaked back into the public API.
 #
-# This script is a BOUNDARY check (the mechanical check already covers
-# callsite presence).  Together they prove the surface is collapsed: external
-# code cannot reach legacy internals, and the internal routing alias is gone.
+# This script is intentionally a BOUNDARY cleanup check.
+# It proves the public surface stayed narrowed and the orphaned alias/test
+# surface stayed deleted. It does NOT prove that engine.rs no longer routes
+# through build_open_order_intent_runtime() or evaluate_intent_pipeline().
 #
 # Usage: bash plans/tests/test_upgrade_1b_proof.sh
 # Exit code: 0 = all checks passed, 1 = one or more checks failed
@@ -31,14 +32,13 @@ PASS=0
 pass() { echo "  OK : $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL : $1"; FAILURES=$((FAILURES + 1)); }
 
-echo "=== Upgrade 1B Architectural Proof ==="
+echo "=== Upgrade 1B Cleanup Boundary Proof ==="
 echo
 
 # ── Check 1: engine_parity_tests.rs must NOT exist ──────────────────────────
 
 echo "--- 1. engine_parity_tests.rs is deleted ---"
-found_parity_test="$(find "$ROOT/crates" -name "engine_parity_tests.rs" -print -quit)"
-if [[ -n "$found_parity_test" ]]; then
+if find "$ROOT/crates" -name "engine_parity_tests.rs" -print -quit | grep -q .; then
     fail "engine_parity_tests.rs still exists — legacy evaluate() test surface not fully removed"
 else
     pass "engine_parity_tests.rs absent"
@@ -88,7 +88,7 @@ echo
 
 echo "=== Result: $PASS passed, $FAILURES failed ==="
 if [[ "$FAILURES" -gt 0 ]]; then
-    echo "UPGRADE 1B ARCHITECTURAL PROOF FAILED"
+    echo "UPGRADE 1B CLEANUP BOUNDARY PROOF FAILED"
     exit 1
 fi
-echo "UPGRADE 1B ARCHITECTURAL PROOF PASSED"
+echo "UPGRADE 1B CLEANUP BOUNDARY PROOF PASSED"

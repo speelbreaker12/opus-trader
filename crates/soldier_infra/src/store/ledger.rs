@@ -987,21 +987,17 @@ fn apply_event(
             let record = latest_by_hash
                 .get_mut(intent_hash)
                 .ok_or_else(|| format!("transition missing intent_hash: {intent_hash}"))?;
-            // Design: WAL replay is intentionally lenient — invalid transitions log a warning
-            // but are applied to preserve replay fidelity for historical WAL files. A strict
-            // rejection here would prevent replaying WAL files written by older versions with
-            // different TLSM rules. All in-flight state is rebuilt from WAL, so a corrupt record
-            // can only cause a phantom in-flight entry, not data loss.
-            // Risk: If a Filled record is followed by a Sent record in a corrupted WAL, the intent
-            // appears in in_flight_hashes as Sent. Monitor logs for "WARN invalid_wal_transition".
+            // Replay remains fail-closed: illegal transitions are tolerated so the WAL still
+            // loads, but they must not mutate the reconstructed state. Otherwise a corrupted or
+            // stale WAL can resurrect terminal intents into phantom in-flight work at restart.
             if !record.tls_state.is_valid_successor(*new_state) {
                 tracing::warn!(
                     intent_hash = %intent_hash,
                     from = ?record.tls_state,
                     to = ?new_state,
-                    "illegal state transition — applying anyway \
-                     (WAL is source of truth)"
+                    "illegal state transition during WAL replay — ignoring event"
                 );
+                return Ok(());
             }
             record.tls_state = *new_state;
             Ok(())

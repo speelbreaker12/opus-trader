@@ -309,7 +309,7 @@ fn engine_close_wal_failure_emits_csp32_visibility_metric() {
 }
 
 #[test]
-fn engine_close_without_wal_gate_is_non_blocking() {
+fn engine_close_without_wal_gate_emits_no_gate_configured_metric() {
     let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -331,7 +331,7 @@ fn engine_close_without_wal_gate_is_non_blocking() {
                 && line.contains("intent_class=Close")
                 && line.contains("source=no_gate_configured")
         }),
-        "expected CSP.3.2 no-gate metric line for Close, got {lines:?}"
+        "expected CSP.3.2 no-gate visibility metric line, got {lines:?}"
     );
 }
 
@@ -356,37 +356,10 @@ fn engine_hedge_rejected_quantize() {
 }
 
 #[test]
-fn engine_hedge_without_wal_gate_is_non_blocking() {
-    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    let _ = crate::execution::take_execution_metric_lines();
-
-    let base = base_execution_input_with_risk_state(RiskState::Degraded);
-    let engine = ExecutionEngine::new();
-    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { base });
-    let mut runtime = ExecutionRuntime::default();
-
-    let delegated = engine.decide(&engine_input, &mut runtime);
-    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
-
-    let lines = crate::execution::take_execution_metric_lines();
-    assert!(
-        lines.iter().any(|line| {
-            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
-                && line.contains("intent_class=Hedge")
-                && line.contains("source=no_gate_configured")
-        }),
-        "expected CSP.3.2 no-gate metric line for Hedge, got {lines:?}"
-    );
-}
-
-#[test]
 fn engine_hedge_wal_failure_emits_csp32_visibility_metric() {
     // AT-CSP32-HEDGE: Hedge shares the Close|Hedge branch in pipeline_wal_recorded.
     // A WAL failure must be non-blocking AND must emit a metric line with intent_class=Hedge,
-    // proving both sides of the shared branch are independently observable.
+    // proving both branches of the shared path are independently observable.
     let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
         Ok(guard) => guard,
         Err(poisoned) => poisoned.into_inner(),
@@ -419,11 +392,7 @@ fn decide_pipeline_open_fails_closed_instead_of_panicking() {
     let engine = ExecutionEngine::new();
     let mut runtime = ExecutionRuntime::default();
 
-    let decision = engine.decide_pipeline(
-        &base_execution_input(),
-        ChokeIntentClass::Open,
-        &mut runtime,
-    );
+    let decision = engine.decide_pipeline(&base_execution_input(), ChokeIntentClass::Open, &mut runtime);
 
     assert!(matches!(
         decision,

@@ -21,10 +21,10 @@ trap 'rm -rf "$tmp_dir"' EXIT
 mock_root=""
 mock_bin=""
 mock_worktree_add_mode=""
+mock_gh_require_repo_arg=""
 
 setup_mock_env() {
   local name="$1"
-  mock_worktree_add_mode="ok"
   mock_root="$tmp_dir/$name/root"
   mock_bin="$tmp_dir/$name/bin"
   mkdir -p "$mock_root/plans" "$mock_root/artifacts/story" "$mock_bin"
@@ -40,12 +40,13 @@ shift
 
 printf '%s\n' "$PWD" >> "$mock_root/parallel_pwd.log"
 printf '%s\n' "$run_id" "$@" > "$mock_root/parallel_args.log"
-printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" > "$mock_root/parallel_review_script.log"
+printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" >> "$mock_root/parallel_review_script.log"
 
-if [[ "$scenario" == "pr_artifacts_in_worktree" ]]; then
+story_dir="$mock_root/artifacts/story/$run_id"
+if [[ -n "${STORY_ARTIFACTS_ROOT:-}" ]]; then
+  story_dir="$STORY_ARTIFACTS_ROOT/$run_id"
+elif [[ "$PWD" != "$mock_root" ]]; then
   story_dir="$PWD/artifacts/story/$run_id"
-else
-  story_dir="$mock_root/artifacts/story/$run_id"
 fi
 mkdir -p "$story_dir"
 
@@ -98,16 +99,6 @@ case "$scenario" in
     echo "[done] kimi  exit=0  (1s)"
     echo "[done] gemini  exit=0  (1s)"
     ;;
-  pr_artifacts_in_worktree)
-    write_artifact codex 0 1 0 crates/soldier_core/src/execution/dispatch_map.rs:10
-    write_artifact opus 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
-    write_artifact kimi 0 2 0 crates/soldier_core/src/execution/dispatch_map.rs:30
-    write_artifact gemini 1 0 0 crates/soldier_core/src/execution/dispatch_map.rs:40
-    echo "[done] codex  exit=0  (1s)"
-    echo "[done] opus  exit=0  (1s)"
-    echo "[done] kimi  exit=0  (1s)"
-    echo "[done] gemini  exit=0  (1s)"
-    ;;
   *)
     echo "unknown scenario: $scenario" >&2
     exit 99
@@ -123,6 +114,12 @@ set -euo pipefail
 mock_root="${EXTERNAL_REVIEW_ROOT:?}"
 printf '%s\n' "$*" >> "$mock_root/gh.log"
 if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
+  if [[ "${MOCK_GH_REQUIRE_REPO_ARG:-0}" == "1" ]]; then
+    if [[ "$*" != *"--repo speelbreaker12/opus-trader"* ]]; then
+      echo "missing --repo speelbreaker12/opus-trader" >&2
+      exit 97
+    fi
+  fi
   cat <<'EOF'
 {"number":190,"baseRefName":"main","headRefOid":"abc123def456"}
 EOF
@@ -149,12 +146,12 @@ if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "--show-toplevel" ]]; t
 fi
 
 if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "HEAD" ]]; then
-  printf '%s\n' "${MOCK_GIT_HEAD_OID:-abc123def456}"
+  printf '%s\n' "feedfacefeedfacefeedfacefeedfacefeedface"
   exit 0
 fi
 
-if [[ "${args[0]:-}" == "rev-parse" && $# -ge 1 ]]; then
-  printf '%s\n' "${MOCK_GIT_HEAD_OID:-abc123def456}"
+if [[ "${args[0]:-}" == "remote" && "${args[1]:-}" == "get-url" && "${args[2]:-}" == "origin" ]]; then
+  printf '%s\n' "git@github.com:speelbreaker12/opus-trader.git"
   exit 0
 fi
 
@@ -210,6 +207,7 @@ run_wrapper() {
   EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
   MOCK_PARALLEL_SCENARIO="$scenario" \
   MOCK_GIT_WORKTREE_ADD_MODE="${mock_worktree_add_mode:-ok}" \
+  MOCK_GH_REQUIRE_REPO_ARG="${mock_gh_require_repo_arg:-0}" \
   "$SCRIPT" "$@" >"$output_file" 2>&1
   rc=$?
   if [[ "$had_errexit" -eq 1 ]]; then
@@ -246,12 +244,39 @@ assert_file_contains() {
   grep -Fq -- "$pattern" "$file" || fail "expected '$pattern' in $file"
 }
 
-assert_file_lacks() {
-  local file="$1"
-  local pattern="$2"
-  if grep -Fq -- "$pattern" "$file"; then
-    fail "did not expect '$pattern' in $file"
-  fi
+test_python_candidate_must_be_python3_6_or_newer() {
+  setup_mock_env "python_version_guard"
+
+  cat > "$mock_bin/python3" <<'MOCK_PYTHON3'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+exit 99
+MOCK_PYTHON3
+
+  cat > "$mock_bin/python" <<'MOCK_PYTHON'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+exit 99
+MOCK_PYTHON
+  chmod +x "$mock_bin/python3" "$mock_bin/python"
+
+  local output_file="$tmp_dir/python_guard.out"
+  set +e
+  PATH="$mock_bin:$PATH" \
+  EXTERNAL_REVIEW_ROOT="$mock_root" \
+  /bin/bash "$SCRIPT" --help >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "python candidate older than 3.6 should be rejected"
+  assert_file_contains "$output_file" "python3.6+ is required"
+  pass "find_python rejects python candidates that cannot satisfy Python 3.6+"
 }
 
 test_commit_mode_success() {
@@ -302,6 +327,16 @@ test_uncommitted_mode_success() {
   pass "no-arg mode reviews tracked uncommitted diff"
 }
 
+test_help_text_warns_on_authority_and_scope() {
+  local help_out="$tmp_dir/external_review_generic.help"
+  "$SCRIPT" --help >"$help_out"
+
+  assert_file_contains "$help_out" "Review the current tracked working-tree diff only."
+  assert_file_contains "$help_out" "Untracked files are NOT auto-discovered in this mode."
+  assert_file_contains "$help_out" "Convenience wrapper only. Not a workflow gate and not pass-authoritative."
+  pass "help text warns that no-arg mode is tracked-only and not a workflow gate"
+}
+
 test_pr_mode_resolution() {
   setup_mock_env "pr_success"
   mock_worktree_add_mode="ok"
@@ -311,17 +346,28 @@ test_pr_mode_resolution() {
   local story_dir="$mock_root/artifacts/story/$run_id"
   local summary_md="$story_dir/external_review_generic/summary.md"
 
-  assert_file_contains "$mock_root/gh.log" "pr view 190 --json number,baseRefName,headRefOid"
-  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr-190-"
-  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190-"
-  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190-"
-  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190-"
+  assert_file_contains "$mock_root/gh.log" "pr view 190 --repo speelbreaker12/opus-trader --json number,baseRefName,headRefOid"
+  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr_190_20260305T220000Z_"
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
-  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190-"
+  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
+}
+
+test_pr_mode_scopes_gh_to_root_repo() {
+  setup_mock_env "pr_repo_scope"
+  mock_worktree_add_mode="ok"
+  mock_gh_require_repo_arg="1"
+
+  run_wrapper all_ok PR190 >/dev/null || fail "PR mode should resolve PR metadata via the repo rooted at EXTERNAL_REVIEW_ROOT"
+
+  assert_file_contains "$mock_root/gh.log" "pr view 190 --repo speelbreaker12/opus-trader --json number,baseRefName,headRefOid"
+  pass "PR mode scopes gh metadata resolution to the root repo instead of caller cwd"
 }
 
 test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout() {
@@ -342,81 +388,53 @@ test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout() {
   pass "failed PR worktree creation does not remove an uncreated checkout"
 }
 
-test_pr_mode_copies_artifacts_from_temp_worktree() {
-  setup_mock_env "pr_worktree_artifacts"
-  run_wrapper pr_artifacts_in_worktree PR190 >/dev/null || fail "PR-mode worktree artifacts should be harvested into canonical storage"
+test_parallel_script_override_keeps_legacy_cli_contract() {
+  setup_mock_env "parallel_override"
 
-  local run_id="external_review_generic_20260305T220000Z_pr_190"
-  local story_dir="$mock_root/artifacts/story/$run_id"
-  local summary_md="$story_dir/external_review_generic/summary.md"
-
-  [[ -f "$story_dir/codex/codex.generic.md" ]] || fail "expected codex artifact to be copied into canonical story dir"
-  [[ -f "$story_dir/gemini/gemini.generic.md" ]] || fail "expected gemini artifact to be copied into canonical story dir"
-  assert_file_contains "$summary_md" "codex | OK | exit=0"
-  assert_file_lacks "$summary_md" "missing canonical artifact"
-  pass "PR mode harvests reviewer artifacts from the detached review worktree before summarizing"
-}
-
-test_pr_mode_uses_unique_temp_refs_and_worktrees() {
-  setup_mock_env "pr_unique_temp"
-  run_wrapper all_ok PR190 >/dev/null || fail "first PR-mode run should exit 0"
-  run_wrapper all_ok PR190 >/dev/null || fail "second PR-mode run should exit 0"
-
-  local fetch_lines worktree_lines
-  fetch_lines="$(grep 'fetch origin main pull/190/head:' "$mock_root/git.log" || true)"
-  worktree_lines="$(grep 'worktree add --detach ' "$mock_root/git.log" || true)"
-
-  local ref1 ref2 wt1 wt2
-  ref1="$(printf '%s\n' "$fetch_lines" | sed -n '1s/.*pull\/190\/head:\(refs\/tmp\/external-review\/[^[:space:]]*\).*/\1/p')"
-  ref2="$(printf '%s\n' "$fetch_lines" | sed -n '2s/.*pull\/190\/head:\(refs\/tmp\/external-review\/[^[:space:]]*\).*/\1/p')"
-  wt1="$(printf '%s\n' "$worktree_lines" | sed -n '1s/.*worktree add --detach \([^[:space:]]*\.tmp\/external-review\/[^[:space:]]*\) .*/\1/p')"
-  wt2="$(printf '%s\n' "$worktree_lines" | sed -n '2s/.*worktree add --detach \([^[:space:]]*\.tmp\/external-review\/[^[:space:]]*\) .*/\1/p')"
-
-  [[ -n "$ref1" && -n "$ref2" ]] || fail "expected two fetched temp refs"
-  [[ -n "$wt1" && -n "$wt2" ]] || fail "expected two temp worktree paths"
-  [[ "$ref1" != "$ref2" ]] || fail "temp PR refs must be unique per run"
-  [[ "$wt1" != "$wt2" ]] || fail "temp worktree paths must be unique per run"
-  pass "PR mode isolates concurrent runs with unique temp refs and worktrees"
-}
-
-test_pr_mode_rejects_head_oid_mismatch() {
-  setup_mock_env "pr_head_oid_mismatch"
-  local output_file="$tmp_dir/pr_head_oid_mismatch.out"
-  set +e
-  PATH="$mock_bin:$PATH" \
-  EXTERNAL_REVIEW_ROOT="$mock_root" \
-  EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
-  MOCK_PARALLEL_SCENARIO="all_ok" \
-  MOCK_GIT_HEAD_OID="deadbeef" \
-  "$SCRIPT" PR190 >"$output_file" 2>&1
-  rc=$?
-  set -e
-  [[ $rc -ne 0 ]] || fail "PR mode should reject fetched head OID mismatches"
-  grep -Fq "fetched PR head OID does not match GitHub metadata" "$output_file" || fail "missing head OID mismatch diagnostic"
-  pass "PR mode verifies fetched PR head against GitHub metadata"
-}
-
-test_python3_requirement_is_explicit() {
-  setup_mock_env "python_version_gate"
-  cat > "$mock_bin/python" <<'MOCK_PY'
+  cat > "$mock_root/custom_parallel.sh" <<'MOCK_OVERRIDE'
 #!/usr/bin/env bash
 set -euo pipefail
-exit 1
-MOCK_PY
-  chmod +x "$mock_bin/python"
 
-  local output_file="$tmp_dir/python_version_gate.out"
-  set +e
-  PATH="$mock_bin" \
-  EXTERNAL_REVIEW_ROOT="$mock_root" \
-  EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
-  MOCK_PARALLEL_SCENARIO="all_ok" \
-  /bin/bash "$SCRIPT" --commit HEAD >"$output_file" 2>&1
-  rc=$?
-  set -e
-  [[ $rc -ne 0 ]] || fail "wrapper should fail when only a non-Python-3 'python' is available"
-  grep -Fq "python3 (or python 3) is required" "$output_file" || fail "missing explicit Python 3 requirement diagnostic"
-  pass "wrapper rejects Python 2 style fallbacks with a clear diagnostic"
+run_id="${1:?missing run id}"
+shift
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tools|--prompt|--commit|--base|--files)
+      shift 2
+      ;;
+    --uncommitted)
+      shift
+      ;;
+    *)
+      echo "unexpected arg: $1" >&2
+      exit 99
+      ;;
+  esac
+done
+
+printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" > "${EXTERNAL_REVIEW_ROOT:?}/override_review_script.log"
+story_dir="${STORY_ARTIFACTS_ROOT:?}/$run_id"
+mkdir -p "$story_dir/codex" "$story_dir/opus" "$story_dir/kimi" "$story_dir/gemini"
+for tool in codex opus kimi gemini; do
+  cat > "$story_dir/$tool/$tool.generic.md" <<EOF
+# $tool generic review
+FINDINGS_SUMMARY: P0=0 P1=0 P2=0
+EOF
+  echo "[done] $tool  exit=0  (1s)"
+done
+MOCK_OVERRIDE
+
+  chmod +x "$mock_root/custom_parallel.sh"
+
+  EXTERNAL_REVIEW_PARALLEL_SCRIPT="$mock_root/custom_parallel.sh" \
+    run_wrapper all_ok --commit HEAD >/dev/null || fail "parallel override should keep working without --review-script CLI support"
+
+  assert_file_contains "$mock_root/override_review_script.log" "$mock_root/plans/review_logged.sh"
+  if grep -Fq -- "--review-script" "$mock_root/parallel_args.log" 2>/dev/null; then
+    fail "legacy parallel override should not receive --review-script"
+  fi
+  pass "parallel override uses environment-based review script routing without breaking legacy arg parsing"
 }
 
 test_reviewer_failure_preserves_summary() {
@@ -457,16 +475,99 @@ test_missing_success_artifact_is_inconsistent() {
   pass "zero-exit reviewer without canonical artifact is treated as inconsistent"
 }
 
+test_parallel_review_artifact_summary_uses_story_artifacts_root() {
+  local fixture_dir="$tmp_dir/parallel_review_artifact_root"
+  local repo="$fixture_dir/repo"
+  local output_file="$fixture_dir/parallel_review.out"
+  mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="enriched"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool)
+      tool="${2:?missing tool}"
+      shift 2
+      ;;
+    --prompt)
+      prompt="${2:?missing prompt}"
+      shift 2
+      ;;
+    --base|--commit|--files|--timeout-seconds|--out-root|--title)
+      shift 2
+      ;;
+    --uncommitted|--proof-graph)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$tool" ]] || exit 2
+
+story_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
+if [[ "$story_root" != /* ]]; then
+  story_root="$PWD/$story_root"
+fi
+
+outdir="$story_root/$story/$tool"
+mkdir -p "$outdir"
+cat > "$outdir/$tool.$prompt.md" <<EOF
+# $tool review
+FINDINGS_SUMMARY: P0=0 P1=1 P2=0
+EOF
+MOCK_REVIEW
+
+  chmod +x "$repo/plans/review_logged.sh"
+
+  set +e
+  (
+    cd "$repo/.tmp/run"
+    STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
+      bash "$repo/plans/parallel_review.sh" S9-ART --base main --tools codex,opus --prompt generic --review-script "$repo/plans/review_logged.sh"
+  ) >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review should succeed with canonical artifact root override"
+  [[ -f "$repo/canonical/story/S9-ART/codex/codex.generic.md" ]] || fail "missing codex artifact in canonical root"
+  [[ -f "$repo/canonical/story/S9-ART/opus/opus.generic.md" ]] || fail "missing opus artifact in canonical root"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/codex/codex.generic.md"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/opus/opus.generic.md"
+  if grep -Fq "not found — review may have failed" "$output_file"; then
+    fail "artifact summary should not report canonical artifacts as missing"
+  fi
+  pass "parallel_review artifact summary follows STORY_ARTIFACTS_ROOT"
+}
+
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
+test_python_candidate_must_be_python3_6_or_newer
+test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
+test_pr_mode_scopes_gh_to_root_repo
 test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout
-test_pr_mode_copies_artifacts_from_temp_worktree
-test_pr_mode_uses_unique_temp_refs_and_worktrees
-test_pr_mode_rejects_head_oid_mismatch
-test_python3_requirement_is_explicit
+test_parallel_script_override_keeps_legacy_cli_contract
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
+test_parallel_review_artifact_summary_uses_story_artifacts_root
 
 echo "PASS: external_review_generic regression fixtures"

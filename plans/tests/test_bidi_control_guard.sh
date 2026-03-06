@@ -63,4 +63,36 @@ set -e
 [[ "$alm_rc" -ne 0 ]] || fail "expected bidi guard to fail when U+061C exists"
 echo "$alm_out" | grep -Fq "src/with_alm.rs:1" || fail "missing U+061C offending file/line diagnostic"
 
+rm -f "$fixture/src/with_bidi.rs" "$fixture/src/with_alm.rs"
+
+real_grep="$(command -v grep)"
+cat > "$mock_bin/grep" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == "-Iq" && "\${2:-}" == "." ]]; then
+  exit 0
+fi
+exec "$real_grep" "\$@"
+EOF
+chmod +x "$mock_bin/grep"
+
+python3 - <<'PY' "$fixture/src/late_nul_binary.bin"
+from pathlib import Path
+import sys
+
+Path(sys.argv[1]).write_bytes(
+    b"A" * 12000 + "\u202e".encode("utf-8") + b"B" * 32 + b"\0tail\n"
+)
+PY
+
+set +e
+binary_out="$(
+  PATH="$mock_bin:$PATH" BIDI_CONTROL_GUARD_ROOT="$fixture" "$SCRIPT" 2>&1
+)"
+binary_rc=$?
+set -e
+
+[[ "$binary_rc" -eq 0 ]] || fail "binary files with late NUL bytes must be skipped before bidi scanning"
+echo "$binary_out" | grep -Fq "bidi_control_guard: PASS" || fail "binary late-NUL fixture should not trip the bidi guard"
+
 echo "PASS: bidi control guard"

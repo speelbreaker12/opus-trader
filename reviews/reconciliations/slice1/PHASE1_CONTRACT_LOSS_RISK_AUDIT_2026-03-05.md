@@ -78,7 +78,7 @@ Top 3 simpler-safer contract improvements
 | Risk-reducing close and hedge path when L2 is missing or stale | Current text can forbid all non-emergency exits | High | High | Missing or stale L2 blocks OPEN only; risk-reducing intents use the Section 3.1 fallback ladder | G5-LIQEXIT |
 | Integer-only hash identity | Float-like hash inputs permit divergent identities across codepaths | High | High | Hash only `qty_steps` and `price_ticks`; never hash `qty_q` or `limit_price_q` directly | G2-HASH |
 | Exact canonical `s4` identity rule | Heuristic fallback can merge distinct intents | High | Medium | Canonical `s4` labels must exact-match `{sid8,gid12,leg_idx,ih16}` or fail closed | G4-LABELMATCH |
-| Normative instrument-kind derivation inputs | Two reasonable implementations can classify the same instrument differently | High | Medium | Define required venue fields and fail closed on missing or contradictory metadata | G1-IKIND |
+| Normative instrument-kind derivation inputs | Two reasonable implementations can classify the same instrument differently | High | Medium | Define required venue fields, derive `AmountSemantics::{Coin, Usd}` from them, and fail closed on missing or contradictory metadata | G1-IKIND |
 | Explicit fee-staleness carveout for risk reduction | Current safety relies on inference while one enforcement path blocks at `FeeCacheCheck` | Medium | High | Hard-stale fee cache blocks OPEN only; `CLOSE/HEDGE/CANCEL` remain legal unless `Kill` applies | G6-FEEPROOF |
 | Recovered-unsent OPEN rule | Replay alone can create stale OPEN exposure or suppress valid re-entry depending on implementation choice | High | High | Replayed unsent OPENs MUST NOT dispatch from WAL alone; only fresh post-restart regeneration may open risk | G7-RESTART |
 | Enforced startup latch before any OPEN-capable dispatch path | Reconcile-before-dispatch is not causal without runtime gating | High | Medium | Runtime starts with `RESTART_RECONCILE_REQUIRED`; latch clears only after successful reconcile | G10-STARTUPLATCH |
@@ -93,8 +93,9 @@ Top 3 simpler-safer contract improvements
 ```text
 NEW CLAUSE:
 `InstrumentMeta` MUST expose `instrument_family` and `amount_semantics`.
-`amount_semantics ∈ {coin_sized, usd_sized}` is the sole dispatch/sizing branch input.
-Derivation from venue metadata MUST use explicit fields required by this contract.
+`amount_semantics ∈ {Coin, Usd}` is the sole dispatch/sizing branch input.
+Venue metadata derivation MUST use explicit required fields and MUST be wired into the live normalization/dispatch path, not test-only helpers.
+The derived `amount_semantics` MUST be enforced by the runtime sizing path before dispatch.
 If any required field is missing, contradictory, or unrecognized, the instrument MUST be rejected before cache insert and any dependent OPEN intent MUST fail closed.
 ```
 
@@ -177,7 +178,7 @@ If atomic commit is unavailable, the system MUST durably record the trade with `
 
 | Clause | Required enforcement point | Required proving test | Causal assertion needed | Missing today? |
 |---|---|---|---|---|
-| Instrument-kind derivation | `crates/soldier_core/src/venue/types.rs` | Realistic venue fixtures prove the same metadata always yields the same `amount_semantics` and dispatch amount | Dispatch branches only on normative metadata, not naming guesses | Yes |
+| Instrument-kind derivation | `crates/soldier_core/src/venue/types.rs` wired into the production normalization path plus `crates/soldier_core/src/execution/domain_model.rs` | Realistic venue fixtures prove the same metadata always yields the same `amount_semantics` and dispatch amount | Dispatch branches only on normative metadata in the live path, not naming guesses or test-only helpers | Yes |
 | Hash identity inputs | `crates/soldier_core/src/idempotency/hash.rs` plus `crates/soldier_core/src/execution/quantize.rs` | Equivalent float inputs that quantize to identical steps/ticks produce identical hash; different steps/ticks produce different hash | Hash identity changes only when integer canonical identity changes | Yes |
 | `s4` schema validation | `crates/soldier_core/src/execution/label.rs` | Wrong width, charset, version, and leg-index labels reject before dispatch with deterministic reason | Invalid canonical labels never reach dispatch | Yes |
 | Canonical label matching | `crates/soldier_core/src/recovery/label_match.rs` | Canonical `s4` exact-match count not equal to 1 degrades and blocks OPEN; no heuristic fallback on canonical labels | Recovery cannot silently map a canonical exchange order to the wrong local intent | Yes |
@@ -203,7 +204,35 @@ Smallest-first remediation sequence
 
 Strong complete proof chains already present
 
-- `CSP.3.2` WAL degradation: queue-full or WAL failure blocks OPEN while allowing risk reduction.
-- `AT-233` and `AT-234` crash-after-send and crash-after-fill recovery paths.
-- Structural single-chokepoint and WAL-last-gate proofs for the execution path.
-- Stable intent-identity proofs in the current integer-hash implementation.
+- `CSP.3.2` WAL degradation: queue-full or WAL failure blocks OPEN while allowing risk reduction. See Section G for exact test commands.
+- `AT-233` and `AT-234` crash-after-send and crash-after-fill recovery paths. See Section G for exact test commands.
+- Structural single-chokepoint and WAL-last-gate proofs for the execution path. See Section G for exact test commands.
+- Stable intent-identity proofs in the current integer-hash implementation. See Section G for exact test commands.
+
+## G) Reproducible evidence for current-tree claims
+
+Run these commands against the current tree to reproduce the "already present" statements above:
+
+- `CSP.3.2` WAL degradation and non-blocking risk reduction:
+  - `cargo test -p soldier_core test_close_intent_approved_despite_wal_failure`
+  - `cargo test -p soldier_core test_hedge_intent_approved_despite_wal_failure`
+  - `cargo test -p soldier_infra test_queue_full_returns_error_not_block`
+- `AT-233` / `AT-234` restart and replay recovery:
+  - `cargo test -p soldier_infra test_at233_sent_intent_not_resent_on_durable_restart`
+  - `cargo test -p soldier_infra test_at234_fill_detected_on_restart_updates_tlsm`
+  - Companion unit coverage lives in `crates/soldier_infra/tests/test_ledger_replay.rs`
+- Structural single chokepoint and WAL-last-gate enforcement:
+  - `cargo test -p soldier_core test_dispatch_chokepoint_no_bypass_approved`
+  - `cargo test -p soldier_core test_no_direct_gate_results_construction_in_production`
+  - `cargo test -p soldier_core test_constraint_reject_gates_before_persist`
+  - `cargo test -p soldier_core test_constraint_wal_is_last_gate_open`
+- Stable integer-hash identity:
+  - `cargo test -p soldier_core gi_020_intent_hash_is_deterministic`
+  - `cargo test -p soldier_core gi_020_different_fields_produce_different_hashes`
+  - Companion integration coverage lives in `crates/soldier_core/tests/test_idempotency.rs`
+
+## H) Follow-Up Handoff
+
+- The deferred contract-tightening items salvaged from `artifacts/LOSS_RISK_CONTRACT_AUDIT_PHASE1.md` have been normalized into `docs/plans/2026-03-05-phase-1-contract-audit-followup.md`.
+- Use that doc as the shortlist for the next Phase 2 contract-tightening pass only; it is not authoritative for this audit's `NO-GO` verdict or proof claims.
+- Keep this audit as the source of truth for Phase 1 block/unblock decisions.
