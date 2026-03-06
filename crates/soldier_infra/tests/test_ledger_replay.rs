@@ -5,10 +5,26 @@
 //! AT-233: crash after send → no resend on replay.
 //! AT-234: crash after fill → detect fill on replay.
 
-use soldier_core::execution::{Tlsm, TlsmEvent, TlsmState, TransitionResult};
+use soldier_core::execution::{
+    PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
+};
 use soldier_infra::store::{
     IntentRecord, LedgerAppendError, LedgerMetrics, LedgerTransitionSink, TlsState, WalLedger,
 };
+
+/// Local no-op sink for test setup. `Tlsm::apply()` is `#[cfg(test)]`-gated
+/// on the library and unavailable in integration tests.
+struct NoopSink;
+impl TlsmTransitionSink for NoopSink {
+    fn append_transition(&mut self, _t: PersistedTransition) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+fn drive(sm: &mut Tlsm, event: TlsmEvent) -> TransitionResult {
+    sm.apply_with_sink(event, &mut NoopSink)
+        .expect("NoopSink never fails")
+}
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -268,6 +284,7 @@ fn test_replay_empty_ledger() {
 }
 
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_replay_mixed_states() {
     let mut ledger = WalLedger::new(10);
     let mut m = LedgerMetrics::new();
@@ -282,18 +299,23 @@ fn test_replay_mixed_states() {
     let _ = ledger.append(intent("h4", "g4", 0, TlsState::Cancelled), &mut m);
     // Acked (in-flight)
     let _ = ledger.append(intent("h5", "g5", 0, TlsState::Acked), &mut m);
+    // AT-TLSM-06 partial coverage: Rejected (deprecated WAL-only) is terminal, must not appear in in-flight
+    let _ = ledger.append(intent("h6", "g6", 0, TlsState::Rejected), &mut m);
 
     let outcome = ledger.replay();
-    assert_eq!(outcome.records_replayed, 5);
+    assert_eq!(outcome.records_replayed, 6);
     assert_eq!(outcome.in_flight_count, 3); // Created, Sent, Acked
     assert!(outcome.in_flight_hashes.contains(&"h1".to_string()));
     assert!(outcome.in_flight_hashes.contains(&"h2".to_string()));
     assert!(outcome.in_flight_hashes.contains(&"h5".to_string()));
+    // Rejected is terminal — must NOT appear in in-flight
+    assert!(!outcome.in_flight_hashes.contains(&"h6".to_string()));
 }
 
 // ─── Terminal states ────────────────────────────────────────────────────
 
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_terminal_states() {
     assert!(TlsState::Filled.is_terminal());
     assert!(TlsState::Cancelled.is_terminal());
@@ -387,8 +409,8 @@ fn test_legacy_record_missing_reduce_only_defaults_fail_closed() {
     let parsed: IntentRecord =
         serde_json::from_value(legacy).expect("legacy record without reduce_only should parse");
     assert!(
-        parsed.reduce_only,
-        "legacy record missing reduce_only must default fail-closed"
+        !parsed.reduce_only,
+        "legacy record missing reduce_only must default to false (OPEN classification) per CONTRACT §2.4"
     );
 }
 
@@ -573,7 +595,7 @@ fn drive_tlsm_to(target: TlsmState) -> Option<Tlsm> {
     for (state, events) in paths {
         if *state == target {
             for event in *events {
-                tlsm.apply(event.clone());
+                drive(&mut tlsm, event.clone());
             }
             assert_eq!(tlsm.state(), target);
             return Some(tlsm);
@@ -613,12 +635,12 @@ fn test_tlsm_wal_whitelist_sync() {
         for event in &all_events {
             let mut tlsm = drive_tlsm_to(from_state)
                 .unwrap_or_else(|| panic!("cannot reach {:?}", from_state));
-            let result = tlsm.apply(event.clone());
+            let result = drive(&mut tlsm, event.clone());
 
             // Extract the to-state if the TLSM accepted the transition.
-            let to_state = match &result {
-                TransitionResult::Transitioned { to, .. } => Some(*to),
-                TransitionResult::OutOfOrder { to, .. } => Some(*to),
+            let to_state = match result {
+                TransitionResult::Transitioned { to, .. } => Some(to),
+                TransitionResult::OutOfOrder { to, .. } => Some(to),
                 TransitionResult::Ignored { .. } => None,
             };
 
@@ -648,6 +670,7 @@ fn test_tlsm_wal_whitelist_sync() {
 /// events to TlsmState::Failed, but the WAL preserves the distinction.
 /// These tests verify Rejected transitions directly at the WAL level.
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_rejected_is_terminal() {
     assert!(
         !TlsState::Rejected.is_valid_successor(TlsState::Sent),
@@ -659,6 +682,7 @@ fn test_rejected_is_terminal() {
 }
 
 #[test]
+#[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records
 fn test_rejected_valid_successors() {
     // Created and Sent can transition to Rejected (exchange rejection before ack).
     assert!(TlsState::Created.is_valid_successor(TlsState::Rejected));

@@ -2,11 +2,34 @@
 //!
 //! Metric-counter assertions (e.g. ooo_count/ooo_total) remain unit-level in
 //! `src/execution/tlsm_tests.rs`.
+//!
+//! NOTE: `Tlsm::apply()` is `#[cfg(test)]`-gated on the library and therefore
+//! unavailable here (integration tests compile the crate as a normal
+//! dependency without `cfg(test)` set). All state-driving calls use
+//! `apply_with_sink` with a local `NoopSink` to keep the test concise while
+//! making the WAL-sink requirement explicit at the call site.
 
 use soldier_core::execution::{
     PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
 };
 use soldier_core::risk::ReservationId;
+
+/// Local no-op sink — for test setup only. Production callers must supply a
+/// durable WAL sink.
+struct NoopSink;
+impl TlsmTransitionSink for NoopSink {
+    fn append_transition(&mut self, _t: PersistedTransition) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// Convenience wrapper: drive `sm` through `event` using the local no-op sink.
+/// Returns the `TransitionResult`, panicking on `TlsmError` (which cannot
+/// happen with a no-op sink).
+fn drive(sm: &mut Tlsm, event: TlsmEvent) -> TransitionResult {
+    sm.apply_with_sink(event, &mut NoopSink)
+        .expect("NoopSink never fails")
+}
 
 #[derive(Default)]
 struct CollectingSink {
@@ -26,28 +49,28 @@ fn test_normal_lifecycle_created_to_filled() {
     assert_eq!(sm.state(), TlsmState::Created);
 
     assert!(matches!(
-        sm.apply(TlsmEvent::Sent),
+        drive(&mut sm, TlsmEvent::Sent),
         TransitionResult::Transitioned {
             from: TlsmState::Created,
             to: TlsmState::Sent
         }
     ));
     assert!(matches!(
-        sm.apply(TlsmEvent::Acked),
+        drive(&mut sm, TlsmEvent::Acked),
         TransitionResult::Transitioned {
             from: TlsmState::Sent,
             to: TlsmState::Acked
         }
     ));
     assert!(matches!(
-        sm.apply(TlsmEvent::PartialFill),
+        drive(&mut sm, TlsmEvent::PartialFill),
         TransitionResult::Transitioned {
             from: TlsmState::Acked,
             to: TlsmState::PartiallyFilled
         }
     ));
     assert!(matches!(
-        sm.apply(TlsmEvent::Filled),
+        drive(&mut sm, TlsmEvent::Filled),
         TransitionResult::Transitioned {
             from: TlsmState::PartiallyFilled,
             to: TlsmState::Filled
@@ -60,9 +83,9 @@ fn test_normal_lifecycle_created_to_filled() {
 #[test]
 fn test_fill_before_ack_is_out_of_order_but_accepted() {
     let mut sm = Tlsm::new();
-    let _ = sm.apply(TlsmEvent::Sent);
+    let _ = drive(&mut sm, TlsmEvent::Sent);
 
-    let result = sm.apply(TlsmEvent::Filled);
+    let result = drive(&mut sm, TlsmEvent::Filled);
     assert!(matches!(
         result,
         TransitionResult::OutOfOrder {
@@ -77,11 +100,11 @@ fn test_fill_before_ack_is_out_of_order_but_accepted() {
 #[test]
 fn test_terminal_state_ignores_late_events() {
     let mut sm = Tlsm::new();
-    let _ = sm.apply(TlsmEvent::Sent);
-    let _ = sm.apply(TlsmEvent::Acked);
-    let _ = sm.apply(TlsmEvent::Filled);
+    let _ = drive(&mut sm, TlsmEvent::Sent);
+    let _ = drive(&mut sm, TlsmEvent::Acked);
+    let _ = drive(&mut sm, TlsmEvent::Filled);
 
-    let result = sm.apply(TlsmEvent::PartialFill);
+    let result = drive(&mut sm, TlsmEvent::PartialFill);
     assert!(matches!(
         result,
         TransitionResult::Ignored {
@@ -116,9 +139,9 @@ fn test_pending_reservation_settles_once_at_terminal() {
 
     assert_eq!(sm.take_pending_reservation_on_terminal(), None);
 
-    let _ = sm.apply(TlsmEvent::Sent);
-    let _ = sm.apply(TlsmEvent::Acked);
-    let _ = sm.apply(TlsmEvent::Filled);
+    let _ = drive(&mut sm, TlsmEvent::Sent);
+    let _ = drive(&mut sm, TlsmEvent::Acked);
+    let _ = drive(&mut sm, TlsmEvent::Filled);
 
     let settled = sm.take_pending_reservation_on_terminal();
     assert_eq!(settled, Some((rid, "BTC-PERP".to_string())));

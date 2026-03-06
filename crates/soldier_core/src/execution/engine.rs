@@ -296,10 +296,50 @@ impl ExecutionEngine {
         intent_class: ChokeIntentClass,
         runtime: &mut ExecutionRuntime<'runtime>,
     ) -> ExecutionDecision {
-        let wal_recorded = pipeline_wal_recorded(intent_class, runtime);
+        if intent_class == ChokeIntentClass::Open {
+            return unexpected_open_pipeline_decision();
+        }
+
+        let outcome = pipeline_wal_recorded(intent_class, runtime);
+
+        // H-4: Distinguish "gate absent" from "gate errored" for monitoring.
+        //
+        // When the WAL gate is absent (NoGate), pass wal_recorded=true to the
+        // pipeline so PrecomputedWalGate passes Gate 10 cleanly without emitting
+        // a second (incorrect) source=wal_gate_error metric line. After the
+        // pipeline returns, emit the correct source=no_gate_configured metric —
+        // but only when the intent was approved (meaning Gate 10 was actually
+        // reached; a rejection at gates 1-6 means WAL was never the issue).
+        //
+        // When the gate was present but errored (GateError), wal_recorded=false
+        // causes PrecomputedWalGate to return Err, and build_order_intent_internal
+        // emits source=wal_gate_error — the correct source for that case.
+        let wal_recorded = match outcome {
+            WalRecordOutcome::Recorded => true,
+            WalRecordOutcome::GateError => false,
+            WalRecordOutcome::NoGate => true,
+        };
+
         let legacy_input = build_pipeline_input(input, intent_class, wal_recorded);
         let mut metrics = IntentPipelineMetrics::new();
         let result = evaluate_intent_pipeline(&legacy_input, &mut metrics);
+
+        // H-4 (continued): Emit no_gate_configured metric after pipeline for
+        // approved Close/Hedge intents. Approved means the intent reached Gate
+        // 10 (WAL gate), which is the only gate where the absent-gate source
+        // matters. Rejections at gates 1-6 make the WAL outcome irrelevant.
+        if outcome == WalRecordOutcome::NoGate && result.reject_reason_code.is_none() {
+            super::build_order_intent::bump_wal_nonblocking_allowed_total();
+            super::emit_execution_metric_line(
+                super::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL,
+                &format!("intent_class={intent_class:?} source=no_gate_configured"),
+            );
+            tracing::warn!(
+                intent_class = ?intent_class,
+                "WAL gate absent for non-OPEN intent — allowing per CSP.3.2 (no_gate_configured)"
+            );
+        }
+
         pipeline_result_to_decision(
             result.decision,
             result.reject_reason_code,
@@ -500,18 +540,46 @@ fn build_pipeline_input<'a>(
     }
 }
 
+/// Outcome of the WAL gate check in the pipeline path.
+///
+/// Distinguishes between a gate that recorded successfully, a gate that was
+/// present but returned an error, and the case where no gate was configured
+/// at all. The distinction matters for metric tagging (H-4): absent gates
+/// must emit `source=no_gate_configured`, not `source=wal_gate_error`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WalRecordOutcome {
+    /// Gate present, record succeeded.
+    Recorded,
+    /// Gate present, record returned an error.
+    GateError,
+    /// No gate was configured (runtime.wal_gate was None).
+    NoGate,
+}
+
 fn pipeline_wal_recorded(
     intent_class: ChokeIntentClass,
     runtime: &mut ExecutionRuntime<'_>,
-) -> bool {
+) -> WalRecordOutcome {
     match intent_class {
-        ChokeIntentClass::Close | ChokeIntentClass::Hedge => runtime
-            .wal_gate
-            .as_deref_mut()
-            .map(|gate| gate.record_before_dispatch().is_ok())
-            .unwrap_or(false),
-        ChokeIntentClass::CancelOnly => true,
-        ChokeIntentClass::Open => false,
+        ChokeIntentClass::Close | ChokeIntentClass::Hedge => {
+            match runtime.wal_gate.as_deref_mut() {
+                Some(gate) => {
+                    if gate.record_before_dispatch().is_ok() {
+                        WalRecordOutcome::Recorded
+                    } else {
+                        WalRecordOutcome::GateError
+                    }
+                }
+                None => WalRecordOutcome::NoGate,
+            }
+        }
+        ChokeIntentClass::CancelOnly => WalRecordOutcome::Recorded,
+        ChokeIntentClass::Open => {
+            tracing::error!(
+                "Open intent unexpectedly reached pipeline_wal_recorded — failing closed"
+            );
+            WalRecordOutcome::GateError
+        }
     }
 }
 
@@ -650,6 +718,14 @@ fn missing_runtime_dependency_decision(dependency: &'static str) -> ExecutionDec
         code: RejectReasonCode::AssemblyFailed,
         step: ExecutionStep::Runtime(RuntimeStep::Assembly),
         detail: format!("missing runtime dependency: {dependency}"),
+    })
+}
+
+fn unexpected_open_pipeline_decision() -> ExecutionDecision {
+    ExecutionDecision::Rejected(ExecutionRejection {
+        code: RejectReasonCode::RecordedBeforeDispatchFailed,
+        step: ExecutionStep::Gate(GateStep::RecordedBeforeDispatch),
+        detail: "Open intent unexpectedly reached non-OPEN pipeline path".to_string(),
     })
 }
 

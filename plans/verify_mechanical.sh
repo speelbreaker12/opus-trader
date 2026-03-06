@@ -217,6 +217,25 @@ else
 fi
 echo
 
+# ── Check 4: Upgrade 1B architectural proof ────────────────────────
+#
+# Verifies the three structural guarantees claimed by Upgrade 1B:
+#   - engine_parity_tests.rs is deleted
+#   - pub fn evaluate alias is absent from engine.rs
+#   - api.rs exposes no legacy internal pipeline types
+
+echo "=== Check 4: Upgrade 1B architectural proof ==="
+CHECKS=$((CHECKS + 1))
+proof_script="$ROOT/plans/tests/test_upgrade_1b_proof.sh"
+if [[ ! -f "$proof_script" ]]; then
+  fail "test_upgrade_1b_proof.sh not found — 1B proof gate missing"
+elif bash "$proof_script"; then
+  pass "Upgrade 1B architectural proof passed"
+else
+  fail "Upgrade 1B architectural proof failed — see output above"
+fi
+echo
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 echo "=== Summary ==="

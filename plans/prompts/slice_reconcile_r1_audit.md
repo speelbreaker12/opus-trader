@@ -18,38 +18,47 @@ Audit the already-implemented story against the premortem, contract, and PRD cla
 The **premortem is your primary audit checklist** — walk it section by section against the real code.
 Find the real enforcement points, verify fail-closed behavior, verify causal proof quality, verify premortem decisions and wrong-impl tightenings, and produce a remediation plan.
 No edits in this step.
+This audit produces the evidence ledger consumed before the reconciliation `implement` step. Do not skip from this audit directly to `self_review`.
 
 ## READ FIRST (required)
 
 1. **The story premortem**: `reviews/premortems/${STORY_ID}_premortem.md`
    This is your primary audit checklist. Walk §0-§8 against reality.
-2. Recon preflight artifact from Step 1 (contract -> AT -> test proof audit)
+2. Legacy R1/preflight evidence for this story, if present (for reruns/comparison only)
 3. Prior postmortem(s) for this slice/story (if any)
 4. `specs/CONTRACT.md` (relevant clauses for this story)
 5. `specs/DESIGN_PATTERNS.md` §0 (if present / used in this repo)
 6. `plans/prd.json` (the story entry for `${STORY_ID}`)
-   - AT source: `jq '.stories["${STORY_ID}"].enforcing_contract_ats' plans/prd.json`
-   - Scope source: `jq '.stories["${STORY_ID}"].scope.touch' plans/prd.json`
+   - Story lookup check: `jq -e --arg id "${STORY_ID}" '.items[] | select(.id == $id)' plans/prd.json >/dev/null`
+   - AT source: `jq --arg id "${STORY_ID}" '.items[] | select(.id == $id) | .enforcing_contract_ats' plans/prd.json`
+   - Scope source: `jq --arg id "${STORY_ID}" '.items[] | select(.id == $id) | .scope.touch' plans/prd.json`
 7. Files listed in the premortem §0 `scope.touch`
 
-**MISSING ARTIFACT RULE**: If any of items 4-7 is missing from the workspace (file does not exist,
-story ID not found in prd.json), immediately return:
+**MISSING ARTIFACT RULE**: If any required item (4, 6, 7) is missing from the workspace
+(file does not exist, story ID not found in `plans/prd.json`), immediately return:
 ```
 GATE: NO-GO
 Reason: MISSING_ARTIFACT: <filename or description>
 ```
 Do not proceed. Do not guess or hallucinate the content of missing artifacts.
 
-**Item 2 (recon preflight) is OPTIONAL when the premortem (item 1) exists.** When the premortem
-exists, it is already your primary audit checklist and the preflight adds marginal value. If the
-preflight exists, read it for additional context. If it does not exist and the premortem does,
-proceed without it.
+Item 5 (`specs/DESIGN_PATTERNS.md` §0) is conditional. If the file is absent in this repo/story,
+note `DESIGN_PATTERNS_NOT_PRESENT` and continue.
+
+**Item 2 (legacy R1/preflight evidence) is OPTIONAL for artifact availability, not review value.**
+If an earlier preflight artifact exists, read it for drift/comparison context. If it does not
+exist and the premortem does, proceed and note in output: `NO_PREFLIGHT_ARTIFACT`.
 
 **Item 3 (prior postmortems) is OPTIONAL.** If no postmortem exists for this story, proceed
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.
 
 **PREMORTEM HARD RULE** (item 1 only): If `reviews/premortems/${STORY_ID}_premortem.md` does not exist:
-- **STOP.** Output `NO-GO: PREMORTEM_MISSING`. Do not proceed.
+- **STOP.** Output:
+  ```
+  GATE: NO-GO
+  Reason: PREMORTEM_MISSING
+  ```
+  Do not proceed.
 - Write the premortem first using Mode A (Premortem Authoring) before entering reconciliation.
 - Do NOT guess or hallucinate premortem content. There is no surrogate or fallback path for R1.
 
@@ -59,10 +68,11 @@ Open the premortem §10 STOPLIGHT result before doing anything else:
 - **RED**    -> STOP. Do not proceed. Report which blockers must be fixed first.
 - **YELLOW** -> Proceed only if every gap is explicitly marked:
   - DEFERRED (future slice), or
-  - FIX IN STEP 5
+  - FIX IN IMPLEMENT
 - **GREEN**  -> Proceed.
 
-If the recon preflight from Step 1 also has a STOPLIGHT, check it too. The more restrictive gate wins.
+If a legacy preflight/audit artifact already exists for this story, check its STOPLIGHT too. The
+more restrictive gate wins.
 
 ## READ-ONLY INTEGRITY CHECK
 
@@ -71,7 +81,7 @@ Run at the **start** of this step:
 git status --porcelain > /tmp/recon_start_status_${STORY_ID}.txt
 ```
 
-Run at the **end** of this step (before writing READY FOR SELF_REVIEW):
+Run at the **end** of this step (before writing READY FOR IMPLEMENT GATE):
 ```bash
 git status --porcelain > /tmp/recon_end_status_${STORY_ID}.txt
 diff /tmp/recon_start_status_${STORY_ID}.txt /tmp/recon_end_status_${STORY_ID}.txt
@@ -187,23 +197,37 @@ Classify every issue as one of:
 
 | Classification | Meaning | When to use |
 |---------------|---------|-------------|
-| **CODE_FIX** | Fix in Step 5 (remediation) | Missing enforcement, fail-open path, unwrap in prod |
-| **TEST_FIX** | Fix in Step 5 (remediation) | Missing TRIP/NON-TRIP, missing golden vector, weak proof |
-| **PRD_FIX** | Fix in Step 5 (remediation) | Wrong `implementation_tests[]`, stale `enforcing_contract_ats[]` |
+| **CODE_FIX** | Fix in follow-up remediation work | Missing enforcement, fail-open path, unwrap in prod |
+| **TEST_FIX** | Fix in follow-up remediation work | Missing TRIP/NON-TRIP, missing golden vector, weak proof |
+| **PRD_FIX** | Fix in follow-up remediation work | Wrong `implementation_tests[]`, stale `enforcing_contract_ats[]` |
 | **DEFERRED** | Future slice | Include owner + target slice |
 | **INFO** | Non-blocking, no action required | Observations, minor style notes, "better design" ideas |
 
 ### IMPORTANT
 
 - If you discover a "better design," do NOT redesign here. Mark it:
-  - **BLOCKING** if it creates loss/safety risk (must fix now)
+  - **BLOCKING** if it creates loss/safety risk or can silently prevent valid profit in normal operation (must fix now)
   - **HARDENING** if it is an improvement but not required for contract compliance (defer)
 - Decision rule for BLOCKING vs HARDENING:
-  - Fail-open path reachable in **normal operation** (valid inputs, standard flow) -> **BLOCKING**
-  - Fail-open path requires **adversarial or out-of-spec input** to reach -> **HARDENING** (document the assumption about what is out-of-spec)
+  - Fail-open path, avoidable loss path, or silent valid-profit block reachable in **normal operation** (valid inputs, standard flow) -> **BLOCKING**
+  - If the issue requires adversarial or out-of-spec input to trigger, and normal operation remains contract-safe, -> **HARDENING** (document the assumption about what is out-of-spec)
 - Do not conflate "different from premortem prediction" with "wrong."
   The premortem was written before code existed. The code may have found a better path.
   Only flag divergence as a problem when the code violates the contract or is fail-open.
+
+### GATE DECISION RULE
+
+Return `NO-GO` if any of the following is found:
+- `FAIL_OPEN` in a production path
+- `UNWRAP_IN_PROD` in a production path without documented safety rationale
+- Missing enforcement for a safety-critical AT
+- Missing TRIP or NON-TRIP proof for a safety-critical AT
+- `WRONG_IMPL_UNBLOCKED` for a safety-critical AT
+- `SILENT_REJECT` on a path that protects capital or preserves valid profit
+- Trading lens = `BLOCKING`
+
+Trading lens = `BLOCKING` requires `GATE: NO-GO`.
+`GATE: GO` is valid only when trading lens is `PASS` or `HARDENING`.
 
 ---
 
@@ -213,13 +237,14 @@ Classify every issue as one of:
 rg / grep / cat / jq / less          (inspection)
 cargo check --workspace              (compilation check)
 cargo test <target>                   (verification — run, don't create)
-git diff / git show / git log        (inspection)
+git status / git diff / git show / git log  (inspection)
+diff                                  (read-only integrity comparison)
 ```
 
 ### PROHIBITED COMMANDS
 
 ```
-sed -i / awk (with file modification) / any write command
+sed -i / awk (with file modification) / any write command that modifies repository files
 cargo add / cargo rm                  (dependency changes)
 ```
 
@@ -232,6 +257,9 @@ cargo add / cargo rm                  (dependency changes)
 ```
 GATE: GO | NO-GO
 Reason: <one line>
+Trading lens: PASS | BLOCKING | HARDENING
+Trading lens reason: <one line>
+Trading lens evidence: <file:line or artifact pointer>
 ```
 
 ### B) AT AUDIT TABLE
@@ -276,6 +304,26 @@ List any risks discovered:
 - Blast radius concerns
 - Silent reject paths (no log, no metric)
 
+#### D1) Trading-System Risk Lens
+
+For this implementation, answer all three:
+- Loss risk: Did the implementation introduce any direct or indirect path to avoidable loss
+  (wrong order behavior, widened exposure, blocked reductions, stale-state execution,
+  duplicate action, reconciliation drift, or fail-open behavior)?
+- Profit-block risk: Did the implementation introduce any path that could silently block valid
+  profit (false rejects, unnecessary restrictions, degraded signal interpretation, or avoidable
+  execution friction)?
+- Simpler-safer alternative: Is there a simpler or safer design that would reduce risk or
+  preserve edge better?
+
+Classify findings as:
+- BLOCKING if they can cause loss, fail-open behavior, or silently prevent valid profit in
+  normal operation.
+- HARDENING if they are improvements but not required for current contract-safe behavior.
+
+For each trading-lens classification, include at least one evidence pointer (`file:line` or
+artifact path). No evidence pointer means the trading-lens line in Section A is invalid.
+
 ### E) REMEDIATION PLAN (ordered, smallest-first)
 
 ```
@@ -300,7 +348,7 @@ Priority ordering:
 ### FINAL LINE (exact)
 
 ```
-READY FOR SELF_REVIEW
+READY FOR IMPLEMENT GATE
 ```
 
 ---
@@ -311,7 +359,7 @@ READY FOR SELF_REVIEW
 - Do NOT edit tests
 - Do NOT edit `plans/prd.json`
 - Do NOT create or modify review artifacts
-- Do NOT create new files in any directory
+- Do NOT create new files inside the repository (git-tracked or untracked); temporary files under `/tmp` for the read-only integrity check are allowed
 - Do NOT run `./plans/prd_set_pass.sh`
 - Do NOT claim a fix was applied in this step
 - Do NOT skip the premortem §10 STOPLIGHT gate

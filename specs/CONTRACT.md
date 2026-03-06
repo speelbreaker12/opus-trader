@@ -141,6 +141,17 @@ Before live-trading enablement, these operational baseline items MUST be complet
 
 **Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys.
 
+**P0-E clarifications (Normative):**
+- The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement (after foundation mode exits).
+- In foundation mode, `/api/v1/status` uses the status-lite schema (AT-1230). The equivalent "opens not permitted" signal in foundation mode is `dispatch_enabled: false` (not `opens_globally_permitted`).
+- `/api/v1/health` MUST use the liveness key `ok`. `/api/v1/status` MUST use the liveness key `service_up` (foundation mode) or the full CSP minimum schema (Phase 2+). These keys MUST NOT be swapped or mixed between surfaces.
+
+**AT-P0E-NEG** `Profile: GOP` (Negative assertion)
+Given: The system is running in foundation mode (`dispatch_enabled: false`, `phase: foundation`).
+When: The `/api/v1/status` endpoint is queried.
+Then: The response MUST NOT contain any CSP minimum schema keys, including: `mode_reasons`, `open_permission_blocked_latch`, `enforced_profile`, `trading_mode`, `opens_globally_permitted`.
+Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumers that see them may incorrectly treat them as authoritative, enabling fail-open decisions.
+
 **Status authority matrix (Normative):**
 
 | Surface | Phase applicability | Required keys / schema | Authority boundary |
@@ -167,10 +178,7 @@ This repo is a Rust workspace with two required crates:
 - `crates/soldier_core`
 - `crates/soldier_infra`
 
-Any “Where:” references in this contract that mention `soldier/core/...` or `soldier/infra/...` map to:
-
-- `soldier/core/...` => `crates/soldier_core/...`
-- `soldier/infra/...` => `crates/soldier_infra/...`
+All “Where:” references in this contract use the canonical paths `crates/soldier_core/src/...` and `crates/soldier_infra/src/...`.
 
 Contract invariant: any implementation that relocates these crates or breaks this mapping is non-compliant unless `CONTRACT.md` is updated first.
 
@@ -759,6 +767,8 @@ AT-104
 - Pass criteria: OPEN dispatch count remains 0; CLOSE/HEDGE/CANCEL are not blocked solely by stale metadata.
 - Fail criteria: any OPEN is dispatched while metadata is stale.
 
+**Phase 1 stub test note (AT-104):** AT-104 requires `TradingMode==ReduceOnly` (full PolicyGuard resolver, Phase 2). A Phase 1 stub test MAY prove the precondition by verifying that `RiskState::Degraded` is set when metadata is stale, and that OPEN intents are blocked by `RiskState::Degraded` alone (without requiring the full PolicyGuard TradingMode axis resolver). The full AT-104 (including `TradingMode==ReduceOnly` assertion) MUST pass before Phase 2 completion.
+
 AT-333
 - Given: instrument metadata is fetched from `/public/get_instruments`.
 - When: quantization/sizing uses `tick_size`, `amount_step`, `min_amount`, and `contract_multiplier`.
@@ -881,6 +891,8 @@ pub struct OrderSize {
 }
 ```
 
+**Note:** `contracts` values exceeding 2^53 are non-compliant due to f64 precision limits (JSON and many downstream consumers serialize integers as f64; values > 2^53 lose integer precision).
+
 **Dispatcher Rules (Deribit request mapping):**
 - Determine `instrument_kind` from instrument metadata (`option | linear_future | inverse_future | perpetual`).
 - Compute size fields:
@@ -925,7 +937,7 @@ AT-920
 - `sid8` = first 8 chars of stable strategy id hash (e.g., base32(xxhash(strat_id)))
 - `gid12` = first 12 chars of group_id (uuid without dashes, truncated)
 - `li` = leg_idx (0/1)
-- `ih16` = 16-hex (or base32) intent hash
+- `ih16` = 16-hex intent hash
 
 **Deribit Constraint:** `label` must be <= 64 chars. (Hard limit)
 
@@ -935,11 +947,86 @@ Rejections for schema/length violations MUST use `Rejected(LabelTooLong)` (or a 
 **Legacy Documentation Format (non-sent):** `s4:{strat_id}:{group_id}:{leg_idx}:{intent_hash}`  
 This expanded format is for human-readable logs and internal documentation only. It MUST NOT be sent to the exchange.
 
+### **1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)**
+
+**Requirement:** All idempotency keys and order payloads MUST use canonical, exchange-valid rounded values.
+
+**Where:** `crates/soldier_core/src/execution/quantize.rs`
+
+**Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`
+**Outputs:** `qty_q`, `limit_price_q` (quantized)
+
+**Rules (Deterministic):**
+- Fetch instrument constraints: `tick_size`, `amount_step`, `min_amount`.
+- If any of `tick_size`, `amount_step`, or `min_amount` is missing or unparseable -> Reject(intent=InstrumentMetadataMissing) and do not dispatch (fail-closed).
+- `qty_q = round_down(raw_qty, amount_step)` (never round up size).
+- `limit_price_q = round_to_nearest_tick(raw_limit_price, tick_size)` (or round in the safer direction; see below).
+- If `qty_q < min_amount` → Reject(intent=TooSmallAfterQuantization).
+- Idempotency hash must be computed ONLY from quantized fields:
+  `intent_hash = xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)`
+
+**Safer rounding direction:**
+- For BUY: round `limit_price_q` DOWN (never pay extra).
+- For SELL: round `limit_price_q` UP (never sell cheaper).
+
+**Note:** Side-only rounding is intentional for simplicity. For CLOSE/HEDGE orders, `close_buffer_ticks` in §3.1 compensates for the conservative rounding direction.
+
+**Acceptance Tests (REQUIRED):**
+AT-218
+- Given: two codepaths compute the same intent fields.
+- When: `intent_hash` is generated.
+- Then: both hashes are identical.
+- Pass criteria: `intent_hash` equality across codepaths.
+- Fail criteria: hash mismatch for identical inputs.
+
+AT-219
+- Given: raw BUY and SELL prices that are not on tick.
+- When: quantization runs.
+- Then: BUY rounds down and SELL rounds up (never worse price).
+- Pass criteria: BUY price never increases; SELL price never decreases.
+- Fail criteria: BUY rounds up or SELL rounds down.
+
+AT-908
+- Given: `qty_q < min_amount` after quantization for an OPEN intent.
+- When: quantization runs.
+- Then: intent is rejected with `Rejected(TooSmallAfterQuantization)` and no dispatch occurs.
+- Pass criteria: rejection reason matches; dispatch count remains 0.
+- Fail criteria: dispatch occurs or reason missing/mismatched.
+
+AT-926
+- Given: instrument metadata is missing/unparseable (`tick_size` or `amount_step` or `min_amount`).
+- When: quantization runs for an OPEN intent.
+- Then: the intent is rejected with `Rejected(InstrumentMetadataMissing)` and no dispatch occurs.
+- Pass criteria: rejection reason matches; dispatch count remains 0.
+- Fail criteria: dispatch occurs or an implicit default is used.
+
+AT-928
+- Given: the WAL already contains `intent_hash` for a pending intent.
+- When: the system evaluates a new intent with the same `intent_hash`.
+- Then: it is a NOOP (no dispatch; no new WAL entry).
+- Pass criteria: dispatch count remains 0; WAL unchanged.
+- Fail criteria: a duplicate dispatch occurs or WAL duplicates the intent.
+
+**Idempotency Rules (Non-Negotiable):**
+1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
+2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by `group_id`.
+3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
+4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute “atomic slippage” per group.
+
+AT-1098
+- Given: a multi-leg atomic group is dispatched and one or more fills arrive (via WS or REST trade reconciliation).
+- When: fill attribution is performed.
+- Then: every fill MUST map to exactly one `group_id` + `leg_idx` pair; no fill is unattributed (orphan) and no fill maps to multiple groups.
+- Pass criteria: all fills have a valid `group_id` + `leg_idx`; atomic slippage per group is computable from the attributed fills.
+- Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
+
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
 
 **Requirement:** Label collisions can still occur (hash collisions or non-conforming labels). The Soldier must deterministically map exchange orders to local intents.
 
-**Where:** `soldier/core/recovery/label_match.rs`
+**Where:** `crates/soldier_core/src/recovery/label_match.rs`
+
+**Note:** At 10^4 intents/day, the expected collision rate for a 64-bit hash is < 10^-15/year. The fallback algorithm exists for defense-in-depth, not expected operations.
 
 **Algorithm:**
 1) Parse label → extract `{sid8, gid12, leg_idx, ih16}`.
@@ -989,10 +1076,10 @@ AT-921
 
 
 
-* `strat_id`: Static ID of the running strategy (e.g., `strangle_btc_low_vol`).  
-* `group_id`: UUIDv4 (Shared by all legs in a single atomic attempt).  
-* `leg_idx`: `0` or `1` (Identity within the group).  
-* `intent_hash`: `xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)` (see §1.1.1 for quantization)  
+* `strat_id`: Static ID of the running strategy (e.g., `strangle_btc_low_vol`).
+* `group_id`: UUIDv4 (Shared by all legs in a single atomic attempt).
+* `leg_idx`: `0` or `1` (Identity within the group).
+* `intent_hash`: `xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)` (see §1.1.1 for quantization)
   **Hard rule:** Do NOT include wall-clock timestamps in the idempotency hash.
 
 AT-343
@@ -1008,78 +1095,6 @@ AT-933
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
 - Fail criteria: duplicate dispatch occurs or orders are treated as missing.
-
-
-### **1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)**
-
-**Requirement:** All idempotency keys and order payloads MUST use canonical, exchange-valid rounded values.
-
-**Where:** `soldier/core/execution/quantize.rs`
-
-**Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`  
-**Outputs:** `qty_q`, `limit_price_q` (quantized)
-
-**Rules (Deterministic):**
-- Fetch instrument constraints: `tick_size`, `amount_step`, `min_amount`.
-- If any of `tick_size`, `amount_step`, or `min_amount` is missing or unparseable -> Reject(intent=InstrumentMetadataMissing) and do not dispatch (fail-closed).
-- `qty_q = round_down(raw_qty, amount_step)` (never round up size).
-- `limit_price_q = round_to_nearest_tick(raw_limit_price, tick_size)` (or round in the safer direction; see below).
-- If `qty_q < min_amount` → Reject(intent=TooSmallAfterQuantization).
-- Idempotency hash must be computed ONLY from quantized fields:
-  `intent_hash = xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)`
-
-**Safer rounding direction:**
-- For BUY: round `limit_price_q` DOWN (never pay extra).
-- For SELL: round `limit_price_q` UP (never sell cheaper).
-
-**Acceptance Tests (REQUIRED):**
-AT-218
-- Given: two codepaths compute the same intent fields.
-- When: `intent_hash` is generated.
-- Then: both hashes are identical.
-- Pass criteria: `intent_hash` equality across codepaths.
-- Fail criteria: hash mismatch for identical inputs.
-
-AT-219
-- Given: raw BUY and SELL prices that are not on tick.
-- When: quantization runs.
-- Then: BUY rounds down and SELL rounds up (never worse price).
-- Pass criteria: BUY price never increases; SELL price never decreases.
-- Fail criteria: BUY rounds up or SELL rounds down.
-
-AT-908
-- Given: `qty_q < min_amount` after quantization for an OPEN intent.
-- When: quantization runs.
-- Then: intent is rejected with `Rejected(TooSmallAfterQuantization)` and no dispatch occurs.
-- Pass criteria: rejection reason matches; dispatch count remains 0.
-- Fail criteria: dispatch occurs or reason missing/mismatched.
-
-AT-926
-- Given: instrument metadata is missing/unparseable (`tick_size` or `amount_step` or `min_amount`).
-- When: quantization runs for an OPEN intent.
-- Then: the intent is rejected with `Rejected(InstrumentMetadataMissing)` and no dispatch occurs.
-- Pass criteria: rejection reason matches; dispatch count remains 0.
-- Fail criteria: dispatch occurs or an implicit default is used.
-
-AT-928
-- Given: the WAL already contains `intent_hash` for a pending intent.
-- When: the system evaluates a new intent with the same `intent_hash`.
-- Then: it is a NOOP (no dispatch; no new WAL entry).
-- Pass criteria: dispatch count remains 0; WAL unchanged.
-- Fail criteria: a duplicate dispatch occurs or WAL duplicates the intent.
-
-**Idempotency Rules (Non-Negotiable):**
-1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
-2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by `group_id`.
-3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
-4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute "atomic slippage" per group.
-
-AT-1098
-- Given: a multi-leg atomic group is dispatched and one or more fills arrive (via WS or REST trade reconciliation).
-- When: fill attribution is performed.
-- Then: every fill MUST map to exactly one `group_id` + `leg_idx` pair; no fill is unattributed (orphan) and no fill maps to multiple groups.
-- Pass criteria: all fills have a valid `group_id` + `leg_idx`; atomic slippage per group is computable from the attributed fills.
-- Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
 
 
 ### **1.2 Atomic Group Executor**
@@ -1104,7 +1119,7 @@ AT-1098
 **Fail-Closed Rule:**
 - Group intent MUST be durably recorded before any leg dispatch. If persistence fails, the executor MUST abort and MUST NOT submit any leg orders.
 
-**Where:** `soldier/core/execution/atomic_group_executor.rs`
+**Where:** `crates/soldier_core/src/execution/atomic_group_executor.rs`
 
 **Acceptance Test (REQUIRED):**
 AT-220
@@ -1121,7 +1136,7 @@ AT-924
 - Pass criteria: no stall; ReduceOnly enforced; OPEN blocked.
 - Fail criteria: hot loop blocks or OPEN dispatch occurs while lock is unavailable.
 
-**Implementation (Rust Skeleton):** `soldier/core/execution/group.rs`
+**Implementation (Rust Skeleton):** `crates/soldier_core/src/execution/group.rs`
 
 ```rust
 pub enum GroupState { New, Dispatched, Complete, MixedFailed, Flattening, Flattened }
@@ -1256,7 +1271,7 @@ AT-936
   - block new opens for that key (return `Rejected(ChurnBreakerActive)`),
   - allow closes/hedges (ReduceOnly) as normal.
 
-**Where:** `soldier/core/risk/churn_breaker.rs`
+**Where:** `crates/soldier_core/src/risk/churn_breaker.rs`
 
 **Acceptance Test (REQUIRED):**
 AT-221
@@ -1271,7 +1286,7 @@ AT-221
 **Goal:** Prevent the bot from reacting to its own impact and recursively increasing exposure (“echo chamber”).
 This is a **safety guard**, not a strategy feature.
 
-**Where:** `soldier/core/risk/self_impact_guard.rs`
+**Where:** `crates/soldier_core/src/risk/self_impact_guard.rs`
 
 **Inputs (minimum):**
 - Rolling public market volume estimate over `feedback_loop_window_s` (USD notional): `public_notional_usd`
@@ -1346,7 +1361,7 @@ AT-957
 
 ### **1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)**
 
-**Council Weakness Covered:** No Liquidity Gate (Low) \+ Taker Bleed (Critical). **Requirement:** Before any order is sent (including IOC), the Soldier must estimate book impact for the requested size and reject trades that exceed max slippage. **Where:** `soldier/core/execution/gate.rs` **Input:** `OrderQty`, `L2BookSnapshot`, `max_slippage_bps = 10` (default: see Appendix A)
+**Council Weakness Covered:** No Liquidity Gate (Low) \+ Taker Bleed (Critical). **Requirement:** Before any order is sent (including IOC), the Soldier must estimate book impact for the requested size and reject trades that exceed max slippage. **Where:** `crates/soldier_core/src/execution/gate.rs` **Input:** `OrderQty`, `L2BookSnapshot`, `max_slippage_bps = 10` (default: see Appendix A)
 
 If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents. CLOSE/HEDGE/replace order placement is rejected; CANCEL-only intents remain allowed. Deterministic Emergency Close is exempt from profitability gates, but still requires a valid price source; if L2 is missing/stale it MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
 Rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateNoL2)`.
@@ -1408,7 +1423,7 @@ AT-1216
 ### **1.4 Fee-Aware IOC Limit Pricer (No Market Orders)**
 **Council Weakness Covered:** Taker Bleed (Critical) + Fee Blindness (High)
 
-**Where:** `soldier/core/execution/pricer.rs`  
+**Where:** `crates/soldier_core/src/execution/pricer.rs`  
 **Input:** `fair_price`, `gross_edge_usd`, `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`  
 **Output:** `limit_price`
 
@@ -1441,7 +1456,7 @@ AT-223
 ### **1.4.1 Net Edge Gate (Fees + Expected Slippage)**
 **Why this exists:** Prevent “gross edge” hallucinations from bypassing execution safety.
 
-**Where:** `soldier/core/execution/gates.rs`  
+**Where:** `crates/soldier_core/src/execution/gates.rs`  
 **Input:** `gross_edge_usd`, `fee_usd`, `expected_slippage_usd`, `min_edge_usd`  
 **Output:** `Allowed | Rejected(reason=NetEdgeTooLow)`
 
@@ -1550,7 +1565,7 @@ AT-934
 
 **Requirement:** Before dispatching any new `AtomicGroup`, the Soldier must **reserve** the projected exposure impact of the intent, atomically, against a shared budget.
 
-**Where:** `soldier/core/risk/pending_exposure.rs`
+**Where:** `crates/soldier_core/src/risk/pending_exposure.rs`
 
 **Model (Minimum Viable):**
 - Maintain `pending_delta` (and optionally pending vega/gamma) per instrument + global.
@@ -1589,7 +1604,7 @@ AT-910
 ### **1.4.2.2 Global Exposure Budget (Cross‑Instrument, Correlation‑Aware)**
 **Goal:** Prevent “safe per‑instrument” trades from stacking into unsafe portfolio exposure.
 
-**Where:** `soldier/core/risk/exposure_budget.rs`
+**Where:** `crates/soldier_core/src/risk/exposure_budget.rs`
 
 **Budget Model (Pragmatic MVP):**
 - Track exposures per instrument and portfolio aggregate:
@@ -1628,8 +1643,8 @@ AT-929
 **Why this exists:** Delta-neutral ≠ safe. Deribit can hike maintenance margin; margin liquidation is the silent killer.
 
 **Where:**
-- Gate: `soldier/core/risk/margin_gate.rs`
-- Fetcher: `soldier/infra/deribit/account_summary.rs`
+- Gate: `crates/soldier_core/src/risk/margin_gate.rs`
+- Fetcher: `crates/soldier_infra/src/deribit/account_summary.rs`
 
 **Inputs:** `/private/get_account_summary` → `maintenance_margin`, `initial_margin`, `equity`  
 **Computed:** `mm_util = maintenance_margin / max(equity, epsilon)`
@@ -1801,7 +1816,7 @@ AT-916
 ### **1.5 Position-Aware Execution Sequencer (Council D3)**
 **Goal:** Prevent creating *new* naked risk while repairing, hedging, or closing.
 
-**Where:** `soldier/core/execution/sequencer.rs`  
+**Where:** `crates/soldier_core/src/execution/sequencer.rs`  
 **Input:** `intent_kind(Open|Close|Repair)`, `current_positions`, `desired_legs`, `risk_limits`  
 **Output:** An ordered list of **ExecutionSteps** with enforced prerequisites (confirmations).
 
@@ -1839,14 +1854,14 @@ Profile: CSP
 
 **Requirement**: Never panic. Handle real-world messiness (e.g., receiving a Fill message before the Acknowledgement message).
 
-**Where:** `soldier/core/execution/state.rs`
+**Where:** `crates/soldier_core/src/execution/state.rs`
 
 **States:** `Created -> Sent -> Acked -> PartiallyFilled -> Filled | Canceled | Failed`
 
 **Hard Rules:**
 - Never panic on out-of-order WS events.
 - “Fill-before-Ack” is valid reality: accept fill, log anomaly, reconcile later.
-- Every transition is appended to WAL immediately.
+- Every transition is enqueued to the WAL writer immediately (within the same tick). Durability semantics follow §2.4.1.
 
 **Acceptance Test (REQUIRED):**
 AT-230
@@ -1856,11 +1871,63 @@ AT-230
 - Pass criteria: Filled state and WAL contains both events.
 - Fail criteria: crash, wrong state, or WAL missing events.
 
+Profile: CSP
+AT-TLSM-01
+- Given: an order intent transitions through the normal flow: `Created→Sent→Acked→Filled`.
+- When: TLSM processes each event in sequence.
+- Then: the final state is `Filled`.
+- Pass criteria: TLSM reaches `Filled`; no panic; WAL records each transition.
+- Fail criteria: state is not `Filled`, panic occurs, or WAL is missing a transition.
+
+Profile: CSP
+AT-TLSM-02
+- Given: an order intent in `PartiallyFilled` state receives a `Canceled` event.
+- When: TLSM processes the cancel event.
+- Then: the final state is `Cancelled` and the WAL contains both the `PartiallyFilled` transition and the `Cancelled` transition, in that order.
+- Pass criteria: state is `Cancelled`; WAL records `PartiallyFilled → Cancelled` in sequence.
+- Fail criteria: state is incorrect, or WAL record is missing/out-of-order.
+- Phase 2 note: qty preservation in WAL (partial fill qty matching the fill) is deferred to Phase 2 when `TlsmEvent::PartialFill` gains a qty field.
+
+Profile: CSP
+AT-TLSM-03
+- Given: an order intent in `Sent` state receives a `VenueRejected` event (before `Acked`).
+- When: TLSM processes the venue rejection.
+- Then: the final state is `Failed`.
+- Pass criteria: state is `Failed`; no panic; WAL records the `VenueRejected`→`Failed` transition.
+- Fail criteria: state is not `Failed`, or the rejection is silently dropped.
+
+**AT-TLSM-03-NT** (NON-TRIP) `Profile: CSP`
+Given: A TLSM in `Sent` state.
+When: `Acked` event is applied.
+Then: State transitions to `Acked` — NOT to `Failed`. The `VenueRejected` handler MUST NOT fire on valid acknowledgements.
+
+Profile: CSP
+AT-TLSM-04
+- Given: an order intent is already in `Filled` state and a second fill event arrives.
+- When: TLSM processes the duplicate fill event.
+- Then: it is a NOOP — state remains `Filled`, no duplicate WAL entry, no panic.
+- Pass criteria: state unchanged; WAL has no additional transition entry; no crash.
+- Fail criteria: state changes, a duplicate WAL entry is written, or the handler panics.
+
+Profile: CSP
+AT-TLSM-05
+- Given: an order intent has reached a terminal state (`Filled`, `Canceled`, or `Failed`).
+- When: any subsequent TLSM event is received for that intent.
+- Then: no state transition occurs — the terminal state is immutable.
+- Pass criteria: state remains unchanged for all terminal states across all possible subsequent events.
+- Fail criteria: any event causes a transition out of a terminal state.
+
+**AT-TLSM-06** `Profile: CSP`
+Given: The WAL contains a historical record with `tls_state: Rejected` (a venue-level rejection preserved from legacy).
+When: The system restarts and replays the WAL.
+Then: The replayed intent MUST be treated as terminal (`is_terminal() == true`), the pending exposure reservation MUST be released, and NO re-dispatch MUST occur.
+Where: `crates/soldier_infra/src/store/ledger.rs` — `TlsState::Rejected.is_terminal()`.
+Note: `TlsState::Rejected` is WAL-only and `#[deprecated]`; the core TLSM maps `VenueRejected` events to `TlsmState::Failed`. This AT covers only the WAL-replay path.
 
 ### **2.2 PolicyGuard (Single Authoritative TradingMode Resolver)**
 **Goal:** Eliminate conflicting “mode sources” and prevent stale/late policy pushes from re‑enabling risk.
 
-**Where:** `soldier/core/policy/guard.rs`
+**Where:** `crates/soldier_core/src/policy/guard.rs`
 
 **Inputs:**
 - **Timebase convention:** all `*_ts_ms` values used for staleness/freshness are **monotonic‑epoch milliseconds** (epoch‑aligned, monotonic); `now_ms` is current monotonic‑epoch milliseconds (and `now` refers to `now_ms` in this contract); seconds are derived as `(now_ms - *_ts_ms)/1000`.
@@ -2889,7 +2956,7 @@ AT-1101
 
 ### 2.3 Reflexive Cortex (Hot-Loop Safety Override)
 
-**Where:** `soldier/core/reflex/cortex.rs`
+**Where:** `crates/soldier_core/src/reflex/cortex.rs`
 
 **Inputs:** `MarketData(dvol, spread_bps, depth_topN, last_1m_return)`  
 **Output:** `SafetyOverride::{None, ForceReduceOnly{cooldown_s}, ForceKill}`
@@ -2971,7 +3038,7 @@ AT-119
   - Set `cortex_override = ForceReduceOnly` (producer output; effective override is max-severity per §2.3).
   - Reason: unknown exchange state is not safe for new opens.
 
-**Where:** `soldier/core/risk/exchange_health.rs`
+**Where:** `crates/soldier_core/src/risk/exchange_health.rs`
 
 **Acceptance Test (REQUIRED):**
 AT-232
@@ -3074,7 +3141,7 @@ AT-205
 **Purpose:** Liquidation/margin risk is driven by reference prices (e.g., mark), not necessarily last trade. Large basis
 divergence is a microstructure failure mode; the bot MUST fail-closed for new risk when basis blows out.
 
-**Where:** `soldier/core/risk/basis_monitor.rs`
+**Where:** `crates/soldier_core/src/risk/basis_monitor.rs`
 
 **Inputs (per instrument, minimum):**
 - `mark_price` (float, >0) + `mark_price_ts_ms`
@@ -3138,7 +3205,7 @@ AT-963
 Alias anchor: `§2.4 — WAL / intent ledger (RecordedBeforeDispatch)`.
 Profile: CSP
 
-**Council Weakness Covered:** TLSM duplication \+ messy middle \+ restart correctness. **Requirement:** Redis is not a source of truth. All intents \+ state transitions must be persisted to a crash-safe local WAL (Sled or SQLite). **Where:** `soldier/infra/store/ledger.rs` **Rules:**
+**Council Weakness Covered:** TLSM duplication \+ messy middle \+ restart correctness. **Requirement:** Redis is not a source of truth. All intents \+ state transitions must be persisted to a crash-safe local WAL (Sled or SQLite). **Where:** `crates/soldier_infra/src/store/ledger.rs` **Rules:**
 
 * Write intent record BEFORE network dispatch.  
 * Write every TLSM transition immediately (append-only).  
@@ -3167,14 +3234,25 @@ Profile: CSP
   - `wal_queue_capacity` (max items in the WAL queue)
   - `wal_queue_enqueue_failures` (monotonic counter of failed enqueues)
 
+> **Architecture boundary (Normative):** The fsync/durability barrier MUST execute
+> in the WAL writer task (a separate async task), NOT in the hot loop that calls
+> `RecordedBeforeDispatch`. The hot-loop gate succeeds upon successful **enqueue**
+> into the bounded channel. If the channel is full, the gate MUST fail closed
+> (reject OPEN). The WAL writer task may block on fsync with a bounded timeout;
+> if fsync times out or errors, the writer MUST signal degraded state and the next
+> OPEN gate attempt MUST fail closed.
+
 **Hot-loop output queue backpressure (Non-Negotiable):**
 - All hot-loop output queues (status writer, telemetry, order events) MUST be bounded.
 - If any such queue is full, the hot loop MUST NOT block and MUST force ReduceOnly until backlog clears.
 
 **Persisted Record (Minimum):**
-- intent_hash, group_id, leg_idx, instrument, side, reduce_only, qty, limit_price
+- intent_hash, group_id, leg_idx, instrument, side, reduce_only: bool, qty, limit_price
 - tls_state, created_ts, sent_ts, ack_ts, last_fill_ts
 - exchange_order_id (if known), last_trade_id (if known)
+
+**Migration note:** WAL records written before `reduce_only` was added to the minimum field list MUST be treated as `reduce_only = false` (conservative: OPEN classification) for backwards compatibility.
+NOTE: `reduce_only = false` means the intent is classified as OPEN — the most conservative choice, since it applies all OPEN gates on recovery. Do NOT default to `true` (CLOSE/HEDGE): this would bypass OPEN gates for potentially risk-increasing legacy orders.
 
 **Acceptance Tests (REQUIRED):**
 AT-233
@@ -3276,7 +3354,7 @@ Profile: CSP
 
 **Requirement**: When an atomic group fails, we must exit the position *immediately* and *safely*.
 
-**Where:** `soldier/core/execution/emergency_close.rs`
+**Where:** `crates/soldier_core/src/execution/emergency_close.rs`
 
 **Price Source (Deterministic, fail-closed):**
 - Primary: `L2BookSnapshot` best bid/ask when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
@@ -3402,7 +3480,7 @@ AT-203
 
 **Council Weakness Covered:** Rate Limit Exhaustion (Medium) + Session Termination (High).
 
-**Where:** `soldier/infra/api/rate_limit.rs`
+**Where:** `crates/soldier_infra/src/api/rate_limit.rs`
 
 **Deribit Reality (MUST implement):**
 - Deribit uses a **credit-based / tiered** limit system. Limits are **dynamic per account/subaccount**.
@@ -3776,7 +3854,7 @@ AT-1104
 
 **Why this exists:** RMSE/drift gates can pass while the curve is financially nonsense. We must reject **arbitrageable** surfaces.
 
-**Where:** `soldier/core/quant/svi_arb.rs` (invoked from `validate_svi_fit(...)`)
+**Where:** `crates/soldier_core/src/quant/svi_arb.rs` (invoked from `validate_svi_fit(...)`)
 
 **Guards (minimum viable):**
 - **Butterfly convexity:** across a grid of strikes, call prices must be convex in strike  
@@ -3829,7 +3907,7 @@ Profile: CSP
 - Fee depends on instrument type (option/perp), maker/taker, and delivery proximity.
 - `fee_usd = Σ(leg.notional_usd * (fee_rate + delivery_buffer))`
 
-**Implementation:** `soldier/core/strategy/fees.rs`
+**Implementation:** `crates/soldier_core/src/strategy/fees.rs`
 - Provide `estimate_fees(legs, is_maker, is_near_expiry) -> fee_usd`
 
 **Acceptance Test (REQUIRED):**
@@ -3938,7 +4016,7 @@ AT-1114
 ### **4.3 Time Drift Safety Gate**
 Profile: CSP
 
-**Council Weakness Covered:** time handling / drift safety. **Where:** `soldier/core/analytics/attribution.rs` (or equivalent time-drift guard path). **Safety requirement:** time drift beyond threshold must force a safety downgrade regardless of attribution completeness. **Key safety fields:** `exchange_ts`, `local_recv_ts`, `drift_ms = local_recv_ts - exchange_ts`. **Rules:**
+**Council Weakness Covered:** time handling / drift safety. **Where:** `crates/soldier_core/src/analytics/attribution.rs` (or equivalent time-drift guard path). **Safety requirement:** time drift beyond threshold must force a safety downgrade regardless of attribution completeness. **Key safety fields:** `exchange_ts`, `local_recv_ts`, `drift_ms = local_recv_ts - exchange_ts`. **Rules:**
 
 * If `drift_ms` exceeds `time_drift_threshold_ms` (default: **50ms**, configurable), the system MUST set `RiskState::Degraded` and PolicyGuard MUST compute `TradingMode::ReduceOnly` via the canonical `risk_state == Degraded` trigger (see §2.2.3).
 * Require **chrony/NTP** running as an operational prerequisite.
@@ -4171,7 +4249,7 @@ AT-044
 ### **4.4 Fill Simulator (Shadow Mode Book-Walk)**
 Profile: GOP
 
-**Council Weakness Covered:** Constraint relief — execution reality feedback loop. **Where:** `soldier/core/sim/exchange.rs` **Requirement:** Before live fire, run Shadow Mode that simulates fills by walking L2 depth and applying maker/taker fees. **Algorithm:**
+**Council Weakness Covered:** Constraint relief — execution reality feedback loop. **Where:** `crates/soldier_core/src/sim/exchange.rs` **Requirement:** Before live fire, run Shadow Mode that simulates fills by walking L2 depth and applying maker/taker fees. **Algorithm:**
 
 * Walk the book to compute WAP for size.  
 * Apply fee model.  
@@ -4209,7 +4287,7 @@ Profile: GOP
 
 **Where:**
 - Python: `commander/analytics/slippage_calibration.py`
-- Rust (optional): `soldier/core/analytics/slippage_calibration.rs`
+- Rust (optional): `crates/soldier_core/src/analytics/slippage_calibration.rs`
 
 **Data contract (minimum):**
 - Persist `predicted_slippage_bps_sim` alongside each live decision so the ratio is well-defined.
@@ -4515,6 +4593,8 @@ Profile: GOP
 
 ### **Phase 1: Foundation (Non-Deployable)**
 
+> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema, WAL/durable ledger, Liquidity Gate) satisfy both `Profile: GOP` (roadmap milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete only when the **Phase 1 AT Subset** (see below) passes. These ATs are CSP-scoped for these specific components but do not constitute full CSP compliance. The GOP tag does not relax CSP obligations for these deliverables.
+
 * Instrument metadata + canonical quantization.
 * `s4:` label schema + parser.
 * TLSM core.
@@ -4522,6 +4602,33 @@ Profile: GOP
 * `/health` + minimal owner status scaffolding.
 
 **Phase-1 rule:** Completion of Phase 1 is an implementation milestone only; it is **not** a CSP compliance claim and **not** live-trading readiness.
+
+#### **Phase 1 AT Subset (Required for Phase 1 Completion)**
+
+The following acceptance tests MUST pass before Phase 1 is considered complete. These are the ATs that can be proven without PolicyGuard/reconciliation infrastructure (Phase 2 requirements).
+
+**Required for Phase 1 completion:**
+- AT-216 (s4 label parse/format correctness)
+- AT-218 (deterministic intent hash across codepaths)
+- AT-219 (safe rounding direction: BUY down, SELL up)
+- AT-230 (fill-before-ack: no crash, WAL contains both events)
+- AT-277 (dispatcher mapping: option coin sizing, perp USD sizing, mismatch reject)
+- AT-333 (instrument metadata: no hardcoded defaults)
+- AT-343 (intent hash not time-dependent)
+- AT-905 (repo layout: crates/soldier_core and crates/soldier_infra exist)
+- AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)
+- AT-908 (too-small-after-quantization reject)
+- AT-920 (contracts/amount mismatch reject)
+- AT-921 (unknown label prefix reject)
+- AT-926 (instrument metadata missing/unparseable reject)
+- AT-928 (duplicate intent hash is NOOP; depends on canonical quantization being correct and must pass before Phase 1 is closed)
+- AT-1097 (mixed coin+USD sizing reject)
+
+**Deferred to Phase 2 (require PolicyGuard/reconciliation):**
+- AT-104 (stale instrument metadata blocks OPEN; requires TradingMode enforcement)
+- AT-233 (crash after send, before ACK; requires WAL restart reconcile)
+- AT-234 (crash after fill, before local update; requires WAL restart reconcile)
+- AT-935 (RecordedBeforeDispatch + restart: dispatch exactly once; requires full WAL lifecycle)
 
 ### **Phase 2: CSP Safety Kernel (First Deployable Phase)**
 
@@ -6343,3 +6450,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
 | 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |
+| 2026-03-06 | CCL-2026-03-06-01 | Branch delta vs origin/main (multiple sections and appendices); Appendix CONTRACT_CHANGE_LEDGER | process | Record append-only ledger growth for the current branch-level contract delta so verify gate 02a remains fail-closed and auditable. | `plans/check_contract_change_ledger.sh` requires ledger growth whenever `specs/CONTRACT.md` diverges from base; this preserves deterministic gate behavior. | VR-LEDGER-01 | local/isolated-verify-20260305 |

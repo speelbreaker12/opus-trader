@@ -35,9 +35,9 @@ fn test_at277_option_sizing() {
     };
     let size = build_order_size(&input).must();
 
-    assert_eq!(size.qty_coin, Some(0.3));
-    assert_eq!(size.qty_usd, None, "AT-277: option qty_usd MUST be unset");
-    assert!((size.notional_usd - 30_000.0).abs() < 0.01);
+    assert_eq!(size.qty_coin(), Some(0.3));
+    assert_eq!(size.qty_usd(), None, "AT-277: option qty_usd MUST be unset");
+    assert!((size.notional_usd() - 30_000.0).abs() < 0.01);
 }
 
 #[test]
@@ -50,9 +50,9 @@ fn test_at277_perpetual_sizing() {
     };
     let size = build_order_size(&input).must();
 
-    assert_eq!(size.qty_usd, Some(30_000.0));
-    assert!((size.qty_coin.must() - 0.3).abs() < 1e-9);
-    assert!((size.notional_usd - 30_000.0).abs() < 0.01);
+    assert_eq!(size.qty_usd(), Some(30_000.0));
+    assert!((size.qty_coin().must() - 0.3).abs() < 1e-9);
+    assert!((size.notional_usd() - 30_000.0).abs() < 0.01);
 }
 
 // Canonical sizing per instrument kind
@@ -66,9 +66,9 @@ fn test_option_canonical_is_qty_coin() {
         contract_multiplier: None,
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.qty_coin, Some(1.5));
-    assert_eq!(size.qty_usd, None);
-    assert!((size.notional_usd - 75_000.0).abs() < 0.01);
+    assert_eq!(size.qty_coin(), Some(1.5));
+    assert_eq!(size.qty_usd(), None);
+    assert!((size.notional_usd() - 75_000.0).abs() < 0.01);
 }
 
 #[test]
@@ -80,9 +80,9 @@ fn test_linear_future_canonical_is_qty_coin() {
         contract_multiplier: None,
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.qty_coin, Some(2.0));
-    assert_eq!(size.qty_usd, None);
-    assert!((size.notional_usd - 120_000.0).abs() < 0.01);
+    assert_eq!(size.qty_coin(), Some(2.0));
+    assert_eq!(size.qty_usd(), None);
+    assert!((size.notional_usd() - 120_000.0).abs() < 0.01);
 }
 
 #[test]
@@ -94,9 +94,9 @@ fn test_perpetual_canonical_is_qty_usd() {
         contract_multiplier: None,
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.qty_usd, Some(50_000.0));
-    assert!((size.qty_coin.must() - 0.5).abs() < 1e-9);
-    assert!((size.notional_usd - 50_000.0).abs() < 0.01);
+    assert_eq!(size.qty_usd(), Some(50_000.0));
+    assert!((size.qty_coin().must() - 0.5).abs() < 1e-9);
+    assert!((size.notional_usd() - 50_000.0).abs() < 0.01);
 }
 
 #[test]
@@ -108,9 +108,9 @@ fn test_inverse_future_canonical_is_qty_usd() {
         contract_multiplier: None,
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.qty_usd, Some(10_000.0));
-    assert!((size.qty_coin.must() - 0.2).abs() < 1e-9);
-    assert!((size.notional_usd - 10_000.0).abs() < 0.01);
+    assert_eq!(size.qty_usd(), Some(10_000.0));
+    assert!((size.qty_coin().must() - 0.2).abs() < 1e-9);
+    assert!((size.notional_usd() - 10_000.0).abs() < 0.01);
 }
 
 #[test]
@@ -131,14 +131,18 @@ fn test_instrument_kind_metadata_changes_sizing_outcome() {
     let option_size = build_order_size(&option_input).must();
     let perp_size = build_order_size(&perp_input).must();
 
-    assert!(option_size.qty_coin.is_some(), "option must have qty_coin");
     assert!(
-        option_size.qty_usd.is_none(),
+        option_size.qty_coin().is_some(),
+        "option must have qty_coin"
+    );
+    assert!(
+        option_size.qty_usd().is_none(),
         "option must not have qty_usd"
     );
-    assert!(perp_size.qty_usd.is_some(), "perpetual must have qty_usd");
+    assert!(perp_size.qty_usd().is_some(), "perpetual must have qty_usd");
     assert_ne!(
-        option_size.notional_usd, perp_size.notional_usd,
+        option_size.notional_usd(),
+        perp_size.notional_usd(),
         "different instrument_kind must produce different notional_usd"
     );
 }
@@ -162,9 +166,9 @@ fn test_notional_usd_always_populated() {
         };
         let size = build_order_size(&input).must();
         assert!(
-            (size.notional_usd - expected_notional).abs() < 0.01,
+            (size.notional_usd() - expected_notional).abs() < 0.01,
             "notional_usd wrong for {kind:?}: got {} expected {expected_notional}",
-            size.notional_usd
+            size.notional_usd()
         );
     }
 }
@@ -180,7 +184,7 @@ fn test_contracts_derived_for_option() {
         contract_multiplier: Some(1.0),
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.contracts, Some(3));
+    assert_eq!(size.contracts(), Some(3));
 }
 
 #[test]
@@ -192,7 +196,7 @@ fn test_contracts_derived_for_perpetual() {
         contract_multiplier: Some(10.0),
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.contracts, Some(3000));
+    assert_eq!(size.contracts(), Some(3000));
 }
 
 #[test]
@@ -204,7 +208,7 @@ fn test_no_multiplier_no_contracts() {
         contract_multiplier: None,
     };
     let size = build_order_size(&input).must();
-    assert_eq!(size.contracts, None);
+    assert_eq!(size.contracts(), None);
 }
 
 // Input validation
@@ -310,5 +314,79 @@ fn test_order_size_overflow_contracts_returns_err() {
     assert!(
         matches!(result, Err(OrderSizeError::ContractsOverflow { .. })),
         "expected ContractsOverflow, got {result:?}"
+    );
+}
+
+// TODO-13: contracts > 2^53 must be rejected before i64→f64 conversion (precision loss guard)
+
+#[test]
+fn test_contracts_exceeds_f64_precision_limit_rejected_option() {
+    // Use 2^53 + 2, the next representable f64 above 2^53.
+    // Note: (1i64 << 53) + 1 rounds DOWN to 2^53 in IEEE 754 (odd integers
+    // above 2^53 are not representable); +2 is the first representable value
+    // strictly greater than 2^53, ensuring the precision guard fires.
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: (1i64 << 53) as f64 + 2.0, // first f64 strictly > 2^53
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsPrecisionLoss { .. })),
+        "contracts exceeding 2^53 must return ContractsPrecisionLoss, got {result:?}"
+    );
+}
+
+#[test]
+fn test_contracts_exceeds_f64_precision_limit_rejected_perpetual() {
+    // Same guard must fire for the Perpetual/InverseFuture arm.
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        canonical_qty: (1i64 << 53) as f64 + 2.0, // first f64 strictly > 2^53
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsPrecisionLoss { .. })),
+        "contracts exceeding 2^53 must return ContractsPrecisionLoss (perpetual), got {result:?}"
+    );
+}
+
+#[test]
+fn test_contracts_exceeds_f64_precision_limit_rejected_inverse_future() {
+    // InverseFuture shares the Perpetual code path; explicit coverage documents the invariant.
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::InverseFuture,
+        canonical_qty: (1i64 << 53) as f64 + 2.0, // first f64 strictly > 2^53
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        matches!(result, Err(OrderSizeError::ContractsPrecisionLoss { .. })),
+        "InverseFuture arm must also reject contracts exceeding 2^53, got {result:?}"
+    );
+}
+
+#[test]
+fn test_contracts_at_f64_precision_limit_accepted() {
+    // 2^53 exactly is representable in f64 without loss; must not be rejected.
+    let contracts_value = 1i64 << 53;
+    let input = OrderSizeInput {
+        instrument_kind: InstrumentKind::Option,
+        canonical_qty: contracts_value as f64,
+        index_price: 50_000.0,
+        contract_multiplier: Some(1.0),
+    };
+    let result = build_order_size(&input);
+    assert!(
+        result.is_ok(),
+        "contracts == 2^53 must be accepted (boundary is exclusive), got {result:?}"
+    );
+    assert_eq!(
+        result.as_ref().map(|size| size.contracts()),
+        Ok(Some(contracts_value))
     );
 }

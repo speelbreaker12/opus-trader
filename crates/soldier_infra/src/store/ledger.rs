@@ -24,9 +24,24 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
+static LEGACY_REDUCE_ONLY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
+
+fn should_log_legacy_reduce_only_warning(flag: &AtomicBool) -> bool {
+    !flag.swap(true, Ordering::Relaxed)
+}
+
 fn default_reduce_only_legacy() -> bool {
-    // Fail-closed for legacy WAL lines missing reduce_only: classify as risk-reducing.
-    true
+    // Fail-closed: legacy WAL records missing reduce_only MUST default to false (OPEN classification)
+    // per CONTRACT §2.4. OPEN is the most conservative choice — it applies all OPEN gates on recovery.
+    // NOTE: This field is for WAL persistence/audit only. Gate classification derives from IntentClass.
+    // UPGRADE NOTE: If WAL files predate the reduce_only field, records will be reclassified as OPEN
+    // on replay. Log once per process to avoid replay flood while still surfacing the upgrade hazard.
+    if should_log_legacy_reduce_only_warning(&LEGACY_REDUCE_ONLY_WARNING_EMITTED) {
+        tracing::warn!(
+            "WAL replay: legacy record missing reduce_only field, defaulting to false (OPEN classification)"
+        );
+    }
+    false
 }
 
 // ─── TLSM State ─────────────────────────────────────────────────────────
@@ -46,18 +61,17 @@ pub enum TlsState {
     Filled,
     /// Cancelled (by us or exchange).
     Cancelled,
-    /// Rejected by exchange.
+    /// Dead code — TLSM never produces this state. Use `Failed` for TLSM terminal failures. See CONTRACT §1.2.1.
     ///
     /// **WAL-only state:** The core TLSM maps `TlsmEvent::Rejected` to
     /// `TlsmState::Failed`, so `map_core_tlsm_state` never produces this
-    /// variant.
-    ///
-    /// Legal direct-construction contexts:
-    /// 1) replay of historical WAL records that already contain `Rejected`;
-    /// 2) reconciliation/import paths that intentionally preserve venue-level
-    ///    rejection semantics directly in WAL.
+    /// variant. Retained only for replay of historical WAL records.
     ///
     /// Core TLSM transition sinks MUST NOT emit this variant.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Dead code — TLSM never produces this state. Use `Failed` for TLSM terminal failures. See CONTRACT §1.2.1."
+    )]
     Rejected,
     /// Failed (internal error).
     Failed,
@@ -65,6 +79,7 @@ pub enum TlsState {
 
 impl TlsState {
     /// Whether this state is terminal (no further transitions expected).
+    #[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records only
     pub fn is_terminal(self) -> bool {
         matches!(
             self,
@@ -76,6 +91,7 @@ impl TlsState {
     ///
     /// Valid successors derived from Tlsm::apply() in soldier_core/execution/tlsm.rs — keep in sync.
     /// This is a state-level whitelist (less restrictive than event-based TLSM).
+    #[allow(deprecated)] // TlsState::Rejected retained for WAL-replay of historical records only
     pub fn is_valid_successor(self, to: TlsState) -> bool {
         match self {
             TlsState::Created => matches!(
@@ -137,7 +153,11 @@ pub struct IntentRecord {
     /// `false` => OPEN-class intent.
     ///
     /// Backward compatibility: older WAL lines missing this field default to
-    /// `true` (fail-closed reduce-only classification).
+    /// `false` (OPEN classification — most conservative, applies all OPEN gates on recovery per CONTRACT §2.4).
+    ///
+    /// NOTE: This field is used for WAL persistence and audit only. Gate classification at
+    /// dispatch time derives `reduce_only` from `IntentClass` at the chokepoint layer —
+    /// NOT from this persisted field. Do NOT use this field for gate decisions.
     #[serde(default = "default_reduce_only_legacy")]
     pub reduce_only: bool,
     /// Quantized quantity.
@@ -967,6 +987,13 @@ fn apply_event(
             let record = latest_by_hash
                 .get_mut(intent_hash)
                 .ok_or_else(|| format!("transition missing intent_hash: {intent_hash}"))?;
+            // Design: WAL replay is intentionally lenient — invalid transitions log a warning
+            // but are applied to preserve replay fidelity for historical WAL files. A strict
+            // rejection here would prevent replaying WAL files written by older versions with
+            // different TLSM rules. All in-flight state is rebuilt from WAL, so a corrupt record
+            // can only cause a phantom in-flight entry, not data loss.
+            // Risk: If a Filled record is followed by a Sent record in a corrupted WAL, the intent
+            // appears in in_flight_hashes as Sent. Monitor logs for "WARN invalid_wal_transition".
             if !record.tls_state.is_valid_successor(*new_state) {
                 tracing::warn!(
                     intent_hash = %intent_hash,
@@ -1136,4 +1163,17 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
     }
 
     Ok(events)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_reduce_only_warning_helper_logs_only_once() {
+        let warned = AtomicBool::new(false);
+
+        assert!(should_log_legacy_reduce_only_warning(&warned));
+        assert!(!should_log_legacy_reduce_only_warning(&warned));
+    }
 }

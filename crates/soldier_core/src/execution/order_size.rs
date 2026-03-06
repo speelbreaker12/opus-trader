@@ -9,6 +9,8 @@ use crate::venue::InstrumentKind;
 
 /// Canonical order sizing per CONTRACT.md.
 ///
+/// Construct only via [`build_order_size`] to enforce precision and validity guards.
+///
 /// ```text
 /// pub struct OrderSize {
 ///   pub contracts: Option<i64>,     // integer contracts when applicable
@@ -27,14 +29,36 @@ use crate::venue::InstrumentKind;
 #[derive(Debug, Clone, PartialEq)]
 pub struct OrderSize {
     /// Integer contracts when applicable.
-    pub contracts: Option<i64>,
+    pub(crate) contracts: Option<i64>,
     /// BTC/ETH amount — canonical for `option | linear_future`.
-    pub qty_coin: Option<f64>,
+    pub(crate) qty_coin: Option<f64>,
     /// USD amount — canonical for `perpetual | inverse_future`.
     /// MUST be `None` for options (CONTRACT.md AT-277).
-    pub qty_usd: Option<f64>,
+    pub(crate) qty_usd: Option<f64>,
     /// Always populated. Derived from the canonical quantity.
-    pub notional_usd: f64,
+    pub(crate) notional_usd: f64,
+}
+
+impl OrderSize {
+    /// Returns the integer contracts value, if set.
+    pub fn contracts(&self) -> Option<i64> {
+        self.contracts
+    }
+
+    /// Returns the coin quantity (BTC/ETH), if set.
+    pub fn qty_coin(&self) -> Option<f64> {
+        self.qty_coin
+    }
+
+    /// Returns the USD quantity, if set.
+    pub fn qty_usd(&self) -> Option<f64> {
+        self.qty_usd
+    }
+
+    /// Returns the notional USD value (always set).
+    pub fn notional_usd(&self) -> f64 {
+        self.notional_usd
+    }
 }
 
 /// Input parameters for building an `OrderSize`.
@@ -70,6 +94,8 @@ pub enum OrderSizeError {
     InvalidNotional(f64),
     /// Computed contracts value overflows i64 range.
     ContractsOverflow { value: f64 },
+    /// Computed contracts value exceeds 2^53, making i64→f64 conversion lossy.
+    ContractsPrecisionLoss { value: f64 },
 }
 
 // TODO(slice-N): Wire into production dispatch — currently only called from unit tests
@@ -116,6 +142,11 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
                     if rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
                         return Err(OrderSizeError::ContractsOverflow { value: rounded });
                     }
+                    // Guard: i64→f64 conversion is lossy for values > 2^53.
+                    // Reject before the cast so downstream float math is precise.
+                    if rounded.abs() > (1i64 << 53) as f64 {
+                        return Err(OrderSizeError::ContractsPrecisionLoss { value: rounded });
+                    }
                     Some(rounded as i64)
                 }
                 None => None,
@@ -147,6 +178,11 @@ pub fn build_order_size(input: &OrderSizeInput) -> Result<OrderSize, OrderSizeEr
                     let rounded = (qty_usd / mult).round();
                     if rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
                         return Err(OrderSizeError::ContractsOverflow { value: rounded });
+                    }
+                    // Guard: i64→f64 conversion is lossy for values > 2^53.
+                    // Reject before the cast so downstream float math is precise.
+                    if rounded.abs() > (1i64 << 53) as f64 {
+                        return Err(OrderSizeError::ContractsPrecisionLoss { value: rounded });
                     }
                     Some(rounded as i64)
                 }

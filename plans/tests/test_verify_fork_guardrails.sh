@@ -119,15 +119,23 @@ assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger
 assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
 
 # Guardrail: recon prompt invariants must be enforced between gate integrity and doc sync.
-assert_contains_line 'log "14cc) recon prompt guard"'
-assert_contains_line 'run_logged_or_exit "recon_prompt_guard"'
-assert_contains_line 'bash "$ROOT/plans/recon_prompt_guard.sh"'
-assert_line_before 'log "14c) gate integrity lint"' 'log "14cc) recon prompt guard"'
-assert_contains_line 'log "14cd) recon doc budget"'
-assert_contains_line 'run_logged_or_exit "recon_doc_budget"'
-assert_contains_line 'bash "$ROOT/plans/recon_doc_budget.sh"'
-assert_line_before 'log "14cc) recon prompt guard"' 'log "14cd) recon doc budget"'
-assert_line_before 'log "14cd) recon doc budget"' 'log "14d) doc sync check"'
+assert_contains_line 'run_required_bash_gate "bidi_control_guard"'
+assert_contains_line '"14c1) bidi control guard" "$ROOT/plans/bidi_control_guard.sh"'
+assert_not_contains_line 'warn "bidi_control_guard skipped (missing plans/bidi_control_guard.sh)"'
+assert_line_before 'log "14c) gate integrity lint"' 'run_required_bash_gate "bidi_control_guard"'
+assert_contains_line 'run_required_bash_gate "recon_prompt_guard"'
+assert_contains_line '"14cc) recon prompt guard" "$ROOT/plans/recon_prompt_guard.sh"'
+assert_not_contains_line 'warn "recon_prompt_guard skipped (missing plans/recon_prompt_guard.sh)"'
+assert_line_before 'run_required_bash_gate "bidi_control_guard"' 'run_required_bash_gate "recon_prompt_guard"'
+assert_contains_line 'run_required_bash_gate "slice_execute_guard"'
+assert_contains_line '"14ccc) slice execute guard" "$ROOT/plans/slice_execute_guard.sh"'
+assert_not_contains_line 'warn "slice_execute_guard skipped (missing plans/slice_execute_guard.sh)"'
+assert_line_before 'run_required_bash_gate "recon_prompt_guard"' 'run_required_bash_gate "slice_execute_guard"'
+assert_contains_line 'run_required_bash_gate "recon_doc_budget"'
+assert_contains_line '"14cd) recon doc budget" "$ROOT/plans/recon_doc_budget.sh"'
+assert_not_contains_line 'warn "recon_doc_budget skipped (missing plans/recon_doc_budget.sh)"'
+assert_line_before 'run_required_bash_gate "slice_execute_guard"' 'run_required_bash_gate "recon_doc_budget"'
+assert_line_before 'run_required_bash_gate "recon_doc_budget"' 'log "14d) doc sync check"'
 
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {
@@ -148,6 +156,7 @@ tmp_fns="$tmp_dir/verify_fork_fns.sh"
 fn_defs="$(extract_fn detect_status_fixture_hash_backend)
 $(extract_fn status_fixture_path_hash)
 $(extract_fn status_fixture_gate_name)
+$(extract_fn run_required_bash_gate)
 $(extract_fn run_logged_nonblocking_gate)
 $(extract_fn compute_csp_strict_changed_files)
 $(extract_fn should_enable_csp_strict)
@@ -186,6 +195,41 @@ if [[ ! -f "$artifact_dir/status_fixture_test_gate.warn" ]]; then
 fi
 if ! grep -Fq "failed in quick mode with rc=7" "$artifact_dir/status_fixture_test_gate.warn"; then
   fail "run_logged_nonblocking_gate .warn artifact content missing"
+fi
+
+# Runtime check: required bash gates must run even when the script is not executable.
+non_exec_gate="$tmp_dir/non_exec_gate.sh"
+cat > "$non_exec_gate" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod 0644 "$non_exec_gate"
+run_required_bash_gate "non_exec_gate" 1s "non-executable gate fixture" "$non_exec_gate"
+if [[ ! -f "$artifact_dir/non_exec_gate.rc" ]]; then
+  fail "run_required_bash_gate must execute non-executable scripts via bash"
+fi
+if [[ "$(cat "$artifact_dir/non_exec_gate.rc")" != "0" ]]; then
+  fail "run_required_bash_gate should succeed for non-executable scripts when bash can read them"
+fi
+
+# Runtime check: missing required bash gates must fail closed with standard artifacts.
+missing_artifact_dir="$tmp_dir/missing_gate_artifacts"
+mkdir -p "$missing_artifact_dir"
+set +e
+(
+  VERIFY_ARTIFACTS_DIR="$missing_artifact_dir"
+  run_required_bash_gate "missing_gate" 1s "missing gate fixture" "$tmp_dir/missing_gate.sh"
+) >/dev/null 2>&1
+missing_rc=$?
+set -e
+if [[ "$missing_rc" == "0" ]]; then
+  fail "run_required_bash_gate must fail when the guard script is missing"
+fi
+if [[ ! -f "$missing_artifact_dir/missing_gate.rc" ]]; then
+  fail "missing required bash gate must emit an .rc artifact"
+fi
+if [[ "$(cat "$missing_artifact_dir/FAILED_GATE")" != "missing_gate" ]]; then
+  fail "missing required bash gate must mark FAILED_GATE"
 fi
 
 # Runtime check: multiline .warn payload must be preserved in summary output.

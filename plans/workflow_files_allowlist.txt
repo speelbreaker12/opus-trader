@@ -11,6 +11,7 @@ docs/validation_rules.md
 plans/aggregate_proofs.sh
 plans/artifact_lint.sh
 plans/autofix.sh
+plans/bidi_control_guard.sh
 plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_contract_change_ledger.sh
 plans/check_skip_entrypoint.sh
@@ -35,6 +36,7 @@ plans/crossref_execution_invariants.yaml
 plans/crossref_gate.sh
 plans/doc_sync_check.sh
 plans/evidence_sources.txt
+plans/external_review_generic.sh
 plans/fork_attestation_mirror.sh
 plans/fork_attestation_remediation_verify.sh
 plans/global_manual_allowlist.json
@@ -60,6 +62,7 @@ plans/prd_preflight.sh
 plans/prd_set_pass.sh
 plans/pre_pr_review_gate.sh
 plans/preflight.sh
+plans/premortem_path_guard.sh
 plans/readme_ci_parity_check.sh
 plans/recon_bundle.sh
 plans/recon_doc_budget.sh
@@ -77,6 +80,7 @@ plans/schemas/verify_checkpoint.schema.json
 plans/self_review_logged.sh
 plans/slice_completion_enforce.sh
 plans/slice_completion_review_guard.sh
+plans/slice_execute_guard.sh
 plans/slice_review_gate.sh
 plans/ssot_lint.sh
 plans/step_prompts/recon/cycle1.md
@@ -98,6 +102,7 @@ plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
+plans/tests/test_bidi_control_guard.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
@@ -107,6 +112,7 @@ plans/tests/test_contract_review_emit.sh
 plans/tests/test_crossref_gate.sh
 plans/tests/test_crossref_invariants.sh
 plans/tests/test_doc_sync_check.sh
+plans/tests/test_external_review_generic.sh
 plans/tests/test_fail_closed_gate_map_paths.sh
 plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
@@ -117,6 +123,8 @@ plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
 plans/tests/test_preflight_fixture_profiles.sh
 plans/tests/test_preflight_fixture_timeout_controls.sh
+plans/tests/test_premortem_gate_trading_hard_gate.sh
+plans/tests/test_premortem_path_guard.sh
 plans/tests/test_recon_bundle.sh
 plans/tests/test_recon_doc_budget.sh
 plans/tests/test_recon_evidence_ledger.sh
@@ -133,12 +141,14 @@ plans/tests/test_roadmap_evidence_audit.sh
 plans/tests/test_rust_gates_smoke_targets.sh
 plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh
+plans/tests/test_slice_execute_guard.sh
 plans/tests/test_slice_review_gate.sh
 plans/tests/test_stoic_cli_invariant_check.sh
 plans/tests/test_story_review_findings_guard.sh
 plans/tests/test_toggle_policy_check.sh
 plans/tests/test_wf_step_path_signal_scan.sh
 plans/tests/test_wf_step_review_provenance.sh
+plans/tests/test_upgrade_1b_proof.sh
 plans/tests/test_wf_step_stop_on_blocker.sh
 plans/tests/test_workflow_allowlist_coverage.sh
 plans/tests/test_workflow_quick_step.sh

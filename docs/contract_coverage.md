@@ -1,11 +1,11 @@
 # Contract Coverage Matrix
 
-Generated: 2026-02-17 22:20:30Z
+Generated: 2026-03-04 23:54:47Z
 
 ## Anchors
 
 - ✅ **Anchor-001** — PolicyGuard Mode Precedence → S1-010, S2-003
-- ✅ **Anchor-002** — Runtime F1 Certification Gate → S1-010
+- ✅ **Anchor-002** — Runtime Binding Gate → S1-010
 - ✅ **Anchor-003** — EvidenceGuard Blocks Opens on Evidence Chain Failure → S1-010
 - ✅ **Anchor-004** — TruthCapsule Timing (RecordedBeforeDispatch) → S4-000
 - ✅ **Anchor-005** — Decision Snapshots Required for Replay → S4-000
@@ -30,7 +30,7 @@ Generated: 2026-02-17 22:20:30Z
 
 ## Validation Rules
 
-- ✅ **VR-001** — F1 Certification Gate → S1-010
+- ✅ **VR-001** — Runtime Binding Gate → S1-010
 - ✅ **VR-002** — EvidenceGuard Gate → S1-010
 - ✅ **VR-003** — Policy Staleness Gate → S1-010
 - ✅ **VR-004a** — Watchdog Heartbeat Kill Gate → S1-010

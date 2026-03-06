@@ -533,7 +533,7 @@ When refreshing only missing/failed C1 artifacts, use `plans/review_missing_refr
 *Step 2 — Implement:*
 1. Implement code/test/observability fixes for each gap, following the plan
 2. Update evidence ledger rows: GAP → FIXED, add new file:line citations
-3. Generate proof graph: `python3 python/proof_graph/init.py ${STORY_ID} --premortem-dir artifacts/story/${STORY_ID}/`, populate from evidence ledger verdicts/citations, validate with `python3 python/proof_graph/validate.py --strict artifacts/story/${STORY_ID}/proof_graph.json`
+3. Generate proof graph: `python3 python/proof_graph/init.py ${STORY_ID} --premortem-path reviews/premortems/${STORY_ID}_premortem.md`, populate from evidence ledger verdicts/citations, validate with `python3 python/proof_graph/validate.py --strict artifacts/story/${STORY_ID}/proof_graph.json`
 4. Run verification commands (at least `verify.sh quick` + targeted tests)
 
 **Output**:

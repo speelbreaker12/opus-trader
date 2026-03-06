@@ -152,10 +152,20 @@ pub trait TlsmTransitionSink {
     fn append_transition(&mut self, transition: PersistedTransition) -> Result<(), String>;
 }
 
-/// Default sink used by `Tlsm::apply` when no external sink is provided.
+/// No-op WAL sink — silently discards every transition.
+///
+/// **TEST-ONLY.** Gated behind `#[cfg(test)]` so it cannot be used in
+/// production code. Production callers MUST pass a real sink to
+/// [`Tlsm::apply_with_sink`] to ensure transitions are durably persisted.
+///
+/// If you need this type in integration tests (a separate test crate),
+/// write a local `struct NoopSink;` that implements [`TlsmTransitionSink`]
+/// directly in that crate.
+#[cfg(test)]
 #[derive(Debug, Default)]
 pub struct NoopTransitionSink;
 
+#[cfg(test)]
 impl TlsmTransitionSink for NoopTransitionSink {
     fn append_transition(&mut self, _transition: PersistedTransition) -> Result<(), String> {
         Ok(())
@@ -269,8 +279,14 @@ impl Tlsm {
 
     /// Apply an event with the default no-op persistence sink.
     ///
+    /// **TEST-ONLY** — gated by `#[cfg(test)]`. This method silently drops
+    /// every WAL transition, which is safe in unit tests but breaks
+    /// crash-recovery correctness in production. Production code MUST use
+    /// [`Tlsm::apply_with_sink`] and supply a durable WAL sink.
+    ///
     /// CONTRACT.md §2.1: "Never panic on out-of-order WS events."
     /// Returns the transition result — structurally cannot panic.
+    #[cfg(test)]
     pub fn apply(&mut self, event: TlsmEvent) -> TransitionResult {
         let mut sink = NoopTransitionSink;
         let fallback_event = event.clone();

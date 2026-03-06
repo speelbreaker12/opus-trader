@@ -14,8 +14,10 @@ fail() {
 mk_fixture() {
   local dst="$1"
   mkdir -p \
+    "$dst/SKILLS" \
     "$dst/plans/step_prompts/recon" \
     "$dst/plans/prompts"
+  cp "$ROOT/SKILLS/slice-execute.md" "$dst/SKILLS/slice-execute.md"
   cp "$ROOT/plans/step_prompts/recon/r1_audit.md" "$dst/plans/step_prompts/recon/r1_audit.md"
   cp "$ROOT/plans/step_prompts/recon/INDEX.md" "$dst/plans/step_prompts/recon/INDEX.md"
   cp "$ROOT/plans/prompts/reconcil.md" "$dst/plans/prompts/reconcil.md"
@@ -68,5 +70,45 @@ surrogate_rc=$?
 set -e
 [[ "$surrogate_rc" -ne 0 ]] || fail "expected surrogate regression case to fail"
 echo "$surrogate_output" | grep -Fq "SURROGATE_POLICY_MISSING" || fail "missing SURROGATE_POLICY_MISSING diagnostic"
+
+# Case 4: R1 prompt must hand off to implement, not self_review.
+fixture_next_step="$tmp_dir/next_step"
+mk_fixture "$fixture_next_step"
+perl -0pi -e 's/READY FOR IMPLEMENT GATE/READY FOR SELF_REVIEW/g' \
+  "$fixture_next_step/plans/prompts/slice_reconcile_r1_audit.md" \
+  "$fixture_next_step/plans/step_prompts/recon/r1_audit.md"
+
+set +e
+next_step_output="$(RECON_PROMPT_GUARD_ROOT="$fixture_next_step" "$SCRIPT" 2>&1)"
+next_step_rc=$?
+set -e
+[[ "$next_step_rc" -ne 0 ]] || fail "expected next-step drift case to fail"
+echo "$next_step_output" | grep -Fq "NEXT_STEP_DRIFT" || fail "missing NEXT_STEP_DRIFT diagnostic"
+
+# Case 5: Trading lens must be explicitly bound to gate outcome.
+fixture_lens="$tmp_dir/lens"
+mk_fixture "$fixture_lens"
+perl -0pi -e 's/Trading lens = `BLOCKING` requires `GATE: NO-GO`\./Trading lens and gate are independent./g' \
+  "$fixture_lens/plans/prompts/slice_reconcile_r1_audit.md"
+
+set +e
+lens_output="$(RECON_PROMPT_GUARD_ROOT="$fixture_lens" "$SCRIPT" 2>&1)"
+lens_rc=$?
+set -e
+[[ "$lens_rc" -ne 0 ]] || fail "expected trading-lens gate-binding regression case to fail"
+echo "$lens_output" | grep -Fq "TRADING_LENS_GATE_BINDING_MISSING" || fail "missing TRADING_LENS_GATE_BINDING_MISSING diagnostic"
+
+# Case 6: slice-execute must reference premortem §5 for wrong-impl gate.
+fixture_slice="$tmp_dir/slice"
+mk_fixture "$fixture_slice"
+perl -0pi -e 's/premortem §5 \(wrong impl gate\)/premortem §4 (wrong impl gate)/g' \
+  "$fixture_slice/SKILLS/slice-execute.md"
+
+set +e
+slice_output="$(RECON_PROMPT_GUARD_ROOT="$fixture_slice" "$SCRIPT" 2>&1)"
+slice_rc=$?
+set -e
+[[ "$slice_rc" -ne 0 ]] || fail "expected slice-execute wrong-section regression case to fail"
+echo "$slice_output" | grep -Fq "WRONG_IMPL_SECTION_DRIFT" || fail "missing WRONG_IMPL_SECTION_DRIFT diagnostic"
 
 echo "PASS: recon prompt guard test"

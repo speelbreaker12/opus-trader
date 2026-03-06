@@ -17,10 +17,10 @@ flows:
         name: "Compute TradingMode precedence and mode_reasons"
         section: "§2.2.3"
     where:
-      - soldier/core/policy/guard.rs
-      - soldier/core/reflex/cortex.rs
-      - soldier/core/risk/exchange_health.rs
-      - soldier/core/risk/basis_monitor.rs
+      - crates/soldier_core/src/policy/guard.rs
+      - crates/soldier_core/src/reflex/cortex.rs
+      - crates/soldier_core/src/risk/exchange_health.rs
+      - crates/soldier_core/src/risk/basis_monitor.rs
     refs:
       sections:
         - §2.2.1
@@ -126,19 +126,19 @@ flows:
         name: "Decision snapshot and truth capsule requirements"
         section: "§4.3.2"
     where:
-      - soldier/core/execution/quantize.rs
-      - soldier/core/recovery/label_match.rs
-      - soldier/infra/store/ledger.rs
-      - soldier/core/execution/gate.rs
-      - soldier/core/execution/gates.rs
-      - soldier/core/execution/pricer.rs
-      - soldier/core/risk/pending_exposure.rs
-      - soldier/core/risk/exposure_budget.rs
-      - soldier/core/risk/margin_gate.rs
-      - soldier/core/risk/self_impact_guard.rs
-      - soldier/infra/deribit/account_summary.rs
-      - soldier/core/execution/sequencer.rs
-      - soldier/core/execution/state.rs
+      - crates/soldier_core/src/execution/quantize.rs
+      - crates/soldier_core/src/recovery/label_match.rs
+      - crates/soldier_infra/src/store/ledger.rs
+      - crates/soldier_core/src/execution/gate.rs
+      - crates/soldier_core/src/execution/gates.rs
+      - crates/soldier_core/src/execution/pricer.rs
+      - crates/soldier_core/src/risk/pending_exposure.rs
+      - crates/soldier_core/src/risk/exposure_budget.rs
+      - crates/soldier_core/src/risk/margin_gate.rs
+      - crates/soldier_core/src/risk/self_impact_guard.rs
+      - crates/soldier_infra/src/deribit/account_summary.rs
+      - crates/soldier_core/src/execution/sequencer.rs
+      - crates/soldier_core/src/execution/state.rs
     refs:
       sections:
         - Definitions
@@ -219,9 +219,9 @@ flows:
         name: "Emergency close canonical algorithm"
         section: "§3.1"
     where:
-      - soldier/core/execution/atomic_group_executor.rs
-      - soldier/core/risk/churn_breaker.rs
-      - soldier/core/execution/emergency_close.rs
+      - crates/soldier_core/src/execution/atomic_group_executor.rs
+      - crates/soldier_core/src/risk/churn_breaker.rs
+      - crates/soldier_core/src/execution/emergency_close.rs
     refs:
       sections:
         - §1.2
@@ -285,8 +285,8 @@ flows:
         name: "Rate limit circuit breaker informs Kill causes"
         section: "§3.3"
     where:
-      - soldier/infra/api/rate_limit.rs
-      - soldier/core/execution/emergency_close.rs
+      - crates/soldier_infra/src/api/rate_limit.rs
+      - crates/soldier_core/src/execution/emergency_close.rs
     refs:
       sections:
         - §2.2.3
@@ -333,8 +333,8 @@ flows:
         name: "Clear latch only after reconciliation success"
         section: "§2.2.4"
     where:
-      - soldier/core/recovery/label_match.rs
-      - soldier/core/execution/sequencer.rs
+      - crates/soldier_core/src/recovery/label_match.rs
+      - crates/soldier_core/src/execution/sequencer.rs
     refs:
       sections:
         - §1.1.2
@@ -398,11 +398,11 @@ flows:
       - python/reviewer/daily_ops_review.py
       - python/reviewer/incident_review.py
       - python/tools/f1_certify.py
-      - soldier/core/quant/svi_arb.rs
+      - crates/soldier_core/src/quant/svi_arb.rs
       - commander/analytics/slippage_calibration.py
-      - soldier/core/analytics/slippage_calibration.rs
-      - soldier/core/analytics/attribution.rs
-      - soldier/core/sim/exchange.rs
+      - crates/soldier_core/src/analytics/slippage_calibration.rs
+      - crates/soldier_core/src/analytics/attribution.rs
+      - crates/soldier_core/src/sim/exchange.rs
     refs:
       sections:
         - §4.1.1

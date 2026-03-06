@@ -16,7 +16,11 @@ class TestInitV2(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         self.output_dir = Path(self.tmpdir) / "output"
 
-    def _init(self, story_id: str, premortem_dir: Path | None = None) -> dict:
+    def _init(
+        self,
+        story_id: str,
+        premortem_path: Path | None = None,
+    ) -> dict:
         from python.proof_graph.init import init_v2
 
         out_path = init_v2(
@@ -24,7 +28,7 @@ class TestInitV2(unittest.TestCase):
             prd_path=PRD,
             contract_path=CONTRACT,
             output_dir=self.output_dir,
-            premortem_dir=premortem_dir,
+            premortem_path=premortem_path,
         )
         return json.loads(out_path.read_text(encoding="utf-8"))
 
@@ -88,11 +92,10 @@ class TestInitV2(unittest.TestCase):
             self.assertIn("extra_discovered", at)
             self.assertFalse(at["extra_discovered"])
 
-    def test_premortem_parsing(self):
-        """When premortem.md exists with section values, they're populated."""
-        premortem_dir = Path(self.tmpdir) / "premortem"
-        premortem_dir.mkdir()
-        (premortem_dir / "premortem.md").write_text(
+    def test_premortem_path_parsing(self):
+        """When canonical premortem file exists, section values are populated."""
+        premortem_path = Path(self.tmpdir) / "S1-007_premortem.md"
+        premortem_path.write_text(
             "# Premortem\n"
             "## Section 2\n"
             "assumptions: ALL_VALIDATED\n"
@@ -102,7 +105,7 @@ class TestInitV2(unittest.TestCase):
             "wrong impl blocked: ALL\n",
             encoding="utf-8",
         )
-        graph = self._init("S1-007", premortem_dir=premortem_dir)
+        graph = self._init("S1-007", premortem_path=premortem_path)
         for at in graph["ats"]:
             pc = at["premortem_checks"]
             self.assertEqual(pc.get("section5_wrong_impl_blocked"), "ALL")
@@ -110,10 +113,9 @@ class TestInitV2(unittest.TestCase):
             self.assertEqual(pc.get("section2_assumptions"), "ALL_VALIDATED")
 
     def test_premortem_missing_no_crash(self):
-        """When premortem.md doesn't exist, premortem fields are absent."""
-        premortem_dir = Path(self.tmpdir) / "empty"
-        premortem_dir.mkdir()
-        graph = self._init("S1-007", premortem_dir=premortem_dir)
+        """When premortem file doesn't exist, premortem fields are absent."""
+        premortem_path = Path(self.tmpdir) / "missing_premortem.md"
+        graph = self._init("S1-007", premortem_path=premortem_path)
         for at in graph["ats"]:
             pc = at["premortem_checks"]
             self.assertNotIn("section5_wrong_impl_blocked", pc)

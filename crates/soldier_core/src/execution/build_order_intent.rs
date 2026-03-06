@@ -232,6 +232,16 @@ pub fn gate_sequence_total(result: GateSequenceResult) -> u64 {
     }
 }
 
+/// Increment the global WAL-nonblocking-allowed counter.
+///
+/// Called by `engine::decide_pipeline` when the WAL gate is absent for a
+/// Close/Hedge intent (H-4: no_gate_configured case). The caller is
+/// responsible for also emitting the `wal_nonblocking_allowed_total` metric
+/// line with `source=no_gate_configured`.
+pub(super) fn bump_wal_nonblocking_allowed_total() {
+    WAL_NONBLOCKING_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);
+}
+
 fn finish_approved(metrics: &mut ChokeMetrics, gate_trace: Vec<GateStep>) -> ChokeResult {
     metrics.record_approved();
     GATE_SEQUENCE_ALLOWED_TOTAL.fetch_add(1, Ordering::Relaxed);

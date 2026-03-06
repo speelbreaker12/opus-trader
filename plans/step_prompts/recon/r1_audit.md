@@ -2,6 +2,7 @@ ROLE
 You are the Builder performing the R1 READ-ONLY AUDIT for ${STORY_ID}.
 This is reconciliation mode — diagnosis only. No code edits in this step.
 Fixes belong in Step 2 (implement/R5), not here.
+This audit feeds the `implement` step. Do not skip directly to `self_review`.
 
 STORY
 - Story ID: ${STORY_ID}
@@ -9,7 +10,8 @@ STORY
 - Current HEAD: ${HEAD}
 
 READS
-- Recon preflight artifact (Step 1 output — AT proof audit table + STOPLIGHT)
+- reviews/premortems/${STORY_ID}_premortem.md (primary audit checklist)
+- Legacy R1/preflight audit artifact for this story, if present (comparison context only)
 - Prior postmortem: ${PRIOR_POSTMORTEM_PATH}
 - specs/CONTRACT.md (referenced ATs)
 - specs/DESIGN_PATTERNS.md §0 (principles)
@@ -17,11 +19,12 @@ READS
 - scope.touch files (existing implementation)
 
 HARD GATE
-Read the recon preflight STOPLIGHT from Step 1.
-- RED → STOP. Do not proceed. Fix preflight gaps first.
+Read the premortem §10 STOPLIGHT first.
+- RED → STOP. Do not proceed. Fix premortem blockers first.
 - YELLOW → Proceed only if every gap is explicitly marked:
-    DEFERRED (future slice) or FIX_IN_STEP_5
+    DEFERRED (future slice) or FIX_IN_IMPLEMENT
 - GREEN → Proceed.
+If legacy R1/preflight evidence also has a STOPLIGHT, the more restrictive gate wins.
 
 TASK (read-only — no edits)
 For each AT in enforcing_contract_ats[]:
@@ -50,9 +53,9 @@ For each AT in enforcing_contract_ats[]:
 
   5) Build remediation list (NO EDITS — list only)
      Categorize each finding:
-     - CODE_FIX — code change needed (Step 5)
-     - TEST_FIX — test change needed (Step 5)
-     - PRD_FIX — PRD mapping drift (Step 5)
+     - CODE_FIX — code change needed (follow-up remediation)
+     - TEST_FIX — test change needed (follow-up remediation)
+     - PRD_FIX — PRD mapping drift (follow-up remediation)
      - DEFERRED — future slice (with owner + rationale)
 
 DESIGN DISCOVERY RULE
@@ -87,7 +90,7 @@ D) Fail-Closed Findings
    - List any fail-open or ambiguous error paths
    - Include severity (P0/P1/P2/P3)
 
-E) Step 5 Patch Plan (ordered smallest-first)
+E) Remediation Patch Plan (ordered smallest-first)
    | # | Category | File | What to change | Why | Test to add/update |
 
 F) Decision Notes (for non-obvious issues only)
@@ -97,7 +100,7 @@ F) Decision Notes (for non-obvious issues only)
    - What could still go wrong
    - How it would be detected
 
-G) End with exact line: READY FOR SELF_REVIEW
+G) End with exact line: READY FOR IMPLEMENT GATE
 
 PROHIBITED
 - Do NOT edit production code or tests

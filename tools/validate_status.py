@@ -90,6 +90,7 @@ FOUNDATION_FORBIDDEN_KEYS = frozenset([
     "trading_mode",
     "opens_globally_permitted",
     "is_trading_allowed",
+    "enforced_profile",
     "mode_reasons",
     "open_permission_blocked_latch",
     "open_permission_reason_codes",

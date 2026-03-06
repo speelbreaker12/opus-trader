@@ -452,6 +452,13 @@ else
         timeout_seconds="${REVIEW_LOGGED_KIMI_TIMEOUT_SECONDS:-600}"
       fi
       ;;
+    gemini)
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_FILES_TIMEOUT_SECONDS:-600}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-600}"
+      fi
+      ;;
   esac
 fi
 
@@ -659,7 +666,7 @@ if [[ "$proof_graph" == "true" ]]; then
   python3 "$root/python/proof_graph/init.py" "$story" \
     --prd-path "$root/plans/prd.json" \
     --contract-path "$root/specs/CONTRACT.md" \
-    --premortem-dir "$root/artifacts/story/$story/" \
+    --premortem-path "$root/reviews/premortems/${story}_premortem.md" \
     --output-dir "$pg_outdir" >&2
   pg_skeleton="$pg_outdir/proof_graph.json"
   if [[ ! -f "$pg_skeleton" ]]; then
@@ -716,7 +723,7 @@ case "$tool" in
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
 
-    local gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
+    gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
     # -p <content> activates headless mode with the prompt inline.
     # Gemini CLI requires a PTY for stdin piping, so we pass the prompt
     # via the -p flag instead (reads file into shell arg).
