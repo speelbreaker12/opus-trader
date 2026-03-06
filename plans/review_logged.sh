@@ -454,7 +454,11 @@ else
       fi
       ;;
     gemini)
-      timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-${REVIEW_LOGGED_TIMEOUT_SECONDS:-600}}"
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_FILES_TIMEOUT_SECONDS:-600}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-${REVIEW_LOGGED_TIMEOUT_SECONDS:-600}}"
+      fi
       ;;
   esac
 fi
