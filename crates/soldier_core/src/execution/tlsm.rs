@@ -152,15 +152,6 @@ pub trait TlsmTransitionSink {
     fn append_transition(&mut self, transition: PersistedTransition) -> Result<(), String>;
 }
 
-#[derive(Debug, Default)]
-struct CompatibilityNoopSink;
-
-impl TlsmTransitionSink for CompatibilityNoopSink {
-    fn append_transition(&mut self, _transition: PersistedTransition) -> Result<(), String> {
-        Ok(())
-    }
-}
-
 /// No-op WAL sink — silently discards every transition.
 ///
 /// **TEST-ONLY.** Gated behind `#[cfg(test)]` so it cannot be used in
@@ -171,7 +162,6 @@ impl TlsmTransitionSink for CompatibilityNoopSink {
 /// write a local `struct NoopSink;` that implements [`TlsmTransitionSink`]
 /// directly in that crate.
 #[cfg(test)]
-#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub struct NoopTransitionSink;
 
@@ -287,20 +277,18 @@ impl Tlsm {
         }
     }
 
-    /// Apply an event with the compatibility no-op persistence sink.
+    /// Apply an event with the default no-op persistence sink.
     ///
-    /// This shim exists for source compatibility with legacy callers. It
-    /// silently discards every WAL transition, so production code should
-    /// prefer [`Tlsm::apply_with_sink`] with a durable sink.
+    /// **TEST-ONLY** — gated by `#[cfg(test)]`. This method silently drops
+    /// every WAL transition, which is safe in unit tests but breaks
+    /// crash-recovery correctness in production. Production code MUST use
+    /// [`Tlsm::apply_with_sink`] and supply a durable WAL sink.
     ///
     /// CONTRACT.md §2.1: "Never panic on out-of-order WS events."
     /// Returns the transition result — structurally cannot panic.
-    #[deprecated(
-        since = "0.2.0",
-        note = "Use apply_with_sink() with a durable WAL sink."
-    )]
+    #[cfg(test)]
     pub fn apply(&mut self, event: TlsmEvent) -> TransitionResult {
-        let mut sink = CompatibilityNoopSink;
+        let mut sink = NoopTransitionSink;
         let fallback_event = event.clone();
         let fallback_state = self.state;
         match self.apply_with_sink(event, &mut sink) {

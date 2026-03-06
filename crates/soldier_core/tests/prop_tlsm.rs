@@ -7,9 +7,9 @@
 //! - Transition count == number of non-Ignored events.
 //! - State after terminal event remains terminal for all future events.
 //!
-//! NOTE: `Tlsm::apply()` remains available only as a deprecated compatibility
-//! shim. All state-driving calls here use `apply_with_sink` with a local
-//! `NoopSink` helper so the sink requirement stays explicit.
+//! NOTE: `Tlsm::apply()` is test-only inside the crate. These integration
+//! tests intentionally use `apply_with_sink` with a local `NoopSink` helper
+//! so the sink requirement stays explicit.
 
 use proptest::prelude::*;
 use soldier_core::execution::{

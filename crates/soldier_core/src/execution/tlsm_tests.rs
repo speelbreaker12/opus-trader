@@ -2,8 +2,6 @@
 //!
 //! AT-230: Fill-before-ack is valid reality.
 //! AT-210: Orphan fill (fill-before-send).
-#![allow(deprecated)]
-
 use super::*;
 
 trait TestValueExt<T> {
@@ -705,27 +703,25 @@ fn test_ooo_total_is_sum_of_categories() {
 
 // ─── WAL sink production-safety enforcement ──────────────────────────────
 //
-// These tests enforce the invariant that `NoopTransitionSink` remains
-// test-only and that production code does not bypass durable sinks by
-// calling bare `apply()`.
+// These tests enforce the invariant that `NoopTransitionSink` and the
+// no-op `apply()` method are ONLY used in test contexts.
 //
-// Design rationale: `NoopTransitionSink` is gated with `#[cfg(test)]` in
-// tlsm.rs. `apply()` remains as a deprecated compatibility shim, so the
-// tests below provide a second layer of defence: they scan the raw source
-// text at test time and fail if the sink gate is accidentally removed.
+// Design rationale: `NoopTransitionSink` and `apply()` are gated with
+// `#[cfg(test)]` in tlsm.rs. The tests below provide a second layer of
+// defence: they scan the raw source text at test time and fail if the
+// invariant is violated (e.g. if the cfg gate is accidentally removed).
 //
 // Production code MUST call `apply_with_sink()` with a durable WAL sink.
 
 /// Assert that `NoopTransitionSink` only appears inside the `#[cfg(test)]`
-/// block in the production source of tlsm.rs, and that `apply()` remains a
-/// deprecated compatibility shim.
+/// block in the production source of tlsm.rs.
 ///
 /// Because `NoopTransitionSink` is gated with `#[cfg(test)]`, any occurrence
 /// of the identifier that is NOT inside a cfg(test) region is a bug. This test
 /// catches a future author accidentally removing the cfg gate or adding a new
 /// usage outside it.
 #[test]
-fn noop_sink_definition_is_cfg_test_gated_and_apply_is_deprecated() {
+fn noop_sink_definition_is_cfg_test_gated() {
     let src = include_str!("tlsm.rs");
 
     // Verify that every occurrence of "NoopTransitionSink" appears after the
@@ -777,18 +773,37 @@ fn noop_sink_definition_is_cfg_test_gated_and_apply_is_deprecated() {
          NoopTransitionSink definition, found: {non_whitespace_non_doc:?}"
     );
 
-    // The compatibility apply() shim must remain deprecated so external
-    // callers get a migration path without silently blessing it for new use.
+    // Also verify that the apply() method is gated: find `#[cfg(test)]`
+    // immediately before `pub fn apply(`.
     let apply_tag = "pub fn apply(";
     let apply_pos = src
         .find(apply_tag)
         .expect("apply() method not found in tlsm.rs");
-    let deprecated_pos = src[..apply_pos]
-        .rfind("#[deprecated")
-        .expect("no #[deprecated] attribute found before apply() method in tlsm.rs");
+
+    let apply_gate_pos = src[..apply_pos]
+        .rfind(cfg_test_tag)
+        .expect("no #[cfg(test)] gate found before apply() method in tlsm.rs");
+
+    // Assert the apply gate is exactly #[cfg(test)].
+    let apply_gate_text = src[apply_gate_pos..apply_gate_pos + cfg_test_tag.len()].trim();
+    assert_eq!(
+        apply_gate_text, "#[cfg(test)]",
+        "Gate must be exactly #[cfg(test)], not cfg(any(...)) or feature-gated"
+    );
+
+    let between_apply = &src[apply_gate_pos + cfg_test_tag.len()..apply_pos];
+    let non_whitespace_apply: Vec<&str> = between_apply
+        .lines()
+        .map(str::trim)
+        .filter(|l| {
+            !l.is_empty() && !l.starts_with("///") && !l.starts_with("//") && !l.starts_with("#[")
+        })
+        .collect();
+
     assert!(
-        deprecated_pos < apply_pos,
-        "deprecated attribute for apply() must precede the method definition"
+        non_whitespace_apply.is_empty(),
+        "Expected only whitespace/doc-comments between #[cfg(test)] and apply() \
+         method, found: {non_whitespace_apply:?}"
     );
 }
 

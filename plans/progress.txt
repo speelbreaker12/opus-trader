@@ -218,6 +218,12 @@ Summary: Added fail-closed legacy layout guard and verify quick/full contract-pa
 Commands: ./plans/legacy_layout_guard.sh; ./plans/verify_gate_contract_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/legacy_layout_guard.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/verify_fork.sh; reviews/postmortems/*.md; artifacts/verify/20260208_142926.
 Next: None.
+2026-03-06 16:31:38 UTC
+Summary: Narrowed PR #174 after review: restored `Tlsm::apply()` to test-only `#[cfg(test)]`, removed public-facade compatibility helper proofs, and realigned TLSM integration comments with the durable-sink boundary; kept the other guard/provenance/WAL fixes intact.
+Commands: cargo test -p soldier_core noop_sink_definition_is_cfg_test_gated --lib (red then green); cargo test -p soldier_core tlsm --no-fail-fast; cargo test -p soldier_core --test test_execution_facade_public --no-fail-fast; cargo test -p soldier_core engine_evaluate_alias_matches_decide --lib; cargo fmt --all.
+Evidence: crates/soldier_core/src/execution/tlsm.rs; crates/soldier_core/src/execution/tlsm_tests.rs; crates/soldier_core/src/execution/open_runtime_wiring_tests.rs; crates/soldier_core/src/execution/facade_completeness_contract_tests.rs; crates/soldier_core/tests/test_execution_facade_public.rs; crates/soldier_core/tests/prop_tlsm.rs; crates/soldier_core/tests/test_tlsm.rs.
+Notes: Red phase failure was `execution::tlsm::tlsm_tests::noop_sink_definition_is_cfg_test_gated` proving `apply()` remained production-visible; green phase restored the `#[cfg(test)]` boundary. Local `./plans/verify.sh quick` is still blocked by a pre-existing preflight timeout: `legacy_layout_guard.sh` passes standalone but takes `real 39.63`, exceeding `PREFLIGHT_GUARD_TIMEOUT=30`; `./plans/readme_ci_parity_check.sh` passes standalone. Local runtime artifact `var/runtime/runtime_state.json` remains intentionally unstaged.
+Next: Commit/push the narrowed patch onto PR #174 and rely on CI clean-checkout verify for the repo-level gate while targeted Rust evidence is green locally.
 Story: workflow-maintenance
 Date: 2026-03-02
 Summary: Restored Decision-A exact-token enforcement for contract_version <= 5.2 in tools/validate_status.py, removed substring latch-token heuristic, and added explicit manifest-driven DecisionALatchReasonCode path for contract_version >= 5.3 with strict single-code + in-tier checks; updated status docs and regression tests.

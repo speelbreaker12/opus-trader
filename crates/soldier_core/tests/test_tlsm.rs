@@ -3,9 +3,9 @@
 //! Metric-counter assertions (e.g. ooo_count/ooo_total) remain unit-level in
 //! `src/execution/tlsm_tests.rs`.
 //!
-//! NOTE: `Tlsm::apply()` remains available only as a deprecated compatibility
-//! shim. These tests intentionally use `apply_with_sink` with a local
-//! `NoopSink` to keep the WAL-sink requirement explicit at the call site.
+//! NOTE: `Tlsm::apply()` is test-only inside the crate. These tests
+//! intentionally use `apply_with_sink` with a local `NoopSink` to keep the
+//! WAL-sink requirement explicit at the call site.
 
 use soldier_core::execution::{
     PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
