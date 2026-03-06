@@ -6,7 +6,7 @@
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
 
 use super::*;
-use crate::execution::{take_execution_metric_lines, with_intent_trace_ids, METRICS_TEST_LOCK};
+use crate::execution::{METRICS_TEST_LOCK, take_execution_metric_lines, with_intent_trace_ids};
 
 fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
     METRICS_TEST_LOCK
@@ -710,10 +710,7 @@ fn test_at317_default_10bps_rejects_above_threshold() {
 
     let result = evaluate_liquidity_gate(&input, &mut m);
     assert!(
-        matches!(
-            result.decision,
-            LiquidityGateDecision::Rejected { .. }
-        ),
+        matches!(result.decision, LiquidityGateDecision::Rejected { .. }),
         "AT-317: slippage > 10bps must reject, got {:?}",
         result,
     );
@@ -776,10 +773,7 @@ fn test_hedge_invalid_qty_rejected_with_expected_slippage_reason() {
     let LiquidityGateDecision::Rejected { reason } = result.decision else {
         panic!("expected Rejected, got {:?}", result)
     };
-    assert_eq!(
-        reason,
-        LiquidityGateRejectReason::ExpectedSlippageTooHigh,
-    );
+    assert_eq!(reason, LiquidityGateRejectReason::ExpectedSlippageTooHigh,);
 }
 
 // ─── FIX-4: NaN/Inf L2Level tests ──────────────────────────────────────
