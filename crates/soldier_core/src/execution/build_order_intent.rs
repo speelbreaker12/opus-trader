@@ -149,6 +149,12 @@ pub enum ChokeResult {
     },
 }
 
+impl ChokeResult {
+    pub fn is_approved(&self) -> bool {
+        matches!(self, Self::Approved { .. })
+    }
+}
+
 // --- Metrics -------------------------------------------------------------
 
 /// Observability metrics for the chokepoint.
