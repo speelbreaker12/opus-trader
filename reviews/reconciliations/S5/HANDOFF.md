@@ -128,33 +128,38 @@ Friction:
 ### Stopped At
 
 - Story: `S5-000`
-- Step: `cycle1` (next)
-- Status: Steps 1-3 complete (preflight, implement, self_review). 8 new tests added and passing. Committed at 35fbb90.
-- HEAD at stop: `35fbb90`
+- Step: `cycle1` (next — not yet started)
+- Status: Steps 1-3 complete. 8 new tests committed. Ready for external review.
+- HEAD at stop: `fe957da`
 
 ### What Happened (2-5 bullets)
 
-- Steps 1-3 complete: preflight (GREEN), implement (no gaps), self_review (6 agents, 5 fixes applied)
-- 8 new tests: AT-317 named, AT-421 hedge, ExpectedSlippageTooHigh x2, NaN/Inf x4, METRICS_TEST_LOCK
-- Tooling fix: `RECON_SKIP_OWNERSHIP=1` added to `recon_precheck.sh` and `premortem_ready.sh`
-- 3 items deferred to debt register (all P2, no safety impact)
-- This is YELLOW path (code changes made = 8 new tests), not GREEN
+- Session 1: Steps 1-3 complete (preflight GREEN, implement no-gaps, self_review 6 agents)
+- Session 2: Resumed, confirmed receipt chain, read cycle1 prompt — context ran low before executing
+- 8 new tests committed: AT-317, AT-421 hedge, ExpectedSlippageTooHigh x2, NaN/Inf x4, METRICS_TEST_LOCK
+- YELLOW path (code changes = 8 new tests) — cycle2 needs FIX_DIFF + AT_REGRESSION basis
 
 ### Must Read First (ordered)
 
 1. `artifacts/story/S5-000/self_review/FIX_PLAN.md` — 5 TEST_FIX items + 3 DEFERRED
-2. `plans/step_prompts/recon/cycle1.md` — next step instructions
-3. `reviews/reconciliations/PROTOCOL.md` — gate rules for cycle1
+2. `plans/step_prompts/recon/cycle1.md` — cycle1 step instructions
+3. `reviews/reconciliations/PROTOCOL.md` — gate rules
 
 ### Next Steps (exact commands/actions)
 
-1. Run cycle1 external review: `RECON_SKIP_OWNERSHIP=1 plans/review_logged.sh S5-000 --tool codex --prompt enriched --base recon/S5-000`
-2. Stamp cycle1 receipt: `RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 cycle1`
-3. Continue fix → cycle2 → resolution → verify_full → pass
+1. Run cycle1 external reviews (both enriched and generic for max coverage):
+   ```bash
+   plans/review_logged.sh S5-000 --tool opus --prompt enriched --files "crates/soldier_core/src/execution/gate.rs crates/soldier_core/src/execution/gate_tests.rs"
+   plans/review_logged.sh S5-000 --tool opus --prompt generic --files "crates/soldier_core/src/execution/gate.rs crates/soldier_core/src/execution/gate_tests.rs"
+   ```
+2. Write evidence ledger: `artifacts/story/S5-000/evidence_ledger.json`
+3. Stamp receipt: `RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 cycle1`
+4. Continue: fix → cycle2 → resolution → verify_full → pass
 
 ### Open Decisions / Blockers
 
 - YELLOW path (tests added) — cycle2 must use FIX_DIFF + AT_REGRESSION basis, not abbreviated GREEN path
+- All commands need `RECON_SKIP_OWNERSHIP=1` env var due to AT-222/344/909/421 shared with S6-012
 
 ### Resume Command
 
