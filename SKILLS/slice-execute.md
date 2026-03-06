@@ -169,7 +169,7 @@ For every AT claimed by this story:
 - **B) Unified Diff** — summary of changes made
 - **C) Commands + Evidence** — test commands run and their output
 - **D) Decision Record** — any design choice not specified in contract, justified by DESIGN_PATTERNS §0
-- **E) Post-Run STOPLIGHT + Debt Register** — updated stoplight after implementation
+- **E) Post-Run Implementation Notes + Debt Register Delta** — capture implementation outcomes and new debt in the step artifact; keep premortem §10 STOPLIGHT as the pre-implementation gate record
 
 ## Hard Constraints
 

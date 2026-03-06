@@ -61,9 +61,38 @@ section_number_content() {
 table_rows() {
   local content="$1"
   echo "$content" | awk '
-    /^\|/ && $0 !~ /^\|[-| ]+\|$/ { count++ }
+    function trim(s) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      return s
+    }
+    /^\|/ {
+      line = trim($0)
+      if (line ~ /^\|[-:| ]+\|$/) next
+      # Header-only tables must fail; ignore the first non-separator row as header.
+      if (!header_seen) {
+        header_seen = 1
+        next
+      }
+      count++
+    }
     END { print count + 0 }
   '
+}
+
+extract_section_ats() {
+  local content="$1"
+  printf '%s\n' "$content" | awk -F'|' '
+    function trim_field(s) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      return s
+    }
+    /^\|/ {
+      at = trim_field($2)
+      if (at == "" || at == "AT") next
+      if (at ~ /^-+$/) next
+      if (at ~ /^AT-[A-Za-z0-9._-]+$/) print at
+    }
+  ' | LC_ALL=C sort -u
 }
 
 trim() {
@@ -294,7 +323,12 @@ if grep -Fq "> Premortem Schema: v2" "$pm"; then
   premortem_schema_v2=true
 fi
 
-if [[ "$premortem_schema_v2" == "true" ]] || grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$pm"; then
+has_trading_risk_hard_gate=false
+if grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$pm"; then
+  has_trading_risk_hard_gate=true
+fi
+
+if [[ "$premortem_schema_v2" == "true" || "$has_trading_risk_hard_gate" == "true" ]]; then
   validate_trading_risk_hard_gate "$pm" "$stoplight_value"
 fi
 
@@ -303,6 +337,10 @@ s0=$(section_content "$pm" "## 0) What we're building")
 echo "$s0" | grep -Eq '^- Story: .+' || die "§0 missing filled 'Story:' line"
 echo "$s0" | grep -Eq '^- Contract clause' || die "§0 missing 'Contract clause' line"
 echo "$s0" | grep -Eq '^- Acceptance tests: AT-' || die "§0 missing 'Acceptance tests: AT-' line"
+if [[ "$premortem_schema_v2" == "true" || "$has_trading_risk_hard_gate" == "true" ]]; then
+  echo "$s0" | grep -Eq '^- Touch scope: .+' || die "§0 missing filled 'Touch scope:' line"
+  echo "$s0" | grep -Eq '^- \*\*Risk rating\*\*: (LOW|MED|HIGH)([[:space:]]|$)' || die "§0 missing valid 'Risk rating' (LOW/MED/HIGH)"
+fi
 
 # --- §1: Clause audit table has rows ---
 s1=$(section_content "$pm" "## 1) Clause audit")
@@ -331,6 +369,16 @@ rows=$(table_rows "$s6")
 if [[ "$rows" -lt 1 ]]; then
   die "§6 proof plan table is empty (need at least 1 AT row)"
 fi
+
+# --- §1 -> §5/§6 AT cross-section consistency ---
+ats_clause="$(extract_section_ats "$s1")"
+ats_wrong="$(extract_section_ats "$s5")"
+ats_proof="$(extract_section_ats "$s6")"
+while IFS= read -r at; do
+  [[ -n "$at" ]] || continue
+  echo "$ats_wrong" | grep -Fxq "$at" || die "§5 missing AT '$at' from §1 clause audit"
+  echo "$ats_proof" | grep -Fxq "$at" || die "§6 missing AT '$at' from §1 clause audit"
+done <<< "$ats_clause"
 
 # --- §7: Economic risk has loss content ---
 s7=$(section_content "$pm" "## 7) Economic risk")

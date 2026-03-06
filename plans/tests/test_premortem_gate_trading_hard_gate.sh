@@ -31,6 +31,7 @@ cat > "$repo/reviews/premortems/S9-001_premortem.md" <<'MD'
 - Contract clause(s): `specs/CONTRACT.md` §5.1
 - Acceptance tests: AT-900
 - Touch scope: plans/premortem_gate.sh
+- **Risk rating**: MED
 
 ## Trading Risk Hard Gate
 
@@ -125,6 +126,7 @@ cat > "$repo/reviews/premortems/S9-002_premortem.md" <<'MD'
 - Contract clause(s): `specs/CONTRACT.md` §5.1
 - Acceptance tests: AT-901
 - Touch scope: plans/premortem_gate.sh
+- **Risk rating**: MED
 
 ## Trading Risk Hard Gate
 
@@ -211,5 +213,300 @@ set -e
 
 [[ "$invalid_rc" -ne 0 ]] || fail "expected UNKNOWN row without Gap ID to fail"
 printf '%s\n' "$invalid_out" | grep -Fq "requires Gap ID for answer UNKNOWN" || fail "missing Gap ID failure diagnostic"
+
+# Case 3: Header-only §5 table must fail (table row counting ignores headers).
+cat > "$repo/reviews/premortems/S9-003_premortem.md" <<'MD'
+# Story Premortem: S9-003
+
+> Premortem Schema: v2
+
+## 0) What we're building
+- Story: Header-only §5 table should fail
+- Contract clause(s): `specs/CONTRACT.md` §5.1
+- Acceptance tests: AT-902
+- Touch scope: plans/premortem_gate.sh
+- **Risk rating**: LOW
+
+## Trading Risk Hard Gate
+
+| Question | Answer (YES/NO/UNKNOWN) | Why (one sentence) | Proof (contract clause(s); enforcement file(s); test/vector/artifact) | Gap ID (required when NO/UNKNOWN) |
+|----------|--------------------------|--------------------|------------------------------------------------------------------------|-----------------------------------|
+| Loss prevention | YES | Reject path is fail-closed. | CONTRACT §5.1; plans/premortem_gate.sh; test | N/A |
+| Profit preservation | YES | Valid reduce behavior stays unblocked. | CONTRACT §5.2; plans/premortem_gate.sh; test | N/A |
+| Best design choice | YES | Single gate is smallest safe scope. | CONTRACT §2.4; plans/premortem_gate.sh; test | N/A |
+| Better alternative check | YES | Simpler alternatives were evaluated and rejected. | CONTRACT §2.4; plans/premortem_gate.sh; test | N/A |
+| Failure-path correctness | YES | Retry and replay coverage is explicit. | CONTRACT §6.3; plans/premortem_gate.sh; test | N/A |
+| Fail-closed enforcement | YES | Unknown states deny by default. | CONTRACT §3.2; plans/premortem_gate.sh; test | N/A |
+| Proof, not belief | YES | Claims map to contract and test artifacts. | CONTRACT §1.1; plans/premortem_gate.sh; test | N/A |
+
+Hard Gate Decision Rule:
+
+- GO only if all 7 answers are YES with concrete proof.
+- YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment.
+- NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim.
+
+## 1) Clause audit (contract -> AT traceability)
+| AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
+|----|-----------|---------------------------|------------------------|-----------|
+| AT-902 | §5.1 | Fail closed on uncertainty | MUST | Y |
+
+## 2) Assumptions (each must become a test or get killed)
+| # | Assumption | How it breaks | Test that proves it | Validated? |
+|---|-----------|---------------|---------------------|------------|
+| 1 | Inputs are parseable | malformed tables bypass checks | test-parse-01 | YES |
+
+## 3) Top 5 failure modes
+| # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
+|---|----------------|-----------|----------------------|-------------------|
+| 1 | Missing row | row lookup fails | block | AT-902 |
+| 2 | Invalid answer | enum check fails | block | AT-902 |
+| 3 | Missing proof | non-empty proof check fails | block | AT-902 |
+
+## 4) Open decisions (resolve before coding)
+### Decision: keep gate local
+- **What is ambiguous / missing**: where to enforce hard-gate schema
+- **Evidence** (file + anchor or snippet): plans/premortem_gate.sh
+- **Options**:
+  1. Option A — enforce in premortem gate
+  2. Option B — enforce only in docs review
+- **Chosen**: A — deciding factor: deterministic enforcement
+- **Why not others**: review-only path is non-deterministic
+- **Scope control**:
+  - What we're NOT doing yet (subordinate): migrate legacy premortems
+  - What unblocks us if this choice is wrong (elevate): add migration tool
+
+## 5) Wrong implementation gate
+| AT | Wrong impl that passes | Easier than correct? (Y/N) | Why it's wrong | Tightening (new AT / golden vector / property test) |
+|----|----------------------|-----------------------------|----------------|---------------------------------------------------|
+
+## 6) Proof plan (AT -> enforcement -> tests)
+| AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
+|----|-------------------|-----------------|-------|-----------|-----------------|-----------|
+| AT-902 | plans/premortem_gate.sh | test_premortem_gate_trading_hard_gate.sh | Y | Y | reject_reason | Y |
+
+## 7) Economic risk (loss_mode)
+- **If this fails in prod, worst financial outcome**: unsafe implementation reaches dispatch.
+- **Fail-closed cap on loss** (what restricts exposure): block implementation start.
+
+## 8) Conflict scan & hot zones
+- **Invariants/gates impacted**: premortem gate.
+
+## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: enforce explicit NO-GO reasoning
+
+## 10) STOPLIGHT + Exit criteria
+**STOPLIGHT**: GREEN
+- [ ] done 1
+- [ ] done 2
+- [ ] done 3
+- [ ] done 4
+- [ ] done 5
+MD
+
+set +e
+header_only_out="$(cd "$repo" && bash plans/premortem_gate.sh S9-003 2>&1)"
+header_only_rc=$?
+set -e
+
+[[ "$header_only_rc" -ne 0 ]] || fail "expected header-only §5 table to fail"
+printf '%s\n' "$header_only_out" | grep -Fq "§5 wrong implementation table is empty" || fail "missing §5 header-only failure diagnostic"
+
+# Case 4: §1 AT missing from §5 must fail cross-section consistency.
+cat > "$repo/reviews/premortems/S9-004_premortem.md" <<'MD'
+# Story Premortem: S9-004
+
+> Premortem Schema: v2
+
+## 0) What we're building
+- Story: AT cross-section mismatch should fail
+- Contract clause(s): `specs/CONTRACT.md` §5.1
+- Acceptance tests: AT-903
+- Touch scope: plans/premortem_gate.sh
+- **Risk rating**: MED
+
+## Trading Risk Hard Gate
+
+| Question | Answer (YES/NO/UNKNOWN) | Why (one sentence) | Proof (contract clause(s); enforcement file(s); test/vector/artifact) | Gap ID (required when NO/UNKNOWN) |
+|----------|--------------------------|--------------------|------------------------------------------------------------------------|-----------------------------------|
+| Loss prevention | YES | Reject path is fail-closed. | CONTRACT §5.1; plans/premortem_gate.sh; test | N/A |
+| Profit preservation | YES | Valid reduce behavior stays unblocked. | CONTRACT §5.2; plans/premortem_gate.sh; test | N/A |
+| Best design choice | YES | Single gate is smallest safe scope. | CONTRACT §2.4; plans/premortem_gate.sh; test | N/A |
+| Better alternative check | YES | Simpler alternatives were evaluated and rejected. | CONTRACT §2.4; plans/premortem_gate.sh; test | N/A |
+| Failure-path correctness | YES | Retry and replay coverage is explicit. | CONTRACT §6.3; plans/premortem_gate.sh; test | N/A |
+| Fail-closed enforcement | YES | Unknown states deny by default. | CONTRACT §3.2; plans/premortem_gate.sh; test | N/A |
+| Proof, not belief | YES | Claims map to contract and test artifacts. | CONTRACT §1.1; plans/premortem_gate.sh; test | N/A |
+
+Hard Gate Decision Rule:
+
+- GO only if all 7 answers are YES with concrete proof.
+- YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment.
+- NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim.
+
+## 1) Clause audit (contract -> AT traceability)
+| AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
+|----|-----------|---------------------------|------------------------|-----------|
+| AT-903 | §5.1 | Fail closed on uncertainty | MUST | Y |
+
+## 2) Assumptions (each must become a test or get killed)
+| # | Assumption | How it breaks | Test that proves it | Validated? |
+|---|-----------|---------------|---------------------|------------|
+| 1 | Inputs are parseable | malformed tables bypass checks | test-parse-01 | YES |
+
+## 3) Top 5 failure modes
+| # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
+|---|----------------|-----------|----------------------|-------------------|
+| 1 | Missing row | row lookup fails | block | AT-903 |
+| 2 | Invalid answer | enum check fails | block | AT-903 |
+| 3 | Missing proof | non-empty proof check fails | block | AT-903 |
+
+## 4) Open decisions (resolve before coding)
+### Decision: keep gate local
+- **What is ambiguous / missing**: where to enforce hard-gate schema
+- **Evidence** (file + anchor or snippet): plans/premortem_gate.sh
+- **Options**:
+  1. Option A — enforce in premortem gate
+  2. Option B — enforce only in docs review
+- **Chosen**: A — deciding factor: deterministic enforcement
+- **Why not others**: review-only path is non-deterministic
+- **Scope control**:
+  - What we're NOT doing yet (subordinate): migrate legacy premortems
+  - What unblocks us if this choice is wrong (elevate): add migration tool
+
+## 5) Wrong implementation gate
+| AT | Wrong impl that passes | Easier than correct? (Y/N) | Why it's wrong | Tightening (new AT / golden vector / property test) |
+|----|----------------------|-----------------------------|----------------|---------------------------------------------------|
+| AT-999 | Wrong row for cross-check | Y | does not match §1 AT | add matching row |
+
+## 6) Proof plan (AT -> enforcement -> tests)
+| AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
+|----|-------------------|-----------------|-------|-----------|-----------------|-----------|
+| AT-903 | plans/premortem_gate.sh | test_premortem_gate_trading_hard_gate.sh | Y | Y | reject_reason | Y |
+
+## 7) Economic risk (loss_mode)
+- **If this fails in prod, worst financial outcome**: unsafe implementation reaches dispatch.
+- **Fail-closed cap on loss** (what restricts exposure): block implementation start.
+
+## 8) Conflict scan & hot zones
+- **Invariants/gates impacted**: premortem gate.
+
+## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: enforce explicit NO-GO reasoning
+
+## 10) STOPLIGHT + Exit criteria
+**STOPLIGHT**: GREEN
+- [ ] done 1
+- [ ] done 2
+- [ ] done 3
+- [ ] done 4
+- [ ] done 5
+MD
+
+set +e
+at_mismatch_out="$(cd "$repo" && bash plans/premortem_gate.sh S9-004 2>&1)"
+at_mismatch_rc=$?
+set -e
+
+[[ "$at_mismatch_rc" -ne 0 ]] || fail "expected §1/§5 AT mismatch to fail"
+printf '%s\n' "$at_mismatch_out" | grep -Fq "§5 missing AT 'AT-903' from §1 clause audit" || fail "missing §1/§5 AT mismatch diagnostic"
+
+# Case 5: v2 premortem without §0 risk rating must fail.
+cat > "$repo/reviews/premortems/S9-005_premortem.md" <<'MD'
+# Story Premortem: S9-005
+
+> Premortem Schema: v2
+
+## 0) What we're building
+- Story: Missing risk rating should fail
+- Contract clause(s): `specs/CONTRACT.md` §5.1
+- Acceptance tests: AT-904
+- Touch scope: plans/premortem_gate.sh
+
+## Trading Risk Hard Gate
+
+| Question | Answer (YES/NO/UNKNOWN) | Why (one sentence) | Proof (contract clause(s); enforcement file(s); test/vector/artifact) | Gap ID (required when NO/UNKNOWN) |
+|----------|--------------------------|--------------------|------------------------------------------------------------------------|-----------------------------------|
+| Loss prevention | YES | Reject path is fail-closed. | CONTRACT §5.1; plans/premortem_gate.sh; test | N/A |
+| Profit preservation | YES | Valid reduce behavior stays unblocked. | CONTRACT §5.2; plans/premortem_gate.sh; test | N/A |
+| Best design choice | YES | Single gate is smallest safe scope. | CONTRACT §2.4; plans/premortem_gate.sh; test | N/A |
+| Better alternative check | YES | Simpler alternatives were evaluated and rejected. | CONTRACT §2.4; plans/premortem_gate.sh; test | N/A |
+| Failure-path correctness | YES | Retry and replay coverage is explicit. | CONTRACT §6.3; plans/premortem_gate.sh; test | N/A |
+| Fail-closed enforcement | YES | Unknown states deny by default. | CONTRACT §3.2; plans/premortem_gate.sh; test | N/A |
+| Proof, not belief | YES | Claims map to contract and test artifacts. | CONTRACT §1.1; plans/premortem_gate.sh; test | N/A |
+
+Hard Gate Decision Rule:
+
+- GO only if all 7 answers are YES with concrete proof.
+- YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment.
+- NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim.
+
+## 1) Clause audit (contract -> AT traceability)
+| AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
+|----|-----------|---------------------------|------------------------|-----------|
+| AT-904 | §5.1 | Fail closed on uncertainty | MUST | Y |
+
+## 2) Assumptions (each must become a test or get killed)
+| # | Assumption | How it breaks | Test that proves it | Validated? |
+|---|-----------|---------------|---------------------|------------|
+| 1 | Inputs are parseable | malformed tables bypass checks | test-parse-01 | YES |
+
+## 3) Top 5 failure modes
+| # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
+|---|----------------|-----------|----------------------|-------------------|
+| 1 | Missing row | row lookup fails | block | AT-904 |
+| 2 | Invalid answer | enum check fails | block | AT-904 |
+| 3 | Missing proof | non-empty proof check fails | block | AT-904 |
+
+## 4) Open decisions (resolve before coding)
+### Decision: keep gate local
+- **What is ambiguous / missing**: where to enforce hard-gate schema
+- **Evidence** (file + anchor or snippet): plans/premortem_gate.sh
+- **Options**:
+  1. Option A — enforce in premortem gate
+  2. Option B — enforce only in docs review
+- **Chosen**: A — deciding factor: deterministic enforcement
+- **Why not others**: review-only path is non-deterministic
+- **Scope control**:
+  - What we're NOT doing yet (subordinate): migrate legacy premortems
+  - What unblocks us if this choice is wrong (elevate): add migration tool
+
+## 5) Wrong implementation gate
+| AT | Wrong impl that passes | Easier than correct? (Y/N) | Why it's wrong | Tightening (new AT / golden vector / property test) |
+|----|----------------------|-----------------------------|----------------|---------------------------------------------------|
+| AT-904 | Missing risk rating accepted | Y | allows unknown risk class | require LOW/MED/HIGH |
+
+## 6) Proof plan (AT -> enforcement -> tests)
+| AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
+|----|-------------------|-----------------|-------|-----------|-----------------|-----------|
+| AT-904 | plans/premortem_gate.sh | test_premortem_gate_trading_hard_gate.sh | Y | Y | reject_reason | Y |
+
+## 7) Economic risk (loss_mode)
+- **If this fails in prod, worst financial outcome**: unsafe implementation reaches dispatch.
+- **Fail-closed cap on loss** (what restricts exposure): block implementation start.
+
+## 8) Conflict scan & hot zones
+- **Invariants/gates impacted**: premortem gate.
+
+## 9) Constraint I expect to hit
+Prior Postmortem: NONE
+Reused Guardrail: enforce explicit NO-GO reasoning
+
+## 10) STOPLIGHT + Exit criteria
+**STOPLIGHT**: GREEN
+- [ ] done 1
+- [ ] done 2
+- [ ] done 3
+- [ ] done 4
+- [ ] done 5
+MD
+
+set +e
+risk_missing_out="$(cd "$repo" && bash plans/premortem_gate.sh S9-005 2>&1)"
+risk_missing_rc=$?
+set -e
+
+[[ "$risk_missing_rc" -ne 0 ]] || fail "expected missing §0 risk rating to fail"
+printf '%s\n' "$risk_missing_out" | grep -Fq "§0 missing valid 'Risk rating' (LOW/MED/HIGH)" || fail "missing risk rating failure diagnostic"
 
 echo "PASS: premortem gate trading hard gate"

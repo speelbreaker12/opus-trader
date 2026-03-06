@@ -70,4 +70,61 @@ set -e
 [[ "$loop_rc" -ne 0 ]] || fail "expected workflow-loop drift case to fail"
 echo "$loop_output" | grep -Fq "WORKFLOW_LOOP_POINTER_MISSING" || fail "missing WORKFLOW_LOOP_POINTER_MISSING diagnostic"
 
+# Case 3: wrong-implementation section reference regressed to §4.
+fixture_wrong_impl="$tmp_dir/wrong_impl"
+mk_fixture "$fixture_wrong_impl"
+replace_text \
+  "$fixture_wrong_impl/SKILLS/slice-execute.md" \
+  "At least one case from the premortem §5 (wrong impl gate) — the tightened AT" \
+  "At least one case from the premortem §4 (wrong impl gate) — the tightened AT"
+
+set +e
+wrong_impl_output="$(SLICE_EXECUTE_GUARD_ROOT="$fixture_wrong_impl" "$SCRIPT" 2>&1)"
+wrong_impl_rc=$?
+set -e
+[[ "$wrong_impl_rc" -ne 0 ]] || fail "expected wrong-impl section drift case to fail"
+echo "$wrong_impl_output" | grep -Fq "WRONG_IMPL_SECTION_DRIFT" || fail "missing WRONG_IMPL_SECTION_DRIFT diagnostic"
+
+# Case 4: stale preflight wording appears while required premortem lines still exist.
+fixture_preflight="$tmp_dir/preflight"
+mk_fixture "$fixture_preflight"
+printf '\nLegacy wording: GO (preflight was GREEN/YELLOW-addressed)\n' >> "$fixture_preflight/SKILLS/slice-execute.md"
+
+set +e
+preflight_output="$(SLICE_EXECUTE_GUARD_ROOT="$fixture_preflight" "$SCRIPT" 2>&1)"
+preflight_rc=$?
+set -e
+[[ "$preflight_rc" -ne 0 ]] || fail "expected preflight wording drift case to fail"
+echo "$preflight_output" | grep -Fq "PREMORTEM_WORDING_DRIFT" || fail "missing PREMORTEM_WORDING_DRIFT diagnostic"
+
+# Case 5: premortem immutability statement removed.
+fixture_immut="$tmp_dir/immut"
+mk_fixture "$fixture_immut"
+replace_text \
+  "$fixture_immut/SKILLS/slice-execute.md" \
+  "keep premortem §10 STOPLIGHT as the pre-implementation gate record" \
+  "update premortem stoplight after implementation"
+
+set +e
+immut_output="$(SLICE_EXECUTE_GUARD_ROOT="$fixture_immut" "$SCRIPT" 2>&1)"
+immut_rc=$?
+set -e
+[[ "$immut_rc" -ne 0 ]] || fail "expected premortem immutability drift case to fail"
+echo "$immut_output" | grep -Fq "PREMORTEM_IMMUTABILITY_DRIFT" || fail "missing PREMORTEM_IMMUTABILITY_DRIFT diagnostic"
+
+# Case 6: trading-system lens heading removed.
+fixture_lens="$tmp_dir/lens"
+mk_fixture "$fixture_lens"
+replace_text \
+  "$fixture_lens/SKILLS/slice-execute.md" \
+  "### 0A) Trading-System Implementation Lens" \
+  "### 0A) Implementation Lens"
+
+set +e
+lens_output="$(SLICE_EXECUTE_GUARD_ROOT="$fixture_lens" "$SCRIPT" 2>&1)"
+lens_rc=$?
+set -e
+[[ "$lens_rc" -ne 0 ]] || fail "expected trading-lens drift case to fail"
+echo "$lens_output" | grep -Fq "TRADING_LENS_MISSING" || fail "missing TRADING_LENS_MISSING diagnostic"
+
 echo "PASS: slice execute guard test"
