@@ -81,7 +81,11 @@ For any **new guard** (a rule, latch, monitor, or gate) that can block an OPEN, 
 
 
 - **instrument_kind**: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).
-  - **Linear Perpetuals (USDC‑margined)**: treat as `linear_future` for sizing (canonical `qty_coin`), even if their venue symbol says "PERPETUAL".
+  - **Linear Perpetuals (USDC‑margined)**: treat as `linear_future` for sizing metadata derivation, even if their venue symbol says "PERPETUAL".
+- **amount_semantics**: one of `coin | usd` (derived from normalized venue metadata).
+  - `coin` means canonical sizing and outbound `amount` use `qty_coin`.
+  - `usd` means canonical sizing and outbound `amount` use `qty_usd`.
+  - `amount_semantics` is the authoritative discriminator for sizing/quantization/outbound amount selection only. `instrument_kind` and other product-family metadata remain authoritative for non-sizing rules such as expiry, linked-order capability checks, and option/future/perp policy.
 - **order_type** (Deribit `type`): `limit | market | stop_limit | stop_market | ...` (venue-specific).
 - **linked_order_type**: Deribit linked/OCO semantics (venue-specific; gated off for this bot).
 - **Aggressive IOC Limit**: a `limit` order with `time_in_force=immediate_or_cancel` and a *bounded* limit price computed from `fair_price` with fee-aware edge-based clamps (see §1.4).
@@ -882,21 +886,22 @@ pub struct OrderSize {
 ```
 
 **Dispatcher Rules (Deribit request mapping):**
-- Determine `instrument_kind` from instrument metadata (`option | linear_future | inverse_future | perpetual`).
+- Normalize instrument metadata into at least: `instrument_kind`, `amount_semantics`, `tick_size`, `amount_step`, `min_amount`, and optional `contract_size_usd`.
+- Determine canonical sizing from `amount_semantics`, not directly from `instrument_kind`.
 - Compute size fields:
-  - `option | linear_future`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined.
-    - **Linear Perpetuals (USDC‑margined)** are treated as `linear_future`.
-  - `perpetual | inverse_future`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` (if defined) and `qty_coin = qty_usd / index_price`.
+  - `amount_semantics = coin`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined.
+  - `amount_semantics = usd`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` (if defined) and `qty_coin = qty_usd / index_price`.
+- `instrument_kind` MAY still influence non-sizing behavior (for example expiry and linked-order policy), but it MUST NOT override `amount_semantics` for outbound amount selection.
 - **Deribit outbound order size field:** always send exactly one canonical “amount” value:
-  - coin instruments → send `amount = qty_coin`
-  - USD-sized instruments → send `amount = qty_usd`
+  - `amount_semantics = coin` → send `amount = qty_coin`
+  - `amount_semantics = usd` → send `amount = qty_usd`
 - If `contracts` exists, it must be consistent with the canonical amount before dispatch (reject if not).
 
 **Acceptance Test (REQUIRED):**
 AT-277
 - Given:
-  1) `instrument_kind=option` with `qty_coin=0.3` at `index_price=100_000`
-  2) `instrument_kind=perpetual` with `qty_usd=30_000` at `index_price=100_000`
+  1) normalized metadata yields `instrument_kind=option`, `amount_semantics=coin`, with `qty_coin=0.3` at `index_price=100_000`
+  2) normalized metadata yields `instrument_kind=perpetual`, `amount_semantics=usd`, with `qty_usd=30_000` at `index_price=100_000`
 - When: the dispatcher maps request fields.
 - Then:
   - outbound option uses `amount=0.3` (coin), `notional_usd=30_000`, and `qty_usd` is unset
@@ -935,28 +940,36 @@ Rejections for schema/length violations MUST use `Rejected(LabelTooLong)` (or a 
 **Legacy Documentation Format (non-sent):** `s4:{strat_id}:{group_id}:{leg_idx}:{intent_hash}`  
 This expanded format is for human-readable logs and internal documentation only. It MUST NOT be sent to the exchange.
 
+**Recovery / Matching Rule (Normative):**
+- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.
+- Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.
+- Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.
+- If the applicable matcher yields none or more than one candidate, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
 
 **Requirement:** Label collisions can still occur (hash collisions or non-conforming labels). The Soldier must deterministically map exchange orders to local intents.
 
-**Where:** `soldier/core/recovery/label_match.rs`
+**Where:** `crates/soldier_core/src/recovery/label_match.rs`
+
+**Note:** At 10^4 intents/day, the expected collision rate for a 64-bit hash is < 10^-15/year. The legacy fallback path exists for defense-in-depth and historical recovery, not expected current operations.
 
 **Algorithm:**
-1) Parse label → extract `{sid8, gid12, leg_idx, ih16}`.
-2) Primary candidate set = all local intents where:
+1) Parse label.
+2) If the label is canonical `s4`, extract `{sid8, gid12, leg_idx, ih16}` and build the candidate set using exact full short identity:
    - `sid8` matches,
    - `gid12` matches,
    - `leg_idx` matches,
-   - `ih16` matches (full short identity).
-3) If primary candidate set size == 1 → match.
-4) Else use legacy/repair fallback candidate set where:
+   - `ih16` matches.
+3) If the canonical candidate set size == 1 → match.
+4) If a canonical `s4` label yields none or more than one candidate → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+5) If the label is explicitly non-canonical legacy/repair data, build the legacy fallback candidate set where:
    - `gid12` matches AND `leg_idx` matches.
-5) If fallback candidate size == 1 → match.
-6) Else disambiguate fallback candidates using tie-breakers in order:
+6) If legacy fallback candidate size == 1 → match.
+7) Else disambiguate legacy fallback candidates using tie-breakers in order:
    A) instrument match
    B) side match
    C) qty_q match
-7) If still ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+8) If legacy fallback remains ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
 
 **Acceptance Tests (REQUIRED):**
 AT-216
@@ -967,11 +980,11 @@ AT-216
 - Fail criteria: label format invalid, length > 64, or parsed components mismatch.
 
 AT-217
-- Given: two intents share the same `gid12` and `leg_idx`.
-- When: the label matcher disambiguates using tie-breakers.
-- Then: it first attempts full `sid8+gid12+leg_idx+ih16` identity match; if no unique full match, it uses legacy fallback tie-breakers; if still ambiguous, `RiskState::Degraded` and opens blocked.
-- Pass criteria: deterministic match with full identity when available; deterministic fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
-- Fail criteria: ambiguous mapping accepted or opens proceed without Degraded on unresolved ambiguity.
+- Given: a recovered order candidate set is matched against either canonical `s4` labels or explicitly legacy non-canonical labels.
+- When: the label matcher disambiguates.
+- Then: canonical `s4` labels require exact full `sid8+gid12+leg_idx+ih16` identity with no tie-breakers; legacy fallback tie-breakers are permitted only for explicitly legacy non-canonical labels; any unresolved none-or-many result forces `RiskState::Degraded` and opens blocked.
+- Pass criteria: deterministic full-identity match for canonical labels; deterministic legacy-only fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
+- Fail criteria: canonical labels use heuristic fallback, ambiguous mapping is accepted, or opens proceed without Degraded on unresolved ambiguity.
 
 AT-041
 - Given: an outbound label candidate does not conform to canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape (wrong segment count, wrong token widths, or invalid characters).
@@ -989,14 +1002,14 @@ AT-921
 
 
 
-* `strat_id`: Static ID of the running strategy (e.g., `strangle_btc_low_vol`).  
-* `group_id`: UUIDv4 (Shared by all legs in a single atomic attempt).  
-* `leg_idx`: `0` or `1` (Identity within the group).  
-* `intent_hash`: `xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)` (see §1.1.1 for quantization)  
+* `strat_id`: Static ID of the running strategy (e.g., `strangle_btc_low_vol`).
+* `group_id`: UUIDv4 (Shared by all legs in a single atomic attempt).
+* `leg_idx`: `0` or `1` (Identity within the group).
+* `intent_hash`: `xxhash64(instrument + side + qty_steps + price_ticks + group_id + leg_idx)` (see §1.1.1 for quantization)
   **Hard rule:** Do NOT include wall-clock timestamps in the idempotency hash.
 
 AT-343
-- Given: two intents with identical canonical fields (instrument, side, qty_q, limit_price_q, group_id, leg_idx) evaluated at different wall-clock times.
+- Given: two intents with identical canonical fields (instrument, side, qty_steps, price_ticks, group_id, leg_idx) evaluated at different wall-clock times.
 - When: `intent_hash` is computed for both.
 - Then: the two `intent_hash` values are identical.
 - Pass criteria: `intent_hash(t0) == intent_hash(t1)` for identical canonical fields.
@@ -1004,33 +1017,35 @@ AT-343
 
 AT-933
 - Given: a WS reconnect occurs and the exchange still has open orders with canonical `s4` labels.
-- When: the system re-fetches open orders and matches using full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`) with legacy fallback per §1.1.2.
+- When: the system re-fetches open orders and matches using exact full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`); legacy fallback is reserved for explicitly non-canonical legacy labels per §1.1.2.
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
-- Fail criteria: duplicate dispatch occurs or orders are treated as missing.
+- Fail criteria: duplicate dispatch occurs, canonical labels use heuristic fallback, or orders are treated as missing.
 
 
 ### **1.1.1 Canonical Quantization (Pre-Hash & Pre-Dispatch)**
 
 **Requirement:** All idempotency keys and order payloads MUST use canonical, exchange-valid rounded values.
 
-**Where:** `soldier/core/execution/quantize.rs`
+**Where:** `crates/soldier_core/src/execution/quantize.rs`
 
-**Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`  
-**Outputs:** `qty_q`, `limit_price_q` (quantized)
+**Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`
+**Outputs:** `qty_steps`, `price_ticks`, `qty_q`, `limit_price_q` (quantized)
 
 **Rules (Deterministic):**
 - Fetch instrument constraints: `tick_size`, `amount_step`, `min_amount`.
 - If any of `tick_size`, `amount_step`, or `min_amount` is missing or unparseable -> Reject(intent=InstrumentMetadataMissing) and do not dispatch (fail-closed).
-- `qty_q = round_down(raw_qty, amount_step)` (never round up size).
-- `limit_price_q = round_to_nearest_tick(raw_limit_price, tick_size)` (or round in the safer direction; see below).
+- `qty_steps = floor(raw_qty / amount_step)` and `qty_q = qty_steps * amount_step` (never round up size).
+- `price_ticks = floor(raw_limit_price / tick_size)` for BUY and `ceil(raw_limit_price / tick_size)` for SELL; `limit_price_q = price_ticks * tick_size`.
 - If `qty_q < min_amount` → Reject(intent=TooSmallAfterQuantization).
-- Idempotency hash must be computed ONLY from quantized fields:
-  `intent_hash = xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)`
+- Idempotency hash must be computed ONLY from integer quantized identity fields:
+  `intent_hash = xxhash64(instrument + side + qty_steps + price_ticks + group_id + leg_idx)`
 
 **Safer rounding direction:**
 - For BUY: round `limit_price_q` DOWN (never pay extra).
 - For SELL: round `limit_price_q` UP (never sell cheaper).
+
+**Note:** Side-only rounding is intentional for simplicity. For CLOSE/HEDGE orders, `close_buffer_ticks` in §3.1 compensates for the conservative rounding direction.
 
 **Acceptance Tests (REQUIRED):**
 AT-218
@@ -1070,7 +1085,7 @@ AT-928
 
 **Idempotency Rules (Non-Negotiable):**
 1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
-2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by `group_id`.
+2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by canonical parsed `s4` identity `{sid8, gid12, leg_idx, ih16}`; use legacy fallback only for explicitly non-canonical legacy labels.
 3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
 4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute "atomic slippage" per group.
 
@@ -1408,14 +1423,14 @@ AT-1216
 ### **1.4 Fee-Aware IOC Limit Pricer (No Market Orders)**
 **Council Weakness Covered:** Taker Bleed (Critical) + Fee Blindness (High)
 
-**Where:** `soldier/core/execution/pricer.rs`  
-**Input:** `fair_price`, `gross_edge_usd`, `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`  
+**Where:** `crates/soldier_core/src/execution/pricer.rs`
+**Input:** `fair_price`, `net_edge_usd` (already authorized by Net Edge Gate), `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`
 **Output:** `limit_price`
 
 **Rule:**
-- `net_edge = gross_edge - fees`
-- If `net_edge < min_edge` ⇒ reject.
-- `net_edge_per_unit = net_edge / qty`
+- For OPEN intents, Net Edge Gate is the sole profitability eligibility gate. The pricer MUST NOT make an independent profitability authorization decision once an OPEN has already passed Net Edge (and any Inventory Skew re-check).
+- If any required pricer numeric input is missing, unparseable, NaN, or `qty <= 0`, the pricer MUST fail closed with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and no dispatch occurs.
+- `net_edge_per_unit = net_edge_usd / qty`
 - Compute per-unit bounds:
   - `fee_per_unit = fee_estimate_usd / qty`
   - `min_edge_per_unit = min_edge_usd / qty`
@@ -1436,6 +1451,11 @@ AT-223
 - Then: the system never fills worse than `limit_price` and `Realized Edge >= Min_Edge` at the limit price.
 - Pass criteria: no fills beyond `limit_price`; realized edge meets minimum.
 - Fail criteria: fill worse than `limit_price` or realized edge below minimum.
+
+**OPEN chokepoint sequence (Normative):**
+- `DispatchAuth -> Preflight -> Quantize -> DispatchConsistency -> FeeCache/Policy -> Expiry -> Liquidity -> NetEdge -> InventorySkew -> NetEdge re-check (if Inventory Skew adjusts min_edge_usd) -> Pricer -> RecordedBeforeDispatch -> venue/network dispatch`
+- No venue/network dispatch side effects may occur before `RecordedBeforeDispatch`. WAL append/acknowledgment, metrics, and reject diagnostics are permitted before dispatch because they are not venue/network side effects.
+- `FeeCache/Policy` blocks OPEN when hard-stale fee state or other PolicyGuard/dispatch-authorization conditions apply. CLOSE/HEDGE/CANCEL remain governed by the contract's risk-reducing and Kill semantics.
 
 
 ### **1.4.1 Net Edge Gate (Fees + Expected Slippage)**
@@ -6343,3 +6363,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
 | 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |
+| 2026-03-06 | CCL-2026-03-06-01 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
