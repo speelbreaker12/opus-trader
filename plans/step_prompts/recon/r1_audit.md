@@ -10,7 +10,8 @@ STORY
 - Current HEAD: ${HEAD}
 
 READS
-- Existing R1/preflight audit artifact for this story, if present (for reruns/comparison)
+- reviews/premortems/${STORY_ID}_premortem.md (primary audit checklist)
+- Legacy R1/preflight audit artifact for this story, if present (comparison context only)
 - Prior postmortem: ${PRIOR_POSTMORTEM_PATH}
 - specs/CONTRACT.md (referenced ATs)
 - specs/DESIGN_PATTERNS.md §0 (principles)
@@ -18,11 +19,12 @@ READS
 - scope.touch files (existing implementation)
 
 HARD GATE
-Read the current R1/preflight STOPLIGHT (generate it now if this is the first pass).
-- RED → STOP. Do not proceed. Fix preflight gaps first.
+Read the premortem §10 STOPLIGHT first.
+- RED → STOP. Do not proceed. Fix premortem blockers first.
 - YELLOW → Proceed only if every gap is explicitly marked:
     DEFERRED (future slice) or FIX_IN_IMPLEMENT
 - GREEN → Proceed.
+If legacy R1/preflight evidence also has a STOPLIGHT, the more restrictive gate wins.
 
 TASK (read-only — no edits)
 For each AT in enforcing_contract_ats[]:
