@@ -302,8 +302,36 @@ fn engine_close_wal_failure_emits_csp32_visibility_metric() {
         lines.iter().any(|line| {
             line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
                 && line.contains("intent_class=Close")
+                && line.contains("source=wal_gate_error")
         }),
         "expected CSP.3.2 non-blocking WAL visibility metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn engine_close_without_wal_gate_emits_no_gate_configured_metric() {
+    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let _ = crate::execution::take_execution_metric_lines();
+
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Close(CloseExecutionInput { base });
+    let mut runtime = ExecutionRuntime::default();
+
+    let delegated = engine.decide(&engine_input, &mut runtime);
+    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+
+    let lines = crate::execution::take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
+                && line.contains("intent_class=Close")
+                && line.contains("source=no_gate_configured")
+        }),
+        "expected CSP.3.2 no-gate visibility metric line, got {lines:?}"
     );
 }
 
@@ -353,9 +381,27 @@ fn engine_hedge_wal_failure_emits_csp32_visibility_metric() {
         lines.iter().any(|line| {
             line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
                 && line.contains("intent_class=Hedge")
+                && line.contains("source=wal_gate_error")
         }),
         "expected CSP.3.2 non-blocking WAL visibility metric line for Hedge, got {lines:?}"
     );
+}
+
+#[test]
+fn decide_pipeline_open_fails_closed_instead_of_panicking() {
+    let engine = ExecutionEngine::new();
+    let mut runtime = ExecutionRuntime::default();
+
+    let decision = engine.decide_pipeline(&base_execution_input(), ChokeIntentClass::Open, &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::RecordedBeforeDispatchFailed,
+            step: ExecutionStep::Gate(GateStep::RecordedBeforeDispatch),
+            ..
+        })
+    ));
 }
 
 #[test]

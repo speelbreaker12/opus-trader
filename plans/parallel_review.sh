@@ -277,7 +277,7 @@ if [[ "$PROOF_GRAPH" == "true" && "$NO_AGGREGATE" != "true" && "$any_failed" -eq
     echo "Running proof graph aggregation..."
     if [[ -x "$AGGREGATE_SCRIPT" ]]; then
       set +e
-      "$AGGREGATE_SCRIPT" "$STORY"
+      STORY_ARTIFACTS_ROOT="$STORY_ARTIFACTS_DIR" "$AGGREGATE_SCRIPT" "$STORY"
       agg_rc=$?
       set -e
       if [[ $agg_rc -eq 0 ]]; then

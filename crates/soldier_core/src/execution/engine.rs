@@ -296,6 +296,10 @@ impl ExecutionEngine {
         intent_class: ChokeIntentClass,
         runtime: &mut ExecutionRuntime<'runtime>,
     ) -> ExecutionDecision {
+        if intent_class == ChokeIntentClass::Open {
+            return unexpected_open_pipeline_decision();
+        }
+
         let outcome = pipeline_wal_recorded(intent_class, runtime);
 
         // H-4: Distinguish "gate absent" from "gate errored" for monitoring.
@@ -573,7 +577,10 @@ fn pipeline_wal_recorded(
         }
         ChokeIntentClass::CancelOnly => WalRecordOutcome::Recorded,
         ChokeIntentClass::Open => {
-            unreachable!("Open intents route through decide_open, not decide_pipeline")
+            tracing::error!(
+                "Open intent unexpectedly reached pipeline_wal_recorded — failing closed"
+            );
+            WalRecordOutcome::GateError
         }
     }
 }
@@ -713,6 +720,14 @@ fn missing_runtime_dependency_decision(dependency: &'static str) -> ExecutionDec
         code: RejectReasonCode::AssemblyFailed,
         step: ExecutionStep::Runtime(RuntimeStep::Assembly),
         detail: format!("missing runtime dependency: {dependency}"),
+    })
+}
+
+fn unexpected_open_pipeline_decision() -> ExecutionDecision {
+    ExecutionDecision::Rejected(ExecutionRejection {
+        code: RejectReasonCode::RecordedBeforeDispatchFailed,
+        step: ExecutionStep::Gate(GateStep::RecordedBeforeDispatch),
+        detail: "Open intent unexpectedly reached non-OPEN pipeline path".to_string(),
     })
 }
 
