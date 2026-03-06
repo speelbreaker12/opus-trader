@@ -21,9 +21,20 @@ set -euo pipefail
 STORY_ID="${1:?Usage: aggregate_proofs.sh <STORY_ID>}"
 # SCRIPT_ROOT: always the real repo root (for python scripts, specs, plans)
 SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# AGGREGATE_ROOT: overridable for tests (artifact paths only)
-ROOT="${AGGREGATE_ROOT:-$SCRIPT_ROOT}"
-BASE="$ROOT/artifacts/story/$STORY_ID/proof_graph.json"
+# STORY_ROOT: overridable for callers that write reviewer artifacts outside
+# the repo-default artifacts/story tree.
+if [[ -n "${STORY_ARTIFACTS_ROOT:-}" ]]; then
+  STORY_ROOT="$STORY_ARTIFACTS_ROOT"
+  if [[ "$STORY_ROOT" != /* ]]; then
+    STORY_ROOT="$SCRIPT_ROOT/$STORY_ROOT"
+  fi
+else
+  # AGGREGATE_ROOT remains supported for tests that provide a synthetic repo
+  # root containing artifacts/story/<STORY_ID>/...
+  ROOT="${AGGREGATE_ROOT:-$SCRIPT_ROOT}"
+  STORY_ROOT="$ROOT/artifacts/story"
+fi
+BASE="$STORY_ROOT/$STORY_ID/proof_graph.json"
 
 # Detect python binary (prefers python3; verify_utils.sh ensure_python prefers python)
 if command -v python3 >/dev/null 2>&1; then
@@ -50,7 +61,7 @@ fi
 # files from e.g. self_review/, premortem/, or other non-reviewer subdirectories.
 REVIEWS=()
 LABELS=()
-for dir in "$ROOT"/artifacts/story/"$STORY_ID"/*/; do
+for dir in "$STORY_ROOT"/"$STORY_ID"/*/; do
   [[ -d "$dir" ]] || continue
   tool="$(basename "$dir")"
   # Filter to known reviewer tools

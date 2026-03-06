@@ -143,9 +143,10 @@ status_tsv=""
 dispatch_status_json=""
 summary_md=""
 parallel_review_log=""
+temp_worktree_created=false
 
 cleanup() {
-  if [[ -n "$temp_worktree" ]]; then
+  if [[ "$temp_worktree_created" == "true" && -n "$temp_worktree" ]]; then
     git -C "$ROOT" worktree remove --force "$temp_worktree" >/dev/null 2>&1 || true
   fi
   if [[ -n "$temp_ref" ]]; then
@@ -178,6 +179,9 @@ if [[ -z "$mode" ]]; then
   requested_target="tracked working-tree diff"
 fi
 
+timestamp_utc="${EXTERNAL_REVIEW_NOW_UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
+[[ -n "$timestamp_utc" ]] || fail "timestamp generation failed"
+
 case "$mode" in
   pr)
     [[ -n "$pr_number" ]] || fail "missing PR number"
@@ -191,12 +195,14 @@ case "$mode" in
     [[ -n "$resolved_base_ref" ]] || fail "failed to resolve baseRefName for PR #$pr_number"
     [[ -n "$resolved_head_oid" ]] || fail "failed to resolve headRefOid for PR #$pr_number"
 
-    temp_ref="refs/tmp/external-review/pr-$pr_number"
-    temp_worktree="$ROOT/.tmp/external-review/pr-$pr_number"
+    temp_token="$(sanitize_component "pr_${pr_number}_${timestamp_utc}_$$")"
+    temp_ref="refs/tmp/external-review/$temp_token"
+    temp_worktree="$ROOT/.tmp/external-review/$temp_token"
     mkdir -p "$(dirname "$temp_worktree")"
 
     git -C "$ROOT" fetch origin "$resolved_base_ref" "pull/$pr_number/head:$temp_ref"
     git -C "$ROOT" worktree add --detach "$temp_worktree" "$temp_ref"
+    temp_worktree_created=true
 
     parallel_cwd="$temp_worktree"
     parallel_mode_args=(--base "origin/$resolved_base_ref")
@@ -226,9 +232,6 @@ case "$mode" in
     ;;
 esac
 
-timestamp_utc="${EXTERNAL_REVIEW_NOW_UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
-[[ -n "$timestamp_utc" ]] || fail "timestamp generation failed"
-
 RUN_ID="external_review_generic_${timestamp_utc}_${run_id_suffix}"
 RUN_ID="$(sanitize_component "$RUN_ID")"
 
@@ -242,7 +245,9 @@ summary_md="$review_dir/summary.md"
 parallel_review_log="$review_dir/parallel_review.log"
 
 parallel_cmd=("$PARALLEL_SCRIPT" "$RUN_ID" --tools codex,opus,kimi,gemini --prompt generic)
-parallel_cmd+=(--review-script "$ROOT/plans/review_logged.sh")
+if [[ "$PARALLEL_SCRIPT" == "$ROOT/plans/parallel_review.sh" ]]; then
+  parallel_cmd+=(--review-script "$ROOT/plans/review_logged.sh")
+fi
 parallel_cmd+=("${parallel_mode_args[@]}")
 
 set +e

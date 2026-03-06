@@ -116,6 +116,12 @@ run_aggregate() {
   AGGREGATE_ROOT="$tmp_dir" bash "$SCRIPT" "$sid"
 }
 
+run_aggregate_story_root() {
+  local sid="$1"
+  local story_root="$2"
+  STORY_ARTIFACTS_ROOT="$story_root" bash "$SCRIPT" "$sid"
+}
+
 # ── Test 1: No base graph → exit 1 with error message ────────────
 
 test_no_base_graph() {
@@ -150,6 +156,34 @@ test_zero_reviewers() {
   echo "$output" | grep -q "WARN.*No reviewer" \
     || fail "zero reviewers: expected warning about no reviewers"
   pass "zero reviewers → exit 0 with warning"
+}
+
+test_story_artifacts_root_override() {
+  local sid="TEST-STORY-ROOT"
+  local story_root="$tmp_dir/custom/story"
+  local story_dir="$story_root/$sid"
+  mkdir -p "$story_dir"
+  copy_base "$story_dir"
+  create_reviewer_graph "$story_dir" "codex" "PROVEN_UNIT"
+
+  set +e
+  output="$(run_aggregate_story_root "$sid" "$story_root" 2>&1)"
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "story-artifacts root override should exit 0, got $rc. Output: $output"
+  echo "$output" | grep -q "Aggregated 1 reviewer" \
+    || fail "story-artifacts root override: expected aggregation output"
+
+  local merged="$story_dir/proof_graph.json"
+  [[ -f "$merged" ]] || fail "story-artifacts root override: merged graph not found at $merged"
+
+  local merged_verdict
+  merged_verdict="$(read_merged_field "$merged" "print(g['ats'][0]['at_verdict']['verdict'])")"
+  [[ "$merged_verdict" == "PROVEN_UNIT" ]] \
+    || fail "story-artifacts root override: expected PROVEN_UNIT verdict, got $merged_verdict"
+
+  pass "STORY_ARTIFACTS_ROOT overrides the default artifacts/story tree"
 }
 
 # ── Test 3: Base + 1 reviewer → exit 0, verdict preserved ────────
@@ -393,6 +427,7 @@ test_known_tools_sync() {
 echo "=== aggregate_proofs.sh tests ==="
 test_no_base_graph
 test_zero_reviewers
+test_story_artifacts_root_override
 test_single_reviewer
 test_two_reviewers_strictest
 test_blocking_rejected
