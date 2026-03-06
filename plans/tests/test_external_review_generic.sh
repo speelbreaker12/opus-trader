@@ -290,12 +290,59 @@ test_pr_mode_resolution() {
   assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190"
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
-  assert_file_contains "$mock_root/parallel_args.log" "--review-script"
-  assert_file_contains "$mock_root/parallel_args.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
+}
+
+test_parallel_script_override_keeps_legacy_cli_contract() {
+  setup_mock_env "parallel_override"
+
+  cat > "$mock_root/custom_parallel.sh" <<'MOCK_OVERRIDE'
+#!/usr/bin/env bash
+set -euo pipefail
+
+run_id="${1:?missing run id}"
+shift
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tools|--prompt|--commit|--base|--files)
+      shift 2
+      ;;
+    --uncommitted)
+      shift
+      ;;
+    *)
+      echo "unexpected arg: $1" >&2
+      exit 99
+      ;;
+  esac
+done
+
+printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" > "${EXTERNAL_REVIEW_ROOT:?}/override_review_script.log"
+story_dir="${STORY_ARTIFACTS_ROOT:?}/$run_id"
+mkdir -p "$story_dir/codex" "$story_dir/opus" "$story_dir/kimi" "$story_dir/gemini"
+for tool in codex opus kimi gemini; do
+  cat > "$story_dir/$tool/$tool.generic.md" <<EOF
+# $tool generic review
+FINDINGS_SUMMARY: P0=0 P1=0 P2=0
+EOF
+  echo "[done] $tool  exit=0  (1s)"
+done
+MOCK_OVERRIDE
+
+  chmod +x "$mock_root/custom_parallel.sh"
+
+  EXTERNAL_REVIEW_PARALLEL_SCRIPT="$mock_root/custom_parallel.sh" \
+    run_wrapper all_ok --commit HEAD >/dev/null || fail "parallel override should keep working without --review-script CLI support"
+
+  assert_file_contains "$mock_root/override_review_script.log" "$mock_root/plans/review_logged.sh"
+  if grep -Fq -- "--review-script" "$mock_root/parallel_args.log" 2>/dev/null; then
+    fail "legacy parallel override should not receive --review-script"
+  fi
+  pass "parallel override uses environment-based review script routing without breaking legacy arg parsing"
 }
 
 test_reviewer_failure_preserves_summary() {
@@ -423,6 +470,7 @@ test_files_mode_success
 test_uncommitted_mode_success
 test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
+test_parallel_script_override_keeps_legacy_cli_contract
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
 test_parallel_review_artifact_summary_uses_story_artifacts_root
