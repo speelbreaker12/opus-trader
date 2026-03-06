@@ -405,6 +405,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_review_logged_timeout_fallback.sh"
   "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
   "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
+  "plans/tests/test_review_logged_prompt_literalization.sh"
   "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
@@ -414,7 +415,6 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_workflow_quick_step.sh"
   "plans/tests/test_toggle_policy_check.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
-  "plans/tests/test_preflight_fixture_timeout_controls.sh"
   "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
@@ -429,7 +429,6 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_recon_handoff_sources.sh"
   "plans/tests/test_recon_precheck.sh"
   "plans/tests/test_recon_operator_trace.sh"
-  "plans/tests/test_recon_scoreboard.sh"
   "plans/tests/test_recon_evidence_ledger.sh"
   "plans/tests/test_premortem_ready_ownership_conflict.sh"
   "plans/tests/test_premortem_gate_trading_hard_gate.sh"
@@ -455,8 +454,10 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_prd_set_pass.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
   # Heavy recon integration fixtures stay in verify coverage, but not in quick smoke.
+  "plans/tests/test_preflight_fixture_timeout_controls.sh"
   "plans/tests/test_recon_bundle.sh"
   "plans/tests/test_recon_operator_runner.sh"
+  "plans/tests/test_recon_scoreboard.sh"
 )
 # NOTE: test_story_review_gate.sh and test_pr_gate.sh moved to verify_fork.sh
 # gate 14g (overlaps with rust compilation for better wall-clock performance).
