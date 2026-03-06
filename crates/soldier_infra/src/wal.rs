@@ -36,11 +36,74 @@ pub enum BuildCreatedIntentRecordError {
     UnsupportedLifecycleIntent(LifecycleIntent),
 }
 
+fn created_intent_record_from_fields(
+    intent_hash: &str,
+    group_id: &str,
+    leg_idx: u32,
+    instrument: &str,
+    side: &str,
+    lifecycle_intent: LifecycleIntent,
+    qty_q: f64,
+    limit_price_q: f64,
+    created_ts: u64,
+) -> IntentRecord {
+    IntentRecord {
+        intent_hash: intent_hash.to_string(),
+        group_id: group_id.to_string(),
+        leg_idx,
+        instrument: instrument.to_string(),
+        side: side.to_string(),
+        reduce_only: reduce_only_from_lifecycle_intent(lifecycle_intent),
+        qty_q,
+        limit_price_q,
+        tls_state: TlsState::Created,
+        created_ts,
+        sent_ts: 0,
+        ack_ts: 0,
+        last_fill_ts: 0,
+        exchange_order_id: None,
+        last_trade_id: None,
+    }
+}
+
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
 ///
-/// This is the canonical constructor for newly-persisted pre-dispatch intents.
-/// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
+/// Deprecated compatibility shim: preserves the original infallible public
+/// constructor shape for downstream callers. New code that needs to reject
+/// unsupported lifecycle intents should use `try_build_created_intent_record`.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use try_build_created_intent_record() for validated construction."
+)]
 pub fn build_created_intent_record(
+    intent_hash: &str,
+    group_id: &str,
+    leg_idx: u32,
+    instrument: &str,
+    side: &str,
+    lifecycle_intent: LifecycleIntent,
+    qty_q: f64,
+    limit_price_q: f64,
+    created_ts: u64,
+) -> IntentRecord {
+    created_intent_record_from_fields(
+        intent_hash,
+        group_id,
+        leg_idx,
+        instrument,
+        side,
+        lifecycle_intent,
+        qty_q,
+        limit_price_q,
+        created_ts,
+    )
+}
+
+/// Construct a CREATED-state WAL intent record from runtime intent fields.
+///
+/// This is the validated constructor for newly-persisted pre-dispatch intents.
+/// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
+pub fn try_build_created_intent_record(
     intent_hash: &str,
     group_id: &str,
     leg_idx: u32,
@@ -57,23 +120,17 @@ pub fn build_created_intent_record(
         ));
     }
 
-    Ok(IntentRecord {
-        intent_hash: intent_hash.to_string(),
-        group_id: group_id.to_string(),
+    Ok(created_intent_record_from_fields(
+        intent_hash,
+        group_id,
         leg_idx,
-        instrument: instrument.to_string(),
-        side: side.to_string(),
-        reduce_only: reduce_only_from_lifecycle_intent(lifecycle_intent),
+        instrument,
+        side,
+        lifecycle_intent,
         qty_q,
         limit_price_q,
-        tls_state: TlsState::Created,
         created_ts,
-        sent_ts: 0,
-        ack_ts: 0,
-        last_fill_ts: 0,
-        exchange_order_id: None,
-        last_trade_id: None,
-    })
+    ))
 }
 
 /// WAL durability barrier configuration.
