@@ -217,7 +217,12 @@ if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
   fi
 
   if [[ "$ownership_conflicts" -gt 0 ]]; then
-    reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    if [[ "${RECON_SKIP_OWNERSHIP:-0}" == "1" ]]; then
+      echo "WARN: $ownership_conflicts AT ownership conflict(s) skipped (RECON_SKIP_OWNERSHIP=1)" >&2
+      ownership_conflicts=0
+    else
+      reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    fi
 
     while IFS= read -r obj; do
       [[ -n "$obj" ]] && ownership_conflict_details+=("$obj")
@@ -257,7 +262,12 @@ elif [[ "$premortem_exists" == "true" ]]; then
   fi
 
   if [[ $ownership_conflicts -gt 0 ]]; then
-    reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    if [[ "${RECON_SKIP_OWNERSHIP:-0}" == "1" ]]; then
+      echo "WARN: $ownership_conflicts AT ownership conflict(s) skipped (RECON_SKIP_OWNERSHIP=1)" >&2
+      ownership_conflicts=0
+    else
+      reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    fi
   fi
 fi
 

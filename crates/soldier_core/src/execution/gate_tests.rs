@@ -6,7 +6,13 @@
 //! AT-421: Cancel-only allowed even without L2; Close/Hedge rejected.
 
 use super::*;
-use crate::execution::{take_execution_metric_lines, with_intent_trace_ids};
+use crate::execution::{take_execution_metric_lines, with_intent_trace_ids, METRICS_TEST_LOCK};
+
+fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
+    METRICS_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+}
 
 trait TestOptionExt<T> {
     fn must(self) -> T;
@@ -592,6 +598,7 @@ fn test_non_marketable_open_with_stale_l2_still_rejected_fail_closed() {
 
 #[test]
 fn test_liquidity_gate_emits_structured_reject_and_slippage_metrics() {
+    let _lock = metrics_lock();
     let intent_id = "intent-liquidity-001";
     let run_id = "run-liquidity-001";
     let _ = take_execution_metric_lines();
@@ -682,4 +689,189 @@ fn test_staleness_at_exact_max_age_allowed() {
         result,
     );
     assert_eq!(m.allowed_total(), 1);
+}
+
+// ─── FIX-1: AT-317 named test ───────────────────────────────────────────
+
+/// AT-317: L2 walk estimates slippage_bps > 10 (default max_slippage_bps)
+/// → trade rejected before dispatch.
+#[test]
+fn test_at317_default_10bps_rejects_above_threshold() {
+    let mut m = LiquidityGateMetrics::new();
+
+    // Asks: 100.0 x 1.0, 110.0 x 1.0 — slippage ~500bps >> 10bps default
+    // max_slippage_bps = 10.0 (the contract-mandated default from Appendix A)
+    let snap = book(vec![(100.0, 1.0), (110.0, 1.0)], vec![], 900);
+    let input = gate_input(2.0, true, GateIntentClass::Open, Some(snap));
+    assert!(
+        (input.max_slippage_bps - 10.0).abs() < f64::EPSILON,
+        "gate_input must use the contract default of 10bps"
+    );
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(
+        matches!(
+            result.decision,
+            LiquidityGateDecision::Rejected { .. }
+        ),
+        "AT-317: slippage > 10bps must reject, got {:?}",
+        result,
+    );
+}
+
+// ─── FIX-2: AT-421 hedge + missing L2 ───────────────────────────────────
+
+/// AT-421: Hedge with missing L2 → rejected with LiquidityGateNoL2.
+#[test]
+fn test_at421_hedge_rejected_without_l2() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let input = gate_input(1.0, true, GateIntentClass::Hedge, None);
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(matches!(
+        result.decision,
+        LiquidityGateDecision::Rejected {
+            reason: LiquidityGateRejectReason::LiquidityGateNoL2
+        }
+    ));
+    assert_eq!(m.reject_no_l2(), 1);
+}
+
+// ─── FIX-3: ExpectedSlippageTooHigh coverage ────────────────────────────
+
+/// Close intent with invalid order_qty → rejected with ExpectedSlippageTooHigh
+/// (not InsufficientDepthWithinBudget). Proves the reason code differentiation
+/// between Open and Close/Hedge paths.
+#[test]
+fn test_close_invalid_qty_rejected_with_expected_slippage_reason() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(100.0, 10.0)], vec![], 900);
+    let mut input = gate_input(1.0, true, GateIntentClass::Close, Some(snap));
+    input.order_qty = 0.0; // Invalid — triggers fail-closed guard
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    let LiquidityGateDecision::Rejected { reason } = result.decision else {
+        panic!("expected Rejected, got {:?}", result)
+    };
+    assert_eq!(
+        reason,
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+        "Close must use ExpectedSlippageTooHigh, not InsufficientDepthWithinBudget"
+    );
+    assert_eq!(m.reject_slippage(), 1);
+}
+
+/// Hedge intent with negative order_qty → rejected with ExpectedSlippageTooHigh.
+#[test]
+fn test_hedge_invalid_qty_rejected_with_expected_slippage_reason() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = book(vec![(100.0, 10.0)], vec![], 900);
+    let mut input = gate_input(1.0, true, GateIntentClass::Hedge, Some(snap));
+    input.order_qty = -1.0; // Invalid — triggers fail-closed guard
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    let LiquidityGateDecision::Rejected { reason } = result.decision else {
+        panic!("expected Rejected, got {:?}", result)
+    };
+    assert_eq!(
+        reason,
+        LiquidityGateRejectReason::ExpectedSlippageTooHigh,
+    );
+}
+
+// ─── FIX-4: NaN/Inf L2Level tests ──────────────────────────────────────
+
+/// NaN price in L2 level → fail-closed (no panic).
+#[test]
+fn test_nan_l2_price_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = L2BookSnapshot {
+        asks: vec![L2Level {
+            price: f64::NAN,
+            qty: 10.0,
+        }],
+        bids: vec![],
+        timestamp_ms: 900,
+    };
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Rejected { .. }),
+        "NaN L2 price must reject (fail-closed), got {:?}",
+        result,
+    );
+}
+
+/// NaN qty in L2 level → fail-closed (no panic).
+#[test]
+fn test_nan_l2_qty_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = L2BookSnapshot {
+        asks: vec![L2Level {
+            price: 100.0,
+            qty: f64::NAN,
+        }],
+        bids: vec![],
+        timestamp_ms: 900,
+    };
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Rejected { .. }),
+        "NaN L2 qty must reject (fail-closed), got {:?}",
+        result,
+    );
+}
+
+/// Negative price in L2 level → fail-closed (no panic).
+#[test]
+fn test_negative_l2_price_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = L2BookSnapshot {
+        asks: vec![L2Level {
+            price: -100.0,
+            qty: 10.0,
+        }],
+        bids: vec![],
+        timestamp_ms: 900,
+    };
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Rejected { .. }),
+        "negative L2 price must reject (fail-closed), got {:?}",
+        result,
+    );
+}
+
+/// Infinity price in L2 level → fail-closed (no panic).
+#[test]
+fn test_infinity_l2_price_fails_closed() {
+    let mut m = LiquidityGateMetrics::new();
+
+    let snap = L2BookSnapshot {
+        asks: vec![L2Level {
+            price: f64::INFINITY,
+            qty: 10.0,
+        }],
+        bids: vec![],
+        timestamp_ms: 900,
+    };
+    let input = gate_input(1.0, true, GateIntentClass::Open, Some(snap));
+
+    let result = evaluate_liquidity_gate(&input, &mut m);
+    assert!(
+        matches!(result.decision, LiquidityGateDecision::Rejected { .. }),
+        "Infinity L2 price must reject (fail-closed), got {:?}",
+        result,
+    );
 }

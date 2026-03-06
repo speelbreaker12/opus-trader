@@ -116,7 +116,13 @@ if [[ "$story_found" != "true" ]]; then
   reasons+=("story not found in $prd_file: $story_id")
 fi
 if [[ "$ownership_conflicts" -gt 0 ]]; then
-  reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+  if [[ "${RECON_SKIP_OWNERSHIP:-0}" == "1" ]]; then
+    echo "WARN: $ownership_conflicts AT ownership conflict(s) found but RECON_SKIP_OWNERSHIP=1 — skipping" >&2
+    echo "$conflict_json" | jq -r '.[] | "  - \(.at_id): \(.claiming_stories | join(", "))"' >&2
+    ownership_conflicts=0
+  else
+    reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+  fi
 fi
 
 # ==== Stale-docs check (warning only, does not block) ====
