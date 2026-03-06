@@ -31,49 +31,17 @@ pub fn reduce_only_from_lifecycle_intent(intent: LifecycleIntent) -> bool {
     )
 }
 
-/// Borrowed fields used to construct a CREATED-state WAL intent record.
-#[derive(Debug, Clone)]
-pub struct CreatedIntentRecordArgs<'a> {
-    pub intent_hash: &'a str,
-    pub group_id: &'a str,
-    pub leg_idx: u32,
-    pub instrument: &'a str,
-    pub side: &'a str,
-    pub lifecycle_intent: LifecycleIntent,
-    pub qty_q: f64,
-    pub limit_price_q: f64,
-    pub created_ts: u64,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildCreatedIntentRecordError {
+    UnsupportedLifecycleIntent(LifecycleIntent),
 }
 
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
 ///
 /// This is the canonical constructor for newly-persisted pre-dispatch intents.
 /// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
-pub fn build_created_intent_record_from_args(args: CreatedIntentRecordArgs<'_>) -> IntentRecord {
-    IntentRecord {
-        intent_hash: args.intent_hash.to_string(),
-        group_id: args.group_id.to_string(),
-        leg_idx: args.leg_idx,
-        instrument: args.instrument.to_string(),
-        side: args.side.to_string(),
-        reduce_only: reduce_only_from_lifecycle_intent(args.lifecycle_intent),
-        qty_q: args.qty_q,
-        limit_price_q: args.limit_price_q,
-        tls_state: TlsState::Created,
-        created_ts: args.created_ts,
-        sent_ts: 0,
-        ack_ts: 0,
-        last_fill_ts: 0,
-        exchange_order_id: None,
-        last_trade_id: None,
-    }
-}
-
-/// Compatibility wrapper for callers still passing record fields individually.
-///
-/// New code should prefer [`build_created_intent_record_from_args`] to avoid the
-/// wide argument list.
-#[allow(clippy::too_many_arguments)]
+/// `LifecycleIntent::Cancel` is rejected because CREATED WAL records model
+/// new-order intents; cancel flows follow a separate lifecycle path.
 pub fn build_created_intent_record(
     intent_hash: &str,
     group_id: &str,
@@ -84,17 +52,29 @@ pub fn build_created_intent_record(
     qty_q: f64,
     limit_price_q: f64,
     created_ts: u64,
-) -> IntentRecord {
-    build_created_intent_record_from_args(CreatedIntentRecordArgs {
-        intent_hash,
-        group_id,
+) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
+    if lifecycle_intent == LifecycleIntent::Cancel {
+        return Err(BuildCreatedIntentRecordError::UnsupportedLifecycleIntent(
+            lifecycle_intent,
+        ));
+    }
+
+    Ok(IntentRecord {
+        intent_hash: intent_hash.to_string(),
+        group_id: group_id.to_string(),
         leg_idx,
-        instrument,
-        side,
-        lifecycle_intent,
+        instrument: instrument.to_string(),
+        side: side.to_string(),
+        reduce_only: reduce_only_from_lifecycle_intent(lifecycle_intent),
         qty_q,
         limit_price_q,
+        tls_state: TlsState::Created,
         created_ts,
+        sent_ts: 0,
+        ack_ts: 0,
+        last_fill_ts: 0,
+        exchange_order_id: None,
+        last_trade_id: None,
     })
 }
 
