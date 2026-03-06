@@ -88,6 +88,8 @@ validate_trading_risk_hard_gate() {
   local why=""
   local proof=""
   local gap_id=""
+  local blocking_answer=""
+  local blocking_question=""
 
   grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$file" \
     || die "missing required heading: ## Trading Risk Hard Gate"
@@ -141,6 +143,10 @@ validate_trading_risk_hard_gate() {
       fi
       is_valid_gap_id_list "$gap_id" \
         || die "Trading Risk Hard Gate row '$question' has invalid Gap ID list '$gap_id'"
+      if [[ -z "$blocking_answer" ]]; then
+        blocking_answer="$answer"
+        blocking_question="$question"
+      fi
     fi
   done
 
@@ -150,6 +156,10 @@ validate_trading_risk_hard_gate() {
     || die "Trading Risk Hard Gate missing YELLOW decision rule"
   echo "$section" | grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." \
     || die "Trading Risk Hard Gate missing NO-GO decision rule"
+
+  if [[ -n "$blocking_answer" ]]; then
+    die "Trading Risk Hard Gate row '$blocking_question' hard gate blocks implementation for answer $blocking_answer"
+  fi
 }
 
 # --- args ---

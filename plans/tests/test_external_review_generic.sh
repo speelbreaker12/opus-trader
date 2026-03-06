@@ -20,6 +20,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 mock_root=""
 mock_bin=""
+mock_worktree_add_mode=""
 
 setup_mock_env() {
   local name="$1"
@@ -148,6 +149,18 @@ fi
 
 if [[ "${args[0]:-}" == "worktree" && "${args[1]:-}" == "add" ]]; then
   worktree_path="${args[3]:?missing worktree path}"
+  case "${MOCK_GIT_WORKTREE_ADD_MODE:-ok}" in
+    fail)
+      echo "mock worktree add failure" >&2
+      exit 1
+      ;;
+    ok)
+      ;;
+    *)
+      echo "unknown MOCK_GIT_WORKTREE_ADD_MODE: ${MOCK_GIT_WORKTREE_ADD_MODE:-}" >&2
+      exit 88
+      ;;
+  esac
   mkdir -p "$worktree_path"
   exit 0
 fi
@@ -181,6 +194,7 @@ run_wrapper() {
   EXTERNAL_REVIEW_ROOT="$mock_root" \
   EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
   MOCK_PARALLEL_SCENARIO="$scenario" \
+  MOCK_GIT_WORKTREE_ADD_MODE="${mock_worktree_add_mode:-ok}" \
   "$SCRIPT" "$@" >"$output_file" 2>&1
   rc=$?
   if [[ "$had_errexit" -eq 1 ]]; then
@@ -277,6 +291,7 @@ test_help_text_warns_on_authority_and_scope() {
 
 test_pr_mode_resolution() {
   setup_mock_env "pr_success"
+  mock_worktree_add_mode="ok"
   run_wrapper all_ok PR190 >/dev/null || fail "PR mode should exit 0"
 
   local run_id="external_review_generic_20260305T220000Z_pr_190"
@@ -284,16 +299,34 @@ test_pr_mode_resolution() {
   local summary_md="$story_dir/external_review_generic/summary.md"
 
   assert_file_contains "$mock_root/gh.log" "pr view 190 --json number,baseRefName,headRefOid"
-  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190 refs/tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190"
-  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr-190"
+  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
+  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/pr_190_20260305T220000Z_"
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
-  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190"
+  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr_190_20260305T220000Z_"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
+}
+
+test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout() {
+  setup_mock_env "pr_worktree_add_failure"
+  mock_worktree_add_mode="fail"
+
+  set +e
+  run_wrapper all_ok PR190 >/dev/null
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "PR mode should fail when detached worktree creation fails"
+  assert_file_contains "$mock_root/git.log" "worktree add --detach"
+  if grep -Fq "worktree remove --force" "$mock_root/git.log"; then
+    fail "cleanup must not remove a worktree this process did not create"
+  fi
+  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/"
+  pass "failed PR worktree creation does not remove an uncreated checkout"
 }
 
 test_parallel_script_override_keeps_legacy_cli_contract() {
@@ -470,6 +503,7 @@ test_files_mode_success
 test_uncommitted_mode_success
 test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
+test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout
 test_parallel_script_override_keeps_legacy_cli_contract
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent

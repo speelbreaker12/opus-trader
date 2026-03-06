@@ -65,4 +65,28 @@ grep -Fq -- "- Timeout Fallback Kind: timeout_retry" "$review_file" || fail "tim
 grep -Fq -- "- Timeout Attempts: 1" "$review_file" || fail "timeout attempts should be 1"
 grep -Fq -- "src/mock_timeout_retry.rs:7" "$review_file" || fail "retry transcript citation missing"
 
+cat > "$mock_bin/gemini" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "src/mock_gemini_timeout_default.rs:11"
+exit 0
+EOF
+chmod +x "$mock_bin/gemini"
+
+gemini_story="S9-GEMINI-TIMEOUT-DEFAULT"
+gemini_out_root="$tmp_dir/out-gemini"
+
+PATH="$mock_bin:$PATH" \
+bash "$SCRIPT" "$gemini_story" \
+  --tool gemini \
+  --commit HEAD \
+  --out-root "$gemini_out_root" \
+  --title "fixture gemini default timeout" >/dev/null
+
+gemini_review_file="$gemini_out_root/$gemini_story/gemini/gemini.enriched.md"
+[[ -f "$gemini_review_file" ]] || fail "missing gemini review artifact: $gemini_review_file"
+
+grep -Fq -- "- Timeout Seconds: 600" "$gemini_review_file" || fail "gemini default timeout mismatch"
+grep -Fq -- "src/mock_gemini_timeout_default.rs:11" "$gemini_review_file" || fail "gemini transcript citation missing"
+
 echo "test_review_logged_timeout_retry_noncodex.sh: ok"
