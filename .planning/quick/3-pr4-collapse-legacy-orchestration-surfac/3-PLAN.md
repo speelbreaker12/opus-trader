@@ -1,7 +1,10 @@
 # Quick Task 3: PR4 — Collapse Legacy Orchestration Surface
 
 **Created:** 2026-03-05
-**Status:** Ready to execute
+**Status:** Executed (cleanup-only scope)
+
+**Scope note:** This quick task covered the PR 172 cleanup slice only.
+It did **not** collapse the remaining OPEN-vs-pipeline orchestration duplication or remove the WAL-shim path.
 
 ## Task 1: Delete orphaned test file + remove evaluate alias
 
@@ -47,4 +50,6 @@
 
 **Verify:** `./plans/verify.sh quick` passes; facade lint passes
 
-**Done:** Fallback path tested; obsidian status updated
+**Done:** Fallback path tested; obsidian status updated.
+
+**Deferred follow-up:** Behavior-focused orchestration consolidation remains open in `glowing-booping-parasol.md`.

@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Phase: 1 of 1 (Foundation)
 Plan: 1 of 2 in current phase
 Status: Ready to execute
-Last activity: 2026-03-05 - Completed quick task 3: PR4: Collapse Legacy Orchestration Surface
+Last activity: 2026-03-05 - Completed quick task 3 cleanup slice for PR4; orchestration-consolidation follow-up still pending
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -59,7 +59,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 2 | Execute CI enforcement hardening from /Users/admin/.claude/plans/witty-juggling-dongarra.md (all tasks complete) | 2026-03-04 | b947645 | [2-execute-ci-enforcement-hardening-from-us](./quick/2-execute-ci-enforcement-hardening-from-us/) |
-| 3 | PR4: Collapse Legacy Orchestration Surface | 2026-03-05 | cbc908d | [3-pr4-collapse-legacy-orchestration-surfac](./quick/3-pr4-collapse-legacy-orchestration-surfac/) |
+| 3 | PR4 cleanup slice: orphaned parity file removal, test cleanup, fallback coverage | 2026-03-05 | cbc908d | [3-pr4-collapse-legacy-orchestration-surfac](./quick/3-pr4-collapse-legacy-orchestration-surfac/) |
 
 ## Session Continuity
 

@@ -16,12 +16,14 @@ Behavior:
   --base REF      Review current branch diff vs base.
   --files LIST    Review selected files only.
   no args         Review the current tracked working-tree diff only.
+                  Untracked files are NOT auto-discovered in this mode.
 
 Notes:
   - Runs codex, opus, kimi, and gemini generic reviews in parallel.
   - Writes dispatch_status.json and summary.md under:
       artifacts/story/<RUN_ID>/external_review_generic/
   - Exits 0 only when all four reviewers succeed and summary generation succeeds.
+  - Convenience wrapper only. Not a workflow gate and not pass-authoritative.
 EOF
 }
 
@@ -36,7 +38,7 @@ find_python() {
     if ! command -v "$candidate" >/dev/null 2>&1; then
       continue
     fi
-    if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[0] >= 3 else 1)' >/dev/null 2>&1; then
+    if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
       echo "$candidate"
       return 0
     fi
@@ -52,13 +54,6 @@ sanitize_component() {
     raw="value"
   fi
   printf '%s' "$raw"
-}
-
-generate_unique_suffix() {
-  local temp_dir=""
-  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/external-review.XXXXXX")" || return 1
-  basename "$temp_dir"
-  rmdir "$temp_dir" >/dev/null 2>&1 || true
 }
 
 extract_json_field() {
@@ -79,6 +74,35 @@ print(value)
 PY
 }
 
+resolve_github_repo_slug() {
+  local remote_url=""
+  local slug=""
+  remote_url="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
+  [[ -n "$remote_url" ]] || return 1
+
+  case "$remote_url" in
+    git@github.com:*)
+      slug="${remote_url#git@github.com:}"
+      ;;
+    https://github.com/*)
+      slug="${remote_url#https://github.com/}"
+      ;;
+    http://github.com/*)
+      slug="${remote_url#http://github.com/}"
+      ;;
+    ssh://git@github.com/*)
+      slug="${remote_url#ssh://git@github.com/}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  slug="${slug%.git}"
+  [[ -n "$slug" ]] || return 1
+  printf '%s' "$slug"
+}
+
 ROOT="${EXTERNAL_REVIEW_ROOT:-}"
 if [[ -z "$ROOT" ]]; then
   ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || fail "not in a git repo"
@@ -87,7 +111,7 @@ fi
 PARALLEL_SCRIPT="${EXTERNAL_REVIEW_PARALLEL_SCRIPT:-$ROOT/plans/parallel_review.sh}"
 [[ -x "$PARALLEL_SCRIPT" ]] || fail "parallel review script not found: $PARALLEL_SCRIPT"
 
-PYTHON_BIN="$(find_python)" || fail "python3 (or python 3) is required"
+PYTHON_BIN="$(find_python)" || fail "python3.6+ is required"
 
 requested_target=""
 mode=""
@@ -140,7 +164,6 @@ parallel_mode_args=()
 parallel_cwd="$ROOT"
 resolved_base_ref=""
 resolved_head_oid=""
-fetched_head_oid=""
 pr_metadata_json=""
 temp_ref=""
 temp_worktree=""
@@ -150,6 +173,7 @@ dispatch_status_json=""
 summary_md=""
 parallel_review_log=""
 temp_worktree_created=false
+gh_repo_slug=""
 
 cleanup() {
   if [[ "$temp_worktree_created" == "true" && -n "$temp_worktree" ]]; then
@@ -185,6 +209,9 @@ if [[ -z "$mode" ]]; then
   requested_target="tracked working-tree diff"
 fi
 
+timestamp_utc="${EXTERNAL_REVIEW_NOW_UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
+[[ -n "$timestamp_utc" ]] || fail "timestamp generation failed"
+
 case "$mode" in
   pr)
     [[ -n "$pr_number" ]] || fail "missing PR number"
@@ -192,22 +219,28 @@ case "$mode" in
     run_id_suffix="pr_$pr_number"
 
     pr_metadata_json="$(mktemp)"
-    gh pr view "$pr_number" --json number,baseRefName,headRefOid > "$pr_metadata_json"
+    gh_repo_slug="$(resolve_github_repo_slug || true)"
+    if [[ -n "$gh_repo_slug" ]]; then
+      gh pr view "$pr_number" --repo "$gh_repo_slug" --json number,baseRefName,headRefOid > "$pr_metadata_json"
+    else
+      (
+        cd "$ROOT"
+        gh pr view "$pr_number" --json number,baseRefName,headRefOid > "$pr_metadata_json"
+      )
+    fi
     resolved_base_ref="$(extract_json_field "$pr_metadata_json" "baseRefName")"
     resolved_head_oid="$(extract_json_field "$pr_metadata_json" "headRefOid")"
     [[ -n "$resolved_base_ref" ]] || fail "failed to resolve baseRefName for PR #$pr_number"
     [[ -n "$resolved_head_oid" ]] || fail "failed to resolve headRefOid for PR #$pr_number"
 
-    unique_suffix="$(generate_unique_suffix)" || fail "failed to generate unique temp suffix"
-    temp_ref="refs/tmp/external-review/pr-$pr_number-$unique_suffix"
-    temp_worktree="$ROOT/.tmp/external-review/pr-$pr_number-$unique_suffix"
+    temp_token="$(sanitize_component "pr_${pr_number}_${timestamp_utc}_$$")"
+    temp_ref="refs/tmp/external-review/$temp_token"
+    temp_worktree="$ROOT/.tmp/external-review/$temp_token"
     mkdir -p "$(dirname "$temp_worktree")"
 
     git -C "$ROOT" fetch origin "$resolved_base_ref" "pull/$pr_number/head:$temp_ref"
     git -C "$ROOT" worktree add --detach "$temp_worktree" "$temp_ref"
     temp_worktree_created=true
-    fetched_head_oid="$(git -C "$temp_worktree" rev-parse HEAD)"
-    [[ "$fetched_head_oid" == "$resolved_head_oid" ]] || fail "fetched PR head OID does not match GitHub metadata"
 
     parallel_cwd="$temp_worktree"
     parallel_mode_args=(--base "origin/$resolved_base_ref")
@@ -237,9 +270,6 @@ case "$mode" in
     ;;
 esac
 
-timestamp_utc="${EXTERNAL_REVIEW_NOW_UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
-[[ -n "$timestamp_utc" ]] || fail "timestamp generation failed"
-
 RUN_ID="external_review_generic_${timestamp_utc}_${run_id_suffix}"
 RUN_ID="$(sanitize_component "$RUN_ID")"
 
@@ -258,27 +288,14 @@ parallel_cmd+=("${parallel_mode_args[@]}")
 set +e
 (
   cd "$parallel_cwd"
-  PARALLEL_REVIEW_REVIEW_SCRIPT="$ROOT/plans/review_logged.sh" \
   STORY_ARTIFACTS_ROOT="$ROOT/artifacts/story" \
+  PARALLEL_REVIEW_REVIEW_SCRIPT="$ROOT/plans/review_logged.sh" \
   "${parallel_cmd[@]}"
 ) 2>&1 | tee "$dispatch_log"
 parallel_rc="${PIPESTATUS[0]}"
 set -e
 
 cp "$dispatch_log" "$parallel_review_log"
-
-if [[ "$parallel_cwd" != "$ROOT" ]]; then
-  source_story_dir="$parallel_cwd/artifacts/story/$RUN_ID"
-  dest_story_dir="$ROOT/artifacts/story/$RUN_ID"
-  if [[ -d "$source_story_dir" ]]; then
-    for artifact_dir in codex opus kimi gemini review_logs; do
-      if [[ -e "$source_story_dir/$artifact_dir" ]]; then
-        rm -rf "$dest_story_dir/$artifact_dir"
-        cp -R "$source_story_dir/$artifact_dir" "$dest_story_dir/"
-      fi
-    done
-  fi
-fi
 
 capture_error=0
 for tool in codex opus kimi gemini; do
