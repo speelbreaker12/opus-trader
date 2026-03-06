@@ -79,3 +79,54 @@ fn facade_symbols_reachable_via_execution_facade() {
     );
     assert!(matches!(decision, ExecutionDecision::Approved(_)));
 }
+
+#[test]
+#[allow(deprecated)]
+fn facade_compatibility_helpers_reachable_via_execution_facade() {
+    let mut tlsm = Tlsm::new();
+    let transition = tlsm.apply(TlsmEvent::Sent);
+    assert!(matches!(
+        transition,
+        TransitionResult::Transitioned {
+            from: TlsmState::Created,
+            to: TlsmState::Sent,
+        }
+    ));
+
+    let base = ExecutionBaseInput {
+        risk_state: RiskState::Healthy,
+        preflight: ExecutionPreflightInput {
+            instrument_kind: InstrumentKind::Option,
+            order_type: ExecutionOrderType::Limit,
+            has_trigger: false,
+            linked_order_type: None,
+            linked_orders_allowed: false,
+            post_only: None,
+        },
+        venue_capabilities: VenueCapabilities::default(),
+        bot_feature_flags: BotFeatureFlags::default(),
+        quantize: QuantizeExecutionInput {
+            raw_qty: 1.0,
+            raw_limit_price: 100.0,
+            side: Side::Buy,
+            tick_size: 0.1,
+            amount_step: 0.1,
+            min_amount: 0.1,
+        },
+        dispatch_consistency_passed: true,
+        fee_snapshot: FeeCacheSnapshot {
+            fee_rate: 0.0005,
+            fee_model_cached_at_ts_ms: Some(1000),
+            now_ms: 1001,
+        },
+        fee_config: FeeStalenessConfig::default(),
+        expiry_guard: None,
+    };
+
+    let mut runtime = ExecutionRuntime::default();
+    let decision = ExecutionEngine::new().evaluate(
+        &ExecutionInput::Cancel(CancelExecutionInput { base }),
+        &mut runtime,
+    );
+    assert!(matches!(decision, ExecutionDecision::Approved(_)));
+}

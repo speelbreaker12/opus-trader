@@ -21,7 +21,7 @@ legacy_pattern="${legacy_root}/[^[:space:]]+/${legacy_leaf}"
 
 set +e
 hits="$(
-  git grep -nE "$legacy_pattern" -- . \
+  git grep --untracked -nE "$legacy_pattern" -- . \
     ':(exclude)plans/premortem_path_guard.sh' \
     ':(exclude)plans/tests/test_premortem_path_guard.sh'
 )"

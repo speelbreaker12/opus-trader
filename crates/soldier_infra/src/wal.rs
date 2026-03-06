@@ -31,6 +31,11 @@ pub fn reduce_only_from_lifecycle_intent(intent: LifecycleIntent) -> bool {
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildCreatedIntentRecordError {
+    UnsupportedLifecycleIntent(LifecycleIntent),
+}
+
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
 ///
 /// This is the canonical constructor for newly-persisted pre-dispatch intents.
@@ -45,8 +50,14 @@ pub fn build_created_intent_record(
     qty_q: f64,
     limit_price_q: f64,
     created_ts: u64,
-) -> IntentRecord {
-    IntentRecord {
+) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
+    if lifecycle_intent == LifecycleIntent::Cancel {
+        return Err(BuildCreatedIntentRecordError::UnsupportedLifecycleIntent(
+            lifecycle_intent,
+        ));
+    }
+
+    Ok(IntentRecord {
         intent_hash: intent_hash.to_string(),
         group_id: group_id.to_string(),
         leg_idx,
@@ -62,7 +73,7 @@ pub fn build_created_intent_record(
         last_fill_ts: 0,
         exchange_order_id: None,
         last_trade_id: None,
-    }
+    })
 }
 
 /// WAL durability barrier configuration.
