@@ -216,6 +216,16 @@ assert_file_contains() {
   grep -Fq -- "$pattern" "$file" || fail "expected '$pattern' in $file"
 }
 
+escape_ere_literal() {
+  local value="$1"
+  python3 - "$value" <<'PY'
+import re
+import sys
+
+print(re.escape(sys.argv[1]))
+PY
+}
+
 assert_file_matches() {
   local file="$1"
   local pattern="$2"
@@ -356,13 +366,40 @@ test_pr_mode_head_oid_mismatch_fails_closed() {
   [[ $rc -ne 0 ]] || fail "PR mode head mismatch should exit non-zero"
 
   echo "$mismatch_output" | grep -Fq "resolved PR head OID mismatch" || fail "missing OID mismatch diagnostic"
-  assert_file_matches "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" "worktree remove --force $(escape_ere_literal "$mock_root")/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
   assert_file_matches "$mock_root/git.log" 'update-ref -d refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
 
-  if [[ -d "$mock_root/artifacts/story" ]] && find "$mock_root/artifacts/story" -mindepth 1 -maxdepth 1 -type d | grep -q .; then
+  if [[ -d "$mock_root/artifacts/story" ]] && [[ -n "$(find "$mock_root/artifacts/story" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]]; then
     fail "OID mismatch should fail before creating review artifacts"
   fi
   pass "PR mode fails closed when fetched HEAD does not match resolved PR OID"
+}
+
+test_python2_fallback_rejected() {
+  setup_mock_env "python2_only"
+  cat > "$mock_bin/python3" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+  cat > "$mock_bin/python" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+echo "unexpected python args: $*" >&2
+exit 1
+EOF
+  chmod +x "$mock_bin/python3" "$mock_bin/python"
+  set +e
+  output="$(
+    PATH="$mock_bin:/usr/bin:/bin" \
+    run_wrapper all_ok --commit HEAD 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] || fail "python2-style fallback should fail"
+  echo "$output" | grep -Fq "python3.6+ is required" || fail "missing python version diagnostic"
+  pass "python fallback requires Python 3.6+"
 }
 
 test_run_id_collision_avoided() {
@@ -393,6 +430,7 @@ test_pr_mode_resolution
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
 test_pr_mode_head_oid_mismatch_fails_closed
+test_python2_fallback_rejected
 test_run_id_collision_avoided
 
 echo "PASS: external_review_generic regression fixtures"

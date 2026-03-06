@@ -31,14 +31,16 @@ fail() {
 }
 
 find_python() {
-  if command -v python3 >/dev/null 2>&1; then
-    echo "python3"
-    return 0
-  fi
-  if command -v python >/dev/null 2>&1; then
-    echo "python"
-    return 0
-  fi
+  local candidate=""
+  for candidate in python3 python; do
+    if ! command -v "$candidate" >/dev/null 2>&1; then
+      continue
+    fi
+    if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -88,7 +90,7 @@ fi
 PARALLEL_SCRIPT="${EXTERNAL_REVIEW_PARALLEL_SCRIPT:-$ROOT/plans/parallel_review.sh}"
 [[ -x "$PARALLEL_SCRIPT" ]] || fail "parallel review script not found: $PARALLEL_SCRIPT"
 
-PYTHON_BIN="$(find_python)" || fail "python3 or python is required"
+PYTHON_BIN="$(find_python)" || fail "python3.6+ is required"
 UNIQUE_SUFFIX="${EXTERNAL_REVIEW_UNIQUE_SUFFIX:-$(generate_unique_suffix)}"
 UNIQUE_SUFFIX="$(sanitize_component "$UNIQUE_SUFFIX")"
 
