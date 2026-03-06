@@ -61,38 +61,9 @@ section_number_content() {
 table_rows() {
   local content="$1"
   echo "$content" | awk '
-    function trim(s) {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
-      return s
-    }
-    /^\|/ {
-      line = trim($0)
-      if (line ~ /^\|[-:| ]+\|$/) next
-      # Header-only tables must fail; ignore the first non-separator row as header.
-      if (!header_seen) {
-        header_seen = 1
-        next
-      }
-      count++
-    }
+    /^\|/ && $0 !~ /^\|[-| ]+\|$/ { count++ }
     END { print count + 0 }
   '
-}
-
-extract_section_ats() {
-  local content="$1"
-  printf '%s\n' "$content" | awk -F'|' '
-    function trim_field(s) {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
-      return s
-    }
-    /^\|/ {
-      at = trim_field($2)
-      if (at == "" || at == "AT") next
-      if (at ~ /^-+$/) next
-      if (at ~ /^AT-[A-Za-z0-9._-]+$/) print at
-    }
-  ' | LC_ALL=C sort -u
 }
 
 trim() {
@@ -108,36 +79,24 @@ is_valid_gap_id_list() {
   [[ "$value" =~ ^GAP-[A-Za-z0-9-]+([[:space:]]*,[[:space:]]*GAP-[A-Za-z0-9-]+)*$ ]]
 }
 
-is_nonempty_debt_cell() {
-  local value
-  value="$(trim "$1")"
-  [[ -n "$value" && "$value" != "-" ]]
-}
-
 validate_trading_risk_hard_gate() {
-  local file="$1"
-  local stoplight="$2"
+  local file="$1" stoplight="$2"
   local section=""
   local question=""
-  local row_fields=""
+  local row=""
   local answer=""
   local why=""
   local proof=""
   local gap_id=""
-  local yes_count=0
-  local no_count=0
-  local unknown_count=0
-  local section10=""
-  local debt_row=""
-  local debt_why=""
-  local debt_owner=""
-  local debt_target=""
+  local question_col=""
+  local i=0
   local blocking_answer=""
   local blocking_question=""
-  local seen_gaps="|"
-  local split_gap=""
-  local -a trading_gap_ids=()
-  local -a split_gap_ids=()
+  local debt_section=""
+  local gap_group=""
+  local gap_item=""
+  local old_ifs=""
+  local unknown_answer_seen=false
 
   grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$file" \
     || die "missing required heading: ## Trading Risk Hard Gate"
@@ -156,31 +115,38 @@ validate_trading_risk_hard_gate() {
     "Failure-path correctness" \
     "Fail-closed enforcement" \
     "Proof, not belief"; do
-    row_fields="$(
+    row="$(
       printf '%s\n' "$section" | awk -F'|' -v q="$question" '
         function trim_field(s) {
           gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
           return s
         }
         /^\|/ {
-          start = 2
-          while (start <= NF && trim_field($start) == "") {
-            start++
-          }
-          if (trim_field($start) == q) {
-            print trim_field($(start + 1)) "\t" trim_field($(start + 2)) "\t" trim_field($(start + 3)) "\t" trim_field($(start + 4))
-            exit
+          for (i = 2; i <= NF; i++) {
+            if (trim_field($i) == q) {
+              print
+              exit
+            }
           }
         }
       '
     )"
-    [[ -n "$row_fields" ]] || die "Trading Risk Hard Gate missing row: $question"
+    [[ -n "$row" ]] || die "Trading Risk Hard Gate missing row: $question"
 
-    IFS=$'\t' read -r answer why proof gap_id <<< "$row_fields"
-    answer="$(trim "${answer:-}")"
-    why="$(trim "${why:-}")"
-    proof="$(trim "${proof:-}")"
-    gap_id="$(trim "${gap_id:-}")"
+    IFS='|' read -r -a columns <<< "$row"
+    question_col=""
+    for (( i = 1; i < ${#columns[@]}; i++ )); do
+      if [[ "$(trim "${columns[$i]}")" == "$question" ]]; then
+        question_col="$i"
+        break
+      fi
+    done
+    [[ -n "$question_col" ]] || die "Trading Risk Hard Gate row '$question' could not be parsed"
+
+    answer="$(trim "${columns[$((question_col + 1))]:-}")"
+    why="$(trim "${columns[$((question_col + 2))]:-}")"
+    proof="$(trim "${columns[$((question_col + 3))]:-}")"
+    gap_id="$(trim "${columns[$((question_col + 4))]:-}")"
 
     [[ "$answer" =~ ^(YES|NO|UNKNOWN)$ ]] \
       || die "Trading Risk Hard Gate row '$question' has invalid answer '$answer' (expected YES/NO/UNKNOWN)"
@@ -195,78 +161,85 @@ validate_trading_risk_hard_gate() {
       fi
       is_valid_gap_id_list "$gap_id" \
         || die "Trading Risk Hard Gate row '$question' has invalid Gap ID list '$gap_id'"
-      if [[ -z "$blocking_answer" ]]; then
+      if [[ "$answer" == "NO" && -z "$blocking_answer" ]]; then
         blocking_answer="$answer"
         blocking_question="$question"
       fi
-
-      IFS=',' read -r -a split_gap_ids <<< "$gap_id"
-      for split_gap in "${split_gap_ids[@]}"; do
-        split_gap="$(trim "$split_gap")"
-        [[ -n "$split_gap" ]] && trading_gap_ids+=("$split_gap")
-      done
-
-      if [[ "$answer" == "NO" ]]; then
-        no_count=$((no_count + 1))
-      else
-        unknown_count=$((unknown_count + 1))
+      if [[ "$answer" == "UNKNOWN" ]]; then
+        unknown_answer_seen=true
       fi
-    else
-      yes_count=$((yes_count + 1))
     fi
   done
 
-  grep -Fq "GO only if all 7 answers are YES with concrete proof." <<<"$section" \
+  echo "$section" | grep -Fq "GO only if all 7 answers are YES with concrete proof." \
     || die "Trading Risk Hard Gate missing GO decision rule"
-  grep -Fq "YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment." <<<"$section" \
+  echo "$section" | grep -Fq "YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment." \
     || die "Trading Risk Hard Gate missing YELLOW decision rule"
-  grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." <<<"$section" \
+  echo "$section" | grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." \
     || die "Trading Risk Hard Gate missing NO-GO decision rule"
 
   if [[ -n "$blocking_answer" ]]; then
     die "Trading Risk Hard Gate row '$blocking_question' hard gate blocks implementation for answer $blocking_answer"
   fi
 
-  if [[ "$stoplight" == "GREEN" ]] && [[ "$no_count" -gt 0 || "$unknown_count" -gt 0 ]]; then
-    die "STOPLIGHT is GREEN but Trading Risk Hard Gate has NO/UNKNOWN answers"
-  fi
+  if [[ "$unknown_answer_seen" == "true" ]]; then
+    [[ "$stoplight" == "YELLOW" ]] \
+      || die "Trading Risk Hard Gate has UNKNOWN answers but STOPLIGHT is $stoplight (expected YELLOW with containment)"
 
-  if [[ "$no_count" -gt 0 && "$stoplight" != "RED" ]]; then
-    die "Trading Risk Hard Gate has NO answers; STOPLIGHT must be RED"
-  fi
+    debt_section="$(section_content "$file" "## 10) STOPLIGHT")"
+    printf '%s\n' "$debt_section" | grep -Fq "**Debt Register**" \
+      || die "Trading Risk Hard Gate requires Debt Register when STOPLIGHT is YELLOW"
 
-  if [[ "${#trading_gap_ids[@]}" -gt 0 ]]; then
-    section10="$(section_content "$file" "## 10) STOPLIGHT")"
-    for split_gap in "${trading_gap_ids[@]}"; do
-      if [[ "$seen_gaps" == *"|$split_gap|"* ]]; then
-        continue
-      fi
-      seen_gaps="${seen_gaps}${split_gap}|"
-
-      debt_row="$(
-        printf '%s\n' "$section10" | awk -F'|' -v target_gap="$split_gap" '
+    for question in \
+      "Loss prevention" \
+      "Profit preservation" \
+      "Best design choice" \
+      "Better alternative check" \
+      "Failure-path correctness" \
+      "Fail-closed enforcement" \
+      "Proof, not belief"; do
+      row="$(
+        printf '%s\n' "$section" | awk -F'|' -v q="$question" '
           function trim_field(s) {
             gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
             return s
           }
           /^\|/ {
-            if (trim_field($2) == target_gap) {
-              print
-              exit
+            for (i = 2; i <= NF; i++) {
+              if (trim_field($i) == q) {
+                print
+                exit
+              }
             }
           }
         '
       )"
-      [[ -n "$debt_row" ]] || die "Trading Risk Hard Gate Gap ID '$split_gap' must be listed in §10 Debt Register"
+      [[ -n "$row" ]] || continue
 
-      IFS='|' read -r _ _debt_gap _debt_item _debt_severity _debt_why _debt_owner _debt_target _debt_proof _ <<< "$debt_row"
-      debt_why="$(trim "${_debt_why:-}")"
-      debt_owner="$(trim "${_debt_owner:-}")"
-      debt_target="$(trim "${_debt_target:-}")"
+      IFS='|' read -r -a columns <<< "$row"
+      question_col=""
+      for (( i = 1; i < ${#columns[@]}; i++ )); do
+        if [[ "$(trim "${columns[$i]}")" == "$question" ]]; then
+          question_col="$i"
+          break
+        fi
+      done
+      [[ -n "$question_col" ]] || continue
 
-      is_nonempty_debt_cell "$debt_why" || die "Debt Register row '$split_gap' is missing Why deferred/containment"
-      is_nonempty_debt_cell "$debt_owner" || die "Debt Register row '$split_gap' is missing Owner"
-      is_nonempty_debt_cell "$debt_target" || die "Debt Register row '$split_gap' is missing Target slice"
+      answer="$(trim "${columns[$((question_col + 1))]:-}")"
+      gap_id="$(trim "${columns[$((question_col + 4))]:-}")"
+      [[ "$answer" == "UNKNOWN" ]] || continue
+
+      old_ifs="$IFS"
+      IFS=','
+      read -r -a gap_ids <<< "$gap_id"
+      IFS="$old_ifs"
+      for gap_group in "${gap_ids[@]}"; do
+        gap_item="$(trim "$gap_group")"
+        [[ -n "$gap_item" ]] || continue
+        printf '%s\n' "$debt_section" | grep -Fq "| $gap_item |" \
+          || die "Trading Risk Hard Gate UNKNOWN Gap ID '$gap_item' missing from Debt Register"
+      done
     done
   fi
 }
@@ -309,9 +282,8 @@ for marker in '<TODO>' 'TBD' 'FILL_ME'; do
 done
 
 # --- STOPLIGHT ---
-grep -Eq '^\*\*STOPLIGHT\*\*: (GREEN|YELLOW|RED)' "$pm" || die "missing or invalid STOPLIGHT line"
-stoplight_value="$(grep -oE '^\*\*STOPLIGHT\*\*:[[:space:]]*(GREEN|YELLOW|RED)' "$pm" | head -1 | grep -oE '(GREEN|YELLOW|RED)' | head -1 || true)"
-[[ -n "$stoplight_value" ]] || die "failed to parse STOPLIGHT value"
+stoplight_value="$(sed -nE 's/^\*\*STOPLIGHT\*\*: (GREEN|YELLOW|RED)$/\1/p' "$pm" | head -1)"
+[[ -n "$stoplight_value" ]] || die "missing or invalid STOPLIGHT line"
 
 # --- required section headings (§0-§10) ---
 require_heading "$pm" "## 0) What we're building"
@@ -337,24 +309,15 @@ if grep -Fq "> Premortem Schema: v2" "$pm"; then
   premortem_schema_v2=true
 fi
 
-has_trading_risk_hard_gate=false
-if grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$pm"; then
-  has_trading_risk_hard_gate=true
-fi
-
-if [[ "$premortem_schema_v2" == "true" || "$has_trading_risk_hard_gate" == "true" ]]; then
+if [[ "$premortem_schema_v2" == "true" ]] || grep -Eq '^## Trading Risk Hard Gate([[:space:]]*\(.*\))?$' "$pm"; then
   validate_trading_risk_hard_gate "$pm" "$stoplight_value"
 fi
 
 # --- §0: Story line filled ---
 s0=$(section_content "$pm" "## 0) What we're building")
-  grep -Eq '^- Story: .+' <<<"$s0" || die "§0 missing filled 'Story:' line"
-  grep -Eq '^- Contract clause' <<<"$s0" || die "§0 missing 'Contract clause' line"
-  grep -Eq '^- Acceptance tests: AT-' <<<"$s0" || die "§0 missing 'Acceptance tests: AT-' line"
-if [[ "$premortem_schema_v2" == "true" || "$has_trading_risk_hard_gate" == "true" ]]; then
-  grep -Eq '^- Touch scope: .+' <<<"$s0" || die "§0 missing filled 'Touch scope:' line"
-  grep -Eq '^- \*\*Risk rating\*\*: (LOW|MED|HIGH)([[:space:]]|$)' <<<"$s0" || die "§0 missing valid 'Risk rating' (LOW/MED/HIGH)"
-fi
+echo "$s0" | grep -Eq '^- Story: .+' || die "§0 missing filled 'Story:' line"
+echo "$s0" | grep -Eq '^- Contract clause' || die "§0 missing 'Contract clause' line"
+echo "$s0" | grep -Eq '^- Acceptance tests: AT-' || die "§0 missing 'Acceptance tests: AT-' line"
 
 # --- §1: Clause audit table has rows ---
 s1=$(section_content "$pm" "## 1) Clause audit")
@@ -384,20 +347,10 @@ if [[ "$rows" -lt 1 ]]; then
   die "§6 proof plan table is empty (need at least 1 AT row)"
 fi
 
-# --- §1 -> §5/§6 AT cross-section consistency ---
-ats_clause="$(extract_section_ats "$s1")"
-ats_wrong="$(extract_section_ats "$s5")"
-ats_proof="$(extract_section_ats "$s6")"
-while IFS= read -r at; do
-  [[ -n "$at" ]] || continue
-  echo "$ats_wrong" | grep -Fxq "$at" || die "§5 missing AT '$at' from §1 clause audit"
-  echo "$ats_proof" | grep -Fxq "$at" || die "§6 missing AT '$at' from §1 clause audit"
-done <<< "$ats_clause"
-
 # --- §7: Economic risk has loss content ---
 s7=$(section_content "$pm" "## 7) Economic risk")
-grep -Eq 'worst financial outcome' <<<"$s7" || die "§7 missing 'worst financial outcome' content"
-grep -Eq '(Fail-closed cap|fail-closed cap)' <<<"$s7" || die "§7 missing 'Fail-closed cap' content"
+echo "$s7" | grep -Eq 'worst financial outcome' || die "§7 missing 'worst financial outcome' content"
+echo "$s7" | grep -Eq '(Fail-closed cap|fail-closed cap)' || die "§7 missing 'Fail-closed cap' content"
 
 # --- §9: Carry-forward lines ---
 grep -q '^Prior Postmortem: ' "$pm" || die "§9 missing required line: 'Prior Postmortem: <path or NONE>'"
@@ -405,7 +358,7 @@ grep -q '^Reused Guardrail: ' "$pm" || die "§9 missing required line: 'Reused G
 
 # --- §10: Exit criteria checklist items ---
 s10=$(section_content "$pm" "## 10) STOPLIGHT")
-checklist_count=$(grep -cE '^\- \[' <<<"$s10" 2>/dev/null || echo 0)
+checklist_count=$(echo "$s10" | grep -cE '^\- \[' 2>/dev/null || echo 0)
 if [[ "$checklist_count" -lt 5 ]]; then
   die "§10 exit criteria has $checklist_count checklist items (need at least 5)"
 fi

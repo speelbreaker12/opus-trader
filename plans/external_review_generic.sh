@@ -74,35 +74,6 @@ print(value)
 PY
 }
 
-resolve_github_repo_slug() {
-  local remote_url=""
-  local slug=""
-  remote_url="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
-  [[ -n "$remote_url" ]] || return 1
-
-  case "$remote_url" in
-    git@github.com:*)
-      slug="${remote_url#git@github.com:}"
-      ;;
-    https://github.com/*)
-      slug="${remote_url#https://github.com/}"
-      ;;
-    http://github.com/*)
-      slug="${remote_url#http://github.com/}"
-      ;;
-    ssh://git@github.com/*)
-      slug="${remote_url#ssh://git@github.com/}"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-
-  slug="${slug%.git}"
-  [[ -n "$slug" ]] || return 1
-  printf '%s' "$slug"
-}
-
 ROOT="${EXTERNAL_REVIEW_ROOT:-}"
 if [[ -z "$ROOT" ]]; then
   ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || fail "not in a git repo"
@@ -173,7 +144,6 @@ dispatch_status_json=""
 summary_md=""
 parallel_review_log=""
 temp_worktree_created=false
-gh_repo_slug=""
 
 cleanup() {
   if [[ "$temp_worktree_created" == "true" && -n "$temp_worktree" ]]; then
@@ -219,15 +189,7 @@ case "$mode" in
     run_id_suffix="pr_$pr_number"
 
     pr_metadata_json="$(mktemp)"
-    gh_repo_slug="$(resolve_github_repo_slug || true)"
-    if [[ -n "$gh_repo_slug" ]]; then
-      gh pr view "$pr_number" --repo "$gh_repo_slug" --json number,baseRefName,headRefOid > "$pr_metadata_json"
-    else
-      (
-        cd "$ROOT"
-        gh pr view "$pr_number" --json number,baseRefName,headRefOid > "$pr_metadata_json"
-      )
-    fi
+    gh pr view "$pr_number" --json number,baseRefName,headRefOid > "$pr_metadata_json"
     resolved_base_ref="$(extract_json_field "$pr_metadata_json" "baseRefName")"
     resolved_head_oid="$(extract_json_field "$pr_metadata_json" "headRefOid")"
     [[ -n "$resolved_base_ref" ]] || fail "failed to resolve baseRefName for PR #$pr_number"
@@ -460,7 +422,7 @@ for entry in entries:
         "exit_code": exit_code,
         "counts_text": counts_text,
         "note": note,
-        "artifact": str(artifact.relative_to(root)),
+        "artifact": str(artifact.relative_to(root)) if artifact.exists() else str(artifact.relative_to(root)),
     })
 
 dispatch_payload = {
