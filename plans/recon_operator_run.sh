@@ -216,10 +216,17 @@ has_active_conflict() {
 }
 
 current_changed_files() {
+  local -a production_pathspecs=(
+    crates
+    src
+    python
+    Cargo.toml
+    Cargo.lock
+  )
   {
-    git diff --name-only 2>/dev/null || true
-    git diff --cached --name-only 2>/dev/null || true
-    git ls-files --others --exclude-standard 2>/dev/null || true
+    git diff --name-only -- "${production_pathspecs[@]}" 2>/dev/null || true
+    git diff --cached --name-only -- "${production_pathspecs[@]}" 2>/dev/null || true
+    git ls-files --others --exclude-standard -- "${production_pathspecs[@]}" 2>/dev/null || true
   } | awk 'NF' | LC_ALL=C sort -u
 }
 

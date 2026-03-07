@@ -33,7 +33,12 @@ rewrite_fixture_arrays() {
     }
     in_smoke && /^\)/ {in_smoke=0; print; next}
     in_smoke {next}
-    /^FULL_ONLY_REVIEW_FIXTURE_TESTS=\(/ {print; in_full=1; next}
+    /^FULL_ONLY_REVIEW_FIXTURE_TESTS=\(/ {
+      print
+      print "  \"plans/tests/test_dummy_sleep.sh\""
+      in_full=1
+      next
+    }
     in_full && /^\)/ {in_full=0; print; next}
     in_full {next}
     {print}
@@ -320,5 +325,32 @@ grep -Fq "Fixture test failed: plans/tests/test_dummy_sleep.sh (rc=124" "$wrappe
 if grep -Fq "Fixture test timed out: plans/tests/test_dummy_sleep.sh" "$wrapper_enabled_124_log"; then
   fail "wrapper-enabled child rc=124 should not be classified as timeout"
 fi
+
+timeout_invocation_log="$tmp_dir/mock_timeout_invocations.log"
+cat > "$mock_bin/timeout" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "\$1" >> "$timeout_invocation_log"
+shift
+"\$@"
+EOF
+chmod +x "$mock_bin/timeout"
+
+full_default_timeout_logged="$tmp_dir/full_default_timeout_logged.log"
+set +e
+(
+  cd "$repo"
+  PREFLIGHT_FIXTURE_MODE=full \
+  PATH="$mock_bin:$PATH" \
+  PREFLIGHT_NO_CACHE=1 \
+  DUMMY_SLEEP_SECS=0 \
+  ./plans/preflight.sh >"$full_default_timeout_logged" 2>&1
+)
+full_default_timeout_logged_rc=$?
+set -e
+[[ "$full_default_timeout_logged_rc" -eq 0 ]] \
+  || fail "expected full fixture mode with logging timeout wrapper to pass, got rc=$full_default_timeout_logged_rc"
+grep -Fxq "300" "$timeout_invocation_log" \
+  || fail "expected full fixture mode to default fixture timeout to 300 seconds"
 
 echo "test_preflight_fixture_timeout_controls.sh: ok"

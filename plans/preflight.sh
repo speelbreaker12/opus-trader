@@ -473,8 +473,12 @@ if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
 else
   pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
 
+  fixture_timeout_default=240
+  if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
+    fixture_timeout_default=300
+  fi
   PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
   if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
     setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
     PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
@@ -600,11 +604,6 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
-    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-300}"
-    if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
-      PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
-    fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()
