@@ -36,7 +36,8 @@ shift $(( $# >= 2 ? 2 : $# ))
 PRD_FILE="${PRD_FILE:-plans/prd.json}"
 ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-}"
 CONTRACT_REVIEW_FILE=""
-EXTERNAL_MANIFEST_GATE_CMD="${EXTERNAL_MANIFEST_GATE_CMD:-$ROOT/plans/external_manifest_gate.sh}"
+DEFAULT_EXTERNAL_MANIFEST_GATE_CMD="$ROOT/plans/external_manifest_gate.sh"
+EXTERNAL_MANIFEST_GATE_CMD="${EXTERNAL_MANIFEST_GATE_CMD:-$DEFAULT_EXTERNAL_MANIFEST_GATE_CMD}"
 DRY_RUN=0
 
 if [[ -z "$ARTIFACTS_DIR" ]]; then
@@ -260,6 +261,10 @@ if [[ "$STATUS" == "true" ]]; then
   # If external_manifest_gate.sh exists, run both gates.
   # Derive slice_id from story ID prefix (e.g., S1-004 → S1).
   ext_gate="$EXTERNAL_MANIFEST_GATE_CMD"
+  ext_gate_uses_builtin_skip_contract=0
+  if [[ "$ext_gate" == "$DEFAULT_EXTERNAL_MANIFEST_GATE_CMD" ]]; then
+    ext_gate_uses_builtin_skip_contract=1
+  fi
   if [[ -x "$ext_gate" || -f "$ext_gate" ]]; then
     slice_prefix="${ID%%-*}"  # S1-004 → S1
     for gate_type in r3 r7; do
@@ -283,9 +288,8 @@ if [[ "$STATUS" == "true" ]]; then
         echo "OK: ${gate_type_uc} external manifest gate passed for $ID"
       else
         gate_rc=$?
-        # Gate failure is non-fatal if manifest doesn't exist yet
-        # (not all stories have reconciliation manifests)
-        if [[ "$gate_rc" -eq 1 ]]; then
+        # Only the built-in gate uses exit 1 to mean "manifest missing".
+        if [[ "$ext_gate_uses_builtin_skip_contract" -eq 1 && "$gate_rc" -eq 1 ]]; then
           echo "WARN: ${gate_type_uc} external manifest gate failed for $ID (exit $gate_rc)" >&2
           echo "  This is expected if reconciliation has not been run for this story." >&2
         else
