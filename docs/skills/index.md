@@ -56,5 +56,6 @@ Validation command:
 | `spec-lint-implementation-plan` | `SKILLS/spec-lint-implementation-plan/SKILL.md` | Validate `IMPLEMENTATION_PLAN.md` against safety contracts. |
 | `/strategic-failure-review` | `SKILLS/strategic-failure-review.md` | Systemic/architectural risk review. |
 | `/validator-audit` | `SKILLS/validator-audit.md` | Validator completeness and gap audit. |
+| `/integrator` | `SKILLS/integrator.md` | Parallel agent integration protocol — touch lists, worktree dispatch, cherry-pick landing, sync decisions. |
 | `/verify` | `SKILLS/verify.md` | Verification run and failure explanation workflow. |
 | `/toc` | `SKILLS/toc.md` | Theory of Constraints commit — commit + §0 what shipped, §1 constraint, §2 next story, §3 enforceable rules. |
