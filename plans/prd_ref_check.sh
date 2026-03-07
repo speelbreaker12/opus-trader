@@ -17,6 +17,13 @@ else
   PLAN_FILE="IMPLEMENTATION_PLAN.md"
 fi
 
+ROADMAP_FILE=""
+if [[ -f "docs/ROADMAP.md" ]]; then
+  ROADMAP_FILE="docs/ROADMAP.md"
+elif [[ -f "ROADMAP.md" ]]; then
+  ROADMAP_FILE="ROADMAP.md"
+fi
+
 if [[ ! -f "$CONTRACT_FILE" ]]; then
   echo "[prd_ref_check] ERROR: contract file missing: specs/CONTRACT.md" >&2
   exit 2
@@ -43,13 +50,18 @@ if [[ -f "docs/contract_kernel.json" ]]; then
   EXTRA_CONTRACT_FILES+=("docs/contract_kernel.json")
 fi
 
-python3 - "$PRD_FILE" "$CONTRACT_FILE" "$PLAN_FILE" "${EXTRA_CONTRACT_FILES[@]}" <<'PY'
+python_args=("$PRD_FILE" "$CONTRACT_FILE" "$PLAN_FILE" "$ROADMAP_FILE")
+if (( ${#EXTRA_CONTRACT_FILES[@]} > 0 )); then
+  python_args+=("${EXTRA_CONTRACT_FILES[@]}")
+fi
+
+python3 - "${python_args[@]}" <<'PY'
 import json
 import os
 import re
 import sys
 
-prd_path, contract_path, plan_path, *extra_contract_paths = sys.argv[1:]
+prd_path, contract_path, plan_path, roadmap_path, *extra_contract_paths = sys.argv[1:]
 
 with open(prd_path, 'r', encoding='utf-8') as f:
     prd = json.load(f)
@@ -70,6 +82,10 @@ for extra_path in extra_contract_paths:
         contract_text += "\n" + f.read()
 with open(plan_path, 'r', encoding='utf-8') as f:
     plan_text = f.read()
+roadmap_text = ''
+if roadmap_path and os.path.isfile(roadmap_path):
+    with open(roadmap_path, 'r', encoding='utf-8') as f:
+        roadmap_text = f.read()
 
 heading_re = re.compile(r'^#{1,6}\s+')
 bullet_re = re.compile(r'^[-*+]\s+')
@@ -107,6 +123,7 @@ def strip_prefix(ref: str) -> str:
     s = ref.strip()
     s = re.sub(r'^(?:specs/)?CONTRACT\.md\s*', '', s, flags=re.IGNORECASE)
     s = re.sub(r'^(?:specs/)?IMPLEMENTATION_PLAN\.md\s*', '', s, flags=re.IGNORECASE)
+    s = re.sub(r'^(?:docs/)?ROADMAP\.md\s*', '', s, flags=re.IGNORECASE)
     s = s.lstrip(':').strip()
     s = s.lstrip('§').strip()
     return s
@@ -162,8 +179,17 @@ def resolve_ref(ref: str, haystack: str) -> bool:
 
 contract_haystack = build_haystack(contract_text)
 plan_haystack = build_haystack(plan_text)
+roadmap_haystack = build_haystack(roadmap_text)
+roadmap_anchor_re = re.compile(r'\bP\d+-[A-Z]\b', re.IGNORECASE)
 
 unresolved = []
+
+def is_roadmap_ref(ref: str) -> bool:
+    text = strip_prefix(ref)
+    return 'ROADMAP' in ref.upper() or roadmap_anchor_re.search(text) is not None
+
+def category_uses_roadmap(item: dict) -> bool:
+    return str(item.get('category', '')).lower() in {'policy', 'infra'}
 
 for item in items:
     item_id = item.get('id', 'unknown')
@@ -179,12 +205,20 @@ for item in items:
     for ref in contract_refs:
         if not ref:
             continue
-        if not resolve_ref(str(ref), contract_haystack):
+        ref_text = str(ref)
+        if category_uses_roadmap(item) and is_roadmap_ref(ref_text):
+            if not roadmap_haystack or not resolve_ref(ref_text, roadmap_haystack):
+                unresolved.append((item_id, 'roadmap', ref))
+        elif not resolve_ref(ref_text, contract_haystack):
             unresolved.append((item_id, 'contract', ref))
     for ref in plan_refs:
         if not ref:
             continue
-        if not resolve_ref(str(ref), plan_haystack):
+        ref_text = str(ref)
+        if category_uses_roadmap(item) and is_roadmap_ref(ref_text):
+            if not roadmap_haystack or not resolve_ref(ref_text, roadmap_haystack):
+                unresolved.append((item_id, 'roadmap', ref))
+        elif not resolve_ref(ref_text, plan_haystack):
             unresolved.append((item_id, 'plan', ref))
 
 if unresolved:
@@ -409,9 +443,7 @@ for item in items:
                         file=sys.stderr,
                     )
         else:
-            # S8-020 uses compact wording that intentionally references CSP key groups
-            # via contract ATs rather than enumerating every key literal.
-            if sid == 'S8-020' and all(marker in acc_blob for marker in compact_csp_status_markers):
+            if all(marker in acc_blob for marker in compact_csp_status_markers):
                 continue
             for k in status_keys:
                 if k.lower() not in acc_blob:

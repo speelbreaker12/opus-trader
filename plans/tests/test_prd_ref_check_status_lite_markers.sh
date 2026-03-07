@@ -55,6 +55,19 @@ cat > "$valid_prd" <<'JSON'
       ],
       "verify": [],
       "enforcing_contract_ats": []
+    },
+    {
+      "id": "S0-920",
+      "story_ref": "Compact CSP marker guard",
+      "contract_refs": [],
+      "plan_refs": [],
+      "acceptance": [
+        "GIVEN /status coverage WHEN the compact csp minimum key set required by at-023/at-405/at-419/at-907/at-927/at-1117 is documented THEN schema/profile/mode/risk fields remain listed.",
+        "GIVEN /status coverage WHEN policy freshness fields and certification fields are documented THEN 5m rate-limit counters remain included.",
+        "GIVEN /status coverage WHEN durability-queue counters and open-permission fields are documented THEN compact CSP coverage stays explicit."
+      ],
+      "verify": [],
+      "enforcing_contract_ats": []
     }
   ]
 }
@@ -64,6 +77,10 @@ expect_rc 0 "$CHECKER" "$valid_prd"
 if grep -Fq "malformed foundation status-lite markers" "$tmp_dir/err.txt"; then
   cat "$tmp_dir/err.txt" >&2
   die "valid status-lite markers were flagged as malformed"
+fi
+if grep -Fq 'S0-920 references /status but acceptance missing required CSP key' "$tmp_dir/err.txt"; then
+  cat "$tmp_dir/err.txt" >&2
+  die "compact CSP marker story was still treated as missing literal CSP keys"
 fi
 
 invalid_prd="$tmp_dir/invalid_status_lite.json"
