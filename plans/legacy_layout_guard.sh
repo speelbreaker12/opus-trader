@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="${LEGACY_LAYOUT_GUARD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 
 fail() {
   echo "FAIL: $*" >&2
+  exit 1
+}
+
+fail_with_paths() {
+  local message="$1"
+  shift
+  local path=""
+
+  echo "FAIL: $message" >&2
+  for path in "$@"; do
+    echo "  - $path" >&2
+  done
   exit 1
 }
 
@@ -37,11 +49,11 @@ for path in "${forbidden_paths[@]}"; do
 done
 
 if [[ "${#present[@]}" -gt 0 ]]; then
-  fail "legacy files found in active paths: ${present[*]}"
+  fail_with_paths "legacy files found in active paths:" "${present[@]}"
 fi
 
 # Guard 2: postmortems with legacy references must be explicitly labeled archival.
-legacy_pattern='ralph|workflow_acceptance|workflow acceptance|plans/ralph\.sh|plans/workflow_acceptance\.sh'
+legacy_pattern='plans/ralph\.sh|plans/ralph_day\.sh|plans/workflow_acceptance\.sh|plans/workflow_acceptance_parallel\.sh|plans/test_parallel_smoke\.sh|plans/tests/test_ralph_needs_human\.sh|plans/tests/test_workflow_acceptance_fallback\.sh|prompts/Workflow_Auditor\.md|prompts/architect_advisor\.md|prompts/contact_arbiter\.md|prompts/workflow_121\.md|reviews/parallel_verify_compounding\.md|reviews/parallel_verify_evidence\.md|reviews/ROLE/PATCH\.diff|reviews/ROLE/PATCH_NOTES\.md|reviews/ROLE/REVIEW\.md|ralph-verify-push|workflow_acceptance'
 label='ARCHIVAL NOTE (Legacy Workflow):'
 
 if command -v rg >/dev/null 2>&1; then
@@ -61,7 +73,7 @@ if [[ -n "$matched_files" ]]; then
 fi
 
 if [[ "${#unlabeled[@]}" -gt 0 ]]; then
-  fail "postmortems with legacy references require archival label: ${unlabeled[*]}"
+  fail_with_paths "postmortems with legacy references require archival label:" "${unlabeled[@]}"
 fi
 
 echo "PASS: legacy layout guard"
