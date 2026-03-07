@@ -13,11 +13,27 @@ fail() {
 command -v jq >/dev/null 2>&1 || fail "jq is required for this test"
 
 tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
+declare -a external_manifest_temp_dirs=()
+
+remove_external_manifest_temp_dirs() {
+  local dir
+  for dir in "${external_manifest_temp_dirs[@]-}"; do
+    [[ -n "$dir" ]] || continue
+    rm -rf "$dir"
+  done
+  external_manifest_temp_dirs=()
+}
+
+cleanup() {
+  remove_external_manifest_temp_dirs
+  rm -rf "$tmp_dir"
+}
+
+trap cleanup EXIT
 
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
-story_id="S1-001"
+story_id="S99-001"
 
 setup_story_review_artifacts() {
   local case_dir="$1"
@@ -185,6 +201,47 @@ set -e
 [[ "$missing_manifest_rc" -eq 0 ]] || fail "expected missing manifests to skip external gate, got rc=$missing_manifest_rc"
 echo "$missing_manifest_output" | grep -Fq "external manifest gate skipped for $story_id" || fail "missing manifest skip diagnostic"
 echo "$missing_manifest_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing skip-path success output"
+
+# ── Test 2b: Custom external gate exit 1 is fatal when manifests exist ──
+custom_gate_fail_case="$tmp_dir/custom_gate_fail"
+mkdir -p "$custom_gate_fail_case"
+setup_case "$custom_gate_fail_case" "$head_sha"
+
+r3_manifest_dir="$ROOT/reviews/reconciliations/S99/external/cycle1/$story_id"
+r7_manifest_dir="$ROOT/reviews/reconciliations/S99/external/cycle2/$story_id"
+mkdir -p "$r3_manifest_dir" "$r7_manifest_dir"
+external_manifest_temp_dirs+=("$r3_manifest_dir" "$r7_manifest_dir")
+printf '{}\n' > "$r3_manifest_dir/R3_EXTERNAL_MANIFEST.json"
+printf '{}\n' > "$r7_manifest_dir/R7_EXTERNAL_MANIFEST.json"
+
+custom_gate_fail="$tmp_dir/custom-gate-fail.sh"
+cat > "$custom_gate_fail" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "custom external gate failing with rc=1" >&2
+exit 1
+EOF
+chmod +x "$custom_gate_fail"
+
+set +e
+custom_gate_fail_output="$(
+  cd "$ROOT" && \
+  EXTERNAL_MANIFEST_GATE_CMD="$custom_gate_fail" \
+  WF_STEP=/bin/true \
+  PRD_FILE="$custom_gate_fail_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$custom_gate_fail_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$custom_gate_fail_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$custom_gate_fail_case/artifacts/contract_review.json" 2>&1
+)"
+custom_gate_fail_rc=$?
+set -e
+
+[[ "$custom_gate_fail_rc" -eq 4 ]] || fail "expected custom external gate rc=1 to fail-closed with rc=4, got rc=$custom_gate_fail_rc"
+echo "$custom_gate_fail_output" | grep -Fq "custom external gate failing with rc=1" || fail "missing custom gate failure output"
+echo "$custom_gate_fail_output" | grep -Fq "ERROR: R3 external manifest gate failed for $story_id (exit 1)" || fail "missing fatal external gate diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$custom_gate_fail_case/prd.json" >/dev/null || fail "passes changed despite custom external gate failure"
+remove_external_manifest_temp_dirs
 
 # ── Test 3: HEAD mismatch in verify.meta.json ─────────────────────────
 mismatch_case="$tmp_dir/mismatch"
