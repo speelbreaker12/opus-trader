@@ -4,6 +4,7 @@ IFS=$'\n\t'
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 pipeline_script="$repo_root/plans/prd_pipeline.sh"
+hash_utils="$repo_root/plans/lib/hash_utils.sh"
 PIPELINE_LAST_RC=0
 
 fail() {
@@ -12,6 +13,7 @@ fail() {
 }
 
 [[ -f "$pipeline_script" ]] || fail "prd_pipeline.sh not found at $pipeline_script"
+[[ -f "$hash_utils" ]] || fail "hash_utils.sh not found at $hash_utils"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -21,9 +23,10 @@ trap cleanup EXIT
 
 setup_fixture() {
   local fixture_root="$1"
-  mkdir -p "$fixture_root/plans" "$fixture_root/.context" "$fixture_root/bin"
+  mkdir -p "$fixture_root/plans" "$fixture_root/plans/lib" "$fixture_root/.context" "$fixture_root/bin"
 
   cp "$pipeline_script" "$fixture_root/plans/prd_pipeline.sh"
+  cp "$hash_utils" "$fixture_root/plans/lib/hash_utils.sh"
   chmod +x "$fixture_root/plans/prd_pipeline.sh"
 
   cat > "$fixture_root/plans/prd.json" <<'JSON'

@@ -2,6 +2,8 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 PRD_FILE="${PRD_FILE:-plans/prd.json}"
 AUDIT_FILE="${AUDIT_FILE:-plans/prd_audit.json}"
 AUDIT_STDOUT="${AUDIT_STDOUT:-.context/prd_auditor_stdout.log}"
@@ -16,6 +18,10 @@ fail() {
   echo "ERROR: $*" >&2
   exit 2
 }
+
+if ! source "$SCRIPT_DIR/lib/hash_utils.sh"; then
+  fail "missing hash utils helper: $SCRIPT_DIR/lib/hash_utils.sh"
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   fail "jq required"
@@ -49,16 +55,7 @@ if [[ "$AUDIT_PROMISE_REQUIRED" == "1" ]]; then
   fi
 fi
 
-hash_file() {
-  local file="$1"
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file" | awk '{print $1}'
-  else
-    shasum -a 256 "$file" | awk '{print $1}'
-  fi
-}
-
-prd_sha="$(hash_file "$PRD_FILE")"
+prd_sha="$(sha256_file "$PRD_FILE")"
 audit_sha="$(jq -r '.prd_sha256 // empty' "$AUDIT_FILE")"
 if [[ -z "$audit_sha" ]]; then
   fail "prd_sha256 missing in audit file"
@@ -67,7 +64,7 @@ fi
 if [[ "$audit_sha" != "$prd_sha" ]]; then
   full_prd_sha=""
   if [[ "$audit_scope" == "slice" && -f "plans/prd.json" ]]; then
-    full_prd_sha="$(hash_file "plans/prd.json")"
+    full_prd_sha="$(sha256_file "plans/prd.json")"
   fi
   if [[ -z "$full_prd_sha" || "$audit_sha" != "$full_prd_sha" ]]; then
     fail "prd_sha256 mismatch in audit file (expected $prd_sha, got $audit_sha)"

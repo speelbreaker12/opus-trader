@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$repo_root/plans/run_prd_auditor.sh"
 check_script="$repo_root/plans/prd_audit_check.sh"
+hash_utils="$repo_root/plans/lib/hash_utils.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -12,6 +13,7 @@ fail() {
 
 [[ -f "$script" ]] || fail "run_prd_auditor.sh not found at $script"
 [[ -f "$check_script" ]] || fail "prd_audit_check.sh not found at $check_script"
+[[ -f "$hash_utils" ]] || fail "hash_utils.sh not found at $hash_utils"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -22,9 +24,10 @@ trap cleanup EXIT
 setup_fixture() {
   local fixture_root="$1"
 
-  mkdir -p "$fixture_root"/plans "$fixture_root"/prompts "$fixture_root"/specs "$fixture_root"/docs "$fixture_root"/.context "$fixture_root"/bin
+  mkdir -p "$fixture_root"/plans "$fixture_root"/plans/lib "$fixture_root"/prompts "$fixture_root"/specs "$fixture_root"/docs "$fixture_root"/.context "$fixture_root"/bin
   cp "$script" "$fixture_root"/plans/run_prd_auditor.sh
   cp "$check_script" "$fixture_root"/plans/prd_audit_check.sh
+  cp "$hash_utils" "$fixture_root"/plans/lib/hash_utils.sh
   chmod +x "$fixture_root"/plans/run_prd_auditor.sh "$fixture_root"/plans/prd_audit_check.sh
 
   cat > "$fixture_root"/plans/prd.json <<'JSON'

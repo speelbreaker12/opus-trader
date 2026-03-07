@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$repo_root/plans/run_prd_auditor.sh"
+hash_utils="$repo_root/plans/lib/hash_utils.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -10,6 +11,7 @@ fail() {
 }
 
 [[ -f "$script" ]] || fail "run_prd_auditor.sh not found at $script"
+[[ -f "$hash_utils" ]] || fail "hash_utils.sh not found at $hash_utils"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -17,8 +19,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$tmp_dir"/plans "$tmp_dir"/prompts "$tmp_dir"/specs "$tmp_dir"/docs "$tmp_dir"/.context "$tmp_dir"/bin
+mkdir -p "$tmp_dir"/plans "$tmp_dir"/plans/lib "$tmp_dir"/prompts "$tmp_dir"/specs "$tmp_dir"/docs "$tmp_dir"/.context "$tmp_dir"/bin
 cp "$script" "$tmp_dir"/plans/run_prd_auditor.sh
+cp "$hash_utils" "$tmp_dir"/plans/lib/hash_utils.sh
 chmod +x "$tmp_dir"/plans/run_prd_auditor.sh
 
 cat > "$tmp_dir"/plans/prd.json <<'JSON'
@@ -166,5 +169,12 @@ else
 fi
 audit_sha="$(jq -r '.prd_sha256 // empty' "$tmp_dir/plans/prd_audit.json")"
 [[ "$audit_sha" == "$expected_sha" ]] || fail "fallback audit sha mismatch"
+
+cost_file="$tmp_dir/.context/audit_costs.jsonl"
+[[ -f "$cost_file" ]] || fail "missing audit cost log"
+jq -s -e 'map(select(.stage != "complete") | has("rc")) | all' "$cost_file" >/dev/null \
+  || fail "audit stage entries missing rc"
+jq -s -e 'map(select(.stage == "auditor") | .rc) | last == 124' "$cost_file" >/dev/null \
+  || fail "auditor timeout rc not recorded"
 
 echo "test_run_prd_auditor_timeout_fallback.sh: ok"
