@@ -3231,7 +3231,7 @@
       "description": "Implement Liquidity Gate book-walk slippage checks, OPEN fail-closed behavior on stale L2, and fallback-driven risk-reducing handling under degraded L2.",
       "contract_refs": [
         "CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)",
-        "CONTRACT.md OPEN rejections due to missing/unparseable/stale L2 MUST use Rejected(LiquidityGateNoL2).",
+        "CONTRACT.md LiquidityGateNoL2",
         "CONTRACT.md AT-222",
         "CONTRACT.md AT-344",
         "CONTRACT.md AT-909",

@@ -22,12 +22,12 @@ How to use
   - Example: Before marking a P1 gate complete, check unblock conditions in `docs/PHASE1_CHECKLIST_BLOCK.md`, then use `docs/ROADMAP.md` for context wording only.
   - Related files: `docs/PHASE1_CHECKLIST_BLOCK.md`, `docs/ROADMAP.md`, `docs/phase1_acceptance.md`, `docs/phase1_index.md`
   - Added: 2026-02-11
-- [ ] Rule:
-  - Do:
-  - Don’t:
-  - Example:
-  - Related files:
-  - Added:
+- [x] Rule:
+  - Do: Use tokenized or anchor-style `contract_refs` in PRD stories, such as `CONTRACT.md AT-132`, `CONTRACT.md LiquidityGateNoL2`, `CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)`, `Anchor-###`, or `VR-###`.
+  - Don't: Put slash-heavy prose sentences in `contract_refs`; keep detailed wording in `acceptance`, `steps`, or `contract_must_evidence`.
+  - Example: Prefer `CONTRACT.md LiquidityGateNoL2` over `CONTRACT.md OPEN rejections due to missing/unparseable/stale L2 MUST use Rejected(LiquidityGateNoL2).`
+  - Related files: `plans/prd_gate_help.md`, `plans/prd_ref_check.sh`, `plans/prd.json`
+  - Added: 2026-03-07
 
 ## Pitfalls (Recent)
 - [ ] Pitfall:
