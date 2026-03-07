@@ -265,9 +265,10 @@
       "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-D Break-Glass Runbook + Drill",
       "category": "policy",
-      "description": "Create break-glass runbook and execute a recorded drill proving halt capability.",
+      "description": "Create a break-glass runbook with one primary canonical runtime emergency action plus one bounded fallback action, and execute a recorded drill proving the documented primary action causes the runtime safety-state transition.",
       "contract_refs": [
-        "P0-D Break-Glass Runbook"
+        "P0-D Break-Glass Runbook",
+        "CONTRACT.md AT-1237"
       ],
       "plan_refs": [
         "Global Non‑Negotiables (apply to ALL stories)"
@@ -283,27 +284,28 @@
         "avoid": []
       },
       "acceptance": [
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has STOP TRADING steps.",
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has verify no further OPEN risk.",
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has verify risk reduction possible.",
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has escalation + notify.",
-        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN has trigger scenario.",
-        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN has time to halt.",
-        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN has observed behavior.",
-        "GIVEN evidence/phase0/break_glass/log_excerpt.txt WHEN reviewed THEN proves drill occurred."
+        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN it names one primary canonical runtime emergency action, one bounded fallback action, and the expected runtime safety state after the primary action.",
+        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN it explains how to verify no further OPEN risk and how to reach the documented risk-reduction path if exposure exists.",
+        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN it includes escalation + notify guidance.",
+        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN it records the exact primary action invoked, time to runtime safety-state transition, resulting runtime state, and proof OPEN dispatch stopped.",
+        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN it records the risk-reducing action that remained available once the primary action completed.",
+        "GIVEN evidence/phase0/break_glass/log_excerpt.txt WHEN reviewed THEN it shows the documented primary action, the matching runtime state transition, and no further OPEN dispatch after that transition."
       ],
       "steps": [
-        "Create docs/break_glass_runbook.md with STOP TRADING steps (kill switch).",
-        "Add how to verify no further OPEN risk.",
-        "Add how to verify risk reduction still possible.",
+        "Create docs/break_glass_runbook.md naming one primary canonical runtime emergency action, one bounded fallback action, and the expected runtime safety state after the primary action.",
+        "Add how to verify no further OPEN risk after the primary action.",
+        "Add the follow-on risk-reduction path that remains available if exposure exists.",
         "Add escalation and who to notify.",
         "Copy runbook to evidence/phase0/break_glass/runbook_snapshot.md.",
-        "Execute drill: simulate runaway order attempt.",
-        "Record drill in evidence/phase0/break_glass/drill.md with trigger, time to halt, observed behavior.",
-        "Capture log excerpt in evidence/phase0/break_glass/log_excerpt.txt."
+        "Execute drill by invoking the exact documented primary action against a simulated runaway order attempt.",
+        "Record drill in evidence/phase0/break_glass/drill.md with trigger, exact primary action invoked, time to safety-state transition, resulting runtime state, observed OPEN blocking, and the surviving risk-reduction path.",
+        "Capture log excerpt in evidence/phase0/break_glass/log_excerpt.txt showing the documented primary action and its runtime state transition."
       ],
       "verify": [
         "./plans/verify.sh",
+        "python3 tools/phase0_meta_test.py --root .",
+        "cargo test -p soldier_infra --test test_phase0_runtime test_break_glass_kill_blocks_open_allows_reduce_runtime -- --exact",
+        "cargo test -p soldier_infra --test test_phase0_runtime test_break_glass_command_path_runtime -- --exact",
         "test -s docs/break_glass_runbook.md",
         "test -s evidence/phase0/break_glass/runbook_snapshot.md",
         "test -s evidence/phase0/break_glass/drill.md",
@@ -317,11 +319,24 @@
       ],
       "dependencies": [],
       "est_size": "S",
-      "risk": "low",
+      "risk": "high",
       "needs_human_decision": false,
       "passes": true,
-      "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Define one primary canonical runtime emergency action, one bounded fallback action, and execute a recorded drill",
+          "location": "specs/CONTRACT.md",
+          "anchor": "P0-D Break-Glass Runbook"
+        },
+        {
+          "quote": "the documented primary action MUST exist at runtime and transition the system within one control-plane tick",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1237"
+        }
+      ],
+      "enforcing_contract_ats": [
+        "AT-1237"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -352,10 +367,11 @@
           "Yes - drill completed and recorded",
           "No - drill not yet executed"
         ],
-        "recommended": "Execute drill in DEV/STAGING before marking done",
+        "recommended": "Execute the exact documented primary action in DEV/STAGING before marking done",
         "unblock_steps": [
           "Create runbook doc",
-          "Execute drill",
+          "Document primary action + bounded fallback",
+          "Execute drill using the primary action",
           "Record in drill.md",
           "Capture log excerpt"
         ]

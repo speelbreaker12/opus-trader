@@ -282,22 +282,26 @@ Anything more belongs to Phase 1+.
 - `test_break_glass_kill_blocks_open_allows_reduce`
 
 **Purpose**
-- Proves there is a reliable way to stop trading under failure.
+- Proves the documented primary break-glass action is a real runtime control path that stops new risk under failure.
 
 **Procedure**
 - Simulate runaway order generation.
-- Trigger break-glass Kill.
+- Invoke the exact primary break-glass action documented in the runbook.
+- Confirm the documented runtime safety state is reached within one control-plane tick.
 - Attempt:
   - OPEN order -> must fail
   - REDUCE_ONLY action -> must succeed
 
 **Pass Criteria**
+- The documented primary action matches the exercised runtime control path.
+- The documented runtime safety state is reached within one control-plane tick.
 - OPEN is blocked immediately.
 - Exposure reduction remains possible.
+- The runbook documents one bounded fallback action.
 - Evidence of the drill is recorded.
 
 **Why this matters**
-- Closes: "we can stop it in theory".
+- Closes: "we wrote a runbook, but never proved the documented action is the real stop button".
 
 ### Test Count Summary (Phase 0)
 

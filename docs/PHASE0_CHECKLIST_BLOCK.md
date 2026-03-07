@@ -99,17 +99,19 @@ evidence/phase0/
 
 **MANUAL artifacts (docs must exist):**
 - `docs/break_glass_runbook.md` includes:
-  - exact STOP TRADING steps (kill switch)
+  - one primary canonical runtime emergency action for STOP TRADING
+  - one bounded fallback action if the primary action is unavailable
+  - the expected runtime safety state after the primary action
   - how to verify no further OPEN risk
   - how to verify risk reduction is still possible if exposure exists
   - escalation + who to notify
 
 **MANUAL evidence (recorded drill required):**
 - `evidence/phase0/break_glass/runbook_snapshot.md` (snapshot at sign-off)
-- `evidence/phase0/break_glass/drill.md` with trigger scenario, time to halt, observed behavior, and follow-ups
-- `evidence/phase0/break_glass/log_excerpt.txt` proving drill occurred
+- `evidence/phase0/break_glass/drill.md` with trigger scenario, exact primary action invoked, time to runtime safety-state transition, resulting runtime state, and follow-ups
+- `evidence/phase0/break_glass/log_excerpt.txt` proving the documented primary action caused the runtime state transition
 
-**Unblock condition:** doc + snapshots + drill record + logs exist.
+**Unblock condition:** doc + snapshots + drill record + logs exist, and the drill proves the exact documented primary action drove the runtime safety-state transition.
 
 ## P0-E — Minimal Health + Owner Status Command/Endpoint
 

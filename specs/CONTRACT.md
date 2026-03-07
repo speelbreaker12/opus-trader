@@ -131,7 +131,7 @@ Before live-trading enablement, these operational baseline items MUST be complet
 | **P0-A** | Launch Policy Baseline | Define explicit constraints on what the system is allowed to do | `docs/launch_policy.md` |
 | **P0-B** | Environment Isolation | Document environment separation (DEV/STAGING/PAPER/LIVE) | `docs/env_matrix.md` |
 | **P0-C** | Keys & Secrets Baseline | Document key creation rules, rotation plan, least-privilege proof | `docs/keys_and_secrets.md` |
-| **P0-D** | Break-Glass Runbook + Drill | Create emergency halt procedure and execute recorded drill | `docs/break_glass_runbook.md`, drill evidence |
+| **P0-D** | Break-Glass Runbook + Drill | Define one primary canonical runtime emergency action, one bounded fallback action, and execute a recorded drill proving the primary action causes the documented runtime state transition | `docs/break_glass_runbook.md`, drill evidence, passing `AT-1237` |
 | **P0-E** | Health + Owner Status Scaffolding | Implement minimal health output and minimal owner-status scaffolding returning `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (and optional deprecated alias `is_trading_allowed`) on owner scaffolding surfaces (CLI/local status). Foundation `/status` uses AT-1230 status-lite keys. | `docs/health_endpoint.md`, passing tests |
 | **P0-F** | Machine Policy Loader Baseline | Bind a machine-readable policy path + strict loader so runtime checks are not doc-only | `config/policy.json`, `tools/policy_loader.py`, passing tests |
 
@@ -144,6 +144,22 @@ Before live-trading enablement, these operational baseline items MUST be complet
 - P0-F Machine Policy Loader Baseline
 
 **Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys.
+
+**P0-D clarifications (Normative):**
+- The runbook MUST name exactly one primary canonical runtime emergency action and one bounded fallback action.
+- The primary action MUST be the currently operator-facing runtime control path for "stop new risk" (CLI, HTTP, or another contract-named surface). An improvised operator step that only kills the process or bypasses the runtime state machine MUST NOT be the primary action.
+- The runbook MUST name the expected runtime safety state reached by the primary action (`trading_mode == Kill`, `trading_mode == ReduceOnly`, `emergency_reduceonly_active == true`, or `dispatch_enabled == false` in foundation mode, as applicable).
+- If exposure can remain after the primary action, the runbook MUST document the follow-on risk-reducing action that remains permitted and the bounded fallback action to use when the primary action is unavailable.
+
+AT-1237
+`Profile: CSP`
+Given: `docs/break_glass_runbook.md` documents one primary canonical runtime emergency action, one bounded fallback action, and the expected runtime safety-state transition for the primary action.
+When: the recorded break-glass drill invokes the documented primary action.
+Then: the documented primary action MUST exist at runtime, match the exercised control path, and transition the system to the documented safety state within one control-plane tick.
+And: once that transition occurs, OPEN dispatch MUST be blocked.
+And: if exposure exists, at least one documented risk-reducing action MUST remain available per §2.2.3.6.
+Pass criteria: drill evidence and runtime tests show the exact documented primary action was invoked, the documented runtime state was reached, OPEN dispatch stopped, and the risk-reducing path remained available.
+Fail criteria: the documented primary action is missing or differs from the exercised runtime path, no documented safety-state transition occurs, OPEN can still dispatch, no risk-reducing path remains when exposure exists, or the runbook omits the bounded fallback action.
 
 **P0-E clarifications (Normative):**
 - The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement (after foundation mode exits).
@@ -4662,6 +4678,13 @@ The following acceptance tests MUST pass before Phase 1 is considered complete. 
 - AT-926 (instrument metadata missing/unparseable reject)
 - AT-928 (duplicate intent hash is NOOP; depends on canonical quantization being correct and must pass before Phase 1 is closed)
 - AT-1097 (mixed coin+USD sizing reject)
+- AT-1215 (foundation happy path: `WALQueueAccepted` + `WALRecorded` succeed, all OPEN blockers covered by the Phase 1 AT subset are forced pass, and exactly one OPEN dispatch occurs)
+
+**Phase 1 closure rule:** The Phase 1 AT subset MUST include at least one NON-TRIP acceptance test proving that an otherwise-valid OPEN reaches dispatch when all OPEN blockers covered by the Phase 1 AT subset are forced pass. Parser-only, mapping-only, or state-only correctness ATs do not satisfy this requirement by themselves.
+
+**Phase 1 pairing rule:** For each Phase 1 subset AT that proves an OPEN-blocking guard on the TRIP path, the Phase 1 AT subset MUST also include NON-TRIP coverage in which that guard is forced pass and the same otherwise-valid OPEN reaches dispatch. A single NON-TRIP AT MAY satisfy this requirement for multiple Phase 1 subset OPEN blockers if it explicitly forces all other OPEN gates pass and proves dispatch count = 1.
+
+These acceptance tests MAY run in an isolated harness and MUST NOT by themselves authorize live trading or foundation exit.
 
 **Deferred to Phase 2 (full PolicyGuard/reconciliation proof):**
 - AT-104 full assertion (`TradingMode==ReduceOnly`) is deferred to Phase 2; Phase 1 still requires the stub proof: stale instrument metadata sets `RiskState::Degraded`, blocks OPEN only, and MUST NOT block CLOSE/HEDGE/CANCEL solely due to metadata staleness.
