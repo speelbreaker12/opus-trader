@@ -88,7 +88,7 @@ assert_recorded_args "$quoted_fixture/gate_args.txt" "--label" "two words"
 injection_fixture="$tmp_dir/injection"
 setup_fixture "$injection_fixture"
 malicious_target="$tmp_dir/pwned"
-run_pipeline_fixture "$injection_fixture" '--label "$(touch '"$malicious_target"')"'
+run_pipeline_fixture "$injection_fixture" '--label "$(touch "'"$malicious_target"'")"'
 assert_recorded_args "$injection_fixture/gate_args.txt" "--label" "\$(touch $malicious_target)"
 [[ ! -e "$malicious_target" ]] || fail "command substitution payload executed unexpectedly"
 
