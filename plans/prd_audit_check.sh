@@ -154,15 +154,16 @@ if ! jq -e '
   fail "global_findings must include must_fix, risk, improvements arrays"
 fi
 
-if ! jq -e '
-  (.summary.items_total | tonumber? != null) and
-  (.summary.items_pass | tonumber? != null) and
-  (.summary.items_fail | tonumber? != null) and
-  (.summary.items_blocked | tonumber? != null) and
-  (.summary.must_fix_count | tonumber? != null)
-' "$AUDIT_FILE" >/dev/null 2>&1; then
-  fail "summary counts must be numeric"
-fi
+for summary_field in items_total items_pass items_fail items_blocked must_fix_count; do
+  summary_type="$(jq -r --arg field "$summary_field" '.summary[$field] | type' "$AUDIT_FILE" 2>/dev/null || echo "null")"
+  if [[ "$summary_type" == "number" ]]; then
+    continue
+  fi
+  if [[ "$summary_type" == "string" ]]; then
+    fail "summary counts must be numbers, not strings: $summary_field"
+  fi
+  fail "summary.$summary_field must be a number (got $summary_type)"
+done
 
 if ! jq -e '
   ( .items | length ) as $total
