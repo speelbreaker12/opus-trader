@@ -124,7 +124,7 @@ AT-1055
 
 ## **Phase 0: Operational Prerequisites (Non-Negotiable)**
 
-Before live-trading enablement, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation.
+Before live-trading enablement, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation. Before any live-trading enablement decision, the operator/release flow MUST run `bash ./plans/live_enable_preflight.sh`. That preflight is the named Phase 0 release/readiness gate and MUST fail closed if any required Phase 0 evidence or runtime proof is missing, invalid, or unreadable. Phase 0 documents/evidence alone are insufficient unless this preflight passes.
 
 | ID | Item | Purpose | Evidence Required |
 |----|------|---------|-------------------|
@@ -143,7 +143,25 @@ Before live-trading enablement, these operational baseline items MUST be complet
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys.
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys. `bash ./plans/live_enable_preflight.sh` is a release/readiness gate only; it does not replace later runtime PolicyGuard enforcement or the Phase 2+ `/api/v1/status` authority boundary.
+
+Profile: CSP
+
+AT-1233
+- Given: all other enablement conditions are forced pass.
+- Given: one required Phase 0 evidence artifact is missing or invalid.
+- When: `bash ./plans/live_enable_preflight.sh` is evaluated for live enablement.
+- Then: the preflight MUST exit non-zero and live enablement MUST be blocked.
+- Pass criteria: gate exits non-zero; enablement remains blocked.
+- Fail criteria: gate exits zero or live enablement proceeds.
+
+AT-1234
+- Given: all required Phase 0 docs, snapshots, proofs, and Phase 0 runtime checks are valid.
+- Given: all other enablement conditions are forced pass.
+- When: `bash ./plans/live_enable_preflight.sh` runs.
+- Then: the Phase 0 gate does not block live enablement.
+- Pass criteria: gate exits zero and Phase 0 does not block promotion.
+- Fail criteria: gate exits non-zero or Phase 0 blocks despite valid inputs.
 
 **P0-D clarifications (Normative):**
 - The runbook MUST name exactly one primary canonical runtime emergency action and one bounded fallback action.
