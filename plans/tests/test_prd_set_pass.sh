@@ -154,7 +154,39 @@ echo "$success_output" | grep -Fq "Updated task $story_id: passes=true" || fail 
 echo "$success_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check did not pass for current HEAD"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$success_case/prd.json" >/dev/null || fail "passes was not updated to true"
 
-# ── Test 2: HEAD mismatch in verify.meta.json ─────────────────────────
+missing_manifest_gate="$tmp_dir/missing-manifest-gate.sh"
+cat > "$missing_manifest_gate" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "external manifest gate should not run when manifest is absent" >&2
+exit 99
+EOF
+chmod +x "$missing_manifest_gate"
+
+# ── Test 2: Missing manifests short-circuit the external gate ────────
+missing_manifest_case="$tmp_dir/missing_manifest_skip"
+mkdir -p "$missing_manifest_case"
+setup_case "$missing_manifest_case" "$head_sha"
+
+set +e
+missing_manifest_output="$(
+  cd "$ROOT" && \
+  EXTERNAL_MANIFEST_GATE_CMD="$missing_manifest_gate" \
+  WF_STEP=/bin/true \
+  PRD_FILE="$missing_manifest_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$missing_manifest_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$missing_manifest_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$missing_manifest_case/artifacts/contract_review.json" 2>&1
+)"
+missing_manifest_rc=$?
+set -e
+
+[[ "$missing_manifest_rc" -eq 0 ]] || fail "expected missing manifests to skip external gate, got rc=$missing_manifest_rc"
+echo "$missing_manifest_output" | grep -Fq "external manifest gate skipped for $story_id" || fail "missing manifest skip diagnostic"
+echo "$missing_manifest_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing skip-path success output"
+
+# ── Test 3: HEAD mismatch in verify.meta.json ─────────────────────────
 mismatch_case="$tmp_dir/mismatch"
 mkdir -p "$mismatch_case"
 setup_case "$mismatch_case" "deadbeef" "$head_sha"
@@ -176,7 +208,7 @@ set -e
 echo "$mismatch_output" | grep -Fq "ERROR: verify metadata HEAD mismatch" || fail "missing head mismatch diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$mismatch_case/prd.json" >/dev/null || fail "passes changed despite head mismatch failure"
 
-# ── Test 3: Mid-run HEAD change detected ────────────────────────────
+# ── Test 4: Mid-run HEAD change detected ────────────────────────────
 head_flip_case="$tmp_dir/head_flip"
 mkdir -p "$head_flip_case"
 setup_case "$head_flip_case" "$head_sha"
@@ -238,7 +270,7 @@ echo "$head_flip_output" | grep -Fq "ERROR: HEAD changed during pass flip valida
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$head_flip_case/prd.json" >/dev/null || fail "passes changed despite mid-run head-change failure"
 echo "$head_flip_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check should run with the initial HEAD before final check"
 
-# ── Test 4: No-flock locking (mkdir-based) ──────────────────────────
+# ── Test 5: No-flock locking (mkdir-based) ──────────────────────────
 noflock_case="$tmp_dir/noflock_lock_cleanup"
 mkdir -p "$noflock_case"
 cat > "$noflock_case/prd.json" <<EOF
@@ -269,7 +301,7 @@ for run in 1 2; do
   [[ ! -d "$noflock_case/prd.json.lock.d" ]] || fail "no-flock run $run left stale lock dir"
 done
 
-# ── Test 5: loss_mode gate — incomplete drift_metric blocks pass flip (exit 9) ──
+# ── Test 6: loss_mode gate — incomplete drift_metric blocks pass flip (exit 9) ──
 loss_mode_case="$tmp_dir/loss_mode_gate"
 mkdir -p "$loss_mode_case"
 setup_case "$loss_mode_case" "$head_sha"
@@ -299,7 +331,7 @@ set -e
 echo "$loss_mode_output" | grep -Fq "loss_mode incomplete for $story_id" || fail "missing loss_mode gate diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$loss_mode_case/prd.json" >/dev/null || fail "passes changed despite loss_mode gate failure"
 
-# ── Test 6: loss_mode gate — malformed loss_mode (non-object) blocks pass flip ──
+# ── Test 7: loss_mode gate — malformed loss_mode (non-object) blocks pass flip ──
 malformed_loss_case="$tmp_dir/malformed_loss"
 mkdir -p "$malformed_loss_case"
 setup_case "$malformed_loss_case" "$head_sha"
@@ -328,7 +360,7 @@ set -e
 echo "$malformed_loss_output" | grep -Fq "loss_mode incomplete for $story_id" || fail "missing loss_mode gate diagnostic for malformed loss_mode"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$malformed_loss_case/prd.json" >/dev/null || fail "passes changed despite malformed loss_mode"
 
-# ── Test 7: loss_mode gate — policy stories are exempt ──────────────
+# ── Test 8: loss_mode gate — policy stories are exempt ──────────────
 policy_exempt_case="$tmp_dir/policy_exempt"
 mkdir -p "$policy_exempt_case"
 setup_case "$policy_exempt_case" "$head_sha"
@@ -360,7 +392,7 @@ echo "$policy_exempt_output" | grep -Fq "Updated task $story_id: passes=true" ||
 echo "$policy_exempt_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "policy story should pass inline review gate"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$policy_exempt_case/prd.json" >/dev/null || fail "policy story did not persist passes=true"
 
-# ── Test 8: Inline review check — no review artifact fails ──────────
+# ── Test 9: Inline review check — no review artifact fails ──────────
 no_review_case="$tmp_dir/no_review"
 mkdir -p "$no_review_case"
 setup_case "$no_review_case" "$head_sha"
@@ -385,7 +417,7 @@ set -e
 echo "$no_review_output" | grep -Fq "no review artifact for HEAD=" || fail "missing inline review check diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$no_review_case/prd.json" >/dev/null || fail "passes changed despite missing review artifacts"
 
-# ── Test 9: preflight gate must be proven in verify artifacts ─────────
+# ── Test 10: preflight gate must be proven in verify artifacts ─────────
 missing_preflight_rc_case="$tmp_dir/missing_preflight_rc"
 mkdir -p "$missing_preflight_rc_case"
 setup_case "$missing_preflight_rc_case" "$head_sha"
@@ -408,7 +440,7 @@ set -e
 echo "$missing_preflight_rc_output" | grep -Fq "missing required gate artifact: $missing_preflight_rc_case/artifacts/preflight.rc" || fail "missing preflight artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_preflight_rc_case/prd.json" >/dev/null || fail "passes changed despite missing preflight.rc"
 
-# ── Test 10: non-zero preflight.rc blocks pass flip ───────────────────
+# ── Test 11: non-zero preflight.rc blocks pass flip ───────────────────
 nonzero_preflight_rc_case="$tmp_dir/nonzero_preflight_rc"
 mkdir -p "$nonzero_preflight_rc_case"
 setup_case "$nonzero_preflight_rc_case" "$head_sha"
@@ -431,7 +463,7 @@ set -e
 echo "$nonzero_preflight_rc_output" | grep -Fq "non-zero gate rc in" || fail "missing preflight non-zero diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$nonzero_preflight_rc_case/prd.json" >/dev/null || fail "passes changed despite non-zero preflight.rc"
 
-# ── Test 11: fail_closed_coverage gate must be proven in verify artifacts ──
+# ── Test 12: fail_closed_coverage gate must be proven in verify artifacts ──
 missing_fc_rc_case="$tmp_dir/missing_fail_closed_rc"
 mkdir -p "$missing_fc_rc_case"
 setup_case "$missing_fc_rc_case" "$head_sha"
@@ -454,7 +486,7 @@ set -e
 echo "$missing_fc_rc_output" | grep -Fq "missing required gate artifact" || fail "missing fail_closed_coverage artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite missing fail_closed_coverage.rc"
 
-# ── Test 12: non-zero fail_closed_coverage.rc blocks pass flip ───────
+# ── Test 13: non-zero fail_closed_coverage.rc blocks pass flip ───────
 nonzero_fc_rc_case="$tmp_dir/nonzero_fail_closed_rc"
 mkdir -p "$nonzero_fc_rc_case"
 setup_case "$nonzero_fc_rc_case" "$head_sha"
@@ -477,7 +509,7 @@ set -e
 echo "$nonzero_fc_rc_output" | grep -Fq "non-zero gate rc in" || fail "missing non-zero gate rc diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$nonzero_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite non-zero fail_closed_coverage.rc"
 
-# ── Test 13: proof graph gate must be proven in verify artifacts ─────
+# ── Test 14: proof graph gate must be proven in verify artifacts ─────
 missing_pg_rc_case="$tmp_dir/missing_proof_graph_rc"
 mkdir -p "$missing_pg_rc_case"
 setup_case "$missing_pg_rc_case" "$head_sha"
@@ -500,7 +532,7 @@ set -e
 echo "$missing_pg_rc_output" | grep -Fq "missing required proof graph gate artifact" || fail "missing proof graph gate artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_pg_rc_case/prd.json" >/dev/null || fail "passes changed despite missing proof graph gate artifact"
 
-# ── Test 14: proof graph TRADING HALT artifact propagates exit 20 ────
+# ── Test 15: proof graph TRADING HALT artifact propagates exit 20 ────
 halt_pg_case="$tmp_dir/proof_graph_halt"
 mkdir -p "$halt_pg_case"
 setup_case "$halt_pg_case" "$head_sha"
@@ -523,7 +555,7 @@ set -e
 echo "$halt_pg_output" | grep -Fq "proof graph triggered TRADING HALT" || fail "missing proof graph trading halt diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$halt_pg_case/prd.json" >/dev/null || fail "passes changed despite proof graph trading halt artifact"
 
-# ── Test 15: proof graph non-zero/non-20 artifact maps to exit 10 ───
+# ── Test 16: proof graph non-zero/non-20 artifact maps to exit 10 ───
 failed_pg_case="$tmp_dir/proof_graph_fail_non20"
 mkdir -p "$failed_pg_case"
 setup_case "$failed_pg_case" "$head_sha"
@@ -546,7 +578,7 @@ set -e
 echo "$failed_pg_output" | grep -Fq "proof graph gate failed for $story_id" || fail "missing proof graph non-20 failure diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$failed_pg_case/prd.json" >/dev/null || fail "passes changed despite non-zero/non-20 proof graph artifact"
 
-# ── Test 14: --dry-run executes pass checks and does not mutate PRD ─
+# ── Test 17: --dry-run executes pass checks and does not mutate PRD ─
 dry_run_case="$tmp_dir/dry_run_success"
 mkdir -p "$dry_run_case"
 setup_case "$dry_run_case" "$head_sha"
@@ -566,7 +598,7 @@ echo "$dry_run_output" | grep -Fq "DRY-RUN: validation passed for task $story_id
 echo "$dry_run_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "dry-run should execute full validation path"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$dry_run_case/prd.json" >/dev/null || fail "dry-run should not mutate passes field"
 
-# ── Test 15: --dry-run fails on broken gates and still avoids mutation ─
+# ── Test 18: --dry-run fails on broken gates and still avoids mutation ─
 dry_run_fail_case="$tmp_dir/dry_run_fail"
 mkdir -p "$dry_run_fail_case"
 setup_case "$dry_run_fail_case" "$head_sha"
