@@ -2994,7 +2994,10 @@
       "contract_refs": [
         "CONTRACT.md §2.4.1 WAL Writer Isolation (Hot Loop Protection)",
         "CONTRACT.md §2.4 Durable Intent Ledger",
-        "AT-935",
+        "AT-1215",
+        "AT-1232",
+        "AT-1235",
+        "AT-1236",
         "AT-906",
         "AT-233",
         "AT-234",
@@ -3007,8 +3010,9 @@
       "scope": {
         "touch": [
           "crates/soldier_infra/src/lib.rs",
-          "crates/soldier_infra/tests",
-          "crates/soldier_infra/src/wal.rs"
+          "crates/soldier_infra/src/wal.rs",
+          "crates/soldier_infra/src/store/ledger.rs",
+          "crates/soldier_infra/tests/test_dispatch_durability.rs"
         ],
         "create": [],
         "avoid": [
@@ -3019,7 +3023,8 @@
       "acceptance": [
         "GIVEN the durability barrier config flag is enabled WHEN a caller awaits the durable-append barrier THEN the durable ledger returns only after the configured durability marker (fsync or equivalent) completes.",
         "GIVEN the durability barrier config flag is disabled WHEN a caller awaits the durable-append barrier THEN the durable ledger returns immediately after enqueue (no fsync wait).",
-        "GIVEN the ledger enqueue queue is full or enqueue fails WHEN append is attempted THEN the durable ledger returns an error, increments ledger_write_errors, and does not block the caller indefinitely."
+        "GIVEN durable-before-dispatch is enabled AND WALRecorded exists but WALDurable is absent WHEN dispatch authorization is evaluated THEN OPEN remains blocked with RecordedBeforeDispatchFailed until the durability marker arrives.",
+        "GIVEN the ledger enqueue queue is full or enqueue fails WHEN append is attempted THEN the durable ledger returns an error, increments wal_write_errors, and does not block the caller indefinitely."
       ],
       "steps": [
         "Extend the ledger to expose a durable-append barrier API and config flag.",
@@ -3044,13 +3049,16 @@
       "passes": true,
       "contract_must_evidence": [
         {
-          "quote": "RecordedBeforeDispatch is mandatory. DurableBeforeDispatch is required when the durability barrier flag is enabled.",
-          "location": "CONTRACT.md §2.4 Durable Intent Ledger",
-          "anchor": "AT-935"
+          "quote": "If a subsystem is configured for durable-before-dispatch, OPEN dispatch additionally requires WALDurable.",
+          "location": "CONTRACT.md §2.4 Durable Intent Ledger / Dispatch rule",
+          "anchor": "AT-1235"
         }
       ],
       "enforcing_contract_ats": [
-        "AT-935",
+        "AT-1215",
+        "AT-1232",
+        "AT-1235",
+        "AT-1236",
         "AT-906",
         "AT-233",
         "AT-234",
@@ -3059,6 +3067,7 @@
       "reason_codes": {
         "type": "RejectReason",
         "values": [
+          "RecordedBeforeDispatchFailed",
           "ExecWalWriteFailed"
         ]
       },
