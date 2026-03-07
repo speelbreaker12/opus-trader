@@ -3565,7 +3565,8 @@
       "contract_refs": [
         "CONTRACT.md §1.4.1 Net Edge Gate (Fees + Expected Slippage)",
         "CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)",
-        "CONTRACT.md RecordedBeforeDispatch",
+        "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
+        "CONTRACT.md §2.4.1 WAL Writer Isolation (Hot Loop Protection)",
         "CONTRACT.md CSP.5.2 Enforcement Rules"
       ],
       "plan_refs": [
@@ -3584,7 +3585,7 @@
         ]
       },
       "acceptance": [
-        "GIVEN build_order_intent is called for an OPEN intent WHEN gates run THEN the sequence is preflight -> quantize -> fee cache check -> Liquidity Gate -> Net Edge Gate -> pricer, and only after all pass does dispatch occur.",
+        "GIVEN build_order_intent is called for an OPEN intent WHEN gates run THEN the sequence is preflight -> quantize -> fee cache check -> Liquidity Gate -> Net Edge Gate -> pricer -> RecordedBeforeDispatch, and only after all pass does dispatch occur.",
         "GIVEN RiskState::Degraded WHEN an OPEN intent is evaluated at the chokepoint THEN it is rejected and dispatch count remains 0 while CLOSE/HEDGE/CANCEL remain allowed.",
         "GIVEN any dispatch attempt WHEN inspecting code paths THEN build_order_intent is the only constructor used for OrderIntent dispatch (no alternate bypass)."
       ],
@@ -3617,10 +3618,17 @@
           "quote": "This gate MUST run before any OrderIntent is eligible for dispatch.",
           "location": "CONTRACT.md §1.4.1 Net Edge Gate (Fees + Expected Slippage)",
           "anchor": "CONTRACT.md §1.4.1 Net Edge Gate (Fees + Expected Slippage)"
+        },
+        {
+          "quote": "OPEN dispatch requires WALRecorded.",
+          "location": "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
+          "anchor": "AT-1215"
         }
       ],
       "enforcing_contract_ats": [
-        "AT-015"
+        "AT-015",
+        "AT-1215",
+        "AT-1232"
       ],
       "reason_codes": {
         "type": "ModeReasonCode",
@@ -3664,7 +3672,8 @@
       "category": "hardening",
       "description": "Implement CI tests proving exactly one module/function may dispatch exchange orders with no bypass paths.",
       "contract_refs": [
-        "RecordedBeforeDispatch",
+        "CONTRACT.md CSP.3 RecordedBeforeDispatch (WAL)",
+        "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
         "AT-935",
         "Anchor-006",
         "VR-014",
@@ -3829,7 +3838,8 @@
       "category": "hardening",
       "description": "Implement CI test proving rejected intents leave no persistent state changes except counters/logs.",
       "contract_refs": [
-        "RecordedBeforeDispatch",
+        "CONTRACT.md CSP.3 RecordedBeforeDispatch (WAL)",
+        "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
         "AT-201",
         "Anchor-006",
         "1.2 Atomic Group Executor"
@@ -3996,8 +4006,14 @@
       "category": "hardening",
       "description": "Implement CI test and doc proving gate ordering invariants: reject before persist, WAL before dispatch.",
       "contract_refs": [
-        "CONTRACT.md RecordedBeforeDispatch",
+        "CONTRACT.md CSP.3 RecordedBeforeDispatch (WAL)",
+        "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
+        "CONTRACT.md §2.4.1 WAL Writer Isolation (Hot Loop Protection)",
         "CONTRACT.md CSP.5.2 Enforcement Rules",
+        "AT-1215",
+        "AT-1232",
+        "AT-1235",
+        "AT-1236",
         "Anchor-006",
         "VR-014"
       ],
@@ -4015,14 +4031,14 @@
         ]
       },
       "acceptance": [
-        "GIVEN test_gate_ordering_constraints runs WHEN a side effect occurs before final accept THEN test fails.",
-        "GIVEN durable ledger commit is attempted after dispatch WHEN test runs THEN test fails.",
-        "GIVEN docs/intent_gate_invariants.md exists THEN it states the 3 normative ordering constraints."
+        "GIVEN test_gate_ordering_constraints runs for a non-durable OPEN path WHEN dispatch authorization occurs before WALRecorded THEN test fails.",
+        "GIVEN test_gate_ordering_constraints runs for a durable-before-dispatch OPEN path WHEN dispatch authorization occurs before WALDurable THEN test fails.",
+        "GIVEN docs/intent_gate_invariants.md exists THEN it states reject-before-persist, WALRecorded-before-OPEN-dispatch, and WALDurable-before-OPEN-dispatch-when-configured."
       ],
       "steps": [
         "Extend or create crates/soldier_core/tests/test_gate_ordering.rs.",
-        "Implement test_gate_ordering_constraints with instrumented gate/side-effect events.",
-        "Assert: reject gates before persist, WAL before dispatch, no side effects before accept.",
+        "Implement test_gate_ordering_constraints with instrumented gate/side-effect events for non-durable and durable-before-dispatch paths.",
+        "Assert: reject gates before persist, WALRecorded before OPEN dispatch, and WALDurable before OPEN dispatch when configured.",
         "Create docs/intent_gate_invariants.md with normative statements.",
         "Run test and verify pass."
       ],
@@ -4035,15 +4051,30 @@
         "docs/intent_gate_invariants.md with 3 normative statements"
       ],
       "dependencies": [
+        "S4-003",
         "S5-004"
       ],
       "est_size": "S",
       "risk": "low",
       "needs_human_decision": false,
       "passes": true,
-      "contract_must_evidence": [],
+      "contract_must_evidence": [
+        {
+          "quote": "OPEN dispatch requires WALRecorded.",
+          "location": "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
+          "anchor": "AT-1215"
+        },
+        {
+          "quote": "If a subsystem is configured for durable-before-dispatch, OPEN dispatch additionally requires WALDurable.",
+          "location": "CONTRACT.md §2.4 Durable Intent Ledger / Dispatch rule",
+          "anchor": "AT-1235"
+        }
+      ],
       "enforcing_contract_ats": [
-        "AT-010"
+        "AT-1215",
+        "AT-1232",
+        "AT-1235",
+        "AT-1236"
       ],
       "reason_codes": {
         "type": "",
@@ -4057,10 +4088,13 @@
         "status_contract_ats": []
       },
       "implementation_tests": [
-        "crates/soldier_core/tests/test_gate_ordering.rs::test_at501_open_all_gates_pass_trace_order"
+        "crates/soldier_core/tests/test_gate_ordering.rs::test_gate_ordering_constraints"
       ],
       "primary_owner_for": [
-        "AT-010"
+        "AT-1215",
+        "AT-1232",
+        "AT-1235",
+        "AT-1236"
       ],
       "loss_mode": {
         "worst_case": "gate ordering violated → side effect before final accept → partial state mutation on reject",
