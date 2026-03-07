@@ -116,6 +116,55 @@ write_blocked() {
     > "$PRD_PIPELINE_BLOCKED_JSON"
 }
 
+PARSED_ARGS=()
+
+parse_cmd_args() {
+  local label="$1"
+  local args="$2"
+  local parsed_file=""
+  local error_file=""
+  local parse_error=""
+  local arg=""
+
+  PARSED_ARGS=()
+  if [[ -z "$args" ]]; then
+    return 0
+  fi
+
+  parsed_file="$(mktemp)"
+  error_file="$(mktemp)"
+
+  if ! python3 - "$args" >"$parsed_file" 2>"$error_file" <<'PY'
+import shlex
+import sys
+
+try:
+    parsed = shlex.split(sys.argv[1], posix=True)
+except ValueError as exc:
+    print(exc, file=sys.stderr)
+    sys.exit(1)
+
+for value in parsed:
+    sys.stdout.write(value)
+    sys.stdout.write("\0")
+PY
+  then
+    parse_error="$(tr '\n' ' ' < "$error_file" | sed 's/[[:space:]]*$//')"
+    rm -f "$parsed_file" "$error_file"
+    if [[ -z "$parse_error" ]]; then
+      parse_error="invalid shell-style arguments"
+    fi
+    echo "ERROR: failed to parse ${label}_ARGS: $parse_error" >&2
+    return 2
+  fi
+
+  while IFS= read -r -d '' arg; do
+    PARSED_ARGS+=("$arg")
+  done < "$parsed_file"
+
+  rm -f "$parsed_file" "$error_file"
+}
+
 run_cmd() {
   local label="$1"
   local cmd="$2"
@@ -142,10 +191,11 @@ run_cmd() {
   fi
   cmd_arr+=("$cmd")
   if [[ -n "$args" ]]; then
-    # Fix: Use eval for proper quoted argument handling
-    eval "arg_arr=($args)"
-    if (( ${#arg_arr[@]} > 0 )); then
-      cmd_arr+=("${arg_arr[@]}")
+    if ! parse_cmd_args "$label" "$args"; then
+      return 2
+    fi
+    if (( ${#PARSED_ARGS[@]} > 0 )); then
+      cmd_arr+=("${PARSED_ARGS[@]}")
     fi
   fi
   echo "==> $label" >&2
