@@ -145,18 +145,23 @@ Before live-trading enablement, these operational baseline items MUST be complet
 
 **Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys. `bash ./plans/live_enable_preflight.sh` is a release/readiness gate only; it does not replace later runtime PolicyGuard enforcement or the Phase 2+ `/api/v1/status` authority boundary.
 
+**P0-F clarification (Normative):**
+- P0-F is not satisfied by repository presence of `config/policy.json` alone.
+- The release/readiness proof MUST include strict-loader success for the checked policy file and fail-closed health/status behavior when the effective runtime policy path is missing, unreadable, or invalid.
+- A repo-local policy file that is never selected by runtime does not satisfy P0-F.
+
 Profile: CSP
 
 AT-1233
 - Given: all other enablement conditions are forced pass.
-- Given: one required Phase 0 evidence artifact is missing or invalid.
+- Given: one required Phase 0 evidence artifact is missing or invalid, or the P0-F runtime policy-path proof fails.
 - When: `bash ./plans/live_enable_preflight.sh` is evaluated for live enablement.
 - Then: the preflight MUST exit non-zero and live enablement MUST be blocked.
 - Pass criteria: gate exits non-zero; enablement remains blocked.
 - Fail criteria: gate exits zero or live enablement proceeds.
 
 AT-1234
-- Given: all required Phase 0 docs, snapshots, proofs, and Phase 0 runtime checks are valid.
+- Given: all required Phase 0 docs, snapshots, proofs, and Phase 0 runtime checks are valid, including the P0-F strict-loader check and runtime-path fail-closed proof.
 - Given: all other enablement conditions are forced pass.
 - When: `bash ./plans/live_enable_preflight.sh` runs.
 - Then: the Phase 0 gate does not block live enablement.
