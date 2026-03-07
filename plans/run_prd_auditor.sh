@@ -116,6 +116,30 @@ audit_cost_end() {
   echo "{\"run_id\":\"$_audit_run_id\",\"stage\":\"complete\",\"decision\":\"$decision\",\"total_duration_s\":$total_duration,\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$AUDIT_COST_FILE"
 }
 
+compute_audit_decision() {
+  local audit_file="$1"
+  local decision
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '%s\n' "UNKNOWN"
+    return 0
+  fi
+  decision="$(jq -r '
+    if (.summary.items_fail | type) != "number" or (.summary.items_blocked | type) != "number" then
+      "UNKNOWN"
+    elif .summary.items_fail > 0 then
+      "FAIL"
+    elif .summary.items_blocked > 0 then
+      "BLOCKED"
+    else
+      "PASS"
+    end
+  ' "$audit_file" 2>/dev/null || true)"
+  if [[ -z "$decision" ]]; then
+    decision="UNKNOWN"
+  fi
+  printf '%s\n' "$decision"
+}
+
 progress() {
   local msg="$1"
   if [[ "$AUDIT_PROGRESS" == "1" ]]; then
@@ -436,22 +460,9 @@ AUDIT_PROMISE_REQUIRED=1 \
   ./plans/prd_audit_check.sh
 
 write_audit_cache() {
+  local decision="${1:-UNKNOWN}"
   if ! command -v jq >/dev/null 2>&1; then
     return 0
-  fi
-  local decision="BLOCKED"
-  local items_fail
-  local items_blocked
-  items_fail="$(jq -r '.summary.items_fail // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
-  items_blocked="$(jq -r '.summary.items_blocked // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
-  if [[ "$items_fail" =~ ^[0-9]+$ && "$items_blocked" =~ ^[0-9]+$ ]]; then
-    if (( items_fail > 0 )); then
-      decision="FAIL"
-    elif (( items_blocked > 0 )); then
-      decision="BLOCKED"
-    else
-      decision="PASS"
-    fi
   fi
   mkdir -p "$(dirname "$AUDIT_CACHE_FILE")"
   jq -n \
@@ -491,21 +502,11 @@ write_audit_cache() {
     }' > "$AUDIT_CACHE_FILE"
 }
 
-write_audit_cache
+audit_decision="$(compute_audit_decision "$AUDIT_OUTPUT_JSON")"
+
+write_audit_cache "$audit_decision"
 
 # Track cost with final decision
 if command -v jq >/dev/null 2>&1; then
-  _final_decision="UNKNOWN"
-  _items_fail="$(jq -r '.summary.items_fail // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
-  _items_blocked="$(jq -r '.summary.items_blocked // empty' "$AUDIT_OUTPUT_JSON" 2>/dev/null || true)"
-  if [[ "$_items_fail" =~ ^[0-9]+$ && "$_items_blocked" =~ ^[0-9]+$ ]]; then
-    if (( _items_fail > 0 )); then
-      _final_decision="FAIL"
-    elif (( _items_blocked > 0 )); then
-      _final_decision="BLOCKED"
-    else
-      _final_decision="PASS"
-    fi
-  fi
-  audit_cost_end "$_final_decision"
+  audit_cost_end "$audit_decision"
 fi

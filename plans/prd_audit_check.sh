@@ -155,13 +155,28 @@ if ! jq -e '
 fi
 
 if ! jq -e '
-  (.summary.items_total | tonumber? != null) and
-  (.summary.items_pass | tonumber? != null) and
-  (.summary.items_fail | tonumber? != null) and
-  (.summary.items_blocked | tonumber? != null) and
-  (.summary.must_fix_count | tonumber? != null)
+  [
+    .summary.items_total,
+    .summary.items_pass,
+    .summary.items_fail,
+    .summary.items_blocked,
+    .summary.must_fix_count
+  ]
+  | all(.[]; type == "number")
 ' "$AUDIT_FILE" >/dev/null 2>&1; then
-  fail "summary counts must be numeric"
+  if jq -e '
+    [
+      .summary.items_total,
+      .summary.items_pass,
+      .summary.items_fail,
+      .summary.items_blocked,
+      .summary.must_fix_count
+    ]
+    | any(.[]; type == "string")
+  ' "$AUDIT_FILE" >/dev/null 2>&1; then
+    fail "summary counts must be numbers, not strings"
+  fi
+  fail "summary counts must be numbers"
 fi
 
 if ! jq -e '

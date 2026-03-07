@@ -151,6 +151,67 @@ JSON
 
 PRD_FILE="$prd" AUDIT_FILE="$audit_with_notes" AUDIT_STDOUT="$stdout_log" "$check_script" >/dev/null 2>&1
 
+audit_string_counts="$tmp_dir/audit_string_counts.json"
+cat > "$audit_string_counts" <<JSON
+{
+  "project": "Fixture",
+  "prd_sha256": "$prd_sha",
+  "inputs": {},
+  "summary": {
+    "items_total": "1",
+    "items_pass": "1",
+    "items_fail": "0",
+    "items_blocked": "0",
+    "must_fix_count": "0"
+  },
+  "global_findings": {
+    "must_fix": [],
+    "risk": [],
+    "improvements": []
+  },
+  "items": [
+    {
+      "id": "S1-001",
+      "slice": 1,
+      "status": "PASS",
+      "reasons": [],
+      "schema_check": { "missing_fields": [], "notes": ["checked schema"] },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": []
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": []
+      },
+      "scope_check": { "too_broad": false, "est_size_too_large": false, "notes": [] },
+      "dependency_check": { "invalid": false, "forward_dep": false, "cycle": false, "notes": [] },
+      "patch_suggestions": []
+    }
+  ]
+}
+JSON
+
+set +e
+output=$(PRD_FILE="$prd" AUDIT_FILE="$audit_string_counts" AUDIT_STDOUT="$stdout_log" "$check_script" 2>&1)
+rc=$?
+set -e
+if [[ "$rc" -eq 0 ]]; then
+  echo "FAIL: expected string summary counts to be rejected" >&2
+  exit 1
+fi
+if ! echo "$output" | grep -Fq "summary counts must be numbers, not strings"; then
+  echo "FAIL: missing string summary count error" >&2
+  echo "$output" >&2
+  exit 1
+fi
+
 audit_missing_reasons="$tmp_dir/audit_missing_reasons.json"
 cat > "$audit_missing_reasons" <<JSON
 {
