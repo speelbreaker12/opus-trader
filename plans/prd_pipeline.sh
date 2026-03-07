@@ -426,7 +426,19 @@ fi
 # Optional Stage B.1: Patcher (controlled)
 if [[ -n "$PRD_PATCHER_CMD" ]]; then
   echo "==> Stage B.1 (Patcher)" >&2
-  run_cmd PRD_PATCHER "$PRD_PATCHER_CMD" "$PRD_PATCHER_ARGS"
+  patcher_rc=0
+  if run_cmd_capture_rc PRD_PATCHER "$PRD_PATCHER_CMD" "$PRD_PATCHER_ARGS"; then
+    patcher_rc=0
+  else
+    patcher_rc=$?
+    if is_timeout_rc "$patcher_rc"; then
+      write_blocked "PATCHER_TIMEOUT" "PRD patcher timed out after audit completion."
+      echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+      echo "ERROR: PRD patcher timed out after audit completion." >&2
+      exit 7
+    fi
+    exit "$patcher_rc"
+  fi
 fi
 
 # Stage C: Gate

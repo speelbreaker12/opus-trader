@@ -144,6 +144,29 @@ esac
 EOF_AUDITOR
   chmod +x "$fixture_root/plans/run_prd_auditor.sh"
 
+  cat > "$fixture_root/plans/prd_patcher.sh" <<'EOF_PATCHER'
+#!/usr/bin/env bash
+set -euo pipefail
+behavior="${PIPELINE_PATCHER_BEHAVIOR:-pass}"
+case "$behavior" in
+  pass)
+    exit 0
+    ;;
+  fail)
+    exit 1
+    ;;
+  sleep:*)
+    sleep "${behavior#sleep:}"
+    exit 0
+    ;;
+  *)
+    echo "unknown patcher behavior: $behavior" >&2
+    exit 2
+    ;;
+esac
+EOF_PATCHER
+  chmod +x "$fixture_root/plans/prd_patcher.sh"
+
   cat > "$fixture_root/bin/timeout" <<'EOF_TIMEOUT'
 #!/usr/bin/env python3
 import subprocess
@@ -273,6 +296,17 @@ run_pipeline_fixture "$auditor_timeout_fixture" \
   "PIPELINE_AUDITOR_BEHAVIOR=sleep:2"
 [[ "$PIPELINE_LAST_RC" -ne 0 ]] || fail "auditor timeout fixture expected non-zero rc"
 assert_blocked_reason "$auditor_timeout_fixture/.context/prd_pipeline_blocked.json" "AUDIT_TIMEOUT"
+
+patcher_timeout_fixture="$tmp_dir/patcher-timeout"
+setup_fixture "$patcher_timeout_fixture"
+run_pipeline_fixture "$patcher_timeout_fixture" \
+  "PIPELINE_CMD_TIMEOUT=1" \
+  "PIPELINE_GATE_BEHAVIOR_1=pass" \
+  "PIPELINE_AUDITOR_BEHAVIOR=pass" \
+  "PRD_PATCHER_CMD=./plans/prd_patcher.sh" \
+  "PIPELINE_PATCHER_BEHAVIOR=sleep:2"
+[[ "$PIPELINE_LAST_RC" -ne 0 ]] || fail "patcher timeout fixture expected non-zero rc"
+assert_blocked_reason "$patcher_timeout_fixture/.context/prd_pipeline_blocked.json" "PATCHER_TIMEOUT"
 
 final_gate_timeout_fixture="$tmp_dir/final-gate-timeout"
 setup_fixture "$final_gate_timeout_fixture"
