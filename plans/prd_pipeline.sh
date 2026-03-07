@@ -214,6 +214,27 @@ run_cmd() {
   return $cmd_rc
 }
 
+is_timeout_rc() {
+  local rc="$1"
+  [[ "$rc" -eq 124 || "$rc" -eq 137 ]]
+}
+
+run_cmd_capture_rc() {
+  set +e
+  run_cmd "$@"
+  local rc=$?
+  set -e
+  return "$rc"
+}
+
+run_gate_capture_rc() {
+  set +e
+  run_gate
+  local rc=$?
+  set -e
+  return "$rc"
+}
+
 run_gate() {
   if [[ -z "$PRD_GATE_CMD" ]]; then
     echo "ERROR: PRD_GATE_CMD not set and ./plans/prd_gate.sh missing." >&2
@@ -259,22 +280,52 @@ for ((i=1; i<=MAX_REPAIR_PASSES; i++)); do
   fi
 
   # Stage A gate: ./plans/prd_gate.sh (via PRD_GATE_CMD) runs before PRD_CUTTER.
-  if run_gate; then
+  gate_rc=0
+  if run_gate_capture_rc; then
     pass=1
     break
+  else
+    gate_rc=$?
+  fi
+  if is_timeout_rc "$gate_rc"; then
+    write_blocked "GATE_TIMEOUT" "PRD gate timed out on repair pass $i."
+    echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+    echo "ERROR: PRD gate timed out on repair pass $i." >&2
+    exit 5
   fi
 
   if [[ -n "$PRD_AUTOFIX_CMD" ]]; then
-    run_cmd PRD_AUTOFIX "$PRD_AUTOFIX_CMD" "$PRD_AUTOFIX_ARGS"
+    autofix_rc=0
+    if run_cmd_capture_rc PRD_AUTOFIX "$PRD_AUTOFIX_CMD" "$PRD_AUTOFIX_ARGS"; then
+      autofix_rc=0
+    else
+      autofix_rc=$?
+      if is_timeout_rc "$autofix_rc"; then
+        write_blocked "AUTOFIX_TIMEOUT" "PRD autofix timed out on pass $i."
+        echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+        echo "ERROR: PRD autofix timed out on pass $i." >&2
+        exit 6
+      fi
+      exit "$autofix_rc"
+    fi
     if ! ./plans/prd_schema_check.sh "$PRD_FILE"; then
       write_blocked "SCHEMA_FAIL" "PRD schema check failed after autofix on pass $i."
       echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
       echo "ERROR: PRD schema check failed after autofix on pass $i." >&2
       exit 4
     fi
-    if run_gate; then
+    gate_rc=0
+    if run_gate_capture_rc; then
       pass=1
       break
+    else
+      gate_rc=$?
+    fi
+    if is_timeout_rc "$gate_rc"; then
+      write_blocked "GATE_TIMEOUT" "PRD gate timed out after autofix on pass $i."
+      echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+      echo "ERROR: PRD gate timed out after autofix on pass $i." >&2
+      exit 5
     fi
   fi
 
@@ -287,7 +338,19 @@ for ((i=1; i<=MAX_REPAIR_PASSES; i++)); do
 
   # Cutter is expected to read PRD_LINT_JSON and fix PRD when present.
   pre_hash="$(sha256_file "$PRD_FILE")"
-  run_cmd PRD_CUTTER "$PRD_CUTTER_CMD" "$PRD_CUTTER_ARGS"
+  cutter_rc=0
+  if run_cmd_capture_rc PRD_CUTTER "$PRD_CUTTER_CMD" "$PRD_CUTTER_ARGS"; then
+    cutter_rc=0
+  else
+    cutter_rc=$?
+    if is_timeout_rc "$cutter_rc"; then
+      write_blocked "CUTTER_TIMEOUT" "PRD cutter timed out on pass $i."
+      echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+      echo "ERROR: PRD cutter timed out on pass $i." >&2
+      exit 6
+    fi
+    exit "$cutter_rc"
+  fi
   post_hash="$(sha256_file "$PRD_FILE")"
   if [[ -n "$pre_hash" && "$pre_hash" == "$post_hash" ]]; then
     write_blocked "NO_PROGRESS" "PRD_CUTTER produced no changes on pass $i; see lint output at $PRD_LINT_JSON."
@@ -299,11 +362,20 @@ for ((i=1; i<=MAX_REPAIR_PASSES; i++)); do
     write_blocked "SCHEMA_FAIL" "PRD schema check failed after cutter on pass $i."
     echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
     echo "ERROR: PRD schema check failed after cutter on pass $i." >&2
-    exit 4
+      exit 4
   fi
-  if run_gate; then
+  gate_rc=0
+  if run_gate_capture_rc; then
     pass=1
     break
+  else
+    gate_rc=$?
+  fi
+  if is_timeout_rc "$gate_rc"; then
+    write_blocked "GATE_TIMEOUT" "PRD gate timed out after cutter on pass $i."
+    echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+    echo "ERROR: PRD gate timed out after cutter on pass $i." >&2
+    exit 5
   fi
 
   echo "Gate errors detected. Continuing repair loop..." >&2
@@ -336,6 +408,12 @@ if [[ -n "$PRD_AUDITOR_CMD" ]]; then
   if [[ "$rc" -ne 0 ]]; then
     audit_json="${AUDIT_OUTPUT_JSON:-plans/prd_audit.json}"
     audit_stdout="${AUDIT_STDOUT_LOG:-.context/prd_auditor_stdout.log}"
+    if is_timeout_rc "$rc"; then
+      write_blocked "AUDIT_TIMEOUT" "PRD auditor timed out; see audit outputs for details." "$audit_json" "$audit_stdout"
+      echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+      echo "ERROR: PRD auditor timed out; see audit outputs for details." >&2
+      exit 7
+    fi
     write_blocked "AUDIT_FAIL" "PRD auditor failed; see audit outputs for details." "$audit_json" "$audit_stdout"
     echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
     echo "ERROR: PRD auditor failed; see audit outputs for details." >&2
@@ -348,12 +426,34 @@ fi
 # Optional Stage B.1: Patcher (controlled)
 if [[ -n "$PRD_PATCHER_CMD" ]]; then
   echo "==> Stage B.1 (Patcher)" >&2
-  run_cmd PRD_PATCHER "$PRD_PATCHER_CMD" "$PRD_PATCHER_ARGS"
+  patcher_rc=0
+  if run_cmd_capture_rc PRD_PATCHER "$PRD_PATCHER_CMD" "$PRD_PATCHER_ARGS"; then
+    patcher_rc=0
+  else
+    patcher_rc=$?
+    if is_timeout_rc "$patcher_rc"; then
+      write_blocked "PATCHER_TIMEOUT" "PRD patcher timed out after audit completion."
+      echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+      echo "ERROR: PRD patcher timed out after audit completion." >&2
+      exit 7
+    fi
+    exit "$patcher_rc"
+  fi
 fi
 
 # Stage C: Gate
 # Fix: Write blocked on final gate failure
-if ! run_gate; then
+gate_rc=0
+if run_gate_capture_rc; then
+  gate_rc=0
+else
+  gate_rc=$?
+  if is_timeout_rc "$gate_rc"; then
+    write_blocked "FINAL_GATE_TIMEOUT" "Final gate check timed out after pipeline completion."
+    echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
+    echo "ERROR: Final gate check timed out after pipeline completion." >&2
+    exit 8
+  fi
   write_blocked "FINAL_GATE_FAIL" "Final gate check failed after pipeline completion."
   echo "<promise>BLOCKED_PRD_PIPELINE</promise>" >&2
   echo "ERROR: Final gate check failed after pipeline completion." >&2
