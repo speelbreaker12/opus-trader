@@ -37,6 +37,7 @@ Validation command:
 | `/failure-mode-review` | `SKILLS/failure-mode-review.md` | Implementation-level failure path analysis. |
 | `flow-audit-loop` | `SKILLS/flow-audit-loop/SKILL.md` | ACF flow audit loop for contract flow bundles. |
 | `/git` | `SKILLS/git.md` | Branch, merge, and worktree discipline. |
+| `/integrator` | `SKILLS/integrator.md` | On-demand batch integration — review worker branches, cherry-pick onto batch branch, test, push, open one draft PR. |
 | `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety gate. |
 | `interview` | `SKILLS/interview.md` | Spec-building interview workflow. |
 | `patch-only-edits` | `SKILLS/patch-only-edits.md` | Patch-only editing style and constraints. |
