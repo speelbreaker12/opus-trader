@@ -2129,9 +2129,9 @@
       "phase": 1,
       "slice": 2,
       "slice_ref": "Slice 2 — Quantization \\+ Labeling \\+ Idempotency",
-      "story_ref": "S2.4 Label full-identity match",
+      "story_ref": "S2.4 Label collision-safe match",
       "category": "risk",
-      "description": "Match labels by full parsed short identity and fail closed on none-or-many candidates.",
+      "description": "Match labels using the collision-safe tie-breaker ladder and fail closed on none-or-many candidates.",
       "contract_refs": [
         "CONTRACT.md 1.1.2 Label Parse + Disambiguation (Collision-Safe)",
         "Anchor-001",
@@ -2142,7 +2142,7 @@
       ],
       "plan_refs": [
         "Slice 2 — Quantization + Labeling + Idempotency",
-        "S2.4 — Label full-identity match; unresolved→Degraded"
+        "S2.4 — Label collision-safe match; unresolved→Degraded"
       ],
       "scope": {
         "touch": [
@@ -2156,17 +2156,19 @@
         ]
       },
       "acceptance": [
-        "GIVEN a parsed label WHEN matching THEN candidate selection requires full parsed short identity `{sid8, gid12, leg_idx, ih16}`.",
-        "GIVEN more than one candidate shares partial fields WHEN matching THEN tie-breaker ladders are not used; only full parsed identity is valid.",
-        "GIVEN candidate set size is not exactly one (none or >1) WHEN matching THEN RiskState::Degraded is returned and opens are blocked (fail-closed).",
-        "GIVEN exactly one full-identity candidate WHEN matching THEN the matched intent is returned deterministically."
+        "GIVEN a parsed label WHEN matching THEN candidate selection starts from intents that share `gid12` and `leg_idx`.",
+        "GIVEN no candidates share `gid12` and `leg_idx` WHEN matching THEN `MatchResult::NoMatch` is returned deterministically.",
+        "GIVEN more than one candidate shares `gid12` and `leg_idx` WHEN matching THEN tie-breakers are applied in order `ih16`, `instrument`, `side`, `qty_q`.",
+        "GIVEN more than one candidate remains after ordered tie-breakers WHEN matching THEN RiskState::Degraded is returned and opens are blocked (fail-closed).",
+        "GIVEN exactly one candidate remains after ordered tie-breakers WHEN matching THEN the matched intent is returned deterministically."
       ],
       "steps": [
         "Parse labels into sid8, gid12, leg_idx, and ih16 in crates/soldier_core/src/recovery/label_match.rs.",
-        "Build the candidate set using full parsed short identity keys (sid8, gid12, leg_idx, ih16).",
-        "Do not implement tie-breaker ladders; unresolved none-or-many candidate sets must fail closed.",
+        "Return `NoMatch` when the `gid12 + leg_idx` candidate set is empty.",
+        "Build the candidate set using `gid12` and `leg_idx`, then disambiguate with ordered tie-breakers `ih16`, `instrument`, `side`, `qty_q`.",
+        "Require unresolved many-candidate sets to fail closed with a Degraded outcome.",
         "On unresolved ambiguity, return a Degraded outcome and increment label_match_ambiguity_total.",
-        "Add unit tests in crates/soldier_core/tests/test_label_match.rs for unique full-identity match and unresolved cases.",
+        "Add unit tests in crates/soldier_core/tests/test_label_match.rs for ordered tie-breakers and unresolved cases.",
         "Ensure the matching result is deterministic for identical inputs."
       ],
       "verify": [
@@ -2221,7 +2223,9 @@
       },
       "implementation_tests": [
         "crates/soldier_core/tests/test_instrument_cache_ttl.rs::test_risk_state_for_stale_returns_degraded",
-        "crates/soldier_core/tests/test_label_match.rs::test_single_candidate_matches"
+        "crates/soldier_core/tests/test_label_match.rs::test_no_candidates",
+        "crates/soldier_core/tests/test_label_match.rs::test_tiebreaker_ih16",
+        "crates/soldier_core/tests/test_label_match.rs::test_ambiguity_returns_degraded"
       ],
       "loss_mode": {
         "worst_case": "label match ambiguity → wrong intent matched to fill → position attribution error",

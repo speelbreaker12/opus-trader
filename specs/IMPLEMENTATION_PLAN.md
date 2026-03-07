@@ -323,17 +323,22 @@ crates/soldier\_core/tests/test\_label.rs::test\_label\_rejects\_over\_64\_no\_t
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
 Observability hooks: counter label\_truncated\_total.  
-S2.4 — Label full-identity match; unresolved→Degraded  
-Allowed paths: crates/soldier\_core/recovery/label\_match.rs  
+S2.4 — Label collision-safe match; unresolved→Degraded
+Allowed paths: crates/soldier\_core/src/recovery/label\_match.rs
 New/changed endpoints: none  
 Acceptance criteria:  
-Matching uses full parsed short identity `{sid8, gid12, leg_idx, ih16}`.  
-Tie-breaker ladders are not allowed in this phase; matching is full-identity exact-match only.  
-If full-identity candidate set size is not exactly one (none or >1), fail closed: set `RiskState::Degraded`, block opens, and require reconcile path.  
+Matching starts from the `gid12 + leg_idx` candidate set.
+Tie-breakers are applied in order `ih16` → `instrument` → `side` → `qty_q`.
+If the candidate set is empty, return `NoMatch`.
+If ordered disambiguation leaves more than one candidate, fail closed: set `RiskState::Degraded`, block opens, and require reconcile path.
 Tests:  
-crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_full\_identity\_unique\_or\_fail\_closed (AT-217)  
-crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_ambiguous\_degrades  
-crates/soldier\_core/tests/test\_label\_match.rs::test\_label\_match\_ambiguity\_sets\_degraded\_and\_blocks\_open (AT-217; unresolved ambiguity => Degraded + opens blocked)  
+crates/soldier\_core/tests/test\_label\_match.rs::test\_no\_candidates
+crates/soldier\_core/tests/test\_label\_match.rs::test\_tiebreaker\_ih16 (AT-217)
+crates/soldier\_core/tests/test\_label\_match.rs::test\_tiebreaker\_instrument
+crates/soldier\_core/tests/test\_label\_match.rs::test\_tiebreaker\_side
+crates/soldier\_core/tests/test\_label\_match.rs::test\_tiebreaker\_qty\_q
+crates/soldier\_core/tests/test\_label\_match.rs::test\_ambiguity\_returns\_degraded
+crates/soldier\_core/tests/test\_label\_match.rs::test\_ambiguity\_increments\_counter (AT-217; unresolved ambiguity => Degraded + opens blocked)
 Evidence artifacts: none  
 Rollout \+ rollback: core.  
 Observability hooks: counter label\_match\_ambiguity\_total.  

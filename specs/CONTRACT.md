@@ -1014,7 +1014,7 @@ AT-928
 
 **Idempotency Rules (Non-Negotiable):**
 1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
-2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by canonical parsed `s4` identity `{sid8, gid12, leg_idx, ih16}`; use legacy fallback only for explicitly non-canonical legacy labels.
+2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match using the collision-safe label matcher in §1.1.2; unresolved ambiguity MUST fail closed.
 3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
 4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute “atomic slippage” per group.
 
@@ -1026,35 +1026,32 @@ AT-1098
 - Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
 
 **Recovery / Matching Rule (Normative):**
-- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.
-- Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.
-- Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.
-- If the applicable matcher yields none or more than one candidate, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.
+- Recovery and reconciliation MUST use the collision-safe label matcher in §1.1.2.
+- Candidate selection MUST start with local intents where `gid12` and `leg_idx` match.
+- The matcher MUST apply tie-breakers in order `ih16`, `instrument`, `side`, `qty_q`.
+- If the candidate set is empty, the matcher MUST return `NoMatch`.
+- If more than one candidate remains after ordered tie-breakers, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
 
 **Requirement:** Label collisions can still occur (hash collisions or non-conforming labels). The Soldier must deterministically map exchange orders to local intents.
 
 **Where:** `crates/soldier_core/src/recovery/label_match.rs`
 
-**Note:** At 10^4 intents/day, the expected collision rate for a 64-bit hash is < 10^-15/year. The legacy fallback path exists for defense-in-depth and historical recovery, not expected current operations.
+**Note:** At 10^4 intents/day, the expected collision rate for a 64-bit hash is < 10^-15/year. The tie-breaker path exists for defense-in-depth and recovery under collisions or non-conforming labels, not expected current operations.
 
 **Algorithm:**
-1) Parse label.
-2) If the label is canonical `s4`, extract `{sid8, gid12, leg_idx, ih16}` and build the candidate set using exact full short identity:
-   - `sid8` matches,
-   - `gid12` matches,
-   - `leg_idx` matches,
-   - `ih16` matches.
-3) If the canonical candidate set size == 1 → match.
-4) If a canonical `s4` label yields none or more than one candidate → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
-5) If the label is explicitly non-canonical legacy/repair data, build the legacy fallback candidate set where:
-   - `gid12` matches AND `leg_idx` matches.
-6) If legacy fallback candidate size == 1 → match.
-7) Else disambiguate legacy fallback candidates using tie-breakers in order:
-   A) instrument match
-   B) side match
-   C) qty_q match
-8) If legacy fallback remains ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+1) Parse label → extract `{sid8, gid12, leg_idx, ih16}`.
+2) Build the candidate set from local intents where:
+   - `gid12` matches, and
+   - `leg_idx` matches.
+3) If candidate set size == 0 → return `NoMatch`.
+4) If candidate set size == 1 → match.
+5) Else disambiguate candidates using tie-breakers in order:
+   A) `ih16` match
+   B) instrument match
+   C) side match
+   D) qty_q match
+6) If still ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
 
 **Acceptance Tests (REQUIRED):**
 AT-216
@@ -1065,11 +1062,11 @@ AT-216
 - Fail criteria: label format invalid, length > 64, or parsed components mismatch.
 
 AT-217
-- Given: a recovered order candidate set is matched against either canonical `s4` labels or explicitly legacy non-canonical labels.
+- Given: two recovered intents share the same `gid12` and `leg_idx`.
 - When: the label matcher disambiguates.
-- Then: canonical `s4` labels require exact full `sid8+gid12+leg_idx+ih16` identity with no tie-breakers; legacy fallback tie-breakers are permitted only for explicitly legacy non-canonical labels; any unresolved none-or-many result forces `RiskState::Degraded` and opens blocked.
-- Pass criteria: deterministic full-identity match for canonical labels; deterministic legacy-only fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
-- Fail criteria: canonical labels use heuristic fallback, ambiguous mapping is accepted, or opens proceed without Degraded on unresolved ambiguity.
+- Then: matching starts from the `gid12 + leg_idx` candidate set; zero candidates return `NoMatch`; otherwise the matcher applies tie-breakers in order `ih16`, `instrument`, `side`, `qty_q`, and any unresolved many-candidate result forces `RiskState::Degraded` with opens blocked.
+- Pass criteria: deterministic `NoMatch` for zero candidates; deterministic match when the ordered tie-breakers reduce the candidate set to one; Degraded + opens blocked on unresolved ambiguity.
+- Fail criteria: tie-breakers apply out of order, zero candidates degrade instead of returning `NoMatch`, ambiguous mapping is accepted, or opens proceed without Degraded on unresolved ambiguity.
 
 AT-041
 - Given: an outbound label candidate does not conform to canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape (wrong segment count, wrong token widths, or invalid characters).
@@ -1102,10 +1099,10 @@ AT-343
 
 AT-933
 - Given: a WS reconnect occurs and the exchange still has open orders with canonical `s4` labels.
-- When: the system re-fetches open orders and matches using exact full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`); legacy fallback is reserved for explicitly non-canonical legacy labels per §1.1.2.
+- When: the system re-fetches open orders and matches using the collision-safe label matcher defined in §1.1.2.
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
-- Fail criteria: duplicate dispatch occurs, canonical labels use heuristic fallback, or orders are treated as missing.
+- Fail criteria: duplicate dispatch occurs or orders are treated as missing.
 ### **1.2 Atomic Group Executor**
 
 **Requirement:** Manage multi-leg intent as a single atomic unit under messy reality (rejects, partials, WS gaps). We do **Runtime Atomicity**: detect atomicity breaks and deterministically contain/flatten.
@@ -1433,13 +1430,14 @@ AT-1216
 **Council Weakness Covered:** Taker Bleed (Critical) + Fee Blindness (High)
 
 **Where:** `crates/soldier_core/src/execution/pricer.rs`
-**Input:** `fair_price`, `net_edge_usd` (already authorized by Net Edge Gate), `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`
+**Input:** `fair_price`, `gross_edge_usd`, `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`
 **Output:** `limit_price`
 
 **Rule:**
-- For OPEN intents, Net Edge Gate is the sole profitability eligibility gate. The pricer MUST NOT make an independent profitability authorization decision once an OPEN has already passed Net Edge (and any Inventory Skew re-check).
+- `net_edge = gross_edge - fees`
+- If `net_edge < min_edge` ⇒ reject.
 - If any required pricer numeric input is missing, unparseable, NaN, or `qty <= 0`, the pricer MUST fail closed with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and no dispatch occurs.
-- `net_edge_per_unit = net_edge_usd / qty`
+- `net_edge_per_unit = net_edge / qty`
 - Compute per-unit bounds:
   - `fee_per_unit = fee_estimate_usd / qty`
   - `min_edge_per_unit = min_edge_usd / qty`
@@ -6493,3 +6491,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-06 | CCL-2026-03-06-02 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
 | 2026-03-07 | CCL-2026-03-07-01 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Remove the enqueue-as-success ambiguity by restating that `RecordedBeforeDispatch` for OPEN requires `WALRecorded` (plus `WALDurable` when configured), and tighten the nearby ATs so enqueue failure and pre-`WALRecorded` authorization remain fail-closed. | Prevent crash/restart replay drift or duplicate exposure caused by treating bounded-queue enqueue success as sufficient dispatch authorization. | AT-906, AT-1215, AT-1232, AT-935 | local/recorded-before-dispatch-fix |
 | 2026-03-07 | CCL-2026-03-07-02 | §2.4 Durable Intent Ledger; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit durable-enabled acceptance coverage so durable-before-dispatch has both allow and fail-closed proofs, and retarget traceability away from restart-only AT-935 for that requirement. | Close the remaining durable-mode ambiguity after the `WALRecorded` clarification and keep downstream traceability aligned with the configured durability rule. | AT-1235, AT-1236, AT-1232 | local/durable-before-dispatch-at-gap |
+| 2026-03-07 | CCL-2026-03-07-03 | §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore the documented label matcher and pricer semantics to the currently implemented behavior: `gid12 + leg_idx` candidate selection with ordered tie-breakers, and a pricer that computes net edge from gross edge and rejects when it cannot preserve `min_edge_usd`. | Remove spec/runtime drift in the current branch without landing an unverified runtime behavior change across recovery and pricing hot paths. | AT-217, AT-223, AT-933 | local/review-fix-round1 |
