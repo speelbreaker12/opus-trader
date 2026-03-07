@@ -82,6 +82,7 @@ assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST
 assert_contains_line 'MONOTONIC_BACKEND="$(select_monotonic_backend)"'
 assert_contains_line 'MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"'
 assert_contains_line 'start_ns="$(now_monotonic_ns)"'
+assert_contains_line 'PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-4}"'
 assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'

@@ -602,7 +602,7 @@ else
     # Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
-    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-4}"
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()
