@@ -995,6 +995,11 @@ Acceptance criteria: flips to ReduceOnly; cancels only non-reduce-only opens; pr
 Tests: crates/soldier\_infra/tests/test\_http\_emergency.rs::test\_post\_emergency\_reduce\_only\_endpoint (AT-132, AT-203, AT-237)
 Observability: counter http\_emergency\_reduce\_only\_calls\_total.  
 
+**Operator rollout guard:**
+- This story does not retroactively change P0-D. Phase 0 break-glass remains CLI-based until this HTTP control is explicitly promoted to operator-facing use.
+- When this endpoint is exposed in any operator-facing surface (dashboard, runbook, or on-call control plane), the same rollout MUST refresh `docs/break_glass_runbook.md` and the recorded drill procedure so the documented emergency action matches the live control path.
+- Until that rollout proof exists, operator guidance remains CLI-first and any dashboard emergency control must stay disabled.
+
 **Emergency reduce-only cooldown semantics (contract §2.2/§3.2):**
 - Track emergency_reduceonly_until_ts_ms = now_ms + emergency_reduceonly_cooldown_s*1000 on POST.
 - PolicyGuard treats emergency_reduceonly_active = (now_ms < emergency_reduceonly_until_ts_ms).

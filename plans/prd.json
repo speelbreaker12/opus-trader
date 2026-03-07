@@ -3107,7 +3107,7 @@
       "description": "Implement Liquidity Gate book-walk slippage checks, OPEN fail-closed behavior on stale L2, and fallback-driven risk-reducing handling under degraded L2.",
       "contract_refs": [
         "CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)",
-        "CONTRACT.md OPEN rejections due to missing/unparseable/stale L2 MUST use Rejected(LiquidityGateNoL2).",
+        "CONTRACT.md LiquidityGateNoL2",
         "CONTRACT.md AT-222",
         "CONTRACT.md AT-344",
         "CONTRACT.md AT-909",
@@ -6192,7 +6192,8 @@
         "touch": [
           "crates/soldier_infra/src",
           "crates/soldier_core/src",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/tests",
+          "docs/break_glass_runbook.md"
         ],
         "create": [],
         "avoid": [
@@ -6202,13 +6203,15 @@
       "acceptance": [
         "GIVEN POST /api/v1/emergency/reduce_only is called. WHEN emergency_reduceonly_active is set to true. THEN TradingMode flips to ReduceOnly with REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE; only non-reduce-only opens are cancelled; existing closes/hedges are preserved.",
         "GIVEN `emergency_reduceonly_active == true` and the cooldown timer has not expired. WHEN TradingMode is computed by the Axis Resolver. THEN `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`. (AT-132).",
-        "GIVEN guard inputs for S8-006 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN guard inputs for S8-006 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded.",
+        "GIVEN this endpoint is exposed on any operator-facing surface. WHEN the rollout artifacts are reviewed. THEN `docs/break_glass_runbook.md` is updated in the same change so the documented emergency action matches the live operator control path; otherwise the operator-facing control remains disabled and incident response stays CLI-based."
       ],
       "steps": [
         "Map S8.7 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S8.7 logic in the smallest practical surface area while preserving fail-closed behavior.",
         "Add/adjust targeted tests for S8.7: crates/soldier_infra/tests/test_http_emergency.rs::test_post_emergency_reduce_only_endpoint.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+        "If this endpoint is promoted to operator-facing use, update docs/break_glass_runbook.md in the same change so the runbook and live control path stay aligned; otherwise leave the operator-facing control disabled and keep the runbook CLI-first.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
       "verify": [
@@ -6217,7 +6220,8 @@
       ],
       "evidence": [
         "cargo test -p soldier_infra --test test_http_emergency output",
-        "PRD entry S8-006 records contract AT and test mappings for this story."
+        "PRD entry S8-006 records contract AT and test mappings for this story.",
+        "docs/break_glass_runbook.md when this endpoint is exposed on an operator-facing surface."
       ],
       "dependencies": [],
       "est_size": "S",

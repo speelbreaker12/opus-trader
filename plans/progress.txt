@@ -1062,3 +1062,33 @@ Commands: apply_patch on `specs/CONTRACT.md`; python3 scripts/build_contract_ker
 Evidence: specs/CONTRACT.md; docs/contract_kernel.json; docs/plans/2026-03-07-recorded-before-dispatch-contract-fix.md; artifacts/verify/20260307_100905/preflight.log.
 Notes: The focused review on the edited WAL section found no remaining contract-internal contradiction, but the freshest `./plans/verify.sh quick` run did not pass in this dirty worktree: preflight failed on `Legacy layout guard` and `README/CI parity guard` before reaching later gates. No `VERIFY_ALLOW_DIRTY` override was used.
 Next: Either isolate the relevant contract/kernel/plan/progress diff in a clean tree and rerun `./plans/verify.sh quick`, or rely on CI clean-checkout verification once the unrelated branch-level preflight blockers are removed.
+Date: 2026-03-07
+Summary: Refiled the emergency-control sync concern to `S8.7` instead of `P0-D`: added an operator-rollout guard in `specs/IMPLEMENTATION_PLAN.md` and updated the break-glass runbook to require a synchronized runbook/drill refresh whenever any HTTP emergency control becomes operator-facing.
+Commands: apply_patch on `specs/IMPLEMENTATION_PLAN.md`, `docs/break_glass_runbook.md`, and `plans/progress.txt`; git diff --check -- specs/IMPLEMENTATION_PLAN.md docs/break_glass_runbook.md plans/progress.txt; ./plans/verify.sh quick.
+Evidence: specs/IMPLEMENTATION_PLAN.md; docs/break_glass_runbook.md; plans/progress.txt.
+Notes: This is a contract-traceability/doc-sync change only. It preserves the current Phase 0 CLI-first break-glass path while making the future `S8.7` rollout responsible for endpoint proof and operator-doc synchronization.
+Next: When `S8.7` implementation begins, carry this rollout guard into the executable story artifacts/tests and refresh the recorded drill materials if the HTTP control is exposed to operators.
+Date: 2026-03-07
+Summary: Carried the `S8.7` operator-rollout guard into the executable story definition in `plans/prd.json`: widened story scope to include `docs/break_glass_runbook.md`, added conditional acceptance/step/evidence language for operator-facing rollout sync, and kept the Phase 0 runbook snapshot unchanged because it is a sign-off snapshot, not a live mirror.
+Commands: apply_patch on `plans/prd.json` and `plans/progress.txt`; git diff --check -- plans/prd.json; ./plans/prd_gate.sh.
+Evidence: plans/prd.json; plans/progress.txt.
+Notes: `git diff --check -- plans/prd.json` passed. `./plans/prd_gate.sh` reached schema/lint checks but exited non-zero on an unrelated pre-existing repo-level reference issue: `[prd_ref_check] ERROR: unresolved contract_ref for S5-000: CONTRACT.md OPEN rejections due to missing/unparseable/stale L2 MUST use Rejected(LiquidityGateNoL2).` The new `S8.7` guard text did not surface as a schema or lint error.
+Next: If you want a green repo-level PRD gate, fix the unrelated `S5-000` contract-ref failure separately; otherwise the `S8.7` story-level guard is in place and ready for future implementation work.
+Date: 2026-03-07
+Summary: Fixed the repo-level `S5-000` PRD reference blocker by replacing the slash-containing free-form contract ref with the stable token `CONTRACT.md LiquidityGateNoL2`, which `prd_ref_check` can resolve against the contract text and reject-reason registry.
+Commands: apply_patch on `plans/prd.json` and `plans/progress.txt`; git diff --check -- plans/prd.json; ./plans/prd_gate.sh.
+Evidence: plans/prd.json; plans/progress.txt.
+Notes: `git diff --check -- plans/prd.json` passed, and `./plans/prd_gate.sh` now exits 0 with `PRD gate OK`. Remaining output consists of non-blocking repo warnings only (`FORWARD_KEYWORD`, `CONTRACT_ACCEPTANCE_MISMATCH`, and `/status` acceptance coverage warnings in later stories).
+Next: Keep using tokenized/anchor-style `contract_refs` in PRD entries instead of slash-heavy prose sentences so `prd_ref_check` stays mechanically resolvable.
+Date: 2026-03-07
+Summary: Codified the PRD ref-authoring guidance in `plans/prd_gate_help.md`: future `contract_refs` should use tokenized/anchor-style identifiers (`AT-###`, reject-reason tokens, `§` section IDs, `Anchor-###`, `VR-###`) and keep prose detail out of the ref field.
+Commands: apply_patch on `plans/prd_gate_help.md` and `plans/progress.txt`; git diff --check -- plans/prd_gate_help.md plans/progress.txt; ./plans/prd_gate.sh.
+Evidence: plans/prd_gate_help.md; plans/progress.txt.
+Notes: This is documentation only; it does not change gate behavior. The goal is to steer future PRD edits away from the exact slash-heavy prose shape that broke `prd_ref_check` for `S5-000`.
+Next: When touching PRD stories in the future, use the new help text as the default authoring rule and reserve prose for `acceptance`, `steps`, and `contract_must_evidence`.
+Date: 2026-03-07
+Summary: Promoted the new PRD `contract_refs` rule into `docs/skills/workflow.md` so it becomes part of the default manual workflow memory, not just gate-help text.
+Commands: apply_patch on `docs/skills/workflow.md` and `plans/progress.txt`; git diff --check -- docs/skills/workflow.md plans/progress.txt.
+Evidence: docs/skills/workflow.md; plans/progress.txt.
+Notes: This is the right place for the “default from now on” decision because the workflow memory is explicitly meant to capture repeated corrections and preferred patterns. The rule points future edits toward tokenized refs and away from prose that `prd_ref_check` cannot resolve reliably.
+Next: Treat this workflow-memory rule and `plans/prd_gate_help.md` as the default source when editing any future PRD story’s `contract_refs`.
