@@ -44,7 +44,7 @@ Eliminate definition-of-done drift in governance documents and verification expe
 - Make `docs/health_endpoint.md` HTTP-canonical and align enum casing to `Active|ReduceOnly|Kill`.
 - Add an explicit authority matrix for status surfaces:
   - Foundation status-lite (phase bootstrap): exact allowed key set and invariants.
-  - CSP-minimum status: canonical authority keys required after foundation mode exits.
+  - CSP-minimum status: canonical authority keys required once `foundation_exit_condition` is true (`phase != foundation`).
   - Phase 0 owner-status scaffolding: minimum required fields and alias behavior.
 - Reconcile all references to this matrix across `specs/CONTRACT.md`, `specs/IMPLEMENTATION_PLAN.md`, and `docs/health_endpoint.md` so field scope/casing cannot drift.
 - Keep CLI as operator convenience surface, not transport authority.

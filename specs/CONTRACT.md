@@ -162,7 +162,8 @@ Pass criteria: drill evidence and runtime tests show the exact documented primar
 Fail criteria: the documented primary action is missing or differs from the exercised runtime path, no documented safety-state transition occurs, OPEN can still dispatch, no risk-reducing path remains when exposure exists, or the runbook omits the bounded fallback action.
 
 **P0-E clarifications (Normative):**
-- The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement (after foundation mode exits).
+- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+- The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement once `foundation_exit_condition` is true.
 - In foundation mode, `/api/v1/status` uses the status-lite schema (AT-1230). The equivalent "opens not permitted" signal in foundation mode is `dispatch_enabled: false` (not `opens_globally_permitted`).
 - `/api/v1/health` MUST use the liveness key `ok`. `/api/v1/status` MUST use the liveness key `service_up` (foundation mode) or the full CSP minimum schema (Phase 2+). These keys MUST NOT be swapped or mixed between surfaces.
 
@@ -177,13 +178,15 @@ Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumer
 | Surface | Phase applicability | Required keys / schema | Authority boundary |
 |---|---|---|---|
 | **P0 owner scaffolding** (CLI/local owner status surfaces) | Phase 0 and early bootstrap operations | `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (optional deprecated alias `is_trading_allowed`) | Owner/operator scaffolding only. MUST NOT claim full `/api/v1/status` contract authority. |
-| **Foundation `/api/v1/status` status-lite** | Only while `phase == foundation` | Exactly `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase` (AT-1230) | Bootstrap status surface only. MUST NOT emit CSP authority keys while in foundation mode. |
-| **CSP minimum `/api/v1/status`** | Required after foundation mode exits; required for live-trading authority | Full CSP minimum key set defined in §7.0 | Canonical runtime authority for TradingMode/open-permission semantics. Release/readiness gates MUST key off this surface once foundation mode exits. |
+| **Foundation `/api/v1/status` status-lite** | Only while `foundation_exit_condition` is false (`phase == foundation`) | Exactly `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase` (AT-1230) | Bootstrap status surface only. MUST NOT emit CSP authority keys while in foundation mode. |
+| **CSP minimum `/api/v1/status`** | Required when `foundation_exit_condition` is true (`phase != foundation`); required for live-trading authority | Full CSP minimum key set defined in §7.0 | Canonical runtime authority for TradingMode/open-permission semantics. Release/readiness gates MUST key off this surface once `foundation_exit_condition` is true. |
 
 **Status authority precedence (Normative):**
-1. While `phase == foundation`, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
-2. After foundation mode exits, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
-3. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
+1. For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+2. While `foundation_exit_condition` is false, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
+3. When `foundation_exit_condition` is true, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
+4. Given `/api/v1/status` is emitted with `phase != foundation`, any authority/readiness validation MUST enforce the full §7.0 CSP minimum schema; P0 owner scaffolding remains non-authoritative for readiness/dispatch decisions.
+5. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -4750,9 +4753,10 @@ AT-022
 - P0-E owner-status keys (`trading_mode`, `opens_globally_permitted`, optional `is_trading_allowed`) are NOT part of foundation status-lite payloads.
 
 **Foundation status-lite mode (Phase 1 bootstrap only):**
-- While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
+- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+- While `foundation_exit_condition` is false, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
 - In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation` (`dispatch_enabled == false` is the canonical "opens not dispatchable" signal in this mode).
-- CSP minimum `/status` keys are required after foundation mode exits.
+- When `foundation_exit_condition` is true, `/status` MUST satisfy the full CSP minimum schema and becomes the canonical runtime authority surface.
 
 AT-1230
 - Given: runtime is in foundation mode (`phase == foundation`).
