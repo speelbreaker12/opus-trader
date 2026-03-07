@@ -1,5 +1,10 @@
 1\) Phase → Slice Mapping Table (contract-aligned)  
-| Phase | Goal | Slices Included | Exit Criteria (objective/measurable) | Key Risks | |---|---|---|---|---| | Phase 1 — Foundation (Panic‑Free Deterministic Intents) | Deterministic intent construction: sizing invariants, quantization+idempotency, venue preflight, durable WAL/TLSM, and hard execution gates behind one chokepoint. | Slices 1–5 | (1) build\_order\_intent() gate ordering proven by test; (2) OPEN dispatch blocked when RiskState::Degraded (0 dispatches); (3) WAL replay proves “no resend after crash”; (4) Market/stop/linked/post-only-crossing are rejected preflight (tests); (5) Liquidity+NetEdge+Fee staleness fail-closed (tests). | Gate bypass via alternate codepaths; float/rounding drift; WAL durability miswired before dispatch. | | Phase 2 — Guardrails (Runtime Safety \+ Recovery) | Atomic containment \+ emergency close, risk budgets (inventory/pending/global/margin), PolicyGuard precedence incl F1 runtime gate, EvidenceGuard, Bunker Mode, plus rate-limit brownout, WS-gap recovery, reconcile, zombie sweep, and required owner endpoints. | Slices 6–9 | (1) Mixed-leg state always contains/neutralizes (tests); (2) PolicyGuard precedence enforces ReduceOnly/Kill correctly incl F1/Evidence/Bunker (tests); (3) 10028/429 behavior preserves emergency actions and blocks opens (tests); (4) New endpoints pass endpoint-level tests. | Recon races causing duplicates; rate limiter starving emergency close; “fail-open” gaps in PolicyGuard. | | Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. | | Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), F1 cert promotion gates, and GOP optimization cycle. | Slices 13–14 | (1) Replay gatekeeper ladder enforced: GOOD (coverage >=95) apply, DEGRADED (80-95) apply-with-haircut + tighten-only, BROKEN (<80 or unreadable) shadow-only; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for full-scale promotion/governance while runtime OPEN gating remains enforced by Phase 2 PolicyGuard F1 checks; (5) GOP optimization produces bounded dry-run patches with explicit approvals. | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
+| Phase | Goal | Slices Included | Exit Criteria (objective/measurable) | Key Risks |
+|---|---|---|---|---|
+| Phase 1 — Foundation (Panic‑Free Deterministic Intents) | Deterministic intent construction: sizing invariants, quantization+idempotency, venue preflight, durable WAL/TLSM, primitive execution gates behind one chokepoint, and a non-deployable foundation harness. | Slices 1–5 | (1) build\_order\_intent() gate ordering proven by test; (2) OPEN dispatch blocked when RiskState::Degraded (0 dispatches); (3) WAL replay proves “no resend after crash”; (4) Market/stop/linked/post-only-crossing are rejected preflight (tests); (5) the foundation happy path proves the Phase 1 subset OPEN blockers can all be forced pass and dispatch exactly once. | Gate bypass via alternate codepaths; float/rounding drift; WAL durability miswired before dispatch. |
+| Phase 2 — Guardrails (Runtime Safety \+ Recovery) | Atomic containment \+ emergency close, integrated Liquidity Gate ownership, risk budgets (inventory/pending/global/margin), PolicyGuard precedence incl F1 runtime gate, EvidenceGuard, Bunker Mode, plus rate-limit brownout, WS-gap recovery, reconcile, zombie sweep, and required owner endpoints. | Slices 6–9 | (1) Mixed-leg state always contains/neutralizes (tests); (2) PolicyGuard precedence enforces ReduceOnly/Kill correctly incl F1/Evidence/Bunker (tests); (3) stale/missing-L2 Liquidity Gate ownership is proven end-to-end: OPEN rejects with LiquidityGateNoL2, CANCEL-only remains allowed, ordinary CLOSE/HEDGE placement remains rejected, and emergency close uses the `§3.1` fallback ladder only when a valid fallback price source exists (tests); (4) New endpoints pass endpoint-level tests. | Recon races causing duplicates; rate limiter starving emergency close; fail-open gaps in PolicyGuard or stale-L2 containment. |
+| Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. |
+| Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), F1 cert promotion gates, and GOP optimization cycle. | Slices 13–14 | (1) Replay gatekeeper ladder enforced: GOOD (coverage >=95) apply, DEGRADED (80-95) apply-with-haircut + tighten-only, BROKEN (<80 or unreadable) shadow-only; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for full-scale promotion/governance while runtime OPEN gating remains enforced by Phase 2 PolicyGuard F1 checks; (5) GOP optimization produces bounded dry-run patches with explicit approvals. | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
 
 **Phase 0 release/readiness gate:** Before any live-trading enablement, the operator/release flow MUST run `bash ./plans/live_enable_preflight.sh`. This fail-closed gate validates the Phase 0 evidence pack and runtime proofs; evidence alone is insufficient unless the named preflight passes. This gate is release/readiness-only and does not replace later runtime PolicyGuard or Phase 2+ `/api/v1/status` authority.
 
@@ -78,7 +83,7 @@ PolicyGuard-derived TradingMode and canonical open-permission semantics begin in
 2\) Per‑Phase Plans (A–G)  
 PHASE 1 — Foundation (Slices 1–5)  
 A) Phase Objective  
-Build the deterministic “intent → gated → priced → WAL-recorded” pipeline. This phase encodes Deribit unit invariants, deterministic quantization+label idempotency, venue preflight hard rejects, and the WAL/TLSM/trade-id dedupe needed to be restart-safe. Execution gates (liquidity, net-edge, fee staleness) are enforced behind a single chokepoint so there is exactly one correct dispatch path.
+Build the deterministic “intent → gated → priced → WAL-recorded” pipeline. This phase encodes Deribit unit invariants, deterministic quantization+label idempotency, venue preflight hard rejects, and the WAL/TLSM/trade-id dedupe needed to be restart-safe. Execution-gate primitives (liquidity book-walk, net-edge, fee staleness) are wired behind a single chokepoint so there is exactly one correct dispatch path, but full Liquidity Gate phase ownership remains in Phase 2 because stale-L2 risk-reducing behavior depends on `§3.1`.
 
 B) Constraint (TOC)  
 Bottleneck: “Multiple ways to dispatch” \+ “non-deterministic rounding” \+ “no durable truth.”  
@@ -477,27 +482,27 @@ Slice 5 — Liquidity Gate \+ Fee Model \+ Net Edge \+ Gate Ordering \+ Pricer
 Slice intent: Deterministic reject/price logic before any order leaves the process.
 Contract AT coverage (traceability assignment): AT-925.
 
+Legacy traceability note: Slice 5 keeps its historical label and story numbering for continuity, but full Liquidity Gate phase ownership is not a Phase 1 closure claim. The standalone primitive may land here early; the integrated stale-L2 + `§3.1` fallback bundle is owned by Phase 2 `S7.3`.
+
 
 S5.1 — Liquidity Gate (book-walk WAP, reject sweep)  
 Allowed paths: crates/soldier\_core/execution/gate.rs  
 New/changed endpoints: none  
 Acceptance criteria: compute WAP & slippage\_bps; reject if exceeds `max_slippage_bps`; log WAP+slippage.  
-If L2 snapshot is missing/unparseable/stale: reject OPEN with `Rejected(LiquidityGateNoL2)`; CANCEL-only allowed; CLOSE/HEDGE order placement rejected.  
-Deterministic Emergency Close is exempt from profitability gates but still requires a valid price source; if L2 is missing/stale it MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.  
+Primitive-only note: if L2 snapshot is missing/unparseable/stale, the standalone gate may reject OPEN with `Rejected(LiquidityGateNoL2)`, but Phase 1 completion does not claim the integrated stale-L2 contract surface.
+Boundary note: Phase 2 `S7.3` owns CANCEL-only allowance, ordinary CLOSE/HEDGE rejection under stale/missing L2, the `§3.1` fallback-ladder proof for deterministic emergency close, and the fresh-L2 positive-path dispatch proof.
 Contract path mapping: `soldier/core/execution/gate` ⇒ `crates/soldier\_core/execution/gate.rs`.  
 Tests:  
 crates/soldier\_core/tests/test\_liquidity\_gate.rs::test\_liquidity\_gate\_rejects\_sweep  
-crates/soldier\_core/tests/test\_liquidity\_gate.rs::test\_liquidity\_gate\_no\_l2\_blocks\_open (AT-344)  
-crates/soldier\_core/tests/test\_liquidity\_gate.rs::test\_liquidity\_gate\_no\_l2\_reject\_reason (AT-909)  
-crates/soldier\_core/tests/test\_liquidity\_gate.rs::test\_liquidity\_gate\_no\_l2\_blocks\_close\_hedge\_allows\_cancel (AT-421)  
+Historical primitive tests may remain under `test_liquidity_gate.rs`, but Phase 1 closure does not depend on the full stale-L2 proof bundle.
 Evidence artifacts: none  
 Rollout \+ rollback: hot-path; no runtime disable. Rollback for Liquidity Gate logic \= revert commit only (contract safety gate).  
 Observability hooks: histogram expected\_slippage\_bps; counter liquidity\_gate\_reject\_total.  
 
 **Scope**: Liquidity Gate applies to OPEN intents (normal \+ rescue) and MUST NOT block emergency close paths.  
 Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.  
-Phase 1: document-only constraint; enforcement tests land in Phase 2 S7.3.  
-Contract AT coverage (traceability assignment): AT-222, AT-317.
+Phase 1 boundary: this subsection is a prerequisite primitive only; integrated Liquidity Gate ownership and `AT-222`, `AT-344`, `AT-909`, `AT-421`, and `AT-1216` acceptance live in Phase 2 S7.3.
+Contract AT coverage (traceability assignment): primitive-only early work; full Liquidity Gate ownership moves to Phase 2 S7.3.
 
 
 S5.2 — Fee cache staleness (soft buffer / hard ReduceOnly latch)  
@@ -694,13 +699,22 @@ Tests: crates/soldier\_core/tests/test\_atomic\_group.rs::test\_atomic\_rescue\_
 Observability: histogram atomic\_rescue\_attempts.  
 S7.3 — Deterministic emergency close \+ hedge fallback  
 Allowed paths: crates/soldier\_core/execution/emergency\_close.rs  
-Acceptance criteria: 3 tries IOC close; then reduce-only delta hedge; logs AtomicNakedEvent; TradingMode is ReduceOnly during exposure.  
+Acceptance criteria: 3 tries IOC close; then reduce-only delta hedge; logs AtomicNakedEvent; TradingMode is ReduceOnly during exposure. This subsection is also the Phase 2 owner for the integrated Liquidity Gate stale-L2 bundle: OPEN rejects with `Rejected(LiquidityGateNoL2)`, CANCEL-only remains allowed, ordinary CLOSE/HEDGE placement remains rejected, and deterministic emergency close consumes the `§3.1` fallback ladder.
 Tests:  
 crates/soldier\_core/tests/test\_emergency\_close.rs::test\_emergency\_close\_fallback\_hedge\_after\_retries  
 crates/soldier\_core/tests/test\_emergency\_close.rs::test\_emergency\_close\_bypasses\_liquidity\_gate  
 crates/soldier\_core/tests/test\_emergency\_close.rs::test\_emergency\_close\_bypasses\_net\_edge\_gate  
 Hot-path rollback: caps configurable (close\_max\_attempts, hedge cap) but must remain fail-closed.  
 Observability: histogram time\_to\_delta\_neutral\_ms, counter atomic\_naked\_events\_total.  
+
+Phase 2 Liquidity Gate ownership note: `S7.3` owns `AT-236`, `AT-937`, `AT-938`, and `AT-1217` plus the fresh-L2 positive-path proof `AT-1216`. This bundle depends on the standalone gate primitive proven earlier in `S5.1`, but it is the deployable phase owner for `§1.3` compliance because the stale-L2 risk-reducing path depends on `§3.1`.
+
+Fresh-L2 positive-path proof: add or alias a `test_liquidity_gate.rs` case that forces all non-liquidity gates pass, uses a fresh/parseable L2 snapshot with slippage inside budget, and proves dispatch count increases by 1 (`AT-1216`).
+
+Fallback-ladder proof requirements:
+- `AT-937`: fresh L1 fallback dispatches when L2 is missing/unparseable/stale.
+- `AT-938`: venue-band fallback dispatches when both L2 and fresh L1 are unavailable.
+- `AT-1217`: fail closed with `Rejected(EmergencyCloseNoPrice)` only when L2, L1, and venue-band fallback are all unavailable.
 
 **Retry pricing rule**: `close_buffer_ticks = 5` on first attempt; on each retry buffer doubles (5 → 10 → 20); max 3 attempts.  
 
