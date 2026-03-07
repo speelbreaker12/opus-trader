@@ -46,6 +46,54 @@ rewrite_fixture_arrays() {
   mv "$tmp_file" "$file"
 }
 
+rewrite_fixture_arrays_repeated_dummy() {
+  local file="$1"
+  local repeat_count="$2"
+  local tmp_file="$file.tmp"
+  local line=""
+  local in_smoke=0
+  local in_full=0
+
+  while IFS= read -r line; do
+    if [[ "$line" == 'SMOKE_REVIEW_FIXTURE_TESTS=(' ]]; then
+      printf '%s\n' "$line" >> "$tmp_file"
+      i=0
+      while [[ "$i" -lt "$repeat_count" ]]; do
+        printf '  "%s"\n' "plans/tests/test_dummy_sleep.sh" >> "$tmp_file"
+        i=$((i + 1))
+      done
+      in_smoke=1
+      continue
+    fi
+    if [[ "$line" == 'FULL_ONLY_REVIEW_FIXTURE_TESTS=(' ]]; then
+      printf '%s\n' "$line" >> "$tmp_file"
+      i=0
+      while [[ "$i" -lt "$repeat_count" ]]; do
+        printf '  "%s"\n' "plans/tests/test_dummy_sleep.sh" >> "$tmp_file"
+        i=$((i + 1))
+      done
+      in_full=1
+      continue
+    fi
+    if [[ "$in_smoke" -eq 1 ]]; then
+      if [[ "$line" == ')' ]]; then
+        in_smoke=0
+        printf '%s\n' "$line" >> "$tmp_file"
+      fi
+      continue
+    fi
+    if [[ "$in_full" -eq 1 ]]; then
+      if [[ "$line" == ')' ]]; then
+        in_full=0
+        printf '%s\n' "$line" >> "$tmp_file"
+      fi
+      continue
+    fi
+    printf '%s\n' "$line" >> "$tmp_file"
+  done < "$file"
+  mv "$tmp_file" "$file"
+}
+
 rewrite_supports_wait_n_to_false() {
   local file="$1"
   local tmp_file="$file.tmp"
@@ -352,5 +400,99 @@ set -e
   || fail "expected full fixture mode with logging timeout wrapper to pass, got rc=$full_default_timeout_logged_rc"
 grep -Fxq "300" "$timeout_invocation_log" \
   || fail "expected full fixture mode to default fixture timeout to 300 seconds"
+
+parallel_default_script="$repo/plans/preflight_parallel_default_jobs.sh"
+cp "$repo/plans/preflight.sh" "$parallel_default_script"
+rewrite_fixture_arrays_repeated_dummy "$parallel_default_script" 5
+chmod +x "$parallel_default_script"
+
+cat > "$repo/plans/tests/test_dummy_sleep.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${DUMMY_EXIT_CODE:-}" ]]; then
+  exit "$DUMMY_EXIT_CODE"
+fi
+
+state_dir="${CONCURRENCY_STATE_DIR:-}"
+if [[ -n "$state_dir" ]]; then
+  mkdir -p "$state_dir"
+  lock_dir="$state_dir/lockdir"
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.01
+  done
+
+  current=0
+  if [[ -f "$state_dir/current" ]]; then
+    current="$(cat "$state_dir/current")"
+  fi
+  current=$((current + 1))
+  printf '%s\n' "$current" > "$state_dir/current"
+
+  max_seen=0
+  if [[ -f "$state_dir/max" ]]; then
+    max_seen="$(cat "$state_dir/max")"
+  fi
+  if [[ "$current" -gt "$max_seen" ]]; then
+    printf '%s\n' "$current" > "$state_dir/max"
+  fi
+  rmdir "$lock_dir"
+fi
+
+sleep "${DUMMY_SLEEP_SECS:-0}"
+
+if [[ -n "$state_dir" ]]; then
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    sleep 0.01
+  done
+  current="$(cat "$state_dir/current")"
+  current=$((current - 1))
+  printf '%s\n' "$current" > "$state_dir/current"
+  rmdir "$lock_dir"
+fi
+
+exit 0
+EOF
+chmod +x "$repo/plans/tests/test_dummy_sleep.sh"
+
+mock_parallel_bin="$tmp_dir/mock_parallel_bin"
+mkdir -p "$mock_parallel_bin"
+cat > "$mock_parallel_bin/sysctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "-n" && "${2:-}" == "hw.ncpu" ]]; then
+  printf '2\n'
+  exit 0
+fi
+
+echo "unexpected sysctl args: $*" >&2
+exit 1
+EOF
+chmod +x "$mock_parallel_bin/sysctl"
+
+parallel_default_log="$tmp_dir/parallel_default_jobs.log"
+parallel_state_dir="$tmp_dir/parallel_state"
+rm -rf "$parallel_state_dir"
+mkdir -p "$parallel_state_dir"
+
+set +e
+(
+  cd "$repo"
+  PATH="$mock_parallel_bin:$PATH" \
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
+  DUMMY_SLEEP_SECS=1 \
+  CONCURRENCY_STATE_DIR="$parallel_state_dir" \
+  "$parallel_default_script" >"$parallel_default_log" 2>&1
+)
+parallel_default_rc=$?
+set -e
+[[ "$parallel_default_rc" -eq 0 ]] \
+  || fail "expected default parallel-jobs fixture run to pass, got rc=$parallel_default_rc"
+parallel_max="$(cat "$parallel_state_dir/max" 2>/dev/null || echo 0)"
+[[ "$parallel_max" -eq 2 ]] \
+  || fail "expected default preflight fixture concurrency to match detected CPU count (2), saw $parallel_max"
 
 echo "test_preflight_fixture_timeout_controls.sh: ok"

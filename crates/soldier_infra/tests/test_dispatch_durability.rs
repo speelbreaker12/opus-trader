@@ -1,7 +1,7 @@
 #![allow(deprecated)] // WalBarrierConfig is deprecated; tests exercise legacy API
 //! Tests for WAL durability barrier per CONTRACT.md §2.4 / §2.4.1.
 //!
-//! AT-935: RecordedBeforeDispatch + restart → dispatch exactly once.
+//! AT-935: RecordedBeforeDispatch + restart preserves recorded-unsent OPENs without replay-driven dispatch.
 //! AT-906: WAL enqueue failure blocks OPEN; hot loop continues.
 
 use soldier_core::execution::RecordedBeforeDispatchGate;

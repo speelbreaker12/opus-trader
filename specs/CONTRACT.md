@@ -319,7 +319,8 @@ AT-1096
   - exchange open orders
   - exchange trades
   - exchange positions
-- No intent MAY be re-sent unless reconciliation proves it unsent or safe to re-issue by idempotency identity.
+- Restart or reconciliation evidence that an intent was already sent, ACKed, or filled MUST forbid replay-driven resend.
+- A recorded-but-unsent OPEN MAY remain visible for reconciliation and later fresh post-restart evaluation, but replay/reconciliation alone MUST NOT authorize a fresh OPEN dispatch.
 
 **D) TradingMode Correctness** <!-- CSP-005 -->
 <!-- Anchors: tradingmode, policyguard, mode, active -->
@@ -1040,7 +1041,7 @@ AT-928
 **Idempotency Rules (Non-Negotiable):**
 1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
 2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by canonical parsed `s4` identity `{sid8, gid12, leg_idx, ih16}`; use legacy fallback only for explicitly non-canonical legacy labels.
-3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
+3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL and complete reconciliation with exchange orders/trades before any OPEN-capable evaluation/dispatch path is reachable. Intents already shown as sent, ACKed, or filled MUST NOT resend. A recorded-but-unsent OPEN remains visible for reconciliation and later evaluation, but replay alone MUST NOT dispatch a fresh OPEN.
 4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute “atomic slippage” per group.
 
 AT-1098
@@ -3249,8 +3250,8 @@ Profile: CSP
 
 * Write intent record BEFORE network dispatch.  
 * Write every TLSM transition immediately (append-only).  
-* On startup, replay ledger into in-memory state and reconcile with exchange.
-* Replay/WAL state is audit and reconciliation input; it MUST NOT by itself authorize a fresh OPEN dispatch after restart.
+* On startup, replay ledger into in-memory state and reconcile with exchange before any OPEN-capable evaluation or dispatch path is reachable.
+* Replayed WAL state is audit/reconciliation input only; it MUST NOT independently authorize a fresh OPEN dispatch.
 
 **Persistence states (latency-aware):**
 - **WALQueueAccepted:** intent enqueue to the WAL writer queue succeeded.
@@ -3295,6 +3296,12 @@ Profile: CSP
 **Migration note:** WAL records written before `reduce_only` was added to the minimum field list MUST be treated as `reduce_only = false` (conservative: OPEN classification) for backwards compatibility.
 NOTE: `reduce_only = false` means the intent is classified as OPEN — the most conservative choice, since it applies all OPEN gates on recovery. Do NOT default to `true` (CLOSE/HEDGE): this would bypass OPEN gates for potentially risk-increasing legacy orders.
 
+**Restart boundary (Normative):**
+- Startup recovery MUST complete reconciliation before any OPEN-capable evaluation or dispatch path is reachable.
+- Restart or reconciliation evidence that an intent was already sent, ACKed, or filled MUST forbid replay-driven resend.
+- If restart recovery finds a recorded-but-unsent OPEN, it MUST preserve that record for reconciliation and later fresh post-restart evaluation.
+- Replay/reconciliation alone MUST NOT dispatch a recorded-but-unsent OPEN.
+
 **Acceptance Tests (REQUIRED):**
 AT-233
 - Given: a crash occurs after send, before ACK.
@@ -3311,11 +3318,11 @@ AT-234
 - Fail criteria: fill missed or TLSM not updated.
 
 AT-935
-- Given: an OPEN intent reaches `WALRecorded` (commit id/LSN issued), but a crash occurs before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
-- When: the system restarts (twice), and on each restart it replays WAL and completes reconciliation (label/open-order + trade reconciliation) before any fresh post-restart strategy evaluation.
-- Then: replay/reconciliation alone MUST NOT dispatch the OPEN intent. The WAL record remains audit/dedupe input only until a fresh post-restart strategy evaluation re-authorizes the OPEN through the normal OPEN gates.
-- Pass criteria: across the two restarts, replay-driven dispatch count == 0; `sent_ts` remains null unless a separate fresh strategy evaluation occurs; no dispatch happens before reconciliation completes.
-- Fail criteria: any OPEN dispatch occurs from replay/reconciliation alone, or replay suppresses a later fresh strategy evaluation by pretending the intent was already sent.
+- Given: a crash occurs after `WALRecorded` succeeds (commit id/LSN issued), but before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
+- When: the system restarts (twice), and on each restart it replays WAL and completes reconciliation (label/open-order + trade reconciliation) before any OPEN-capable evaluation path is reachable.
+- Then: replay/reconciliation itself MUST perform **zero** OPEN dispatches for that intent across both restarts; the recorded-but-unsent OPEN remains visible for reconciliation and later fresh post-restart evaluation only.
+- Pass criteria: replay-driven dispatch count == 0 across two restarts; the intent remains recoverable as recorded-but-unsent after each reconciliation; any later OPEN dispatch requires a fresh post-restart evaluation outside replay/reconciliation.
+- Fail criteria: dispatch occurs before reconciliation completes, replay/reconciliation directly dispatches the recorded-but-unsent OPEN, or sent/ACKed/fill evidence is ignored and a duplicate dispatch occurs.
 
 AT-940
 - Given: a crash occurs after the exchange ACK is received for an intent, but before local TLSM/WAL updates record `ack_ts` or advance state.
@@ -4646,7 +4653,7 @@ Profile: GOP
 
 #### **Phase 1 AT Subset (Required for Phase 1 Completion)**
 
-The following acceptance tests MUST pass before Phase 1 is considered complete. These are the ATs that can be proven without PolicyGuard/reconciliation infrastructure (Phase 2 requirements).
+The following acceptance tests MUST pass before Phase 1 is considered complete. This subset proves the conservative Phase 1 restart boundary: replay-safe recovery, no duplicate send, and no fresh OPEN authorization from replay alone. Broader startup-latch and post-restart OPEN governance remains a Phase 2 responsibility.
 
 **Required for Phase 1 completion:**
 - AT-216 (s4 label parse/format correctness)
@@ -4665,6 +4672,9 @@ The following acceptance tests MUST pass before Phase 1 is considered complete. 
 - AT-928 (duplicate intent hash is NOOP; depends on canonical quantization being correct and must pass before Phase 1 is closed)
 - AT-1097 (mixed coin+USD sizing reject)
 - AT-1215 (foundation happy path: `WALQueueAccepted` + `WALRecorded` succeed, all OPEN blockers covered by the Phase 1 AT subset are forced pass, and exactly one OPEN dispatch occurs)
+- AT-233 (crash after send, before ACK; reconcile and no duplicate send)
+- AT-234 (crash after fill, before local update; recover fill on restart)
+- AT-935 (recorded-unsent OPEN survives restart for reconcile/later evaluation; replay dispatch count remains 0)
 
 **Phase 1 closure rule:** The Phase 1 AT subset MUST include at least one NON-TRIP acceptance test proving that an otherwise-valid OPEN reaches dispatch when all OPEN blockers covered by the Phase 1 AT subset are forced pass. Parser-only, mapping-only, or state-only correctness ATs do not satisfy this requirement by themselves.
 
@@ -4672,11 +4682,9 @@ The following acceptance tests MUST pass before Phase 1 is considered complete. 
 
 These acceptance tests MAY run in an isolated harness and MUST NOT by themselves authorize live trading or foundation exit.
 
-**Deferred to Phase 2 (require PolicyGuard/reconciliation):**
-- AT-104 (stale instrument metadata blocks OPEN; requires TradingMode enforcement)
-- AT-233 (crash after send, before ACK; requires WAL restart reconcile)
-- AT-234 (crash after fill, before local update; requires WAL restart reconcile)
-- AT-935 (RecordedBeforeDispatch + restart: replay/reconciliation alone MUST NOT dispatch OPEN; requires full WAL lifecycle)
+**Deferred to Phase 2 (broader startup/open-permission governance):**
+- AT-104 full assertion (`TradingMode==ReduceOnly`) is deferred to Phase 2; Phase 1 still requires the stub proof: stale instrument metadata sets `RiskState::Degraded`, blocks OPEN only, and MUST NOT block CLOSE/HEDGE/CANCEL solely due to metadata staleness.
+- Full startup-latch governance, continuous reconciliation after WS gaps/session termination, and post-restart OPEN authorization beyond replay-safe preservation remain Phase 2 requirements.
 
 ### **Phase 2: CSP Safety Kernel (First Deployable Phase)**
 
@@ -6325,7 +6333,7 @@ On restart, the system MUST reconcile:
 
 #### **CSP.4.2 No Duplicate Sends**
 
-No intent MAY be re-sent unless reconciliation proves it unsent or safe to re-issue by idempotency identity.
+Restart or reconciliation evidence that an intent was already sent, ACKed, or filled MUST forbid replay-driven resend. A recorded-but-unsent OPEN MAY remain visible for reconciliation and later fresh post-restart evaluation, but replay/reconciliation alone MUST NOT authorize a fresh OPEN dispatch.
 
 #### **CSP.4.3 WS Gap / Session Termination**
 
@@ -6472,12 +6480,12 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.2 Idempotency & Deduplication (group)** | §1.1.1 (canonical quantization + intent_hash inputs)<br>§1.1.2 (label parse/disambiguation)<br>§2.4 (WAL truth source + “Trade-ID Idempotency Registry”)<br>§3.4 (reconciliation ordering; WS gaps; zombies) | AT-343 (intent_hash stable across wall clock)<br>AT-218 (hash equality across codepaths)<br>AT-216 / AT-217 (label parse + collision-safe matching)<br>AT-933 (no duplicate dispatch after WS reconnect)<br>AT-269 / AT-270 (trade-id idempotency; duplicate fill handling) |
 | **CSP.2.1 Stable Intent Identity** | §1.1.1 (quantize → hash; “no wall-clock in hash”)<br>§1.1.2 (s4 label fields include ih16)<br>Definitions (`intent_hash`, `group_id`, `leg_idx`) | AT-343 (hash not time-dependent)<br>AT-218 (deterministic hash across codepaths)<br>AT-219 (safe rounding direction prior to hash)<br>AT-216 (s4 label length/parse correctness) |
 | **CSP.2.2 Deduplication Rule** | §2.4 (Trade-ID Idempotency Registry block; “append trade_id to WAL first”)<br>§3.4 (REST sweeper before WS replay; reconcile ordering)<br>§1.1.2 (label collision-safe matching) | AT-269 (REST sweeper then WS duplicate ignored)<br>AT-270 (duplicate WS trade is NOOP)<br>AT-933 (WS reconnect does not duplicate dispatch)<br>AT-941 (crash during reconciliation → idempotent rerun; no dupes) |
-| **CSP.3 RecordedBeforeDispatch (WAL) (group)** | §0.Z.2.2, item B (RecordedBeforeDispatch invariant)<br>§2.4 (Durable Intent Ledger rules)<br>§2.4.1 (WAL writer isolation; queue semantics) | AT-935 (RecordedBeforeDispatch + restart → replay/reconciliation alone MUST NOT dispatch OPEN)<br>AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)<br>AT-233 / AT-234 (crash + restart reconcile; no resend; detect fill)<br>AT-925 (hot-loop output queue backpressure → ReduceOnly) |
-| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (`RecordedBeforeDispatch` requires `WALRecorded`; `WALQueueAccepted` alone is insufficient) | AT-935 (recorded unsent OPEN survives crash without replay-only dispatch; fresh post-restart evaluation required before dispatch)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
+| **CSP.3 RecordedBeforeDispatch (WAL) (group)** | §0.Z.2.2, item B (RecordedBeforeDispatch invariant)<br>§2.4 (Durable Intent Ledger rules)<br>§2.4.1 (WAL writer isolation; queue semantics) | AT-935 (RecordedBeforeDispatch + restart → preserve recorded-unsent OPEN; replay-driven OPEN dispatch stays 0)<br>AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)<br>AT-1215 / AT-1232 (`WALRecorded` authorizes OPEN; enqueue-only success still blocks)<br>AT-233 / AT-234 (crash + restart reconcile; no resend; detect fill)<br>AT-925 (hot-loop output queue backpressure → ReduceOnly) |
+| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (`RecordedBeforeDispatch` requires `WALRecorded`; `WALQueueAccepted` alone is insufficient) | AT-1215 (`WALRecorded` authorizes OPEN dispatch from the live path only)<br>AT-1232 (enqueue-only success still fail-closed)<br>AT-935 (recorded-unsent OPEN survives crash for reconcile/later evaluation; replay alone does not dispatch it)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
 | **CSP.3.2 WAL Degradation Semantics** | §2.4.1 (enqueue fail → fail-closed for OPEN; continue ticking)<br>§2.2.3.4 (dispatch authorization: OPEN blocked in ReduceOnly/Kill) | AT-906 (OPEN blocked on WAL queue full)<br>AT-925 (no hot-loop stall; ReduceOnly under backpressure)<br>AT-1049 (exposed ⇒ at least one risk-reducing dispatch permitted) |
-| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 / AT-1215 (recorded OPEN intent is not replay-dispatched; no duplicate send)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 / AT-346 (session termination → latch + kill + reconcile + containment permitted)<br>AT-941 (crash during reconciliation → safe restart) |
-| **CSP.4.1 Restart Safety** | §2.4 (startup replay + reconcile before dispatch)<br>§2.2.4 (startup latch set) | AT-233 / AT-234 (restart reconcile; no dupes; fill recovery)<br>AT-430 (startup latch defaults to RESTART_RECONCILE_REQUIRED) |
-| **CSP.4.2 No Duplicate Sends** | §2.4 (no resend unless reconcile proves unsent)<br>§1.1.2 (label matching to detect in-flight orders)<br>§3.4 (reconcile ordering; REST snapshots) | AT-935 (no replay-only OPEN dispatch across restarts)<br>AT-940 (ACK lost locally → recover via reconcile; no resend)<br>AT-933 (WS reconnect: treat existing orders as in-flight; no dupes) |
+| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 / AT-1215 (recorded intent survives restart safely; replay alone never authorizes a fresh OPEN)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 / AT-346 (session termination → latch + kill + reconcile + containment permitted)<br>AT-941 (crash during reconciliation → safe restart) |
+| **CSP.4.1 Restart Safety** | §2.4 (startup replay + reconcile before dispatch-capable paths)<br>§2.2.4 (startup latch set) | AT-233 / AT-234 (restart reconcile; no dupes; fill recovery)<br>AT-935 (recorded-unsent OPEN preserved without replay dispatch)<br>AT-430 (startup latch defaults to RESTART_RECONCILE_REQUIRED) |
+| **CSP.4.2 No Duplicate Sends** | §2.4 (sent/ACKed/fill evidence forbids replay resend)<br>§1.1.2 (label matching to detect in-flight orders)<br>§3.4 (reconcile ordering; REST snapshots) | AT-935 (recorded-unsent OPEN is preserved without replay dispatch)<br>AT-940 (ACK lost locally → recover via reconcile; no resend)<br>AT-933 (WS reconnect: treat existing orders as in-flight; no dupes) |
 | **CSP.4.3 WS Gap / Session Termination** | §3.4 (channel continuity + corrective actions; zombie socket rule)<br>§2.2.4 (latch reasons WS_* and SESSION_TERMINATION_*)<br>§3.3 (10028/session termination handling) | AT-271 / AT-408 (book gap → latch WS_BOOK_GAP_*)<br>AT-272 / AT-202 (trade gap → latch WS_TRADES_GAP_*)<br>AT-947 (zombie socket → latch WS_DATA_STALE_*)<br>AT-409 / AT-240 / AT-346 (session termination → latch + Kill + reconcile while containment remains legal) |
 | **CSP.5 TradingMode Semantics & Enforcement (group)** | Definitions (`TradingMode`, `ModeReasonCode`, etc.)<br>§2.2.3 (TradingMode computation + dispatch authorization + reason-code registry)<br>§2.2.4/§2.2.5 (latch + cancel/replace legality) | AT-1050 / AT-1051 / AT-1052 (axis isolation tests)<br>AT-1053 (resolver monotonicity property)<br>AT-010 / AT-402 (OPEN blocked under latch; risk-increasing cancel/replace blocked)<br>AT-024 / AT-025 / AT-026 (mode_reason invariants) |
 | **CSP.5.1 TradingMode states** | Definitions (TradingMode enum)<br>§2.2.3 (resolver output + reason tiers) | AT-1050–AT-1053 (resolver correctness / monotonicity)<br>AT-024 (Active ⇒ mode_reasons empty) |
@@ -6503,3 +6511,5 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-06 | CCL-2026-03-06-01 | Branch delta vs origin/main (multiple sections and appendices); Appendix CONTRACT_CHANGE_LEDGER | process | Record append-only ledger growth for the current branch-level contract delta so verify gate 02a remains fail-closed and auditable. | `plans/check_contract_change_ledger.sh` requires ledger growth whenever `specs/CONTRACT.md` diverges from base; this preserves deterministic gate behavior. | VR-LEDGER-01 | local/isolated-verify-20260305 |
 | 2026-03-06 | CCL-2026-03-06-02 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
 | 2026-03-12 | CCL-2026-03-12-01 | §0.X; §1.1.1-§1.2; §2.4-§2.4.1; Phase 1 completion notes; Appendix CONTRACT_CHANGE_LEDGER | clarify | Preserve the branch-only Phase 1 contract hardening note for canonical crate-path references, quantization/idempotency ordering, WAL `reduce_only` recovery semantics, and Phase 1/TLSM acceptance clarifications after merging the newer mainline ledger entries. | Keep the PR 182 contract delta auditable without reusing superseded ledger IDs from the pre-main-sync branch history. | AT-104, AT-218, AT-219, AT-928, AT-TLSM-02, AT-TLSM-06, AT-P0E-NEG | PR-182 |
+| 2026-03-07 | CCL-2026-03-07-01 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Remove the enqueue-as-success ambiguity by restating that `RecordedBeforeDispatch` for OPEN requires `WALRecorded` (plus `WALDurable` when configured), and tighten the nearby ATs so enqueue failure and pre-`WALRecorded` authorization remain fail-closed. | Prevent crash/restart replay drift or duplicate exposure caused by treating bounded-queue enqueue success as sufficient dispatch authorization. | AT-906, AT-1215, AT-1232, AT-935 | local/recorded-before-dispatch-fix |
+| 2026-03-07 | CCL-2026-03-07-02 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Phase 1 roadmap/AT subset; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Pull the conservative restart-safety boundary into Phase 1: replay/reconciliation preserves recorded-but-unsent OPENs for reconciliation and later fresh evaluation, but replay alone never authorizes a fresh OPEN dispatch. | Remove the remaining Phase 1/PRD contradiction for restart behavior while preserving fail-closed no-duplicate-send semantics across restarts. | AT-233, AT-234, AT-935 | local/phase1-restart-safety-boundary |

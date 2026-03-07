@@ -113,6 +113,24 @@ select_monotonic_backend() {
   echo "epoch_seconds"
 }
 
+detect_parallel_jobs() {
+  local cpu_count=""
+
+  if command -v sysctl >/dev/null 2>&1; then
+    cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+  fi
+
+  if [[ ! "$cpu_count" =~ ^[1-9][0-9]*$ ]] && command -v getconf >/dev/null 2>&1; then
+    cpu_count="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+  fi
+
+  if [[ "$cpu_count" =~ ^[1-9][0-9]*$ ]]; then
+    echo "$cpu_count"
+  else
+    echo 4
+  fi
+}
+
 MONOTONIC_BACKEND="$(select_monotonic_backend)"
 MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"
 
@@ -603,7 +621,7 @@ else
     # Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
-    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-$(detect_parallel_jobs)}"
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()

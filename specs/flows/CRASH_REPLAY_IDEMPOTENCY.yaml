@@ -29,11 +29,12 @@ crash_points:
     scenario: crash_after_recordedbeforedispatch_before_send
     contract_refs:
       sections: ["2.4.1", "3.4"]
-      notes: "AT-935 defines unsent WAL restart behavior."
+      notes: "AT-935 defines conservative recorded-unsent WAL restart behavior."
     required_post_restart:
-      - "MUST reconcile (labels + open orders + trades) before dispatch."
-      - "MUST dispatch exactly once if WAL indicates unsent and OPEN is permitted."
-      - "MUST set sent_ts on first restart; no resend on subsequent restart."
+      - "MUST reconcile (labels + open orders + trades) before any dispatch-capable evaluation path is reachable."
+      - "MUST preserve the recorded-but-unsent OPEN for reconciliation and later fresh post-restart evaluation."
+      - "MUST perform zero replay-driven OPEN dispatches."
+      - "MUST require a fresh post-restart evaluation before any OPEN dispatch."
     acceptance_tests: ["AT-935"]
     where: ["soldier/infra/store/ledger.rs", "soldier/core/recovery/label_match.rs"]
 
@@ -103,11 +104,11 @@ idempotency:
 
   - id: ID-REPLAY-SAFE
     rule_tag: replay_safe
-    description: "On restart, rebuild in-flight intents from WAL, reconcile with exchange orders/trades; never resend unless WAL state says it is unsent."
+    description: "On restart, rebuild in-flight intents from WAL, reconcile with exchange orders/trades, never resend already-sent intents, and never dispatch a recorded-but-unsent OPEN from replay alone; later OPEN requires fresh post-restart evaluation."
     contract_refs:
-      sections: ["1.1", "2.4.1"]
+      sections: ["1.1", "2.4", "2.4.1"]
       notes: "Idempotency Rules + crash ATs."
-    acceptance_tests: ["AT-233", "AT-234"]
+    acceptance_tests: ["AT-233", "AT-234", "AT-935"]
     where: ["soldier/infra/store/ledger.rs", "soldier/core/recovery/label_match.rs"]
 
   - id: ID-TRADEID-REGISTRY
