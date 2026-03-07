@@ -32,7 +32,7 @@ This phase answers:
 
 ## Required Artifacts
 
-All artifacts below mark Phase 0 complete.
+All artifacts below are required inputs to `bash ./plans/live_enable_preflight.sh`. Phase 0 is not complete for live enablement unless that preflight passes.
 
 ### 1. Trading Policy (Human + Machine)
 
@@ -129,7 +129,7 @@ Phase 0 is considered complete only if all tests below pass.
 - Key scope probe test (prove least privilege)
 - Break-glass drill test (forced Kill blocks OPENs)
 
-See `tests/phase0/`, `tools/phase0_meta_test.py`, and `evidence/phase0/` for Phase-0 acceptance evidence in this repository.
+See `tests/phase0/`, `tools/phase0_meta_test.py`, `plans/live_enable_preflight.sh`, and `evidence/phase0/` for Phase-0 acceptance evidence in this repository.
 Executable runtime integration coverage lives in `crates/soldier_infra/tests/test_phase0_runtime.rs`.
 
 ---
@@ -144,7 +144,7 @@ The owner must be able to answer YES to all of the following:
 - Has a break-glass drill been executed and recorded?
 - Is there any way to trade without passing through these controls?
 
-If any answer is "I think so," Phase 0 is not complete.
+If any answer is "I think so," Phase 0 is not complete and `bash ./plans/live_enable_preflight.sh` must remain fail-closed.
 
 ---
 

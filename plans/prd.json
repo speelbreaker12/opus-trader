@@ -548,6 +548,114 @@
       }
     },
     {
+      "id": "S0-006",
+      "priority": 194,
+      "phase": 0,
+      "slice": 0,
+      "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
+      "story_ref": "Phase 0 live-enable preflight gate",
+      "category": "infra",
+      "description": "Name the Phase 0 live-enable preflight in the contract/docs and route the existing phase0_meta_test verify gate through a thin operator-facing wrapper.",
+      "contract_refs": [
+        "Phase 0: Operational Prerequisites (Non-Negotiable)",
+        "P0-F Machine Policy Loader Baseline",
+        "AT-1233",
+        "AT-1234"
+      ],
+      "plan_refs": [
+        "Global Non‑Negotiables (apply to ALL stories)"
+      ],
+      "scope": {
+        "touch": [
+          "specs/CONTRACT.md",
+          "specs/IMPLEMENTATION_PLAN.md",
+          "docs/PHASE0_CHECKLIST_BLOCK.md",
+          "docs/phase0_acceptance.md",
+          "docs/phase0_index.md",
+          "plans/prd.json",
+          "plans/verify_fork.sh",
+          "plans/workflow_verify.sh",
+          "plans/workflow_files_allowlist.txt",
+          "plans/test_verify_fork_smoke.sh",
+          "plans/tests/test_verify_fork_guardrails.sh",
+          "plans/tests/test_workflow_allowlist_coverage.sh",
+          "docs/contract_kernel.json"
+        ],
+        "create": [
+          "plans/live_enable_preflight.sh"
+        ],
+        "avoid": [
+          "verify.sh",
+          "crates/**"
+        ]
+      },
+      "acceptance": [
+        "GIVEN live-trading enablement is evaluated WHEN Phase 0 prerequisites are checked THEN the contract names `bash ./plans/live_enable_preflight.sh` as the required fail-closed gate.",
+        "GIVEN one required Phase 0 evidence artifact is missing or invalid WHEN `bash ./plans/live_enable_preflight.sh` is evaluated THEN the gate exits non-zero and live enablement is blocked (AT-1233).",
+        "GIVEN all required Phase 0 docs, snapshots, proofs, and runtime checks are valid WHEN `bash ./plans/live_enable_preflight.sh` runs THEN the Phase 0 gate does not block live enablement (AT-1234).",
+        "GIVEN verify runs WHEN the Phase 0 gate executes THEN `phase0_meta_test` remains the canonical artifact name and flows through `plans/live_enable_preflight.sh`.",
+        "GIVEN the new workflow wrapper exists WHEN workflow surface checks run THEN allowlist, syntax, and guardrail coverage all pass."
+      ],
+      "steps": [
+        "Add explicit live-enable preflight wording to the Phase 0 contract and implementation-plan text.",
+        "Add parser-safe CSP acceptance tests for the blocking and non-blocking Phase 0 preflight cases.",
+        "Sync the canonical Phase 0 checklist, acceptance narrative, and index to the named preflight gate.",
+        "Create `plans/live_enable_preflight.sh` as a thin wrapper over `tools/phase0_meta_test.py` and register it in workflow guardrails and allowlists.",
+        "Route the existing `phase0_meta_test` verify gate through the wrapper without renaming the gate artifact.",
+        "Refresh derived contract artifacts and run workflow/verify checks before handoff."
+      ],
+      "verify": [
+        "./plans/verify.sh",
+        "./plans/workflow_verify.sh",
+        "python3 tools/ci/check_contract_profiles.py --contract specs/CONTRACT.md",
+        "bash plans/tests/test_verify_fork_guardrails.sh",
+        "bash plans/test_verify_fork_smoke.sh",
+        "bash plans/tests/test_workflow_allowlist_coverage.sh",
+        "./plans/verify.sh quick",
+        "./plans/verify.sh full"
+      ],
+      "evidence": [
+        "specs/CONTRACT.md",
+        "docs/PHASE0_CHECKLIST_BLOCK.md",
+        "docs/phase0_acceptance.md",
+        "docs/phase0_index.md",
+        "plans/live_enable_preflight.sh",
+        "artifacts/verify/<run_id>/phase0_meta_test.log",
+        "docs/contract_kernel.json"
+      ],
+      "dependencies": [],
+      "est_size": "S",
+      "risk": "med",
+      "needs_human_decision": false,
+      "passes": false,
+      "contract_must_evidence": [],
+      "enforcing_contract_ats": [
+        "AT-1233",
+        "AT-1234"
+      ],
+      "reason_codes": {
+        "type": "",
+        "values": []
+      },
+      "enforcement_point": "",
+      "failure_mode": [],
+      "observability": {
+        "metrics": [],
+        "status_fields": [],
+        "status_contract_ats": []
+      },
+      "implementation_tests": [
+        "plans/tests/test_verify_fork_guardrails.sh",
+        "plans/test_verify_fork_smoke.sh",
+        "plans/tests/test_workflow_allowlist_coverage.sh"
+      ],
+      "loss_mode": {
+        "worst_case": "Phase 0 evidence appears complete but live trading is enabled without the fail-closed preflight gate, allowing unsafe release promotion.",
+        "fail_closed_cap": "plans/live_enable_preflight.sh blocks enablement and verify preserves the phase0_meta_test chokepoint.",
+        "drift_metric": "Guardrail coverage proves phase0_meta_test remains routed through the wrapper."
+      }
+    },
+    {
       "id": "S1-001",
       "priority": 90,
       "phase": 1,
@@ -6192,7 +6300,8 @@
         "touch": [
           "crates/soldier_infra/src",
           "crates/soldier_core/src",
-          "crates/soldier_infra/tests"
+          "crates/soldier_infra/tests",
+          "docs/break_glass_runbook.md"
         ],
         "create": [],
         "avoid": [
@@ -6202,13 +6311,15 @@
       "acceptance": [
         "GIVEN POST /api/v1/emergency/reduce_only is called. WHEN emergency_reduceonly_active is set to true. THEN TradingMode flips to ReduceOnly with REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE; only non-reduce-only opens are cancelled; existing closes/hedges are preserved.",
         "GIVEN `emergency_reduceonly_active == true` and the cooldown timer has not expired. WHEN TradingMode is computed by the Axis Resolver. THEN `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`. (AT-132).",
-        "GIVEN guard inputs for S8-006 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded."
+        "GIVEN guard inputs for S8-006 are absent or stale WHEN evaluation runs THEN fail-closed: OPEN paths are blocked and reject reason is recorded.",
+        "GIVEN this endpoint is exposed on any operator-facing surface. WHEN the rollout artifacts are reviewed. THEN `docs/break_glass_runbook.md` is updated in the same change so the documented emergency action matches the live operator control path; otherwise the operator-facing control remains disabled and incident response stays CLI-based."
       ],
       "steps": [
         "Map S8.7 contract obligations and implementation-plan acceptance criteria into executable checks.",
         "Implement S8.7 logic in the smallest practical surface area while preserving fail-closed behavior.",
         "Add/adjust targeted tests for S8.7: crates/soldier_infra/tests/test_http_emergency.rs::test_post_emergency_reduce_only_endpoint.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
+        "If this endpoint is promoted to operator-facing use, update docs/break_glass_runbook.md in the same change so the runbook and live control path stay aligned; otherwise leave the operator-facing control disabled and keep the runbook CLI-first.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
       "verify": [
@@ -6217,7 +6328,8 @@
       ],
       "evidence": [
         "cargo test -p soldier_infra --test test_http_emergency output",
-        "PRD entry S8-006 records contract AT and test mappings for this story."
+        "PRD entry S8-006 records contract AT and test mappings for this story.",
+        "docs/break_glass_runbook.md when this endpoint is exposed on an operator-facing surface."
       ],
       "dependencies": [],
       "est_size": "S",

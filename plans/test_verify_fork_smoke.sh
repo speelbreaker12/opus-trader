@@ -42,6 +42,7 @@ echo ""
 echo "1) Syntax checks"
 check "plans/verify.sh parses"        bash -n plans/verify.sh
 check "plans/verify_fork.sh parses"   bash -n plans/verify_fork.sh
+check "plans/live_enable_preflight.sh parses" bash -n plans/live_enable_preflight.sh
 check "plans/codex_review_logged.sh parses" bash -n plans/codex_review_logged.sh
 check "plans/codex_review_digest.sh parses" bash -n plans/codex_review_digest.sh
 check "plans/prd_set_pass.sh parses"  bash -n plans/prd_set_pass.sh
@@ -73,6 +74,8 @@ check "verify_fork.sh usage is quick/full only" grep -q 'Usage: ./plans/verify.s
 check "verify_fork.sh writes verify.meta.json" grep -q 'verify.meta.json' plans/verify_fork.sh
 check "verify_fork.sh includes contract_kernel gate" grep -q 'run_logged_or_exit \"contract_kernel\"' plans/verify_fork.sh
 check "verify_fork.sh includes phase0_meta_test gate" grep -q 'run_logged_or_exit \"phase0_meta_test\"' plans/verify_fork.sh
+check "verify_fork.sh routes phase0 gate through live_enable_preflight" \
+  grep -q 'live_enable_preflight\.sh' plans/verify_fork.sh
 check "verify_fork.sh includes phase1_meta_test gate" grep -q 'run_logged_or_exit \"phase1_meta_test\"' plans/verify_fork.sh
 echo ""
 

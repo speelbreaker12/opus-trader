@@ -50,6 +50,7 @@ plans/lib/rust_gates.sh
 plans/lib/status_reason_codegen_gate.sh
 plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
+plans/live_enable_preflight.sh
 plans/postmortem_template.md
 plans/pr_gate.sh
 plans/prd_audit_check.sh
@@ -146,9 +147,9 @@ plans/tests/test_slice_review_gate.sh
 plans/tests/test_stoic_cli_invariant_check.sh
 plans/tests/test_story_review_findings_guard.sh
 plans/tests/test_toggle_policy_check.sh
+plans/tests/test_upgrade_1b_proof.sh
 plans/tests/test_wf_step_path_signal_scan.sh
 plans/tests/test_wf_step_review_provenance.sh
-plans/tests/test_upgrade_1b_proof.sh
 plans/tests/test_wf_step_stop_on_blocker.sh
 plans/tests/test_workflow_allowlist_coverage.sh
 plans/tests/test_workflow_quick_step.sh
