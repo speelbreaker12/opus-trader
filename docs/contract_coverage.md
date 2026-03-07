@@ -1,6 +1,6 @@
 # Contract Coverage Matrix
 
-Generated: 2026-03-04 23:54:47Z
+Generated: 2026-03-07 22:31:51Z
 
 ## Anchors
 
@@ -41,7 +41,7 @@ Generated: 2026-03-04 23:54:47Z
 - ✅ **VR-008** — Cortex Override Gate → S1-010
 - ✅ **VR-009** — Margin Headroom Gate → S1-010
 - ✅ **VR-010** — Replay Gatekeeper Coverage Gate → S4-000
-- ✅ **VR-011** — Liquidity Gate → S5-000
+- ✅ **VR-011** — Liquidity Gate → S7-002
 - ✅ **VR-012** — Net Edge Gate → S5-002
 - ✅ **VR-013** — Instrument Cache Staleness Gate → S1-003, S1-006
 - ✅ **VR-014** — WAL Record-Before-Dispatch Gate → S4-000, S4-003, S6-000, S6-004
