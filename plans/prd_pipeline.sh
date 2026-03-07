@@ -2,6 +2,12 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if ! source "$ROOT/plans/lib/hash_utils.sh"; then
+  echo "ERROR: missing hash utils helper: $ROOT/plans/lib/hash_utils.sh" >&2
+  exit 2
+fi
+
 # Fix: Add timeout for pipeline commands
 PIPELINE_CMD_TIMEOUT="${PIPELINE_CMD_TIMEOUT:-300}"
 
@@ -53,19 +59,6 @@ if [[ "$AUDIT_SCOPE" == "slice" && -z "$AUDIT_SLICE" ]]; then
     exit 2
   fi
 fi
-
-sha256_file() {
-  local file="$1"
-  if [[ ! -f "$file" ]]; then
-    echo ""
-    return 0
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file" | awk '{print $1}'
-  else
-    shasum -a 256 "$file" | awk '{print $1}'
-  fi
-}
 
 append_progress_note() {
   local summary="$1"

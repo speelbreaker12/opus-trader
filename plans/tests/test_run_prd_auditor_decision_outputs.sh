@@ -13,6 +13,7 @@ fail() {
 
 [[ -f "$auditor_script" ]] || fail "run_prd_auditor.sh not found at $auditor_script"
 [[ -x "$check_script" ]] || fail "prd_audit_check.sh not executable at $check_script"
+[[ -f "$hash_utils_script" ]] || fail "hash_utils.sh not found at $hash_utils_script"
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -28,9 +29,7 @@ setup_repo() {
   chmod +x "$repo"/plans/run_prd_auditor.sh
   cp "$check_script" "$repo"/plans/prd_audit_check.sh
   chmod +x "$repo"/plans/prd_audit_check.sh
-  if [[ -f "$hash_utils_script" ]]; then
-    cp "$hash_utils_script" "$repo"/plans/lib/hash_utils.sh
-  fi
+  cp "$hash_utils_script" "$repo"/plans/lib/hash_utils.sh
 
   cat > "$repo"/plans/prd.json <<'JSON'
 {
@@ -234,6 +233,10 @@ run_scenario() {
   cost_decision="$(tail -n 1 "$repo/.context/audit_costs.jsonl" | jq -r '.decision // empty')"
   [[ "$cost_decision" == "$expected_decision" ]] \
     || fail "cost decision mismatch for $expected_decision: got '$cost_decision'"
+
+  auditor_rc="$(jq -r 'select(.stage == "auditor") | .rc // empty' "$repo/.context/audit_costs.jsonl" | tail -n 1)"
+  [[ "$auditor_rc" == "0" ]] \
+    || fail "auditor stage rc mismatch for $expected_decision: got '$auditor_rc'"
 }
 
 run_scenario PASS

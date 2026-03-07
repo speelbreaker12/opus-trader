@@ -4,6 +4,10 @@ IFS=$'\n\t'
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+if ! source "$ROOT/plans/lib/hash_utils.sh"; then
+  echo "[prd_auditor] ERROR: missing hash utils helper: $ROOT/plans/lib/hash_utils.sh" >&2
+  exit 2
+fi
 
 # Lock file to prevent concurrent runs
 AUDIT_LOCK_FILE="${AUDIT_LOCK_FILE:-.context/prd_auditor.lock}"
@@ -68,19 +72,6 @@ if [[ "$AUDITOR_AGENT_CMD" == "codex" && -z "$AUDITOR_AGENT_ARGS" ]]; then
   AUDITOR_AGENT_ARGS="exec"
 fi
 
-sha256_file() {
-  local file="$1"
-  if [[ ! -f "$file" ]]; then
-    echo ""
-    return 0
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file" | awk '{print $1}'
-  else
-    shasum -a 256 "$file" | awk '{print $1}'
-  fi
-}
-
 # Progress reporting (controllable via AUDIT_PROGRESS env var)
 AUDIT_PROGRESS="${AUDIT_PROGRESS:-1}"
 
@@ -103,10 +94,11 @@ audit_cost_start() {
 
 audit_cost_stage() {
   local stage="$1"
-  local cache_hit="${2:-false}"
+  local rc="${2:-0}"
+  local cache_hit="${3:-false}"
   local now=$(date +%s)
   local duration=$((now - _audit_stage_ts))
-  echo "{\"run_id\":\"$_audit_run_id\",\"stage\":\"$stage\",\"duration_s\":$duration,\"cache_hit\":$cache_hit,\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$AUDIT_COST_FILE"
+  echo "{\"run_id\":\"$_audit_run_id\",\"stage\":\"$stage\",\"duration_s\":$duration,\"rc\":$rc,\"cache_hit\":$cache_hit,\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" >> "$AUDIT_COST_FILE"
   _audit_stage_ts=$now
 }
 
@@ -278,11 +270,11 @@ mkdir -p ".context"
 
 progress "Building contract digest..."
 CONTRACT_SOURCE_FILE="$AUDIT_CONTRACT_FILE" CONTRACT_DIGEST_FILE="$AUDIT_CONTRACT_DIGEST_FILE" ./plans/build_contract_digest.sh
-audit_cost_stage "contract_digest"
+audit_cost_stage "contract_digest" 0
 
 progress "Building plan digest..."
 PLAN_SOURCE_FILE="$AUDIT_PLAN_FILE" PLAN_DIGEST_FILE="$AUDIT_PLAN_DIGEST_FILE" ./plans/build_plan_digest.sh
-audit_cost_stage "plan_digest"
+audit_cost_stage "plan_digest" 0
 
 # Build ROADMAP digest if available
 if [[ -n "$AUDIT_ROADMAP_FILE" && -f "$AUDIT_ROADMAP_FILE" ]]; then
@@ -291,7 +283,7 @@ if [[ -n "$AUDIT_ROADMAP_FILE" && -f "$AUDIT_ROADMAP_FILE" ]]; then
     OUTPUT_FILE="$AUDIT_ROADMAP_DIGEST_FILE" \
     DIGEST_MODE="slim" \
     ./plans/build_markdown_digest.sh
-  audit_cost_stage "roadmap_digest"
+  audit_cost_stage "roadmap_digest" 0
 fi
 
 if [[ "$AUDIT_SCOPE" == "slice" ]]; then
@@ -312,7 +304,7 @@ if [[ "$AUDIT_SCOPE" == "slice" ]]; then
     OUT_AUDIT_FILE="$AUDIT_OUTPUT_JSON" \
     OUT_META="$AUDIT_META_FILE" \
     ./plans/prd_slice_prepare.sh
-  audit_cost_stage "slice_prepare"
+  audit_cost_stage "slice_prepare" 0
 else
   if ! command -v jq >/dev/null 2>&1; then
     echo "[prd_auditor] ERROR: jq required to write audit meta" >&2
@@ -373,7 +365,7 @@ fi
 auditor_end_ts="$(date +%s)"
 auditor_duration=$((auditor_end_ts - auditor_start_ts))
 progress "Auditor completed in ${auditor_duration}s (rc=$auditor_rc)"
-audit_cost_stage "auditor"
+audit_cost_stage "auditor" "$auditor_rc"
 
 if [[ "$auditor_rc" -eq 124 || "$auditor_rc" -eq 137 ]]; then
   if [[ "$AUDIT_SCOPE" == "full" && "$AUDITOR_TIMEOUT_FALLBACK_PARALLEL" == "1" && -x "./plans/audit_parallel.sh" ]]; then
