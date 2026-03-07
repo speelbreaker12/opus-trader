@@ -148,6 +148,10 @@ def is_foundation_status(status: dict[str, Any]) -> bool:
     return status.get("phase") == "foundation"
 
 
+def foundation_exit_condition(status: dict[str, Any]) -> bool:
+    return not is_foundation_status(status)
+
+
 def normalize_code_list(value: Any) -> list[str]:
     if isinstance(value, dict):
         if "values" in value:
@@ -572,9 +576,9 @@ Examples:
         schema_path = Path(args.schema)
     else:
         schema_path = (
-            Path(args.schema_foundation)
-            if is_foundation_status(status)
-            else Path(args.schema_csp)
+            Path(args.schema_csp)
+            if foundation_exit_condition(status)
+            else Path(args.schema_foundation)
         )
 
     manifest_path = Path(args.manifest)
@@ -612,11 +616,11 @@ Examples:
     errors.extend(schema_errors)
 
     # 2-3. Phase-aware contract checks
-    if is_foundation_status(status):
-        errors.extend(check_foundation_status_contract(status, manifest))
-    else:
+    if foundation_exit_condition(status):
         errors.extend(check_minimum_keys(status))
         errors.extend(check_contract_invariants(status, manifest))
+    else:
+        errors.extend(check_foundation_status_contract(status, manifest))
 
     # 4. Strict mode: no extra keys
     if args.strict:
