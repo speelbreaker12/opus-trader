@@ -87,13 +87,13 @@ Mark that CI job as required in branch protection.
 6. Second review for `REVIEW_SHA` (adversarial), then fix blocking issues.
 7. `./plans/verify.sh quick`
 8. Turn top findings into failing tests first (red), then fix to green.
-11. `./plans/verify.sh quick`
-   - Sequence-bound equivalent: `plans/workflow_quick_step.sh <STORY_ID> <checkpoint>` (must execute `./plans/verify.sh quick`).
-12. Sync with integration branch.
-13. If sync changed code, `./plans/verify.sh quick` again.
-14. Freeze story worktree and run `./plans/verify.sh full`.
-15. `./plans/prd_set_pass.sh <STORY_ID> true --artifacts-dir artifacts/verify/<run_id>`
-16. Merge.
+9. `./plans/verify.sh quick`
+10. Sequence-bound equivalent: `plans/workflow_quick_step.sh <STORY_ID> <checkpoint>` (must execute `./plans/verify.sh quick`).
+11. Sync with integration branch.
+12. If sync changed code, `./plans/verify.sh quick` again.
+13. Freeze story worktree and run `./plans/verify.sh full`.
+14. `./plans/prd_set_pass.sh <STORY_ID> true --artifacts-dir artifacts/verify/<run_id>`
+15. Merge.
 
 ## Required evidence notes
 

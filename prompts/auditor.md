@@ -95,7 +95,8 @@ Each item MUST include ALL fields:
 - enforcing_contract_ats (string[]; AT-###)
 - reason_codes (object; type + values)
 - enforcement_point (string; PolicyGuard|EvidenceGuard|DispatcherChokepoint|WAL|AtomicGroupExecutor|StatusEndpoint)
-- failure_mode (string[]; stall|hang|backpressure|missing|stale|parse_error)
+- failure_mode (string[]; failure_mode entries must be stall|hang|backpressure|missing|stale|parse_error)
+- loss_mode { worst_case, fail_closed_cap, drift_metric }
 - observability { metrics[], status_fields[], status_contract_ats[] }
 - implementation_tests (string[])
 - dependencies (string[])
@@ -127,6 +128,7 @@ Mark FAIL if any item:
 - acceptance/steps mention metrics/logs but observability.metrics is empty
 - acceptance/steps mention /status or operator-visible fields but observability.status_fields/status_contract_ats are empty
 - acceptance/steps mention liveness/backpressure but failure_mode/implementation_tests are empty
+- loss handling is vague; fail closed until loss_mode worst_case/fail_closed_cap/drift_metric are concrete
 
 Output integrity requirements (non-negotiable):
 - If status is FAIL or BLOCKED: reasons[] and patch_suggestions[] must be non-empty.
