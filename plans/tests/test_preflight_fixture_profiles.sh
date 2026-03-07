@@ -117,7 +117,6 @@ assert_list_contains "$smoke_list" "plans/tests/test_contract_change_ledger.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_handoff_sources.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_precheck.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_operator_trace.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_recon_scoreboard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_evidence_ledger.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_premortem_ready_ownership_conflict.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_premortem_gate_trading_hard_gate.sh"
@@ -136,12 +135,13 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_bundle.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_operator_runner.sh"
+assert_list_contains "$full_only_list" "plans/tests/test_recon_scoreboard.sh"
+assert_list_contains "$full_only_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
 
 # Heavy tests moved to verify_fork.sh gate 14g — must be absent from both arrays
 assert_list_absent "$full_only_list" "plans/tests/test_story_review_gate.sh"
@@ -151,6 +151,8 @@ assert_list_absent "$smoke_list" "plans/tests/test_pr_gate.sh"
 assert_list_absent "$full_only_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_absent "$smoke_list" "plans/tests/test_recon_bundle.sh"
 assert_list_absent "$smoke_list" "plans/tests/test_recon_operator_runner.sh"
+assert_list_absent "$smoke_list" "plans/tests/test_recon_scoreboard.sh"
+assert_list_absent "$smoke_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
 
 # Verify moved tests are actually present in verify_fork.sh gate 14g
 VERIFY_FORK="$ROOT/plans/verify_fork.sh"
@@ -169,7 +171,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "43" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 43)"
-[[ "$full_only_count" == "10" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 10)"
+[[ "$smoke_count" == "42" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 42)"
+[[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
 
 echo "PASS: preflight fixture profile mapping"

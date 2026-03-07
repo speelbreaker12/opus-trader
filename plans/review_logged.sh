@@ -23,7 +23,8 @@ Options:
                      Run both for maximum coverage.
   --timeout-seconds N
                      Max seconds for external review command. Defaults:
-                     opus=600 (900 for --files), kimi=600, codex=0 (600 for --files).
+                     opus=600 (900 for --files), kimi=600, gemini=600,
+                     codex=0 (600 for --files).
                      Use 0 to disable timeout.
   --proof-graph      Generate per-reviewer proof_graph.json skeleton (requires --prompt enriched)
   --commit REF       Review a specific commit (default: HEAD)
@@ -456,7 +457,7 @@ else
       if [[ "$mode" == "files" ]]; then
         timeout_seconds="${REVIEW_LOGGED_GEMINI_FILES_TIMEOUT_SECONDS:-600}"
       else
-        timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-600}"
+        timeout_seconds="${REVIEW_LOGGED_GEMINI_TIMEOUT_SECONDS:-${REVIEW_LOGGED_TIMEOUT_SECONDS:-600}}"
       fi
       ;;
   esac
@@ -551,13 +552,20 @@ build_review_prompt() {
   local style="$1"
   local ctx_label="$2"
   local diff_ctx="$3"
+  local review_body
+
+  if [[ -n "$diff_ctx" ]]; then
+    review_body="$diff_ctx"
+  else
+    review_body="(no content available)"
+  fi
 
   if [[ "$style" == "generic" ]]; then
-    cat <<PROMPT_EOF
-You are a senior code reviewer for story $story on branch $branch (HEAD: $head_sha).
-
-Review the following $(lcase "$ctx_label") and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).
-
+    printf 'You are a senior code reviewer for story %s on branch %s (HEAD: %s).\n\n' \
+      "$story" "$branch" "$head_sha"
+    printf 'Review the following %s and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).\n\n' \
+      "$(lcase "$ctx_label")"
+    cat <<'PROMPT_EOF'
 Focus on:
 - Correctness bugs and logic errors
 - Safety violations (unwrap in production, silent error drops, fail-open paths)
@@ -570,38 +578,38 @@ Focus on:
 
 For each finding, include:
 - File path and line number
-- At least one explicit evidence citation token in the exact format \`path/to/file.ext:line\`
+- At least one explicit evidence citation token in the exact format `path/to/file.ext:line`
 - Severity level (P0-P3)
 - Description of the issue
 - Suggested fix
 
 Hard requirement:
-- Every finding must contain at least one \`path/to/file.ext:line\` citation.
-- If you report no findings, output \`NO_FINDINGS\` and list at least 3 reviewed citations.
-
-Title: $title
-
-${ctx_label}:
-\`\`\`
-${diff_ctx:-(no content available)}
-\`\`\`
+- Every finding must contain at least one `path/to/file.ext:line` citation.
+- If you report no findings, output `NO_FINDINGS` and list at least 3 reviewed citations.
 PROMPT_EOF
+    printf '\nTitle: %s\n\n%s:\n```\n' "$title" "$ctx_label"
+    printf '%s\n' "$review_body"
+    printf '```\n'
   else
     # enriched: contract-proof audit with AT clauses, premortem, priorities
     local enriched_ctx
     enriched_ctx="$(build_enriched_context "$story" "$root")"
-    cat <<PROMPT_EOF
-You are a senior contract-proof code reviewer for story $story on branch $branch (HEAD: $head_sha).
-
-This is a retroactive contract-proof audit of existing implementation.
-Review the story proof scope: ATs, enforcement points, proving tests, premortem.
-${enriched_ctx}
-
+    printf 'You are a senior contract-proof code reviewer for story %s on branch %s (HEAD: %s).\n\n' \
+      "$story" "$branch" "$head_sha"
+    printf 'This is a retroactive contract-proof audit of existing implementation.\n'
+    printf 'Review the story proof scope: ATs, enforcement points, proving tests, premortem.\n'
+    if [[ -n "$enriched_ctx" ]]; then
+      printf '%s\n' "$enriched_ctx"
+      printf '\n'
+    else
+      printf '\n'
+    fi
+    cat <<'PROMPT_EOF'
 PRIORITIES (check in this order)
 
 1. **Contract alignment (AT-by-AT)** — Does each claimed AT have a real proving test? Does it prove causality (dispatch_count, reject_reason, latch_reason), not just existence? Re-read the AT anchor text above — does the enforcement point implement the clause's *specific requirement*, or merely a prerequisite/side-effect?
 2. **Paper compliance detection** — AT claimed in PRD but not causally proven? implementation_tests[] points to real tests? No fake "passes" logic?
-3. **Fail-closed behavior** — For EACH input AND intermediate computation in enforcement functions: (1) Missing/None → reject? (2) NaN/Inf → reject? (3) Negative where unsigned expected → reject? (4) Out-of-domain (type::MAX, percentage > 1.0, timestamp beyond sane range) → reject? (5) Corrupt/garbage extreme values → reject or degrade? (6) Narrowing type casts (\`as i64\`, \`as u32\`) — is the source value bounded before the cast? "Invalid" means all six — not just NaN.
+3. **Fail-closed behavior** — For EACH input AND intermediate computation in enforcement functions: (1) Missing/None → reject? (2) NaN/Inf → reject? (3) Negative where unsigned expected → reject? (4) Out-of-domain (type::MAX, percentage > 1.0, timestamp beyond sane range) → reject? (5) Corrupt/garbage extreme values → reject or degrade? (6) Narrowing type casts (`as i64`, `as u32`) — is the source value bounded before the cast? "Invalid" means all six — not just NaN.
 4. **Premortem conformance** — §4 decisions implemented as chosen? §5 wrong impls blocked by tightening tests? §2 assumptions turned into tests?
 5. **Observability** — Reason code / structured log / metric on reject/degrade/latch paths?
 6. **Pattern conformance** — Gates use real quantities, state transitions explicit, small blast radius (including deserialization: strict serde enums in batch-deserialized types must not poison sibling elements), idempotent where retries happen?
@@ -609,23 +617,19 @@ PRIORITIES (check in this order)
 
 For each finding, include:
 - File path and line number
-- At least one explicit evidence citation token in the exact format \`path/to/file.ext:line\`
+- At least one explicit evidence citation token in the exact format `path/to/file.ext:line`
 - Severity level (P0-Critical, P1-High, P2-Medium, P3-Low)
 - Which PRIORITY it falls under (1-7)
 - Description of the issue
 - Suggested fix
 
 Hard requirement:
-- Every finding must contain at least one \`path/to/file.ext:line\` citation.
-- If you report no findings, output \`NO_FINDINGS\` and list at least 3 reviewed citations.
-
-Title: $title
-
-${ctx_label}:
-\`\`\`
-${diff_ctx:-(no content available)}
-\`\`\`
+- Every finding must contain at least one `path/to/file.ext:line` citation.
+- If you report no findings, output `NO_FINDINGS` and list at least 3 reviewed citations.
 PROMPT_EOF
+    printf '\nTitle: %s\n\n%s:\n```\n' "$title" "$ctx_label"
+    printf '%s\n' "$review_body"
+    printf '```\n'
   fi
 
   # F-11: Inject proof graph skeleton into prompt when --proof-graph is active
