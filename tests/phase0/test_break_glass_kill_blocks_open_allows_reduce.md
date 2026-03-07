@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Prove break-glass authority can halt new risk while preserving risk reduction.
+Prove the documented primary break-glass action halts new risk while preserving risk reduction.
 
 ## Procedure
 
 1. Simulate runaway OPEN order generation.
    - Example: `STOIC_DRILL_MODE=1 ./stoic-cli simulate-open --instrument BTC-28MAR26-50000-C --count 3`
-2. Trigger break-glass Kill.
+2. Trigger the exact primary break-glass action documented in the runbook.
    - Example: `./stoic-cli emergency kill --reason "phase0 drill"`
-3. Verify KILL authority state and empty pending queue.
+3. Verify the documented runtime safety state and empty pending queue.
    - `./stoic-cli status --format json`
    - `./stoic-cli orders --pending --format json`
 4. Attempt an OPEN order (must fail in KILL).
@@ -23,6 +23,9 @@ Prove break-glass authority can halt new risk while preserving risk reduction.
 
 ## Pass Criteria
 
+- The documented primary action matches the exercised runtime control path.
+- The documented runtime safety state is reached within one control-plane tick.
 - OPEN attempt fails immediately once Kill is active.
 - Risk-reducing action remains available and succeeds.
+- The runbook includes one bounded fallback action if the primary action is unavailable.
 - Evidence of the drill is recorded with timestamp and operator.
