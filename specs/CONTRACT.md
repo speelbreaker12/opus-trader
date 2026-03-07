@@ -81,7 +81,11 @@ For any **new guard** (a rule, latch, monitor, or gate) that can block an OPEN, 
 
 
 - **instrument_kind**: one of `option | linear_future | inverse_future | perpetual` (derived from venue metadata).
-  - **Linear Perpetuals (USDC‑margined)**: treat as `linear_future` for sizing (canonical `qty_coin`), even if their venue symbol says "PERPETUAL".
+  - **Linear Perpetuals (USDC‑margined)**: treat as `linear_future` for sizing metadata derivation, even if their venue symbol says "PERPETUAL".
+- **amount_semantics**: one of `coin | usd` (derived from normalized venue metadata).
+  - `coin` means canonical sizing and outbound `amount` use `qty_coin`.
+  - `usd` means canonical sizing and outbound `amount` use `qty_usd`.
+  - `amount_semantics` is the authoritative discriminator for sizing/quantization/outbound amount selection only. `instrument_kind` and other product-family metadata remain authoritative for non-sizing rules such as expiry, linked-order capability checks, and option/future/perp policy.
 - **order_type** (Deribit `type`): `limit | market | stop_limit | stop_market | ...` (venue-specific).
 - **linked_order_type**: Deribit linked/OCO semantics (venue-specific; gated off for this bot).
 - **Aggressive IOC Limit**: a `limit` order with `time_in_force=immediate_or_cancel` and a *bounded* limit price computed from `fair_price` with fee-aware edge-based clamps (see §1.4).
@@ -894,21 +898,22 @@ pub struct OrderSize {
 **Note:** `contracts` values exceeding 2^53 are non-compliant due to f64 precision limits (JSON and many downstream consumers serialize integers as f64; values > 2^53 lose integer precision).
 
 **Dispatcher Rules (Deribit request mapping):**
-- Determine `instrument_kind` from instrument metadata (`option | linear_future | inverse_future | perpetual`).
+- Normalize instrument metadata into at least: `instrument_kind`, `amount_semantics`, `tick_size`, `amount_step`, `min_amount`, and optional `contract_size_usd`.
+- Determine canonical sizing from `amount_semantics`, not directly from `instrument_kind`.
 - Compute size fields:
-  - `option | linear_future`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined.
-    - **Linear Perpetuals (USDC‑margined)** are treated as `linear_future`.
-  - `perpetual | inverse_future`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` (if defined) and `qty_coin = qty_usd / index_price`.
+  - `amount_semantics = coin`: canonical = `qty_coin`; derive `contracts` if contract multiplier is defined.
+  - `amount_semantics = usd`: canonical = `qty_usd`; derive `contracts = round(qty_usd / contract_size_usd)` (if defined) and `qty_coin = qty_usd / index_price`.
+- `instrument_kind` MAY still influence non-sizing behavior (for example expiry and linked-order policy), but it MUST NOT override `amount_semantics` for outbound amount selection.
 - **Deribit outbound order size field:** always send exactly one canonical “amount” value:
-  - coin instruments → send `amount = qty_coin`
-  - USD-sized instruments → send `amount = qty_usd`
+  - `amount_semantics = coin` → send `amount = qty_coin`
+  - `amount_semantics = usd` → send `amount = qty_usd`
 - If `contracts` exists, it must be consistent with the canonical amount before dispatch (reject if not).
 
 **Acceptance Test (REQUIRED):**
 AT-277
 - Given:
-  1) `instrument_kind=option` with `qty_coin=0.3` at `index_price=100_000`
-  2) `instrument_kind=perpetual` with `qty_usd=30_000` at `index_price=100_000`
+  1) normalized metadata yields `instrument_kind=option`, `amount_semantics=coin`, with `qty_coin=0.3` at `index_price=100_000`
+  2) normalized metadata yields `instrument_kind=perpetual`, `amount_semantics=usd`, with `qty_usd=30_000` at `index_price=100_000`
 - When: the dispatcher maps request fields.
 - Then:
   - outbound option uses `amount=0.3` (coin), `notional_usd=30_000`, and `qty_usd` is unset
@@ -954,16 +959,16 @@ This expanded format is for human-readable logs and internal documentation only.
 **Where:** `crates/soldier_core/src/execution/quantize.rs`
 
 **Inputs:** `instrument_id`, `raw_qty`, `raw_limit_price`
-**Outputs:** `qty_q`, `limit_price_q` (quantized)
+**Outputs:** `qty_steps`, `price_ticks`, `qty_q`, `limit_price_q` (quantized)
 
 **Rules (Deterministic):**
 - Fetch instrument constraints: `tick_size`, `amount_step`, `min_amount`.
 - If any of `tick_size`, `amount_step`, or `min_amount` is missing or unparseable -> Reject(intent=InstrumentMetadataMissing) and do not dispatch (fail-closed).
-- `qty_q = round_down(raw_qty, amount_step)` (never round up size).
-- `limit_price_q = round_to_nearest_tick(raw_limit_price, tick_size)` (or round in the safer direction; see below).
+- `qty_steps = floor(raw_qty / amount_step)` and `qty_q = qty_steps * amount_step` (never round up size).
+- `price_ticks = floor(raw_limit_price / tick_size)` for BUY and `ceil(raw_limit_price / tick_size)` for SELL; `limit_price_q = price_ticks * tick_size`.
 - If `qty_q < min_amount` → Reject(intent=TooSmallAfterQuantization).
-- Idempotency hash must be computed ONLY from quantized fields:
-  `intent_hash = xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)`
+- Idempotency hash must be computed ONLY from integer quantized identity fields:
+  `intent_hash = xxhash64(instrument + side + qty_steps + price_ticks + group_id + leg_idx)`
 
 **Safer rounding direction:**
 - For BUY: round `limit_price_q` DOWN (never pay extra).
@@ -1009,7 +1014,7 @@ AT-928
 
 **Idempotency Rules (Non-Negotiable):**
 1. **Dedupe-on-Send (Local):** Before dispatch, check `intent_hash` in the WAL. If exists → NOOP.
-2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by `group_id`.
+2. **Dedupe-on-Send (Remote):** Use Deribit `label` as the idempotency key. If WS reconnect occurs, re-fetch open orders and match by canonical parsed `s4` identity `{sid8, gid12, leg_idx, ih16}`; use legacy fallback only for explicitly non-canonical legacy labels.
 3. **Replay Safe:** On restart, rebuild “in-flight intents” from WAL, then reconcile with exchange orders/trades. Never resend an intent unless WAL state says it is unsent.
 4. **Attribution-Keyed:** Every fill must map to `group_id` + `leg_idx`, so we can compute “atomic slippage” per group.
 
@@ -1020,30 +1025,36 @@ AT-1098
 - Pass criteria: all fills have a valid `group_id` + `leg_idx`; atomic slippage per group is computable from the attributed fills.
 - Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
 
+**Recovery / Matching Rule (Normative):**
+- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.
+- Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.
+- Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.
+- If the applicable matcher yields none or more than one candidate, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
 
 **Requirement:** Label collisions can still occur (hash collisions or non-conforming labels). The Soldier must deterministically map exchange orders to local intents.
 
 **Where:** `crates/soldier_core/src/recovery/label_match.rs`
 
-**Note:** At 10^4 intents/day, the expected collision rate for a 64-bit hash is < 10^-15/year. The fallback algorithm exists for defense-in-depth, not expected operations.
+**Note:** At 10^4 intents/day, the expected collision rate for a 64-bit hash is < 10^-15/year. The legacy fallback path exists for defense-in-depth and historical recovery, not expected current operations.
 
 **Algorithm:**
-1) Parse label → extract `{sid8, gid12, leg_idx, ih16}`.
-2) Primary candidate set = all local intents where:
+1) Parse label.
+2) If the label is canonical `s4`, extract `{sid8, gid12, leg_idx, ih16}` and build the candidate set using exact full short identity:
    - `sid8` matches,
    - `gid12` matches,
    - `leg_idx` matches,
-   - `ih16` matches (full short identity).
-3) If primary candidate set size == 1 → match.
-4) Else use legacy/repair fallback candidate set where:
+   - `ih16` matches.
+3) If the canonical candidate set size == 1 → match.
+4) If a canonical `s4` label yields none or more than one candidate → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+5) If the label is explicitly non-canonical legacy/repair data, build the legacy fallback candidate set where:
    - `gid12` matches AND `leg_idx` matches.
-5) If fallback candidate size == 1 → match.
-6) Else disambiguate fallback candidates using tie-breakers in order:
+6) If legacy fallback candidate size == 1 → match.
+7) Else disambiguate legacy fallback candidates using tie-breakers in order:
    A) instrument match
    B) side match
    C) qty_q match
-7) If still ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
+8) If legacy fallback remains ambiguous → mark `RiskState::Degraded`, block opens, and require REST trade/order snapshot reconcile.
 
 **Acceptance Tests (REQUIRED):**
 AT-216
@@ -1054,11 +1065,11 @@ AT-216
 - Fail criteria: label format invalid, length > 64, or parsed components mismatch.
 
 AT-217
-- Given: two intents share the same `gid12` and `leg_idx`.
-- When: the label matcher disambiguates using tie-breakers.
-- Then: it first attempts full `sid8+gid12+leg_idx+ih16` identity match; if no unique full match, it uses legacy fallback tie-breakers; if still ambiguous, `RiskState::Degraded` and opens blocked.
-- Pass criteria: deterministic match with full identity when available; deterministic fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
-- Fail criteria: ambiguous mapping accepted or opens proceed without Degraded on unresolved ambiguity.
+- Given: a recovered order candidate set is matched against either canonical `s4` labels or explicitly legacy non-canonical labels.
+- When: the label matcher disambiguates.
+- Then: canonical `s4` labels require exact full `sid8+gid12+leg_idx+ih16` identity with no tie-breakers; legacy fallback tie-breakers are permitted only for explicitly legacy non-canonical labels; any unresolved none-or-many result forces `RiskState::Degraded` and opens blocked.
+- Pass criteria: deterministic full-identity match for canonical labels; deterministic legacy-only fallback behavior when required; Degraded + opens blocked on unresolved ambiguity.
+- Fail criteria: canonical labels use heuristic fallback, ambiguous mapping is accepted, or opens proceed without Degraded on unresolved ambiguity.
 
 AT-041
 - Given: an outbound label candidate does not conform to canonical `s4:{sid8}:{gid12}:{li}:{ih16}` shape (wrong segment count, wrong token widths, or invalid characters).
@@ -1079,11 +1090,11 @@ AT-921
 * `strat_id`: Static ID of the running strategy (e.g., `strangle_btc_low_vol`).
 * `group_id`: UUIDv4 (Shared by all legs in a single atomic attempt).
 * `leg_idx`: `0` or `1` (Identity within the group).
-* `intent_hash`: `xxhash64(instrument + side + qty_q + limit_price_q + group_id + leg_idx)` (see §1.1.1 for quantization)
+* `intent_hash`: `xxhash64(instrument + side + qty_steps + price_ticks + group_id + leg_idx)` (see §1.1.1 for quantization)
   **Hard rule:** Do NOT include wall-clock timestamps in the idempotency hash.
 
 AT-343
-- Given: two intents with identical canonical fields (instrument, side, qty_q, limit_price_q, group_id, leg_idx) evaluated at different wall-clock times.
+- Given: two intents with identical canonical fields (instrument, side, qty_steps, price_ticks, group_id, leg_idx) evaluated at different wall-clock times.
 - When: `intent_hash` is computed for both.
 - Then: the two `intent_hash` values are identical.
 - Pass criteria: `intent_hash(t0) == intent_hash(t1)` for identical canonical fields.
@@ -1091,12 +1102,10 @@ AT-343
 
 AT-933
 - Given: a WS reconnect occurs and the exchange still has open orders with canonical `s4` labels.
-- When: the system re-fetches open orders and matches using full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`) with legacy fallback per §1.1.2.
+- When: the system re-fetches open orders and matches using exact full parsed `s4` identity (`sid8`, `gid12`, `leg_idx`, `ih16`); legacy fallback is reserved for explicitly non-canonical legacy labels per §1.1.2.
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
-- Fail criteria: duplicate dispatch occurs or orders are treated as missing.
-
-
+- Fail criteria: duplicate dispatch occurs, canonical labels use heuristic fallback, or orders are treated as missing.
 ### **1.2 Atomic Group Executor**
 
 **Requirement:** Manage multi-leg intent as a single atomic unit under messy reality (rejects, partials, WS gaps). We do **Runtime Atomicity**: detect atomicity breaks and deterministically contain/flatten.
@@ -1363,8 +1372,8 @@ AT-957
 
 **Council Weakness Covered:** No Liquidity Gate (Low) \+ Taker Bleed (Critical). **Requirement:** Before any order is sent (including IOC), the Soldier must estimate book impact for the requested size and reject trades that exceed max slippage. **Where:** `crates/soldier_core/src/execution/gate.rs` **Input:** `OrderQty`, `L2BookSnapshot`, `max_slippage_bps = 10` (default: see Appendix A)
 
-If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents with `Rejected(LiquidityGateNoL2)`. CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2; they MUST use the deterministic §3.1 fallback price ladder and may dispatch only a strictly positive, monotonic risk-reducing quantity. If no valid §3.1 fallback price source exists, the intent MUST fail closed with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded`. CANCEL-only intents remain allowed.
-OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateNoL2)`.
+If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents. CLOSE/HEDGE/replace order placement is rejected; CANCEL-only intents remain allowed. Deterministic Emergency Close is exempt from profitability gates, but still requires a valid price source; if L2 is missing/stale it MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
+Rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateNoL2)`.
 
 **Output:** `Allowed | Rejected(reason=ExpectedSlippageTooHigh)`
 
@@ -1407,9 +1416,9 @@ AT-909
 AT-421
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`.
 - When: a CANCEL-only intent and a CLOSE/HEDGE order placement intent are evaluated.
-- Then: CANCEL is allowed; CLOSE/HEDGE order placement uses the §3.1 fallback price ladder, remains strictly monotonic risk-reducing, and OPEN remains rejected.
-- Pass criteria: cancel proceeds; close/hedge dispatch count is >= 1 when a valid §3.1 fallback source exists; dispatched close/hedge size is > 0 and <= current position / exposure cap; OPEN is rejected.
-- Fail criteria: close/hedge is blocked despite a valid §3.1 fallback source, dispatched size is 0 or risk-increasing, or OPEN proceeds.
+- Then: CANCEL is allowed; CLOSE/HEDGE order placement is rejected (no dispatch).
+- Pass criteria: cancel proceeds; close/hedge is rejected.
+- Fail criteria: close/hedge proceeds or cancel is blocked.
 
 AT-1216
 - Given: `L2BookSnapshot` is present, parseable, and fresh; expected slippage is <= `max_slippage_bps`; all non-liquidity gates are forced pass.
@@ -1423,14 +1432,14 @@ AT-1216
 ### **1.4 Fee-Aware IOC Limit Pricer (No Market Orders)**
 **Council Weakness Covered:** Taker Bleed (Critical) + Fee Blindness (High)
 
-**Where:** `crates/soldier_core/src/execution/pricer.rs`  
-**Input:** `fair_price`, `gross_edge_usd`, `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`  
+**Where:** `crates/soldier_core/src/execution/pricer.rs`
+**Input:** `fair_price`, `net_edge_usd` (already authorized by Net Edge Gate), `min_edge_usd`, `fee_estimate_usd`, `qty`, `side`
 **Output:** `limit_price`
 
 **Rule:**
-- `net_edge = gross_edge - fees`
-- If `net_edge < min_edge` ⇒ reject.
-- `net_edge_per_unit = net_edge / qty`
+- For OPEN intents, Net Edge Gate is the sole profitability eligibility gate. The pricer MUST NOT make an independent profitability authorization decision once an OPEN has already passed Net Edge (and any Inventory Skew re-check).
+- If any required pricer numeric input is missing, unparseable, NaN, or `qty <= 0`, the pricer MUST fail closed with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and no dispatch occurs.
+- `net_edge_per_unit = net_edge_usd / qty`
 - Compute per-unit bounds:
   - `fee_per_unit = fee_estimate_usd / qty`
   - `min_edge_per_unit = min_edge_usd / qty`
@@ -1451,6 +1460,11 @@ AT-223
 - Then: the system never fills worse than `limit_price` and `Realized Edge >= Min_Edge` at the limit price.
 - Pass criteria: no fills beyond `limit_price`; realized edge meets minimum.
 - Fail criteria: fill worse than `limit_price` or realized edge below minimum.
+
+**OPEN chokepoint sequence (Normative):**
+- `DispatchAuth -> Preflight -> Quantize -> DispatchConsistency -> FeeCache/Policy -> Expiry -> Liquidity -> NetEdge -> InventorySkew -> NetEdge re-check (if Inventory Skew adjusts min_edge_usd) -> Pricer -> RecordedBeforeDispatch -> venue/network dispatch`
+- No venue/network dispatch side effects may occur before `RecordedBeforeDispatch`. WAL append/acknowledgment, metrics, and reject diagnostics are permitted before dispatch because they are not venue/network side effects.
+- `FeeCache/Policy` blocks OPEN when hard-stale fee state or other PolicyGuard/dispatch-authorization conditions apply. CLOSE/HEDGE/CANCEL remain governed by the contract's risk-reducing and Kill semantics.
 
 
 ### **1.4.1 Net Edge Gate (Fees + Expected Slippage)**
@@ -3210,7 +3224,6 @@ Profile: CSP
 * Write intent record BEFORE network dispatch.  
 * Write every TLSM transition immediately (append-only).  
 * On startup, replay ledger into in-memory state and reconcile with exchange.
-* Replay/WAL state is audit and reconciliation input; it MUST NOT by itself authorize a fresh OPEN dispatch after restart.
 
 **Persistence states (latency-aware):**
 - **WALQueueAccepted:** intent enqueue to the WAL writer queue succeeded.
@@ -3236,12 +3249,16 @@ Profile: CSP
   - `wal_queue_enqueue_failures` (monotonic counter of failed enqueues)
 
 > **Architecture boundary (Normative):** The fsync/durability barrier MUST execute
-> in the WAL writer task (a separate async task), NOT in the hot loop that calls
-> `RecordedBeforeDispatch`. The hot-loop gate succeeds upon successful **enqueue**
-> into the bounded channel. If the channel is full, the gate MUST fail closed
-> (reject OPEN). The WAL writer task may block on fsync with a bounded timeout;
-> if fsync times out or errors, the writer MUST signal degraded state and the next
-> OPEN gate attempt MUST fail closed.
+> in the WAL writer task (a separate async task), NOT in the hot loop that
+> evaluates `RecordedBeforeDispatch`. `RecordedBeforeDispatch` is satisfied for
+> OPEN only after the intent first reaches `WALQueueAccepted` **and** the WAL
+> writer returns `WALRecorded`; `WALQueueAccepted` alone is not sufficient for
+> OPEN dispatch. If the channel is full, enqueue fails, or `WALRecorded` cannot
+> be obtained, the gate MUST fail closed (reject OPEN). If durable-before-
+> dispatch is configured, OPEN dispatch additionally requires `WALDurable`. The
+> WAL writer task may block on fsync with a bounded timeout; if fsync times out
+> or errors, the writer MUST signal degraded state and the next OPEN gate
+> attempt MUST fail closed.
 
 **Hot-loop output queue backpressure (Non-Negotiable):**
 - All hot-loop output queues (status writer, telemetry, order events) MUST be bounded.
@@ -3271,11 +3288,11 @@ AT-234
 - Fail criteria: fill missed or TLSM not updated.
 
 AT-935
-- Given: an OPEN intent reaches `WALRecorded` (commit id/LSN issued), but a crash occurs before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
-- When: the system restarts (twice), and on each restart it replays WAL and completes reconciliation (label/open-order + trade reconciliation) before any fresh post-restart strategy evaluation.
-- Then: replay/reconciliation alone MUST NOT dispatch the OPEN intent. The WAL record remains audit/dedupe input only until a fresh post-restart strategy evaluation re-authorizes the OPEN through the normal OPEN gates.
-- Pass criteria: across the two restarts, replay-driven dispatch count == 0; `sent_ts` remains null unless a separate fresh strategy evaluation occurs; no dispatch happens before reconciliation completes.
-- Fail criteria: any OPEN dispatch occurs from replay/reconciliation alone, or replay suppresses a later fresh strategy evaluation by pretending the intent was already sent.
+- Given: a crash occurs after `WALRecorded` succeeds (commit id/LSN issued), but before any network send attempt, so `sent_ts` is absent and the exchange has no open order for the intent's `s4:` label.
+- When: the system restarts (twice), and on each restart it replays WAL and completes reconciliation (label/open-order + trade reconciliation) before attempting dispatch.
+- Then: on the first restart, it must dispatch the intent **exactly once**, record `sent_ts`, and proceed; on the second restart, it must NOT dispatch again (since WAL no longer indicates "unsent").
+- Pass criteria: across two restarts, total dispatch count == 1; `sent_ts` becomes non-null after restart #1; restart #2 performs reconcile and produces 0 dispatches for that intent.
+- Fail criteria: dispatch occurs before reconciliation completes, dispatch count == 0 despite "unsent + reconciled + dispatch permitted," or dispatch count > 1 across restarts.
 
 AT-940
 - Given: a crash occurs after the exchange ACK is received for an intent, but before local TLSM/WAL updates record `ack_ts` or advance state.
@@ -3286,17 +3303,24 @@ AT-940
 
 AT-906
 - Given: WAL appends use a bounded queue of capacity N, and the WAL writer is stalled so the queue reaches N items.
-- When: an OPEN intent is evaluated and the system attempts `WALQueueAccepted` enqueue (a prerequisite for `RecordedBeforeDispatch`).
+- When: an OPEN intent is evaluated and the system attempts `WALQueueAccepted` enqueue as the first prerequisite for `RecordedBeforeDispatch`.
 - Then: the OPEN intent is rejected before dispatch, `wal_write_errors` increments, and the hot loop continues ticking.
-- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked until enqueue succeeds.
+- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked while enqueue fails and until a later evaluation obtains the required writer acknowledgment.
 - Fail criteria: hot loop blocks, an OPEN dispatch occurs without a successful enqueue, `wal_write_errors` does not increment, or opens remain allowed while enqueue fails.
 
 AT-1215
-- Given: `WALQueueAccepted` and `WALRecorded` succeed for an OPEN intent, all other OPEN gates are forced pass, and the intent is evaluated exactly once.
+- Given: `WALQueueAccepted` and `WALRecorded` succeed for an OPEN intent, durable-before-dispatch is not configured for that path, all other OPEN gates are forced pass, and the intent is evaluated exactly once after `WALRecorded` is available.
 - When: dispatch authorization runs.
-- Then: exactly one OPEN dispatch attempt occurs.
-- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`.
-- Fail criteria: dispatch count is 0 despite successful WAL recording, or >1 for the same intent.
+- Then: exactly one OPEN dispatch attempt occurs, and no dispatch attempt occurs before `WALRecorded` is received.
+- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch occurs; no `RecordedBeforeDispatchFailed` is emitted; the dispatch occurs only after `WALRecorded`.
+- Fail criteria: dispatch count is 0 despite successful `WALRecorded`, any dispatch occurs before `WALRecorded`, or dispatch count > 1 for the same intent.
+
+AT-1232
+- Given: `WALQueueAccepted` succeeds for an OPEN intent, all other OPEN gates are forced pass, but the WAL writer withholds or fails `WALRecorded` for that intent.
+- When: dispatch authorization runs before `WALRecorded` is available.
+- Then: no OPEN dispatch occurs, `wal_write_errors` increments, and `RecordedBeforeDispatchFailed` is surfaced.
+- Pass criteria: dispatch count remains 0; `wal_write_errors` increases; the rejection reason is recorded; OPEN remains blocked until a later evaluation obtains the required writer acknowledgment.
+- Fail criteria: any dispatch occurs after enqueue-only success or without `WALRecorded`, `wal_write_errors` does not increment, or the rejection reason is missing.
 
 AT-1231
 - Given: a CLOSE/HEDGE intent (`reduce_only == true`) is WAL-recorded in a non-terminal TLS state, then a crash occurs before completion.
@@ -4625,11 +4649,11 @@ The following acceptance tests MUST pass before Phase 1 is considered complete. 
 - AT-928 (duplicate intent hash is NOOP; depends on canonical quantization being correct and must pass before Phase 1 is closed)
 - AT-1097 (mixed coin+USD sizing reject)
 
-**Deferred to Phase 2 (require PolicyGuard/reconciliation):**
-- AT-104 (stale instrument metadata blocks OPEN; requires TradingMode enforcement)
+**Deferred to Phase 2 (full PolicyGuard/reconciliation proof):**
+- AT-104 full assertion (`TradingMode==ReduceOnly`) is deferred to Phase 2; Phase 1 still requires the stub proof: stale instrument metadata sets `RiskState::Degraded`, blocks OPEN only, and MUST NOT block CLOSE/HEDGE/CANCEL solely due to metadata staleness.
 - AT-233 (crash after send, before ACK; requires WAL restart reconcile)
 - AT-234 (crash after fill, before local update; requires WAL restart reconcile)
-- AT-935 (RecordedBeforeDispatch + restart: replay/reconciliation alone MUST NOT dispatch OPEN; requires full WAL lifecycle)
+- AT-935 (RecordedBeforeDispatch + restart: dispatch exactly once; requires full WAL lifecycle)
 
 ### **Phase 2: CSP Safety Kernel (First Deployable Phase)**
 
@@ -6424,12 +6448,12 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.2 Idempotency & Deduplication (group)** | §1.1.1 (canonical quantization + intent_hash inputs)<br>§1.1.2 (label parse/disambiguation)<br>§2.4 (WAL truth source + “Trade-ID Idempotency Registry”)<br>§3.4 (reconciliation ordering; WS gaps; zombies) | AT-343 (intent_hash stable across wall clock)<br>AT-218 (hash equality across codepaths)<br>AT-216 / AT-217 (label parse + collision-safe matching)<br>AT-933 (no duplicate dispatch after WS reconnect)<br>AT-269 / AT-270 (trade-id idempotency; duplicate fill handling) |
 | **CSP.2.1 Stable Intent Identity** | §1.1.1 (quantize → hash; “no wall-clock in hash”)<br>§1.1.2 (s4 label fields include ih16)<br>Definitions (`intent_hash`, `group_id`, `leg_idx`) | AT-343 (hash not time-dependent)<br>AT-218 (deterministic hash across codepaths)<br>AT-219 (safe rounding direction prior to hash)<br>AT-216 (s4 label length/parse correctness) |
 | **CSP.2.2 Deduplication Rule** | §2.4 (Trade-ID Idempotency Registry block; “append trade_id to WAL first”)<br>§3.4 (REST sweeper before WS replay; reconcile ordering)<br>§1.1.2 (label collision-safe matching) | AT-269 (REST sweeper then WS duplicate ignored)<br>AT-270 (duplicate WS trade is NOOP)<br>AT-933 (WS reconnect does not duplicate dispatch)<br>AT-941 (crash during reconciliation → idempotent rerun; no dupes) |
-| **CSP.3 RecordedBeforeDispatch (WAL) (group)** | §0.Z.2.2, item B (RecordedBeforeDispatch invariant)<br>§2.4 (Durable Intent Ledger rules)<br>§2.4.1 (WAL writer isolation; queue semantics) | AT-935 (RecordedBeforeDispatch + restart → replay/reconciliation alone MUST NOT dispatch OPEN)<br>AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)<br>AT-233 / AT-234 (crash + restart reconcile; no resend; detect fill)<br>AT-925 (hot-loop output queue backpressure → ReduceOnly) |
-| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (`RecordedBeforeDispatch` requires `WALRecorded`; `WALQueueAccepted` alone is insufficient) | AT-935 (recorded unsent OPEN survives crash without replay-only dispatch; fresh post-restart evaluation required before dispatch)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
+| **CSP.3 RecordedBeforeDispatch (WAL) (group)** | §0.Z.2.2, item B (RecordedBeforeDispatch invariant)<br>§2.4 (Durable Intent Ledger rules)<br>§2.4.1 (WAL writer isolation; queue semantics) | AT-935 (RecordedBeforeDispatch + restart → dispatch exactly once)<br>AT-906 (WAL enqueue failure blocks OPEN; hot loop continues)<br>AT-1215 / AT-1232 (`WALRecorded` authorizes OPEN; enqueue-only success still blocks)<br>AT-233 / AT-234 (crash + restart reconcile; no resend; detect fill)<br>AT-925 (hot-loop output queue backpressure → ReduceOnly) |
+| **CSP.3.1 Mandatory Recording for OPEN** | §2.4 (write intent record before send)<br>§2.4.1 (`RecordedBeforeDispatch` requires `WALRecorded`; `WALQueueAccepted` alone is insufficient) | AT-1215 (`WALRecorded` allows exactly one OPEN dispatch)<br>AT-1232 (enqueue-only success still fail-closed)<br>AT-935 (recorded unsent survives crash; sent once after reconcile)<br>AT-906 (enqueue failure prevents OPEN dispatch) |
 | **CSP.3.2 WAL Degradation Semantics** | §2.4.1 (enqueue fail → fail-closed for OPEN; continue ticking)<br>§2.2.3.4 (dispatch authorization: OPEN blocked in ReduceOnly/Kill) | AT-906 (OPEN blocked on WAL queue full)<br>AT-925 (no hot-loop stall; ReduceOnly under backpressure)<br>AT-1049 (exposed ⇒ at least one risk-reducing dispatch permitted) |
-| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 / AT-1215 (recorded OPEN intent is not replay-dispatched; no duplicate send)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 / AT-346 (session termination → latch + kill + reconcile + containment permitted)<br>AT-941 (crash during reconciliation → safe restart) |
+| **CSP.4 Restart, gaps, and reconciliation (group)** | §0.Z.2.2, items C/E (restart reconcile + latch semantics)<br>§2.4 (replay ledger + reconcile with exchange)<br>§2.2.4 (Open Permission Latch)<br>§3.4 (WS continuity + zombie socket + reconcile) | AT-233 / AT-234 / AT-940 (restart correctness; recover ACK/fill; no resend)<br>AT-935 / AT-1215 (recorded intent dispatches exactly once; no duplicate send)<br>AT-430 / AT-011 (startup latch set; clears only after reconcile)<br>AT-271 / AT-272 / AT-408 / AT-202 (WS gap → latch reasons; OPEN blocked)<br>AT-409 / AT-240 / AT-346 (session termination → latch + kill + reconcile + containment permitted)<br>AT-941 (crash during reconciliation → safe restart) |
 | **CSP.4.1 Restart Safety** | §2.4 (startup replay + reconcile before dispatch)<br>§2.2.4 (startup latch set) | AT-233 / AT-234 (restart reconcile; no dupes; fill recovery)<br>AT-430 (startup latch defaults to RESTART_RECONCILE_REQUIRED) |
-| **CSP.4.2 No Duplicate Sends** | §2.4 (no resend unless reconcile proves unsent)<br>§1.1.2 (label matching to detect in-flight orders)<br>§3.4 (reconcile ordering; REST snapshots) | AT-935 (no replay-only OPEN dispatch across restarts)<br>AT-940 (ACK lost locally → recover via reconcile; no resend)<br>AT-933 (WS reconnect: treat existing orders as in-flight; no dupes) |
+| **CSP.4.2 No Duplicate Sends** | §2.4 (no resend unless reconcile proves unsent)<br>§1.1.2 (label matching to detect in-flight orders)<br>§3.4 (reconcile ordering; REST snapshots) | AT-935 (no duplicate send across restarts)<br>AT-940 (ACK lost locally → recover via reconcile; no resend)<br>AT-933 (WS reconnect: treat existing orders as in-flight; no dupes) |
 | **CSP.4.3 WS Gap / Session Termination** | §3.4 (channel continuity + corrective actions; zombie socket rule)<br>§2.2.4 (latch reasons WS_* and SESSION_TERMINATION_*)<br>§3.3 (10028/session termination handling) | AT-271 / AT-408 (book gap → latch WS_BOOK_GAP_*)<br>AT-272 / AT-202 (trade gap → latch WS_TRADES_GAP_*)<br>AT-947 (zombie socket → latch WS_DATA_STALE_*)<br>AT-409 / AT-240 / AT-346 (session termination → latch + Kill + reconcile while containment remains legal) |
 | **CSP.5 TradingMode Semantics & Enforcement (group)** | Definitions (`TradingMode`, `ModeReasonCode`, etc.)<br>§2.2.3 (TradingMode computation + dispatch authorization + reason-code registry)<br>§2.2.4/§2.2.5 (latch + cancel/replace legality) | AT-1050 / AT-1051 / AT-1052 (axis isolation tests)<br>AT-1053 (resolver monotonicity property)<br>AT-010 / AT-402 (OPEN blocked under latch; risk-increasing cancel/replace blocked)<br>AT-024 / AT-025 / AT-026 (mode_reason invariants) |
 | **CSP.5.1 TradingMode states** | Definitions (TradingMode enum)<br>§2.2.3 (resolver output + reason tiers) | AT-1050–AT-1053 (resolver correctness / monotonicity)<br>AT-024 (Active ⇒ mode_reasons empty) |
@@ -6451,4 +6475,6 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-04 | CCL-2026-03-04-02 | Appendix CONTRACT_CHANGE_LEDGER | process | Append a new ledger entry to satisfy append-only growth for current branch delta. | Gate 02a requires row growth when CONTRACT.md differs from base; this records the mutation explicitly. | VR-LEDGER-01 | local/task1 |
 | 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |
-| 2026-03-05 | CCL-2026-03-05-03 | §1.3 Pre-Trade Liquidity Gate; §2.4 Durable Intent Ledger; Phase 1 completion notes; Appendix CONTRACT_CHANGE_LEDGER | clarify | Align stale-L2 handling so OPEN fails closed while risk-reducing actions use the §3.1 fallback ladder, and align restart semantics so replay/reconciliation alone never authorize fresh OPEN dispatch after restart. | Keep the Phase 1 remediation contract auditable and aligned with the PRD, degraded-market-data safety requirements, and replay/recovery proofs on this branch. | AT-421, AT-935, AT-1231 | local/phase1-remediation |
+| 2026-03-06 | CCL-2026-03-06-01 | Branch delta vs origin/main (multiple sections and appendices); Appendix CONTRACT_CHANGE_LEDGER | process | Record append-only ledger growth for the current branch-level contract delta so verify gate 02a remains fail-closed and auditable. | `plans/check_contract_change_ledger.sh` requires ledger growth whenever `specs/CONTRACT.md` diverges from base; this preserves deterministic gate behavior. | VR-LEDGER-01 | local/isolated-verify-20260305 |
+| 2026-03-06 | CCL-2026-03-06-02 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
+| 2026-03-07 | CCL-2026-03-07-01 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Remove the enqueue-as-success ambiguity by restating that `RecordedBeforeDispatch` for OPEN requires `WALRecorded` (plus `WALDurable` when configured), and tighten the nearby ATs so enqueue failure and pre-`WALRecorded` authorization remain fail-closed. | Prevent crash/restart replay drift or duplicate exposure caused by treating bounded-queue enqueue success as sufficient dispatch authorization. | AT-906, AT-1215, AT-1232, AT-935 | local/recorded-before-dispatch-fix |
