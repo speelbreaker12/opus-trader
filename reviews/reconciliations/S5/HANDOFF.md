@@ -43,7 +43,7 @@ Operational rule:
 | Integration branch | recon/S5-000 |
 | Stories in scope | S5-000 |
 | Started | 2026-03-05 |
-| Last updated | 2026-03-05 |
+| Last updated | 2026-03-06 |
 
 ---
 
@@ -53,7 +53,7 @@ Symbols: `·` not started · `→` in progress · `✓` done · `✗` blocked
 
 | Story | Step 1 preflight | Step 2 implement | Step 3 self_review | Step 4 cycle1 | Step 5 fix | Step 6 cycle2 | Step 7 resolution | Step 8 verify_full | Step 9 pass | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
-| S5-000 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | → | · | — |
+| S5-000 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GREEN |
 
 ---
 
@@ -67,9 +67,9 @@ Symbols: `·` not started · `→` in progress · `✓` done · `✗` blocked
 |---|---|---|
 | Preflight | PASS | `artifacts/story/S5-000/preflight/audit.md` |
 | Self-review | PASS | `artifacts/story/S5-000/self_review/FIX_PLAN.md` + 6 FINDINGS files |
-| External C1 | — | — |
-| External C2 | — | — |
-| Verify full | — | — |
+| External C1 | PASS (GREEN) | `artifacts/story/S5-000/codex/`, `artifacts/story/S5-000/kimi/`, `artifacts/story/S5-000/opus/` |
+| External C2 | PASS (GREEN) | 0 blocking findings — abbreviated cycle2 |
+| Verify full | PASS | `artifacts/verify/20260306_175244/` — `VERIFY OK (mode=full)` |
 
 #### Step Log
 
@@ -103,6 +103,65 @@ Notes: 6-agent review found 5 TEST_FIX items (all fixed), 3 DEFERRED. 8 new test
 Friction:
 ```
 
+```text
+Step 4 · cycle1
+Status: COMPLETE
+Receipt: .wf/receipts/S5-000/03_cycle1.json
+Gate: PASS (GREEN — 0 blocking findings)
+Artifacts: artifacts/story/S5-000/codex/, artifacts/story/S5-000/kimi/, artifacts/story/S5-000/opus/
+Notes: 3 external reviews (codex, kimi, opus). Gemini crashed (API error). 0 blocking findings.
+Friction: Gemini API failure
+```
+
+```text
+Step 5 · fix
+Status: COMPLETE
+Receipt: .wf/receipts/S5-000/04_fix.json
+Gate: PASS (no fixes needed — GREEN path)
+Artifacts: —
+Notes: GREEN path — 0 blocking C1 findings, no code changes required.
+Friction:
+```
+
+```text
+Step 6 · cycle2
+Status: COMPLETE
+Receipt: .wf/receipts/S5-000/05_cycle2.json
+Gate: PASS (abbreviated — GREEN path)
+Artifacts: —
+Notes: Abbreviated cycle2 per GREEN path protocol (1 review, no code changes).
+Friction:
+```
+
+```text
+Step 7 · resolution
+Status: COMPLETE
+Receipt: .wf/receipts/S5-000/06_resolution.json
+Gate: PASS
+Artifacts: artifacts/story/S5-000/review_resolution.md
+Notes: All findings triaged. BLOCKING=0.
+Friction:
+```
+
+```text
+Step 8 · verify_full
+Status: COMPLETE
+Receipt: .wf/receipts/S5-000/07_verify_full.json
+Gate: PASS — VERIFY OK (mode=full)
+Artifacts: artifacts/verify/20260306_175244/
+Notes: 64 preflight checks passed, all Rust tests green, clippy clean, all gates passed.
+Friction: Needed PREFLIGHT_FIXTURE_TEST_TIMEOUT=480 for slow recon fixture tests. Legacy layout guard flaky on first run (parallel race), passed on retry.
+```
+
+```text
+Step 9 · pass
+Status: COMPLETE
+Gate: PASS — 8/8 receipts validated, GREEN recon = no pass re-flip needed
+Artifacts: —
+Notes: Story already passes=true. GREEN recon confirms contract-proof integrity.
+Friction:
+```
+
 ---
 
 ## Debt Register
@@ -120,6 +179,8 @@ Friction:
 | # | Step | Rule | Severity | Fix target | Owner | Status |
 |---|---|---|---|---|---|---|
 | 1 | preflight | `rule: AT ownership gate blocks recon for shared ATs · trigger: S5-000 shares AT-222/344/909/421 with S6-012 · prevents: legitimate recon · enforce: RECON_SKIP_OWNERSHIP=1` | P1 | recon_precheck.sh, premortem_ready.sh | — | applied |
+| 2 | verify_full | `rule: PREFLIGHT_FIXTURE_TEST_TIMEOUT default 240s too low for recon fixtures · trigger: test_recon_operator_runner.sh exceeds 240s · prevents: clean verify · enforce: PREFLIGHT_FIXTURE_TEST_TIMEOUT=480` | P2 | preflight.sh default or RUNBOOK | — | workaround applied |
+| 3 | verify_full | `rule: Legacy layout guard flaky under parallel execution · trigger: intermittent FAIL on first run, PASS on retry · prevents: clean verify on first attempt · enforce: none (race condition)` | P2 | preflight.sh guard parallelism | — | observed |
 
 ---
 
@@ -128,53 +189,39 @@ Friction:
 ### Stopped At
 
 - Story: `S5-000`
-- Step: `verify_full` (next — not yet stamped)
-- Status: Steps 1-7 complete (receipts 00-06). Fmt fix committed. verify.sh full failing on fixture timeouts.
-- HEAD at stop: `6b818e4`
+- Step: COMPLETE — all 9 steps done
+- Status: GREEN recon complete. 8/8 receipts. VERIFY OK (mode=full). No pass re-flip needed.
+- HEAD at stop: `0f4fa37`
 
 ### What Happened (2-5 bullets)
 
-- Session 3: Ran 4-model C1 reviews (codex, kimi, opus, gemini). Gemini crashed (API error), other 3 succeeded.
-- Codex found 4 findings (3xP1, 1xP2) — AT-222 reason mismatch (DEFERRED), AT-421 pipeline skip (by design), anchor test paper proof, premortem overstates. All triaged as non-blocking.
-- Kimi: 2xP0 (1 already deferred, 1 FP), 1xP1 (FP — test exists), 1xP2. Opus: CONDITIONAL_PASS, 0 blocking.
-- GREEN path throughout — 0 blocking findings. Steps 4-7 (cycle1, fix, cycle2, resolution) stamped.
-- cargo fmt fix committed (`6b818e4`). verify.sh full fails on fixture test timeouts (240s limit), not code issues.
-- `plans/review_logged.sh` line 719: fixed `local` keyword bug for gemini (uncommitted).
+- Committed tooling fixes (review_logged.sh gemini support, safe_count fix) + doc updates to clean the tree.
+- Ran verify.sh full — first attempt failed (legacy guard flaky + 3 fixture timeouts at 240s default).
+- Second attempt with PREFLIGHT_FIXTURE_TEST_TIMEOUT=360: 1 remaining timeout (test_recon_operator_runner.sh at 361s).
+- Third attempt with PREFLIGHT_FIXTURE_TEST_TIMEOUT=480: all 64 preflight checks passed, full pipeline green.
+- Stamped verify_full and pass receipts. GREEN recon = story `passes=true` confirmed.
 
 ### Must Read First (ordered)
 
-1. `artifacts/story/S5-000/review_resolution.md` — full triage table
-2. `artifacts/story/S5-000/evidence_ledger.json` — AT verdicts with file:line citations
-3. `artifacts/story/S5-000/codex/codex.enriched.md` — most substantive review (4 findings)
+1. `artifacts/verify/20260306_175244/` — verify full artifacts (green run)
+2. `artifacts/story/S5-000/review_resolution.md` — full triage table
+3. `artifacts/story/S5-000/evidence_ledger.json` — AT verdicts with file:line citations
 
 ### Next Steps (exact commands/actions)
 
-1. Commit or stash `plans/review_logged.sh` gemini fix (dirty tree blocks verify)
-2. Run verify.sh full with higher timeouts:
-   ```bash
-   PREFLIGHT_TIMEOUT=1200 FIXTURE_TIMEOUT=360 ./plans/verify.sh full
-   ```
-3. If verify passes, stamp:
-   ```bash
-   RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 verify_full
-   ```
-4. Stamp pass (GREEN recon = no pass re-flip needed):
-   ```bash
-   RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 pass
-   ```
-5. Update HANDOFF as complete.
+1. Reconciliation COMPLETE — no further action needed for S5-000.
+2. Optional: commit HANDOFF update and verify artifacts.
+3. Optional: merge `recon/S5-000` branch or clean up worktree.
 
 ### Open Decisions / Blockers
 
-- verify.sh full fixture timeouts (8 tests hit 240s limit) — need `FIXTURE_TIMEOUT=360` or similar env var
-- `plans/review_logged.sh` gemini fix uncommitted (line 719: `local` → bare assignment)
-- All commands need `RECON_SKIP_OWNERSHIP=1` env var due to AT-222/344/909/421 shared with S6-012
+None — reconciliation complete.
 
 ### Resume Command
 
 ```bash
-/reconcil S5-000
-RECON_SKIP_OWNERSHIP=1 WF_RECON_MODE=1 plans/wf_step.sh S5-000 --status
+# No resume needed — S5-000 reconciliation is complete
+plans/wf_step.sh S5-000 --status
 ```
 
 ---

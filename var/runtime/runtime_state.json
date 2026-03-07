@@ -4,63 +4,63 @@
     "expected_publish_interval_s": 2,
     "stale_after_s": 15
   },
-  "generated_at": "2026-03-06T19:30:42Z",
-  "head_commit": "6b818e4",
+  "generated_at": "2026-03-03T21:29:47Z",
+  "head_commit": "72b4dd8",
   "instance_id": "soldier-main-01",
   "metrics": {
     "deribit_10028_count": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "count",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     },
     "deribit_http_p95": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "ms",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     },
     "disk_used_pct": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "percent",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     },
     "http_429_count": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "count",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     },
     "mm_util": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "ratio",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     },
     "wal_queue_depth": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "count",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     },
     "ws_event_lag": {
       "reason": "Metric unavailable",
       "threshold_state": "UNKNOWN",
       "unit": "ms",
-      "updated_at": "2026-03-06T19:30:42Z",
+      "updated_at": "2026-03-03T21:29:47Z",
       "value": null
     }
   },
   "safety": {
     "f1_cert_state": {
-      "last_certified_at": "2026-03-06T19:30:42Z",
+      "last_certified_at": "2026-03-03T21:29:47Z",
       "reason_codes": [
         "runtime_mode_reduced"
       ],
