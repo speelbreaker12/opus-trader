@@ -33,6 +33,7 @@ trap cleanup EXIT
 
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
+real_jq="$(command -v jq)"
 story_id="S99-001"
 
 setup_story_review_artifacts() {
@@ -169,6 +170,30 @@ success_output="$(
 echo "$success_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing success output"
 echo "$success_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check did not pass for current HEAD"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$success_case/prd.json" >/dev/null || fail "passes was not updated to true"
+
+# ── Test 1b: missing --artifacts-dir value is rejected deterministically ──
+set +e
+missing_artifacts_arg_output="$(
+  cd "$ROOT" && \
+  "$SCRIPT" "$story_id" true --artifacts-dir 2>&1
+)"
+missing_artifacts_arg_rc=$?
+set -e
+
+[[ "$missing_artifacts_arg_rc" -eq 2 ]] || fail "expected exit 2 for missing --artifacts-dir value, got $missing_artifacts_arg_rc"
+echo "$missing_artifacts_arg_output" | grep -Fq "ERROR: --artifacts-dir requires a value" || fail "missing artifacts-dir value diagnostic"
+
+# ── Test 1c: missing --contract-review value is rejected deterministically ──
+set +e
+missing_contract_arg_output="$(
+  cd "$ROOT" && \
+  "$SCRIPT" "$story_id" true --contract-review 2>&1
+)"
+missing_contract_arg_rc=$?
+set -e
+
+[[ "$missing_contract_arg_rc" -eq 2 ]] || fail "expected exit 2 for missing --contract-review value, got $missing_contract_arg_rc"
+echo "$missing_contract_arg_output" | grep -Fq "ERROR: --contract-review requires a value" || fail "missing contract-review value diagnostic"
 
 missing_manifest_gate="$tmp_dir/missing-manifest-gate.sh"
 cat > "$missing_manifest_gate" <<'EOF'
@@ -326,6 +351,120 @@ set -e
 echo "$head_flip_output" | grep -Fq "ERROR: HEAD changed during pass flip validation" || fail "missing mid-run head-change diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$head_flip_case/prd.json" >/dev/null || fail "passes changed despite mid-run head-change failure"
 echo "$head_flip_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check should run with the initial HEAD before final check"
+
+# ── Test 4b: mid-run PRD mutation is rejected fail-closed ─────────────
+prd_mutation_case="$tmp_dir/prd_mutation_during_head_check"
+mkdir -p "$prd_mutation_case"
+setup_case "$prd_mutation_case" "$head_sha"
+
+git_mutation_wrapper_dir="$tmp_dir/git-wrapper-prd-mutation"
+mkdir -p "$git_mutation_wrapper_dir"
+cat > "$git_mutation_wrapper_dir/git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+count_file="${TEST_GIT_COUNT_FILE:?missing TEST_GIT_COUNT_FILE}"
+count=0
+if [[ -f "$count_file" ]]; then
+  count="$(cat "$count_file")"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$count_file"
+
+if [[ "$#" -ge 2 && "$1" == "rev-parse" && "$2" == "HEAD" ]]; then
+  if [[ "$count" -eq 2 ]]; then
+    python3 - <<'PY'
+import json
+import os
+
+path = os.environ["TEST_MUTATE_PRD_FILE"]
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+data["items"][0]["enforcement_point"] = "MUTATED_DURING_VALIDATION"
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle)
+PY
+  fi
+  printf '%s\n' "${TEST_GIT_HEAD:?missing TEST_GIT_HEAD}"
+  exit 0
+fi
+
+exec "${TEST_GIT_REAL:?missing TEST_GIT_REAL}" "$@"
+EOF
+chmod +x "$git_mutation_wrapper_dir/git"
+
+set +e
+prd_mutation_output="$(
+  cd "$ROOT" && \
+  PATH="$git_mutation_wrapper_dir:$PATH" \
+  TEST_GIT_REAL="$real_git" \
+  TEST_GIT_COUNT_FILE="$prd_mutation_case/git.count" \
+  TEST_GIT_HEAD="$head_sha" \
+  TEST_MUTATE_PRD_FILE="$prd_mutation_case/prd.json" \
+  WF_STEP=/bin/true \
+  PRD_FILE="$prd_mutation_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$prd_mutation_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$prd_mutation_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$prd_mutation_case/artifacts/contract_review.json" 2>&1
+)"
+prd_mutation_rc=$?
+set -e
+
+[[ "$prd_mutation_rc" -ne 0 ]] || fail "expected pass flip to fail when PRD mutates during validation"
+echo "$prd_mutation_output" | grep -Fq "ERROR: PRD modified during validation: $prd_mutation_case/prd.json" || fail "missing mid-run PRD mutation diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$prd_mutation_case/prd.json" >/dev/null || fail "passes changed despite mid-run PRD mutation"
+
+# ── Test 4c: late PRD mutation before final rewrite is rejected ───────
+late_prd_mutation_case="$tmp_dir/prd_mutation_during_rewrite"
+mkdir -p "$late_prd_mutation_case"
+setup_case "$late_prd_mutation_case" "$head_sha"
+
+jq_mutation_wrapper_dir="$tmp_dir/jq-wrapper-prd-mutation"
+mkdir -p "$jq_mutation_wrapper_dir"
+cat > "$jq_mutation_wrapper_dir/jq" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$*" == *'.passes = $status'* ]] && [[ ! -f "${TEST_JQ_MUTATION_MARKER:?missing TEST_JQ_MUTATION_MARKER}" ]]; then
+  python3 - <<'PY'
+import json
+import os
+
+path = os.environ["TEST_MUTATE_PRD_FILE"]
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+data["items"][0]["enforcement_point"] = "MUTATED_DURING_REWRITE"
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle)
+PY
+  : > "${TEST_JQ_MUTATION_MARKER}"
+fi
+
+exec "${TEST_REAL_JQ:?missing TEST_REAL_JQ}" "$@"
+EOF
+chmod +x "$jq_mutation_wrapper_dir/jq"
+
+set +e
+late_prd_mutation_output="$(
+  cd "$ROOT" && \
+  PATH="$jq_mutation_wrapper_dir:$PATH" \
+  TEST_REAL_JQ="$real_jq" \
+  TEST_JQ_MUTATION_MARKER="$late_prd_mutation_case/jq.mutated" \
+  TEST_MUTATE_PRD_FILE="$late_prd_mutation_case/prd.json" \
+  WF_STEP=/bin/true \
+  PRD_FILE="$late_prd_mutation_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$late_prd_mutation_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$late_prd_mutation_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$late_prd_mutation_case/artifacts/contract_review.json" 2>&1
+)"
+late_prd_mutation_rc=$?
+set -e
+
+[[ "$late_prd_mutation_rc" -ne 0 ]] || fail "expected pass flip to fail when PRD mutates during rewrite"
+echo "$late_prd_mutation_output" | grep -Fq "ERROR: PRD modified during validation: $late_prd_mutation_case/prd.json" || fail "missing late PRD mutation diagnostic"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$late_prd_mutation_case/prd.json" >/dev/null || fail "passes changed despite late PRD mutation"
 
 # ── Test 5: No-flock locking (mkdir-based) ──────────────────────────
 noflock_case="$tmp_dir/noflock_lock_cleanup"
