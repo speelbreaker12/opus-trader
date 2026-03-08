@@ -451,6 +451,7 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_audit_parallel_empty_cache_arrays.sh"
   "plans/tests/test_slice_completion_review_guard.sh"
   "plans/tests/test_slice_completion_enforce.sh"
+  "plans/tests/test_prd_ref_check_refs.sh"
   "plans/tests/test_prd_set_pass.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
   # Heavy recon integration fixtures stay in verify coverage, but not in quick smoke.
