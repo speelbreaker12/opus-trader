@@ -116,6 +116,7 @@ required=(
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_ref_check_refs.sh
+  plans/tests/test_prd_set_pass_hardening.sh
   plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
