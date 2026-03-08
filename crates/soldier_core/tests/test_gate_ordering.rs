@@ -20,3 +20,10 @@ fn assert_unit_test_present(name: &str) {
 fn test_at501_open_all_gates_pass_trace_order() {
     assert_unit_test_present("test_at501_open_all_gates_pass_trace_order");
 }
+
+#[test]
+fn test_gate_ordering_constraints() {
+    assert_unit_test_present("test_constraint_reject_gates_before_persist");
+    assert_unit_test_present("test_constraint_wal_is_last_gate_open");
+    assert_unit_test_present("test_constraint_no_approval_with_any_gate_failed");
+}
