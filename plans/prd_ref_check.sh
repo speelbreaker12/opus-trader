@@ -43,13 +43,20 @@ if [[ -f "docs/contract_kernel.json" ]]; then
   EXTRA_CONTRACT_FILES+=("docs/contract_kernel.json")
 fi
 
-python3 - "$PRD_FILE" "$CONTRACT_FILE" "$PLAN_FILE" "${EXTRA_CONTRACT_FILES[@]}" <<'PY'
+ROADMAP_FILE=""
+if [[ -f "docs/ROADMAP.md" ]]; then
+  ROADMAP_FILE="docs/ROADMAP.md"
+elif [[ -f "ROADMAP.md" ]]; then
+  ROADMAP_FILE="ROADMAP.md"
+fi
+
+python3 - "$PRD_FILE" "$CONTRACT_FILE" "$PLAN_FILE" "$ROADMAP_FILE" "${EXTRA_CONTRACT_FILES[@]}" <<'PY'
 import json
 import os
 import re
 import sys
 
-prd_path, contract_path, plan_path, *extra_contract_paths = sys.argv[1:]
+prd_path, contract_path, plan_path, roadmap_path, *extra_contract_paths = sys.argv[1:]
 
 with open(prd_path, 'r', encoding='utf-8') as f:
     prd = json.load(f)
@@ -70,6 +77,10 @@ for extra_path in extra_contract_paths:
         contract_text += "\n" + f.read()
 with open(plan_path, 'r', encoding='utf-8') as f:
     plan_text = f.read()
+roadmap_text = ''
+if roadmap_path and os.path.isfile(roadmap_path):
+    with open(roadmap_path, 'r', encoding='utf-8') as f:
+        roadmap_text = f.read()
 
 heading_re = re.compile(r'^#{1,6}\s+')
 bullet_re = re.compile(r'^[-*+]\s+')
@@ -107,6 +118,7 @@ def strip_prefix(ref: str) -> str:
     s = ref.strip()
     s = re.sub(r'^(?:specs/)?CONTRACT\.md\s*', '', s, flags=re.IGNORECASE)
     s = re.sub(r'^(?:specs/)?IMPLEMENTATION_PLAN\.md\s*', '', s, flags=re.IGNORECASE)
+    s = re.sub(r'^(?:docs/)?ROADMAP\.md\s*', '', s, flags=re.IGNORECASE)
     s = s.lstrip(':').strip()
     s = s.lstrip('§').strip()
     return s
@@ -126,6 +138,8 @@ def variants(text: str):
 
 
 section_id_re = re.compile(r'^([0-9]+(?:\.[0-9A-Z]+)*)\s+(.*)$', re.IGNORECASE)
+roadmap_anchor_re = re.compile(r'^P\d+-[A-Z]\b', re.IGNORECASE)
+numeric_section_re = re.compile(r'^[0-9]+(?:\.[0-9A-Z]+)*$', re.IGNORECASE)
 
 
 def split_segments(ref: str):
@@ -148,11 +162,33 @@ def split_segments(ref: str):
     return expanded
 
 
+def is_explicit_roadmap_ref(ref: str) -> bool:
+    return 'ROADMAP.MD' in str(ref).upper()
+
+
+def is_bare_roadmap_anchor_ref(item: dict, ref: str) -> bool:
+    category = str(item.get('category', '')).lower()
+    ref_text = str(ref).strip()
+    return (
+        category in ('policy', 'infra')
+        and (
+            not is_explicit_roadmap_ref(ref_text)
+            and roadmap_anchor_re.match(strip_prefix(ref_text)) is not None
+        )
+    )
+
+
+def candidate_in_haystack(candidate: str, haystack: str) -> bool:
+    if numeric_section_re.fullmatch(candidate):
+        return bool(re.search(r'(?<![0-9.])' + re.escape(candidate) + r'(?![0-9.])', haystack))
+    return candidate in haystack
+
+
 def resolve_ref(ref: str, haystack: str) -> bool:
     for segment in split_segments(ref):
         ok = False
         for candidate in variants(segment):
-            if candidate and candidate in haystack:
+            if candidate and candidate_in_haystack(candidate, haystack):
                 ok = True
                 break
         if not ok:
@@ -162,6 +198,7 @@ def resolve_ref(ref: str, haystack: str) -> bool:
 
 contract_haystack = build_haystack(contract_text)
 plan_haystack = build_haystack(plan_text)
+roadmap_haystack = build_haystack(roadmap_text) if roadmap_text else ''
 
 unresolved = []
 
@@ -179,12 +216,38 @@ for item in items:
     for ref in contract_refs:
         if not ref:
             continue
-        if not resolve_ref(str(ref), contract_haystack):
+        ref_text = str(ref)
+        haystacks = []
+        if is_explicit_roadmap_ref(ref_text):
+            if not roadmap_haystack:
+                unresolved.append((item_id, 'contract', ref))
+                continue
+            haystacks.append(roadmap_haystack)
+        elif is_bare_roadmap_anchor_ref(item, ref_text):
+            if roadmap_haystack:
+                haystacks.append(roadmap_haystack)
+            haystacks.append(contract_haystack)
+        else:
+            haystacks.append(contract_haystack)
+        if not any(resolve_ref(ref_text, haystack) for haystack in haystacks):
             unresolved.append((item_id, 'contract', ref))
     for ref in plan_refs:
         if not ref:
             continue
-        if not resolve_ref(str(ref), plan_haystack):
+        ref_text = str(ref)
+        haystacks = []
+        if is_explicit_roadmap_ref(ref_text):
+            if not roadmap_haystack:
+                unresolved.append((item_id, 'plan', ref))
+                continue
+            haystacks.append(roadmap_haystack)
+        elif is_bare_roadmap_anchor_ref(item, ref_text):
+            if roadmap_haystack:
+                haystacks.append(roadmap_haystack)
+            haystacks.append(plan_haystack)
+        else:
+            haystacks.append(plan_haystack)
+        if not any(resolve_ref(ref_text, haystack) for haystack in haystacks):
             unresolved.append((item_id, 'plan', ref))
 
 if unresolved:

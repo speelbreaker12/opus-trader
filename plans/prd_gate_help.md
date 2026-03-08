@@ -32,6 +32,7 @@ From `prd_ref_check.sh` (separate script):
 
 Preferred `contract_refs` shape:
 - Use stable, mechanically resolvable tokens such as `CONTRACT.md AT-132`, `CONTRACT.md LiquidityGateNoL2`, `CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)`, `Anchor-###`, or `VR-###`.
+- For `policy` / `infra` workflow stories, roadmap refs are also supported in compact form: `ROADMAP.md P0-A Launch Policy Baseline` or bare `P0-A Launch Policy Baseline`.
 - Avoid free-form prose sentences in `contract_refs`, especially slash-heavy text like `missing/unparseable/stale`, because `prd_ref_check.sh` splits refs into segments and may fail to resolve otherwise-valid prose.
 - Put detailed behavioral wording in `acceptance`, `steps`, or `contract_must_evidence`; keep `contract_refs` compact and tokenized.
 
@@ -55,6 +56,8 @@ Preferred `contract_refs` shape:
   - `CONTRACT.md LiquidityGateNoL2`
   - `CONTRACT.md AT-132`
   - `CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)`
+  - `ROADMAP.md P0-A Launch Policy Baseline`
+  - `P0-A Launch Policy Baseline` (for `policy` / `infra` stories)
 - Keep the detailed sentence in `acceptance` or `steps`, not in `contract_refs`
 
 ## Pass-Gate Preview (Dry Run)
