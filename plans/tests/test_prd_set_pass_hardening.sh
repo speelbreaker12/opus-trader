@@ -21,7 +21,7 @@ trap cleanup EXIT
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
 real_jq="$(command -v jq)"
-story_id="S99-001"
+story_id="S98-001"
 
 setup_story_review_artifacts() {
   local case_dir="$1"
