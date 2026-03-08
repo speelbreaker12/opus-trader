@@ -95,7 +95,8 @@ Each item MUST include ALL fields:
 - enforcing_contract_ats (string[]; AT-###)
 - reason_codes (object; type + values)
 - enforcement_point (string; PolicyGuard|EvidenceGuard|DispatcherChokepoint|WAL|AtomicGroupExecutor|StatusEndpoint)
-- failure_mode (string[]; stall|hang|backpressure|missing|stale|parse_error)
+- failure_mode (string[]; entries must be stall|hang|backpressure|missing|stale|parse_error)
+- loss_mode (object; worst_case/fail_closed_cap/drift_metric)
 - observability { metrics[], status_fields[], status_contract_ats[] }
 - implementation_tests (string[])
 - dependencies (string[])
@@ -155,6 +156,7 @@ For each story:
 - Confirm contract_refs is specific and applicable.
 - Confirm acceptance explicitly enforces at least one invariant/gate implied by the referenced contract section(s).
 - Confirm story does not weaken fail-closed rules described in the contract.
+- If loss/risk handling is mentioned, confirm loss_mode preserves explicit worst_case, fail_closed_cap, and drift_metric fail-closed constraints.
 
 EXCEPTION for category=policy|infra (Phase 0 operational prerequisites):
 - These items may reference ROADMAP.md sections instead of CONTRACT.md.
