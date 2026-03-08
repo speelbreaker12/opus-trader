@@ -34,6 +34,7 @@ STATUS="${2:-}"
 shift $(( $# >= 2 ? 2 : $# ))
 
 PRD_FILE="${PRD_FILE:-plans/prd.json}"
+PRD_READ_FILE="$PRD_FILE"
 ARTIFACTS_DIR="${VERIFY_ARTIFACTS_DIR:-}"
 CONTRACT_REVIEW_FILE=""
 DEFAULT_EXTERNAL_MANIFEST_GATE_CMD="$ROOT/plans/external_manifest_gate.sh"
@@ -48,11 +49,13 @@ ARTIFACTS_DIR="${ARTIFACTS_DIR%/}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --artifacts-dir)
-      ARTIFACTS_DIR="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || { echo "ERROR: --artifacts-dir requires a value" >&2; exit 2; }
+      ARTIFACTS_DIR="$2"
       shift 2
       ;;
     --contract-review)
-      CONTRACT_REVIEW_FILE="${2:-}"
+      [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != --* ]] || { echo "ERROR: --contract-review requires a value" >&2; exit 2; }
+      CONTRACT_REVIEW_FILE="$2"
       shift 2
       ;;
     --dry-run)
@@ -80,11 +83,33 @@ command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required" >&2; exit 2; }
 lock_file="${PRD_FILE}.lock"
 lock_dir="${lock_file}.d"
 tmp=""
+prd_snapshot=""
+prd_sha_start=""
 lock_dir_acquired=0
+
+file_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
+require_prd_unchanged() {
+  local prd_sha_end=""
+  prd_sha_end="$(file_sha256 "$PRD_FILE")"
+  if [[ "$prd_sha_start" != "$prd_sha_end" ]]; then
+    echo "ERROR: PRD modified during validation: $PRD_FILE" >&2
+    exit 7
+  fi
+}
 
 cleanup() {
   if [[ -n "$tmp" && -f "$tmp" ]]; then
     rm -f "$tmp" 2>/dev/null || true
+  fi
+  if [[ -n "$prd_snapshot" && -f "$prd_snapshot" ]]; then
+    rm -f "$prd_snapshot" 2>/dev/null || true
   fi
   if [[ "$lock_dir_acquired" == "1" ]]; then
     rmdir "$lock_dir" 2>/dev/null || true
@@ -112,7 +137,14 @@ if ! jq -e . "$PRD_FILE" >/dev/null 2>&1; then
   exit 1
 fi
 
-exists="$(jq --arg id "$ID" 'any(.items[]; .id==$id)' "$PRD_FILE")"
+if [[ "$STATUS" == "true" ]]; then
+  prd_snapshot="$(mktemp)"
+  cp "$PRD_FILE" "$prd_snapshot"
+  PRD_READ_FILE="$prd_snapshot"
+  prd_sha_start="$(file_sha256 "$prd_snapshot")"
+fi
+
+exists="$(jq --arg id "$ID" 'any(.items[]; .id==$id)' "$PRD_READ_FILE")"
 if [[ "$exists" != "true" ]]; then
   echo "ERROR: task id not found in PRD: $ID" >&2
   exit 3
@@ -120,14 +152,14 @@ fi
 
 if [[ "$STATUS" == "true" ]]; then
   # ── PRD field validation ──────────────────────────────────────────
-  story_category="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.category // "")' "$PRD_FILE")"
+  story_category="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.category // "")' "$PRD_READ_FILE")"
   if [[ "$story_category" != "policy" && "$story_category" != "certification" ]]; then
-    eca_count="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcing_contract_ats // []) | if type == "array" then length else 0 end' "$PRD_FILE")"
+    eca_count="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcing_contract_ats // []) | if type == "array" then length else 0 end' "$PRD_READ_FILE")"
     if [[ "$eca_count" -eq 0 ]]; then
       echo "ERROR: cannot set passes=true for $ID: enforcing_contract_ats is empty (PASS requires AT ownership)" >&2
       exit 6
     fi
-    enf_point="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcement_point // "")' "$PRD_FILE")"
+    enf_point="$(jq -r --arg id "$ID" '.items[] | select(.id==$id) | (.enforcement_point // "")' "$PRD_READ_FILE")"
     if [[ -z "$enf_point" ]]; then
       echo "ERROR: cannot set passes=true for $ID: enforcement_point is missing/empty (PASS requires a named enforcement point)" >&2
       exit 6
@@ -142,7 +174,7 @@ if [[ "$STATUS" == "true" ]]; then
       ((.worst_case // "") | length > 0) and
       ((.fail_closed_cap // "") | length > 0) and
       ((.drift_metric // "") | length > 0)
-    ' "$PRD_FILE")
+    ' "$PRD_READ_FILE")
     if [[ "$loss_ok" != "true" ]]; then
       echo "ERROR: loss_mode incomplete for $ID (worst_case, fail_closed_cap, drift_metric required)" >&2
       exit 9
@@ -372,10 +404,16 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
+if [[ -n "$prd_snapshot" ]]; then
+  require_prd_unchanged
+fi
 tmp="$(mktemp)"
 jq --arg id "$ID" --argjson status "$STATUS" '
   .items = (.items | map(if .id == $id then .passes = $status else . end))
-' "$PRD_FILE" > "$tmp"
+' "$PRD_READ_FILE" > "$tmp"
+if [[ -n "$prd_snapshot" ]]; then
+  require_prd_unchanged
+fi
 mv "$tmp" "$PRD_FILE"
 
 echo "Updated task $ID: passes=$STATUS"
