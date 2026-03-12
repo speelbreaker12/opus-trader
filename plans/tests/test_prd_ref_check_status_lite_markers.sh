@@ -82,7 +82,7 @@ cat > "$compact_prd" <<'JSON'
       "contract_refs": [],
       "plan_refs": [],
       "acceptance": [
-        "GIVEN /status is queried THEN csp minimum key set required by at-023/at-405/at-419/at-907/at-927/at-1117 is enforced.",
+        "GIVEN status_mode=compact_csp_status_markers WHEN /status is queried THEN csp minimum key set required by at-023/at-405/at-419/at-907/at-927/at-1117 is enforced.",
         "GIVEN /status is emitted THEN schema/profile/mode/risk fields, policy freshness fields, certification fields, and 5m rate-limit counters remain present.",
         "GIVEN /status is returned THEN durability-queue counters and open-permission fields remain visible."
       ],
@@ -98,6 +98,40 @@ if grep -Fq 'references /status but acceptance missing required CSP key' "$tmp_d
   echo "stderr:" >&2
   cat "$tmp_dir/err.txt" >&2 || true
   die "compact status markers should not emit missing CSP key warnings"
+fi
+
+compact_without_optin_prd="$tmp_dir/compact_status_markers_without_optin.json"
+cat > "$compact_without_optin_prd" <<'JSON'
+{
+  "items": [
+    { "id": "S0-100", "story_ref": "P0-A prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-101", "story_ref": "P0-B prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-102", "story_ref": "P0-C prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-103", "story_ref": "P0-D prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-104", "story_ref": "P0-E prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-105", "story_ref": "P0-F prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    {
+      "id": "S0-904",
+      "story_ref": "/status compact CSP marker guard without opt-in",
+      "contract_refs": [],
+      "plan_refs": [],
+      "acceptance": [
+        "GIVEN /status is queried THEN csp minimum key set required by at-023/at-405/at-419/at-907/at-927/at-1117 is enforced.",
+        "GIVEN /status is emitted THEN schema/profile/mode/risk fields, policy freshness fields, certification fields, and 5m rate-limit counters remain present.",
+        "GIVEN /status is returned THEN durability-queue counters and open-permission fields remain visible."
+      ],
+      "verify": [],
+      "enforcing_contract_ats": []
+    }
+  ]
+}
+JSON
+
+expect_rc 0 "$CHECKER" "$compact_without_optin_prd"
+if ! grep -Fq 'references /status but acceptance missing required CSP key' "$tmp_dir/err.txt"; then
+  echo "stderr:" >&2
+  cat "$tmp_dir/err.txt" >&2 || true
+  die "compact status markers without opt-in should still emit missing CSP key warnings"
 fi
 
 invalid_prd="$tmp_dir/invalid_status_lite.json"

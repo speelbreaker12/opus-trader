@@ -334,20 +334,27 @@ if roadmap_digest_path and Path(roadmap_digest_path).exists():
     except (json.JSONDecodeError, IOError) as e:
         print(f"[prd_slice_prepare] WARN: could not load ROADMAP digest: {e}", file=sys.stderr)
 
+roadmap_categories = {'policy', 'infra'}
+roadmap_anchor_re = re.compile(r'^P\d+-[A-Z]\b', re.IGNORECASE)
+explicit_roadmap_ref_re = re.compile(r'^(?:docs/)?ROADMAP\.md\b', re.IGNORECASE)
+
 contract_refs = []
 plan_refs = []
 roadmap_refs_by_item = {}
 for item in slice_items:
     item_contract_refs = item.get('contract_refs', []) or []
     item_plan_refs = item.get('plan_refs', []) or []
+    item_category = str(item.get('category', '')).strip().lower()
 
     # Check for ROADMAP refs (items with category policy/infra may reference ROADMAP.md)
-    # Also detect P0-*, P1-* style refs which are ROADMAP phase anchors
-    roadmap_anchor_re = re.compile(r'^P\d+-[A-Z]$')
     roadmap_refs = []
     other_contract_refs = []
     for ref in item_contract_refs:
-        if isinstance(ref, str) and ('ROADMAP' in ref.upper() or roadmap_anchor_re.match(ref)):
+        if (
+            isinstance(ref, str)
+            and item_category in roadmap_categories
+            and (explicit_roadmap_ref_re.match(ref.strip()) or roadmap_anchor_re.match(ref.strip()))
+        ):
             roadmap_refs.append(ref)
         else:
             other_contract_refs.append(ref)
@@ -356,7 +363,11 @@ for item in slice_items:
     roadmap_plan_refs = []
     other_plan_refs = []
     for ref in item_plan_refs:
-        if isinstance(ref, str) and ('ROADMAP' in ref.upper() or roadmap_anchor_re.match(ref)):
+        if (
+            isinstance(ref, str)
+            and item_category in roadmap_categories
+            and (explicit_roadmap_ref_re.match(ref.strip()) or roadmap_anchor_re.match(ref.strip()))
+        ):
             roadmap_plan_refs.append(ref)
         else:
             other_plan_refs.append(ref)

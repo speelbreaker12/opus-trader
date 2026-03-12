@@ -4,6 +4,7 @@ IFS=$'\n\t'
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHECKER="$ROOT/plans/prd_ref_check.sh"
+SLICE_PREPARE="$ROOT/plans/prd_slice_prepare.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -29,6 +30,7 @@ expect_rc() {
 }
 
 [[ -x "$CHECKER" ]] || fail "checker is not executable: $CHECKER"
+[[ -x "$SLICE_PREPARE" ]] || fail "slice prepare is not executable: $SLICE_PREPARE"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -37,6 +39,8 @@ repo="$tmp_dir/repo"
 mkdir -p "$repo/plans" "$repo/specs" "$repo/docs" "$repo/docs/architecture"
 cp "$CHECKER" "$repo/plans/prd_ref_check.sh"
 chmod +x "$repo/plans/prd_ref_check.sh"
+cp "$SLICE_PREPARE" "$repo/plans/prd_slice_prepare.sh"
+chmod +x "$repo/plans/prd_slice_prepare.sh"
 
 cat > "$repo/specs/CONTRACT.md" <<'EOF_CONTRACT'
 # Contract
@@ -104,5 +108,113 @@ JSON
 expect_rc 1 bash -lc "cd '$repo' && ./plans/prd_ref_check.sh '$missing_prd'"
 grep -Fq "unresolved roadmap_ref for INF-002" "$tmp_dir/err.txt" \
   || fail "missing roadmap-specific unresolved ref diagnostic"
+
+execution_prd="$repo/plans/execution_prd.json"
+cat > "$execution_prd" <<'JSON'
+{
+  "items": [
+    {
+      "id": "EXE-001",
+      "category": "execution",
+      "story_ref": "Execution roadmap misuse",
+      "contract_refs": ["ROADMAP.md P0-A Launch Policy Baseline"],
+      "plan_refs": [],
+      "acceptance": [],
+      "verify": [],
+      "enforcing_contract_ats": []
+    }
+  ]
+}
+JSON
+
+expect_rc 1 bash -lc "cd '$repo' && ./plans/prd_ref_check.sh '$execution_prd'"
+grep -Eq "roadmap.*policy|infra|ROADMAP" "$tmp_dir/err.txt" \
+  || fail "missing category restriction diagnostic for roadmap refs"
+
+cat > "$repo/specs/CONTRACT.md" <<'EOF_CONTRACT_2'
+# Contract
+
+## 6. Implementation Roadmap v4.0
+Important contract heading.
+EOF_CONTRACT_2
+
+contract_roadmap_word_prd="$repo/plans/contract_heading_prd.json"
+cat > "$contract_roadmap_word_prd" <<'JSON'
+{
+  "items": [
+    {
+      "id": "EXE-002",
+      "category": "execution",
+      "story_ref": "Contract heading contains roadmap word",
+      "contract_refs": ["6. Implementation Roadmap v4.0"],
+      "plan_refs": [],
+      "acceptance": [],
+      "verify": [],
+      "enforcing_contract_ats": []
+    }
+  ]
+}
+JSON
+
+expect_rc 0 bash -lc "cd '$repo' && ./plans/prd_ref_check.sh '$contract_roadmap_word_prd'"
+
+cat > "$repo/.context_contract_digest.json" <<'JSON'
+{
+  "source_path": "specs/CONTRACT.md",
+  "source_sha256": "contract",
+  "anchors": {},
+  "sections": []
+}
+JSON
+
+cat > "$repo/.context_plan_digest.json" <<'JSON'
+{
+  "source_path": "specs/IMPLEMENTATION_PLAN.md",
+  "source_sha256": "plan",
+  "anchors": {},
+  "sections": []
+}
+JSON
+
+cat > "$repo/.context_roadmap_digest.json" <<'JSON'
+{
+  "source_path": "docs/ROADMAP.md",
+  "source_sha256": "roadmap",
+  "anchors": {},
+  "sections": [
+    {
+      "id": "P0-A",
+      "title": "Launch Policy Baseline",
+      "text": ""
+    }
+  ]
+}
+JSON
+
+slice_prd="$repo/plans/slice_prd.json"
+cat > "$slice_prd" <<'JSON'
+{
+  "project": "Fixture",
+  "source": {},
+  "rules": {},
+  "items": [
+    {
+      "id": "S0-000",
+      "slice": 0,
+      "story_ref": "P0-A Launch Policy Baseline",
+      "category": "policy",
+      "contract_refs": ["P0-A Launch Policy Baseline"],
+      "plan_refs": [],
+      "acceptance": [],
+      "verify": [],
+      "dependencies": []
+    }
+  ]
+}
+JSON
+
+expect_rc 0 bash -lc "cd '$repo' && PRD_FILE='$slice_prd' PRD_SLICE=0 CONTRACT_DIGEST='$repo/.context_contract_digest.json' PLAN_DIGEST='$repo/.context_plan_digest.json' ROADMAP_DIGEST='$repo/.context_roadmap_digest.json' OUT_PRD_SLICE='$repo/.context_prd_slice.json' OUT_CONTRACT_DIGEST='$repo/.context_contract_slice.json' OUT_PLAN_DIGEST='$repo/.context_plan_slice.json' OUT_ROADMAP_DIGEST='$repo/.context_roadmap_slice.json' OUT_AUDIT_FILE='$repo/plans/prd_audit.json' OUT_META='$repo/.context_meta.json' ./plans/prd_slice_prepare.sh"
+[[ "$(jq '.sections | length' "$repo/.context_roadmap_slice.json")" == "1" ]] \
+  || fail "implicit roadmap anchor should survive slice preparation"
 
 echo "PASS: prd_ref_check roadmap refs"

@@ -130,6 +130,7 @@ def variants(text: str):
     if not base:
         return []
     out = {base}
+    out.add(normalize(number_re.sub('', text.strip())))
     if base.endswith(':'):
         out.add(base[:-1].strip())
     out.add(re.sub(r'\s*\([^)]*\)\s*$', '', base).strip())
@@ -179,10 +180,11 @@ roadmap_haystack = build_haystack(roadmap_text)
 
 roadmap_categories = {'policy', 'infra'}
 roadmap_anchor_re = re.compile(r'^P\d+-[A-Z]\b', re.IGNORECASE)
+explicit_roadmap_ref_re = re.compile(r'^(?:docs/)?ROADMAP\.md\b', re.IGNORECASE)
 
 
 def is_explicit_roadmap_ref(ref: str) -> bool:
-    return 'ROADMAP' in str(ref).upper()
+    return bool(explicit_roadmap_ref_re.match(str(ref).strip()))
 
 
 def is_roadmap_anchor_ref(ref: str) -> bool:
@@ -193,16 +195,17 @@ def should_resolve_against_roadmap(item: dict, ref: str, default_haystack: str) 
     ref_text = str(ref)
     if not ref_text.strip():
         return False
-    if is_explicit_roadmap_ref(ref_text):
-        return True
     item_category = str(item.get('category', '')).strip().lower()
     if item_category not in roadmap_categories:
         return False
+    if is_explicit_roadmap_ref(ref_text):
+        return True
     if not is_roadmap_anchor_ref(ref_text):
         return False
     return not resolve_ref(ref_text, default_haystack)
 
 unresolved = []
+invalid_roadmap_category = []
 
 for item in items:
     item_id = item.get('id', 'unknown')
@@ -219,6 +222,9 @@ for item in items:
         if not ref:
             continue
         ref_text = str(ref)
+        if is_explicit_roadmap_ref(ref_text) and str(item.get('category', '')).strip().lower() not in roadmap_categories:
+            invalid_roadmap_category.append((item_id, 'contract', ref))
+            continue
         if should_resolve_against_roadmap(item, ref_text, contract_haystack):
             if not resolve_ref(ref_text, roadmap_haystack):
                 unresolved.append((item_id, 'roadmap', ref))
@@ -229,12 +235,23 @@ for item in items:
         if not ref:
             continue
         ref_text = str(ref)
+        if is_explicit_roadmap_ref(ref_text) and str(item.get('category', '')).strip().lower() not in roadmap_categories:
+            invalid_roadmap_category.append((item_id, 'plan', ref))
+            continue
         if should_resolve_against_roadmap(item, ref_text, plan_haystack):
             if not resolve_ref(ref_text, roadmap_haystack):
                 unresolved.append((item_id, 'roadmap', ref))
             continue
         if not resolve_ref(ref_text, plan_haystack):
             unresolved.append((item_id, 'plan', ref))
+
+if invalid_roadmap_category:
+    for item_id, kind, ref in invalid_roadmap_category:
+        print(
+            f'[prd_ref_check] ERROR: {item_id} uses ROADMAP ref in {kind}_refs but roadmap refs are only allowed for policy/infra items: {ref}',
+            file=sys.stderr,
+        )
+    raise SystemExit(1)
 
 if unresolved:
     for item_id, kind, ref in unresolved:
@@ -398,8 +415,8 @@ compact_csp_status_markers = (
 )
 
 
-def has_compact_csp_status_markers(acc_blob: str) -> bool:
-    return all(marker in acc_blob for marker in compact_csp_status_markers)
+def has_compact_csp_status_markers(acc_blob: str, text_blob: str) -> bool:
+    return ('status_mode=compact_csp_status_markers' in text_blob) and all(marker in acc_blob for marker in compact_csp_status_markers)
 
 def classify_status_story_mode(item: dict, acc_blob: str, story_ref_lower: str) -> tuple[str, str | None]:
     if '/status' not in acc_blob and '/api/v1/status' not in acc_blob and '/status' not in story_ref_lower:
@@ -462,7 +479,15 @@ for item in items:
                         file=sys.stderr,
                     )
         else:
-            if has_compact_csp_status_markers(acc_blob):
+            if has_compact_csp_status_markers(acc_blob, ' '.join(
+                str(x) for x in (
+                    item.get('acceptance', [])
+                    + item.get('verify', [])
+                    + item.get('contract_refs', [])
+                    + item.get('plan_refs', [])
+                    + [item.get('story_ref', '')]
+                )
+            ).lower()):
                 continue
             for k in status_keys:
                 if k.lower() not in acc_blob:

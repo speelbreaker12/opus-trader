@@ -319,6 +319,22 @@ run_pipeline_fixture "$final_gate_timeout_fixture" \
   "PIPELINE_GATE_BEHAVIOR_2=sleep:2" \
   "PIPELINE_AUDITOR_BEHAVIOR=pass"
 [[ "$PIPELINE_LAST_RC" -ne 0 ]] || fail "final gate timeout fixture expected non-zero rc"
-assert_blocked_reason "$final_gate_timeout_fixture/.context/prd_pipeline_blocked.json" "FINAL_GATE_TIMEOUT"
+  assert_blocked_reason "$final_gate_timeout_fixture/.context/prd_pipeline_blocked.json" "FINAL_GATE_TIMEOUT"
+
+cleanup_fixture="$tmp_dir/blocked-cleanup"
+setup_fixture "$cleanup_fixture"
+run_pipeline_fixture "$cleanup_fixture" \
+  "PIPELINE_CMD_TIMEOUT=1" \
+  "MAX_REPAIR_PASSES=2" \
+  "PIPELINE_GATE_BEHAVIOR_1=sleep:2" \
+  "PRD_AUDITOR_ENABLED=0"
+[[ "$PIPELINE_LAST_RC" -ne 0 ]] || fail "blocked cleanup fixture expected initial failure"
+[[ -f "$cleanup_fixture/.context/prd_pipeline_blocked.json" ]] || fail "blocked cleanup fixture missing blocked json after failure"
+
+run_pipeline_fixture "$cleanup_fixture" \
+  "PIPELINE_GATE_BEHAVIOR_1=pass" \
+  "PIPELINE_AUDITOR_BEHAVIOR=pass"
+[[ "$PIPELINE_LAST_RC" -eq 0 ]] || fail "blocked cleanup fixture expected second run success, got $PIPELINE_LAST_RC"
+[[ ! -f "$cleanup_fixture/.context/prd_pipeline_blocked.json" ]] || fail "blocked json should be removed after successful run"
 
 echo "test_prd_pipeline.sh: ok"

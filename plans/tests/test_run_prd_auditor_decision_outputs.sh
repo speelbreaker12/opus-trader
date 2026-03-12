@@ -103,11 +103,19 @@ set -euo pipefail
 scenario="${AUDIT_SCENARIO:-PASS}"
 prd_file="plans/prd.json"
 out_file="plans/prd_audit.json"
+count_file=".context/auditor_invocations"
 if command -v sha256sum >/dev/null 2>&1; then
   prd_sha="$(sha256sum "$prd_file" | awk '{print $1}')"
 else
   prd_sha="$(shasum -a 256 "$prd_file" | awk '{print $1}')"
 fi
+
+count=0
+if [[ -f "$count_file" ]]; then
+  count="$(cat "$count_file")"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$count_file"
 
 status="PASS"
 items_pass=1
@@ -117,6 +125,7 @@ must_fix_count=0
 reasons='[]'
 patch_suggestions='[]'
 contract_notes='[]'
+global_must_fix='[]'
 
 case "$scenario" in
   PASS)
@@ -137,6 +146,11 @@ case "$scenario" in
     reasons='["missing prerequisite evidence"]'
     patch_suggestions='["add missing prerequisite artifact"]'
     contract_notes='["blocked by missing evidence"]'
+    ;;
+  GLOBAL_MUST_FIX)
+    must_fix_count=1
+    global_must_fix='["global contract conflict"]'
+    contract_notes='["global must-fix found"]'
     ;;
   *)
     echo "unknown AUDIT_SCENARIO: $scenario" >&2
@@ -163,7 +177,7 @@ cat > "$out_file" <<JSON
     "must_fix_count": $must_fix_count
   },
   "global_findings": {
-    "must_fix": [],
+    "must_fix": $global_must_fix,
     "risk": [],
     "improvements": []
   },
@@ -202,21 +216,39 @@ EOF_AUDITOR
 }
 
 run_scenario() {
-  local expected_decision="$1"
+  local scenario="$1"
+  local expected_decision="$2"
+  local expect_success="$3"
   local scenario_dir
-  scenario_dir="$(printf '%s' "$expected_decision" | tr '[:upper:]' '[:lower:]')"
+  scenario_dir="$(printf '%s' "$scenario" | tr '[:upper:]' '[:lower:]')"
   local repo="$tmp_dir/$scenario_dir"
+  local rc=0
 
   setup_repo "$repo"
 
+  set +e
   (
     cd "$repo"
     AUDITOR_AGENT_CMD="./bin/fake_auditor.sh" \
     AUDITOR_AGENT_ARGS="" \
-    AUDIT_SCENARIO="$expected_decision" \
+    AUDIT_SCENARIO="$scenario" \
     AUDIT_PROGRESS=0 \
     ./plans/run_prd_auditor.sh
   )
+  rc=$?
+  set -e
+
+  case "$expect_success" in
+    yes)
+      [[ "$rc" -eq 0 ]] || fail "scenario $scenario expected rc=0, got $rc"
+      ;;
+    no)
+      [[ "$rc" -ne 0 ]] || fail "scenario $scenario expected non-zero rc"
+      ;;
+    *)
+      fail "invalid expect_success value: $expect_success"
+      ;;
+  esac
 
   (
     cd "$repo"
@@ -239,8 +271,52 @@ run_scenario() {
     || fail "auditor stage rc mismatch for $expected_decision: got '$auditor_rc'"
 }
 
-run_scenario PASS
-run_scenario FAIL
-run_scenario BLOCKED
+test_roadmap_change_invalidates_cache() {
+  local repo="$tmp_dir/roadmap-cache"
+  local invocations=""
+
+  setup_repo "$repo"
+
+  (
+    cd "$repo"
+    AUDITOR_AGENT_CMD="./bin/fake_auditor.sh" \
+    AUDITOR_AGENT_ARGS="" \
+    AUDIT_SCENARIO="PASS" \
+    AUDIT_PROGRESS=0 \
+    ./plans/run_prd_auditor.sh >/dev/null
+  )
+
+  (
+    cd "$repo"
+    AUDITOR_AGENT_CMD="./bin/fake_auditor.sh" \
+    AUDITOR_AGENT_ARGS="" \
+    AUDIT_SCENARIO="PASS" \
+    AUDIT_PROGRESS=0 \
+    ./plans/run_prd_auditor.sh >/dev/null
+  )
+
+  invocations="$(cat "$repo/.context/auditor_invocations")"
+  [[ "$invocations" == "1" ]] || fail "expected second identical run to reuse cache, got invocations=$invocations"
+
+  printf '%s\n' "# roadmap changed" >> "$repo/docs/ROADMAP.md"
+
+  (
+    cd "$repo"
+    AUDITOR_AGENT_CMD="./bin/fake_auditor.sh" \
+    AUDITOR_AGENT_ARGS="" \
+    AUDIT_SCENARIO="PASS" \
+    AUDIT_PROGRESS=0 \
+    ./plans/run_prd_auditor.sh >/dev/null
+  )
+
+  invocations="$(cat "$repo/.context/auditor_invocations")"
+  [[ "$invocations" == "2" ]] || fail "expected roadmap edit to invalidate cache, got invocations=$invocations"
+}
+
+run_scenario PASS PASS yes
+run_scenario FAIL FAIL no
+run_scenario BLOCKED BLOCKED no
+run_scenario GLOBAL_MUST_FIX FAIL no
+test_roadmap_change_invalidates_cache
 
 echo "test_run_prd_auditor_decision_outputs.sh: ok"

@@ -166,6 +166,67 @@ EOF
   pass "TC9: BLOCKED invalidates cache entry"
 }
 
+# TC11: FAIL invalidates prior cache entry
+test_fail_invalidates_cache() {
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  mkdir -p "$tmp_dir/.context"
+  echo '{"items":[{"slice":1,"id":"S1-001"}]}' > "$tmp_dir/prd.json"
+  cat > "$tmp_dir/.context/prd_audit_slice_cache.json" <<'EOF'
+{
+  "version": 1,
+  "global_inputs_sha": "old_sha",
+  "slices": {
+    "1": {
+      "slice_inputs_sha": "old_slice_sha",
+      "decision": "PASS",
+      "audit_json": "/tmp/old_audit.json"
+    }
+  }
+}
+EOF
+
+  cat > "$tmp_dir/fail_audit.json" <<'EOF'
+{
+  "summary": {
+    "items_total": 1,
+    "items_pass": 0,
+    "items_fail": 1,
+    "items_blocked": 0
+  }
+}
+EOF
+
+  local rc=0
+  REPO_ROOT="$tmp_dir" PRD_FILE="$tmp_dir/prd.json" \
+    python3 plans/prd_cache_update.py 1 "$tmp_dir/fail_audit.json" 2>&1 || rc=$?
+
+  if [[ "$rc" -ne 0 ]]; then
+    fail "TC11: cache update failed with rc=$rc"
+    return 1
+  fi
+
+  local decision
+  decision=$(python3 -c "import json; print(json.load(open('$tmp_dir/.context/prd_audit_slice_cache.json'))['slices']['1']['decision'])")
+  if [[ "$decision" != "FAIL" ]]; then
+    fail "TC11: expected decision=FAIL, got $decision"
+    return 1
+  fi
+
+  local check_output
+  check_output=$(REPO_ROOT="$tmp_dir" PRD_FILE="$tmp_dir/prd.json" \
+    python3 plans/prd_cache_check.py --slices "1" 2>/dev/null)
+
+  if ! echo "$check_output" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if 1 in d['invalid_slices'] else 1)"; then
+    fail "TC11: FAIL slice should be in invalid_slices"
+    return 1
+  fi
+
+  pass "TC11: FAIL invalidates cache entry"
+}
+
 # TC10: Lock contention causes failure (not silent fallback)
 test_lock_contention_fails() {
   local tmp_dir
@@ -221,6 +282,7 @@ test_corrupt_digest_hard_fail
 test_missing_slice_detected
 test_float_count_handling
 test_blocked_invalidates_cache
+test_fail_invalidates_cache
 test_lock_contention_fails
 
 echo ""

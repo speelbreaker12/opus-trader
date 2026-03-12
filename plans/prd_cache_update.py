@@ -164,10 +164,13 @@ def extract_decision_from_audit(audit_path: Path) -> str:
 
         items_fail = to_int(summary.get("items_fail", 0))
         items_blocked = to_int(summary.get("items_blocked", 0))
+        must_fix_count = to_int(summary.get("must_fix_count", 0))
 
-        if items_fail is None or items_blocked is None:
+        if items_fail is None or items_blocked is None or must_fix_count is None:
             return "UNKNOWN"
 
+        if must_fix_count > 0:
+            return "FAIL"
         if items_fail > 0:
             return "FAIL"
         elif items_blocked > 0:

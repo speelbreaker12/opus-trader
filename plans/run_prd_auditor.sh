@@ -117,6 +117,10 @@ compute_audit_decision() {
       "BLOCKED"
     elif (.summary.items_blocked | type) != "number" then
       "BLOCKED"
+    elif (.summary.must_fix_count | type) != "number" then
+      "BLOCKED"
+    elif .summary.must_fix_count > 0 then
+      "FAIL"
     elif .summary.items_fail > 0 then
       "FAIL"
     elif .summary.items_blocked > 0 then
@@ -188,6 +192,8 @@ fi
 roadmap_sha=""
 if [[ -n "$AUDIT_ROADMAP_FILE" && -f "$AUDIT_ROADMAP_FILE" ]]; then
   roadmap_sha="$(sha256_file "$AUDIT_ROADMAP_FILE")"
+else
+  rm -f "$AUDIT_ROADMAP_DIGEST_FILE" "$AUDIT_ROADMAP_SLICE_DIGEST_FILE"
 fi
 
 if [[ -z "$AUDIT_CONTRACT_FILE" || -z "$AUDIT_PLAN_FILE" || -z "$AUDIT_WORKFLOW_CONTRACT_FILE" ]]; then
@@ -212,12 +218,14 @@ audit_cache_matches() {
     --arg contract_sha "$contract_sha" \
     --arg plan_sha "$plan_sha" \
     --arg workflow_sha "$workflow_sha" \
+    --arg roadmap_sha "$roadmap_sha" \
     --arg prompt_sha "$prompt_sha" \
     '
       .prd_sha256 == $prd_sha and
       .contract_sha256 == $contract_sha and
       .impl_plan_sha256 == $plan_sha and
       .workflow_contract_sha256 == $workflow_sha and
+      .roadmap_sha256 == $roadmap_sha and
       .auditor_prompt_sha256 == $prompt_sha and
       .audited_scope == "full" and
       .decision == "PASS"
@@ -501,6 +509,12 @@ write_audit_cache() {
 write_audit_cache
 
 # Track cost with final decision
+final_decision="$(compute_audit_decision)"
 if command -v jq >/dev/null 2>&1; then
-  audit_cost_end "$(compute_audit_decision)"
+  audit_cost_end "$final_decision"
+fi
+
+if [[ "$final_decision" != "PASS" ]]; then
+  echo "[prd_auditor] ERROR: audit decision is $final_decision" >&2
+  exit 4
 fi

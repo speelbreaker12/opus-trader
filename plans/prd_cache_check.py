@@ -179,6 +179,10 @@ def main():
                 # BLOCKED is always a cache miss (dependencies may have resolved)
                 invalid_slices.append(slice_num)
                 reasons[slice_num] = "blocked_not_cacheable"
+            elif cached_decision == "FAIL":
+                # FAIL is always a cache miss (it must be re-audited until fixed)
+                invalid_slices.append(slice_num)
+                reasons[slice_num] = "fail_not_cacheable"
             elif not cached_audit_path or not Path(cached_audit_path).exists():
                 invalid_slices.append(slice_num)
                 reasons[slice_num] = "cached_audit_file_missing"

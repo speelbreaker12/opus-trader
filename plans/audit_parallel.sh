@@ -100,6 +100,13 @@ declare -a valid_slices=()
 declare -a invalid_slices=()
 declare -a reused_slices=()
 
+dedupe_slice_array() {
+  if [[ $# -eq 0 ]]; then
+    return 0
+  fi
+  printf '%s\n' "$@" | awk 'NF && !seen[$0]++'
+}
+
 if [[ "$AUDIT_NO_CACHE" == "1" ]]; then
   echo "[audit_parallel] Cache disabled (AUDIT_NO_CACHE=1), re-auditing all slices" >&2
   invalid_slices=("${slice_list[@]}")
@@ -139,7 +146,14 @@ fi
 # Process cached slices: copy from cache and validate
 if [[ ${#valid_slices[@]} -gt 0 ]]; then
 for slice in "${valid_slices[@]}"; do
+  cached_decision=$(jq -r ".slices[\"$slice\"].decision // empty" .context/prd_audit_slice_cache.json 2>/dev/null || true)
   cached_audit=$(jq -r ".slices[\"$slice\"].audit_json // empty" .context/prd_audit_slice_cache.json 2>/dev/null || true)
+
+  if [[ "$cached_decision" != "PASS" ]]; then
+    echo "[audit_parallel] Slice $slice: CACHE HIT but decision=$cached_decision is not reusable, will re-audit" >&2
+    invalid_slices+=("$slice")
+    continue
+  fi
 
   if [[ -n "$cached_audit" ]] && [[ -f "$cached_audit" ]]; then
     # Validate cached path is under repo root (trust boundary)
@@ -196,6 +210,14 @@ PY
     invalid_slices+=("$slice")
   fi
 done
+fi
+
+if [[ ${#invalid_slices[@]} -gt 0 ]]; then
+  deduped_invalid_slices=()
+  while IFS= read -r slice; do
+    deduped_invalid_slices+=("$slice")
+  done < <(dedupe_slice_array "${invalid_slices[@]}")
+  invalid_slices=("${deduped_invalid_slices[@]}")
 fi
 
 # Run parallel audits for invalid slices

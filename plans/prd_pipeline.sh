@@ -32,6 +32,8 @@ PRD_AUDITOR_ENABLED="${PRD_AUDITOR_ENABLED:-1}"
 PRD_AUDIT_SCOPE="${PRD_AUDIT_SCOPE:-}"
 PRD_AUDIT_SLICE="${PRD_AUDIT_SLICE:-}"
 
+rm -f "$PRD_PIPELINE_BLOCKED_JSON"
+
 slice_arg="${1:-}"
 slice_num=""
 if [[ -n "$slice_arg" ]]; then
@@ -453,4 +455,5 @@ else
   exit 8
 fi
 
+rm -f "$PRD_PIPELINE_BLOCKED_JSON"
 echo "PRD pipeline complete"
