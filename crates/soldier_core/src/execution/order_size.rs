@@ -39,6 +39,7 @@ pub struct OrderSize {
     pub(crate) notional_usd: f64,
 }
 
+#[allow(dead_code)]
 impl OrderSize {
     /// Returns the integer contracts value, if set.
     pub fn contracts(&self) -> Option<i64> {
