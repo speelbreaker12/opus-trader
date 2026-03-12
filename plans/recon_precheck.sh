@@ -119,6 +119,7 @@ if [[ "$ownership_conflicts" -gt 0 ]]; then
   if [[ "${RECON_SKIP_OWNERSHIP:-0}" == "1" ]]; then
     echo "WARN: $ownership_conflicts AT ownership conflict(s) found but RECON_SKIP_OWNERSHIP=1 — skipping" >&2
     echo "$conflict_json" | jq -r '.[] | "  - \(.at_id): \(.claiming_stories | join(", "))"' >&2
+    conflict_json="[]"
     ownership_conflicts=0
   else
     reasons+=("$ownership_conflicts AT ownership conflict(s) found")

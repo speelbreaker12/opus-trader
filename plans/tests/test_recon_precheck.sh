@@ -55,6 +55,11 @@ set -e
 [[ "$rc_conflict" -eq 1 ]] || fail "expected ownership conflict to block (exit 1), got $rc_conflict"
 echo "$out_conflict" | grep -q "AT ownership conflict" || fail "ownership conflict reason not reported"
 
+json_skip="$(RECON_SKIP_OWNERSHIP=1 plans/recon_precheck.sh S3-000 --json)"
+echo "$json_skip" | jq -e '.ready == true' >/dev/null || fail "skip mode should still report ready"
+echo "$json_skip" | jq -e '.ownership_conflicts == 0' >/dev/null || fail "skip mode should zero ownership_conflicts"
+echo "$json_skip" | jq -e '.ownership_conflict_details == []' >/dev/null || fail "skip mode should clear ownership_conflict_details"
+
 cat > plans/prd.json <<'EOF'
 {
   "items": [
