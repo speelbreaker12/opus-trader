@@ -9,7 +9,8 @@ use soldier_core::venue::LifecycleIntent;
 use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
 use soldier_infra::wal::{
     BarrierMetrics, CreatedIntentRecordInput, DurableAppendResult, DurableWalGate,
-    WalBarrierConfig, build_created_intent_record, durable_append, try_build_created_intent_record,
+    WalBarrierConfig, build_created_intent_record, build_created_intent_record_from_input,
+    durable_append, try_build_created_intent_record, try_build_created_intent_record_from_input,
 };
 
 /// Helper: build a minimal intent record.
@@ -222,8 +223,10 @@ fn test_real_record_construction_persists_reduce_only_by_intent_class() {
 
     for (label, lifecycle_intent, expected_reduce_only) in cases {
         let intent_hash = format!("real-path-{label}");
-        let record =
-            build_created_intent_record(&created_record_input(&intent_hash, lifecycle_intent));
+        let record = build_created_intent_record_from_input(&created_record_input(
+            &intent_hash,
+            lifecycle_intent,
+        ));
         durable_append(&mut ledger, record, &config, &mut lm, &mut bm).expect("append should work");
 
         let persisted = ledger
@@ -238,10 +241,17 @@ fn test_real_record_construction_persists_reduce_only_by_intent_class() {
 
 #[test]
 fn test_legacy_created_record_constructor_keeps_cancel_compatibility() {
-    let record = build_created_intent_record(&created_record_input(
+    let record = build_created_intent_record(
         "cancel-created",
+        "g-real",
+        0,
+        "BTC-PERP",
+        "buy",
         LifecycleIntent::Cancel,
-    ));
+        1.0,
+        50_000.0,
+        1_000,
+    );
 
     assert!(
         record.reduce_only,
@@ -252,11 +262,32 @@ fn test_legacy_created_record_constructor_keeps_cancel_compatibility() {
 
 #[test]
 fn test_checked_created_record_rejects_cancel_intent() {
-    let error = try_build_created_intent_record(&created_record_input(
+    let error = try_build_created_intent_record(
         "cancel-created",
+        "g-real",
+        0,
+        "BTC-PERP",
+        "buy",
+        LifecycleIntent::Cancel,
+        1.0,
+        50_000.0,
+        1_000,
+    )
+    .expect_err("cancel intent must not be persisted through the checked constructor");
+
+    assert!(
+        format!("{error:?}").contains("Cancel"),
+        "expected error to mention cancel intent, got {error:?}"
+    );
+}
+
+#[test]
+fn test_checked_created_record_from_input_rejects_cancel_intent() {
+    let error = try_build_created_intent_record_from_input(&created_record_input(
+        "cancel-created-from-input",
         LifecycleIntent::Cancel,
     ))
-    .expect_err("cancel intent must not be persisted through the checked constructor");
+    .expect_err("cancel intent must not be persisted through the input constructor");
 
     assert!(
         format!("{error:?}").contains("Cancel"),
