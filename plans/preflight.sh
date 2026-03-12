@@ -440,6 +440,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_crossref_invariants.sh"
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
+  "plans/tests/test_bidi_control_guard.sh"
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(

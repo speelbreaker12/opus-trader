@@ -11,6 +11,7 @@ docs/validation_rules.md
 plans/aggregate_proofs.sh
 plans/artifact_lint.sh
 plans/autofix.sh
+plans/bidi_control_guard.sh
 plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_contract_change_ledger.sh
 plans/check_skip_entrypoint.sh
@@ -98,6 +99,7 @@ plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
+plans/tests/test_bidi_control_guard.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh

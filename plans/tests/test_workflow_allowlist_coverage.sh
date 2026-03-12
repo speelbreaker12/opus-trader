@@ -39,6 +39,7 @@ required=(
   docs/validation_rules.md
   plans/autofix.sh
   plans/artifact_lint.sh
+  plans/bidi_control_guard.sh
   plans/check_contract_change_ledger.sh
   plans/check_skip_entrypoint.sh
   plans/code_review_expert_attest.sh
@@ -102,6 +103,7 @@ required=(
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
+  plans/tests/test_bidi_control_guard.sh
   plans/tests/test_code_review_expert_guard.sh
   plans/tests/test_fail_closed_gate_map_paths.sh
   plans/tests/test_guard_no_command_substitution.sh

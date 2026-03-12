@@ -92,7 +92,9 @@ This forces convergence: any agent implementing the gate must pass the same tabl
 For any ambiguity identified in the premortem (§4 open decisions, §5 wrong impl gate):
 - Add a behavioral AT (golden vector row or property test)
 - The AT must distinguish correct from wrong implementation
-- Register in `specs/CONTRACT.md`
+- If contract text/AT registration must change:
+  - If `specs/CONTRACT.md` is in the story `scope.touch`, update it and run the required contract gates.
+  - If it is not in scope, do not widen scope ad-hoc. Set `needs_human_decision=true`, record owner + target slice, and stop for owner direction.
 
 ### 6) Add Observability
 
@@ -101,9 +103,17 @@ For every reject/latch/gate path:
 - Reason code in the reject path
 - Diagnostic info for debugging
 
-## Hard Gate: Mechanical Verification (Before Declaring Done)
+## Hard Gate: Mechanical Verification (Implementation Step)
 
-Before declaring done: `./plans/verify_mechanical.sh` must pass. Any failure = not done.
+Before declaring the implementation step done: `./plans/verify_mechanical.sh` must pass.
+Any failure = not done.
+
+## Workflow Verification Handoff (Required Before Final Done/Pass)
+
+`verify_mechanical.sh` is necessary but not sufficient for story completion. The full story loop still requires:
+- `./plans/verify.sh quick` during iteration and after review-fix checkpoints
+- `./plans/verify.sh full` before pass-flip
+- `plans/prd_set_pass.sh` for the `passes=true` mutation only after full verify is green
 
 ## Self-Check (Before Declaring Done)
 

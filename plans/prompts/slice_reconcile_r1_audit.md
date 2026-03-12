@@ -28,17 +28,21 @@ No edits in this step.
 4. `specs/CONTRACT.md` (relevant clauses for this story)
 5. `specs/DESIGN_PATTERNS.md` §0 (if present / used in this repo)
 6. `plans/prd.json` (the story entry for `${STORY_ID}`)
-   - AT source: `jq '.stories["${STORY_ID}"].enforcing_contract_ats' plans/prd.json`
-   - Scope source: `jq '.stories["${STORY_ID}"].scope.touch' plans/prd.json`
+   - Story lookup check: `jq -e --arg id "${STORY_ID}" '.items[] | select(.id == $id)' plans/prd.json >/dev/null`
+   - AT source: `jq --arg id "${STORY_ID}" '.items[] | select(.id == $id) | .enforcing_contract_ats' plans/prd.json`
+   - Scope source: `jq --arg id "${STORY_ID}" '.items[] | select(.id == $id) | .scope.touch' plans/prd.json`
 7. Files listed in the premortem §0 `scope.touch`
 
-**MISSING ARTIFACT RULE**: If any of items 4-7 is missing from the workspace (file does not exist,
-story ID not found in prd.json), immediately return:
+**MISSING ARTIFACT RULE**: If any required item (4, 6, 7) is missing from the workspace
+(file does not exist, story ID not found in `plans/prd.json`), immediately return:
 ```
 GATE: NO-GO
 Reason: MISSING_ARTIFACT: <filename or description>
 ```
 Do not proceed. Do not guess or hallucinate the content of missing artifacts.
+
+Item 5 (`specs/DESIGN_PATTERNS.md` §0) is conditional. If the file is absent in this repo/story,
+note `DESIGN_PATTERNS_NOT_PRESENT` and continue.
 
 **Item 2 (recon preflight) is OPTIONAL when the premortem (item 1) exists.** When the premortem
 exists, it is already your primary audit checklist and the preflight adds marginal value. If the
@@ -49,7 +53,12 @@ proceed without it.
 without it. Note in output: `NO_PRIOR_POSTMORTEM`.
 
 **PREMORTEM HARD RULE** (item 1 only): If `reviews/premortems/${STORY_ID}_premortem.md` does not exist:
-- **STOP.** Output `NO-GO: PREMORTEM_MISSING`. Do not proceed.
+- **STOP.** Output:
+  ```
+  GATE: NO-GO
+  Reason: PREMORTEM_MISSING
+  ```
+  Do not proceed.
 - Write the premortem first using Mode A (Premortem Authoring) before entering reconciliation.
 - Do NOT guess or hallucinate premortem content. There is no surrogate or fallback path for R1.
 
@@ -213,13 +222,14 @@ Classify every issue as one of:
 rg / grep / cat / jq / less          (inspection)
 cargo check --workspace              (compilation check)
 cargo test <target>                   (verification — run, don't create)
-git diff / git show / git log        (inspection)
+git status / git diff / git show / git log  (inspection)
+diff                                  (read-only integrity comparison)
 ```
 
 ### PROHIBITED COMMANDS
 
 ```
-sed -i / awk (with file modification) / any write command
+sed -i / awk (with file modification) / any write command that modifies repository files
 cargo add / cargo rm                  (dependency changes)
 ```
 

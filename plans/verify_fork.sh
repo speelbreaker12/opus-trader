@@ -825,6 +825,14 @@ else
   warn "gate_integrity skipped (missing scripts/check_gate_integrity.py)"
 fi
 
+if [[ -x "$ROOT/plans/bidi_control_guard.sh" ]]; then
+  log "14c1) bidi control guard"
+  run_logged_or_exit "bidi_control_guard" "$GATE_INTEGRITY_TIMEOUT" \
+    bash "$ROOT/plans/bidi_control_guard.sh"
+else
+  warn "bidi_control_guard skipped (missing plans/bidi_control_guard.sh)"
+fi
+
 if [[ -x "$ROOT/plans/recon_prompt_guard.sh" ]]; then
   log "14cc) recon prompt guard"
   run_logged_or_exit "recon_prompt_guard" "$GATE_INTEGRITY_TIMEOUT" \
