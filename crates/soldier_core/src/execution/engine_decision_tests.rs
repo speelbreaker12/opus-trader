@@ -392,7 +392,11 @@ fn decide_pipeline_open_fails_closed_instead_of_panicking() {
     let engine = ExecutionEngine::new();
     let mut runtime = ExecutionRuntime::default();
 
-    let decision = engine.decide_pipeline(&base_execution_input(), ChokeIntentClass::Open, &mut runtime);
+    let decision = engine.decide_pipeline(
+        &base_execution_input(),
+        ChokeIntentClass::Open,
+        &mut runtime,
+    );
 
     assert!(matches!(
         decision,
