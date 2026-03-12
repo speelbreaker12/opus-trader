@@ -31,7 +31,7 @@
       "contract_ref": "\u00a74.3.2",
       "id": "Anchor-004",
       "proof": {
-        "line": 4181,
+        "line": 4188,
         "section": "\u00a74.3.2"
       },
       "title": "TruthCapsule Timing (RecordedBeforeDispatch)"
@@ -76,7 +76,7 @@
       "contract_ref": "\u00a77.1.3",
       "id": "Anchor-009",
       "proof": {
-        "line": 5102,
+        "line": 5109,
         "section": "\u00a77.1.3"
       },
       "title": "AGGRESSIVE Patches Require Human Approval"
@@ -103,7 +103,7 @@
       "contract_ref": "\u00a75.3",
       "id": "Anchor-012",
       "proof": {
-        "line": 4455,
+        "line": 4462,
         "section": "\u00a75.3"
       },
       "title": "Canary Rollout Abort Triggers Rollback"
@@ -209,13 +209,13 @@
     }
   ],
   "contract_version": "5.2",
-  "generated_at_utc": "2026-03-12T23:21:01Z",
+  "generated_at_utc": "2026-03-12T23:22:38Z",
   "kernel_version": 3,
   "sources": {
     "anchors_path": "docs/architecture/contract_anchors.md",
     "anchors_sha256": "f219e66f69b1a04d5e47677e2a668bbdfb78a5180a5ea0579fccdb85cfeee86f",
     "contract_path": "specs/CONTRACT.md",
-    "contract_sha256": "6a6cdb660ca3a5a8d39ba26f483ce5df0cdefd03ea11c2e7944c41376b30374a",
+    "contract_sha256": "517256177851af8b66b7d23637ca992d4124730239495301d45b5097d2e8c3a9",
     "plan_path": "specs/IMPLEMENTATION_PLAN.md",
     "plan_sha256": "7dfcd80d30444c912b940063f9bc9a33eee91d15ca506f9d15898091ab6802cd",
     "rules_path": "docs/architecture/validation_rules.md",

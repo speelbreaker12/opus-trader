@@ -3368,6 +3368,13 @@ AT-1215
 - Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`.
 - Fail criteria: dispatch count is 0 despite successful WAL recording, or >1 for the same intent.
 
+AT-1232
+- Given: `WALQueueAccepted` succeeds for an OPEN intent, all other OPEN gates are forced pass, but the WAL writer withholds or fails `WALRecorded` for that intent.
+- When: dispatch authorization runs before `WALRecorded` is available.
+- Then: no OPEN dispatch occurs, `wal_write_errors` increments, and `RecordedBeforeDispatchFailed` is surfaced.
+- Pass criteria: dispatch count remains 0; `wal_write_errors` increases; the rejection reason is recorded; OPEN remains blocked until a later evaluation obtains the required writer acknowledgment.
+- Fail criteria: any dispatch occurs after enqueue-only success or without `WALRecorded`, `wal_write_errors` does not increment, or the rejection reason is missing.
+
 AT-1231
 - Given: a CLOSE/HEDGE intent (`reduce_only == true`) is WAL-recorded in a non-terminal TLS state, then a crash occurs before completion.
 - When: the system restarts and reconstructs in-flight intents from WAL during replay/reconciliation.
