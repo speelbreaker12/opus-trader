@@ -36,28 +36,31 @@ pub enum BuildCreatedIntentRecordError {
     UnsupportedLifecycleIntent(LifecycleIntent),
 }
 
-fn created_intent_record_from_fields(
-    intent_hash: &str,
-    group_id: &str,
-    leg_idx: u32,
-    instrument: &str,
-    side: &str,
-    lifecycle_intent: LifecycleIntent,
-    qty_q: f64,
-    limit_price_q: f64,
-    created_ts: u64,
-) -> IntentRecord {
+#[derive(Debug, Clone, Copy)]
+pub struct CreatedIntentRecordInput<'a> {
+    pub intent_hash: &'a str,
+    pub group_id: &'a str,
+    pub leg_idx: u32,
+    pub instrument: &'a str,
+    pub side: &'a str,
+    pub lifecycle_intent: LifecycleIntent,
+    pub qty_q: f64,
+    pub limit_price_q: f64,
+    pub created_ts: u64,
+}
+
+fn created_intent_record_from_input(input: &CreatedIntentRecordInput<'_>) -> IntentRecord {
     IntentRecord {
-        intent_hash: intent_hash.to_string(),
-        group_id: group_id.to_string(),
-        leg_idx,
-        instrument: instrument.to_string(),
-        side: side.to_string(),
-        reduce_only: reduce_only_from_lifecycle_intent(lifecycle_intent),
-        qty_q,
-        limit_price_q,
+        intent_hash: input.intent_hash.to_string(),
+        group_id: input.group_id.to_string(),
+        leg_idx: input.leg_idx,
+        instrument: input.instrument.to_string(),
+        side: input.side.to_string(),
+        reduce_only: reduce_only_from_lifecycle_intent(input.lifecycle_intent),
+        qty_q: input.qty_q,
+        limit_price_q: input.limit_price_q,
         tls_state: TlsState::Created,
-        created_ts,
+        created_ts: input.created_ts,
         sent_ts: 0,
         ack_ts: 0,
         last_fill_ts: 0,
@@ -75,28 +78,8 @@ fn created_intent_record_from_fields(
     since = "0.2.0",
     note = "Use try_build_created_intent_record() for validated construction."
 )]
-pub fn build_created_intent_record(
-    intent_hash: &str,
-    group_id: &str,
-    leg_idx: u32,
-    instrument: &str,
-    side: &str,
-    lifecycle_intent: LifecycleIntent,
-    qty_q: f64,
-    limit_price_q: f64,
-    created_ts: u64,
-) -> IntentRecord {
-    created_intent_record_from_fields(
-        intent_hash,
-        group_id,
-        leg_idx,
-        instrument,
-        side,
-        lifecycle_intent,
-        qty_q,
-        limit_price_q,
-        created_ts,
-    )
+pub fn build_created_intent_record(input: &CreatedIntentRecordInput<'_>) -> IntentRecord {
+    created_intent_record_from_input(input)
 }
 
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
@@ -106,33 +89,15 @@ pub fn build_created_intent_record(
 /// `LifecycleIntent::Cancel` is rejected because CREATED WAL records model
 /// new-order intents; cancel flows follow a separate lifecycle path.
 pub fn try_build_created_intent_record(
-    intent_hash: &str,
-    group_id: &str,
-    leg_idx: u32,
-    instrument: &str,
-    side: &str,
-    lifecycle_intent: LifecycleIntent,
-    qty_q: f64,
-    limit_price_q: f64,
-    created_ts: u64,
+    input: &CreatedIntentRecordInput<'_>,
 ) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
-    if lifecycle_intent == LifecycleIntent::Cancel {
+    if input.lifecycle_intent == LifecycleIntent::Cancel {
         return Err(BuildCreatedIntentRecordError::UnsupportedLifecycleIntent(
-            lifecycle_intent,
+            input.lifecycle_intent,
         ));
     }
 
-    Ok(created_intent_record_from_fields(
-        intent_hash,
-        group_id,
-        leg_idx,
-        instrument,
-        side,
-        lifecycle_intent,
-        qty_q,
-        limit_price_q,
-        created_ts,
-    ))
+    Ok(created_intent_record_from_input(input))
 }
 
 /// WAL durability barrier configuration.
