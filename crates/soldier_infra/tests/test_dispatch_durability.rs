@@ -226,7 +226,8 @@ fn test_real_record_construction_persists_reduce_only_by_intent_class() {
         let record = build_created_intent_record_from_input(&created_record_input(
             &intent_hash,
             lifecycle_intent,
-        ));
+        ))
+        .expect("input constructor should accept non-cancel intents");
         durable_append(&mut ledger, record, &config, &mut lm, &mut bm).expect("append should work");
 
         let persisted = ledger
@@ -274,6 +275,20 @@ fn test_checked_created_record_rejects_cancel_intent() {
         1_000,
     )
     .expect_err("cancel intent must not be persisted through the checked constructor");
+
+    assert!(
+        format!("{error:?}").contains("Cancel"),
+        "expected error to mention cancel intent, got {error:?}"
+    );
+}
+
+#[test]
+fn test_input_constructor_rejects_cancel_intent_by_default() {
+    let error = build_created_intent_record_from_input(&created_record_input(
+        "cancel-created-default",
+        LifecycleIntent::Cancel,
+    ))
+    .expect_err("input constructor must reject cancel intent by default");
 
     assert!(
         format!("{error:?}").contains("Cancel"),

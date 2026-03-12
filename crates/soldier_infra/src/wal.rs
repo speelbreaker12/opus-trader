@@ -70,10 +70,20 @@ fn created_intent_record_from_input(input: &CreatedIntentRecordInput<'_>) -> Int
 }
 
 /// Construct a CREATED-state WAL intent record from a shared input struct.
+///
+/// This is the validated constructor for newly-persisted pre-dispatch intents
+/// using the shared input shape. `LifecycleIntent::Cancel` is rejected because
+/// CREATED WAL records model new-order intents only.
 pub fn build_created_intent_record_from_input(
     input: &CreatedIntentRecordInput<'_>,
-) -> IntentRecord {
-    created_intent_record_from_input(input)
+) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
+    if input.lifecycle_intent == LifecycleIntent::Cancel {
+        return Err(BuildCreatedIntentRecordError::UnsupportedLifecycleIntent(
+            input.lifecycle_intent,
+        ));
+    }
+
+    Ok(created_intent_record_from_input(input))
 }
 
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
@@ -97,7 +107,7 @@ pub fn build_created_intent_record(
     limit_price_q: f64,
     created_ts: u64,
 ) -> IntentRecord {
-    build_created_intent_record_from_input(&CreatedIntentRecordInput {
+    created_intent_record_from_input(&CreatedIntentRecordInput {
         intent_hash,
         group_id,
         leg_idx,
@@ -112,20 +122,12 @@ pub fn build_created_intent_record(
 
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
 ///
-/// This is the validated constructor for newly-persisted pre-dispatch intents.
-/// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
-/// `LifecycleIntent::Cancel` is rejected because CREATED WAL records model
-/// new-order intents; cancel flows follow a separate lifecycle path.
+/// Alias for callers that prefer the explicit `try_` naming with the shared
+/// input shape.
 pub fn try_build_created_intent_record_from_input(
     input: &CreatedIntentRecordInput<'_>,
 ) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
-    if input.lifecycle_intent == LifecycleIntent::Cancel {
-        return Err(BuildCreatedIntentRecordError::UnsupportedLifecycleIntent(
-            input.lifecycle_intent,
-        ));
-    }
-
-    Ok(created_intent_record_from_input(input))
+    build_created_intent_record_from_input(input)
 }
 
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
