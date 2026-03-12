@@ -217,15 +217,20 @@ if [[ -f "plans/prd.json" ]] && command -v jq >/dev/null 2>&1; then
   fi
 
   if [[ "$ownership_conflicts" -gt 0 ]]; then
-    reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    if [[ "${RECON_SKIP_OWNERSHIP:-0}" == "1" ]]; then
+      echo "WARN: $ownership_conflicts AT ownership conflict(s) skipped (RECON_SKIP_OWNERSHIP=1)" >&2
+      conflict_json="[]"
+      ownership_conflicts=0
+    else
+      reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+      while IFS= read -r obj; do
+        [[ -n "$obj" ]] && ownership_conflict_details+=("$obj")
+      done < <(echo "$conflict_json" | jq -c '.[]' 2>/dev/null)
 
-    while IFS= read -r obj; do
-      [[ -n "$obj" ]] && ownership_conflict_details+=("$obj")
-    done < <(echo "$conflict_json" | jq -c '.[]' 2>/dev/null)
-
-    while IFS= read -r detail; do
-      [[ -n "$detail" ]] && ownership_conflict_human+=("$detail")
-    done < <(echo "$conflict_json" | jq -r '.[] | "\(.at_id) -> \(.claiming_stories | join(", "))"' 2>/dev/null)
+      while IFS= read -r detail; do
+        [[ -n "$detail" ]] && ownership_conflict_human+=("$detail")
+      done < <(echo "$conflict_json" | jq -r '.[] | "\(.at_id) -> \(.claiming_stories | join(", "))"' 2>/dev/null)
+    fi
   fi
 elif [[ "$premortem_exists" == "true" ]]; then
   # Legacy fallback when jq is unavailable: infer ownership from premortem section 1.
@@ -257,7 +262,14 @@ elif [[ "$premortem_exists" == "true" ]]; then
   fi
 
   if [[ $ownership_conflicts -gt 0 ]]; then
-    reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    if [[ "${RECON_SKIP_OWNERSHIP:-0}" == "1" ]]; then
+      echo "WARN: $ownership_conflicts AT ownership conflict(s) skipped (RECON_SKIP_OWNERSHIP=1)" >&2
+      ownership_conflict_details=()
+      ownership_conflict_human=()
+      ownership_conflicts=0
+    else
+      reasons+=("$ownership_conflicts AT ownership conflict(s) found")
+    fi
   fi
 fi
 

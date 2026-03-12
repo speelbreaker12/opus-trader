@@ -732,6 +732,7 @@ case "$tool" in
     # Gemini CLI requires a PTY for stdin piping, so we pass the prompt
     # via the -p flag instead (reads file into shell arg).
     cmd=("gemini" "-o" "text" "-m" "$gemini_model" "-p" "$(<"$prompt_tmp")")
+    rm -f "$prompt_tmp"
     prompt_tmp=""  # clear so the stdin-piping path is skipped
     if [[ ${#extra[@]} -gt 0 ]]; then
       cmd+=("${extra[@]}")

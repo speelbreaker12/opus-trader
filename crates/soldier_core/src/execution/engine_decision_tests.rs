@@ -392,7 +392,11 @@ fn decide_pipeline_open_fails_closed_instead_of_panicking() {
     let engine = ExecutionEngine::new();
     let mut runtime = ExecutionRuntime::default();
 
-    let decision = engine.decide_pipeline(&base_execution_input(), ChokeIntentClass::Open, &mut runtime);
+    let decision = engine.decide_pipeline(
+        &base_execution_input(),
+        ChokeIntentClass::Open,
+        &mut runtime,
+    );
 
     assert!(matches!(
         decision,
@@ -458,10 +462,10 @@ fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
         GateStep::FeeCacheCheck,
         GateStep::ExpiryGuard,
     ];
-    if let Some(gate) = rejected_gate {
-        if !gate_trace.contains(&gate) {
-            gate_trace.push(gate);
-        }
+    if let Some(gate) = rejected_gate
+        && !gate_trace.contains(&gate)
+    {
+        gate_trace.push(gate);
     }
     OpenRuntimeOutput {
         choke_result: ChokeResult::Rejected { reason, gate_trace },
