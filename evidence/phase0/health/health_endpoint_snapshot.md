@@ -23,6 +23,8 @@
 
 Notes:
 - This matrix is aligned to `specs/CONTRACT.md` §7.0.
+- For `/api/v1/status`, `foundation_exit_condition` is true when `phase != foundation`.
+- While `foundation_exit_condition` is false, `/api/v1/status` remains status-lite; when it is true, `/api/v1/status` must satisfy the full CSP minimum schema and becomes the canonical authority surface.
 - Phase 1 completion is not a CSP minimum status compliance claim.
 
 ---

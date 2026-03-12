@@ -67,7 +67,7 @@ fi
 
 grep -Fq 'sources.contract_sha256 mismatch' "$stderr_log" \
   || fail "expected contract sha mismatch message"
-grep -Fq 'python3 scripts/build_contract_kernel.py --out docs/contract_kernel.json' "$stderr_log" \
+grep -Fq "python3 scripts/build_contract_kernel.py --out $fixture/docs/contract_kernel.json" "$stderr_log" \
   || fail "expected rebuild remediation command"
 
 echo "PASS: contract kernel drift remediation message"

@@ -162,7 +162,8 @@ Pass criteria: drill evidence and runtime tests show the exact documented primar
 Fail criteria: the documented primary action is missing or differs from the exercised runtime path, no documented safety-state transition occurs, OPEN can still dispatch, no risk-reducing path remains when exposure exists, or the runbook omits the bounded fallback action.
 
 **P0-E clarifications (Normative):**
-- The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement (after foundation mode exits).
+- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+- The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement once `foundation_exit_condition` is true.
 - In foundation mode, `/api/v1/status` uses the status-lite schema (AT-1230). The equivalent "opens not permitted" signal in foundation mode is `dispatch_enabled: false` (not `opens_globally_permitted`).
 - `/api/v1/health` MUST use the liveness key `ok`. `/api/v1/status` MUST use the liveness key `service_up` (foundation mode) or the full CSP minimum schema (Phase 2+). These keys MUST NOT be swapped or mixed between surfaces.
 
@@ -177,13 +178,15 @@ Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumer
 | Surface | Phase applicability | Required keys / schema | Authority boundary |
 |---|---|---|---|
 | **P0 owner scaffolding** (CLI/local owner status surfaces) | Phase 0 and early bootstrap operations | `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (optional deprecated alias `is_trading_allowed`) | Owner/operator scaffolding only. MUST NOT claim full `/api/v1/status` contract authority. |
-| **Foundation `/api/v1/status` status-lite** | Only while `phase == foundation` | Exactly `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase` (AT-1230) | Bootstrap status surface only. MUST NOT emit CSP authority keys while in foundation mode. |
-| **CSP minimum `/api/v1/status`** | Required after foundation mode exits; required for live-trading authority | Full CSP minimum key set defined in §7.0 | Canonical runtime authority for TradingMode/open-permission semantics. Release/readiness gates MUST key off this surface once foundation mode exits. |
+| **Foundation `/api/v1/status` status-lite** | Only while `foundation_exit_condition` is false (`phase == foundation`) | Exactly `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase` (AT-1230) | Bootstrap status surface only. MUST NOT emit CSP authority keys while in foundation mode. |
+| **CSP minimum `/api/v1/status`** | Required when `foundation_exit_condition` is true (`phase != foundation`); required for live-trading authority | Full CSP minimum key set defined in §7.0 | Canonical runtime authority for TradingMode/open-permission semantics. Release/readiness gates MUST key off this surface once `foundation_exit_condition` is true. |
 
 **Status authority precedence (Normative):**
-1. While `phase == foundation`, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
-2. After foundation mode exits, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
-3. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
+1. For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+2. While `foundation_exit_condition` is false, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
+3. When `foundation_exit_condition` is true, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
+4. Given `/api/v1/status` is emitted with `phase != foundation`, any authority/readiness validation MUST enforce the full §7.0 CSP minimum schema; P0 owner scaffolding remains non-authoritative for readiness/dispatch decisions.
+5. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -1047,6 +1050,11 @@ AT-1098
 - Pass criteria: all fills have a valid `group_id` + `leg_idx`; atomic slippage per group is computable from the attributed fills.
 - Fail criteria: any fill lacks `group_id` or `leg_idx`, or a fill maps to multiple groups.
 
+**Recovery / Matching Rule (Normative):**
+- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.
+- Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.
+- Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.
+- If the applicable matcher yields none or more than one candidate, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.
 #### **1.1.2 Label Parse + Disambiguation (Collision-Safe)**
 
 **Requirement:** Label collisions can still occur (hash collisions or non-conforming labels). The Soldier must deterministically map exchange orders to local intents.
@@ -1123,7 +1131,6 @@ AT-933
 - Then: no duplicate dispatch occurs and the existing orders are treated as in-flight.
 - Pass criteria: dispatch count remains 0 for duplicates; reconciliation succeeds.
 - Fail criteria: duplicate dispatch occurs, canonical labels use heuristic fallback, or orders are treated as missing.
-
 
 ### **1.2 Atomic Group Executor**
 
@@ -4746,9 +4753,10 @@ AT-022
 - P0-E owner-status keys (`trading_mode`, `opens_globally_permitted`, optional `is_trading_allowed`) are NOT part of foundation status-lite payloads.
 
 **Foundation status-lite mode (Phase 1 bootstrap only):**
-- While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
+- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+- While `foundation_exit_condition` is false, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
 - In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation` (`dispatch_enabled == false` is the canonical "opens not dispatchable" signal in this mode).
-- CSP minimum `/status` keys are required after foundation mode exits.
+- When `foundation_exit_condition` is true, `/status` MUST satisfy the full CSP minimum schema and becomes the canonical runtime authority surface.
 
 AT-1230
 - Given: runtime is in foundation mode (`phase == foundation`).
@@ -6492,4 +6500,5 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-05 | CCL-2026-03-05-01 | §1.2.1 GroupState Serialization Invariant; Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify that WAL replay/recovery preserves `Rejected` as WAL-only terminal while core TLSM uses `Failed`. | Prevent cross-layer terminal-state ambiguity in restart/replay implementations and keep contract text aligned with WAL behavior/tests. | AT-1231 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-03 | §1.3 Pre-Trade Liquidity Gate; §2.4 Durable Intent Ledger; Phase 1 completion notes; Appendix CONTRACT_CHANGE_LEDGER | clarify | Align stale-L2 handling so OPEN fails closed while risk-reducing actions use the §3.1 fallback ladder, and align restart semantics so replay/reconciliation alone never authorize fresh OPEN dispatch after restart. | Keep the Phase 1 remediation contract auditable and aligned with the PRD, degraded-market-data safety requirements, and replay/recovery proofs on this branch. | AT-421, AT-935, AT-1231 | local/phase1-remediation |
-| 2026-03-06 | CCL-2026-03-06-01 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
+| 2026-03-06 | CCL-2026-03-06-01 | Branch delta vs origin/main (multiple sections and appendices); Appendix CONTRACT_CHANGE_LEDGER | process | Record append-only ledger growth for the current branch-level contract delta so verify gate 02a remains fail-closed and auditable. | `plans/check_contract_change_ledger.sh` requires ledger growth whenever `specs/CONTRACT.md` diverges from base; this preserves deterministic gate behavior. | VR-LEDGER-01 | local/isolated-verify-20260305 |
+| 2026-03-06 | CCL-2026-03-06-02 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
