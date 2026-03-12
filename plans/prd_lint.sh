@@ -130,15 +130,25 @@ suggest_fix() {
       echo "  2. Manual: Add \"./plans/verify.sh\" to verify array"
       context_link
       ;;
-    UNRESOLVED_CONTRACT_REF|UNRESOLVED_PLAN_REF)
+    UNRESOLVED_CONTRACT_REF|UNRESOLVED_PLAN_REF|UNRESOLVED_ROADMAP_REF)
       echo "  Story: $id"
-      echo "  Field: ${field}_refs"
+      if [[ "$code" == "UNRESOLVED_ROADMAP_REF" ]]; then
+        echo "  Field: roadmap_ref"
+      else
+        echo "  Field: ${field}_refs"
+      fi
       echo "  Ref:   $value"
       echo ""
       echo "  Possible fixes:"
-      echo "  1. Check specs/CONTRACT.md for exact section text"
-      echo "  2. Use section ID format: \"2.2.1 PolicyGuard Resolution\""
-      echo "  3. Run: grep -i '$(echo "$value" | cut -d' ' -f1)' specs/CONTRACT.md"
+      if [[ "$code" == "UNRESOLVED_ROADMAP_REF" ]]; then
+        echo "  1. Check docs/ROADMAP.md (or ROADMAP.md) for exact section text"
+        echo "  2. Use phase anchor format: \"ROADMAP.md P0-A Launch Policy Baseline\""
+        echo "  3. Run: grep -i '$(echo "$value" | cut -d' ' -f1)' docs/ROADMAP.md ROADMAP.md"
+      else
+        echo "  1. Check specs/CONTRACT.md for exact section text"
+        echo "  2. Use section ID format: \"2.2.1 PolicyGuard Resolution\""
+        echo "  3. Run: grep -i '$(echo "$value" | cut -d' ' -f1)' specs/CONTRACT.md"
+      fi
       context_link
       ;;
     FORWARD_KEYWORD)

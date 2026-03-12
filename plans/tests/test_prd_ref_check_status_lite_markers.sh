@@ -66,6 +66,40 @@ if grep -Fq "malformed foundation status-lite markers" "$tmp_dir/err.txt"; then
   die "valid status-lite markers were flagged as malformed"
 fi
 
+compact_csp_prd="$tmp_dir/compact_csp_status.json"
+cat > "$compact_csp_prd" <<'JSON'
+{
+  "items": [
+    { "id": "S0-100", "story_ref": "P0-A prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-101", "story_ref": "P0-B prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-102", "story_ref": "P0-C prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-103", "story_ref": "P0-D prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-104", "story_ref": "P0-E prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    { "id": "S0-105", "story_ref": "P0-F prereq stub", "contract_refs": [], "plan_refs": [], "acceptance": [], "verify": [], "enforcing_contract_ats": [] },
+    {
+      "id": "S0-903",
+      "story_ref": "Compact CSP status marker guard",
+      "contract_refs": [],
+      "plan_refs": [],
+      "acceptance": [
+        "GIVEN /status is queried THEN csp minimum key set required by at-023/at-405/at-419/at-907/at-927/at-1117 is present.",
+        "GIVEN /status is queried THEN schema/profile/mode/risk fields, policy freshness fields, certification fields, 5m rate-limit counters, and durability-queue counters are present.",
+        "GIVEN /status is queried THEN open-permission fields remain visible."
+      ],
+      "verify": [],
+      "enforcing_contract_ats": []
+    }
+  ]
+}
+JSON
+
+expect_rc 0 "$CHECKER" "$compact_csp_prd"
+if grep -Fq 'S0-903 references /status but acceptance missing required CSP key' "$tmp_dir/err.txt"; then
+  echo "stderr:" >&2
+  cat "$tmp_dir/err.txt" >&2 || true
+  die "compact CSP marker detection should not be tied to S8-020"
+fi
+
 invalid_prd="$tmp_dir/invalid_status_lite.json"
 cat > "$invalid_prd" <<'JSON'
 {

@@ -17,6 +17,13 @@ else
   PLAN_FILE="IMPLEMENTATION_PLAN.md"
 fi
 
+ROADMAP_FILE=""
+if [[ -f "docs/ROADMAP.md" ]]; then
+  ROADMAP_FILE="docs/ROADMAP.md"
+elif [[ -f "ROADMAP.md" ]]; then
+  ROADMAP_FILE="ROADMAP.md"
+fi
+
 if [[ ! -f "$CONTRACT_FILE" ]]; then
   echo "[prd_ref_check] ERROR: contract file missing: specs/CONTRACT.md" >&2
   exit 2
@@ -43,13 +50,13 @@ if [[ -f "docs/contract_kernel.json" ]]; then
   EXTRA_CONTRACT_FILES+=("docs/contract_kernel.json")
 fi
 
-python3 - "$PRD_FILE" "$CONTRACT_FILE" "$PLAN_FILE" "${EXTRA_CONTRACT_FILES[@]}" <<'PY'
+python3 - "$PRD_FILE" "$CONTRACT_FILE" "$PLAN_FILE" "$ROADMAP_FILE" "${EXTRA_CONTRACT_FILES[@]+"${EXTRA_CONTRACT_FILES[@]}"}" <<'PY'
 import json
 import os
 import re
 import sys
 
-prd_path, contract_path, plan_path, *extra_contract_paths = sys.argv[1:]
+prd_path, contract_path, plan_path, roadmap_path, *extra_contract_paths = sys.argv[1:]
 
 with open(prd_path, 'r', encoding='utf-8') as f:
     prd = json.load(f)
@@ -70,6 +77,10 @@ for extra_path in extra_contract_paths:
         contract_text += "\n" + f.read()
 with open(plan_path, 'r', encoding='utf-8') as f:
     plan_text = f.read()
+roadmap_text = ''
+if roadmap_path and os.path.isfile(roadmap_path):
+    with open(roadmap_path, 'r', encoding='utf-8') as f:
+        roadmap_text = f.read()
 
 heading_re = re.compile(r'^#{1,6}\s+')
 bullet_re = re.compile(r'^[-*+]\s+')
@@ -103,10 +114,17 @@ def build_haystack(text: str) -> str:
     return normalize(' '.join(lines))
 
 
-def strip_prefix(ref: str) -> str:
+roadmap_anchor_re = re.compile(r'\bP\d+-[A-Z]\b', re.IGNORECASE)
+
+
+def strip_prefix(ref: str, kind: str = 'default') -> str:
     s = ref.strip()
-    s = re.sub(r'^(?:specs/)?CONTRACT\.md\s*', '', s, flags=re.IGNORECASE)
-    s = re.sub(r'^(?:specs/)?IMPLEMENTATION_PLAN\.md\s*', '', s, flags=re.IGNORECASE)
+    if kind == 'roadmap':
+        s = re.sub(r'^(?:docs/)?ROADMAP\.md\s*', '', s, flags=re.IGNORECASE)
+        s = re.sub(r'^ROADMAP\s*', '', s, flags=re.IGNORECASE)
+    else:
+        s = re.sub(r'^(?:specs/)?CONTRACT\.md\s*', '', s, flags=re.IGNORECASE)
+        s = re.sub(r'^(?:specs/)?IMPLEMENTATION_PLAN\.md\s*', '', s, flags=re.IGNORECASE)
     s = s.lstrip(':').strip()
     s = s.lstrip('§').strip()
     return s
@@ -128,8 +146,8 @@ def variants(text: str):
 section_id_re = re.compile(r'^([0-9]+(?:\.[0-9A-Z]+)*)\s+(.*)$', re.IGNORECASE)
 
 
-def split_segments(ref: str):
-    s = strip_prefix(ref)
+def split_segments(ref: str, kind: str = 'default'):
+    s = strip_prefix(ref, kind)
     if not s:
         return []
     parts = [p.strip() for p in s.split('/') if p.strip()]
@@ -148,8 +166,8 @@ def split_segments(ref: str):
     return expanded
 
 
-def resolve_ref(ref: str, haystack: str) -> bool:
-    for segment in split_segments(ref):
+def resolve_ref(ref: str, haystack: str, kind: str = 'default') -> bool:
+    for segment in split_segments(ref, kind):
         ok = False
         for candidate in variants(segment):
             if candidate and candidate in haystack:
@@ -160,8 +178,13 @@ def resolve_ref(ref: str, haystack: str) -> bool:
     return True
 
 
+def is_roadmap_ref(ref: str) -> bool:
+    return 'ROADMAP' in ref.upper() or bool(roadmap_anchor_re.search(ref))
+
+
 contract_haystack = build_haystack(contract_text)
 plan_haystack = build_haystack(plan_text)
+roadmap_haystack = build_haystack(roadmap_text)
 
 unresolved = []
 
@@ -179,12 +202,20 @@ for item in items:
     for ref in contract_refs:
         if not ref:
             continue
-        if not resolve_ref(str(ref), contract_haystack):
+        ref_text = str(ref)
+        if is_roadmap_ref(ref_text):
+            if not resolve_ref(ref_text, roadmap_haystack, 'roadmap'):
+                unresolved.append((item_id, 'roadmap', ref))
+        elif not resolve_ref(ref_text, contract_haystack):
             unresolved.append((item_id, 'contract', ref))
     for ref in plan_refs:
         if not ref:
             continue
-        if not resolve_ref(str(ref), plan_haystack):
+        ref_text = str(ref)
+        if is_roadmap_ref(ref_text):
+            if not resolve_ref(ref_text, roadmap_haystack, 'roadmap'):
+                unresolved.append((item_id, 'roadmap', ref))
+        elif not resolve_ref(ref_text, plan_haystack):
             unresolved.append((item_id, 'plan', ref))
 
 if unresolved:
@@ -409,9 +440,7 @@ for item in items:
                         file=sys.stderr,
                     )
         else:
-            # S8-020 uses compact wording that intentionally references CSP key groups
-            # via contract ATs rather than enumerating every key literal.
-            if sid == 'S8-020' and all(marker in acc_blob for marker in compact_csp_status_markers):
+            if all(marker in acc_blob for marker in compact_csp_status_markers):
                 continue
             for k in status_keys:
                 if k.lower() not in acc_blob:
