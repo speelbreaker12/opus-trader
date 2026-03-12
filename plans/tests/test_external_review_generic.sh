@@ -26,6 +26,7 @@ setup_mock_env() {
   local name="$1"
   mock_root="$tmp_dir/$name/root"
   mock_bin="$tmp_dir/$name/bin"
+  mock_worktree_add_mode=""
   mkdir -p "$mock_root/plans" "$mock_root/artifacts/story" "$mock_bin"
 
   cat > "$mock_root/plans/parallel_review.sh" <<'MOCK_PARALLEL'
@@ -113,9 +114,8 @@ set -euo pipefail
 mock_root="${EXTERNAL_REVIEW_ROOT:?}"
 printf '%s\n' "$*" >> "$mock_root/gh.log"
 if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
-  cat <<'EOF'
-{"number":190,"baseRefName":"main","headRefOid":"abc123def456"}
-EOF
+  printf '{"number":190,"baseRefName":"%s","headRefOid":"%s"}\n' \
+    "${MOCK_GH_BASE_REF:-main}" "${MOCK_GH_HEAD_OID:-abc123def456}"
   exit 0
 fi
 echo "unexpected gh args: $*" >&2
@@ -139,7 +139,7 @@ if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "--show-toplevel" ]]; t
 fi
 
 if [[ "${args[0]:-}" == "rev-parse" && "${args[1]:-}" == "HEAD" ]]; then
-  printf '%s\n' "feedfacefeedfacefeedfacefeedfacefeedface"
+  printf '%s\n' "${MOCK_WORKTREE_HEAD:-${MOCK_GH_HEAD_OID:-abc123def456}}"
   exit 0
 fi
 
@@ -231,6 +231,108 @@ assert_file_contains() {
   grep -Fq -- "$pattern" "$file" || fail "expected '$pattern' in $file"
 }
 
+assert_file_matches() {
+  local file="$1"
+  local pattern="$2"
+  grep -Eq -- "$pattern" "$file" || fail "expected pattern '$pattern' in $file"
+}
+
+find_single_run_id() {
+  local story_base="$1"
+  local count
+  count="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  [[ "$count" == "1" ]] || fail "expected exactly one run dir under $story_base, found $count"
+  find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;
+}
+
+setup_actual_parallel_repo() {
+  local name="$1"
+  local repo="$tmp_dir/$name/repo"
+  mkdir -p "$repo/plans" "$repo/python/proof_graph"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="generic"
+proof_graph=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool) tool="${2:?missing tool}"; shift 2 ;;
+    --prompt) prompt="${2:?missing prompt}"; shift 2 ;;
+    --proof-graph) proof_graph=true; shift ;;
+    --base|--commit|--files|--title|--timeout-seconds|--out-root) shift 2 ;;
+    --uncommitted) shift ;;
+    --) shift; break ;;
+    *) shift ;;
+  esac
+done
+
+out_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
+out_dir="$out_root/$story/$tool"
+mkdir -p "$out_dir"
+
+printf '# %s %s review\n' "$tool" "$prompt" > "$out_dir/$tool.$prompt.md"
+printf 'FINDINGS_SUMMARY: P0=0 P1=0 P2=0\n'
+
+if [[ "$proof_graph" == "true" ]]; then
+  cat > "$out_dir/proof_graph.json" <<EOF
+{"schema_version":"proof_graph.v1","story_id":"$story","tool":"$tool"}
+EOF
+fi
+
+if [[ "${MOCK_REVIEW_FAIL_TOOL:-}" == "$tool" ]]; then
+  echo "$tool transport failure" >&2
+  exit 7
+fi
+MOCK_REVIEW
+
+  cat > "$repo/plans/aggregate_proofs.sh" <<'MOCK_AGG'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+story_root="${STORY_ARTIFACTS_ROOT:?missing STORY_ARTIFACTS_ROOT}"
+printf '%s\n' "$story_root" > "${MOCK_AGG_LOG:?missing aggregate log}"
+printf '%s\n' "$story" >> "${MOCK_AGG_LOG:?missing aggregate log}"
+[[ -f "$story_root/$story/proof_graph.json" ]] || {
+  echo "missing base proof graph at $story_root/$story/proof_graph.json" >&2
+  exit 9
+}
+exit 0
+MOCK_AGG
+
+  cat > "$repo/python/proof_graph/init.py" <<'MOCK_INIT'
+#!/usr/bin/env python3
+import json
+import os
+import sys
+
+story_id = sys.argv[1]
+output_dir = None
+for i, arg in enumerate(sys.argv):
+    if arg == "--output-dir":
+        output_dir = sys.argv[i + 1]
+        break
+if output_dir is None:
+    raise SystemExit("missing --output-dir")
+os.makedirs(output_dir, exist_ok=True)
+with open(os.path.join(output_dir, "proof_graph.json"), "w", encoding="utf-8") as handle:
+    json.dump({"schema_version": "proof_graph.v1", "story_id": story_id}, handle)
+MOCK_INIT
+
+  chmod +x "$repo/plans/review_logged.sh" "$repo/plans/aggregate_proofs.sh" "$repo/python/proof_graph/init.py"
+  printf '%s\n' "$repo"
+}
+
 test_python_candidate_must_be_python3_6_or_newer() {
   setup_mock_env "python_version_guard"
 
@@ -270,7 +372,8 @@ test_commit_mode_success() {
   setup_mock_env "commit_success"
   run_wrapper all_ok --commit HEAD >/dev/null || fail "commit mode should exit 0"
 
-  local run_id="external_review_generic_20260305T220000Z_commit_HEAD"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local story_dir="$mock_root/artifacts/story/$run_id"
   local status_json="$story_dir/external_review_generic/dispatch_status.json"
   local summary_md="$story_dir/external_review_generic/summary.md"
@@ -278,7 +381,7 @@ test_commit_mode_success() {
   [[ -d "$story_dir" ]] || fail "missing story dir for commit mode"
   [[ -f "$status_json" ]] || fail "missing dispatch status json"
   [[ -f "$summary_md" ]] || fail "missing summary md"
-  [[ "$run_id" =~ ^[A-Za-z0-9_-]+$ ]] || fail "run id must be shell-safe: $run_id"
+  [[ "$run_id" =~ ^external_review_generic_20260305T220000Z_commit_HEAD_[A-Za-z0-9_-]+$ ]] || fail "run id must be unique and shell-safe: $run_id"
 
   assert_file_contains "$mock_root/parallel_args.log" "--commit"
   assert_file_contains "$mock_root/parallel_args.log" "HEAD"
@@ -328,22 +431,25 @@ test_pr_mode_resolution() {
   setup_mock_env "pr_success"
   run_wrapper all_ok PR190 >/dev/null || fail "PR mode should exit 0"
 
-  local run_id="external_review_generic_20260305T220000Z_pr_190"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local story_dir="$mock_root/artifacts/story/$run_id"
+  local status_json="$story_dir/external_review_generic/dispatch_status.json"
   local summary_md="$story_dir/external_review_generic/summary.md"
 
   assert_file_contains "$mock_root/gh.log" "pr view 190 --json number,baseRefName,headRefOid"
-  assert_file_contains "$mock_root/git.log" "fetch origin main pull/190/head:refs/tmp/external-review/"
-  assert_file_contains "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/"
-  assert_file_contains "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/"
-  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/"
+  assert_file_matches "$mock_root/git.log" 'fetch origin main pull/190/head:refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
+  assert_file_matches "$mock_root/git.log" "worktree add --detach $mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+ refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" 'update-ref -d refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
   assert_file_contains "$mock_root/parallel_args.log" "--review-script"
   assert_file_contains "$mock_root/parallel_args.log" "$mock_root/plans/review_logged.sh"
-  assert_file_contains "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/"
+  assert_file_matches "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
+  assert_json_field "$status_json" 'data["resolved_head_oid"] == "abc123def456"'
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
 }
 
@@ -442,7 +548,8 @@ test_reviewer_failure_preserves_summary() {
   set -e
   [[ $rc -ne 0 ]] || fail "reviewer failure should exit non-zero"
 
-  local run_id="external_review_generic_20260305T220000Z_commit_HEAD"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local story_dir="$mock_root/artifacts/story/$run_id"
   local status_json="$story_dir/external_review_generic/dispatch_status.json"
   local summary_md="$story_dir/external_review_generic/summary.md"
@@ -463,13 +570,106 @@ test_missing_success_artifact_is_inconsistent() {
   set -e
   [[ $rc -ne 0 ]] || fail "missing artifact on successful exit should fail wrapper"
 
-  local run_id="external_review_generic_20260305T220000Z_commit_HEAD"
+  local run_id
+  run_id="$(find_single_run_id "$mock_root/artifacts/story")"
   local summary_md="$mock_root/artifacts/story/$run_id/external_review_generic/summary.md"
 
   [[ -f "$summary_md" ]] || fail "summary should still be written on inconsistency"
   assert_file_contains "$summary_md" "gemini | FAIL | exit=0"
   assert_file_contains "$summary_md" "missing canonical artifact"
   pass "zero-exit reviewer without canonical artifact is treated as inconsistent"
+}
+
+test_pr_mode_head_oid_mismatch_fails_closed() {
+  setup_mock_env "pr_head_mismatch"
+  set +e
+  mismatch_output="$(
+    MOCK_GH_HEAD_OID="abc123def456" \
+    MOCK_WORKTREE_HEAD="deadbeefcaf0" \
+    run_wrapper all_ok PR190 2>&1
+  )"
+  rc=$?
+  set -e
+  [[ $rc -ne 0 ]] || fail "PR mode head mismatch should exit non-zero"
+
+  echo "$mismatch_output" | grep -Fq "resolved PR head OID mismatch" || fail "missing OID mismatch diagnostic"
+  assert_file_matches "$mock_root/git.log" "worktree remove --force $mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
+  assert_file_matches "$mock_root/git.log" 'update-ref -d refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
+
+  if [[ -d "$mock_root/artifacts/story" ]] && find "$mock_root/artifacts/story" -mindepth 1 -maxdepth 1 -type d | grep -q .; then
+    fail "OID mismatch should fail before creating review artifacts"
+  fi
+  pass "PR mode fails closed when fetched HEAD does not match resolved PR OID"
+}
+
+test_run_id_collision_avoided() {
+  setup_mock_env "run_id_collision"
+  run_wrapper all_ok --commit HEAD >/dev/null || fail "first commit run should exit 0"
+  run_wrapper all_ok --commit HEAD >/dev/null || fail "second commit run should exit 0"
+
+  local story_base="$mock_root/artifacts/story"
+  local count
+  count="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  [[ "$count" == "2" ]] || fail "expected two unique run dirs after same-second reruns, found $count"
+
+  local first_run_id
+  local second_run_id
+  first_run_id="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | LC_ALL=C sort | sed -n '1p')"
+  second_run_id="$(find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | LC_ALL=C sort | sed -n '2p')"
+  [[ -n "$first_run_id" && -n "$second_run_id" ]] || fail "expected two run ids"
+  [[ "$first_run_id" != "$second_run_id" ]] || fail "same-second reruns must not reuse RUN_ID"
+  [[ "$first_run_id" =~ ^external_review_generic_20260305T220000Z_commit_HEAD_[A-Za-z0-9_-]+$ ]] || fail "unexpected first run id format: $first_run_id"
+  [[ "$second_run_id" =~ ^external_review_generic_20260305T220000Z_commit_HEAD_[A-Za-z0-9_-]+$ ]] || fail "unexpected second run id format: $second_run_id"
+  pass "same-second reruns allocate distinct RUN_ID values"
+}
+
+test_parallel_review_failure_honors_story_artifacts_root() {
+  local repo
+  repo="$(setup_actual_parallel_repo "parallel_story_root_failure")"
+  local custom_root="$repo/custom_story_root"
+
+  set +e
+  output="$(
+    cd "$repo" && \
+      PARALLEL_REVIEW_REVIEW_SCRIPT="$repo/plans/review_logged.sh" \
+      STORY_ARTIFACTS_ROOT="$custom_root" \
+      MOCK_REVIEW_FAIL_TOOL="kimi" \
+      bash plans/parallel_review.sh S9-200 --tools codex,kimi --uncommitted --prompt generic 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "parallel_review reviewer failure should exit non-zero"
+  [[ -f "$custom_root/S9-200/review_logs/kimi.log" ]] || fail "review logs should be copied under STORY_ARTIFACTS_ROOT"
+  [[ ! -f "$repo/artifacts/story/S9-200/review_logs/kimi.log" ]] || fail "review logs should not fall back to repo artifacts root when STORY_ARTIFACTS_ROOT is set"
+  echo "$output" | grep -Fq "$custom_root/S9-200/review_logs/" || fail "failure output should point at STORY_ARTIFACTS_ROOT review_logs path"
+  pass "parallel_review failure logs honor STORY_ARTIFACTS_ROOT"
+}
+
+test_parallel_review_proof_graph_honors_story_artifacts_root() {
+  local repo
+  repo="$(setup_actual_parallel_repo "parallel_story_root_proof_graph")"
+  local custom_root="$repo/custom_story_root"
+  local agg_log="$repo/aggregate.log"
+
+  set +e
+  output="$(
+    cd "$repo" && \
+      PARALLEL_REVIEW_REVIEW_SCRIPT="$repo/plans/review_logged.sh" \
+      STORY_ARTIFACTS_ROOT="$custom_root" \
+      MOCK_AGG_LOG="$agg_log" \
+      bash plans/parallel_review.sh S9-201 --tools opus --files "plans/review_logged.sh" --prompt enriched --proof-graph 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review proof-graph run should succeed, got rc=$rc output=$output"
+  [[ -f "$custom_root/S9-201/proof_graph.json" ]] || fail "base proof graph should be initialized under STORY_ARTIFACTS_ROOT"
+  [[ ! -f "$repo/artifacts/story/S9-201/proof_graph.json" ]] || fail "base proof graph should not be initialized under default artifacts root when STORY_ARTIFACTS_ROOT is set"
+  [[ -f "$agg_log" ]] || fail "mock aggregate script should run"
+  assert_file_contains "$agg_log" "$custom_root"
+  assert_file_contains "$agg_log" "S9-201"
+  pass "parallel_review proof-graph paths honor STORY_ARTIFACTS_ROOT"
 }
 
 test_parallel_review_artifact_summary_uses_story_artifacts_root() {
@@ -658,6 +858,10 @@ test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout
 test_parallel_script_override_keeps_legacy_cli_contract
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
+test_pr_mode_head_oid_mismatch_fails_closed
+test_run_id_collision_avoided
+test_parallel_review_failure_honors_story_artifacts_root
+test_parallel_review_proof_graph_honors_story_artifacts_root
 test_parallel_review_artifact_summary_uses_story_artifacts_root
 test_parallel_review_proof_aggregation_uses_story_artifacts_root
 

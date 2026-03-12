@@ -317,7 +317,6 @@ fn execution_facade_symbols_publicly_reachable() {
     );
     assert!(matches!(decision, ExecutionDecision::Approved(_)));
 }
-
 #[test]
 fn facade_symbol_lists_stay_in_sync() {
     assert_facade_symbol_lists_in_sync();

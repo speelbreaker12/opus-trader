@@ -2,9 +2,12 @@
 
 use super::*;
 use crate::execution::build_order_intent::{
-    ChokeRejectReason, ChokeResult, GateStep, build_gate_results,
+    ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateStep, build_gate_results,
 };
-use crate::execution::open_runtime::OpenRuntimeOutput;
+use crate::execution::open_runtime::{
+    OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
+};
+use crate::execution::pipeline::{IntentPipelineMetrics, evaluate_intent_pipeline};
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, MarginGateInput, MarginGateMode, PendingExposureBook,
     ReservationId, RiskState,
@@ -162,6 +165,154 @@ fn make_pending_book(limit: f64) -> PendingExposureBook {
     let book = PendingExposureBook::new(None);
     book.register_instrument("BTC-PERPETUAL", Some(limit));
     book
+}
+
+fn legacy_open_decision(
+    input: &OpenExecutionInput<'_>,
+    pending_book: &PendingExposureBook,
+    wal_recorded: bool,
+) -> ExecutionDecision {
+    let legacy_input = build_open_runtime_input(input, wal_recorded);
+    let mut choke_metrics = ChokeMetrics::new();
+    let mut runtime_metrics = OpenRuntimeMetrics::default();
+    let output = build_open_order_intent_runtime(
+        &legacy_input,
+        pending_book,
+        &mut choke_metrics,
+        &mut runtime_metrics,
+    );
+    open_runtime_to_decision(input, &output)
+}
+
+fn legacy_pipeline_decision(
+    input: &ExecutionBaseInput<'_>,
+    intent_class: ChokeIntentClass,
+    wal_recorded: bool,
+) -> ExecutionDecision {
+    let legacy_input = build_pipeline_input(input, intent_class, wal_recorded);
+    let mut metrics = IntentPipelineMetrics::new();
+    let result = evaluate_intent_pipeline(&legacy_input, &mut metrics);
+    pipeline_result_to_decision(
+        result.decision,
+        result.reject_reason_code,
+        input.risk_state,
+        &GateRejectCodes::default(),
+    )
+}
+
+#[test]
+fn engine_open_approval_matches_legacy_runtime_exactly() {
+    let input = base_open_input();
+    let legacy_book = make_pending_book(100.0);
+    let engine_book = make_pending_book(100.0);
+    let expected = legacy_open_decision(&input, &legacy_book, true);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let actual = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert_eq!(wal_gate.calls, 1, "open path should consult WAL once");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn engine_open_pending_exposure_rejection_matches_legacy_runtime_exactly() {
+    let input = base_open_input();
+    let legacy_book = make_pending_book(5.0);
+    let engine_book = make_pending_book(5.0);
+    let expected = legacy_open_decision(&input, &legacy_book, true);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let actual = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn engine_close_approval_matches_legacy_pipeline_exactly() {
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let expected = legacy_pipeline_decision(&base, ChokeIntentClass::Close, true);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
+    let actual = engine.decide(
+        &ExecutionInput::Close(CloseExecutionInput { base }),
+        &mut runtime,
+    );
+
+    assert_eq!(wal_gate.calls, 1, "close path should consult WAL once");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn engine_close_rejection_matches_legacy_pipeline_exactly() {
+    let mut base = base_execution_input_with_risk_state(RiskState::Degraded);
+    base.quantize.raw_qty = 0.01;
+    let expected = legacy_pipeline_decision(&base, ChokeIntentClass::Close, true);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
+    let actual = engine.decide(
+        &ExecutionInput::Close(CloseExecutionInput { base }),
+        &mut runtime,
+    );
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn engine_hedge_wal_failure_matches_legacy_pipeline_exactly() {
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let expected = legacy_pipeline_decision(&base, ChokeIntentClass::Hedge, false);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = ErrWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
+    let actual = engine.decide(
+        &ExecutionInput::Hedge(HedgeExecutionInput { base }),
+        &mut runtime,
+    );
+
+    assert_eq!(wal_gate.calls, 1, "hedge path should attempt WAL once");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn engine_cancel_matches_legacy_pipeline_exactly() {
+    let base = base_execution_input();
+    let expected = legacy_pipeline_decision(&base, ChokeIntentClass::CancelOnly, true);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = ErrWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), None);
+    let actual = engine.decide(
+        &ExecutionInput::Cancel(CancelExecutionInput { base }),
+        &mut runtime,
+    );
+
+    assert_eq!(wal_gate.calls, 0, "cancel path must skip WAL gate");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+#[allow(deprecated)]
+fn engine_evaluate_alias_matches_decide() {
+    let engine = ExecutionEngine::new();
+    let input = ExecutionInput::Cancel(CancelExecutionInput {
+        base: base_execution_input(),
+    });
+    let mut decide_runtime = ExecutionRuntime::default();
+    let mut evaluate_runtime = ExecutionRuntime::default();
+
+    let decide = engine.decide(&input, &mut decide_runtime);
+    let evaluate = engine.evaluate(&input, &mut evaluate_runtime);
+
+    assert_eq!(evaluate, decide);
 }
 
 #[test]

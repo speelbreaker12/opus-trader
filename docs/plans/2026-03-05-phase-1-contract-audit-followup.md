@@ -1,6 +1,6 @@
 # Phase 1 Contract Audit Follow-Up
 
-**Date:** 2026-03-05  
+**Date:** 2026-03-05
 **Purpose:** Capture the useful contract-patch ideas from `artifacts/LOSS_RISK_CONTRACT_AUDIT_PHASE1.md` without inheriting that artifact's verdict or unsupported proof claims.
 
 ## Scope Rule

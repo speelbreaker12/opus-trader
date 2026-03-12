@@ -4,13 +4,14 @@
 # Tests:
 #   1. No base graph → exit 1 with error message
 #   2. Base graph, zero reviewer graphs → exit 0 with warning
-#   3. Base graph + 1 reviewer graph → exit 0, aggregation runs, verdict preserved
-#   4. Base graph + 2 reviewer graphs → strictest verdict wins (PROVEN_UNIT > PROVEN_INTEGRATED), both sources in meta
-#   5. Aggregated graph with BLOCKING → validate.py rejects with error message
-#   6. Non-reviewer dirs ignored (simpler-than-correct blocker)
-#   7. Validation failure preserves base graph (atomic write invariant)
-#   8. Trading halt (exit 20) → CRITICAL message, merged graph written to base
-#   9. KNOWN_TOOLS sync with review_logged.sh (drift detection)
+#   3. STORY_ARTIFACTS_ROOT override is honored for base + reviewer graphs
+#   4. Base graph + 1 reviewer graph → exit 0, aggregation runs, verdict preserved
+#   5. Base graph + 2 reviewer graphs → strictest verdict wins (PROVEN_UNIT > PROVEN_INTEGRATED), both sources in meta
+#   6. Aggregated graph with BLOCKING → validate.py rejects with error message
+#   7. Non-reviewer dirs ignored (simpler-than-correct blocker)
+#   8. Validation failure preserves base graph (atomic write invariant)
+#   9. Trading halt (exit 20) → CRITICAL message, merged graph written to base
+#   10. KNOWN_TOOLS sync with review_logged.sh (drift detection)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -158,6 +159,8 @@ test_zero_reviewers() {
   pass "zero reviewers → exit 0 with warning"
 }
 
+# ── Test 3: STORY_ARTIFACTS_ROOT override is honored ──────────────
+
 test_story_artifacts_root_override() {
   local sid="TEST-STORY-ROOT"
   local story_root="$tmp_dir/custom/story"
@@ -175,18 +178,18 @@ test_story_artifacts_root_override() {
   echo "$output" | grep -q "Aggregated 1 reviewer" \
     || fail "story-artifacts root override: expected aggregation output"
 
-  local merged="$story_dir/proof_graph.json"
-  [[ -f "$merged" ]] || fail "story-artifacts root override: merged graph not found at $merged"
-
   local merged_verdict
-  merged_verdict="$(read_merged_field "$merged" "print(g['ats'][0]['at_verdict']['verdict'])")"
+  merged_verdict="$(read_merged_field "$story_root/$sid/proof_graph.json" "print(g['ats'][0]['at_verdict']['verdict'])")"
   [[ "$merged_verdict" == "PROVEN_UNIT" ]] \
     || fail "story-artifacts root override: expected PROVEN_UNIT verdict, got $merged_verdict"
+
+  [[ ! -e "$tmp_dir/artifacts/story/$sid/proof_graph.json" ]] \
+    || fail "story-artifacts root override: aggregate_proofs.sh should not fall back to default artifacts/story"
 
   pass "STORY_ARTIFACTS_ROOT overrides the default artifacts/story tree"
 }
 
-# ── Test 3: Base + 1 reviewer → exit 0, verdict preserved ────────
+# ── Test 4: Base + 1 reviewer → exit 0, verdict preserved ────────
 
 test_single_reviewer() {
   local sid="TEST-SINGLE-REV"
@@ -222,7 +225,7 @@ test_single_reviewer() {
   pass "single reviewer → exit 0, verdict=PROVEN_UNIT, review_count=1"
 }
 
-# ── Test 4: Base + 2 reviewers → strictest verdict, both sources ──
+# ── Test 5: Base + 2 reviewers → strictest verdict, both sources ──
 
 test_two_reviewers_strictest() {
   local sid="TEST-TWO-REV"
@@ -270,7 +273,7 @@ print(','.join(sorted(s)))
   pass "two reviewers → strictest verdict (PROVEN_UNIT), both sources in meta"
 }
 
-# ── Test 5: BLOCKING severity → validate.py rejects with message ──
+# ── Test 6: BLOCKING severity → validate.py rejects with message ──
 
 test_blocking_rejected() {
   local sid="TEST-BLOCKING"
@@ -290,7 +293,7 @@ test_blocking_rejected() {
   pass "BLOCKING aggregation → validate.py rejects (exit $rc) with message"
 }
 
-# ── Test 6: Non-reviewer dirs ignored (simpler-than-correct gate) ──
+# ── Test 7: Non-reviewer dirs ignored (simpler-than-correct gate) ──
 # If a `self_review/` or `premortem/` directory contains a proof_graph.json,
 # it must NOT be included in aggregation. Only KNOWN_TOOLS dirs count.
 # This blocks the simpler-than-correct exploit where `cp REVIEWS[0] BASE`
@@ -404,7 +407,7 @@ test_trading_halt() {
   pass "trading halt → exit 20, CRITICAL message, merged graph written"
 }
 
-# ── Test 9: KNOWN_TOOLS sync with review_logged.sh ────────────────
+# ── Test 10: KNOWN_TOOLS sync with review_logged.sh ───────────────
 # Verifies that the KNOWN_TOOLS list in aggregate_proofs.sh matches
 # the tool case-statement in review_logged.sh, catching drift.
 

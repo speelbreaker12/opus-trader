@@ -32,6 +32,9 @@ else
   # AGGREGATE_ROOT remains supported for tests that provide a synthetic repo
   # root containing artifacts/story/<STORY_ID>/...
   ROOT="${AGGREGATE_ROOT:-$SCRIPT_ROOT}"
+  if [[ "$ROOT" != /* ]]; then
+    ROOT="$SCRIPT_ROOT/$ROOT"
+  fi
   STORY_ROOT="$ROOT/artifacts/story"
 fi
 BASE="$STORY_ROOT/$STORY_ID/proof_graph.json"
@@ -52,7 +55,7 @@ KNOWN_TOOLS="codex opus kimi gemini"
 # Guard: base must exist (init.py must have been run)
 if [[ ! -f "$BASE" ]]; then
   echo "ERROR: Base proof_graph.json not found at $BASE" >&2
-  echo "Run: python3 python/proof_graph/init.py $STORY_ID" >&2
+  echo "Run: python3 python/proof_graph/init.py $STORY_ID --output-dir $STORY_ROOT/$STORY_ID/" >&2
   exit 1
 fi
 

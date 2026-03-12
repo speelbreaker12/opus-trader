@@ -74,6 +74,16 @@ print(value)
 PY
 }
 
+generate_unique_suffix() {
+  "$PYTHON_BIN" - <<'PY'
+import os
+import time
+import uuid
+
+print(f"{os.getpid()}_{int(time.time() * 1_000_000)}_{uuid.uuid4().hex[:8]}")
+PY
+}
+
 ROOT="${EXTERNAL_REVIEW_ROOT:-}"
 if [[ -z "$ROOT" ]]; then
   ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || fail "not in a git repo"
@@ -83,6 +93,8 @@ PARALLEL_SCRIPT="${EXTERNAL_REVIEW_PARALLEL_SCRIPT:-$ROOT/plans/parallel_review.
 [[ -x "$PARALLEL_SCRIPT" ]] || fail "parallel review script not found: $PARALLEL_SCRIPT"
 
 PYTHON_BIN="$(find_python)" || fail "python3.6+ is required"
+UNIQUE_SUFFIX="${EXTERNAL_REVIEW_UNIQUE_SUFFIX:-$(generate_unique_suffix)}"
+UNIQUE_SUFFIX="$(sanitize_component "$UNIQUE_SUFFIX")"
 
 requested_target=""
 mode=""
@@ -195,14 +207,16 @@ case "$mode" in
     [[ -n "$resolved_base_ref" ]] || fail "failed to resolve baseRefName for PR #$pr_number"
     [[ -n "$resolved_head_oid" ]] || fail "failed to resolve headRefOid for PR #$pr_number"
 
-    temp_token="$(sanitize_component "pr_${pr_number}_${timestamp_utc}_$$")"
-    temp_ref="refs/tmp/external-review/$temp_token"
-    temp_worktree="$ROOT/.tmp/external-review/$temp_token"
+    temp_ref="refs/tmp/external-review/pr-$pr_number-$UNIQUE_SUFFIX"
+    temp_worktree="$ROOT/.tmp/external-review/pr-$pr_number-$UNIQUE_SUFFIX"
     mkdir -p "$(dirname "$temp_worktree")"
 
     git -C "$ROOT" fetch origin "$resolved_base_ref" "pull/$pr_number/head:$temp_ref"
     git -C "$ROOT" worktree add --detach "$temp_worktree" "$temp_ref"
     temp_worktree_created=true
+    fetched_head_oid="$(git -C "$temp_worktree" rev-parse HEAD)"
+    [[ "$fetched_head_oid" == "$resolved_head_oid" ]] || fail \
+      "resolved PR head OID mismatch: gh=$resolved_head_oid fetched=$fetched_head_oid"
 
     parallel_cwd="$temp_worktree"
     parallel_mode_args=(--base "origin/$resolved_base_ref")
@@ -232,7 +246,7 @@ case "$mode" in
     ;;
 esac
 
-RUN_ID="external_review_generic_${timestamp_utc}_${run_id_suffix}"
+RUN_ID="external_review_generic_${timestamp_utc}_${run_id_suffix}_${UNIQUE_SUFFIX}"
 RUN_ID="$(sanitize_component "$RUN_ID")"
 
 review_dir="$ROOT/artifacts/story/$RUN_ID/external_review_generic"

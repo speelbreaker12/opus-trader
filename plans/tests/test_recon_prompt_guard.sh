@@ -111,4 +111,23 @@ set -e
 [[ "$slice_rc" -ne 0 ]] || fail "expected slice-execute wrong-section regression case to fail"
 echo "$slice_output" | grep -Fq "WRONG_IMPL_SECTION_DRIFT" || fail "missing WRONG_IMPL_SECTION_DRIFT diagnostic"
 
+# Case 7: missing/broken rg must fail closed.
+fixture_missing_rg="$tmp_dir/missing_rg"
+mk_fixture "$fixture_missing_rg"
+mock_bin="$tmp_dir/mock_bin"
+mkdir -p "$mock_bin"
+cat > "$mock_bin/rg" <<'EOF'
+#!/usr/bin/env bash
+exit 127
+EOF
+chmod +x "$mock_bin/rg"
+
+set +e
+missing_rg_output="$(
+  PATH="$mock_bin:/usr/bin:/bin" RECON_PROMPT_GUARD_ROOT="$fixture_missing_rg" "$SCRIPT" 2>&1
+)"
+missing_rg_rc=$?
+set -e
+[[ "$missing_rg_rc" -ne 0 ]] || fail "expected missing rg case to fail closed"
+echo "$missing_rg_output" | grep -Eq "FAIL: .*rg|MISSING_TOOL|SCANNER_ERROR" || fail "missing rg failure diagnostic"
 echo "PASS: recon prompt guard test"

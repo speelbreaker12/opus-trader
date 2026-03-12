@@ -221,7 +221,7 @@ echo
 #
 # Verifies the three cleanup-slice guarantees claimed by the PR4 cleanup work:
 #   - engine_parity_tests.rs is deleted
-#   - pub fn evaluate alias is absent from engine.rs
+#   - pub fn evaluate alias remains as a deprecated compatibility shim
 #   - api.rs exposes no legacy internal pipeline types
 
 echo "=== Check 4: Upgrade 1B cleanup-boundary proof ==="

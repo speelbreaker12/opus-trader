@@ -12,8 +12,9 @@ use soldier_infra::store::{
     IntentRecord, LedgerAppendError, LedgerMetrics, LedgerTransitionSink, TlsState, WalLedger,
 };
 
-/// Local no-op sink for test setup. `Tlsm::apply()` is `#[cfg(test)]`-gated
-/// on the library and unavailable in integration tests.
+/// Local no-op sink for test setup. `Tlsm::apply()` remains available only as
+/// a deprecated compatibility shim, so integration tests keep sink handling
+/// explicit.
 struct NoopSink;
 impl TlsmTransitionSink for NoopSink {
     fn append_transition(&mut self, _t: PersistedTransition) -> Result<(), String> {
