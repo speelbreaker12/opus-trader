@@ -571,10 +571,10 @@ fn test_replay_duplicate_intent_recorded_last_writer_wins() {
 }
 
 /// Replay with illegal state transition in WAL — should succeed with warning.
-/// The WAL is source of truth even if the transition is invalid, because the
-/// event was already persisted.
+/// Replay must ignore illegal terminal -> non-terminal transitions so restart
+/// cannot resurrect phantom in-flight work from a corrupted WAL.
 #[test]
-fn test_replay_illegal_state_transition_applies_anyway() {
+fn test_replay_illegal_state_transition_is_ignored() {
     let path = temp_wal_path("replay_illegal_tx");
 
     // Manually write a WAL file with an illegal transition (Filled → Sent)
@@ -598,14 +598,16 @@ fn test_replay_illegal_state_transition_applies_anyway() {
         f.sync_all().unwrap();
     }
 
-    // Load ledger — replay must not fail (WAL is source of truth)
+    // Load ledger — replay must not fail, but illegal transitions are ignored.
     let ledger = WalLedger::with_storage_path(100, &path).expect("replay with illegal transition");
-    // The illegal transition should have been applied (WAL is truth)
     assert_eq!(
         ledger.get("h1").unwrap().tls_state,
-        TlsState::Sent,
-        "WAL replay must apply events as-is, even if transition is illegal"
+        TlsState::Filled,
+        "WAL replay must ignore illegal terminal -> non-terminal transitions"
     );
+    let replay = ledger.replay();
+    assert_eq!(replay.in_flight_count, 0);
+    assert!(!replay.in_flight_hashes.contains(&"h1".to_string()));
 
     drop(ledger);
     remove_if_exists(&path);
@@ -614,7 +616,7 @@ fn test_replay_illegal_state_transition_applies_anyway() {
 // ─── Runtime illegal transition rejection ────────────────────────────────
 
 /// update_state must reject illegal state transitions at runtime (TRIP test).
-/// Unlike WAL replay (which applies anyway), the runtime path validates via
+/// Unlike WAL replay (which ignores illegal transitions), the runtime path validates via
 /// is_valid_successor and returns IllegalTransition.
 #[test]
 fn test_update_state_illegal_transition_returns_error() {
