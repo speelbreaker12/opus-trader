@@ -19,24 +19,22 @@ legacy_root="artifacts/story"
 legacy_leaf="premortem.md"
 legacy_pattern="${legacy_root}/[^[:space:]]+/${legacy_leaf}"
 
+hits=""
+
 set +e
 hits="$(
   git grep --untracked -nE "$legacy_pattern" -- . \
     ':(exclude)plans/premortem_path_guard.sh' \
     ':(exclude)plans/tests/test_premortem_path_guard.sh'
 )"
-grep_rc=$?
+tracked_rc=$?
 set -e
 
-case "$grep_rc" in
-  1)
-    echo "premortem_path_guard: PASS"
-    exit 0
-    ;;
-  0)
+case "$tracked_rc" in
+  0|1)
     ;;
   *)
-    echo "FAIL: scanner error while searching legacy premortem paths (git grep rc=$grep_rc)" >&2
+    echo "FAIL: scanner error while searching tracked files for legacy premortem paths (git grep rc=$tracked_rc)" >&2
     exit 1
     ;;
 esac

@@ -117,6 +117,12 @@ run_aggregate() {
   AGGREGATE_ROOT="$tmp_dir" bash "$SCRIPT" "$sid"
 }
 
+run_aggregate_story_root() {
+  local sid="$1"
+  local story_root="$2"
+  STORY_ARTIFACTS_ROOT="$story_root" bash "$SCRIPT" "$sid"
+}
+
 # ── Test 1: No base graph → exit 1 with error message ────────────
 
 test_no_base_graph() {
@@ -157,31 +163,30 @@ test_zero_reviewers() {
 
 test_story_artifacts_root_override() {
   local sid="TEST-STORY-ROOT"
-  local story_root="$tmp_dir/custom_story_root"
+  local story_root="$tmp_dir/custom/story"
   local story_dir="$story_root/$sid"
   mkdir -p "$story_dir"
   copy_base "$story_dir"
-  create_reviewer_graph "$story_dir" "opus" "PROVEN_UNIT"
+  create_reviewer_graph "$story_dir" "codex" "PROVEN_UNIT"
 
   set +e
-  output="$(STORY_ARTIFACTS_ROOT="$story_root" bash "$SCRIPT" "$sid" 2>&1)"
+  output="$(run_aggregate_story_root "$sid" "$story_root" 2>&1)"
   rc=$?
   set -e
 
-  [[ $rc -eq 0 ]] || fail "story root override: expected exit 0, got $rc. Output: $output"
+  [[ $rc -eq 0 ]] || fail "story-artifacts root override should exit 0, got $rc. Output: $output"
   echo "$output" | grep -q "Aggregated 1 reviewer" \
-    || fail "story root override: expected 'Aggregated 1 reviewer' in output"
-  [[ -f "$story_root/$sid/proof_graph.json" ]] \
-    || fail "story root override: merged graph not found under STORY_ARTIFACTS_ROOT"
-  [[ ! -e "$tmp_dir/artifacts/story/$sid/proof_graph.json" ]] \
-    || fail "story root override: aggregate_proofs.sh should not fall back to default artifacts/story"
+    || fail "story-artifacts root override: expected aggregation output"
 
   local merged_verdict
   merged_verdict="$(read_merged_field "$story_root/$sid/proof_graph.json" "print(g['ats'][0]['at_verdict']['verdict'])")"
   [[ "$merged_verdict" == "PROVEN_UNIT" ]] \
-    || fail "story root override: expected PROVEN_UNIT verdict, got $merged_verdict"
+    || fail "story-artifacts root override: expected PROVEN_UNIT verdict, got $merged_verdict"
 
-  pass "story root override → aggregate_proofs honors STORY_ARTIFACTS_ROOT"
+  [[ ! -e "$tmp_dir/artifacts/story/$sid/proof_graph.json" ]] \
+    || fail "story-artifacts root override: aggregate_proofs.sh should not fall back to default artifacts/story"
+
+  pass "STORY_ARTIFACTS_ROOT overrides the default artifacts/story tree"
 }
 
 # ── Test 4: Base + 1 reviewer → exit 0, verdict preserved ────────

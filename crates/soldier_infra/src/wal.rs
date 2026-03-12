@@ -103,6 +103,8 @@ pub fn build_created_intent_record(
 ///
 /// This is the validated constructor for newly-persisted pre-dispatch intents.
 /// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
+/// `LifecycleIntent::Cancel` is rejected because CREATED WAL records model
+/// new-order intents; cancel flows follow a separate lifecycle path.
 pub fn try_build_created_intent_record(
     intent_hash: &str,
     group_id: &str,

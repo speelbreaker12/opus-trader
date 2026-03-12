@@ -12,7 +12,7 @@ economic risk, and open decisions.
 ## Rules
 - Fill the premortem from `STORY_PREMORTEM_TEMPLATE.md` before writing any implementation code.
 - §0 Risk rating must be filled. HIGH stories get extra scrutiny on §7 (economic risk) and §8 (conflict scan).
-- Trading Risk Hard Gate (between §0 and §1) is a hard gate in schema v2: all 7 questions must be answered with proof before implementation.
+- Trading Risk Hard Gate (between §0 and §1) is a hard gate in schema v2: all 7 questions must be answered with proof before implementation. Mechanical enforcement lives in `plans/premortem_gate.sh`; workflow blocking happens in `plans/wf_step.sh`, and fixture coverage for the validator runs in `plans/tests/test_premortem_gate_trading_hard_gate.sh` via `plans/preflight.sh`.
 - §1 (clause audit) is a hard gate: every AT must trace to a normative contract clause.
 - §4 (open decisions) is a hard gate: no unresolved ambiguities before coding. Each decision must cite evidence (file + line).
 - §5 (wrong implementation gate) is a hard gate: every AT must have at least one wrong impl identified and blocked.

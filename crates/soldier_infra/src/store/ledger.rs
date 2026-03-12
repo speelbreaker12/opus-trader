@@ -24,15 +24,23 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
+static LEGACY_REDUCE_ONLY_WARNING_EMITTED: AtomicBool = AtomicBool::new(false);
+
+fn should_log_legacy_reduce_only_warning(flag: &AtomicBool) -> bool {
+    !flag.swap(true, Ordering::Relaxed)
+}
+
 fn default_reduce_only_legacy() -> bool {
     // Fail-closed: legacy WAL records missing reduce_only MUST default to false (OPEN classification)
     // per CONTRACT §2.4. OPEN is the most conservative choice — it applies all OPEN gates on recovery.
     // NOTE: This field is for WAL persistence/audit only. Gate classification derives from IntentClass.
     // UPGRADE NOTE: If WAL files predate the reduce_only field, records will be reclassified as OPEN
-    // on replay. Monitor logs for this warning after upgrade to verify expected record count.
-    tracing::warn!(
-        "WAL replay: legacy record missing reduce_only field, defaulting to false (OPEN classification)"
-    );
+    // on replay. Log once per process to avoid replay flood while still surfacing the upgrade hazard.
+    if should_log_legacy_reduce_only_warning(&LEGACY_REDUCE_ONLY_WARNING_EMITTED) {
+        tracing::warn!(
+            "WAL replay: legacy record missing reduce_only field, defaulting to false (OPEN classification)"
+        );
+    }
     false
 }
 
@@ -979,21 +987,17 @@ fn apply_event(
             let record = latest_by_hash
                 .get_mut(intent_hash)
                 .ok_or_else(|| format!("transition missing intent_hash: {intent_hash}"))?;
-            // Design: WAL replay is intentionally lenient — invalid transitions log a warning
-            // but are applied to preserve replay fidelity for historical WAL files. A strict
-            // rejection here would prevent replaying WAL files written by older versions with
-            // different TLSM rules. All in-flight state is rebuilt from WAL, so a corrupt record
-            // can only cause a phantom in-flight entry, not data loss.
-            // Risk: If a Filled record is followed by a Sent record in a corrupted WAL, the intent
-            // appears in in_flight_hashes as Sent. Monitor logs for "WARN invalid_wal_transition".
+            // Replay remains fail-closed: illegal transitions are tolerated so the WAL still
+            // loads, but they must not mutate the reconstructed state. Otherwise a corrupted or
+            // stale WAL can resurrect terminal intents into phantom in-flight work at restart.
             if !record.tls_state.is_valid_successor(*new_state) {
                 tracing::warn!(
                     intent_hash = %intent_hash,
                     from = ?record.tls_state,
                     to = ?new_state,
-                    "illegal state transition — applying anyway \
-                     (WAL is source of truth)"
+                    "illegal state transition during WAL replay — ignoring event"
                 );
+                return Ok(());
             }
             record.tls_state = *new_state;
             Ok(())
@@ -1155,4 +1159,17 @@ fn read_events_from_path(path: &Path) -> io::Result<Vec<WalEvent>> {
     }
 
     Ok(events)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_reduce_only_warning_helper_logs_only_once() {
+        let warned = AtomicBool::new(false);
+
+        assert!(should_log_legacy_reduce_only_warning(&warned));
+        assert!(!should_log_legacy_reduce_only_warning(&warned));
+    }
 }

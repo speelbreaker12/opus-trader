@@ -184,12 +184,14 @@ validate_trading_risk_hard_gate() {
   echo "$section" | grep -Fq "NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim." \
     || die "Trading Risk Hard Gate missing NO-GO decision rule"
 
-  if [[ "$stoplight" == "GREEN" ]] && [[ "$no_count" -gt 0 || "$unknown_count" -gt 0 ]]; then
-    die "STOPLIGHT is GREEN but Trading Risk Hard Gate has NO/UNKNOWN answers"
+  # UNKNOWN may remain reviewable under explicit YELLOW debt, but an explicit NO
+  # is always a hard block per the Trading Risk Hard Gate decision rule.
+  if [[ "$no_count" -gt 0 ]]; then
+    die "Trading Risk Hard Gate has NO answers; premortem is NO-GO"
   fi
 
-  if [[ "$no_count" -gt 0 && "$stoplight" != "RED" ]]; then
-    die "Trading Risk Hard Gate has NO answers; STOPLIGHT must be RED"
+  if [[ "$stoplight" == "GREEN" ]] && [[ "$unknown_count" -gt 0 ]]; then
+    die "STOPLIGHT is GREEN but Trading Risk Hard Gate has UNKNOWN answers"
   fi
 
   if [[ "${#trading_gap_ids[@]}" -gt 0 ]]; then

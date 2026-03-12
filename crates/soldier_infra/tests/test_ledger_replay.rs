@@ -968,6 +968,32 @@ fn test_replay_round_trip_from_durable_storage() {
     remove_if_exists(&wal_path);
 }
 
+#[test]
+fn test_replay_ignores_illegal_terminal_to_nonterminal_transition() {
+    let wal_path = temp_wal_path("illegal_terminal_replay");
+    let wal = format!(
+        "{}\n{}\n{}\n",
+        wal_intent_line("hash1", "g1"),
+        wal_state_transition_line("hash1", TlsState::Filled),
+        wal_state_transition_line("hash1", TlsState::Sent)
+    );
+    std::fs::write(&wal_path, wal).expect("write wal");
+
+    let ledger = WalLedger::with_storage_path(10, &wal_path).expect("reload wal");
+    let record = ledger.get("hash1").expect("record should exist");
+    assert_eq!(
+        record.tls_state,
+        TlsState::Filled,
+        "replay must ignore illegal terminal -> non-terminal transitions",
+    );
+
+    let replay = ledger.replay();
+    assert_eq!(replay.in_flight_count, 0);
+    assert!(!replay.in_flight_hashes.contains(&"hash1".to_string()));
+
+    remove_if_exists(&wal_path);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Trailing corruption tolerance (TRIP / NON-TRIP pairs per §0.Z.2.2 item A)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -982,6 +1008,16 @@ fn wal_intent_line(hash: &str, group_id: &str) -> String {
     let event = serde_json::json!({
         "kind": "intent_recorded",
         "record": record_json
+    });
+    serde_json::to_string(&event).unwrap()
+}
+
+/// Helper: serialize a StateTransition WAL event as a JSONL line (no newline).
+fn wal_state_transition_line(hash: &str, new_state: TlsState) -> String {
+    let event = serde_json::json!({
+        "kind": "state_transition",
+        "intent_hash": hash,
+        "new_state": new_state
     });
     serde_json::to_string(&event).unwrap()
 }

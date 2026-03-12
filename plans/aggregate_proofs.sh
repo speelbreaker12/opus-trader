@@ -21,23 +21,23 @@ set -euo pipefail
 STORY_ID="${1:?Usage: aggregate_proofs.sh <STORY_ID>}"
 # SCRIPT_ROOT: always the real repo root (for python scripts, specs, plans)
 SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# STORY_ARTIFACTS_ROOT: explicit story artifacts base override (used by review harnesses).
-# AGGREGATE_ROOT: legacy repo-like root override for tests when artifacts live under artifacts/story/.
-ARTIFACTS_ROOT="${STORY_ARTIFACTS_ROOT:-}"
-if [[ -n "$ARTIFACTS_ROOT" ]]; then
-  case "$ARTIFACTS_ROOT" in
-    /*) ;;
-    *) ARTIFACTS_ROOT="$SCRIPT_ROOT/$ARTIFACTS_ROOT" ;;
-  esac
+# STORY_ROOT: overridable for callers that write reviewer artifacts outside
+# the repo-default artifacts/story tree.
+if [[ -n "${STORY_ARTIFACTS_ROOT:-}" ]]; then
+  STORY_ROOT="$STORY_ARTIFACTS_ROOT"
+  if [[ "$STORY_ROOT" != /* ]]; then
+    STORY_ROOT="$SCRIPT_ROOT/$STORY_ROOT"
+  fi
 else
+  # AGGREGATE_ROOT remains supported for tests that provide a synthetic repo
+  # root containing artifacts/story/<STORY_ID>/...
   ROOT="${AGGREGATE_ROOT:-$SCRIPT_ROOT}"
-  case "$ROOT" in
-    /*) ;;
-    *) ROOT="$SCRIPT_ROOT/$ROOT" ;;
-  esac
-  ARTIFACTS_ROOT="$ROOT/artifacts/story"
+  if [[ "$ROOT" != /* ]]; then
+    ROOT="$SCRIPT_ROOT/$ROOT"
+  fi
+  STORY_ROOT="$ROOT/artifacts/story"
 fi
-BASE="$ARTIFACTS_ROOT/$STORY_ID/proof_graph.json"
+BASE="$STORY_ROOT/$STORY_ID/proof_graph.json"
 
 # Detect python binary (prefers python3; verify_utils.sh ensure_python prefers python)
 if command -v python3 >/dev/null 2>&1; then
@@ -55,7 +55,7 @@ KNOWN_TOOLS="codex opus kimi gemini"
 # Guard: base must exist (init.py must have been run)
 if [[ ! -f "$BASE" ]]; then
   echo "ERROR: Base proof_graph.json not found at $BASE" >&2
-  echo "Run: python3 python/proof_graph/init.py $STORY_ID --output-dir $ARTIFACTS_ROOT/$STORY_ID/" >&2
+  echo "Run: python3 python/proof_graph/init.py $STORY_ID --output-dir $STORY_ROOT/$STORY_ID/" >&2
   exit 1
 fi
 
@@ -64,7 +64,7 @@ fi
 # files from e.g. self_review/, premortem/, or other non-reviewer subdirectories.
 REVIEWS=()
 LABELS=()
-for dir in "$ARTIFACTS_ROOT"/"$STORY_ID"/*/; do
+for dir in "$STORY_ROOT"/"$STORY_ID"/*/; do
   [[ -d "$dir" ]] || continue
   tool="$(basename "$dir")"
   # Filter to known reviewer tools

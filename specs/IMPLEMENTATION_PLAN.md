@@ -96,7 +96,7 @@ Foundation owner-status contract is proven in Phase 1 with explicit scope bounda
 - Out-of-scope in Phase 1 status-lite: canonical authority/status schema fields (`status_schema_version`, `supported_profiles`, `enforced_profile`, `trading_mode`, `risk_state`, `bunker_mode_active`, `mode_reasons`, `open_permission_*`, `policy_age_sec`, `last_policy_update_ts`, `python_policy_generated_ts_ms`, `f1_cert_*`, queue/latency counters).  
 - Required AT slice coverage in Phase 1: AT-022 + AT-1230.  
 - Hard rule: while `phase == foundation`, every `/status` payload MUST keep `dispatch_enabled == false`.  
-- Interpretation guard (non-negotiable): meeting Phase 1 exit criteria is an implementation milestone only and MUST NOT be interpreted as CSP minimum status compliance or live-trading readiness. CSP minimum `/status` authority begins after foundation mode exits (see `specs/CONTRACT.md` §7.0 status authority matrix, Surface C).  
+- Interpretation guard (non-negotiable): meeting Phase 1 exit criteria is an implementation milestone only and MUST NOT be interpreted as CSP minimum status compliance or live-trading readiness. CSP minimum `/status` authority begins once `foundation_exit_condition` is true (`phase != foundation`) (see `specs/CONTRACT.md` §7.0 status authority matrix, Surface C).
 E) Slices Breakdown (Phase 1\)  
 Slice 1 — Instrument Units \+ Dispatcher Invariants  
 Slice intent: Encode Deribit sizing semantics to prevent 10–100× exposure errors.
@@ -1081,7 +1081,7 @@ Allowed paths: crates/soldier\_infra/http/{router.rs,health.rs}
 New endpoint: GET /api/v1/health  
 Required endpoint-level tests: yes  
 Phase boundary note: AT-022 + AT-1230 foundation status-lite ownership is Phase 1 scope; this Phase 2 slice extends owner control-plane behavior (watchdog heartbeat + steady-state hardening) without replacing Phase 1 coverage.  
-Phase boundary guard: this slice MUST NOT reinterpret Phase 1 completion as CSP minimum status readiness; it only extends owner control-plane behavior after foundation mode exits under contract §7.0 authority rules.  
+Phase boundary guard: this slice MUST NOT reinterpret Phase 1 completion as CSP minimum status readiness; it only extends owner control-plane behavior once `foundation_exit_condition` is true (`phase != foundation`) under contract §7.0 authority rules.
 Acceptance criteria: HTTP 200 JSON includes keys (contract §7.0):  
 - ok (bool; MUST be true when process is up)  
 - build\_id (string)  

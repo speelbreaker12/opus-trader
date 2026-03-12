@@ -12,6 +12,8 @@ set -euo pipefail
 # Options:
 #   --tools <list>     Comma-separated tools (default: codex,opus)
 #                      Available: codex, opus, kimi, gemini
+#   --review-script <PATH>
+#                      review_logged.sh path override
 #   --base <REF>       Base ref for diff (passed through to review_logged.sh)
 #   --commit <REF>     Commit ref (passed through)
 #   --files <LIST>     Files list (passed through)
@@ -32,12 +34,6 @@ set -euo pipefail
 #   plans/parallel_review.sh S1-004 --files "src/gate.rs" --tools opus,kimi --prompt generic
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: not in a git repo" >&2; exit 2; }
-ARTIFACTS_ROOT="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
-case "$ARTIFACTS_ROOT" in
-  /*) ;;
-  *) ARTIFACTS_ROOT="$ROOT/$ARTIFACTS_ROOT" ;;
-esac
-REVIEW_SCRIPT="${PARALLEL_REVIEW_REVIEW_SCRIPT:-$ROOT/plans/review_logged.sh}"
 AGGREGATE_SCRIPT="$ROOT/plans/aggregate_proofs.sh"
 
 usage() {
@@ -46,9 +42,27 @@ usage() {
 
 die() { echo "ERROR: $*" >&2; exit 2; }
 
+resolve_story_artifacts_root() {
+  local artifacts_root="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
+  if [[ "$artifacts_root" != /* ]]; then
+    artifacts_root="$ROOT/$artifacts_root"
+  fi
+  printf '%s' "$artifacts_root"
+}
+
+display_artifact_path() {
+  local artifact_path="$1"
+  if [[ "$artifact_path" == "$ROOT/"* ]]; then
+    printf '%s' "${artifact_path#$ROOT/}"
+  else
+    printf '%s' "$artifact_path"
+  fi
+}
+
 # ── Defaults ──────────────────────────────────────────────────────────
 STORY=""
 TOOLS="codex,opus"
+REVIEW_SCRIPT_OVERRIDE=""
 MODE_ARGS=()
 PROMPT_STYLE="enriched"
 PROOF_GRAPH=false
@@ -64,6 +78,7 @@ STORY="$1"; shift
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tools)       TOOLS="${2:?missing tools list}"; shift 2 ;;
+    --review-script) REVIEW_SCRIPT_OVERRIDE="${2:?missing review script path}"; shift 2 ;;
     # G-6 fix: detect conflicting mode flags
     --base)        [[ ${#MODE_ARGS[@]} -gt 0 ]] && die "only one of --base/--commit/--files/--uncommitted allowed"
                    MODE_ARGS=("--base" "${2:?missing ref}"); shift 2 ;;
@@ -87,6 +102,7 @@ done
 [[ -n "$STORY" ]] || die "STORY_ID is required"
 [[ "$STORY" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || die "invalid STORY_ID: $STORY"
 [[ ${#MODE_ARGS[@]} -gt 0 ]] || die "one of --base, --commit, --files, or --uncommitted is required"
+REVIEW_SCRIPT="${REVIEW_SCRIPT_OVERRIDE:-${PARALLEL_REVIEW_REVIEW_SCRIPT:-$ROOT/plans/review_logged.sh}}"
 [[ -x "$REVIEW_SCRIPT" ]] || die "review_logged.sh not found at $REVIEW_SCRIPT"
 
 # Parse tool list
@@ -109,6 +125,7 @@ RC_LIST=()
 
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
+STORY_ARTIFACTS_DIR="$(resolve_story_artifacts_root)"
 
 echo "═══════════════════════════════════════════════════════════════"
 echo "  parallel_review: $STORY"
@@ -237,13 +254,13 @@ agg_rc=0
 if [[ "$PROOF_GRAPH" == "true" && "$NO_AGGREGATE" != "true" && "$any_failed" -eq 0 ]]; then
   echo
   # G-5 fix: ensure base proof graph exists before aggregation.
-  base_pg="$ARTIFACTS_ROOT/$STORY/proof_graph.json"
+  base_pg="$STORY_ARTIFACTS_DIR/$STORY/proof_graph.json"
   if [[ ! -f "$base_pg" ]]; then
     echo "Initializing base proof graph for $STORY..."
     init_script="$ROOT/python/proof_graph/init.py"
     if [[ -f "$init_script" ]]; then
       set +e
-      python3 "$init_script" "$STORY" --output-dir "$ARTIFACTS_ROOT/$STORY/" 2>&1
+      python3 "$init_script" "$STORY" --output-dir "$STORY_ARTIFACTS_DIR/$STORY/" 2>&1
       init_rc=$?
       set -e
       if [[ $init_rc -ne 0 ]]; then
@@ -260,7 +277,7 @@ if [[ "$PROOF_GRAPH" == "true" && "$NO_AGGREGATE" != "true" && "$any_failed" -eq
     echo "Running proof graph aggregation..."
     if [[ -x "$AGGREGATE_SCRIPT" ]]; then
       set +e
-      STORY_ARTIFACTS_ROOT="$ARTIFACTS_ROOT" "$AGGREGATE_SCRIPT" "$STORY"
+      STORY_ARTIFACTS_ROOT="$STORY_ARTIFACTS_DIR" "$AGGREGATE_SCRIPT" "$STORY"
       agg_rc=$?
       set -e
       if [[ $agg_rc -eq 0 ]]; then
@@ -284,11 +301,12 @@ fi
 echo
 echo "Artifacts:"
 for tool in "${TOOL_LIST[@]}"; do
-  artifact="$ARTIFACTS_ROOT/$STORY/$tool/${tool}.${PROMPT_STYLE}.md"
-  if [[ -f "$artifact" ]]; then
-    echo "  $artifact"
+  artifact_path="$STORY_ARTIFACTS_DIR/$STORY/$tool/${tool}.${PROMPT_STYLE}.md"
+  artifact_display="$(display_artifact_path "$artifact_path")"
+  if [[ -f "$artifact_path" ]]; then
+    echo "  $artifact_display"
   else
-    echo "  $artifact  (not found — review may have failed)"
+    echo "  $artifact_display  (not found — review may have failed)"
   fi
 done
 
@@ -296,12 +314,12 @@ done
 # G-2 fix: on failure, copy logs to artifacts dir (not world-readable /tmp),
 # then let the EXIT trap clean up the temp dir.
 if [[ $any_failed -ne 0 ]]; then
-  fail_log_dir="$ARTIFACTS_ROOT/$STORY/review_logs"
+  fail_log_dir="$STORY_ARTIFACTS_DIR/$STORY/review_logs"
   mkdir -p "$fail_log_dir"
   cp "$LOG_DIR"/*.log "$fail_log_dir/" 2>/dev/null || true
   cp "$LOG_DIR"/*.log.end "$fail_log_dir/" 2>/dev/null || true
   echo
-  echo "One or more reviews failed. Logs saved to: $fail_log_dir/"
+  echo "One or more reviews failed. Logs saved to: $(display_artifact_path "$fail_log_dir")/"
   exit 1
 fi
 

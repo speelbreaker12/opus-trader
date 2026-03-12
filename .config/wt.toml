@@ -1,0 +1,10 @@
+# Worktrunk Project Configuration — opus-trader
+# Shared across developers; checked into git.
+
+# Post-Create: copy Rust build cache from primary worktree to avoid cold compiles
+[post-create]
+target-cache = "rsync -a --link-dest={{ primary_worktree_path }}/target {{ primary_worktree_path }}/target/ {{ worktree_path }}/target/"
+
+# Pre-Merge: run verify.sh quick before allowing merge back
+[pre-merge]
+verify = "cd {{ worktree_path }} && ./plans/verify.sh quick"

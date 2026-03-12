@@ -265,9 +265,10 @@
       "slice_ref": "Slice 0 — Phase 0 Launch Policy & Ops Baseline",
       "story_ref": "P0-D Break-Glass Runbook + Drill",
       "category": "policy",
-      "description": "Create break-glass runbook and execute a recorded drill proving halt capability.",
+      "description": "Create a break-glass runbook with one primary canonical runtime emergency action plus one bounded fallback action, and execute a recorded drill proving the documented primary action causes the runtime safety-state transition.",
       "contract_refs": [
-        "P0-D Break-Glass Runbook"
+        "P0-D Break-Glass Runbook",
+        "CONTRACT.md AT-1237"
       ],
       "plan_refs": [
         "Global Non‑Negotiables (apply to ALL stories)"
@@ -283,27 +284,28 @@
         "avoid": []
       },
       "acceptance": [
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has STOP TRADING steps.",
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has verify no further OPEN risk.",
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has verify risk reduction possible.",
-        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN has escalation + notify.",
-        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN has trigger scenario.",
-        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN has time to halt.",
-        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN has observed behavior.",
-        "GIVEN evidence/phase0/break_glass/log_excerpt.txt WHEN reviewed THEN proves drill occurred."
+        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN it names one primary canonical runtime emergency action, one bounded fallback action, and the expected runtime safety state after the primary action.",
+        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN it explains how to verify no further OPEN risk and how to reach the documented risk-reduction path if exposure exists.",
+        "GIVEN docs/break_glass_runbook.md WHEN reviewed THEN it includes escalation + notify guidance.",
+        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN it records the exact primary action invoked, time to runtime safety-state transition, resulting runtime state, and proof OPEN dispatch stopped.",
+        "GIVEN evidence/phase0/break_glass/drill.md WHEN reviewed THEN it records the risk-reducing action that remained available once the primary action completed.",
+        "GIVEN evidence/phase0/break_glass/log_excerpt.txt WHEN reviewed THEN it shows the documented primary action, the matching runtime state transition, and no further OPEN dispatch after that transition."
       ],
       "steps": [
-        "Create docs/break_glass_runbook.md with STOP TRADING steps (kill switch).",
-        "Add how to verify no further OPEN risk.",
-        "Add how to verify risk reduction still possible.",
+        "Create docs/break_glass_runbook.md naming one primary canonical runtime emergency action, one bounded fallback action, and the expected runtime safety state after the primary action.",
+        "Add how to verify no further OPEN risk after the primary action.",
+        "Add the follow-on risk-reduction path that remains available if exposure exists.",
         "Add escalation and who to notify.",
         "Copy runbook to evidence/phase0/break_glass/runbook_snapshot.md.",
-        "Execute drill: simulate runaway order attempt.",
-        "Record drill in evidence/phase0/break_glass/drill.md with trigger, time to halt, observed behavior.",
-        "Capture log excerpt in evidence/phase0/break_glass/log_excerpt.txt."
+        "Execute drill by invoking the exact documented primary action against a simulated runaway order attempt.",
+        "Record drill in evidence/phase0/break_glass/drill.md with trigger, exact primary action invoked, time to safety-state transition, resulting runtime state, observed OPEN blocking, and the surviving risk-reduction path.",
+        "Capture log excerpt in evidence/phase0/break_glass/log_excerpt.txt showing the documented primary action and its runtime state transition."
       ],
       "verify": [
         "./plans/verify.sh",
+        "python3 tools/phase0_meta_test.py --root .",
+        "cargo test -p soldier_infra --test test_phase0_runtime test_break_glass_kill_blocks_open_allows_reduce_runtime -- --exact",
+        "cargo test -p soldier_infra --test test_phase0_runtime test_break_glass_command_path_runtime -- --exact",
         "test -s docs/break_glass_runbook.md",
         "test -s evidence/phase0/break_glass/runbook_snapshot.md",
         "test -s evidence/phase0/break_glass/drill.md",
@@ -317,11 +319,24 @@
       ],
       "dependencies": [],
       "est_size": "S",
-      "risk": "low",
+      "risk": "high",
       "needs_human_decision": false,
       "passes": true,
-      "contract_must_evidence": [],
-      "enforcing_contract_ats": [],
+      "contract_must_evidence": [
+        {
+          "quote": "Define one primary canonical runtime emergency action, one bounded fallback action, and execute a recorded drill",
+          "location": "specs/CONTRACT.md",
+          "anchor": "P0-D Break-Glass Runbook"
+        },
+        {
+          "quote": "the documented primary action MUST exist at runtime and transition the system within one control-plane tick",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-1237"
+        }
+      ],
+      "enforcing_contract_ats": [
+        "AT-1237"
+      ],
       "reason_codes": {
         "type": "",
         "values": []
@@ -352,10 +367,11 @@
           "Yes - drill completed and recorded",
           "No - drill not yet executed"
         ],
-        "recommended": "Execute drill in DEV/STAGING before marking done",
+        "recommended": "Execute the exact documented primary action in DEV/STAGING before marking done",
         "unblock_steps": [
           "Create runbook doc",
-          "Execute drill",
+          "Document primary action + bounded fallback",
+          "Execute drill using the primary action",
           "Record in drill.md",
           "Capture log excerpt"
         ]
@@ -2668,7 +2684,7 @@
       "slice_ref": "Slice 4 — Durable WAL \\+ TLSM \\+ Trade‑ID Registry",
       "story_ref": "S4.1 WAL append + replay no-resend",
       "category": "durability",
-      "description": "Persist intents to a durable WAL and replay without resending after crash.",
+      "description": "Persist intents to a durable WAL, replay them without duplicate sends after crash, and prevent replay alone from creating fresh OPEN exposure.",
       "contract_refs": [
         "CONTRACT.md 2.4 Durable Intent Ledger (WAL Truth Source)",
         "CONTRACT.md §2.4.1 WAL Writer Isolation (Hot Loop Protection)",
@@ -2676,6 +2692,7 @@
         "AT-906",
         "AT-233",
         "AT-234",
+        "AT-1231",
         "Anchor-004",
         "Anchor-005",
         "Anchor-006",
@@ -2697,18 +2714,19 @@
         ]
       },
       "acceptance": [
-        "GIVEN an intent is appended to the durable ledger before dispatch WHEN the system restarts THEN the intent is not resent.",
+        "GIVEN an OPEN intent is appended to the durable ledger before dispatch and crash occurs before any send WHEN the system restarts THEN replay/reconciliation alone does not dispatch it; a fresh post-restart evaluation is required before any OPEN dispatch.",
         "GIVEN the system restarts WHEN reconstructing state from the durable ledger THEN in-flight intents are rebuilt without duplicate dispatch.",
         "GIVEN a recorded intent WHEN persisted THEN the record includes intent_hash, group_id, leg_idx, instrument, side, qty_steps or qty_q, limit_price_q or price_ticks, tls_state, created_ts, sent_ts, ack_ts, last_fill_ts, and exchange_order_id when available.",
+        "GIVEN a WAL-recorded CLOSE/HEDGE intent with reduce_only == true in a non-terminal TLS state WHEN the system restarts THEN replay retains that non-OPEN classification for reconciliation and recovery handling.",
         "GIVEN ledger append fails WHEN dispatch is attempted THEN the OPEN intent is rejected and the error counter increments.",
         "GIVEN the ledger writer queue is full WHEN an append is attempted THEN the append returns immediately with an error (hot loop not blocked)."
       ],
       "steps": [
         "Create crates/soldier_infra/src/store/ledger.rs with append + replay primitives.",
         "Wire the store module into crates/soldier_infra/src/lib.rs.",
-        "Record intents before dispatch (RecordedBeforeDispatch) and mark replay outcomes.",
+        "Record intents before dispatch (RecordedBeforeDispatch), replay them for audit/reconciliation state, and ensure replay alone does not auto-dispatch unsent OPEN intents.",
         "Define the minimum persisted intent schema in ledger storage comments and enforce it in the record struct.",
-        "Add unit tests in crates/soldier_infra/tests/test_ledger_replay.rs for no-resend after crash.",
+        "Add unit tests in crates/soldier_infra/tests/test_ledger_replay.rs for no replay-only OPEN dispatch after crash and for reduce_only classification retention during replay.",
         "Document WAL initialization and replay expectations in module-level comments."
       ],
       "verify": [
@@ -2737,6 +2755,7 @@
         "AT-906",
         "AT-233",
         "AT-234",
+        "AT-1231",
         "AT-925",
         "AT-940"
       ],
@@ -2769,7 +2788,8 @@
         "AT-233",
         "AT-234",
         "AT-906",
-        "AT-935"
+        "AT-935",
+        "AT-1231"
       ],
       "partial_coverage_notes": {
         "AT-925": "partial: queue-full detection + WAL error counter proven (test_at935_queue_full_returns_error, test_queue_full_returns_immediately). Mode forcing (TradingMode::ReduceOnly under backpressure) deferred to PolicyGuard integration slice S8.1c. See docs/reconcile/slices_0_6_reconciliation.md § Deferred ATs table.",
@@ -3100,10 +3120,10 @@
       "slice_ref": "Slice 5 — Liquidity Gate \\+ Fee Model \\+ Net Edge \\+ Gate Ordering \\+ Pricer",
       "story_ref": "S5.1 Liquidity Gate (book-walk WAP, reject sweep)",
       "category": "execution",
-      "description": "Implement Liquidity Gate book-walk slippage checks and L2 staleness rejects for OPEN intents.",
+      "description": "Implement Liquidity Gate book-walk slippage checks, OPEN fail-closed behavior on stale L2, and fallback-driven risk-reducing handling under degraded L2.",
       "contract_refs": [
         "CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)",
-        "CONTRACT.md Rejections due to missing/unparseable/stale L2 MUST use Rejected(LiquidityGateNoL2).",
+        "CONTRACT.md OPEN rejections due to missing/unparseable/stale L2 MUST use Rejected(LiquidityGateNoL2).",
         "CONTRACT.md AT-222",
         "CONTRACT.md AT-344",
         "CONTRACT.md AT-909",
@@ -3128,7 +3148,7 @@
       "acceptance": [
         "GIVEN an L2 book where OrderQty implies slippage_bps > max_slippage_bps WHEN Liquidity Gate evaluates an OPEN intent THEN the intent is rejected with Rejected(ExpectedSlippageTooHigh) and no OrderIntent is emitted.",
         "GIVEN L2BookSnapshot is missing, unparseable, or older than l2_book_snapshot_max_age_ms WHEN Liquidity Gate evaluates an OPEN intent THEN it is rejected with Rejected(LiquidityGateNoL2) and dispatch count remains 0.",
-        "GIVEN L2 is missing or stale WHEN evaluating intents THEN CANCEL-only proceeds and CLOSE/HEDGE order placement is rejected.",
+        "GIVEN L2 is missing or stale and a valid §3.1 fallback price source exists WHEN evaluating intents THEN CANCEL-only proceeds, OPEN is rejected, and CLOSE/HEDGE order placement remains eligible to dispatch a strictly positive monotonic risk-reducing size.",
         "GIVEN Liquidity Gate rejects WHEN evaluated THEN a LiquidityGateReject log entry includes WAP and slippage_bps."
       ],
       "steps": [
@@ -3137,7 +3157,7 @@
         "Reject OPEN intents when slippage_bps exceeds max_slippage_bps with Rejected(ExpectedSlippageTooHigh).",
         "Emit a LiquidityGateReject log entry that includes WAP and slippage_bps on rejection.",
         "Export the Liquidity Gate from crates/soldier_core/src/execution/mod.rs for chokepoint integration.",
-        "Add unit tests in crates/soldier_core/tests/test_liquidity_gate.rs for sweep rejection, no-L2 rejection reason, and cancel vs close/hedge behavior."
+        "Add unit tests in crates/soldier_core/tests/test_liquidity_gate.rs for sweep rejection, no-L2 rejection reason, and cancel vs close/hedge fallback behavior."
       ],
       "verify": [
         "./plans/verify.sh",
@@ -3145,7 +3165,7 @@
       ],
       "evidence": [
         "cargo test -p soldier_core --test test_liquidity_gate output",
-        "Assertions in test_liquidity_gate.rs for Rejected(ExpectedSlippageTooHigh) and Rejected(LiquidityGateNoL2)",
+        "Assertions in test_liquidity_gate.rs for Rejected(ExpectedSlippageTooHigh), Rejected(LiquidityGateNoL2), and strictly positive risk-reducing fallback dispatch under stale L2 when a valid §3.1 fallback source exists",
         "Captured LiquidityGateReject log entry with WAP and slippage_bps in test output"
       ],
       "dependencies": [],

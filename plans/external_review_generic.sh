@@ -16,12 +16,14 @@ Behavior:
   --base REF      Review current branch diff vs base.
   --files LIST    Review selected files only.
   no args         Review the current tracked working-tree diff only.
+                  Untracked files are NOT auto-discovered in this mode.
 
 Notes:
   - Runs codex, opus, kimi, and gemini generic reviews in parallel.
   - Writes dispatch_status.json and summary.md under:
       artifacts/story/<RUN_ID>/external_review_generic/
   - Exits 0 only when all four reviewers succeed and summary generation succeeds.
+  - Convenience wrapper only. Not a workflow gate and not pass-authoritative.
 EOF
 }
 
@@ -31,14 +33,16 @@ fail() {
 }
 
 find_python() {
-  if command -v python3 >/dev/null 2>&1; then
-    echo "python3"
-    return 0
-  fi
-  if command -v python >/dev/null 2>&1; then
-    echo "python"
-    return 0
-  fi
+  local candidate=""
+  for candidate in python3 python; do
+    if ! command -v "$candidate" >/dev/null 2>&1; then
+      continue
+    fi
+    if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -88,7 +92,7 @@ fi
 PARALLEL_SCRIPT="${EXTERNAL_REVIEW_PARALLEL_SCRIPT:-$ROOT/plans/parallel_review.sh}"
 [[ -x "$PARALLEL_SCRIPT" ]] || fail "parallel review script not found: $PARALLEL_SCRIPT"
 
-PYTHON_BIN="$(find_python)" || fail "python3 or python is required"
+PYTHON_BIN="$(find_python)" || fail "python3.6+ is required"
 UNIQUE_SUFFIX="${EXTERNAL_REVIEW_UNIQUE_SUFFIX:-$(generate_unique_suffix)}"
 UNIQUE_SUFFIX="$(sanitize_component "$UNIQUE_SUFFIX")"
 
@@ -151,9 +155,10 @@ status_tsv=""
 dispatch_status_json=""
 summary_md=""
 parallel_review_log=""
+temp_worktree_created=false
 
 cleanup() {
-  if [[ -n "$temp_worktree" ]]; then
+  if [[ "$temp_worktree_created" == "true" && -n "$temp_worktree" ]]; then
     git -C "$ROOT" worktree remove --force "$temp_worktree" >/dev/null 2>&1 || true
   fi
   if [[ -n "$temp_ref" ]]; then
@@ -186,6 +191,9 @@ if [[ -z "$mode" ]]; then
   requested_target="tracked working-tree diff"
 fi
 
+timestamp_utc="${EXTERNAL_REVIEW_NOW_UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
+[[ -n "$timestamp_utc" ]] || fail "timestamp generation failed"
+
 case "$mode" in
   pr)
     [[ -n "$pr_number" ]] || fail "missing PR number"
@@ -205,6 +213,7 @@ case "$mode" in
 
     git -C "$ROOT" fetch origin "$resolved_base_ref" "pull/$pr_number/head:$temp_ref"
     git -C "$ROOT" worktree add --detach "$temp_worktree" "$temp_ref"
+    temp_worktree_created=true
     fetched_head_oid="$(git -C "$temp_worktree" rev-parse HEAD)"
     [[ "$fetched_head_oid" == "$resolved_head_oid" ]] || fail \
       "resolved PR head OID mismatch: gh=$resolved_head_oid fetched=$fetched_head_oid"
@@ -237,9 +246,6 @@ case "$mode" in
     ;;
 esac
 
-timestamp_utc="${EXTERNAL_REVIEW_NOW_UTC:-$(date -u +%Y%m%dT%H%M%SZ)}"
-[[ -n "$timestamp_utc" ]] || fail "timestamp generation failed"
-
 RUN_ID="external_review_generic_${timestamp_utc}_${run_id_suffix}_${UNIQUE_SUFFIX}"
 RUN_ID="$(sanitize_component "$RUN_ID")"
 
@@ -253,6 +259,9 @@ summary_md="$review_dir/summary.md"
 parallel_review_log="$review_dir/parallel_review.log"
 
 parallel_cmd=("$PARALLEL_SCRIPT" "$RUN_ID" --tools codex,opus,kimi,gemini --prompt generic)
+if [[ "$PARALLEL_SCRIPT" == "$ROOT/plans/parallel_review.sh" ]]; then
+  parallel_cmd+=(--review-script "$ROOT/plans/review_logged.sh")
+fi
 parallel_cmd+=("${parallel_mode_args[@]}")
 
 set +e

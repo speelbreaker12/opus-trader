@@ -20,11 +20,13 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 mock_root=""
 mock_bin=""
+mock_worktree_add_mode=""
 
 setup_mock_env() {
   local name="$1"
   mock_root="$tmp_dir/$name/root"
   mock_bin="$tmp_dir/$name/bin"
+  mock_worktree_add_mode=""
   mkdir -p "$mock_root/plans" "$mock_root/artifacts/story" "$mock_bin"
 
   cat > "$mock_root/plans/parallel_review.sh" <<'MOCK_PARALLEL'
@@ -147,6 +149,18 @@ fi
 
 if [[ "${args[0]:-}" == "worktree" && "${args[1]:-}" == "add" ]]; then
   worktree_path="${args[3]:?missing worktree path}"
+  case "${MOCK_GIT_WORKTREE_ADD_MODE:-ok}" in
+    fail)
+      echo "mock worktree add failure" >&2
+      exit 1
+      ;;
+    ok)
+      ;;
+    *)
+      echo "unknown MOCK_GIT_WORKTREE_ADD_MODE: ${MOCK_GIT_WORKTREE_ADD_MODE:-}" >&2
+      exit 88
+      ;;
+  esac
   mkdir -p "$worktree_path"
   exit 0
 fi
@@ -180,6 +194,7 @@ run_wrapper() {
   EXTERNAL_REVIEW_ROOT="$mock_root" \
   EXTERNAL_REVIEW_NOW_UTC="20260305T220000Z" \
   MOCK_PARALLEL_SCENARIO="$scenario" \
+  MOCK_GIT_WORKTREE_ADD_MODE="${mock_worktree_add_mode:-ok}" \
   "$SCRIPT" "$@" >"$output_file" 2>&1
   rc=$?
   if [[ "$had_errexit" -eq 1 ]]; then
@@ -318,6 +333,41 @@ MOCK_INIT
   printf '%s\n' "$repo"
 }
 
+test_python_candidate_must_be_python3_6_or_newer() {
+  setup_mock_env "python_version_guard"
+
+  cat > "$mock_bin/python3" <<'MOCK_PYTHON3'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+exit 99
+MOCK_PYTHON3
+
+  cat > "$mock_bin/python" <<'MOCK_PYTHON'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-c" ]]; then
+  exit 1
+fi
+exit 99
+MOCK_PYTHON
+  chmod +x "$mock_bin/python3" "$mock_bin/python"
+
+  local output_file="$tmp_dir/python_guard.out"
+  set +e
+  PATH="$mock_bin:$PATH" \
+  EXTERNAL_REVIEW_ROOT="$mock_root" \
+  /bin/bash "$SCRIPT" --help >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "python candidate older than 3.6 should be rejected"
+  assert_file_contains "$output_file" "python3.6+ is required"
+  pass "find_python rejects python candidates that cannot satisfy Python 3.6+"
+}
+
 test_commit_mode_success() {
   setup_mock_env "commit_success"
   run_wrapper all_ok --commit HEAD >/dev/null || fail "commit mode should exit 0"
@@ -367,6 +417,16 @@ test_uncommitted_mode_success() {
   pass "no-arg mode reviews tracked uncommitted diff"
 }
 
+test_help_text_warns_on_authority_and_scope() {
+  local help_out="$tmp_dir/external_review_generic.help"
+  "$SCRIPT" --help >"$help_out"
+
+  assert_file_contains "$help_out" "Review the current tracked working-tree diff only."
+  assert_file_contains "$help_out" "Untracked files are NOT auto-discovered in this mode."
+  assert_file_contains "$help_out" "Convenience wrapper only. Not a workflow gate and not pass-authoritative."
+  pass "help text warns that no-arg mode is tracked-only and not a workflow gate"
+}
+
 test_pr_mode_resolution() {
   setup_mock_env "pr_success"
   run_wrapper all_ok PR190 >/dev/null || fail "PR mode should exit 0"
@@ -384,11 +444,100 @@ test_pr_mode_resolution() {
   assert_file_matches "$mock_root/git.log" 'update-ref -d refs/tmp/external-review/pr-190-[A-Za-z0-9_-]+'
   assert_file_contains "$mock_root/parallel_args.log" "--base"
   assert_file_contains "$mock_root/parallel_args.log" "origin/main"
+  assert_file_contains "$mock_root/parallel_args.log" "--review-script"
+  assert_file_contains "$mock_root/parallel_args.log" "$mock_root/plans/review_logged.sh"
   assert_file_matches "$mock_root/parallel_pwd.log" "$mock_root/.tmp/external-review/pr-190-[A-Za-z0-9_-]+"
   assert_file_contains "$mock_root/parallel_review_script.log" "$mock_root/plans/review_logged.sh"
   assert_file_contains "$summary_md" "PR #190"
   assert_json_field "$status_json" 'data["resolved_head_oid"] == "abc123def456"'
   pass "PR mode resolves metadata, uses a detached temp worktree, and reviews against the resolved base"
+}
+
+test_pr_mode_uses_unique_temp_refs_per_run() {
+  setup_mock_env "pr_unique_temp_names"
+  run_wrapper all_ok PR190 >/dev/null || fail "first PR run should exit 0"
+  run_wrapper all_ok PR190 >/dev/null || fail "second PR run should exit 0"
+
+  local fetch_count add_count fetch_first fetch_second add_first add_second
+  fetch_count="$(grep -F "fetch origin main pull/190/head:refs/tmp/external-review/" "$mock_root/git.log" | wc -l | tr -d ' ')"
+  add_count="$(grep -F "worktree add --detach" "$mock_root/git.log" | wc -l | tr -d ' ')"
+  fetch_first="$(grep -F "fetch origin main pull/190/head:refs/tmp/external-review/" "$mock_root/git.log" | sed -n '1p')"
+  fetch_second="$(grep -F "fetch origin main pull/190/head:refs/tmp/external-review/" "$mock_root/git.log" | sed -n '2p')"
+  add_first="$(grep -F "worktree add --detach" "$mock_root/git.log" | sed -n '1p')"
+  add_second="$(grep -F "worktree add --detach" "$mock_root/git.log" | sed -n '2p')"
+
+  [[ "$fetch_count" == "2" ]] || fail "expected two fetches for repeated PR runs"
+  [[ "$add_count" == "2" ]] || fail "expected two worktree adds for repeated PR runs"
+  [[ "$fetch_first" != "$fetch_second" ]] || fail "temp refs must be unique per run"
+  [[ "$add_first" != "$add_second" ]] || fail "temp worktrees must be unique per run"
+  pass "PR mode allocates unique temp refs and worktrees per run"
+}
+
+test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout() {
+  setup_mock_env "pr_worktree_add_failure"
+  mock_worktree_add_mode="fail"
+
+  set +e
+  run_wrapper all_ok PR190 >/dev/null
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "PR mode should fail when detached worktree creation fails"
+  assert_file_contains "$mock_root/git.log" "worktree add --detach"
+  if grep -Fq "worktree remove --force" "$mock_root/git.log"; then
+    fail "cleanup must not remove a worktree this process did not create"
+  fi
+  assert_file_contains "$mock_root/git.log" "update-ref -d refs/tmp/external-review/"
+  pass "failed PR worktree creation does not remove an uncreated checkout"
+}
+
+test_parallel_script_override_keeps_legacy_cli_contract() {
+  setup_mock_env "parallel_override"
+
+  cat > "$mock_root/custom_parallel.sh" <<'MOCK_OVERRIDE'
+#!/usr/bin/env bash
+set -euo pipefail
+
+run_id="${1:?missing run id}"
+shift
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tools|--prompt|--commit|--base|--files)
+      shift 2
+      ;;
+    --uncommitted)
+      shift
+      ;;
+    *)
+      echo "unexpected arg: $1" >&2
+      exit 99
+      ;;
+  esac
+done
+
+printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" > "${EXTERNAL_REVIEW_ROOT:?}/override_review_script.log"
+story_dir="${STORY_ARTIFACTS_ROOT:?}/$run_id"
+mkdir -p "$story_dir/codex" "$story_dir/opus" "$story_dir/kimi" "$story_dir/gemini"
+for tool in codex opus kimi gemini; do
+  cat > "$story_dir/$tool/$tool.generic.md" <<EOF
+# $tool generic review
+FINDINGS_SUMMARY: P0=0 P1=0 P2=0
+EOF
+  echo "[done] $tool  exit=0  (1s)"
+done
+MOCK_OVERRIDE
+
+  chmod +x "$mock_root/custom_parallel.sh"
+
+  EXTERNAL_REVIEW_PARALLEL_SCRIPT="$mock_root/custom_parallel.sh" \
+    run_wrapper all_ok --commit HEAD >/dev/null || fail "parallel override should keep working without --review-script CLI support"
+
+  assert_file_contains "$mock_root/override_review_script.log" "$mock_root/plans/review_logged.sh"
+  if grep -Fq -- "--review-script" "$mock_root/parallel_args.log" 2>/dev/null; then
+    fail "legacy parallel override should not receive --review-script"
+  fi
+  pass "parallel override uses environment-based review script routing without breaking legacy arg parsing"
 }
 
 test_reviewer_failure_preserves_summary() {
@@ -523,15 +672,197 @@ test_parallel_review_proof_graph_honors_story_artifacts_root() {
   pass "parallel_review proof-graph paths honor STORY_ARTIFACTS_ROOT"
 }
 
+test_parallel_review_artifact_summary_uses_story_artifacts_root() {
+  local fixture_dir="$tmp_dir/parallel_review_artifact_root"
+  local repo="$fixture_dir/repo"
+  local output_file="$fixture_dir/parallel_review.out"
+  mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="enriched"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool)
+      tool="${2:?missing tool}"
+      shift 2
+      ;;
+    --prompt)
+      prompt="${2:?missing prompt}"
+      shift 2
+      ;;
+    --base|--commit|--files|--timeout-seconds|--out-root|--title)
+      shift 2
+      ;;
+    --uncommitted|--proof-graph)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$tool" ]] || exit 2
+
+story_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
+if [[ "$story_root" != /* ]]; then
+  story_root="$PWD/$story_root"
+fi
+
+outdir="$story_root/$story/$tool"
+mkdir -p "$outdir"
+cat > "$outdir/$tool.$prompt.md" <<EOF
+# $tool review
+FINDINGS_SUMMARY: P0=0 P1=1 P2=0
+EOF
+MOCK_REVIEW
+
+  chmod +x "$repo/plans/review_logged.sh"
+
+  set +e
+  (
+    cd "$repo/.tmp/run"
+    STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
+      bash "$repo/plans/parallel_review.sh" S9-ART --base main --tools codex,opus --prompt generic --review-script "$repo/plans/review_logged.sh"
+  ) >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review should succeed with canonical artifact root override"
+  [[ -f "$repo/canonical/story/S9-ART/codex/codex.generic.md" ]] || fail "missing codex artifact in canonical root"
+  [[ -f "$repo/canonical/story/S9-ART/opus/opus.generic.md" ]] || fail "missing opus artifact in canonical root"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/codex/codex.generic.md"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/opus/opus.generic.md"
+  if grep -Fq "not found — review may have failed" "$output_file"; then
+    fail "artifact summary should not report canonical artifacts as missing"
+  fi
+  pass "parallel_review artifact summary follows STORY_ARTIFACTS_ROOT"
+}
+
+test_parallel_review_proof_aggregation_uses_story_artifacts_root() {
+  local fixture_dir="$tmp_dir/parallel_review_proof_root"
+  local repo="$fixture_dir/repo"
+  local output_file="$fixture_dir/parallel_review_proof.out"
+  local aggregate_log="$fixture_dir/aggregate_root.log"
+  mkdir -p "$repo/plans" "$repo/.tmp/run" "$repo/canonical/story/S9-PG"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="enriched"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool)
+      tool="${2:?missing tool}"
+      shift 2
+      ;;
+    --prompt)
+      prompt="${2:?missing prompt}"
+      shift 2
+      ;;
+    --base|--commit|--files|--timeout-seconds|--out-root|--title)
+      shift 2
+      ;;
+    --uncommitted|--proof-graph)
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$tool" ]] || exit 2
+
+story_root="${STORY_ARTIFACTS_ROOT:?}"
+outdir="$story_root/$story/$tool"
+mkdir -p "$outdir"
+cat > "$outdir/$tool.$prompt.md" <<EOF
+# $tool review
+FINDINGS_SUMMARY: P0=0 P1=0 P2=0
+EOF
+MOCK_REVIEW
+
+cat > "$repo/plans/aggregate_proofs.sh" <<'MOCK_AGG'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+printf '%s\n' "${STORY_ARTIFACTS_ROOT:-}" > "${MOCK_AGGREGATE_LOG:?}"
+[[ "${STORY_ARTIFACTS_ROOT:-}" == "${MOCK_EXPECTED_AGGREGATE_ROOT:?}" ]] || {
+  echo "wrong aggregate root: ${STORY_ARTIFACTS_ROOT:-}" >&2
+  exit 33
+}
+touch "${STORY_ARTIFACTS_ROOT}/$story/aggregate.ok"
+MOCK_AGG
+
+  chmod +x "$repo/plans/review_logged.sh" "$repo/plans/aggregate_proofs.sh"
+
+  cat > "$repo/canonical/story/S9-PG/proof_graph.json" <<'EOF'
+{"schema_version":2}
+EOF
+
+  set +e
+  (
+    cd "$repo/.tmp/run"
+    STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
+    MOCK_AGGREGATE_LOG="$aggregate_log" \
+    MOCK_EXPECTED_AGGREGATE_ROOT="$repo/canonical/story" \
+      bash "$repo/plans/parallel_review.sh" S9-PG --base main --tools codex --prompt generic --review-script "$repo/plans/review_logged.sh" --proof-graph
+  ) >"$output_file" 2>&1
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review should propagate custom artifact root into aggregate_proofs.sh"
+  assert_file_contains "$aggregate_log" "$repo/canonical/story"
+  [[ -f "$repo/canonical/story/S9-PG/aggregate.ok" ]] || fail "aggregate_proofs should run against the custom story-artifacts root"
+  pass "parallel_review propagates STORY_ARTIFACTS_ROOT into proof aggregation"
+}
+
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
+test_python_candidate_must_be_python3_6_or_newer
+test_help_text_warns_on_authority_and_scope
 test_pr_mode_resolution
+test_pr_mode_uses_unique_temp_refs_per_run
+test_pr_mode_worktree_add_failure_does_not_remove_uncreated_checkout
+test_parallel_script_override_keeps_legacy_cli_contract
 test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
 test_pr_mode_head_oid_mismatch_fails_closed
 test_run_id_collision_avoided
 test_parallel_review_failure_honors_story_artifacts_root
 test_parallel_review_proof_graph_honors_story_artifacts_root
+test_parallel_review_artifact_summary_uses_story_artifacts_root
+test_parallel_review_proof_aggregation_uses_story_artifacts_root
 
 echo "PASS: external_review_generic regression fixtures"

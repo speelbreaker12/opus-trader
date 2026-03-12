@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import shlex
 from pathlib import Path
 
 from contract_kernel_lib import (
@@ -97,6 +98,13 @@ def check_kernel(kernel_path: Path) -> None:
     }
     for key, expected in expected_hashes.items():
         if sources.get(key) != expected:
+            if key == "contract_sha256":
+                fail(
+                    "sources.contract_sha256 mismatch "
+                    f"(expected {expected}); "
+                    "run python3 scripts/build_contract_kernel.py --out "
+                    f"{shlex.quote(str(kernel_path))}"
+                )
             fail(f"sources.{key} mismatch (expected {expected})")
 
     anchors_text = ANCHORS_PATH.read_text(encoding="utf-8")

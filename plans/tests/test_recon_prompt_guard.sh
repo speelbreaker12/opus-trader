@@ -130,5 +130,4 @@ missing_rg_rc=$?
 set -e
 [[ "$missing_rg_rc" -ne 0 ]] || fail "expected missing rg case to fail closed"
 echo "$missing_rg_output" | grep -Eq "FAIL: .*rg|MISSING_TOOL|SCANNER_ERROR" || fail "missing rg failure diagnostic"
-
 echo "PASS: recon prompt guard test"

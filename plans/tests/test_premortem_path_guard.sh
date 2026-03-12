@@ -49,4 +49,14 @@ echo "$out" | grep -Fq "FAIL: legacy premortem path reference(s) detected" || fa
 echo "$out" | grep -Fq "docs/bad.md:1" || fail "missing offending file/line diagnostic"
 echo "$out" | grep -Fq "Canonical path: reviews/premortems/<ID>_premortem.md" || fail "missing canonical path hint"
 
+printf 'legacy-untracked: %s/%s/%s\n' "$legacy_root" "<ID>" "$legacy_leaf" > "$fixture/docs/untracked_bad.md"
+
+set +e
+untracked_out="$(PREMORTEM_PATH_GUARD_ROOT="$fixture" "$SCRIPT" 2>&1)"
+untracked_rc=$?
+set -e
+
+[[ "$untracked_rc" -ne 0 ]] || fail "expected guard to fail on untracked legacy path reference"
+echo "$untracked_out" | grep -Fq "docs/untracked_bad.md:1" || fail "missing untracked offending file/line diagnostic"
+
 echo "PASS: premortem path guard"

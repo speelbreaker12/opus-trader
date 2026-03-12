@@ -173,6 +173,32 @@ def test_cli_auto_schema_accepts_foundation_status_lite(tmp_path: Path) -> None:
   assert proc.returncode == 0, proc.stderr
 
 
+def test_cli_auto_schema_rejects_non_foundation_status_lite_payload(tmp_path: Path) -> None:
+  status = {
+    "service_up": True,
+    "build_id": "phase-transition-test",
+    "contract_version": "5.2",
+    "dispatch_enabled": False,
+    "phase": "bootstrap_complete",
+  }
+
+  proc = _run_validator_cli(status, tmp_path, "--strict")
+  assert proc.returncode == 1
+  assert "[SCHEMA]" in proc.stderr
+  assert "status_schema_version" in proc.stderr
+
+
+def test_cli_auto_schema_accepts_csp_payload_outside_foundation(tmp_path: Path) -> None:
+  status = json.loads(
+    (ROOT / "tests" / "fixtures" / "status" / "market_data_stale.json").read_text(
+      encoding="utf-8"
+    )
+  )
+
+  proc = _run_validator_cli(status, tmp_path, "--strict")
+  assert proc.returncode == 0, proc.stderr
+
+
 def test_cli_auto_schema_rejects_foundation_payload_with_canonical_fields(tmp_path: Path) -> None:
   status = _base_foundation_status()
   status["opens_globally_permitted"] = True
@@ -207,6 +233,7 @@ def test_help_does_not_crash_when_generated_module_is_missing(tmp_path: Path) ->
   ("opens_globally_permitted", False),
   ("open_permission_reason_codes", ["RESTART_RECONCILE_REQUIRED"]),
   ("open_permission_requires_reconcile", True),
+  ("is_trading_allowed", True),
 ])
 def test_foundation_contract_rejects_each_forbidden_csp_key(
   forbidden_key: str,
