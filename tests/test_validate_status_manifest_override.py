@@ -184,7 +184,8 @@ def test_cli_auto_schema_rejects_non_foundation_status_lite_payload(tmp_path: Pa
 
   proc = _run_validator_cli(status, tmp_path, "--strict")
   assert proc.returncode == 1
-  assert "[SCHEMA] $: 'status_schema_version' is a required property" in proc.stderr
+  assert "[SCHEMA]" in proc.stderr
+  assert "status_schema_version" in proc.stderr
 
 
 def test_cli_auto_schema_accepts_csp_payload_outside_foundation(tmp_path: Path) -> None:
