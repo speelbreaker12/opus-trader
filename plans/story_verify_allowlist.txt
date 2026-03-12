@@ -42,6 +42,8 @@ cargo test -p soldier_infra --test test_crash_mid_intent
 cargo test -p soldier_infra --test test_dispatch_durability
 cargo test -p soldier_infra --test test_fee_cache
 cargo test -p soldier_infra --test test_ledger_replay
+cargo test -p soldier_infra --test test_phase0_runtime test_break_glass_command_path_runtime -- --exact
+cargo test -p soldier_infra --test test_phase0_runtime test_break_glass_kill_blocks_open_allows_reduce_runtime -- --exact
 cargo test -p soldier_infra --test test_phase0_runtime test_status_command_behavior_runtime -- --exact
 cargo test -p soldier_infra --test test_trade_id_registry
 cargo test AT_1115 AT_1116
