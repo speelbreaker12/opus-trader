@@ -19,6 +19,14 @@ fi
 
 grep -Eq 'auditor_cmd=\(' "$script" \
   || fail "missing auditor_cmd array assembly"
+grep -Eq 'AUDITOR_CODEX_DISABLE_FEATURES="\$\{AUDITOR_CODEX_DISABLE_FEATURES:-multi_agent js_repl apps\}"' "$script" \
+  || fail "missing codex feature-disable default"
+grep -Eq 'auditor_cmd\+=\("--disable" "\$feature"\)' "$script" \
+  || fail "missing codex feature-disable flags in auditor invocation"
+grep -Eq 'AUDITOR_CODEX_SANDBOX="\$\{AUDITOR_CODEX_SANDBOX:-workspace-write\}"' "$script" \
+  || fail "missing codex sandbox default"
+grep -Eq 'auditor_cmd\+=\("--sandbox" "\$AUDITOR_CODEX_SANDBOX"\)' "$script" \
+  || fail "missing codex sandbox flag in auditor invocation"
 grep -Eq 'timeout "\$AUDITOR_TIMEOUT" "\$\{auditor_cmd\[@\]\}"' "$script" \
   || fail "timeout invocation must execute auditor_cmd array directly"
 grep -Eq 'gtimeout "\$AUDITOR_TIMEOUT" "\$\{auditor_cmd\[@\]\}"' "$script" \

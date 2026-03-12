@@ -5,6 +5,23 @@ IFS=$'\n\t'
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+AUDIT_LOCK_DIR=""
+audit_agent_dir=""
+audit_agent_output=""
+audit_agent_meta=""
+AUDIT_AGENT_KEEP_WORKDIR="${AUDIT_AGENT_KEEP_WORKDIR:-0}"
+
+cleanup_prd_auditor() {
+  if [[ "${AUDIT_AGENT_KEEP_WORKDIR:-0}" != "1" && -n "${audit_agent_dir:-}" && -d "${audit_agent_dir:-}" ]]; then
+    rm -rf "$audit_agent_dir" 2>/dev/null || true
+  fi
+  if [[ -n "${AUDIT_LOCK_DIR:-}" ]]; then
+    rmdir "$AUDIT_LOCK_DIR" 2>/dev/null || true
+  fi
+}
+
+trap cleanup_prd_auditor EXIT
+
 # Lock file to prevent concurrent runs
 AUDIT_LOCK_FILE="${AUDIT_LOCK_FILE:-.context/prd_auditor.lock}"
 mkdir -p "$(dirname "$AUDIT_LOCK_FILE")"
@@ -16,11 +33,11 @@ if command -v flock >/dev/null 2>&1; then
   fi
 else
   # Fallback for macOS: use mkdir atomicity
-  if ! mkdir "$AUDIT_LOCK_FILE.d" 2>/dev/null; then
-    echo "[prd_auditor] ERROR: another auditor is running (lock: $AUDIT_LOCK_FILE.d)" >&2
+  AUDIT_LOCK_DIR="$AUDIT_LOCK_FILE.d"
+  if ! mkdir "$AUDIT_LOCK_DIR" 2>/dev/null; then
+    echo "[prd_auditor] ERROR: another auditor is running (lock: $AUDIT_LOCK_DIR)" >&2
     exit 6
   fi
-  trap 'rmdir "$AUDIT_LOCK_FILE.d" 2>/dev/null || true' EXIT
 fi
 
 # Timeout for agent calls
@@ -121,6 +138,83 @@ progress() {
   if [[ "$AUDIT_PROGRESS" == "1" ]]; then
     echo "[prd_auditor] $msg" >&2
   fi
+}
+
+stage_required_file() {
+  local src="$1"
+  local dest="$2"
+  local label="$3"
+  if [[ -z "$src" || ! -f "$src" ]]; then
+    echo "[prd_auditor] ERROR: missing $label for isolated workspace: $src" >&2
+    return 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp "$src" "$dest"
+}
+
+stage_optional_file() {
+  local src="$1"
+  local dest="$2"
+  if [[ -n "$src" && -f "$src" ]]; then
+    mkdir -p "$(dirname "$dest")"
+    cp "$src" "$dest"
+  fi
+}
+
+prepare_audit_agent_workspace() {
+  local prd_rel="plans/prd.json"
+  local contract_digest_rel=".context/contract_digest.json"
+  local plan_digest_rel=".context/plan_digest.json"
+  local roadmap_digest_rel=""
+  local output_rel="$AUDIT_OUTPUT_JSON"
+
+  audit_agent_dir="$(mktemp -d "${TMPDIR:-/tmp}/prd_auditor_agent.XXXXXX")"
+  mkdir -p "$audit_agent_dir/.context" "$audit_agent_dir/plans" "$audit_agent_dir/specs" "$audit_agent_dir/docs"
+
+  if [[ "$output_rel" == /* ]]; then
+    output_rel="plans/prd_audit.json"
+  fi
+
+  if [[ "$AUDIT_SCOPE" == "slice" ]]; then
+    prd_rel=".context/prd_slice.json"
+    contract_digest_rel=".context/contract_digest_slice.json"
+    plan_digest_rel=".context/plan_digest_slice.json"
+    stage_required_file "$AUDIT_PRD_SLICE_FILE" "$audit_agent_dir/$prd_rel" "slice PRD input" || return 1
+    stage_required_file "$AUDIT_CONTRACT_SLICE_DIGEST_FILE" "$audit_agent_dir/$contract_digest_rel" "slice contract digest" || return 1
+    stage_required_file "$AUDIT_PLAN_SLICE_DIGEST_FILE" "$audit_agent_dir/$plan_digest_rel" "slice plan digest" || return 1
+    if [[ -n "${AUDIT_ROADMAP_SLICE_DIGEST_FILE:-}" && -f "${AUDIT_ROADMAP_SLICE_DIGEST_FILE:-}" ]]; then
+      roadmap_digest_rel=".context/roadmap_digest_slice.json"
+      stage_optional_file "$AUDIT_ROADMAP_SLICE_DIGEST_FILE" "$audit_agent_dir/$roadmap_digest_rel"
+    fi
+  else
+    stage_required_file "$AUDIT_PRD_FILE" "$audit_agent_dir/$prd_rel" "PRD input" || return 1
+    stage_required_file "$AUDIT_CONTRACT_DIGEST_FILE" "$audit_agent_dir/$contract_digest_rel" "contract digest" || return 1
+    stage_required_file "$AUDIT_PLAN_DIGEST_FILE" "$audit_agent_dir/$plan_digest_rel" "plan digest" || return 1
+    if [[ -n "${AUDIT_ROADMAP_DIGEST_FILE:-}" && -f "${AUDIT_ROADMAP_DIGEST_FILE:-}" ]]; then
+      roadmap_digest_rel=".context/roadmap_digest.json"
+      stage_optional_file "$AUDIT_ROADMAP_DIGEST_FILE" "$audit_agent_dir/$roadmap_digest_rel"
+    fi
+  fi
+
+  stage_required_file "$AUDIT_WORKFLOW_CONTRACT_FILE" "$audit_agent_dir/specs/WORKFLOW_CONTRACT.md" "workflow contract" || return 1
+  stage_optional_file "$AUDIT_ROADMAP_FILE" "$audit_agent_dir/docs/ROADMAP.md"
+
+  audit_agent_output="$audit_agent_dir/$output_rel"
+  audit_agent_meta="$audit_agent_dir/.context/prd_audit_meta.json"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "[prd_auditor] ERROR: jq required to stage isolated audit meta" >&2
+    return 1
+  fi
+  if [[ ! -f "$AUDIT_META_FILE" ]]; then
+    echo "[prd_auditor] ERROR: missing audit meta file for isolated workspace: $AUDIT_META_FILE" >&2
+    return 1
+  fi
+
+  jq \
+    --arg output_file "$output_rel" \
+    '.output_file = $output_file' \
+    "$AUDIT_META_FILE" > "$audit_agent_meta"
 }
 
 resolve_input_file() {
@@ -310,19 +404,55 @@ if [[ -n "$AUDITOR_AGENT_ARGS" ]]; then
   IFS="$_old_ifs"
 fi
 
+AUDITOR_CODEX_DISABLE_FEATURES="${AUDITOR_CODEX_DISABLE_FEATURES:-multi_agent js_repl apps}"
+AUDITOR_CODEX_DISABLE_FEATURES_ARR=()
+if [[ -n "$AUDITOR_CODEX_DISABLE_FEATURES" ]]; then
+  _old_ifs="$IFS"; IFS=$' \t\n'
+  read -r -a AUDITOR_CODEX_DISABLE_FEATURES_ARR <<<"$AUDITOR_CODEX_DISABLE_FEATURES"
+  IFS="$_old_ifs"
+fi
+
+AUDITOR_CODEX_SANDBOX="${AUDITOR_CODEX_SANDBOX:-workspace-write}"
+
+AUDIT_AGENT_ISOLATE="${AUDIT_AGENT_ISOLATE:-}"
+if [[ -z "$AUDIT_AGENT_ISOLATE" ]]; then
+  if [[ "$(basename "$AUDITOR_AGENT_CMD")" == "codex" ]]; then
+    AUDIT_AGENT_ISOLATE="1"
+  else
+    AUDIT_AGENT_ISOLATE="0"
+  fi
+fi
+
+meta_source_file="$AUDIT_META_FILE"
+if [[ "$AUDIT_AGENT_ISOLATE" == "1" ]]; then
+  prepare_audit_agent_workspace || exit 2
+  meta_source_file="$audit_agent_meta"
+fi
+
 # Build prompt and argv in the current shell so timeout execution does not drop state.
 auditor_prompt="$(cat "$AUDITOR_PROMPT")"
-if [[ -f "$AUDIT_META_FILE" ]]; then
-  meta_json="$(cat "$AUDIT_META_FILE")"
+if [[ -f "$meta_source_file" ]]; then
+  meta_json="$(cat "$meta_source_file")"
   auditor_prompt="${auditor_prompt//__AUDIT_META_PLACEHOLDER__/$meta_json}"
 else
-  echo "[prd_auditor] ERROR: missing audit meta file: $AUDIT_META_FILE" >&2
+  echo "[prd_auditor] ERROR: missing audit meta file: $meta_source_file" >&2
   exit 1
 fi
 
 auditor_cmd=("$AUDITOR_AGENT_CMD")
 if [[ ${#AUDITOR_AGENT_ARGS_ARR[@]} -gt 0 ]]; then
   auditor_cmd+=("${AUDITOR_AGENT_ARGS_ARR[@]}")
+fi
+if [[ "$(basename "$AUDITOR_AGENT_CMD")" == "codex" && ${#AUDITOR_CODEX_DISABLE_FEATURES_ARR[@]} -gt 0 ]]; then
+  for feature in "${AUDITOR_CODEX_DISABLE_FEATURES_ARR[@]}"; do
+    auditor_cmd+=("--disable" "$feature")
+  done
+fi
+if [[ "$(basename "$AUDITOR_AGENT_CMD")" == "codex" && -n "$AUDITOR_CODEX_SANDBOX" ]]; then
+  auditor_cmd+=("--sandbox" "$AUDITOR_CODEX_SANDBOX")
+fi
+if [[ "$AUDIT_AGENT_ISOLATE" == "1" && "$(basename "$AUDITOR_AGENT_CMD")" == "codex" ]]; then
+  auditor_cmd+=("-C" "$audit_agent_dir" "--skip-git-repo-check")
 fi
 if [[ -n "${AUDITOR_PROMPT_FLAG:-}" ]]; then
   auditor_cmd+=("$AUDITOR_PROMPT_FLAG")
@@ -336,6 +466,7 @@ progress "Starting auditor agent (timeout=${AUDITOR_TIMEOUT}s)..."
 # Run auditor with timeout
 auditor_start_ts="$(date +%s)"
 auditor_rc=0
+audit_fallback_used=0
 if command -v timeout >/dev/null 2>&1; then
   timeout "$AUDITOR_TIMEOUT" "${auditor_cmd[@]}" > "$AUDIT_STDOUT_LOG" 2>&1 || auditor_rc=$?
 elif command -v gtimeout >/dev/null 2>&1; then
@@ -373,6 +504,7 @@ if [[ "$auditor_rc" -eq 124 || "$auditor_rc" -eq 137 ]]; then
     # Emit promise token so downstream promise checks remain consistent.
     echo "<promise>AUDIT_COMPLETE</promise>" >> "$AUDIT_STDOUT_LOG"
     auditor_rc=0
+    audit_fallback_used=1
     progress "Parallel slice fallback completed successfully."
   else
     echo "[prd_auditor] ERROR: auditor timed out after ${AUDITOR_TIMEOUT}s" >&2
@@ -380,10 +512,14 @@ if [[ "$auditor_rc" -eq 124 || "$auditor_rc" -eq 137 ]]; then
   fi
 fi
 
-# Auditor prompt hardcodes output to plans/prd_audit.json
-# If AUDIT_OUTPUT_JSON differs, copy the output to the expected location
 AUDITOR_DEFAULT_OUTPUT="plans/prd_audit.json"
-if [[ "$AUDIT_OUTPUT_JSON" != "$AUDITOR_DEFAULT_OUTPUT" && -f "$AUDITOR_DEFAULT_OUTPUT" && ! -f "$AUDIT_OUTPUT_JSON" ]]; then
+if [[ "$AUDIT_AGENT_ISOLATE" == "1" && "$audit_fallback_used" == "0" ]]; then
+  if [[ -f "$audit_agent_output" ]]; then
+    progress "Copying isolated audit output to $AUDIT_OUTPUT_JSON"
+    mkdir -p "$(dirname "$AUDIT_OUTPUT_JSON")"
+    cp "$audit_agent_output" "$AUDIT_OUTPUT_JSON"
+  fi
+elif [[ "$AUDIT_OUTPUT_JSON" != "$AUDITOR_DEFAULT_OUTPUT" && -f "$AUDITOR_DEFAULT_OUTPUT" && ! -f "$AUDIT_OUTPUT_JSON" ]]; then
   progress "Copying audit output to $AUDIT_OUTPUT_JSON"
   mkdir -p "$(dirname "$AUDIT_OUTPUT_JSON")"
   cp "$AUDITOR_DEFAULT_OUTPUT" "$AUDIT_OUTPUT_JSON"
