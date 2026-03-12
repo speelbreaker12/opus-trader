@@ -616,7 +616,7 @@ fn test_replay_illegal_state_transition_is_ignored() {
 // ─── Runtime illegal transition rejection ────────────────────────────────
 
 /// update_state must reject illegal state transitions at runtime (TRIP test).
-/// Unlike WAL replay (which applies anyway), the runtime path validates via
+/// Unlike WAL replay (which ignores illegal transitions), the runtime path validates via
 /// is_valid_successor and returns IllegalTransition.
 #[test]
 fn test_update_state_illegal_transition_returns_error() {

@@ -69,6 +69,13 @@ fn created_intent_record_from_input(input: &CreatedIntentRecordInput<'_>) -> Int
     }
 }
 
+/// Construct a CREATED-state WAL intent record from a shared input struct.
+pub fn build_created_intent_record_from_input(
+    input: &CreatedIntentRecordInput<'_>,
+) -> IntentRecord {
+    created_intent_record_from_input(input)
+}
+
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
 ///
 /// Deprecated compatibility shim: preserves the original infallible public
@@ -78,8 +85,29 @@ fn created_intent_record_from_input(input: &CreatedIntentRecordInput<'_>) -> Int
     since = "0.2.0",
     note = "Use try_build_created_intent_record() for validated construction."
 )]
-pub fn build_created_intent_record(input: &CreatedIntentRecordInput<'_>) -> IntentRecord {
-    created_intent_record_from_input(input)
+#[allow(clippy::too_many_arguments)] // Compatibility wrapper preserves the legacy public API.
+pub fn build_created_intent_record(
+    intent_hash: &str,
+    group_id: &str,
+    leg_idx: u32,
+    instrument: &str,
+    side: &str,
+    lifecycle_intent: LifecycleIntent,
+    qty_q: f64,
+    limit_price_q: f64,
+    created_ts: u64,
+) -> IntentRecord {
+    build_created_intent_record_from_input(&CreatedIntentRecordInput {
+        intent_hash,
+        group_id,
+        leg_idx,
+        instrument,
+        side,
+        lifecycle_intent,
+        qty_q,
+        limit_price_q,
+        created_ts,
+    })
 }
 
 /// Construct a CREATED-state WAL intent record from runtime intent fields.
@@ -88,7 +116,7 @@ pub fn build_created_intent_record(input: &CreatedIntentRecordInput<'_>) -> Inte
 /// `reduce_only` is derived from `lifecycle_intent` (never from TradingMode).
 /// `LifecycleIntent::Cancel` is rejected because CREATED WAL records model
 /// new-order intents; cancel flows follow a separate lifecycle path.
-pub fn try_build_created_intent_record(
+pub fn try_build_created_intent_record_from_input(
     input: &CreatedIntentRecordInput<'_>,
 ) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
     if input.lifecycle_intent == LifecycleIntent::Cancel {
@@ -98,6 +126,34 @@ pub fn try_build_created_intent_record(
     }
 
     Ok(created_intent_record_from_input(input))
+}
+
+/// Construct a CREATED-state WAL intent record from runtime intent fields.
+///
+/// Preserves the legacy validated constructor signature for downstream callers.
+#[allow(clippy::too_many_arguments)] // Compatibility wrapper preserves the legacy public API.
+pub fn try_build_created_intent_record(
+    intent_hash: &str,
+    group_id: &str,
+    leg_idx: u32,
+    instrument: &str,
+    side: &str,
+    lifecycle_intent: LifecycleIntent,
+    qty_q: f64,
+    limit_price_q: f64,
+    created_ts: u64,
+) -> Result<IntentRecord, BuildCreatedIntentRecordError> {
+    try_build_created_intent_record_from_input(&CreatedIntentRecordInput {
+        intent_hash,
+        group_id,
+        leg_idx,
+        instrument,
+        side,
+        lifecycle_intent,
+        qty_q,
+        limit_price_q,
+        created_ts,
+    })
 }
 
 /// WAL durability barrier configuration.
