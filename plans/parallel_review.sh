@@ -32,6 +32,11 @@ set -euo pipefail
 #   plans/parallel_review.sh S1-004 --files "src/gate.rs" --tools opus,kimi --prompt generic
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: not in a git repo" >&2; exit 2; }
+ARTIFACTS_ROOT="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
+case "$ARTIFACTS_ROOT" in
+  /*) ;;
+  *) ARTIFACTS_ROOT="$ROOT/$ARTIFACTS_ROOT" ;;
+esac
 REVIEW_SCRIPT="${PARALLEL_REVIEW_REVIEW_SCRIPT:-$ROOT/plans/review_logged.sh}"
 AGGREGATE_SCRIPT="$ROOT/plans/aggregate_proofs.sh"
 
@@ -232,13 +237,13 @@ agg_rc=0
 if [[ "$PROOF_GRAPH" == "true" && "$NO_AGGREGATE" != "true" && "$any_failed" -eq 0 ]]; then
   echo
   # G-5 fix: ensure base proof graph exists before aggregation.
-  base_pg="$ROOT/artifacts/story/$STORY/proof_graph.json"
+  base_pg="$ARTIFACTS_ROOT/$STORY/proof_graph.json"
   if [[ ! -f "$base_pg" ]]; then
     echo "Initializing base proof graph for $STORY..."
     init_script="$ROOT/python/proof_graph/init.py"
     if [[ -f "$init_script" ]]; then
       set +e
-      python3 "$init_script" "$STORY" --output-dir "$ROOT/artifacts/story/$STORY/" 2>&1
+      python3 "$init_script" "$STORY" --output-dir "$ARTIFACTS_ROOT/$STORY/" 2>&1
       init_rc=$?
       set -e
       if [[ $init_rc -ne 0 ]]; then
@@ -255,7 +260,7 @@ if [[ "$PROOF_GRAPH" == "true" && "$NO_AGGREGATE" != "true" && "$any_failed" -eq
     echo "Running proof graph aggregation..."
     if [[ -x "$AGGREGATE_SCRIPT" ]]; then
       set +e
-      "$AGGREGATE_SCRIPT" "$STORY"
+      STORY_ARTIFACTS_ROOT="$ARTIFACTS_ROOT" "$AGGREGATE_SCRIPT" "$STORY"
       agg_rc=$?
       set -e
       if [[ $agg_rc -eq 0 ]]; then
@@ -279,8 +284,8 @@ fi
 echo
 echo "Artifacts:"
 for tool in "${TOOL_LIST[@]}"; do
-  artifact="artifacts/story/$STORY/$tool/${tool}.${PROMPT_STYLE}.md"
-  if [[ -f "$ROOT/$artifact" ]]; then
+  artifact="$ARTIFACTS_ROOT/$STORY/$tool/${tool}.${PROMPT_STYLE}.md"
+  if [[ -f "$artifact" ]]; then
     echo "  $artifact"
   else
     echo "  $artifact  (not found — review may have failed)"
@@ -291,12 +296,12 @@ done
 # G-2 fix: on failure, copy logs to artifacts dir (not world-readable /tmp),
 # then let the EXIT trap clean up the temp dir.
 if [[ $any_failed -ne 0 ]]; then
-  fail_log_dir="$ROOT/artifacts/story/$STORY/review_logs"
+  fail_log_dir="$ARTIFACTS_ROOT/$STORY/review_logs"
   mkdir -p "$fail_log_dir"
   cp "$LOG_DIR"/*.log "$fail_log_dir/" 2>/dev/null || true
   cp "$LOG_DIR"/*.log.end "$fail_log_dir/" 2>/dev/null || true
   echo
-  echo "One or more reviews failed. Logs saved to: artifacts/story/$STORY/review_logs/"
+  echo "One or more reviews failed. Logs saved to: $fail_log_dir/"
   exit 1
 fi
 

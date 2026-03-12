@@ -31,13 +31,20 @@ PASS=0
 pass() { echo "  OK : $1"; PASS=$((PASS + 1)); }
 fail() { echo "FAIL : $1"; FAILURES=$((FAILURES + 1)); }
 
+contains_fixed_string() {
+  local haystack="$1"
+  local needle="$2"
+  [[ "$haystack" == *"$needle"* ]]
+}
+
 echo "=== Upgrade 1B Architectural Proof ==="
 echo
 
 # ── Check 1: engine_parity_tests.rs must NOT exist ──────────────────────────
 
 echo "--- 1. engine_parity_tests.rs is deleted ---"
-if find "$ROOT/crates" -name "engine_parity_tests.rs" | grep -q .; then
+engine_parity_path="$(find "$ROOT/crates" -name "engine_parity_tests.rs" -print -quit)"
+if [[ -n "$engine_parity_path" ]]; then
     fail "engine_parity_tests.rs still exists — legacy evaluate() test surface not fully removed"
 else
     pass "engine_parity_tests.rs absent"
@@ -51,12 +58,14 @@ ENGINE_RS="$ROOT/crates/soldier_core/src/execution/engine.rs"
 if ! grep -Eq '^\s*pub\s+fn\s+evaluate\b' "$ENGINE_RS"; then
     fail "pub fn evaluate missing from engine.rs — compatibility alias regressed"
 else
-    evaluate_line="$(grep -nE '^\s*pub\s+fn\s+evaluate\b' "$ENGINE_RS" | head -1 | cut -d: -f1)"
+    evaluate_match="$(grep -nEm1 '^\s*pub\s+fn\s+evaluate\b' "$ENGINE_RS" || true)"
+    evaluate_line="${evaluate_match%%:*}"
     start_line=1
     if [[ "$evaluate_line" -gt 6 ]]; then
         start_line=$((evaluate_line - 6))
     fi
-    if sed -n "${start_line},${evaluate_line}p" "$ENGINE_RS" | grep -Fq "#[deprecated"; then
+    range_content="$(sed -n "${start_line},${evaluate_line}p" "$ENGINE_RS")"
+    if contains_fixed_string "$range_content" "#[deprecated"; then
         pass "pub fn evaluate present and deprecated in engine.rs"
     else
         fail "pub fn evaluate exists but is not marked deprecated"

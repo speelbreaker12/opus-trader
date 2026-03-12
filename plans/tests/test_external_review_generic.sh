@@ -230,6 +230,94 @@ find_single_run_id() {
   find "$story_base" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;
 }
 
+setup_actual_parallel_repo() {
+  local name="$1"
+  local repo="$tmp_dir/$name/repo"
+  mkdir -p "$repo/plans" "$repo/python/proof_graph"
+  git init -q "$repo"
+
+  cp "$ROOT/plans/parallel_review.sh" "$repo/plans/parallel_review.sh"
+  chmod +x "$repo/plans/parallel_review.sh"
+
+  cat > "$repo/plans/review_logged.sh" <<'MOCK_REVIEW'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+shift
+
+tool=""
+prompt="generic"
+proof_graph=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tool) tool="${2:?missing tool}"; shift 2 ;;
+    --prompt) prompt="${2:?missing prompt}"; shift 2 ;;
+    --proof-graph) proof_graph=true; shift ;;
+    --base|--commit|--files|--title|--timeout-seconds|--out-root) shift 2 ;;
+    --uncommitted) shift ;;
+    --) shift; break ;;
+    *) shift ;;
+  esac
+done
+
+out_root="${STORY_ARTIFACTS_ROOT:-artifacts/story}"
+out_dir="$out_root/$story/$tool"
+mkdir -p "$out_dir"
+
+printf '# %s %s review\n' "$tool" "$prompt" > "$out_dir/$tool.$prompt.md"
+printf 'FINDINGS_SUMMARY: P0=0 P1=0 P2=0\n'
+
+if [[ "$proof_graph" == "true" ]]; then
+  cat > "$out_dir/proof_graph.json" <<EOF
+{"schema_version":"proof_graph.v1","story_id":"$story","tool":"$tool"}
+EOF
+fi
+
+if [[ "${MOCK_REVIEW_FAIL_TOOL:-}" == "$tool" ]]; then
+  echo "$tool transport failure" >&2
+  exit 7
+fi
+MOCK_REVIEW
+
+  cat > "$repo/plans/aggregate_proofs.sh" <<'MOCK_AGG'
+#!/usr/bin/env bash
+set -euo pipefail
+
+story="${1:?missing story id}"
+story_root="${STORY_ARTIFACTS_ROOT:?missing STORY_ARTIFACTS_ROOT}"
+printf '%s\n' "$story_root" > "${MOCK_AGG_LOG:?missing aggregate log}"
+printf '%s\n' "$story" >> "${MOCK_AGG_LOG:?missing aggregate log}"
+[[ -f "$story_root/$story/proof_graph.json" ]] || {
+  echo "missing base proof graph at $story_root/$story/proof_graph.json" >&2
+  exit 9
+}
+exit 0
+MOCK_AGG
+
+  cat > "$repo/python/proof_graph/init.py" <<'MOCK_INIT'
+#!/usr/bin/env python3
+import json
+import os
+import sys
+
+story_id = sys.argv[1]
+output_dir = None
+for i, arg in enumerate(sys.argv):
+    if arg == "--output-dir":
+        output_dir = sys.argv[i + 1]
+        break
+if output_dir is None:
+    raise SystemExit("missing --output-dir")
+os.makedirs(output_dir, exist_ok=True)
+with open(os.path.join(output_dir, "proof_graph.json"), "w", encoding="utf-8") as handle:
+    json.dump({"schema_version": "proof_graph.v1", "story_id": story_id}, handle)
+MOCK_INIT
+
+  chmod +x "$repo/plans/review_logged.sh" "$repo/plans/aggregate_proofs.sh" "$repo/python/proof_graph/init.py"
+  printf '%s\n' "$repo"
+}
+
 test_commit_mode_success() {
   setup_mock_env "commit_success"
   run_wrapper all_ok --commit HEAD >/dev/null || fail "commit mode should exit 0"
@@ -386,6 +474,55 @@ test_run_id_collision_avoided() {
   pass "same-second reruns allocate distinct RUN_ID values"
 }
 
+test_parallel_review_failure_honors_story_artifacts_root() {
+  local repo
+  repo="$(setup_actual_parallel_repo "parallel_story_root_failure")"
+  local custom_root="$repo/custom_story_root"
+
+  set +e
+  output="$(
+    cd "$repo" && \
+      PARALLEL_REVIEW_REVIEW_SCRIPT="$repo/plans/review_logged.sh" \
+      STORY_ARTIFACTS_ROOT="$custom_root" \
+      MOCK_REVIEW_FAIL_TOOL="kimi" \
+      bash plans/parallel_review.sh S9-200 --tools codex,kimi --uncommitted --prompt generic 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ $rc -ne 0 ]] || fail "parallel_review reviewer failure should exit non-zero"
+  [[ -f "$custom_root/S9-200/review_logs/kimi.log" ]] || fail "review logs should be copied under STORY_ARTIFACTS_ROOT"
+  [[ ! -f "$repo/artifacts/story/S9-200/review_logs/kimi.log" ]] || fail "review logs should not fall back to repo artifacts root when STORY_ARTIFACTS_ROOT is set"
+  echo "$output" | grep -Fq "$custom_root/S9-200/review_logs/" || fail "failure output should point at STORY_ARTIFACTS_ROOT review_logs path"
+  pass "parallel_review failure logs honor STORY_ARTIFACTS_ROOT"
+}
+
+test_parallel_review_proof_graph_honors_story_artifacts_root() {
+  local repo
+  repo="$(setup_actual_parallel_repo "parallel_story_root_proof_graph")"
+  local custom_root="$repo/custom_story_root"
+  local agg_log="$repo/aggregate.log"
+
+  set +e
+  output="$(
+    cd "$repo" && \
+      PARALLEL_REVIEW_REVIEW_SCRIPT="$repo/plans/review_logged.sh" \
+      STORY_ARTIFACTS_ROOT="$custom_root" \
+      MOCK_AGG_LOG="$agg_log" \
+      bash plans/parallel_review.sh S9-201 --tools opus --files "plans/review_logged.sh" --prompt enriched --proof-graph 2>&1
+  )"
+  rc=$?
+  set -e
+
+  [[ $rc -eq 0 ]] || fail "parallel_review proof-graph run should succeed, got rc=$rc output=$output"
+  [[ -f "$custom_root/S9-201/proof_graph.json" ]] || fail "base proof graph should be initialized under STORY_ARTIFACTS_ROOT"
+  [[ ! -f "$repo/artifacts/story/S9-201/proof_graph.json" ]] || fail "base proof graph should not be initialized under default artifacts root when STORY_ARTIFACTS_ROOT is set"
+  [[ -f "$agg_log" ]] || fail "mock aggregate script should run"
+  assert_file_contains "$agg_log" "$custom_root"
+  assert_file_contains "$agg_log" "S9-201"
+  pass "parallel_review proof-graph paths honor STORY_ARTIFACTS_ROOT"
+}
+
 test_commit_mode_success
 test_files_mode_success
 test_uncommitted_mode_success
@@ -394,5 +531,7 @@ test_reviewer_failure_preserves_summary
 test_missing_success_artifact_is_inconsistent
 test_pr_mode_head_oid_mismatch_fails_closed
 test_run_id_collision_avoided
+test_parallel_review_failure_honors_story_artifacts_root
+test_parallel_review_proof_graph_honors_story_artifacts_root
 
 echo "PASS: external_review_generic regression fixtures"
