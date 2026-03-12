@@ -33,6 +33,8 @@ EvidenceGuard logic MUST consume the contract names (or their documented 1:1 ali
 **Ops deliverables (contract §7 Must-use now):**
 
 - Provide Grafana dashboard(s) for: trading_mode, risk_state, evidence_chain_state, parquet_queue_depth_pct, disk_used_pct, mm_util, ws_event_lag_ms.
+- Operator presentation surfaces (dashboards, replicated status stores, derived operator-state docs such as `runtime_state.v1`) are downstream and non-authoritative. They MUST preserve canonical `/status` blocked/open conclusions, and any renamed/reshaped fields MUST remain semantically equivalent to the canonical authority they derive from.
+- P0 owner scaffolding remains the separate bootstrap surface from `specs/CONTRACT.md` P0-E; these dashboard/operator-surface rules do not replace or narrow that category.
 - Provide Prometheus alert rules for the Minimum Alert Set in the contract.
 - Provide a DuckDB query/playbook to inspect Parquet evidence artifacts and reproduce key release metrics.
 - Document chrony/NTP requirement and add an operational health check step in runbooks (time drift gate depends on it).

@@ -96,6 +96,107 @@ def test_runtime_state_payload_transforms_owner_view_schema_errors() -> None:
     )
 
 
+def test_csp_payload_missing_open_permission_latch_fails_closed() -> None:
+  payload = json.loads((ROOT / "tests" / "fixtures" / "status" / "restart_reconcile.json").read_text(encoding="utf-8"))
+  payload.pop("open_permission_blocked_latch")
+
+  with pytest.raises(SnapshotBuilderError, match="open_permission_blocked_latch"):
+    build_snapshot_envelope(
+      payload,
+      instance_id="soldier-main-01",
+      service="soldier_core",
+      env="paper",
+      head_commit="4a2e6fc",
+      expected_publish_interval_s=2,
+      stale_after_s=15,
+      generated_at="2026-02-23T21:10:03Z",
+      publisher_version="status-publisher.v1",
+      attempt=1,
+    )
+
+
+def test_foundation_status_lite_payload_is_rejected_for_dashboard_snapshot() -> None:
+  payload = {
+    "service_up": True,
+    "build_id": "phase-foundation-test",
+    "contract_version": "5.2",
+    "dispatch_enabled": False,
+    "phase": "foundation",
+  }
+
+  with pytest.raises(SnapshotBuilderError, match="foundation status-lite"):
+    build_snapshot_envelope(
+      payload,
+      instance_id="soldier-main-01",
+      service="soldier_core",
+      env="paper",
+      head_commit="4a2e6fc",
+      expected_publish_interval_s=2,
+      stale_after_s=15,
+      generated_at="2026-02-23T21:10:03Z",
+      publisher_version="status-publisher.v1",
+      attempt=1,
+    )
+
+
+def test_runtime_state_and_csp_payload_preserve_equivalent_blocked_conclusions() -> None:
+  runtime_payload = json.loads((ROOT / "tests" / "fixtures" / "runtime_state" / "runtime_state_v1_valid.json").read_text(encoding="utf-8"))
+  csp_payload = {
+    "trading_mode": "ReduceOnly",
+    "risk_state": "Degraded",
+    "mode_reasons": runtime_payload["safety"]["mode_reasons"],
+    "open_permission_blocked_latch": runtime_payload["safety"]["latches"]["open_permission_latched_off"],
+    "open_permission_reason_codes": runtime_payload["safety"]["f1_cert_state"]["reason_codes"],
+    "open_permission_requires_reconcile": runtime_payload["safety"]["latches"]["open_permission_latched_off"],
+    "connectivity_degraded": runtime_payload["safety"]["latches"]["market_truth_latched"],
+    "f1_cert_state": "FAIL",
+    "f1_cert_expires_at": 1769451300000,
+    "mm_util": 0.78,
+    "disk_used_pct": 0.674,
+    "wal_queue_depth": 42,
+    "wal_queue_capacity": 100,
+    "ws_event_lag_ms": 320,
+    "429_count_5m": 3,
+    "10028_count_5m": 0,
+    "deribit_http_p95_ms": 185,
+    "loop_tick_last_ts_ms": 1769452202000,
+    "disk_used_last_update_ts_ms": 1769452201000,
+    "mm_util_last_update_ts_ms": 1769452202000,
+  }
+
+  runtime_snapshot = build_snapshot_envelope(
+    runtime_payload,
+    instance_id="soldier-main-01",
+    service="soldier_core",
+    env="paper",
+    head_commit="4a2e6fc",
+    expected_publish_interval_s=2,
+    stale_after_s=15,
+    generated_at="2026-02-23T21:10:03Z",
+    publisher_version="status-publisher.v1",
+    attempt=1,
+  )
+  csp_snapshot = build_snapshot_envelope(
+    csp_payload,
+    instance_id="soldier-main-01",
+    service="soldier_core",
+    env="paper",
+    head_commit="4a2e6fc",
+    expected_publish_interval_s=2,
+    stale_after_s=15,
+    generated_at="2026-02-23T21:10:03Z",
+    publisher_version="status-publisher.v1",
+    attempt=1,
+  )
+
+  assert runtime_snapshot["safety"]["trading_mode"] == csp_snapshot["safety"]["trading_mode"] == "REDUCE_ONLY"
+  assert runtime_snapshot["safety"]["risk_state"] == csp_snapshot["safety"]["risk_state"] == "DEGRADED"
+  assert runtime_snapshot["safety"]["latches"]["open_permission_latched_off"] is True
+  assert csp_snapshot["safety"]["latches"]["open_permission_latched_off"] is True
+  assert runtime_snapshot["safety"]["f1_cert_state"]["status"] == csp_snapshot["safety"]["f1_cert_state"]["status"] == "BLOCKED"
+  assert runtime_snapshot["safety"]["mode_reasons"] == csp_snapshot["safety"]["mode_reasons"]
+
+
 def test_sidecar_state_counters(tmp_path: Path) -> None:
   temp_state = tmp_path / "status_publisher_state_test.json"
   baseline = load_state(temp_state, "soldier-main-01")

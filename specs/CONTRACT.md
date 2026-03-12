@@ -179,11 +179,13 @@ Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumer
 | **P0 owner scaffolding** (CLI/local owner status surfaces) | Phase 0 and early bootstrap operations | `ok`, `build_id`, `contract_version`, `trading_mode`, `opens_globally_permitted` (optional deprecated alias `is_trading_allowed`) | Owner/operator scaffolding only. MUST NOT claim full `/api/v1/status` contract authority. |
 | **Foundation `/api/v1/status` status-lite** | Only while `phase == foundation` | Exactly `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase` (AT-1230) | Bootstrap status surface only. MUST NOT emit CSP authority keys while in foundation mode. |
 | **CSP minimum `/api/v1/status`** | Required after foundation mode exits; required for live-trading authority | Full CSP minimum key set defined in §7.0 | Canonical runtime authority for TradingMode/open-permission semantics. Release/readiness gates MUST key off this surface once foundation mode exits. |
+| **Operator presentation surfaces** (dashboards, replicated status stores, derived operator-state docs such as `runtime_state.v1`) | Only as downstream consumers of foundation status-lite or CSP minimum `/status` | Surface-specific schema permitted; reused canonical field names MUST preserve exact canonical value/meaning, and renamed/reshaped fields MUST remain semantically equivalent | Downstream, non-authoritative surfaces only. MUST preserve canonical `/status` blocked/open conclusions and fail closed when source status is stale, missing, or invalid. |
 
 **Status authority precedence (Normative):**
 1. While `phase == foundation`, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
 2. After foundation mode exits, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
 3. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
+4. Operator presentation surfaces are always downstream/non-authoritative; they MUST NOT outrank canonical `/api/v1/status`, foundation status-lite, or the separate P0 owner scaffolding category.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -4745,6 +4747,44 @@ AT-022
 - Foundation `/api/v1/status` status-lite uses liveness key `service_up`.
 - P0-E owner-status keys (`trading_mode`, `opens_globally_permitted`, optional `is_trading_allowed`) are NOT part of foundation status-lite payloads.
 
+#### **7.0.1 Runtime Authority vs Operator Presentation Surfaces**
+
+- P0 owner scaffolding remains the separate P0-E bootstrap surface; the rules below do not replace or narrow that category.
+- After foundation mode exits, operator presentation surfaces MUST derive dispatch/readiness semantics from canonical `GET /api/v1/status`.
+- While `phase == foundation`, operator presentation surfaces MAY derive only from foundation status-lite or fail closed; they MUST NOT synthesize CSP authority fields.
+- Operator presentation surfaces MAY use a surface-specific or derived operator-state schema (for example a dashboard snapshot or `runtime_state.v1`) only if that surface is non-authoritative and preserves the same blocked/open conclusion as the canonical status it was derived from.
+- If an operator presentation surface reuses canonical field names such as `trading_mode`, `opens_globally_permitted`, `mode_reasons`, or `open_permission_*`, the value and meaning MUST match the canonical source exactly.
+- If an operator presentation surface renames or reshapes canonical information, the derived field MUST remain semantically equivalent and MUST NOT contradict the canonical blocked/open conclusion.
+- If canonical source status is stale, unreadable, missing, or invalid, the operator presentation surface MUST fail closed: it MUST report `UNKNOWN`/`STALE` semantics or refuse to render an authoritative conclusion. It MUST NOT imply OPEN eligibility from invalid source status.
+
+AT-1238
+- Given: canonical `/api/v1/status` is fresh and an operator presentation surface or derived operator-state document is backed by it.
+- When: canonical authority fields are republished or convenience summaries are derived.
+- Then: any reused canonical field names MUST exactly match canonical values, and any renamed/reshaped fields MUST remain semantically equivalent and non-contradictory.
+- Pass criteria: no downstream field contradicts the canonical blocked/open conclusion; reused canonical names match exactly.
+- Fail criteria: any reused canonical field diverges in value/meaning, or any derived field reports a less restrictive conclusion than canonical `/status`.
+
+AT-1239
+- Given: canonical source status required by an operator presentation surface is stale, unreadable, missing, or invalid.
+- When: the surface attempts to render operator-facing state.
+- Then: it MUST report `UNKNOWN` or `STALE` semantics, or fail closed by refusing to render an authoritative conclusion; it MUST NOT imply OPEN eligibility.
+- Pass criteria: the surface exposes only fail-closed semantics under invalid source conditions.
+- Fail criteria: the surface renders OPEN-permitted or otherwise authoritative-safe conclusions from stale/missing/invalid source status.
+
+AT-1240
+- Given: runtime is in foundation mode (`phase == foundation`).
+- When: an operator presentation surface consumes foundation status-lite or attempts to transform it into a downstream representation.
+- Then: it MUST preserve foundation status-lite semantics and MUST NOT synthesize CSP authority fields; surfaces that cannot do so MUST fail closed.
+- Pass criteria: only foundation semantics are exposed, or the downstream transformation is rejected fail-closed.
+- Fail criteria: any CSP authority field is synthesized from foundation status-lite, or a downstream surface implies Phase 2+ authority while still in foundation mode.
+
+AT-1241
+- Given: canonical runtime state blocks OPEN through `trading_mode`, `open_permission_blocked_latch`, or both.
+- When: a derived operator-state document or dashboard snapshot is produced from that state.
+- Then: no derived field may indicate OPEN-permitted, Active/NORMAL-without-block, or another less restrictive conclusion than canonical `/status`.
+- Pass criteria: downstream blocked/open semantics remain at least as restrictive as canonical `/status`.
+- Fail criteria: any derived surface downgrades a blocked canonical state into an OPEN-permitted or otherwise safer conclusion.
+
 **Foundation status-lite mode (Phase 1 bootstrap only):**
 - While `phase == foundation`, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
 - In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation` (`dispatch_enabled == false` is the canonical "opens not dispatchable" signal in this mode).
@@ -6493,3 +6533,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-05 | CCL-2026-03-05-02 | Phase 0 prerequisites; §7.0 status surface split; Appendix CONTRACT_CHANGE_LEDGER | clarify | Restore a normative status authority matrix and precedence across P0 owner scaffolding, foundation status-lite, and CSP minimum `/status`; align Phase 0 timing to live-trading enablement. | Prevent status-surface drift and ambiguous authority during bootstrap-to-CSP transitions; preserve clear release/readiness semantics. | AT-1230, AT-023 | local/hygiene-pr166 |
 | 2026-03-05 | CCL-2026-03-05-03 | §1.3 Pre-Trade Liquidity Gate; §2.4 Durable Intent Ledger; Phase 1 completion notes; Appendix CONTRACT_CHANGE_LEDGER | clarify | Align stale-L2 handling so OPEN fails closed while risk-reducing actions use the §3.1 fallback ladder, and align restart semantics so replay/reconciliation alone never authorize fresh OPEN dispatch after restart. | Keep the Phase 1 remediation contract auditable and aligned with the PRD, degraded-market-data safety requirements, and replay/recovery proofs on this branch. | AT-421, AT-935, AT-1231 | local/phase1-remediation |
 | 2026-03-06 | CCL-2026-03-06-01 | Definitions; §1.0 dispatcher sizing rules; §1.1 labeling/idempotency; §1.4 pricer/chokepoint ordering; Appendix CONTRACT_CHANGE_LEDGER | clarify | Make `amount_semantics` the normative sizing discriminator, align intent-hash identity to `qty_steps`/`price_ticks`, tighten canonical-label matching, and clarify that Net Edge authorizes while Pricer constructs the limit inside the normative OPEN chokepoint order. | Reduce contract/PRD drift before runtime remediation by making the intended Phase 1 semantics explicit in the source of truth. | AT-277, AT-217, AT-218, AT-223, AT-343 | local/phase1-contract-doc-pass |
+| 2026-03-12 | CCL-2026-03-12-01 | Phase 0 prerequisites; §7.0 operator presentation surfaces; Appendix CONTRACT_CHANGE_LEDGER | clarify | Define downstream operator presentation surfaces as non-authoritative, preserve the separate P0 owner-scaffolding boundary, require semantic equivalence for renamed/reshaped operator fields, and require fail-closed handling for invalid/foundation-mode source status. | Prevent dashboards, replicated status stores, or derived operator-state documents from synthesizing safer authority semantics than canonical `/status`, especially during invalid-source and foundation-mode transitions. | AT-1238, AT-1239, AT-1240, AT-1241 | local/operator-surface-contract |

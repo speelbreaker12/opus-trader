@@ -26,6 +26,14 @@ RUNTIME_RISK_STATES = {"HEALTHY", "DEGRADED", "MAINTENANCE", "KILL"}
 RUNTIME_F1_STATES = {"VALID", "BLOCKED", "UNKNOWN"}
 RUNTIME_THRESHOLD_STATES = {"OK", "WARN", "CRIT", "UNKNOWN"}
 HEAD_COMMIT_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+REQUIRED_CSP_OPERATOR_AUTHORITY_FIELDS = (
+  "trading_mode",
+  "risk_state",
+  "mode_reasons",
+  "open_permission_blocked_latch",
+  "open_permission_reason_codes",
+  "open_permission_requires_reconcile",
+)
 
 
 def _is_iso8601_utc_z(value: object) -> bool:
@@ -311,6 +319,30 @@ def _extract_reason_codes(payload: Dict[str, Any], key: str) -> list[str]:
   return value
 
 
+def _validate_csp_operator_authority_payload(payload: Dict[str, Any]) -> None:
+  if payload.get("phase") == "foundation":
+    raise SnapshotBuilderError("foundation status-lite payload cannot be transformed into dashboard snapshot")
+
+  missing_fields = [field for field in REQUIRED_CSP_OPERATOR_AUTHORITY_FIELDS if field not in payload]
+  if missing_fields:
+    joined = ", ".join(missing_fields)
+    raise SnapshotBuilderError(f"canonical status payload missing required operator-authority field(s): {joined}")
+
+  if not isinstance(payload.get("mode_reasons"), list) or not all(isinstance(item, str) for item in payload["mode_reasons"]):
+    raise SnapshotBuilderError("canonical status payload field mode_reasons must be an array of strings")
+
+  if not isinstance(payload.get("open_permission_blocked_latch"), bool):
+    raise SnapshotBuilderError("canonical status payload field open_permission_blocked_latch must be boolean")
+
+  if not isinstance(payload.get("open_permission_reason_codes"), list) or not all(
+    isinstance(item, str) for item in payload["open_permission_reason_codes"]
+  ):
+    raise SnapshotBuilderError("canonical status payload field open_permission_reason_codes must be an array of strings")
+
+  if not isinstance(payload.get("open_permission_requires_reconcile"), bool):
+    raise SnapshotBuilderError("canonical status payload field open_permission_requires_reconcile must be boolean")
+
+
 def _owner_view_steps(payload: Dict[str, Any]) -> list[str]:
   owner_view = payload.get("owner_view")
   if not isinstance(owner_view, dict):
@@ -453,6 +485,8 @@ def _build_from_csp_payload(
   publisher_version: str,
   attempt: int = 1,
 ) -> Dict[str, Any]:
+  _validate_csp_operator_authority_payload(payload)
+
   mm_util = _safe_float(payload.get("mm_util"))
   disk_used_pct = _safe_float(payload.get("disk_used_pct"))
   wal_depth = _safe_float(payload.get("wal_queue_depth"))
