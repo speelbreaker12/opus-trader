@@ -1,5 +1,6 @@
-# R5b: No Fixes Needed
+Superseded on 2026-03-05 after external rerun.
 
-**Story**: S2-001 | **Date**: 2026-02-27 | **Reviewer**: claude-opus-4-6
-
-R5b abbreviated self-review found 0 actionable issues across 4 checks (code quality, contract alignment, fail-closed, wrong-impl). All 16 tests pass. No fixes required before proceeding to R6.
+R5b is no longer in a no-fixes state.
+See:
+- `reviews/reconciliations/S2/SELF_REVIEW_R5b.md`
+- `reviews/reconciliations/S2/R5B_SELF_REVIEW_GATE.json`

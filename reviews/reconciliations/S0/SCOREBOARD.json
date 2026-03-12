@@ -1,0 +1,137 @@
+{
+  "generated_at": "2026-03-05T03:11:46Z",
+  "head_commit": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+  "repo_head_commit": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+  "slice": 0,
+  "stories": [
+    {
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/reviews/reconciliations/S0/S0-000_reconciliation.md",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S0-000"
+    },
+    {
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/reviews/reconciliations/S0/S0-001_reconciliation.md",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S0-001"
+    },
+    {
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/reviews/reconciliations/S0/S0-002_reconciliation.md",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S0-002"
+    },
+    {
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/reviews/reconciliations/S0/S0-003_reconciliation.md",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S0-003"
+    },
+    {
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/reviews/reconciliations/S0/S0-004_reconciliation.md",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S0-004"
+    },
+    {
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+      "passes": true,
+      "path": "GREEN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/artifacts/story/S0-005/evidence_ledger.json",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {
+        "cycle1": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "cycle2": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "fix": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "implement": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "preflight": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "resolution": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "self_review": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "verify_full": "c034cfee2be6d3131d155215572e8e42dd1bab01"
+      },
+      "steps": {
+        "cycle1": "DONE",
+        "cycle2": "DONE",
+        "fix": "DONE",
+        "implement": "DONE",
+        "pass": "DONE",
+        "preflight": "DONE",
+        "resolution": "DONE",
+        "self_review": "DONE",
+        "verify_full": "DONE"
+      },
+      "story_id": "S0-005"
+    }
+  ]
+}

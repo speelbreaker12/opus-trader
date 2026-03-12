@@ -1,60 +1,73 @@
 {
-  "generated_at": "2026-03-01T00:31:47Z",
-  "head_commit": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
-  "repo_head_commit": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+  "generated_at": "2026-03-05T04:24:14Z",
+  "head_commit": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+  "repo_head_commit": "c034cfee2be6d3131d155215572e8e42dd1bab01",
   "slice": 2,
   "stories": [
     {
-      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
       "passes": true,
-      "path": "UNKNOWN",
-      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S2/S2-000_reconciliation.md",
+      "path": "GREEN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/artifacts/story/S2-000/evidence_ledger.json",
+      "step_blocked_attempts": {},
       "step_receipt_head_sha": {
-        "cycle1": "58076cb9c5cc916c50fc20d118e3718a173f37f4",
-        "cycle2": "58076cb9c5cc916c50fc20d118e3718a173f37f4",
-        "fix": "58076cb9c5cc916c50fc20d118e3718a173f37f4",
-        "implement": "58076cb9c5cc916c50fc20d118e3718a173f37f4",
-        "preflight": "58076cb9c5cc916c50fc20d118e3718a173f37f4",
-        "resolution": "58076cb9c5cc916c50fc20d118e3718a173f37f4",
-        "self_review": "58076cb9c5cc916c50fc20d118e3718a173f37f4"
+        "cycle1": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "cycle2": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "fix": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "implement": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "preflight": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "resolution": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "self_review": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "verify_full": "c034cfee2be6d3131d155215572e8e42dd1bab01"
       },
       "steps": {
-        "cycle1": "STALE",
-        "cycle2": "STALE",
-        "fix": "STALE",
-        "implement": "STALE",
-        "pass": "MISSING",
-        "preflight": "STALE",
-        "resolution": "STALE",
-        "self_review": "STALE",
-        "verify_full": "MISSING"
+        "cycle1": "DONE",
+        "cycle2": "DONE",
+        "fix": "DONE",
+        "implement": "DONE",
+        "pass": "DONE",
+        "preflight": "DONE",
+        "resolution": "DONE",
+        "self_review": "DONE",
+        "verify_full": "DONE"
       },
       "story_id": "S2-000"
     },
     {
-      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
       "passes": true,
-      "path": "YELLOW",
-      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S2/S2-001_reconciliation.json",
-      "step_receipt_head_sha": {},
+      "path": "GREEN",
+      "path_source": "/Users/admin/Desktop/opus-trader/.worktrees/recon_s2_agent_20260304193942/artifacts/story/S2-001/evidence_ledger.json",
+      "step_blocked_attempts": {},
+      "step_receipt_head_sha": {
+        "cycle1": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "cycle2": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "fix": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "implement": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "preflight": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "resolution": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "self_review": "c034cfee2be6d3131d155215572e8e42dd1bab01",
+        "verify_full": "c034cfee2be6d3131d155215572e8e42dd1bab01"
+      },
       "steps": {
-        "cycle1": "MISSING",
-        "cycle2": "MISSING",
-        "fix": "MISSING",
-        "implement": "MISSING",
-        "pass": "MISSING",
-        "preflight": "MISSING",
-        "resolution": "MISSING",
-        "self_review": "MISSING",
-        "verify_full": "MISSING"
+        "cycle1": "DONE",
+        "cycle2": "DONE",
+        "fix": "DONE",
+        "implement": "DONE",
+        "pass": "DONE",
+        "preflight": "DONE",
+        "resolution": "DONE",
+        "self_review": "DONE",
+        "verify_full": "DONE"
       },
       "story_id": "S2-001"
     },
     {
-      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
       "passes": true,
       "path": "UNKNOWN",
       "path_source": "",
+      "step_blocked_attempts": {},
       "step_receipt_head_sha": {},
       "steps": {
         "cycle1": "MISSING",
@@ -70,10 +83,11 @@
       "story_id": "S2-002"
     },
     {
-      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
       "passes": true,
       "path": "UNKNOWN",
       "path_source": "",
+      "step_blocked_attempts": {},
       "step_receipt_head_sha": {},
       "steps": {
         "cycle1": "MISSING",
@@ -89,10 +103,11 @@
       "story_id": "S2-003"
     },
     {
-      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "head": "c034cfee2be6d3131d155215572e8e42dd1bab01",
       "passes": true,
       "path": "UNKNOWN",
       "path_source": "",
+      "step_blocked_attempts": {},
       "step_receipt_head_sha": {},
       "steps": {
         "cycle1": "MISSING",

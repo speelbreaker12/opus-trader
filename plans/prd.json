@@ -1902,10 +1902,8 @@
         "crates/soldier_core/tests/test_quantize.rs::test_qty_rounds_down"
       ],
       "primary_owner_for": [
-        "AT-020",
-        "AT-021",
-        "AT-219",
-        "AT-926"
+        "AT-280",
+        "AT-908"
       ],
       "loss_mode": {
         "worst_case": "quantization rounding wrong → order too small rejected or too large → unintended fill size",
@@ -2005,9 +2003,7 @@
         "crates/soldier_core/tests/test_idempotency.rs::test_at218_deterministic_hash"
       ],
       "primary_owner_for": [
-        "AT-201",
-        "AT-218",
-        "AT-343"
+        "AT-928"
       ],
       "loss_mode": {
         "worst_case": "intent hash non-deterministic → duplicate dispatch on restart → double position",
