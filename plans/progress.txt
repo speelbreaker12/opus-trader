@@ -1041,3 +1041,9 @@ Commands: python3 scripts/build_contract_kernel.py --out docs/contract_kernel.js
 Evidence: docs/contract_kernel.json; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/engine.rs; artifacts/verify/20260306_145623/.
 Notes: The original `./plans/verify.sh quick` blocker at `contract_kernel` was resolved by regenerating the kernel. A later quick run exposed an existing-but-now-enforced unit failure in `execution::dispatch_chokepoint_contract_tests::test_dispatch_chokepoint_no_bypass_approved` because `engine.rs` used `matches!(..., ChokeResult::Approved { .. })`; the helper-based change preserves behavior while satisfying the chokepoint contract. `./plans/verify.sh quick` is now green on run `20260306_145623`.
 Next: Commit and push the kernel refresh plus chokepoint helper fix, then mark PR #176 ready since the branch now has current artifact-backed quick verification.
+Date: 2026-03-12
+Summary: Wrote a next-agent handoff for the operator-surface contract patch after committing `9867f1ed`, capturing the committed scope, prior verification evidence, the unrelated `rust_fmt` blocker from `./plans/verify.sh quick`, and the remaining dirty/untracked files that should stay out of the patch.
+Commands: git status --short; git log -1 --oneline; git diff --cached --stat; git diff --cached; apply_patch.
+Evidence: plans/pause.md; artifacts/verify/20260312_125708/; commit `9867f1ed`.
+Notes: No new repo verification was run in this handoff step. The active constraint remains clean verification because the last quick verify failure was unrelated repo drift in `crates/soldier_core/src/execution/engine_decision_tests.rs`, and the local tree still contains runtime/untracked noise.
+Next: Resume from `plans/pause.md`, keep unrelated local files out of the operator-surface patch, and use a clean checkout or CI before claiming a green verify state.
