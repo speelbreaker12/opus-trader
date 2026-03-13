@@ -540,6 +540,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"
+  "plans/tests/test_rust_gates_quick_clippy.sh"
   "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"

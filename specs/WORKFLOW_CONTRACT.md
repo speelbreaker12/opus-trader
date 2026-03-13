@@ -279,7 +279,7 @@ QUICK must run:
 4) Status fixtures validation (if `tests/fixtures/status/**` exists): `status_fixture_*`
 5) Doc sync validation: `doc_sync_check`
 6) Stack tests (language-gated by repo contents):
-   - Rust: `rust_fmt`, `rust_tests_quick`
+   - Rust: `rust_fmt`, `rust_clippy`, `rust_tests_quick`, `rust_tests_smoke`, `execution_facade_lint`
    - Python: `python_ruff_check`, `python_pytest_quick`
    - Node: `node_lint`, `node_typecheck`, `node_test`
 

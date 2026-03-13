@@ -81,7 +81,10 @@ quick_tokens=(
   status_fixture_*
   doc_sync_check
   rust_fmt
+  rust_clippy
   rust_tests_quick
+  rust_tests_smoke
+  execution_facade_lint
   python_ruff_check
   python_pytest_quick
   node_lint
@@ -171,17 +174,32 @@ for token in "${verify_extra_tokens[@]}"; do
   require_code_token "$VERIFY_CONTENT" "$VERIFY" "$token"
 done
 
-# Stack gate scripts: ensure quick/full gate names are present.
-rust_tokens=(
+# Stack gate scripts: ensure quick/full Rust gate names are present.
+rust_quick_tokens=(
   'run_logged_or_exit "rust_fmt"'
   'run_logged_or_exit "rust_clippy"'
-  'run_logged_or_exit "rust_tests_full"'
   'run_logged_or_exit "rust_tests_quick"'
+  'run_logged_or_exit "rust_tests_smoke"'
+  'run_logged_or_exit "execution_facade_lint"'
 )
 RUST_GATES_CONTENT="$(<"$RUST_GATES")"
-for token in "${rust_tokens[@]}"; do
+for token in "${rust_quick_tokens[@]}"; do
   require_code_token "$RUST_GATES_CONTENT" "$RUST_GATES" "$token"
 done
+
+rust_full_tokens=(
+  'run_logged_or_exit "rust_clippy"'
+  'run_logged_or_exit "rust_tests_full"'
+  'run_logged_or_exit "rust_tests_smoke"'
+  'run_logged_or_exit "execution_facade_lint"'
+)
+for token in "${rust_full_tokens[@]}"; do
+  require_code_token "$RUST_GATES_CONTENT" "$RUST_GATES" "$token"
+done
+
+if contains_literal_token "$RUST_GATES_CONTENT" 'warn "Skipping clippy in quick mode"'; then
+  fail "quick Rust gates must not skip rust_clippy"
+fi
 
 py_tokens=(
   'run_logged_or_exit "python_ruff_check"'
