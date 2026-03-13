@@ -115,6 +115,7 @@ select_monotonic_backend() {
 
 detect_parallel_jobs() {
   local cpu_count=""
+  local max_parallel_jobs=8
 
   if command -v sysctl >/dev/null 2>&1; then
     cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"
@@ -125,6 +126,9 @@ detect_parallel_jobs() {
   fi
 
   if [[ "$cpu_count" =~ ^[1-9][0-9]*$ ]]; then
+    if (( cpu_count > max_parallel_jobs )); then
+      cpu_count="$max_parallel_jobs"
+    fi
     echo "$cpu_count"
   else
     echo 4
@@ -437,6 +441,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
+  "plans/tests/test_live_enable_preflight.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"

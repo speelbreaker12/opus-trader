@@ -6,12 +6,12 @@ cd "$ROOT"
 
 PYTHON_BIN_EFFECTIVE="${PYTHON_BIN:-}"
 if [[ -z "$PYTHON_BIN_EFFECTIVE" ]]; then
-  if command -v python >/dev/null 2>&1; then
-    PYTHON_BIN_EFFECTIVE="python"
-  elif command -v python3 >/dev/null 2>&1; then
+  if command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN_EFFECTIVE="python3"
+  elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN_EFFECTIVE="python"
   else
-    echo "FAIL: Missing required command: python (or python3)" >&2
+    echo "FAIL: Missing required command: python3 (or python)" >&2
     exit 1
   fi
 elif ! command -v "$PYTHON_BIN_EFFECTIVE" >/dev/null 2>&1; then

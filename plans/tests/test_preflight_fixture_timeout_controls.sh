@@ -403,7 +403,7 @@ grep -Fxq "300" "$timeout_invocation_log" \
 
 parallel_default_script="$repo/plans/preflight_parallel_default_jobs.sh"
 cp "$repo/plans/preflight.sh" "$parallel_default_script"
-rewrite_fixture_arrays_repeated_dummy "$parallel_default_script" 5
+rewrite_fixture_arrays_repeated_dummy "$parallel_default_script" 12
 chmod +x "$parallel_default_script"
 
 cat > "$repo/plans/tests/test_dummy_sleep.sh" <<'EOF'
@@ -494,5 +494,43 @@ set -e
 parallel_max="$(cat "$parallel_state_dir/max" 2>/dev/null || echo 0)"
 [[ "$parallel_max" -eq 2 ]] \
   || fail "expected default preflight fixture concurrency to match detected CPU count (2), saw $parallel_max"
+
+cat > "$mock_parallel_bin/sysctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "-n" && "${2:-}" == "hw.ncpu" ]]; then
+  printf '64\n'
+  exit 0
+fi
+
+echo "unexpected sysctl args: $*" >&2
+exit 1
+EOF
+chmod +x "$mock_parallel_bin/sysctl"
+
+parallel_cap_log="$tmp_dir/parallel_cap_jobs.log"
+parallel_cap_state_dir="$tmp_dir/parallel_cap_state"
+rm -rf "$parallel_cap_state_dir"
+mkdir -p "$parallel_cap_state_dir"
+
+set +e
+(
+  cd "$repo"
+  PATH="$mock_parallel_bin:$PATH" \
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
+  DUMMY_SLEEP_SECS=3 \
+  CONCURRENCY_STATE_DIR="$parallel_cap_state_dir" \
+  "$parallel_default_script" >"$parallel_cap_log" 2>&1
+)
+parallel_cap_rc=$?
+set -e
+[[ "$parallel_cap_rc" -eq 0 ]] \
+  || fail "expected capped parallel-jobs fixture run to pass, got rc=$parallel_cap_rc"
+parallel_cap_max="$(cat "$parallel_cap_state_dir/max" 2>/dev/null || echo 0)"
+[[ "$parallel_cap_max" -eq 8 ]] \
+  || fail "expected default preflight fixture concurrency to cap at 8 workers, saw $parallel_cap_max"
 
 echo "test_preflight_fixture_timeout_controls.sh: ok"

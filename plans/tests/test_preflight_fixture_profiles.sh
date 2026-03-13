@@ -109,6 +109,7 @@ assert_contains_line 'Falling back to full fixture hash scan'
 
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_live_enable_preflight.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_gate_contract_check_batching.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
@@ -178,7 +179,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "43" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 43)"
+[[ "$smoke_count" == "44" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 44)"
 [[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
 
 echo "PASS: preflight fixture profile mapping"
