@@ -1098,3 +1098,10 @@ Commands: python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.
 Evidence: specs/CONTRACT.md; docs/contract_kernel.json.
 Notes: This slice is contract/kernel-only; it does not include the separate gate-ordering test dirt still present in the worktree.
 Next: If this WAL clarification is meant to drive implementation follow-up, add the missing executable gate-ordering proof separately instead of treating this wording sync as sufficient runtime evidence.
+Story: health-snapshot-refresh
+Date: 2026-03-13 22:11:28 UTC
+Summary: Refreshed the Phase 0 health/status snapshot so the evidence copy matches the committed legal foundation-exit wording in the canonical health endpoint document.
+Commands: git diff -- evidence/phase0/health/health_endpoint_snapshot.md.
+Evidence: evidence/phase0/health/health_endpoint_snapshot.md.
+Notes: This is an evidence-doc refresh only; no runtime or harness behavior changed.
+Next: Keep the snapshot in sync with future `docs/health_endpoint.md` wording changes so reviewers do not have to resolve stale evidence by hand.
