@@ -21,6 +21,8 @@ if [[ "${MODE:-}" == "full" ]]; then
   log "2b) Rust clippy (full)"
   run_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --all-targets --all-features -- -D warnings
 else
+  # Quick mode keeps clippy on lib targets only for fast feedback.
+  # Full mode retains broader all-target coverage.
   log "2b) Rust clippy (quick)"
   run_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --lib -- -D warnings
 fi

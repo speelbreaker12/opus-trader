@@ -574,6 +574,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_fail_closed_gate_map_paths.sh"
   "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_rust_gates_quick_clippy.sh"
+  "plans/tests/test_lint_execution_facade.sh"
   "plans/tests/test_contract_kernel_drift_message.sh"
   "plans/tests/test_recon_handoff_sources.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"

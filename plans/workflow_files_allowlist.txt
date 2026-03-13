@@ -36,6 +36,7 @@ plans/crossref_execution_invariants.yaml
 plans/crossref_gate.sh
 plans/doc_sync_check.sh
 plans/evidence_sources.txt
+plans/execution_facade_symbols.txt
 plans/external_review_generic.sh
 plans/fork_attestation_mirror.sh
 plans/fork_attestation_remediation_verify.sh

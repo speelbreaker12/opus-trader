@@ -53,6 +53,7 @@ required=(
   plans/contract_coverage_promote.sh
   plans/contract_review_emit.sh
   plans/contract_review_validate.sh
+  plans/execution_facade_symbols.txt
   plans/external_review_generic.sh
   plans/fork_attestation_mirror.sh
   plans/fork_attestation_remediation_verify.sh

@@ -284,6 +284,7 @@ QUICK must run:
    - Node: `node_lint`, `node_typecheck`, `node_test`
 
 Notes:
+- QUICK `rust_clippy` is intentionally lib-only (`cargo clippy --workspace --lib -- -D warnings`); FULL keeps the broader all-targets/all-features clippy pass.
 - QUICK may warn on optional heuristics (e.g., endpoint gate), but must not block unless explicitly enabled.
 
 #### FULL (story completion)

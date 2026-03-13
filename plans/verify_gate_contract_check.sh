@@ -178,6 +178,7 @@ done
 rust_quick_tokens=(
   'run_logged_or_exit "rust_fmt"'
   'run_logged_or_exit "rust_clippy"'
+  'cargo clippy --workspace --lib -- -D warnings'
   'run_logged_or_exit "rust_tests_quick"'
   'run_logged_or_exit "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
@@ -189,6 +190,7 @@ done
 
 rust_full_tokens=(
   'run_logged_or_exit "rust_clippy"'
+  'cargo clippy --workspace --all-targets --all-features -- -D warnings'
   'run_logged_or_exit "rust_tests_full"'
   'run_logged_or_exit "rust_tests_smoke"'
   'run_logged_or_exit "execution_facade_lint"'
