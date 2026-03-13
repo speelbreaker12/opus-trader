@@ -30,7 +30,7 @@ Use **/contract-audit-full** when you need completeness/coverage.
 
 ## Confidence rule (hard)
 Only report a finding if **all** are true:
-1) You cite a specific contract section (`CONTRACT.md` §X.Y, `WORKFLOW_CONTRACT.md` §X, or `CLAUDE.md` rule) or Acceptance Test (AT-*).
+1) You cite a specific Contract section or Acceptance Test (AT-*).
 2) There is a concrete path to unsafe behavior.
 3) The fix is precise and implementable.
 
