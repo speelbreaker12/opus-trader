@@ -68,11 +68,10 @@ Flag when:
 - `/health` or `/status` payloads regress required keys/semantics in the touched code
 
 ## Exclusions (do NOT flag)
-- Test files (`*_test.rs`, `tests/`) unless the test itself creates a fail-open illusion (e.g., asserting success while bypassing gating, or asserting a wrong safety classification like `Close` for unknown intents)
+- Test files (`*_test.rs`, `tests/`) unless the test itself creates a fail-open illusion (e.g., asserting success while bypassing gating)
 - Documentation and comments
 - Python tooling scripts unless they are part of a safety gate used by CI/verify
 - Style preferences not codified in CLAUDE.md / contract
-- Shell scripts in `plans/` unless they implement a CI/verification safety gate (e.g., `verify.sh`, `preflight.sh`)
 
 ## Method (4 phases)
 
