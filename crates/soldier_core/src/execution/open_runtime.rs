@@ -25,7 +25,7 @@ use super::inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
     evaluate_inventory_skew,
 };
-use super::pipeline::run_shared_orchestration_tail;
+use super::orchestration_tail::run_orchestration_tail;
 use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
 use super::reject_reason::{GateRejectCodes, RejectReasonCode};
 use super::tlsm::Tlsm;
@@ -294,8 +294,13 @@ pub(crate) fn build_open_order_intent_runtime(
                             effective_risk_state = RiskState::Degraded;
                         }
                     }
-                    InventorySkewResult::Rejected { .. } => {
+                    InventorySkewResult::Rejected {
+                        adjusted_min_edge_usd: adjusted,
+                        ..
+                    } => {
                         gate_results.net_edge_passed = false;
+                        gate_reject_codes.net_edge_gate = Some(RejectReasonCode::NetEdgeTooLow);
+                        adjusted_min_edge_usd = adjusted;
                     }
                 }
 
@@ -328,7 +333,7 @@ pub(crate) fn build_open_order_intent_runtime(
     }
 
     gate_results.max_dispatch_qty = max_dispatch_qty;
-    let mut choke_result = run_shared_orchestration_tail(
+    let mut choke_result = run_orchestration_tail(
         ChokeIntentClass::Open,
         effective_risk_state,
         choke_metrics,

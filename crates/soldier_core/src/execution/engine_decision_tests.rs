@@ -97,7 +97,6 @@ fn open_l2_snapshot() -> ExecutionL2BookSnapshot {
 fn base_open_input() -> OpenExecutionInput<'static> {
     OpenExecutionInput {
         base: base_execution_input(),
-        gate_reject_codes: GateRejectCodes::default(),
         current_delta: 0.0,
         delta_impact_est: 10.0,
         liquidity: LiquidityExecutionInput {
@@ -697,6 +696,29 @@ fn open_runtime_step_maps_inventory_skew_on_adjusted_net_edge_reject() {
 }
 
 #[test]
+fn engine_open_inventory_skew_reject_maps_runtime_step() {
+    let mut input = base_open_input();
+    input.current_delta = 100.0;
+    input.inventory_skew.inventory_skew_k = 0.2;
+
+    let engine_book = make_pending_book(200.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::NetEdgeTooLow,
+            step: ExecutionStep::Runtime(RuntimeStep::InventorySkew),
+            ..
+        })
+    ));
+}
+
+#[test]
 fn open_runtime_override_reasons_map_to_registry_codes() {
     let input = base_open_input();
 
@@ -757,6 +779,21 @@ fn open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes() {
         decision,
         ExecutionDecision::Rejected(ExecutionRejection {
             code: RejectReasonCode::LiquidityGateNoL2,
+            ..
+        })
+    ));
+
+    output.gate_reject_codes = GateRejectCodes {
+        liquidity_gate: Some(RejectReasonCode::ExpectedSlippageTooHigh),
+        ..Default::default()
+    };
+
+    let decision = open_runtime_to_decision(&input, &output);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::ExpectedSlippageTooHigh,
             ..
         })
     ));

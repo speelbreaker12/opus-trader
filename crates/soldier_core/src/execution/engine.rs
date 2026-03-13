@@ -89,7 +89,6 @@ pub struct QuantizeExecutionInput {
 #[derive(Debug, Clone)]
 pub struct OpenExecutionInput<'a> {
     pub base: ExecutionBaseInput<'a>,
-    pub gate_reject_codes: GateRejectCodes,
     pub current_delta: f64,
     pub delta_impact_est: f64,
     pub liquidity: LiquidityExecutionInput,

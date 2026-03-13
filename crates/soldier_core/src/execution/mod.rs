@@ -69,6 +69,8 @@ mod open_runtime;
 #[cfg_attr(not(test), allow(dead_code))]
 mod order_size;
 #[cfg_attr(not(test), allow(dead_code))]
+mod orchestration_tail;
+#[cfg_attr(not(test), allow(dead_code))]
 mod pipeline;
 #[cfg_attr(not(test), allow(dead_code))]
 mod post_only_guard;
