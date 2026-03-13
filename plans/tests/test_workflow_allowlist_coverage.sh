@@ -58,6 +58,7 @@ required=(
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
+  plans/live_enable_preflight.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
   plans/pr_gate.sh
@@ -226,3 +227,5 @@ workflow_verify="$ROOT/plans/workflow_verify.sh"
 [[ -f "$workflow_verify" ]] || fail "missing workflow_verify.sh"
 grep -Fq 'check_script "plans/tests/test_preflight_diagnostics.sh"' "$workflow_verify" \
   || fail "workflow_verify missing plans/tests/test_preflight_diagnostics.sh syntax check"
+grep -Fq 'check_script "plans/live_enable_preflight.sh"' "$workflow_verify" \
+  || fail "workflow_verify missing plans/live_enable_preflight.sh syntax check"

@@ -538,6 +538,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
+  "plans/tests/test_live_enable_preflight.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"

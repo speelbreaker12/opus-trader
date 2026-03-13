@@ -50,6 +50,7 @@ plans/lib/rust_gates.sh
 plans/lib/status_reason_codegen_gate.sh
 plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
+plans/live_enable_preflight.sh
 plans/postmortem_template.md
 plans/pr_gate.sh
 plans/prd_audit_check.sh
