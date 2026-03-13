@@ -4,6 +4,11 @@ Status: **Complete** (verified 2026-03-05 on `wip/main-pre-sync-20260304`)
 Date: 2026-03-05
 Reference: `docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md` §PR3
 
+Follow-up status (2026-03-13): the active executable PR4 follow-up is the
+behavior-focused orchestration-consolidation plan at
+`/Users/admin/.claude/plans/glowing-booping-parasol.md`. Do not interpret this
+PR3 handoff as directing a new file-boundary-enforcement increment.
+
 ---
 
 ## 0) Intent
@@ -119,7 +124,18 @@ All PR3 scope items are complete on `wip/main-pre-sync-20260304`:
 - Legacy orchestration paths (`pipeline.rs`, `open_runtime.rs`) still exist as separate modules.
   PR4 creates one private internal execution runner and migrates tests off the legacy helpers.
 
-See: `docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md` §PR4 for the remaining scope.
+Executable follow-up note: the remaining PR4 work is now tracked by the
+2026-03-05 behavior-focused follow-up plan at
+`/Users/admin/.claude/plans/glowing-booping-parasol.md`, which narrows the
+increment to orchestration-tail consolidation inside existing modules.
+
+That live follow-up explicitly does not add `engine_bridge.rs`, does not move
+`ExecutionRuntime` or `RecordedBeforeDispatchGate`, and does not add an
+engine-boundary lint or a new public engine-contract integration test in this
+increment.
+
+Use `docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md` §PR4 as
+architectural background only.
 
 ---
 

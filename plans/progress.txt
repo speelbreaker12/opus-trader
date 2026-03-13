@@ -1084,3 +1084,10 @@ Commands: python3 -m py_compile tools/validate_status.py; python3 -m pytest test
 Evidence: specs/IMPLEMENTATION_PLAN.md; docs/health_endpoint.md; plans/phase_drift_closure_plan.md; tools/validate_status.py.
 Notes: This follow-up intentionally avoided adding fake validator enforcement for preflight/reconciliation because those facts are not derivable from a bare `/status` payload. Full `./plans/verify.sh quick` remains blocked in this worktree by the existing preflight timeout (`artifacts/verify/20260313_131323/FAILED_GATE` = `preflight`, rc=124).
 Next: If desired, propagate the same wording to any remaining reconciliation/roadmap docs that still describe foundation exit as plain `phase != foundation`.
+Story: docs-maintenance (Upgrade 1B canonical plan alignment)
+Date: 2026-03-13 19:10:23 UTC
+Summary: Aligned the stale Upgrade 1B planning docs with the newer March 5 follow-up so the repo now points at the behavior-focused orchestration-consolidation plan as the active executable PR4 path instead of the rejected private-bridge / engine-boundary-lint / public-engine-contract-coverage slice.
+Commands: sed -n '1,80p' docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md; sed -n '228,260p' docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md; sed -n '1,40p' docs/plans/2026-03-05-upgrade-1b-pr3-spec.md; sed -n '112,128p' docs/plans/2026-03-05-upgrade-1b-pr3-spec.md; sed -n '10,20p' .planning/STATE.md; apply_patch.
+Evidence: docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md; docs/plans/2026-03-05-upgrade-1b-pr3-spec.md; .planning/STATE.md; /Users/admin/.claude/plans/glowing-booping-parasol.md.
+Notes: This was a documentation/state-alignment pass only. No Rust or harness behavior changed.
+Next: If implementation resumes on Upgrade 1B follow-up work, treat `/Users/admin/.claude/plans/glowing-booping-parasol.md` as the canonical executable plan unless a newer superseding plan is written.

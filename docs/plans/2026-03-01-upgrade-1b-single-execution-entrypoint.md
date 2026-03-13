@@ -3,6 +3,20 @@
 Date: 2026-03-01
 Owner: execution facade follow-up
 
+## Status Note (2026-03-13)
+
+This document remains the architectural target for Upgrade 1B, but it is not the
+current step-by-step execution plan for the remaining PR4 follow-up.
+
+The active executable follow-up is the 2026-03-05 behavior-focused orchestration
+consolidation plan at `/Users/admin/.claude/plans/glowing-booping-parasol.md`.
+Use that plan for implementation sequencing.
+
+Do not read this document as authorizing a new file-boundary-enforcement slice
+(`engine_bridge.rs`, engine-boundary lint, `runtime.rs`, or a new public engine
+contract integration test) unless a newer plan explicitly supersedes the
+2026-03-05 follow-up.
+
 ## Goal
 
 Finish Upgrade 1B by making `ExecutionEngine::decide` the single public orchestration entrypoint for `soldier_core::execution`, with private internal wiring and a reduced facade surface.
@@ -226,6 +240,12 @@ If the pre-PR1 consumer audit finds non-execution consumers, log a follow-up sto
 - Gate wire structs are no longer externally required.
 
 ## PR4: Collapse Legacy Orchestration Surface
+
+Status note: the live PR4 follow-up was narrowed after the cleanup slice landed.
+Treat the scope below as the architectural end-state target, not the active
+execution checklist. The active follow-up keeps `engine.rs` in place and
+consolidates the remaining OPEN-vs-pipeline orchestration tail inside existing
+modules per `/Users/admin/.claude/plans/glowing-booping-parasol.md`.
 
 ### Scope
 
