@@ -1112,3 +1112,10 @@ Commands: git diff --binary > /tmp/opus_verify_current_20260313f.patch; git work
 Evidence: artifacts/verify/20260313_153930/verify.meta.json; artifacts/verify/20260313_155140/verify.meta.json; artifacts/verify/20260313_153930; artifacts/verify/20260313_155140.
 Notes: Both copied runs are green against HEAD `81a411cc9f6f` plus the current local dirty diff. Quick run `20260313_153930` finished `status=ok`; full run `20260313_155140` finished `status=ok`.
 Next: Treat `artifacts/verify/20260313_155140` as the current merge-readiness evidence until the local diff changes again.
+Story: S6-013
+Date: 2026-03-13 23:08:35 UTC
+Summary: Added canonical PRD story `S6-013` plus premortem `reviews/premortems/S6-013_premortem.md` to map the `UPGRADE-1B-PR4` execution-tail cleanup slice back into the repo proof workflow, then reran the mapping-sensitive review evidence so `/loss-risk-gate` no longer fails on missing traceability.
+Commands: rg -n "UPGRADE-1B-PR4|orchestration-tail|share execution tail" plans/prd.json reviews/premortems -S; bash plans/premortem_gate.sh S6-013; ./plans/prd_gate.sh.
+Evidence: plans/prd.json; reviews/premortems/S6-013_premortem.md; artifacts/story/UPGRADE-1B-PR4/self_review/REVIEW_STACK.md.
+Notes: `bash plans/premortem_gate.sh S6-013` passed with `STOPLIGHT: GREEN`. `./plans/prd_gate.sh` now clears `S6-013` itself and only reports an unrelated baseline backlog error on `S0-006` (`plans/live_enable_preflight.sh` already exists), so the old PR4 mapping blocker is resolved without claiming repo-wide PRD hygiene is green.
+Next: Commit the PRD/premortem mapping if you want the cleared `/loss-risk-gate` result preserved in git history, then address the unrelated `S0-006` PRD backlog issue separately before using `./plans/prd_gate.sh` as a repo-clean signal.
