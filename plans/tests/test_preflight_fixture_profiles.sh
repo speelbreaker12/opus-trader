@@ -173,7 +173,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "43" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 43)"
+[[ "$smoke_count" == "44" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 44)"
 [[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
 
 echo "PASS: preflight fixture profile mapping"
