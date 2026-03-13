@@ -143,6 +143,10 @@ For each NEW or MODIFIED guard/latch/gate:
 
 **Evidence:**
 <diff hunk or function name>
+
+---
+
+**Decision: FAIL** — N finding(s) require remediation before merge.
 ```
 
 ### When no findings exist
