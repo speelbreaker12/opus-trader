@@ -67,12 +67,6 @@ Flag when:
 - Any endpoint allows risk mutation or "set Active"
 - `/health` or `/status` payloads regress required keys/semantics in the touched code
 
-### 6) CI/verification gate weakening
-Flag when:
-- `verify.sh`, `preflight.sh`, or other CI gate scripts remove or skip safety checks (clippy, test timeouts, preflight gates)
-- Timeout guards are removed, allowing test hangs to block or silently pass CI
-- Safety gate calls are deleted from verification paths
-
 ## Exclusions (do NOT flag)
 - Test files (`*_test.rs`, `tests/`) unless the test itself creates a fail-open illusion (e.g., asserting success while bypassing gating)
 - Documentation and comments
