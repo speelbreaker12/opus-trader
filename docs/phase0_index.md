@@ -61,6 +61,7 @@ Runtime integration coverage:
 ## Enforcement
 
 - `tools/phase0_meta_test.py` (Phase 0 doc/evidence/runtime gate checks)
+- `plans/live_enable_preflight.sh` (canonical operator-facing Phase 0 live-enable wrapper over `tools/phase0_meta_test.py`)
 - `stoic-cli` (executable health/status/emergency command surface)
 - `plans/verify.sh` (verify entrypoint)
 - `plans/verify_fork.sh` (canonical verify gate implementation)

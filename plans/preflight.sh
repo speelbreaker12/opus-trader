@@ -113,6 +113,28 @@ select_monotonic_backend() {
   echo "epoch_seconds"
 }
 
+detect_parallel_jobs() {
+  local cpu_count=""
+  local max_parallel_jobs=8
+
+  if command -v sysctl >/dev/null 2>&1; then
+    cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+  fi
+
+  if [[ ! "$cpu_count" =~ ^[1-9][0-9]*$ ]] && command -v getconf >/dev/null 2>&1; then
+    cpu_count="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
+  fi
+
+  if [[ "$cpu_count" =~ ^[1-9][0-9]*$ ]]; then
+    if (( cpu_count > max_parallel_jobs )); then
+      cpu_count="$max_parallel_jobs"
+    fi
+    echo "$cpu_count"
+  else
+    echo 4
+  fi
+}
+
 MONOTONIC_BACKEND="$(select_monotonic_backend)"
 MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"
 
@@ -419,6 +441,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
+  "plans/tests/test_live_enable_preflight.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"
@@ -473,8 +496,12 @@ if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
 else
   pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
 
+  fixture_timeout_default=240
+  if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
+    fixture_timeout_default=300
+  fi
   PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
   if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
     setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
     PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
@@ -599,12 +626,7 @@ else
     # Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
-    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
-    PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-300}"
-    if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
-      setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
-      PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
-    fi
+    PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-$(detect_parallel_jobs)}"
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()

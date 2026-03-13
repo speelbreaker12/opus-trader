@@ -116,6 +116,7 @@ STOIC_DRILL_MODE=1 ./stoic-cli simulate-close --instrument <INSTRUMENT> --dry-ru
 Dashboard emergency controls are **V1-gated on endpoint verification**. The Force ReduceOnly button must remain disabled until
 `POST /api/v1/emergency/reduce_only` (or equivalent endpoint) has been positively verified in local integration checks.
 Until that verification is complete, incident response remains CLI-based only, and operators should continue using this runbook.
+If this HTTP control is later promoted to operator-facing use, that same rollout MUST refresh this runbook and the recorded drill procedure so the documented emergency action matches the live operator control.
 
 ---
 

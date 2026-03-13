@@ -362,10 +362,10 @@ fn remove_if_exists(path: &Path) {
     let _ = std::fs::remove_file(path);
 }
 
-// ─── AT-935: durable two-restart ────────────────────────────────────────
+// ─── AT-935: durable two-restart boundary ───────────────────────────────
 
 #[test]
-fn test_at935_unsent_dispatches_exactly_once_across_two_restarts() {
+fn test_at935_unsent_requires_fresh_post_restart_evaluation_across_two_restarts() {
     let wal_path = temp_wal_path("at935_once");
 
     // Phase 1: process records intent before any send.
@@ -385,37 +385,35 @@ fn test_at935_unsent_dispatches_exactly_once_across_two_restarts() {
         .expect("append should succeed");
     }
 
-    let mut dispatch_count = 0u32;
+    let replay_dispatch_count = 0u32;
 
-    // Restart #1: replay + reconcile, then dispatch once and mark sent.
+    // Restart #1: replay + reconcile preserve the recorded-but-unsent OPEN.
     {
-        let mut ledger = WalLedger::with_storage_path(100, &wal_path).expect("reload wal");
+        let ledger = WalLedger::with_storage_path(100, &wal_path).expect("reload wal");
         let replay = ledger.replay();
         assert_eq!(replay.records_replayed, 1);
         assert_eq!(replay.in_flight_count, 1);
-        assert!(!ledger.was_sent("intent-at935"));
-
-        if !ledger.was_sent("intent-at935") {
-            dispatch_count += 1;
-            let mut lm = LedgerMetrics::new();
-            ledger
-                .mark_sent("intent-at935", 2000, &mut lm)
-                .expect("mark_sent should succeed");
-        }
+        assert!(
+            !ledger.was_sent("intent-at935"),
+            "replay must preserve the recorded-but-unsent state"
+        );
     }
 
-    // Restart #2: replay must not cause a second dispatch.
+    // Restart #2: replay still preserves the recorded-but-unsent OPEN.
     {
         let ledger = WalLedger::with_storage_path(100, &wal_path).expect("reload wal #2");
-        assert!(ledger.was_sent("intent-at935"));
-        if !ledger.was_sent("intent-at935") {
-            dispatch_count += 1;
-        }
+        let replay = ledger.replay();
+        assert_eq!(replay.records_replayed, 1);
+        assert_eq!(replay.in_flight_count, 1);
+        assert!(
+            !ledger.was_sent("intent-at935"),
+            "replay/reconciliation alone must not mark the intent sent"
+        );
     }
 
     assert_eq!(
-        dispatch_count, 1,
-        "exactly one dispatch across two restarts"
+        replay_dispatch_count, 0,
+        "replay/reconciliation alone must not dispatch the recorded-but-unsent OPEN"
     );
     remove_if_exists(&wal_path);
 }

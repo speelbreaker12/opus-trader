@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERIFY="$ROOT/plans/verify_fork.sh"
 VERIFY_WRAPPER="$ROOT/plans/verify.sh"
 VERIFY_UTILS="$ROOT/plans/lib/verify_utils.sh"
+LIVE_ENABLE_PREFLIGHT="$ROOT/plans/live_enable_preflight.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -46,6 +47,15 @@ assert_line_before() {
 
 [[ -f "$VERIFY" ]] || fail "missing verify script: $VERIFY"
 [[ -f "$VERIFY_WRAPPER" ]] || fail "missing verify wrapper: $VERIFY_WRAPPER"
+[[ -f "$LIVE_ENABLE_PREFLIGHT" ]] || fail "missing phase0 live-enable wrapper: $LIVE_ENABLE_PREFLIGHT"
+
+if ! bash -n "$LIVE_ENABLE_PREFLIGHT"; then
+  fail "phase0 live-enable wrapper must parse with bash -n"
+fi
+
+if ! grep -Fq 'tools/phase0_meta_test.py --root "$ROOT"' "$LIVE_ENABLE_PREFLIGHT"; then
+  fail "phase0 live-enable wrapper must delegate to tools/phase0_meta_test.py"
+fi
 
 # Guardrail: status fixture gate names must use deterministic hash-based naming helper.
 assert_contains_line 'detect_status_fixture_hash_backend()'
@@ -136,6 +146,13 @@ assert_contains_line '"14cd) recon doc budget" "$ROOT/plans/recon_doc_budget.sh"
 assert_not_contains_line 'warn "recon_doc_budget skipped (missing plans/recon_doc_budget.sh)"'
 assert_line_before 'run_required_bash_gate "slice_execute_guard"' 'run_required_bash_gate "recon_doc_budget"'
 assert_line_before 'run_required_bash_gate "recon_doc_budget"' 'log "14d) doc sync check"'
+
+# Guardrail: Phase 0 live-enable gate must flow through the shell wrapper.
+assert_contains_line 'log "14b) phase0 meta-test"'
+assert_contains_line 'run_logged_or_exit "phase0_meta_test"'
+assert_contains_line 'env PYTHON_BIN="$PYTHON_BIN" bash "$ROOT/plans/live_enable_preflight.sh"'
+assert_not_contains_line '"$PYTHON_BIN" tools/phase0_meta_test.py --root "$ROOT"'
+assert_line_before 'log "14b) phase0 meta-test"' 'run_logged_or_exit "phase0_meta_test"'
 
 # Behavior checks: the helpers must be invocable and deterministic where possible.
 extract_fn() {

@@ -3,7 +3,7 @@
 **Purpose:** Phase 0 binds authority before code correctness is trusted.  
 If this is paperwork only, the rest of the roadmap is gameable.
 
-**Rule:** Phase 0 is DONE only if every item below is satisfied with required evidence.
+**Rule:** Phase 0 is DONE only if every item below is satisfied with required evidence and `bash ./plans/live_enable_preflight.sh` passes as the named live-enable preflight.
 
 Canonical narrative: `docs/phase0_acceptance.md`.
 
@@ -33,6 +33,9 @@ evidence/phase0/
 - `README.md`: 1-page owner summary (what was proven, what failed, remaining risks).
 - `ci_links.md`: links to CI runs + build IDs used for proof; if CI is not wired yet, include recorded local output for AUTO gates.
 - Snapshots are literal copies of sign-off docs (prevents silent edits after sign-off).
+- These artifacts are inputs to `bash ./plans/live_enable_preflight.sh`; evidence alone does not clear Phase 0 for live enablement unless that preflight passes.
+
+**Release gate:** `bash ./plans/live_enable_preflight.sh` MUST pass before live trading is enabled. Missing, unreadable, or invalid Phase 0 evidence is a fail-closed block.
 
 <!-- REQUIRED_EVIDENCE: evidence/phase0/README.md -->
 <!-- REQUIRED_EVIDENCE: evidence/phase0/ci_links.md -->

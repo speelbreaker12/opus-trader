@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="${README_CI_PARITY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 
 README="README.md"
@@ -10,6 +10,63 @@ CI_WORKFLOW=".github/workflows/ci.yml"
 fail() {
   echo "FAIL: $*" >&2
   exit 1
+}
+
+emit_pattern_hits() {
+  local file="$1"
+  local pattern="$2"
+
+  grep -HEn -- "$pattern" "$file" >&2 || true
+}
+
+fail_with_pattern_hits() {
+  local message="$1"
+  local file="$2"
+  local pattern="$3"
+
+  echo "FAIL: $message" >&2
+  emit_pattern_hits "$file" "$pattern"
+  exit 1
+}
+
+list_ci_jobs() {
+  local jobs=""
+
+  jobs="$(
+    awk '
+      /^jobs:/ {in_jobs=1; next}
+      in_jobs && /^[^[:space:]]/ {exit}
+      in_jobs && /^  [A-Za-z0-9_-]+:/ {
+        job=$1
+        sub(/:$/, "", job)
+        print job
+      }
+    ' "$CI_WORKFLOW" | paste -sd' ' -
+  )"
+
+  if [[ -n "$jobs" ]]; then
+    echo "$jobs"
+  else
+    echo "<none>"
+  fi
+}
+
+fail_missing_job_section() {
+  local job_name="$1"
+
+  echo "FAIL: unable to parse $job_name job from $CI_WORKFLOW" >&2
+  echo "discovered jobs: $(list_ci_jobs)" >&2
+  exit 1
+}
+
+extract_job_section() {
+  local job_name="$1"
+
+  awk -v job_name="$job_name" '
+    $0 ~ ("^  " job_name ":") {in_job=1}
+    in_job && $0 ~ /^  [A-Za-z0-9_-]+:/ && $0 !~ ("^  " job_name ":") {exit}
+    in_job {print}
+  ' "$CI_WORKFLOW"
 }
 
 require_file_token() {
@@ -25,7 +82,7 @@ forbid_file_regex() {
   local pattern="$2"
   local reason="$3"
   if grep -Eq "$pattern" "$file"; then
-    fail "$file contains forbidden reference ($reason): $pattern"
+    fail_with_pattern_hits "$file contains forbidden reference ($reason): $pattern" "$file" "$pattern"
   fi
 }
 
@@ -44,15 +101,9 @@ forbid_file_regex "$README" '(^|[^.[:alnum:]_])\./verify\.sh([[:space:]]|$)' "no
 forbid_file_regex "$README" 'ralph-verify-push|workflow_acceptance|(^|[^[:alnum:]_])ralph([^[:alnum:]_]|$)' "legacy workflow command"
 forbid_file_regex "$README" '(^|[^[:alnum:]_])bootstrap([^[:alnum:]_]|$)' "legacy bootstrap flow"
 
-verify_section="$(
-  awk '
-    /^  verify:/ {in_verify=1}
-    in_verify && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  verify:/ {exit}
-    in_verify {print}
-  ' "$CI_WORKFLOW"
-)"
+verify_section="$(extract_job_section verify)"
 
-[[ -n "$verify_section" ]] || fail "unable to parse verify job from $CI_WORKFLOW"
+[[ -n "$verify_section" ]] || fail_missing_job_section "verify"
 
 require_section_token() {
   local token="$1"
@@ -65,7 +116,7 @@ forbid_section_regex() {
   local pattern="$1"
   local reason="$2"
   if printf '%s\n' "$verify_section" | grep -Eq "$pattern"; then
-    fail "$CI_WORKFLOW verify job contains forbidden reference ($reason): $pattern"
+    fail_with_pattern_hits "$CI_WORKFLOW verify job contains forbidden reference ($reason): $pattern" "$CI_WORKFLOW" "$pattern"
   fi
 }
 
@@ -86,15 +137,9 @@ require_file_token "$CI_WORKFLOW" "pull_request_review:"
 require_file_token "$CI_WORKFLOW" "pull_request_review_comment:"
 require_file_token "$CI_WORKFLOW" "issue_comment:"
 
-prd_story_gate_section="$(
-  awk '
-    /^  prd-story-gate:/ {in_gate=1; next}
-    in_gate && /^  [A-Za-z0-9_-]+:/ && $0 !~ /^  prd-story-gate:/ {exit}
-    in_gate {print}
-  ' "$CI_WORKFLOW"
-)"
+prd_story_gate_section="$(extract_job_section prd-story-gate)"
 
-[[ -n "$prd_story_gate_section" ]] || fail "unable to parse prd-story-gate job from $CI_WORKFLOW"
+[[ -n "$prd_story_gate_section" ]] || fail_missing_job_section "prd-story-gate"
 
 require_prd_story_gate_token() {
   local token="$1"
@@ -107,7 +152,7 @@ forbid_prd_story_gate_regex() {
   local pattern="$1"
   local reason="$2"
   if printf '%s\n' "$prd_story_gate_section" | grep -Eq -- "$pattern"; then
-    fail "$CI_WORKFLOW prd-story-gate job contains forbidden reference ($reason): $pattern"
+    fail_with_pattern_hits "$CI_WORKFLOW prd-story-gate job contains forbidden reference ($reason): $pattern" "$CI_WORKFLOW" "$pattern"
   fi
 }
 
