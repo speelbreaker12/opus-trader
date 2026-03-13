@@ -1091,3 +1091,10 @@ Commands: sed -n '1,80p' docs/plans/2026-03-01-upgrade-1b-single-execution-entry
 Evidence: docs/plans/2026-03-01-upgrade-1b-single-execution-entrypoint.md; docs/plans/2026-03-05-upgrade-1b-pr3-spec.md; .planning/STATE.md; /Users/admin/.claude/plans/glowing-booping-parasol.md.
 Notes: This was a documentation/state-alignment pass only. No Rust or harness behavior changed.
 Next: If implementation resumes on Upgrade 1B follow-up work, treat `/Users/admin/.claude/plans/glowing-booping-parasol.md` as the canonical executable plan unless a newer superseding plan is written.
+Story: wal-contract-reconcile
+Date: 2026-03-13 22:10:25 UTC
+Summary: Reconciled the remaining WAL isolation wording with the existing `RecordedBeforeDispatch` contract so OPEN dispatch requires `WALRecorded` (and `WALDurable` when configured), tightened the nearby AT language around enqueue failure and pre-`WALRecorded` dispatch, and refreshed `docs/contract_kernel.json` to the resulting contract hash.
+Commands: python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs; python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json; bash plans/verify_gate_contract_check.sh.
+Evidence: specs/CONTRACT.md; docs/contract_kernel.json.
+Notes: This slice is contract/kernel-only; it does not include the separate gate-ordering test dirt still present in the worktree.
+Next: If this WAL clarification is meant to drive implementation follow-up, add the missing executable gate-ordering proof separately instead of treating this wording sync as sufficient runtime evidence.

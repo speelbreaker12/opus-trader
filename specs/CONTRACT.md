@@ -3311,11 +3311,15 @@ Profile: CSP
 
 > **Architecture boundary (Normative):** The fsync/durability barrier MUST execute
 > in the WAL writer task (a separate async task), NOT in the hot loop that calls
-> `RecordedBeforeDispatch`. The hot-loop gate succeeds upon successful **enqueue**
-> into the bounded channel. If the channel is full, the gate MUST fail closed
-> (reject OPEN). The WAL writer task may block on fsync with a bounded timeout;
-> if fsync times out or errors, the writer MUST signal degraded state and the next
-> OPEN gate attempt MUST fail closed.
+> `RecordedBeforeDispatch`. `RecordedBeforeDispatch` is satisfied for OPEN only
+> after the intent first reaches `WALQueueAccepted` **and** the WAL writer
+> returns `WALRecorded`; `WALQueueAccepted` alone is not sufficient for OPEN
+> dispatch. If the channel is full, enqueue fails, or `WALRecorded` cannot be
+> obtained, the gate MUST fail closed (reject OPEN). If durable-before-dispatch
+> is configured, OPEN dispatch additionally requires `WALDurable`. The WAL
+> writer task may block on fsync with a bounded timeout; if fsync times out or
+> errors, the writer MUST signal degraded state and the next OPEN gate attempt
+> MUST fail closed.
 
 **Hot-loop output queue backpressure (Non-Negotiable):**
 - All hot-loop output queues (status writer, telemetry, order events) MUST be bounded.
@@ -3368,15 +3372,15 @@ AT-906
 - Given: WAL appends use a bounded queue of capacity N, and the WAL writer is stalled so the queue reaches N items.
 - When: an OPEN intent is evaluated and the system attempts `WALQueueAccepted` enqueue (a prerequisite for `RecordedBeforeDispatch`).
 - Then: the OPEN intent is rejected before dispatch, `wal_write_errors` increments, and the hot loop continues ticking.
-- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked until enqueue succeeds.
+- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked while enqueue fails and until a later evaluation obtains the required writer acknowledgment.
 - Fail criteria: hot loop blocks, an OPEN dispatch occurs without a successful enqueue, `wal_write_errors` does not increment, or opens remain allowed while enqueue fails.
 
 AT-1215
 - Given: `WALQueueAccepted` and `WALRecorded` succeed for an OPEN intent, all other OPEN gates are forced pass, and the intent is evaluated exactly once.
 - When: dispatch authorization runs.
-- Then: exactly one OPEN dispatch attempt occurs.
-- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`.
-- Fail criteria: dispatch count is 0 despite successful WAL recording, or >1 for the same intent.
+- Then: exactly one OPEN dispatch attempt occurs, and no dispatch attempt occurs before `WALRecorded` is received.
+- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`; the dispatch occurs only after `WALRecorded`.
+- Fail criteria: dispatch count is 0 despite successful WAL recording, any dispatch occurs before `WALRecorded`, or dispatch count > 1 for the same intent.
 
 AT-1232
 - Given: `WALQueueAccepted` succeeds for an OPEN intent, all other OPEN gates are forced pass, but the WAL writer withholds or fails `WALRecorded` for that intent.
@@ -6553,4 +6557,5 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-12 | CCL-2026-03-12-01 | §0.X; §1.1.1-§1.2; §2.4-§2.4.1; Phase 1 completion notes; Appendix CONTRACT_CHANGE_LEDGER | clarify | Preserve the branch-only Phase 1 contract hardening note for canonical crate-path references, quantization/idempotency ordering, WAL `reduce_only` recovery semantics, and Phase 1/TLSM acceptance clarifications after merging the newer mainline ledger entries. | Keep the PR 182 contract delta auditable without reusing superseded ledger IDs from the pre-main-sync branch history. | AT-104, AT-218, AT-219, AT-928, AT-TLSM-02, AT-TLSM-06, AT-P0E-NEG | PR-182 |
 | 2026-03-07 | CCL-2026-03-07-01 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Remove the enqueue-as-success ambiguity by restating that `RecordedBeforeDispatch` for OPEN requires `WALRecorded` (plus `WALDurable` when configured), and tighten the nearby ATs so enqueue failure and pre-`WALRecorded` authorization remain fail-closed. | Prevent crash/restart replay drift or duplicate exposure caused by treating bounded-queue enqueue success as sufficient dispatch authorization. | AT-906, AT-1215, AT-1232, AT-935 | local/recorded-before-dispatch-fix |
 | 2026-03-07 | CCL-2026-03-07-02 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Phase 1 roadmap/AT subset; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Pull the conservative restart-safety boundary into Phase 1: replay/reconciliation preserves recorded-but-unsent OPENs for reconciliation and later fresh evaluation, but replay alone never authorizes a fresh OPEN dispatch. | Remove the remaining Phase 1/PRD contradiction for restart behavior while preserving fail-closed no-duplicate-send semantics across restarts. | AT-233, AT-234, AT-935 | local/phase1-restart-safety-boundary |
+| 2026-03-13 | CCL-2026-03-13-01 | §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Reconcile the active branch's WAL isolation text with the already-present `RecordedBeforeDispatch` rule so OPEN dispatch requires `WALRecorded` (and `WALDurable` when configured), not enqueue-only success. | Remove the remaining internal contract split that could otherwise imply enqueue success is sufficient dispatch authorization despite the surrounding WAL invariants and AT map. | AT-906, AT-1215, AT-1232, AT-935 | local/main-wal-contract-reconcile |
 | 2026-03-13 | CCL-2026-03-13-02 | Phase 0 prerequisites; §7.0 status surface split; Phase 2 rule; Appendix CONTRACT_CHANGE_LEDGER | clarify | Bind the existing Phase 0 preflight to any legal transition out of foundation mode and require the `/api/v1/status` authority handoff from status-lite to CSP minimum schema to occur atomically in the same control-path. | Prevent non-foundation status authority from being activated by local convention or split control-paths before Phase 2 deployable readiness and reconciliation are satisfied. | AT-1230, AT-1233, AT-1234, AT-1238, AT-023 | local/foundation-exit-authority-boundary |
