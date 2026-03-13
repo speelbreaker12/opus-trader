@@ -136,6 +136,7 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_preflight_diagnostics.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
