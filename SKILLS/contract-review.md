@@ -95,7 +95,7 @@ rg -n "PolicyGuard|TradingMode|Open Permission|RecordedBeforeDispatch|WAL|reconc
 
 ### Phase 2 — Pattern scan
 ```bash
-git diff main...HEAD -- '*.rs' | rg -n "\.unwrap\(|\.expect\(|let _ =|\.ok\(\)|unwrap_or_default"
+git diff main...HEAD -- '*.rs' | rg -n "\.unwrap\(|\.expect\(|let _ =|\.ok\(\)|unwrap_or_default|unwrap_or\(TradingMode::Active\)"
 ```
 Then inspect touched files for:
 - Where is dispatch authorization enforced?
