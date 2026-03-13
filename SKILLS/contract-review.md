@@ -127,7 +127,7 @@ For each NEW or MODIFIED guard/latch/gate:
 ### [CRITICAL|HIGH|MEDIUM|LOW] <title>
 **File:** path/to/file.rs:123
 **Contract Ref:** §X.Y.Z or AT-###
-**Category:** Fail-Open | PolicyGuard | Intent | Execution | Endpoint
+**Category:** Fail-Open | PolicyGuard | Intent | Execution | Endpoint | Workflow
 
 **What changed:**
 <one sentence>
