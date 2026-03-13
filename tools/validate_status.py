@@ -4,6 +4,11 @@ tools/validate_status.py (v4)
 
 Contract-enforced /status validator for CSP + Phase 0/1 foundation status-lite.
 
+This validator proves payload-shape and field-semantics compliance for the observed
+status document. It does not, by itself, prove the separate control-path
+preconditions that the contract requires for a legal transition out of foundation
+mode (for example Phase 0 preflight passage or reconciliation completion).
+
 Validates:
   - JSONSchema (Draft 2020-12)
   - Phase-aware contract checks:
@@ -149,6 +154,7 @@ def is_foundation_status(status: dict[str, Any]) -> bool:
 
 
 def foundation_exit_condition(status: dict[str, Any]) -> bool:
+    """Observed status predicate from the payload, not proof of a legal transition."""
     return not is_foundation_status(status)
 
 
@@ -571,7 +577,9 @@ Examples:
             eprint(f"Error loading status: {ex}")
         return 2
 
-    # Resolve phase-aware schema path
+    # Resolve phase-aware schema path from the observed payload only.
+    # The validator does not attempt to prove the contract's separate legal
+    # foundation-exit preconditions from a bare status document.
     if args.schema:
         schema_path = Path(args.schema)
     else:
