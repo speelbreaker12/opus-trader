@@ -54,6 +54,7 @@ rewrite_fixture_arrays_repeated_dummy() {
   local in_smoke=0
   local in_full=0
 
+  : > "$tmp_file"
   while IFS= read -r line; do
     if [[ "$line" == 'SMOKE_REVIEW_FIXTURE_TESTS=(' ]]; then
       printf '%s\n' "$line" >> "$tmp_file"

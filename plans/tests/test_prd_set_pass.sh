@@ -207,10 +207,11 @@ custom_gate_fail_case="$tmp_dir/custom_gate_fail"
 mkdir -p "$custom_gate_fail_case"
 setup_case "$custom_gate_fail_case" "$head_sha"
 
-r3_manifest_dir="$ROOT/reviews/reconciliations/S99/external/cycle1/$story_id"
-r7_manifest_dir="$ROOT/reviews/reconciliations/S99/external/cycle2/$story_id"
+manifest_test_root="$ROOT/reviews/reconciliations/S99"
+r3_manifest_dir="$manifest_test_root/external/cycle1/$story_id"
+r7_manifest_dir="$manifest_test_root/external/cycle2/$story_id"
 mkdir -p "$r3_manifest_dir" "$r7_manifest_dir"
-external_manifest_temp_dirs+=("$r3_manifest_dir" "$r7_manifest_dir")
+external_manifest_temp_dirs+=("$manifest_test_root")
 printf '{}\n' > "$r3_manifest_dir/R3_EXTERNAL_MANIFEST.json"
 printf '{}\n' > "$r7_manifest_dir/R7_EXTERNAL_MANIFEST.json"
 
