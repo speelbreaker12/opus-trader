@@ -1,17 +1,18 @@
-# SKILL: /review-stack (6-Skill Review Stack)
+# SKILL: /review-stack (7-Skill Review Stack)
 
 Purpose
-- Run the full 6-skill review stack in sequence, collecting findings into a single artifact
+- Run the full 7-skill review stack in sequence, collecting findings into a single artifact
 - Most thorough single-pass review available — subsumes `/self-review` (5-skill)
 - Produces a structured aggregate report with per-skill verdicts and a final decision
 
-The 6 skills, in order:
+The 7 skills, in order:
 1. **PR Review** — correctness, conventions, performance, testing
 2. **Failure-Mode Review** — implementation-level failure analysis (caching, state, integrations, error paths)
 3. **Strategic Failure Review** — architectural, systemic, operational risks
 4. **Contract Review** — fail-open hazards, CONTRACT.md alignment
 5. **Validator Audit** — missing validations in rule-based validators
 6. **Devils Advocate** — mutation testing: write wrong impls that pass the test suite
+7. **Loss-Risk Gate** — trading loss / profit-block review for economic safety and simpler fail-closed design
 
 When to use
 - Full PR/change review (the "everything" option)
@@ -48,6 +49,7 @@ Each skill has a full definition file in `SKILLS/`. Read the relevant file befor
 | 4 | `/contract-review` | `SKILLS/contract-review.md` | Fail-open patterns, PolicyGuard/TradingMode enforcement, intent classification, execution layer, owner endpoints |
 | 5 | `/validator-audit` | `SKILLS/validator-audit.md` | Missing validations, enum exhaustiveness, field coverage, paper compliance, merge invariants |
 | 6 | `/devils-advocate` | `SKILLS/devils-advocate.md` | Mutation testing: wrong impls that pass, simpler-than-correct gate, TRIP/NON-TRIP isolation |
+| 7 | `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block review, economic safety, simpler fail-closed alternative audit |
 
 ---
 
@@ -123,6 +125,14 @@ Read `SKILLS/devils-advocate.md`.
 
 **Record:** Mutations attempted / gaps found / tests added, Simpler-than-correct gate: PASS / BLOCKED
 
+### Phase 7 — Loss-Risk Gate (`/loss-risk-gate`)
+
+Read `SKILLS/loss-risk-gate.md`.
+
+**Skip condition:** If the diff does not touch risk, dispatch, reconciliation, position state, intent classification, market-data freshness, permissions, or fail-closed logic, skip. Record `SKIPPED (no economic-safety surface changed)`.
+
+**Record:** Verdict: GO / NO-GO, Trading Lens: PASS / HARDENING / BLOCKING
+
 ---
 
 ## Aggregate Decision
@@ -130,8 +140,12 @@ Read `SKILLS/devils-advocate.md`.
 ```
 if any phase == FAIL or BLOCKED:
     DECISION = FAIL
+elif loss_risk_gate.verdict == "NO-GO" or loss_risk_gate.trading_lens == BLOCKING:
+    DECISION = FAIL
 elif any phase == CONCERNS:
     DECISION = CONDITIONAL_PASS (list concerns)
+elif loss_risk_gate.trading_lens == HARDENING:
+    DECISION = CONDITIONAL_PASS (list hardening items)
 else:
     DECISION = PASS
 ```
@@ -155,7 +169,7 @@ After fixes, update the artifact with the final verdicts.
 Write to `artifacts/story/${STORY_ID}/self_review/`:
 
 ```markdown
-# 6-Skill Review Stack — ${STORY_ID}
+# 7-Skill Review Stack — ${STORY_ID}
 
 Story: ${STORY_ID}
 HEAD: ${HEAD}
@@ -173,6 +187,7 @@ Decision: ${DECISION}
 | 4 | /contract-review | PASS/FAIL/SKIPPED | C:0 H:0 M:0 L:0 |
 | 5 | /validator-audit | PASS/CONCERNS/SKIPPED | N gaps |
 | 6 | /devils-advocate | PASS/BLOCKED/SKIPPED | N mutations, N gaps |
+| 7 | /loss-risk-gate | GO/NO-GO/SKIPPED | Lens: PASS/HARDENING/BLOCKING |
 
 ## PR Review Findings
 <findings from phase 1, or "None">
@@ -191,6 +206,9 @@ Decision: ${DECISION}
 
 ## Devils Advocate Results
 <findings from phase 6, or "None — skipped">
+
+## Loss-Risk Gate Results
+<verdict, trading lens, findings, or "None — skipped">
 
 ## Risks / Follow-ups
 <aggregate list of unresolved concerns, deferred items>
@@ -218,7 +236,7 @@ If Phase 4 ran, also write `contract_review.json`:
 ## Exit Criteria
 
 The skill is complete when:
-1. All 6 phases have run (or been legitimately skipped with documented reason)
+1. All 7 phases have run (or been legitimately skipped with documented reason)
 2. The aggregate decision is PASS or CONDITIONAL_PASS
 3. The review artifact is written with all findings documented
 4. Any fixes applied during review are committed

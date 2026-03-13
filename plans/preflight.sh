@@ -186,6 +186,100 @@ warn() {
   ((WARN_COUNT++)) || true
 }
 
+PREFLIGHT_DIAG_SCHEMA_VERSION=1
+PREFLIGHT_DIAG_FIXTURE_MODE="$PREFLIGHT_FIXTURE_MODE"
+PREFLIGHT_DIAG_FIXTURE_TEST_COUNT=0
+PREFLIGHT_DIAG_CACHE_STATE="not_evaluated"
+PREFLIGHT_DIAG_HASH_STRATEGY="not_evaluated"
+PREFLIGHT_DIAG_CACHE_REASONS=()
+PREFLIGHT_DIAG_PARALLEL_JOBS=0
+PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS=0
+PREFLIGHT_DIAG_FIXTURE_RUNTIME_SECONDS=0
+PREFLIGHT_DIAG_CACHE_FILE=""
+PREFLIGHT_DIAG_ARTIFACT_PATH=""
+if [[ -n "${VERIFY_ARTIFACTS_DIR:-}" ]]; then
+  PREFLIGHT_DIAG_ARTIFACT_PATH="${VERIFY_ARTIFACTS_DIR}/preflight_diagnostics.json"
+fi
+
+preflight_diag_add_reason() {
+  local reason="$1"
+  local existing=""
+  [[ -n "$reason" ]] || return 0
+  for existing in "${PREFLIGHT_DIAG_CACHE_REASONS[@]-}"; do
+    [[ -n "$existing" ]] || continue
+    if [[ "$existing" == "$reason" ]]; then
+      return 0
+    fi
+  done
+  PREFLIGHT_DIAG_CACHE_REASONS+=("$reason")
+}
+
+preflight_diag_json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
+}
+
+preflight_diag_json_array() {
+  local item=""
+  local first=1
+  printf '['
+  for item in "$@"; do
+    [[ -n "$item" ]] || continue
+    if [[ "$first" -eq 0 ]]; then
+      printf ', '
+    fi
+    printf '"%s"' "$(preflight_diag_json_escape "$item")"
+    first=0
+  done
+  printf ']'
+}
+
+preflight_diag_join_reasons() {
+  local joined=""
+  local item=""
+  for item in "${PREFLIGHT_DIAG_CACHE_REASONS[@]-}"; do
+    [[ -n "$item" ]] || continue
+    if [[ -n "$joined" ]]; then
+      joined="${joined},"
+    fi
+    joined="${joined}${item}"
+  done
+  if [[ -z "$joined" ]]; then
+    joined="none"
+  fi
+  printf '%s\n' "$joined"
+}
+
+preflight_diag_emit() {
+  local reasons_summary=""
+  reasons_summary="$(preflight_diag_join_reasons)"
+
+  if [[ -n "$PREFLIGHT_DIAG_ARTIFACT_PATH" ]]; then
+    mkdir -p "$(dirname "$PREFLIGHT_DIAG_ARTIFACT_PATH")"
+    cat > "$PREFLIGHT_DIAG_ARTIFACT_PATH" <<EOF
+{
+  "schema_version": $PREFLIGHT_DIAG_SCHEMA_VERSION,
+  "fixture_mode": "$(preflight_diag_json_escape "$PREFLIGHT_DIAG_FIXTURE_MODE")",
+  "fixture_test_count": $PREFLIGHT_DIAG_FIXTURE_TEST_COUNT,
+  "cache_state": "$(preflight_diag_json_escape "$PREFLIGHT_DIAG_CACHE_STATE")",
+  "hash_strategy": "$(preflight_diag_json_escape "$PREFLIGHT_DIAG_HASH_STRATEGY")",
+  "cache_reasons": $(preflight_diag_json_array "${PREFLIGHT_DIAG_CACHE_REASONS[@]-}"),
+  "parallel_jobs": $PREFLIGHT_DIAG_PARALLEL_JOBS,
+  "fixture_timeout_seconds": $PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS,
+  "fixture_runtime_seconds": $PREFLIGHT_DIAG_FIXTURE_RUNTIME_SECONDS,
+  "cache_file": "$(preflight_diag_json_escape "$PREFLIGHT_DIAG_CACHE_FILE")"
+}
+EOF
+  fi
+
+  echo "preflight diagnostics: fixture_mode=$PREFLIGHT_DIAG_FIXTURE_MODE tests=$PREFLIGHT_DIAG_FIXTURE_TEST_COUNT cache=$PREFLIGHT_DIAG_CACHE_STATE hash=$PREFLIGHT_DIAG_HASH_STRATEGY reasons=$reasons_summary"
+}
+
 PREFLIGHT_WAIT_N_MODE="${PREFLIGHT_WAIT_N_MODE:-auto}"
 case "$PREFLIGHT_WAIT_N_MODE" in
   auto|force_on|force_off) ;;
@@ -436,6 +530,7 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_fork_attestation_mirror.sh"
   "plans/tests/test_workflow_quick_step.sh"
   "plans/tests/test_toggle_policy_check.sh"
+  "plans/tests/test_preflight_diagnostics.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
   "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
@@ -490,8 +585,13 @@ REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
   REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
 fi
+PREFLIGHT_DIAG_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"
+PREFLIGHT_DIAG_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+fixture_diag_started_ns="$(now_monotonic_ns)"
 
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
+  PREFLIGHT_DIAG_CACHE_STATE="skipped"
+  PREFLIGHT_DIAG_HASH_STRATEGY="skipped"
   pass "Fixture tests skipped (mode=none)"
 else
   pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"
@@ -502,26 +602,35 @@ else
   fi
   PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
   PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
+  PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS="$PREFLIGHT_FIXTURE_TEST_TIMEOUT"
   if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
     setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
     PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
     PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
+    PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS=0
   fi
 
   # --- Fixture cache ---
   # Cache key = SHA256 of all workflow/tool/spec files that fixture tests depend on.
   # Broad scope prevents stale cache from missed dependencies.
   PREFLIGHT_NO_CACHE="${PREFLIGHT_NO_CACHE:-0}"
+  if [[ "$PREFLIGHT_NO_CACHE" == "1" ]]; then
+    preflight_diag_add_reason "requested_no_cache"
+  fi
   # --strict implies thoroughness: disable cache to ensure all tests actually run
   if [[ "$STRICT_MODE" == "1" ]]; then
+    preflight_diag_add_reason "strict_mode"
     PREFLIGHT_NO_CACHE=1
   fi
   if [[ "$PREFLIGHT_FIXTURE_TIMEOUT_INVALID" == "1" ]]; then
+    preflight_diag_add_reason "invalid_fixture_timeout"
     PREFLIGHT_NO_CACHE=1
   fi
   _cache_dir="$ROOT/.cache"
   _cache_file="$_cache_dir/preflight_fixtures_${PREFLIGHT_FIXTURE_MODE}.hash"
+  PREFLIGHT_DIAG_CACHE_FILE="${_cache_file#$ROOT/}"
   _cache_hit=0
+  PREFLIGHT_COMPUTED_FIXTURE_HASH=""
 
   _compute_fixture_hash_from_list() {
     local _file_list="$1"
@@ -580,8 +689,19 @@ else
     local fast_hash=""
     local fallback_hash=""
     local untracked_scoped=""
+    PREFLIGHT_COMPUTED_FIXTURE_HASH=""
 
     if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      if ! git diff --quiet --cached --; then
+        preflight_diag_add_reason "dirty_index"
+      fi
+      if ! git diff --quiet --; then
+        preflight_diag_add_reason "dirty_worktree"
+      fi
+      untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null || true)"
+      if [[ -n "$untracked_scoped" ]]; then
+        preflight_diag_add_reason "scoped_untracked_files_present"
+      fi
       if git diff --quiet --cached -- \
         && git diff --quiet -- \
         && untracked_scoped="$(git ls-files --others --exclude-standard -- plans specs SKILLS tools scripts 2>/dev/null)" \
@@ -590,36 +710,62 @@ else
         if [[ -n "$fast_file_list" ]]; then
           if fast_hash="$(_compute_fixture_hash_from_list "$fast_file_list")"; then
             if [[ "$fast_hash" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "$fast_hash"
+              PREFLIGHT_DIAG_HASH_STRATEGY="fast_git_tracked"
+              PREFLIGHT_COMPUTED_FIXTURE_HASH="$fast_hash"
               return 0
             fi
           fi
         fi
+      else
+        PREFLIGHT_DIAG_HASH_STRATEGY="fallback_scan"
       fi
+    else
+      preflight_diag_add_reason "git_unavailable"
     fi
 
     # Falling back to full fixture hash scan
+    PREFLIGHT_DIAG_HASH_STRATEGY="fallback_scan"
     if fallback_hash="$(_compute_fixture_hash_fallback)"; then
-      echo "$fallback_hash"
+      PREFLIGHT_COMPUTED_FIXTURE_HASH="$fallback_hash"
       return 0
     fi
 
-    printf '%s\n' "preflight-fixture-hash-empty" | shasum -a 256 | cut -d' ' -f1
+    PREFLIGHT_COMPUTED_FIXTURE_HASH="$(printf '%s\n' "preflight-fixture-hash-empty" | shasum -a 256 | cut -d' ' -f1)"
+    return 0
   }
 
   # Validate shasum is available (fail-closed: if missing, skip cache entirely)
   if ! command -v shasum >/dev/null 2>&1; then
+    preflight_diag_add_reason "missing_shasum"
     PREFLIGHT_NO_CACHE=1
   fi
 
-  if [[ "$PREFLIGHT_NO_CACHE" != "1" && -f "$_cache_file" ]]; then
-    _cached_hash="$(cat "$_cache_file" 2>/dev/null || true)"
-    _current_hash="$(_compute_fixture_hash)"
-    # Guard against degenerate hash (empty or all-zeros from broken shasum)
-    if [[ -n "$_current_hash" && ${#_current_hash} -ge 60 && -n "$_cached_hash" && "$_cached_hash" == "$_current_hash" ]]; then
-      _cache_hit=1
-      pass "Fixture tests (cached, ${#REVIEW_FIXTURE_TESTS[@]} tests)"
+  if [[ "$PREFLIGHT_NO_CACHE" != "1" ]]; then
+    _compute_fixture_hash
+    _current_hash="$PREFLIGHT_COMPUTED_FIXTURE_HASH"
+    if [[ -f "$_cache_file" ]]; then
+      _cached_hash="$(cat "$_cache_file" 2>/dev/null || true)"
+      # Guard against degenerate hash (empty or all-zeros from broken shasum)
+      if [[ -n "$_current_hash" && ${#_current_hash} -ge 60 && -n "$_cached_hash" && "$_cached_hash" == "$_current_hash" ]]; then
+        _cache_hit=1
+        pass "Fixture tests (cached, ${#REVIEW_FIXTURE_TESTS[@]} tests)"
+      else
+        preflight_diag_add_reason "cache_hash_mismatch"
+      fi
+    else
+      preflight_diag_add_reason "cache_file_missing"
     fi
+  fi
+
+  if [[ "$PREFLIGHT_NO_CACHE" == "1" ]]; then
+    PREFLIGHT_DIAG_CACHE_STATE="disabled"
+    if [[ "$PREFLIGHT_DIAG_HASH_STRATEGY" == "not_evaluated" ]]; then
+      PREFLIGHT_DIAG_HASH_STRATEGY="skipped"
+    fi
+  elif [[ "$_cache_hit" == "1" ]]; then
+    PREFLIGHT_DIAG_CACHE_STATE="hit"
+  else
+    PREFLIGHT_DIAG_CACHE_STATE="miss"
   fi
 
   if [[ "$_cache_hit" == "0" ]]; then
@@ -723,7 +869,10 @@ else
     # Cache write is best-effort — failure must not kill a passing preflight run.
     if [[ "$_fixture_all_passed" == "1" && "$PREFLIGHT_NO_CACHE" != "1" ]]; then
       if mkdir -p "$_cache_dir" 2>/dev/null; then
-        _current_hash="${_current_hash:-$(_compute_fixture_hash)}"
+        if [[ -z "${_current_hash:-}" ]]; then
+          _compute_fixture_hash
+          _current_hash="$PREFLIGHT_COMPUTED_FIXTURE_HASH"
+        fi
         if [[ -n "$_current_hash" && ${#_current_hash} -ge 60 ]]; then
           _tmp_cache="$(mktemp "$_cache_dir/preflight_cache.XXXXXX" 2>/dev/null)" || true
           if [[ -n "${_tmp_cache:-}" ]]; then
@@ -737,6 +886,15 @@ else
     fi
   fi
 fi
+
+fixture_diag_finished_ns="$(now_monotonic_ns)"
+if [[ "$fixture_diag_started_ns" =~ ^[0-9]+$ ]] && [[ "$fixture_diag_finished_ns" =~ ^[0-9]+$ ]] \
+  && [[ "$fixture_diag_finished_ns" -ge "$fixture_diag_started_ns" ]]; then
+  PREFLIGHT_DIAG_FIXTURE_RUNTIME_SECONDS=$(((fixture_diag_finished_ns - fixture_diag_started_ns) / 1000000000))
+else
+  PREFLIGHT_DIAG_FIXTURE_RUNTIME_SECONDS=0
+fi
+preflight_diag_emit
 
 # 7. Postmortem check: plans/postmortem_check.sh
 POSTMORTEM_CHECK="plans/postmortem_check.sh"
