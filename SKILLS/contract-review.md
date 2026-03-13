@@ -76,11 +76,12 @@ Flag when:
 ## Method (4 phases)
 
 ### Phase 0 — Workflow alignment (quick)
-If the change touches workflow/harness files, verify:
+If the change touches workflow/harness files (`plans/`, `verify.sh`, `preflight.sh`, CI configs), verify:
 - Read `specs/WORKFLOW_CONTRACT.md` and identify affected clauses
 - Confirm enforcement paths (script, contract, test) exist for each clause
 - Confirm `verify.sh` / preflight / gate coverage where required
 - Record evidence (commands + outputs)
+- **Include a "Phase 0 — Workflow alignment" section in the output** listing which WORKFLOW_CONTRACT.md clauses were checked and their enforcement status
 
 Skip this phase if the change is pure Rust/application code with no workflow surface.
 
