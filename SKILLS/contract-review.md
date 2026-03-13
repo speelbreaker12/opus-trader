@@ -113,6 +113,13 @@ rg "guard_function_name" crates/ --glob '*.rs' | grep -v '/tests/' | grep -v '_t
 ```
 Zero production callers = dead enforcement = P1 finding.
 
+### Phase 2.7 — Test-validates-unsafe check
+
+When a diff modifies BOTH production code AND test code:
+- Check whether any test change asserts or validates the unsafe production behavior introduced in the same diff
+- A test that asserts a wrong safety classification (e.g., `assert_eq!(class, Close)` for unknown intents) is itself a finding — it enshrines the violation and makes it harder to catch later
+- Report the test change as part of the production finding's evidence, not as a separate finding
+
 ### Phase 3 — Causality check
 For each NEW or MODIFIED guard/latch/gate:
 - Must have TRIP + NON-TRIP coverage
