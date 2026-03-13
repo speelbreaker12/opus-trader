@@ -187,6 +187,9 @@ VERIFY_CONSOLE="${VERIFY_CONSOLE:-quiet}"
 VERIFY_LOG_CAPTURE="${VERIFY_LOG_CAPTURE:-1}"
 source "$tmp_fns"
 source "$VERIFY_UTILS"
+# This fixture validates helper behavior directly; do not inherit the outer
+# verify gate's FAILED_GATE suppression flag.
+unset RUN_LOGGED_SKIP_FAILED_GATE
 
 STATUS_FIXTURE_HASH_BACKEND="$(detect_status_fixture_hash_backend)"
 fixture_name_1="tests/fixtures/status/alpha/beta.json"

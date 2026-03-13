@@ -124,7 +124,7 @@ AT-1055
 
 ## **Phase 0: Operational Prerequisites (Non-Negotiable)**
 
-Before live-trading enablement, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation. Before any live-trading enablement decision, the operator/release flow MUST run `bash ./plans/live_enable_preflight.sh`. That preflight is the named Phase 0 release/readiness gate and MUST fail closed if any required Phase 0 evidence or runtime proof is missing, invalid, or unreadable. Phase 0 documents/evidence alone are insufficient unless this preflight passes.
+Before live-trading enablement, these operational baseline items MUST be completed and evidenced. They establish the policy, environment, and operational controls required for safe system operation. Before any live-trading enablement decision, the operator/release flow MUST run `bash ./plans/live_enable_preflight.sh`. That preflight is the named Phase 0 release/readiness gate and MUST fail closed if any required Phase 0 evidence or runtime proof is missing, invalid, or unreadable. The same named gate MUST also pass in the same control-path before any runtime transition changes `phase` from `foundation` to a non-foundation value. Phase 0 documents/evidence alone are insufficient unless this preflight passes.
 
 | ID | Item | Purpose | Evidence Required |
 |----|------|---------|-------------------|
@@ -143,7 +143,7 @@ Before live-trading enablement, these operational baseline items MUST be complet
 - P0-E Health + Owner Status Scaffolding
 - P0-F Machine Policy Loader Baseline
 
-**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys. `bash ./plans/live_enable_preflight.sh` is a release/readiness gate only; it does not replace later runtime PolicyGuard enforcement or the Phase 2+ `/api/v1/status` authority boundary.
+**Rationale:** These items are operational controls, not strategy behavior specifications. They ensure the deployment environment is safe before any trading logic is implemented and that operator-facing checks are runtime-bound rather than documentation-only. Phase 0 requires a minimal owner status signal (`trading_mode`, `opens_globally_permitted`) but not the full `/api/v1/status` schema/reason-code surface (later phases). Foundation `/status` is a separate status-lite surface with AT-1230 keys. `bash ./plans/live_enable_preflight.sh` remains a release/readiness gate; when reused by the legal foundation-exit transition, it still does not replace later runtime PolicyGuard enforcement or the Phase 2+ `/api/v1/status` authority boundary.
 
 **P0-F clarification (Normative):**
 - P0-F is not satisfied by repository presence of `config/policy.json` alone.
@@ -185,7 +185,7 @@ Pass criteria: drill evidence and runtime tests show the exact documented primar
 Fail criteria: the documented primary action is missing or differs from the exercised runtime path, no documented safety-state transition occurs, OPEN can still dispatch, no risk-reducing path remains when exposure exists, or the runbook omits the bounded fallback action.
 
 **P0-E clarifications (Normative):**
-- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`. `phase` MUST NOT change away from `foundation` except through the legal foundation-exit transition defined in the status-authority precedence block below.
 - The `trading_mode` / `opens_globally_permitted` requirement in P0-E applies to owner scaffolding surfaces (CLI/local status). The full `/api/v1/status` endpoint with these fields is a Phase 2+ requirement once `foundation_exit_condition` is true.
 - In foundation mode, `/api/v1/status` uses the status-lite schema (AT-1230). The equivalent "opens not permitted" signal in foundation mode is `dispatch_enabled: false` (not `opens_globally_permitted`).
 - `/api/v1/health` MUST use the liveness key `ok`. `/api/v1/status` MUST use the liveness key `service_up` (foundation mode) or the full CSP minimum schema (Phase 2+). These keys MUST NOT be swapped or mixed between surfaces.
@@ -206,10 +206,20 @@ Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumer
 
 **Status authority precedence (Normative):**
 1. For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
-2. While `foundation_exit_condition` is false, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
-3. When `foundation_exit_condition` is true, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
-4. Given `/api/v1/status` is emitted with `phase != foundation`, any authority/readiness validation MUST enforce the full §7.0 CSP minimum schema; P0 owner scaffolding remains non-authoritative for readiness/dispatch decisions.
-5. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
+2. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value unless `bash ./plans/live_enable_preflight.sh` has passed for the running `build_id` and `contract_version` in the same control-path.
+3. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value unless startup reconciliation is complete, no startup/open-permission latch still requires reconciliation, and the same control-path can atomically switch `/api/v1/status` from foundation status-lite to the full §7.0 CSP minimum schema.
+4. If any condition in (2) or (3) is not satisfied, `phase` MUST remain `foundation`, `/api/v1/status` MUST remain status-lite, and `dispatch_enabled` MUST remain `false`.
+5. While `foundation_exit_condition` is false, `/api/v1/status` authority is the status-lite schema only (AT-1230); CSP minimum keys are not yet required on that surface.
+6. When `foundation_exit_condition` is true, `/api/v1/status` MUST satisfy the §7.0 CSP minimum schema and becomes the canonical status authority for dispatch/readiness semantics.
+7. Given `/api/v1/status` is emitted with `phase != foundation`, any authority/readiness validation MUST enforce the full §7.0 CSP minimum schema; P0 owner scaffolding remains non-authoritative for readiness/dispatch decisions.
+8. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
+
+AT-1238
+- Given: the current `Phase-2 rule` is satisfied, `bash ./plans/live_enable_preflight.sh` passes for the running `build_id` and `contract_version` in the same control-path, startup reconciliation is complete, no startup/open-permission latch requires reconciliation, and the runtime can serve the full §7.0 CSP minimum `/api/v1/status` schema.
+- When: the runtime evaluates a transition that changes `phase` from `foundation` to a non-foundation value.
+- Then: in the same control-path, `phase` changes from `foundation` to non-foundation, foundation status-lite stops, `/api/v1/status` emits the full CSP minimum schema, and the CSP minimum surface becomes authoritative without any mixed or intermediate payload.
+- Pass criteria: no mixed status payload is emitted during the transition; `phase != foundation`; `/api/v1/status` satisfies the full CSP minimum schema; authority/readiness validation keys off the CSP minimum payload only after the transition completes.
+- Fail criteria: `phase` exits foundation after a failed/missing/stale preflight, exits foundation before reconciliation/latch preconditions clear, emits any mixed/intermediate status payload during the transition, or remains in foundation after all listed preconditions are satisfied and the transition is evaluated.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -3301,11 +3311,15 @@ Profile: CSP
 
 > **Architecture boundary (Normative):** The fsync/durability barrier MUST execute
 > in the WAL writer task (a separate async task), NOT in the hot loop that calls
-> `RecordedBeforeDispatch`. The hot-loop gate succeeds upon successful **enqueue**
-> into the bounded channel. If the channel is full, the gate MUST fail closed
-> (reject OPEN). The WAL writer task may block on fsync with a bounded timeout;
-> if fsync times out or errors, the writer MUST signal degraded state and the next
-> OPEN gate attempt MUST fail closed.
+> `RecordedBeforeDispatch`. `RecordedBeforeDispatch` is satisfied for OPEN only
+> after the intent first reaches `WALQueueAccepted` **and** the WAL writer
+> returns `WALRecorded`; `WALQueueAccepted` alone is not sufficient for OPEN
+> dispatch. If the channel is full, enqueue fails, or `WALRecorded` cannot be
+> obtained, the gate MUST fail closed (reject OPEN). If durable-before-dispatch
+> is configured, OPEN dispatch additionally requires `WALDurable`. The WAL
+> writer task may block on fsync with a bounded timeout; if fsync times out or
+> errors, the writer MUST signal degraded state and the next OPEN gate attempt
+> MUST fail closed.
 
 **Hot-loop output queue backpressure (Non-Negotiable):**
 - All hot-loop output queues (status writer, telemetry, order events) MUST be bounded.
@@ -3358,15 +3372,15 @@ AT-906
 - Given: WAL appends use a bounded queue of capacity N, and the WAL writer is stalled so the queue reaches N items.
 - When: an OPEN intent is evaluated and the system attempts `WALQueueAccepted` enqueue (a prerequisite for `RecordedBeforeDispatch`).
 - Then: the OPEN intent is rejected before dispatch, `wal_write_errors` increments, and the hot loop continues ticking.
-- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked until enqueue succeeds.
+- Pass criteria: no outbound dispatch for that OPEN; `wal_write_errors` increases; opens remain blocked while enqueue fails and until a later evaluation obtains the required writer acknowledgment.
 - Fail criteria: hot loop blocks, an OPEN dispatch occurs without a successful enqueue, `wal_write_errors` does not increment, or opens remain allowed while enqueue fails.
 
 AT-1215
 - Given: `WALQueueAccepted` and `WALRecorded` succeed for an OPEN intent, all other OPEN gates are forced pass, and the intent is evaluated exactly once.
 - When: dispatch authorization runs.
-- Then: exactly one OPEN dispatch attempt occurs.
-- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`.
-- Fail criteria: dispatch count is 0 despite successful WAL recording, or >1 for the same intent.
+- Then: exactly one OPEN dispatch attempt occurs, and no dispatch attempt occurs before `WALRecorded` is received.
+- Pass criteria: dispatch count for the intent equals 1; no duplicate dispatch; no `RecordedBeforeDispatchFailed`; the dispatch occurs only after `WALRecorded`.
+- Fail criteria: dispatch count is 0 despite successful WAL recording, any dispatch occurs before `WALRecorded`, or dispatch count > 1 for the same intent.
 
 AT-1232
 - Given: `WALQueueAccepted` succeeds for an OPEN intent, all other OPEN gates are forced pass, but the WAL writer withholds or fails `WALRecorded` for that intent.
@@ -4725,7 +4739,7 @@ These acceptance tests MAY run in an isolated harness and MUST NOT by themselves
 * Deterministic emergency containment (bounded close + hedge fallback + venue-band fallback).
 * Margin headroom, order-type preflight, exchange health, and liquidity safety gates.
 
-**Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests.
+**Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value until this rule is satisfied and the §7.0 legal foundation-exit transition completes.
 
 ### **Phase 3: GOP Data Loop**
 
@@ -4791,7 +4805,7 @@ AT-022
 - P0-E owner-status keys (`trading_mode`, `opens_globally_permitted`, optional `is_trading_allowed`) are NOT part of foundation status-lite payloads.
 
 **Foundation status-lite mode (Phase 1 bootstrap only):**
-- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`.
+- For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`. `phase` MUST NOT change away from `foundation` except through the legal foundation-exit transition defined in the earlier status-authority precedence block.
 - While `foundation_exit_condition` is false, `/status` MUST include exactly the bootstrap keys `service_up`, `build_id`, `contract_version`, `dispatch_enabled`, `phase`.
 - In foundation status-lite mode, `dispatch_enabled` MUST be `false` and `phase` MUST be `foundation` (`dispatch_enabled == false` is the canonical "opens not dispatchable" signal in this mode).
 - When `foundation_exit_condition` is true, `/status` MUST satisfy the full CSP minimum schema and becomes the canonical runtime authority surface.
@@ -6543,3 +6557,5 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-12 | CCL-2026-03-12-01 | §0.X; §1.1.1-§1.2; §2.4-§2.4.1; Phase 1 completion notes; Appendix CONTRACT_CHANGE_LEDGER | clarify | Preserve the branch-only Phase 1 contract hardening note for canonical crate-path references, quantization/idempotency ordering, WAL `reduce_only` recovery semantics, and Phase 1/TLSM acceptance clarifications after merging the newer mainline ledger entries. | Keep the PR 182 contract delta auditable without reusing superseded ledger IDs from the pre-main-sync branch history. | AT-104, AT-218, AT-219, AT-928, AT-TLSM-02, AT-TLSM-06, AT-P0E-NEG | PR-182 |
 | 2026-03-07 | CCL-2026-03-07-01 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Remove the enqueue-as-success ambiguity by restating that `RecordedBeforeDispatch` for OPEN requires `WALRecorded` (plus `WALDurable` when configured), and tighten the nearby ATs so enqueue failure and pre-`WALRecorded` authorization remain fail-closed. | Prevent crash/restart replay drift or duplicate exposure caused by treating bounded-queue enqueue success as sufficient dispatch authorization. | AT-906, AT-1215, AT-1232, AT-935 | local/recorded-before-dispatch-fix |
 | 2026-03-07 | CCL-2026-03-07-02 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Phase 1 roadmap/AT subset; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Pull the conservative restart-safety boundary into Phase 1: replay/reconciliation preserves recorded-but-unsent OPENs for reconciliation and later fresh evaluation, but replay alone never authorizes a fresh OPEN dispatch. | Remove the remaining Phase 1/PRD contradiction for restart behavior while preserving fail-closed no-duplicate-send semantics across restarts. | AT-233, AT-234, AT-935 | local/phase1-restart-safety-boundary |
+| 2026-03-13 | CCL-2026-03-13-01 | §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Reconcile the active branch's WAL isolation text with the already-present `RecordedBeforeDispatch` rule so OPEN dispatch requires `WALRecorded` (and `WALDurable` when configured), not enqueue-only success. | Remove the remaining internal contract split that could otherwise imply enqueue success is sufficient dispatch authorization despite the surrounding WAL invariants and AT map. | AT-906, AT-1215, AT-1232, AT-935 | local/main-wal-contract-reconcile |
+| 2026-03-13 | CCL-2026-03-13-02 | Phase 0 prerequisites; §7.0 status surface split; Phase 2 rule; Appendix CONTRACT_CHANGE_LEDGER | clarify | Bind the existing Phase 0 preflight to any legal transition out of foundation mode and require the `/api/v1/status` authority handoff from status-lite to CSP minimum schema to occur atomically in the same control-path. | Prevent non-foundation status authority from being activated by local convention or split control-paths before Phase 2 deployable readiness and reconciliation are satisfied. | AT-1230, AT-1233, AT-1234, AT-1238, AT-023 | local/foundation-exit-authority-boundary |

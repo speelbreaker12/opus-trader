@@ -18,10 +18,13 @@ log "2a) Rust format"
 run_logged_or_exit "rust_fmt" "$RUST_FMT_TIMEOUT" cargo fmt --all -- --check
 
 if [[ "${MODE:-}" == "full" ]]; then
-  log "2b) Rust clippy"
+  log "2b) Rust clippy (full)"
   run_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --all-targets --all-features -- -D warnings
 else
-  warn "Skipping clippy in quick mode"
+  # Quick mode keeps clippy on lib targets only for fast feedback.
+  # Full mode retains broader all-target coverage.
+  log "2b) Rust clippy (quick)"
+  run_logged_or_exit "rust_clippy" "$RUST_CLIPPY_TIMEOUT" cargo clippy --workspace --lib -- -D warnings
 fi
 
 log "2c) Rust tests"
@@ -51,12 +54,13 @@ else
 
   run_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo test --workspace --lib --locked
 
-  # Smoke contract tests: ensure facade-level integration contracts remain green in quick mode.
-  run_logged_or_exit "rust_tests_smoke" "$RUST_TEST_TIMEOUT" \
-    cargo test -p soldier_core --locked \
-      --test test_execution_facade_public \
-      --test test_tlsm
 fi
+
+# Smoke contract tests: ensure facade-level integration contracts remain green in both modes.
+run_logged_or_exit "rust_tests_smoke" "$RUST_TEST_TIMEOUT" \
+  cargo test -p soldier_core --locked \
+    --test test_execution_facade_public \
+    --test test_tlsm
 
 run_logged_or_exit "execution_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_execution_facade.sh
 

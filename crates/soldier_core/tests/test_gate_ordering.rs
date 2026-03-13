@@ -20,3 +20,8 @@ fn assert_unit_test_present(name: &str) {
 fn test_at501_open_all_gates_pass_trace_order() {
     assert_unit_test_present("test_at501_open_all_gates_pass_trace_order");
 }
+
+#[test]
+fn test_gate_ordering_constraints() {
+    assert_unit_test_present("test_gate_sequence_emits_structured_reject_metric_line");
+}

@@ -53,11 +53,13 @@ required=(
   plans/contract_coverage_promote.sh
   plans/contract_review_emit.sh
   plans/contract_review_validate.sh
+  plans/execution_facade_symbols.txt
   plans/external_review_generic.sh
   plans/fork_attestation_mirror.sh
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
+  plans/lint_execution_facade.sh
   plans/live_enable_preflight.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
@@ -115,6 +117,7 @@ required=(
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
+  plans/tests/test_lint_execution_facade.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_set_pass.sh
@@ -135,6 +138,7 @@ required=(
   plans/tests/test_review_logged_timeout_binary_unavailable.sh
   plans/tests/test_review_logged_timeout_fallback.sh
   plans/tests/test_review_logged_timeout_retry_noncodex.sh
+  plans/tests/test_rust_gates_quick_clippy.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh

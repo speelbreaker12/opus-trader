@@ -85,7 +85,7 @@ Update the Phase table, Phase 1 objective, and Phase 1 exit criteria so they no 
 
 Specifically remove or rewrite wording such as:
 - `Liquidity+NetEdge+Fee staleness fail-closed (tests)`
-- any Phase 1 objective text that implies full Liquidity Gate compliance is part of foundation exit
+- any Phase 1 objective text that implies full Liquidity Gate compliance or plain `phase != foundation` is itself the thing that authorizes foundation exit; the legal runtime transition remains the separate `specs/CONTRACT.md` §7.0 rule
 
 Keep Phase 1 focused on deterministic intent construction, WAL/TLSM, fee/net-edge/pricer ordering, and non-deployable chokepoint behavior.
 

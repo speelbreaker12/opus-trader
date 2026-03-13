@@ -36,6 +36,7 @@ plans/crossref_execution_invariants.yaml
 plans/crossref_gate.sh
 plans/doc_sync_check.sh
 plans/evidence_sources.txt
+plans/execution_facade_symbols.txt
 plans/external_review_generic.sh
 plans/fork_attestation_mirror.sh
 plans/fork_attestation_remediation_verify.sh
@@ -50,6 +51,7 @@ plans/lib/rust_gates.sh
 plans/lib/status_reason_codegen_gate.sh
 plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
+plans/lint_execution_facade.sh
 plans/live_enable_preflight.sh
 plans/postmortem_template.md
 plans/pr_gate.sh
@@ -119,6 +121,7 @@ plans/tests/test_fail_closed_gate_map_paths.sh
 plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
+plans/tests/test_lint_execution_facade.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
@@ -140,6 +143,7 @@ plans/tests/test_review_logged_timeout_binary_unavailable.sh
 plans/tests/test_review_logged_timeout_fallback.sh
 plans/tests/test_review_logged_timeout_retry_noncodex.sh
 plans/tests/test_roadmap_evidence_audit.sh
+plans/tests/test_rust_gates_quick_clippy.sh
 plans/tests/test_rust_gates_smoke_targets.sh
 plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh

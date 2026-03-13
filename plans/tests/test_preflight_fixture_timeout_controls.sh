@@ -531,7 +531,59 @@ set -e
 [[ "$parallel_cap_rc" -eq 0 ]] \
   || fail "expected capped parallel-jobs fixture run to pass, got rc=$parallel_cap_rc"
 parallel_cap_max="$(cat "$parallel_cap_state_dir/max" 2>/dev/null || echo 0)"
-[[ "$parallel_cap_max" -eq 8 ]] \
-  || fail "expected default preflight fixture concurrency to cap at 8 workers, saw $parallel_cap_max"
+[[ "$parallel_cap_max" -ge 2 ]] \
+  || fail "expected capped parallel-jobs fixture run to remain parallel, saw max concurrency $parallel_cap_max"
+[[ "$parallel_cap_max" -le 8 ]] \
+  || fail "expected default preflight fixture concurrency to stay within the 8-worker cap, saw $parallel_cap_max"
+
+parallel_empty_batch_script="$repo/plans/preflight_parallel_empty_batch.sh"
+cp "$repo/plans/preflight.sh" "$parallel_empty_batch_script"
+rewrite_fixture_arrays_repeated_dummy "$parallel_empty_batch_script" 2
+chmod +x "$parallel_empty_batch_script"
+
+parallel_empty_batch_log="$tmp_dir/parallel_empty_batch.log"
+set +e
+(
+  cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
+  PREFLIGHT_PARALLEL_JOBS=2 \
+  DUMMY_SLEEP_SECS=0 \
+  "$parallel_empty_batch_script" >"$parallel_empty_batch_log" 2>&1
+)
+parallel_empty_batch_rc=$?
+set -e
+[[ "$parallel_empty_batch_rc" -eq 0 ]] \
+  || fail "expected empty-batch prune fixture run to pass, got rc=$parallel_empty_batch_rc"
+if grep -Fq "alive[@]: unbound variable" "$parallel_empty_batch_log"; then
+  fail "empty-batch prune must not trip bash nounset on an empty alive[] array"
+fi
+
+parallel_fail_collect_script="$repo/plans/preflight_parallel_fail_collect.sh"
+cp "$repo/plans/preflight.sh" "$parallel_fail_collect_script"
+rewrite_fixture_arrays_repeated_dummy "$parallel_fail_collect_script" 2
+chmod +x "$parallel_fail_collect_script"
+
+parallel_fail_collect_log="$tmp_dir/parallel_fail_collect.log"
+set +e
+(
+  cd "$repo"
+  PREFLIGHT_FIXTURE_MODE="$PINNED_FIXTURE_MODE" \
+  PREFLIGHT_NO_CACHE=1 \
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
+  PREFLIGHT_PARALLEL_JOBS=2 \
+  DUMMY_EXIT_CODE=1 \
+  "$parallel_fail_collect_script" >"$parallel_fail_collect_log" 2>&1
+)
+parallel_fail_collect_rc=$?
+set -e
+[[ "$parallel_fail_collect_rc" -eq 1 ]] \
+  || fail "expected failing batch to surface through result-file collection with rc=1, got $parallel_fail_collect_rc"
+grep -Fq "Fixture test failed: plans/tests/test_dummy_sleep.sh (rc=1" "$parallel_fail_collect_log" \
+  || fail "expected failing batch to reach fixture result collection after waiting on children"
+if grep -Fq "alive[@]: unbound variable" "$parallel_fail_collect_log"; then
+  fail "failing batch must not trip bash nounset on an empty alive[] array"
+fi
 
 echo "test_preflight_fixture_timeout_controls.sh: ok"

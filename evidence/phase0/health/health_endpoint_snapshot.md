@@ -6,9 +6,9 @@
 
 ## Metadata
 - doc_id: HEALTH-001
-- version: 1.1
+- version: 1.2
 - contract_version_target: 5.2
-- last_updated_utc: 2026-02-10T16:30:00Z
+- last_updated_utc: 2026-03-13T19:45:00Z
 
 ---
 
@@ -18,13 +18,13 @@
 |-------|------|-------------|----------------|
 | Phase 0 owner-status scaffolding | CLI (`./stoic-cli status`) | Phase 0 ops baseline | `trading_mode`, `opens_globally_permitted`; optional alias `is_trading_allowed` (must equal canonical field) |
 | Foundation status-lite | HTTP `GET /api/v1/status` | `phase == foundation` | Exactly `{service_up, build_id, contract_version, dispatch_enabled, phase}` with `dispatch_enabled=false`, `phase=foundation` |
-| CSP minimum status | HTTP `GET /api/v1/status` | `phase != foundation` | Full CSP minimum keys from `specs/CONTRACT.md` §7.0 |
+| CSP minimum status | HTTP `GET /api/v1/status` | Legal foundation-exit transition already completed (`phase != foundation`) | Full CSP minimum keys from `specs/CONTRACT.md` §7.0 |
 | Health minimum | HTTP `GET /api/v1/health` and CLI health parity | Any phase | `{ok, build_id, contract_version}` |
 
 Notes:
 - This matrix is aligned to `specs/CONTRACT.md` §7.0.
-- For `/api/v1/status`, `foundation_exit_condition` is true when `phase != foundation`.
-- While `foundation_exit_condition` is false, `/api/v1/status` remains status-lite; when it is true, `/api/v1/status` must satisfy the full CSP minimum schema and becomes the canonical authority surface.
+- For `/api/v1/status`, `foundation_exit_condition` is true when `phase != foundation`, but the contract does not permit local convention to set that state. The transition out of foundation mode is legal only when the §7.0 foundation-exit rule is satisfied.
+- While `foundation_exit_condition` is false, `/api/v1/status` remains status-lite; once the legal foundation-exit transition completes and `foundation_exit_condition` becomes true, `/api/v1/status` must satisfy the full CSP minimum schema and becomes the canonical authority surface.
 - Phase 1 completion is not a CSP minimum status compliance claim.
 
 ---
