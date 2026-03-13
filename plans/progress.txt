@@ -1105,3 +1105,10 @@ Commands: git diff -- evidence/phase0/health/health_endpoint_snapshot.md.
 Evidence: evidence/phase0/health/health_endpoint_snapshot.md.
 Notes: This is an evidence-doc refresh only; no runtime or harness behavior changed.
 Next: Keep the snapshot in sync with future `docs/health_endpoint.md` wording changes so reviewers do not have to resolve stale evidence by hand.
+Story: verify-clean-snapshot-20260313
+Date: 2026-03-13 22:17:40 UTC
+Summary: Re-ran the current dirty root diff in a detached clean snapshot and got fresh green `quick` and `full` verification evidence, then copied both verify artifact bundles back into the repo before temp-worktree cleanup.
+Commands: git diff --binary > /tmp/opus_verify_current_20260313f.patch; git worktree add --detach /private/tmp/opus-verify-current-main-20260313f HEAD; git -C /private/tmp/opus-verify-current-main-20260313f apply --binary /tmp/opus_verify_current_20260313f.patch; PREFLIGHT_TIMEOUT=1200s ./plans/verify.sh quick; ./plans/verify.sh full; cp -R /private/tmp/opus-verify-current-main-20260313f/artifacts/verify/20260313_153930 artifacts/verify/; cp -R /private/tmp/opus-verify-current-main-20260313f/artifacts/verify/20260313_155140 artifacts/verify/.
+Evidence: artifacts/verify/20260313_153930/verify.meta.json; artifacts/verify/20260313_155140/verify.meta.json; artifacts/verify/20260313_153930; artifacts/verify/20260313_155140.
+Notes: Both copied runs are green against HEAD `81a411cc9f6f` plus the current local dirty diff. Quick run `20260313_153930` finished `status=ok`; full run `20260313_155140` finished `status=ok`.
+Next: Treat `artifacts/verify/20260313_155140` as the current merge-readiness evidence until the local diff changes again.

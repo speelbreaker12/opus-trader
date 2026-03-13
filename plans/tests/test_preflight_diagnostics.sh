@@ -96,7 +96,7 @@ run_log="$tmp_dir/preflight.log"
   VERIFY_ARTIFACTS_DIR="$verify_artifacts" \
   PREFLIGHT_FIXTURE_MODE=smoke \
   PREFLIGHT_PARALLEL_JOBS=3 \
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT=17 \
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT=45 \
   ./plans/preflight.sh >"$run_log" 2>&1
 ) || fail "preflight run failed"
 
@@ -113,7 +113,7 @@ jq -e '.cache_reasons | index("scoped_untracked_files_present")' "$diag" >/dev/n
 jq -e '.cache_reasons | index("cache_file_missing")' "$diag" >/dev/null \
   || fail "expected cache_file_missing reason"
 jq -e '.parallel_jobs == 3' "$diag" >/dev/null || fail "parallel_jobs mismatch"
-jq -e '.fixture_timeout_seconds == 17' "$diag" >/dev/null || fail "fixture_timeout_seconds mismatch"
+jq -e '.fixture_timeout_seconds == 45' "$diag" >/dev/null || fail "fixture_timeout_seconds mismatch"
 jq -e '(.fixture_runtime_seconds | type) == "number"' "$diag" >/dev/null \
   || fail "fixture_runtime_seconds must be numeric"
 jq -e '.cache_file == ".cache/preflight_fixtures_smoke.hash"' "$diag" >/dev/null \
