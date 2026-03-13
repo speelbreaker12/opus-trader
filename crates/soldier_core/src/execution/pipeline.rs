@@ -81,6 +81,37 @@ pub(crate) struct PipelineResult {
     pub reject_reason_code: Option<RejectReasonCode>,
 }
 
+pub(crate) fn run_shared_orchestration_tail(
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    chokepoint_metrics: &mut ChokeMetrics,
+    gate_results: &super::build_order_intent::GateResults,
+    gate_reject_codes: &GateRejectCodes,
+) -> PipelineResult {
+    // TODO(Phase 2): migrate open_runtime.rs GateResults construction to use GateOutcome converters.
+    #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+    let mut wal_gate = PrecomputedWalGate {
+        recorded: gate_results.wal_recorded,
+    };
+    let decision = build_order_intent_with_wal_gate(
+        intent_class,
+        risk_state,
+        chokepoint_metrics,
+        gate_results,
+        &mut wal_gate,
+    );
+    let reject_reason_code = if let ChokeResult::Rejected { reason, .. } = &decision {
+        Some(reject_reason_from_chokepoint(reason, gate_reject_codes))
+    } else {
+        None
+    };
+
+    PipelineResult {
+        decision,
+        reject_reason_code,
+    }
+}
+
 /// Evaluate the execution pipeline and return the chokepoint decision.
 ///
 /// The function remains fail-closed: any missing OPEN-path input marks that
@@ -265,28 +296,13 @@ pub(crate) fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
-    // TODO(Phase 2): migrate open_runtime.rs GateResults construction to use GateOutcome converters.
-    #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
-    let mut wal_gate = PrecomputedWalGate {
-        recorded: input.wal_recorded,
-    };
-    let decision = build_order_intent_with_wal_gate(
+    run_shared_orchestration_tail(
         input.intent_class,
         input.risk_state,
         &mut metrics.chokepoint,
         &gate_results,
-        &mut wal_gate,
-    );
-    let reject_reason_code = if let ChokeResult::Rejected { reason, .. } = &decision {
-        Some(reject_reason_from_chokepoint(reason, &gate_reject_codes))
-    } else {
-        None
-    };
-
-    PipelineResult {
-        decision,
-        reject_reason_code,
-    }
+        &gate_reject_codes,
+    )
 }
 
 #[cfg(test)]

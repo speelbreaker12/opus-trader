@@ -37,6 +37,7 @@ use crate::execution::pipeline::QuantizePipelineInput;
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
 use crate::execution::quantize::{QuantizeConstraints, Side};
+use crate::execution::reject_reason::RejectReasonCode;
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
     MarginGateMode, PendingExposureBook, ReservationId, RiskState,
@@ -203,6 +204,18 @@ fn test_runtime_wiring_releases_pending_reservation_on_reject() {
 
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
+    assert_eq!(
+        out.gate_reject_codes.liquidity_gate,
+        Some(RejectReasonCode::GlobalExposureBudgetExceeded)
+    );
+    assert_eq!(
+        out.gate_reject_codes.net_edge_gate,
+        Some(RejectReasonCode::GateCascadeSkip)
+    );
+    assert_eq!(
+        out.gate_reject_codes.pricer,
+        Some(RejectReasonCode::GateCascadeSkip)
+    );
     assert!(out.pending_reservation_id.is_none());
     assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.pending_exposure.release_total(), 1);
@@ -243,6 +256,18 @@ fn test_runtime_wiring_pending_reject_takes_precedence_over_global_budget_reject
 
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
+    assert_eq!(
+        out.gate_reject_codes.liquidity_gate,
+        Some(RejectReasonCode::PendingExposureBudgetExceeded)
+    );
+    assert_eq!(
+        out.gate_reject_codes.net_edge_gate,
+        Some(RejectReasonCode::GateCascadeSkip)
+    );
+    assert_eq!(
+        out.gate_reject_codes.pricer,
+        Some(RejectReasonCode::GateCascadeSkip)
+    );
     assert!(out.pending_reservation_id.is_none());
     assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.global_exposure.reject_total(), 0);
