@@ -58,6 +58,7 @@ required=(
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
+  plans/live_enable_preflight.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
   plans/pr_gate.sh

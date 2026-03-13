@@ -30,6 +30,11 @@ From `prd_ref_check.sh` (separate script):
 [prd_ref_check] ERROR: unresolved plan_ref ...
 ```
 
+Preferred `contract_refs` shape:
+- Use stable, mechanically resolvable tokens such as `CONTRACT.md AT-132`, `CONTRACT.md LiquidityGateNoL2`, `CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)`, `Anchor-###`, or `VR-###`.
+- Avoid free-form prose sentences in `contract_refs`, especially slash-heavy text like `missing/unparseable/stale`, because `prd_ref_check.sh` splits refs into segments and may fail to resolve otherwise-valid prose.
+- Put detailed behavioral wording in `acceptance`, `steps`, or `contract_must_evidence`; keep `contract_refs` compact and tokenized.
+
 ## Quick Fixes
 
 **CREATE_PATH_EXISTS**: The `scope.create` path already exists. Either:
@@ -44,6 +49,13 @@ From `prd_ref_check.sh` (separate script):
 **MISSING_ANCHOR_REF / MISSING_VR_REF**: Contract references need explicit IDs:
 - Find the anchor/VR in `specs/CONTRACT.md`
 - Add the ID in format: `"Anchor-001: Title"` or `"VR-001: Title"`
+
+**unresolved contract_ref / plan_ref**: Make the ref more mechanical:
+- Replace prose sentences with a stable token, section ID, or anchor, for example:
+  - `CONTRACT.md LiquidityGateNoL2`
+  - `CONTRACT.md AT-132`
+  - `CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)`
+- Keep the detailed sentence in `acceptance` or `steps`, not in `contract_refs`
 
 ## Pass-Gate Preview (Dry Run)
 

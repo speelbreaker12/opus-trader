@@ -825,7 +825,7 @@ fi
 
 log "14b) phase0 meta-test"
 run_logged_or_exit "phase0_meta_test" "$SPEC_LINT_TIMEOUT" \
-  "$PYTHON_BIN" tools/phase0_meta_test.py --root "$ROOT"
+  env PYTHON_BIN="$PYTHON_BIN" bash "$ROOT/plans/live_enable_preflight.sh"
 
 if [[ -f scripts/check_gate_integrity.py ]]; then
   log "14c) gate integrity lint"
