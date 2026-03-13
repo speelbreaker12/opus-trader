@@ -588,6 +588,7 @@
           "docs/PHASE0_CHECKLIST_BLOCK.md",
           "docs/phase0_acceptance.md",
           "docs/phase0_index.md",
+          "plans/live_enable_preflight.sh",
           "plans/prd.json",
           "plans/verify_fork.sh",
           "plans/workflow_verify.sh",

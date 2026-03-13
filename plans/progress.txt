@@ -1119,3 +1119,10 @@ Commands: rg -n "UPGRADE-1B-PR4|orchestration-tail|share execution tail" plans/p
 Evidence: plans/prd.json; reviews/premortems/S6-013_premortem.md; artifacts/story/UPGRADE-1B-PR4/self_review/REVIEW_STACK.md.
 Notes: `bash plans/premortem_gate.sh S6-013` passed with `STOPLIGHT: GREEN`. `./plans/prd_gate.sh` now clears `S6-013` itself and only reports an unrelated baseline backlog error on `S0-006` (`plans/live_enable_preflight.sh` already exists), so the old PR4 mapping blocker is resolved without claiming repo-wide PRD hygiene is green.
 Next: Commit the PRD/premortem mapping if you want the cleared `/loss-risk-gate` result preserved in git history, then address the unrelated `S0-006` PRD backlog issue separately before using `./plans/prd_gate.sh` as a repo-clean signal.
+Story: PRD hygiene cleanup
+Date: 2026-03-13 23:52:17 UTC
+Summary: Cleared the remaining repo-wide `plans/prd_gate.sh` errors by fixing `S0-006` to classify `plans/live_enable_preflight.sh` as an existing touched file and removing stale non-existent `AT-1235` / `AT-1236` references from `S4-003` and `S6-004`, while keeping the durable-before-dispatch proof tied to the live contract sections.
+Commands: ./plans/prd_gate.sh; ./plans/prd_audit_check.sh; rg -n "AT-1235|AT-1236" plans/prd.json; git diff --check -- plans/prd.json.
+Evidence: plans/prd.json; `./plans/prd_gate.sh` output (`PRD gate OK`).
+Notes: `./plans/prd_gate.sh` now exits 0 with warnings only. `./plans/prd_audit_check.sh` still fails closed because `.context/prd_auditor_stdout.log` is missing in this worktree, so PRD audit caching remains a separate hygiene issue.
+Next: Restore or regenerate the missing PRD audit stdout/meta artifacts if this worktree needs audit-clean PRD evidence, then decide whether to chase the remaining warning-only PRD debt.
