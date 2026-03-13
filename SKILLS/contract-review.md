@@ -155,6 +155,8 @@ For each NEW or MODIFIED guard/latch/gate:
 
 No contract violations found.
 
+**Scope reviewed:** <list files touched and why they are safe — e.g., "test-only change, no production code affected" or "documentation change, excluded per skill rules">
+
 **Decision: PASS**
 ```
 
