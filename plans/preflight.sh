@@ -314,24 +314,68 @@ prune_fixture_pids_once() {
       alive+=("$pid")
     fi
   done
-  fixture_pids=("${alive[@]}")
+  if [[ ${#alive[@]} -gt 0 ]]; then
+    fixture_pids=("${alive[@]}")
+  else
+    fixture_pids=()
+  fi
+}
+
+shift_fixture_pid_queue() {
+  if [[ ${#fixture_pids[@]} -gt 1 ]]; then
+    fixture_pids=("${fixture_pids[@]:1}")
+  else
+    fixture_pids=()
+  fi
 }
 
 wait_for_fixture_slot() {
+  local pid=""
+  local errexit=0
+
+  case "$-" in
+    *e*) errexit=1 ;;
+  esac
+
   if [[ "$PREFLIGHT_WAIT_N_USE" == "1" ]]; then
     if [[ ${#fixture_pids[@]} -gt 0 ]]; then
+      set +e
       wait -n "${fixture_pids[@]}" 2>/dev/null || true
+      if [[ "$errexit" == "1" ]]; then
+        set -e
+      fi
     fi
     prune_fixture_pids_once
     return 0
   fi
 
-  while true; do
-    prune_fixture_pids_once
-    if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
-      break
+  while [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; do
+    pid="${fixture_pids[0]}"
+    set +e
+    wait "$pid"
+    if [[ "$errexit" == "1" ]]; then
+      set -e
     fi
-    sleep 0.2
+    shift_fixture_pid_queue
+  done
+}
+
+wait_for_all_fixture_jobs() {
+  local pid=""
+  local errexit=0
+
+  case "$-" in
+    *e*) errexit=1 ;;
+  esac
+
+  while [[ ${#fixture_pids[@]} -gt 0 ]]; do
+    pid="${fixture_pids[0]}"
+    set +e
+    wait "$pid"
+    if [[ "$errexit" == "1" ]]; then
+      set -e
+    fi
+    shift_fixture_pid_queue
   done
 }
 
@@ -517,12 +561,6 @@ fi
 # Split into fast smoke checks (default) vs full matrix checks (full verify).
 SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_run_prd_auditor_invocation.sh"
-  "plans/tests/test_codex_review_logged.sh"
-  "plans/tests/test_review_logged_timeout_fallback.sh"
-  "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
-  "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
-  "plans/tests/test_review_logged_prompt_literalization.sh"
-  "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_story_review_findings_guard.sh"
@@ -530,37 +568,16 @@ SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_fork_attestation_mirror.sh"
   "plans/tests/test_workflow_quick_step.sh"
   "plans/tests/test_toggle_policy_check.sh"
-  "plans/tests/test_preflight_diagnostics.sh"
-  "plans/tests/test_preflight_fixture_profiles.sh"
-  "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
-  "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
   "plans/tests/test_live_enable_preflight.sh"
-  "plans/tests/test_verify_fork_guardrails.sh"
-  "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"
-  "plans/tests/test_rust_gates_quick_clippy.sh"
   "plans/tests/test_rust_gates_smoke_targets.sh"
-  "plans/tests/test_contract_profile_parity.sh"
-  "plans/tests/test_contract_review_emit.sh"
-  "plans/tests/test_contract_change_ledger.sh"
+  "plans/tests/test_rust_gates_quick_clippy.sh"
   "plans/tests/test_contract_kernel_drift_message.sh"
   "plans/tests/test_recon_handoff_sources.sh"
-  "plans/tests/test_recon_precheck.sh"
-  "plans/tests/test_recon_operator_trace.sh"
-  "plans/tests/test_recon_evidence_ledger.sh"
-  "plans/tests/test_premortem_ready_ownership_conflict.sh"
-  "plans/tests/test_premortem_gate_trading_hard_gate.sh"
-  "plans/tests/test_wf_step_stop_on_blocker.sh"
-  "plans/tests/test_wf_step_path_signal_scan.sh"
-  "plans/tests/test_wf_step_review_provenance.sh"
-  "plans/tests/test_code_review_expert_guard.sh"
   "plans/tests/test_roadmap_evidence_audit.sh"
   "plans/tests/test_crossref_invariants.sh"
-  "plans/tests/test_crossref_gate.sh"
-  "plans/tests/test_artifact_lint.sh"
-  "plans/tests/test_bidi_control_guard.sh"
   "plans/tests/test_premortem_path_guard.sh"
 )
 
@@ -579,8 +596,9 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_recon_operator_runner.sh"
   "plans/tests/test_recon_scoreboard.sh"
 )
-# NOTE: test_story_review_gate.sh and test_pr_gate.sh moved to verify_fork.sh
-# gate 14g (overlaps with rust compilation for better wall-clock performance).
+# NOTE: heavy workflow integration fixtures run in verify_fork.sh gate 14g
+# (parallel with rust compilation) instead of preflight smoke so the cheap
+# preflight loop stays within the quick-mode timeout budget.
 
 REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
@@ -831,8 +849,9 @@ else
       fi
     done
 
-    # Wait for all remaining
-    wait
+    # Wait for all remaining without letting an individual child rc abort
+    # preflight before result-file collection/classification runs.
+    wait_for_all_fixture_jobs
 
     # Collect results in original order (deterministic output, counters in parent shell)
     _fixture_all_passed=1

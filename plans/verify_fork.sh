@@ -463,6 +463,14 @@ start_parallel_gate() {
   PARALLEL_ACTIVE_PIDS+=("$!")
 }
 
+start_parallel_workflow_test() {
+  local test_script="$1"
+  local test_name="${test_script##*/}"
+  local gate_name="wf_${test_name%.sh}"
+  start_parallel_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT" \
+    bash "$test_script"
+}
+
 finish_parallel_group_or_exit() {
   local first_failed=""
   local first_rc="0"
@@ -918,28 +926,60 @@ if [[ -f specs/status/status_reason_registries_manifest.json ]]; then
 fi
 
 # Gate 14g: Heavy workflow integration tests run in parallel with rust gates.
-# These were moved out of preflight because they take 3-10 min each and
-# dominated the preflight parallel group wall-clock time.
+# These remain mandatory in quick/full verify, but stay out of preflight smoke
+# because they are no longer cheap early-failure checks.
+WORKFLOW_INTEGRATION_TESTS=(
+  "plans/tests/test_codex_review_logged.sh"
+  "plans/tests/test_review_logged_timeout_fallback.sh"
+  "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
+  "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
+  "plans/tests/test_review_logged_prompt_literalization.sh"
+  "plans/tests/test_external_review_generic.sh"
+  "plans/tests/test_preflight_diagnostics.sh"
+  "plans/tests/test_preflight_fixture_profiles.sh"
+  "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
+  "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
+  "plans/tests/test_verify_fork_guardrails.sh"
+  "plans/tests/test_verify_gate_contract_check_batching.sh"
+  "plans/tests/test_lint_execution_facade.sh"
+  "plans/tests/test_contract_profile_parity.sh"
+  "plans/tests/test_contract_review_emit.sh"
+  "plans/tests/test_contract_change_ledger.sh"
+  "plans/tests/test_recon_precheck.sh"
+  "plans/tests/test_recon_operator_trace.sh"
+  "plans/tests/test_recon_evidence_ledger.sh"
+  "plans/tests/test_premortem_ready_ownership_conflict.sh"
+  "plans/tests/test_premortem_gate_trading_hard_gate.sh"
+  "plans/tests/test_wf_step_stop_on_blocker.sh"
+  "plans/tests/test_wf_step_path_signal_scan.sh"
+  "plans/tests/test_wf_step_review_provenance.sh"
+  "plans/tests/test_code_review_expert_guard.sh"
+  "plans/tests/test_crossref_gate.sh"
+  "plans/tests/test_artifact_lint.sh"
+  "plans/tests/test_bidi_control_guard.sh"
+)
+FULL_MODE_WORKFLOW_INTEGRATION_TESTS=(
+  "plans/tests/test_story_review_gate.sh"
+  "plans/tests/test_pr_gate.sh"
+)
+
+log "14g) workflow integration tests (parallel with rust gates)"
+parallel_group_reset
+for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do
+  start_parallel_workflow_test "$workflow_test"
+done
 if [[ "$MODE" == "full" ]]; then
-  log "14g) workflow integration tests (parallel with rust gates)"
-  parallel_group_reset
-  start_parallel_gate "wf_test_story_review_gate" "$WORKFLOW_TEST_TIMEOUT" \
-    bash plans/tests/test_story_review_gate.sh
-  start_parallel_gate "wf_test_pr_gate" "$WORKFLOW_TEST_TIMEOUT" \
-    bash plans/tests/test_pr_gate.sh
-
-  if [[ -f Cargo.toml ]]; then
-    log "15) rust gates"
-    bash "$ROOT/plans/lib/rust_gates.sh"
-  fi
-
-  finish_parallel_group_or_exit
-else
-  if [[ -f Cargo.toml ]]; then
-    log "15) rust gates"
-    bash "$ROOT/plans/lib/rust_gates.sh"
-  fi
+  for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do
+    start_parallel_workflow_test "$workflow_test"
+  done
 fi
+
+if [[ -f Cargo.toml ]]; then
+  log "15) rust gates"
+  bash "$ROOT/plans/lib/rust_gates.sh"
+fi
+
+finish_parallel_group_or_exit
 
 if [[ -f pyproject.toml || -f requirements.txt ]]; then
   log "16) python gates"
