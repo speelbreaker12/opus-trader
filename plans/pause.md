@@ -1,5 +1,35 @@
 # Pause Note (optional)
 
+## 2026-03-13 - current-head pause handoff
+
+- Date: 2026-03-13 15:29:34 UTC
+- Branch/worktree: `phase0/break-glass-at1237-20260307` at `/Users/admin/Desktop/opus-trader`
+- Latest local commit: `3576e312` `test(wal): align replay illegal transition expectation`
+- Current branch state beyond the prior handoff:
+  - `417aed6a` `style(rust): format engine decision test`
+  - `611d99ee` `style(rust): allow wal constructor arg count`
+  - `a8d303e3` `style(rust): satisfy clippy cleanups`
+  - `3576e312` `test(wal): align replay illegal transition expectation`
+- Scope completed before this pause:
+  - Rust formatting/clippy cleanup commits landed on the current branch after the older operator-surface handoff.
+  - WAL replay coverage was adjusted in `crates/soldier_infra/tests/test_async_wal_writer.rs` so the illegal-transition expectation matches the current behavior under replay.
+  - This handoff refresh aligns `plans/pause.md` with the actual branch HEAD instead of the older `9867f1ed` operator-surface snapshot.
+- Verification evidence:
+  - No new verification was run in this handoff step.
+  - Latest artifact-backed verify remains `./plans/verify.sh quick` from `artifacts/verify/20260312_125708/verify.meta.json`, and it predates current HEAD.
+  - That latest verify artifact recorded `status=failed`, `failed_gate=rust_fmt`, and `head_sha=2d27837ee789505f5a428243fd6d8bdc13b967d1`.
+- Working tree note:
+  - The dirty set is broader than the runtime artifact; check `git status --short` before assuming patch scope.
+  - `var/runtime/runtime_state.json` is one dirty path, but there are also unrelated docs/workflow/test edits in this worktree.
+  - Leave runtime artifact churn unstaged unless the user explicitly wants it committed.
+- Next agent default actions:
+  1. Review `git log --oneline -5` and `git show --stat 3576e312` to reorient on the post-handoff Rust/WAL changes.
+  2. Get fresh verification for current HEAD from a clean checkout or CI before claiming pass state, because the latest verify artifact is stale and the local tree is dirty.
+  3. If resuming the operator-surface thread, keep the runtime artifact and unrelated local noise out of any follow-up patch/PR.
+- Constraints/preferences to preserve:
+  - Do not use `VERIFY_ALLOW_DIRTY=1` without explicit owner approval recorded in `plans/progress.txt`.
+  - Keep workflow verification fail-closed; do not treat the older `20260312_125708` artifact as proof for current HEAD.
+
 ## 2026-03-04 - PR #161 drift-closure handoff
 
 - Date: 2026-03-04 22:11:46 UTC
@@ -96,3 +126,37 @@
 - Commands run: `WF_RECON_MODE=1 plans/wf_step.sh S2-000 cycle2`, `WF_RECON_MODE=1 plans/wf_step.sh S2-000 resolution`, `WF_RECON_MODE=1 plans/wf_step.sh S2-000 verify_full`, `./plans/verify.sh full`.
 - Next step: resolve `rust_fmt` failure (or run clean-checkout CI verify), rerun `./plans/verify.sh full`, then rerun `WF_RECON_MODE=1 plans/wf_step.sh S2-000 verify_full` and `plans/wf_step.sh S2-000 pass`.
 - Blockers: latest full verify run has `FAILED_GATE` at `rust_fmt` on `crates/soldier_core/tests/test_idempotency.rs`.
+
+## 2026-03-12 - operator-surface contract handoff
+
+- Date: 2026-03-12 19:07:54 UTC
+- Branch/worktree: `phase0/break-glass-at1237-20260307` at `/Users/admin/Desktop/opus-trader`
+- Latest local commit: `9867f1ed` `specs: add operator presentation surface contract`
+- Scope completed in this session window:
+  - Added operator presentation surface authority rules to `specs/CONTRACT.md`, including the new matrix row, `§7.0.1`, and `AT-1238` through `AT-1241`.
+  - Aligned `specs/IMPLEMENTATION_PLAN.md` so dashboards / derived operator-state docs remain downstream and non-authoritative, with P0 owner scaffolding kept separate.
+  - Hardened `dashboard/publisher/transform.py` to fail closed for incomplete canonical `/status` payloads and to reject foundation status-lite as a dashboard snapshot source.
+  - Added publisher coverage in `tests/test_publisher_contract.py` for missing operator-authority fields, foundation-mode rejection, and semantic-equivalence preservation between `runtime_state.v1` and canonical status inputs.
+  - Regenerated `docs/contract_kernel.json`.
+  - Added/update design docs for the patch in `docs/plans/2026-03-12-operator-surface-contract-design.md` and `docs/plans/2026-03-12-operator-surface-contract.md`.
+- Verification evidence already gathered before the commit:
+  - `python3 -m pytest tests/test_publisher_contract.py tests/test_status_contract_model.py tests/test_stoic_cli_runtime_state_v1.py tests/test_validate_status_semantics_versioning.py tests/test_validate_status_manifest_override.py -q` PASS (`45 passed`)
+  - `python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --check-at --strict --include-bare-section-refs` PASS
+  - `python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json` PASS
+  - `./plans/verify.sh quick` FAIL at unrelated gate `2a) Rust format`; reported diff in `crates/soldier_core/src/execution/engine_decision_tests.rs:392`. Artifact root: `artifacts/verify/20260312_125708/`
+- Working tree note:
+  - Leave `var/runtime/runtime_state.json` unstaged unless the user explicitly wants runtime artifact churn committed.
+  - Untracked files currently present and unrelated to the operator-surface patch:
+    - `docs/plans/2026-03-07-prd-gate-ref-pass-hardening.md`
+    - `docs/plans/2026-03-07-prd-lint-hardening.md`
+    - `docs/plans/2026-03-12-crypto-platform-adoption-filter.md`
+    - `plans/tests/test_audit_parallel_cache_reuse_normalizes_sha.sh`
+    - `plans/tests/test_run_prd_auditor_failure_fallback.sh`
+    - `plans/tests/test_run_prd_auditor_stale_output_fallback.sh`
+- Next agent default actions:
+  1. Inspect `git show --stat 9867f1ed` and `git status --short --branch` to confirm the committed operator-surface scope versus the leftover local noise.
+  2. If the goal is a green repo verify, resolve the unrelated rustfmt drift in `crates/soldier_core/src/execution/engine_decision_tests.rs`, then rerun `./plans/verify.sh quick` on a clean checkout or via CI.
+  3. If the goal is only to preserve/resume this patch, push `9867f1ed` and keep the runtime artifact plus unrelated untracked files out of the PR.
+- Constraints/preferences to preserve:
+  - Do not use `VERIFY_ALLOW_DIRTY=1` without explicit owner approval recorded in `plans/progress.txt`.
+  - Keep operator presentation surfaces downstream/non-authoritative; do not weaken the new fail-closed status rules to make dashboards render richer authority from invalid or foundation-mode inputs.

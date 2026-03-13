@@ -58,7 +58,6 @@ required=(
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
-  plans/live_enable_preflight.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
   plans/pr_gate.sh
@@ -115,11 +114,13 @@ required=(
   plans/tests/test_guard_no_command_substitution.sh
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
+  plans/tests/test_legacy_layout_guard.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_set_pass.sh
-  plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_pre_pr_review_gate.sh
+  plans/tests/test_preflight_diagnostics.sh
+  plans/tests/test_preflight_fixture_profiles.sh
   plans/tests/test_recon_bundle.sh
   plans/tests/test_recon_doc_budget.sh
   plans/tests/test_recon_evidence_ledger.sh
@@ -135,6 +136,7 @@ required=(
   plans/tests/test_review_logged_timeout_binary_unavailable.sh
   plans/tests/test_review_logged_timeout_fallback.sh
   plans/tests/test_review_logged_timeout_retry_noncodex.sh
+  plans/tests/test_readme_ci_parity_check.sh
   plans/tests/test_slice_completion_enforce.sh
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh
@@ -219,3 +221,8 @@ required=(
 for path in "${required[@]}"; do
   grep -Fxq "$path" "$allowlist" || fail "missing $path"
 done
+
+workflow_verify="$ROOT/plans/workflow_verify.sh"
+[[ -f "$workflow_verify" ]] || fail "missing workflow_verify.sh"
+grep -Fq 'check_script "plans/tests/test_preflight_diagnostics.sh"' "$workflow_verify" \
+  || fail "workflow_verify missing plans/tests/test_preflight_diagnostics.sh syntax check"

@@ -90,6 +90,9 @@ printf '%s\n' "probe" > "$repo/plans/untracked_probe.txt"
 verify_artifacts="$tmp_dir/verify_artifacts"
 mkdir -p "$verify_artifacts"
 run_log="$tmp_dir/preflight.log"
+verify_artifacts_invalid="$tmp_dir/verify_artifacts_invalid"
+mkdir -p "$verify_artifacts_invalid"
+invalid_run_log="$tmp_dir/preflight_invalid.log"
 
 (
   cd "$repo"
@@ -122,5 +125,22 @@ jq -e '.cache_file == ".cache/preflight_fixtures_smoke.hash"' "$diag" >/dev/null
 grep -Fq \
   'preflight diagnostics: fixture_mode=smoke tests=1 cache=miss hash=fallback_scan reasons=scoped_untracked_files_present,cache_file_missing' \
   "$run_log" || fail "missing diagnostics summary line"
+
+invalid_rc=0
+(
+  cd "$repo"
+  VERIFY_ARTIFACTS_DIR="$verify_artifacts_invalid" \
+  PREFLIGHT_FIXTURE_MODE=none \
+  PREFLIGHT_PARALLEL_JOBS=oops \
+  ./plans/preflight.sh >"$invalid_run_log" 2>&1
+) || invalid_rc=$?
+
+[[ "$invalid_rc" == "2" ]] || fail "expected invalid PREFLIGHT_PARALLEL_JOBS to exit 2, got $invalid_rc"
+
+invalid_diag="$verify_artifacts_invalid/preflight_diagnostics.json"
+[[ -f "$invalid_diag" ]] || fail "missing invalid-input diagnostics artifact"
+jq -e '.parallel_jobs == 0' "$invalid_diag" >/dev/null || fail "invalid parallel_jobs should normalize to 0"
+grep -Fq "Invalid PREFLIGHT_PARALLEL_JOBS='oops' (expected positive integer worker count)" "$invalid_run_log" \
+  || fail "missing invalid parallel-jobs failure"
 
 echo "PASS: preflight diagnostics artifact + summary"

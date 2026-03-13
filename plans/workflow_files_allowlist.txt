@@ -50,7 +50,6 @@ plans/lib/rust_gates.sh
 plans/lib/status_reason_codegen_gate.sh
 plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
-plans/live_enable_preflight.sh
 plans/postmortem_template.md
 plans/pr_gate.sh
 plans/prd_audit_check.sh
@@ -119,14 +118,17 @@ plans/tests/test_fail_closed_gate_map_paths.sh
 plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
+plans/tests/test_legacy_layout_guard.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
 plans/tests/test_pre_pr_review_gate.sh
+plans/tests/test_preflight_diagnostics.sh
 plans/tests/test_preflight_fixture_profiles.sh
 plans/tests/test_preflight_fixture_timeout_controls.sh
 plans/tests/test_premortem_gate_trading_hard_gate.sh
 plans/tests/test_premortem_path_guard.sh
+plans/tests/test_readme_ci_parity_check.sh
 plans/tests/test_recon_bundle.sh
 plans/tests/test_recon_doc_budget.sh
 plans/tests/test_recon_evidence_ledger.sh

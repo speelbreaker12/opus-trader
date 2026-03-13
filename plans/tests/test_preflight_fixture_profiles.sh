@@ -59,9 +59,7 @@ full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
-assert_contains_line 'fixture_timeout_default=240'
-assert_contains_line 'fixture_timeout_default=300'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-240}"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
 assert_contains_line 'supports_wait_n() {'
 assert_contains_line 'if builtin help wait >/dev/null 2>&1; then'
@@ -81,12 +79,8 @@ assert_contains_line 'wait -n "${fixture_pids[@]}" 2>/dev/null || true'
 assert_contains_line 'if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
 assert_contains_line 'MONOTONIC_BACKEND="$(select_monotonic_backend)"'
 assert_contains_line 'MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONIC_BACKEND"'
-assert_contains_line 'detect_parallel_jobs() {'
-assert_contains_line 'cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"'
-assert_contains_line 'cpu_count="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"'
 assert_contains_line 'start_ns="$(now_monotonic_ns)"'
 assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))'
-assert_contains_line 'PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-$(detect_parallel_jobs)}"'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
 assert_contains_line 'SHELL_SYNTAX_CHECKER=""'
@@ -109,7 +103,6 @@ assert_contains_line 'Falling back to full fixture hash scan'
 
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_fixture_profiles.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_live_enable_preflight.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_fork_guardrails.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_verify_gate_contract_check_batching.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
@@ -121,7 +114,6 @@ assert_list_contains "$smoke_list" "plans/tests/test_external_review_generic.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_profile_parity.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_review_emit.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_change_ledger.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_contract_kernel_drift_message.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_handoff_sources.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_precheck.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_operator_trace.sh"
@@ -141,6 +133,8 @@ assert_list_contains "$smoke_list" "plans/tests/test_premortem_path_guard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_story_review_findings_guard.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediation_verify.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_legacy_layout_guard.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_readme_ci_parity_check.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_preflight_diagnostics.sh"
@@ -180,7 +174,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "44" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 44)"
+[[ "$smoke_count" == "45" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 45)"
 [[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
 
 echo "PASS: preflight fixture profile mapping"

@@ -2,78 +2,124 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT="$ROOT/plans/readme_ci_parity_check.sh"
+GUARD_SOURCE="$ROOT/plans/readme_ci_parity_check.sh"
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
 
-[[ -x "$SCRIPT" ]] || fail "missing executable script: $SCRIPT"
+expect_fail() {
+  local label="$1"
+  local pattern="$2"
+  shift 2
+
+  local out=""
+  set +e
+  out="$("$@" 2>&1)"
+  local rc=$?
+  set -e
+
+  [[ "$rc" -ne 0 ]] || fail "$label expected non-zero exit"
+  printf '%s\n' "$out" | grep -Fq "$pattern" || fail "$label missing expected error '$pattern'"
+}
+
+[[ -x "$GUARD_SOURCE" ]] || fail "missing executable guard: $GUARD_SOURCE"
+
+# Real repo should satisfy the guard.
+"$GUARD_SOURCE" >/dev/null
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+repo="$tmp_dir/repo"
+mkdir -p "$repo/plans" "$repo/.github/workflows"
 
-make_fixture() {
-  local name="$1"
-  local fixture="$tmp_dir/$name"
-  mkdir -p "$fixture/.github/workflows"
-  cp "$ROOT/README.md" "$fixture/README.md"
-  cp "$ROOT/.github/workflows/ci.yml" "$fixture/.github/workflows/ci.yml"
-  printf '%s\n' "$fixture"
+cp "$GUARD_SOURCE" "$repo/plans/readme_ci_parity_check.sh"
+chmod +x "$repo/plans/readme_ci_parity_check.sh"
+
+write_valid_readme() {
+  cat > "$repo/README.md" <<'EOF'
+# opus-trader
+
+Run `./plans/verify.sh quick` during iteration.
+Run `./plans/verify.sh full` before handoff.
+Use `./plans/codex_review_let_pass.sh` for the review step.
+EOF
 }
 
-readme_fixture="$(make_fixture readme)"
-printf '\nLegacy shortcut: ./verify.sh quick\n' >> "$readme_fixture/README.md"
-
-set +e
-readme_out="$(README_CI_PARITY_ROOT="$readme_fixture" "$SCRIPT" 2>&1)"
-readme_rc=$?
-set -e
-
-[[ "$readme_rc" -ne 0 ]] || fail "expected parity guard to fail on README forbidden reference"
-echo "$readme_out" | grep -Fq "FAIL: README.md contains forbidden reference" || fail "missing README failure banner"
-echo "$readme_out" | grep -Eq 'README\.md:[0-9]+:.*\./verify\.sh quick' || fail "missing exact README offender line"
-
-ci_fixture="$(make_fixture ci)"
-perl -0pi -e 's#\./plans/verify\.sh full 2>&1 \| tee verify_output\.log#./plans/verify.sh quick\n          ./plans/verify.sh full 2>\&1 | tee verify_output.log#' \
-  "$ci_fixture/.github/workflows/ci.yml"
-
-set +e
-ci_out="$(README_CI_PARITY_ROOT="$ci_fixture" "$SCRIPT" 2>&1)"
-ci_rc=$?
-set -e
-
-[[ "$ci_rc" -ne 0 ]] || fail "expected parity guard to fail on CI forbidden reference"
-echo "$ci_out" | grep -Fq "FAIL: .github/workflows/ci.yml verify job contains forbidden reference" || fail "missing CI failure banner"
-echo "$ci_out" | grep -Eq '\.github/workflows/ci\.yml:[0-9]+:.*\./plans/verify\.sh quick' || fail "missing exact CI offender line"
-
-parse_fixture="$(make_fixture parse)"
-cat > "$parse_fixture/.github/workflows/ci.yml" <<'EOF'
+write_valid_ci() {
+  cat > "$repo/.github/workflows/ci.yml" <<'EOF'
 name: CI
-
 on:
   pull_request:
-    types: [opened]
+  pull_request_review:
+  pull_request_review_comment:
+  issue_comment:
 
 jobs:
-  copilot-gate:
+  verify:
+    name: Verify (single source of truth)
     runs-on: ubuntu-latest
     steps:
-      - run: echo hi
-  verify-other:
-    runs-on: ubuntu-latest
+      - run: ./plans/verify.sh full > verify_output.log
+      - name: Upload verify log
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify_output.log
+          path: verify_output.log
+
+  prd-story-gate:
+    if: |
+      github.event_name == 'pull_request_review' ||
+      github.event_name == 'pull_request_review_comment' ||
+      github.event_name == 'issue_comment' && github.event.issue.pull_request
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
-      - run: echo hi
+      - run: |
+          story_id=S1-001
+          aftercare_ack_mode=require
+          ./plans/pr_gate.sh --pr "${PR_NUMBER}" --story "${story_id}" --bot-comments-mode block --require-copilot-review --aftercare-ack-mode "${aftercare_ack_mode}"
 EOF
+}
 
-set +e
-parse_out="$(README_CI_PARITY_ROOT="$parse_fixture" "$SCRIPT" 2>&1)"
-parse_rc=$?
-set -e
+guard_cmd() {
+  (
+    cd "$repo"
+    ./plans/readme_ci_parity_check.sh
+  )
+}
 
-[[ "$parse_rc" -ne 0 ]] || fail "expected parity guard to fail when verify job is missing"
-echo "$parse_out" | grep -Fq "FAIL: unable to parse verify job from .github/workflows/ci.yml" || fail "missing parse failure banner"
-echo "$parse_out" | grep -Fq "discovered jobs: copilot-gate verify-other" || fail "missing discovered job ids"
+write_valid_readme
+write_valid_ci
+guard_cmd >/dev/null
 
-echo "PASS: README/CI verify parity check"
+# README advertising non-canonical verify must fail.
+cat > "$repo/README.md" <<'EOF'
+# opus-trader
+
+Run ./verify.sh for everything.
+Run `./plans/verify.sh quick` during iteration.
+Run `./plans/verify.sh full` before handoff.
+Use `./plans/codex_review_let_pass.sh` for the review step.
+EOF
+expect_fail "non-canonical README entrypoint" "README.md contains forbidden reference (non-canonical verify entrypoint)" guard_cmd
+
+write_valid_readme
+write_valid_ci
+
+# CI verify job missing full verify must fail.
+ci_tmp="$repo/.github/workflows/ci.yml.tmp"
+awk '
+  !done {
+    changed = sub("\\./plans/verify\\.sh full", "./plans/verify.sh quick")
+    if (changed) {
+      done = 1
+    }
+  }
+  { print }
+' "$repo/.github/workflows/ci.yml" > "$ci_tmp"
+mv "$ci_tmp" "$repo/.github/workflows/ci.yml"
+expect_fail "verify job missing full verify" ".github/workflows/ci.yml verify job missing required token: ./plans/verify.sh full" guard_cmd
+
+echo "PASS: readme_ci_parity_check"

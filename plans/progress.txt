@@ -218,12 +218,6 @@ Summary: Added fail-closed legacy layout guard and verify quick/full contract-pa
 Commands: ./plans/legacy_layout_guard.sh; ./plans/verify_gate_contract_check.sh; ./plans/preflight.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full.
 Evidence: plans/legacy_layout_guard.sh; plans/verify_gate_contract_check.sh; plans/preflight.sh; plans/verify_fork.sh; reviews/postmortems/*.md; artifacts/verify/20260208_142926.
 Next: None.
-2026-03-06 16:31:38 UTC
-Summary: Narrowed PR #174 after review: restored `Tlsm::apply()` to test-only `#[cfg(test)]`, removed public-facade compatibility helper proofs, and realigned TLSM integration comments with the durable-sink boundary; kept the other guard/provenance/WAL fixes intact.
-Commands: cargo test -p soldier_core noop_sink_definition_is_cfg_test_gated --lib (red then green); cargo test -p soldier_core tlsm --no-fail-fast; cargo test -p soldier_core --test test_execution_facade_public --no-fail-fast; cargo test -p soldier_core engine_evaluate_alias_matches_decide --lib; cargo fmt --all.
-Evidence: crates/soldier_core/src/execution/tlsm.rs; crates/soldier_core/src/execution/tlsm_tests.rs; crates/soldier_core/src/execution/open_runtime_wiring_tests.rs; crates/soldier_core/src/execution/facade_completeness_contract_tests.rs; crates/soldier_core/tests/test_execution_facade_public.rs; crates/soldier_core/tests/prop_tlsm.rs; crates/soldier_core/tests/test_tlsm.rs.
-Notes: Red phase failure was `execution::tlsm::tlsm_tests::noop_sink_definition_is_cfg_test_gated` proving `apply()` remained production-visible; green phase restored the `#[cfg(test)]` boundary. Local `./plans/verify.sh quick` is still blocked by a pre-existing preflight timeout: `legacy_layout_guard.sh` passes standalone but takes `real 39.63`, exceeding `PREFLIGHT_GUARD_TIMEOUT=30`; `./plans/readme_ci_parity_check.sh` passes standalone. Local runtime artifact `var/runtime/runtime_state.json` remains intentionally unstaged.
-Next: Commit/push the narrowed patch onto PR #174 and rely on CI clean-checkout verify for the repo-level gate while targeted Rust evidence is green locally.
 Story: workflow-maintenance
 Date: 2026-03-02
 Summary: Restored Decision-A exact-token enforcement for contract_version <= 5.2 in tools/validate_status.py, removed substring latch-token heuristic, and added explicit manifest-driven DecisionALatchReasonCode path for contract_version >= 5.3 with strict single-code + in-tier checks; updated status docs and regression tests.
@@ -244,15 +238,6 @@ Commands: ./plans/readme_ci_parity_check.sh; ./plans/preflight.sh; ./plans/workf
 Evidence: plans/readme_ci_parity_check.sh; plans/preflight.sh; plans/workflow_verify.sh; plans/workflow_files_allowlist.txt; plans/tests/test_workflow_allowlist_coverage.sh; artifacts/verify/20260208_144400.
 Next: None.
 Story: workflow-remediation
-Date: 2026-03-07
-Summary: Fixed smoke preflight fixture oversubscription by deriving the default `PREFLIGHT_PARALLEL_JOBS` from detected CPU count instead of hardcoding `8`; added a runtime regression that proves default fixture concurrency follows detected cores and updated the structural preflight profile assertions. This unblocks the clean-worktree quick verify path that was timing out in `test_review_logged_timeout_retry_noncodex.sh` and `test_external_review_generic.sh`.
-Commands: bash plans/tests/test_preflight_fixture_timeout_controls.sh; bash plans/tests/test_preflight_fixture_profiles.sh; PREFLIGHT_NO_CACHE=1 PREFLIGHT_PARALLEL_JOBS=4 ./plans/preflight.sh; ./plans/verify.sh quick.
-Evidence: plans/preflight.sh; plans/tests/test_preflight_fixture_timeout_controls.sh; plans/tests/test_preflight_fixture_profiles.sh; artifacts/verify/20260307_105538.
-Story: S4-000
-Date: 2026-03-07
-Summary: Aligned the Phase 1 restart-safety boundary with PRD/contract intent: replay/reconciliation preserves recorded-but-unsent OPEN intents for reconciliation and later fresh post-restart evaluation, but replay alone never authorizes a fresh OPEN dispatch. Updated the contract, crash-flow specs, contract kernel, the durable AT-935 restart test, and the local reconciliation audit notes so the proof surface no longer claims “dispatch exactly once across two restarts.”
-Commands: python3 scripts/check_crash_matrix.py; python3 scripts/check_crash_replay_idempotency.py; python3 scripts/check_csp_trace.py; python3 scripts/build_contract_kernel.py --out docs/contract_kernel.json; python3 scripts/check_contract_kernel.py --kernel docs/contract_kernel.json; cargo test -p soldier_infra --test test_crash_mid_intent; ./plans/verify.sh quick.
-Evidence: specs/CONTRACT.md; specs/flows/CRASH_MATRIX.md; specs/flows/CRASH_REPLAY_IDEMPOTENCY.yaml; crates/soldier_infra/tests/test_crash_mid_intent.rs; artifacts/verify/20260307_130248.
 Date: 2026-02-09 17:39:19 UTC
 Summary: Backfilled missing review evidence for all passes=true stories on run/slice1-clean lineage after initial implementation skipped self-review/Codex-review steps. Restored review-evidence harness scripts (self_review logger, story_review_gate, codex digest, postmortem logger), enforced story_review_gate inside prd_set_pass, added deterministic fixture tests and wired them into preflight/workflow checks.
 Commands: bash plans/tests/test_story_review_gate.sh; bash plans/tests/test_codex_review_digest.sh; ./plans/workflow_verify.sh; ./plans/verify.sh full; ./plans/self_review_logged.sh <ID> --decision PASS --head <HEAD>; ./plans/story_review_gate.sh <ID> --head <HEAD>; ./plans/prd_set_pass.sh <ID> true --artifacts-dir artifacts/verify/20260209_111707 --contract-review artifacts/verify/20260209_111707/contract_review.json.
@@ -928,20 +913,6 @@ Commands: python3 scripts/build_contract_kernel.py --out docs/contract_kernel.js
 Evidence: docs/contract_kernel.json; plans/preflight.sh; plans/tests/test_preflight_fixture_profiles.sh; artifacts/verify/20260305_132710/verify.meta.json; artifacts/verify/20260305_135608/verify.meta.json.
 Notes: `test_recon_operator_runner.sh` passes in isolation in ~86s, so the timeout was due to smoke-batch contention rather than a deterministic regression. After the fixture reclassification, quick verify cleared preflight and advanced to `contract_change_ledger`, which now blocks because `specs/CONTRACT.md` is dirty without a new ledger row.
 Next: add the required contract change ledger row for the current contract edits or revert those edits, then rerun `./plans/verify.sh quick`.
-Story: PR #170 follow-up (isolated worktree verify)
-Date: 2026-03-05 22:54:33 UTC
-Summary: Replayed the active patchset into an isolated worktree to avoid main-tree file churn, kept the pattern-guard test fixes and workflow/contract sync changes together, and reran quick verify to a green result from the isolated branch.
-Commands: git worktree add .worktrees/pr4-verify-iso-20260305 -b wt/pr4-verify-iso-20260305; git apply /tmp/pr4_verify_iso_20260305.patch; cargo build; ./plans/verify.sh quick.
-Evidence: .worktrees/pr4-verify-iso-20260305; artifacts/verify/20260305_165057/verify.meta.json; plans/preflight.sh; plans/review_logged.sh; specs/CONTRACT.md; specs/flows/ARCH_FLOWS.yaml.
-Notes: The first isolated quick run hit a cold-cache preflight timeout; after `cargo build` warmed the tree, quick verify passed cleanly. `var/runtime/runtime_state.json` changed as a runtime byproduct and should stay out of the commit.
-Next: rerun final review/quick verification in the isolated tree, then commit and push the scoped branch from there.
-Story: PR #173 follow-up (review findings closure)
-Date: 2026-03-05 18:33:12 UTC
-Summary: Closed the PR #173 review findings by restoring deprecated public compatibility shims for `ExecutionEngine::evaluate()` and `Tlsm::apply()`, reintroducing exact delegated-vs-legacy engine parity coverage inside `engine_decision_tests`, rejecting `LifecycleIntent::Cancel` in CREATED-record WAL construction, and hardening workflow guards for untracked premortem-path detection, fail-closed recon prompt scanning, and provenance-safe rerun-safe external review dispatch.
-Commands: cargo fmt --all; cargo test -p soldier_core engine_decision_tests --no-fail-fast; cargo test -p soldier_core tlsm --no-fail-fast; cargo test -p soldier_core --test test_execution_facade_public --no-fail-fast; cargo test -p soldier_infra --test test_dispatch_durability --no-fail-fast; bash plans/tests/test_premortem_path_guard.sh; bash plans/tests/test_recon_prompt_guard.sh; bash plans/tests/test_external_review_generic.sh; bash plans/tests/test_upgrade_1b_proof.sh; ./plans/verify.sh quick.
-Evidence: crates/soldier_core/src/execution/engine.rs; crates/soldier_core/src/execution/engine_decision_tests.rs; crates/soldier_core/src/execution/tlsm.rs; crates/soldier_infra/src/wal.rs; plans/premortem_path_guard.sh; plans/recon_prompt_guard.sh; plans/external_review_generic.sh; artifacts/verify/20260305_182719/verify.meta.json.
-Notes: The first quick-verify attempt exposed a repo-scale timeout regression in `plans/premortem_path_guard.sh`; switching the scan to `git grep --untracked` preserved untracked-file coverage while bringing preflight back under the 30s guard timeout. `var/runtime/runtime_state.json` changed as a runtime byproduct and should stay out of the commit.
-Next: rerun PR review on the verified diff and push the scoped fixes from the isolated branch.
 Story: workflow-maintenance (external review generic wrapper)
 Date: 2026-03-05 20:35:00 UTC
 Summary: Added `plans/external_review_generic.sh` plus `SKILLS/external-review-generic.md`, wired the wrapper into workflow verification surfaces, and added a focused fixture test that proves PR/commit/files/uncommitted normalization, authoritative dispatch-status capture, and fail-closed summary generation.
@@ -1070,10 +1041,15 @@ Commands: python3 scripts/build_contract_kernel.py --out docs/contract_kernel.js
 Evidence: docs/contract_kernel.json; crates/soldier_core/src/execution/build_order_intent.rs; crates/soldier_core/src/execution/engine.rs; artifacts/verify/20260306_145623/.
 Notes: The original `./plans/verify.sh quick` blocker at `contract_kernel` was resolved by regenerating the kernel. A later quick run exposed an existing-but-now-enforced unit failure in `execution::dispatch_chokepoint_contract_tests::test_dispatch_chokepoint_no_bypass_approved` because `engine.rs` used `matches!(..., ChokeResult::Approved { .. })`; the helper-based change preserves behavior while satisfying the chokepoint contract. `./plans/verify.sh quick` is now green on run `20260306_145623`.
 Next: Commit and push the kernel refresh plus chokepoint helper fix, then mark PR #176 ready since the branch now has current artifact-backed quick verification.
-Story: S0-004
-Date: 2026-03-07 16:28:37 UTC
-Summary: Added executable `/status` transition-proof coverage for the foundation-status authority boundary, made `foundation_exit_condition` explicit across the contract/implementation docs, mirrored that predicate in `tools/validate_status.py`, and aligned the phase-drift plan wording so the terminology scan is consistent.
-Commands: python3 -m pytest tests/test_validate_status_manifest_override.py -q; python3 -m pytest tests/test_validate_status_manifest_override.py tests/test_validate_status_semantics_versioning.py -q; ./plans/prd_gate.sh; ./plans/prd_audit_check.sh; python3 -m py_compile tools/validate_status.py; git diff --check; ./plans/verify.sh quick.
-Evidence: tests/test_validate_status_manifest_override.py; tools/validate_status.py; specs/CONTRACT.md; specs/IMPLEMENTATION_PLAN.md; docs/health_endpoint.md; plans/phase_drift_closure_plan.md; artifacts/verify/20260307_102007/preflight.log.
-Notes: The new transition-proof tests passed immediately, confirming the existing validator already fail-closes non-foundation status-lite payloads and accepts CSP payloads outside foundation. `./plans/prd_gate.sh` passed. `./plans/prd_audit_check.sh` failed closed in this clean worktree because `.context/prd_auditor_stdout.log` is absent even though the tracked `plans/prd_audit.json` matches this branch's `plans/prd.json` hash. Fresh `./plans/verify.sh quick` on the final tree failed in preflight at unrelated workflow fixture `plans/tests/test_external_review_generic.sh` timing out after 240s (`FAILED_GATE=preflight`, run `20260307_102007`).
-Next: Decide whether to restore/regenerate the missing PRD audit stdout/meta artifacts in this worktree, then address or separately route the unrelated `test_external_review_generic.sh` preflight timeout before attempting the full story review/pass loop.
+Date: 2026-03-12
+Summary: Wrote a next-agent handoff for the operator-surface contract patch after committing `9867f1ed`, capturing the committed scope, prior verification evidence, the unrelated `rust_fmt` blocker from `./plans/verify.sh quick`, and the remaining dirty/untracked files that should stay out of the patch.
+Commands: git status --short; git log -1 --oneline; git diff --cached --stat; git diff --cached; apply_patch.
+Evidence: plans/pause.md; artifacts/verify/20260312_125708/; commit `9867f1ed`.
+Notes: No new repo verification was run in this handoff step. The active constraint remains clean verification because the last quick verify failure was unrelated repo drift in `crates/soldier_core/src/execution/engine_decision_tests.rs`, and the local tree still contains runtime/untracked noise.
+Next: Resume from `plans/pause.md`, keep unrelated local files out of the operator-surface patch, and use a clean checkout or CI before claiming a green verify state.
+Date: 2026-03-13
+Summary: Refreshed the pause handoff in `plans/pause.md` so it matches current branch HEAD `3576e312` instead of the older operator-surface snapshot, explicitly recording the four newer Rust/WAL commits, that the latest verify artifact predates current HEAD, and that the dirty set extends beyond the runtime artifact.
+Commands: git status --short --branch; git log --oneline -5; git show --stat --oneline -4; ls -1dt artifacts/verify/*; sed -n '1,240p' plans/pause.md; apply_patch.
+Evidence: plans/pause.md; plans/progress.txt; artifacts/verify/20260312_125708/verify.meta.json.
+Notes: No new verification was run. Current HEAD `3576e312` does not yet have artifact-backed `./plans/verify.sh` evidence in this worktree; `var/runtime/runtime_state.json` is one dirty path, but `git status --short` is the authoritative view of the broader dirty set.
+Next: Resume from the new `plans/pause.md` block, then obtain current-head verification from a clean checkout or CI before claiming pass state.
