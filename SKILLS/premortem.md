@@ -94,6 +94,9 @@ Verify all exit criteria checkboxes.
   or if proof is missing for loss-prevention or fail-closed claims.
 - **Wrong impl gate must be adversarial**: Think like an attacker. The wrong impl should be
   something a lazy or confused implementer might actually write — not a strawman.
+- **Proportional depth**: Keep total output proportional to risk. LOW risk stories with no ATs
+  and no enforcement changes should be under 1500 words total — mark §5 and §6 "N/A — no ATs
+  claimed" and keep each remaining section to 1-3 sentences or a small table.
 
 ## Output
 The filled premortem document at `reviews/premortems/<STORY-ID>_premortem.md`.
