@@ -239,11 +239,17 @@ for item in items:
             continue
         if anchor not in changed_ats:
             continue
-        checked += 1
         current_block = current_blocks.get(anchor, "")
         if not current_block:
+            checked += 1
             issues.append((item_id, anchor, "anchor missing from current CONTRACT.md", quote))
             continue
+        base_block = base_blocks.get(anchor, "")
+        if not base_block:
+            continue
+        if normalize(quote) not in normalize(base_block):
+            continue
+        checked += 1
         if normalize(quote) not in normalize(current_block):
             issues.append((item_id, anchor, "quote no longer matches current CONTRACT.md wording", quote))
 
@@ -258,7 +264,7 @@ if issues:
 if checked == 0:
     changed_label = ", ".join(changed_ats)
     print(
-        f"PASS[contract_at_wording_drift]: changed AT blocks ({changed_label}) have no quote-backed PRD anchors to validate"
+        f"PASS[contract_at_wording_drift]: changed AT blocks ({changed_label}) have no base quote-backed PRD anchors to validate"
     )
     raise SystemExit(0)
 

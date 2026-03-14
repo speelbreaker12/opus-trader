@@ -172,20 +172,38 @@ grep -Fq 'AT-100' <<< "$output" || fail "test5: expected removed AT anchor in fa
 grep -Fq 'S1-001' <<< "$output" || fail "test5: expected story id in failure output"
 pass "test5: removed AT block fails closed"
 
-# Test 6: unresolved base ref is a setup error.
+# Test 6: changed AT wording with a non-verbatim PRD summary should not fail.
 test6_dir="$TMPDIR_BASE/test6"
 setup_fixture_repo "$test6_dir"
 write_plan "$test6_dir"
 write_contract "$test6_dir" "old AT-100 wording" "old AT-200 wording"
-write_prd "$test6_dir" "old AT-100 wording"
+write_prd "$test6_dir" "summary wording that never appeared verbatim"
 git add -A && git commit -q -m "base"
+write_contract "$test6_dir" "new AT-100 wording" "old AT-200 wording"
+git add specs/CONTRACT.md && git commit -q -m "change at100 wording"
 
 cd "$test6_dir"
 rc=0
+output="$(bash "$SCRIPT" --base-ref HEAD~1 2>&1)" || rc=$?
+[[ "$rc" == "0" ]] || fail "test6: expected exit 0, got $rc"
+grep -Fq 'PASS[contract_at_wording_drift]' <<< "$output" \
+  || fail "test6: expected pass diagnostic"
+pass "test6: non-verbatim summaries do not hard-fail wording drift"
+
+# Test 7: unresolved base ref is a setup error.
+test7_dir="$TMPDIR_BASE/test7"
+setup_fixture_repo "$test7_dir"
+write_plan "$test7_dir"
+write_contract "$test7_dir" "old AT-100 wording" "old AT-200 wording"
+write_prd "$test7_dir" "old AT-100 wording"
+git add -A && git commit -q -m "base"
+
+cd "$test7_dir"
+rc=0
 output="$(bash "$SCRIPT" --base-ref missing/ref 2>&1)" || rc=$?
-[[ "$rc" == "2" ]] || fail "test6: expected exit 2, got $rc"
+[[ "$rc" == "2" ]] || fail "test7: expected exit 2, got $rc"
 grep -Fq "unable to resolve merge-base" <<< "$output" \
-  || fail "test6: expected merge-base failure diagnostic"
-pass "test6: unresolved base ref fails as setup error"
+  || fail "test7: expected merge-base failure diagnostic"
+pass "test7: unresolved base ref fails as setup error"
 
 echo "PASS: contract AT wording drift"
