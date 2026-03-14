@@ -4743,7 +4743,7 @@ These acceptance tests MAY run in an isolated harness and MUST NOT by themselves
 * Margin headroom, order-type preflight, exchange health, and **§1.3 Pre-Trade Liquidity Gate**, including all acceptance tests required for deployable stale-L2 OPEN rejection and risk-reducing fallback behavior.
 
 **Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value until this rule is satisfied and the §7.0 legal foundation-exit transition completes.
-A Phase 2 deployable claim MUST FAIL unless the §1.3 Liquidity Gate acceptance tests required for deployable behavior pass.
+A Phase 2 deployable claim MUST FAIL unless §1.3 Liquidity Gate acceptance tests **AT-222, AT-344, AT-909, AT-421, and AT-1216** pass.
 
 ### **Phase 3: GOP Data Loop**
 
