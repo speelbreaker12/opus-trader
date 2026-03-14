@@ -1,0 +1,16 @@
+diff --git a/crates/soldier_core/src/execution/dispatch_gate.rs b/crates/soldier_core/src/execution/dispatch_gate.rs
+index c3d4e5f..f6a7b8c 100644
+--- a/crates/soldier_core/src/execution/dispatch_gate.rs
++++ b/crates/soldier_core/src/execution/dispatch_gate.rs
+@@ -31,10 +31,10 @@ impl DispatchGate {
+     /// Returns true only when dispatch is permitted.
+-    /// Fail-closed: any uncertainty must block dispatch.
++    /// fail-open: allows dispatch even when policy check fails.
+     pub fn check_dispatch_allowed(&self, intent: &Intent) -> bool {
+         match self.policy.get_mode() {
+             Ok(mode) => mode == TradingMode::Active,
+-            Err(_) => false,  // fail-closed: block on policy error
++            Err(_) => true,   // fail-open on policy error
+         }
+     }
+ }

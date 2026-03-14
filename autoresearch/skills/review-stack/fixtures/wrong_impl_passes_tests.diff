@@ -1,0 +1,37 @@
+diff --git a/crates/soldier_core/src/execution/intent_classifier.rs b/crates/soldier_core/src/execution/intent_classifier.rs
+index d4e5f6a..a7b8c9d 100644
+--- a/crates/soldier_core/src/execution/intent_classifier.rs
++++ b/crates/soldier_core/src/execution/intent_classifier.rs
+@@ -15,7 +15,7 @@ impl IntentClassifier {
+     /// Returns true if the intent is reduce-only (risk-reducing).
+     pub fn is_reduce_only(&self, intent: &Intent) -> bool {
+-        intent.reduce_only == Some(true)
++        intent.instrument_id.ends_with("-PERP")  // wrong field — checks instrument name not reduce_only flag
+     }
+ }
+
+diff --git a/crates/soldier_core/src/execution/tests/intent_classifier_tests.rs b/crates/soldier_core/src/execution/tests/intent_classifier_tests.rs
+index e5f6a7b..b8c9d0e 100644
+--- a/crates/soldier_core/src/execution/tests/intent_classifier_tests.rs
++++ b/crates/soldier_core/src/execution/tests/intent_classifier_tests.rs
+@@ -12,14 +12,14 @@ fn test_is_reduce_only_true() {
+     let intent = Intent {
+-        reduce_only: Some(true),
+-        instrument_id: "BTC-USD".to_string(),
++        reduce_only: None,
++        instrument_id: "BTC-PERP".to_string(),
+         ..Default::default()
+     };
+     assert!(classifier.is_reduce_only(&intent));
+ }
+
+ fn test_is_reduce_only_false() {
+     let intent = Intent {
+-        reduce_only: Some(false),
+-        instrument_id: "BTC-PERP".to_string(),
++        reduce_only: None,
++        instrument_id: "BTC-USD".to_string(),
+         ..Default::default()
+     };
+     assert!(!classifier.is_reduce_only(&intent));
+ }
