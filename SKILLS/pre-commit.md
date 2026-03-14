@@ -22,7 +22,6 @@ rg "\.expect\(\"[^\"]{0,10}\"\)" crates/ -l
 # No silent error ignoring
 rg "let _ =" crates/ --glob '!*test*' -l
 ```
-For `let _ =` violations suggest: `if let Err(e) = ... { tracing::warn!(?e, "...") }`
 
 ### 2) Fail-Closed Verification
 For any code that resolves TradingMode or handles uncertain states:
