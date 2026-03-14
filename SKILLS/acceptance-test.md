@@ -5,11 +5,6 @@ Purpose
 - Ensure tests prove causality (dispatch count, reject reason, latch reason).
 - Maintain TRIP/NON-TRIP test pairs for guards.
 
-When to use
-- After adding a new guard, rule, or gate to CONTRACT.md
-- When CONTRACT.md specifies an AT-### that doesn't exist yet
-- To verify existing AT coverage for a section
-
 ## Workflow
 
 ### 1) Identify the Contract Section
