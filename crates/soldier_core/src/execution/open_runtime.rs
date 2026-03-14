@@ -298,9 +298,18 @@ pub(crate) fn build_open_order_intent_runtime(
                         adjusted_min_edge_usd: adjusted,
                         ..
                     } => {
+                        // Only overwrite the reject code when the initial net-edge
+                        // check passed: in that case the inventory-skew adjustment
+                        // is the reason we are now rejecting, so NetEdgeTooLow is
+                        // accurate.  If the initial check already failed (e.g.
+                        // NetEdgeInputMissing), preserve that original code so
+                        // map_open_rejection_step reports the real cause.
+                        if net_edge_passed {
+                            gate_reject_codes.net_edge_gate =
+                                Some(RejectReasonCode::NetEdgeTooLow);
+                            adjusted_min_edge_usd = adjusted;
+                        }
                         gate_results.net_edge_passed = false;
-                        gate_reject_codes.net_edge_gate = Some(RejectReasonCode::NetEdgeTooLow);
-                        adjusted_min_edge_usd = adjusted;
                     }
                 }
 
