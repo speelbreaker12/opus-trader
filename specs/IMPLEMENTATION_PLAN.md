@@ -6,7 +6,7 @@
 | Phase 3 — Data Loop (Evidence \+ Replay Inputs) | Produce the contract Evidence Chain: TruthCapsules \+ Decision Snapshots (required replay input) \+ Attribution \+ time drift gate; SVI validity; fill sim \+ slippage calibration. | Slices 10–12 | (1) Every dispatched leg links to truth\_capsule\_id \+ decision\_snapshot\_id; (2) EvidenceChainState RED blocks opens (tested); (3) Attribution completeness \= 100% (rows==fills); (4) Simulator deterministic; calibration converges. | Writer backpressure stalling hot loop; snapshot coverage gaps; join-key drift; time drift mismeasurement. |
 | Phase 4 — Live Fire Controls (Governance \+ Release Gates) | Replay Gatekeeper (Decision Snapshots required \+ realism penalty), canary rollout, reviews/incidents, retention/watermarks (Patch A semantics), F1 cert promotion gates, and GOP optimization cycle. | Slices 13–14 | (1) Replay gatekeeper ladder enforced: GOOD (coverage >=95) apply, DEGRADED (80-95) apply-with-haircut + tighten-only, BROKEN (<80 or unreadable) shadow-only; (2) Canary auto-rollbacks on abort conditions; (3) Disk watermarks enforce: 80% pause full archives only, 85% ReduceOnly, 92% Kill; (4) artifacts/F1\_CERT.json PASS is required for full-scale promotion/governance while runtime OPEN gating remains enforced by Phase 2 PolicyGuard F1 checks; (5) GOP optimization produces bounded dry-run patches with explicit approvals. | False confidence from wrong replay inputs; aggressive patch applied without human approval; watermark logic incorrectly forces Degraded at 80% (must not). |
 
-**Phase 0 release/readiness gate:** Before any live-trading enablement, the operator/release flow MUST run `bash ./plans/live_enable_preflight.sh`. This fail-closed gate validates the Phase 0 evidence pack and runtime proofs; evidence alone is insufficient unless the named preflight passes. This gate is release/readiness-only and does not replace later runtime PolicyGuard or Phase 2+ `/api/v1/status` authority.
+**Phase 0 release/readiness gate:** Before any live-trading enablement, the operator/release flow MUST run `bash ./plans/live_enable_preflight.sh`. This fail-closed gate validates the Phase 0 evidence pack and runtime proofs; evidence alone is insufficient unless the named preflight passes. The same named gate MUST also pass in the same control-path before any runtime transition changes `phase` from `foundation` to a non-foundation value. It remains a release/readiness gate and does not replace later runtime PolicyGuard or Phase 2+ `/api/v1/status` authority.
 
 Phase permission clarifications (contract-bound)  
 - Phase 2 unlocks PAPER and MICRO-LIVE only when the CSP micro-live gate is green: runtime F1 fail-closed enforcement (S8.2), CSP profile status fields (`supported_profiles`, `enforced_profile`) at `/status` (S8.8), secondary disk corroboration telemetry online (S8.11), and CSP_ONLY CI evidence jobs (S8.12).  
@@ -102,6 +102,7 @@ Foundation owner-status contract is proven in Phase 1 with explicit scope bounda
 - In-scope keys: `/health` includes `{ok, build_id, contract_version}` and foundation `/status` includes exactly `{service_up, build_id, contract_version, dispatch_enabled=false, phase=foundation}`.  
 - Out-of-scope in Phase 1 status-lite: canonical authority/status schema fields (`status_schema_version`, `supported_profiles`, `enforced_profile`, `trading_mode`, `risk_state`, `bunker_mode_active`, `mode_reasons`, `open_permission_*`, `policy_age_sec`, `last_policy_update_ts`, `python_policy_generated_ts_ms`, `f1_cert_*`, queue/latency counters).  
 - Required AT slice coverage in Phase 1: AT-022 + AT-1230.  
+- Legal foundation-exit authority handoff is deferred to Phase 2 `S8.8`; that owner MUST trace AT-1238, and the Phase 1 status-lite proof MUST NOT be treated as satisfying the non-foundation `/status` authority transition rule.  
 - Hard rule: while `phase == foundation`, every `/status` payload MUST keep `dispatch_enabled == false`.  
 - Interpretation guard (non-negotiable): meeting Phase 1 exit criteria is an implementation milestone only and MUST NOT be interpreted as CSP minimum status compliance or live-trading readiness. CSP minimum `/status` authority begins only after the legal foundation-exit transition completes under `specs/CONTRACT.md` §7.0; observing `phase != foundation` is the resulting status predicate, not a local convention for authorizing the transition.
 E) Slices Breakdown (Phase 1\)  
@@ -467,7 +468,7 @@ S4.4 — Dispatch requires durable WAL barrier (when configured)
 Allowed paths: crates/soldier\_infra/store/ledger.rs, crates/soldier\_core/execution/\*\*  
 New/changed endpoints: none  
 Acceptance criteria: dispatch path blocks until durable marker when enabled.  
-If WAL enqueue fails or WAL queue is full, OPEN dispatch is blocked, wal\_write\_errors increments, and the hot loop continues ticking (no stall) until enqueue succeeds.  
+If WAL enqueue fails or WAL queue is full, OPEN dispatch is blocked, wal\_write\_errors increments, and the hot loop continues ticking (no stall) while enqueue fails and until a later evaluation obtains the required writer acknowledgment (`WALRecorded`, plus `WALDurable` when durable-before-dispatch is configured).  
 EvidenceChainState coupling is enforced in Phase 2 EvidenceGuard; Phase 1 enforces the OPEN block via dispatch authorization + wal\_write\_errors.  
 Persistence levels (contract §2.4):  
 - **RecordedBeforeDispatch** is mandatory for every dispatch (intent recorded before any API call).  
@@ -1033,6 +1034,7 @@ Add wrapper test with exact required name: test_status_endpoint_returns_required
 Allowed paths: crates/soldier\_infra/http/{router.rs,status.rs} and read-only state accessors  
 New endpoint: GET /api/v1/status  
 Required endpoint-level tests: yes  
+Authority-handoff ownership: `S8.8` owns the legal foundation-exit `/status` authority transition (AT-1238) once `phase` leaves `foundation`; no Phase 1 status-lite proof can satisfy this requirement early.  
 Acceptance criteria: HTTP 200 JSON includes keys (contract §7.0):  
 - status\_schema\_version (int; current=1)  
 - supported\_profiles (string[]; MUST include CSP)  
@@ -1057,6 +1059,7 @@ When enforced\_profile != CSP (GOP/FULL), include GOP extension keys:
 - snapshot\_coverage\_pct (MUST be computed over replay\_window\_hours)  
 - replay\_quality, replay\_apply\_mode, open\_haircut\_mult  
 When enforced\_profile == CSP: GOP extension keys MUST be omitted or labeled NOT\_ENFORCED.  
+Legal foundation-exit authority handoff (AT-1238): when the contract-defined control-path changes `phase` from `foundation` to a non-foundation value, `/status` MUST switch atomically from foundation status-lite to the full CSP minimum schema with no mixed/intermediate payload, and readiness/authority checks MUST key off the CSP minimum payload only after that transition completes.  
 Tests (endpoint-level \+ semantic invariants):  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_endpoint\_returns\_required\_fields  
 crates/soldier\_infra/tests/test\_http\_status.rs::test\_status\_mode\_reasons\_empty\_iff\_active  
