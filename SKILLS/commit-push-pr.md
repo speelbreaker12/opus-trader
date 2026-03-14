@@ -23,6 +23,23 @@ Review all staged and unstaged changes. Identify:
 - Which files should be committed (skip secrets, `.env`, large binaries)
 - Whether changes are logically cohesive (one PR = one concern)
 
+### 1.5) Sync with main
+
+Before staging, bring the branch up to date:
+
+```bash
+git fetch origin main
+git merge origin/main
+```
+
+- If the merge is **clean** → continue to step 2
+- If there are **conflicts** → stop immediately. List conflicting files:
+  ```bash
+  git diff --name-only --diff-filter=U
+  ```
+  Then ask the user: resolve now or abort? Do not proceed until they decide.
+- Never auto-resolve conflicts
+
 ### 2) Stage Files
 - Stage files by name — prefer `git add <file>...` over `git add -A`
 - Never stage files that contain secrets or credentials

@@ -24,6 +24,26 @@ any coding begins on safety-critical trading stories. No production code in this
 
 ## Task
 
+### 0) Scope Challenge (before touching the template)
+
+Read the story entry from `plans/prd.json`. Then answer these three questions internally:
+
+1. **What existing code already partially solves this?** Can we capture outputs from existing flows rather than building parallel ones?
+2. **What is the minimum set of changes that achieves the stated goal?** Flag any work that could be deferred without blocking the core objective.
+3. **Complexity check:** Does this touch more than 3 files or introduce more than 2 new types/structs? If yes, treat that as a smell.
+
+Present your finding to the user and ask them to choose:
+
+> **A) SCOPE REDUCTION** — the story as written is over-specified. Propose a minimal version that achieves the contract goal, then proceed with that.
+> **B) FULL SCOPE** — proceed as specified in the PRD story.
+> **C) SMALL CHANGE** — compressed scope: one primary enforcement path, minimum new code, defer secondary hardening to a follow-on story.
+
+**Hard rule:** Once the user picks a scope, commit to it fully. Do not re-argue for a smaller scope during S0–S10. If the user chose FULL SCOPE, your job is to make that scope succeed — not to keep lobbying for less work.
+
+Only after the user responds, proceed to step 1.
+
+---
+
 ### 1) Copy the template
 Copy `reviews/premortems/STORY_PREMORTEM_TEMPLATE.md` to
 `reviews/premortems/<STORY-ID>_premortem.md`. Fill in the story ID in the header.
