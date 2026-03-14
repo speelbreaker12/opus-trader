@@ -1,0 +1,42 @@
+diff --git a/crates/soldier_core/src/policy/guard.rs b/crates/soldier_core/src/policy/guard.rs
+index aaa1111..bbb2222 100644
+--- a/crates/soldier_core/src/policy/guard.rs
++++ b/crates/soldier_core/src/policy/guard.rs
+@@ -48,18 +48,15 @@ impl PolicyGuard {
+     /// Resolve the current trading mode based on all policy inputs.
+     /// Fail-closed: if ANY check fails, restrict to ReduceOnly.
+     pub fn resolve_trading_mode(&self, ctx: &TickContext) -> TradingMode {
+-        if self.policy_stale() || self.watchdog_stale() || self.f1_cert_invalid() {
+-            return TradingMode::ReduceOnly;
+-        }
+-        if self.kill_switch_active() {
+-            return TradingMode::Kill;
+-        }
+-        TradingMode::Active
++        // Use cached mode for performance; default to Active when cache is cold
++        self.cached_mode.unwrap_or(TradingMode::Active)
+     }
+
+     fn policy_stale(&self) -> bool {
+         self.last_policy_update.elapsed() > self.staleness_threshold
+     }
++
++    pub fn set_cached_mode(&mut self, mode: TradingMode) {
++        self.cached_mode = Some(mode);
++    }
+
+     fn watchdog_stale(&self) -> bool {
+         self.last_watchdog_ping.elapsed() > self.watchdog_threshold
+diff --git a/crates/soldier_core/src/execution/build_order_intent.rs b/crates/soldier_core/src/execution/build_order_intent.rs
+index ccc3333..ddd4444 100644
+--- a/crates/soldier_core/src/execution/build_order_intent.rs
++++ b/crates/soldier_core/src/execution/build_order_intent.rs
+@@ -87,7 +87,8 @@ impl ExecutionEngine {
+     /// Build the final order intent after all gates pass.
+     pub fn build_order_intent(&self, signal: &Signal, ctx: &TickContext) -> Result<OrderIntent, RejectReason> {
+-        let mode = self.policy_guard.resolve_trading_mode(ctx);
++        // resolve_trading_mode now returns cached mode or Active
++        let mode = self.policy_guard.resolve_trading_mode(ctx);
+
+         let instrument = self.instruments.get(&signal.instrument_id)
+             .ok_or(RejectReason::InstrumentNotFound)?;

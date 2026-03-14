@@ -1,0 +1,53 @@
+## Scenario: Gate with TRIP test only — no NON-TRIP (always-allow mutation should pass)
+
+### Gate Code (staleness_gate.rs)
+
+```rust
+pub struct StalenessGateInput {
+    pub data_age_ms: u64,
+    pub max_age_ms: u64,
+    pub source: DataSource,
+}
+
+pub fn evaluate_staleness_gate(input: &StalenessGateInput) -> GateResult {
+    if input.data_age_ms > input.max_age_ms {
+        return GateResult::Reject(RejectReason::StaleData {
+            source: input.source.clone(),
+            age_ms: input.data_age_ms,
+            limit_ms: input.max_age_ms,
+        });
+    }
+    GateResult::Pass
+}
+```
+
+### Test Suite (test_staleness_gate.rs)
+
+```rust
+#[test]
+fn test_staleness_gate_trip_stale_data_rejects() {
+    // TRIP: data age exceeds max → must reject
+    let input = StalenessGateInput {
+        data_age_ms: 5000,
+        max_age_ms: 3000,
+        source: DataSource::OrderBook,
+    };
+    let result = evaluate_staleness_gate(&input);
+    assert!(matches!(result, GateResult::Reject(RejectReason::StaleData { .. })));
+}
+
+#[test]
+fn test_staleness_gate_trip_very_stale_rejects() {
+    // TRIP: extremely stale data → must reject
+    let input = StalenessGateInput {
+        data_age_ms: 60000,
+        max_age_ms: 3000,
+        source: DataSource::PriceFeed,
+    };
+    let result = evaluate_staleness_gate(&input);
+    assert!(matches!(result, GateResult::Reject(RejectReason::StaleData { .. })));
+}
+```
+
+### Task
+Run /devils-advocate on the staleness gate and its test suite above. Notice there are only TRIP tests (proving rejection when data is stale). There is no NON-TRIP test proving that fresh data passes. Attempt an always-allow mutation (`return GateResult::Pass` unconditionally) and determine if the tests catch it.

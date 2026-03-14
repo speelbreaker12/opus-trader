@@ -1,0 +1,202 @@
+{
+  "skill": "SKILLS/devils-advocate.md",
+  "description": "Binary assertion tests for /devils-advocate skill output quality",
+  "total_assertions": 25,
+  "tests": [
+    {
+      "id": "T1",
+      "name": "always_reject_caught",
+      "description": "Gate with TRIP + NON-TRIP tests. An always-reject mutation should be caught by the NON-TRIP test. Skill should report the mutation was attempted and caught, with simpler-than-correct gate PASS.",
+      "fixture": "fixtures/always_reject_caught.txt",
+      "prompt": "Run /devils-advocate on the spread gate and test suite in this fixture. The suite has both TRIP and NON-TRIP tests. Attempt all standard mutations including always-reject.",
+      "assertions": [
+        {
+          "id": "T1-A1",
+          "check": "Output contains a 'Mutations Attempted' table",
+          "rule": {"type": "contains", "value": "Mutations Attempted"},
+          "expected": true
+        },
+        {
+          "id": "T1-A2",
+          "check": "Always-reject mutation is listed and marked as caught (NO — test caught it)",
+          "rule": {"type": "regex", "pattern": "(?i)always.reject.*NO|NO.*always.reject"},
+          "expected": true
+        },
+        {
+          "id": "T1-A3",
+          "check": "No gap is flagged for the always-reject mutation (NON-TRIP test catches it)",
+          "rule": {"type": "not_contains", "value": "Add NON-TRIP"},
+          "expected": true
+        },
+        {
+          "id": "T1-A4",
+          "check": "Simpler-than-correct gate result is PASS",
+          "rule": {"type": "regex", "pattern": "(?i)simpler.than.correct.*\\bPASS\\b|\\bResult:\\s*PASS\\b"},
+          "expected": true
+        },
+        {
+          "id": "T1-A5",
+          "check": "Output contains Phase Transition section documenting completion",
+          "rule": {"type": "regex", "pattern": "(?i)phase.transition|exit.criteria"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "always_allow_uncaught",
+      "description": "Gate with only TRIP tests (no NON-TRIP). An always-allow mutation (return Pass unconditionally) should pass all tests. Skill must flag the gap and recommend adding a NON-TRIP test.",
+      "fixture": "fixtures/always_allow_uncaught.txt",
+      "prompt": "Run /devils-advocate on the staleness gate and test suite in this fixture. There are only TRIP tests. Attempt an always-allow mutation and determine if tests catch it.",
+      "assertions": [
+        {
+          "id": "T2-A1",
+          "check": "Output contains a 'Mutations Attempted' table",
+          "rule": {"type": "contains", "value": "Mutations Attempted"},
+          "expected": true
+        },
+        {
+          "id": "T2-A2",
+          "check": "Always-allow mutation is listed and marked as passing (YES — gap found)",
+          "rule": {"type": "regex", "pattern": "(?i)always.allow.*YES|YES.*always.allow|always.allow.*gap|always.allow.*pass"},
+          "expected": true
+        },
+        {
+          "id": "T2-A3",
+          "check": "Output recommends adding a NON-TRIP test for fresh/valid data passing",
+          "rule": {"type": "regex", "pattern": "(?i)(add|need|missing|require).*(NON.TRIP|non_trip|fresh|valid.*pass)"},
+          "expected": true
+        },
+        {
+          "id": "T2-A4",
+          "check": "Simpler-than-correct gate result is BLOCKED",
+          "rule": {"type": "regex", "pattern": "(?i)simpler.than.correct.*BLOCKED|Result:\\s*BLOCKED"},
+          "expected": true
+        },
+        {
+          "id": "T2-A5",
+          "check": "Output contains a Tests Added section listing specific test names or descriptions",
+          "rule": {"type": "regex", "pattern": "(?i)tests?.added|test.case.*(add|need|recommend)"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "boundary_flip_uncaught",
+      "description": "Gate uses `>` threshold but no test hits the exact boundary. An off-by-one mutation (>= vs >) should pass. Skill must flag the missing boundary test.",
+      "fixture": "fixtures/boundary_flip_uncaught.txt",
+      "prompt": "Run /devils-advocate on the position limit gate and test suite in this fixture. Tests have TRIP and NON-TRIP but no boundary case. Attempt a boundary flip mutation (change > to >=).",
+      "assertions": [
+        {
+          "id": "T3-A1",
+          "check": "Output contains a 'Mutations Attempted' table",
+          "rule": {"type": "contains", "value": "Mutations Attempted"},
+          "expected": true
+        },
+        {
+          "id": "T3-A2",
+          "check": "Boundary flip or off-by-one mutation is identified as uncaught",
+          "rule": {"type": "regex", "pattern": "(?i)(boundary|off.by.one|>=.*>|>.*>=).*(YES|gap|pass|uncaught)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A3",
+          "check": "Output recommends adding a boundary test case at exact limit",
+          "rule": {"type": "regex", "pattern": "(?i)(add|need|missing).*(boundary|exact|equal|==.*limit|100.000)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A4",
+          "check": "Simpler-than-correct gate result is BLOCKED",
+          "rule": {"type": "regex", "pattern": "(?i)simpler.than.correct.*BLOCKED|Result:\\s*BLOCKED"},
+          "expected": true
+        },
+        {
+          "id": "T3-A5",
+          "check": "Output identifies the specific operator comparison (> vs >=) as the issue",
+          "rule": {"type": "regex", "pattern": ">=|>\\s*vs\\s*>=|strict.*comparison|operator"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "ignore_field_uncaught",
+      "description": "Gate checks 3 boolean fields but tests only vary 1 field. Removing checks for the other 2 fields should pass. Skill must flag the missing field coverage.",
+      "fixture": "fixtures/ignore_field_uncaught.txt",
+      "prompt": "Run /devils-advocate on the preflight gate and test suite in this fixture. Tests only vary ws_connected. Attempt mutations that ignore clock_synced and position_reconciled fields.",
+      "assertions": [
+        {
+          "id": "T4-A1",
+          "check": "Output contains a 'Mutations Attempted' table",
+          "rule": {"type": "contains", "value": "Mutations Attempted"},
+          "expected": true
+        },
+        {
+          "id": "T4-A2",
+          "check": "Ignore-field mutation for clock_synced or position_reconciled is identified as uncaught",
+          "rule": {"type": "regex", "pattern": "(?i)(clock_synced|position_reconciled).*(YES|gap|pass|uncaught|ignor)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A3",
+          "check": "Output recommends adding test cases that vary the untested fields individually",
+          "rule": {"type": "regex", "pattern": "(?i)(add|need|missing|test).*(clock_synced|position_reconciled|each.*field|individual.*field)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A4",
+          "check": "Simpler-than-correct gate result is BLOCKED",
+          "rule": {"type": "regex", "pattern": "(?i)simpler.than.correct.*BLOCKED|Result:\\s*BLOCKED"},
+          "expected": true
+        },
+        {
+          "id": "T4-A5",
+          "check": "Output identifies at least 2 fields that lack independent test coverage",
+          "rule": {"type": "count_min", "pattern": "(?i)(clock_synced|position_reconciled)", "min": 2},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "simpler_than_correct_gate_pass",
+      "description": "Well-tested gate with comprehensive TRIP, NON-TRIP, boundary, and field-variation tests. No simpler wrong implementation should pass. Skill should report PASS on simpler-than-correct gate.",
+      "fixture": "fixtures/simpler_than_correct_gate_pass.txt",
+      "prompt": "Run /devils-advocate on the risk state gate and test suite in this fixture. The suite has comprehensive coverage: TRIP, NON-TRIP, boundary, reason code, and enum variant tests. Attempt all standard mutations.",
+      "assertions": [
+        {
+          "id": "T5-A1",
+          "check": "Output contains a 'Mutations Attempted' table",
+          "rule": {"type": "contains", "value": "Mutations Attempted"},
+          "expected": true
+        },
+        {
+          "id": "T5-A2",
+          "check": "All standard mutations are marked as caught (NO — test caught it)",
+          "rule": {"type": "count_min", "pattern": "(?i)\\bNO\\b", "min": 3},
+          "expected": true
+        },
+        {
+          "id": "T5-A3",
+          "check": "No uncaught gap is flagged (no YES entries in mutation table)",
+          "rule": {"type": "not_regex", "pattern": "YES.*gap|gap.*YES"},
+          "expected": true
+        },
+        {
+          "id": "T5-A4",
+          "check": "Simpler-than-correct gate result is PASS",
+          "rule": {"type": "regex", "pattern": "(?i)simpler.than.correct.*\\bPASS\\b|\\bResult:\\s*PASS\\b"},
+          "expected": true
+        },
+        {
+          "id": "T5-A5",
+          "check": "Output contains Phase Transition section confirming all mutations require more complex logic",
+          "rule": {"type": "regex", "pattern": "(?i)phase.transition|more.complex|exit.criteria"},
+          "expected": true
+        }
+      ]
+    }
+  ]
+}

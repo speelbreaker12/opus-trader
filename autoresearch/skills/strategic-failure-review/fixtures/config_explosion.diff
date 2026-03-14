@@ -1,0 +1,100 @@
+diff --git a/plans/rust_gates.sh b/plans/rust_gates.sh
+index aaa1111..bbb2222 100644
+--- a/plans/rust_gates.sh
++++ b/plans/rust_gates.sh
+@@ -5,6 +5,14 @@
+ # Environment variables:
+ #   RUST_GATES_TIMEOUT: timeout in seconds for each gate (default: 120)
+ #   CARGO_TARGET_DIR: cargo build directory
++#   RUST_GATES_PARALLEL: run gates in parallel (0 or 1, default: 0)
++#   RUST_GATES_PARALLEL_JOBS: number of parallel jobs (default: 4)
++#   RUST_GATES_RETRY_COUNT: retry failed gates N times (default: 0)
++#   RUST_GATES_RETRY_DELAY: seconds between retries (default: 5)
++#   RUST_GATES_LOG_LEVEL: log verbosity (debug|info|warn|error, default: info)
++#   RUST_GATES_ARTIFACT_DIR: where to write gate result artifacts (default: .gate_artifacts)
++#   RUST_GATES_CACHE_TTL: seconds before cached gate results expire (default: 3600)
++#   RUST_GATES_NOTIFICATION_WEBHOOK: URL to POST gate results to (default: empty/disabled)
+
+ set -euo pipefail
+
+@@ -15,6 +23,64 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ TIMEOUT="${RUST_GATES_TIMEOUT:-120}"
+ TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+
++# --- New configuration for parallel execution, retries, and notifications ---
++PARALLEL="${RUST_GATES_PARALLEL:-0}"
++PARALLEL_JOBS="${RUST_GATES_PARALLEL_JOBS:-4}"
++RETRY_COUNT="${RUST_GATES_RETRY_COUNT:-0}"
++RETRY_DELAY="${RUST_GATES_RETRY_DELAY:-5}"
++LOG_LEVEL="${RUST_GATES_LOG_LEVEL:-info}"
++ARTIFACT_DIR="${RUST_GATES_ARTIFACT_DIR:-.gate_artifacts}"
++CACHE_TTL="${RUST_GATES_CACHE_TTL:-3600}"
++NOTIFICATION_WEBHOOK="${RUST_GATES_NOTIFICATION_WEBHOOK:-}"
++
++log_at_level() {
++  local level="$1"
++  shift
++  local levels=(error warn info debug)
++  local current_idx=0
++  for i in "${!levels[@]}"; do
++    [[ "${levels[$i]}" == "$LOG_LEVEL" ]] && current_idx=$i
++  done
++  local msg_idx=0
++  for i in "${!levels[@]}"; do
++    [[ "${levels[$i]}" == "$level" ]] && msg_idx=$i
++  done
++  if (( msg_idx <= current_idx )); then
++    echo "[$(date -u +%FT%TZ)] [$level] $*"
++  fi
++}
++
++run_with_retry() {
++  local gate_name="$1"
++  shift
++  local attempt=0
++  while (( attempt <= RETRY_COUNT )); do
++    if (( attempt > 0 )); then
++      log_at_level warn "Retry $attempt/$RETRY_COUNT for $gate_name (waiting ${RETRY_DELAY}s)"
++      sleep "$RETRY_DELAY"
++    fi
++    if "$@"; then
++      return 0
++    fi
++    (( attempt++ ))
++  done
++  return 1
++}
++
++write_artifact() {
++  local gate_name="$1" result="$2" duration="$3"
++  mkdir -p "$ARTIFACT_DIR"
++  cat > "$ARTIFACT_DIR/${gate_name}.json" <<ARTEOF
++{"gate": "$gate_name", "result": "$result", "duration_s": $duration, "timestamp": "$(date -u +%FT%TZ)"}
++ARTEOF
++}
++
++send_notification() {
++  local gate_name="$1" result="$2"
++  [[ -z "$NOTIFICATION_WEBHOOK" ]] && return 0
++  curl -s -X POST "$NOTIFICATION_WEBHOOK" \
++    -H "Content-Type: application/json" \
++    -d "{\"gate\": \"$gate_name\", \"result\": \"$result\"}" \
++    || log_at_level warn "Notification failed for $gate_name"
++}
++
+ run_clippy() {
+-  log_info "Running clippy..."
+-  timeout "$TIMEOUT" cargo clippy --workspace --all-targets -- -D warnings
++  log_at_level info "Running clippy..."
++  local start_time=$SECONDS
++  if run_with_retry "clippy" timeout "$TIMEOUT" cargo clippy --workspace --all-targets -- -D warnings; then
++    local duration=$(( SECONDS - start_time ))
++    write_artifact "clippy" "pass" "$duration"
++    send_notification "clippy" "pass"
++  else
++    local duration=$(( SECONDS - start_time ))
++    write_artifact "clippy" "fail" "$duration"
++    send_notification "clippy" "fail"
++    return 1
++  fi
+ }
