@@ -230,6 +230,7 @@ def run_evaluation(eval_config: dict, output_dir: Path, verbose: bool = False) -
     total_passed = 0
     total_assertions = 0
     total_needs_review = 0
+    missing_output_tests = 0
 
     for test in tests:
         test_id = test["id"]
@@ -243,6 +244,7 @@ def run_evaluation(eval_config: dict, output_dir: Path, verbose: bool = False) -
             output_file = output_dir / f"{test_id}.txt"
 
         if not output_file.exists():
+            missing_output_tests += 1
             test_result = {
                 "id": test_id,
                 "name": test_name,
@@ -256,12 +258,11 @@ def run_evaluation(eval_config: dict, output_dir: Path, verbose: bool = False) -
                 test_result["assertions"].append({
                     "id": a["id"],
                     "check": a.get("check", ""),
-                    "passed": None,
-                    "method": "skipped",
-                    "reason": f"output file not found: {test_id}.md",
+                    "passed": False,
+                    "method": "missing_output",
+                    "reason": f"output file not found: {test_id}.md or {test_id}.txt",
                 })
             total_assertions += len(assertions)
-            total_needs_review += len(assertions)
             all_results.append(test_result)
 
             if verbose:
@@ -312,7 +313,8 @@ def run_evaluation(eval_config: dict, output_dir: Path, verbose: bool = False) -
             color = GREEN if test_passed == len(assertions) else (YELLOW if test_needs_review > 0 else RED)
             print(f"  {color}[{test_id}]{NC} {test_name} — {test_passed}/{len(assertions)}")
 
-    # Calculate score (only count programmatically evaluated assertions)
+    # Calculate score using all assertions except explicit needs-review checks.
+    # Missing output files are counted as failed assertions.
     evaluated = total_assertions - total_needs_review
     score = total_passed / evaluated if evaluated > 0 else 0.0
 
@@ -322,6 +324,7 @@ def run_evaluation(eval_config: dict, output_dir: Path, verbose: bool = False) -
         "total": total_assertions,
         "evaluated": evaluated,
         "needs_review": total_needs_review,
+        "missing_outputs": missing_output_tests,
         "tests": all_results,
     }
 
@@ -375,6 +378,8 @@ def main():
         print(f"  {BOLD}Score:{NC}         {score_color}{results['score']:.1%}{NC} ({results['passed']}/{results['evaluated']} programmatic)")
         if results["needs_review"] > 0:
             print(f"  {BOLD}Needs review:{NC} {YELLOW}{results['needs_review']}{NC} assertions without programmatic rules")
+        if results["missing_outputs"] > 0:
+            print(f"  {BOLD}Missing output files:{NC} {RED}{results['missing_outputs']}{NC} test(s)")
         print()
 
         # Per-test summary
@@ -391,7 +396,9 @@ def main():
                         print(f"       {RED}✗ {ar['id']}: {ar['reason']}{NC}")
         print()
 
-    # Exit code: 0 if perfect, 1 if any failures
+    # Exit code: fail closed when any fixture output is missing.
+    if results["missing_outputs"] > 0:
+        sys.exit(1)
     sys.exit(0 if results["score"] >= 1.0 else 1)
 
 

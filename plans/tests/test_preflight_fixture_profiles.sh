@@ -99,9 +99,10 @@ assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
 assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
 assert_contains_line 'fixture_timeout_default=240'
 assert_contains_line 'fixture_timeout_default=300'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
-assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
-assert_contains_line 'setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='"'"'$PREFLIGHT_FIXTURE_TEST_TIMEOUT'"'"' (expected non-negative integer seconds)"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW"'
+assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW" =~ ^[0-9]+$ ]]; then'
+assert_contains_line 'setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='"'"'$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW'"'"' (expected non-negative integer seconds)"'
 assert_contains_line 'supports_wait_n() {'
 assert_contains_line 'if builtin help wait >/dev/null 2>&1; then'
 assert_contains_line 'wait_help_text="$(builtin help wait 2>/dev/null || true)"'
@@ -190,28 +191,17 @@ workflow_gate_block="$(
   ' "$VERIFY_FORK"
 )"
 [[ -n "$workflow_gate_block" ]] || fail "missing workflow integration gate block"
-workflow_runner_fn="$(
-  awk '
-    /^run_workflow_integration_tests\(\) \{/ { in_fn=1 }
-    in_fn { print }
-    in_fn && /^}$/ { exit }
-  ' "$VERIFY_FORK"
-)"
-[[ -n "$workflow_runner_fn" ]] || fail "missing run_workflow_integration_tests()"
 
 assert_file_contains_line "$VERIFY_FORK" 'start_parallel_workflow_test() {'
 assert_file_contains_line "$VERIFY_FORK" 'finish_parallel_group_or_exit() {'
-assert_text_contains_line "$workflow_runner_fn" 'parallel_group_reset'
-assert_text_contains_line "$workflow_runner_fn" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do'
-assert_text_contains_line "$workflow_runner_fn" 'start_parallel_workflow_test "$workflow_test"'
-assert_text_contains_line "$workflow_runner_fn" 'if [[ "$MODE" == "full" ]]; then'
-assert_text_contains_line "$workflow_runner_fn" 'for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do'
-assert_text_contains_line "$workflow_runner_fn" 'return 0'
-assert_text_contains_line "$workflow_gate_block" 'run_workflow_integration_tests'
+assert_text_contains_line "$workflow_gate_block" 'parallel_group_reset'
+assert_text_contains_line "$workflow_gate_block" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do'
+assert_text_contains_line "$workflow_gate_block" 'start_parallel_workflow_test "$workflow_test"'
+assert_text_contains_line "$workflow_gate_block" 'if [[ "$MODE" == "full" ]]; then'
+assert_text_contains_line "$workflow_gate_block" 'for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do'
 assert_text_contains_line "$workflow_gate_block" 'log "15) rust gates"'
 assert_text_contains_line "$workflow_gate_block" 'finish_parallel_group_or_exit'
-assert_text_line_before "$workflow_runner_fn" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do' 'if [[ "$MODE" == "full" ]]; then'
-assert_text_line_before "$workflow_gate_block" 'run_workflow_integration_tests' 'log "15) rust gates"'
+assert_text_line_before "$workflow_gate_block" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do' 'if [[ "$MODE" == "full" ]]; then'
 assert_text_line_before "$workflow_gate_block" 'log "15) rust gates"' 'finish_parallel_group_or_exit'
 
 parallel_gate_tests=(
@@ -242,7 +232,6 @@ parallel_gate_tests=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
-  "plans/tests/test_contract_at_parity_invalid_refs.sh"
 )
 full_mode_parallel_gate_tests=(
   "plans/tests/test_story_review_gate.sh"
