@@ -104,7 +104,3 @@ Add to the relevant section:
 - [ ] AT-### registered in CONTRACT.md
 - [ ] Test file follows naming: `test_<guard>_trip.rs` or in `#[cfg(test)]` module
 
-## Output
-- Test skeleton with correct structure
-- AT registration text for CONTRACT.md
-- Verification that AT number is unique
