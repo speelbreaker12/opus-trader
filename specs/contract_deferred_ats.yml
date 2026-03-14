@@ -14,10 +14,10 @@
 
 AT-1235:
   owner: "phase1"
-  reason: "Referenced by S4-003/S6-004 but not yet defined in CONTRACT.md"
+  reason: "defined in CONTRACT.md but not yet covered by a PRD story"
   target_phase: 2
 
 AT-1236:
   owner: "phase1"
-  reason: "Referenced by S4-003/S6-004 but not yet defined in CONTRACT.md"
+  reason: "defined in CONTRACT.md but not yet covered by a PRD story"
   target_phase: 2
