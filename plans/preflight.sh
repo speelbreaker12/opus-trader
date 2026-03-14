@@ -330,8 +330,8 @@ shift_fixture_pid_queue() {
 }
 
 wait_for_fixture_slot() {
-  local pid=""
   local errexit=0
+  local pid=""
 
   case "$-" in
     *e*) errexit=1 ;;
@@ -354,13 +354,16 @@ wait_for_fixture_slot() {
     if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
       break
     fi
-    pid="${fixture_pids[0]}"
-    set +e
-    wait "$pid"
-    if [[ "$errexit" == "1" ]]; then
-      set -e
-    fi
-    shift_fixture_pid_queue
+
+    while true; do
+      for pid in "${fixture_pids[@]}"; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+          prune_fixture_pids_once
+          break 2
+        fi
+      done
+      sleep 0.05
+    done
   done
 }
 
@@ -636,10 +639,12 @@ else
     fixture_timeout_default=300
   fi
   PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
-  PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS="$PREFLIGHT_FIXTURE_TEST_TIMEOUT"
-  if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
-    setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected positive integer seconds)"
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT="$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW"
+  PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS="$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW"
+  # 0 means explicit no-timeout for fixture jobs.
+  if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW" =~ ^[0-9]+$ ]]; then
+    setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW' (expected non-negative integer seconds)"
     PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
     PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
     PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS=0
