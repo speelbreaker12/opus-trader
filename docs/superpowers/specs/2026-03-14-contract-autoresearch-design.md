@@ -431,6 +431,8 @@ harness.sh contract phase1 baseline [--tag TAG] [--model MODEL] [--eval PATH]
 harness.sh contract phase2 run      [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
 harness.sh contract phase2 baseline [--tag TAG] [--model MODEL] [--eval PATH]
 harness.sh contract refresh-fixtures
+harness.sh contract refresh-common          # Rebuild common/ from CONTRACT.md + AT registry
+harness.sh contract refresh-all             # refresh-common then refresh-fixtures
 harness.sh contract status
 ```
 
@@ -455,7 +457,10 @@ Before each `run` or `baseline`, the harness compares `context_manifest.json` ha
 - All snapshot fixture files in `phase2/fixtures/snapshot/` (SHA256 of content)
 - The CONTRACT.md file itself (SHA256 of content, stored as `contract_content_hash`)
 
-Mismatch on any tracked file → abort with exit code 2: `Stale context: <filename> changed. Run 'harness.sh contract refresh-fixtures' first`.
+Mismatch on any tracked file → abort with exit code 2, with error message depending on artifact class:
+- `common/` file stale → `Stale context: <filename> changed. Run 'harness.sh contract refresh-common' first`
+- snapshot fixture stale → `Stale context: snapshot/<filename> changed. Run 'harness.sh contract refresh-fixtures' first`
+- CONTRACT.md hash stale (proposal index) → `Stale proposal: CONTRACT.md changed since generation (contract_file_hash mismatch). Re-run Phase 2.`
 
 The `contract_content_hash` field in `context_manifest.json` is the authoritative source for staleness detection — it is compared against `contract_file_hash` in `proposals_index.json` entries at promotion time.
 
@@ -467,9 +472,25 @@ The `contract_content_hash` field in `context_manifest.json` is the authoritativ
 2. Extract sections from CONTRACT.md
 3. Write to `phase2/fixtures/snapshot/`
 4. For each extracted snapshot fixture: count fail-closed clauses matching pattern (MUST + input_name + NaN|missing|stale|absent) using `at_registry.json` as the input-name vocabulary. Write the count as `expected_gate_input_count` for that fixture in `phase2/eval.json`. This count is authoritative for subsequent Phase 2 runs — it replaces any previously stored value.
-5. Update `context_manifest.json`
+5. Update `context_manifest.json` (snapshot fixture hashes + contract_content_hash)
 6. Fail fast if `section_index.md` ranges no longer align — require `refresh-common` first
 7. Produce diff report if extraction anchors changed
+
+#### refresh_common.sh (shared context rebuild)
+
+Rebuilds `common/` artifacts that both phases depend on. Run when:
+- CONTRACT.md structure changes (new sections, renamed sections)
+- AT registry changes (new ATs, retired ATs)
+- The stale-context gate fires on a `common/` file
+
+Steps:
+1. Re-extract `contract_header.md` from CONTRACT.md §0.0 scope + definitions
+2. Re-generate `at_registry.json` from CONTRACT.md AT-### anchors (all AT IDs + one-line descriptions)
+3. Re-generate `section_index.md` section-to-line-range mapping from CONTRACT.md headings
+4. Update `context_manifest.json` (common/ hashes)
+5. Warn if any Phase 1 planted-gap fixture references a section that no longer exists in `section_index.md` — those fixtures require manual update
+
+Note: Phase 1 planted-gap fixtures (the mutated versions) are NOT rebuilt automatically — they encode specific injected defects and must be manually verified after `refresh-common` changes AT references or section structure.
 
 ### 5.5 Write Isolation Architecture
 
