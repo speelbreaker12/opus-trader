@@ -428,17 +428,6 @@ For shell scripts, check these common silent failures:
 | Single-variant walkthrough | Only trace Open through new dispatch function; miss CancelOnly/Close/Hedge | Walk at least one scenario per enum variant of primary input |
 | Early-return metric gap | Error path returns before incrementing rejection counter | For each counter, enumerate all paths; check early-returns bypass |
 
-### 13. Dead Code Detection
-
-Run findReferences on each guard function. Zero callers outside tests = dead enforcement.
-
-```bash
-# For each new guard/gate function:
-rg "fn guard_name" crates/ --glob '*.rs' | grep -v '/tests/' | grep -v '_test.rs'
-```
-
-If the only callers are in test files, the guard is an island — it exists but doesn't protect anything in production. Mark as HIGH finding with recommendation to wire into the dispatch path.
-
 ## Integration with Other Skills
 
 - Run `/pr-review` first for general correctness
