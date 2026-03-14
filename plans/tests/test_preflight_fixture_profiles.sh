@@ -258,6 +258,7 @@ parallel_gate_tests=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
+  "plans/tests/test_contract_at_wording_drift.sh"
   "plans/tests/test_contract_at_parity_invalid_refs.sh"
 )
 full_mode_parallel_gate_tests=(

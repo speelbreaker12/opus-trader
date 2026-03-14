@@ -142,7 +142,6 @@ assert_contains_line 'run_contract_at_plan_parity_gate()'
 assert_contains_line 'run_logged_nonblocking_gate "contract_at_plan_parity"'
 assert_contains_line 'warn "contract-plan AT parity: WARN (run verify full for hard gate)"'
 assert_line_before 'run_contract_at_plan_parity_gate()' 'log "02a2) contract-plan AT parity"'
-
 # Guardrail: recon prompt invariants must be enforced between gate integrity and doc sync.
 assert_contains_line 'run_required_bash_gate "bidi_control_guard"'
 assert_contains_line '"14c1) bidi control guard" "$ROOT/plans/bidi_control_guard.sh"'

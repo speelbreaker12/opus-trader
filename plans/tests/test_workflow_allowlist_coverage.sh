@@ -109,6 +109,7 @@ required=(
   plans/tests/test_contract_at_parity_invalid_refs.sh
   plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_change_ledger.sh
+  plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_kernel_drift_message.sh
   plans/tests/test_contract_profile_parity.sh
   plans/tests/test_contract_at_parity_invalid_refs.sh
