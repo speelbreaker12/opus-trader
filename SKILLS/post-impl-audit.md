@@ -95,7 +95,7 @@ Run `./plans/verify_mechanical.sh` and paste output. Any FAIL = downgrade STOPLI
 ## Required Output
 
 ### A) STOPLIGHT
-Verdict: GREEN / YELLOW / RED with 3-6 bullet rationale.
+**STOPLIGHT: GREEN / YELLOW / RED** — 3-6 bullet rationale.
 
 ### B) Blockers (if any)
 Each blocker with: AT/Clause, why it's failing, exact file:line references.
