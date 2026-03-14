@@ -258,6 +258,7 @@ parallel_gate_tests=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
+  "plans/tests/test_contract_at_parity_invalid_refs.sh"
 )
 full_mode_parallel_gate_tests=(
   "plans/tests/test_story_review_gate.sh"
@@ -293,5 +294,11 @@ serial_full_only_count="$(printf '%s\n' "$serial_full_only_list" | sed '/^$/d' |
 [[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
 [[ "$full_only_count" == "11" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 11)"
 [[ "$serial_full_only_count" == "1" ]] || fail "unexpected serial full-only fixture count: $serial_full_only_count (expected 1)"
+
+# Verify 14g dispatch loop pattern exists in verify_fork.sh
+grep -Eq 'for workflow_test in "\$\{WORKFLOW_INTEGRATION_TESTS\[@\]\}"' "$VERIFY_FORK" \
+  || fail "14g dispatch loop for WORKFLOW_INTEGRATION_TESTS missing"
+grep -Eq 'start_parallel_workflow_test "\$workflow_test"' "$VERIFY_FORK" \
+  || fail "start_parallel_workflow_test call missing in 14g loop"
 
 echo "PASS: preflight fixture profile mapping"
