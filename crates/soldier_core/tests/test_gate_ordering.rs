@@ -8,10 +8,17 @@ const UNIT_TEST_SOURCE: &str =
     include_str!("../src/execution/build_order_intent_gate_ordering_tests.rs");
 
 fn assert_unit_test_present(name: &str) {
-    let needle = format!("fn {name}(");
+    let fn_needle = format!("fn {name}(");
     assert!(
-        UNIT_TEST_SOURCE.contains(&needle),
+        UNIT_TEST_SOURCE.contains(&fn_needle),
         "expected unit test '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
+        name
+    );
+    // Also verify the function is annotated with #[test], not just any fn.
+    let attr_needle = format!("#[test]\nfn {name}(");
+    assert!(
+        UNIT_TEST_SOURCE.contains(&attr_needle),
+        "expected #[test] attribute on '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
         name
     );
 }

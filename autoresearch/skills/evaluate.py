@@ -201,14 +201,21 @@ def evaluate_assertion(output: str, assertion: dict) -> dict:
     evaluator = RULE_EVALUATORS.get(rule_type)
 
     if evaluator is None:
-        result["passed"] = None
-        result["method"] = "unknown_rule"
-        result["reason"] = f"unknown rule type: {rule_type}"
+        # Unknown rule type is a hard authoring error — fail the assertion so
+        # typos (e.g. "contians") are caught immediately rather than silently
+        # disappearing into the needs_review bucket.
+        result["passed"] = False
+        result["method"] = "error"
+        result["reason"] = f"unknown rule type: '{rule_type}' — check eval.json for typos"
         return result
 
     try:
         raw_passed, reason = evaluator(output, rule)
-        # Apply expected inversion: if expected=false, flip the result
+        # Apply expected inversion: if expected=false, flip the evaluator result.
+        # Example: not_contains returns False when string IS found; expected=False
+        # then flips to True, meaning "we expected to find it and we did."
+        # Combining expected=False with not_* rules creates a double-negation —
+        # avoid this pattern in eval.json; prefer the positive form instead.
         passed = raw_passed if expected else not raw_passed
         result["passed"] = passed
         result["method"] = "programmatic"
@@ -226,6 +233,17 @@ def evaluate_assertion(output: str, assertion: dict) -> dict:
 def run_evaluation(eval_config: dict, output_dir: Path, verbose: bool = False) -> dict:
     """Run all tests and return scored results."""
     tests = eval_config.get("tests", [])
+
+    # Validate total_assertions metadata matches actual assertion count.
+    declared = eval_config.get("total_assertions")
+    if declared is not None:
+        actual = sum(len(t.get("assertions", [])) for t in tests)
+        if declared != actual:
+            print(
+                f"{YELLOW}WARNING: eval.json total_assertions={declared} but "
+                f"actual count={actual} — update the metadata field{NC}"
+            )
+
     all_results = []
     total_passed = 0
     total_assertions = 0
