@@ -398,6 +398,19 @@ For shell scripts, check these common silent failures:
 > follow up with `/strategic-failure-review`.
 ```
 
+**For trivial changes (no applicable sections):**
+```markdown
+## Failure Mode Review: <component>
+
+### Findings
+
+No findings. <one-line reason: "Simple rename, no caching/state/external deps.">
+
+### Concrete Value Walkthrough
+
+<brief trace showing the change is contained>
+```
+
 ---
 
 ## Common Failure Patterns (Implementation)
