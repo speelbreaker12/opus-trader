@@ -290,6 +290,8 @@ Adversarial input that passes all rules but is substantively wrong:
 3. <merge invariant fix>
 ```
 
+**For clean/complete validators** (no CRITICAL or HIGH findings): keep total output under 500 words — omit empty sections, use ✓ inline for confirmed-OK items rather than expanding each.
+
 ---
 
 ## Integration with Other Skills
