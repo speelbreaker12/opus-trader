@@ -23,5 +23,16 @@ fn test_at501_open_all_gates_pass_trace_order() {
 
 #[test]
 fn test_gate_ordering_constraints() {
-    assert_unit_test_present("test_gate_sequence_emits_structured_reject_metric_line");
+    for constraint_test in [
+        "test_constraint_reject_gates_before_persist",
+        "test_constraint_wal_is_last_gate_open",
+        "test_constraint_wal_is_last_gate_close",
+        "test_constraint_wal_is_last_gate_hedge",
+        "test_constraint_no_approval_with_any_gate_failed",
+        "test_constraint_approval_requires_all_gates_pass",
+        "test_constraint_rejected_trace_stops_at_failure",
+        "test_constraint_wal_after_all_validation_gates",
+    ] {
+        assert_unit_test_present(constraint_test);
+    }
 }

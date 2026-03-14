@@ -595,11 +595,10 @@
           "plans/test_verify_fork_smoke.sh",
           "plans/tests/test_verify_fork_guardrails.sh",
           "plans/tests/test_workflow_allowlist_coverage.sh",
+          "plans/live_enable_preflight.sh",
           "docs/contract_kernel.json"
         ],
-        "create": [
-          "plans/live_enable_preflight.sh"
-        ],
+        "create": [],
         "avoid": [
           "verify.sh",
           "crates/**"
@@ -3120,8 +3119,6 @@
         "CONTRACT.md §2.4 Durable Intent Ledger",
         "AT-1215",
         "AT-1232",
-        "AT-1235",
-        "AT-1236",
         "AT-906",
         "AT-233",
         "AT-234",
@@ -3175,14 +3172,12 @@
         {
           "quote": "If a subsystem is configured for durable-before-dispatch, OPEN dispatch additionally requires WALDurable.",
           "location": "CONTRACT.md §2.4 Durable Intent Ledger / Dispatch rule",
-          "anchor": "AT-1235"
+          "anchor": "Anchor-006"
         }
       ],
       "enforcing_contract_ats": [
         "AT-1215",
         "AT-1232",
-        "AT-1235",
-        "AT-1236",
         "AT-906",
         "AT-233",
         "AT-234",
@@ -4135,8 +4130,6 @@
         "CONTRACT.md CSP.5.2 Enforcement Rules",
         "AT-1215",
         "AT-1232",
-        "AT-1235",
-        "AT-1236",
         "Anchor-006",
         "VR-014"
       ],
@@ -4190,14 +4183,12 @@
         {
           "quote": "If a subsystem is configured for durable-before-dispatch, OPEN dispatch additionally requires WALDurable.",
           "location": "CONTRACT.md §2.4 Durable Intent Ledger / Dispatch rule",
-          "anchor": "AT-1235"
+          "anchor": "Anchor-006"
         }
       ],
       "enforcing_contract_ats": [
         "AT-1215",
-        "AT-1232",
-        "AT-1235",
-        "AT-1236"
+        "AT-1232"
       ],
       "reason_codes": {
         "type": "",
@@ -4215,9 +4206,7 @@
       ],
       "primary_owner_for": [
         "AT-1215",
-        "AT-1232",
-        "AT-1235",
-        "AT-1236"
+        "AT-1232"
       ],
       "loss_mode": {
         "worst_case": "gate ordering violated → side effect before final accept → partial state mutation on reject",
@@ -7071,10 +7060,11 @@
       "slice_ref": "Slice 8 — PolicyGuard \\+ Cortex \\+ Exchange Health \\+ Bunker/Evidence/F1 \\+ Owner Endpoints (Patch D)",
       "story_ref": "S8.8a — /status Response Schema & F1 Certification",
       "category": "hardening",
-      "description": "Implement /status endpoint schema: required CSP minimum keys, certification state fields, WAL/rate-limit counters, and F1 cert integration.",
+      "description": "Implement /status endpoint schema: required CSP minimum keys, certification state fields, WAL/rate-limit counters, F1 cert integration, and the non-foundation authority handoff surface.",
       "contract_refs": [
         "TradingMode",
         "AT-023",
+        "AT-1238",
         "AT-003",
         "AT-405",
         "AT-419",
@@ -7100,11 +7090,13 @@
       },
       "acceptance": [
         "GIVEN service is running WHEN GET /api/v1/status is called THEN HTTP 200 response includes all required CSP minimum keys from contract §7.0 and AT-023.",
+        "GIVEN `phase == foundation` and foundation `/status` still emits `dispatch_enabled=false` status-lite WHEN the legal foundation-exit transition changes `phase` from `foundation` to a non-foundation value in that control-path THEN the payload is the full CSP minimum schema only, with no mixed/intermediate status-lite payload (AT-1238).",
         "GIVEN certification artifact is present and fresh WHEN GET /api/v1/status is called THEN certification state and expiration timestamp satisfy AT-003 deterministic value checks.",
         "GIVEN GET /api/v1/status is called WHEN WAL and rate-limit fields are inspected THEN wal_queue_depth, rate_limit_* counters, and schema_version are present and correctly typed per AT-927/AT-967."
       ],
       "steps": [
         "Implement /status endpoint returning all required CSP minimum keys per AT-023.",
+        "Implement the status authority handoff so non-foundation `/status` emits the CSP minimum schema without mixed status-lite payloads.",
         "Add certification state fields (F1 cert status, expiration timestamp).",
         "Add WAL queue and rate-limit counter fields.",
         "Add tests validating schema completeness and field presence.",
@@ -7132,6 +7124,7 @@
       ],
       "enforcing_contract_ats": [
         "AT-023",
+        "AT-1238",
         "AT-405",
         "AT-419",
         "AT-927",
@@ -7166,7 +7159,8 @@
           "mode_reasons"
         ],
         "status_contract_ats": [
-          "AT-023"
+          "AT-023",
+          "AT-1238"
         ]
       },
       "implementation_tests": [
@@ -7179,7 +7173,8 @@
         "crates/soldier_core/tests/test_status_endpoint.rs::test_status_endpoint_f1_cert_expires_at_matches_generated_plus_window"
       ],
       "primary_owner_for": [
-        "AT-023"
+        "AT-023",
+        "AT-1238"
       ],
       "loss_mode": {
         "worst_case": "/status schema wrong → operator dashboard shows incorrect state → bad human decisions",
