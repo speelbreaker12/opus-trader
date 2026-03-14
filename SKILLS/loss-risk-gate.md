@@ -58,6 +58,9 @@ Same format: `YES | NO | UNKNOWN` + reason + proof. `UNKNOWN` = treat as `YES`.
 If yes (or unknown) to any, mark `PROFIT_BLOCK_BLOCKING`.
 
 ### 4) Simpler-safer alternative audit
+
+**Dedup rule:** If `/strategic-failure-review` §20 was already completed in this review cycle, §4 may inherit its verdict. Record: `§4 INHERITED from strategic-failure-review §20 — <N/A / HARDENING / BLOCKING>` and skip re-running the audit.
+
 Ask:
 - Is there a simpler fail-closed design that satisfies the same contract?
 - Did the implementation add moving parts, hidden coupling, or statefulness that increases the error surface without improving capital protection?
@@ -68,6 +71,9 @@ If a materially simpler / safer design exists, mark:
 - `HARDENING` if current design is contract-safe but unnecessarily fragile
 
 ### 5) Proof quality audit
+
+**Dedup rule:** If `/contract-review` Phase 3 was already completed in this review cycle, §5 may inherit its TRIP/NON-TRIP verdict. Cite the artifact (e.g., `artifacts/story/${STORY_ID}/self_review/contract_review.json`) and record: `§5 INHERITED from contract-review Phase 3 — <PASS/FAIL>`. Re-run §5 only if the inherited verdict is PASS but you have specific evidence it is incomplete for this story's safety-critical paths.
+
 For every safety-critical AT touched by the diff:
 - Enforcement point exists?
 - TRIP test exists?

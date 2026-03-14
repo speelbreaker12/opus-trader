@@ -122,9 +122,15 @@ When reviewing proposals or batches of changes against the contract:
 - **Batch-internal contradictions**: Two proposals that each individually pass contradiction checks can jointly contradict the contract (or each other). Check proposals pairwise within the same batch, not just each against the base document.
 
 ### Phase 3 — Causality check
-For each NEW or MODIFIED guard/latch/gate:
+
+**For NEW enforcement points** (guard/latch/gate added in this diff):
 - Must have TRIP + NON-TRIP coverage
 - Must prove causality via dispatch count OR reason code OR latch reason OR override field
+
+**For MODIFIED enforcement points** (guard/latch/gate changed in this diff):
+- If the modification changes control flow, predicate logic, or evaluation order → treat as NEW: require full TRIP + NON-TRIP proof
+- If the modification is semantics-preserving (rename, extract refactor, add logging, formatting only) → delta-check: verify the modification does not weaken or bypass the existing causality proof
+- When in doubt, treat as NEW
 
 ## Output format (strict)
 

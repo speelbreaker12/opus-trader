@@ -34,6 +34,21 @@ Prerequisite: Run `/failure-mode-review` first. This skill assumes implementatio
 
 Without this grounding, architectural analysis becomes theoretical and misses the concrete interactions that cause real failures.
 
+## ALWAYS-REQUIRED (no triage skip)
+
+These four sections run for every change, regardless of size or risk level. Reporting may be brief (1–2 bullets) but the section cannot be omitted or marked SKIPPED.
+
+| Section | What it catches |
+|---------|----------------|
+| §2 Complexity-to-Benefit | Unnecessary machinery vs. actual benefit |
+| §12 Mental Model Mismatches | Likely developer misunderstandings |
+| §20 Simpler Alternative | 80/20 alternative that avoids the complexity |
+| §22 Safety Invariant Enumeration | Invariants weakened or broken by the change |
+
+For trivial/small changes: run these four first. If all four produce no findings, other sections may be brief or omitted — but these four must appear in output even if just `(none)`.
+
+---
+
 ### Triage: which sections apply?
 
 | If the change involves... | Apply sections... |
@@ -44,15 +59,15 @@ Without this grounding, architectural analysis becomes theoretical and misses th
 | Multi-phase rollout | §4b Point-in-Time Correctness, §6d Zombie Features |
 | Manifests, allowlists, lints | §6b Manifest Staleness, §15 Maintenance Burden |
 | Operator-facing behavior change | §7 Operations, §12 Mental Models, §14 Docs |
-| Telemetry or data collection | §10 Data & Privacy |
-| >5 implementation tickets | §9 Organizational, §17 Acceptance Quality |
+| Telemetry or data collection | §10 Data & Privacy [optional — skip if no telemetry present] |
+| >5 implementation tickets or >2 contributors | §9 Organizational [optional — skip for solo/small team], §17 Acceptance Quality |
 | Tooling/harness integration | §8 Tooling Integration, §16 Harness Interaction |
 | Any plan with acceptance tests/commands | §17 Acceptance Quality |
 | Multi-ticket implementation | §18 Ticket Dependencies |
 | Any plan with multiple design sections | §21 Internal Contradictions |
 | Changes to safety-critical systems | §22 Safety Invariant Enumeration |
 
-**Always apply**: §2 (Complexity-to-Benefit), §12 (Mental Model Mismatches), §20 (Simpler Alternative), and §22 (Safety Invariants) — these are the most commonly missed and highest-signal.
+**Always apply**: §2, §12, §20, §22 — see ALWAYS-REQUIRED banner above.
 
 ### Verify acceptance commands against reality
 
@@ -496,6 +511,11 @@ Checklist:
 
 ```markdown
 ## Strategic Failure Review: <component/PR>
+
+### Coverage
+Always-required (§2/§12/§20/§22): applied
+Additional sections applied: §N [reason], §N [reason]
+Sections skipped: §N [reason], §N [reason]
 
 ### Architectural Findings
 

@@ -71,6 +71,21 @@ Each skill has a full definition file in `SKILLS/`. Read the relevant file befor
    SAFETY_CRITICAL=$(git diff ${BASE_BRANCH}...HEAD --name-only | grep -cE 'crates/soldier_core/|crates/soldier_infra/' || true)
    ```
 
+### Parallelism Opportunity
+
+Phases 1–3 have no inter-dependency and can be dispatched to parallel agents simultaneously. Phase 0 must complete first (it produces the `SAFETY_CRITICAL` flag consumed by Phases 3–4).
+
+**Recommended parallel batch (after Phase 0):**
+- Agent A → Phase 1 (PR Review)
+- Agent B → Phase 2 (Failure-Mode Review)
+- Agent C → Phase 3 (Strategic Failure Review)
+
+Collect all three results before starting Phase 4. Phases 4–7 run sequentially — each may reference findings from earlier phases and they share the `SAFETY_CRITICAL` flag.
+
+**Short-circuit exception:** If Phase 1 produces a P0 finding, cancel the other agents and fix the P0 before continuing.
+
+---
+
 ### Phase 1 — PR Review (`/pr-review`)
 
 Read `SKILLS/pr-review.md` and execute the full checklist.

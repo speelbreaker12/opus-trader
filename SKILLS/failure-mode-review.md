@@ -35,6 +35,8 @@ Minimum: read the top 3 most-modified files before starting any checklist item.
 
 ### Triage: which sections apply?
 
+> **Before reviewing:** scan the "Reviewer Anti-Patterns" section at the end of this skill. The #1 anti-pattern — abstract reasoning without reading code — kills most reviews before they start.
+
 Scan the change and check which sections to apply:
 
 | If the change involves... | Apply sections... |
@@ -333,6 +335,8 @@ Issues that don't break correctness but cause problems over time:
 
 ### 12. Bash/Shell-Specific Traps
 
+**Skip condition:** Only apply if the diff touches `.sh`, `.bash`, or inline shell in `Makefile`/`justfile`. Skip for pure Rust, Python, or documentation changes.
+
 For shell scripts, check these common silent failures:
 
 - [ ] **Exit code masking**: `result=$(failing_command)` — `$?` reflects the assignment, not the command. Use `set -o pipefail` or check explicitly.
@@ -359,6 +363,22 @@ For shell scripts, check these common silent failures:
 
 ```markdown
 ## Failure Mode Review: <component/PR>
+
+### Triage Applied
+| Section | Applied / Skipped | Skip reason |
+|---------|-------------------|-------------|
+| §1 Interface Crossings | applied/skipped | |
+| §2 State Transitions | applied/skipped | |
+| §3 What-If Analysis | applied/skipped | |
+| §4 Error Path Tracing | applied/skipped | |
+| §5 Summary/Count Verification | applied/skipped | |
+| §6 Concrete Value Walkthrough | **always applied** | — |
+| §7 Concurrent Execution | applied/skipped | |
+| §8 Completeness Validation | applied/skipped | |
+| §9 Downstream Error Propagation | applied/skipped | |
+| §10 Trusted Files | applied/skipped | |
+| §11 Operational Concerns | applied/skipped | |
+| §12 Bash/Shell Traps | applied/skipped | no .sh in diff |
 
 ### Findings
 

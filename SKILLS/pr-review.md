@@ -54,10 +54,12 @@ gh pr diff <number>
 - [ ] Edge cases tested
 - [ ] For new features: happy path + error path
 
-#### Security (lightweight)
-- [ ] No hardcoded secrets
-- [ ] Input validation where needed
-- [ ] No SQL/command injection risks
+#### Security (diff-scoped — new/changed lines only, not pre-existing code)
+- [ ] No hardcoded secrets in new/changed lines
+- [ ] For new/changed Rust lines: no `unwrap()` / `expect()` without a context message (production paths only)
+- [ ] For new/changed Python lines: no bare `except:` — catch specific exception types
+- [ ] Input validation where new system boundaries are introduced
+- [ ] No SQL/command injection risks in new code
 - [ ] (For safety-critical code: use `/contract-review` instead)
 
 #### Documentation
@@ -74,6 +76,15 @@ gh pr diff <number>
 - [ ] No unrelated changes bundled in
 - [ ] Appropriate size (not too large to review)
 
+### 4. Block Conditions (embedded from `reviews/REVIEW_CHECKLIST.md`)
+
+Mark PR **BLOCKED** if any are true:
+- Evidence section is empty, vague, or missing artifacts
+- Requirements touched cannot be cited (no CR-IDs / contract anchors)
+- New system-boundary input has no validation and no stated rationale for omission
+
+Use `reviews/REVIEW_CHECKLIST.md` for the full evidence/compounding/workflow gate checklist. These three are the hard blocks.
+
 ## Output Format
 
 ```markdown
@@ -84,6 +95,10 @@ gh pr diff <number>
 
 ### Summary
 Brief description of what this PR does.
+
+### Finding Counts
+P0: N  P1: N  P2: N
+_(P0 = must-fix before merge · P1 = should-fix · P2 = nice-to-have)_
 
 ### Verdict: APPROVE | REQUEST_CHANGES | COMMENT
 
