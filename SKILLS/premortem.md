@@ -102,11 +102,16 @@ Verify all exit criteria checkboxes.
 - **Q6 (contract clauses MUST-level)**: YES for stories with no enforcement changes and no ATs
   — no normative enforcement clause is being relied upon. Mark UNKNOWN only if the story
   claims an AT whose contract clause level you cannot verify from the provided fixture.
-- **Q7 (AT coverage causal sufficiency)**: YES if the claimed ATs cover TRIP+NON-TRIP for the
-  primary enforcement path stated in the story. Do NOT invent gaps for standard fail-closed
-  branches (stale state, NaN, missing values) unless the story explicitly introduces a NEW
-  untested code path (e.g., a new cache-miss default, a new empty-state branch). If the
-  fixture doesn't identify a coverage gap, Q7 is YES.
+- **Q7 (AT coverage causal sufficiency)**: Q7 asks whether the CLAIMED ATs causally prove the
+  CLAIMED contract paths — not whether every fail-closed branch has a dedicated AT. Answer YES
+  when the named ATs (AT-XXX) cover TRIP+NON-TRIP for the primary enforcement path they claim
+  to cover. Secondary fail-closed branches described as design requirements (stale state
+  handling, NaN guarding, missing snapshot handling) are implementation best practices; their
+  absence from the AT list does NOT make Q7 UNKNOWN unless the story specifically introduces a
+  NEW LOGIC PATH not covered by any existing AT (e.g., a new cache-miss default that the ATs
+  provably cannot trigger). Example: S4-007 AT-050/AT-051 prove spread threshold TRIP/NON-TRIP
+  → Q7=YES even though there are no dedicated stale/NaN ATs, because those are implementation
+  detail paths, not the primary contract path being claimed.
 - **Wrong impl gate must be adversarial**: Think like an attacker. The wrong impl should be
   something a lazy or confused implementer might actually write — not a strawman.
 - **Proportional depth**: Keep total output proportional to risk. LOW risk stories with no ATs
