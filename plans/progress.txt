@@ -1126,3 +1126,10 @@ Commands: ./plans/prd_gate.sh; ./plans/prd_audit_check.sh; rg -n "AT-1235|AT-123
 Evidence: plans/prd.json; `./plans/prd_gate.sh` output (`PRD gate OK`).
 Notes: `./plans/prd_gate.sh` now exits 0 with warnings only. `./plans/prd_audit_check.sh` still fails closed because `.context/prd_auditor_stdout.log` is missing in this worktree, so PRD audit caching remains a separate hygiene issue.
 Next: Restore or regenerate the missing PRD audit stdout/meta artifacts if this worktree needs audit-clean PRD evidence, then decide whether to chase the remaining warning-only PRD debt.
+Story: PRD audit artifact refresh
+Date: 2026-03-13 18:23:00 UTC
+Summary: Regenerated the PRD audit artifacts in the PR4 worktree after fixing story-verify allowlist drift for the newly added `S0-006` and `S6-013` verify commands, restoring `.context/prd_auditor_stdout.log` / `.context/prd_audit_meta.json` and bringing `./plans/prd_audit_check.sh` back to green.
+Commands: ./plans/prd_preflight.sh; ./plans/story_verify_allowlist_check.sh plans/prd.json; ./plans/story_verify_allowlist_lint.sh; AUDITOR_TIMEOUT=1800 ./plans/run_prd_auditor.sh; ./plans/prd_audit_check.sh; bash plans/tests/test_workflow_allowlist_coverage.sh.
+Evidence: plans/story_verify_allowlist.txt; plans/prd_audit.json; .context/prd_auditor_stdout.log; .context/prd_audit_meta.json; .context/prd_audit_cache.json.
+Notes: The first auditor attempt failed in preflight because `plans/story_verify_allowlist.txt` was missing legitimate verify commands referenced by `S0-006` and `S6-013`. After allowlisting those commands, preflight passed, the auditor completed in 281s, and `./plans/prd_audit_check.sh` returned `PRD audit check OK`.
+Next: Commit and push the refreshed allowlist plus `plans/prd_audit.json` so the open PR carries the restored audit proof, then decide whether to burn down the remaining warning-only PRD debt.
