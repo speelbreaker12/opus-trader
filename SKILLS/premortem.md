@@ -36,9 +36,7 @@ Every section must be filled. Empty sections are not acceptable.
 Apply the risk rating rules: HIGH if touching persistence/replay/idempotency, order
 placement/funds movement, risk limits, auth/keys, or anything that can silently weaken gates.
 
-**Trading Risk Hard Gate**: Answer all 7 questions with YES / NO / UNKNOWN. Each answer
-requires a one-sentence justification and a concrete proof reference (contract clause, file
-path, test name). If any answer is NO or UNKNOWN, provide a Gap ID.
+**Trading Risk Hard Gate**: Answer all 7 questions with YES / NO / UNKNOWN using a Markdown table with columns `| # | Question | Answer | Justification | Proof Reference | Gap ID |`. Each answer requires a one-sentence justification and a concrete proof reference (contract clause, file path, test name). If any answer is NO or UNKNOWN, provide a Gap ID.
 
 **S1 — Clause audit**: For each claimed AT, look up the actual text in CONTRACT.md. Extract
 the normative clause, classify as MUST/SHOULD/MAY, and confirm testability. Flag any AT
@@ -89,8 +87,7 @@ Verify all exit criteria checkboxes.
   proof = not answered.
 - **No optimistic defaults**: Do not assume safety. Prove it. If proof is missing, the
   answer is UNKNOWN or NO with a Gap ID.
-- **gap_id format**: `GAP-<STORY-ID>-<SEQ>` for story-specific, `GAP-SYSTEMIC-<SEQ>` for
-  cross-story debt.
+- **gap_id format**: `GAP-<STORY-ID>-<SEQ>` for story-specific (e.g., `GAP-S5-003-1`, `GAP-S4-007-2`), `GAP-SYSTEMIC-<SEQ>` for cross-story debt — use the exact story ID including its dash.
 - **STOPLIGHT rules**: GREEN only if all 7 Hard Gate answers are YES with proof. YELLOW only
   if gaps have explicit gap_ids and containment. RED if any answer is NO without resolution,
   or if proof is missing for loss-prevention or fail-closed claims.
