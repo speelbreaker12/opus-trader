@@ -26,7 +26,7 @@ rg "let _ =" crates/ --glob '!*test*' -l
 ### 2) Fail-Closed Verification
 For any code that resolves TradingMode or handles uncertain states:
 - [ ] Default is `ReduceOnly` or `Kill`, never `Active`
-- [ ] Missing/stale inputs -> restrictive mode
+- [ ] Missing/stale inputs -> restrictive mode (e.g., `Option` wrapping that skips a check when `None` is fail-open)
 - [ ] Unknown intent classification -> treated as OPEN
 
 ### 3) Contract Alignment
