@@ -64,6 +64,8 @@ TRIP and NON-TRIP tests. Note interactions between ATs.
 
 **S7 — Economic risk**: State the worst financial outcome if this fails in prod, the
 fail-closed cap on loss, the drift metric name, the loss boundary, and the rollback plan.
+For observability-only stories (no enforcement changes, no ATs), state explicitly: "no capital
+impact — this change cannot cause financial loss or block profit."
 
 **S8 — Conflict scan**: Check for invariant/gate conflicts, CONTRACT.md conflicts, struct
 field assumptions, and state machine transitions affected. If touching CONTRACT.md, run the
@@ -72,7 +74,11 @@ contract change ledger check.
 **S9 — Constraint**: Read the prior postmortem (if any) section 8 startup note. State the
 expected constraint, exploit, and smallest fix.
 
-**S10 — STOPLIGHT + Exit criteria**: Assign GREEN / YELLOW / RED based on gate results.
+**S10 — STOPLIGHT + Exit criteria**: Assign GREEN / YELLOW / RED using these strict rules:
+- **GREEN**: ALL 7 Hard Gate answers are YES with proof — no exceptions.
+- **YELLOW**: No answer is NO; at least one UNKNOWN has a gap_id and a containment plan.
+- **RED or NO-GO**: ANY answer is NO — even if a gap_id exists. A NO answer is a known design
+  violation; a gap_id documents it but does not cure it. NO always means RED.
 Use the exact format: `**STOPLIGHT**: GREEN` — bold only the word STOPLIGHT, value after the
 colon outside the bold markers (not `**STOPLIGHT: GREEN**`).
 If YELLOW, include a `**Debt Register**` section (use that exact heading) with a table containing gap_id, severity, owner, and target slice.
@@ -88,9 +94,16 @@ Verify all exit criteria checkboxes.
 - **No optimistic defaults**: Do not assume safety. Prove it. If proof is missing, the
   answer is UNKNOWN or NO with a Gap ID.
 - **gap_id format**: `GAP-<STORY-ID>-<SEQ>` for story-specific (e.g., `GAP-S5-003-1`, `GAP-S4-007-2`), `GAP-SYSTEMIC-<SEQ>` for cross-story debt — use the exact story ID including its dash.
-- **STOPLIGHT rules**: GREEN only if all 7 Hard Gate answers are YES with proof. YELLOW only
-  if gaps have explicit gap_ids and containment. RED if any answer is NO without resolution,
-  or if proof is missing for loss-prevention or fail-closed claims.
+- **STOPLIGHT color rule**: GREEN = all YES. YELLOW = no NO, at least one UNKNOWN (contained).
+  RED = any NO. A gap_id on a NO answer documents the violation but STOPLIGHT stays RED.
+- **Q6 (contract clauses MUST-level)**: YES for stories with no enforcement changes and no ATs
+  — no normative enforcement clause is being relied upon. Mark UNKNOWN only if the story
+  claims an AT whose contract clause level you cannot verify from the provided fixture.
+- **Q7 (AT coverage causal sufficiency)**: YES if the claimed ATs cover TRIP+NON-TRIP for the
+  primary enforcement path stated in the story. Do NOT invent gaps for standard fail-closed
+  branches (stale state, NaN, missing values) unless the story explicitly introduces a NEW
+  untested code path (e.g., a new cache-miss default, a new empty-state branch). If the
+  fixture doesn't identify a coverage gap, Q7 is YES.
 - **Wrong impl gate must be adversarial**: Think like an attacker. The wrong impl should be
   something a lazy or confused implementer might actually write — not a strawman.
 - **Proportional depth**: Keep total output proportional to risk. LOW risk stories with no ATs
