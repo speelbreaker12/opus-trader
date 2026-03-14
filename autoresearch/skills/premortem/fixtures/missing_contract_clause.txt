@@ -1,0 +1,27 @@
+Story: S5-003 — Add venue-specific rate limit gate
+Risk Rating: MED
+Contract: specs/CONTRACT.md §2.4 (claimed, but section is sparse)
+Acceptance Tests: AT-099 (RateLimitGate rejects when venue rate limit is near capacity)
+Enforcement Point: DispatcherChokepoint — build_order_intent.rs
+Touch Scope: crates/soldier_core/src/execution/build_order_intent.rs, crates/soldier_core/src/execution/rate_limit_gate.rs (new file)
+
+Description:
+This story adds a RateLimitGate that tracks per-venue API call counts and rejects new OPEN
+intents when the venue's rate limit is near capacity (configurable threshold, e.g., 80% of
+known limit).
+
+The contract clause §2.4 is titled "Venue Rate Limiting" but contains only:
+  "The system SHOULD implement venue-aware rate limiting to prevent API bans."
+
+Problems with the contract text:
+- Uses SHOULD (not MUST) — is this actually required?
+- Does not specify what "near capacity" means (no threshold defined)
+- Does not specify behavior for CLOSE/HEDGE intents when rate limited
+- Does not specify whether rate limit state should be per-connection or global
+- AT-099 references this section but the acceptance criteria are not defined in CONTRACT.md —
+  AT-099 appears only in plans/prd.json with no corresponding anchor in the contract
+
+The PRD story claims AT-099 as an enforcing acceptance test, but the AT is not registered
+in CONTRACT.md. The contract text is advisory (SHOULD), not normative (MUST).
+
+Prior postmortem: none

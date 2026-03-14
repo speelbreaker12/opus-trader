@@ -1,0 +1,23 @@
+Story: S2-012 — Add structured logging to reconciliation loop
+Risk Rating: LOW
+Contract: specs/CONTRACT.md §3.1 (Reconciliation Observability)
+Acceptance Tests: none (no enforcement changes, observability only)
+Enforcement Point: none (logging only, no gate changes)
+Touch Scope: crates/soldier_infra/src/reconciliation/loop.rs
+
+Description:
+This story adds structured tracing logs to the reconciliation loop. Currently the loop runs
+silently with only error-level logs on failure. This change adds:
+
+- info-level log at start/end of each reconciliation cycle with cycle_id and duration_ms
+- warn-level log when position delta exceeds soft threshold (configurable, default 5%)
+- debug-level log with per-instrument fill counts and position snapshots
+
+No enforcement points are modified. No gates are added or changed. No dispatch path is touched.
+No contract clauses require enforcement changes for this story.
+
+The reconciliation loop already has fail-closed behavior: any reconciliation failure sets the
+Open Permission Latch, which blocks new OPEN intents until the next successful reconciliation.
+This story does not modify that latch behavior.
+
+Prior postmortem: none (first story in this slice)
