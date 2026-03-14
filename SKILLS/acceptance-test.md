@@ -101,12 +101,6 @@ Add to the relevant section:
 - AT-002: [Guard] NON-TRIP - guard inactive when [condition], OPEN dispatches
 ```
 
-### 6) Verify AT Numbering
-```bash
-# Find next available AT number
-rg "AT-\d+" specs/CONTRACT.md | grep -oE "AT-[0-9]+" | sort -t- -k2 -n | tail -5
-```
-
 ## Checklist
 - [ ] TRIP test exists
 - [ ] NON-TRIP test exists
