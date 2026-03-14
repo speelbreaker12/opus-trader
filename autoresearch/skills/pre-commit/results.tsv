@@ -1,1 +1,5 @@
 commit	score	passed	total	status	description
+77f72172	1.000	25	25	baseline	initial baseline — skill as-is, all 25 assertions pass
+666d307d	1.000	25	25	discard	stability-1: add if-let-Err hint for let _ = (equal score, reverted)
+e1cbc1b6	1.000	25	25	discard	stability-2: Option-wrapping as fail-open example in section 2 (equal score, reverted)
+73be818d	1.000	25	25	discard	stability-3: explicit AT-xxx CONTRACT.md registration in section 4 (equal score, reverted)
