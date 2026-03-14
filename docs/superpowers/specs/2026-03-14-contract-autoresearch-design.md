@@ -406,6 +406,11 @@ Contradictions and scope-narrowings are flagged `status: rejected` with reason c
 
 > **Note on scope narrowing**: A `SCOPE_NARROWING` finding is not necessarily wrong — it may reflect legitimate contract refinement. It is flagged to ensure human review rather than auto-rejected. No category may bypass SCOPE_NARROWING review, including `cross_ref_broken`.
 
+> **Batch-internal contradiction check**: After all per-proposal checks pass, `check_contradictions.py` performs a pairwise check across all proposals in the batch:
+> - For each pair (P_i, P_j): extract MUST/SHALL clauses from `proposed_text` (for new_requirement) or `new_text` in `replace_span` (for mechanical). Check each clause from P_i against each clause from P_j for subject overlap + negation conflict or scope contradiction.
+> - If P_i's new text introduces "MUST do X under condition C" and P_j's new text introduces "MUST NOT do X under condition C" (or equivalent), flag as `BATCH_CONTRADICTION`.
+> - `BATCH_CONTRADICTION` findings abort the entire batch — the reviewer is shown which proposals conflict and must resolve before re-submitting.
+
 ### 4.5 Exit Criteria
 
 - 100% of proposals pass `proposals.schema.json` validation
@@ -521,6 +526,7 @@ SETUP → PHASE 1 (detection calibration) → PHASE 2 (propose-then-apply)
 1. Re-validate accepted proposals against `proposals.schema.json`
 2. Re-check all `mechanical_ok: true` spans against **current CONTRACT.md** (not snapshot) — span may have drifted since generation. Mismatch → mark proposal `stale`, abort that proposal
 3. Re-run `check_contradictions.py` against current CONTRACT.md
+4b. Batch-internal contradiction check: re-run pairwise check across all accepted proposals.
 4. Any failure → abort **entire promotion batch**; notify reviewer; do not apply partial batch
 5. Record pre-apply CONTRACT.md hash in `proposals_index.json` as `apply_base_hash`
 
