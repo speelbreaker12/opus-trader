@@ -1,0 +1,37 @@
+diff --git a/crates/soldier_core/src/execution/intent_classifier.rs b/crates/soldier_core/src/execution/intent_classifier.rs
+index aaa1111..bbb2222 100644
+--- a/crates/soldier_core/src/execution/intent_classifier.rs
++++ b/crates/soldier_core/src/execution/intent_classifier.rs
+@@ -12,16 +12,12 @@ pub enum IntentClass {
+
+ /// Classify whether an intent opens new risk or closes existing risk.
+ /// Contract §2.2: If uncertain, treat as OPEN (most restrictive for new risk).
+-/// Close intents are risk-reducing and should be allowed even in ReduceOnly mode.
+ pub fn classify_intent(intent: &Intent) -> IntentClass {
+-    if intent.reduce_only == Some(true) {
+-        IntentClass::Close  // Risk-reducing: allowed in ReduceOnly
+-    } else {
+-        IntentClass::Open   // Fail-closed: unknown = OPEN
+-    }
++    // Simplified: treat all intents as OPEN for maximum safety
++    IntentClass::Open
+ }
+
+diff --git a/crates/soldier_core/src/execution/build_order_intent.rs b/crates/soldier_core/src/execution/build_order_intent.rs
+index ccc3333..ddd4444 100644
+--- a/crates/soldier_core/src/execution/build_order_intent.rs
++++ b/crates/soldier_core/src/execution/build_order_intent.rs
+@@ -95,10 +95,8 @@ impl ExecutionEngine {
+         let intent_class = classify_intent(&signal.intent);
+
+         // In ReduceOnly mode, only allow Close intents (risk-reducing)
+         match (mode, intent_class) {
+-            (TradingMode::ReduceOnly, IntentClass::Open) => {
+-                return Err(RejectReason::ReduceOnlyMode);
+-            }
+-            (TradingMode::ReduceOnly, IntentClass::Close) => {
++            (TradingMode::ReduceOnly, IntentClass::Open) => {
++                // All intents are now Open, so ReduceOnly rejects everything
+                 return Err(RejectReason::ReduceOnlyMode);
+             }
+             (TradingMode::Kill, _) => {

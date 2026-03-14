@@ -1,0 +1,63 @@
+## Validator: assumption_validator.py
+
+```python
+from enum import Enum
+from typing import Optional
+from dataclasses import dataclass
+
+class AssumptionStatus(Enum):
+    """Status of a design assumption — must be validated before deployment."""
+    UNVERIFIED = "UNVERIFIED"
+    PROVEN = "PROVEN"
+    DISPROVEN = "DISPROVEN"
+    EXPIRED = "EXPIRED"
+
+class DeploymentGate(Enum):
+    BLOCKED = "BLOCKED"
+    APPROVED = "APPROVED"
+
+@dataclass
+class ValidationContext:
+    environment: str
+    version: str
+    assumptions: list[dict]
+
+def validate_deployment_readiness(ctx: ValidationContext) -> dict:
+    """Check that deployment prerequisites are met."""
+    findings = []
+    verdict = "PASS"
+
+    # Rule 1: Environment must be specified
+    if not ctx.environment:
+        findings.append({"rule": "R1", "msg": "Environment not specified"})
+        verdict = "FAIL"
+
+    # Rule 2: Version must follow semver
+    if not _is_semver(ctx.version):
+        findings.append({"rule": "R2", "msg": f"Invalid version format: {ctx.version}"})
+        verdict = "FAIL"
+
+    # Rule 3: Gate check
+    gate = _resolve_gate(ctx)
+    if gate == DeploymentGate.BLOCKED:
+        findings.append({"rule": "R3", "msg": "Deployment gate is BLOCKED"})
+        verdict = "FAIL"
+
+    # NOTE: AssumptionStatus is imported but NEVER referenced in any rule.
+    # No rule checks whether assumptions are UNVERIFIED, DISPROVEN, or EXPIRED.
+    # A deployment with all assumptions DISPROVEN would pass validation.
+
+    return {"verdict": verdict, "findings": findings}
+
+def _is_semver(version: str) -> bool:
+    import re
+    return bool(re.match(r"^\d+\.\d+\.\d+$", version))
+
+def _resolve_gate(ctx: ValidationContext) -> DeploymentGate:
+    # Placeholder — in production reads from config
+    return DeploymentGate.APPROVED
+```
+
+## Task
+
+Run /validator-audit on this validator. Check for dead imports (types imported but never used in validation rules) and flag any domain types that should have corresponding rules but don't.
