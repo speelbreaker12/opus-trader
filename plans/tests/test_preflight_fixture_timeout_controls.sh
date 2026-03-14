@@ -114,6 +114,18 @@ rewrite_supports_wait_n_to_false() {
   mv "$tmp_file" "$file"
 }
 
+extract_fn() {
+  local file="$1"
+  local fn_name="$2"
+  awk -v fn="$fn_name" '
+    $0 ~ "^" fn "\\(\\)[[:space:]]*\\{" { in_fn=1 }
+    in_fn {
+      print
+      if ($0 == "}") { in_fn=0 }
+    }
+  ' "$file"
+}
+
 rewrite_fixture_arrays "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
 
@@ -585,5 +597,61 @@ grep -Fq "Fixture test failed: plans/tests/test_dummy_sleep.sh (rc=1" "$parallel
 if grep -Fq "alive[@]: unbound variable" "$parallel_fail_collect_log"; then
   fail "failing batch must not trip bash nounset on an empty alive[] array"
 fi
+
+preflight_helper_fns="$tmp_dir/preflight_helper_fns.sh"
+{
+  extract_fn "$SOURCE_PREFLIGHT" "prune_fixture_pids_once"
+  extract_fn "$SOURCE_PREFLIGHT" "shift_fixture_pid_queue"
+  extract_fn "$SOURCE_PREFLIGHT" "wait_for_fixture_slot"
+} > "$preflight_helper_fns"
+
+# Regression proof: on the no-wait-n fallback path, a completed child must
+# free a slot without blocking on the oldest still-running PID.
+# Current failure mode on bash 3.2 waits on fixture_pids[0] and leaves the slot
+# idle until that oldest PID exits.
+fixture_pids=()
+PREFLIGHT_WAIT_N_USE=0
+PREFLIGHT_PARALLEL_JOBS=2
+source "$preflight_helper_fns"
+
+sleep 5 &
+slow_pid=$!
+sleep 0.2 &
+fast_pid=$!
+fixture_pids=("$slow_pid" "$fast_pid")
+
+slot_wait_started="$(python3 - <<'PY'
+import time
+print(time.monotonic())
+PY
+)"
+wait_for_fixture_slot
+slot_wait_elapsed="$(python3 - "$slot_wait_started" <<'PY'
+import time
+import sys
+
+start = float(sys.argv[1])
+print(f"{time.monotonic() - start:.3f}")
+PY
+)"
+
+if python3 - "$slot_wait_elapsed" <<'PY'
+import sys
+elapsed = float(sys.argv[1])
+sys.exit(0 if elapsed < 1.5 else 1)
+PY
+then
+  :
+else
+  fail "expected no-wait-n fallback to free a slot from a completed child without blocking on oldest PID (elapsed=${slot_wait_elapsed}s)"
+fi
+[[ "${#fixture_pids[@]}" -eq 1 ]] \
+  || fail "expected no-wait-n fallback to prune finished children down to one active PID, saw ${#fixture_pids[@]}"
+[[ "${fixture_pids[0]}" == "$slow_pid" ]] \
+  || fail "expected slow PID to remain active after pruning finished later child"
+
+wait "$fast_pid" 2>/dev/null || true
+kill "$slow_pid" 2>/dev/null || true
+wait "$slow_pid" 2>/dev/null || true
 
 echo "test_preflight_fixture_timeout_controls.sh: ok"

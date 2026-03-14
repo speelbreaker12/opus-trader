@@ -150,7 +150,7 @@ now_monotonic_ns() {
       python -c 'import time; print(int(time.monotonic() * 1000000000))'
       ;;
     perl)
-      perl -MTime::HiRes=time -e 'printf("%.0f\\n", time() * 1000000000)'
+      perl -MTime::HiRes=time -e 'printf("%.0f\n", time() * 1000000000)'
       ;;
     *)
       printf '%s000000000\n' "$(date +%s)"
@@ -330,8 +330,8 @@ shift_fixture_pid_queue() {
 }
 
 wait_for_fixture_slot() {
-  local pid=""
   local errexit=0
+  local pid=""
 
   case "$-" in
     *e*) errexit=1 ;;
@@ -350,13 +350,20 @@ wait_for_fixture_slot() {
   fi
 
   while [[ ${#fixture_pids[@]} -ge $PREFLIGHT_PARALLEL_JOBS ]]; do
-    pid="${fixture_pids[0]}"
-    set +e
-    wait "$pid"
-    if [[ "$errexit" == "1" ]]; then
-      set -e
+    prune_fixture_pids_once
+    if [[ ${#fixture_pids[@]} -lt $PREFLIGHT_PARALLEL_JOBS ]]; then
+      break
     fi
-    shift_fixture_pid_queue
+
+    while true; do
+      for pid in "${fixture_pids[@]}"; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+          prune_fixture_pids_once
+          break 2
+        fi
+      done
+      sleep 0.05
+    done
   done
 }
 
@@ -606,7 +613,18 @@ if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
   REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
 fi
 PREFLIGHT_DIAG_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"
-PREFLIGHT_DIAG_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-8}"
+PREFLIGHT_PARALLEL_JOBS_RAW="${PREFLIGHT_PARALLEL_JOBS-}"
+if [[ -z "$PREFLIGHT_PARALLEL_JOBS_RAW" ]]; then
+  PREFLIGHT_DIAG_PARALLEL_JOBS="$(detect_parallel_jobs)"
+  PREFLIGHT_PARALLEL_JOBS=""
+elif [[ "$PREFLIGHT_PARALLEL_JOBS_RAW" =~ ^[1-9][0-9]*$ ]]; then
+  PREFLIGHT_DIAG_PARALLEL_JOBS="$PREFLIGHT_PARALLEL_JOBS_RAW"
+  PREFLIGHT_PARALLEL_JOBS="$PREFLIGHT_PARALLEL_JOBS_RAW"
+else
+  setup_fail "Invalid PREFLIGHT_PARALLEL_JOBS='$PREFLIGHT_PARALLEL_JOBS_RAW' (expected positive integer worker count)"
+  PREFLIGHT_DIAG_PARALLEL_JOBS=1
+  PREFLIGHT_PARALLEL_JOBS=1
+fi
 fixture_diag_started_ns="$(now_monotonic_ns)"
 
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "none" ]]; then
@@ -621,10 +639,12 @@ else
     fixture_timeout_default=300
   fi
   PREFLIGHT_FIXTURE_TIMEOUT_INVALID=0
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
-  PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS="$PREFLIGHT_FIXTURE_TEST_TIMEOUT"
-  if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then
-    setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT' (expected non-negative integer seconds)"
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"
+  PREFLIGHT_FIXTURE_TEST_TIMEOUT="$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW"
+  PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS="$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW"
+  # 0 means explicit no-timeout for fixture jobs.
+  if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW" =~ ^[0-9]+$ ]]; then
+    setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW' (expected non-negative integer seconds)"
     PREFLIGHT_FIXTURE_TIMEOUT_INVALID=1
     PREFLIGHT_FIXTURE_TEST_TIMEOUT=0
     PREFLIGHT_DIAG_FIXTURE_TIMEOUT_SECONDS=0
@@ -793,6 +813,9 @@ else
     # Each test is isolated (own tmpdir) so parallel execution is safe.
     # Results collected via temp files to preserve pass()/fail() counter semantics.
     PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-$(detect_parallel_jobs)}"
+    if [[ -z "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
+      setup_fail "PREFLIGHT fixture timeout requested (${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s) but timeout command missing (install coreutils timeout or gtimeout)"
+    fi
     fixture_results_dir="$(mktemp -d)"
     _preflight_cleanup_dirs+=("$fixture_results_dir")
     fixture_pids=()
