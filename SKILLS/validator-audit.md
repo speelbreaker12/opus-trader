@@ -13,11 +13,6 @@ When to use
 - When a validator is the quality gate for a pipeline (CI, workflow, deploy)
 - When an external reviewer finds gaps your skills missed (retrospective)
 
-When NOT to use
-- Simple single-rule fixes (use `/pr-review`)
-- Production enforcement code (use `/contract-review`)
-- Implementation failure modes (use `/failure-mode-review`)
-
 ---
 
 ## Before You Start (MANDATORY)
