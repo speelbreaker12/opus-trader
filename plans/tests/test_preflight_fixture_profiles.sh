@@ -52,13 +52,25 @@ assert_list_absent() {
 
 smoke_list="$(extract_array "SMOKE_REVIEW_FIXTURE_TESTS")"
 full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
+serial_full_only_list="$(extract_array "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS")"
 
 [[ -n "$smoke_list" ]] || fail "SMOKE_REVIEW_FIXTURE_TESTS is empty"
 [[ -n "$full_only_list" ]] || fail "FULL_ONLY_REVIEW_FIXTURE_TESTS is empty"
+[[ -n "$serial_full_only_list" ]] || fail "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS is empty"
 
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
-assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
+assert_contains_line 'SERIAL_REVIEW_FIXTURE_TESTS=()'
+assert_contains_line 'REVIEW_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"'
+assert_contains_line 'SERIAL_REVIEW_FIXTURE_TEST_COUNT=0'
+assert_contains_line 'if declare -p REVIEW_FIXTURE_TESTS >/dev/null 2>&1; then'
+assert_contains_line '  REVIEW_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"'
+assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1; then'
+assert_contains_line '  SERIAL_REVIEW_FIXTURE_TEST_COUNT="${#SERIAL_REVIEW_FIXTURE_TESTS[@]}"'
+assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1 && \'
+assert_contains_line 'for fixture_test in "${SERIAL_REVIEW_FIXTURE_TESTS[@]}"; do'
+assert_contains_line 'PREFLIGHT_DIAG_FIXTURE_TEST_COUNT=$(( REVIEW_FIXTURE_TEST_COUNT + SERIAL_REVIEW_FIXTURE_TEST_COUNT ))'
+assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${PREFLIGHT_DIAG_FIXTURE_TEST_COUNT} tests)"'
 assert_contains_line 'fixture_timeout_default=240'
 assert_contains_line 'fixture_timeout_default=300'
 assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
@@ -89,6 +101,8 @@ assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000)
 assert_contains_line 'PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-$(detect_parallel_jobs)}"'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
+assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1 && \'
+assert_contains_line 'for fixture_test in "${SERIAL_REVIEW_FIXTURE_TESTS[@]}"; do'
 assert_contains_line 'SHELL_SYNTAX_CHECKER=""'
 assert_contains_line 'if ! SHELL_SYNTAX_CHECKER="$(command -v bash 2>/dev/null)"; then'
 assert_contains_line 'setup_fail "Shell syntax setup failed (missing bash)"'
@@ -123,7 +137,8 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
-assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
+assert_list_absent "$full_only_list" "plans/tests/test_prd_set_pass.sh"
+assert_list_contains "$serial_full_only_list" "plans/tests/test_prd_set_pass.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_bundle.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_operator_runner.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_scoreboard.sh"
@@ -183,7 +198,9 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+serial_full_only_count="$(printf '%s\n' "$serial_full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 [[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
-[[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
+[[ "$full_only_count" == "11" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 11)"
+[[ "$serial_full_only_count" == "1" ]] || fail "unexpected serial full-only fixture count: $serial_full_only_count (expected 1)"
 
 echo "PASS: preflight fixture profile mapping"
