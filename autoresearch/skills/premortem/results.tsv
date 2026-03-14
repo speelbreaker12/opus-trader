@@ -1,3 +1,7 @@
 commit	score	passed	total	status	description
 55763d29	0.640	16	25	baseline	estimated clean baseline — STOPLIGHT format wrong + Hard Gate framing + word count failures
 4aba633a	0.680	17	25	keep	proportional depth: LOW risk <1500w — fixed T2-A3; 8 failures remain
+61951783	1.000	25	25	keep	STOPLIGHT format **STOPLIGHT**: VALUE — fixed 8 assertions (T1-A1/A5 T2-A2/A5 T3-A3/A5 T4-A4 T5-A5) — PERFECT SCORE
+61951783	0.960	24	25	stability-fail	stability check: T3-A4 failed — agent used "**Gaps**:" heading instead of "**Debt Register**"
+61951783	1.000	25	25	stability-pass	stability check 3 (old): T3-A4 passed — agent used "**Debt Register**" heading — 2/3 stable, not sufficient
+198f44eb	—	—	25	pending	Debt Register heading fix — explicit "**Debt Register**" heading instruction in S10

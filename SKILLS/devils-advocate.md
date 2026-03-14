@@ -40,6 +40,7 @@ For each AT, iterate:
    - Ignore one input field entirely
    - Swap two enum variants
    - **Enum variant sweep**: For each enum variant the function accepts, feed it through the full function with hostile/garbage inputs for all other parameters. Example: `evaluate_assembled_pipeline(CancelOnly, NaN_metadata)` — does CancelOnly still get approved? Tests that only exercise one variant (e.g., always Open) leave every other variant's path untested.
+   - **Identity/no-op mutation**: new implementation == old implementation (passthrough, no change). For any loop-style optimization or score-based exit criterion, check whether the scoring fixtures already satisfy the structural assertions *before any patcher runs*. If they do, the null patcher scores 100% — the exit criterion is vacuous. Fix: add a post-apply hash check asserting `hash(output) != hash(input)` before accepting a patch as "applied".
 
 2. **Run tests**: `cargo test` on the relevant module. Does the wrong impl pass?
 
@@ -113,7 +114,7 @@ Weakest surviving test: <which test would be first to break if you relaxed it>
 ## Exit Criteria
 
 The skill is complete when:
-1. All mutations from the standard list have been attempted
+1. All mutations from the standard list have been attempted (including the identity/no-op mutation)
 2. Every gap found has been closed with a new test case
 3. The simpler-than-correct gate returns PASS
 4. The phase transition has been reached and documented

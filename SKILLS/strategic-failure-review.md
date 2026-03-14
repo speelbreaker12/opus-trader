@@ -128,6 +128,7 @@ Common hidden assumptions:
 | Atomic writes prevent all corruption | NFS, Docker overlay, disk-full between open and replace | Non-atomic write on non-POSIX filesystem |
 | Cache file is not adversarial | Shared dev machine, CI runner reuse, file permissions | No HMAC/signature; anyone with write access can forge cache |
 | `is_ci()` catches all CI environments | Custom CI, Docker without CI=true, developer with CI=false in profile | Skip fires in CI or is blocked on developer machine |
+| Auto-apply boundary is "zero semantic content" | LLM picks wrong target within allowed token set | Wrong AT-ID repair redirects normative reference; structural check passes |
 
 Checklist:
 - [ ] For each cached/skipped decision: list ALL inputs that affect the outcome, not just the fingerprinted ones
@@ -462,6 +463,8 @@ Fix: either preserve the invariant (exit 0 = all ran) or update all
 - "Close/Hedge bypass OPEN-only gates but still pass through shared gates"
 - "Single chokepoint: all dispatch routes through build_order_intent()"
 - "Metrics counters reflect all paths (no early-return gaps that undercount)"
+
+**Auto-apply / auto-graduation mechanisms**: For any mechanism that automatically graduates a category (e.g., "graduated by construction", "zero-content auto-apply"), the graduation criteria must be applied to the category being graduated — not bypassed by design decision. A category marked "graduated by construction" requires a written safety argument explaining *why* the graduation process is vacuous, not just an assertion that it is.
 
 Checklist:
 - [ ] **List >=5 invariants** from the existing system before reviewing the change

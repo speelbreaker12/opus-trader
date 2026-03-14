@@ -113,6 +113,14 @@ rg "guard_function_name" crates/ --glob '*.rs' | grep -v '/tests/' | grep -v '_t
 ```
 Zero production callers = dead enforcement = P1 finding.
 
+### Phase 2.6 — Contradiction and Weakening Check
+
+When reviewing proposals or batches of changes against the contract:
+
+- **Scope-narrowing weakening**: A MUST clause that gains a conditional guard (`AND`, `IF`, `EXCEPT WHEN`) narrows its applicability without contradicting existing text — standard contradiction detection misses this. Flag any unconditioned→conditioned MUST transformation for manual review.
+- **SHALL equivalence**: `SHALL` is normatively equivalent to `MUST` (RFC 2119). Checkers that only extract `MUST` sentences will miss `SHOULD` downgrades applied to `SHALL` clauses.
+- **Batch-internal contradictions**: Two proposals that each individually pass contradiction checks can jointly contradict the contract (or each other). Check proposals pairwise within the same batch, not just each against the base document.
+
 ### Phase 3 — Causality check
 For each NEW or MODIFIED guard/latch/gate:
 - Must have TRIP + NON-TRIP coverage

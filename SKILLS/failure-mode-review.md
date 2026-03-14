@@ -97,6 +97,8 @@ For any caching, persistence, or stateful logic, explicitly enumerate:
 
 Write these out before concluding the cache logic is correct.
 
+**Single-file vs per-instance artifacts**: If an artifact file has a `fixture_id` field but the same file is reused across multiple fixtures in one run, the field is structurally ambiguous. Before accepting artifact design, ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" Ambiguous ownership breaks per-fixture attribution and staleness detection.
+
 ### 3. "What If" Analysis
 
 For each external input (file read, env var, JSON field, CLI arg):
@@ -427,6 +429,8 @@ For shell scripts, check these common silent failures:
 | Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
 | Single-variant walkthrough | Only trace Open through new dispatch function; miss CancelOnly/Close/Hedge | Walk at least one scenario per enum variant of primary input |
 | Early-return metric gap | Error path returns before incrementing rejection counter | For each counter, enumerate all paths; check early-returns bypass |
+| `git_hash` field naming | Field name implies git SHA; implementation uses file content hash — incompatible; staleness check never fires | Audit field names that imply one hash type when another is used |
+| Single-file vs per-instance artifacts | Artifact file has a `fixture_id` field but is reused across multiple fixtures in one run — field is structurally ambiguous | Ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" |
 
 ## Integration with Other Skills
 

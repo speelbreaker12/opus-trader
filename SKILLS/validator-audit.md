@@ -193,6 +193,8 @@ Checklist:
 - [ ] Can `reconciliation_status=RECONCILED` coexist with unproven ATs? (not just BLOCKING ones)
 - [ ] Construct a **minimal adversarial input** that passes all rules but is clearly wrong. If you can build one, there's a gap.
 
+**Path-derived metadata**: When `run_id` and `fixture_id` are encoded in the directory structure rather than JSON fields, the schema cannot validate them. Check whether required identifiers live in the file or only in the path — path-only means per-fixture attribution depends entirely on naming conventions with no machine-enforceable contract.
+
 **Technique**: Build the most dishonest input that could pass validation. If it passes, you've found a gap.
 
 ### 7. Derived Value Consistency
