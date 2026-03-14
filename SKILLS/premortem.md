@@ -75,6 +75,8 @@ contract change ledger check.
 expected constraint, exploit, and smallest fix.
 
 **S10 — STOPLIGHT + Exit criteria**: Assign GREEN / YELLOW / RED based on gate results.
+Use the exact format: `**STOPLIGHT**: GREEN` — bold only the word STOPLIGHT, value after the
+colon outside the bold markers (not `**STOPLIGHT: GREEN**`).
 If YELLOW, fill the Debt Register with gap_id, severity, owner, and target slice.
 Verify all exit criteria checkboxes.
 
