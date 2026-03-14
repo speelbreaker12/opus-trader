@@ -1,0 +1,27 @@
+diff --git a/crates/soldier_core/tests/test_gate_ordering.rs b/crates/soldier_core/tests/test_gate_ordering.rs
+index eee5555..fff6666 100644
+--- a/crates/soldier_core/tests/test_gate_ordering.rs
++++ b/crates/soldier_core/tests/test_gate_ordering.rs
+@@ -15,6 +15,22 @@ fn test_risk_state_gate_blocks_before_preflight() {
+     assert_eq!(result.reject_reason, RejectReasonCode::RiskStateDegraded);
+ }
+
++/// AT-050: Gate ordering — preflight runs before quantize
++#[test]
++fn test_preflight_gate_blocks_before_quantize() {
++    let mut ctx = TestContext::new();
++    ctx.set_risk_state(RiskState::Healthy);
++    ctx.set_preflight_fail(true);
++    ctx.force_other_gates_pass();
++
++    let result = ctx.dispatch_open_intent();
++
++    assert_eq!(result.dispatch_count, 0);
++    assert_eq!(result.reject_reason, RejectReasonCode::PreflightFailed);
++    // Verify quantize was never called
++    assert_eq!(ctx.quantize_call_count(), 0);
++}
++
+ #[test]
+ fn test_all_gates_pass_dispatches() {
+     let mut ctx = TestContext::new();

@@ -1,0 +1,73 @@
+diff --git a/crates/soldier_core/src/execution/gates/spread_gate.rs b/crates/soldier_core/src/execution/gates/spread_gate.rs
+new file mode 100644
+index 0000000..aaa7777
+--- /dev/null
++++ b/crates/soldier_core/src/execution/gates/spread_gate.rs
+@@ -0,0 +1,38 @@
++use crate::execution::{GateResult, RejectReasonCode};
++use crate::types::TickContext;
++
++/// Spread Gate: blocks OPEN orders when the bid-ask spread exceeds
++/// the configured threshold for the instrument.
++///
++/// Contract: §2.3.7 — "OPEN orders MUST be rejected when the quoted
++/// spread exceeds the instrument's max_spread_bps threshold."
++pub struct SpreadGate {
++    max_spread_bps: f64,
++}
++
++impl SpreadGate {
++    pub fn new(max_spread_bps: f64) -> Self {
++        Self { max_spread_bps }
++    }
++
++    pub fn check(&self, ctx: &TickContext) -> GateResult {
++        let spread_bps = ctx.current_spread_bps();
++
++        if spread_bps > self.max_spread_bps {
++            GateResult::Reject(RejectReasonCode::SpreadTooWide)
++        } else {
++            GateResult::Pass
++        }
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_spread_gate_basic() {
++        let gate = SpreadGate::new(10.0);
++        // Only tests construction, no TRIP/NON-TRIP coverage
++    }
++}
+diff --git a/crates/soldier_core/src/execution/engine.rs b/crates/soldier_core/src/execution/engine.rs
+index bbb8888..ccc9999 100644
+--- a/crates/soldier_core/src/execution/engine.rs
++++ b/crates/soldier_core/src/execution/engine.rs
+@@ -12,6 +12,7 @@ use crate::execution::gates::liquidity_gate::LiquidityGate;
+ use crate::execution::gates::net_edge_gate::NetEdgeGate;
+ use crate::execution::gates::preflight_gate::PreflightGate;
+ use crate::execution::gates::risk_state_gate::RiskStateGate;
++use crate::execution::gates::spread_gate::SpreadGate;
+
+ pub struct ExecutionEngine {
+     policy_guard: PolicyGuard,
+@@ -22,6 +23,7 @@ pub struct ExecutionEngine {
+     liquidity_gate: LiquidityGate,
+     pricer: Pricer,
+     wal: WAL,
++    spread_gate: SpreadGate,
+ }
+
+ impl ExecutionEngine {
+@@ -45,6 +47,9 @@ impl ExecutionEngine {
+         // ... existing gate pipeline ...
+         self.liquidity_gate.check(&liquidity_input)?;
+
++        // Spread gate — added per §2.3.7
++        self.spread_gate.check(ctx)?;
++
+         // Record before dispatch (WAL)
+         self.wal.record(&intent)?;
