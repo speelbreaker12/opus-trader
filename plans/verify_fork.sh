@@ -942,6 +942,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
   "plans/tests/test_lint_execution_facade.sh"
+  "plans/tests/test_contract_at_parity_invalid_refs.sh"
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_contract_change_ledger.sh"
