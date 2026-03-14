@@ -1,0 +1,5 @@
+commit	score	passed	total	status	description
+8daa0931	1.000	25	25	baseline	initial evaluation — all 25 assertions pass across 5 fixtures
+031f98dd	1.000	25	25	keep	stability 1: remove Common Gap Patterns table — score unchanged, skill simpler
+7642d5d0	1.000	25	25	keep	stability 2: add conciseness note for clean validators — T5-A5 more robust
+4d24a84b	1.000	25	25	keep	stability 3: remove When-NOT-to-use section — score stable, skill simpler

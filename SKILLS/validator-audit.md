@@ -13,11 +13,6 @@ When to use
 - When a validator is the quality gate for a pipeline (CI, workflow, deploy)
 - When an external reviewer finds gaps your skills missed (retrospective)
 
-When NOT to use
-- Simple single-rule fixes (use `/pr-review`)
-- Production enforcement code (use `/contract-review`)
-- Implementation failure modes (use `/failure-mode-review`)
-
 ---
 
 ## Before You Start (MANDATORY)
@@ -290,23 +285,7 @@ Adversarial input that passes all rules but is substantively wrong:
 3. <merge invariant fix>
 ```
 
----
-
-## Common Gap Patterns
-
-| Pattern | Gap | Detection |
-|---------|-----|-----------|
-| Enum subset in condition | Highest/most dangerous member excluded | List all members, check which are in the condition |
-| Imported but unused type | Rule was intended but never written | Grep imports vs. rule bodies |
-| Boolean field unchecked | `false` when `true` required passes silently | Field coverage matrix |
-| String field presence-only | Empty string passes, placeholder passes | Check for `.strip()` / `PLACEHOLDER_RE` coverage |
-| Mechanism string validated, data not | "dispatch_count" accepted, but `dispatch_count_assert` not required | Trace mechanism → required subfields |
-| Count recomputed, boolean not | `blocking_count` recalculated, `trading_halt` stale | Check which derived fields have consistency rules |
-| Merge ignores same-value severity | Verdict matches → severity update skipped | Test same-verdict-different-severity inputs |
-| Tie-break by input order | First reviewer wins on equal rank | Test with reversed input order |
-| Metadata not cleaned up | Old conflicts persist after resolution | Test re-aggregation after disagreement resolved |
-| Version gate missing | V2 rule runs on V1 data or V1 rule misses V2 field | Check `_is_v2()` guards |
-| Threshold gap at boundary | MED/HIGH checked, CRITICAL forgotten | Enumerate full range above threshold |
+**For clean/complete validators** (no CRITICAL or HIGH findings): keep total output under 500 words — omit empty sections, use ✓ inline for confirmed-OK items rather than expanding each.
 
 ---
 

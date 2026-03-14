@@ -1,0 +1,131 @@
+diff --git a/plans/verify.sh b/plans/verify.sh
+index aaa1111..bbb2222 100644
+--- a/plans/verify.sh
++++ b/plans/verify.sh
+@@ -8,6 +8,12 @@
+ # Environment variables:
+ #   VERIFY_MODE: quick | full (default: quick)
+ #   VERIFY_SKIP_GATES: comma-separated list of gate names to skip
++#   VERIFY_SHADOW_ENABLED: 1 to enable shadow mode for new gate pipeline (default: 0)
++#     Shadow mode runs the new pipeline alongside the old one, logs divergences,
++#     but does NOT use the new pipeline's results for pass/fail decisions.
++#   VERIFY_SHADOW_TELEMETRY_DIR: directory for shadow comparison logs (default: .shadow_telemetry)
++#   VERIFY_SHADOW_ROLLOUT_PHASE: off | shadow | canary | enforced (default: off)
++#     Controls the rollout progression of the new gate pipeline.
+
+ set -euo pipefail
+
+@@ -30,6 +36,97 @@ log_error() {
+ FAILED_GATES=()
+ MODE="${VERIFY_MODE:-quick}"
+
++# --- Shadow Pipeline: multi-phase rollout of new gate evaluation ---
++#
++# Phase 1 (shadow):  Run both old and new pipelines. Log divergences.
++#                     Old pipeline results are authoritative.
++# Phase 2 (canary):  Run both pipelines. New pipeline results are used
++#                     for 10% of runs (selected by hash of date + run_id).
++# Phase 3 (enforced): New pipeline only. Old pipeline removed.
++#
++# Shadow telemetry writes one JSON file per gate per run:
++#   .shadow_telemetry/<gate>/<timestamp>.json
++#   { "gate": "...", "old_result": 0, "new_result": 1, "diverged": true }
++
++SHADOW_ENABLED="${VERIFY_SHADOW_ENABLED:-0}"
++SHADOW_TELEMETRY="${VERIFY_SHADOW_TELEMETRY_DIR:-.shadow_telemetry}"
++SHADOW_PHASE="${VERIFY_SHADOW_ROLLOUT_PHASE:-off}"
++
++shadow_should_run() {
++  [[ "$SHADOW_ENABLED" == "1" ]] || return 1
++  [[ "$SHADOW_PHASE" != "off" ]] || return 1
++  return 0
++}
++
++shadow_run_new_pipeline() {
++  local gate_name="$1"
++  shift
++  # The new pipeline implementation — currently identical to old but
++  # will diverge as we add optimizations and reordering.
++  local new_result=0
++  "$@" || new_result=$?
++  echo "$new_result"
++}
++
++shadow_record_comparison() {
++  local gate_name="$1" old_result="$2" new_result="$3"
++  local diverged="false"
++  [[ "$old_result" != "$new_result" ]] && diverged="true"
++
++  local telemetry_dir="$SHADOW_TELEMETRY/$gate_name"
++  mkdir -p "$telemetry_dir"
++
++  local ts
++  ts=$(date -u +%Y%m%dT%H%M%SZ)
++  cat > "$telemetry_dir/${ts}.json" <<SHADOWEOF
++{
++  "gate": "$gate_name",
++  "old_result": $old_result,
++  "new_result": $new_result,
++  "diverged": $diverged,
++  "phase": "$SHADOW_PHASE",
++  "timestamp": "$ts"
++}
++SHADOWEOF
++
++  if [[ "$diverged" == "true" ]]; then
++    log_info "SHADOW DIVERGENCE: $gate_name (old=$old_result, new=$new_result)"
++  fi
++}
++
++shadow_select_result() {
++  local gate_name="$1" old_result="$2" new_result="$3"
++  case "$SHADOW_PHASE" in
++    shadow)
++      # Always use old result
++      echo "$old_result"
++      ;;
++    canary)
++      # Use new result for ~10% of runs
++      local hash
++      hash=$(echo "${gate_name}$(date +%s)" | sha256sum | cut -c1-2)
++      local decimal=$((16#$hash))
++      if (( decimal < 26 )); then  # ~10% of 256
++        log_info "CANARY: using new pipeline result for $gate_name"
++        echo "$new_result"
++      else
++        echo "$old_result"
++      fi
++      ;;
++    enforced)
++      # New pipeline only
++      echo "$new_result"
++      ;;
++    *)
++      echo "$old_result"
++      ;;
++  esac
++}
++
+ run_gate() {
+   local gate_name="$1"
+   shift
+@@ -42,7 +139,22 @@ run_gate() {
+
+   log_info "RUN: $gate_name"
+-  "$@"
+-  local rc=$?
++  local old_result=0
++  "$@" || old_result=$?
++
++  local rc="$old_result"
++
++  # Shadow pipeline: run new implementation and compare
++  if shadow_should_run; then
++    local new_result
++    new_result=$(shadow_run_new_pipeline "$gate_name" "$@")
++    shadow_record_comparison "$gate_name" "$old_result" "$new_result"
++    rc=$(shadow_select_result "$gate_name" "$old_result" "$new_result")
++  fi
+
+   if [[ $rc -eq 0 ]]; then
+     log_info "PASS: $gate_name"

@@ -67,6 +67,14 @@ rewrite_fixture_arrays_with_paths() {
     }
     in_full && /^\)/ {in_full=0; print; next}
     in_full {next}
+    /^FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=\(/ {
+      print
+      print "  \"plans/tests/test_dummy_sleep.sh\""
+      in_full_serial=1
+      next
+    }
+    in_full_serial && /^\)/ {in_full_serial=0; print; next}
+    in_full_serial {next}
     {print}
   ' "$file" > "$tmp_file"
   mv "$tmp_file" "$file"

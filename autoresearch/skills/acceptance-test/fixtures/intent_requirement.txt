@@ -1,0 +1,12 @@
+Contract Section: §2.1.3 - Intent Classification
+
+Requirement:
+"UNKNOWN intent MUST be classified as OPEN (most restrictive).
+Only intents with reduce_only=true MAY be classified as CLOSE.
+Replace orders MUST be treated as cancel + new OPEN placement."
+
+Classification rules:
+- reduce_only=true -> CLOSE
+- reduce_only=false or None -> OPEN
+- replace order -> OPEN (new placement gates apply)
+- unknown/missing -> OPEN (fail-closed)

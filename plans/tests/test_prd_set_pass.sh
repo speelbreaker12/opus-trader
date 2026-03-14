@@ -14,6 +14,9 @@ command -v jq >/dev/null 2>&1 || fail "jq is required for this test"
 
 tmp_dir="$(mktemp -d)"
 declare -a external_manifest_temp_dirs=()
+recon_root="$tmp_dir/reviews/reconciliations"
+mkdir -p "$recon_root"
+export RECONCILIATION_ROOT="$recon_root"
 
 remove_external_manifest_temp_dirs() {
   local dir
@@ -33,6 +36,7 @@ trap cleanup EXIT
 
 head_sha="$(git -C "$ROOT" rev-parse HEAD)"
 real_git="$(command -v git)"
+real_grep="$(command -v grep)"
 story_id="S99-001"
 
 setup_story_review_artifacts() {
@@ -166,8 +170,8 @@ success_output="$(
   --contract-review "$success_case/artifacts/contract_review.json"
 )"
 
-echo "$success_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing success output"
-echo "$success_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check did not pass for current HEAD"
+grep -Fq "Updated task $story_id: passes=true" <<<"$success_output" || fail "missing success output"
+grep -Fq "OK: review gate passed for $story_id @ $head_sha" <<<"$success_output" || fail "inline review check did not pass for current HEAD"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$success_case/prd.json" >/dev/null || fail "passes was not updated to true"
 
 missing_manifest_gate="$tmp_dir/missing-manifest-gate.sh"
@@ -199,15 +203,15 @@ missing_manifest_rc=$?
 set -e
 
 [[ "$missing_manifest_rc" -eq 0 ]] || fail "expected missing manifests to skip external gate, got rc=$missing_manifest_rc"
-echo "$missing_manifest_output" | grep -Fq "external manifest gate skipped for $story_id" || fail "missing manifest skip diagnostic"
-echo "$missing_manifest_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing skip-path success output"
+grep -Fq "external manifest gate skipped for $story_id" <<<"$missing_manifest_output" || fail "missing manifest skip diagnostic"
+grep -Fq "Updated task $story_id: passes=true" <<<"$missing_manifest_output" || fail "missing skip-path success output"
 
 # ── Test 2b: Custom external gate exit 1 is fatal when manifests exist ──
 custom_gate_fail_case="$tmp_dir/custom_gate_fail"
 mkdir -p "$custom_gate_fail_case"
 setup_case "$custom_gate_fail_case" "$head_sha"
 
-manifest_test_root="$ROOT/reviews/reconciliations/S99"
+manifest_test_root="$RECONCILIATION_ROOT/S99"
 r3_manifest_dir="$manifest_test_root/external/cycle1/$story_id"
 r7_manifest_dir="$manifest_test_root/external/cycle2/$story_id"
 mkdir -p "$r3_manifest_dir" "$r7_manifest_dir"
@@ -239,8 +243,8 @@ custom_gate_fail_rc=$?
 set -e
 
 [[ "$custom_gate_fail_rc" -eq 4 ]] || fail "expected custom external gate rc=1 to fail-closed with rc=4, got rc=$custom_gate_fail_rc"
-echo "$custom_gate_fail_output" | grep -Fq "custom external gate failing with rc=1" || fail "missing custom gate failure output"
-echo "$custom_gate_fail_output" | grep -Fq "ERROR: R3 external manifest gate failed for $story_id (exit 1)" || fail "missing fatal external gate diagnostic"
+grep -Fq "custom external gate failing with rc=1" <<<"$custom_gate_fail_output" || fail "missing custom gate failure output"
+grep -Fq "ERROR: R3 external manifest gate failed for $story_id (exit 1)" <<<"$custom_gate_fail_output" || fail "missing fatal external gate diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$custom_gate_fail_case/prd.json" >/dev/null || fail "passes changed despite custom external gate failure"
 remove_external_manifest_temp_dirs
 
@@ -263,7 +267,7 @@ mismatch_rc=$?
 set -e
 
 [[ "$mismatch_rc" -ne 0 ]] || fail "expected head mismatch to fail"
-echo "$mismatch_output" | grep -Fq "ERROR: verify metadata HEAD mismatch" || fail "missing head mismatch diagnostic"
+grep -Fq "ERROR: verify metadata HEAD mismatch" <<<"$mismatch_output" || fail "missing head mismatch diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$mismatch_case/prd.json" >/dev/null || fail "passes changed despite head mismatch failure"
 
 # ── Test 4: Mid-run HEAD change detected ────────────────────────────
@@ -324,9 +328,9 @@ head_flip_rc=$?
 set -e
 
 [[ "$head_flip_rc" -ne 0 ]] || fail "expected pass flip to fail when HEAD changes mid-run"
-echo "$head_flip_output" | grep -Fq "ERROR: HEAD changed during pass flip validation" || fail "missing mid-run head-change diagnostic"
+grep -Fq "ERROR: HEAD changed during pass flip validation" <<<"$head_flip_output" || fail "missing mid-run head-change diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$head_flip_case/prd.json" >/dev/null || fail "passes changed despite mid-run head-change failure"
-echo "$head_flip_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check should run with the initial HEAD before final check"
+grep -Fq "OK: review gate passed for $story_id @ $head_sha" <<<"$head_flip_output" || fail "inline review check should run with the initial HEAD before final check"
 
 # ── Test 5: No-flock locking (mkdir-based) ──────────────────────────
 noflock_case="$tmp_dir/noflock_lock_cleanup"
@@ -355,7 +359,7 @@ for run in 1 2; do
     VERIFY_ARTIFACTS_DIR="$noflock_case/unused_artifacts" \
     "$SCRIPT" "$story_id" false 2>&1
   )"
-  echo "$noflock_output" | grep -Fq "Updated task $story_id: passes=false" || fail "no-flock run $run did not complete successfully"
+  grep -Fq "Updated task $story_id: passes=false" <<<"$noflock_output" || fail "no-flock run $run did not complete successfully"
   [[ ! -d "$noflock_case/prd.json.lock.d" ]] || fail "no-flock run $run left stale lock dir"
 done
 
@@ -386,7 +390,7 @@ loss_mode_rc=$?
 set -e
 
 [[ "$loss_mode_rc" -eq 9 ]] || fail "expected exit 9 for incomplete loss_mode, got $loss_mode_rc"
-echo "$loss_mode_output" | grep -Fq "loss_mode incomplete for $story_id" || fail "missing loss_mode gate diagnostic"
+grep -Fq "loss_mode incomplete for $story_id" <<<"$loss_mode_output" || fail "missing loss_mode gate diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$loss_mode_case/prd.json" >/dev/null || fail "passes changed despite loss_mode gate failure"
 
 # ── Test 7: loss_mode gate — malformed loss_mode (non-object) blocks pass flip ──
@@ -415,7 +419,7 @@ malformed_loss_rc=$?
 set -e
 
 [[ "$malformed_loss_rc" -eq 9 ]] || fail "expected exit 9 for malformed loss_mode, got $malformed_loss_rc"
-echo "$malformed_loss_output" | grep -Fq "loss_mode incomplete for $story_id" || fail "missing loss_mode gate diagnostic for malformed loss_mode"
+grep -Fq "loss_mode incomplete for $story_id" <<<"$malformed_loss_output" || fail "missing loss_mode gate diagnostic for malformed loss_mode"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$malformed_loss_case/prd.json" >/dev/null || fail "passes changed despite malformed loss_mode"
 
 # ── Test 8: loss_mode gate — policy stories are exempt ──────────────
@@ -446,8 +450,8 @@ policy_exempt_rc=$?
 set -e
 
 [[ "$policy_exempt_rc" -eq 0 ]] || fail "expected policy story with complete artifacts to pass, got rc=$policy_exempt_rc"
-echo "$policy_exempt_output" | grep -Fq "Updated task $story_id: passes=true" || fail "policy story did not flip passes=true"
-echo "$policy_exempt_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "policy story should pass inline review gate"
+grep -Fq "Updated task $story_id: passes=true" <<<"$policy_exempt_output" || fail "policy story did not flip passes=true"
+grep -Fq "OK: review gate passed for $story_id @ $head_sha" <<<"$policy_exempt_output" || fail "policy story should pass inline review gate"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$policy_exempt_case/prd.json" >/dev/null || fail "policy story did not persist passes=true"
 
 # ── Test 9: Inline review check — no review artifact fails ──────────
@@ -472,8 +476,66 @@ no_review_rc=$?
 set -e
 
 [[ "$no_review_rc" -eq 4 ]] || fail "expected exit 4 for missing review artifacts, got $no_review_rc"
-echo "$no_review_output" | grep -Fq "no review artifact for HEAD=" || fail "missing inline review check diagnostic"
+grep -Fq "no review artifact for HEAD=" <<<"$no_review_output" || fail "missing inline review check diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$no_review_case/prd.json" >/dev/null || fail "passes changed despite missing review artifacts"
+
+# ── Test 9b: Inline review check must not depend on pipefail-sensitive grep pipelines ──
+pipefail_review_case="$tmp_dir/pipefail_review_gate"
+mkdir -p "$pipefail_review_case"
+setup_case "$pipefail_review_case" "$head_sha"
+
+grep_wrapper_dir="$tmp_dir/grep-wrapper"
+mkdir -p "$grep_wrapper_dir"
+cat > "$grep_wrapper_dir/grep" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+real_grep="${TEST_REAL_GREP:?missing TEST_REAL_GREP}"
+target_dir="${TEST_GREP_FLAKE_DIR:-}"
+has_q=0
+has_r=0
+has_f=0
+targets_story_dir=0
+
+for arg in "$@"; do
+  if [[ "$arg" == -* ]]; then
+    [[ "$arg" == *q* ]] && has_q=1
+    [[ "$arg" == *r* ]] && has_r=1
+    [[ "$arg" == *F* ]] && has_f=1
+  fi
+  if [[ -n "$target_dir" ]] && [[ "$arg" == "$target_dir" || "$arg" == "$target_dir/" ]]; then
+    targets_story_dir=1
+  fi
+done
+
+if [[ "$targets_story_dir" -eq 1 && "$has_r" -eq 1 && "$has_f" -eq 1 && "$has_q" -eq 0 ]]; then
+  printf '%s\n' "$target_dir/20260214T000001Z_review.md"
+  exit 141
+fi
+
+exec "$real_grep" "$@"
+EOF
+chmod +x "$grep_wrapper_dir/grep"
+
+set +e
+pipefail_review_output="$(
+  cd "$ROOT" && \
+  PATH="$grep_wrapper_dir:$PATH" \
+  TEST_REAL_GREP="$real_grep" \
+  TEST_GREP_FLAKE_DIR="$pipefail_review_case/story_artifacts/$story_id/codex" \
+  WF_STEP=/bin/true \
+  PRD_FILE="$pipefail_review_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$pipefail_review_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$pipefail_review_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$pipefail_review_case/artifacts/contract_review.json" 2>&1
+)"
+pipefail_review_rc=$?
+set -e
+
+[[ "$pipefail_review_rc" -eq 0 ]] || fail "expected inline review gate to ignore pipefail-sensitive grep wrappers, got rc=$pipefail_review_rc"
+grep -Fq "OK: review gate passed for $story_id @ $head_sha" <<<"$pipefail_review_output" || fail "inline review gate should pass with grep wrapper"
+jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$pipefail_review_case/prd.json" >/dev/null || fail "passes should flip under grep wrapper case"
 
 # ── Test 10: preflight gate must be proven in verify artifacts ─────────
 missing_preflight_rc_case="$tmp_dir/missing_preflight_rc"
@@ -495,7 +557,7 @@ missing_preflight_rc_status=$?
 set -e
 
 [[ "$missing_preflight_rc_status" -eq 4 ]] || fail "expected exit 4 for missing preflight.rc, got $missing_preflight_rc_status"
-echo "$missing_preflight_rc_output" | grep -Fq "missing required gate artifact: $missing_preflight_rc_case/artifacts/preflight.rc" || fail "missing preflight artifact diagnostic"
+grep -Fq "missing required gate artifact: $missing_preflight_rc_case/artifacts/preflight.rc" <<<"$missing_preflight_rc_output" || fail "missing preflight artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_preflight_rc_case/prd.json" >/dev/null || fail "passes changed despite missing preflight.rc"
 
 # ── Test 11: non-zero preflight.rc blocks pass flip ───────────────────
@@ -518,7 +580,7 @@ nonzero_preflight_rc_status=$?
 set -e
 
 [[ "$nonzero_preflight_rc_status" -eq 4 ]] || fail "expected exit 4 for non-zero preflight.rc, got $nonzero_preflight_rc_status"
-echo "$nonzero_preflight_rc_output" | grep -Fq "non-zero gate rc in" || fail "missing preflight non-zero diagnostic"
+grep -Fq "non-zero gate rc in" <<<"$nonzero_preflight_rc_output" || fail "missing preflight non-zero diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$nonzero_preflight_rc_case/prd.json" >/dev/null || fail "passes changed despite non-zero preflight.rc"
 
 # ── Test 12: fail_closed_coverage gate must be proven in verify artifacts ──
@@ -541,7 +603,7 @@ missing_fc_rc_status=$?
 set -e
 
 [[ "$missing_fc_rc_status" -eq 4 ]] || fail "expected exit 4 for missing fail_closed_coverage.rc, got $missing_fc_rc_status"
-echo "$missing_fc_rc_output" | grep -Fq "missing required gate artifact" || fail "missing fail_closed_coverage artifact diagnostic"
+grep -Fq "missing required gate artifact" <<<"$missing_fc_rc_output" || fail "missing fail_closed_coverage artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite missing fail_closed_coverage.rc"
 
 # ── Test 13: non-zero fail_closed_coverage.rc blocks pass flip ───────
@@ -564,7 +626,7 @@ nonzero_fc_rc_status=$?
 set -e
 
 [[ "$nonzero_fc_rc_status" -eq 4 ]] || fail "expected exit 4 for non-zero fail_closed_coverage.rc, got $nonzero_fc_rc_status"
-echo "$nonzero_fc_rc_output" | grep -Fq "non-zero gate rc in" || fail "missing non-zero gate rc diagnostic"
+grep -Fq "non-zero gate rc in" <<<"$nonzero_fc_rc_output" || fail "missing non-zero gate rc diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$nonzero_fc_rc_case/prd.json" >/dev/null || fail "passes changed despite non-zero fail_closed_coverage.rc"
 
 # ── Test 14: proof graph gate must be proven in verify artifacts ─────
@@ -587,7 +649,7 @@ missing_pg_rc_status=$?
 set -e
 
 [[ "$missing_pg_rc_status" -eq 4 ]] || fail "expected exit 4 for missing proof graph gate artifact, got $missing_pg_rc_status"
-echo "$missing_pg_rc_output" | grep -Fq "missing required proof graph gate artifact" || fail "missing proof graph gate artifact diagnostic"
+grep -Fq "missing required proof graph gate artifact" <<<"$missing_pg_rc_output" || fail "missing proof graph gate artifact diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$missing_pg_rc_case/prd.json" >/dev/null || fail "passes changed despite missing proof graph gate artifact"
 
 # ── Test 15: proof graph TRADING HALT artifact propagates exit 20 ────
@@ -610,7 +672,7 @@ halt_pg_status=$?
 set -e
 
 [[ "$halt_pg_status" -eq 20 ]] || fail "expected exit 20 for proof graph trading halt artifact, got $halt_pg_status"
-echo "$halt_pg_output" | grep -Fq "proof graph triggered TRADING HALT" || fail "missing proof graph trading halt diagnostic"
+grep -Fq "proof graph triggered TRADING HALT" <<<"$halt_pg_output" || fail "missing proof graph trading halt diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$halt_pg_case/prd.json" >/dev/null || fail "passes changed despite proof graph trading halt artifact"
 
 # ── Test 16: proof graph non-zero/non-20 artifact maps to exit 10 ───
@@ -633,7 +695,7 @@ failed_pg_status=$?
 set -e
 
 [[ "$failed_pg_status" -eq 10 ]] || fail "expected exit 10 for non-zero/non-20 proof graph artifact, got $failed_pg_status"
-echo "$failed_pg_output" | grep -Fq "proof graph gate failed for $story_id" || fail "missing proof graph non-20 failure diagnostic"
+grep -Fq "proof graph gate failed for $story_id" <<<"$failed_pg_output" || fail "missing proof graph non-20 failure diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$failed_pg_case/prd.json" >/dev/null || fail "passes changed despite non-zero/non-20 proof graph artifact"
 
 # ── Test 17: --dry-run executes pass checks and does not mutate PRD ─
@@ -652,8 +714,8 @@ dry_run_output="$(
   --dry-run
 )"
 
-echo "$dry_run_output" | grep -Fq "DRY-RUN: validation passed for task $story_id (requested passes=true)" || fail "missing dry-run success diagnostic"
-echo "$dry_run_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "dry-run should execute full validation path"
+grep -Fq "DRY-RUN: validation passed for task $story_id (requested passes=true)" <<<"$dry_run_output" || fail "missing dry-run success diagnostic"
+grep -Fq "OK: review gate passed for $story_id @ $head_sha" <<<"$dry_run_output" || fail "dry-run should execute full validation path"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$dry_run_case/prd.json" >/dev/null || fail "dry-run should not mutate passes field"
 
 # ── Test 18: --dry-run fails on broken gates and still avoids mutation ─
@@ -677,7 +739,7 @@ dry_run_fail_rc=$?
 set -e
 
 [[ "$dry_run_fail_rc" -eq 4 ]] || fail "expected exit 4 for dry-run gate failure, got $dry_run_fail_rc"
-echo "$dry_run_fail_output" | grep -Fq "missing required gate artifact" || fail "missing dry-run gate failure diagnostic"
+grep -Fq "missing required gate artifact" <<<"$dry_run_fail_output" || fail "missing dry-run gate failure diagnostic"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==false)' "$dry_run_fail_case/prd.json" >/dev/null || fail "dry-run failure should not mutate passes field"
 
 echo "PASS: prd_set_pass"

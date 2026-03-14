@@ -1,0 +1,6 @@
+commit	score	passed	total	status	description
+34899b27	0.600	15	25	baseline	initial baseline: verdict/lens on separate lines from headers fails 10 regex assertions
+8daa0931	1.000	25	25	keep	add inline format note: verdict+lens must appear on single labeled line (fixes 10 assertions)
+8daa0931	0.600	15	25	discard	simplify §A/§B to `GO|NO-GO` — format note alone insufficient, section template overrides
+8daa0931	1.000	25	25	discard	stability-2: brevity note for GO verdict — no-op (T1-A5 already passes), equal score
+8daa0931	1.000	25	25	discard	stability-3: move format note inline — no-op for all assertions, equal score; stability confirmed

@@ -1,0 +1,17 @@
+diff --git a/crates/soldier_core/src/execution/gates/net_edge_gate.rs b/crates/soldier_core/src/execution/gates/net_edge_gate.rs
+index ggg7777..hhh8888 100644
+--- a/crates/soldier_core/src/execution/gates/net_edge_gate.rs
++++ b/crates/soldier_core/src/execution/gates/net_edge_gate.rs
+@@ -15,8 +15,10 @@ impl NetEdgeGate {
+     pub fn check(&self, input: &NetEdgeInput) -> GateResult {
+         let edge = input.fee_usd + input.expected_slippage_usd;
+-        if edge > self.max_edge_usd {
+-            return GateResult::Reject(RejectReasonCode::EdgeTooHigh);
++        if let Some(max) = self.max_edge_usd {
++            if edge > max {
++                let _ = self.log_rejection(input);
++                return GateResult::Reject(RejectReasonCode::EdgeTooHigh);
++            }
+         }
+         GateResult::Pass
+     }

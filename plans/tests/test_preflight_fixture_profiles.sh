@@ -13,6 +13,7 @@ fail() {
 
 extract_array() {
   local name="$1"
+  local source_file="${2:-$PREFLIGHT}"
   awk -v name="$name" '
     $0 ~ "^" name "=\\(" {in_array=1; next}
     in_array && $0 ~ "^\\)" {exit}
@@ -24,13 +25,50 @@ extract_array() {
         print line
       }
     }
-  ' "$PREFLIGHT"
+  ' "$source_file"
 }
 
 assert_contains_line() {
   local needle="$1"
   if ! grep -Fq "$needle" "$PREFLIGHT"; then
     fail "missing expected preflight line: $needle"
+  fi
+}
+
+assert_file_contains_line() {
+  local file="$1"
+  local needle="$2"
+  if ! grep -Fq "$needle" "$file"; then
+    fail "missing expected line in $(basename "$file"): $needle"
+  fi
+}
+
+assert_text_contains_line() {
+  local text="$1"
+  local needle="$2"
+  if ! grep -Fq "$needle" <<< "$text"; then
+    fail "missing expected block line: $needle"
+  fi
+}
+
+line_number_in_text() {
+  local text="$1"
+  local needle="$2"
+  local line
+  line="$(grep -nF "$needle" <<< "$text" | head -n1 | cut -d: -f1 || true)"
+  [[ -n "$line" ]] || fail "missing expected block line: $needle"
+  echo "$line"
+}
+
+assert_text_line_before() {
+  local text="$1"
+  local first="$2"
+  local second="$3"
+  local first_line second_line
+  first_line="$(line_number_in_text "$text" "$first")"
+  second_line="$(line_number_in_text "$text" "$second")"
+  if (( first_line >= second_line )); then
+    fail "unexpected block order: '$first' (line $first_line) must appear before '$second' (line $second_line)"
   fi
 }
 
@@ -75,6 +113,7 @@ assert_contains_line 'fixture_timeout_default=240'
 assert_contains_line 'fixture_timeout_default=300'
 assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
+assert_contains_line 'setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='"'"'$PREFLIGHT_FIXTURE_TEST_TIMEOUT'"'"' (expected non-negative integer seconds)"'
 assert_contains_line 'supports_wait_n() {'
 assert_contains_line 'if builtin help wait >/dev/null 2>&1; then'
 assert_contains_line 'wait_help_text="$(builtin help wait 2>/dev/null || true)"'
@@ -96,9 +135,15 @@ assert_contains_line 'MONOTONIC_BACKEND_INIT_MARKER="monotonic_backend=$MONOTONI
 assert_contains_line 'detect_parallel_jobs() {'
 assert_contains_line 'cpu_count="$(sysctl -n hw.ncpu 2>/dev/null || true)"'
 assert_contains_line 'cpu_count="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"'
+assert_contains_line 'PREFLIGHT_PARALLEL_JOBS_RAW="${PREFLIGHT_PARALLEL_JOBS-}"'
+assert_contains_line 'if [[ -z "$PREFLIGHT_PARALLEL_JOBS_RAW" ]]; then'
+assert_contains_line 'elif [[ "$PREFLIGHT_PARALLEL_JOBS_RAW" =~ ^[1-9][0-9]*$ ]]; then'
+assert_contains_line 'setup_fail "Invalid PREFLIGHT_PARALLEL_JOBS='"'"'$PREFLIGHT_PARALLEL_JOBS_RAW'"'"' (expected positive integer worker count)"'
 assert_contains_line 'start_ns="$(now_monotonic_ns)"'
 assert_contains_line 'timeout_ns=$((PREFLIGHT_FIXTURE_TEST_TIMEOUT * 1000000000))'
 assert_contains_line 'PREFLIGHT_PARALLEL_JOBS="${PREFLIGHT_PARALLEL_JOBS:-$(detect_parallel_jobs)}"'
+assert_contains_line 'if [[ -z "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then'
+assert_contains_line 'setup_fail "PREFLIGHT fixture timeout requested (${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s) but timeout command missing (install coreutils timeout or gtimeout)"'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
 assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1 && \'
@@ -147,7 +192,44 @@ assert_list_contains "$full_only_list" "plans/tests/test_preflight_fixture_timeo
 # Verify moved tests are actually present in verify_fork.sh gate 14g
 VERIFY_FORK="$ROOT/plans/verify_fork.sh"
 [[ -f "$VERIFY_FORK" ]] || fail "missing verify_fork.sh: $VERIFY_FORK"
-heavy_verify_tests=(
+workflow_verify_list="$(extract_array "WORKFLOW_INTEGRATION_TESTS" "$VERIFY_FORK")"
+full_mode_workflow_verify_list="$(extract_array "FULL_MODE_WORKFLOW_INTEGRATION_TESTS" "$VERIFY_FORK")"
+[[ -n "$workflow_verify_list" ]] || fail "WORKFLOW_INTEGRATION_TESTS is empty"
+[[ -n "$full_mode_workflow_verify_list" ]] || fail "FULL_MODE_WORKFLOW_INTEGRATION_TESTS is empty"
+
+workflow_gate_block="$(
+  awk '
+    /log "14g\) workflow integration tests/ { in_block=1 }
+    in_block { print }
+    in_block && /^finish_parallel_group_or_exit$/ { exit }
+  ' "$VERIFY_FORK"
+)"
+[[ -n "$workflow_gate_block" ]] || fail "missing workflow integration gate block"
+workflow_runner_fn="$(
+  awk '
+    /^run_workflow_integration_tests\(\) \{/ { in_fn=1 }
+    in_fn { print }
+    in_fn && /^}$/ { exit }
+  ' "$VERIFY_FORK"
+)"
+[[ -n "$workflow_runner_fn" ]] || fail "missing run_workflow_integration_tests()"
+
+assert_file_contains_line "$VERIFY_FORK" 'start_parallel_workflow_test() {'
+assert_file_contains_line "$VERIFY_FORK" 'finish_parallel_group_or_exit() {'
+assert_text_contains_line "$workflow_runner_fn" 'parallel_group_reset'
+assert_text_contains_line "$workflow_runner_fn" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do'
+assert_text_contains_line "$workflow_runner_fn" 'start_parallel_workflow_test "$workflow_test"'
+assert_text_contains_line "$workflow_runner_fn" 'if [[ "$MODE" == "full" ]]; then'
+assert_text_contains_line "$workflow_runner_fn" 'for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do'
+assert_text_contains_line "$workflow_runner_fn" 'return 0'
+assert_text_contains_line "$workflow_gate_block" 'run_workflow_integration_tests'
+assert_text_contains_line "$workflow_gate_block" 'log "15) rust gates"'
+assert_text_contains_line "$workflow_gate_block" 'finish_parallel_group_or_exit'
+assert_text_line_before "$workflow_runner_fn" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do' 'if [[ "$MODE" == "full" ]]; then'
+assert_text_line_before "$workflow_gate_block" 'run_workflow_integration_tests' 'log "15) rust gates"'
+assert_text_line_before "$workflow_gate_block" 'log "15) rust gates"' 'finish_parallel_group_or_exit'
+
+parallel_gate_tests=(
   "plans/tests/test_codex_review_logged.sh"
   "plans/tests/test_review_logged_timeout_fallback.sh"
   "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
@@ -176,14 +258,24 @@ heavy_verify_tests=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
+  "plans/tests/test_contract_at_wording_drift.sh"
+  "plans/tests/test_contract_at_parity_invalid_refs.sh"
+)
+full_mode_parallel_gate_tests=(
   "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_pr_gate.sh"
 )
-for heavy_verify_test in "${heavy_verify_tests[@]}"; do
+for heavy_verify_test in "${parallel_gate_tests[@]}"; do
   assert_list_absent "$smoke_list" "$heavy_verify_test"
   assert_list_absent "$full_only_list" "$heavy_verify_test"
-  grep -Fq "\"$heavy_verify_test\"" "$VERIFY_FORK" \
-    || fail "$(basename "$heavy_verify_test") not found in verify_fork.sh gate 14g"
+  assert_list_contains "$workflow_verify_list" "$heavy_verify_test"
+  assert_list_absent "$full_mode_workflow_verify_list" "$heavy_verify_test"
+done
+for heavy_verify_test in "${full_mode_parallel_gate_tests[@]}"; do
+  assert_list_absent "$smoke_list" "$heavy_verify_test"
+  assert_list_absent "$full_only_list" "$heavy_verify_test"
+  assert_list_contains "$full_mode_workflow_verify_list" "$heavy_verify_test"
+  assert_list_absent "$workflow_verify_list" "$heavy_verify_test"
 done
 assert_list_absent "$smoke_list" "plans/tests/test_recon_bundle.sh"
 assert_list_absent "$smoke_list" "plans/tests/test_recon_operator_runner.sh"
@@ -203,5 +295,11 @@ serial_full_only_count="$(printf '%s\n' "$serial_full_only_list" | sed '/^$/d' |
 [[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
 [[ "$full_only_count" == "11" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 11)"
 [[ "$serial_full_only_count" == "1" ]] || fail "unexpected serial full-only fixture count: $serial_full_only_count (expected 1)"
+
+# Verify 14g dispatch loop pattern exists in verify_fork.sh
+grep -Eq 'for workflow_test in "\$\{WORKFLOW_INTEGRATION_TESTS\[@\]\}"' "$VERIFY_FORK" \
+  || fail "14g dispatch loop for WORKFLOW_INTEGRATION_TESTS missing"
+grep -Eq 'start_parallel_workflow_test "\$workflow_test"' "$VERIFY_FORK" \
+  || fail "start_parallel_workflow_test call missing in 14g loop"
 
 echo "PASS: preflight fixture profile mapping"

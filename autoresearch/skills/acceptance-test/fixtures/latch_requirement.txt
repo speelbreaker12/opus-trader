@@ -1,0 +1,11 @@
+Contract Section: §2.4.1 - WebSocket Book Gap Latch
+
+Requirement:
+"When a gap is detected in the WebSocket book feed, the Open Permission
+Latch MUST be set with LatchReason::WsBookGap. The latch MUST remain
+set until explicit reconciliation via reconcile() is called."
+
+Latch: open_permission_latch
+Trigger: WebSocket book gap detected
+Clear condition: reconcile() called
+Expected: OPEN blocked while latch is set, permitted after reconcile

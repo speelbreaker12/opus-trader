@@ -1,0 +1,202 @@
+{
+  "skill": "SKILLS/strategic-failure-review.md",
+  "description": "Binary assertion tests for /strategic-failure-review skill output quality",
+  "total_assertions": 25,
+  "tests": [
+    {
+      "id": "T1",
+      "name": "simple_rename_produces_clean_output",
+      "description": "A trivial variable and method rename in risk_state_gate.rs. No architectural impact, no new mechanisms, no config changes. Output should be minimal with no high-severity findings.",
+      "fixture": "fixtures/simple_rename.diff",
+      "prompt": "Run /strategic-failure-review on this diff. The diff renames a method from check() to evaluate() and renames local variables in risk_state_gate.rs. No logic change, no new state, no new env vars.",
+      "assertions": [
+        {
+          "id": "T1-A1",
+          "check": "Output contains zero HIGH or CRITICAL findings (rename has no architectural impact)",
+          "rule": {"type": "count_max", "pattern": "#### (?:High|CRITICAL)", "max": 0},
+          "expected": true
+        },
+        {
+          "id": "T1-A2",
+          "check": "Output is under 800 words total (trivial change should produce concise review)",
+          "rule": {"type": "word_count_max", "max": 800},
+          "expected": true
+        },
+        {
+          "id": "T1-A3",
+          "check": "Output contains the Simpler Alternative section and marks it N/A or not applicable",
+          "rule": {"type": "regex", "pattern": "(?i)simpler alternative.*(?:N/?A|not applicable|none|no.+needed|trivial)"},
+          "expected": true
+        },
+        {
+          "id": "T1-A4",
+          "check": "Output does NOT flag a dual-mechanism interaction (none exists)",
+          "rule": {"type": "not_contains", "value": "dual-mechanism interaction"},
+          "expected": true
+        },
+        {
+          "id": "T1-A5",
+          "check": "Output does NOT flag a complexity-to-benefit concern (rename is zero-cost)",
+          "rule": {"type": "not_contains", "value": "complexity-to-benefit"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "dual_mechanism_skip_flagged",
+      "description": "Introduces a checkpoint-based skip system alongside the existing change_detection skip system. Should flag dual-mechanism interaction, ordering/authority questions, and debug path increase.",
+      "fixture": "fixtures/dual_mechanism.diff",
+      "prompt": "Run /strategic-failure-review on this diff. The diff adds a checkpoint-based gate skip system to verify.sh alongside the existing change_detection skip mechanism.",
+      "assertions": [
+        {
+          "id": "T2-A1",
+          "check": "Output flags dual-mechanism or two-system interaction between skip mechanisms",
+          "rule": {"type": "regex", "pattern": "(?i)(dual.mechanism|two.*(skip|system)|parallel.*(skip|mechanism)|second.*(skip|system)|both.*(skip|mechanism))"},
+          "expected": true
+        },
+        {
+          "id": "T2-A2",
+          "check": "Output asks about ordering or authority when the two skip systems disagree",
+          "rule": {"type": "regex", "pattern": "(?i)(which.*(first|wins|authorit)|order.*(check|run|evaluat)|conflict|disagree|preced)"},
+          "expected": true
+        },
+        {
+          "id": "T2-A3",
+          "check": "Output contains at least one finding at High severity level",
+          "rule": {"type": "count_min", "pattern": "#### High", "min": 1},
+          "expected": true
+        },
+        {
+          "id": "T2-A4",
+          "check": "Output mentions the debugging difficulty of tracing skip decisions across two systems",
+          "rule": {"type": "regex", "pattern": "(?i)(debug|diagnos|trac).*(skip|two|multiple|both|which)"},
+          "expected": true
+        },
+        {
+          "id": "T2-A5",
+          "check": "Output mentions change_detection and checkpoint as the two mechanisms",
+          "rule": {"type": "regex", "pattern": "change_detection.*checkpoint|checkpoint.*change_detection"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "config_explosion_flagged",
+      "description": "Adds 8 new environment variables (parallel, retry, logging, artifacts, cache, notifications) for a minor feature in rust_gates.sh. Should flag complexity-to-benefit ratio and config explosion.",
+      "fixture": "fixtures/config_explosion.diff",
+      "prompt": "Run /strategic-failure-review on this diff. The diff adds parallel execution, retries, artifact writing, and webhook notifications to rust_gates.sh, introducing 8 new env vars.",
+      "assertions": [
+        {
+          "id": "T3-A1",
+          "check": "Output mentions complexity-to-benefit ratio or disproportionate complexity",
+          "rule": {"type": "regex", "pattern": "(?i)(complexity.to.benefit|disproportionate|ratio.*cost.*benefit|benefit.*ratio|cost.*exceed|machinery.*exceed)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A2",
+          "check": "Output enumerates or counts the env vars (should mention 8 or list them)",
+          "rule": {"type": "regex", "pattern": "(?i)(8.*env|eight.*env|env.*var.*(8|eight)|RUST_GATES_PARALLEL|RUST_GATES_RETRY|RUST_GATES_NOTIFICATION)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A3",
+          "check": "Output recommends a simpler alternative or questions whether the complexity is justified",
+          "rule": {"type": "regex", "pattern": "(?i)(simpler alternative|simpler approach|80.?20|do nothing|is.*justified|unnecessary|overkill)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A4",
+          "check": "Output flags config explosion or configuration surface area growth",
+          "rule": {"type": "regex", "pattern": "(?i)(config.*explo|configuration.*surface|configuration.*space|env.*var.*explosion|configuration.*dimension)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A5",
+          "check": "Output mentions dangerous or untestable env var combinations or interaction effects",
+          "rule": {"type": "regex", "pattern": "(?i)(combination|interact.*env|contradictory|dangerous.*var|untestable|dimension)"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "zombie_feature_rollout_flagged",
+      "description": "Introduces a multi-phase shadow rollout (off -> shadow -> canary -> enforced) with telemetry. If rollout stalls at shadow, the scaffolding stays forever. Should flag zombie risk and sunset clause.",
+      "fixture": "fixtures/zombie_feature.diff",
+      "prompt": "Run /strategic-failure-review on this diff. The diff adds a multi-phase shadow pipeline rollout to verify.sh with phases off/shadow/canary/enforced and per-gate telemetry logging.",
+      "assertions": [
+        {
+          "id": "T4-A1",
+          "check": "Output flags zombie feature or scaffolding risk if rollout stalls",
+          "rule": {"type": "regex", "pattern": "(?i)(zombie|scaffolding.*(stay|remain|persist|forever|stall)|stall.*(shadow|rollout)|rollout.*stall|never.*fully.*enabled|never.*promoted)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A2",
+          "check": "Output recommends a sunset clause, removal criteria, or expiration mechanism",
+          "rule": {"type": "regex", "pattern": "(?i)(sunset|removal.criter|expir|time.?bound|deadline|auto.?remov|cleanup.date|maximum.duration)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A3",
+          "check": "Output flags maintenance hazard from the shadow/canary machinery persisting",
+          "rule": {"type": "regex", "pattern": "(?i)(maintenance.*(hazard|burden|cost|overhead)|overhead.*(every|each|per).run|telemetry.*(accumulate|grow|disk))"},
+          "expected": true
+        },
+        {
+          "id": "T4-A4",
+          "check": "Output mentions the shadow telemetry data accumulation or cleanup concern",
+          "rule": {"type": "regex", "pattern": "(?i)(telemetry.*(cleanup|accumulate|grow|retention|TTL|disk)|shadow.*(data|file|log).*(grow|cleanup|retention))"},
+          "expected": true
+        },
+        {
+          "id": "T4-A5",
+          "check": "Output mentions multi-phase or rollout complexity (4 phases is significant)",
+          "rule": {"type": "regex", "pattern": "(?i)(multi.?phase|four.*phase|4.*phase|phase.*(off|shadow|canary|enforced)|rollout.*complex)"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "safety_invariant_weakened_flagged",
+      "description": "Changes exit code 0 semantics from 'all gates ran and passed' to 'all required gates ran or were skipped'. Weakens a safety invariant that callers (ralph.sh, CI) depend on.",
+      "fixture": "fixtures/safety_invariant_break.diff",
+      "prompt": "Run /strategic-failure-review on this diff. The diff changes verify.sh exit code semantics: exit 0 now means 'all gates ran or eligible ones were skipped' instead of 'all gates ran and passed'. It also adds a skip-eligible mechanism.",
+      "assertions": [
+        {
+          "id": "T5-A1",
+          "check": "Output lists the 'exit 0 = all gates ran' safety invariant",
+          "rule": {"type": "regex", "pattern": "(?i)(exit.?0.*(all.*ran|every.*gate|all.*gate)|invariant.*exit.*0|exit.*code.*semant)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A2",
+          "check": "Output flags the invariant as weakened or broken by the change",
+          "rule": {"type": "regex", "pattern": "(?i)(weaken|broken|violat|changed.*semant|semantic.*change|no.longer.mean|redefin|dilut)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A3",
+          "check": "Output notes impact on callers that assume exit 0 means full verification",
+          "rule": {"type": "regex", "pattern": "(?i)(caller|consumer|ralph|CI|downstream|depend|assume|rely.on|false.*sense|false.*confidence)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A4",
+          "check": "Output mentions that 'passed' now includes 'skipped' which is a semantic shift",
+          "rule": {"type": "regex", "pattern": "(?i)(pass.*(includ|mean).*skip|skip.*(count|includ).*pass|ran.or.skipped|all.*ran.*or|skip.*equiv.*pass)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A5",
+          "check": "Output recommends preserving the invariant or updating all callers",
+          "rule": {"type": "regex", "pattern": "(?i)(preserv.*invariant|update.*caller|distinct.*exit.*code|separate.*exit|caller.*updat|document.*change|notify.*caller)"},
+          "expected": true
+        }
+      ]
+    }
+  ]
+}

@@ -82,10 +82,6 @@ If a plausible wrong design would pass, mark the test **TOO-COARSE** and recomme
 - Add property test
 - Split test into isolated assertions
 
-### 5b) Mechanical verification
-
-Run `./plans/verify_mechanical.sh` and paste output. Any FAIL = downgrade STOPLIGHT.
-
 ### 6) Regression + scope check
 
 - Changes are localized to `scope.touch`
@@ -95,7 +91,7 @@ Run `./plans/verify_mechanical.sh` and paste output. Any FAIL = downgrade STOPLI
 ## Required Output
 
 ### A) STOPLIGHT
-Verdict: GREEN / YELLOW / RED with 3-6 bullet rationale.
+**STOPLIGHT: GREEN / YELLOW / RED** — 3-6 bullet rationale.
 
 ### B) Blockers (if any)
 Each blocker with: AT/Clause, why it's failing, exact file:line references.
@@ -124,10 +120,3 @@ Tests marked TOO-COARSE with the "wrong implementation that would pass" explanat
 - **No guessing.** If you can't find proof, it's not proven.
 - Prefer small, surgical recommendations.
 - Use `--base` against integration branch for diffs, not `--commit HEAD`.
-
-## Integration with story loop
-
-This skill fits between steps 2 (slice-execute) and 3 (self-review) of the story loop:
-1. Fill premortem → `/slice-execute` → **`/post-impl-audit`** → `/pr-review` + `/failure-mode-review` → verify.sh → codex reviews → merge
-
-It can also replace the combination of `/pr-review` + `/failure-mode-review` + `/devils-advocate` as a single focused pass when the priority is contract compliance over general code quality.

@@ -103,13 +103,16 @@ required=(
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh
   plans/story_verify_allowlist_suggest.sh
+  plans/tests/test_audit_parallel_empty_cache_arrays.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_at_parity_invalid_refs.sh
   plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_change_ledger.sh
+  plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_kernel_drift_message.sh
   plans/tests/test_contract_profile_parity.sh
+  plans/tests/test_contract_at_parity_invalid_refs.sh
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
@@ -121,10 +124,14 @@ required=(
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
   plans/tests/test_lint_execution_facade.sh
+  plans/tests/test_live_enable_preflight.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
+  plans/tests/test_preflight_diagnostics.sh
+  plans/tests/test_preflight_shell_syntax_cross_file_masking.sh
+  plans/tests/test_preflight_shell_syntax_setup_failure.sh
   plans/tests/test_pre_pr_review_gate.sh
   plans/tests/test_recon_bundle.sh
   plans/tests/test_recon_doc_budget.sh
@@ -133,10 +140,15 @@ required=(
   plans/tests/test_preflight_fixture_timeout_controls.sh
   plans/tests/test_premortem_gate_trading_hard_gate.sh
   plans/tests/test_premortem_path_guard.sh
+  plans/tests/test_premortem_ready_ownership_conflict.sh
   plans/tests/test_recon_operator_runner.sh
   plans/tests/test_recon_operator_trace.sh
+  plans/tests/test_recon_scoreboard.sh
   plans/tests/test_recon_precheck.sh
   plans/tests/test_recon_prompt_guard.sh
+  plans/tests/test_review_logged_prompt_literalization.sh
+  plans/tests/test_run_prd_auditor_invocation.sh
+  plans/tests/test_run_prd_auditor_timeout_fallback.sh
   plans/tests/test_slice_execute_guard.sh
   plans/tests/test_review_logged_timeout_binary_unavailable.sh
   plans/tests/test_review_logged_timeout_fallback.sh
@@ -146,7 +158,11 @@ required=(
   plans/tests/test_slice_completion_review_guard.sh
   plans/tests/test_slice_review_gate.sh
   plans/tests/test_stoic_cli_invariant_check.sh
+  plans/tests/test_story_review_gate.sh
   plans/tests/test_story_review_findings_guard.sh
+  plans/tests/test_verify_timeout_policy.sh
+  plans/tests/test_verify_fork_guardrails.sh
+  plans/tests/test_verify_gate_contract_check_batching.sh
   plans/tests/test_rust_gates_smoke_targets.sh
   plans/tests/test_wf_step_path_signal_scan.sh
   plans/tests/test_wf_step_review_provenance.sh
