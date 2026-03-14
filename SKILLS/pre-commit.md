@@ -43,7 +43,6 @@ For new guards or rules:
 - [ ] TRIP AT exists (guard activates, blocks action)
 - [ ] NON-TRIP AT exists (guard doesn't activate, action proceeds)
 - [ ] Both prove causality via dispatch count, reject reason, or latch reason
-- [ ] AT registered in CONTRACT.md with AT-xxx anchor
 
 ### 5) Commit Message
 - [ ] References CONTRACT.md section if implementing a requirement
