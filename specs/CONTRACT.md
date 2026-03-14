@@ -1430,6 +1430,9 @@ AT-957
 
 ### **1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)**
 
+**Phase applicability (Normative):**
+§1.3 Liquidity Gate is **NOT** a Phase 1 completion requirement. §1.3 becomes mandatory beginning in **Phase 2** and later deployable phases, together with the required stale-L2 CLOSE/HEDGE integration points that use the applicable fallback pricing rules. Before Phase 2, absence of §1.3 implementation MUST NOT, by itself, fail Phase 1 completion. Phase 1 remains non-deployable and foundation-gated.
+
 **Council Weakness Covered:** No Liquidity Gate (Low) \+ Taker Bleed (Critical). **Requirement:** Before any order is sent (including IOC), the Soldier must estimate book impact for the requested size and reject trades that exceed max slippage. **Where:** `crates/soldier_core/src/execution/gate.rs` **Input:** `OrderQty`, `L2BookSnapshot`, `max_slippage_bps = 10` (default: see Appendix A)
 
 If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents with `Rejected(LiquidityGateNoL2)`. CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2; they MUST use the deterministic §3.1 fallback price ladder and may dispatch only a strictly positive, monotonic risk-reducing quantity. If no valid §3.1 fallback price source exists, the intent MUST fail closed with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded`. CANCEL-only intents remain allowed.
@@ -4685,7 +4688,7 @@ Profile: GOP
 
 ### **Phase 1: Foundation (Non-Deployable)**
 
-> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema, WAL/durable ledger, Liquidity Gate) satisfy both `Profile: GOP` (roadmap milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete only when the **Phase 1 AT Subset** (see below) passes. These ATs are CSP-scoped for these specific components but do not constitute full CSP compliance. The GOP tag does not relax CSP obligations for these deliverables.
+> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema, WAL/durable ledger) satisfy both `Profile: GOP` (roadmap milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete only when the **Phase 1 AT Subset** (see below) passes. These ATs are CSP-scoped for these specific components but do not constitute full CSP compliance. The GOP tag does not relax CSP obligations for these deliverables.
 
 * Instrument metadata + canonical quantization.
 * `s4:` label schema + parser.
@@ -4737,9 +4740,10 @@ These acceptance tests MAY run in an isolated harness and MUST NOT by themselves
 * OpenPermissionLatch + reconciliation clear rules.
 * Continuous 3-way reconciliation + WS gap/session-termination handling.
 * Deterministic emergency containment (bounded close + hedge fallback + venue-band fallback).
-* Margin headroom, order-type preflight, exchange health, and liquidity safety gates.
+* Margin headroom, order-type preflight, exchange health, and **§1.3 Pre-Trade Liquidity Gate**, including all acceptance tests required for deployable stale-L2 OPEN rejection and risk-reducing fallback behavior.
 
 **Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value until this rule is satisfied and the §7.0 legal foundation-exit transition completes.
+A Phase 2 deployable claim MUST FAIL unless the §1.3 Liquidity Gate acceptance tests required for deployable behavior pass.
 
 ### **Phase 3: GOP Data Loop**
 
@@ -6559,3 +6563,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-07 | CCL-2026-03-07-02 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Phase 1 roadmap/AT subset; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Pull the conservative restart-safety boundary into Phase 1: replay/reconciliation preserves recorded-but-unsent OPENs for reconciliation and later fresh evaluation, but replay alone never authorizes a fresh OPEN dispatch. | Remove the remaining Phase 1/PRD contradiction for restart behavior while preserving fail-closed no-duplicate-send semantics across restarts. | AT-233, AT-234, AT-935 | local/phase1-restart-safety-boundary |
 | 2026-03-13 | CCL-2026-03-13-01 | §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Reconcile the active branch's WAL isolation text with the already-present `RecordedBeforeDispatch` rule so OPEN dispatch requires `WALRecorded` (and `WALDurable` when configured), not enqueue-only success. | Remove the remaining internal contract split that could otherwise imply enqueue success is sufficient dispatch authorization despite the surrounding WAL invariants and AT map. | AT-906, AT-1215, AT-1232, AT-935 | local/main-wal-contract-reconcile |
 | 2026-03-13 | CCL-2026-03-13-02 | Phase 0 prerequisites; §7.0 status surface split; Phase 2 rule; Appendix CONTRACT_CHANGE_LEDGER | clarify | Bind the existing Phase 0 preflight to any legal transition out of foundation mode and require the `/api/v1/status` authority handoff from status-lite to CSP minimum schema to occur atomically in the same control-path. | Prevent non-foundation status authority from being activated by local convention or split control-paths before Phase 2 deployable readiness and reconciliation are satisfied. | AT-1230, AT-1233, AT-1234, AT-1238, AT-023 | local/foundation-exit-authority-boundary |
+| 2026-03-14 | CCL-2026-03-14-01 | §1.3 Pre-Trade Liquidity Gate; §6 Implementation Roadmap v4.0 (Phase 1/Phase 2 notes); Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit §1.3 phase applicability so Liquidity Gate is not a Phase 1 completion requirement and is mandatory for Phase 2 deployable claims, then align Phase 1/Phase 2 roadmap wording to match. | Remove the live Phase 1/Phase 2 Liquidity Gate scope contradiction so milestone closure and deployable-claim criteria are deterministic and fail-closed. | AT-222, AT-344, AT-909, AT-421, AT-1216 | local/blocking-6-phase-scope-alignment |

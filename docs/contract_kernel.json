@@ -31,7 +31,7 @@
       "contract_ref": "\u00a74.3.2",
       "id": "Anchor-004",
       "proof": {
-        "line": 4202,
+        "line": 4205,
         "section": "\u00a74.3.2"
       },
       "title": "TruthCapsule Timing (RecordedBeforeDispatch)"
@@ -76,7 +76,7 @@
       "contract_ref": "\u00a77.1.3",
       "id": "Anchor-009",
       "proof": {
-        "line": 5123,
+        "line": 5127,
         "section": "\u00a77.1.3"
       },
       "title": "AGGRESSIVE Patches Require Human Approval"
@@ -103,7 +103,7 @@
       "contract_ref": "\u00a75.3",
       "id": "Anchor-012",
       "proof": {
-        "line": 4476,
+        "line": 4479,
         "section": "\u00a75.3"
       },
       "title": "Canary Rollout Abort Triggers Rollback"
@@ -139,7 +139,7 @@
       "contract_ref": "\u00a72.3.1",
       "id": "Anchor-016",
       "proof": {
-        "line": 2026,
+        "line": 2029,
         "section": "\u00a72.3.1"
       },
       "title": "Exchange Health Monitor Blocks Opens Before Maintenance"
@@ -157,7 +157,7 @@
       "contract_ref": "\u00a71.4.2.1",
       "id": "Anchor-018",
       "proof": {
-        "line": 1598,
+        "line": 1601,
         "section": "\u00a71.4.2.1"
       },
       "title": "Pending Exposure Reservation Prevents Double-Spend"
@@ -209,13 +209,13 @@
     }
   ],
   "contract_version": "5.2",
-  "generated_at_utc": "2026-03-13T23:59:28Z",
+  "generated_at_utc": "2026-03-14T19:21:11Z",
   "kernel_version": 3,
   "sources": {
     "anchors_path": "docs/architecture/contract_anchors.md",
     "anchors_sha256": "f219e66f69b1a04d5e47677e2a668bbdfb78a5180a5ea0579fccdb85cfeee86f",
     "contract_path": "specs/CONTRACT.md",
-    "contract_sha256": "2b879f08cc559b9a2423a3878c649be7af08a4cc38e0a39843a920854e01f8b6",
+    "contract_sha256": "568170a53c0660190ba53c0be6e2b1814eb58a25334400724efb3b9cb41c708e",
     "plan_path": "specs/IMPLEMENTATION_PLAN.md",
     "plan_sha256": "bebfb39b11d8d1592de4b8e9f149d2bfb552614703af4be24bc29f423ebb2c7b",
     "rules_path": "docs/architecture/validation_rules.md",
