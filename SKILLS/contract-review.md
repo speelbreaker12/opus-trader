@@ -119,6 +119,8 @@ For each NEW or MODIFIED guard/latch/gate:
 - Must prove causality via dispatch count OR reason code OR latch reason OR override field
 
 ## Output format (strict)
+
+### When findings exist
 ```markdown
 ## Contract Review Findings
 
@@ -141,7 +143,27 @@ For each NEW or MODIFIED guard/latch/gate:
 
 **Evidence:**
 <diff hunk or function name>
+
+---
+
+**Decision: FAIL** — N finding(s) require remediation before merge.
 ```
+
+### When no findings exist
+```markdown
+## Contract Review Findings
+
+No contract violations found.
+
+**Scope reviewed:** <list files touched and why they are safe — e.g., "test-only change, no production code affected" or "documentation change, excluded per skill rules">
+
+**Decision: PASS**
+```
+
+**Decision rules:**
+- Any CRITICAL or HIGH finding -> **FAIL**
+- Only MEDIUM or LOW findings -> **FAIL** (still requires remediation)
+- Zero findings -> **PASS**
 
 ## Severity
 - **CRITICAL**: Could cause unintended trades / exposure increase / capital loss
