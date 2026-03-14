@@ -360,8 +360,6 @@ For shell scripts, check these common silent failures:
 
 ### Findings
 
-> Omit any severity section (High / Medium / Low) that has no findings.
-
 #### High
 - **<title>** — `file:line`
   - Failure scenario: <how it fails>
