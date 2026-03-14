@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "generated_at",
+    "validator_version",
+    "proposals"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validator_version": {
+      "type": "string"
+    },
+    "proposals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "source_finding",
+          "source_finding_category",
+          "section",
+          "change_type",
+          "rationale",
+          "status",
+          "dedupe_key"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "pattern": "^P-[0-9]{3,}$"
+          },
+          "source_finding": {
+            "type": "string",
+            "pattern": "^F-[0-9]{3,}$"
+          },
+          "section": {
+            "type": "string"
+          },
+          "change_type": {
+            "type": "string",
+            "enum": [
+              "mechanical",
+              "new_requirement"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "pending_scope_review",
+              "rejected",
+              "stale"
+            ]
+          },
+          "dedupe_key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "replace_span": {
+            "type": "object",
+            "required": [
+              "start_line",
+              "end_line",
+              "old_text",
+              "new_text"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "start_line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "end_line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "old_text": {
+                "type": "string",
+                "minLength": 10
+              },
+              "new_text": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "proposed_text": {
+            "type": "string"
+          },
+          "mechanical_ok": {
+            "type": "boolean"
+          },
+          "mechanical_details": {
+            "type": "string"
+          },
+          "enforcement_point": {
+            "type": "string"
+          },
+          "callsite_evidence": {
+            "type": "string"
+          },
+          "new_ats": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "at_id",
+                "description"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "at_id": {
+                  "type": "string",
+                  "pattern": "^AT-PROP-[0-9]{3,}$"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "diff_preview": {
+            "type": "string"
+          },
+          "source_finding_category": {
+            "type": "string",
+            "enum": [
+              "missing_fail_closed",
+              "weak_normative",
+              "missing_at_pair",
+              "stale_input_unspecified",
+              "gate_interaction_gap",
+              "cross_ref_broken"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "mechanical_ok": {
+                  "const": true
+                }
+              },
+              "required": [
+                "mechanical_ok"
+              ]
+            },
+            "then": {
+              "required": [
+                "replace_span",
+                "mechanical_details"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "change_type": {
+                  "const": "new_requirement"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "proposed_text"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "change_type": {
+                  "const": "mechanical"
+                }
+              },
+              "required": [
+                "change_type"
+              ]
+            },
+            "then": {
+              "required": [
+                "mechanical_ok"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "change_type": {
+                  "const": "mechanical"
+                },
+                "mechanical_ok": {
+                  "const": false
+                }
+              },
+              "required": [
+                "change_type",
+                "mechanical_ok"
+              ]
+            },
+            "then": {
+              "not": {}
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "source_finding_category": {
+                  "const": "weak_normative"
+                }
+              },
+              "required": [
+                "source_finding_category"
+              ]
+            },
+            "then": {
+              "required": [
+                "enforcement_point",
+                "callsite_evidence"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

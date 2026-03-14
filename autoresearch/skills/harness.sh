@@ -616,12 +616,21 @@ for t in data['tests']:
 
     info "  [$test_id] Generating output..."
 
-    local fixture_content gen_prompt
+    local fixture_content gen_prompt fence context_label
     fixture_content="$(cat "$fixture_path")"
-    gen_prompt="Read the skill file: $skill_file
-Follow its instructions exactly to review this diff:
 
-\`\`\`diff
+    # Choose fence type and context label based on fixture extension.
+    # .diff files are git diffs; .txt/.md are plain context (e.g. story content).
+    case "$fixture" in
+      *.diff) fence="diff";     context_label="diff" ;;
+      *.md)   fence="markdown"; context_label="content" ;;
+      *)      fence="text";     context_label="content" ;;
+    esac
+
+    gen_prompt="Read the skill file: $skill_file
+Follow its instructions exactly to review this ${context_label}:
+
+\`\`\`${fence}
 $fixture_content
 \`\`\`
 
