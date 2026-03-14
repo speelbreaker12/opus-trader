@@ -32,7 +32,7 @@ From the section, identify:
 For each guard/rule, create a TRIP and NON-TRIP pair:
 
 ```rust
-/// AT-XXX: [Guard Name] TRIP test
+/// AT-001: [Guard Name] TRIP test
 /// Contract: §X.Y.Z - [requirement text]
 ///
 /// Preconditions:
@@ -55,7 +55,7 @@ fn test_guard_name_trip() {
     assert_eq!(result.reject_reason, RejectReasonCode::GuardName);
 }
 
-/// AT-XXX: [Guard Name] NON-TRIP test
+/// AT-002: [Guard Name] NON-TRIP test
 /// Contract: §X.Y.Z - [requirement text]
 ///
 /// Preconditions: Same as TRIP, but guard condition is false
@@ -97,8 +97,8 @@ assert!(result.is_err());
 Add to the relevant section:
 ```markdown
 **Acceptance Tests:**
-- AT-XXX: [Guard] TRIP - guard activates when [condition], blocks OPEN with `RejectReasonCode::X`
-- AT-XXY: [Guard] NON-TRIP - guard inactive when [condition], OPEN dispatches
+- AT-001: [Guard] TRIP - guard activates when [condition], blocks OPEN with `RejectReasonCode::X`
+- AT-002: [Guard] NON-TRIP - guard inactive when [condition], OPEN dispatches
 ```
 
 ### 6) Verify AT Numbering
