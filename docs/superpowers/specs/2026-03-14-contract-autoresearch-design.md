@@ -459,14 +459,17 @@ Mismatch on any tracked file → abort with exit code 2: `Stale context: <filena
 
 The `contract_content_hash` field in `context_manifest.json` is the authoritative source for staleness detection — it is compared against `contract_file_hash` in `proposals_index.json` entries at promotion time.
 
-### 5.4 refresh_fixtures.sh
+### 5.4 Refresh Commands
+
+#### refresh_fixtures.sh (phase-2 snapshot refresh)
 
 1. Read `section_index.md` for line ranges
 2. Extract sections from CONTRACT.md
 3. Write to `phase2/fixtures/snapshot/`
-4. Update `context_manifest.json`
-5. Fail fast if `section_index.md` ranges no longer align — require explicit index refresh first
-6. Produce diff report if extraction anchors changed
+4. For each extracted snapshot fixture: count fail-closed clauses matching pattern (MUST + input_name + NaN|missing|stale|absent) using `at_registry.json` as the input-name vocabulary. Write the count as `expected_gate_input_count` for that fixture in `phase2/eval.json`. This count is authoritative for subsequent Phase 2 runs — it replaces any previously stored value.
+5. Update `context_manifest.json`
+6. Fail fast if `section_index.md` ranges no longer align — require `refresh-common` first
+7. Produce diff report if extraction anchors changed
 
 ### 5.5 Write Isolation Architecture
 
