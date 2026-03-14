@@ -40,6 +40,7 @@ required=(
   plans/autofix.sh
   plans/artifact_lint.sh
   plans/bidi_control_guard.sh
+  plans/check_contract_at_wording_drift.sh
   plans/check_contract_change_ledger.sh
   plans/check_skip_entrypoint.sh
   plans/code_review_expert_attest.sh
@@ -105,6 +106,7 @@ required=(
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
   plans/tests/test_contract_at_parity_invalid_refs.sh
+  plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_change_ledger.sh
   plans/tests/test_contract_kernel_drift_message.sh
   plans/tests/test_contract_profile_parity.sh
