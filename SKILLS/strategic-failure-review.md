@@ -543,7 +543,7 @@ Checklist:
 - [ ] Rollback tested: <yes/no/untested>
 
 ### Simpler Alternative
-- [ ] 80/20 alternative considered: <description or "none viable">
+- [ ] Simpler alternative: <description or "N/A — reason"> (use inline format; put "Simpler alternative: N/A" on one line for trivial changes)
 
 ### Internal Contradictions
 - [ ] Contradictions found: <section A vs section B>
