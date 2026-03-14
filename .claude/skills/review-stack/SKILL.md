@@ -5,4 +5,4 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat /Users/admin/Desktop/opus-trader/SKILLS/review-stack.md`
+!`cat /Users/admin/Desktop/opus-trader/SKILLS/review-stack.md || echo "ERROR: SKILLS/review-stack.md not found — skill body unavailable"`
