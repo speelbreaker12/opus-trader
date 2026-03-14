@@ -486,6 +486,11 @@ Checklist:
 
 ## Output Format
 
+**Omission rule**: Include only sections, subsection headers, and bullets that are relevant to the specific change.
+- Omit `#### High` entirely when no High-severity findings exist (do not write the header with "(none)" underneath).
+- Omit template bullets (e.g., `Dual-mechanism interaction`, `Zombie risk`) when they do not apply to the change under review.
+- For trivial changes with no findings, "### Architectural Findings\n(none)" is the correct output — do not include empty severity subsections.
+
 ```markdown
 ## Strategic Failure Review: <component/PR>
 
@@ -505,7 +510,7 @@ Checklist:
 
 ### Systemic Risks
 - [ ] Complexity ratio: <N env vars, M scripts> for <benefit>
-- [ ] Dual-mechanism interaction: <system A> vs <system B> on conflict
+- [ ] Dual-mechanism interaction: <system A> vs <system B> on conflict [omit if no dual mechanism]
 
 ### Compounding Failures
 - [ ] Chain: <A> → <B> → <C> with detection gap at <step>
@@ -538,7 +543,7 @@ Checklist:
 - [ ] Rollback tested: <yes/no/untested>
 
 ### Simpler Alternative
-- [ ] 80/20 alternative considered: <description or "none viable">
+- [ ] Simpler alternative: <description or "N/A — reason"> (use inline format; put "Simpler alternative: N/A" on one line for trivial changes)
 
 ### Internal Contradictions
 - [ ] Contradictions found: <section A vs section B>
