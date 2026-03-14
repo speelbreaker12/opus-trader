@@ -389,6 +389,20 @@ run_logged_nonblocking_gate() {
   return 0
 }
 
+run_contract_at_plan_parity_gate() {
+  if [[ "$MODE" == "full" ]]; then
+    run_logged_or_exit "contract_at_plan_parity" "$CONTRACT_KERNEL_TIMEOUT" \
+      bash "$ROOT/plans/prd_ref_check.sh" plans/prd.json
+    return 0
+  fi
+
+  run_logged_nonblocking_gate "contract_at_plan_parity" "$CONTRACT_KERNEL_TIMEOUT" \
+    bash "$ROOT/plans/prd_ref_check.sh" plans/prd.json
+  if [[ -f "$VERIFY_ARTIFACTS_DIR/contract_at_plan_parity.warn" ]]; then
+    warn "contract-plan AT parity: WARN (run verify full for hard gate)"
+  fi
+}
+
 run_required_bash_gate() {
   local gate_name="$1"
   local timeout="$2"
@@ -606,6 +620,15 @@ fi
 log "02a) contract change ledger"
 run_logged_or_exit "contract_change_ledger" "$CONTRACT_KERNEL_TIMEOUT" \
   bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md
+
+log "02a2) contract-plan AT parity"
+run_contract_at_plan_parity_gate
+
+if [[ "$MODE" == "full" ]]; then
+  log "02a3) contract AT wording drift"
+  run_logged_or_exit "contract_at_wording_drift" "$CONTRACT_KERNEL_TIMEOUT" \
+    bash "$ROOT/plans/check_contract_at_wording_drift.sh" --base-ref "$VERIFY_BASE_REF"
+fi
 
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   log "02b-02e) profile/invariant gates (parallel)"
@@ -958,6 +981,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
+  "plans/tests/test_contract_at_wording_drift.sh"
 )
 FULL_MODE_WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_story_review_gate.sh"
