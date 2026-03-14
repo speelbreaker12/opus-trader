@@ -81,7 +81,10 @@ expected constraint, exploit, and smallest fix.
   violation; a gap_id documents it but does not cure it. NO always means RED.
 Use the exact format: `**STOPLIGHT**: GREEN` — bold only the word STOPLIGHT, value after the
 colon outside the bold markers (not `**STOPLIGHT: GREEN**`).
-If YELLOW, include a `**Debt Register**` section (use that exact heading) with a table containing gap_id, severity, owner, and target slice.
+For YELLOW and RED outputs, include a `**Debt Register**` section (use that exact heading) with
+a table containing gap_id, severity, owner, and target slice. This is required for both colors:
+YELLOW debt register documents UNKNOWN gaps that need containment; RED debt register documents NO
+violations that block implementation.
 Verify all exit criteria checkboxes.
 
 ### 3) Quality rules (non-negotiable)
