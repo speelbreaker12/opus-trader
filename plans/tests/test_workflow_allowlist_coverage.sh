@@ -104,6 +104,7 @@ required=(
   plans/story_verify_allowlist_suggest.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
+  plans/tests/test_contract_at_parity_invalid_refs.sh
   plans/tests/test_contract_change_ledger.sh
   plans/tests/test_contract_kernel_drift_message.sh
   plans/tests/test_contract_profile_parity.sh
