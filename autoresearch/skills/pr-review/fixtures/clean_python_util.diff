@@ -1,0 +1,32 @@
+diff --git a/python/tools/validate_schema.py b/python/tools/validate_schema.py
+index aaa1111..bbb2222 100644
+--- a/python/tools/validate_schema.py
++++ b/python/tools/validate_schema.py
+@@ -1,8 +1,12 @@
++"""Schema validation utility for status endpoint payloads."""
++
+ import json
++from pathlib import Path
++from typing import Any, Optional
+
+
+-def validate(data, schema_path):
+-    with open(schema_path) as f:
++def validate(data: dict[str, Any], schema_path: Path) -> list[str]:
++    """Validate data against a JSON schema, returning a list of errors."""
++    with open(schema_path, encoding="utf-8") as f:
+         schema = json.load(f)
+     errors = []
+     for key in schema.get("required", []):
+@@ -10,3 +14,7 @@ def validate(data, schema_path):
+             errors.append(f"Missing required key: {key}")
+     return errors
+
++
++def load_schema(schema_path: Path) -> Optional[dict[str, Any]]:
++    """Load and return a JSON schema, or None on failure."""
++    try:
++        with open(schema_path, encoding="utf-8") as f:
++            return json.load(f)
++    except (OSError, json.JSONDecodeError):
++        return None
