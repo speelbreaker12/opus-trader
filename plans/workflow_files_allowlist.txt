@@ -106,6 +106,7 @@ plans/story_verify_allowlist_suggest.sh
 plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
+plans/tests/test_audit_parallel_empty_cache_arrays.sh
 plans/tests/test_bidi_control_guard.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
@@ -125,6 +126,7 @@ plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_lint_execution_facade.sh
+plans/tests/test_live_enable_preflight.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
@@ -145,12 +147,15 @@ plans/tests/test_recon_operator_runner.sh
 plans/tests/test_recon_operator_trace.sh
 plans/tests/test_recon_precheck.sh
 plans/tests/test_recon_prompt_guard.sh
+plans/tests/test_recon_scoreboard.sh
 plans/tests/test_review_logged_prompt_literalization.sh
 plans/tests/test_review_logged_proof_graph.sh
 plans/tests/test_review_logged_timeout_binary_unavailable.sh
 plans/tests/test_review_logged_timeout_fallback.sh
 plans/tests/test_review_logged_timeout_retry_noncodex.sh
 plans/tests/test_roadmap_evidence_audit.sh
+plans/tests/test_run_prd_auditor_invocation.sh
+plans/tests/test_run_prd_auditor_timeout_fallback.sh
 plans/tests/test_rust_gates_quick_clippy.sh
 plans/tests/test_rust_gates_smoke_targets.sh
 plans/tests/test_slice_completion_enforce.sh
@@ -164,6 +169,7 @@ plans/tests/test_toggle_policy_check.sh
 plans/tests/test_upgrade_1b_proof.sh
 plans/tests/test_verify_fork_guardrails.sh
 plans/tests/test_verify_gate_contract_check_batching.sh
+plans/tests/test_verify_timeout_policy.sh
 plans/tests/test_wf_step_path_signal_scan.sh
 plans/tests/test_wf_step_review_provenance.sh
 plans/tests/test_wf_step_stop_on_blocker.sh

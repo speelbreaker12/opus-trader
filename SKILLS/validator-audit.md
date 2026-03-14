@@ -292,24 +292,6 @@ Adversarial input that passes all rules but is substantively wrong:
 
 ---
 
-## Common Gap Patterns
-
-| Pattern | Gap | Detection |
-|---------|-----|-----------|
-| Enum subset in condition | Highest/most dangerous member excluded | List all members, check which are in the condition |
-| Imported but unused type | Rule was intended but never written | Grep imports vs. rule bodies |
-| Boolean field unchecked | `false` when `true` required passes silently | Field coverage matrix |
-| String field presence-only | Empty string passes, placeholder passes | Check for `.strip()` / `PLACEHOLDER_RE` coverage |
-| Mechanism string validated, data not | "dispatch_count" accepted, but `dispatch_count_assert` not required | Trace mechanism → required subfields |
-| Count recomputed, boolean not | `blocking_count` recalculated, `trading_halt` stale | Check which derived fields have consistency rules |
-| Merge ignores same-value severity | Verdict matches → severity update skipped | Test same-verdict-different-severity inputs |
-| Tie-break by input order | First reviewer wins on equal rank | Test with reversed input order |
-| Metadata not cleaned up | Old conflicts persist after resolution | Test re-aggregation after disagreement resolved |
-| Version gate missing | V2 rule runs on V1 data or V1 rule misses V2 field | Check `_is_v2()` guards |
-| Threshold gap at boundary | MED/HIGH checked, CRITICAL forgotten | Enumerate full range above threshold |
-
----
-
 ## Integration with Other Skills
 
 - Run `/pr-review` first for general code correctness

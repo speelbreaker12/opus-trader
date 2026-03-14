@@ -162,6 +162,14 @@ assert_not_contains_line 'warn "recon_doc_budget skipped (missing plans/recon_do
 assert_line_before 'run_required_bash_gate "slice_execute_guard"' 'run_required_bash_gate "recon_doc_budget"'
 assert_line_before 'run_required_bash_gate "recon_doc_budget"' 'log "14d) doc sync check"'
 
+# Guardrail: workflow integration test lane must preserve the serial fallback
+# when VERIFY_PARALLEL=0 instead of unconditionally launching the parallel path.
+assert_contains_line 'workflow_integration_gate_name()'
+assert_contains_line 'run_workflow_integration_tests()'
+assert_contains_line 'if [[ "$VERIFY_PARALLEL" == "1" ]]; then'
+assert_contains_line 'run_required_bash_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT"'
+assert_contains_line 'run_workflow_integration_tests'
+
 # Guardrail: Phase 0 live-enable gate must flow through the shell wrapper.
 assert_contains_line 'log "14b) phase0 meta-test"'
 assert_contains_line 'run_logged_or_exit "phase0_meta_test"'
@@ -191,6 +199,8 @@ $(extract_fn status_fixture_gate_name)
 $(extract_fn run_required_bash_gate)
 $(extract_fn run_logged_nonblocking_gate)
 $(extract_fn run_contract_at_plan_parity_gate)
+$(extract_fn workflow_integration_gate_name)
+$(extract_fn run_workflow_integration_tests)
 $(extract_fn compute_csp_strict_changed_files)
 $(extract_fn should_enable_csp_strict)
 $(extract_fn emit_timing_and_warn_summary)"
@@ -315,6 +325,51 @@ grep -Fxq "blocking:contract_at_plan_parity:15s:bash:$tmp_dir/parity_root/plans/
   || fail "full mode must route contract-plan AT parity through run_logged_or_exit"
 if grep -Eq '^nonblocking:' "$parity_call_log"; then
   fail "full mode must not route contract-plan AT parity through run_logged_nonblocking_gate"
+fi
+
+# Runtime check: workflow integration tests must respect VERIFY_PARALLEL=0 and
+# keep quick-mode workflow coverage on the serial path.
+workflow_call_log="$tmp_dir/workflow_calls.log"
+parallel_group_reset() {
+  printf '%s\n' "parallel_reset" >> "$workflow_call_log"
+}
+start_parallel_workflow_test() {
+  printf '%s\n' "parallel:$1" >> "$workflow_call_log"
+}
+run_required_bash_gate() {
+  printf '%s\n' "serial:$1:$4" >> "$workflow_call_log"
+}
+
+: > "$workflow_call_log"
+VERIFY_PARALLEL=0
+MODE=quick
+WORKFLOW_TEST_TIMEOUT=15s
+WORKFLOW_INTEGRATION_TESTS=("plans/tests/test_alpha.sh" "plans/tests/test_beta.sh")
+FULL_MODE_WORKFLOW_INTEGRATION_TESTS=("plans/tests/test_full_only.sh")
+run_workflow_integration_tests
+if grep -Fq 'parallel:' "$workflow_call_log"; then
+  fail "serial workflow path must not launch parallel workflow tests when VERIFY_PARALLEL=0"
+fi
+grep -Fxq 'serial:wf_test_alpha:plans/tests/test_alpha.sh' "$workflow_call_log" \
+  || fail "serial workflow path must run quick workflow test alpha"
+grep -Fxq 'serial:wf_test_beta:plans/tests/test_beta.sh' "$workflow_call_log" \
+  || fail "serial workflow path must run quick workflow test beta"
+if grep -Fq 'test_full_only.sh' "$workflow_call_log"; then
+  fail "quick mode must not run full-only workflow tests on the serial path"
+fi
+
+: > "$workflow_call_log"
+VERIFY_PARALLEL=1
+MODE=quick
+run_workflow_integration_tests
+grep -Fxq 'parallel_reset' "$workflow_call_log" \
+  || fail "parallel workflow path must reset the parallel group"
+grep -Fxq 'parallel:plans/tests/test_alpha.sh' "$workflow_call_log" \
+  || fail "parallel workflow path must launch workflow test alpha"
+grep -Fxq 'parallel:plans/tests/test_beta.sh' "$workflow_call_log" \
+  || fail "parallel workflow path must launch workflow test beta"
+if grep -Fq 'serial:' "$workflow_call_log"; then
+  fail "parallel workflow path must not use the serial gate runner"
 fi
 
 # Runtime check: should_enable_csp_strict must cache changed-file set by base ref.
