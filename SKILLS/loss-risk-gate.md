@@ -72,7 +72,13 @@ If a materially simpler / safer design exists, mark:
 
 ### 5) Proof quality audit
 
-**Dedup rule:** If `/contract-review` Phase 3 was already completed in this review cycle, §5 may inherit its TRIP/NON-TRIP verdict. Cite the artifact (e.g., `artifacts/story/${STORY_ID}/self_review/contract_review.json`) and record: `§5 INHERITED from contract-review Phase 3 — <PASS/FAIL>`. Re-run §5 only if the inherited verdict is PASS but you have specific evidence it is incomplete for this story's safety-critical paths.
+**Dedup rule:** If `/contract-review` Phase 3 was already completed in this review cycle, §5 may inherit only the overlapping checks (enforcement point exists, TRIP/NON-TRIP coverage, and causal proof). Cite the artifact (e.g., `artifacts/story/${STORY_ID}/self_review/contract_review.json`) and record: `§5 PARTIALLY INHERITED from contract-review Phase 3 — <PASS/FAIL for shared checks>`.
+
+You must still evaluate §5-only checks locally:
+- Golden vector exists if the gate is safety-critical
+- Premortem §5 wrong implementation is explicitly blocked
+
+If the inherited artifact does not explicitly prove a shared check, treat that check as `UNKNOWN` and run the full §5 audit for that path.
 
 For every safety-critical AT touched by the diff:
 - Enforcement point exists?

@@ -59,9 +59,10 @@ For trivial/small changes: run these four first. If all four produce no findings
 | Multi-phase rollout | §4b Point-in-Time Correctness, §6d Zombie Features |
 | Manifests, allowlists, lints | §6b Manifest Staleness, §15 Maintenance Burden |
 | Operator-facing behavior change | §7 Operations, §12 Mental Models, §14 Docs |
-| Telemetry or data collection | §10 Data & Privacy [optional — skip if no telemetry present] |
-| >5 implementation tickets or >2 contributors | §9 Organizational [optional — skip for solo/small team], §17 Acceptance Quality |
+| Telemetry capture/retention or identity-bearing artifacts | §10 Data & Privacy |
+| Multi-contributor rollout (>2 contributors) or broad delivery split (>5 tickets) | §9 Organizational, §17 Acceptance Quality |
 | Tooling/harness integration | §8 Tooling Integration, §16 Harness Interaction |
+| Iterative self-improving / calibration loops | §4d Benchmark Governance |
 | Any plan with acceptance tests/commands | §17 Acceptance Quality |
 | Multi-ticket implementation | §18 Ticket Dependencies |
 | Any plan with multiple design sections | §21 Internal Contradictions |
@@ -187,6 +188,18 @@ When two independent mechanisms can both skip/route the same gate:
 - [ ] If they disagree, which wins?
 - [ ] Can the disagreement itself be detected and logged?
 - [ ] Trace a concrete scenario where they disagree and identify the outcome.
+
+#### 4d. Benchmark Governance
+
+For iterative loops where the loop improves a skill and the same harness scores that skill:
+
+- [ ] **Self-lowering threshold**: Can the pass threshold be recomputed from the candidate's own current output, silently lowering the bar on regressions?
+- [ ] **Measurement outside the loop**: Is the measurement function outside the loop it measures? A refresh script that reads current state and writes scoring targets creates a self-corruption channel.
+- [ ] **Single-writer promotion state**: Is ownership explicit for each state transition in mutable promotion artifacts, with exactly one writer per state?
+
+Evidence checks:
+- [ ] Trace threshold writes and promotion-state writers with concrete grep evidence.
+- [ ] For full validator-level proof requirements, run `/validator-audit` §9 (canonical checklist).
 
 ### 5. Compounding Failure Scenarios
 

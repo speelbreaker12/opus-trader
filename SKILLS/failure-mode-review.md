@@ -97,6 +97,9 @@ For any caching, persistence, or stateful logic, explicitly enumerate:
 | What if artifact is corrupted/partial/empty? | |
 | What if artifact has wrong schema version? | |
 
+Checklist:
+- [ ] **Single-writer ownership**: For each state transition, is there exactly one write path? Map every actor that touches the state artifact (harness, applicator, loop agent) and confirm each state is written by at most one. Dual-write paths create recovery ambiguity when interrupted mid-transition.
+
 Write these out before concluding the cache logic is correct.
 
 **Single-file vs per-instance artifacts**: If an artifact file has a `fixture_id` field but the same file is reused across multiple fixtures in one run, the field is structurally ambiguous. Before accepting artifact design, ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" Ambiguous ownership breaks per-fixture attribution and staleness detection.

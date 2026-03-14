@@ -76,14 +76,17 @@ gh pr diff <number>
 - [ ] No unrelated changes bundled in
 - [ ] Appropriate size (not too large to review)
 
-### 4. Block Conditions (embedded from `reviews/REVIEW_CHECKLIST.md`)
+### 4. Block Conditions (must match `reviews/REVIEW_CHECKLIST.md`)
 
 Mark PR **BLOCKED** if any are true:
 - Evidence section is empty, vague, or missing artifacts
+- Compounding sections (`AGENTS.md updates proposed` / `Elevation plan`) are empty or non-enforceable
 - Requirements touched cannot be cited (no CR-IDs / contract anchors)
+
+Additional safety escalation (recommended):
 - New system-boundary input has no validation and no stated rationale for omission
 
-Use `reviews/REVIEW_CHECKLIST.md` for the full evidence/compounding/workflow gate checklist. These three are the hard blocks.
+Use `reviews/REVIEW_CHECKLIST.md` for the full evidence/compounding/workflow gate checklist.
 
 ## Output Format
 
