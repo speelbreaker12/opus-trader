@@ -8,10 +8,24 @@ const UNIT_TEST_SOURCE: &str =
     include_str!("../src/execution/build_order_intent_gate_ordering_tests.rs");
 
 fn assert_unit_test_present(name: &str) {
-    let needle = format!("fn {name}(");
+    let fn_needle = format!("fn {name}(");
+    let fn_pos = UNIT_TEST_SOURCE.find(&fn_needle).unwrap_or_else(|| {
+        panic!(
+            "expected unit test '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
+            name
+        )
+    });
+    // Verify #[test] appears within 200 bytes before `fn name(`.
+    // Uses rfind on the substring up to fn_pos to avoid char-boundary issues,
+    // and accommodates stacked attributes (e.g. #[allow(...)]) between
+    // #[test] and fn without requiring exact adjacency.
+    let has_test_attr = UNIT_TEST_SOURCE[..fn_pos]
+        .rfind("#[test]")
+        .map(|attr_pos| fn_pos - attr_pos <= 200)
+        .unwrap_or(false);
     assert!(
-        UNIT_TEST_SOURCE.contains(&needle),
-        "expected unit test '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
+        has_test_attr,
+        "expected #[test] attribute on '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
         name
     );
 }

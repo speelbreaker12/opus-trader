@@ -35,6 +35,8 @@ Minimum: read the top 3 most-modified files before starting any checklist item.
 
 ### Triage: which sections apply?
 
+> **Before reviewing:** scan the "Reviewer Anti-Patterns" section at the end of this skill. The #1 anti-pattern — abstract reasoning without reading code — kills most reviews before they start.
+
 Scan the change and check which sections to apply:
 
 | If the change involves... | Apply sections... |
@@ -95,7 +97,12 @@ For any caching, persistence, or stateful logic, explicitly enumerate:
 | What if artifact is corrupted/partial/empty? | |
 | What if artifact has wrong schema version? | |
 
+Checklist:
+- [ ] **Single-writer ownership**: For each state transition, is there exactly one write path? Map every actor that touches the state artifact (harness, applicator, loop agent) and confirm each state is written by at most one. Dual-write paths create recovery ambiguity when interrupted mid-transition.
+
 Write these out before concluding the cache logic is correct.
+
+**Single-file vs per-instance artifacts**: If an artifact file has a `fixture_id` field but the same file is reused across multiple fixtures in one run, the field is structurally ambiguous. Before accepting artifact design, ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" Ambiguous ownership breaks per-fixture attribution and staleness detection.
 
 ### 3. "What If" Analysis
 
@@ -331,6 +338,8 @@ Issues that don't break correctness but cause problems over time:
 
 ### 12. Bash/Shell-Specific Traps
 
+**Skip condition:** Only apply if the diff touches `.sh`, `.bash`, or inline shell in `Makefile`/`justfile`. Skip for pure Rust, Python, or documentation changes.
+
 For shell scripts, check these common silent failures:
 
 - [ ] **Exit code masking**: `result=$(failing_command)` — `$?` reflects the assignment, not the command. Use `set -o pipefail` or check explicitly.
@@ -357,6 +366,22 @@ For shell scripts, check these common silent failures:
 
 ```markdown
 ## Failure Mode Review: <component/PR>
+
+### Triage Applied
+| Section | Applied / Skipped | Skip reason |
+|---------|-------------------|-------------|
+| §1 Interface Crossings | applied/skipped | |
+| §2 State Transitions | applied/skipped | |
+| §3 What-If Analysis | applied/skipped | |
+| §4 Error Path Tracing | applied/skipped | |
+| §5 Summary/Count Verification | applied/skipped | |
+| §6 Concrete Value Walkthrough | **always applied** | — |
+| §7 Concurrent Execution | applied/skipped | |
+| §8 Completeness Validation | applied/skipped | |
+| §9 Downstream Error Propagation | applied/skipped | |
+| §10 Trusted Files | applied/skipped | |
+| §11 Operational Concerns | applied/skipped | |
+| §12 Bash/Shell Traps | applied/skipped | no .sh in diff |
 
 ### Findings
 
@@ -427,6 +452,8 @@ For shell scripts, check these common silent failures:
 | Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
 | Single-variant walkthrough | Only trace Open through new dispatch function; miss CancelOnly/Close/Hedge | Walk at least one scenario per enum variant of primary input |
 | Early-return metric gap | Error path returns before incrementing rejection counter | For each counter, enumerate all paths; check early-returns bypass |
+| `git_hash` field naming | Field name implies git SHA; implementation uses file content hash — incompatible; staleness check never fires | Audit field names that imply one hash type when another is used |
+| Single-file vs per-instance artifacts | Artifact file has a `fixture_id` field but is reused across multiple fixtures in one run — field is structurally ambiguous | Ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" |
 
 ## Integration with Other Skills
 

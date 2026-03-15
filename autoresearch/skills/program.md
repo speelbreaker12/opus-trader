@@ -2,6 +2,8 @@
 
 Adapted from Karpathy's autoresearch pattern. Instead of optimizing val_bpb in a training script, we optimize pass_rate of binary assertions against a Claude Code skill.
 
+Scope note: this loop protocol governs the legacy skill autoresearch commands (`harness.sh run|baseline|eval <skill>`). It does not govern `harness.sh contract ...`, which uses the separate manual-promotion contract autoresearch flow.
+
 ## Setup
 
 To set up a new experiment, work with the user to:
@@ -79,7 +81,8 @@ a1b2c3d	0.920	23	25	keep	add explicit PASS/FAIL decision requirement
 - If score **improved** (higher than previous best): KEEP. This is now the new baseline.
 - If score is **equal or worse**: REVERT.
 ```bash
-git reset --hard HEAD~1
+# Revert only the target skill file (non-destructive for unrelated work)
+git restore --source=HEAD~1 -- "SKILLS/<skill>.md"
 ```
 
 ### 9. NEVER STOP
@@ -112,6 +115,7 @@ commit	score	passed	total	status	description
 ## Ground Rules
 
 1. **Only modify the skill.md file.** Do not modify eval.json, fixtures, or this program.
+   This rule applies to the legacy skill loop only, not to `harness.sh contract ...`.
 2. **One change per iteration.** Compound changes make it impossible to attribute improvements.
 3. **Objective evaluation.** Binary assertions must be checked literally, not charitably.
 4. **Simplicity criterion.** All else being equal, simpler skill instructions are better. A 0.01 improvement that adds 20 lines of instructions? Probably not worth it. Removing instructions and getting equal or better results? Definitely keep.

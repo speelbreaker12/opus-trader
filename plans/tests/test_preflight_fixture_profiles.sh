@@ -112,6 +112,7 @@ assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${PREFLIGH
 assert_contains_line 'fixture_timeout_default=240'
 assert_contains_line 'fixture_timeout_default=300'
 assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW="$PREFLIGHT_FIXTURE_TEST_TIMEOUT"'
 assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
 assert_contains_line 'setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='"'"'$PREFLIGHT_FIXTURE_TEST_TIMEOUT'"'"' (expected non-negative integer seconds)"'
 assert_contains_line 'supports_wait_n() {'
@@ -259,7 +260,6 @@ parallel_gate_tests=(
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
   "plans/tests/test_contract_at_wording_drift.sh"
-  "plans/tests/test_contract_at_parity_invalid_refs.sh"
 )
 full_mode_parallel_gate_tests=(
   "plans/tests/test_story_review_gate.sh"

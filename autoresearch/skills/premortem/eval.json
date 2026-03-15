@@ -1,0 +1,202 @@
+{
+  "skill": "SKILLS/premortem.md",
+  "description": "Binary assertion tests for /premortem skill output quality",
+  "total_assertions": 25,
+  "tests": [
+    {
+      "id": "T1",
+      "name": "high_risk_dispatch_gate",
+      "description": "HIGH risk story adding SpreadGate to dispatch pipeline. Claims AT-050, AT-051. Contract §2.2. Must produce complete premortem with all 7 Hard Gate YES, TRIP+NON-TRIP proof plan, wrong impl entries for both ATs, and GREEN STOPLIGHT.",
+      "fixture": "fixtures/high_risk_dispatch_gate.txt",
+      "prompt": "Run /premortem for this story. Fill out ALL sections (§0-§10) of the premortem template. The story adds a SpreadGate to the 8-gate execution pipeline, claims AT-050 and AT-051, and is HIGH risk.",
+      "assertions": [
+        {
+          "id": "T1-A1",
+          "check": "Trading Risk Hard Gate table present with all 7 rows answered YES",
+          "rule": {"type": "count_min", "pattern": "\\|\\s*YES\\s*\\|", "min": 7},
+          "expected": true
+        },
+        {
+          "id": "T1-A2",
+          "check": "§6 proof plan has both TRIP and NON-TRIP marked for at least one AT",
+          "rule": {"type": "regex", "pattern": "(?i)TRIP.*NON-TRIP|NON-TRIP.*TRIP"},
+          "expected": true
+        },
+        {
+          "id": "T1-A3",
+          "check": "§5 wrong impl table has entries for AT-050 and AT-051",
+          "rule": {"type": "count_min", "pattern": "AT-05[01]", "min": 2},
+          "expected": true
+        },
+        {
+          "id": "T1-A4",
+          "check": "§3 failure modes table has at least 5 entries (HIGH risk requires 5+)",
+          "rule": {"type": "count_min", "pattern": "^\\|\\s*[1-5]\\s*\\|", "min": 5},
+          "expected": true
+        },
+        {
+          "id": "T1-A5",
+          "check": "STOPLIGHT is GREEN",
+          "rule": {"type": "regex", "pattern": "\\*\\*STOPLIGHT\\*\\*:?\\s*GREEN"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "low_risk_logging",
+      "description": "LOW risk story adding structured logging. No ATs, no enforcement changes. Must produce complete but concise premortem with trivially safe Hard Gate, minimal failure modes, no capital impact in §7, and GREEN STOPLIGHT.",
+      "fixture": "fixtures/low_risk_logging.txt",
+      "prompt": "Run /premortem for this story. Fill out ALL sections (§0-§10) of the premortem template. The story adds structured logging to reconciliation — LOW risk, no enforcement changes, no new ATs.",
+      "assertions": [
+        {
+          "id": "T2-A1",
+          "check": "Trading Risk Hard Gate table is present with 7 rows",
+          "rule": {"type": "count_min", "pattern": "\\|\\s*(?:YES|NO|UNKNOWN)\\s*\\|", "min": 7},
+          "expected": true
+        },
+        {
+          "id": "T2-A2",
+          "check": "§7 economic risk mentions no/minimal/zero capital impact",
+          "rule": {"type": "regex", "pattern": "(?i)(no\\s+(capital|financial)|minimal\\s+(capital|financial|risk|impact)|zero\\s+(capital|loss|financial)|no\\s+loss|cannot\\s+cause\\s+loss|no\\s+direct.*loss)"},
+          "expected": true
+        },
+        {
+          "id": "T2-A3",
+          "check": "Output is concise — under 1500 words for a LOW risk story",
+          "rule": {"type": "word_count_max", "max": 1500},
+          "expected": true
+        },
+        {
+          "id": "T2-A4",
+          "check": "§3 failure modes table has at least 2 entries (LOW risk minimum)",
+          "rule": {"type": "count_min", "pattern": "^\\|\\s*[1-5]\\s*\\|", "min": 2},
+          "expected": true
+        },
+        {
+          "id": "T2-A5",
+          "check": "STOPLIGHT is GREEN",
+          "rule": {"type": "regex", "pattern": "\\*\\*STOPLIGHT\\*\\*:?\\s*GREEN"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "missing_contract_clause",
+      "description": "Story claims AT-099 but the contract clause is ambiguous/SHOULD-level and AT-099 has no anchor in CONTRACT.md. Must flag the gap in §1 clause audit, document ambiguity in §4, use YELLOW or RED STOPLIGHT with debt register, and use gap_id format.",
+      "fixture": "fixtures/missing_contract_clause.txt",
+      "prompt": "Run /premortem for this story. Fill out ALL sections (§0-§10) of the premortem template. The story claims AT-099 but CONTRACT.md §2.4 uses SHOULD (not MUST), and AT-099 has no anchor in the contract.",
+      "assertions": [
+        {
+          "id": "T3-A1",
+          "check": "§1 clause audit flags the gap — mentions ambiguous, missing, SHOULD, or not found",
+          "rule": {"type": "regex", "pattern": "(?i)(ambig|missing|SHOULD|not\\s+found|not\\s+registered|no\\s+anchor|informational|advisory|gap|absent)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A2",
+          "check": "§4 open decisions section has at least one decision entry",
+          "rule": {"type": "regex", "pattern": "(?i)###\\s*Decision:"},
+          "expected": true
+        },
+        {
+          "id": "T3-A3",
+          "check": "STOPLIGHT is YELLOW or RED (not GREEN — there is an unresolved gap)",
+          "rule": {"type": "regex", "pattern": "\\*\\*STOPLIGHT\\*\\*:?\\s*(YELLOW|RED)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A4",
+          "check": "Debt register is present with at least one entry",
+          "rule": {"type": "regex", "pattern": "(?i)debt\\s+register"},
+          "expected": true
+        },
+        {
+          "id": "T3-A5",
+          "check": "Gap ID follows the required format GAP-<STORY>-<SEQ> or GAP-SYSTEMIC-<SEQ>",
+          "rule": {"type": "regex", "pattern": "GAP-(S[0-9]+-[0-9]+|SYSTEMIC)-[0-9]+"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "fail_open_design",
+      "description": "Story proposes unwrap_or(TradingMode::Active) as default — classic fail-open anti-pattern. Must produce Hard Gate with at least one NO or UNKNOWN, §3 catching the fail-open default, and RED or NO-GO STOPLIGHT.",
+      "fixture": "fixtures/fail_open_design.txt",
+      "prompt": "Run /premortem for this story. Fill out ALL sections (§0-§10) of the premortem template. The story proposes caching PolicyGuard mode with unwrap_or(TradingMode::Active) as the empty-cache default. This is a known fail-open anti-pattern.",
+      "assertions": [
+        {
+          "id": "T4-A1",
+          "check": "Hard Gate table has at least one NO or UNKNOWN answer (fail-closed enforcement fails)",
+          "rule": {"type": "count_min", "pattern": "\\|\\s*(?:NO|UNKNOWN)\\s*\\|", "min": 1},
+          "expected": true
+        },
+        {
+          "id": "T4-A2",
+          "check": "Output mentions fail-open or fail-closed in the context of the unsafe default",
+          "rule": {"type": "regex", "pattern": "(?i)(fail[- ]?open|fail[- ]?closed)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A3",
+          "check": "§3 failure modes catches the Active default or unwrap_or pattern",
+          "rule": {"type": "regex", "pattern": "(?i)(Active.*default|unwrap_or|default.*Active|empty.*cache|missing.*cache|permissive.*default)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A4",
+          "check": "STOPLIGHT is RED or NO-GO (not GREEN — there is a fail-open violation)",
+          "rule": {"type": "regex", "pattern": "\\*\\*STOPLIGHT\\*\\*:?\\s*(RED|NO-GO|NO.GO)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A5",
+          "check": "Output mentions ReduceOnly as the correct safe default",
+          "rule": {"type": "regex", "pattern": "ReduceOnly"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "multi_at_interactions",
+      "description": "Story claims 3 interacting ATs (reservation + exposure + position limit). Must produce §2 assumptions about AT interactions, §5 wrong impl for all 3 ATs, §6 proof plan noting interaction or combined AT need, and proof plan with 3+ rows.",
+      "fixture": "fixtures/multi_at_interactions.txt",
+      "prompt": "Run /premortem for this story. Fill out ALL sections (§0-§10) of the premortem template. The story claims AT-070, AT-071, AT-072 which interact via shared reservation state. Three gates in sequence depend on each other.",
+      "assertions": [
+        {
+          "id": "T5-A1",
+          "check": "§2 assumptions table mentions interaction, shared state, ordering, or dependency between ATs/gates",
+          "rule": {"type": "regex", "pattern": "(?i)(interact|shared.*state|ordering|depend|reservation.*(?:exposure|position)|(?:exposure|position).*reservation|sequence|upstream|downstream)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A2",
+          "check": "§5 wrong impl table has entries for all 3 ATs (AT-070, AT-071, AT-072)",
+          "rule": {"type": "count_min", "pattern": "AT-07[012]", "min": 3},
+          "expected": true
+        },
+        {
+          "id": "T5-A3",
+          "check": "§6 proof plan notes AT interaction, combined test need, or cross-AT dependency",
+          "rule": {"type": "regex", "pattern": "(?i)(interact|combined|cross.*AT|shared|joint|depend|coordinat|integrat)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A4",
+          "check": "§6 proof plan table has at least 3 rows (one per AT)",
+          "rule": {"type": "count_min", "pattern": "\\|\\s*AT-07[012]\\s*\\|", "min": 3},
+          "expected": true
+        },
+        {
+          "id": "T5-A5",
+          "check": "STOPLIGHT section is present with a verdict",
+          "rule": {"type": "regex", "pattern": "\\*\\*STOPLIGHT\\*\\*:?\\s*(GREEN|YELLOW|RED|NO-GO)"},
+          "expected": true
+        }
+      ]
+    }
+  ]
+}

@@ -11,12 +11,15 @@ set -euo pipefail
 #   harness.sh status    <skill>
 #   harness.sh eval      <skill> [--output-dir DIR] [--generate]
 #   harness.sh baseline  <skill> [--tag TAG]
+#   harness.sh contract  <subcommand> [options]
 # ─────────────────────────────────────────────────────────────────────
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SKILLS_DIR="$ROOT/autoresearch/skills"
 PROGRAM_MD="$SKILLS_DIR/program.md"
 EVALUATE_PY="$SKILLS_DIR/evaluate.py"
+CONTRACT_DIR="$ROOT/autoresearch/contract"
+CONTRACT_RENDER_PY="$CONTRACT_DIR/render_review.py"
 
 # ── Colors ───────────────────────────────────────────────────────────
 RED="${RED:-\033[0;31m}"
@@ -42,7 +45,9 @@ Usage:
   harness.sh scaffold  <skill>
   harness.sh status    <skill>
   harness.sh eval      <skill> [--output-dir DIR] [--generate]
-  harness.sh baseline  <skill> [--tag TAG]
+  harness.sh baseline          <skill> [--tag TAG]
+  harness.sh check-monotonic   <skill>
+  harness.sh contract          <subcommand> [options]
 
 Commands:
   run        Launch the autonomous improvement loop via Claude Code.
@@ -62,6 +67,23 @@ Commands:
   baseline   Run all tests once against the current skill (no changes).
              Records the baseline score in results.tsv.
 
+  check-monotonic  Verify that all 'keep' entries in results.tsv have
+             non-decreasing scores. Exits non-zero if any violation is
+             found (guards against falsified prior-best rows).
+
+  contract   Contract autoresearch namespace.
+             Supported today:
+               scaffold       Ensure the tracked contract tree and runtime dirs exist
+               status         Summarize phase1/phase2 results.tsv and proposal index state
+               render-review  Render review markdown and optional accepted-only patch
+
+             Deferred commands fail closed with a deterministic message:
+               phase1 run|baseline|eval
+               phase2 run|baseline|eval
+               refresh-common
+               refresh-fixtures
+               refresh-all
+
 Options:
   --tag TAG      Branch tag (default: today's date, e.g. mar13)
   --model MODEL  Claude model to use (default: sonnet)
@@ -73,6 +95,8 @@ Examples:
   ./autoresearch/skills/harness.sh run contract-review --tag mar13
   ./autoresearch/skills/harness.sh status contract-review
   ./autoresearch/skills/harness.sh eval contract-review --generate
+  ./autoresearch/skills/harness.sh contract status
+  ./autoresearch/skills/harness.sh contract render-review --run-id demo-run
 USAGE
   exit 1
 }
@@ -111,7 +135,7 @@ count_fixtures() {
   local skill="$1"
   local fixture_dir="$SKILLS_DIR/$skill/fixtures"
   if [[ -d "$fixture_dir" ]]; then
-    find "$fixture_dir" -type f -name '*.diff' -o -name '*.txt' -o -name '*.md' | wc -l | tr -d ' '
+    find "$fixture_dir" -type f \( -name '*.diff' -o -name '*.txt' -o -name '*.md' \) | wc -l | tr -d ' '
   else
     echo "0"
   fi
@@ -126,6 +150,208 @@ with open('$SKILLS_DIR/$skill/eval.json') as f:
 total = sum(len(t.get('assertions', [])) for t in data.get('tests', []))
 print(total)
 " 2>/dev/null || echo "?"
+}
+
+ensure_tsv_header() {
+  local path="$1"
+  local header='commit	score	passed	total	status	description'
+  mkdir -p "$(dirname "$path")"
+  if [[ ! -f "$path" ]]; then
+    printf '%s\n' "$header" > "$path"
+    return
+  fi
+  if [[ ! -s "$path" ]]; then
+    printf '%s\n' "$header" > "$path"
+    return
+  fi
+  local first_line
+  IFS= read -r first_line < "$path" || first_line=""
+  if [[ "$first_line" != "$header" ]]; then
+    fail "Refusing to rewrite unexpected results.tsv header in $path"
+  fi
+}
+
+contract_usage() {
+  cat <<'USAGE'
+Contract autoresearch commands:
+  harness.sh contract scaffold
+  harness.sh contract status
+  harness.sh contract render-review [--run-id RUN_ID] [--accepted-only] [--review PATH]
+
+Deferred and fail-closed in the current manual-promotion slice:
+  harness.sh contract phase1 run|baseline|eval
+  harness.sh contract phase2 run|baseline|eval
+  harness.sh contract refresh-common
+  harness.sh contract refresh-fixtures
+  harness.sh contract refresh-all
+USAGE
+}
+
+require_contract_tree() {
+  if [[ ! -d "$CONTRACT_DIR" ]]; then
+    fail "Missing contract autoresearch tree: $CONTRACT_DIR"
+  fi
+  if [[ ! -f "$CONTRACT_DIR/phase1/findings.schema.json" ]]; then
+    fail "Missing phase1 schema: $CONTRACT_DIR/phase1/findings.schema.json"
+  fi
+  if [[ ! -f "$CONTRACT_DIR/phase2/proposals.schema.json" ]]; then
+    fail "Missing phase2 schema: $CONTRACT_DIR/phase2/proposals.schema.json"
+  fi
+  if [[ ! -f "$CONTRACT_DIR/phase2/review.schema.json" ]]; then
+    fail "Missing phase2 review schema: $CONTRACT_DIR/phase2/review.schema.json"
+  fi
+}
+
+summarize_results_file() {
+  local label="$1"
+  local path="$2"
+  if [[ ! -f "$path" ]]; then
+    info "  $label: missing results file"
+    return
+  fi
+  local total_lines latest_score latest_status
+  total_lines="$(tail -n +2 "$path" | wc -l | tr -d ' ')"
+  if [[ "$total_lines" == "0" ]]; then
+    info "  $label: 0 runs"
+    return
+  fi
+  latest_score="$(tail -1 "$path" | awk -F'\t' '{print $2}')"
+  latest_status="$(tail -1 "$path" | awk -F'\t' '{print $5}')"
+  info "  $label: $total_lines runs, latest score=$latest_score status=$latest_status"
+}
+
+cmd_contract_scaffold() {
+  [[ $# -eq 0 ]] || fail "contract scaffold takes no arguments"
+  require_contract_tree
+  log "Contract autoresearch scaffold"
+
+  mkdir -p \
+    "$CONTRACT_DIR/phase1/fixtures" \
+    "$CONTRACT_DIR/phase1/outputs" \
+    "$CONTRACT_DIR/phase2/fixtures/static" \
+    "$CONTRACT_DIR/phase2/fixtures/snapshot" \
+    "$CONTRACT_DIR/phase2/outputs" \
+    "$CONTRACT_DIR/phase2/proposals" \
+    "$CONTRACT_DIR/phase2/review"
+
+  ensure_tsv_header "$CONTRACT_DIR/phase1/results.tsv"
+  ensure_tsv_header "$CONTRACT_DIR/phase2/results.tsv"
+
+  info "Contract tree ready:"
+  info "  $CONTRACT_DIR/common"
+  info "  $CONTRACT_DIR/phase1"
+  info "  $CONTRACT_DIR/phase2"
+}
+
+cmd_contract_status() {
+  [[ $# -eq 0 ]] || fail "contract status takes no arguments"
+  require_contract_tree
+  log "Contract autoresearch status"
+  summarize_results_file "phase1" "$CONTRACT_DIR/phase1/results.tsv"
+  summarize_results_file "phase2" "$CONTRACT_DIR/phase2/results.tsv"
+
+  local index_file="$CONTRACT_DIR/phase2/proposals_index.json"
+  if [[ -f "$index_file" ]]; then
+    python3 - <<'PY' "$index_file"
+import json
+import sys
+from collections import Counter
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+if isinstance(data, list):
+    entries = data
+elif isinstance(data, dict):
+    if "entries" in data:
+        entries = data["entries"]
+    elif "runs" in data:
+        entries = data["runs"]
+    else:
+        raise SystemExit("FAIL: proposals_index.json must contain an entries or runs array")
+else:
+    raise SystemExit("FAIL: proposals_index.json must be an array or object")
+if not isinstance(entries, list):
+    raise SystemExit("FAIL: proposals_index.json entries/runs must be a JSON array")
+statuses = Counter()
+for entry in entries:
+    if not isinstance(entry, dict):
+        raise SystemExit("FAIL: proposals_index.json contains a non-object entry")
+    statuses[entry.get("status", "unknown")] += 1
+print("  proposals_index entries:", len(entries))
+if statuses:
+    print("  proposals_index status_counts:", ", ".join(f"{k}={v}" for k, v in sorted(statuses.items())))
+PY
+  else
+    info "  proposals_index: missing"
+  fi
+}
+
+cmd_contract_render_review() {
+  require_contract_tree
+  [[ -f "$CONTRACT_RENDER_PY" ]] || fail "Missing renderer: $CONTRACT_RENDER_PY"
+
+  local args=("--root" "$ROOT")
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --run-id)
+        [[ $# -ge 2 ]] || fail "Missing value for --run-id"
+        args+=("$1" "$2")
+        shift 2
+        ;;
+      --review)
+        [[ $# -ge 2 ]] || fail "Missing value for --review"
+        args+=("$1" "$2")
+        shift 2
+        ;;
+      --accepted-only)
+        args+=("$1")
+        shift
+        ;;
+      *)
+        fail "Unknown contract render-review option: $1"
+        ;;
+    esac
+  done
+
+  python3 "$CONTRACT_RENDER_PY" "${args[@]}"
+}
+
+contract_deferred_fail() {
+  fail "contract $* is deferred in the current manual-promotion slice. Available today: scaffold, status, render-review."
+}
+
+cmd_contract() {
+  local subcommand="${1:-}"
+  shift || true
+
+  case "$subcommand" in
+    scaffold)      cmd_contract_scaffold "$@" ;;
+    status)        cmd_contract_status "$@" ;;
+    render-review) cmd_contract_render_review "$@" ;;
+    phase1)
+      case "${1:-}" in
+        run|baseline|eval) contract_deferred_fail "phase1 ${1:-}" ;;
+        *) contract_usage; fail "Unknown contract phase1 subcommand: ${1:-}" ;;
+      esac
+      ;;
+    phase2)
+      case "${1:-}" in
+        run|baseline|eval) contract_deferred_fail "phase2 ${1:-}" ;;
+        *) contract_usage; fail "Unknown contract phase2 subcommand: ${1:-}" ;;
+      esac
+      ;;
+    refresh-common|refresh-fixtures|refresh-all)
+      contract_deferred_fail "$subcommand"
+      ;;
+    ""|-h|--help)
+      contract_usage
+      ;;
+    *)
+      contract_usage
+      fail "Unknown contract subcommand: $subcommand"
+      ;;
+  esac
 }
 
 # ── Command: scaffold ────────────────────────────────────────────────
@@ -268,6 +494,7 @@ CRITICAL RULES:
 - Binary assertions must be checked literally
 - Never weaken safety semantics to improve score
 - Log every iteration to autoresearch/skills/$skill/results.tsv
+- NEVER falsify results.tsv — scores for 'keep' entries must be strictly non-decreasing
 - NEVER STOP — keep looping until perfect score or manually interrupted
 PROMPT
   )"
@@ -275,8 +502,10 @@ PROMPT
   info "Creating branch and launching Claude..."
   git checkout -b "$branch" 2>/dev/null || git checkout "$branch"
 
-  # Launch Claude with the prompt
-  exec claude --model "$model" -p "$launch_prompt"
+  # Launch Claude with the prompt. Do NOT use exec so the shell remains alive
+  # to catch crashes — a clean exit means Claude finished normally, a non-zero
+  # exit means it crashed (which should be logged as status=crash by the agent).
+  claude --model "$model" -p "$launch_prompt"
 }
 
 # ── Command: baseline ────────────────────────────────────────────────
@@ -297,45 +526,129 @@ cmd_baseline() {
   done
 
   require_skill_dir "$skill"
-  local skill_file
-  skill_file="$(require_skill_file "$skill")"
-  local n_assertions
-  n_assertions="$(count_assertions "$skill")"
 
-  log "Running baseline for skill: $skill"
-  info "Assertions: $n_assertions"
-  echo ""
-
-  local short_head
+  local eval_json results_file output_dir short_head
+  eval_json="$SKILLS_DIR/$skill/eval.json"
+  results_file="$SKILLS_DIR/$skill/results.tsv"
+  output_dir="$SKILLS_DIR/$skill/outputs/baseline-$tag"
   short_head="$(git rev-parse --short HEAD)"
 
-  local baseline_prompt="You are evaluating a skill's baseline score. Follow these steps:
+  log "Running baseline for skill: $skill"
+  info "Output dir: $output_dir"
+  echo ""
 
-1. Read the eval config: autoresearch/skills/${skill}/eval.json
-2. Read the current skill file: ${skill_file}
-3. Read ALL fixture files in autoresearch/skills/${skill}/fixtures/
+  mkdir -p "$output_dir"
 
-For each test in eval.json:
-  a) Read the fixture diff
-  b) Execute the skill: follow the skill instructions exactly as written, producing full output
-  c) Check each assertion (binary: TRUE or FALSE) against your output
+  # Generate one output file per test using Claude (same as eval --generate)
+  generate_skill_outputs "$skill" "$output_dir" "$model"
 
-Report:
-- Total score: passed / total
-- Per-test breakdown (test id, name, passed/total, failed assertion IDs)
-- Overall pass rate as a percentage
+  # Score mechanically via evaluate.py — never self-attested
+  if [[ ! -f "$EVALUATE_PY" ]]; then
+    fail "Evaluator not found: $EVALUATE_PY"
+  fi
 
-Append the baseline to autoresearch/skills/${skill}/results.tsv:
-  commit: ${short_head}
-  score: (calculated)
-  passed: (count)
-  total: ${n_assertions}
-  status: baseline
-  description: baseline - no changes
+  local score_json score passed total
+  score_json="$(python3 "$EVALUATE_PY" \
+    --eval "$eval_json" \
+    --output-dir "$output_dir" \
+    --skill-dir "$SKILLS_DIR/$skill" \
+    --json)"
 
-Do NOT modify any files except results.tsv."
+  score="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['score'])")"
+  passed="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['passed'])")"
+  total="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['total'])")"
 
-  exec claude --model "$model" -p "$baseline_prompt"
+  # Append mechanical score row to results.tsv
+  ensure_tsv_header "$results_file"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$short_head" "$score" "$passed" "$total" "baseline" "baseline - no changes" \
+    >> "$results_file"
+
+  log "Baseline recorded"
+  info "Score: $score ($passed/$total)"
+}
+
+# ── Helper: generate outputs via Claude ──────────────────────────────
+# generate_skill_outputs <skill> <output_dir> <model>
+# For each test in eval.json, invokes Claude to produce an output file.
+# Skips tests whose output file already exists and is non-empty.
+
+generate_skill_outputs() {
+  local skill="$1"
+  local output_dir="$2"
+  local model="${3:-sonnet}"
+  local eval_json="$SKILLS_DIR/$skill/eval.json"
+  local skill_file
+  skill_file="$(require_skill_file "$skill")"
+
+  log "Generating outputs via Claude"
+  info "Skill:      $skill_file"
+  info "Output dir: $output_dir"
+  echo ""
+
+  # Read test IDs and fixtures from eval.json.
+  # Replace tabs in prompt to prevent IFS-split corruption.
+  local test_ids
+  test_ids="$(python3 -c "
+import json
+with open('$eval_json') as f:
+    data = json.load(f)
+for t in data['tests']:
+    prompt = t.get('prompt', '').replace('\t', ' ')
+    print(t['id'] + '\t' + t.get('fixture', '') + '\t' + prompt)
+")"
+
+  while IFS=$'\t' read -r test_id fixture prompt; do
+    # Strip any residual tabs that survived the Python sanitisation
+    prompt="${prompt//$'\t'/ }"
+    local fixture_path="$SKILLS_DIR/$skill/$fixture"
+    local output_file="$output_dir/${test_id}.md"
+
+    if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
+      info "  [$test_id] Output exists, skipping (delete to regenerate)"
+      continue
+    fi
+
+    if [[ ! -f "$fixture_path" ]]; then
+      warn "  [$test_id] Fixture not found: $fixture_path"
+      continue
+    fi
+
+    info "  [$test_id] Generating output..."
+
+    local fixture_content gen_prompt fence context_label
+    fixture_content="$(cat "$fixture_path")"
+
+    # Choose fence type and context label based on fixture extension.
+    # .diff files are git diffs; .txt/.md are plain context (e.g. story content).
+    case "$fixture" in
+      *.diff) fence="diff";     context_label="diff" ;;
+      *.md)   fence="markdown"; context_label="content" ;;
+      *)      fence="text";     context_label="content" ;;
+    esac
+
+    gen_prompt="Read the skill file: $skill_file
+Follow its instructions exactly to review this ${context_label}:
+
+\`\`\`${fence}
+$fixture_content
+\`\`\`
+
+$prompt
+
+Produce the complete skill output as specified in the skill file."
+
+    local stderr_file
+    stderr_file="$(mktemp)"
+    claude --model "$model" -p "$gen_prompt" > "$output_file" 2>"$stderr_file" || {
+      warn "  [$test_id] Claude invocation failed"
+      [[ -s "$stderr_file" ]] && warn "  [$test_id] Error: $(cat "$stderr_file")"
+      rm -f "$output_file"
+    }
+    rm -f "$stderr_file"
+  done <<< "$test_ids"
+
+  echo ""
 }
 
 # ── Command: eval ────────────────────────────────────────────────────
@@ -358,67 +671,12 @@ cmd_eval() {
   done
 
   require_skill_dir "$skill"
-  local skill_file eval_json
-  skill_file="$(require_skill_file "$skill")"
+  local eval_json
   eval_json="$SKILLS_DIR/$skill/eval.json"
 
   mkdir -p "$output_dir"
 
-  if [[ "$generate" -eq 1 ]]; then
-    log "Generating outputs via Claude"
-    info "Skill:      $skill_file"
-    info "Output dir: $output_dir"
-    echo ""
-
-    # Read test IDs and fixtures from eval.json
-    local test_ids
-    test_ids="$(python3 -c "
-import json
-with open('$eval_json') as f:
-    data = json.load(f)
-for t in data['tests']:
-    print(t['id'] + '\t' + t.get('fixture', '') + '\t' + t.get('prompt', ''))
-")"
-
-    while IFS=$'\t' read -r test_id fixture prompt; do
-      local fixture_path="$SKILLS_DIR/$skill/$fixture"
-      local output_file="$output_dir/${test_id}.md"
-
-      if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
-        info "  [$test_id] Output exists, skipping (delete to regenerate)"
-        continue
-      fi
-
-      if [[ ! -f "$fixture_path" ]]; then
-        warn "  [$test_id] Fixture not found: $fixture_path"
-        continue
-      fi
-
-      info "  [$test_id] Generating output..."
-
-      local fixture_content
-      fixture_content="$(cat "$fixture_path")"
-
-      local gen_prompt
-      gen_prompt="Read the skill file: $skill_file
-Follow its instructions exactly to review this diff:
-
-\`\`\`diff
-$fixture_content
-\`\`\`
-
-$prompt
-
-Produce the complete skill output as specified in the skill file."
-
-      claude --model "$model" -p "$gen_prompt" > "$output_file" 2>/dev/null || {
-        warn "  [$test_id] Claude invocation failed"
-        rm -f "$output_file"
-      }
-    done <<< "$test_ids"
-
-    echo ""
-  fi
+  [[ "$generate" -eq 1 ]] && generate_skill_outputs "$skill" "$output_dir" "$model"
 
   # Run programmatic evaluation
   log "Evaluating outputs"
@@ -498,7 +756,50 @@ cmd_status() {
   fi
 }
 
+# ── Command: check-monotonic ─────────────────────────────────────────
+
+cmd_check_monotonic() {
+  local skill="$1"
+  require_skill_dir "$skill"
+
+  local results_file="$SKILLS_DIR/$skill/results.tsv"
+  if [[ ! -f "$results_file" ]]; then
+    fail "No results.tsv for skill '$skill'"
+  fi
+
+  log "Checking monotonicity of 'keep' entries: $skill"
+
+  # Extract scores for rows where status == "keep", in file order
+  local violations=0
+  local prev_score=""
+  local line_num=1
+  while IFS=$'\t' read -r commit score passed total status _description; do
+    ((line_num++)) || true
+    [[ "$status" != "keep" ]] && continue
+    if [[ -n "$prev_score" ]]; then
+      # awk comparison: fail if new score < prev score
+      if awk "BEGIN{exit !($score < $prev_score)}"; then
+        warn "  Line $line_num: score $score < prior keep $prev_score (commit $commit)"
+        ((violations++)) || true
+      fi
+    fi
+    prev_score="$score"
+  done < <(tail -n +2 "$results_file")
+
+  if [[ "$violations" -gt 0 ]]; then
+    fail "Monotonicity violated: $violations 'keep' row(s) have lower score than a prior keep — results.tsv may have been falsified"
+  fi
+
+  info "OK — all 'keep' entries have non-decreasing scores"
+}
+
 # ── Main ─────────────────────────────────────────────────────────────
+
+if [[ "${1:-}" == "contract" ]]; then
+  shift
+  cmd_contract "$@"
+  exit 0
+fi
 
 if [[ $# -lt 2 ]] && [[ "${1:-}" != "--help" ]] && [[ "${1:-}" != "-h" ]]; then
   usage
@@ -508,11 +809,12 @@ COMMAND="${1:-}"
 SKILL="${2:-}"
 
 case "$COMMAND" in
-  run)       shift 2; cmd_run "$SKILL" "$@" ;;
-  scaffold)  cmd_scaffold "$SKILL" ;;
-  status)    cmd_status "$SKILL" ;;
-  eval)      shift 2; cmd_eval "$SKILL" "$@" ;;
-  baseline)  shift 2; cmd_baseline "$SKILL" "$@" ;;
-  -h|--help) usage ;;
-  *)         fail "Unknown command: $COMMAND. Run with --help for usage." ;;
+  run)              shift 2; cmd_run "$SKILL" "$@" ;;
+  scaffold)         cmd_scaffold "$SKILL" ;;
+  status)           cmd_status "$SKILL" ;;
+  eval)             shift 2; cmd_eval "$SKILL" "$@" ;;
+  baseline)         shift 2; cmd_baseline "$SKILL" "$@" ;;
+  check-monotonic)  cmd_check_monotonic "$SKILL" ;;
+  -h|--help)        usage ;;
+  *)                fail "Unknown command: $COMMAND. Run with --help for usage." ;;
 esac

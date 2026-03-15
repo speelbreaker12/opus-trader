@@ -34,6 +34,21 @@ Prerequisite: Run `/failure-mode-review` first. This skill assumes implementatio
 
 Without this grounding, architectural analysis becomes theoretical and misses the concrete interactions that cause real failures.
 
+## ALWAYS-REQUIRED (no triage skip)
+
+These four sections run for every change, regardless of size or risk level. Reporting may be brief (1–2 bullets) but the section cannot be omitted or marked SKIPPED.
+
+| Section | What it catches |
+|---------|----------------|
+| §2 Complexity-to-Benefit | Unnecessary machinery vs. actual benefit |
+| §12 Mental Model Mismatches | Likely developer misunderstandings |
+| §20 Simpler Alternative | 80/20 alternative that avoids the complexity |
+| §22 Safety Invariant Enumeration | Invariants weakened or broken by the change |
+
+For trivial/small changes: run these four first. If all four produce no findings, other sections may be brief or omitted — but these four must appear in output even if just `(none)`.
+
+---
+
 ### Triage: which sections apply?
 
 | If the change involves... | Apply sections... |
@@ -44,15 +59,16 @@ Without this grounding, architectural analysis becomes theoretical and misses th
 | Multi-phase rollout | §4b Point-in-Time Correctness, §6d Zombie Features |
 | Manifests, allowlists, lints | §6b Manifest Staleness, §15 Maintenance Burden |
 | Operator-facing behavior change | §7 Operations, §12 Mental Models, §14 Docs |
-| Telemetry or data collection | §10 Data & Privacy |
-| >5 implementation tickets | §9 Organizational, §17 Acceptance Quality |
+| Telemetry capture/retention or identity-bearing artifacts | §10 Data & Privacy |
+| Multi-contributor rollout (>2 contributors) or broad delivery split (>5 tickets) | §9 Organizational, §17 Acceptance Quality |
 | Tooling/harness integration | §8 Tooling Integration, §16 Harness Interaction |
+| Iterative self-improving / calibration loops | §4d Benchmark Governance |
 | Any plan with acceptance tests/commands | §17 Acceptance Quality |
 | Multi-ticket implementation | §18 Ticket Dependencies |
 | Any plan with multiple design sections | §21 Internal Contradictions |
 | Changes to safety-critical systems | §22 Safety Invariant Enumeration |
 
-**Always apply**: §2 (Complexity-to-Benefit), §12 (Mental Model Mismatches), §20 (Simpler Alternative), and §22 (Safety Invariants) — these are the most commonly missed and highest-signal.
+**Always apply**: §2, §12, §20, §22 — see ALWAYS-REQUIRED banner above.
 
 ### Verify acceptance commands against reality
 
@@ -128,6 +144,7 @@ Common hidden assumptions:
 | Atomic writes prevent all corruption | NFS, Docker overlay, disk-full between open and replace | Non-atomic write on non-POSIX filesystem |
 | Cache file is not adversarial | Shared dev machine, CI runner reuse, file permissions | No HMAC/signature; anyone with write access can forge cache |
 | `is_ci()` catches all CI environments | Custom CI, Docker without CI=true, developer with CI=false in profile | Skip fires in CI or is blocked on developer machine |
+| Auto-apply boundary is "zero semantic content" | LLM picks wrong target within allowed token set | Wrong AT-ID repair redirects normative reference; structural check passes |
 
 Checklist:
 - [ ] For each cached/skipped decision: list ALL inputs that affect the outcome, not just the fingerprinted ones
@@ -171,6 +188,18 @@ When two independent mechanisms can both skip/route the same gate:
 - [ ] If they disagree, which wins?
 - [ ] Can the disagreement itself be detected and logged?
 - [ ] Trace a concrete scenario where they disagree and identify the outcome.
+
+#### 4d. Benchmark Governance
+
+For iterative loops where the loop improves a skill and the same harness scores that skill:
+
+- [ ] **Self-lowering threshold**: Can the pass threshold be recomputed from the candidate's own current output, silently lowering the bar on regressions?
+- [ ] **Measurement outside the loop**: Is the measurement function outside the loop it measures? A refresh script that reads current state and writes scoring targets creates a self-corruption channel.
+- [ ] **Single-writer promotion state**: Is ownership explicit for each state transition in mutable promotion artifacts, with exactly one writer per state?
+
+Evidence checks:
+- [ ] Trace threshold writes and promotion-state writers with concrete grep evidence.
+- [ ] For full validator-level proof requirements, run `/validator-audit` §9 (canonical checklist).
 
 ### 5. Compounding Failure Scenarios
 
@@ -463,6 +492,8 @@ Fix: either preserve the invariant (exit 0 = all ran) or update all
 - "Single chokepoint: all dispatch routes through build_order_intent()"
 - "Metrics counters reflect all paths (no early-return gaps that undercount)"
 
+**Auto-apply / auto-graduation mechanisms**: For any mechanism that automatically graduates a category (e.g., "graduated by construction", "zero-content auto-apply"), the graduation criteria must be applied to the category being graduated — not bypassed by design decision. A category marked "graduated by construction" requires a written safety argument explaining *why* the graduation process is vacuous, not just an assertion that it is.
+
 Checklist:
 - [ ] **List >=5 invariants** from the existing system before reviewing the change
 - [ ] **Trace each invariant** through the change — is it preserved, weakened, or broken?
@@ -493,6 +524,11 @@ Checklist:
 
 ```markdown
 ## Strategic Failure Review: <component/PR>
+
+### Coverage
+Always-required (§2/§12/§20/§22): applied
+Additional sections applied: §N [reason], §N [reason]
+Sections skipped: §N [reason], §N [reason]
 
 ### Architectural Findings
 
