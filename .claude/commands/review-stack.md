@@ -215,6 +215,26 @@ If Phase 4 ran, also write `contract_review.json`:
 
 ---
 
+## PR Gate Marker
+
+After the aggregate decision is determined, write the gate marker **only if DECISION is PASS or CONDITIONAL_PASS**. If FAIL or BLOCKED, do not write it — the gate must stay blocked.
+
+```bash
+mkdir -p artifacts/pr-review-gate
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+SAFE_BRANCH="${BRANCH//\//_}"
+HEAD=$(git rev-parse --short HEAD)
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+cat > "artifacts/pr-review-gate/${SAFE_BRANCH}.json" <<EOF
+{
+  "branch": "${BRANCH}",
+  "head": "${HEAD}",
+  "verdict": "${DECISION}",
+  "timestamp_utc": "${TS}"
+}
+EOF
+```
+
 ## Exit Criteria
 
 The skill is complete when:
@@ -222,7 +242,8 @@ The skill is complete when:
 2. The aggregate decision is PASS or CONDITIONAL_PASS
 3. The review artifact is written with all findings documented
 4. Any fixes applied during review are committed
-5. End message: `READY FOR REVIEW GATE`
+5. PR gate marker written to `artifacts/pr-review-gate/<branch>.json`
+6. End message: `READY FOR REVIEW GATE`
 
 ---
 
