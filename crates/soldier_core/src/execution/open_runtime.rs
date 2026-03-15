@@ -405,7 +405,17 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                     gate: override_gate,
                     reason: override_reason.to_string(),
                 },
+                gate_trace: normalize_open_override_gate_trace(gate_trace, override_gate),
+            },
+            ChokeResult::Rejected {
+                reason: ChokeRejectReason::RiskStateNotHealthy,
                 gate_trace,
+            } if inventory_skew_delta_limit_missing => ChokeResult::Rejected {
+                reason: ChokeRejectReason::GateRejected {
+                    gate: override_gate,
+                    reason: override_reason.to_string(),
+                },
+                gate_trace: normalize_open_override_gate_trace(gate_trace, override_gate),
             },
             other => {
                 runtime_metrics.reject_override_mismatch_total += 1;
@@ -441,6 +451,48 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
         effective_risk_state,
         adjusted_min_edge_usd,
     }
+}
+
+fn normalize_open_override_gate_trace(
+    mut gate_trace: Vec<GateStep>,
+    override_gate: GateStep,
+) -> Vec<GateStep> {
+    if gate_trace.last() == Some(&override_gate) {
+        return gate_trace;
+    }
+
+    if let Some(prefix) = open_gate_trace_prefix_through(override_gate) {
+        return prefix;
+    }
+
+    if !gate_trace.contains(&override_gate) {
+        gate_trace.push(override_gate);
+    }
+    gate_trace
+}
+
+fn open_gate_trace_prefix_through(last_gate: GateStep) -> Option<Vec<GateStep>> {
+    const OPEN_GATE_ORDER: [GateStep; 10] = [
+        GateStep::DispatchAuth,
+        GateStep::Preflight,
+        GateStep::Quantize,
+        GateStep::DispatchConsistency,
+        GateStep::FeeCacheCheck,
+        GateStep::ExpiryGuard,
+        GateStep::LiquidityGate,
+        GateStep::NetEdgeGate,
+        GateStep::Pricer,
+        GateStep::RecordedBeforeDispatch,
+    ];
+
+    let mut trace = Vec::with_capacity(OPEN_GATE_ORDER.len());
+    for gate in OPEN_GATE_ORDER {
+        trace.push(gate);
+        if gate == last_gate {
+            return Some(trace);
+        }
+    }
+    None
 }
 
 /// Complete lifecycle: settle pending exposure on TLSM terminal state (S6-008).

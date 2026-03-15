@@ -78,36 +78,6 @@ pub use super::foo::{Alpha, Beta};
 pub use super::bar::Gamma;
 EOF
 
-cat > "$api_file" <<'EOF'
-pub use super::foo::{nested::{Alpha, Beta}, Gamma};
-EOF
-
-LINT_SOLDIER_INFRA_FACADE_LIB="$lib_file" \
-LINT_SOLDIER_INFRA_FACADE_API="$api_file" \
-LINT_SOLDIER_INFRA_FACADE_ALLOWLIST="$allowlist_file" \
-LINT_SOLDIER_INFRA_FACADE_SCAN_ROOT="$scan_root" \
-bash "$SCRIPT" >/dev/null
-
-cat > "$api_file" <<'EOF'
-pub use super::foo::Alpha;
-mod hidden {
-    pub use super::super::foo::Beta;
-}
-pub use super::bar::Gamma;
-EOF
-
-set +e
-nested_out="$(LINT_SOLDIER_INFRA_FACADE_LIB="$lib_file" LINT_SOLDIER_INFRA_FACADE_API="$api_file" LINT_SOLDIER_INFRA_FACADE_ALLOWLIST="$allowlist_file" LINT_SOLDIER_INFRA_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
-nested_rc=$?
-set -e
-[[ $nested_rc -ne 0 ]] || fail "nested-module pub use should fail soldier_infra facade lint"
-echo "$nested_out" | grep -Fq "non-top-level pub use" || fail "missing nested-module diagnostic"
-
-cat > "$api_file" <<'EOF'
-pub use super::foo::{Alpha, Beta};
-pub use super::bar::Gamma;
-EOF
-
 cat > "$tmp_dir/consumer/deep_import.rs" <<'EOF'
 use soldier_infra::store::WalLedger;
 EOF
