@@ -49,6 +49,8 @@ mod dispatch_map;
 #[cfg_attr(not(test), allow(dead_code))]
 mod domain_model;
 #[cfg_attr(not(test), allow(dead_code))]
+mod emergency_close;
+#[cfg_attr(not(test), allow(dead_code))]
 mod engine;
 #[cfg_attr(not(test), allow(dead_code))]
 mod gate;
@@ -66,8 +68,6 @@ mod inventory_skew;
 mod label;
 #[cfg_attr(not(test), allow(dead_code))]
 mod open_runtime;
-#[cfg_attr(not(test), allow(dead_code))]
-mod orchestration_tail;
 #[cfg_attr(not(test), allow(dead_code))]
 mod order_size;
 #[cfg_attr(not(test), allow(dead_code))]

@@ -89,6 +89,7 @@ pub struct QuantizeExecutionInput {
 #[derive(Debug, Clone)]
 pub struct OpenExecutionInput<'a> {
     pub base: ExecutionBaseInput<'a>,
+    pub gate_reject_codes: GateRejectCodes,
     pub current_delta: f64,
     pub delta_impact_est: f64,
     pub liquidity: LiquidityExecutionInput,
@@ -168,6 +169,7 @@ pub struct PricerExecutionInput {
     pub gross_edge_usd: f64,
     pub min_edge_usd: f64,
     pub fee_estimate_usd: f64,
+    pub expected_slippage_usd: f64,
     pub qty: f64,
     pub side: Side,
 }
@@ -483,6 +485,7 @@ fn build_open_runtime_input<'a>(
             gross_edge_usd: input.pricer.gross_edge_usd,
             min_edge_usd: input.pricer.min_edge_usd,
             fee_estimate_usd: input.pricer.fee_estimate_usd,
+            expected_slippage_usd: input.pricer.expected_slippage_usd,
             qty: input.pricer.qty,
             side: input.pricer.side,
         },
@@ -628,7 +631,7 @@ fn open_runtime_to_decision(
 
     match &output.choke_result {
         ChokeRejected { reason, .. } => ExecutionDecision::Rejected(ExecutionRejection {
-            code: map_open_runtime_reject_code(reason, &output.gate_reject_codes),
+            code: map_open_runtime_reject_code(reason, &input.gate_reject_codes),
             step: map_open_rejection_step(input, output, reason),
             detail: reject_reason_detail(reason),
         }),

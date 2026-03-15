@@ -168,6 +168,8 @@ EOF_ALLOWLIST_REPO_ROOT
 set +e
 (
   cd "$ROOT/tools"
+  # Unset git hook env vars so the tool's git rev-parse resolves correctly.
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
   python3 "$TOOL" \
     --prd "$prd_repo_root" \
     --inputs "$checklist_repo_root" \

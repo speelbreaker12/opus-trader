@@ -22,59 +22,25 @@ chmod +x "$repo/plans/preflight.sh"
 
 rewrite_fixture_arrays() {
   local file="$1"
-  rewrite_fixture_arrays_with_paths \
-    "$file" \
-    "plans/tests/test_dummy_sleep.sh" \
-    "plans/tests/test_dummy_sleep.sh" \
-    "plans/tests/test_dummy_sleep.sh"
-}
-
-rewrite_fixture_arrays_with_paths() {
-  local file="$1"
-  local smoke_entry="$2"
-  local full_entry="$3"
-  local serial_entry="$4"
   local tmp_file="$file.tmp"
-  awk -v smoke="$smoke_entry" -v full="$full_entry" -v serial="$serial_entry" '
-    BEGIN {in_smoke=0; in_full=0; in_full_serial=0}
+  awk '
+    BEGIN {in_smoke=0; in_full=0}
     /^SMOKE_REVIEW_FIXTURE_TESTS=\(/ {
       print
-      if (smoke != "__EMPTY__") {
-        print "  \"" smoke "\""
-      }
+      print "  \"plans/tests/test_dummy_sleep.sh\""
       in_smoke=1
       next
     }
     in_smoke && /^\)/ {in_smoke=0; print; next}
     in_smoke {next}
-    /^FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=\(/ {
-      print
-      if (serial != "__EMPTY__") {
-        print "  \"" serial "\""
-      }
-      in_full_serial=1
-      next
-    }
-    in_full_serial && /^\)/ {in_full_serial=0; print; next}
-    in_full_serial {next}
     /^FULL_ONLY_REVIEW_FIXTURE_TESTS=\(/ {
       print
-      if (full != "__EMPTY__") {
-        print "  \"" full "\""
-      }
+      print "  \"plans/tests/test_dummy_sleep.sh\""
       in_full=1
       next
     }
     in_full && /^\)/ {in_full=0; print; next}
     in_full {next}
-    /^FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=\(/ {
-      print
-      print "  \"plans/tests/test_dummy_sleep.sh\""
-      in_full_serial=1
-      next
-    }
-    in_full_serial && /^\)/ {in_full_serial=0; print; next}
-    in_full_serial {next}
     {print}
   ' "$file" > "$tmp_file"
   mv "$tmp_file" "$file"
@@ -87,7 +53,6 @@ rewrite_fixture_arrays_repeated_dummy() {
   local line=""
   local in_smoke=0
   local in_full=0
-  local in_full_serial=0
 
   : > "$tmp_file"
   while IFS= read -r line; do
@@ -111,26 +76,9 @@ rewrite_fixture_arrays_repeated_dummy() {
       in_full=1
       continue
     fi
-    if [[ "$line" == 'FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=(' ]]; then
-      printf '%s\n' "$line" >> "$tmp_file"
-      i=0
-      while [[ "$i" -lt "$repeat_count" ]]; do
-        printf '  "%s"\n' "plans/tests/test_dummy_sleep.sh" >> "$tmp_file"
-        i=$((i + 1))
-      done
-      in_full_serial=1
-      continue
-    fi
     if [[ "$in_smoke" -eq 1 ]]; then
       if [[ "$line" == ')' ]]; then
         in_smoke=0
-        printf '%s\n' "$line" >> "$tmp_file"
-      fi
-      continue
-    fi
-    if [[ "$in_full_serial" -eq 1 ]]; then
-      if [[ "$line" == ')' ]]; then
-        in_full_serial=0
         printf '%s\n' "$line" >> "$tmp_file"
       fi
       continue
@@ -193,13 +141,6 @@ sleep "${DUMMY_SLEEP_SECS:-0}"
 exit 0
 EOF
 chmod +x "$repo/plans/tests/test_dummy_sleep.sh"
-
-cat > "$repo/plans/tests/test_dummy_serial_fail.sh" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-exit 1
-EOF
-chmod +x "$repo/plans/tests/test_dummy_serial_fail.sh"
 
 write_pass_script() {
   local path="$1"
@@ -472,31 +413,6 @@ set -e
   || fail "expected full fixture mode with logging timeout wrapper to pass, got rc=$full_default_timeout_logged_rc"
 grep -Fxq "300" "$timeout_invocation_log" \
   || fail "expected full fixture mode to default fixture timeout to 300 seconds"
-
-serial_batch_failure_script="$repo/plans/preflight_serial_batch_failure.sh"
-cp "$repo/plans/preflight.sh" "$serial_batch_failure_script"
-rewrite_fixture_arrays_with_paths \
-  "$serial_batch_failure_script" \
-  "plans/tests/test_dummy_sleep.sh" \
-  "plans/tests/test_dummy_sleep.sh" \
-  "plans/tests/test_dummy_serial_fail.sh"
-chmod +x "$serial_batch_failure_script"
-
-serial_batch_failure_log="$tmp_dir/serial_batch_failure.log"
-set +e
-(
-  cd "$repo"
-  PREFLIGHT_FIXTURE_MODE=full \
-  PREFLIGHT_NO_CACHE=1 \
-  PREFLIGHT_FIXTURE_TEST_TIMEOUT=0 \
-  "$serial_batch_failure_script" >"$serial_batch_failure_log" 2>&1
-)
-serial_batch_failure_rc=$?
-set -e
-[[ "$serial_batch_failure_rc" -eq 1 ]] \
-  || fail "expected serial-batch full fixture failure to surface with rc=1, got $serial_batch_failure_rc"
-grep -Fq "Fixture test failed: plans/tests/test_dummy_serial_fail.sh (rc=1" "$serial_batch_failure_log" \
-  || fail "expected serial-batch failure to prove the serial fixture loop executed"
 
 parallel_default_script="$repo/plans/preflight_parallel_default_jobs.sh"
 cp "$repo/plans/preflight.sh" "$parallel_default_script"

@@ -90,31 +90,19 @@ assert_list_absent() {
 
 smoke_list="$(extract_array "SMOKE_REVIEW_FIXTURE_TESTS")"
 full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
-serial_full_only_list="$(extract_array "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS")"
 
 [[ -n "$smoke_list" ]] || fail "SMOKE_REVIEW_FIXTURE_TESTS is empty"
 [[ -n "$full_only_list" ]] || fail "FULL_ONLY_REVIEW_FIXTURE_TESTS is empty"
-[[ -n "$serial_full_only_list" ]] || fail "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS is empty"
 
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
-assert_contains_line 'SERIAL_REVIEW_FIXTURE_TESTS=()'
-assert_contains_line 'REVIEW_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"'
-assert_contains_line 'SERIAL_REVIEW_FIXTURE_TEST_COUNT=0'
-assert_contains_line 'if declare -p REVIEW_FIXTURE_TESTS >/dev/null 2>&1; then'
-assert_contains_line '  REVIEW_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"'
-assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1; then'
-assert_contains_line '  SERIAL_REVIEW_FIXTURE_TEST_COUNT="${#SERIAL_REVIEW_FIXTURE_TESTS[@]}"'
-assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1 && \'
-assert_contains_line 'for fixture_test in "${SERIAL_REVIEW_FIXTURE_TESTS[@]}"; do'
-assert_contains_line 'PREFLIGHT_DIAG_FIXTURE_TEST_COUNT=$(( REVIEW_FIXTURE_TEST_COUNT + SERIAL_REVIEW_FIXTURE_TEST_COUNT ))'
-assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${PREFLIGHT_DIAG_FIXTURE_TEST_COUNT} tests)"'
+assert_contains_line 'pass "Fixture profile: $PREFLIGHT_FIXTURE_MODE (${#REVIEW_FIXTURE_TESTS[@]} tests)"'
 assert_contains_line 'fixture_timeout_default=240'
 assert_contains_line 'fixture_timeout_default=300'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
-assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW="$PREFLIGHT_FIXTURE_TEST_TIMEOUT"'
-assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" =~ ^[0-9]+$ ]]; then'
-assert_contains_line 'setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='"'"'$PREFLIGHT_FIXTURE_TEST_TIMEOUT'"'"' (expected non-negative integer seconds)"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW="${PREFLIGHT_FIXTURE_TEST_TIMEOUT:-$fixture_timeout_default}"'
+assert_contains_line 'PREFLIGHT_FIXTURE_TEST_TIMEOUT="$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW"'
+assert_contains_line 'if [[ ! "$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW" =~ ^[0-9]+$ ]]; then'
+assert_contains_line 'setup_fail "Invalid PREFLIGHT_FIXTURE_TEST_TIMEOUT='"'"'$PREFLIGHT_FIXTURE_TEST_TIMEOUT_RAW'"'"' (expected non-negative integer seconds)"'
 assert_contains_line 'supports_wait_n() {'
 assert_contains_line 'if builtin help wait >/dev/null 2>&1; then'
 assert_contains_line 'wait_help_text="$(builtin help wait 2>/dev/null || true)"'
@@ -147,8 +135,6 @@ assert_contains_line 'if [[ -z "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST
 assert_contains_line 'setup_fail "PREFLIGHT fixture timeout requested (${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s) but timeout command missing (install coreutils timeout or gtimeout)"'
 assert_contains_line 'echo "${status}|${duration_s}|${rc}" > "$fixture_results_dir/$idx"'
 assert_contains_line 'pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)"'
-assert_contains_line 'if declare -p SERIAL_REVIEW_FIXTURE_TESTS >/dev/null 2>&1 && \'
-assert_contains_line 'for fixture_test in "${SERIAL_REVIEW_FIXTURE_TESTS[@]}"; do'
 assert_contains_line 'SHELL_SYNTAX_CHECKER=""'
 assert_contains_line 'if ! SHELL_SYNTAX_CHECKER="$(command -v bash 2>/dev/null)"; then'
 assert_contains_line 'setup_fail "Shell syntax setup failed (missing bash)"'
@@ -183,8 +169,7 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
-assert_list_absent "$full_only_list" "plans/tests/test_prd_set_pass.sh"
-assert_list_contains "$serial_full_only_list" "plans/tests/test_prd_set_pass.sh"
+assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_bundle.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_operator_runner.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_scoreboard.sh"
@@ -206,28 +191,17 @@ workflow_gate_block="$(
   ' "$VERIFY_FORK"
 )"
 [[ -n "$workflow_gate_block" ]] || fail "missing workflow integration gate block"
-workflow_runner_fn="$(
-  awk '
-    /^run_workflow_integration_tests\(\) \{/ { in_fn=1 }
-    in_fn { print }
-    in_fn && /^}$/ { exit }
-  ' "$VERIFY_FORK"
-)"
-[[ -n "$workflow_runner_fn" ]] || fail "missing run_workflow_integration_tests()"
 
 assert_file_contains_line "$VERIFY_FORK" 'start_parallel_workflow_test() {'
 assert_file_contains_line "$VERIFY_FORK" 'finish_parallel_group_or_exit() {'
-assert_text_contains_line "$workflow_runner_fn" 'parallel_group_reset'
-assert_text_contains_line "$workflow_runner_fn" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do'
-assert_text_contains_line "$workflow_runner_fn" 'start_parallel_workflow_test "$workflow_test"'
-assert_text_contains_line "$workflow_runner_fn" 'if [[ "$MODE" == "full" ]]; then'
-assert_text_contains_line "$workflow_runner_fn" 'for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do'
-assert_text_contains_line "$workflow_runner_fn" 'return 0'
-assert_text_contains_line "$workflow_gate_block" 'run_workflow_integration_tests'
+assert_text_contains_line "$workflow_gate_block" 'parallel_group_reset'
+assert_text_contains_line "$workflow_gate_block" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do'
+assert_text_contains_line "$workflow_gate_block" 'start_parallel_workflow_test "$workflow_test"'
+assert_text_contains_line "$workflow_gate_block" 'if [[ "$MODE" == "full" ]]; then'
+assert_text_contains_line "$workflow_gate_block" 'for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do'
 assert_text_contains_line "$workflow_gate_block" 'log "15) rust gates"'
 assert_text_contains_line "$workflow_gate_block" 'finish_parallel_group_or_exit'
-assert_text_line_before "$workflow_runner_fn" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do' 'if [[ "$MODE" == "full" ]]; then'
-assert_text_line_before "$workflow_gate_block" 'run_workflow_integration_tests' 'log "15) rust gates"'
+assert_text_line_before "$workflow_gate_block" 'for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do' 'if [[ "$MODE" == "full" ]]; then'
 assert_text_line_before "$workflow_gate_block" 'log "15) rust gates"' 'finish_parallel_group_or_exit'
 
 parallel_gate_tests=(
@@ -243,7 +217,6 @@ parallel_gate_tests=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
-  "plans/tests/test_contract_at_parity_invalid_refs.sh"
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_contract_change_ledger.sh"
@@ -259,7 +232,6 @@ parallel_gate_tests=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
-  "plans/tests/test_contract_at_wording_drift.sh"
 )
 full_mode_parallel_gate_tests=(
   "plans/tests/test_story_review_gate.sh"
@@ -291,10 +263,8 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-serial_full_only_count="$(printf '%s\n' "$serial_full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 [[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
-[[ "$full_only_count" == "11" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 11)"
-[[ "$serial_full_only_count" == "1" ]] || fail "unexpected serial full-only fixture count: $serial_full_only_count (expected 1)"
+[[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
 
 # Verify 14g dispatch loop pattern exists in verify_fork.sh
 grep -Eq 'for workflow_test in "\$\{WORKFLOW_INTEGRATION_TESTS\[@\]\}"' "$VERIFY_FORK" \

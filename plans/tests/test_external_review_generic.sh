@@ -737,6 +737,8 @@ MOCK_REVIEW
   set +e
   (
     cd "$repo/.tmp/run"
+    # Unset git hook env vars so fixture-repo git commands resolve correctly.
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
     STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
       bash "$repo/plans/parallel_review.sh" S9-ART --base main --tools codex,opus --prompt generic --review-script "$repo/plans/review_logged.sh"
   ) >"$output_file" 2>&1
@@ -833,6 +835,8 @@ EOF
   set +e
   (
     cd "$repo/.tmp/run"
+    # Unset git hook env vars so fixture-repo git commands resolve correctly.
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
     STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
     MOCK_AGGREGATE_LOG="$aggregate_log" \
     MOCK_EXPECTED_AGGREGATE_ROOT="$repo/canonical/story" \

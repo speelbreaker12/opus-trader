@@ -12,12 +12,4 @@
 #
 # When an AT is covered by a PRD story, remove it from this file.
 
-AT-1235:
-  owner: "phase1"
-  reason: "defined in CONTRACT.md but not yet covered by a PRD story"
-  target_phase: 2
-
-AT-1236:
-  owner: "phase1"
-  reason: "defined in CONTRACT.md but not yet covered by a PRD story"
-  target_phase: 2
+# (none currently — all 335 contract ATs are covered by PRD)

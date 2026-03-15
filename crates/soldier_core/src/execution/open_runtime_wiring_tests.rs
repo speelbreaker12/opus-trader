@@ -37,7 +37,6 @@ use crate::execution::pipeline::QuantizePipelineInput;
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
 use crate::execution::quantize::{QuantizeConstraints, Side};
-use crate::execution::reject_reason::RejectReasonCode;
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
     MarginGateMode, PendingExposureBook, ReservationId, RiskState,
@@ -136,6 +135,7 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
             gross_edge_usd: 20.0,
             min_edge_usd: 9.0,
             fee_estimate_usd: 2.0,
+            expected_slippage_usd: 1.0,
             qty: 1.0,
             side: Side::Buy,
         },
@@ -156,6 +156,9 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
             mm_util_reject_opens: 0.70,
             mm_util_reduceonly: 0.85,
             mm_util_kill: 0.95,
+            now_ms: 1_000,
+            mm_util_last_update_ts_ms: Some(1_000),
+            mm_util_max_age_ms: 30_000,
         },
         reservation_id: ReservationId::new("test-intent-0000").must(),
         instrument_id: "BTC-PERPETUAL".to_string(),
@@ -204,18 +207,6 @@ fn test_runtime_wiring_releases_pending_reservation_on_reject() {
 
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
-    assert_eq!(
-        out.gate_reject_codes.liquidity_gate,
-        Some(RejectReasonCode::GlobalExposureBudgetExceeded)
-    );
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
-        out.gate_reject_codes.pricer,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
     assert!(out.pending_reservation_id.is_none());
     assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.pending_exposure.release_total(), 1);
@@ -256,18 +247,6 @@ fn test_runtime_wiring_pending_reject_takes_precedence_over_global_budget_reject
 
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
-    assert_eq!(
-        out.gate_reject_codes.liquidity_gate,
-        Some(RejectReasonCode::PendingExposureBudgetExceeded)
-    );
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
-        out.gate_reject_codes.pricer,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
     assert!(out.pending_reservation_id.is_none());
     assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.global_exposure.reject_total(), 0);
@@ -423,40 +402,6 @@ fn test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first
     }
 }
 
-#[test]
-fn test_runtime_wiring_inventory_skew_reject_preserves_runtime_sidecar() {
-    let mut input = base_open_input();
-    input.current_delta = 100.0;
-    input.inventory_skew_input.inventory_skew_k = 0.2;
-
-    let pending_book = make_pending_book(200.0);
-    let mut choke_metrics = ChokeMetrics::new();
-    let mut runtime_metrics = OpenRuntimeMetrics::default();
-
-    let out = build_open_order_intent_runtime(
-        &input,
-        &pending_book,
-        &mut choke_metrics,
-        &mut runtime_metrics,
-    );
-
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::NetEdgeTooLow)
-    );
-    assert!(out.adjusted_min_edge_usd.is_some());
-    assert!(matches!(
-        out.choke_result,
-        ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
-                gate: GateStep::NetEdgeGate,
-                ..
-            },
-            ..
-        }
-    ));
-}
-
 /// Helper: Set up TLSM settlement test with pending exposure reservation.
 fn setup_tlsm_settlement_test() -> (
     crate::execution::Tlsm,
@@ -606,18 +551,6 @@ fn test_unregistered_instrument_rejected_through_runtime() {
     assert!(
         out.pending_reservation_id.is_none(),
         "no reservation should be created for unregistered instrument"
-    );
-    assert_eq!(
-        out.gate_reject_codes.liquidity_gate,
-        Some(RejectReasonCode::PendingExposureBudgetExceeded)
-    );
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
-        out.gate_reject_codes.pricer,
-        Some(RejectReasonCode::GateCascadeSkip)
     );
     assert_eq!(
         runtime_metrics

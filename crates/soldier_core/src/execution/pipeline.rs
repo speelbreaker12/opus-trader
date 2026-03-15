@@ -8,17 +8,20 @@ use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
+#[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::build_gate_results_from_dispatch_proof;
-use super::build_order_intent::{ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep};
+use super::build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, build_order_intent_with_wal_gate,
+};
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
 use super::gate_outcome::GateOutcome;
 use super::gates::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
-use super::orchestration_tail::run_orchestration_tail;
 use super::preflight::{PreflightInput, PreflightMetrics};
 use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
 use super::quantize::{QuantizeConstraints, QuantizeMetrics, Side};
-use super::reject_reason::{GateRejectCodes, RejectReasonCode};
+use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 
 /// Quantize inputs required by the execution pipeline.
 #[derive(Debug, Clone)]
@@ -262,17 +265,27 @@ pub(crate) fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
-    let tail = run_orchestration_tail(
+    // TODO(Phase 2): migrate open_runtime.rs GateResults construction to use GateOutcome converters.
+    #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+    let mut wal_gate = PrecomputedWalGate {
+        recorded: input.wal_recorded,
+    };
+    let decision = build_order_intent_with_wal_gate(
         input.intent_class,
         input.risk_state,
         &mut metrics.chokepoint,
         &gate_results,
-        &gate_reject_codes,
+        &mut wal_gate,
     );
+    let reject_reason_code = if let ChokeResult::Rejected { reason, .. } = &decision {
+        Some(reject_reason_from_chokepoint(reason, &gate_reject_codes))
+    } else {
+        None
+    };
 
     PipelineResult {
-        decision: tail.decision,
-        reject_reason_code: tail.reject_reason_code,
+        decision,
+        reject_reason_code,
     }
 }
 
@@ -349,6 +362,7 @@ mod tests {
                 gross_edge_usd: 10.0,
                 min_edge_usd: 2.0,
                 fee_estimate_usd: 2.0,
+                expected_slippage_usd: 1.0,
                 qty: 1.0,
                 side: Side::Buy,
             }),

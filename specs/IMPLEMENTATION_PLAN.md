@@ -678,12 +678,6 @@ Allowed paths: crates/soldier_core/src/execution/gate.rs, crates/soldier_core/sr
 Acceptance criteria: LiquidityGateResult is struct { decision: LiquidityGateDecision, metadata: LiquidityGateMetadata }. All existing AT-421/AT-222/AT-344/AT-909 tests pass.
 Tests: crates/soldier_core/tests/test_liquidity_gate.rs, crates/soldier_core/tests/test_gate_outcome.rs
 
-S6.13 — Share execution tail + runtime reject-code ownership (UPGRADE-1B-PR4)
-Allowed paths: crates/soldier_core/src/execution/{engine.rs,mod.rs,open_runtime.rs,open_runtime_wiring_tests.rs,orchestration_tail.rs,pipeline.rs}, crates/soldier_core/src/execution/engine_decision_tests.rs, docs/plans/2026-03-02-upgrade-1b-pr1-spec.md
-Acceptance criteria: OPEN runtime reject-code authority is owned by `OpenRuntimeOutput.gate_reject_codes` only; pending-exposure/global-budget short-circuits preserve deterministic `GateCascadeSkip` sidecars; inventory-skew re-checks preserve `RuntimeStep::InventorySkew`, `RejectReasonCode::NetEdgeTooLow`, and adjusted-edge metadata; OPEN runtime and generic pipeline share one neutral orchestration-tail helper without changing `RecordedBeforeDispatch` behavior.
-Tests: crates/soldier_core/src/execution/engine_decision_tests.rs::open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes, crates/soldier_core/src/execution/engine_decision_tests.rs::engine_open_inventory_skew_reject_maps_runtime_step, crates/soldier_core/src/execution/open_runtime_wiring_tests.rs::test_runtime_wiring_inventory_skew_reject_preserves_runtime_sidecar, crates/soldier_core/src/execution/open_runtime_wiring_tests.rs::test_unregistered_instrument_rejected_through_runtime
-Contract AT coverage (traceability assignment): AT-909, AT-910, AT-911, CSP.3 RecordedBeforeDispatch (WAL).
-
 Slice 7 — Atomic Group Executor \+ Emergency Close \+ Sequencer \+ Churn Breaker
 Slice intent: runtime atomicity: bounded rescue then deterministic flatten/hedge fallback.
 Contract AT coverage (traceability assignment): AT-227, AT-228, AT-912.

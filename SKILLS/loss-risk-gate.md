@@ -101,13 +101,11 @@ Silent capital-protection logic or silent profit-block logic = blocker.
 
 ## Required Output
 
-> **Format**: Express verdict and trading lens as labeled inline values on a single line — label and value together, e.g. `**Verdict**: GO` and `**Trading Lens**: BLOCKING`.
-
 ### A) Verdict
-`**Verdict**: GO` or `**Verdict**: NO-GO`
+`GO | NO-GO`
 
 ### B) Trading Lens
-`**Trading Lens**: PASS` or `**Trading Lens**: BLOCKING` or `**Trading Lens**: HARDENING`
+`PASS | BLOCKING | HARDENING`
 
 Derivation: `BLOCKING` if any finding is `*_BLOCKING`. `HARDENING` if no blocking findings but fragility noted. `PASS` otherwise. Verdict is `NO-GO` when Trading Lens is `BLOCKING`.
 

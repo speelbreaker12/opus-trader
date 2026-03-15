@@ -53,6 +53,7 @@ else
   export PROPTEST_CASES
 
   run_logged_or_exit "rust_tests_quick" "$RUST_TEST_TIMEOUT" cargo test --workspace --lib --locked
+
 fi
 
 # Smoke contract tests: ensure facade-level integration contracts remain green in both modes.
