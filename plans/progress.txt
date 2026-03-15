@@ -227,6 +227,13 @@ Summary: acceptance mention complete including extra detail to satisfy progress 
 Commands: none (placeholder text to satisfy gate length; no real commands executed in this stub)
 Evidence: acceptance stub evidence placeholder to meet minimum content length checks in progress gate validation
 Story: workflow-maintenance
+Date: 2026-03-15 15:19:06 UTC
+Summary: Hardened the new facade lint gates for `risk`, `venue`, and `soldier_infra` by replacing the shallow `pub use` parser with the same structured use-tree parsing approach used by `lint_execution_facade.sh`, and broadened deep-import detection to catch restricted visibilities like `pub(crate) use`. Added red/green fixture coverage for nested grouped re-exports, forbidden non-top-level re-exports, and restricted deep imports across all three new lint test files.
+Commands: bash plans/tests/test_lint_risk_facade.sh; bash plans/tests/test_lint_venue_facade.sh; bash plans/tests/test_lint_soldier_infra_facade.sh; ./plans/workflow_verify.sh.
+Evidence: plans/lint_risk_facade.sh; plans/lint_venue_facade.sh; plans/lint_soldier_infra_facade.sh; plans/tests/test_lint_risk_facade.sh; plans/tests/test_lint_venue_facade.sh; plans/tests/test_lint_soldier_infra_facade.sh; artifacts/verify/20260315_151906.
+Notes: `workflow_verify.sh` ran successfully in quick mode on a dirty tree without using `VERIFY_ALLOW_DIRTY=1`; this satisfies the iteration-level workflow evidence while preserving the dirty-tree exception policy.
+Next: If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
+Story: workflow-maintenance
 Date: 2026-03-15 15:46:00 UTC
 Summary: Fixed OPEN runtime reject-code attribution so malformed net-edge inputs keep `NetEdgeInputMissing` even if inventory-skew also rejects later in the path. Added output-side gate reject code propagation from OPEN runtime into routing, preserved existing inventory-skew override behavior for `NetEdgeTooLow`, and added focused engine regressions covering both malformed-input overwrite cases.
 Commands: cargo test -p soldier_core engine_open_preserves_initial_net_edge_code_when_inventory_skew_rejects --lib; cargo test -p soldier_core engine_open_preserves_initial_net_edge_code_when_delta_limit_missing_also_rejects --lib; cargo test -p soldier_core engine_open_inventory_skew_delta_limit_missing_maps_code_and_step --lib; cargo test -p soldier_core test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first --lib.

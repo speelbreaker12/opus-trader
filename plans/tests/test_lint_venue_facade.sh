@@ -78,6 +78,36 @@ pub use super::foo::{Alpha, Beta};
 pub use super::bar::Gamma;
 EOF
 
+cat > "$api_file" <<'EOF'
+pub use super::foo::{nested::{Alpha, Beta}, Gamma};
+EOF
+
+LINT_VENUE_FACADE_MOD="$mod_file" \
+LINT_VENUE_FACADE_API="$api_file" \
+LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" \
+LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" \
+bash "$SCRIPT" >/dev/null
+
+cat > "$api_file" <<'EOF'
+pub use super::foo::Alpha;
+mod hidden {
+    pub use super::super::foo::Beta;
+}
+pub use super::bar::Gamma;
+EOF
+
+set +e
+nested_out="$(LINT_VENUE_FACADE_MOD="$mod_file" LINT_VENUE_FACADE_API="$api_file" LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
+nested_rc=$?
+set -e
+[[ $nested_rc -ne 0 ]] || fail "nested-module pub use should fail venue facade lint"
+echo "$nested_out" | grep -Fq "non-top-level pub use" || fail "missing nested-module diagnostic"
+
+cat > "$api_file" <<'EOF'
+pub use super::foo::{Alpha, Beta};
+pub use super::bar::Gamma;
+EOF
+
 cat > "$scan_root/soldier_core/src/consumer/deep_import.rs" <<'EOF'
 use crate::venue::types::InstrumentKind;
 EOF
@@ -89,5 +119,17 @@ set -e
 [[ $deep_rc -ne 0 ]] || fail "deep venue import should fail lint"
 echo "$deep_out" | grep -Fq "deep venue imports are forbidden" || fail "missing deep-import diagnostic"
 echo "$deep_out" | grep -Fq "consumer/deep_import.rs" || fail "deep-import location should be reported"
+
+cat > "$scan_root/soldier_core/src/consumer/deep_import.rs" <<'EOF'
+pub(crate) use crate::venue::types::InstrumentKind;
+EOF
+
+set +e
+deep_restricted_out="$(LINT_VENUE_FACADE_MOD="$mod_file" LINT_VENUE_FACADE_API="$api_file" LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
+deep_restricted_rc=$?
+set -e
+[[ $deep_restricted_rc -ne 0 ]] || fail "restricted deep venue import should fail lint"
+echo "$deep_restricted_out" | grep -Fq "deep venue imports are forbidden" || fail "missing restricted deep-import diagnostic"
+echo "$deep_restricted_out" | grep -Fq "consumer/deep_import.rs" || fail "restricted deep-import location should be reported"
 
 echo "PASS: lint_venue_facade fixtures"

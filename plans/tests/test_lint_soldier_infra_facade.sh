@@ -78,6 +78,36 @@ pub use super::foo::{Alpha, Beta};
 pub use super::bar::Gamma;
 EOF
 
+cat > "$api_file" <<'EOF'
+pub use super::foo::{nested::{Alpha, Beta}, Gamma};
+EOF
+
+LINT_SOLDIER_INFRA_FACADE_LIB="$lib_file" \
+LINT_SOLDIER_INFRA_FACADE_API="$api_file" \
+LINT_SOLDIER_INFRA_FACADE_ALLOWLIST="$allowlist_file" \
+LINT_SOLDIER_INFRA_FACADE_SCAN_ROOT="$scan_root" \
+bash "$SCRIPT" >/dev/null
+
+cat > "$api_file" <<'EOF'
+pub use super::foo::Alpha;
+mod hidden {
+    pub use super::super::foo::Beta;
+}
+pub use super::bar::Gamma;
+EOF
+
+set +e
+nested_out="$(LINT_SOLDIER_INFRA_FACADE_LIB="$lib_file" LINT_SOLDIER_INFRA_FACADE_API="$api_file" LINT_SOLDIER_INFRA_FACADE_ALLOWLIST="$allowlist_file" LINT_SOLDIER_INFRA_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
+nested_rc=$?
+set -e
+[[ $nested_rc -ne 0 ]] || fail "nested-module pub use should fail soldier_infra facade lint"
+echo "$nested_out" | grep -Fq "non-top-level pub use" || fail "missing nested-module diagnostic"
+
+cat > "$api_file" <<'EOF'
+pub use super::foo::{Alpha, Beta};
+pub use super::bar::Gamma;
+EOF
+
 cat > "$tmp_dir/consumer/deep_import.rs" <<'EOF'
 use soldier_infra::store::WalLedger;
 EOF
@@ -89,5 +119,17 @@ set -e
 [[ $deep_rc -ne 0 ]] || fail "deep soldier_infra import should fail lint"
 echo "$deep_out" | grep -Fq "deep soldier_infra imports are forbidden" || fail "missing deep-import diagnostic"
 echo "$deep_out" | grep -Fq "consumer/deep_import.rs" || fail "deep-import location should be reported"
+
+cat > "$tmp_dir/consumer/deep_import.rs" <<'EOF'
+pub(crate) use soldier_infra::store::WalLedger;
+EOF
+
+set +e
+deep_restricted_out="$(LINT_SOLDIER_INFRA_FACADE_LIB="$lib_file" LINT_SOLDIER_INFRA_FACADE_API="$api_file" LINT_SOLDIER_INFRA_FACADE_ALLOWLIST="$allowlist_file" LINT_SOLDIER_INFRA_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
+deep_restricted_rc=$?
+set -e
+[[ $deep_restricted_rc -ne 0 ]] || fail "restricted deep soldier_infra import should fail lint"
+echo "$deep_restricted_out" | grep -Fq "deep soldier_infra imports are forbidden" || fail "missing restricted deep-import diagnostic"
+echo "$deep_restricted_out" | grep -Fq "consumer/deep_import.rs" || fail "restricted deep-import location should be reported"
 
 echo "PASS: lint_soldier_infra_facade fixtures"
