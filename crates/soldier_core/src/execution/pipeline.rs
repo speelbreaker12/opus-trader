@@ -21,18 +21,14 @@ use super::gate_outcome::GateOutcome;
 use super::gates::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
 use super::preflight::{PreflightInput, PreflightMetrics};
 use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
-use super::quantize::{QuantizeConstraints, QuantizeMetrics, Side};
+use super::quantize::QuantizeMetrics;
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 use super::wal_gate::RecordedBeforeDispatchGate;
 
-/// Quantize inputs required by the execution pipeline.
-#[derive(Debug, Clone)]
-pub(crate) struct QuantizePipelineInput {
-    pub raw_qty: f64,
-    pub raw_limit_price: f64,
-    pub side: Side,
-    pub constraints: QuantizeConstraints,
-}
+pub(crate) use super::base_gates::QuantizePipelineInput;
+
+#[cfg(test)]
+use super::quantize::QuantizeConstraints;
 
 /// Inputs required to run the end-to-end execution pipeline.
 #[derive(Debug, Clone)]

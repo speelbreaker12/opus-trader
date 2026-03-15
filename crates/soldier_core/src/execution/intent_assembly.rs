@@ -1,26 +1,15 @@
 //! Intent assembly: sizing derivation + dispatch mapping before gate evaluation.
 //!
 //! Wires `derive_instrument_kind`, `build_order_size`, and `validate_and_dispatch`
-//! into a single production-path function that feeds `evaluate_intent_pipeline`.
+//! into a single production-path assembly step.
 
-use super::build_order_intent::{ChokeIntentClass, ChokeRejectReason, ChokeResult};
+use super::build_order_intent::ChokeIntentClass;
 use super::dispatch_map::{
     DispatchConsistencyProof, IntentClass, MismatchMetrics, validate_and_dispatch,
 };
-use super::gate::LiquidityGateInput;
-use super::gates::NetEdgeInput;
 use super::order_size::{OrderSize, OrderSizeInput, build_order_size};
-use super::pipeline::QuantizePipelineInput;
-use super::pipeline::{
-    IntentPipelineInput, IntentPipelineMetrics, PipelineResult, evaluate_intent_pipeline,
-};
-use super::preflight::PreflightInput;
-use super::pricer::PricerInput;
-use super::reject_reason::RejectReasonCode;
-use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{
-    BotFeatureFlags, ExpiryGuardInput, InstrumentKind, InstrumentKindInput, VenueCapabilities,
-    derive_instrument_kind,
+    InstrumentKind, InstrumentKindInput, derive_instrument_kind,
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -56,29 +45,6 @@ pub struct AssembledSizing {
     pub dispatch_consistency: DispatchConsistencyProof,
     /// Whether assembly detected a degraded condition (mismatch).
     pub risk_state_degraded: bool,
-}
-
-/// Pipeline parameters excluding `dispatch_consistency` (derived from assembly).
-///
-/// Contains all `IntentPipelineInput` fields except `dispatch_consistency`,
-/// which is determined by the assembly step.
-#[derive(Debug, Clone)]
-pub struct AssembledPipelineParams<'a> {
-    pub intent_class: ChokeIntentClass,
-    pub risk_state: RiskState,
-    pub preflight: PreflightInput<'a>,
-    pub venue_capabilities: VenueCapabilities,
-    pub bot_feature_flags: BotFeatureFlags,
-    pub quantize: QuantizePipelineInput,
-    pub fee_snapshot: FeeCacheSnapshot,
-    pub fee_config: FeeStalenessConfig,
-    pub expiry_guard: Option<ExpiryGuardInput>,
-    pub liquidity: Option<LiquidityGateInput>,
-    pub net_edge: Option<NetEdgeInput>,
-    pub pricer: Option<PricerInput>,
-    pub wal_recorded: bool,
-    pub requested_qty: Option<f64>,
-    pub max_dispatch_qty: Option<f64>,
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -140,146 +106,6 @@ pub fn assemble_sizing(
         dispatch_consistency,
         risk_state_degraded,
     })
-}
-
-// ─── Pipeline integration ───────────────────────────────────────────────
-
-/// Assemble sizing, then evaluate the full intent pipeline.
-///
-/// This is the production entry point that wires orphaned functions
-/// (`derive_instrument_kind`, `build_order_size`, `validate_and_dispatch`)
-/// into the pipeline path.
-///
-/// Assembly failure is fail-closed: returns `Rejected` with `AssemblyFailed`.
-///
-/// **CancelOnly bypass**: CancelOnly intents skip assembly entirely and go
-/// straight to the pipeline, where the chokepoint short-circuits to Approved.
-/// This prevents metadata/sizing failures from blocking urgent cancellations.
-///
-/// **Metrics note**: Assembly failures return `PipelineResult` before the
-/// chokepoint is reached, so `metrics.chokepoint.rejected_total` is not
-/// incremented. This is intentional: `rejected_total` tracks chokepoint-level
-/// rejections, not pre-chokepoint assembly failures. Assembly failures are
-/// observable via the `tracing::warn!` log and the `AssemblyFailed` reject
-/// reason code in the returned `PipelineResult`.
-pub fn evaluate_assembled_pipeline(
-    meta: &InstrumentKindInput,
-    sizing_params: &SizingParams,
-    mismatch_metrics: &mut MismatchMetrics,
-    remaining: AssembledPipelineParams<'_>,
-    metrics: &mut IntentPipelineMetrics,
-) -> PipelineResult {
-    // CancelOnly intents bypass assembly: cancels must never be blocked by
-    // metadata/sizing failures. The chokepoint short-circuits CancelOnly to
-    // Approved after Gate 1 (DispatchAuth).
-    if remaining.intent_class == ChokeIntentClass::CancelOnly {
-        let pipeline_input = IntentPipelineInput {
-            intent_class: remaining.intent_class,
-            risk_state: remaining.risk_state,
-            preflight: remaining.preflight,
-            venue_capabilities: remaining.venue_capabilities,
-            bot_feature_flags: remaining.bot_feature_flags,
-            quantize: remaining.quantize,
-            dispatch_consistency: DispatchConsistencyProof::no_contracts(),
-            fee_snapshot: remaining.fee_snapshot,
-            fee_config: remaining.fee_config,
-            expiry_guard: remaining.expiry_guard,
-            liquidity: remaining.liquidity,
-            net_edge: remaining.net_edge,
-            pricer: remaining.pricer,
-            wal_recorded: remaining.wal_recorded,
-            requested_qty: remaining.requested_qty,
-            max_dispatch_qty: remaining.max_dispatch_qty,
-        };
-        return evaluate_intent_pipeline(&pipeline_input, metrics);
-    }
-
-    // Step 1: Convert intent class for dispatch mapping.
-    let intent = choke_intent_to_dispatch(remaining.intent_class);
-
-    // Step 2: Assemble sizing (derive kind + build size + validate dispatch).
-    //
-    // Close/Hedge bypass on assembly failure (CSP Invariant F / AT-1049):
-    // Risk-reducing intents must never be blocked by metadata/sizing failures.
-    // On assembly Err, Close/Hedge fall through to the pipeline with
-    // no_contracts() consistency (skipping Gate 4) so the chokepoint can
-    // approve them. Open intents fail-closed with AssemblyFailed.
-    let assembled = match assemble_sizing(meta, sizing_params, intent, mismatch_metrics) {
-        Ok(assembled) => assembled,
-        Err(e)
-            if remaining.intent_class == ChokeIntentClass::Close
-                || remaining.intent_class == ChokeIntentClass::Hedge =>
-        {
-            tracing::warn!(
-                ?e,
-                intent_class = ?remaining.intent_class,
-                "assembly failed for risk-reducing intent — bypassing (CSP Invariant F)"
-            );
-            let pipeline_input = IntentPipelineInput {
-                intent_class: remaining.intent_class,
-                risk_state: remaining.risk_state,
-                preflight: remaining.preflight,
-                venue_capabilities: remaining.venue_capabilities,
-                bot_feature_flags: remaining.bot_feature_flags,
-                quantize: remaining.quantize,
-                dispatch_consistency: DispatchConsistencyProof::no_contracts(),
-                fee_snapshot: remaining.fee_snapshot,
-                fee_config: remaining.fee_config,
-                expiry_guard: remaining.expiry_guard,
-                liquidity: remaining.liquidity,
-                net_edge: remaining.net_edge,
-                pricer: remaining.pricer,
-                wal_recorded: remaining.wal_recorded,
-                requested_qty: remaining.requested_qty,
-                max_dispatch_qty: remaining.max_dispatch_qty,
-            };
-            return evaluate_intent_pipeline(&pipeline_input, metrics);
-        }
-        Err(e) => {
-            tracing::warn!(?e, "intent assembly failed — rejecting fail-closed");
-            return PipelineResult {
-                decision: ChokeResult::Rejected {
-                    reason: ChokeRejectReason::AssemblyFailed,
-                    gate_trace: vec![],
-                },
-                reject_reason_code: Some(RejectReasonCode::AssemblyFailed),
-            };
-        }
-    };
-
-    // Step 3: Determine effective risk state.
-    // If assembly detected a mismatch AND caller was Healthy, override to Degraded.
-    // If caller was already Kill/Maintenance/Degraded, preserve the higher severity.
-    // Matches the open_runtime.rs pattern: only escalate Healthy → Degraded.
-    let effective_risk_state =
-        if assembled.risk_state_degraded && remaining.risk_state == RiskState::Healthy {
-            RiskState::Degraded
-        } else {
-            remaining.risk_state
-        };
-
-    // Step 4: Build full pipeline input from assembly result + remaining params.
-    let pipeline_input = IntentPipelineInput {
-        intent_class: remaining.intent_class,
-        risk_state: effective_risk_state,
-        preflight: remaining.preflight,
-        venue_capabilities: remaining.venue_capabilities,
-        bot_feature_flags: remaining.bot_feature_flags,
-        quantize: remaining.quantize,
-        dispatch_consistency: assembled.dispatch_consistency,
-        fee_snapshot: remaining.fee_snapshot,
-        fee_config: remaining.fee_config,
-        expiry_guard: remaining.expiry_guard,
-        liquidity: remaining.liquidity,
-        net_edge: remaining.net_edge,
-        pricer: remaining.pricer,
-        wal_recorded: remaining.wal_recorded,
-        requested_qty: remaining.requested_qty,
-        max_dispatch_qty: remaining.max_dispatch_qty,
-    };
-
-    // Step 5: Evaluate the full gate pipeline.
-    evaluate_intent_pipeline(&pipeline_input, metrics)
 }
 
 #[cfg(test)]

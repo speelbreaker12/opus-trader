@@ -457,8 +457,6 @@ if execution_dir.is_dir():
     for path in sorted(execution_dir.glob("*.rs")):
         if path.resolve() == routing:
             continue
-        if path.name in {"base_gates.rs", "intent_assembly.rs"}:
-            continue
         if path.name.endswith("_tests.rs"):
             continue
         text = path.read_text(encoding="utf-8")

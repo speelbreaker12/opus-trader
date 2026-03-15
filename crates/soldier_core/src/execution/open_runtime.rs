@@ -163,6 +163,7 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
     let mut max_dispatch_qty = Some(input.liquidity_input.order_qty);
     let mut adjusted_min_edge_usd = None;
     let mut choke_override: Option<(GateStep, &'static str)> = None;
+    let mut inventory_skew_delta_limit_missing = false;
 
     let pre_dispatch_gates_ready = effective_risk_state == RiskState::Healthy
         && legacy.preflight_passed
@@ -289,6 +290,7 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                         if effective_risk_state == RiskState::Healthy {
                             effective_risk_state = RiskState::Degraded;
                         }
+                        inventory_skew_delta_limit_missing = true;
                         choke_override = Some((
                             GateStep::NetEdgeGate,
                             REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING,
@@ -333,9 +335,16 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
     }
 
     gate_results.max_dispatch_qty = max_dispatch_qty;
+    // Keep output risk state degraded while preserving gate-level attribution
+    // for this specific inventory-skew configuration failure.
+    let mut choke_risk_state = effective_risk_state;
+    if inventory_skew_delta_limit_missing && input.base_gates.risk_state == RiskState::Healthy {
+        choke_risk_state = RiskState::Healthy;
+    }
+
     let mut choke_result = build_order_intent_with_optional_wal_gate(
         ChokeIntentClass::Open,
-        effective_risk_state,
+        choke_risk_state,
         choke_metrics,
         &gate_results,
         wal_gate,
@@ -350,17 +359,7 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                     gate: override_gate,
                     reason: override_reason.to_string(),
                 },
-                gate_trace: normalize_open_override_gate_trace(gate_trace, override_gate),
-            },
-            ChokeResult::Rejected {
-                reason: ChokeRejectReason::RiskStateNotHealthy,
                 gate_trace,
-            } => ChokeResult::Rejected {
-                reason: ChokeRejectReason::GateRejected {
-                    gate: override_gate,
-                    reason: override_reason.to_string(),
-                },
-                gate_trace: normalize_open_override_gate_trace(gate_trace, override_gate),
             },
             other => {
                 runtime_metrics.reject_override_mismatch_total += 1;
@@ -395,48 +394,6 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
         effective_risk_state,
         adjusted_min_edge_usd,
     }
-}
-
-fn normalize_open_override_gate_trace(
-    mut gate_trace: Vec<GateStep>,
-    override_gate: GateStep,
-) -> Vec<GateStep> {
-    if gate_trace.last() == Some(&override_gate) {
-        return gate_trace;
-    }
-
-    if let Some(prefix) = open_gate_trace_prefix_through(override_gate) {
-        return prefix;
-    }
-
-    if !gate_trace.contains(&override_gate) {
-        gate_trace.push(override_gate);
-    }
-    gate_trace
-}
-
-fn open_gate_trace_prefix_through(last_gate: GateStep) -> Option<Vec<GateStep>> {
-    const OPEN_GATE_ORDER: [GateStep; 10] = [
-        GateStep::DispatchAuth,
-        GateStep::Preflight,
-        GateStep::Quantize,
-        GateStep::DispatchConsistency,
-        GateStep::FeeCacheCheck,
-        GateStep::ExpiryGuard,
-        GateStep::LiquidityGate,
-        GateStep::NetEdgeGate,
-        GateStep::Pricer,
-        GateStep::RecordedBeforeDispatch,
-    ];
-
-    let mut trace = Vec::with_capacity(OPEN_GATE_ORDER.len());
-    for gate in OPEN_GATE_ORDER {
-        trace.push(gate);
-        if gate == last_gate {
-            return Some(trace);
-        }
-    }
-    None
 }
 
 /// Complete lifecycle: settle pending exposure on TLSM terminal state (S6-008).

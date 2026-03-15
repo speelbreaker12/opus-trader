@@ -20,17 +20,18 @@ impl<T, E: std::fmt::Debug> TestValueExt<T> for Result<T, E> {
     }
 }
 
-use crate::execution::build_order_intent::{ChokeIntentClass, ChokeResult};
+use crate::execution::build_order_intent::{ChokeIntentClass, ChokeRejectReason, ChokeResult};
 use crate::execution::dispatch_map::DispatchConsistencyProof;
 use crate::execution::dispatch_map::IntentClass;
 use crate::execution::gate::{GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput};
 use crate::execution::gates::NetEdgeInput;
 use crate::execution::intent_assembly::{
-    AssembledPipelineParams, AssemblySizingError, MismatchMetrics, SizingParams, assemble_sizing,
-    choke_intent_to_dispatch, evaluate_assembled_pipeline,
+    AssemblySizingError, MismatchMetrics, SizingParams, assemble_sizing,
+    choke_intent_to_dispatch,
 };
 use crate::execution::pipeline::{
     IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput,
+    PipelineResult, evaluate_intent_pipeline,
 };
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
@@ -120,6 +121,127 @@ fn base_open_input<'a>() -> IntentPipelineInput<'a> {
         requested_qty: Some(1.0),
         max_dispatch_qty: Some(1.0),
     }
+}
+
+#[derive(Debug, Clone)]
+struct AssembledPipelineParams<'a> {
+    intent_class: ChokeIntentClass,
+    risk_state: RiskState,
+    preflight: PreflightInput<'a>,
+    venue_capabilities: crate::venue::VenueCapabilities,
+    bot_feature_flags: crate::venue::BotFeatureFlags,
+    quantize: QuantizePipelineInput,
+    fee_snapshot: crate::risk::FeeCacheSnapshot,
+    fee_config: crate::risk::FeeStalenessConfig,
+    expiry_guard: Option<crate::venue::ExpiryGuardInput>,
+    liquidity: Option<LiquidityGateInput>,
+    net_edge: Option<NetEdgeInput>,
+    pricer: Option<PricerInput>,
+    wal_recorded: bool,
+    requested_qty: Option<f64>,
+    max_dispatch_qty: Option<f64>,
+}
+
+fn evaluate_assembled_pipeline(
+    meta: &InstrumentKindInput,
+    sizing_params: &SizingParams,
+    mismatch_metrics: &mut MismatchMetrics,
+    remaining: AssembledPipelineParams<'_>,
+    metrics: &mut IntentPipelineMetrics,
+) -> PipelineResult {
+    if remaining.intent_class == ChokeIntentClass::CancelOnly {
+        let pipeline_input = IntentPipelineInput {
+            intent_class: remaining.intent_class,
+            risk_state: remaining.risk_state,
+            preflight: remaining.preflight,
+            venue_capabilities: remaining.venue_capabilities,
+            bot_feature_flags: remaining.bot_feature_flags,
+            quantize: remaining.quantize,
+            dispatch_consistency: DispatchConsistencyProof::no_contracts(),
+            fee_snapshot: remaining.fee_snapshot,
+            fee_config: remaining.fee_config,
+            expiry_guard: remaining.expiry_guard,
+            liquidity: remaining.liquidity,
+            net_edge: remaining.net_edge,
+            pricer: remaining.pricer,
+            wal_recorded: remaining.wal_recorded,
+            requested_qty: remaining.requested_qty,
+            max_dispatch_qty: remaining.max_dispatch_qty,
+        };
+        return evaluate_intent_pipeline(&pipeline_input, metrics);
+    }
+
+    let intent = choke_intent_to_dispatch(remaining.intent_class);
+    let assembled = match assemble_sizing(meta, sizing_params, intent, mismatch_metrics) {
+        Ok(assembled) => assembled,
+        Err(e)
+            if remaining.intent_class == ChokeIntentClass::Close
+                || remaining.intent_class == ChokeIntentClass::Hedge =>
+        {
+            tracing::warn!(
+                ?e,
+                intent_class = ?remaining.intent_class,
+                "assembly failed for risk-reducing intent — bypassing (CSP Invariant F)"
+            );
+            let pipeline_input = IntentPipelineInput {
+                intent_class: remaining.intent_class,
+                risk_state: remaining.risk_state,
+                preflight: remaining.preflight,
+                venue_capabilities: remaining.venue_capabilities,
+                bot_feature_flags: remaining.bot_feature_flags,
+                quantize: remaining.quantize,
+                dispatch_consistency: DispatchConsistencyProof::no_contracts(),
+                fee_snapshot: remaining.fee_snapshot,
+                fee_config: remaining.fee_config,
+                expiry_guard: remaining.expiry_guard,
+                liquidity: remaining.liquidity,
+                net_edge: remaining.net_edge,
+                pricer: remaining.pricer,
+                wal_recorded: remaining.wal_recorded,
+                requested_qty: remaining.requested_qty,
+                max_dispatch_qty: remaining.max_dispatch_qty,
+            };
+            return evaluate_intent_pipeline(&pipeline_input, metrics);
+        }
+        Err(e) => {
+            tracing::warn!(?e, "intent assembly failed — rejecting fail-closed");
+            return PipelineResult {
+                decision: ChokeResult::Rejected {
+                    reason: ChokeRejectReason::AssemblyFailed,
+                    gate_trace: vec![],
+                },
+                reject_reason_code: Some(RejectReasonCode::AssemblyFailed),
+            };
+        }
+    };
+
+    let effective_risk_state =
+        if assembled.risk_state_degraded && remaining.risk_state == RiskState::Healthy {
+            RiskState::Degraded
+        } else {
+            remaining.risk_state
+        };
+
+    let pipeline_input = IntentPipelineInput {
+        intent_class: remaining.intent_class,
+        risk_state: effective_risk_state,
+        preflight: remaining.preflight,
+        venue_capabilities: remaining.venue_capabilities,
+        bot_feature_flags: remaining.bot_feature_flags,
+        quantize: remaining.quantize,
+        dispatch_consistency: assembled.dispatch_consistency,
+        fee_snapshot: remaining.fee_snapshot,
+        fee_config: remaining.fee_config,
+        expiry_guard: remaining.expiry_guard,
+        liquidity: remaining.liquidity,
+        net_edge: remaining.net_edge,
+        pricer: remaining.pricer,
+        wal_recorded: remaining.wal_recorded,
+        requested_qty: remaining.requested_qty,
+        max_dispatch_qty: remaining.max_dispatch_qty,
+    };
+
+    evaluate_intent_pipeline(&pipeline_input, metrics)
 }
 
 // ─── assemble_sizing unit tests ─────────────────────────────────────────

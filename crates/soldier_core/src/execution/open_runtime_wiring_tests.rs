@@ -406,6 +406,12 @@ fn test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first
         runtime_metrics.inventory_skew.reject_delta_limit_missing(),
         1
     );
+    assert_eq!(
+        choke_metrics.rejected_risk_state(),
+        0,
+        "delta-limit-missing must be attributed to a gate reject, not RiskStateNotHealthy"
+    );
+    assert_eq!(choke_metrics.rejected_total(), 1);
 
     match out.choke_result {
         ChokeResult::Rejected { reason, gate_trace } => {
