@@ -13,11 +13,13 @@ The initial executable slice in this repository provides:
 
 - tracked schemas for findings, proposals, and review decisions
 - tracked phase directories and results headers
-- contract harness commands for `scaffold`, `status`, and `render-review`
+- contract harness commands for `scaffold`, `status`, `phase1 run|baseline|eval`, `phase2 run|baseline|eval`, `refresh-common|refresh-fixtures|refresh-all`, and `render-review`
+- fail-closed Phase 2 validation for cross-file integrity, weak-normative evidence presence, mechanical span resolution, contradiction heuristics, and review-package rendering
+- deterministic refresh of shared context, snapshot fixtures, and manifest hashes
+- `results.tsv` records execution-check rows for `run` and scored rows for `baseline`; `eval` scores existing output directories without mutating results history
 
 Deferred automation remains deferred:
 
-- phase loop execution
-- refresh-common / refresh-fixtures regeneration
+- richer structural scoring beyond the current contract-specific evaluator rules
 - auto-apply / promotion-state management
 - live contract writes

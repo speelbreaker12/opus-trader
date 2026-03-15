@@ -26,16 +26,16 @@ class ContractHarnessCliTests(unittest.TestCase):
         self.assertIn("phase1", result.stdout)
         self.assertIn("phase2", result.stdout)
 
-    def test_deferred_contract_command_fails_closed(self) -> None:
+    def test_contract_phase_eval_requires_output_dir(self) -> None:
         result = subprocess.run(
-            ["bash", str(HARNESS), "contract", "phase1", "run"],
+            ["bash", str(HARNESS), "contract", "phase1", "eval"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("deferred in the current manual-promotion slice", result.stderr)
+        self.assertIn("requires --output-dir", result.stderr)
 
     def test_contract_status_rejects_unknown_args(self) -> None:
         result = subprocess.run(

@@ -1,1 +1,10 @@
-{}
+{
+  "fixtures": {
+    "sample_contract_gap": {
+      "section_anchor": "1",
+      "injected_tokens": [
+        "AT-999"
+      ]
+    }
+  }
+}

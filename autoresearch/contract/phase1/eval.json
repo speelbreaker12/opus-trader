@@ -1,4 +1,56 @@
 {
   "description": "Contract autoresearch phase 1 planted-gap evaluation",
-  "tests": []
+  "tests": [
+    {
+      "id": "sample-phase1-gap",
+      "fixture": "fixtures/sample_contract_gap.md",
+      "output_file": "sample_contract_gap/findings.json",
+      "assertions": [
+        {
+          "id": "phase1-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "phase1-category",
+          "check": "detector identifies the planted cross_ref_broken gap",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "cross_ref_broken"
+          }
+        },
+        {
+          "id": "phase1-count",
+          "check": "detector emits a tight finding count",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 1,
+            "max": 3
+          }
+        },
+        {
+          "id": "phase1-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "phase1-evidence",
+          "check": "evidence points at the planted broken AT token",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].evidence.quote",
+            "pattern": "AT-999"
+          }
+        }
+      ]
+    }
+  ]
 }

@@ -1,5 +1,14 @@
 {
-  "schema_version": 1,
-  "tracked_files": {},
-  "contract_content_hash": ""
+  "schema_version": 2,
+  "tracked_files": {
+    "common/at_registry.json": "8b0775e55f260681b40c42e7bfe0eeb670344e4d93e3d5f7e4cf5306975c0b46",
+    "common/contract_header.md": "ead65bdf2b0e3adef5024ca438d92a59de05598e8d2ec2c30967c2064a755670",
+    "common/gate_input_registry.json": "9c2c818f1e2d580c26d2e2ca15861d0297fa2076d54ff08ce32d4973ca003a38",
+    "common/section_index.md": "6a2e40bf6b4119b2680fb131e1b06f5923f8cf59e4b0851aee313c8f124dbb54",
+    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "46b2a2057412ca6488b9a0d94453a81469f9fe80168fff9d5e5707e1cf8da9d9",
+    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "c7610fa0766db86a21963ebbece09fd421c1b856b4fd52bfb9b89aec6979e7a5"
+  },
+  "contract_content_hash": "db34d0cb23a2b6baeb2c4f1e26771fdc1138b8abf62b7afb9e6d0700c1acb044",
+  "common_contract_hash": "db34d0cb23a2b6baeb2c4f1e26771fdc1138b8abf62b7afb9e6d0700c1acb044",
+  "snapshot_contract_hash": "db34d0cb23a2b6baeb2c4f1e26771fdc1138b8abf62b7afb9e6d0700c1acb044"
 }

@@ -20,6 +20,8 @@ PROGRAM_MD="$SKILLS_DIR/program.md"
 EVALUATE_PY="$SKILLS_DIR/evaluate.py"
 CONTRACT_DIR="$ROOT/autoresearch/contract"
 CONTRACT_RENDER_PY="$CONTRACT_DIR/render_review.py"
+CONTRACT_RUN_PY="$CONTRACT_DIR/run_phase.py"
+CONTRACT_REFRESH_PY="$CONTRACT_DIR/refresh_context.py"
 
 # ── Colors ───────────────────────────────────────────────────────────
 RED="${RED:-\033[0;31m}"
@@ -75,14 +77,16 @@ Commands:
              Supported today:
                scaffold       Ensure the tracked contract tree and runtime dirs exist
                status         Summarize phase1/phase2 results.tsv and proposal index state
+               phase1 run     Generate findings.json outputs for configured Phase 1 fixtures
+               phase1 baseline Generate and score Phase 1 baseline outputs
+               phase1 eval     Score an existing Phase 1 output directory
+               phase2 run     Generate findings/proposals/patched outputs and review package
+               phase2 baseline Generate and score Phase 2 baseline outputs
+               phase2 eval     Score an existing Phase 2 output directory
                render-review  Render review markdown and optional accepted-only patch
-
-             Deferred commands fail closed with a deterministic message:
-               phase1 run|baseline|eval
-               phase2 run|baseline|eval
-               refresh-common
-               refresh-fixtures
-               refresh-all
+               refresh-common Rebuild shared contract autoresearch context files
+               refresh-fixtures Refresh snapshot fixtures and manifest hashes
+               refresh-all    Run refresh-common then refresh-fixtures
 
 Options:
   --tag TAG      Branch tag (default: today's date, e.g. mar13)
@@ -176,14 +180,16 @@ contract_usage() {
 Contract autoresearch commands:
   harness.sh contract scaffold
   harness.sh contract status
-  harness.sh contract render-review [--run-id RUN_ID] [--accepted-only] [--review PATH]
-
-Deferred and fail-closed in the current manual-promotion slice:
-  harness.sh contract phase1 run|baseline|eval
-  harness.sh contract phase2 run|baseline|eval
+  harness.sh contract phase1 run [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase1 baseline [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase1 eval [--eval PATH] --output-dir PATH
+  harness.sh contract phase2 run [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase2 baseline [--tag TAG] [--model MODEL] [--eval PATH] [--workdir PATH]
+  harness.sh contract phase2 eval [--eval PATH] --output-dir PATH
   harness.sh contract refresh-common
   harness.sh contract refresh-fixtures
   harness.sh contract refresh-all
+  harness.sh contract render-review [--run-id RUN_ID] [--accepted-only] [--review PATH]
 USAGE
 }
 
@@ -200,6 +206,88 @@ require_contract_tree() {
   if [[ ! -f "$CONTRACT_DIR/phase2/review.schema.json" ]]; then
     fail "Missing phase2 review schema: $CONTRACT_DIR/phase2/review.schema.json"
   fi
+}
+
+cmd_contract_phase_action() {
+  local phase="$1"
+  local mode="$2"
+  shift
+  shift
+  require_contract_tree
+  [[ -f "$CONTRACT_RUN_PY" ]] || fail "Missing contract runner: $CONTRACT_RUN_PY"
+
+  local tag model eval_path workdir output_dir
+  tag="$(today_tag)"
+  model="sonnet"
+  eval_path="$CONTRACT_DIR/$phase/eval.json"
+  workdir=""
+  output_dir=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tag)
+        [[ $# -ge 2 ]] || fail "Missing value for --tag"
+        tag="$2"
+        shift 2
+        ;;
+      --model)
+        [[ $# -ge 2 ]] || fail "Missing value for --model"
+        model="$2"
+        shift 2
+        ;;
+      --eval)
+        [[ $# -ge 2 ]] || fail "Missing value for --eval"
+        eval_path="$2"
+        shift 2
+        ;;
+      --workdir)
+        [[ $# -ge 2 ]] || fail "Missing value for --workdir"
+        workdir="$2"
+        shift 2
+        ;;
+      --output-dir)
+        [[ $# -ge 2 ]] || fail "Missing value for --output-dir"
+        output_dir="$2"
+        shift 2
+        ;;
+      *)
+        fail "Unknown contract $phase $mode option: $1"
+        ;;
+    esac
+  done
+
+  if [[ "$mode" == "eval" ]]; then
+    [[ -n "$output_dir" ]] || fail "contract $phase eval requires --output-dir"
+    [[ -z "$workdir" ]] || fail "contract $phase eval does not accept --workdir"
+  else
+    [[ -z "$output_dir" ]] || fail "contract $phase $mode does not accept --output-dir"
+  fi
+
+  local args=(
+    "$CONTRACT_RUN_PY"
+    --root "$ROOT"
+    --phase "$phase"
+    --mode "$mode"
+    --tag "$tag"
+    --model "$model"
+    --eval "$eval_path"
+  )
+  if [[ -n "$workdir" ]]; then
+    args+=(--workdir "$workdir")
+  fi
+  if [[ -n "$output_dir" ]]; then
+    args+=(--output-dir "$output_dir")
+  fi
+  python3 "${args[@]}"
+}
+
+cmd_contract_refresh() {
+  local mode="$1"
+  shift
+  require_contract_tree
+  [[ $# -eq 0 ]] || fail "contract refresh-$mode takes no arguments"
+  [[ -f "$CONTRACT_REFRESH_PY" ]] || fail "Missing contract refresh backend: $CONTRACT_REFRESH_PY"
+  python3 "$CONTRACT_REFRESH_PY" --root "$ROOT" --mode "$mode"
 }
 
 summarize_results_file() {
@@ -317,10 +405,6 @@ cmd_contract_render_review() {
   python3 "$CONTRACT_RENDER_PY" "${args[@]}"
 }
 
-contract_deferred_fail() {
-  fail "contract $* is deferred in the current manual-promotion slice. Available today: scaffold, status, render-review."
-}
-
 cmd_contract() {
   local subcommand="${1:-}"
   shift || true
@@ -331,18 +415,44 @@ cmd_contract() {
     render-review) cmd_contract_render_review "$@" ;;
     phase1)
       case "${1:-}" in
-        run|baseline|eval) contract_deferred_fail "phase1 ${1:-}" ;;
+        run)
+          shift
+          cmd_contract_phase_action "phase1" "run" "$@"
+          ;;
+        baseline)
+          shift
+          cmd_contract_phase_action "phase1" "baseline" "$@"
+          ;;
+        eval)
+          shift
+          cmd_contract_phase_action "phase1" "eval" "$@"
+          ;;
         *) contract_usage; fail "Unknown contract phase1 subcommand: ${1:-}" ;;
       esac
       ;;
     phase2)
       case "${1:-}" in
-        run|baseline|eval) contract_deferred_fail "phase2 ${1:-}" ;;
+        run)
+          shift
+          cmd_contract_phase_action "phase2" "run" "$@"
+          ;;
+        baseline)
+          shift
+          cmd_contract_phase_action "phase2" "baseline" "$@"
+          ;;
+        eval)
+          shift
+          cmd_contract_phase_action "phase2" "eval" "$@"
+          ;;
         *) contract_usage; fail "Unknown contract phase2 subcommand: ${1:-}" ;;
       esac
       ;;
     refresh-common|refresh-fixtures|refresh-all)
-      contract_deferred_fail "$subcommand"
+      case "$subcommand" in
+        refresh-common) cmd_contract_refresh "common" "$@" ;;
+        refresh-fixtures) cmd_contract_refresh "fixtures" "$@" ;;
+        refresh-all) cmd_contract_refresh "all" "$@" ;;
+      esac
       ;;
     ""|-h|--help)
       contract_usage
