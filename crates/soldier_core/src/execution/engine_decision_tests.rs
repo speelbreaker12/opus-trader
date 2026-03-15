@@ -8,6 +8,10 @@ use crate::execution::open_runtime::{
     OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 use crate::execution::pipeline::{IntentPipelineMetrics, evaluate_intent_pipeline};
+use crate::execution::routing::{
+    build_open_runtime_input, build_pipeline_input, open_runtime_to_decision,
+    pipeline_result_to_decision,
+};
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, MarginGateInput, MarginGateMode, PendingExposureBook,
     ReservationId, RiskState,
@@ -700,6 +704,33 @@ fn open_runtime_step_maps_inventory_skew_on_adjusted_net_edge_reject() {
 }
 
 #[test]
+fn engine_open_inventory_skew_reject_maps_runtime_step() {
+    // Inventory skew with a high current_delta forces adjusted min_edge up until
+    // net-edge fails.  The reject code must be NetEdgeTooLow and the step must
+    // map to InventorySkew, proving reject_reason_from_chokepoint's unwrap_or
+    // default is the sole code-path in play.
+    let mut input = base_open_input();
+    input.current_delta = 100.0;
+    input.inventory_skew.inventory_skew_k = 0.2;
+
+    let engine_book = make_pending_book(200.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::NetEdgeTooLow,
+            step: ExecutionStep::Runtime(RuntimeStep::InventorySkew),
+            ..
+        })
+    ));
+}
+
+#[test]
 fn open_runtime_override_reasons_map_to_registry_codes() {
     let input = base_open_input();
 
@@ -745,7 +776,7 @@ fn open_runtime_override_reasons_map_to_registry_codes() {
 #[test]
 fn open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes() {
     let input = base_open_input();
-    let mut input_with_codes = input;
+    let mut input_with_codes = input.clone();
     input_with_codes.gate_reject_codes = GateRejectCodes {
         liquidity_gate: Some(RejectReasonCode::LiquidityGateNoL2),
         ..Default::default()
@@ -761,6 +792,23 @@ fn open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes() {
         decision,
         ExecutionDecision::Rejected(ExecutionRejection {
             code: RejectReasonCode::LiquidityGateNoL2,
+            ..
+        })
+    ));
+
+    // Second code variant: ExpectedSlippageTooHigh forwarded when set on input.
+    let mut input_with_slippage = base_open_input();
+    input_with_slippage.gate_reject_codes = GateRejectCodes {
+        liquidity_gate: Some(RejectReasonCode::ExpectedSlippageTooHigh),
+        ..Default::default()
+    };
+
+    let decision = open_runtime_to_decision(&input_with_slippage, &output);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::ExpectedSlippageTooHigh,
             ..
         })
     ));

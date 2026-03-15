@@ -48,7 +48,7 @@ mod build_order_intent;
 mod dispatch_map;
 #[cfg_attr(not(test), allow(dead_code))]
 mod domain_model;
-#[cfg_attr(not(test), allow(dead_code))]
+// Items re-exported via api.rs; no dead_code suppression needed.
 mod emergency_close;
 #[cfg_attr(not(test), allow(dead_code))]
 mod engine;
@@ -82,7 +82,10 @@ mod pricer;
 mod quantize;
 mod reject_reason;
 #[cfg_attr(not(test), allow(dead_code))]
+mod routing;
+#[cfg_attr(not(test), allow(dead_code))]
 mod tlsm;
+mod wal_gate;
 
 #[cfg(test)]
 mod adversarial_gi_enforcement_tests;

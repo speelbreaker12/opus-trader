@@ -102,6 +102,7 @@ fn test_intent_id_propagates_through_approved_pipeline() {
         gross_edge_usd: 10.0,
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
+        expected_slippage_usd: 1.0,
         qty: 1.0,
         side: Side::Buy,
     };

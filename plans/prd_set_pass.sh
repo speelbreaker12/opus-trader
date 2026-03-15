@@ -28,6 +28,7 @@ USAGE
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+RECONCILIATION_ROOT="${RECONCILIATION_ROOT:-$ROOT/reviews/reconciliations}"
 
 ID="${1:-}"
 STATUS="${2:-}"
@@ -271,8 +272,8 @@ if [[ "$STATUS" == "true" ]]; then
       gate_type_uc="$(printf '%s' "$gate_type" | tr '[:lower:]' '[:upper:]')"
       manifest_path=""
       case "$gate_type" in
-        r3) manifest_path="$ROOT/reviews/reconciliations/$slice_prefix/external/cycle1/$ID/R3_EXTERNAL_MANIFEST.json" ;;
-        r7) manifest_path="$ROOT/reviews/reconciliations/$slice_prefix/external/cycle2/$ID/R7_EXTERNAL_MANIFEST.json" ;;
+        r3) manifest_path="$RECONCILIATION_ROOT/$slice_prefix/external/cycle1/$ID/R3_EXTERNAL_MANIFEST.json" ;;
+        r7) manifest_path="$RECONCILIATION_ROOT/$slice_prefix/external/cycle2/$ID/R7_EXTERNAL_MANIFEST.json" ;;
       esac
       if [[ ! -f "$manifest_path" ]]; then
         echo "WARN: ${gate_type_uc} external manifest gate skipped for $ID (manifest missing: $manifest_path)" >&2

@@ -6,7 +6,7 @@
 use soldier_core::risk::{
     FeeCacheSnapshot, FeeStaleness, FeeStalenessConfig, RiskState, evaluate_fee_staleness,
 };
-use soldier_infra::deribit::{FeeCache, FeeTierData};
+use soldier_infra::{FeeCache, FeeTierData};
 
 // ─── AT-031: Epoch-ms restart arithmetic ─────────────────────────────────
 

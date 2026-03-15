@@ -6,11 +6,11 @@
 
 use soldier_core::execution::RecordedBeforeDispatchGate;
 use soldier_core::venue::LifecycleIntent;
-use soldier_infra::store::{IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger};
-use soldier_infra::wal::{
-    BarrierMetrics, CreatedIntentRecordInput, DurableAppendResult, DurableWalGate,
-    WalBarrierConfig, build_created_intent_record, build_created_intent_record_from_input,
-    durable_append, try_build_created_intent_record, try_build_created_intent_record_from_input,
+use soldier_infra::{
+    BarrierMetrics, CreatedIntentRecordInput, DurableAppendResult, DurableWalGate, IntentRecord,
+    LedgerAppendError, LedgerMetrics, TlsState, WalBarrierConfig, WalLedger,
+    build_created_intent_record, build_created_intent_record_from_input, durable_append,
+    try_build_created_intent_record, try_build_created_intent_record_from_input,
 };
 
 /// Helper: build a minimal intent record.

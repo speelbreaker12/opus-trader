@@ -98,6 +98,7 @@ fn base_open_input<'a>() -> IntentPipelineInput<'a> {
             gross_edge_usd: 10.0,
             min_edge_usd: 2.0,
             fee_estimate_usd: 2.0,
+            expected_slippage_usd: 1.0,
             qty: 1.0,
             side: Side::Buy,
         }),

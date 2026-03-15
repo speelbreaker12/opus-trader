@@ -5,13 +5,13 @@ import argparse
 import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, NoReturn
 
 
 APPLYABLE_STATUSES = {"proposed"}
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"FAIL: {message}")
 
 

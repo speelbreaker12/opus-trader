@@ -3,17 +3,19 @@
 
 #[allow(unused_imports)]
 use crate::execution::{
-    ApprovedExecution, AtomicGroup, CancelExecutionInput, CloseExecutionInput, ExecutionBaseInput,
-    ExecutionDecision, ExecutionEngine, ExecutionInput, ExecutionL2BookSnapshot, ExecutionL2Level,
-    ExecutionOrderType, ExecutionPostOnlyInput, ExecutionPreflightInput, ExecutionRejection,
-    ExecutionRuntime, ExecutionStep, GateRejectCodes, GateStep, GroupConfig, GroupError, GroupLock,
-    GroupState, GroupStateTransition, HedgeExecutionInput, InventorySkewExecutionInput,
-    LABEL_MAX_LEN, LabelError, LabelInput, LegResult, LiquidityExecutionInput,
-    LockAcquisitionResult, NetEdgeExecutionInput, OpenExecutionInput, PersistedTransition,
-    PricerExecutionInput, QuantizeExecutionInput, RecordedBeforeDispatchGate, RejectReasonCode,
-    RuntimeStep, Side, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
-    derive_gid12, derive_sid8, encode_label, reject_reason_registry,
-    reject_reason_registry_contains, try_acquire_group_lock,
+    ApprovedExecution, AtomicGroup, CancelExecutionInput, CloseExecutionInput,
+    EmergencyClosePriceInput, EmergencyClosePriceSelection, EmergencyClosePriceSource,
+    EmergencyTopOfBookSnapshot, EmergencyVenueBand, ExecutionBaseInput, ExecutionDecision,
+    ExecutionEngine, ExecutionInput, ExecutionL2BookSnapshot, ExecutionL2Level, ExecutionOrderType,
+    ExecutionPostOnlyInput, ExecutionPreflightInput, ExecutionRejection, ExecutionRuntime,
+    ExecutionStep, GateRejectCodes, GateStep, GroupConfig, GroupError, GroupLock, GroupState,
+    GroupStateTransition, HedgeExecutionInput, InventorySkewExecutionInput, LABEL_MAX_LEN,
+    LabelError, LabelInput, LegResult, LiquidityExecutionInput, LockAcquisitionResult,
+    NetEdgeExecutionInput, OpenExecutionInput, PersistedTransition, PricerExecutionInput,
+    QuantizeExecutionInput, RecordedBeforeDispatchGate, RejectReasonCode, RuntimeStep, Side, Tlsm,
+    TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult, derive_gid12, derive_sid8,
+    encode_label, reject_reason_registry, reject_reason_registry_contains,
+    select_emergency_close_best_price, try_acquire_group_lock,
 };
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};

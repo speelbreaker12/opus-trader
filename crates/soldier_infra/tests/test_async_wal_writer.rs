@@ -3,7 +3,7 @@
 //! AT-935: append() blocks on barrier — durable before dispatch.
 //! AT-906: Writer degraded → fail-closed for OPEN intents.
 
-use soldier_infra::store::{
+use soldier_infra::{
     IntentRecord, LedgerAppendError, LedgerMetrics, TlsState, WalLedger, WalWriterConfig,
 };
 use std::path::{Path, PathBuf};

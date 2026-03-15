@@ -11,7 +11,7 @@ fn base_input(side: Side) -> EmergencyClosePriceInput {
     EmergencyClosePriceInput {
         side,
         now_ms: 10_000,
-        l2_book_snapshot_max_age_ms: 1_000,
+        book_snapshot_max_age_ms: 1_000,
         instrument_cache_age_s: 10.0,
         instrument_cache_ttl_s: 3_600.0,
         l2: None,

@@ -313,6 +313,7 @@ fn test_rejected_pricer_no_side_effects() {
         gross_edge_usd: 3.0,
         min_edge_usd: 5.0,
         fee_estimate_usd: 2.0,
+        expected_slippage_usd: 1.0,
         qty: 1.0,
         side: Side::Buy,
     };

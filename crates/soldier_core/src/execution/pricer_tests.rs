@@ -30,6 +30,27 @@ fn input(fair: f64, gross: f64, min_edge: f64, fee: f64, qty: f64, side: Side) -
         gross_edge_usd: gross,
         min_edge_usd: min_edge,
         fee_estimate_usd: fee,
+        expected_slippage_usd: 0.0,
+        qty,
+        side,
+    }
+}
+
+fn input_with_slippage(
+    fair: f64,
+    gross: f64,
+    min_edge: f64,
+    fee: f64,
+    slippage: f64,
+    qty: f64,
+    side: Side,
+) -> PricerInput {
+    PricerInput {
+        fair_price: fair,
+        gross_edge_usd: gross,
+        min_edge_usd: min_edge,
+        fee_estimate_usd: fee,
+        expected_slippage_usd: slippage,
         qty,
         side,
     }
@@ -177,6 +198,81 @@ fn test_negative_net_edge_rejected() {
             ..
         }
     ));
+}
+
+#[test]
+fn test_contract_net_edge_subtracts_expected_slippage() {
+    let mut m = PricerMetrics::new();
+    let inp = input_with_slippage(100.0, 10.0, 2.0, 2.0, 3.0, 1.0, Side::Buy);
+
+    let result = compute_limit_price(&inp, &mut m);
+
+    match result {
+        PricerResult::LimitPrice {
+            limit_price,
+            max_price_for_min_edge,
+            net_edge_usd,
+        } => {
+            assert!((net_edge_usd - 5.0).abs() < 1e-9);
+            assert!((max_price_for_min_edge - 93.0).abs() < 1e-9);
+            assert!((limit_price - 93.0).abs() < 1e-9);
+            let realized_edge = (inp.fair_price - limit_price) * inp.qty
+                - inp.fee_estimate_usd
+                - inp.expected_slippage_usd;
+            assert!((realized_edge - inp.min_edge_usd).abs() < 1e-9);
+        }
+        other => panic!("expected LimitPrice, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_contract_net_edge_subtracts_expected_slippage_for_sell() {
+    let mut m = PricerMetrics::new();
+    let inp = input_with_slippage(100.0, 10.0, 2.0, 2.0, 3.0, 1.0, Side::Sell);
+
+    let result = compute_limit_price(&inp, &mut m);
+
+    match result {
+        PricerResult::LimitPrice {
+            limit_price,
+            max_price_for_min_edge,
+            net_edge_usd,
+        } => {
+            assert!((net_edge_usd - 5.0).abs() < 1e-9);
+            assert!((max_price_for_min_edge - 107.0).abs() < 1e-9);
+            assert!((limit_price - 107.0).abs() < 1e-9);
+            let realized_edge = (limit_price - inp.fair_price) * inp.qty
+                - inp.fee_estimate_usd
+                - inp.expected_slippage_usd;
+            assert!((realized_edge - inp.min_edge_usd).abs() < 1e-9);
+        }
+        other => panic!("expected LimitPrice, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_contract_net_edge_subtracts_expected_slippage_sell() {
+    let mut m = PricerMetrics::new();
+    let inp = input_with_slippage(100.0, 10.0, 2.0, 2.0, 3.0, 1.0, Side::Sell);
+
+    let result = compute_limit_price(&inp, &mut m);
+
+    match result {
+        PricerResult::LimitPrice {
+            limit_price,
+            max_price_for_min_edge,
+            net_edge_usd,
+        } => {
+            assert!((net_edge_usd - 5.0).abs() < 1e-9);
+            assert!((max_price_for_min_edge - 107.0).abs() < 1e-9);
+            assert!((limit_price - 107.0).abs() < 1e-9);
+            let realized_edge = (limit_price - inp.fair_price) * inp.qty
+                - inp.fee_estimate_usd
+                - inp.expected_slippage_usd;
+            assert!((realized_edge - inp.min_edge_usd).abs() < 1e-9);
+        }
+        other => panic!("expected LimitPrice, got {other:?}"),
+    }
 }
 
 // ─── Invalid input ──────────────────────────────────────────────────────
@@ -357,6 +453,7 @@ fn test_static_counter_invalid_input_reject_increments() {
         gross_edge_usd: 1.0,
         min_edge_usd: 0.5,
         fee_estimate_usd: 0.1,
+        expected_slippage_usd: 0.0,
         qty: 1.0,
         side: Side::Buy,
     };
@@ -385,6 +482,7 @@ fn test_static_counter_net_edge_too_low_reject_increments() {
         gross_edge_usd: 0.5,
         min_edge_usd: 1.0,
         fee_estimate_usd: 0.1,
+        expected_slippage_usd: 0.0,
         qty: 1.0,
         side: Side::Buy,
     };

@@ -647,10 +647,42 @@ cmd_baseline() {
   info "Output dir: $output_dir"
   echo ""
 
+  # Baselines must always reflect the current skill revision, even when the
+  # caller reuses a day-based tag. Clear stale outputs before regenerating.
+  rm -rf "$output_dir"
   mkdir -p "$output_dir"
 
   # Generate one output file per test using Claude (same as eval --generate)
   generate_skill_outputs "$skill" "$output_dir" "$model"
+
+  # Detect crash: any expected output file missing means Claude failed for that test.
+  local missing_outputs=0
+  local expected_ids
+  expected_ids="$(python3 -c "
+import json
+with open('$eval_json') as f:
+    data = json.load(f)
+for t in data['tests']:
+    print(t['id'])
+")"
+  while IFS= read -r test_id; do
+    [[ -z "$test_id" ]] && continue
+    if [[ ! -s "$output_dir/${test_id}.md" ]]; then
+      warn "  Missing output for test $test_id — Claude invocation may have crashed"
+      ((missing_outputs++)) || true
+    fi
+  done <<< "$expected_ids"
+
+  if [[ "$missing_outputs" -gt 0 ]]; then
+    local total_tests
+    total_tests="$(wc -l <<< "$expected_ids" | tr -d ' ')"
+    ensure_tsv_header "$results_file"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$short_head" "0.0" "0" "$total_tests" "crash" \
+      "baseline crash: $missing_outputs/$total_tests output(s) missing" \
+      >> "$results_file"
+    fail "Baseline aborted: $missing_outputs output file(s) missing — check Claude invocation errors above"
+  fi
 
   # Score mechanically via evaluate.py — never self-attested
   if [[ ! -f "$EVALUATE_PY" ]]; then
@@ -870,6 +902,16 @@ cmd_status() {
 
 cmd_check_monotonic() {
   local skill="$1"
+  shift
+  local min_score=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --min-score) min_score="$2"; shift 2 ;;
+      *) fail "Unknown option: $1" ;;
+    esac
+  done
+
   require_skill_dir "$skill"
 
   local results_file="$SKILLS_DIR/$skill/results.tsv"
@@ -877,7 +919,21 @@ cmd_check_monotonic() {
     fail "No results.tsv for skill '$skill'"
   fi
 
+  # If no --min-score, derive floor from the MAX of all baseline rows.
+  # Using max() prevents an autonomous loop from permanently lowering the floor
+  # by running `harness.sh baseline` on a degraded skill revision and then
+  # stabilising at that lowered score.
+  if [[ -z "$min_score" ]]; then
+    min_score="$(awk -F'\t' 'NR>1 && $5=="baseline" {print $2}' "$results_file" \
+      | awk 'BEGIN{m=""} {if(m=="" || $1+0 > m+0) m=$1} END{print m}')"
+  fi
+
   log "Checking monotonicity of 'keep' entries: $skill"
+  if [[ -n "$min_score" ]]; then
+    info "  Quality floor (must not go below): $min_score"
+  else
+    warn "  No baseline row found in results.tsv — quality floor disabled. Run 'harness.sh baseline $skill' to establish a floor."
+  fi
 
   # Extract scores for rows where status == "keep", in file order
   local violations=0
@@ -893,14 +949,21 @@ cmd_check_monotonic() {
         ((violations++)) || true
       fi
     fi
+    # Absolute floor check: keep score must not fall below baseline
+    if [[ -n "$min_score" ]]; then
+      if awk "BEGIN{exit !($score < $min_score)}"; then
+        warn "  Line $line_num: score $score < quality floor $min_score (commit $commit)"
+        ((violations++)) || true
+      fi
+    fi
     prev_score="$score"
   done < <(tail -n +2 "$results_file")
 
   if [[ "$violations" -gt 0 ]]; then
-    fail "Monotonicity violated: $violations 'keep' row(s) have lower score than a prior keep — results.tsv may have been falsified"
+    fail "Monotonicity violated: $violations 'keep' row(s) have lower score than a prior keep or the quality floor — results.tsv may have been falsified"
   fi
 
-  info "OK — all 'keep' entries have non-decreasing scores"
+  info "OK — all 'keep' entries have non-decreasing scores${min_score:+ and meet quality floor $min_score}"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────

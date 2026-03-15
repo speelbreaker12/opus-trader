@@ -2,16 +2,18 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, NoReturn
 from uuid import uuid4
 
 from jsonschema import Draft202012Validator
@@ -24,7 +26,7 @@ from check_enforcement import validate_weak_normative
 RESULTS_HEADER = "commit\tscore\tpassed\ttotal\tstatus\tdescription"
 
 
-def fail(message: str, exit_code: int = 1) -> None:
+def fail(message: str, exit_code: int = 1) -> NoReturn:
     print(f"FAIL: {message}", file=sys.stderr)
     raise SystemExit(exit_code)
 
@@ -444,7 +446,12 @@ def apply_status_results(
         proposal = index.get(result["proposal_id"])
         if proposal is None:
             fail(f"enforcement checker returned unknown proposal_id: {result['proposal_id']}")
+        # Contradiction rejections remain terminal. Scope-review holds are softer:
+        # enforcement may still escalate them to `rejected`, but must not relax
+        # them back to `proposed`.
         if proposal["status"] == "rejected":
+            continue
+        if proposal["status"] == "pending_scope_review" and result["status"] != "rejected":
             continue
         if result["status"] != "proposed":
             proposal["status"] = result["status"]
@@ -496,13 +503,27 @@ def write_index_container(
     write_json_atomic(index_path, updated_payload)
 
 
+@contextmanager
+def _index_lock(index_path: Path):  # type: ignore[return]
+    """Exclusive flock on a companion .lock file to serialise concurrent writers."""
+    lock_path = index_path.with_suffix(".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
 def append_index_entry(index_path: Path, entry: dict[str, Any]) -> list[dict[str, Any]]:
-    entries, wrapper_key, wrapper_payload = load_index_container(index_path)
-    for existing in entries:
-        if existing.get("run_id") == entry["run_id"]:
-            fail(f"duplicate run_id in proposals index: {entry['run_id']}")
-    entries = list(entries) + [entry]
-    write_index_container(index_path, entries, wrapper_key, wrapper_payload)
+    with _index_lock(index_path):
+        entries, wrapper_key, wrapper_payload = load_index_container(index_path)
+        for existing in entries:
+            if existing.get("run_id") == entry["run_id"]:
+                fail(f"duplicate run_id in proposals index: {entry['run_id']}")
+        entries = list(entries) + [entry]
+        write_index_container(index_path, entries, wrapper_key, wrapper_payload)
     return entries
 
 
@@ -681,6 +702,9 @@ def phase2_run(root: Path, tag: str, model: str, eval_path: Path, workdir: str |
     contract_hash = sha256_text(contract_text)
     proposal_count = 0
     passed_checks = 0
+    # 6 per-fixture checks: findings-valid, proposals-valid, contradictions,
+    # enforcement, final-validate, patched-write.  Plus 2 run-mode checks:
+    # index-append, render-review-paths.  Total = N*6 + 2 → score 1.0 on clean run.
     total_checks = len(fixtures) * 6 + 2
 
     try:
@@ -747,8 +771,11 @@ def phase2_run(root: Path, tag: str, model: str, eval_path: Path, workdir: str |
             passed_checks += 1
             proposal_count += len(validated_payload.get("proposals", []))
 
-        tmp_run_dir.replace(final_run_dir)
         if mode == "run":
+            # Write the index entry BEFORE the atomic rename so that a SIGKILL
+            # between this point and the rename leaves an index entry pointing to
+            # a missing directory (detectable) rather than an orphaned directory
+            # with no index entry (silent).
             index_entry = {
                 "run_id": run_id,
                 "timestamp": iso_now(),
@@ -762,6 +789,8 @@ def phase2_run(root: Path, tag: str, model: str, eval_path: Path, workdir: str |
             previous_index = index_path.read_text(encoding="utf-8") if index_path.exists() else None
             append_index_entry(index_path, index_entry)
             passed_checks += 1
+        tmp_run_dir.replace(final_run_dir)
+        if mode == "run":
             render = subprocess.run(
                 [sys.executable, str(paths["render_review"]), "--root", str(root), "--run-id", run_id],
                 cwd=root,
@@ -775,6 +804,13 @@ def phase2_run(root: Path, tag: str, model: str, eval_path: Path, workdir: str |
                 else:
                     write_text_atomic(index_path, previous_index)
                 shutil.rmtree(final_run_dir, ignore_errors=True)
+                # Clean up any partially-written render artifacts so they do not
+                # linger as orphaned files after the rollback.
+                for orphan in [
+                    phase_dir / "proposals" / f"CONTRACT_PROPOSALS_{run_id}.md",
+                    phase_dir / "review" / f"CONTRACT_REVIEW_{run_id}.md",
+                ]:
+                    orphan.unlink(missing_ok=True)
                 fail(render.stderr.strip() or render.stdout.strip() or "render-review failed")
             update_index_review_paths(
                 index_path,

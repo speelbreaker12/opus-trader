@@ -5,14 +5,14 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 
 NORMATIVE_RE = re.compile(r"\b(MUST(?:\s+NOT)?|SHALL(?:\s+NOT)?|SHOULD|MAY)\b", re.IGNORECASE)
 CONDITIONAL_RE = re.compile(r"\b(AND|OR|EXCEPT|IF|WHEN|UNLESS)\b", re.IGNORECASE)
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"FAIL: {message}")
 
 

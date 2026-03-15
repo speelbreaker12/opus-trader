@@ -19,8 +19,8 @@ use super::pricer::PricerInput;
 use super::reject_reason::RejectReasonCode;
 use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{
-    BotFeatureFlags, ExpiryGuardInput, InstrumentKind, VenueCapabilities,
-    types::{InstrumentKindInput, derive_instrument_kind},
+    BotFeatureFlags, ExpiryGuardInput, InstrumentKind, InstrumentKindInput, VenueCapabilities,
+    derive_instrument_kind,
 };
 
 // ─── Types ──────────────────────────────────────────────────────────────

@@ -7,8 +7,9 @@
 //! **Dispatch causality**: Production callsite for resolve_config_value is tested in
 //! `test_config_init.rs` via `build_gate_config_from_raw()`.
 
-use soldier_infra::config::{
-    ALL_PARAMS, ConfigParam, appendix_a_default, param_name, resolve_config_value,
+use soldier_infra::{
+    ALL_PARAMS, ConfigParam, EXPECTED_PARAM_COUNT, appendix_a_default, param_name,
+    resolve_config_value,
 };
 
 // --- AT-341: Appendix A defaults apply when config values are missing ---
@@ -94,7 +95,7 @@ fn test_all_config_params_fail_closed_when_missing_without_default() {
     // not added to ALL_PARAMS.
     assert_eq!(
         ALL_PARAMS.len(),
-        soldier_infra::config::EXPECTED_PARAM_COUNT,
+        EXPECTED_PARAM_COUNT,
         "ALL_PARAMS length does not match EXPECTED_PARAM_COUNT — a new \
          ConfigParam variant may have been added without updating ALL_PARAMS. \
          If the new variant lacks a default, it needs a dedicated fail-closed test."

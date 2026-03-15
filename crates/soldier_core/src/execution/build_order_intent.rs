@@ -23,6 +23,7 @@ use crate::venue::opens_blocked;
 
 use super::dispatch_map::DispatchConsistencyProof;
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
+pub(crate) use super::wal_gate::RecordedBeforeDispatchGate;
 
 const REJECT_REASON_PREFLIGHT: &str = "preflight rejected";
 const REJECT_REASON_QUANTIZE: &str = "quantize failed";
@@ -66,14 +67,6 @@ pub enum GateStep {
     NetEdgeGate,
     Pricer,
     RecordedBeforeDispatch,
-}
-
-/// Runtime adapter for the final RecordedBeforeDispatch gate.
-///
-/// Implementations perform the concrete WAL append attempt and return an
-/// error when recording fails.
-pub trait RecordedBeforeDispatchGate {
-    fn record_before_dispatch(&mut self) -> Result<(), String>;
 }
 
 /// Evaluate the chokepoint with a runtime WAL gate adapter.

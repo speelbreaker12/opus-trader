@@ -24,6 +24,7 @@ impl<T> TestValueExt<T> for Option<T> {
 use crate::execution::base_gates::BaseGatesInput;
 use crate::execution::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateStep,
+    RecordedBeforeDispatchGate,
 };
 use crate::execution::dispatch_map::DispatchConsistencyProof;
 use crate::execution::gate::{GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput};
@@ -31,7 +32,7 @@ use crate::execution::gates::NetEdgeInput;
 use crate::execution::inventory_skew::InventorySkewInput;
 use crate::execution::open_runtime::{
     OpenRuntimeInput, OpenRuntimeMetrics, build_open_order_intent_runtime,
-    settle_pending_on_tlsm_terminal,
+    build_open_order_intent_runtime_with_wal_gate, settle_pending_on_tlsm_terminal,
 };
 use crate::execution::pipeline::QuantizePipelineInput;
 use crate::execution::preflight::{OrderType, PreflightInput};
@@ -44,6 +45,18 @@ use crate::risk::{
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, InstrumentKind, LifecycleIntent, VenueCapabilities,
 };
+
+#[derive(Debug, Default)]
+struct FailingWalGate {
+    calls: usize,
+}
+
+impl RecordedBeforeDispatchGate for FailingWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        self.calls += 1;
+        Err("simulated live wal failure".to_string())
+    }
+}
 
 fn open_l2_snapshot() -> L2BookSnapshot {
     L2BookSnapshot {
@@ -559,4 +572,42 @@ fn test_unregistered_instrument_rejected_through_runtime() {
         1,
         "instrument_not_registered metric should fire"
     );
+}
+
+#[test]
+fn test_runtime_live_wal_gate_failure_rejects_and_releases_pending() {
+    let input = base_open_input();
+    let pending_book = make_pending_book(100.0);
+    let mut choke_metrics = ChokeMetrics::new();
+    let mut runtime_metrics = OpenRuntimeMetrics::default();
+    let mut wal_gate = FailingWalGate::default();
+
+    let out = build_open_order_intent_runtime_with_wal_gate(
+        &input,
+        &pending_book,
+        Some(&mut wal_gate),
+        &mut choke_metrics,
+        &mut runtime_metrics,
+    );
+
+    assert_eq!(
+        wal_gate.calls, 1,
+        "live WAL gate must be consulted exactly once"
+    );
+    match out.choke_result {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert_eq!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::RecordedBeforeDispatch,
+                    reason: "simulated live wal failure".to_string(),
+                }
+            );
+            assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
+        }
+        other => panic!("expected WAL rejection, got {other:?}"),
+    }
+    assert!(out.pending_reservation_id.is_none());
+    assert_eq!(pending_book.active_reservations(INST), 0);
+    assert_eq!(runtime_metrics.pending_exposure.release_total(), 1);
 }

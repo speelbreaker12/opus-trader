@@ -158,6 +158,7 @@ fn test_pricer_same_inputs_same_price() {
         gross_edge_usd: 10.0,
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
+        expected_slippage_usd: 1.0,
         qty: 1.0,
         side: Side::Buy,
     };
@@ -182,6 +183,7 @@ fn test_pricer_sell_deterministic() {
         gross_edge_usd: 10.0,
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
+        expected_slippage_usd: 1.0,
         qty: 1.0,
         side: Side::Sell,
     };
@@ -388,6 +390,7 @@ fn test_full_pipeline_determinism() {
         gross_edge_usd: 10.0,
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
+        expected_slippage_usd: 1.0,
         qty: 1.0,
         side: Side::Buy,
     };

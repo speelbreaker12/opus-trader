@@ -6,6 +6,8 @@ MOD="${LINT_EXECUTION_FACADE_MOD:-$ROOT/crates/soldier_core/src/execution/mod.rs
 API="${LINT_EXECUTION_FACADE_API:-$ROOT/crates/soldier_core/src/execution/api.rs}"
 ALLOWLIST="${LINT_EXECUTION_FACADE_ALLOWLIST:-$ROOT/plans/execution_facade_symbols.txt}"
 SCAN_ROOT="${LINT_EXECUTION_FACADE_SCAN_ROOT:-$ROOT/crates}"
+ENGINE="${LINT_EXECUTION_FACADE_ENGINE:-$ROOT/crates/soldier_core/src/execution/engine.rs}"
+ROUTING="${LINT_EXECUTION_FACADE_ROUTING:-$ROOT/crates/soldier_core/src/execution/routing.rs}"
 
 cleanup_tmp() {
   [[ -n "${tmp_expected:-}" && -f "${tmp_expected:-}" ]] && rm -f "$tmp_expected"
@@ -19,6 +21,14 @@ if [[ ! -f "$MOD" ]]; then
 fi
 if [[ ! -f "$API" ]]; then
   echo "FAIL: missing execution api file: $API"
+  exit 1
+fi
+if [[ ! -f "$ENGINE" ]]; then
+  echo "FAIL: missing execution engine file: $ENGINE"
+  exit 1
+fi
+if [[ ! -f "$ROUTING" ]]; then
+  echo "FAIL: missing execution routing file: $ROUTING"
   exit 1
 fi
 
@@ -396,6 +406,74 @@ PY
     echo "$deep_import_violations"
     exit 1
   fi
+fi
+
+# 6) engine.rs must not import open_runtime or pipeline; routing.rs is the
+# sole production module allowed to own those imports.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "FAIL: python3 is required to lint execution routing imports"
+  exit 1
+fi
+
+engine_violation="$(
+  python3 - "$ENGINE" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+text = re.sub(r"//.*", "", text)
+stmt_re = re.compile(r'^\s*(?:pub\s+)?use\b.*?;', re.M | re.S)
+target_re = re.compile(r'\b(open_runtime|pipeline)\b')
+
+for match in stmt_re.finditer(text):
+    statement = match.group(0)
+    if target_re.search(statement):
+        line = text.count("\n", 0, match.start()) + 1
+        print(f"{path}:{line}: {' '.join(statement.split())}")
+PY
+)"
+if [[ -n "$engine_violation" ]]; then
+  echo "FAIL: engine.rs must not import open_runtime or pipeline"
+  echo "$engine_violation"
+  exit 1
+fi
+
+non_routing_violations="$(
+  python3 - "$SCAN_ROOT" "$ROUTING" <<'PY'
+import pathlib
+import re
+import sys
+
+scan_root = pathlib.Path(sys.argv[1]).resolve()
+routing = pathlib.Path(sys.argv[2]).resolve()
+execution_dir = scan_root / "soldier_core" / "src" / "execution"
+stmt_re = re.compile(r'^\s*(?:pub\s+)?use\b.*?;', re.M | re.S)
+target_re = re.compile(r'\b(open_runtime|pipeline)\b')
+
+if execution_dir.is_dir():
+    for path in sorted(execution_dir.glob("*.rs")):
+        if path.resolve() == routing:
+            continue
+        if path.name.endswith("_tests.rs"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        text = re.sub(r"//.*", "", text)
+        for match in stmt_re.finditer(text):
+            statement = match.group(0)
+            if target_re.search(statement):
+                line = text.count("\n", 0, match.start()) + 1
+                rel = path.relative_to(scan_root).as_posix()
+                print(f"{rel}:{line}: {' '.join(statement.split())}")
+PY
+)"
+if [[ -n "$non_routing_violations" ]]; then
+  echo "FAIL: only routing.rs may import open_runtime or pipeline"
+  echo "$non_routing_violations"
+  exit 1
 fi
 
 echo "✓ execution facade lint passed"

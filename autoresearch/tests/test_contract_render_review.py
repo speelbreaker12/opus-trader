@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
         shutil.copytree(CONTRACT_TEMPLATE, self.root / "autoresearch" / "contract")
         self.phase2 = self.root / "autoresearch" / "contract" / "phase2"
+        contract_path = self.root / "specs" / "CONTRACT.md"
+        contract_path.parent.mkdir(parents=True, exist_ok=True)
+        contract_path.write_text("AT-999 is referenced here\n", encoding="utf-8")
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -46,7 +50,7 @@ class ContractRenderReviewTests(unittest.TestCase):
             check=False,
         )
 
-    def _seed_run(self, diff_preview_two: str | None = None) -> None:
+    def _seed_run(self, diff_preview_two: str | None = None, run_id: str = "run-1") -> None:
         proposals = {
             "generated_at": "2026-03-14T20:00:00Z",
             "validator_version": "test",
@@ -105,24 +109,24 @@ class ContractRenderReviewTests(unittest.TestCase):
             ],
         }
         _write_json(
-            self.phase2 / "outputs" / "run-1" / "fixture-1" / "proposals.json",
+            self.phase2 / "outputs" / run_id / "fixture-1" / "proposals.json",
             proposals,
         )
         _write_json(
-            self.phase2 / "outputs" / "run-1" / "fixture-2" / "proposals.json",
+            self.phase2 / "outputs" / run_id / "fixture-2" / "proposals.json",
             proposals_two,
         )
         _write_json(
             self.phase2 / "proposals_index.json",
             [
                 {
-                    "run_id": "run-1",
+                    "run_id": run_id,
                     "timestamp": "2026-03-14T20:00:02Z",
                     "contract_file_hash": "a" * 64,
                     "status": "pending",
                     "proposal_count": 2,
                     "accepted_count": 0,
-                    "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_run-1.md",
+                    "file_path": f"autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_{run_id}.md",
                 }
             ],
         )
@@ -282,6 +286,58 @@ class ContractRenderReviewTests(unittest.TestCase):
         accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("must target only specs/CONTRACT.md", accepted.stderr)
+
+    def test_render_review_discovers_latest_run_by_mtime(self) -> None:
+        self._seed_run(run_id="run-10")
+        stale_run = self.phase2 / "outputs" / "run-9"
+        stale_run.mkdir(parents=True)
+        os.utime(stale_run, (1_700_000_000, 1_700_000_000))
+        os.utime(self.phase2 / "outputs" / "run-10", (1_800_000_000, 1_800_000_000))
+
+        result = self._render()
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertTrue((self.phase2 / "review" / "CONTRACT_REVIEW_run-10.md").exists())
+        self.assertFalse((self.phase2 / "review" / "CONTRACT_REVIEW_run-9.md").exists())
+
+    def test_render_review_fails_closed_on_git_patch_without_unified_headers(self) -> None:
+        partial_patch = "\n".join([
+            "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
+            "@@ -20,0 +21,1 @@",
+            "+PolicyGuard MUST reject when evidence_chain_score is missing.",
+        ])
+        self._seed_run(diff_preview_two=partial_patch)
+
+        initial = self._render("--run-id", "run-1")
+        self.assertEqual(initial.returncode, 0, msg=initial.stderr)
+
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        proposals_hash = _extract_hash(review_md, "proposals_file_hash")
+        decisions = {
+            "run_id": "run-1",
+            "reviewed_at": "2026-03-14T21:00:00Z",
+            "contract_file_hash": "a" * 64,
+            "proposals_file_hash": proposals_hash,
+            "decisions": [
+                {
+                    "proposal_id": "P-001",
+                    "decision": "rejected",
+                    "reviewer": "tester",
+                    "reason_code": "OUT_OF_SCOPE",
+                },
+                {
+                    "proposal_id": "P-002",
+                    "decision": "accepted",
+                    "reviewer": "tester",
+                    "reason_code": "APPROVED",
+                },
+            ],
+        }
+        review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
+        _write_json(review_json, decisions)
+
+        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        self.assertNotEqual(accepted.returncode, 0)
+        self.assertIn("must include both ---/+++ unified diff headers", accepted.stderr)
 
 
 if __name__ == "__main__":

@@ -1,14 +1,15 @@
 //! Fee-Aware IOC Limit Pricer per CONTRACT.md §1.4.
 //!
 //! **Rule:**
-//! - `net_edge = gross_edge - fees`
+//! - `net_edge = gross_edge - fees - expected_slippage`
 //! - If `net_edge < min_edge` -> reject.
 //! - `net_edge_per_unit = net_edge / qty`
 //! - `fee_per_unit = fee_estimate_usd / qty`
+//! - `slippage_per_unit = expected_slippage_usd / qty`
 //! - `min_edge_per_unit = min_edge_usd / qty`
 //! - `max_price_for_min_edge`:
-//!   - BUY: `fair_price - (min_edge_per_unit + fee_per_unit)`
-//!   - SELL: `fair_price + (min_edge_per_unit + fee_per_unit)`
+//!   - BUY: `fair_price - (min_edge_per_unit + fee_per_unit + slippage_per_unit)`
+//!   - SELL: `fair_price + (min_edge_per_unit + fee_per_unit + slippage_per_unit)`
 //! - `proposed_limit = fair_price +/- 0.5 * net_edge_per_unit`
 //! - Final limit clamped to guarantee min edge at limit price.
 //!
@@ -31,6 +32,8 @@ pub(crate) struct PricerInput {
     pub min_edge_usd: f64,
     /// Estimated fee in USD for this trade.
     pub fee_estimate_usd: f64,
+    /// Expected slippage in USD for this trade.
+    pub expected_slippage_usd: f64,
     /// Order quantity.
     pub qty: f64,
     /// Order side.
@@ -175,14 +178,16 @@ pub(crate) fn compute_limit_price(
         || input.min_edge_usd < 0.0
         || !input.fee_estimate_usd.is_finite()
         || input.fee_estimate_usd < 0.0
+        || !input.expected_slippage_usd.is_finite()
+        || input.expected_slippage_usd < 0.0
         || !input.qty.is_finite()
         || input.qty <= 0.0
     {
         return reject_invalid(metrics);
     }
 
-    // net_edge = gross_edge - fees
-    let net_edge = input.gross_edge_usd - input.fee_estimate_usd;
+    // net_edge = gross_edge - fees - expected_slippage
+    let net_edge = input.gross_edge_usd - input.fee_estimate_usd - input.expected_slippage_usd;
     if !net_edge.is_finite() {
         return reject_invalid(metrics);
     }
@@ -200,16 +205,20 @@ pub(crate) fn compute_limit_price(
     // Per-unit calculations
     let net_edge_per_unit = net_edge / input.qty;
     let fee_per_unit = input.fee_estimate_usd / input.qty;
+    let slippage_per_unit = input.expected_slippage_usd / input.qty;
     let min_edge_per_unit = input.min_edge_usd / input.qty;
-    if !net_edge_per_unit.is_finite() || !fee_per_unit.is_finite() || !min_edge_per_unit.is_finite()
+    if !net_edge_per_unit.is_finite()
+        || !fee_per_unit.is_finite()
+        || !slippage_per_unit.is_finite()
+        || !min_edge_per_unit.is_finite()
     {
         return reject_invalid(metrics);
     }
 
     // max_price_for_min_edge (guarantees min edge at fill)
     let max_price_for_min_edge = match input.side {
-        Side::Buy => input.fair_price - (min_edge_per_unit + fee_per_unit),
-        Side::Sell => input.fair_price + (min_edge_per_unit + fee_per_unit),
+        Side::Buy => input.fair_price - (min_edge_per_unit + fee_per_unit + slippage_per_unit),
+        Side::Sell => input.fair_price + (min_edge_per_unit + fee_per_unit + slippage_per_unit),
     };
 
     // proposed_limit from fill aggressiveness

@@ -10,8 +10,10 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use soldier_infra::store::{IntentRecord, LedgerMetrics, TlsState, WalLedger};
-use soldier_infra::wal::{BarrierMetrics, WalBarrierConfig, durable_append};
+use soldier_infra::{
+    BarrierMetrics, IntentRecord, LedgerMetrics, TlsState, WalBarrierConfig, WalLedger,
+    durable_append,
+};
 
 /// Create a test intent record.
 fn test_intent(hash: &str, state: TlsState, sent_ts: u64) -> IntentRecord {

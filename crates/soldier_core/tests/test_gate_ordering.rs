@@ -15,14 +15,15 @@ fn assert_unit_test_present(name: &str) {
             name
         )
     });
-    // Verify #[test] appears within 200 bytes before `fn name(`.
-    // Uses rfind on the substring up to fn_pos to avoid char-boundary issues,
-    // and accommodates stacked attributes (e.g. #[allow(...)]) between
-    // #[test] and fn without requiring exact adjacency.
-    let has_test_attr = UNIT_TEST_SOURCE[..fn_pos]
-        .rfind("#[test]")
-        .map(|attr_pos| fn_pos - attr_pos <= 200)
-        .unwrap_or(false);
+    // Bound the #[test] search to the attribute block immediately preceding this
+    // function.  Find the last closing brace (`\n}`) before fn_pos — any #[test]
+    // after that boundary belongs to this function, not a prior one.  This is
+    // robust to arbitrarily many stacked attributes and arbitrary function body size.
+    let search_start = UNIT_TEST_SOURCE[..fn_pos]
+        .rfind("\n}")
+        .map(|p| p + 2) // skip past the `\n}` itself
+        .unwrap_or(0);
+    let has_test_attr = UNIT_TEST_SOURCE[search_start..fn_pos].contains("#[test]");
     assert!(
         has_test_attr,
         "expected #[test] attribute on '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",

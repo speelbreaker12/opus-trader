@@ -60,8 +60,17 @@ fi
 run_logged_or_exit "rust_tests_smoke" "$RUST_TEST_TIMEOUT" \
   cargo test -p soldier_core --locked \
     --test test_execution_facade_public \
+    --test test_risk_facade_public \
+    --test test_venue_facade_public \
     --test test_tlsm
 
+run_logged_or_exit "soldier_infra_facade_smoke" "$RUST_TEST_TIMEOUT" \
+  cargo test -p soldier_infra --locked \
+    --test test_soldier_infra_facade_public
+
 run_logged_or_exit "execution_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_execution_facade.sh
+run_logged_or_exit "risk_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_risk_facade.sh
+run_logged_or_exit "venue_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_venue_facade.sh
+run_logged_or_exit "soldier_infra_facade_lint" "$RUST_TEST_TIMEOUT" bash plans/lint_soldier_infra_facade.sh
 
 echo "✓ rust gates passed"

@@ -607,6 +607,10 @@ log "02a) contract change ledger"
 run_logged_or_exit "contract_change_ledger" "$CONTRACT_KERNEL_TIMEOUT" \
   bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md
 
+log "02a2) autoresearch context manifest freshness"
+run_logged_or_exit "autoresearch_manifest" "$CONTRACT_KERNEL_TIMEOUT" \
+  "$PYTHON_BIN" "$ROOT/plans/check_autoresearch_manifest.py"
+
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   log "02b-02e) profile/invariant gates (parallel)"
   parallel_group_reset

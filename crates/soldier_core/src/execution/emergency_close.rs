@@ -29,7 +29,8 @@ pub struct EmergencyVenueBand {
 pub struct EmergencyClosePriceInput {
     pub side: Side,
     pub now_ms: u64,
-    pub l2_book_snapshot_max_age_ms: u64,
+    /// Maximum age (ms) for L2 or L1 top-of-book snapshots to be considered fresh.
+    pub book_snapshot_max_age_ms: u64,
     pub instrument_cache_age_s: f64,
     pub instrument_cache_ttl_s: f64,
     pub l2: Option<EmergencyTopOfBookSnapshot>,
@@ -62,7 +63,7 @@ pub fn select_emergency_close_best_price(
         input.side,
         input.l2,
         input.now_ms,
-        input.l2_book_snapshot_max_age_ms,
+        input.book_snapshot_max_age_ms,
     ) {
         return Some(EmergencyClosePriceSelection {
             source: EmergencyClosePriceSource::L2,
@@ -74,7 +75,7 @@ pub fn select_emergency_close_best_price(
         input.side,
         input.l1,
         input.now_ms,
-        input.l2_book_snapshot_max_age_ms,
+        input.book_snapshot_max_age_ms,
     ) {
         return Some(EmergencyClosePriceSelection {
             source: EmergencyClosePriceSource::L1,

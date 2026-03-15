@@ -7,7 +7,7 @@ import json
 import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, NoReturn
 
 
 HEADING_RE = re.compile(r"^(#{2,6})\s+(.+?)\s*$")
@@ -15,7 +15,7 @@ SECTION_TOKEN_RE = re.compile(r"^([0-9A-Z]+(?:\.[0-9A-Z]+)*)\b")
 AT_ID_RE = re.compile(r"^AT-\d+$")
 
 
-def fail(message: str, exit_code: int = 1) -> None:
+def fail(message: str, exit_code: int = 1) -> NoReturn:
     raise SystemExit(f"FAIL: {message}")
 
 

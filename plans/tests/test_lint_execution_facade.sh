@@ -22,9 +22,20 @@ mod_file="$tmp_dir/mod.rs"
 api_file="$tmp_dir/api.rs"
 allowlist_file="$tmp_dir/execution_facade_symbols.txt"
 scan_root="$tmp_dir/crates"
+engine_file="$tmp_dir/engine.rs"
+routing_file="$tmp_dir/routing.rs"
 
 mkdir -p "$scan_root/soldier_core/src/execution"
 mkdir -p "$scan_root/soldier_core/src/consumer"
+
+cat > "$engine_file" <<'EOF'
+use super::routing::route_open;
+EOF
+
+cat > "$routing_file" <<'EOF'
+use super::open_runtime::build_open_order_intent_runtime;
+use super::pipeline::evaluate_intent_pipeline;
+EOF
 
 cat > "$scan_root/soldier_core/src/consumer/facade_only.rs" <<'EOF'
 use crate::execution::Side;
@@ -54,6 +65,8 @@ LINT_EXECUTION_FACADE_MOD="$mod_file" \
 LINT_EXECUTION_FACADE_API="$api_file" \
 LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
 LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
 bash "$SCRIPT" >/dev/null
 pass "exact facade export set passes"
 
@@ -68,6 +81,8 @@ public_mod_out="$(
   LINT_EXECUTION_FACADE_MOD="$mod_file" \
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
   bash "$SCRIPT" 2>&1
 )"
 public_mod_rc=$?
@@ -91,6 +106,8 @@ LINT_EXECUTION_FACADE_MOD="$mod_file" \
 LINT_EXECUTION_FACADE_API="$api_file" \
 LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
 LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
 bash "$SCRIPT" >/dev/null
 pass "nested grouped facade export set passes"
 
@@ -109,6 +126,8 @@ nested_out="$(
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
   LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
   bash "$SCRIPT" 2>&1
 )"
 nested_rc=$?
@@ -133,6 +152,8 @@ extra_out="$(
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
   LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
   bash "$SCRIPT" 2>&1
 )"
 extra_rc=$?
@@ -154,6 +175,8 @@ missing_out="$(
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
   LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
   bash "$SCRIPT" 2>&1
 )"
 missing_rc=$?
@@ -182,6 +205,8 @@ deep_out="$(
   LINT_EXECUTION_FACADE_API="$api_file" \
   LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
   LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
   bash "$SCRIPT" 2>&1
 )"
 deep_rc=$?
@@ -190,5 +215,92 @@ set -e
 echo "$deep_out" | grep -Fq "deep execution imports are forbidden" || fail "missing deep-import diagnostic"
 echo "$deep_out" | grep -Fq "consumer/deep_import.rs" || fail "deep-import location should be reported"
 pass "deep execution import fails lint"
+
+# Cleanup deep-import artifact before engine import test to avoid cross-test interference.
+rm -f "$scan_root/soldier_core/src/consumer/deep_import.rs"
+
+# 5) engine.rs must not import open_runtime/pipeline, including grouped multiline imports.
+cat > "$engine_file" <<'EOF'
+use super::{
+    open_runtime::{OpenRuntimeInput, build_open_order_intent_runtime},
+    pipeline::{IntentPipelineInput, evaluate_intent_pipeline},
+};
+EOF
+
+set +e
+engine_import_out="$(
+  LINT_EXECUTION_FACADE_MOD="$mod_file" \
+  LINT_EXECUTION_FACADE_API="$api_file" \
+  LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
+  bash "$SCRIPT" 2>&1
+)"
+engine_import_rc=$?
+set -e
+[[ $engine_import_rc -ne 0 ]] || fail "engine import of open_runtime/pipeline should fail lint"
+echo "$engine_import_out" | grep -Fq "engine.rs must not import open_runtime or pipeline" || fail "missing engine import diagnostic"
+pass "engine grouped multiline imports fail lint"
+
+# Restore engine fixture for routing-only checks.
+cat > "$engine_file" <<'EOF'
+use super::routing::{route_open, route_pipeline};
+EOF
+
+# 6) routing.rs may own open_runtime/pipeline imports.
+cat > "$routing_file" <<'EOF'
+use super::{
+    open_runtime::{OpenRuntimeInput, build_open_order_intent_runtime},
+    pipeline::{IntentPipelineInput, evaluate_intent_pipeline},
+};
+EOF
+
+LINT_EXECUTION_FACADE_MOD="$mod_file" \
+LINT_EXECUTION_FACADE_API="$api_file" \
+LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
+bash "$SCRIPT" >/dev/null
+pass "routing imports of open_runtime and pipeline pass lint"
+
+# 7) non-test execution files other than routing.rs must not import open_runtime/pipeline.
+cat > "$scan_root/soldier_core/src/execution/not_routing.rs" <<'EOF'
+use super::pipeline::evaluate_intent_pipeline;
+EOF
+
+set +e
+non_routing_out="$(
+  LINT_EXECUTION_FACADE_MOD="$mod_file" \
+  LINT_EXECUTION_FACADE_API="$api_file" \
+  LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
+  bash "$SCRIPT" 2>&1
+)"
+non_routing_rc=$?
+set -e
+[[ $non_routing_rc -ne 0 ]] || fail "non-routing execution import should fail lint"
+echo "$non_routing_out" | grep -Fq "only routing.rs may import open_runtime or pipeline" || fail "missing non-routing diagnostic"
+echo "$non_routing_out" | grep -Fq "not_routing.rs" || fail "non-routing location should be reported"
+pass "non-routing execution imports fail lint"
+
+rm -f "$scan_root/soldier_core/src/execution/not_routing.rs"
+
+# 8) test-only execution files remain exempt.
+cat > "$scan_root/soldier_core/src/execution/routing_boundary_tests.rs" <<'EOF'
+use crate::execution::pipeline::evaluate_intent_pipeline;
+EOF
+
+LINT_EXECUTION_FACADE_MOD="$mod_file" \
+LINT_EXECUTION_FACADE_API="$api_file" \
+LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
+bash "$SCRIPT" >/dev/null
+pass "test-only execution imports remain exempt"
 
 echo "PASS: lint_execution_facade exact-set fixtures"

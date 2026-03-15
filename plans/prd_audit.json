@@ -1,6 +1,6 @@
 {
   "project": "StoicTrader",
-  "prd_sha256": "3927acfa636ab75679c0d0e5ab64406326b56bf88307b8892836182a89122e08",
+  "prd_sha256": "d12c7ed49788bd693e07a088dbeb4ed105017c472a18ff87ad631518f55e4dd7",
   "inputs": {
     "prd": "plans/prd.json",
     "contract": "CONTRACT.md",
@@ -9,11 +9,11 @@
     "roadmap": "docs/ROADMAP.md"
   },
   "summary": {
-    "items_total": 111,
+    "items_total": 112,
     "items_pass": 0,
-    "items_fail": 31,
+    "items_fail": 32,
     "items_blocked": 80,
-    "must_fix_count": 36
+    "must_fix_count": 37
   },
   "global_findings": {
     "must_fix": [
@@ -306,6 +306,52 @@
       "patch_suggestions": [
         "Split the story into smaller items so each one touches a single subsystem/root and keeps `scope.touch` below the current breadth.",
         "Tighten `acceptance`, `verify`, and `evidence` so each referenced invariant is proven by a targeted command, explicit output artifact, or deterministic file comparison."
+      ]
+    },
+    {
+      "id": "S0-006",
+      "slice": 0,
+      "status": "FAIL",
+      "reasons": [
+        "MUST_FIX: scope.touch is too broad for a bite-sized, immediately verifiable story."
+      ],
+      "schema_check": {
+        "missing_fields": [],
+        "notes": [
+          "WARN: Extra item fields present: loss_mode."
+        ]
+      },
+      "contract_check": {
+        "refs_present": true,
+        "refs_specific": true,
+        "contract_refs_resolved": true,
+        "roadmap_refs_resolved": true,
+        "acceptance_enforces_invariant": true,
+        "contradiction": false,
+        "notes": []
+      },
+      "verify_check": {
+        "has_verify_sh": true,
+        "has_targeted_checks": true,
+        "evidence_concrete": true,
+        "notes": []
+      },
+      "scope_check": {
+        "too_broad": true,
+        "est_size_too_large": false,
+        "notes": [
+          "MUST_FIX: scope.touch spans 14 paths across roots [docs, plans, specs], which is not bite-sized for Ralph-style verification."
+        ]
+      },
+      "dependency_check": {
+        "invalid": false,
+        "forward_dep": false,
+        "cycle": false,
+        "notes": []
+      },
+      "patch_suggestions": [
+        "Split the story into smaller items so each one touches a single subsystem/root and keeps `scope.touch` below the current breadth.",
+        "Separate the contract/docs sync from the workflow-wrapper/guardrail wiring so each follow-up story can prove one invariant with targeted artifacts."
       ]
     },
     {

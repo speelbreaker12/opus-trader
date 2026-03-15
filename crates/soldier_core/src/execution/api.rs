@@ -13,8 +13,15 @@ pub use super::engine::{
     QuantizeExecutionInput, RuntimeStep,
 };
 
+// Emergency-close fallback selector
+pub use super::emergency_close::{
+    EmergencyClosePriceInput, EmergencyClosePriceSelection, EmergencyClosePriceSource,
+    EmergencyTopOfBookSnapshot, EmergencyVenueBand, select_emergency_close_best_price,
+};
+
 // Chokepoint boundary
-pub use super::build_order_intent::{GateStep, RecordedBeforeDispatchGate};
+pub use super::build_order_intent::GateStep;
+pub use super::wal_gate::RecordedBeforeDispatchGate;
 
 // Reject reason
 pub use super::reject_reason::{

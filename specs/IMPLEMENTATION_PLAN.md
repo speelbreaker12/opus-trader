@@ -708,7 +708,7 @@ crates/soldier\_core/tests/test\_emergency\_close.rs::test\_emergency\_close\_by
 Hot-path rollback: caps configurable (close\_max\_attempts, hedge cap) but must remain fail-closed.  
 Observability: histogram time\_to\_delta\_neutral\_ms, counter atomic\_naked\_events\_total.  
 
-Phase 2 Liquidity Gate ownership note: `S7.3` owns `AT-236`, `AT-937`, `AT-938`, and `AT-1217` plus the fresh-L2 positive-path proof `AT-1216`. This bundle depends on the standalone gate primitive proven earlier in `S5.1`, but it is the deployable phase owner for `§1.3` compliance because the stale-L2 risk-reducing path depends on `§3.1`.
+Phase 2 Liquidity Gate ownership note: `S7.3` owns `AT-236`, `AT-937`, `AT-938`, `AT-1217`, and `AT-1239` plus the fresh-L2 positive-path proof `AT-1216`. This bundle depends on the standalone gate primitive proven earlier in `S5.1`, but it is the deployable phase owner for `§1.3` compliance because the stale-L2 risk-reducing path depends on `§3.1`.
 
 Fresh-L2 positive-path proof: add or alias a `test_liquidity_gate.rs` case that forces all non-liquidity gates pass, uses a fresh/parseable L2 snapshot with slippage inside budget, and proves dispatch count increases by 1 (`AT-1216`).
 
@@ -716,6 +716,7 @@ Fallback-ladder proof requirements:
 - `AT-937`: fresh L1 fallback dispatches when L2 is missing/unparseable/stale.
 - `AT-938`: venue-band fallback dispatches when both L2 and fresh L1 are unavailable.
 - `AT-1217`: fail closed with `Rejected(EmergencyCloseNoPrice)` only when L2, L1, and venue-band fallback are all unavailable.
+- `AT-1239`: venue-band fallback is disallowed when instrument metadata is stale (`instrument_cache_age_s > instrument_cache_ttl_s`), producing `Rejected(EmergencyCloseNoPrice)` and no dispatch.
 
 **Retry pricing rule**: `close_buffer_ticks = 5` on first attempt; on each retry buffer doubles (5 → 10 → 20); max 3 attempts.  
 
@@ -755,7 +756,7 @@ Add tests proving containment is still permitted under Kill-tier causes while ex
 - `test_kill_allows_containment_when_session_terminated()` — aligns to AT-346
 - `test_kill_allows_containment_when_watchdog_stale()` — aligns to AT-347
 - `test_kill_allows_containment_when_bunker_mode_active()` — aligns to AT-013
-Contract AT coverage (traceability assignment): AT-211, AT-213, AT-235, AT-236, AT-283, AT-316, AT-327, AT-328, AT-936, AT-937, AT-938.
+Contract AT coverage (traceability assignment): AT-211, AT-213, AT-235, AT-236, AT-283, AT-316, AT-327, AT-328, AT-936, AT-937, AT-938, AT-1217, AT-1239.
 
 
 

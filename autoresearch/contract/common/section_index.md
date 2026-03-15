@@ -123,28 +123,28 @@
 | A.3.1 | Emergency Close & Liquidity Gates | 6073 | 6104 |
 | A.4 | Fee Model Staleness | 6105 | 6141 |
 | A.5 | SVI Stability Guards | 6142 | 6167 |
-| A.6 | Retention & Replay Windows | 6168 | 6228 |
-| A.7 | Summary Table | 6229 | 6312 |
-| CSP.0 | Scope | 6313 | 6320 |
-| CSP.1 | Definitions (Self-Contained) | 6321 | 6365 |
-| CSP.2 | Idempotency & Deduplication | 6366 | 6367 |
-| CSP.2.1 | Stable Intent Identity | 6368 | 6378 |
-| CSP.2.2 | Deduplication Rule | 6379 | 6387 |
-| CSP.3 | RecordedBeforeDispatch (WAL) | 6388 | 6389 |
-| CSP.3.1 | Mandatory Recording for OPEN | 6390 | 6397 |
-| CSP.3.2 | WAL Degradation Semantics | 6398 | 6406 |
-| CSP.4 | Restart, Gaps, and Reconciliation | 6407 | 6408 |
-| CSP.4.1 | Restart Safety | 6409 | 6416 |
-| CSP.4.2 | No Duplicate Sends | 6417 | 6420 |
-| CSP.4.3 | WS Gap / Session Termination | 6421 | 6427 |
-| CSP.5 | TradingMode Semantics & Enforcement | 6428 | 6429 |
-| CSP.5.1 | Modes | 6430 | 6435 |
-| CSP.5.2 | Enforcement Rules | 6436 | 6445 |
-| CSP.5.3 | Safety-Critical Prerequisite: Runtime Binding Gate | 6446 | 6453 |
-| CSP.6 | Capital Supremacy (No Stranded Exposure) | 6454 | 6464 |
-| CSP.7 | Deterministic Emergency Containment | 6465 | 6484 |
-| CSP.8 | Timebase Authority (Safety-Critical) | 6485 | 6492 |
-| CSP.9 | Profile Isolation | 6493 | 6509 |
-| CSP.10 | CSP_ONLY Build/Test Mode (Mechanically Enforced) | 6510 | 6523 |
-| CSP.11 | Explicit Non-Requirements | 6524 | 6536 |
-| CSP.12 | Acceptance Tests | 6537 | 6603 |
+| A.6 | Retention & Replay Windows | 6168 | 6223 |
+| A.7 | Summary Table | 6224 | 6307 |
+| CSP.0 | Scope | 6308 | 6315 |
+| CSP.1 | Definitions (Self-Contained) | 6316 | 6360 |
+| CSP.2 | Idempotency & Deduplication | 6361 | 6362 |
+| CSP.2.1 | Stable Intent Identity | 6363 | 6373 |
+| CSP.2.2 | Deduplication Rule | 6374 | 6382 |
+| CSP.3 | RecordedBeforeDispatch (WAL) | 6383 | 6384 |
+| CSP.3.1 | Mandatory Recording for OPEN | 6385 | 6392 |
+| CSP.3.2 | WAL Degradation Semantics | 6393 | 6401 |
+| CSP.4 | Restart, Gaps, and Reconciliation | 6402 | 6403 |
+| CSP.4.1 | Restart Safety | 6404 | 6411 |
+| CSP.4.2 | No Duplicate Sends | 6412 | 6415 |
+| CSP.4.3 | WS Gap / Session Termination | 6416 | 6422 |
+| CSP.5 | TradingMode Semantics & Enforcement | 6423 | 6424 |
+| CSP.5.1 | Modes | 6425 | 6430 |
+| CSP.5.2 | Enforcement Rules | 6431 | 6440 |
+| CSP.5.3 | Safety-Critical Prerequisite: Runtime Binding Gate | 6441 | 6448 |
+| CSP.6 | Capital Supremacy (No Stranded Exposure) | 6449 | 6459 |
+| CSP.7 | Deterministic Emergency Containment | 6460 | 6479 |
+| CSP.8 | Timebase Authority (Safety-Critical) | 6480 | 6487 |
+| CSP.9 | Profile Isolation | 6488 | 6504 |
+| CSP.10 | CSP_ONLY Build/Test Mode (Mechanically Enforced) | 6505 | 6518 |
+| CSP.11 | Explicit Non-Requirements | 6519 | 6531 |
+| CSP.12 | Acceptance Tests | 6532 | 6598 |

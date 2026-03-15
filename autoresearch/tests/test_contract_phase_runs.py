@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -237,6 +238,45 @@ class _TempContractRepo:
 class ContractPhaseRunTests(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = _TempContractRepo()
+
+    def test_apply_status_results_allows_enforcement_rejection_to_override_scope_review(self) -> None:
+        contract_dir = REPO_ROOT / "autoresearch" / "contract"
+        sys.path.insert(0, str(contract_dir))
+        try:
+            import run_phase as contract_run_phase
+
+            payload = {
+                "proposals": [
+                    {
+                        "proposal_id": "P-001",
+                        "status": "proposed",
+                    }
+                ]
+            }
+            contradiction_results = {
+                "results": [
+                    {
+                        "proposal_id": "P-001",
+                        "status": "pending_scope_review",
+                        "reason_code": "SCOPE_NARROWING",
+                    }
+                ]
+            }
+            enforcement_results = [
+                {
+                    "proposal_id": "P-001",
+                    "status": "rejected",
+                    "reason_code": "ENFORCEMENT_EVIDENCE_MISSING",
+                }
+            ]
+
+            updated = contract_run_phase.apply_status_results(
+                payload, contradiction_results, enforcement_results
+            )
+        finally:
+            sys.path.pop(0)
+
+        self.assertEqual(updated["proposals"][0]["status"], "rejected")
 
     def tearDown(self) -> None:
         self.repo.close()

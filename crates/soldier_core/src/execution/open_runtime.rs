@@ -17,21 +17,17 @@ use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateResults, GateStep,
-    build_order_intent_with_wal_gate,
+    RecordedBeforeDispatchGate, build_order_intent_with_optional_wal_gate,
 };
-use super::dispatch_map::{DispatchConsistencyProof, IntentClass, MismatchMetrics};
-use super::gate::{
-    LiquidityGateDecision, LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate,
-};
+use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
+use super::gate_outcome::GateOutcome;
 use super::gates::{NetEdgeInput, NetEdgeMetrics, NetEdgeResult, evaluate_net_edge};
-use super::intent_assembly::{SizingParams, assemble_sizing};
 use super::inventory_skew::{
     InventorySkewInput, InventorySkewMetrics, InventorySkewRejectReason, InventorySkewResult,
     evaluate_inventory_skew,
 };
-use super::pricer::{PricerInput, PricerMetrics, PricerResult, compute_limit_price};
+use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
 use super::tlsm::Tlsm;
-use crate::venue::InstrumentKindInput;
 
 /// Machine-stable reject-detail tokens consumed by execution-engine mapping.
 ///
@@ -101,6 +97,26 @@ pub(crate) struct OpenRuntimeOutput {
 pub(crate) fn build_open_order_intent_runtime(
     input: &OpenRuntimeInput<'_>,
     pending_book: &PendingExposureBook,
+    choke_metrics: &mut ChokeMetrics,
+    runtime_metrics: &mut OpenRuntimeMetrics,
+) -> OpenRuntimeOutput {
+    #[allow(deprecated)] // Compatibility wrapper for tests still driving precomputed WAL input.
+    let mut wal_gate = PrecomputedWalGate {
+        recorded: input.wal_recorded,
+    };
+    build_open_order_intent_runtime_with_wal_gate(
+        input,
+        pending_book,
+        Some(&mut wal_gate),
+        choke_metrics,
+        runtime_metrics,
+    )
+}
+
+pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
+    input: &OpenRuntimeInput<'_>,
+    pending_book: &PendingExposureBook,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
     choke_metrics: &mut ChokeMetrics,
     runtime_metrics: &mut OpenRuntimeMetrics,
 ) -> OpenRuntimeOutput {
@@ -203,8 +219,9 @@ pub(crate) fn build_open_order_intent_runtime(
         if liquidity_override_reason.is_none() {
             let liquidity_result =
                 evaluate_liquidity_gate(&input.liquidity_input, &mut runtime_metrics.liquidity);
-            gate_results.liquidity_gate_passed =
-                matches!(liquidity_result.decision, LiquidityGateDecision::Allowed);
+            let liquidity_outcome =
+                GateOutcome::from_liquidity(GateStep::LiquidityGate, &liquidity_result);
+            gate_results.liquidity_gate_passed = liquidity_outcome.is_allowed();
             // allowed_qty is extracted regardless of decision: on reject the gate
             // is still the authority on how much qty was fillable, and the value
             // is used for observability. Dispatch is gated by liquidity_gate_passed
@@ -216,12 +233,13 @@ pub(crate) fn build_open_order_intent_runtime(
             if gate_results.liquidity_gate_passed {
                 let first_net_edge =
                     evaluate_net_edge(&input.net_edge_input, &mut runtime_metrics.net_edge);
+                let first_net_edge_outcome =
+                    GateOutcome::from_net_edge(GateStep::NetEdgeGate, &first_net_edge);
                 let first_net_edge_usd = match first_net_edge {
                     NetEdgeResult::Allowed { net_edge_usd } => Some(net_edge_usd),
                     NetEdgeResult::Rejected { net_edge_usd, .. } => net_edge_usd,
                 };
-                gate_results.net_edge_passed =
-                    matches!(first_net_edge, NetEdgeResult::Allowed { .. });
+                gate_results.net_edge_passed = first_net_edge_outcome.is_allowed();
 
                 let mut inventory_skew_input = input.inventory_skew_input.clone();
                 // Always override with the authoritative current_delta from the runtime input,
@@ -245,10 +263,13 @@ pub(crate) fn build_open_order_intent_runtime(
                         adjusted_min_edge_usd = Some(adjusted);
                         let mut net_edge_recheck = input.net_edge_input.clone();
                         net_edge_recheck.min_edge_usd = Some(adjusted);
-                        gate_results.net_edge_passed = matches!(
-                            evaluate_net_edge(&net_edge_recheck, &mut runtime_metrics.net_edge),
-                            NetEdgeResult::Allowed { .. }
+                        let net_edge_recheck_result =
+                            evaluate_net_edge(&net_edge_recheck, &mut runtime_metrics.net_edge);
+                        let net_edge_recheck_outcome = GateOutcome::from_net_edge(
+                            GateStep::NetEdgeGate,
+                            &net_edge_recheck_result,
                         );
+                        gate_results.net_edge_passed = net_edge_recheck_outcome.is_allowed();
                     }
                     InventorySkewResult::Rejected {
                         reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
@@ -259,7 +280,17 @@ pub(crate) fn build_open_order_intent_runtime(
                             effective_risk_state = RiskState::Degraded;
                         }
                     }
-                    InventorySkewResult::Rejected { .. } => {
+                    InventorySkewResult::Rejected {
+                        adjusted_min_edge_usd: adjusted,
+                        ..
+                    } => {
+                        // Propagate adjusted_min_edge_usd only when the initial
+                        // net-edge check passed: in that case inventory-skew is
+                        // the sole reason for rejection, so open_runtime_to_decision
+                        // can map the step to InventorySkew instead of NetEdgeGate.
+                        if first_net_edge_outcome.is_allowed() {
+                            adjusted_min_edge_usd = adjusted;
+                        }
                         gate_results.net_edge_passed = false;
                     }
                 }
@@ -269,10 +300,10 @@ pub(crate) fn build_open_order_intent_runtime(
                     if let Some(adjusted) = adjusted_min_edge_usd {
                         pricer_input.min_edge_usd = adjusted;
                     }
-                    gate_results.pricer_passed = matches!(
-                        compute_limit_price(&pricer_input, &mut runtime_metrics.pricer),
-                        PricerResult::LimitPrice { .. }
-                    );
+                    let pricer_result =
+                        compute_limit_price(&pricer_input, &mut runtime_metrics.pricer);
+                    let pricer_outcome = GateOutcome::from_pricer(GateStep::Pricer, &pricer_result);
+                    gate_results.pricer_passed = pricer_outcome.is_allowed();
                 } else {
                     gate_results.pricer_passed = false;
                 }
@@ -288,16 +319,12 @@ pub(crate) fn build_open_order_intent_runtime(
     }
 
     gate_results.max_dispatch_qty = max_dispatch_qty;
-    #[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
-    let mut wal_gate = PrecomputedWalGate {
-        recorded: gate_results.wal_recorded,
-    };
-    let mut choke_result = build_order_intent_with_wal_gate(
+    let mut choke_result = build_order_intent_with_optional_wal_gate(
         ChokeIntentClass::Open,
         effective_risk_state,
         choke_metrics,
         &gate_results,
-        &mut wal_gate,
+        wal_gate,
     );
     if let Some(override_reason) = liquidity_override_reason {
         choke_result = match choke_result {
@@ -393,66 +420,6 @@ pub fn settle_pending_on_tlsm_terminal(
             );
         }
     }
-}
-
-/// Build an OPEN intent with full assembly validation.
-///
-/// This combines `assemble_sizing()` (deriving `dispatch_consistency`
-/// and optionally degrading risk state) with the OPEN runtime gate evaluation.
-///
-/// Use this entry point when raw venue metadata is available. It provides the
-/// production callsite for `derive_instrument_kind`, `build_order_size`, and
-/// `validate_and_dispatch` — ensuring the full assembly chain is exercised
-/// before gate evaluation.
-///
-/// TODO(slice-2): Wire as production entry point for order submission.
-///
-/// Assembly failure is fail-closed: `dispatch_consistency` is set to
-/// `failed()` and risk state is degraded.
-#[allow(dead_code)]
-pub(crate) fn build_open_intent_with_assembly(
-    assembly_meta: &InstrumentKindInput,
-    sizing_params: &SizingParams,
-    input: &OpenRuntimeInput<'_>,
-    pending_book: &PendingExposureBook,
-    choke_metrics: &mut ChokeMetrics,
-    runtime_metrics: &mut OpenRuntimeMetrics,
-    mismatch_metrics: &mut MismatchMetrics,
-) -> OpenRuntimeOutput {
-    let mut adjusted_input = input.clone();
-
-    match assemble_sizing(
-        assembly_meta,
-        sizing_params,
-        IntentClass::Open,
-        mismatch_metrics,
-    ) {
-        Ok(assembled) => {
-            adjusted_input.base_gates.dispatch_consistency = assembled.dispatch_consistency;
-            if assembled.risk_state_degraded
-                && adjusted_input.base_gates.risk_state == RiskState::Healthy
-            {
-                adjusted_input.base_gates.risk_state = RiskState::Degraded;
-            }
-        }
-        Err(e) => {
-            tracing::warn!(
-                ?e,
-                "assembly failed — degrading dispatch_consistency to false"
-            );
-            adjusted_input.base_gates.dispatch_consistency = DispatchConsistencyProof::failed();
-            if adjusted_input.base_gates.risk_state == RiskState::Healthy {
-                adjusted_input.base_gates.risk_state = RiskState::Degraded;
-            }
-        }
-    }
-
-    build_open_order_intent_runtime(
-        &adjusted_input,
-        pending_book,
-        choke_metrics,
-        runtime_metrics,
-    )
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@
 //! Validates that `DeribitInstrument` correctly deserializes from
 //! `/public/get_instruments` response payloads (CONTRACT.md AT-333).
 
-use soldier_infra::deribit::{
+use soldier_infra::{
     DeribitInstrument, DeribitInstrumentKind, SettlementPeriod, map_deribit_kind_to_input,
 };
 
@@ -168,7 +168,7 @@ fn test_perpetual_no_expiration() {
     assert_eq!(instr.is_perpetual, Some(true));
 }
 
-/// Pub re-export: types are accessible from soldier_infra::deribit.
+/// Pub re-export: types are accessible from soldier_infra root.
 #[test]
 fn test_pub_reexport() {
     // This test compiles iff the re-exports are correct.

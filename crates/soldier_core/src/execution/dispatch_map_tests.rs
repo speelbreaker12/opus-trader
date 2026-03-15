@@ -673,6 +673,46 @@ fn test_at920_perpetual_mismatch_rejected() {
     assert_eq!(metrics.reject_unit_mismatch_total(), 1);
 }
 
+/// AT-1097: mixed canonical sizing fields on a single intent must reject
+/// before dispatch with ContractsAmountMismatch.
+///
+/// RiskState::Degraded propagation is covered separately by
+/// intent_assembly_tests::test_assembly_mismatch_sets_degraded; this test
+/// stays focused on the mixed-sizing rejection itself.
+#[test]
+fn test_at1097_mixed_canonical_size_fields_rejected() {
+    // A perpetual intent must use USD sizing canonically. Supplying both
+    // qty_usd and qty_coin as authoritative fields is a contract violation.
+    let size = OrderSize {
+        contracts: Some(100),
+        qty_coin: Some(0.3),
+        qty_usd: Some(30_000.0),
+        notional_usd: 30_000.0,
+    };
+
+    let mut mismatch_metrics = MismatchMetrics::new();
+    let result = validate_and_dispatch(
+        &size,
+        InstrumentKind::Perpetual,
+        IntentClass::Open,
+        Some(10.0),
+        &mut mismatch_metrics,
+    );
+
+    assert!(
+        matches!(
+            result,
+            Err(DispatchMapError::ContractsAmountMismatch { .. })
+        ),
+        "mixed canonical qty_coin + qty_usd must reject before dispatch"
+    );
+    assert_eq!(
+        mismatch_metrics.reject_unit_mismatch_total(),
+        1,
+        "mixed canonical sizing must increment mismatch counter"
+    );
+}
+
 /// AT-920: mismatch within tolerance → passes
 #[test]
 fn test_at920_within_tolerance_passes() {
