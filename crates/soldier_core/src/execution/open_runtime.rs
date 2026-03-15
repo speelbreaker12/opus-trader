@@ -376,7 +376,8 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
     if let Some((override_gate, override_reason)) = choke_override {
         match (override_gate, override_reason) {
             (GateStep::LiquidityGate, REJECT_REASON_PENDING_EXPOSURE_OVERFILL)
-            | (GateStep::LiquidityGate, REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED) => {
+            | (GateStep::LiquidityGate, REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED) =>
+            {
                 gate_reject_codes.liquidity_gate =
                     Some(RejectReasonCode::PendingExposureBudgetExceeded);
             }

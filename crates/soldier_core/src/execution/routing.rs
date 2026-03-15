@@ -267,9 +267,18 @@ pub(crate) fn open_runtime_to_decision(
     use ChokeResult::{Approved as ChokeApproved, Rejected as ChokeRejected};
 
     let gate_reject_codes = GateRejectCodes {
-        preflight: output.gate_reject_codes.preflight.or(input.gate_reject_codes.preflight),
-        quantize: output.gate_reject_codes.quantize.or(input.gate_reject_codes.quantize),
-        fee_cache: output.gate_reject_codes.fee_cache.or(input.gate_reject_codes.fee_cache),
+        preflight: output
+            .gate_reject_codes
+            .preflight
+            .or(input.gate_reject_codes.preflight),
+        quantize: output
+            .gate_reject_codes
+            .quantize
+            .or(input.gate_reject_codes.quantize),
+        fee_cache: output
+            .gate_reject_codes
+            .fee_cache
+            .or(input.gate_reject_codes.fee_cache),
         expiry_guard: output
             .gate_reject_codes
             .expiry_guard
@@ -286,7 +295,10 @@ pub(crate) fn open_runtime_to_decision(
             .gate_reject_codes
             .recorded_before_dispatch
             .or(input.gate_reject_codes.recorded_before_dispatch),
-        pricer: output.gate_reject_codes.pricer.or(input.gate_reject_codes.pricer),
+        pricer: output
+            .gate_reject_codes
+            .pricer
+            .or(input.gate_reject_codes.pricer),
     };
 
     match &output.choke_result {
