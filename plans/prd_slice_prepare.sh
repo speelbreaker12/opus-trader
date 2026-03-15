@@ -370,6 +370,33 @@ for item in slice_items:
 contract_indices, contract_missing, contract_ambig = resolve_refs(contract_refs, contract_key_map, contract_ambiguous)
 plan_indices, plan_missing, plan_ambig = resolve_refs(plan_refs, plan_key_map, plan_ambiguous)
 
+# Also include sections that contain enforcing_contract_ats anchors.
+# Uses direct anchor map lookup (AT-### → section_indices), NOT the fuzzy key_map path
+# used for contract_refs. Anchor keys are raw strings (e.g. "AT-022") matching exactly.
+# Stale digest (anchors key absent, or AT not yet indexed): WARN to stderr, skip gracefully.
+at_anchor_map = contract_digest.get('anchors', {})
+if not at_anchor_map and any(item.get('enforcing_contract_ats') for item in slice_items):
+    print(
+        "[prd_slice_prepare] WARN: contract digest has no 'anchors' map — "
+        "AT enrichment disabled; regenerate digest with build_contract_digest.sh",
+        file=sys.stderr
+    )
+for item in slice_items:
+    for at_id in (item.get('enforcing_contract_ats') or []):
+        if not isinstance(at_id, str):
+            continue
+        section_indices = at_anchor_map.get(at_id)
+        if not section_indices:
+            if at_anchor_map:
+                print(
+                    f"[prd_slice_prepare] WARN: enforcing AT {at_id} "
+                    f"(item {item.get('id')}) not in digest anchors — "
+                    "regenerate digest?",
+                    file=sys.stderr
+                )
+            continue
+        contract_indices.update(section_indices)
+
 # Resolve ROADMAP refs
 all_roadmap_refs = []
 for refs in roadmap_refs_by_item.values():

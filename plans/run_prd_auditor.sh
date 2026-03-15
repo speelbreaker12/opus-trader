@@ -20,7 +20,7 @@ else
     echo "[prd_auditor] ERROR: another auditor is running (lock: $AUDIT_LOCK_FILE.d)" >&2
     exit 6
   fi
-  trap 'rmdir "$AUDIT_LOCK_FILE.d" 2>/dev/null || true' EXIT
+  trap 'rmdir "$AUDIT_LOCK_FILE.d" 2>/dev/null || true; kill "${_digest_pid_contract:-}" "${_digest_pid_plan:-}" "${_digest_pid_roadmap:-}" 2>/dev/null || true' EXIT
 fi
 
 # Timeout for agent calls
@@ -249,23 +249,29 @@ fi
 
 mkdir -p ".context"
 
-progress "Building contract digest..."
-CONTRACT_SOURCE_FILE="$AUDIT_CONTRACT_FILE" CONTRACT_DIGEST_FILE="$AUDIT_CONTRACT_DIGEST_FILE" ./plans/build_contract_digest.sh
-audit_cost_stage "contract_digest"
+progress "Building digests in parallel..."
+CONTRACT_SOURCE_FILE="$AUDIT_CONTRACT_FILE" CONTRACT_DIGEST_FILE="$AUDIT_CONTRACT_DIGEST_FILE" \
+  ./plans/build_contract_digest.sh &
+_digest_pid_contract=$!
 
-progress "Building plan digest..."
-PLAN_SOURCE_FILE="$AUDIT_PLAN_FILE" PLAN_DIGEST_FILE="$AUDIT_PLAN_DIGEST_FILE" ./plans/build_plan_digest.sh
-audit_cost_stage "plan_digest"
+PLAN_SOURCE_FILE="$AUDIT_PLAN_FILE" PLAN_DIGEST_FILE="$AUDIT_PLAN_DIGEST_FILE" \
+  ./plans/build_plan_digest.sh &
+_digest_pid_plan=$!
 
-# Build ROADMAP digest if available
 if [[ -n "$AUDIT_ROADMAP_FILE" && -f "$AUDIT_ROADMAP_FILE" ]]; then
-  progress "Building roadmap digest..."
   SOURCE_FILE="$AUDIT_ROADMAP_FILE" \
     OUTPUT_FILE="$AUDIT_ROADMAP_DIGEST_FILE" \
     DIGEST_MODE="slim" \
-    ./plans/build_markdown_digest.sh
-  audit_cost_stage "roadmap_digest"
+    ./plans/build_markdown_digest.sh &
+  _digest_pid_roadmap=$!
+else
+  _digest_pid_roadmap=""
 fi
+
+wait "$_digest_pid_contract" || { echo "[prd_auditor] ERROR: contract digest failed" >&2; exit 2; }
+wait "$_digest_pid_plan"     || { echo "[prd_auditor] ERROR: plan digest failed" >&2; exit 2; }
+[[ -n "$_digest_pid_roadmap" ]] && { wait "$_digest_pid_roadmap" || { echo "[prd_auditor] ERROR: roadmap digest failed" >&2; exit 2; }; }
+audit_cost_stage "digests_parallel"
 
 if [[ "$AUDIT_SCOPE" == "slice" ]]; then
   if [[ -z "$AUDIT_SLICE" ]]; then
