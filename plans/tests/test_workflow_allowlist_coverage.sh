@@ -54,12 +54,18 @@ required=(
   plans/contract_review_emit.sh
   plans/contract_review_validate.sh
   plans/execution_facade_symbols.txt
+  plans/risk_facade_symbols.txt
+  plans/venue_facade_symbols.txt
+  plans/soldier_infra_facade_symbols.txt
   plans/external_review_generic.sh
   plans/fork_attestation_mirror.sh
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
   plans/lint_execution_facade.sh
+  plans/lint_risk_facade.sh
+  plans/lint_venue_facade.sh
+  plans/lint_soldier_infra_facade.sh
   plans/live_enable_preflight.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
@@ -118,6 +124,9 @@ required=(
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
   plans/tests/test_lint_execution_facade.sh
+  plans/tests/test_lint_risk_facade.sh
+  plans/tests/test_lint_venue_facade.sh
+  plans/tests/test_lint_soldier_infra_facade.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_set_pass.sh

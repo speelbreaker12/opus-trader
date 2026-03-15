@@ -9,8 +9,8 @@ use soldier_core::risk::{
     PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
     PendingExposureResult, PendingExposureTerminalOutcome, ReservationId, RiskState,
     compute_margin_mode_hint, evaluate_fee_staleness, evaluate_global_exposure_budget,
-    evaluate_margin_headroom_gate, exposure_budget_reject_total,
-    fee_staleness_hard_stale_total, margin_gate_reject_total, pending_exposure_reject_total,
+    evaluate_margin_headroom_gate, exposure_budget_reject_total, fee_staleness_hard_stale_total,
+    margin_gate_reject_total, pending_exposure_reject_total,
 };
 
 #[test]
@@ -55,5 +55,8 @@ fn risk_facade_symbols_publicly_reachable() {
     };
     let decision = evaluate_margin_headroom_gate(&margin_input, &mut margin_metrics);
     assert!(matches!(decision, MarginGateDecision::Allowed { .. }));
-    assert_eq!(compute_margin_mode_hint(&margin_input), MarginGateMode::Active);
+    assert_eq!(
+        compute_margin_mode_hint(&margin_input),
+        MarginGateMode::Active
+    );
 }

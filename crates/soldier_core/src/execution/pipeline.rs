@@ -12,7 +12,8 @@ use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evalu
 use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::build_gate_results_from_dispatch_proof;
 use super::build_order_intent::{
-    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep, build_order_intent_with_optional_wal_gate,
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep,
+    build_order_intent_with_optional_wal_gate,
 };
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};

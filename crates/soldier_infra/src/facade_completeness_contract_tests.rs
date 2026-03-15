@@ -1,7 +1,7 @@
 //! Compile-time proof that intended facade symbols are reachable via
 //! `crate::{...}`.
 
-#[allow(unused_imports)]
+#[allow(deprecated, unused_imports)]
 use crate::{
     ALL_PARAMS, AcknowledgedBootstrap, BarrierMetrics, BootstrapResult,
     BuildCreatedIntentRecordError, ConfigParam, CreatedIntentRecordInput, DeribitInstrument,
@@ -12,9 +12,8 @@ use crate::{
     TlsState, TradeIdRegistry, TradeRecord, WalBarrierConfig, WalLedger, WalWriterConfig,
     appendix_a_default, bootstrap_full, bootstrap_storage, build_created_intent_record,
     build_created_intent_record_from_input, build_gate_config_from_raw, durable_append,
-    map_deribit_kind_to_input, param_name, reduce_only_from_lifecycle_intent,
-    resolve_config_value, try_build_created_intent_record,
-    try_build_created_intent_record_from_input,
+    map_deribit_kind_to_input, param_name, reduce_only_from_lifecycle_intent, resolve_config_value,
+    try_build_created_intent_record, try_build_created_intent_record_from_input,
 };
 
 #[test]

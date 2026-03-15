@@ -52,6 +52,9 @@ plans/lib/status_reason_codegen_gate.sh
 plans/lib/verify_checkpoint.sh
 plans/lib/verify_utils.sh
 plans/lint_execution_facade.sh
+plans/lint_risk_facade.sh
+plans/lint_soldier_infra_facade.sh
+plans/lint_venue_facade.sh
 plans/live_enable_preflight.sh
 plans/postmortem_template.md
 plans/pr_gate.sh
@@ -77,6 +80,7 @@ plans/recon_run_card_template.md
 plans/recon_trace.sh
 plans/review_logged.sh
 plans/review_resolution_template.md
+plans/risk_facade_symbols.txt
 plans/schemas/crossref_execution_invariants.schema.json
 plans/schemas/fork_attestation_remediation.schema.json
 plans/schemas/verify_checkpoint.schema.json
@@ -85,6 +89,7 @@ plans/slice_completion_enforce.sh
 plans/slice_completion_review_guard.sh
 plans/slice_execute_guard.sh
 plans/slice_review_gate.sh
+plans/soldier_infra_facade_symbols.txt
 plans/ssot_lint.sh
 plans/step_prompts/recon/cycle1.md
 plans/step_prompts/recon/cycle2.md
@@ -122,6 +127,9 @@ plans/tests/test_fork_attestation_mirror.sh
 plans/tests/test_fork_attestation_remediation_verify.sh
 plans/tests/test_guard_no_command_substitution.sh
 plans/tests/test_lint_execution_facade.sh
+plans/tests/test_lint_risk_facade.sh
+plans/tests/test_lint_soldier_infra_facade.sh
+plans/tests/test_lint_venue_facade.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_prd_cache.sh
 plans/tests/test_prd_set_pass.sh
@@ -169,6 +177,7 @@ plans/tests/test_workflow_quick_step.sh
 plans/toggle_policy_check.sh
 plans/validate_crossref_invariants.py
 plans/validate_recon_step_report.py
+plans/venue_facade_symbols.txt
 plans/verify.sh
 plans/verify_day.sh
 plans/verify_fork.sh

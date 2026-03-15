@@ -38,6 +38,8 @@ pub(crate) const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str 
     "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED";
 pub(crate) const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str =
     "GLOBAL_EXPOSURE_BUDGET_REJECT";
+pub(crate) const REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING: &str =
+    "INVENTORY_SKEW_DELTA_LIMIT_MISSING";
 
 /// OPEN runtime inputs assembled before chokepoint evaluation.
 ///
@@ -160,7 +162,7 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
     let mut pending_reservation_id = None;
     let mut max_dispatch_qty = Some(input.liquidity_input.order_qty);
     let mut adjusted_min_edge_usd = None;
-    let mut liquidity_override_reason: Option<&'static str> = None;
+    let mut choke_override: Option<(GateStep, &'static str)> = None;
 
     let pre_dispatch_gates_ready = effective_risk_state == RiskState::Healthy
         && legacy.preflight_passed
@@ -190,18 +192,23 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                 gate_results.liquidity_gate_passed = false;
                 gate_results.net_edge_passed = false;
                 gate_results.pricer_passed = false;
-                liquidity_override_reason =
-                    Some(REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED);
+                choke_override = Some((
+                    GateStep::LiquidityGate,
+                    REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED,
+                ));
             }
             PendingExposureResult::Rejected { .. } => {
                 gate_results.liquidity_gate_passed = false;
                 gate_results.net_edge_passed = false;
                 gate_results.pricer_passed = false;
-                liquidity_override_reason = Some(REJECT_REASON_PENDING_EXPOSURE_OVERFILL);
+                choke_override = Some((
+                    GateStep::LiquidityGate,
+                    REJECT_REASON_PENDING_EXPOSURE_OVERFILL,
+                ));
             }
         }
 
-        if liquidity_override_reason.is_none() {
+        if choke_override.is_none() {
             match evaluate_global_exposure_budget(
                 &input.exposure_budget_input,
                 &mut runtime_metrics.global_exposure,
@@ -211,12 +218,15 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                     gate_results.liquidity_gate_passed = false;
                     gate_results.net_edge_passed = false;
                     gate_results.pricer_passed = false;
-                    liquidity_override_reason = Some(REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT);
+                    choke_override = Some((
+                        GateStep::LiquidityGate,
+                        REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT,
+                    ));
                 }
             }
         }
 
-        if liquidity_override_reason.is_none() {
+        if choke_override.is_none() {
             let liquidity_result =
                 evaluate_liquidity_gate(&input.liquidity_input, &mut runtime_metrics.liquidity);
             let liquidity_outcome =
@@ -279,6 +289,10 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                         if effective_risk_state == RiskState::Healthy {
                             effective_risk_state = RiskState::Degraded;
                         }
+                        choke_override = Some((
+                            GateStep::NetEdgeGate,
+                            REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING,
+                        ));
                     }
                     InventorySkewResult::Rejected {
                         adjusted_min_edge_usd: adjusted,
@@ -326,21 +340,27 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
         &gate_results,
         wal_gate,
     );
-    if let Some(override_reason) = liquidity_override_reason {
+    if let Some((override_gate, override_reason)) = choke_override {
         choke_result = match choke_result {
             ChokeResult::Rejected {
-                reason:
-                    ChokeRejectReason::GateRejected {
-                        gate: GateStep::LiquidityGate,
-                        ..
-                    },
+                reason: ChokeRejectReason::GateRejected { gate, .. },
+                gate_trace,
+            } if gate == override_gate => ChokeResult::Rejected {
+                reason: ChokeRejectReason::GateRejected {
+                    gate: override_gate,
+                    reason: override_reason.to_string(),
+                },
+                gate_trace: normalize_open_override_gate_trace(gate_trace, override_gate),
+            },
+            ChokeResult::Rejected {
+                reason: ChokeRejectReason::RiskStateNotHealthy,
                 gate_trace,
             } => ChokeResult::Rejected {
                 reason: ChokeRejectReason::GateRejected {
-                    gate: GateStep::LiquidityGate,
+                    gate: override_gate,
                     reason: override_reason.to_string(),
                 },
-                gate_trace,
+                gate_trace: normalize_open_override_gate_trace(gate_trace, override_gate),
             },
             other => {
                 runtime_metrics.reject_override_mismatch_total += 1;
@@ -375,6 +395,48 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
         effective_risk_state,
         adjusted_min_edge_usd,
     }
+}
+
+fn normalize_open_override_gate_trace(
+    mut gate_trace: Vec<GateStep>,
+    override_gate: GateStep,
+) -> Vec<GateStep> {
+    if gate_trace.last() == Some(&override_gate) {
+        return gate_trace;
+    }
+
+    if let Some(prefix) = open_gate_trace_prefix_through(override_gate) {
+        return prefix;
+    }
+
+    if !gate_trace.contains(&override_gate) {
+        gate_trace.push(override_gate);
+    }
+    gate_trace
+}
+
+fn open_gate_trace_prefix_through(last_gate: GateStep) -> Option<Vec<GateStep>> {
+    const OPEN_GATE_ORDER: [GateStep; 10] = [
+        GateStep::DispatchAuth,
+        GateStep::Preflight,
+        GateStep::Quantize,
+        GateStep::DispatchConsistency,
+        GateStep::FeeCacheCheck,
+        GateStep::ExpiryGuard,
+        GateStep::LiquidityGate,
+        GateStep::NetEdgeGate,
+        GateStep::Pricer,
+        GateStep::RecordedBeforeDispatch,
+    ];
+
+    let mut trace = Vec::with_capacity(OPEN_GATE_ORDER.len());
+    for gate in OPEN_GATE_ORDER {
+        trace.push(gate);
+        if gate == last_gate {
+            return Some(trace);
+        }
+    }
+    None
 }
 
 /// Complete lifecycle: settle pending exposure on TLSM terminal state (S6-008).

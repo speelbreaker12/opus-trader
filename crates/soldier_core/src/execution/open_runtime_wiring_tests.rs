@@ -408,10 +408,29 @@ fn test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first
     );
 
     match out.choke_result {
-        ChokeResult::Rejected { reason, .. } => {
-            assert_eq!(reason, ChokeRejectReason::RiskStateNotHealthy);
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert_eq!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::NetEdgeGate,
+                    reason: "INVENTORY_SKEW_DELTA_LIMIT_MISSING".to_string(),
+                }
+            );
+            assert_eq!(
+                gate_trace.last(),
+                Some(&GateStep::NetEdgeGate),
+                "gate trace must end at the gate reported in rejection reason"
+            );
+            assert!(
+                gate_trace.contains(&GateStep::LiquidityGate),
+                "liquidity gate should still appear before net-edge rejection"
+            );
+            assert!(
+                !gate_trace.contains(&GateStep::Pricer),
+                "pricer must not execute after net-edge rejection"
+            );
         }
-        other => panic!("expected risk-state rejection, got {other:?}"),
+        other => panic!("expected inventory-skew override rejection, got {other:?}"),
     }
 }
 

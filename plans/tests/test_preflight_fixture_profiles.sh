@@ -159,6 +159,9 @@ assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_quick_clippy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_lint_execution_facade.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_lint_risk_facade.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_lint_venue_facade.sh"
+assert_list_contains "$smoke_list" "plans/tests/test_lint_soldier_infra_facade.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_kernel_drift_message.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_recon_handoff_sources.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_roadmap_evidence_audit.sh"
@@ -263,7 +266,7 @@ overlap="$(
 
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "20" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 20)"
+[[ "$smoke_count" == "23" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 23)"
 [[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
 
 # Verify 14g dispatch loop pattern exists in verify_fork.sh

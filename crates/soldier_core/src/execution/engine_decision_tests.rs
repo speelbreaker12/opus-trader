@@ -731,6 +731,28 @@ fn engine_open_inventory_skew_reject_maps_runtime_step() {
 }
 
 #[test]
+fn engine_open_inventory_skew_delta_limit_missing_maps_code_and_step() {
+    let mut input = base_open_input();
+    input.inventory_skew.delta_limit = None;
+
+    let engine_book = make_pending_book(100.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::InventorySkewDeltaLimitMissing,
+            step: ExecutionStep::Runtime(RuntimeStep::InventorySkew),
+            ref detail,
+        }) if detail == "INVENTORY_SKEW_DELTA_LIMIT_MISSING"
+    ));
+}
+
+#[test]
 fn open_runtime_override_reasons_map_to_registry_codes() {
     let input = base_open_input();
 

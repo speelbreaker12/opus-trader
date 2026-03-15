@@ -8,15 +8,17 @@ use super::build_order_intent::{
 use super::dispatch_map::DispatchConsistencyProof;
 use super::engine::{
     ApprovedExecution, ExecutionBaseInput, ExecutionDecision, ExecutionL2BookSnapshot,
-    ExecutionOrderType, ExecutionRejection, ExecutionRuntime, ExecutionStep,
-    OpenExecutionInput, RuntimeStep,
+    ExecutionOrderType, ExecutionRejection, ExecutionRuntime, ExecutionStep, OpenExecutionInput,
+    RuntimeStep,
 };
 use super::gate::{GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput};
 use super::gates::NetEdgeInput;
 use super::inventory_skew::InventorySkewInput;
 use super::open_runtime::{
     OpenRuntimeInput, OpenRuntimeMetrics, OpenRuntimeOutput,
-    build_open_order_intent_runtime_with_wal_gate,
+    REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT, REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING,
+    REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED,
+    REJECT_REASON_PENDING_EXPOSURE_OVERFILL, build_open_order_intent_runtime_with_wal_gate,
 };
 use super::pipeline::{
     IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput,
@@ -29,11 +31,6 @@ use super::quantize::QuantizeConstraints;
 use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
 use super::wal_gate::RecordedBeforeDispatchGate;
 use crate::risk::RiskState;
-
-const REJECT_REASON_PENDING_EXPOSURE_OVERFILL: &str = "PENDING_EXPOSURE_OVERFILL";
-const REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED: &str =
-    "PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED";
-const REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT: &str = "GLOBAL_EXPOSURE_BUDGET_REJECT";
 
 pub(crate) fn route_open<'input, 'runtime>(
     input: &OpenExecutionInput<'input>,
@@ -101,9 +98,7 @@ pub(crate) fn route_pipeline<'input, 'runtime>(
             evaluate_intent_pipeline_with_wal_gate(&legacy_input, &mut metrics, None)
         }
         ChokeIntentClass::Open => {
-            tracing::error!(
-                "Open intent unexpectedly reached route_pipeline - failing closed"
-            );
+            tracing::error!("Open intent unexpectedly reached route_pipeline - failing closed");
             evaluate_intent_pipeline_with_wal_gate(&legacy_input, &mut metrics, None)
         }
     };
@@ -389,6 +384,15 @@ fn map_open_runtime_reject_code(
         };
     }
 
+    if let ChokeRejectReason::GateRejected {
+        gate: GateStep::NetEdgeGate,
+        reason: detail,
+    } = reason
+        && detail == REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING
+    {
+        return RejectReasonCode::InventorySkewDeltaLimitMissing;
+    }
+
     reject_reason_from_chokepoint(reason, gate_reject_codes)
 }
 
@@ -439,6 +443,12 @@ fn map_open_rejection_step(
                     }
                     _ => {}
                 }
+            }
+
+            if *gate == GateStep::NetEdgeGate
+                && reason == REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING
+            {
+                return ExecutionStep::Runtime(RuntimeStep::InventorySkew);
             }
 
             if *gate == GateStep::NetEdgeGate && output.adjusted_min_edge_usd.is_some() {

@@ -10,8 +10,8 @@ use crate::risk::{
     PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
     PendingExposureResult, PendingExposureTerminalOutcome, ReservationId, RiskState,
     compute_margin_mode_hint, evaluate_fee_staleness, evaluate_global_exposure_budget,
-    evaluate_margin_headroom_gate, exposure_budget_reject_total,
-    fee_staleness_hard_stale_total, margin_gate_reject_total, pending_exposure_reject_total,
+    evaluate_margin_headroom_gate, exposure_budget_reject_total, fee_staleness_hard_stale_total,
+    margin_gate_reject_total, pending_exposure_reject_total,
 };
 
 #[test]
