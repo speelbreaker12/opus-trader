@@ -27,6 +27,7 @@ use super::inventory_skew::{
     evaluate_inventory_skew,
 };
 use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
+use super::reject_reason::{GateRejectCodes, RejectReasonCode};
 use super::tlsm::Tlsm;
 
 /// Machine-stable reject-detail tokens consumed by execution-engine mapping.
@@ -89,6 +90,7 @@ pub struct OpenRuntimeMetrics {
 pub(crate) struct OpenRuntimeOutput {
     pub choke_result: ChokeResult,
     pub gate_results: GateResults,
+    pub gate_reject_codes: GateRejectCodes,
     pub pending_reservation_id: Option<ReservationId>,
     pub mode_hint: MarginGateMode,
     pub effective_risk_state: RiskState,
@@ -158,6 +160,13 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
         Some(input.liquidity_input.order_qty),
         None,
     );
+    let mut gate_reject_codes = GateRejectCodes {
+        preflight: legacy.preflight_reject_code,
+        quantize: legacy.quantize_reject_code,
+        fee_cache: legacy.fee_cache_reject_code,
+        expiry_guard: legacy.expiry_guard_reject_code,
+        ..GateRejectCodes::default()
+    };
 
     let mut pending_reservation_id = None;
     let mut max_dispatch_qty = Some(input.liquidity_input.order_qty);
@@ -232,7 +241,9 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                 evaluate_liquidity_gate(&input.liquidity_input, &mut runtime_metrics.liquidity);
             let liquidity_outcome =
                 GateOutcome::from_liquidity(GateStep::LiquidityGate, &liquidity_result);
-            gate_results.liquidity_gate_passed = liquidity_outcome.is_allowed();
+            let (liquidity_gate_passed, liquidity_reject_code) = liquidity_outcome.to_legacy();
+            gate_results.liquidity_gate_passed = liquidity_gate_passed;
+            gate_reject_codes.liquidity_gate = liquidity_reject_code;
             // allowed_qty is extracted regardless of decision: on reject the gate
             // is still the authority on how much qty was fillable, and the value
             // is used for observability. Dispatch is gated by liquidity_gate_passed
@@ -246,11 +257,13 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                     evaluate_net_edge(&input.net_edge_input, &mut runtime_metrics.net_edge);
                 let first_net_edge_outcome =
                     GateOutcome::from_net_edge(GateStep::NetEdgeGate, &first_net_edge);
+                let (net_edge_passed, net_edge_reject_code) = first_net_edge_outcome.to_legacy();
                 let first_net_edge_usd = match first_net_edge {
                     NetEdgeResult::Allowed { net_edge_usd } => Some(net_edge_usd),
                     NetEdgeResult::Rejected { net_edge_usd, .. } => net_edge_usd,
                 };
-                gate_results.net_edge_passed = first_net_edge_outcome.is_allowed();
+                gate_results.net_edge_passed = net_edge_passed;
+                gate_reject_codes.net_edge_gate = net_edge_reject_code;
 
                 let mut inventory_skew_input = input.inventory_skew_input.clone();
                 // Always override with the authoritative current_delta from the runtime input,
@@ -280,7 +293,10 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                             GateStep::NetEdgeGate,
                             &net_edge_recheck_result,
                         );
-                        gate_results.net_edge_passed = net_edge_recheck_outcome.is_allowed();
+                        let (net_edge_passed, net_edge_reject_code) =
+                            net_edge_recheck_outcome.to_legacy();
+                        gate_results.net_edge_passed = net_edge_passed;
+                        gate_reject_codes.net_edge_gate = net_edge_reject_code;
                     }
                     InventorySkewResult::Rejected {
                         reason: InventorySkewRejectReason::InventorySkewDeltaLimitMissing,
@@ -291,10 +307,16 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                             effective_risk_state = RiskState::Degraded;
                         }
                         inventory_skew_delta_limit_missing = true;
-                        choke_override = Some((
-                            GateStep::NetEdgeGate,
-                            REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING,
-                        ));
+                        if gate_reject_codes.net_edge_gate
+                            != Some(RejectReasonCode::NetEdgeInputMissing)
+                        {
+                            gate_reject_codes.net_edge_gate =
+                                Some(RejectReasonCode::InventorySkewDeltaLimitMissing);
+                            choke_override = Some((
+                                GateStep::NetEdgeGate,
+                                REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING,
+                            ));
+                        }
                     }
                     InventorySkewResult::Rejected {
                         adjusted_min_edge_usd: adjusted,
@@ -319,7 +341,9 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
                     let pricer_result =
                         compute_limit_price(&pricer_input, &mut runtime_metrics.pricer);
                     let pricer_outcome = GateOutcome::from_pricer(GateStep::Pricer, &pricer_result);
-                    gate_results.pricer_passed = pricer_outcome.is_allowed();
+                    let (pricer_passed, pricer_reject_code) = pricer_outcome.to_legacy();
+                    gate_results.pricer_passed = pricer_passed;
+                    gate_reject_codes.pricer = pricer_reject_code;
                 } else {
                     gate_results.pricer_passed = false;
                 }
@@ -350,6 +374,22 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
         wal_gate,
     );
     if let Some((override_gate, override_reason)) = choke_override {
+        match (override_gate, override_reason) {
+            (GateStep::LiquidityGate, REJECT_REASON_PENDING_EXPOSURE_OVERFILL)
+            | (GateStep::LiquidityGate, REJECT_REASON_PENDING_EXPOSURE_INSTRUMENT_NOT_REGISTERED) => {
+                gate_reject_codes.liquidity_gate =
+                    Some(RejectReasonCode::PendingExposureBudgetExceeded);
+            }
+            (GateStep::LiquidityGate, REJECT_REASON_GLOBAL_EXPOSURE_BUDGET_REJECT) => {
+                gate_reject_codes.liquidity_gate =
+                    Some(RejectReasonCode::GlobalExposureBudgetExceeded);
+            }
+            (GateStep::NetEdgeGate, REJECT_REASON_INVENTORY_SKEW_DELTA_LIMIT_MISSING) => {
+                gate_reject_codes.net_edge_gate =
+                    Some(RejectReasonCode::InventorySkewDeltaLimitMissing);
+            }
+            _ => {}
+        }
         choke_result = match choke_result {
             ChokeResult::Rejected {
                 reason: ChokeRejectReason::GateRejected { gate, .. },
@@ -389,6 +429,7 @@ pub(crate) fn build_open_order_intent_runtime_with_wal_gate(
     OpenRuntimeOutput {
         choke_result,
         gate_results,
+        gate_reject_codes,
         pending_reservation_id,
         mode_hint,
         effective_risk_state,

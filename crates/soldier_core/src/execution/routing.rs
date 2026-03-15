@@ -266,9 +266,32 @@ pub(crate) fn open_runtime_to_decision(
 ) -> ExecutionDecision {
     use ChokeResult::{Approved as ChokeApproved, Rejected as ChokeRejected};
 
+    let gate_reject_codes = GateRejectCodes {
+        preflight: output.gate_reject_codes.preflight.or(input.gate_reject_codes.preflight),
+        quantize: output.gate_reject_codes.quantize.or(input.gate_reject_codes.quantize),
+        fee_cache: output.gate_reject_codes.fee_cache.or(input.gate_reject_codes.fee_cache),
+        expiry_guard: output
+            .gate_reject_codes
+            .expiry_guard
+            .or(input.gate_reject_codes.expiry_guard),
+        liquidity_gate: output
+            .gate_reject_codes
+            .liquidity_gate
+            .or(input.gate_reject_codes.liquidity_gate),
+        net_edge_gate: output
+            .gate_reject_codes
+            .net_edge_gate
+            .or(input.gate_reject_codes.net_edge_gate),
+        recorded_before_dispatch: output
+            .gate_reject_codes
+            .recorded_before_dispatch
+            .or(input.gate_reject_codes.recorded_before_dispatch),
+        pricer: output.gate_reject_codes.pricer.or(input.gate_reject_codes.pricer),
+    };
+
     match &output.choke_result {
         ChokeRejected { reason, .. } => ExecutionDecision::Rejected(ExecutionRejection {
-            code: map_open_runtime_reject_code(reason, &input.gate_reject_codes),
+            code: map_open_runtime_reject_code(reason, &gate_reject_codes),
             step: map_open_rejection_step(input, output, reason),
             detail: reject_reason_detail(reason),
         }),

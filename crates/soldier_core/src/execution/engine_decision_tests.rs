@@ -641,6 +641,7 @@ fn synthetic_open_output(reason: ChokeRejectReason) -> OpenRuntimeOutput {
             Some(1.0),
             None,
         ),
+        gate_reject_codes: GateRejectCodes::default(),
         pending_reservation_id: None,
         mode_hint: MarginGateMode::Active,
         effective_risk_state: RiskState::Healthy,
@@ -670,6 +671,7 @@ fn open_runtime_step_maps_base_gates_to_runtime_stage() {
 fn open_runtime_step_maps_margin_gate_transition() {
     let output = OpenRuntimeOutput {
         effective_risk_state: RiskState::Degraded,
+        gate_reject_codes: GateRejectCodes::default(),
         ..synthetic_open_output(ChokeRejectReason::RiskStateNotHealthy)
     };
 
@@ -749,6 +751,52 @@ fn engine_open_inventory_skew_delta_limit_missing_maps_code_and_step() {
             step: ExecutionStep::Runtime(RuntimeStep::InventorySkew),
             ref detail,
         }) if detail == "INVENTORY_SKEW_DELTA_LIMIT_MISSING"
+    ));
+}
+
+#[test]
+fn engine_open_preserves_initial_net_edge_code_when_inventory_skew_rejects() {
+    let mut input = base_open_input();
+    input.net_edge.min_edge_usd = None;
+    input.inventory_skew.tick_size = 0.0;
+
+    let engine_book = make_pending_book(100.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::NetEdgeInputMissing,
+            step: ExecutionStep::Gate(GateStep::NetEdgeGate),
+            ..
+        })
+    ));
+}
+
+#[test]
+fn engine_open_preserves_initial_net_edge_code_when_delta_limit_missing_also_rejects() {
+    let mut input = base_open_input();
+    input.net_edge.min_edge_usd = None;
+    input.inventory_skew.delta_limit = None;
+
+    let engine_book = make_pending_book(100.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::NetEdgeInputMissing,
+            step: ExecutionStep::Gate(GateStep::NetEdgeGate),
+            detail,
+        }) if detail != "INVENTORY_SKEW_DELTA_LIMIT_MISSING"
     ));
 }
 

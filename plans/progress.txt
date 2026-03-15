@@ -226,6 +226,13 @@ Next: proceed with subsequent acceptance steps in the workflow acceptance suite
 Summary: acceptance mention complete including extra detail to satisfy progress gate length requirements for workflow acceptance tests
 Commands: none (placeholder text to satisfy gate length; no real commands executed in this stub)
 Evidence: acceptance stub evidence placeholder to meet minimum content length checks in progress gate validation
+Story: workflow-maintenance
+Date: 2026-03-15 15:46:00 UTC
+Summary: Fixed OPEN runtime reject-code attribution so malformed net-edge inputs keep `NetEdgeInputMissing` even if inventory-skew also rejects later in the path. Added output-side gate reject code propagation from OPEN runtime into routing, preserved existing inventory-skew override behavior for `NetEdgeTooLow`, and added focused engine regressions covering both malformed-input overwrite cases.
+Commands: cargo test -p soldier_core engine_open_preserves_initial_net_edge_code_when_inventory_skew_rejects --lib; cargo test -p soldier_core engine_open_preserves_initial_net_edge_code_when_delta_limit_missing_also_rejects --lib; cargo test -p soldier_core engine_open_inventory_skew_delta_limit_missing_maps_code_and_step --lib; cargo test -p soldier_core test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first --lib.
+Evidence: crates/soldier_core/src/execution/open_runtime.rs; crates/soldier_core/src/execution/routing.rs; crates/soldier_core/src/execution/engine_decision_tests.rs.
+Notes: I did not merge the `auto-review` worktree because it bundled unrelated `soldier_infra` and facade-lint changes; I implemented the execution-path fix directly after reproducing the failing case locally.
+Next: If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
 Next: continue with subsequent acceptance steps in the workflow acceptance suite
 2026-01-31 - S1-012
 Summary: acceptance commit without pass including extra detail to satisfy progress gate length requirements for workflow acceptance tests
