@@ -427,6 +427,40 @@ fn test_infinite_gross_edge_rejected() {
     ));
 }
 
+// ─── expected_slippage_usd boundary ──────────────────────────────────
+
+#[test]
+fn test_nan_expected_slippage_rejected() {
+    let mut m = PricerMetrics::new();
+
+    let inp = input_with_slippage(100.0, 10.0, 2.0, 3.0, f64::NAN, 1.0, Side::Buy);
+    let result = compute_limit_price(&inp, &mut m);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_negative_expected_slippage_rejected() {
+    let mut m = PricerMetrics::new();
+
+    let inp = input_with_slippage(100.0, 10.0, 2.0, 3.0, -0.1, 1.0, Side::Buy);
+    let result = compute_limit_price(&inp, &mut m);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::InvalidInput,
+            ..
+        }
+    ));
+}
+
 // ─── Devils-advocate: boundary mutations ─────────────────────────────
 
 /// Catches mutation: `<` flipped to `<=` on net_edge < min_edge check.

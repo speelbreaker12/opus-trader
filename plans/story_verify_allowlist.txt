@@ -18,6 +18,9 @@ cargo test -p soldier_core --lib dispatch_chokepoint_contract_tests
 cargo test -p soldier_core --lib reject_reason_contract_tests
 cargo test -p soldier_core --test test_capabilities
 cargo test -p soldier_core --test test_dispatch_map
+cargo test -p soldier_core --test test_emergency_close
+cargo test -p soldier_core --test test_risk_facade_public
+cargo test -p soldier_core --test test_venue_facade_public
 cargo test -p soldier_core --test test_exposure_budget
 cargo test -p soldier_core --test test_fee_staleness
 cargo test -p soldier_core --test test_gate_ordering
