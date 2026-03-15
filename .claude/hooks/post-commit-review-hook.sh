@@ -4,14 +4,14 @@
 
 INPUT=$(cat)
 
-COMMAND=$(echo "$INPUT" | python3 -c "
+COMMAND=$(python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
     print(d.get('tool_input', {}).get('command', ''))
 except Exception:
     print('')
-" 2>/dev/null || echo "")
+" <<< "$INPUT" 2>/dev/null || echo "")
 
 if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
     cat >&2 <<'EOF'
