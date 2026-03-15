@@ -51,7 +51,7 @@ pub enum ExecutionDecision {
 
 pub struct OpenExecutionInput<'a> {
     pub input: OpenRuntimeInput<'a>,
-    pub gate_reject_codes: GateRejectCodes,
+    // Reject-code sidecars are derived internally from runtime gate results.
 }
 
 pub struct CloseExecutionInput<'a> {

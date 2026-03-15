@@ -1112,6 +1112,27 @@ Commands: git diff --binary > /tmp/opus_verify_current_20260313f.patch; git work
 Evidence: artifacts/verify/20260313_153930/verify.meta.json; artifacts/verify/20260313_155140/verify.meta.json; artifacts/verify/20260313_153930; artifacts/verify/20260313_155140.
 Notes: Both copied runs are green against HEAD `81a411cc9f6f` plus the current local dirty diff. Quick run `20260313_153930` finished `status=ok`; full run `20260313_155140` finished `status=ok`.
 Next: Treat `artifacts/verify/20260313_155140` as the current merge-readiness evidence until the local diff changes again.
+Story: S6-013
+Date: 2026-03-13 23:08:35 UTC
+Summary: Added canonical PRD story `S6-013` plus premortem `reviews/premortems/S6-013_premortem.md` to map the `UPGRADE-1B-PR4` execution-tail cleanup slice back into the repo proof workflow, then reran the mapping-sensitive review evidence so `/loss-risk-gate` no longer fails on missing traceability.
+Commands: rg -n "UPGRADE-1B-PR4|orchestration-tail|share execution tail" plans/prd.json reviews/premortems -S; bash plans/premortem_gate.sh S6-013; ./plans/prd_gate.sh.
+Evidence: plans/prd.json; reviews/premortems/S6-013_premortem.md; artifacts/story/UPGRADE-1B-PR4/self_review/REVIEW_STACK.md.
+Notes: `bash plans/premortem_gate.sh S6-013` passed with `STOPLIGHT: GREEN`. `./plans/prd_gate.sh` now clears `S6-013` itself and only reports an unrelated baseline backlog error on `S0-006` (`plans/live_enable_preflight.sh` already exists), so the old PR4 mapping blocker is resolved without claiming repo-wide PRD hygiene is green.
+Next: Commit the PRD/premortem mapping if you want the cleared `/loss-risk-gate` result preserved in git history, then address the unrelated `S0-006` PRD backlog issue separately before using `./plans/prd_gate.sh` as a repo-clean signal.
+Story: PRD hygiene cleanup
+Date: 2026-03-13 23:52:17 UTC
+Summary: Cleared the remaining repo-wide `plans/prd_gate.sh` errors by fixing `S0-006` to classify `plans/live_enable_preflight.sh` as an existing touched file and removing stale non-existent `AT-1235` / `AT-1236` references from `S4-003` and `S6-004`, while keeping the durable-before-dispatch proof tied to the live contract sections.
+Commands: ./plans/prd_gate.sh; ./plans/prd_audit_check.sh; rg -n "AT-1235|AT-1236" plans/prd.json; git diff --check -- plans/prd.json.
+Evidence: plans/prd.json; `./plans/prd_gate.sh` output (`PRD gate OK`).
+Notes: `./plans/prd_gate.sh` now exits 0 with warnings only. `./plans/prd_audit_check.sh` still fails closed because `.context/prd_auditor_stdout.log` is missing in this worktree, so PRD audit caching remains a separate hygiene issue.
+Next: Restore or regenerate the missing PRD audit stdout/meta artifacts if this worktree needs audit-clean PRD evidence, then decide whether to chase the remaining warning-only PRD debt.
+Story: PRD audit artifact refresh
+Date: 2026-03-13 18:23:00 UTC
+Summary: Regenerated the PRD audit artifacts in the PR4 worktree after fixing story-verify allowlist drift for the newly added `S0-006` and `S6-013` verify commands, restoring `.context/prd_auditor_stdout.log` / `.context/prd_audit_meta.json` and bringing `./plans/prd_audit_check.sh` back to green.
+Commands: ./plans/prd_preflight.sh; ./plans/story_verify_allowlist_check.sh plans/prd.json; ./plans/story_verify_allowlist_lint.sh; AUDITOR_TIMEOUT=1800 ./plans/run_prd_auditor.sh; ./plans/prd_audit_check.sh; bash plans/tests/test_workflow_allowlist_coverage.sh.
+Evidence: plans/story_verify_allowlist.txt; plans/prd_audit.json; .context/prd_auditor_stdout.log; .context/prd_audit_meta.json; .context/prd_audit_cache.json.
+Notes: The first auditor attempt failed in preflight because `plans/story_verify_allowlist.txt` was missing legitimate verify commands referenced by `S0-006` and `S6-013`. After allowlisting those commands, preflight passed, the auditor completed in 281s, and `./plans/prd_audit_check.sh` returned `PRD audit check OK`.
+Next: Commit and push the refreshed allowlist plus `plans/prd_audit.json` so the open PR carries the restored audit proof, then decide whether to burn down the remaining warning-only PRD debt.
 Story: design-maintenance
 Date: 2026-03-14
 Summary: Tightened contract-autoresearch design spec for remaining high-risk gaps: `cross_ref_broken` auto-apply now requires same-section + same-test-type AT substitutions against a pinned `context_manifest_hash`, and Phase 2 write isolation is now specified as a concrete `claude --cwd` + local permission-profile contract with fail-closed startup checks.
