@@ -12,6 +12,7 @@ plans/aggregate_proofs.sh
 plans/artifact_lint.sh
 plans/autofix.sh
 plans/bidi_control_guard.sh
+plans/check_autoresearch_manifest.py
 plans/check_checkpoint_fingerprint_manifest.sh
 plans/check_contract_change_ledger.sh
 plans/check_skip_entrypoint.sh

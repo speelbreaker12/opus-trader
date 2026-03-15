@@ -289,7 +289,55 @@ pass "non-routing execution imports fail lint"
 
 rm -f "$scan_root/soldier_core/src/execution/not_routing.rs"
 
-# 8) test-only execution files remain exempt.
+# 8) base_gates.rs must not be exempt from the routing-only boundary.
+cat > "$scan_root/soldier_core/src/execution/base_gates.rs" <<'EOF'
+use super::pipeline::QuantizePipelineInput;
+EOF
+
+set +e
+base_gates_out="$(
+  LINT_EXECUTION_FACADE_MOD="$mod_file" \
+  LINT_EXECUTION_FACADE_API="$api_file" \
+  LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
+  bash "$SCRIPT" 2>&1
+)"
+base_gates_rc=$?
+set -e
+[[ $base_gates_rc -ne 0 ]] || fail "base_gates.rs pipeline import should fail lint"
+echo "$base_gates_out" | grep -Fq "only routing.rs may import open_runtime or pipeline" || fail "missing base_gates diagnostic"
+echo "$base_gates_out" | grep -Fq "base_gates.rs" || fail "base_gates location should be reported"
+pass "base_gates pipeline import fails lint"
+
+rm -f "$scan_root/soldier_core/src/execution/base_gates.rs"
+
+# 9) intent_assembly.rs must not be exempt from the routing-only boundary.
+cat > "$scan_root/soldier_core/src/execution/intent_assembly.rs" <<'EOF'
+use super::pipeline::evaluate_intent_pipeline;
+EOF
+
+set +e
+intent_assembly_out="$(
+  LINT_EXECUTION_FACADE_MOD="$mod_file" \
+  LINT_EXECUTION_FACADE_API="$api_file" \
+  LINT_EXECUTION_FACADE_ALLOWLIST="$allowlist_file" \
+  LINT_EXECUTION_FACADE_SCAN_ROOT="$scan_root" \
+  LINT_EXECUTION_FACADE_ENGINE="$engine_file" \
+  LINT_EXECUTION_FACADE_ROUTING="$routing_file" \
+  bash "$SCRIPT" 2>&1
+)"
+intent_assembly_rc=$?
+set -e
+[[ $intent_assembly_rc -ne 0 ]] || fail "intent_assembly.rs pipeline import should fail lint"
+echo "$intent_assembly_out" | grep -Fq "only routing.rs may import open_runtime or pipeline" || fail "missing intent_assembly diagnostic"
+echo "$intent_assembly_out" | grep -Fq "intent_assembly.rs" || fail "intent_assembly location should be reported"
+pass "intent_assembly pipeline import fails lint"
+
+rm -f "$scan_root/soldier_core/src/execution/intent_assembly.rs"
+
+# 10) test-only execution files remain exempt.
 cat > "$scan_root/soldier_core/src/execution/routing_boundary_tests.rs" <<'EOF'
 use crate::execution::pipeline::evaluate_intent_pipeline;
 EOF
