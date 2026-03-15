@@ -26,13 +26,7 @@ compute_margin_mode_hint
 evaluate_fee_staleness
 evaluate_global_exposure_budget
 evaluate_margin_headroom_gate
-exposure_budget
 exposure_budget_reject_total
 fee_staleness_hard_stale_total
-fees
-instrument_state
-margin_gate
 margin_gate_reject_total
-pending_exposure
 pending_exposure_reject_total
-state
