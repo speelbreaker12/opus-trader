@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/rust-skills-prompt-hook.py 2>&1"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
@@ -11,6 +21,24 @@
           {
             "type": "command",
             "command": "python3 .claude/scripts/secret-scanner.py 2>&1"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/rust-skills-edit-hook.py 2>&1"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/rust-skills-edit-hook.py 2>&1"
           }
         ]
       }

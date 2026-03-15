@@ -23,6 +23,9 @@ evals/
 !.claude/agents/*.md
 !.claude/scripts/
 !.claude/scripts/*.py
+!.claude/hooks/
+!.claude/hooks/*.py
+!.claude/hooks/*.sh
 !.claude/settings.json
 !.claude/commands/
 !.claude/commands/*.md

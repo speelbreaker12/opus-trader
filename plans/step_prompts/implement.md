@@ -3,6 +3,12 @@ You are the Builder. Do ONLY the IMPLEMENT step for ${STORY_ID}.
 
 STORY: ${STORY_ID}
 
+RUST SKILLS (apply before writing any Rust)
+This is a fintech trading engine. Before writing Rust code:
+- Apply domain-fintech rules: no f32/f64 for prices/qty/fees, use Decimal; fail-closed defaults
+- Apply m01-ownership if touching lifetimes/borrows; m07-concurrency if touching async/Arc/Mutex
+- No unwrap() in production paths
+
 TASK
 Implement the story in scope only:
 - Follow PRD scope.touch / create / avoid
