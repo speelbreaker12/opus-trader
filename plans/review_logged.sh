@@ -697,12 +697,12 @@ case "$tool" in
     else
       # Standard diff modes: use built-in `codex review`
       # Inject Rust fintech rules via the [PROMPT] positional arg (custom review instructions)
+      # NOTE: codex review --base does NOT accept a [PROMPT] positional arg; skip it for base mode.
       _rust_rules="Rust fintech trading engine rules: (1) Flag f32/f64 for prices/quantities/fees — must use Decimal or newtypes. (2) Flag unwrap() in non-test code. (3) Flag fail-open defaults — TradingMode::Active when uncertain is a bug; must be ReduceOnly. (4) Flag non-Send/Sync types used in async/multi-thread contexts. (5) Flag borrow/lifetime errors and moved-value errors (E0382, E0597, E0506)."
-      cmd=("codex" "review" "--title" "$title" "$_rust_rules")
       case "$mode" in
-        commit)      cmd+=("--commit" "$commit") ;;
-        base)        cmd+=("--base" "$base") ;;
-        uncommitted) cmd+=("--uncommitted") ;;
+        commit)      cmd=("codex" "review" "--title" "$title" "$_rust_rules" "--commit" "$commit") ;;
+        base)        cmd=("codex" "review" "--title" "$title" "--base" "$base") ;;
+        uncommitted) cmd=("codex" "review" "--title" "$title" "$_rust_rules" "--uncommitted") ;;
       esac
     fi
     if [[ ${#extra[@]} -gt 0 ]]; then

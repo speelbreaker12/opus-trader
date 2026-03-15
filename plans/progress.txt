@@ -240,6 +240,13 @@ Commands: cargo test -p soldier_core engine_open_preserves_initial_net_edge_code
 Evidence: crates/soldier_core/src/execution/open_runtime.rs; crates/soldier_core/src/execution/routing.rs; crates/soldier_core/src/execution/engine_decision_tests.rs.
 Notes: I did not merge the `auto-review` worktree because it bundled unrelated `soldier_infra` and facade-lint changes; I implemented the execution-path fix directly after reproducing the failing case locally.
 Next: If a clean worktree or CI run is available for this branch, run `./plans/verify.sh full` to produce final clean-checkout verification evidence for merge.
+Story: workflow-maintenance
+Date: 2026-03-15 17:34:00 UTC
+Summary: Fixed `plans/review_logged.sh` so `codex review --base` no longer receives the Rust fintech review prompt as an unsupported positional argument, while `--commit` and `--uncommitted` still inject the custom rules. Added fixture coverage proving files-mode prompt literalization still works and base-mode argv no longer contains the prompt payload.
+Commands: bash -n plans/review_logged.sh plans/tests/test_review_logged_prompt_literalization.sh; bash plans/tests/test_review_logged_prompt_literalization.sh.
+Evidence: plans/review_logged.sh; plans/tests/test_review_logged_prompt_literalization.sh.
+Notes: Kept the change isolated from the remaining local `.claude/**` and runtime-state noise.
+Next: If desired, run the broader review-logged workflow tests or a clean-checkout verify pass before merge.
 Next: continue with subsequent acceptance steps in the workflow acceptance suite
 2026-01-31 - S1-012
 Summary: acceptance commit without pass including extra detail to satisfy progress gate length requirements for workflow acceptance tests
