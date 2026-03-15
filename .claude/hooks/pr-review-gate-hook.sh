@@ -29,7 +29,9 @@ done < <(printf '%s' "$COMMAND" | tr ';&|' '\n')
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 
 # Can't determine branch — don't block
-[ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ] && exit 0
+if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then
+    exit 0
+fi
 
 SAFE_BRANCH="${BRANCH//\//_}"
 MARKER="artifacts/pr-review-gate/${SAFE_BRANCH}.json"
