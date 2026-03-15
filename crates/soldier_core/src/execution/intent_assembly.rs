@@ -8,9 +8,7 @@ use super::dispatch_map::{
     DispatchConsistencyProof, IntentClass, MismatchMetrics, validate_and_dispatch,
 };
 use super::order_size::{OrderSize, OrderSizeInput, build_order_size};
-use crate::venue::{
-    InstrumentKind, InstrumentKindInput, derive_instrument_kind,
-};
+use crate::venue::{InstrumentKind, InstrumentKindInput, derive_instrument_kind};
 
 // ─── Types ──────────────────────────────────────────────────────────────
 

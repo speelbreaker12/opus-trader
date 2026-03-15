@@ -26,12 +26,11 @@ use crate::execution::dispatch_map::IntentClass;
 use crate::execution::gate::{GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput};
 use crate::execution::gates::NetEdgeInput;
 use crate::execution::intent_assembly::{
-    AssemblySizingError, MismatchMetrics, SizingParams, assemble_sizing,
-    choke_intent_to_dispatch,
+    AssemblySizingError, MismatchMetrics, SizingParams, assemble_sizing, choke_intent_to_dispatch,
 };
 use crate::execution::pipeline::{
-    IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput,
-    PipelineResult, evaluate_intent_pipeline,
+    IntentPipelineInput, IntentPipelineMetrics, PipelineResult, QuantizePipelineInput,
+    evaluate_intent_pipeline,
 };
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
