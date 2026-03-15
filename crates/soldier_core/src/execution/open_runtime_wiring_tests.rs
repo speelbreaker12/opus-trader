@@ -440,7 +440,10 @@ fn test_runtime_wiring_inventory_skew_reject_preserves_runtime_sidecar() {
         &mut runtime_metrics,
     );
 
-    assert_eq!(out.gate_reject_codes.net_edge_gate, Some(RejectReasonCode::NetEdgeTooLow));
+    assert_eq!(
+        out.gate_reject_codes.net_edge_gate,
+        Some(RejectReasonCode::NetEdgeTooLow)
+    );
     assert!(out.adjusted_min_edge_usd.is_some());
     assert!(matches!(
         out.choke_result,

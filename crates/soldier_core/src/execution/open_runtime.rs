@@ -305,8 +305,7 @@ pub(crate) fn build_open_order_intent_runtime(
                         // NetEdgeInputMissing), preserve that original code so
                         // map_open_rejection_step reports the real cause.
                         if net_edge_passed {
-                            gate_reject_codes.net_edge_gate =
-                                Some(RejectReasonCode::NetEdgeTooLow);
+                            gate_reject_codes.net_edge_gate = Some(RejectReasonCode::NetEdgeTooLow);
                             adjusted_min_edge_usd = adjusted;
                         }
                         gate_results.net_edge_passed = false;
