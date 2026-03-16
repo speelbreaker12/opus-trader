@@ -9,9 +9,8 @@
 use super::build_order_intent::{ChokeIntentClass, GateStep};
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate_outcome::GateOutcome;
-use super::pipeline::QuantizePipelineInput;
 use super::preflight::{PreflightInput, PreflightMetrics, preflight_intent};
-use super::quantize::{QuantizeMetrics, QuantizedValues, quantize};
+use super::quantize::{QuantizeConstraints, QuantizeMetrics, QuantizedValues, Side, quantize};
 use super::reject_reason::RejectReasonCode;
 use crate::risk::{
     FeeCacheSnapshot, FeeEvaluation, FeeMetrics, FeeStalenessConfig, RiskState,
@@ -23,6 +22,15 @@ use crate::venue::{
 };
 
 // ─── Input ──────────────────────────────────────────────────────────────
+
+/// Quantize inputs shared by the base-gate and pipeline evaluators.
+#[derive(Debug, Clone)]
+pub(crate) struct QuantizePipelineInput {
+    pub raw_qty: f64,
+    pub raw_limit_price: f64,
+    pub side: Side,
+    pub constraints: QuantizeConstraints,
+}
 
 /// Input for the shared base gates (1-6).
 #[derive(Debug, Clone)]

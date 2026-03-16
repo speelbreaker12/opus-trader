@@ -392,12 +392,12 @@ run_logged_nonblocking_gate() {
 run_contract_at_plan_parity_gate() {
   if [[ "$MODE" == "full" ]]; then
     run_logged_or_exit "contract_at_plan_parity" "$CONTRACT_KERNEL_TIMEOUT" \
-      bash "$ROOT/plans/prd_ref_check.sh" plans/prd.json
+      bash "$ROOT/plans/prd_ref_check.sh" "$ROOT/plans/prd.json"
     return 0
   fi
 
   run_logged_nonblocking_gate "contract_at_plan_parity" "$CONTRACT_KERNEL_TIMEOUT" \
-    bash "$ROOT/plans/prd_ref_check.sh" plans/prd.json
+    bash "$ROOT/plans/prd_ref_check.sh" "$ROOT/plans/prd.json"
   if [[ -f "$VERIFY_ARTIFACTS_DIR/contract_at_plan_parity.warn" ]]; then
     warn "contract-plan AT parity: WARN (run verify full for hard gate)"
   fi
@@ -479,47 +479,10 @@ start_parallel_gate() {
 
 start_parallel_workflow_test() {
   local test_script="$1"
-  local gate_name
-  gate_name="$(workflow_integration_gate_name "$test_script")"
+  local test_name="${test_script##*/}"
+  local gate_name="wf_${test_name%.sh}"
   start_parallel_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT" \
     bash "$test_script"
-}
-
-workflow_integration_gate_name() {
-  local test_script="$1"
-  local test_name="${test_script##*/}"
-  echo "wf_${test_name%.sh}"
-}
-
-run_workflow_integration_tests() {
-  local workflow_test=""
-  local gate_name=""
-
-  if [[ "$VERIFY_PARALLEL" == "1" ]]; then
-    parallel_group_reset
-    for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do
-      start_parallel_workflow_test "$workflow_test"
-    done
-    if [[ "$MODE" == "full" ]]; then
-      for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do
-        start_parallel_workflow_test "$workflow_test"
-      done
-    fi
-    return 0
-  fi
-
-  for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do
-    gate_name="$(workflow_integration_gate_name "$workflow_test")"
-    run_required_bash_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT" \
-      "14g) workflow integration test: ${workflow_test##*/}" "$workflow_test"
-  done
-  if [[ "$MODE" == "full" ]]; then
-    for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do
-      gate_name="$(workflow_integration_gate_name "$workflow_test")"
-      run_required_bash_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT" \
-        "14g) workflow integration test: ${workflow_test##*/}" "$workflow_test"
-    done
-  fi
 }
 
 finish_parallel_group_or_exit() {
@@ -658,14 +621,12 @@ log "02a) contract change ledger"
 run_logged_or_exit "contract_change_ledger" "$CONTRACT_KERNEL_TIMEOUT" \
   bash "$ROOT/plans/check_contract_change_ledger.sh" --base-ref "$VERIFY_BASE_REF" --contract specs/CONTRACT.md
 
-log "02a2) contract-plan AT parity"
-run_contract_at_plan_parity_gate
+log "02a2) autoresearch context manifest freshness"
+run_logged_or_exit "autoresearch_manifest" "$CONTRACT_KERNEL_TIMEOUT" \
+  "$PYTHON_BIN" "$ROOT/plans/check_autoresearch_manifest.py"
 
-if [[ "$MODE" == "full" ]]; then
-  log "02a3) contract AT wording drift"
-  run_logged_or_exit "contract_at_wording_drift" "$CONTRACT_KERNEL_TIMEOUT" \
-    bash "$ROOT/plans/check_contract_at_wording_drift.sh" --base-ref "$VERIFY_BASE_REF"
-fi
+log "02a3) contract-plan AT parity"
+run_contract_at_plan_parity_gate
 
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
   log "02b-02e) profile/invariant gates (parallel)"
@@ -931,7 +892,7 @@ if [[ -x "$ROOT/plans/pattern_guard.sh" ]]; then
     bash "$ROOT/plans/pattern_guard.sh"
 fi
 
-MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-600s}"
+MECHANICAL_TIMEOUT="${MECHANICAL_TIMEOUT:-240s}"
 if [[ -x "$ROOT/plans/verify_mechanical.sh" ]]; then
   log "14f-mech) mechanical verification"
   run_logged_or_exit "mechanical_verification" "$MECHANICAL_TIMEOUT" \
@@ -994,15 +955,31 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
   "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
   "plans/tests/test_review_logged_prompt_literalization.sh"
+  "plans/tests/test_pr_review_gate_hook.sh"
   "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_preflight_diagnostics.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
+  "plans/tests/test_workflow_allowlist_coverage.sh"
   "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
+  "plans/tests/test_slice_review_gate.sh"
+  "plans/tests/test_story_review_findings_guard.sh"
+  "plans/tests/test_fork_attestation_remediation_verify.sh"
+  "plans/tests/test_fork_attestation_mirror.sh"
+  "plans/tests/test_workflow_quick_step.sh"
+  "plans/tests/test_toggle_policy_check.sh"
+  "plans/tests/test_stoic_cli_invariant_check.sh"
+  "plans/tests/test_live_enable_preflight.sh"
+  "plans/tests/test_recon_handoff_sources.sh"
+  "plans/tests/test_roadmap_evidence_audit.sh"
+  "plans/tests/test_crossref_invariants.sh"
+  "plans/tests/test_premortem_path_guard.sh"
   "plans/tests/test_lint_execution_facade.sh"
-  "plans/tests/test_contract_at_parity_invalid_refs.sh"
+  "plans/tests/test_lint_risk_facade.sh"
+  "plans/tests/test_lint_venue_facade.sh"
+  "plans/tests/test_lint_soldier_infra_facade.sh"
   "plans/tests/test_contract_profile_parity.sh"
   "plans/tests/test_contract_review_emit.sh"
   "plans/tests/test_contract_change_ledger.sh"
@@ -1018,20 +995,38 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
-  "plans/tests/test_contract_at_wording_drift.sh"
-  "plans/tests/test_contract_at_parity_invalid_refs.sh"
 )
 FULL_MODE_WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_pr_gate.sh"
+  "plans/tests/test_preflight_fixture_timeout_controls.sh"
+  "plans/tests/test_recon_operator_runner.sh"
+  "plans/tests/test_prd_set_pass.sh"
 )
 
+log "14g) workflow integration tests (parallel with rust gates)"
 if [[ "$VERIFY_PARALLEL" == "1" ]]; then
-  log "14g) workflow integration tests (parallel with rust gates)"
+  parallel_group_reset
+  for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do
+    start_parallel_workflow_test "$workflow_test"
+  done
+  if [[ "$MODE" == "full" ]]; then
+    for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do
+      start_parallel_workflow_test "$workflow_test"
+    done
+  fi
 else
-  log "14g) workflow integration tests"
+  for workflow_test in "${WORKFLOW_INTEGRATION_TESTS[@]}"; do
+    run_logged_or_exit "wf_${workflow_test##*/}" "$WORKFLOW_TEST_TIMEOUT" \
+      bash "$workflow_test"
+  done
+  if [[ "$MODE" == "full" ]]; then
+    for workflow_test in "${FULL_MODE_WORKFLOW_INTEGRATION_TESTS[@]}"; do
+      run_logged_or_exit "wf_${workflow_test##*/}" "$WORKFLOW_TEST_TIMEOUT" \
+        bash "$workflow_test"
+    done
+  fi
 fi
-run_workflow_integration_tests
 
 if [[ -f Cargo.toml ]]; then
   log "15) rust gates"

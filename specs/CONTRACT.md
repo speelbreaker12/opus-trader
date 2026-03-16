@@ -214,12 +214,28 @@ Rationale: Foundation mode MUST NOT emit CSP authority keys; downstream consumer
 7. Given `/api/v1/status` is emitted with `phase != foundation`, any authority/readiness validation MUST enforce the full §7.0 CSP minimum schema; P0 owner scaffolding remains non-authoritative for readiness/dispatch decisions.
 8. P0 owner scaffolding remains allowed as an operator-facing companion surface, but it is non-authoritative once CSP minimum `/status` is active.
 
+**Foundation-exit evaluation cadence (Normative):**
+- While `phase == foundation`, the runtime MUST evaluate legal foundation-exit transition preconditions at least once every `foundation_exit_eval_max_delay_s`.
+- If all preconditions from Status authority precedence items (2) and (3) remain satisfied continuously for longer than `foundation_exit_eval_max_delay_s` and the transition has not completed, the runtime MUST:
+  - emit structured diagnostic log `FOUNDATION_EXIT_EVAL_DELAY_EXCEEDED`, and
+  - increment metric counter `foundation_exit_eval_delay_exceeded_total`.
+- The diagnostic payload MUST include at least: `phase`, `build_id`, `contract_version`, `elapsed_s`, and an explicit blocker summary.
+- This cadence diagnostic is observability-only and MUST NOT add keys to foundation status-lite schema.
+
 AT-1238
-- Given: the current `Phase-2 rule` is satisfied, `bash ./plans/live_enable_preflight.sh` passes for the running `build_id` and `contract_version` in the same control-path, startup reconciliation is complete, no startup/open-permission latch requires reconciliation, and the runtime can serve the full §7.0 CSP minimum `/api/v1/status` schema.
+- Given: the §6 **Phase-2 rule** is satisfied, `bash ./plans/live_enable_preflight.sh` passes for the running `build_id` and `contract_version` in the same control-path, startup reconciliation is complete, no startup/open-permission latch requires reconciliation, and the runtime can serve the full §7.0 CSP minimum `/api/v1/status` schema.
 - When: the runtime evaluates a transition that changes `phase` from `foundation` to a non-foundation value.
 - Then: in the same control-path, `phase` changes from `foundation` to non-foundation, foundation status-lite stops, `/api/v1/status` emits the full CSP minimum schema, and the CSP minimum surface becomes authoritative without any mixed or intermediate payload.
 - Pass criteria: no mixed status payload is emitted during the transition; `phase != foundation`; `/api/v1/status` satisfies the full CSP minimum schema; authority/readiness validation keys off the CSP minimum payload only after the transition completes.
 - Fail criteria: `phase` exits foundation after a failed/missing/stale preflight, exits foundation before reconciliation/latch preconditions clear, emits any mixed/intermediate status payload during the transition, or remains in foundation after all listed preconditions are satisfied and the transition is evaluated.
+
+AT-1240
+- Given: `phase == foundation`, the §6 Phase-2 rule is satisfied, `bash ./plans/live_enable_preflight.sh` has passed for the running `build_id` and `contract_version` in the same control-path, startup reconciliation is complete, no startup/open-permission latch requires reconciliation, and the runtime can serve the full §7.0 CSP minimum `/api/v1/status` schema.
+- And: those preconditions remain true continuously for longer than `foundation_exit_eval_max_delay_s` without completing the legal foundation-exit transition.
+- When: foundation-exit evaluation runs.
+- Then: runtime emits `FOUNDATION_EXIT_EVAL_DELAY_EXCEEDED`, increments `foundation_exit_eval_delay_exceeded_total`, and keeps `/api/v1/status` on foundation status-lite until legal transition completion.
+- Pass criteria: log and counter are emitted with elapsed delay and blocker context; no mixed status payload is emitted.
+- Fail criteria: exceeded delay without log/counter, mixed payload emission, or authority handoff outside legal transition semantics.
 
 ## **0.0 Normative Scope (Non-Negotiable)**
 Profile: CSP
@@ -1429,6 +1445,9 @@ AT-957
 
 
 ### **1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)**
+
+**Phase applicability (Normative):**
+§1.3 Liquidity Gate is **NOT** a Phase 1 completion requirement. §1.3 becomes mandatory beginning in **Phase 2** and later deployable phases, together with the required stale-L2 CLOSE/HEDGE integration points that use the applicable fallback pricing rules. Before Phase 2, absence of §1.3 implementation MUST NOT, by itself, fail Phase 1 completion. Phase 1 remains non-deployable and foundation-gated.
 
 **Council Weakness Covered:** No Liquidity Gate (Low) \+ Taker Bleed (Critical). **Requirement:** Before any order is sent (including IOC), the Soldier must estimate book impact for the requested size and reject trades that exceed max slippage. **Where:** `crates/soldier_core/src/execution/gate.rs` **Input:** `OrderQty`, `L2BookSnapshot`, `max_slippage_bps = 10` (default: see Appendix A)
 
@@ -3536,6 +3555,13 @@ AT-1217
 - Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
 - Fail criteria: any dispatch occurs without a valid fallback price source, or rejection reason is missing/mismatched.
 
+AT-1239
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and `instrument_cache_age_s > instrument_cache_ttl_s`.
+- When: emergency close evaluates venue-band fallback pricing.
+- Then: venue-band fallback is treated as unavailable; no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
+- Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
+- Fail criteria: venue-band dispatch occurs while metadata is stale, or rejection reason is missing/mismatched.
+
 
 ### **3.2 Smart Watchdog**
 
@@ -4685,7 +4711,7 @@ Profile: GOP
 
 ### **Phase 1: Foundation (Non-Deployable)**
 
-> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema, WAL/durable ledger, Liquidity Gate) satisfy both `Profile: GOP` (roadmap milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete only when the **Phase 1 AT Subset** (see below) passes. These ATs are CSP-scoped for these specific components but do not constitute full CSP compliance. The GOP tag does not relax CSP obligations for these deliverables.
+> **Profile note (Normative):** Phase 1 deliverables (TLSM, `s4:` labeling schema, WAL/durable ledger) satisfy both `Profile: GOP` (roadmap milestone) and `Profile: CSP` (safety-critical primitives). Phase 1 is complete only when the **Phase 1 AT Subset** (see below) passes. These ATs are CSP-scoped for these specific components but do not constitute full CSP compliance. The GOP tag does not relax CSP obligations for these deliverables.
 
 * Instrument metadata + canonical quantization.
 * `s4:` label schema + parser.
@@ -4737,9 +4763,10 @@ These acceptance tests MAY run in an isolated harness and MUST NOT by themselves
 * OpenPermissionLatch + reconciliation clear rules.
 * Continuous 3-way reconciliation + WS gap/session-termination handling.
 * Deterministic emergency containment (bounded close + hedge fallback + venue-band fallback).
-* Margin headroom, order-type preflight, exchange health, and liquidity safety gates.
+* Margin headroom, order-type preflight, exchange health, and **§1.3 Pre-Trade Liquidity Gate**, including all acceptance tests required for deployable stale-L2 OPEN rejection and risk-reducing fallback behavior.
 
 **Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value until this rule is satisfied and the §7.0 legal foundation-exit transition completes.
+A Phase 2 deployable claim MUST FAIL unless §1.3 Liquidity Gate acceptance tests **AT-222, AT-344, AT-909, AT-421, and AT-1216** pass.
 
 ### **Phase 3: GOP Data Loop**
 
@@ -6186,6 +6213,12 @@ AT-326
 - Pass criteria: eligible analytics deleted.
 - Fail criteria: eligible analytics retained without reason.
 
+**`foundation_exit_eval_max_delay_s`** (P0-E Status authority precedence)
+- **Default**: `5` sec
+- **Purpose**: Maximum allowed delay between continuous satisfaction of legal foundation-exit preconditions and evaluation/transition attempt.
+- **Rationale**: Keeps foundation-exit authority handoff bounded and observable while preserving fail-closed foundation status-lite behavior.
+- Reference acceptance test: AT-1240 (see P0-E section).
+
 ---
 
 ### **A.7 Summary Table**
@@ -6260,6 +6293,7 @@ AT-326
 | `replay_window_hours` | `48` | hours | §5.2 |
 | `tick_l2_retention_hours` | `72` | hours | §7.2 |
 | `parquet_analytics_retention_days` | `30` | days | §7.2 |
+| `foundation_exit_eval_max_delay_s` | `5` | sec | P0-E status authority precedence |
 
 ---
 
@@ -6536,7 +6570,7 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.5.2 Enforcement rules (OPEN gating, ReduceOnly, Kill)** | §2.2.3.4 (dispatch authorization rules)<br>§2.2.4 (OPEN blocked under reconcile latch)<br>§2.2.5 (cancel/replace permission rules) | AT-010 (OPEN blocked; CLOSE/HEDGE allowed under latch)<br>AT-1055 (reduce_only=true is not an OPEN intent)<br>AT-338 (Kill containment is mandatory when exposed) |
 | **CSP.5.3 Runtime Binding Gate** | §2.2.1 (runtime-binding semantics, binding, freshness)<br>§7.0 (`/status` runtime binding fields) | AT-003 / AT-412 (`/status` runtime_binding_state/expires invariants)<br>AT-423 (runtime binding file changes reflected next tick)<br>AT-012 (contract_version string binding)<br>AT-113 (runtime_config_hash canonicalization) |
 | **CSP.6 Capital Supremacy Invariant** | §0.Z.2.2, item F (capital supremacy invariant)<br>§2.2.3.6 (Kill semantics: containment must remain legal under exposure)<br>§3.1 (emergency close) | AT-1049 (no-deadlock-under-exposure)<br>AT-338 / AT-339 / AT-340 (Kill containment required; not blocked by disk/evidence/WAL)<br>AT-346 / AT-347 / AT-013 (containment allowed under session/watchdog/bunker) |
-| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 / AT-1217 (L2/L1/venue-band fallback ladder; fail-closed only when all sources invalid)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
+| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 / AT-1217 / AT-1239 (L2/L1/venue-band fallback ladder; fail-closed when all sources invalid, and venue-band disallowed when instrument metadata is stale)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
 | **CSP.8 Timebase Authority** | §0.Z.2.2, item H (monotonic interval requirement; clock uncertainty semantics)<br>§2.2.1.2 (freshness checks for critical inputs)<br>§7.0 (policy_age_sec calculation + status invariants) | AT-001 / AT-112 / AT-349 / AT-350 / AT-413 (missing/stale inputs force ReduceOnly)<br>AT-406 (policy_age_sec arithmetic correctness)<br>*(No dedicated AT yet for “wall-clock MUST NOT trigger Kill”; add if desired.)* |
 | **CSP.9 Profile Isolation** | §0.Z.7 (runtime + compile-time isolation)<br>§0.Z.10 (numeric isolation under CSP)<br>§2.2.2 (EvidenceGuard "NOT_ENFORCED" when CSP)<br>§2.2.1.2 (critical inputs are profile-scoped)<br>§5.2 (Replay Gatekeeper CSP isolation)<br>§7.0 (status: omit/NOT_ENFORCED GOP keys when CSP) | AT-990 (CSP_ONLY build boots; GOP absent/NOT_ENFORCED)<br>AT-991 / AT-1218 (GOP unhealthy or absent must not affect CSP decisions)<br>AT-992 (GOP enforcement when enforced_profile != CSP)<br>AT-1070 / AT-1219 (CSP isolation from replay/snapshot and GOP-only numeric faults) |
 | **CSP.10 CSP_ONLY Build/Test Mode** | §0.Z.7.3 (CSP_ONLY build requirement)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.9.1 (meta-ATs) | AT-1056 (CI build:csp_only succeeds)<br>AT-1057 (CI test:csp_only runs only CSP tests; all pass)<br>AT-990 (runtime sanity: CSP_ONLY build starts; GOP not enforced) |
@@ -6559,3 +6593,6 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-07 | CCL-2026-03-07-02 | §2.4 Durable Intent Ledger; §2.4.1 WAL Writer Isolation; Phase 1 roadmap/AT subset; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Pull the conservative restart-safety boundary into Phase 1: replay/reconciliation preserves recorded-but-unsent OPENs for reconciliation and later fresh evaluation, but replay alone never authorizes a fresh OPEN dispatch. | Remove the remaining Phase 1/PRD contradiction for restart behavior while preserving fail-closed no-duplicate-send semantics across restarts. | AT-233, AT-234, AT-935 | local/phase1-restart-safety-boundary |
 | 2026-03-13 | CCL-2026-03-13-01 | §2.4.1 WAL Writer Isolation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Reconcile the active branch's WAL isolation text with the already-present `RecordedBeforeDispatch` rule so OPEN dispatch requires `WALRecorded` (and `WALDurable` when configured), not enqueue-only success. | Remove the remaining internal contract split that could otherwise imply enqueue success is sufficient dispatch authorization despite the surrounding WAL invariants and AT map. | AT-906, AT-1215, AT-1232, AT-935 | local/main-wal-contract-reconcile |
 | 2026-03-13 | CCL-2026-03-13-02 | Phase 0 prerequisites; §7.0 status surface split; Phase 2 rule; Appendix CONTRACT_CHANGE_LEDGER | clarify | Bind the existing Phase 0 preflight to any legal transition out of foundation mode and require the `/api/v1/status` authority handoff from status-lite to CSP minimum schema to occur atomically in the same control-path. | Prevent non-foundation status authority from being activated by local convention or split control-paths before Phase 2 deployable readiness and reconciliation are satisfied. | AT-1230, AT-1233, AT-1234, AT-1238, AT-023 | local/foundation-exit-authority-boundary |
+| 2026-03-14 | CCL-2026-03-14-01 | §1.3 Pre-Trade Liquidity Gate; §6 Implementation Roadmap v4.0 (Phase 1/Phase 2 notes); Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit §1.3 phase applicability so Liquidity Gate is not a Phase 1 completion requirement and is mandatory for Phase 2 deployable claims, then align Phase 1/Phase 2 roadmap wording to match. | Remove the live Phase 1/Phase 2 Liquidity Gate scope contradiction so milestone closure and deployable-claim criteria are deterministic and fail-closed. | AT-222, AT-344, AT-909, AT-421, AT-1216 | local/blocking-6-phase-scope-alignment |
+| 2026-03-14 | CCL-2026-03-14-02 | §3.1 Deterministic Emergency Close; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Require venue-band fallback pricing to enforce instrument metadata freshness (`instrument_cache_age_s <= instrument_cache_ttl_s`) and add an explicit stale-metadata negative AT for this path. | Close the stale-but-parseable venue-band fallback hole so emergency-close pricing remains fail-closed when metadata freshness cannot be trusted. | AT-937, AT-938, AT-1217, AT-1239 | local/fix01-venue-band-freshness |
+| 2026-03-15 | CCL-2026-03-15-01 | P0-E status authority precedence; AT-1238; Appendix A defaults/summary; Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit foundation-exit evaluation cadence with bounded delay (`foundation_exit_eval_max_delay_s`), mandatory delay-exceeded diagnostics, and explicit §6 Phase-2 rule wording in AT-1238. | Prevent silent indefinite foundation-exit stalls and make delay diagnostics deterministic without weakening fail-closed status authority boundaries. | AT-1238, AT-1240 | local/foundation-exit-eval-delay-bound |

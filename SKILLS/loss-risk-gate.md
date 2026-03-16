@@ -58,6 +58,9 @@ Same format: `YES | NO | UNKNOWN` + reason + proof. `UNKNOWN` = treat as `YES`.
 If yes (or unknown) to any, mark `PROFIT_BLOCK_BLOCKING`.
 
 ### 4) Simpler-safer alternative audit
+
+**Dedup rule:** If `/strategic-failure-review` §20 was already completed in this review cycle, §4 may inherit its verdict. Record: `§4 INHERITED from strategic-failure-review §20 — <N/A / HARDENING / BLOCKING>` and skip re-running the audit.
+
 Ask:
 - Is there a simpler fail-closed design that satisfies the same contract?
 - Did the implementation add moving parts, hidden coupling, or statefulness that increases the error surface without improving capital protection?
@@ -68,6 +71,15 @@ If a materially simpler / safer design exists, mark:
 - `HARDENING` if current design is contract-safe but unnecessarily fragile
 
 ### 5) Proof quality audit
+
+**Dedup rule:** If `/contract-review` Phase 3 was already completed in this review cycle, §5 may inherit only the overlapping checks (enforcement point exists, TRIP/NON-TRIP coverage, and causal proof). Cite the artifact (e.g., `artifacts/story/${STORY_ID}/self_review/contract_review.json`) and record: `§5 PARTIALLY INHERITED from contract-review Phase 3 — <PASS/FAIL for shared checks>`.
+
+You must still evaluate §5-only checks locally:
+- Golden vector exists if the gate is safety-critical
+- Premortem §5 wrong implementation is explicitly blocked
+
+If the inherited artifact does not explicitly prove a shared check, treat that check as `UNKNOWN` and run the full §5 audit for that path.
+
 For every safety-critical AT touched by the diff:
 - Enforcement point exists?
 - TRIP test exists?
@@ -89,13 +101,11 @@ Silent capital-protection logic or silent profit-block logic = blocker.
 
 ## Required Output
 
-> **Format**: Express verdict and trading lens as labeled inline values on a single line — label and value together, e.g. `**Verdict**: GO` and `**Trading Lens**: BLOCKING`.
-
 ### A) Verdict
-`**Verdict**: GO` or `**Verdict**: NO-GO`
+`GO | NO-GO`
 
 ### B) Trading Lens
-`**Trading Lens**: PASS` or `**Trading Lens**: BLOCKING` or `**Trading Lens**: HARDENING`
+`PASS | BLOCKING | HARDENING`
 
 Derivation: `BLOCKING` if any finding is `*_BLOCKING`. `HARDENING` if no blocking findings but fragility noted. `PASS` otherwise. Verdict is `NO-GO` when Trading Lens is `BLOCKING`.
 

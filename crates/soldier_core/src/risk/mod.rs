@@ -6,30 +6,15 @@
 //!
 //! Module exports are intentionally centralized for deterministic gate wiring.
 
-pub mod exposure_budget;
-pub mod fees;
-pub mod instrument_state;
-pub mod margin_gate;
-pub mod pending_exposure;
-pub mod state;
+mod api;
+mod exposure_budget;
+mod fees;
+mod instrument_state;
+mod margin_gate;
+mod pending_exposure;
+mod state;
 
-pub use exposure_budget::{
-    ExposureBucket, ExposureBudgetInput, ExposureBudgetMetrics, ExposureBudgetRejectReason,
-    ExposureBudgetResult, ExposureBudgetStaticRejectReason, evaluate_global_exposure_budget,
-    exposure_budget_reject_total,
-};
-pub use fees::{
-    FeeCacheSnapshot, FeeEvaluation, FeeMetrics, FeeStaleness, FeeStalenessConfig,
-    evaluate_fee_staleness, fee_staleness_hard_stale_total,
-};
-pub use instrument_state::InstrumentState;
-pub use margin_gate::{
-    MarginGateDecision, MarginGateInput, MarginGateMetrics, MarginGateMode, MarginGateRejectReason,
-    compute_margin_mode_hint, evaluate_margin_headroom_gate, margin_gate_reject_total,
-};
-pub use pending_exposure::{
-    PendingExposureBook, PendingExposureMetrics, PendingExposureRejectReason,
-    PendingExposureResult, PendingExposureTerminalOutcome, ReservationId,
-    pending_exposure_reject_total,
-};
-pub use state::RiskState;
+#[cfg(test)]
+mod facade_completeness_contract_tests;
+
+pub use api::*;

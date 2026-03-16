@@ -3,9 +3,7 @@
 //! AT-269: REST sweeper then WS duplicate ignored.
 //! AT-270: Duplicate WS trade is NOOP.
 
-use soldier_infra::store::{
-    InsertResult, RegistryError, RegistryMetrics, TradeIdRegistry, TradeRecord,
-};
+use soldier_infra::{InsertResult, RegistryError, RegistryMetrics, TradeIdRegistry, TradeRecord};
 
 /// Helper: build a minimal trade record.
 fn trade(trade_id: &str, group_id: &str, leg_idx: u32) -> TradeRecord {

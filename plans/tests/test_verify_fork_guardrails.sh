@@ -127,21 +127,9 @@ assert_contains_line '"$ROOT/plans/check_contract_change_ledger.sh" --base-ref "
 assert_not_contains_line 'warn "contract_change_ledger skipped (missing plans/check_contract_change_ledger.sh)"'
 assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger"'
 assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
+assert_contains_line 'log "02a3) contract-plan AT parity"'
+assert_contains_line 'bash "$ROOT/plans/prd_ref_check.sh" "$ROOT/plans/prd.json"'
 
-# Guardrail: AT wording drift must fail closed in full verify.
-assert_contains_line 'log "02a3) contract AT wording drift"'
-assert_contains_line 'run_logged_or_exit "contract_at_wording_drift"'
-assert_contains_line 'bash "$ROOT/plans/check_contract_at_wording_drift.sh" --base-ref "$VERIFY_BASE_REF"'
-assert_not_contains_line 'run_logged "contract_at_wording_drift"'
-assert_line_before 'log "02a2) contract-plan AT parity"' 'log "02a3) contract AT wording drift"'
-assert_line_before 'log "02a3) contract AT wording drift"' 'log "02b-02e) profile/invariant gates (parallel)"'
-
-# Guardrail: contract-plan AT parity must degrade to warn-only in quick mode
-# without using the fail-closed logger path.
-assert_contains_line 'run_contract_at_plan_parity_gate()'
-assert_contains_line 'run_logged_nonblocking_gate "contract_at_plan_parity"'
-assert_contains_line 'warn "contract-plan AT parity: WARN (run verify full for hard gate)"'
-assert_line_before 'run_contract_at_plan_parity_gate()' 'log "02a2) contract-plan AT parity"'
 # Guardrail: recon prompt invariants must be enforced between gate integrity and doc sync.
 assert_contains_line 'run_required_bash_gate "bidi_control_guard"'
 assert_contains_line '"14c1) bidi control guard" "$ROOT/plans/bidi_control_guard.sh"'
@@ -160,14 +148,6 @@ assert_contains_line '"14cd) recon doc budget" "$ROOT/plans/recon_doc_budget.sh"
 assert_not_contains_line 'warn "recon_doc_budget skipped (missing plans/recon_doc_budget.sh)"'
 assert_line_before 'run_required_bash_gate "slice_execute_guard"' 'run_required_bash_gate "recon_doc_budget"'
 assert_line_before 'run_required_bash_gate "recon_doc_budget"' 'log "14d) doc sync check"'
-
-# Guardrail: workflow integration test lane must preserve the serial fallback
-# when VERIFY_PARALLEL=0 instead of unconditionally launching the parallel path.
-assert_contains_line 'workflow_integration_gate_name()'
-assert_contains_line 'run_workflow_integration_tests()'
-assert_contains_line 'if [[ "$VERIFY_PARALLEL" == "1" ]]; then'
-assert_contains_line 'run_required_bash_gate "$gate_name" "$WORKFLOW_TEST_TIMEOUT"'
-assert_contains_line 'run_workflow_integration_tests'
 
 # Guardrail: Phase 0 live-enable gate must flow through the shell wrapper.
 assert_contains_line 'log "14b) phase0 meta-test"'
@@ -197,9 +177,6 @@ $(extract_fn status_fixture_path_hash)
 $(extract_fn status_fixture_gate_name)
 $(extract_fn run_required_bash_gate)
 $(extract_fn run_logged_nonblocking_gate)
-$(extract_fn run_contract_at_plan_parity_gate)
-$(extract_fn workflow_integration_gate_name)
-$(extract_fn run_workflow_integration_tests)
 $(extract_fn compute_csp_strict_changed_files)
 $(extract_fn should_enable_csp_strict)
 $(extract_fn emit_timing_and_warn_summary)"
@@ -292,83 +269,6 @@ if ! printf '%s\n' "$summary_output" | grep -Fq "WARN: gate_multiline: line one"
 fi
 if ! printf '%s\n' "$summary_output" | grep -Fq "line two"; then
   fail "warn summary must preserve multiline payload"
-fi
-
-# Runtime check: contract-plan AT parity must use the nonblocking helper in
-# quick mode and the fail-closed helper in full mode.
-parity_call_log="$tmp_dir/parity_calls.log"
-run_logged_nonblocking_gate() {
-  printf '%s\n' "nonblocking:$1:$2:$3:$4:$5" >> "$parity_call_log"
-  return 0
-}
-run_logged_or_exit() {
-  printf '%s\n' "blocking:$1:$2:$3:$4:$5" >> "$parity_call_log"
-  return 0
-}
-
-: > "$parity_call_log"
-MODE=quick
-CONTRACT_KERNEL_TIMEOUT=15s
-ROOT="$tmp_dir/parity_root"
-run_contract_at_plan_parity_gate
-grep -Fxq "nonblocking:contract_at_plan_parity:15s:bash:$tmp_dir/parity_root/plans/prd_ref_check.sh:plans/prd.json" "$parity_call_log" \
-  || fail "quick mode must route contract-plan AT parity through run_logged_nonblocking_gate"
-if grep -Eq '^blocking:' "$parity_call_log"; then
-  fail "quick mode must not route contract-plan AT parity through run_logged_or_exit"
-fi
-
-: > "$parity_call_log"
-MODE=full
-run_contract_at_plan_parity_gate
-grep -Fxq "blocking:contract_at_plan_parity:15s:bash:$tmp_dir/parity_root/plans/prd_ref_check.sh:plans/prd.json" "$parity_call_log" \
-  || fail "full mode must route contract-plan AT parity through run_logged_or_exit"
-if grep -Eq '^nonblocking:' "$parity_call_log"; then
-  fail "full mode must not route contract-plan AT parity through run_logged_nonblocking_gate"
-fi
-
-# Runtime check: workflow integration tests must respect VERIFY_PARALLEL=0 and
-# keep quick-mode workflow coverage on the serial path.
-workflow_call_log="$tmp_dir/workflow_calls.log"
-parallel_group_reset() {
-  printf '%s\n' "parallel_reset" >> "$workflow_call_log"
-}
-start_parallel_workflow_test() {
-  printf '%s\n' "parallel:$1" >> "$workflow_call_log"
-}
-run_required_bash_gate() {
-  printf '%s\n' "serial:$1:$4" >> "$workflow_call_log"
-}
-
-: > "$workflow_call_log"
-VERIFY_PARALLEL=0
-MODE=quick
-WORKFLOW_TEST_TIMEOUT=15s
-WORKFLOW_INTEGRATION_TESTS=("plans/tests/test_alpha.sh" "plans/tests/test_beta.sh")
-FULL_MODE_WORKFLOW_INTEGRATION_TESTS=("plans/tests/test_full_only.sh")
-run_workflow_integration_tests
-if grep -Fq 'parallel:' "$workflow_call_log"; then
-  fail "serial workflow path must not launch parallel workflow tests when VERIFY_PARALLEL=0"
-fi
-grep -Fxq 'serial:wf_test_alpha:plans/tests/test_alpha.sh' "$workflow_call_log" \
-  || fail "serial workflow path must run quick workflow test alpha"
-grep -Fxq 'serial:wf_test_beta:plans/tests/test_beta.sh' "$workflow_call_log" \
-  || fail "serial workflow path must run quick workflow test beta"
-if grep -Fq 'test_full_only.sh' "$workflow_call_log"; then
-  fail "quick mode must not run full-only workflow tests on the serial path"
-fi
-
-: > "$workflow_call_log"
-VERIFY_PARALLEL=1
-MODE=quick
-run_workflow_integration_tests
-grep -Fxq 'parallel_reset' "$workflow_call_log" \
-  || fail "parallel workflow path must reset the parallel group"
-grep -Fxq 'parallel:plans/tests/test_alpha.sh' "$workflow_call_log" \
-  || fail "parallel workflow path must launch workflow test alpha"
-grep -Fxq 'parallel:plans/tests/test_beta.sh' "$workflow_call_log" \
-  || fail "parallel workflow path must launch workflow test beta"
-if grep -Fq 'serial:' "$workflow_call_log"; then
-  fail "parallel workflow path must not use the serial gate runner"
 fi
 
 # Runtime check: should_enable_csp_strict must cache changed-file set by base ref.

@@ -566,6 +566,11 @@ build_review_prompt() {
     printf 'Review the following %s and provide findings ordered by severity (P0-Critical, P1-High, P2-Medium, P3-Low).\n\n' \
       "$(lcase "$ctx_label")"
     cat <<'PROMPT_EOF'
+This is a Rust fintech trading engine. Apply these domain rules when reviewing:
+- Fintech: no f32/f64 for prices/quantities/fees (must use Decimal or newtypes); fail-closed defaults (ReduceOnly not Active when uncertain)
+- Ownership: flag moved/borrowed value errors and lifetime issues (E0382, E0597, E0506)
+- Concurrency: flag non-Send/Sync types in async contexts; verify Arc/Mutex usage is correct
+
 Focus on:
 - Correctness bugs and logic errors
 - Safety violations (unwrap in production, silent error drops, fail-open paths)
@@ -691,11 +696,13 @@ case "$tool" in
       codex_exec_mode=true
     else
       # Standard diff modes: use built-in `codex review`
-      cmd=("codex" "review" "--title" "$title")
+      # Inject Rust fintech rules via the [PROMPT] positional arg (custom review instructions)
+      # NOTE: codex review --base does NOT accept a [PROMPT] positional arg; skip it for base mode.
+      _rust_rules="Rust fintech trading engine rules: (1) Flag f32/f64 for prices/quantities/fees — must use Decimal or newtypes. (2) Flag unwrap() in non-test code. (3) Flag fail-open defaults — TradingMode::Active when uncertain is a bug; must be ReduceOnly. (4) Flag non-Send/Sync types used in async/multi-thread contexts. (5) Flag borrow/lifetime errors and moved-value errors (E0382, E0597, E0506)."
       case "$mode" in
-        commit)      cmd+=("--commit" "$commit") ;;
-        base)        cmd+=("--base" "$base") ;;
-        uncommitted) cmd+=("--uncommitted") ;;
+        commit)      cmd=("codex" "review" "--title" "$title" "$_rust_rules" "--commit" "$commit") ;;
+        base)        cmd=("codex" "review" "--title" "$title" "--base" "$base") ;;
+        uncommitted) cmd=("codex" "review" "--title" "$title" "$_rust_rules" "--uncommitted") ;;
       esac
     fi
     if [[ ${#extra[@]} -gt 0 ]]; then

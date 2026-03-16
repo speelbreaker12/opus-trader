@@ -32,6 +32,55 @@ Present a summary table to the user:
 | #38 | fix: cache bug   | fix/cache      | YES       | CHANGES_REQUESTED | Pass  |
 ```
 
+### 1.5) Detect Superseded / Overlapping PRs
+For each pair of open PRs, fetch their changed file lists:
+```bash
+gh pr diff <number> --name-only
+```
+
+Flag pairs that show any of these signals:
+
+| Signal | How to detect |
+|--------|---------------|
+| **Shared files** | Same path appears in both diffs |
+| **Stacked branches** | One branch is based on another (`git merge-base --is-ancestor`) |
+| **Commits absorbed** | Commit subjects from PR A appear verbatim in PR B's log |
+
+```bash
+# Fetch once before all comparisons (not per-pair)
+git fetch origin
+
+# Check if branch A is an ancestor of branch B (stacked)
+git merge-base --is-ancestor origin/<branch-a> origin/<branch-b> && echo "stacked"
+
+# Check if PR A's commits are absorbed into PR B (superseded)
+git log origin/<branch-b> --format='%s' > /tmp/pr_b_subjects
+git log origin/main..origin/<branch-a> --format='%s' | grep -Ff /tmp/pr_b_subjects
+
+# List commits unique to each PR vs main
+git log origin/main..origin/<branch> --oneline
+```
+
+Present findings **before** doing any other work:
+```
+### Potential PR Overlaps (advisory — you decide)
+| PR A | PR B | Signal            | Detail                        |
+|------|------|-------------------|-------------------------------|
+| #38  | #42  | Shared files      | src/auth.rs, config.toml      |
+| #35  | #38  | #35 is base of #38| stacked — merge #35 first     |
+| #35  | #42  | Commits absorbed  | "fix: validate input" in both |
+```
+
+**Ask the user:** "Should any of these be closed before proceeding?"
+
+If the user says yes to closing a PR:
+```bash
+gh pr close <number> --comment "Superseded by #<other>"
+```
+Never close a PR without explicit user confirmation per PR.
+
+Skip this step silently if there is only one open PR.
+
 ### 2) Surface Review Comments
 For each PR with comments or requested changes:
 ```bash
@@ -155,9 +204,11 @@ git push --force-with-lease
 
 ## Hard Constraints
 - Never merge a PR without user confirmation
+- Never close a PR without explicit user confirmation (step 1.5)
 - Never force-push without user confirmation (use `--force-with-lease` when approved)
 - Never dismiss reviews — only address them
 - Never merge PRs with failing CI unless user explicitly overrides
 - Never resolve conflicts by deleting the PR's changes — preserve intent
 - Always show conflict resolutions to the user before committing
 - Process stacked PRs in dependency order (base first)
+- Step 1.5 overlap analysis is advisory only — never infer intent, always present evidence and ask

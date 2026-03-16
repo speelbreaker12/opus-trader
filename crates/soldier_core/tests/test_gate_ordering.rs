@@ -8,10 +8,25 @@ const UNIT_TEST_SOURCE: &str =
     include_str!("../src/execution/build_order_intent_gate_ordering_tests.rs");
 
 fn assert_unit_test_present(name: &str) {
-    let needle = format!("fn {name}(");
+    let fn_needle = format!("fn {name}(");
+    let fn_pos = UNIT_TEST_SOURCE.find(&fn_needle).unwrap_or_else(|| {
+        panic!(
+            "expected unit test '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
+            name
+        )
+    });
+    // Bound the #[test] search to the attribute block immediately preceding this
+    // function.  Find the last closing brace (`\n}`) before fn_pos — any #[test]
+    // after that boundary belongs to this function, not a prior one.  This is
+    // robust to arbitrarily many stacked attributes and arbitrary function body size.
+    let search_start = UNIT_TEST_SOURCE[..fn_pos]
+        .rfind("\n}")
+        .map(|p| p + 2) // skip past the `\n}` itself
+        .unwrap_or(0);
+    let has_test_attr = UNIT_TEST_SOURCE[search_start..fn_pos].contains("#[test]");
     assert!(
-        UNIT_TEST_SOURCE.contains(&needle),
-        "expected unit test '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
+        has_test_attr,
+        "expected #[test] attribute on '{}' in ../src/execution/build_order_intent_gate_ordering_tests.rs",
         name
     );
 }

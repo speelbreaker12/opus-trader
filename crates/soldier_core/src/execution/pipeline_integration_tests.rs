@@ -14,13 +14,14 @@ impl<T> TestValueExt<T> for Option<T> {
 }
 
 use crate::execution::build_order_intent::{
-    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep,
+    ChokeIntentClass, ChokeRejectReason, ChokeResult, GateStep, RecordedBeforeDispatchGate,
 };
 use crate::execution::dispatch_map::DispatchConsistencyProof;
 use crate::execution::gate::LiquidityGateInput;
 use crate::execution::gates::NetEdgeInput;
 use crate::execution::pipeline::{
     IntentPipelineInput, IntentPipelineMetrics, QuantizePipelineInput, evaluate_intent_pipeline,
+    evaluate_intent_pipeline_with_wal_gate,
 };
 use crate::execution::post_only_guard::PostOnlyInput;
 use crate::execution::preflight::{OrderType, PreflightInput};
@@ -29,6 +30,18 @@ use crate::execution::quantize::{QuantizeConstraints, Side};
 use crate::execution::reject_reason::RejectReasonCode;
 use crate::risk::RiskState;
 use crate::venue::{BotFeatureFlags, InstrumentKind, VenueCapabilities};
+
+#[derive(Debug, Default)]
+struct FailingWalGate {
+    calls: usize,
+}
+
+impl RecordedBeforeDispatchGate for FailingWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        self.calls += 1;
+        Err("simulated live wal failure".to_string())
+    }
+}
 
 fn base_open_input() -> IntentPipelineInput<'static> {
     IntentPipelineInput {
@@ -96,6 +109,7 @@ fn base_open_input() -> IntentPipelineInput<'static> {
             gross_edge_usd: 10.0,
             min_edge_usd: 2.0,
             fee_estimate_usd: 2.0,
+            expected_slippage_usd: 1.0,
             qty: 1.0,
             side: Side::Buy,
         }),
@@ -120,6 +134,36 @@ fn test_pipeline_open_happy_path_approved() {
         }
         other => panic!("expected Approved, got {other:?}"),
     }
+    assert_eq!(result.reject_reason_code, None);
+}
+
+#[test]
+fn test_at1215_wal_recorded_happy_path_dispatches_exactly_once() {
+    let input = base_open_input();
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
+    match result.decision {
+        ChokeResult::Approved { gate_trace } => {
+            assert_eq!(
+                gate_trace.last(),
+                Some(&GateStep::RecordedBeforeDispatch),
+                "dispatch must occur only after RecordedBeforeDispatch succeeds"
+            );
+        }
+        other => panic!("expected AT-1215 happy-path approval, got {other:?}"),
+    }
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        1,
+        "AT-1215 requires exactly one OPEN dispatch when WALRecorded succeeds"
+    );
+    assert_eq!(
+        metrics.chokepoint.rejected_total(),
+        0,
+        "AT-1215 happy path must not surface RecordedBeforeDispatchFailed"
+    );
     assert_eq!(result.reject_reason_code, None);
 }
 
@@ -753,6 +797,7 @@ fn test_fe001_pricer_invalid_input_yields_pricer_input_invalid() {
         gross_edge_usd: 10.0,
         min_edge_usd: 2.0,
         fee_estimate_usd: 2.0,
+        expected_slippage_usd: 1.0,
         qty: 1.0,
         side: Side::Buy,
     });
@@ -855,6 +900,68 @@ fn test_fe004_pipeline_wal_not_recorded_yields_recorded_before_dispatch_failed()
         metrics.chokepoint.approved_total(),
         0,
         "dispatch count must be 0 when WAL recording fails"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::RecordedBeforeDispatchFailed)
+    );
+}
+
+#[test]
+fn test_at1215_no_open_dispatch_before_wal_recorded() {
+    let mut input = base_open_input();
+    input.wal_recorded = false;
+    let mut metrics = IntentPipelineMetrics::new();
+
+    let result = evaluate_intent_pipeline(&input, &mut metrics);
+
+    assert!(
+        matches!(result.decision, ChokeResult::Rejected { .. }),
+        "dispatch authorization must fail closed before WALRecorded"
+    );
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "AT-1215 forbids OPEN dispatch before WALRecorded"
+    );
+    assert_eq!(
+        result.reject_reason_code,
+        Some(RejectReasonCode::RecordedBeforeDispatchFailed)
+    );
+}
+
+#[test]
+fn test_pipeline_live_wal_gate_failure_rejects_even_when_input_flag_is_true() {
+    let input = base_open_input();
+    let mut metrics = IntentPipelineMetrics::new();
+    let mut wal_gate = FailingWalGate::default();
+
+    let result = evaluate_intent_pipeline_with_wal_gate(&input, &mut metrics, Some(&mut wal_gate));
+
+    assert_eq!(
+        wal_gate.calls, 1,
+        "live WAL gate must be consulted exactly once"
+    );
+    match &result.decision {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert!(
+                matches!(
+                    reason,
+                    ChokeRejectReason::GateRejected {
+                        gate: GateStep::RecordedBeforeDispatch,
+                        ..
+                    }
+                ),
+                "expected RecordedBeforeDispatch rejection, got {reason:?}"
+            );
+            assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
+        }
+        other => panic!("expected Rejected at RecordedBeforeDispatch, got {other:?}"),
+    }
+    assert_eq!(
+        metrics.chokepoint.approved_total(),
+        0,
+        "dispatch count must be 0 when the live WAL gate fails"
     );
     assert_eq!(
         result.reject_reason_code,

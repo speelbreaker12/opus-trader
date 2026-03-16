@@ -588,7 +588,6 @@
           "docs/PHASE0_CHECKLIST_BLOCK.md",
           "docs/phase0_acceptance.md",
           "docs/phase0_index.md",
-          "plans/live_enable_preflight.sh",
           "plans/prd.json",
           "plans/verify_fork.sh",
           "plans/workflow_verify.sh",
@@ -4947,133 +4946,6 @@
       }
     },
     {
-      "id": "S6-013",
-      "priority": 100,
-      "phase": 2,
-      "slice": 6,
-      "slice_ref": "Slice 6 — Inventory Skew + Pending Exposure + Global Budget + Margin Gate",
-      "story_ref": "S6.13 — UPGRADE-1B-PR4 share execution tail + runtime reject-code ownership",
-      "category": "hardening",
-      "description": "Map the UPGRADE-1B-PR4 cleanup slice to a canonical PRD story by hardening OPEN runtime reject-code provenance, preserving inventory-skew/runtime-sidecar causality, and extracting the shared OPEN/pipeline chokepoint tail into a neutral helper.",
-      "contract_refs": [
-        "AT-909",
-        "AT-910",
-        "AT-911",
-        "CONTRACT.md CSP.3 RecordedBeforeDispatch (WAL)"
-      ],
-      "plan_refs": [
-        "S5.1 — Liquidity Gate (book-walk WAP, reject sweep)",
-        "S6.2 — Pending exposure reservation",
-        "S6.3 — Global exposure budget (corr buckets)",
-        "S6.4 — Margin headroom gate"
-      ],
-      "scope": {
-        "touch": [
-          "crates/soldier_core/src/execution/engine.rs",
-          "crates/soldier_core/src/execution/engine_decision_tests.rs",
-          "crates/soldier_core/src/execution/mod.rs",
-          "crates/soldier_core/src/execution/open_runtime.rs",
-          "crates/soldier_core/src/execution/open_runtime_wiring_tests.rs",
-          "crates/soldier_core/src/execution/orchestration_tail.rs",
-          "crates/soldier_core/src/execution/pipeline.rs",
-          "docs/plans/2026-03-02-upgrade-1b-pr1-spec.md"
-        ],
-        "create": [],
-        "avoid": [
-          "plans/**",
-          "crates/soldier_infra/**"
-        ]
-      },
-      "acceptance": [
-        "GIVEN an OPEN runtime rejection with an unknown liquidity detail WHEN execution maps it to a registry code THEN it uses `OpenRuntimeOutput.gate_reject_codes` rather than any caller-supplied input sidecar, preserving exact `AT-909`-style reject provenance.",
-        "GIVEN Pending Exposure or Global Exposure Budget short-circuits the OPEN runtime WHEN the intent is rejected THEN downstream gates emit `GateCascadeSkip` and the surfaced reject codes stay deterministic for `AT-910` and `AT-911`.",
-        "GIVEN Inventory Skew tightens `min_edge_usd` enough to reject on the re-check WHEN the engine maps the OPEN runtime result THEN it reports `RuntimeStep::InventorySkew` with `RejectReasonCode::NetEdgeTooLow` and preserved adjusted-edge metadata.",
-        "GIVEN OPEN runtime and generic pipeline both need the chokepoint tail WHEN the cleanup completes THEN both call one neutral shared helper and `RecordedBeforeDispatch` / `CSP.3` behavior remains unchanged under targeted tests."
-      ],
-      "steps": [
-        "Remove the dead public `OpenExecutionInput.gate_reject_codes` input field so OPEN reject-code authority is runtime-output owned only.",
-        "Preserve `gate_reject_codes.net_edge_gate` and `adjusted_min_edge_usd` on the inventory-skew reject path in `open_runtime.rs`.",
-        "Preserve explicit cascade reject codes for pending-exposure and global-budget override branches in the OPEN runtime wiring.",
-        "Extract the shared chokepoint tail into a neutral helper module consumed by both `open_runtime.rs` and `pipeline.rs`.",
-        "Strengthen engine/runtime tests so hard-coded liquidity fallback codes, missing inventory-skew provenance, and missing cascade sidecars all fail deterministically.",
-        "Run targeted soldier_core verification and archive review evidence for the UPGRADE-1B-PR4 cleanup slice."
-      ],
-      "verify": [
-        "./plans/verify.sh",
-        "cargo test -p soldier_core engine_decision -- --nocapture",
-        "cargo test -p soldier_core open_runtime -- --nocapture",
-        "cargo test -p soldier_core pipeline -- --nocapture"
-      ],
-      "evidence": [
-        "cargo test -p soldier_core engine_decision -- --nocapture output",
-        "cargo test -p soldier_core open_runtime -- --nocapture output",
-        "cargo test -p soldier_core pipeline -- --nocapture output",
-        "PRD entry S6-013 maps UPGRADE-1B-PR4 to the canonical story and proof artifacts."
-      ],
-      "dependencies": [
-        "S6-008",
-        "S6-009",
-        "S6-010",
-        "S6-012"
-      ],
-      "est_size": "S",
-      "risk": "med",
-      "needs_human_decision": false,
-      "passes": false,
-      "contract_must_evidence": [
-        {
-          "quote": "No venue/network dispatch side effects may occur before `RecordedBeforeDispatch`.",
-          "location": "specs/CONTRACT.md",
-          "anchor": "CSP.3 RecordedBeforeDispatch (WAL)"
-        }
-      ],
-      "enforcing_contract_ats": [
-        "AT-909",
-        "AT-910",
-        "AT-911"
-      ],
-      "reason_codes": {
-        "type": "RejectReason",
-        "values": [
-          "LiquidityGateNoL2",
-          "PendingExposureBudgetExceeded",
-          "GlobalExposureBudgetExceeded",
-          "NetEdgeTooLow",
-          "GateCascadeSkip",
-          "RecordedBeforeDispatchFailed"
-        ]
-      },
-      "enforcement_point": "DispatcherChokepoint",
-      "failure_mode": [
-        "missing"
-      ],
-      "observability": {
-        "metrics": [
-          {
-            "name": "gate_sequence_total",
-            "type": "counter",
-            "unit": "count",
-            "labels": [
-              "result"
-            ]
-          }
-        ],
-        "status_fields": [],
-        "status_contract_ats": []
-      },
-      "implementation_tests": [
-        "crates/soldier_core/src/execution/engine_decision_tests.rs::engine_open_inventory_skew_reject_maps_runtime_step",
-        "crates/soldier_core/src/execution/engine_decision_tests.rs::open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes",
-        "crates/soldier_core/src/execution/open_runtime_wiring_tests.rs::test_runtime_wiring_inventory_skew_reject_preserves_runtime_sidecar",
-        "crates/soldier_core/src/execution/open_runtime_wiring_tests.rs::test_unregistered_instrument_rejected_through_runtime"
-      ],
-      "loss_mode": {
-        "worst_case": "runtime reject-code provenance drifts during the cleanup slice → OPEN reject is misclassified or shared tail diverges → risk-increasing dispatch path loses fail-closed diagnostics",
-        "fail_closed_cap": "OPEN runtime still routes through DispatcherChokepoint and `RecordedBeforeDispatch`; strengthened tests force exact reject codes, runtime steps, and cascade skips before any dispatch-facing behavior can regress",
-        "drift_metric": "gate_sequence_total"
-      }
-    },
-    {
       "id": "S7-000",
       "priority": 100,
       "phase": 2,
@@ -5294,6 +5166,7 @@
         "AT-909",
         "AT-1216",
         "AT-1217",
+        "AT-1239",
         "AT-338",
         "AT-339",
         "AT-340",
@@ -5330,14 +5203,15 @@
         "GIVEN `rate_limit_session_kill_active == true`, `10028_count_5m >= rate_limit_kill_min_10028`, and open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-346).",
         "GIVEN watchdog heartbeat **and** loop tick are stale beyond `watchdog_kill_s` AND open exposure exists. WHEN TradingMode is computed and Kill containment runs. THEN containment actions are permitted/attempted; OPEN remains blocked. (AT-347).",
         "GIVEN `TradingMode in {ReduceOnly, Kill}` and net exposure ≠ 0. WHEN the system proposes a risk-reducing intent (`CLOSE`, reduce-only hedge, or emergency flatten). THEN at least one such intent is permitted to dispatch (subject to venue reachability), and OPEN remains blocked. (AT-1049).",
-        "[GROUP-D: Liquidity Gate Ownership + Self-Impact Guard] AT-222, AT-344, AT-909, AT-421, AT-1216, AT-937, AT-938, AT-939, AT-235, AT-236, AT-237, AT-1217",
+        "[GROUP-D: Liquidity Gate Ownership + Self-Impact Guard] AT-222, AT-344, AT-909, AT-421, AT-1216, AT-937, AT-938, AT-939, AT-235, AT-236, AT-237, AT-1217, AT-1239",
         "GIVEN an L2 book where OrderQty implies slippage_bps > max_slippage_bps WHEN the integrated Liquidity Gate evaluates an OPEN intent THEN the intent is rejected with Rejected(ExpectedSlippageTooHigh) and no dispatch occurs. (AT-222).",
         "GIVEN a fresh parseable L2 book, slippage within max_slippage_bps, and all non-liquidity gates forced pass WHEN the integrated Liquidity Gate evaluates an OPEN intent THEN dispatch count increases by 1. (AT-1216).",
         "GIVEN `L2BookSnapshot` is missing, unparseable, or stale WHEN the integrated Liquidity Gate evaluates an OPEN intent THEN it is rejected with `Rejected(LiquidityGateNoL2)` and dispatch count remains 0. (AT-344, AT-909).",
-        "GIVEN `L2BookSnapshot` is missing/unparseable/stale WHEN ordinary intents are evaluated THEN CANCEL-only proceeds and ordinary CLOSE/HEDGE order placement remains rejected; only deterministic emergency close may consume the `§3.1` fallback ladder. (AT-421).",
+        "GIVEN `L2BookSnapshot` is missing/unparseable/stale WHEN ordinary risk-reducing `CLOSE`/`HEDGE`/`replace` intents are evaluated THEN OPEN remains rejected, CANCEL-only proceeds, and those risk-reducing intents MUST use the `§3.1` fallback ladder with strictly positive monotonic risk-reducing quantity instead of being rejected solely for stale/missing L2. (AT-421).",
         "GIVEN `L2BookSnapshot` is missing/unparseable/stale and a fresh `L1TickerSnapshot` is available. WHEN emergency close runs. THEN IOC close attempts are submitted using the L1 best bid/ask as the `best` price. (AT-937).",
         "GIVEN `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and a valid venue-band fallback price exists. WHEN emergency close runs. THEN IOC close attempts are submitted using the venue-band fallback price. (AT-938).",
         "GIVEN `L2BookSnapshot`, fresh `L1TickerSnapshot`, and venue-band fallback are all unavailable. WHEN emergency close runs. THEN no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`. (AT-1217).",
+        "GIVEN `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue-band metadata is parseable, and `instrument_cache_age_s > instrument_cache_ttl_s`. WHEN emergency close runs. THEN venue-band fallback is treated as unavailable, no dispatch occurs, and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`. (AT-1239).",
         "GIVEN `append_group_intent` fails to persist the group intent. WHEN AtomicGroupExecutor attempts to dispatch legs. THEN no leg orders are submitted and the failure is surfaced. (AT-939).",
         "GIVEN one leg filled and the book thins. WHEN emergency close runs. THEN close attempts run and fallback hedge executes if still exposed; exposure goes to ~0. (AT-235).",
         "GIVEN Liquidity Gate reject conditions are present. WHEN emergency close runs. THEN emergency close still submits IOC close attempts (Liquidity Gate does NOT block it). (AT-236).",
@@ -5351,7 +5225,7 @@
       "steps": [
         "Map S7.3 contract obligations, VR-011 ownership, and the `§1.3`/`§3.1` boundary into executable checks.",
         "Implement S7.3 logic in the smallest practical surface area while preserving fail-closed behavior for emergency close and integrated stale-L2 Liquidity Gate semantics.",
-        "Add/adjust targeted proofs for `AT-222`, `AT-344`, `AT-909`, `AT-421`, `AT-1216`, `AT-937`, `AT-938`, and `AT-1217` plus the existing emergency-close and hedge-fallback checks.",
+        "Add/adjust targeted proofs for `AT-222`, `AT-344`, `AT-909`, `AT-421`, `AT-1216`, `AT-937`, `AT-938`, `AT-1217`, and `AT-1239` plus the existing emergency-close and hedge-fallback checks.",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands, regenerate contract coverage, and archive artifact evidence before setting passes=true."
       ],
@@ -5391,6 +5265,7 @@
         "AT-421",
         "AT-1216",
         "AT-1217",
+        "AT-1239",
         "AT-338",
         "AT-339",
         "AT-340",
@@ -5453,6 +5328,10 @@
       "implementation_tests": [
         "crates/soldier_core/src/execution/gate_tests.rs::test_at421_cancel_only_allowed_without_l2",
         "crates/soldier_core/src/execution/gate_tests.rs::test_at421_close_rejected_without_l2",
+        "crates/soldier_core/tests/test_emergency_close.rs::test_at937_fresh_l1_fallback_used_when_l2_unavailable",
+        "crates/soldier_core/tests/test_emergency_close.rs::test_at938_venue_band_fallback_used_when_l2_l1_unavailable_and_metadata_fresh",
+        "crates/soldier_core/tests/test_emergency_close.rs::test_at1217_no_price_when_all_sources_unavailable",
+        "crates/soldier_core/tests/test_emergency_close.rs::test_at1239_stale_instrument_metadata_blocks_venue_band_fallback",
         "crates/soldier_core/src/execution/pipeline_integration_tests.rs::test_pipeline_open_happy_path_approved"
       ],
       "loss_mode": {
@@ -7193,6 +7072,7 @@
         "TradingMode",
         "AT-023",
         "AT-1238",
+        "AT-1240",
         "AT-003",
         "AT-405",
         "AT-419",
@@ -7253,6 +7133,7 @@
       "enforcing_contract_ats": [
         "AT-023",
         "AT-1238",
+        "AT-1240",
         "AT-405",
         "AT-419",
         "AT-927",
@@ -7288,7 +7169,8 @@
         ],
         "status_contract_ats": [
           "AT-023",
-          "AT-1238"
+          "AT-1238",
+          "AT-1240"
         ]
       },
       "implementation_tests": [
@@ -7302,7 +7184,8 @@
       ],
       "primary_owner_for": [
         "AT-023",
-        "AT-1238"
+        "AT-1238",
+        "AT-1240"
       ],
       "loss_mode": {
         "worst_case": "/status schema wrong → operator dashboard shows incorrect state → bad human decisions",

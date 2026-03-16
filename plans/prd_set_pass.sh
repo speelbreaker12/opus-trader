@@ -247,7 +247,7 @@ if [[ "$STATUS" == "true" ]]; then
   art_root="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
   for dir in "$art_root/$ID/codex" "$art_root/$ID/opus"; do
     [[ -d "$dir" ]] || continue
-    if grep -qrF -- "$HEAD_SHA" "$dir"/ 2>/dev/null; then
+    if grep -rlF "$HEAD_SHA" "$dir"/ 2>/dev/null | head -1 | grep -q .; then
       review_found=1; break
     fi
   done

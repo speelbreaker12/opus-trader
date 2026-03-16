@@ -7,6 +7,24 @@
 
 Read this first. It is the shortest, enforceable workflow summary.
 
+## Rust Skills (Mandatory for any Rust work)
+
+This is a Rust trading-engine codebase. Before writing or reviewing Rust code, you MUST apply:
+
+| Skill | When |
+|-------|------|
+| `domain-fintech` | Any order/price/quantity/decimal/currency logic — no float arithmetic, use Decimal |
+| `m01-ownership` | Borrow/lifetime/move errors (E0382, E0597, E0506) |
+| `m07-concurrency` | async/await, Arc/Mutex, Send+Sync, thread safety |
+
+If you are a Claude agent: invoke `Skill(domain-fintech)`, `Skill(m01-ownership)`, `Skill(m07-concurrency)` via the Skill tool before writing Rust.
+If you are a non-Claude agent (Codex, Gemini, Kimi): apply the three-layer pattern — Layer 1 (language mechanics) → Layer 2 (design choice) → Layer 3 (fintech domain constraint) before proposing any Rust change.
+
+Key fintech rules:
+- Never use `f32`/`f64` for prices, quantities, or fees — use `Decimal` or newtypes
+- Fail-closed: if uncertain, choose `TradingMode::ReduceOnly`, never `Active`
+- No `unwrap()` in production paths — use `?` or explicit error handling
+
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.
 - Verification is mandatory; never weaken gates or tests.

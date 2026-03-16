@@ -70,22 +70,32 @@ fi
 echo "[audit_parallel] Max parallel: $MAX_PARALLEL" >&2
 
 # Pre-build shared digests ONCE before parallel launch (avoids redundant work)
-echo "[audit_parallel] Pre-building shared digests..." >&2
-./plans/build_contract_digest.sh
-./plans/build_plan_digest.sh
+echo "[audit_parallel] Pre-building shared digests in parallel..." >&2
+./plans/build_contract_digest.sh &
+_par_pid_contract=$!
+./plans/build_plan_digest.sh &
+_par_pid_plan=$!
+
 if [[ -f "docs/ROADMAP.md" ]]; then
-  SOURCE_FILE="docs/ROADMAP.md" OUTPUT_FILE=".context/roadmap_digest.json" DIGEST_MODE="slim" ./plans/build_markdown_digest.sh
+  SOURCE_FILE="docs/ROADMAP.md" OUTPUT_FILE=".context/roadmap_digest.json" DIGEST_MODE="slim" ./plans/build_markdown_digest.sh &
+  _par_pid_roadmap=$!
 elif [[ -f "ROADMAP.md" ]]; then
-  SOURCE_FILE="ROADMAP.md" OUTPUT_FILE=".context/roadmap_digest.json" DIGEST_MODE="slim" ./plans/build_markdown_digest.sh
+  SOURCE_FILE="ROADMAP.md" OUTPUT_FILE=".context/roadmap_digest.json" DIGEST_MODE="slim" ./plans/build_markdown_digest.sh &
+  _par_pid_roadmap=$!
 else
   rm -f ".context/roadmap_digest.json"
   echo "[audit_parallel] No roadmap found, removed stale digest" >&2
+  _par_pid_roadmap=""
 fi
+
+wait "$_par_pid_contract" || { echo "[audit_parallel] ERROR: contract digest failed" >&2; exit 2; }
+wait "$_par_pid_plan"     || { echo "[audit_parallel] ERROR: plan digest failed" >&2; exit 2; }
+[[ -n "$_par_pid_roadmap" ]] && { wait "$_par_pid_roadmap" || { echo "[audit_parallel] ERROR: roadmap digest failed" >&2; exit 2; }; }
 echo "[audit_parallel] Digests ready" >&2
 
 # Create work dir for outputs
 WORK_DIR=$(mktemp -d)
-trap 'rm -rf "$WORK_DIR"' EXIT
+trap 'rm -rf "$WORK_DIR"; kill "${_par_pid_contract:-}" "${_par_pid_plan:-}" "${_par_pid_roadmap:-}" 2>/dev/null || true' EXIT
 
 mkdir -p "$AUDIT_OUTPUT_DIR"
 

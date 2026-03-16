@@ -10,18 +10,31 @@ use soldier_core::risk::{
     compute_margin_mode_hint, evaluate_margin_headroom_gate,
 };
 
+fn margin_input(
+    maintenance_margin_usd: f64,
+    equity_usd: f64,
+    mm_util_reject_opens: f64,
+    mm_util_reduceonly: f64,
+    mm_util_kill: f64,
+) -> MarginGateInput {
+    MarginGateInput {
+        maintenance_margin_usd,
+        equity_usd,
+        mm_util_reject_opens,
+        mm_util_reduceonly,
+        mm_util_kill,
+        now_ms: 1_000,
+        mm_util_last_update_ts_ms: Some(1_000),
+        mm_util_max_age_ms: 30_000,
+    }
+}
+
 #[test]
 fn test_margin_gate_thresholds_block_reduceonly_kill() {
     let mut metrics = MarginGateMetrics::new();
 
     // 72% utilization: reject opens, mode may remain Active.
-    let reject_opens = MarginGateInput {
-        maintenance_margin_usd: 72_000.0,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let reject_opens = margin_input(72_000.0, 100_000.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&reject_opens, &mut metrics);
     match out {
         MarginGateDecision::Rejected {
@@ -35,13 +48,7 @@ fn test_margin_gate_thresholds_block_reduceonly_kill() {
     }
 
     // 90% utilization: reject opens and force ReduceOnly.
-    let reduce_only = MarginGateInput {
-        maintenance_margin_usd: 90_000.0,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let reduce_only = margin_input(90_000.0, 100_000.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&reduce_only, &mut metrics);
     match out {
         MarginGateDecision::Rejected {
@@ -55,13 +62,7 @@ fn test_margin_gate_thresholds_block_reduceonly_kill() {
     }
 
     // 96% utilization: reject opens and force Kill.
-    let kill = MarginGateInput {
-        maintenance_margin_usd: 96_000.0,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let kill = margin_input(96_000.0, 100_000.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&kill, &mut metrics);
     match out {
         MarginGateDecision::Rejected {
@@ -78,13 +79,7 @@ fn test_margin_gate_thresholds_block_reduceonly_kill() {
 #[test]
 fn test_margin_gate_allows_opens_below_threshold() {
     let mut metrics = MarginGateMetrics::new();
-    let input = MarginGateInput {
-        maintenance_margin_usd: 10_000.0,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let input = margin_input(10_000.0, 100_000.0, 0.70, 0.85, 0.95);
 
     let out = evaluate_margin_headroom_gate(&input, &mut metrics);
     match out {
@@ -99,13 +94,7 @@ fn test_margin_gate_allows_opens_below_threshold() {
 #[test]
 fn test_margin_gate_invalid_inputs_fail_closed() {
     let mut metrics = MarginGateMetrics::new();
-    let input = MarginGateInput {
-        maintenance_margin_usd: f64::NAN,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let input = margin_input(f64::NAN, 100_000.0, 0.70, 0.85, 0.95);
 
     let out = evaluate_margin_headroom_gate(&input, &mut metrics);
     match out {
@@ -122,13 +111,7 @@ fn test_margin_gate_invalid_inputs_fail_closed() {
 fn test_margin_gate_non_positive_equity_fails_closed() {
     let mut metrics = MarginGateMetrics::new();
 
-    let zero_equity = MarginGateInput {
-        maintenance_margin_usd: 0.0,
-        equity_usd: 0.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let zero_equity = margin_input(0.0, 0.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&zero_equity, &mut metrics);
     match out {
         MarginGateDecision::Rejected {
@@ -140,13 +123,7 @@ fn test_margin_gate_non_positive_equity_fails_closed() {
         other => panic!("expected fail-closed rejection for zero equity, got {other:?}"),
     }
 
-    let negative_equity = MarginGateInput {
-        maintenance_margin_usd: 1.0,
-        equity_usd: -10.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let negative_equity = margin_input(1.0, -10.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&negative_equity, &mut metrics);
     match out {
         MarginGateDecision::Rejected {
@@ -168,13 +145,7 @@ fn test_margin_gate_non_positive_equity_fails_closed() {
 #[test]
 fn test_margin_gate_tiny_positive_equity_uses_actual_ratio() {
     let mut metrics = MarginGateMetrics::new();
-    let input = MarginGateInput {
-        maintenance_margin_usd: 1e-10,
-        equity_usd: 1e-12,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let input = margin_input(1e-10, 1e-12, 0.70, 0.85, 0.95);
 
     let out = evaluate_margin_headroom_gate(&input, &mut metrics);
     match out {
@@ -195,6 +166,86 @@ fn test_margin_gate_tiny_positive_equity_uses_actual_ratio() {
     assert_eq!(metrics.allowed_total(), 0);
 }
 
+#[test]
+fn test_margin_gate_stale_input_rejects_and_forces_reduceonly() {
+    let mut metrics = MarginGateMetrics::new();
+    let input = MarginGateInput {
+        now_ms: 31_001,
+        mm_util_last_update_ts_ms: Some(0),
+        ..margin_input(10_000.0, 100_000.0, 0.70, 0.85, 0.95)
+    };
+
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    assert!(
+        matches!(
+            out,
+            MarginGateDecision::Rejected {
+                reason: MarginGateRejectReason::MarginHeadroomInputStale,
+                mm_util: None,
+            }
+        ),
+        "stale mm_util input must reject opens fail-closed, got {out:?}"
+    );
+    assert_eq!(
+        compute_margin_mode_hint(&input),
+        MarginGateMode::ReduceOnly,
+        "stale critical margin input must force ReduceOnly"
+    );
+}
+
+#[test]
+fn test_margin_gate_clock_regression_rejects_and_forces_reduceonly() {
+    let mut metrics = MarginGateMetrics::new();
+    let input = MarginGateInput {
+        now_ms: 999,
+        mm_util_last_update_ts_ms: Some(1_000),
+        ..margin_input(10_000.0, 100_000.0, 0.70, 0.85, 0.95)
+    };
+
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    assert!(
+        matches!(
+            out,
+            MarginGateDecision::Rejected {
+                reason: MarginGateRejectReason::MarginHeadroomInputStale,
+                mm_util: None,
+            }
+        ),
+        "clock regression (now < last_update) must reject opens fail-closed, got {out:?}"
+    );
+    assert_eq!(
+        compute_margin_mode_hint(&input),
+        MarginGateMode::ReduceOnly,
+        "clock regression must force ReduceOnly"
+    );
+}
+
+#[test]
+fn test_margin_gate_missing_timestamp_rejects_and_forces_reduceonly() {
+    let mut metrics = MarginGateMetrics::new();
+    let input = MarginGateInput {
+        mm_util_last_update_ts_ms: None,
+        ..margin_input(10_000.0, 100_000.0, 0.70, 0.85, 0.95)
+    };
+
+    let out = evaluate_margin_headroom_gate(&input, &mut metrics);
+    assert!(
+        matches!(
+            out,
+            MarginGateDecision::Rejected {
+                reason: MarginGateRejectReason::MarginHeadroomInputStale,
+                mm_util: None,
+            }
+        ),
+        "missing mm_util freshness timestamp must reject opens fail-closed, got {out:?}"
+    );
+    assert_eq!(
+        compute_margin_mode_hint(&input),
+        MarginGateMode::ReduceOnly,
+        "missing critical margin timestamp must force ReduceOnly"
+    );
+}
+
 // ─── Devils-advocate: boundary mutations ─────────────────────────────
 
 /// Catches mutation: `>=` flipped to `>` on mm_util threshold check.
@@ -203,13 +254,7 @@ fn test_margin_gate_tiny_positive_equity_uses_actual_ratio() {
 fn test_margin_at_exact_reject_opens_threshold_rejected() {
     let mut metrics = MarginGateMetrics::new();
     // mm_util = 70_000 / 100_000 = 0.70 == reject_opens threshold
-    let input = MarginGateInput {
-        maintenance_margin_usd: 70_000.0,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let input = margin_input(70_000.0, 100_000.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(
         matches!(out, MarginGateDecision::Rejected { .. }),
@@ -222,13 +267,7 @@ fn test_margin_at_exact_reject_opens_threshold_rejected() {
 fn test_margin_one_tick_below_reject_opens_allowed() {
     let mut metrics = MarginGateMetrics::new();
     // mm_util = 69_999 / 100_000 = 0.69999 < 0.70 threshold
-    let input = MarginGateInput {
-        maintenance_margin_usd: 69_999.0,
-        equity_usd: 100_000.0,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let input = margin_input(69_999.0, 100_000.0, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(
         matches!(out, MarginGateDecision::Allowed { .. }),
@@ -240,13 +279,7 @@ fn test_margin_one_tick_below_reject_opens_allowed() {
 #[test]
 fn test_margin_nan_equity_fails_closed() {
     let mut metrics = MarginGateMetrics::new();
-    let input = MarginGateInput {
-        maintenance_margin_usd: 10_000.0,
-        equity_usd: f64::NAN,
-        mm_util_reject_opens: 0.70,
-        mm_util_reduceonly: 0.85,
-        mm_util_kill: 0.95,
-    };
+    let input = margin_input(10_000.0, f64::NAN, 0.70, 0.85, 0.95);
     let out = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(
         matches!(out, MarginGateDecision::Rejected { .. }),
@@ -294,13 +327,7 @@ fn test_compute_margin_mode_hint_thresholds() {
     ];
 
     for (mm_usd, equity_usd, expected, desc) in cases {
-        let input = MarginGateInput {
-            maintenance_margin_usd: mm_usd,
-            equity_usd,
-            mm_util_reject_opens: 0.70,
-            mm_util_reduceonly: 0.85,
-            mm_util_kill: 0.95,
-        };
+        let input = margin_input(mm_usd, equity_usd, 0.70, 0.85, 0.95);
         let mode = compute_margin_mode_hint(&input);
         assert_eq!(mode, expected, "case: {desc}");
     }
@@ -348,13 +375,7 @@ fn test_compute_margin_mode_hint_invalid_inputs_fail_closed_to_kill() {
     ];
 
     for (mm_usd, equity_usd, reject, reduce, kill, desc) in cases {
-        let input = MarginGateInput {
-            maintenance_margin_usd: mm_usd,
-            equity_usd,
-            mm_util_reject_opens: reject,
-            mm_util_reduceonly: reduce,
-            mm_util_kill: kill,
-        };
+        let input = margin_input(mm_usd, equity_usd, reject, reduce, kill);
         let mode = compute_margin_mode_hint(&input);
         assert_eq!(
             mode,

@@ -39,12 +39,16 @@ pub struct MarginGateInput {
     pub mm_util_reject_opens: f64,
     pub mm_util_reduceonly: f64,
     pub mm_util_kill: f64,
+    pub now_ms: u64,
+    pub mm_util_last_update_ts_ms: Option<u64>,
+    pub mm_util_max_age_ms: u64,
 }
 
 /// Reject reason for margin gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarginGateRejectReason {
     MarginHeadroomRejectOpens,
+    MarginHeadroomInputStale,
 }
 
 /// Margin gate decision (binary allow/reject, decoupled from mode hint).
@@ -100,6 +104,15 @@ pub fn evaluate_margin_headroom_gate(
     input: &MarginGateInput,
     metrics: &mut MarginGateMetrics,
 ) -> MarginGateDecision {
+    if !freshness_is_current(input) {
+        metrics.record_reject();
+        bump_margin_gate_reject();
+        return MarginGateDecision::Rejected {
+            reason: MarginGateRejectReason::MarginHeadroomInputStale,
+            mm_util: None,
+        };
+    }
+
     if !thresholds_valid(
         input.mm_util_reject_opens,
         input.mm_util_reduceonly,
@@ -135,8 +148,13 @@ pub fn evaluate_margin_headroom_gate(
 /// Compute margin mode hint independently of the allow/reject decision.
 ///
 /// Takes `&MarginGateInput` for ergonomics — recomputes mm_util internally (cheap f64 division).
-/// Fails closed to `Kill` on invalid inputs.
+/// Freshness failures fail closed to `ReduceOnly`; invalid/corrupt numeric inputs fail
+/// closed to `Kill`.
 pub fn compute_margin_mode_hint(input: &MarginGateInput) -> MarginGateMode {
+    if !freshness_is_current(input) {
+        return MarginGateMode::ReduceOnly;
+    }
+
     // Intentionally re-validates: standalone function must be self-contained.
     if !input.equity_usd.is_finite()
         || !input.maintenance_margin_usd.is_finite()
@@ -172,4 +190,13 @@ fn thresholds_valid(reject_opens: f64, reduceonly: f64, kill: f64) -> bool {
         return false;
     }
     reject_opens <= reduceonly && reduceonly <= kill
+}
+
+fn freshness_is_current(input: &MarginGateInput) -> bool {
+    matches!(
+        input.mm_util_last_update_ts_ms,
+        Some(last_update_ts_ms)
+            if input.now_ms >= last_update_ts_ms
+                && input.now_ms - last_update_ts_ms <= input.mm_util_max_age_ms
+    )
 }

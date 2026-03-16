@@ -27,7 +27,7 @@ From the section, identify:
 For each guard/rule, create a TRIP and NON-TRIP pair:
 
 ```rust
-/// AT-001: [Guard Name] TRIP test
+/// AT-XXX: [Guard Name] TRIP test
 /// Contract: §X.Y.Z - [requirement text]
 ///
 /// Preconditions:
@@ -50,7 +50,7 @@ fn test_guard_name_trip() {
     assert_eq!(result.reject_reason, RejectReasonCode::GuardName);
 }
 
-/// AT-002: [Guard Name] NON-TRIP test
+/// AT-XXY: [Guard Name] NON-TRIP test
 /// Contract: §X.Y.Z - [requirement text]
 ///
 /// Preconditions: Same as TRIP, but guard condition is false
@@ -92,8 +92,14 @@ assert!(result.is_err());
 Add to the relevant section:
 ```markdown
 **Acceptance Tests:**
-- AT-001: [Guard] TRIP - guard activates when [condition], blocks OPEN with `RejectReasonCode::X`
-- AT-002: [Guard] NON-TRIP - guard inactive when [condition], OPEN dispatches
+- AT-XXX: [Guard] TRIP - guard activates when [condition], blocks OPEN with `RejectReasonCode::X`
+- AT-XXY: [Guard] NON-TRIP - guard inactive when [condition], OPEN dispatches
+```
+
+### 6) Verify AT Numbering
+```bash
+# Find next available AT number and allocate unique IDs for this change
+rg "AT-\d+" specs/CONTRACT.md | grep -oE "AT-[0-9]+" | sort -t- -k2 -n | tail -5
 ```
 
 ## Checklist
@@ -103,4 +109,3 @@ Add to the relevant section:
 - [ ] Both prove causality (dispatch count OR reason code)
 - [ ] AT-### registered in CONTRACT.md
 - [ ] Test file follows naming: `test_<guard>_trip.rs` or in `#[cfg(test)]` module
-

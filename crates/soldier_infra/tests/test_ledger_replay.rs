@@ -8,7 +8,7 @@
 use soldier_core::execution::{
     PersistedTransition, Tlsm, TlsmEvent, TlsmState, TlsmTransitionSink, TransitionResult,
 };
-use soldier_infra::store::{
+use soldier_infra::{
     IntentRecord, LedgerAppendError, LedgerMetrics, LedgerTransitionSink, TlsState, WalLedger,
 };
 

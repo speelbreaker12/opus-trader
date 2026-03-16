@@ -40,7 +40,6 @@ required=(
   plans/autofix.sh
   plans/artifact_lint.sh
   plans/bidi_control_guard.sh
-  plans/check_contract_at_wording_drift.sh
   plans/check_contract_change_ledger.sh
   plans/check_skip_entrypoint.sh
   plans/code_review_expert_attest.sh
@@ -55,12 +54,18 @@ required=(
   plans/contract_review_emit.sh
   plans/contract_review_validate.sh
   plans/execution_facade_symbols.txt
+  plans/risk_facade_symbols.txt
+  plans/venue_facade_symbols.txt
+  plans/soldier_infra_facade_symbols.txt
   plans/external_review_generic.sh
   plans/fork_attestation_mirror.sh
   plans/fork_attestation_remediation_verify.sh
   plans/init.sh
   plans/legacy_layout_guard.sh
   plans/lint_execution_facade.sh
+  plans/lint_risk_facade.sh
+  plans/lint_venue_facade.sh
+  plans/lint_soldier_infra_facade.sh
   plans/live_enable_preflight.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
@@ -71,6 +76,7 @@ required=(
   plans/prd_cache_check.py
   plans/prd_cache_update.py
   plans/prd_gate.sh
+  plans/prd_ref_check.sh
   plans/prd_preflight.sh
   plans/postmortem_template.md
   plans/prd_set_pass.sh
@@ -103,16 +109,11 @@ required=(
   plans/story_verify_allowlist_check.sh
   plans/story_verify_allowlist_lint.sh
   plans/story_verify_allowlist_suggest.sh
-  plans/tests/test_audit_parallel_empty_cache_arrays.sh
   plans/tests/test_codex_review_digest.sh
   plans/tests/test_codex_review_logged.sh
-  plans/tests/test_contract_at_parity_invalid_refs.sh
-  plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_change_ledger.sh
-  plans/tests/test_contract_at_wording_drift.sh
   plans/tests/test_contract_kernel_drift_message.sh
   plans/tests/test_contract_profile_parity.sh
-  plans/tests/test_contract_at_parity_invalid_refs.sh
   plans/tests/test_contract_review_emit.sh
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
@@ -124,7 +125,9 @@ required=(
   plans/tests/test_fork_attestation_mirror.sh
   plans/tests/test_fork_attestation_remediation_verify.sh
   plans/tests/test_lint_execution_facade.sh
-  plans/tests/test_live_enable_preflight.sh
+  plans/tests/test_lint_risk_facade.sh
+  plans/tests/test_lint_venue_facade.sh
+  plans/tests/test_lint_soldier_infra_facade.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_set_pass.sh
@@ -143,12 +146,10 @@ required=(
   plans/tests/test_premortem_ready_ownership_conflict.sh
   plans/tests/test_recon_operator_runner.sh
   plans/tests/test_recon_operator_trace.sh
-  plans/tests/test_recon_scoreboard.sh
   plans/tests/test_recon_precheck.sh
   plans/tests/test_recon_prompt_guard.sh
+  plans/tests/test_pr_review_gate_hook.sh
   plans/tests/test_review_logged_prompt_literalization.sh
-  plans/tests/test_run_prd_auditor_invocation.sh
-  plans/tests/test_run_prd_auditor_timeout_fallback.sh
   plans/tests/test_slice_execute_guard.sh
   plans/tests/test_review_logged_timeout_binary_unavailable.sh
   plans/tests/test_review_logged_timeout_fallback.sh
@@ -160,7 +161,6 @@ required=(
   plans/tests/test_stoic_cli_invariant_check.sh
   plans/tests/test_story_review_gate.sh
   plans/tests/test_story_review_findings_guard.sh
-  plans/tests/test_verify_timeout_policy.sh
   plans/tests/test_verify_fork_guardrails.sh
   plans/tests/test_verify_gate_contract_check_batching.sh
   plans/tests/test_rust_gates_smoke_targets.sh

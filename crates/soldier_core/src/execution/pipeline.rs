@@ -8,26 +8,27 @@ use crate::risk::{FeeCacheSnapshot, FeeStalenessConfig, RiskState};
 use crate::venue::{BotFeatureFlags, ExpiryGuardInput, VenueCapabilities};
 
 use super::base_gates::{BaseGatesInput, BaseGatesLegacy, BaseGatesMetrics, evaluate_base_gates};
+#[allow(deprecated)] // PrecomputedWalGate is a migration shim (GAP-FE-004)
+use super::build_order_intent::PrecomputedWalGate;
 use super::build_order_intent::build_gate_results_from_dispatch_proof;
-use super::build_order_intent::{ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep};
+use super::build_order_intent::{
+    ChokeIntentClass, ChokeMetrics, ChokeResult, GateStep,
+    build_order_intent_with_optional_wal_gate,
+};
 use super::dispatch_map::DispatchConsistencyProof;
 use super::gate::{LiquidityGateInput, LiquidityGateMetrics, evaluate_liquidity_gate};
 use super::gate_outcome::GateOutcome;
 use super::gates::{NetEdgeInput, NetEdgeMetrics, evaluate_net_edge};
-use super::orchestration_tail::run_orchestration_tail;
 use super::preflight::{PreflightInput, PreflightMetrics};
 use super::pricer::{PricerInput, PricerMetrics, compute_limit_price};
-use super::quantize::{QuantizeConstraints, QuantizeMetrics, Side};
-use super::reject_reason::{GateRejectCodes, RejectReasonCode};
+use super::quantize::QuantizeMetrics;
+use super::reject_reason::{GateRejectCodes, RejectReasonCode, reject_reason_from_chokepoint};
+use super::wal_gate::RecordedBeforeDispatchGate;
 
-/// Quantize inputs required by the execution pipeline.
-#[derive(Debug, Clone)]
-pub(crate) struct QuantizePipelineInput {
-    pub raw_qty: f64,
-    pub raw_limit_price: f64,
-    pub side: Side,
-    pub constraints: QuantizeConstraints,
-}
+pub(crate) use super::base_gates::QuantizePipelineInput;
+
+#[cfg(test)]
+use super::quantize::QuantizeConstraints;
 
 /// Inputs required to run the end-to-end execution pipeline.
 #[derive(Debug, Clone)]
@@ -88,6 +89,18 @@ pub(crate) struct PipelineResult {
 pub(crate) fn evaluate_intent_pipeline(
     input: &IntentPipelineInput<'_>,
     metrics: &mut IntentPipelineMetrics,
+) -> PipelineResult {
+    #[allow(deprecated)] // Compatibility wrapper for tests still driving precomputed WAL input.
+    let mut wal_gate = PrecomputedWalGate {
+        recorded: input.wal_recorded,
+    };
+    evaluate_intent_pipeline_with_wal_gate(input, metrics, Some(&mut wal_gate))
+}
+
+pub(crate) fn evaluate_intent_pipeline_with_wal_gate(
+    input: &IntentPipelineInput<'_>,
+    metrics: &mut IntentPipelineMetrics,
+    wal_gate: Option<&mut dyn RecordedBeforeDispatchGate>,
 ) -> PipelineResult {
     // ── Gates 1-6: shared base gate evaluator ───────────────────────────
     let base_input = BaseGatesInput {
@@ -242,7 +255,7 @@ pub(crate) fn evaluate_intent_pipeline(
         liquidity_gate_passed,
         net_edge_passed,
         pricer_passed,
-        input.wal_recorded, // Note: dead in the WAL adapter path (PrecomputedWalGate is the authority); kept for GateRejectCodes sidecar
+        input.wal_recorded, // Compatibility-only: adapter-backed live paths ignore this at Gate 10.
         input.requested_qty,
         input.max_dispatch_qty,
     );
@@ -262,17 +275,22 @@ pub(crate) fn evaluate_intent_pipeline(
         pricer: pricer_reject_code,
     };
 
-    let tail = run_orchestration_tail(
+    let decision = build_order_intent_with_optional_wal_gate(
         input.intent_class,
         input.risk_state,
         &mut metrics.chokepoint,
         &gate_results,
-        &gate_reject_codes,
+        wal_gate,
     );
+    let reject_reason_code = if let ChokeResult::Rejected { reason, .. } = &decision {
+        Some(reject_reason_from_chokepoint(reason, &gate_reject_codes))
+    } else {
+        None
+    };
 
     PipelineResult {
-        decision: tail.decision,
-        reject_reason_code: tail.reject_reason_code,
+        decision,
+        reject_reason_code,
     }
 }
 
@@ -349,6 +367,7 @@ mod tests {
                 gross_edge_usd: 10.0,
                 min_edge_usd: 2.0,
                 fee_estimate_usd: 2.0,
+                expected_slippage_usd: 1.0,
                 qty: 1.0,
                 side: Side::Buy,
             }),

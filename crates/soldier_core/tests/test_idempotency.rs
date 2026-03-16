@@ -3,8 +3,23 @@
 //! AT-218: deterministic hash across codepaths.
 //! AT-343: hash excludes wall-clock timestamps.
 
+use soldier_core::execution::{
+    ExecutionBaseInput, ExecutionDecision, ExecutionEngine, ExecutionInput,
+    ExecutionL2BookSnapshot, ExecutionL2Level, ExecutionOrderType, ExecutionPreflightInput,
+    ExecutionRejection, ExecutionRuntime, ExecutionStep, GateRejectCodes, GateStep,
+    InventorySkewExecutionInput, LiquidityExecutionInput, NetEdgeExecutionInput,
+    OpenExecutionInput, PricerExecutionInput, QuantizeExecutionInput, RecordedBeforeDispatchGate,
+    RejectReasonCode, Side,
+};
 use soldier_core::idempotency::{
     IntentHashInput, compute_intent_hash, format_intent_hash, intent_hash_ih16,
+};
+use soldier_core::risk::{
+    ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
+    PendingExposureBook, ReservationId, RiskState,
+};
+use soldier_core::venue::{
+    BotFeatureFlags, ExpiryGuardInput, InstrumentKind, LifecycleIntent, VenueCapabilities,
 };
 use xxhash_rust::xxh64::xxh64;
 
@@ -259,4 +274,160 @@ fn test_field_boundary_separation() {
         compute_intent_hash(&input_b),
         "shifted field boundaries must produce different hashes"
     );
+}
+
+struct DuplicateWalGate {
+    calls: usize,
+}
+
+impl RecordedBeforeDispatchGate for DuplicateWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        self.calls += 1;
+        Err("duplicate intent_hash".to_string())
+    }
+}
+
+fn at928_open_input() -> OpenExecutionInput<'static> {
+    OpenExecutionInput {
+        base: ExecutionBaseInput {
+            risk_state: RiskState::Healthy,
+            preflight: ExecutionPreflightInput {
+                instrument_kind: InstrumentKind::Option,
+                order_type: ExecutionOrderType::Limit,
+                has_trigger: false,
+                linked_order_type: None,
+                linked_orders_allowed: false,
+                post_only: None,
+            },
+            venue_capabilities: VenueCapabilities::default(),
+            bot_feature_flags: BotFeatureFlags::default(),
+            quantize: QuantizeExecutionInput {
+                raw_qty: 1.0,
+                raw_limit_price: 100.0,
+                side: Side::Buy,
+                tick_size: 0.1,
+                amount_step: 0.1,
+                min_amount: 0.1,
+            },
+            dispatch_consistency_passed: true,
+            fee_snapshot: FeeCacheSnapshot {
+                fee_rate: 0.0005,
+                fee_model_cached_at_ts_ms: Some(1_000_000),
+                now_ms: 1_010_000,
+            },
+            fee_config: FeeStalenessConfig::default(),
+            expiry_guard: Some(ExpiryGuardInput {
+                now_ms: 1_000_000,
+                expiration_timestamp_ms: Some(2_000_000),
+                expiry_delist_buffer_s: 60,
+                intent: LifecycleIntent::Open,
+                instrument_kind: Some(InstrumentKind::LinearFuture),
+            }),
+        },
+        gate_reject_codes: GateRejectCodes::default(),
+        current_delta: 0.0,
+        delta_impact_est: 10.0,
+        liquidity: LiquidityExecutionInput {
+            order_qty: 1.0,
+            side: Side::Buy,
+            is_marketable: true,
+            l2_snapshot: Some(ExecutionL2BookSnapshot {
+                asks: vec![ExecutionL2Level {
+                    price: 100.0,
+                    qty: 10.0,
+                }],
+                bids: vec![ExecutionL2Level {
+                    price: 99.0,
+                    qty: 10.0,
+                }],
+                timestamp_ms: 1_000,
+            }),
+            now_ms: 1_050,
+            l2_book_snapshot_max_age_ms: 100,
+            max_slippage_bps: 20.0,
+        },
+        net_edge: NetEdgeExecutionInput {
+            gross_edge_usd: Some(12.0),
+            fee_usd: Some(1.0),
+            expected_slippage_usd: Some(1.0),
+            min_edge_usd: Some(9.0),
+        },
+        inventory_skew: InventorySkewExecutionInput {
+            current_delta: 0.0,
+            pending_delta: 0.0,
+            delta_limit: Some(100.0),
+            side: Side::Buy,
+            min_edge_usd: 9.0,
+            net_edge_usd: 10.0,
+            limit_price: 100.0,
+            tick_size: 0.5,
+            inventory_skew_k: 0.1,
+            inventory_skew_tick_penalty_max: 3,
+        },
+        pricer: PricerExecutionInput {
+            fair_price: 100.0,
+            gross_edge_usd: 20.0,
+            min_edge_usd: 9.0,
+            fee_estimate_usd: 2.0,
+            expected_slippage_usd: 1.0,
+            qty: 1.0,
+            side: Side::Buy,
+        },
+        exposure_budget: ExposureBudgetInput {
+            current_btc_delta_usd: 0.0,
+            pending_btc_delta_usd: 0.0,
+            current_eth_delta_usd: 0.0,
+            pending_eth_delta_usd: 0.0,
+            current_alts_delta_usd: 0.0,
+            pending_alts_delta_usd: 0.0,
+            candidate_bucket: ExposureBucket::Btc,
+            candidate_delta_usd: 10.0,
+            global_delta_limit_usd: Some(1_000.0),
+        },
+        margin_gate: MarginGateInput {
+            maintenance_margin_usd: 10.0,
+            equity_usd: 100.0,
+            mm_util_reject_opens: 0.70,
+            mm_util_reduceonly: 0.85,
+            mm_util_kill: 0.95,
+            now_ms: 1_000,
+            mm_util_last_update_ts_ms: Some(1_000),
+            mm_util_max_age_ms: 30_000,
+        },
+        reservation_id: match ReservationId::new("test-intent-at928".to_string()) {
+            Some(value) => value,
+            None => panic!("invalid reservation id fixture"),
+        },
+        instrument_id: "BTC-PERPETUAL".to_string(),
+    }
+}
+
+fn at928_pending_book() -> PendingExposureBook {
+    let book = PendingExposureBook::new(None);
+    book.register_instrument("BTC-PERPETUAL", Some(100.0));
+    book
+}
+
+/// AT-928: if WAL reports duplicate intent hash, OPEN evaluation is a no-dispatch NOOP.
+///
+/// WAL unchanged semantics are enforced in infra (`test_duplicate_intent_hash_rejected`).
+/// This test proves the core execution chokepoint does not dispatch on duplicates.
+#[test]
+fn test_intent_hash_noop_when_already_in_wal() {
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = DuplicateWalGate { calls: 0 };
+    let book = at928_pending_book();
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&book));
+
+    let decision = engine.decide(&ExecutionInput::Open(at928_open_input()), &mut runtime);
+
+    assert_eq!(wal_gate.calls, 1, "open path should consult WAL once");
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::RecordedBeforeDispatchFailed,
+            step: ExecutionStep::Gate(GateStep::RecordedBeforeDispatch),
+            ..
+        })
+    ));
 }

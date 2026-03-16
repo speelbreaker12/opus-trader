@@ -6,7 +6,7 @@
 //! Cross-reference: unit-level config tests in test_config_defaults.rs;
 //! pipeline-level gate tests in soldier_core tests.
 
-use soldier_infra::config::{RawThresholdConfig, build_gate_config_from_raw};
+use soldier_infra::{RawThresholdConfig, build_gate_config_from_raw};
 
 // ─── Fail-closed: NaN for safety param → error ──────────────────────────
 

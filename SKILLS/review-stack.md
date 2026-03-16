@@ -71,6 +71,22 @@ Each skill has a full definition file in `SKILLS/`. Read the relevant file befor
    SAFETY_CRITICAL=$(git diff ${BASE_BRANCH}...HEAD --name-only | grep -cE 'crates/soldier_core/|crates/soldier_infra/' || true)
    ```
 
+### Parallelism Opportunity
+
+Phase 0 must complete first (it produces the `SAFETY_CRITICAL` flag consumed by later phases).
+Phases 1 and 2 can run in parallel. Phase 3 must run after Phase 2 because `/strategic-failure-review` requires `/failure-mode-review` as a prerequisite.
+
+**Recommended execution (after Phase 0):**
+- Agent A → Phase 1 (PR Review)
+- Agent B → Phase 2 (Failure-Mode Review)
+- Then run Phase 3 (Strategic Failure Review) after Phase 2 completes
+
+Do not start Phase 3 until Phase 2 findings are available. Phases 4–7 run sequentially — each may reference findings from earlier phases and they share the `SAFETY_CRITICAL` flag.
+
+**Short-circuit exception:** If Phase 1 produces a P0 finding, stop the stack and fix the P0 before continuing.
+
+---
+
 ### Phase 1 — PR Review (`/pr-review`)
 
 Read `SKILLS/pr-review.md` and execute the full checklist.
@@ -91,7 +107,7 @@ Read `SKILLS/failure-mode-review.md`. Read actual source files, not just diffs.
 
 Read `SKILLS/strategic-failure-review.md`.
 
-**Skip condition:** If `SAFETY_CRITICAL == 0` AND the change touches fewer than 3 files → skip. Record `SKIPPED (non-safety, small change)`.
+**Small-change mode:** If `SAFETY_CRITICAL == 0` AND the change touches fewer than 3 files, run the minimum required set only: §2, §12, §20, §22 with concise output.
 
 **Mandatory sections:** Always apply §2 (Complexity-to-Benefit), §12 (Mental Model Mismatches), §20 (Simpler Alternative), §22 (Safety Invariants).
 
@@ -111,7 +127,9 @@ This produces the `contract_review.json` needed by `prd_set_pass.sh`.
 
 Read `SKILLS/validator-audit.md`.
 
-**Skip condition:** If the change does not touch validators, rule sets, schema validation, or proof graph code → skip. Record `SKIPPED (no validator code changed)`.
+**Skip condition:** If the change does not touch validators, rule sets, schema validation, proof graph code, OR any new Python/shell code that validates inputs and produces a gating verdict (harness evaluators, proposal validators, autoresearch pipelines, CI quality gates) → skip. Record `SKIPPED (no validator code changed)`.
+
+**Do not skip when:** a new Python script or module reads structured input, applies correctness checks, and gates or scores downstream output — even if it is "tooling" rather than a trading-domain safety gate.
 
 **Mandatory sections when run:** Always apply §1 (Enum Exhaustiveness), §2 (Field Coverage), §3 (Dead Import Detection), §6 (Paper Compliance).
 

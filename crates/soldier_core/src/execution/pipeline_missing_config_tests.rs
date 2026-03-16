@@ -295,6 +295,7 @@ fn test_zero_qty_pricer_fails_closed() {
         gross_edge_usd: 10.0,
         min_edge_usd: 2.0,
         fee_estimate_usd: 3.0,
+        expected_slippage_usd: 1.0,
         qty: 0.0, // invalid
         side: Side::Buy,
     };
@@ -391,6 +392,7 @@ fn test_rejection_paths_return_enumerated_reason_variants() {
             gross_edge_usd: 10.0,
             min_edge_usd: 1.0,
             fee_estimate_usd: 1.0,
+            expected_slippage_usd: 1.0,
             qty: 0.0,
             side: Side::Buy,
         },

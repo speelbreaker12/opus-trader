@@ -40,8 +40,21 @@ For each AT, iterate:
    - Ignore one input field entirely
    - Swap two enum variants
    - **Enum variant sweep**: For each enum variant the function accepts, feed it through the full function with hostile/garbage inputs for all other parameters. Example: `evaluate_assembled_pipeline(CancelOnly, NaN_metadata)` — does CancelOnly still get approved? Tests that only exercise one variant (e.g., always Open) leave every other variant's path untested.
+   - **Identity/no-op mutation**: new implementation == old implementation (passthrough, no change). For any loop-style optimization or score-based exit criterion, check whether the scoring fixtures already satisfy the structural assertions *before any patcher runs*. If they do, the null patcher scores 100% — the exit criterion is vacuous. Fix: add a post-apply hash check asserting `hash(output) != hash(input)` before accepting a patch as "applied".
 
-2. **Run tests**: `cargo test` on the relevant module. Does the wrong impl pass?
+**Minimum mutation checklist (must attempt ALL before claiming phase transition):**
+- [ ] Always-reject (ignores conditions, rejects everything)
+- [ ] Always-allow (ignores guards, allows everything)
+- [ ] Hard-coded return value
+- [ ] Off-by-one / boundary flip (`<` vs `<=`)
+- [ ] Ignore one input field entirely
+- [ ] Swap two enum variants
+- [ ] Enum variant sweep (one scenario per variant of primary enum input)
+- [ ] Identity/no-op mutation (passthrough, no change)
+
+Record each in Phase 4 output as `[attempted]` or `[N/A — reason]`. A phase transition claimed without exhausting this list is invalid.
+
+2. **Run tests**: `cargo test` on the relevant module (Rust), or `pytest -x <test_file>` / `python -m pytest` (Python). Does the wrong impl pass?
 
 3. **If it passes** → the test suite has a gap:
    - Identify which AT *should* have caught this
@@ -79,12 +92,16 @@ Document in the output:
 ## Devils Advocate: <AT list>
 
 ### Mutations Attempted
-| # | Mutation | Passed? | Test Added |
-|---|---------|---------|------------|
-| 1 | Always-reject (ignore conditions) | YES → gap | Added NON-TRIP case: valid input → must allow |
-| 2 | Ignore `clock_uncertainty` field | YES → gap | Added case: clock_uncertain=true, all else healthy → ReduceOnly |
-| 3 | Hard-code ReduceOnly | NO | — (TRIP test caught it) |
-| 4 | Off-by-one on threshold | NO | — (boundary test caught it) |
+| # | Mutation | Attempted? | Passed tests? | Gap found / Test added |
+|---|---------|------------|---------------|------------------------|
+| 1 | Always-reject (ignore conditions) | yes | YES → gap | Added NON-TRIP case: valid input → must allow |
+| 2 | Ignore `clock_uncertainty` field | yes | YES → gap | Added case: clock_uncertain=true, all else healthy → ReduceOnly |
+| 3 | Hard-code ReduceOnly | yes | NO | — (TRIP test caught it) |
+| 4 | Off-by-one on threshold | yes | NO | — (boundary test caught it) |
+| 5 | Swap enum variants | yes/N/A | ... | ... |
+| 6 | Enum variant sweep | yes/N/A | ... | ... |
+| 7 | Identity/no-op (passthrough) | yes/N/A | ... | ... |
+| 8 | Ignore input field entirely | yes/N/A | ... | ... |
 
 ### Simpler-Than-Correct Gate
 **Result: PASS / BLOCKED**
@@ -113,7 +130,7 @@ Weakest surviving test: <which test would be first to break if you relaxed it>
 ## Exit Criteria
 
 The skill is complete when:
-1. All mutations from the standard list have been attempted
+1. All mutations from the standard list have been attempted (including the identity/no-op mutation)
 2. Every gap found has been closed with a new test case
 3. The simpler-than-correct gate returns PASS
 4. The phase transition has been reached and documented

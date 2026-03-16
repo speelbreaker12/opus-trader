@@ -11,7 +11,15 @@ When to use
 - Reviewing merge/aggregate functions that combine multiple sources
 - After adding new fields/enums to a data model — are they validated?
 - When a validator is the quality gate for a pipeline (CI, workflow, deploy)
+- **Any new Python module or shell script that reads structured input and produces a gating verdict** — e.g., proposal evaluators, harness scoring scripts, autoresearch render tools, contract patch renderers. "Tooling" is not a reason to skip.
 - When an external reviewer finds gaps your skills missed (retrospective)
+
+**The domain-agnostic test:** Does this code (1) accept structured input, (2) apply correctness checks, and (3) gate or score downstream output? If yes → apply this skill, regardless of whether it touches the trading engine.
+
+When NOT to use
+- Simple single-rule fixes (use `/pr-review`)
+- Production enforcement code (use `/contract-review`)
+- Implementation failure modes (use `/failure-mode-review`)
 
 ---
 
@@ -63,6 +71,7 @@ rg "ALL_RULES|RULES|validators" --type py --type rust
 | "Proven" / "passed" / "valid" verdicts | **Always** §6 Paper Compliance |
 | Counts, totals, summaries | §7 Derived Value Consistency |
 | Multiple schema versions | §8 Version Gate Coverage |
+| Iterative calibration / self-improving pipelines | §9 Benchmark and Promotion Integrity |
 
 **Always apply**: §1, §2, §3, §6 — these catch the most gaps.
 
@@ -188,6 +197,8 @@ Checklist:
 - [ ] Can `reconciliation_status=RECONCILED` coexist with unproven ATs? (not just BLOCKING ones)
 - [ ] Construct a **minimal adversarial input** that passes all rules but is clearly wrong. If you can build one, there's a gap.
 
+**Path-derived metadata**: When `run_id` and `fixture_id` are encoded in the directory structure rather than JSON fields, the schema cannot validate them. Check whether required identifiers live in the file or only in the path — path-only means per-fixture attribution depends entirely on naming conventions with no machine-enforceable contract.
+
 **Technique**: Build the most dishonest input that could pass validation. If it passes, you've found a gap.
 
 ### 7. Derived Value Consistency
@@ -209,6 +220,24 @@ Checklist:
 - [ ] V1 data doesn't accidentally trigger V2 rules?
 - [ ] V2-only fields have V2-specific validation (not just V1 rules applied to V2)?
 - [ ] Schema version itself validated (unknown version → reject, not ignore)?
+
+### 9. Benchmark and Promotion Integrity
+
+For validators embedded in iterative self-improvement loops (calibration harnesses, auto-patching pipelines, scored feedback loops). Skip for single-pass validators.
+
+Checklist:
+- [ ] **Monotonic benchmark**: Can `refresh_fixtures.sh` or equivalent rewrite the pass threshold from the candidate's own current output? A reviewed, human-authored inventory artifact must floor the threshold; it may only increase unless a human explicitly modifies the inventory file.
+- [ ] **Authoritative-source vs declared-metadata**: For every proposal-declared field used in routing or gating, is the value resolved from an authoritative sibling artifact, not merely required and present?
+- [ ] **Coordinate bridge**: If evaluation uses local coordinates (fixture line numbers) and promotion uses global coordinates (live file), is the fixture-local -> live-file resolve step explicitly specified?
+- [ ] **Single-writer ownership**: For each mutable promotion-state artifact (for example `proposals_index.json`, status transitions such as `verifying -> applied`), is there exactly one code path that writes each state?
+- [ ] **Canonical review artifact**: Does human approval produce a dedicated, machine-readable record with `run_id`, `proposal_id`, `decision`, `reviewer`, `timestamp`, `base_contract_hash`, and `reason_code`?
+
+Evidence checks (deterministic):
+- [ ] Trace every write to threshold/count fields in eval configs (for example `rg -n "expected_gate_input_count|threshold|target_count"`).
+- [ ] For each gating field, show both declaration/read site and authoritative cross-check site.
+- [ ] Trace every writer to promotion-state artifacts (for example `rg -n "proposals_index|verifying|applied"`).
+
+**Anti-pattern**: A spec that says "human reviews and marks accepted/rejected in proposals.json" has no canonical machine-readable proof of what the human decided.
 
 ---
 
@@ -270,6 +299,13 @@ Checklist:
 - [ ] Tie-breaking: deterministic?
 - [ ] Metadata cleanup: on re-aggregation?
 
+### Benchmark and Promotion Integrity (if applicable)
+- [ ] Monotonic benchmark: threshold cannot drop without human inventory change?
+- [ ] Authoritative-source: all gating fields resolved from ground truth, not just present?
+- [ ] Coordinate bridge: fixture-local -> live-file promotion address explicitly defined?
+- [ ] Single-writer: each promotion state has exactly one writer?
+- [ ] Review artifact: canonical machine-readable record of human decisions exists?
+
 ### Paper Compliance Test
 Adversarial input that passes all rules but is substantively wrong:
 ```json
@@ -285,7 +321,26 @@ Adversarial input that passes all rules but is substantively wrong:
 3. <merge invariant fix>
 ```
 
-**For clean/complete validators** (no CRITICAL or HIGH findings): keep total output under 500 words — omit empty sections, use ✓ inline for confirmed-OK items rather than expanding each.
+---
+
+## Common Gap Patterns
+
+| Pattern | Gap | Detection |
+|---------|-----|-----------|
+| Enum subset in condition | Highest/most dangerous member excluded | List all members, check which are in the condition |
+| Imported but unused type | Rule was intended but never written | Grep imports vs. rule bodies |
+| Boolean field unchecked | `false` when `true` required passes silently | Field coverage matrix |
+| String field presence-only | Empty string passes, placeholder passes | Check for `.strip()` / `PLACEHOLDER_RE` coverage |
+| Mechanism string validated, data not | "dispatch_count" accepted, but `dispatch_count_assert` not required | Trace mechanism → required subfields |
+| Count recomputed, boolean not | `blocking_count` recalculated, `trading_halt` stale | Check which derived fields have consistency rules |
+| Merge ignores same-value severity | Verdict matches → severity update skipped | Test same-verdict-different-severity inputs |
+| Tie-break by input order | First reviewer wins on equal rank | Test with reversed input order |
+| Metadata not cleaned up | Old conflicts persist after resolution | Test re-aggregation after disagreement resolved |
+| Version gate missing | V2 rule runs on V1 data or V1 rule misses V2 field | Check `_is_v2()` guards |
+| Threshold gap at boundary | MED/HIGH checked, CRITICAL forgotten | Enumerate full range above threshold |
+| Self-lowering threshold | Refresh script recomputes threshold from current state; regression silently drops the bar | Trace every write to threshold/count fields in eval configs |
+| Declared-metadata gating | Gating field required by schema but not cross-checked against authoritative source | For each gating field, find where it is declared and where it is verified against ground truth |
+| Missing coordinate bridge | Fixture-local line spans reused as live-file write coordinates | Trace applicator use of `start_line`/`end_line` and confirm explicit live-coordinate resolution |
 
 ---
 

@@ -54,10 +54,13 @@ gh pr diff <number>
 - [ ] Edge cases tested
 - [ ] For new features: happy path + error path
 
-#### Security (lightweight)
-- [ ] No hardcoded secrets
-- [ ] Input validation where needed
-- [ ] No SQL/command injection risks
+#### Security (diff-scoped — new/changed lines only, not pre-existing code)
+- [ ] No hardcoded secrets in new/changed lines
+- [ ] For new/changed Rust lines: no `unwrap()` / `expect()` without a context message (production paths only)
+- [ ] For new/changed Python lines: no bare `except:` — catch specific exception types
+- [ ] Input validation where new system boundaries are introduced
+- [ ] No SQL/command injection risks in new code
+- [ ] **CWD-relative paths in skill/hook/config files**: any `!cat path/to/file` or `source path/to/file` in `.claude/skills/`, `.claude/hooks/`, or wrapper configs — does it resolve correctly when invoked from a directory other than the repo root? Fix: use `$(git rev-parse --show-toplevel)/path` or verify the runner always sets CWD. **Note:** a "low risk" or "pointer file" label in the coverage table does NOT exempt a file from this check — apply it regardless of triage label.
 - [ ] (For safety-critical code: use `/contract-review` instead)
 
 #### Documentation
@@ -68,11 +71,24 @@ gh pr diff <number>
 
 ### Review Coverage (Required)
 - Use `reviews/REVIEW_CHECKLIST.md` to confirm evidence/compounding gates and required workflow checks are covered.
+- **"Comment-only" label discipline**: If you label a file "comment-only" or "docs-only" in the coverage table, you MUST cite the diff to confirm there are zero non-comment changed lines (e.g., no code moved, no logic reordered, no byte-manipulation patterns). Do not assign this label from the diff summary alone — read the actual changed lines.
 
 ### 3. Scope Check
 - [ ] Changes match PR title/description
 - [ ] No unrelated changes bundled in
 - [ ] Appropriate size (not too large to review)
+
+### 4. Block Conditions (must match `reviews/REVIEW_CHECKLIST.md`)
+
+Mark PR **BLOCKED** if any are true:
+- Evidence section is empty, vague, or missing artifacts
+- Compounding sections (`AGENTS.md updates proposed` / `Elevation plan`) are empty or non-enforceable
+- Requirements touched cannot be cited (no CR-IDs / contract anchors)
+
+Additional safety escalation (recommended):
+- New system-boundary input has no validation and no stated rationale for omission
+
+Use `reviews/REVIEW_CHECKLIST.md` for the full evidence/compounding/workflow gate checklist.
 
 ## Output Format
 
@@ -84,6 +100,10 @@ gh pr diff <number>
 
 ### Summary
 Brief description of what this PR does.
+
+### Finding Counts
+P0: N  P1: N  P2: N
+_(P0 = must-fix before merge · P1 = should-fix · P2 = nice-to-have)_
 
 ### Verdict: APPROVE | REQUEST_CHANGES | COMMENT
 
@@ -161,7 +181,9 @@ This skill focuses on "how will this code fail" rather than "does this code look
 | `crates/soldier_*` | Deep + `/contract-review` | Safety, correctness |
 | `python/` | Medium | Correctness, types |
 | `scripts/` | Medium | Correctness, error handling |
+| `autoresearch/` | Deep + `/validator-audit` | Pipeline correctness, hash provenance, fail-closed behavior; has its own design spec in `docs/superpowers/specs/` — check against it |
 | `plans/` | Light | Logic, no regressions |
 | `specs/` | Deep | Accuracy, cross-refs |
 | `docs/` | Light | Clarity, accuracy |
 | `.github/` | Medium | CI correctness |
+| `.claude/skills/`, `.claude/hooks/` | Medium | Path resolution, injection safety |

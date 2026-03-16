@@ -1,3 +1,5 @@
+Rust fintech rules (non-negotiable): no f32/f64 for prices/qty/fees; no unwrap() in production; fail-closed defaults (ReduceOnly not Active when uncertain); Arc/Mutex for shared async state.
+
 Success is not "story marked done."
 Success is: proof-backed, fail-closed, review-clean, and verifiably compliant.
 

@@ -75,6 +75,9 @@ fn test_margin_gate_invalid_input_reject_counter() {
         mm_util_reject_opens: 0.70,
         mm_util_reduceonly: 0.85,
         mm_util_kill: 0.95,
+        now_ms: 1_000,
+        mm_util_last_update_ts_ms: Some(1_000),
+        mm_util_max_age_ms: 30_000,
     };
     let result = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(matches!(result, MarginGateDecision::Rejected { .. }));
@@ -95,6 +98,9 @@ fn test_margin_gate_over_threshold_reject_counter() {
         mm_util_reject_opens: 0.70,
         mm_util_reduceonly: 0.85,
         mm_util_kill: 0.95,
+        now_ms: 1_000,
+        mm_util_last_update_ts_ms: Some(1_000),
+        mm_util_max_age_ms: 30_000,
     };
     let result = evaluate_margin_headroom_gate(&input, &mut metrics);
     assert!(matches!(result, MarginGateDecision::Rejected { .. }));

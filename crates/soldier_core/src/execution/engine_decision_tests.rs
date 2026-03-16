@@ -8,6 +8,10 @@ use crate::execution::open_runtime::{
     OpenRuntimeMetrics, OpenRuntimeOutput, build_open_order_intent_runtime,
 };
 use crate::execution::pipeline::{IntentPipelineMetrics, evaluate_intent_pipeline};
+use crate::execution::routing::{
+    build_open_runtime_input, build_pipeline_input, open_runtime_to_decision,
+    pipeline_result_to_decision,
+};
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, MarginGateInput, MarginGateMode, PendingExposureBook,
     ReservationId, RiskState,
@@ -97,6 +101,7 @@ fn open_l2_snapshot() -> ExecutionL2BookSnapshot {
 fn base_open_input() -> OpenExecutionInput<'static> {
     OpenExecutionInput {
         base: base_execution_input(),
+        gate_reject_codes: GateRejectCodes::default(),
         current_delta: 0.0,
         delta_impact_est: 10.0,
         liquidity: LiquidityExecutionInput {
@@ -131,6 +136,7 @@ fn base_open_input() -> OpenExecutionInput<'static> {
             gross_edge_usd: 20.0,
             min_edge_usd: 9.0,
             fee_estimate_usd: 2.0,
+            expected_slippage_usd: 1.0,
             qty: 1.0,
             side: Side::Buy,
         },
@@ -151,6 +157,9 @@ fn base_open_input() -> OpenExecutionInput<'static> {
             mm_util_reject_opens: 0.70,
             mm_util_reduceonly: 0.85,
             mm_util_kill: 0.95,
+            now_ms: 1_000,
+            mm_util_last_update_ts_ms: Some(1_000),
+            mm_util_max_age_ms: 30_000,
         },
         reservation_id: match ReservationId::new("test-intent-0000".to_string()) {
             Some(value) => value,
@@ -662,6 +671,7 @@ fn open_runtime_step_maps_base_gates_to_runtime_stage() {
 fn open_runtime_step_maps_margin_gate_transition() {
     let output = OpenRuntimeOutput {
         effective_risk_state: RiskState::Degraded,
+        gate_reject_codes: GateRejectCodes::default(),
         ..synthetic_open_output(ChokeRejectReason::RiskStateNotHealthy)
     };
 
@@ -697,6 +707,10 @@ fn open_runtime_step_maps_inventory_skew_on_adjusted_net_edge_reject() {
 
 #[test]
 fn engine_open_inventory_skew_reject_maps_runtime_step() {
+    // Inventory skew with a high current_delta forces adjusted min_edge up until
+    // net-edge fails.  The reject code must be NetEdgeTooLow and the step must
+    // map to InventorySkew, proving reject_reason_from_chokepoint's unwrap_or
+    // default is the sole code-path in play.
     let mut input = base_open_input();
     input.current_delta = 100.0;
     input.inventory_skew.inventory_skew_k = 0.2;
@@ -715,6 +729,74 @@ fn engine_open_inventory_skew_reject_maps_runtime_step() {
             step: ExecutionStep::Runtime(RuntimeStep::InventorySkew),
             ..
         })
+    ));
+}
+
+#[test]
+fn engine_open_inventory_skew_delta_limit_missing_maps_code_and_step() {
+    let mut input = base_open_input();
+    input.inventory_skew.delta_limit = None;
+
+    let engine_book = make_pending_book(100.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::InventorySkewDeltaLimitMissing,
+            step: ExecutionStep::Runtime(RuntimeStep::InventorySkew),
+            ref detail,
+        }) if detail == "INVENTORY_SKEW_DELTA_LIMIT_MISSING"
+    ));
+}
+
+#[test]
+fn engine_open_preserves_initial_net_edge_code_when_inventory_skew_rejects() {
+    let mut input = base_open_input();
+    input.net_edge.min_edge_usd = None;
+    input.inventory_skew.tick_size = 0.0;
+
+    let engine_book = make_pending_book(100.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::NetEdgeInputMissing,
+            step: ExecutionStep::Gate(GateStep::NetEdgeGate),
+            ..
+        })
+    ));
+}
+
+#[test]
+fn engine_open_preserves_initial_net_edge_code_when_delta_limit_missing_also_rejects() {
+    let mut input = base_open_input();
+    input.net_edge.min_edge_usd = None;
+    input.inventory_skew.delta_limit = None;
+
+    let engine_book = make_pending_book(100.0);
+
+    let engine = ExecutionEngine::new();
+    let mut wal_gate = OkWalGate { calls: 0 };
+    let mut runtime = ExecutionRuntime::new(Some(&mut wal_gate), Some(&engine_book));
+    let decision = engine.decide(&ExecutionInput::Open(input), &mut runtime);
+
+    assert!(matches!(
+        decision,
+        ExecutionDecision::Rejected(ExecutionRejection {
+            code: RejectReasonCode::NetEdgeInputMissing,
+            step: ExecutionStep::Gate(GateStep::NetEdgeGate),
+            detail,
+        }) if detail != "INVENTORY_SKEW_DELTA_LIMIT_MISSING"
     ));
 }
 
@@ -764,16 +846,17 @@ fn open_runtime_override_reasons_map_to_registry_codes() {
 #[test]
 fn open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes() {
     let input = base_open_input();
-    let mut output = synthetic_open_output(ChokeRejectReason::GateRejected {
-        gate: GateStep::LiquidityGate,
-        reason: "UNEXPECTED_LIQUIDITY_DETAIL".to_string(),
-    });
-    output.gate_reject_codes = GateRejectCodes {
+    let mut input_with_codes = input.clone();
+    input_with_codes.gate_reject_codes = GateRejectCodes {
         liquidity_gate: Some(RejectReasonCode::LiquidityGateNoL2),
         ..Default::default()
     };
+    let output = synthetic_open_output(ChokeRejectReason::GateRejected {
+        gate: GateStep::LiquidityGate,
+        reason: "UNEXPECTED_LIQUIDITY_DETAIL".to_string(),
+    });
 
-    let decision = open_runtime_to_decision(&input, &output);
+    let decision = open_runtime_to_decision(&input_with_codes, &output);
 
     assert!(matches!(
         decision,
@@ -783,12 +866,14 @@ fn open_runtime_unknown_liquidity_detail_falls_back_to_gate_reject_codes() {
         })
     ));
 
-    output.gate_reject_codes = GateRejectCodes {
+    // Second code variant: ExpectedSlippageTooHigh forwarded when set on input.
+    let mut input_with_slippage = base_open_input();
+    input_with_slippage.gate_reject_codes = GateRejectCodes {
         liquidity_gate: Some(RejectReasonCode::ExpectedSlippageTooHigh),
         ..Default::default()
     };
 
-    let decision = open_runtime_to_decision(&input, &output);
+    let decision = open_runtime_to_decision(&input_with_slippage, &output);
 
     assert!(matches!(
         decision,

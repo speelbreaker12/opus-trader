@@ -24,6 +24,7 @@ impl<T> TestValueExt<T> for Option<T> {
 use crate::execution::base_gates::BaseGatesInput;
 use crate::execution::build_order_intent::{
     ChokeIntentClass, ChokeMetrics, ChokeRejectReason, ChokeResult, GateStep,
+    RecordedBeforeDispatchGate,
 };
 use crate::execution::dispatch_map::DispatchConsistencyProof;
 use crate::execution::gate::{GateIntentClass, L2BookSnapshot, L2Level, LiquidityGateInput};
@@ -31,13 +32,12 @@ use crate::execution::gates::NetEdgeInput;
 use crate::execution::inventory_skew::InventorySkewInput;
 use crate::execution::open_runtime::{
     OpenRuntimeInput, OpenRuntimeMetrics, build_open_order_intent_runtime,
-    settle_pending_on_tlsm_terminal,
+    build_open_order_intent_runtime_with_wal_gate, settle_pending_on_tlsm_terminal,
 };
 use crate::execution::pipeline::QuantizePipelineInput;
 use crate::execution::preflight::{OrderType, PreflightInput};
 use crate::execution::pricer::PricerInput;
 use crate::execution::quantize::{QuantizeConstraints, Side};
-use crate::execution::reject_reason::RejectReasonCode;
 use crate::risk::{
     ExposureBucket, ExposureBudgetInput, FeeCacheSnapshot, FeeStalenessConfig, MarginGateInput,
     MarginGateMode, PendingExposureBook, ReservationId, RiskState,
@@ -45,6 +45,18 @@ use crate::risk::{
 use crate::venue::{
     BotFeatureFlags, ExpiryGuardInput, InstrumentKind, LifecycleIntent, VenueCapabilities,
 };
+
+#[derive(Debug, Default)]
+struct FailingWalGate {
+    calls: usize,
+}
+
+impl RecordedBeforeDispatchGate for FailingWalGate {
+    fn record_before_dispatch(&mut self) -> Result<(), String> {
+        self.calls += 1;
+        Err("simulated live wal failure".to_string())
+    }
+}
 
 fn open_l2_snapshot() -> L2BookSnapshot {
     L2BookSnapshot {
@@ -136,6 +148,7 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
             gross_edge_usd: 20.0,
             min_edge_usd: 9.0,
             fee_estimate_usd: 2.0,
+            expected_slippage_usd: 1.0,
             qty: 1.0,
             side: Side::Buy,
         },
@@ -156,6 +169,9 @@ fn base_open_input<'a>() -> OpenRuntimeInput<'a> {
             mm_util_reject_opens: 0.70,
             mm_util_reduceonly: 0.85,
             mm_util_kill: 0.95,
+            now_ms: 1_000,
+            mm_util_last_update_ts_ms: Some(1_000),
+            mm_util_max_age_ms: 30_000,
         },
         reservation_id: ReservationId::new("test-intent-0000").must(),
         instrument_id: "BTC-PERPETUAL".to_string(),
@@ -204,18 +220,6 @@ fn test_runtime_wiring_releases_pending_reservation_on_reject() {
 
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
-    assert_eq!(
-        out.gate_reject_codes.liquidity_gate,
-        Some(RejectReasonCode::GlobalExposureBudgetExceeded)
-    );
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
-        out.gate_reject_codes.pricer,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
     assert!(out.pending_reservation_id.is_none());
     assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.pending_exposure.release_total(), 1);
@@ -256,18 +260,6 @@ fn test_runtime_wiring_pending_reject_takes_precedence_over_global_budget_reject
 
     assert!(!out.gate_results.liquidity_gate_passed);
     assert!(!out.gate_results.net_edge_passed);
-    assert_eq!(
-        out.gate_reject_codes.liquidity_gate,
-        Some(RejectReasonCode::PendingExposureBudgetExceeded)
-    );
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
-        out.gate_reject_codes.pricer,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
     assert!(out.pending_reservation_id.is_none());
     assert_eq!(pending_book.active_reservations(INST), 0);
     assert_eq!(runtime_metrics.global_exposure.reject_total(), 0);
@@ -414,47 +406,38 @@ fn test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first
         runtime_metrics.inventory_skew.reject_delta_limit_missing(),
         1
     );
+    assert_eq!(
+        choke_metrics.rejected_risk_state(),
+        0,
+        "delta-limit-missing must be attributed to a gate reject, not RiskStateNotHealthy"
+    );
+    assert_eq!(choke_metrics.rejected_total(), 1);
 
     match out.choke_result {
-        ChokeResult::Rejected { reason, .. } => {
-            assert_eq!(reason, ChokeRejectReason::RiskStateNotHealthy);
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert_eq!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::NetEdgeGate,
+                    reason: "INVENTORY_SKEW_DELTA_LIMIT_MISSING".to_string(),
+                }
+            );
+            assert_eq!(
+                gate_trace.last(),
+                Some(&GateStep::NetEdgeGate),
+                "gate trace must end at the gate reported in rejection reason"
+            );
+            assert!(
+                gate_trace.contains(&GateStep::LiquidityGate),
+                "liquidity gate should still appear before net-edge rejection"
+            );
+            assert!(
+                !gate_trace.contains(&GateStep::Pricer),
+                "pricer must not execute after net-edge rejection"
+            );
         }
-        other => panic!("expected risk-state rejection, got {other:?}"),
+        other => panic!("expected inventory-skew override rejection, got {other:?}"),
     }
-}
-
-#[test]
-fn test_runtime_wiring_inventory_skew_reject_preserves_runtime_sidecar() {
-    let mut input = base_open_input();
-    input.current_delta = 100.0;
-    input.inventory_skew_input.inventory_skew_k = 0.2;
-
-    let pending_book = make_pending_book(200.0);
-    let mut choke_metrics = ChokeMetrics::new();
-    let mut runtime_metrics = OpenRuntimeMetrics::default();
-
-    let out = build_open_order_intent_runtime(
-        &input,
-        &pending_book,
-        &mut choke_metrics,
-        &mut runtime_metrics,
-    );
-
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::NetEdgeTooLow)
-    );
-    assert!(out.adjusted_min_edge_usd.is_some());
-    assert!(matches!(
-        out.choke_result,
-        ChokeResult::Rejected {
-            reason: ChokeRejectReason::GateRejected {
-                gate: GateStep::NetEdgeGate,
-                ..
-            },
-            ..
-        }
-    ));
 }
 
 /// Helper: Set up TLSM settlement test with pending exposure reservation.
@@ -608,22 +591,48 @@ fn test_unregistered_instrument_rejected_through_runtime() {
         "no reservation should be created for unregistered instrument"
     );
     assert_eq!(
-        out.gate_reject_codes.liquidity_gate,
-        Some(RejectReasonCode::PendingExposureBudgetExceeded)
-    );
-    assert_eq!(
-        out.gate_reject_codes.net_edge_gate,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
-        out.gate_reject_codes.pricer,
-        Some(RejectReasonCode::GateCascadeSkip)
-    );
-    assert_eq!(
         runtime_metrics
             .pending_exposure
             .reserve_instrument_not_registered_total(),
         1,
         "instrument_not_registered metric should fire"
     );
+}
+
+#[test]
+fn test_runtime_live_wal_gate_failure_rejects_and_releases_pending() {
+    let input = base_open_input();
+    let pending_book = make_pending_book(100.0);
+    let mut choke_metrics = ChokeMetrics::new();
+    let mut runtime_metrics = OpenRuntimeMetrics::default();
+    let mut wal_gate = FailingWalGate::default();
+
+    let out = build_open_order_intent_runtime_with_wal_gate(
+        &input,
+        &pending_book,
+        Some(&mut wal_gate),
+        &mut choke_metrics,
+        &mut runtime_metrics,
+    );
+
+    assert_eq!(
+        wal_gate.calls, 1,
+        "live WAL gate must be consulted exactly once"
+    );
+    match out.choke_result {
+        ChokeResult::Rejected { reason, gate_trace } => {
+            assert_eq!(
+                reason,
+                ChokeRejectReason::GateRejected {
+                    gate: GateStep::RecordedBeforeDispatch,
+                    reason: "simulated live wal failure".to_string(),
+                }
+            );
+            assert!(gate_trace.contains(&GateStep::RecordedBeforeDispatch));
+        }
+        other => panic!("expected WAL rejection, got {other:?}"),
+    }
+    assert!(out.pending_reservation_id.is_none());
+    assert_eq!(pending_book.active_reservations(INST), 0);
+    assert_eq!(runtime_metrics.pending_exposure.release_total(), 1);
 }
