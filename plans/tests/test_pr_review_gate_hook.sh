@@ -68,9 +68,11 @@ write_review_marker() {
   local field_name="$3"
   local field_value="$4"
 
-  cat > "$path" <<EOF
-{"verdict":"$verdict","$field_name":"$field_value"}
-EOF
+  python3 -c "
+import json, sys
+verdict, field, value = sys.argv[1:4]
+print(json.dumps({'verdict': verdict, field: value}))
+" "$verdict" "$field_name" "$field_value" > "$path"
 }
 
 write_external_marker() {
@@ -78,9 +80,11 @@ write_external_marker() {
   local field_name="$2"
   local field_value="$3"
 
-  cat > "$path" <<EOF
-{"$field_name":"$field_value"}
-EOF
+  python3 -c "
+import json, sys
+field, value = sys.argv[1:3]
+print(json.dumps({field: value}))
+" "$field_name" "$field_value" > "$path"
 }
 
 [[ -x "$HOOK" ]] || fail "missing executable hook: $HOOK"

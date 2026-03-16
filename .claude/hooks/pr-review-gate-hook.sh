@@ -21,7 +21,12 @@ try:
     tokens = list(lexer)
 except Exception as exc:
     print(f"WARNING: shlex parse failed, falling back to simple match: {exc}", file=sys.stderr)
-    stripped = segment.lstrip()
+    # Strip common prefixes: optional 'env', KEY=val assignments, optional 'command'
+    stripped = re.sub(
+        r'^(?:env\s+)?(?:[A-Za-z_]\w*=[^\s]*\s+)*(?:command\s+(?:-\S+\s+)*)?',
+        '',
+        segment.lstrip(),
+    )
     if re.match(r'gh\s+pr\s+create(?:\s|$)', stripped):
         print('1')
     else:
