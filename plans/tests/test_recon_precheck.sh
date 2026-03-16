@@ -16,6 +16,7 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 cd "$tmp_dir"
 git init -q
+git symbolic-ref HEAD refs/heads/main
 git config user.email "test@example.com"
 git config user.name "Test"
 
@@ -164,11 +165,13 @@ echo "v1" > plans/step_prompts/recon/INDEX.md
 git add -A
 git commit -q -m "add process doc v1"
 
-# Now modify it on a new branch (simulates worktree divergence)
-git checkout -q -b test-stale
+# Now modify it on detached HEAD while leaving main pinned to v1.
+git update-ref --no-deref HEAD "$(git rev-parse HEAD)"
 echo "v2" > plans/step_prompts/recon/INDEX.md
 git add -A
 git commit -q -m "modify process doc v2"
+
+git symbolic-ref -q --short HEAD >/dev/null && fail "stale-doc fixture should leave HEAD detached"
 
 set +e
 out_stale="$(plans/recon_precheck.sh S3-000 2>&1)"
