@@ -94,7 +94,6 @@ full_only_serial_list="$(extract_array "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS")"
 
 [[ -n "$smoke_list" ]] || fail "SMOKE_REVIEW_FIXTURE_TESTS is empty"
 [[ -n "$full_only_list" ]] || fail "FULL_ONLY_REVIEW_FIXTURE_TESTS is empty"
-[[ -n "$full_only_serial_list" ]] || fail "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS is empty"
 
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
@@ -156,25 +155,15 @@ assert_contains_line 'if fast_hash="$(_compute_fixture_hash_from_list "$fast_fil
 assert_contains_line 'Falling back to full fixture hash scan'
 
 assert_list_contains "$smoke_list" "plans/tests/test_verify_timeout_policy.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_live_enable_preflight.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_fail_closed_gate_map_paths.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_quick_clippy.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_rust_gates_smoke_targets.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_contract_kernel_drift_message.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_recon_handoff_sources.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_roadmap_evidence_audit.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_crossref_invariants.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_premortem_path_guard.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_story_review_findings_guard.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediation_verify.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
-assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_bundle.sh"
-assert_list_contains "$full_only_list" "plans/tests/test_recon_operator_runner.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_scoreboard.sh"
-assert_list_contains "$full_only_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
-assert_list_contains "$full_only_serial_list" "plans/tests/test_prd_set_pass.sh"
+assert_list_absent "$full_only_list" "plans/tests/test_recon_operator_runner.sh"
+assert_list_absent "$full_only_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
+assert_list_absent "$full_only_serial_list" "plans/tests/test_prd_set_pass.sh"
 
 # Verify moved tests are actually present in verify_fork.sh gate 14g
 VERIFY_FORK="$ROOT/plans/verify_fork.sh"
@@ -183,6 +172,10 @@ workflow_verify_list="$(extract_array "WORKFLOW_INTEGRATION_TESTS" "$VERIFY_FORK
 full_mode_workflow_verify_list="$(extract_array "FULL_MODE_WORKFLOW_INTEGRATION_TESTS" "$VERIFY_FORK")"
 [[ -n "$workflow_verify_list" ]] || fail "WORKFLOW_INTEGRATION_TESTS is empty"
 [[ -n "$full_mode_workflow_verify_list" ]] || fail "FULL_MODE_WORKFLOW_INTEGRATION_TESTS is empty"
+
+assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
+assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_recon_operator_runner.sh"
+assert_list_contains "$full_mode_workflow_verify_list" "plans/tests/test_prd_set_pass.sh"
 
 workflow_gate_block="$(
   awk '
@@ -220,6 +213,18 @@ parallel_gate_tests=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
+  "plans/tests/test_slice_review_gate.sh"
+  "plans/tests/test_story_review_findings_guard.sh"
+  "plans/tests/test_fork_attestation_remediation_verify.sh"
+  "plans/tests/test_fork_attestation_mirror.sh"
+  "plans/tests/test_workflow_quick_step.sh"
+  "plans/tests/test_toggle_policy_check.sh"
+  "plans/tests/test_stoic_cli_invariant_check.sh"
+  "plans/tests/test_live_enable_preflight.sh"
+  "plans/tests/test_recon_handoff_sources.sh"
+  "plans/tests/test_roadmap_evidence_audit.sh"
+  "plans/tests/test_crossref_invariants.sh"
+  "plans/tests/test_premortem_path_guard.sh"
   "plans/tests/test_lint_execution_facade.sh"
   "plans/tests/test_lint_risk_facade.sh"
   "plans/tests/test_lint_venue_facade.sh"
@@ -278,9 +283,9 @@ serial_overlap="$(
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_serial_count="$(printf '%s\n' "$full_only_serial_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-[[ "$smoke_count" == "19" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 19)"
-[[ "$full_only_count" == "11" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 11)"
-[[ "$full_only_serial_count" == "1" ]] || fail "unexpected full-only serial fixture count: $full_only_serial_count (expected 1)"
+[[ "$smoke_count" == "7" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 7)"
+[[ "$full_only_count" == "9" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 9)"
+[[ "$full_only_serial_count" == "0" ]] || fail "unexpected full-only serial fixture count: $full_only_serial_count (expected 0)"
 
 # Verify 14g dispatch loop pattern exists in verify_fork.sh
 grep -Eq 'for workflow_test in "\$\{WORKFLOW_INTEGRATION_TESTS\[@\]\}"' "$VERIFY_FORK" \

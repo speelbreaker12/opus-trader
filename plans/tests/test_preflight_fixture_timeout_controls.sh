@@ -24,7 +24,7 @@ rewrite_fixture_arrays() {
   local file="$1"
   local tmp_file="$file.tmp"
   awk '
-    BEGIN {in_smoke=0; in_full=0}
+    BEGIN {in_smoke=0; in_full=0; in_full_serial=0}
     /^SMOKE_REVIEW_FIXTURE_TESTS=\(/ {
       print
       print "  \"plans/tests/test_dummy_sleep.sh\""
@@ -41,6 +41,14 @@ rewrite_fixture_arrays() {
     }
     in_full && /^\)/ {in_full=0; print; next}
     in_full {next}
+    /^FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=\(/ {
+      print
+      print "  \"plans/tests/test_dummy_sleep.sh\""
+      in_full_serial=1
+      next
+    }
+    in_full_serial && /^\)/ {in_full_serial=0; print; next}
+    in_full_serial {next}
     {print}
   ' "$file" > "$tmp_file"
   mv "$tmp_file" "$file"
@@ -53,6 +61,7 @@ rewrite_fixture_arrays_repeated_dummy() {
   local line=""
   local in_smoke=0
   local in_full=0
+  local in_full_serial=0
 
   : > "$tmp_file"
   while IFS= read -r line; do
@@ -76,6 +85,16 @@ rewrite_fixture_arrays_repeated_dummy() {
       in_full=1
       continue
     fi
+    if [[ "$line" == 'FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=(' ]]; then
+      printf '%s\n' "$line" >> "$tmp_file"
+      i=0
+      while [[ "$i" -lt "$repeat_count" ]]; do
+        printf '  "%s"\n' "plans/tests/test_dummy_sleep.sh" >> "$tmp_file"
+        i=$((i + 1))
+      done
+      in_full_serial=1
+      continue
+    fi
     if [[ "$in_smoke" -eq 1 ]]; then
       if [[ "$line" == ')' ]]; then
         in_smoke=0
@@ -86,6 +105,13 @@ rewrite_fixture_arrays_repeated_dummy() {
     if [[ "$in_full" -eq 1 ]]; then
       if [[ "$line" == ')' ]]; then
         in_full=0
+        printf '%s\n' "$line" >> "$tmp_file"
+      fi
+      continue
+    fi
+    if [[ "$in_full_serial" -eq 1 ]]; then
+      if [[ "$line" == ')' ]]; then
+        in_full_serial=0
         printf '%s\n' "$line" >> "$tmp_file"
       fi
       continue

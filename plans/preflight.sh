@@ -610,21 +610,15 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_slice_completion_review_guard.sh"
   "plans/tests/test_slice_completion_enforce.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
-  # Heavy recon integration fixtures stay in verify coverage, but not in quick smoke.
-  "plans/tests/test_preflight_fixture_timeout_controls.sh"
   "plans/tests/test_recon_bundle.sh"
-  "plans/tests/test_recon_operator_runner.sh"
   "plans/tests/test_recon_scoreboard.sh"
 )
 FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=(
-  # This pass-gate fixture still flakes when it shares the parallel preflight
-  # batch with other review-gate tests. Keep it in full coverage, but drain it
-  # serially after the parallel batch.
-  "plans/tests/test_prd_set_pass.sh"
 )
 # NOTE: heavy workflow integration fixtures run in verify_fork.sh gate 14g
-# (parallel with rust compilation) instead of preflight smoke so the cheap
-# preflight loop stays within the quick-mode timeout budget.
+# (parallel with rust compilation) instead of preflight so the cheap preflight
+# loop stays focused on early-failure coverage rather than long-running harness
+# integration tests.
 
 REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
 SERIAL_REVIEW_FIXTURE_TESTS=()

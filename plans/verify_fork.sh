@@ -964,6 +964,18 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"
   "plans/tests/test_verify_gate_contract_check_batching.sh"
+  "plans/tests/test_slice_review_gate.sh"
+  "plans/tests/test_story_review_findings_guard.sh"
+  "plans/tests/test_fork_attestation_remediation_verify.sh"
+  "plans/tests/test_fork_attestation_mirror.sh"
+  "plans/tests/test_workflow_quick_step.sh"
+  "plans/tests/test_toggle_policy_check.sh"
+  "plans/tests/test_stoic_cli_invariant_check.sh"
+  "plans/tests/test_live_enable_preflight.sh"
+  "plans/tests/test_recon_handoff_sources.sh"
+  "plans/tests/test_roadmap_evidence_audit.sh"
+  "plans/tests/test_crossref_invariants.sh"
+  "plans/tests/test_premortem_path_guard.sh"
   "plans/tests/test_lint_execution_facade.sh"
   "plans/tests/test_lint_risk_facade.sh"
   "plans/tests/test_lint_venue_facade.sh"
@@ -987,6 +999,9 @@ WORKFLOW_INTEGRATION_TESTS=(
 FULL_MODE_WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_story_review_gate.sh"
   "plans/tests/test_pr_gate.sh"
+  "plans/tests/test_preflight_fixture_timeout_controls.sh"
+  "plans/tests/test_recon_operator_runner.sh"
+  "plans/tests/test_prd_set_pass.sh"
 )
 
 log "14g) workflow integration tests (parallel with rust gates)"
