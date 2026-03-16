@@ -7,7 +7,7 @@ started: "2026-03-16"
 ---
 
 ## Current State
-Complete. Obsidian-based project tracking system with Templates (Project + Debrief), Bases-compatible frontmatter, and two Claude Code hooks enforcing updates.
+Complete. Obsidian-based project tracking with Templates, Bases-compatible frontmatter, Claude Code hooks, git pre-commit hook, and AGENTS.md instructions for Codex/all agents.
 
 ## Key Files
 - obsidian/Templates/Project.md
@@ -15,6 +15,8 @@ Complete. Obsidian-based project tracking system with Templates (Project + Debri
 - .claude/hooks/obsidian-context-hook.sh
 - .claude/hooks/obsidian-precommit-hook.sh
 - .claude/settings.json
+- .git/hooks/pre-commit
+- AGENTS.md (Obsidian Project Tracking section)
 
 ## Debriefs
 -
@@ -29,3 +31,5 @@ Complete. Obsidian-based project tracking system with Templates (Project + Debri
 - Built obsidian-precommit-hook.sh — PreToolUse hook, blocks git commit unless project file updated
 - Made precommit hook mandatory (exit 2), lists existing projects, includes inline template for new ones
 - Registered both hooks in .claude/settings.json
+- Added git pre-commit hook (.git/hooks/pre-commit) — blocks commit for ALL agents (Codex, Gemini, manual)
+- Added Obsidian Project Tracking section to AGENTS.md — read on start, update before commit, create if missing

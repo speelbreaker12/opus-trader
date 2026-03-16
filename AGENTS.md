@@ -25,6 +25,23 @@ Key fintech rules:
 - Fail-closed: if uncertain, choose `TradingMode::ReduceOnly`, never `Active`
 - No `unwrap()` in production paths — use `?` or explicit error handling
 
+## Obsidian Project Tracking (Mandatory)
+
+Every agent session must track work in `obsidian/Projects/`.
+
+**On session start:** Read all `obsidian/Projects/*.md` files to understand active work, priorities, and current state.
+
+**Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:
+1. Add a dated entry under `## Log` describing what changed
+2. Update `## Current State` if the project status shifted
+3. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+
+**If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
+
+**The git pre-commit hook will block commits** that don't include a staged change to `obsidian/Projects/*.md`.
+
+**At end of session (optional but encouraged):** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Link it from the project's `## Debriefs` section.
+
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.
 - Verification is mandatory; never weaken gates or tests.
