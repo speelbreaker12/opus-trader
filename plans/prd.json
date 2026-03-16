@@ -7958,6 +7958,7 @@
         "AT-011",
         "AT-110",
         "AT-120",
+        "AT-917",
         "AT-027",
         "AT-1243",
         "AT-1241",
@@ -7985,7 +7986,8 @@
         "GIVEN open_permission_blocked_latch remains true and reconciliation stays blocked beyond `reconcile_stall_max_delay_s`. WHEN stall observability evaluates. THEN structured `RECONCILE_STALL` log is emitted with failing criterion, `reconcile_stall_total` increments, and latch remains set with no override-clear. Emission cadence is deterministic: once when threshold is first exceeded for a continuous stall episode, re-emitted only on failing-criterion change, and emitted again only for a new episode after clear/re-stall. (AT-1243)",
         "GIVEN a condition that would set F1_CERT or EvidenceChain failure reasons. WHEN open_permission_reason_codes is evaluated. THEN F1_CERT and EvidenceChain failures MUST NOT appear in open_permission_reason_codes; they are cleared by cert/evidence recovery, not reconciliation. (AT-411)",
         "GIVEN `TradingMode != Active` and cancel sweep evaluates an in-flight order whose risk direction is ambiguous (including legacy WAL records with missing `reduce_only`). WHEN reconciliation evaluates cancellation exemption. THEN exemption is allowed only with positive risk-reducing proof; otherwise the order remains cancel-eligible, explicit diagnostics are emitted, and reconciliation is prioritized. (AT-1241)",
-        "GIVEN `TradingMode != Active`, net exposure is non-zero or unknown, and canceling a candidate in-flight order would leave zero risk-reducing in-flight orders. WHEN cancel sweep executes. THEN that order is not canceled, while other cancel-eligible risk-increasing OPEN orders remain cancelable. (AT-1242)"
+        "GIVEN `TradingMode != Active`, net exposure is non-zero or unknown, and canceling a candidate in-flight order would leave zero risk-reducing in-flight orders. WHEN cancel sweep executes. THEN that order is not canceled, while other cancel-eligible risk-increasing OPEN orders remain cancelable. (AT-1242)",
+        "GIVEN `EvidenceChainState != GREEN`, `enforced_profile != CSP`, and a risk-increasing cancel/replace. WHEN cancel/replace permission is evaluated. THEN the request is rejected with `Rejected(RiskIncreasingCancelReplaceForbidden)` and no risk-increasing cancel/replace dispatch occurs. (AT-917)"
       ],
       "steps": [
         "Map S9.4 contract obligations and implementation-plan acceptance criteria into executable checks.",
@@ -7993,6 +7995,7 @@
         "Add bounded-delay reconciliation-stall observability: emit structured `RECONCILE_STALL` with failing criterion and increment `reconcile_stall_total` without clearing latch.",
         "Add/adjust targeted tests for S9.4: crates/soldier_core/tests/test_open_permission.rs::test_open_permission_blocks_opens_until_reconciled, crates/soldier_core/tests/test_reconcile.rs::test_position_reconcile_epsilon_tolerates_1e_6_qty_diff, crates/soldier_core/tests/test_reconcile.rs::test_reconcile_trade_lookback_sec_queries_300s_history.",
         "Add proof-focused tests for FIX-02/FIX-03 so non-Active cancel sweep treats legacy missing `reduce_only` as OPEN-equivalent, requires positive risk-reducing proof for reconciliation exemptions, and preserves the last risk-reducing in-flight order under non-zero/unknown exposure.",
+        "Add/adjust targeted cancel/replace permission tests so EvidenceChain-driven risk-increasing cancel/replace rejections are proven with `Rejected(RiskIncreasingCancelReplaceForbidden)` under GOP (AT-917).",
         "Wire reason codes, state transitions, and observability fields required for operator-visible diagnostics.",
         "Run verification commands and archive artifact evidence before setting passes=true."
       ],
@@ -8003,6 +8006,7 @@
       "evidence": [
         "cargo test -p soldier_core --test test_open_permission output",
         "cargo test -p soldier_core --test test_reconcile output",
+        "cargo test -p soldier_core --test test_cancel_replace output",
         "cargo test output covering `RECONCILE_STALL` logging + `reconcile_stall_total` metric behavior (AT-1243).",
         "PRD entry S9-003 records contract AT and test mappings for this story."
       ],
@@ -8031,6 +8035,11 @@
           "quote": "runtime emits structured `RECONCILE_STALL` log with the failing criterion, increments `reconcile_stall_total`, and keeps latch set with no override-clear",
           "location": "specs/CONTRACT.md",
           "anchor": "AT-1243"
+        },
+        {
+          "quote": "the request is rejected with `Rejected(RiskIncreasingCancelReplaceForbidden)`",
+          "location": "specs/CONTRACT.md",
+          "anchor": "AT-917"
         }
       ],
       "enforcing_contract_ats": [
@@ -8038,6 +8047,7 @@
         "AT-011",
         "AT-110",
         "AT-120",
+        "AT-917",
         "AT-027",
         "AT-1243",
         "AT-1241",
@@ -8543,11 +8553,13 @@
       },
       "acceptance": [
         "GIVEN any rejection occurs WHEN the reason code is emitted THEN it is a registered member of RejectReasonCode (AT-1101).",
+        "GIVEN risk-increasing cancel/replace is rejected by PolicyGuard. WHEN RejectReasonCode completeness is audited. THEN `RiskIncreasingCancelReplaceForbidden` is present in the registry and the audit passes.",
         "GIVEN an AtomicNakedEvent is emitted WHEN the event is constructed THEN the cause field is non-empty (AT-1102).",
         "GIVEN a new rejection path is added WHEN it uses an unregistered code THEN compilation or validation fails."
       ],
       "steps": [
         "Audit all rejection paths for unregistered reason codes.",
+        "Include `RiskIncreasingCancelReplaceForbidden` in the reject-reason registry coverage for PolicyGuard cancel/replace enforcement.",
         "Add compile-time or startup validation for RejectReasonCode completeness.",
         "Add non-empty cause field enforcement for AtomicNakedEvent construction.",
         "Add test for registry completeness (AT-1101).",
@@ -8575,7 +8587,8 @@
       "reason_codes": {
         "type": "RejectReason",
         "values": [
-          "REJECT_REASON_AUDIT_COMPLETENESS"
+          "REJECT_REASON_AUDIT_COMPLETENESS",
+          "RiskIncreasingCancelReplaceForbidden"
         ]
       },
       "enforcement_point": "DispatcherChokepoint",
