@@ -56,7 +56,7 @@ gh pr diff <number>
 
 #### Security (diff-scoped — new/changed lines only, not pre-existing code)
 - [ ] No hardcoded secrets in new/changed lines
-- [ ] For new/changed Rust lines: no `unwrap()` / `expect()` without a context message (production paths only)
+- [ ] For new/changed Rust lines: no `unwrap()` / `expect()` in non-test production paths
 - [ ] For new/changed Python lines: no bare `except:` — catch specific exception types
 - [ ] Input validation where new system boundaries are introduced
 - [ ] No SQL/command injection risks in new code

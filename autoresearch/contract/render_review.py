@@ -112,10 +112,11 @@ def discover_run_id(phase2_dir: Path) -> str:
     outputs_dir = phase2_dir / "outputs"
     if not outputs_dir.exists():
         fail("phase2/outputs is missing; no run_id to discover")
-    run_dirs = sorted(p.name for p in outputs_dir.iterdir() if p.is_dir())
+    run_dirs = [path for path in outputs_dir.iterdir() if path.is_dir()]
     if not run_dirs:
         fail("phase2/outputs has no run directories; pass --run-id")
-    return run_dirs[-1]
+    latest = max(run_dirs, key=lambda path: (path.stat().st_mtime_ns, path.name))
+    return latest.name
 
 
 def load_proposals(phase2_dir: Path, run_id: str) -> tuple[list[Path], list[dict[str, Any]], str]:
@@ -281,6 +282,11 @@ def normalize_patch_fragment(fragment: str, proposal_id: str) -> str:
         )
     if len(git_headers) > 1 or len(minus_headers) > 1 or len(plus_headers) > 1:
         fail(f"accepted proposal {proposal_id} diff_preview touches multiple files")
+    if has_git_header and not has_unified_headers:
+        fail(
+            f"accepted proposal {proposal_id} diff_preview must include both ---/+++ "
+            "unified diff headers"
+        )
 
     forbidden_headers = (
         "rename from ",
@@ -303,7 +309,7 @@ def normalize_patch_fragment(fragment: str, proposal_id: str) -> str:
         fail(
             f"accepted proposal {proposal_id} diff_preview must target only {CONTRACT_PATCH_PATH}"
         )
-    if minus_headers[0] != expected_minus or plus_headers[0] != expected_plus:
+    if has_unified_headers and (minus_headers[0] != expected_minus or plus_headers[0] != expected_plus):
         fail(
             f"accepted proposal {proposal_id} diff_preview must target only {CONTRACT_PATCH_PATH}"
         )

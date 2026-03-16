@@ -30,11 +30,9 @@ and is marked as "needs_review".
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
 
 # ── ANSI Colors ──────────────────────────────────────────────────────
 

@@ -1,11 +1,16 @@
 # Story verify command allowlist (exact match per line).
-# Auto-synced to plans/prd.json verify[] (excluding ./plans/verify.sh).
+# Auto-synced to plans/prd.json verify[].
+./plans/verify.sh full
+./plans/verify.sh quick
+./plans/workflow_verify.sh
 bash plans/tests/test_pr_gate.sh
 bash plans/tests/test_prd_set_pass.sh
 bash plans/tests/test_review_logged_proof_graph.sh
+bash plans/tests/test_verify_fork_guardrails.sh
 bash plans/tests/test_verify_timeout_policy.sh
 bash plans/tests/test_wf_step.sh
 bash plans/tests/test_workflow_allowlist_coverage.sh
+bash plans/test_verify_fork_smoke.sh
 bash plans/verify_mechanical.sh
 cargo test --workspace
 cargo test -p soldier_core
@@ -63,6 +68,7 @@ cargo test at_1117
 cargo test at_1118
 python -m pytest -k release_gate
 python -c "import json; json.load(open('evidence/phase0/keys/key_scope_probe.json'))"
+python3 tools/ci/check_contract_profiles.py --contract specs/CONTRACT.md
 python3 tools/phase0_meta_test.py --root .
 python3 tools/policy_loader.py --policy config/policy.json
 rg -n "OrderSize" docs/order_size_discovery.md

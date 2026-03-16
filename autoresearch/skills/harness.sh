@@ -537,6 +537,9 @@ cmd_baseline() {
   info "Output dir: $output_dir"
   echo ""
 
+  # Baselines must reflect the current skill revision even when callers reuse
+  # a stable/day-based tag.
+  rm -rf "$output_dir"
   mkdir -p "$output_dir"
 
   # Generate one output file per test using Claude (same as eval --generate)
