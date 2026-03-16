@@ -46,7 +46,7 @@ Optional: `STORY_ID=<id>` for artifact routing. Defaults to a timestamp-based ru
 
 ### Phase 1 — Parallel Execution
 
-Main agent starts `plans/external_review_generic.sh <target>` as a **background process** (non-blocking).
+Main agent starts `plans/external_review_generic.sh <target>` as a **background process** (non-blocking), capturing its stdout to a temp file. The script generates its own timestamped `RUN_ID` (e.g., `external_review_generic_20260315T...`) and on success echoes `summary artifact: <relative-path>`. Phase 2 extracts the actual artifact path from that output — do **not** hardcode `artifacts/story/<calibrate-RUN_ID>/external_review_generic/`.
 
 Immediately, while that script is running, main agent spins **7 subagents in parallel** — one per skill — each running at **full skill depth** (reads actual source files, not just diffs). The sequencing constraint from `review-stack.md` is waived; all 7 run simultaneously:
 
@@ -64,16 +64,15 @@ Each subagent has a **max wall-clock time of 10 minutes**. If a subagent times o
 
 Main agent waits for all 8 (7 subagents + background script) to complete before Phase 2.
 
-**External review script failure handling:** The script writes `artifacts/story/<RUN_ID>/external_review_generic/dispatch_status.json` and `summary.md`. After it completes:
-- If the script exits non-zero, read `dispatch_status.json` to identify which of the 4 reviewers (codex, opus, kimi, gemini) succeeded vs. failed
+**External review script failure handling:** After the script completes, read `dispatch_status.json` (path found via captured stdout) to identify which of the 4 reviewers (codex, opus, kimi, gemini) succeeded vs. failed:
 - **Proceed** if at least 2 reviewers succeeded (note which ones failed in the gap report)
-- **Abort** if fewer than 2 reviewers succeeded — surface error message listing failed tools
+- **Abort** if fewer than 2 reviewers succeeded — preserve all subagent outputs already written, then surface an error message listing failed tools and exit
 
 ### Phase 2 — Gap Extraction
 
 Read findings from:
 - Skill subagent outputs: `artifacts/calibrate/<RUN_ID>/skills/<skill>.md` (7 files)
-- External review output: `artifacts/story/<RUN_ID>/external_review_generic/summary.md`
+- External review output: path extracted from the script's captured stdout (`summary artifact: <path>`)
 
 Partition findings into three buckets:
 
@@ -159,11 +158,11 @@ If there are no confirmed `SKILL_GAP` findings (all `external_only` labeled NOIS
 
 For each confirmed `SKILL_GAP`, Claude rates:
 
-| Rating | Meaning | Action |
-|--------|---------|--------|
-| `HIGH` | Broadly applicable across codebases and PRs | Propose skill patch |
-| `MEDIUM` | Probably generalizable but has project-specific flavor | Propose skill patch with caution note |
-| `LOW` | Too specific to this PR or this codebase | Suggest adding to `CLAUDE.md` instead — no skill patch |
+| Rating | Meaning | Example | Action |
+|--------|---------|---------|--------|
+| `HIGH` | Broadly applicable across codebases and PRs | "bare `except Exception` silently swallows parse errors in any Python validator" | Propose skill patch |
+| `MEDIUM` | Probably generalizable but has project-specific flavor | "CWD-relative `!cat` paths in skill wrapper files fail outside repo root" (specific to Claude Code skill layout) | Propose skill patch with caution note |
+| `LOW` | Too specific to this PR or this codebase | "this trading-domain state machine should reset the latch on reconcile" | Suggest adding to `CLAUDE.md` instead — no skill patch |
 
 **Generalizability heuristic:** If a finding references project-specific types or domain vocabulary (e.g., `TradingMode`, `PolicyGuard`, `ReduceOnly`, contract clause IDs), default to `MEDIUM` unless the underlying pattern is language- or framework-level (e.g., "missing error check on a `Result` return" is HIGH even if it appeared in trading code).
 
