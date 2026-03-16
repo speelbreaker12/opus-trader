@@ -215,6 +215,7 @@ parallel_gate_tests=(
   "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_preflight_diagnostics.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
+  "plans/tests/test_workflow_allowlist_coverage.sh"
   "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"

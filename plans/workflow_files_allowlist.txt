@@ -66,6 +66,7 @@ plans/prd_cache_check.py
 plans/prd_cache_update.py
 plans/prd_gate.sh
 plans/prd_preflight.sh
+plans/prd_ref_check.sh
 plans/prd_set_pass.sh
 plans/pre_pr_review_gate.sh
 plans/preflight.sh

@@ -7,14 +7,16 @@ Invoke the external-review-generic skill to run codex, opus, kimi, and gemini re
 2. After the external review completes successfully, write the external gate marker:
 
 ```bash
-mkdir -p artifacts/pr-review-gate
+REPO_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$REPO_ROOT/artifacts/pr-review-gate"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SAFE_BRANCH="${BRANCH//\//_}"
-HEAD=$(git rev-parse --short HEAD)
+HEAD=$(git rev-parse HEAD)
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-cat > "artifacts/pr-review-gate/${SAFE_BRANCH}.external.json" <<EOF
+cat > "$REPO_ROOT/artifacts/pr-review-gate/${SAFE_BRANCH}.external.json" <<EOF
 {
   "branch": "${BRANCH}",
+  "head_commit": "${HEAD}",
   "head": "${HEAD}",
   "timestamp_utc": "${TS}"
 }

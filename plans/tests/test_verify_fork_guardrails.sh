@@ -127,6 +127,8 @@ assert_contains_line '"$ROOT/plans/check_contract_change_ledger.sh" --base-ref "
 assert_not_contains_line 'warn "contract_change_ledger skipped (missing plans/check_contract_change_ledger.sh)"'
 assert_line_before 'log "02) contract kernel"' 'log "02a) contract change ledger"'
 assert_line_before 'log "02a) contract change ledger"' 'log "02b-02e) profile/invariant gates (parallel)"'
+assert_contains_line 'log "02a3) contract-plan AT parity"'
+assert_contains_line 'bash "$ROOT/plans/prd_ref_check.sh" "$ROOT/plans/prd.json"'
 
 # Guardrail: recon prompt invariants must be enforced between gate integrity and doc sync.
 assert_contains_line 'run_required_bash_gate "bidi_control_guard"'

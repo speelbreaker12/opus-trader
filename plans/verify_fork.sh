@@ -397,7 +397,7 @@ run_contract_at_plan_parity_gate() {
   fi
 
   run_logged_nonblocking_gate "contract_at_plan_parity" "$CONTRACT_KERNEL_TIMEOUT" \
-    bash "$ROOT/plans/prd_ref_check.sh" plans/prd.json
+    bash "$ROOT/plans/prd_ref_check.sh" "$ROOT/plans/prd.json"
   if [[ -f "$VERIFY_ARTIFACTS_DIR/contract_at_plan_parity.warn" ]]; then
     warn "contract-plan AT parity: WARN (run verify full for hard gate)"
   fi
@@ -959,6 +959,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_preflight_diagnostics.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
+  "plans/tests/test_workflow_allowlist_coverage.sh"
   "plans/tests/test_preflight_shell_syntax_setup_failure.sh"
   "plans/tests/test_preflight_shell_syntax_cross_file_masking.sh"
   "plans/tests/test_verify_fork_guardrails.sh"

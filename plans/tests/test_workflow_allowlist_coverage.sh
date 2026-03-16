@@ -76,6 +76,7 @@ required=(
   plans/prd_cache_check.py
   plans/prd_cache_update.py
   plans/prd_gate.sh
+  plans/prd_ref_check.sh
   plans/prd_preflight.sh
   plans/postmortem_template.md
   plans/prd_set_pass.sh

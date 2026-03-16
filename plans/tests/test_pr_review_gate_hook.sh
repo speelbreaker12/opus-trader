@@ -87,6 +87,23 @@ print(json.dumps({field: value}))
 " "$field_name" "$field_value" > "$path"
 }
 
+write_git_wrapper() {
+  local path="$1"
+  local real_git="$2"
+  local ambiguous_short="$3"
+
+  cat > "$path" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == "rev-parse" && "\${2:-}" == "${ambiguous_short}^{commit}" ]]; then
+  echo "fatal: ambiguous short SHA" >&2
+  exit 128
+fi
+exec "$real_git" "\$@"
+EOF
+  chmod +x "$path"
+}
+
 [[ -x "$HOOK" ]] || fail "missing executable hook: $HOOK"
 
 tmp_dir="$(mktemp -d)"
@@ -118,11 +135,68 @@ write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --s
   expect_pass "fresh marker permits gh pr create with --repo" "gh --repo owner/repo pr create --title ready"
 )
 
+target_repo="$tmp_dir/target-repo"
+mkdir -p "$target_repo"
+git -C "$target_repo" init -q
+git -C "$target_repo" config user.name "Target User"
+git -C "$target_repo" config user.email "target@example.com"
+git -C "$target_repo" checkout -qb "story/S2-pr-gate-hook"
+echo "target" > "$target_repo/target.txt"
+git -C "$target_repo" add target.txt
+git -C "$target_repo" commit -qm "target seed"
+
+target_branch_name="$(git -C "$target_repo" rev-parse --abbrev-ref HEAD)"
+target_safe_branch="${target_branch_name//\//_}"
+mkdir -p "$target_repo/artifacts/pr-review-gate"
+write_review_marker "$target_repo/artifacts/pr-review-gate/${target_safe_branch}.json" "PASS" "head" "$(git -C "$target_repo" rev-parse --short HEAD)"
+
+rm -f "$marker_path"
+(
+  cd "$repo"
+  expect_pass "env -C target repo resolves marker state in target repo" "env -C "$target_repo" GH_TOKEN=test gh pr create --title ready"
+)
+
+write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+mkdir -p "$repo/nested/worktree"
+(
+  cd "$repo/nested/worktree"
+  expect_pass "subdirectory invocation still finds repo-root marker" "gh pr create --title ready"
+)
+
+rm -f "$marker_path"
+mkdir -p "$repo/nested/worktree/artifacts/pr-review-gate"
+write_review_marker "$repo/nested/worktree/artifacts/pr-review-gate/${safe_branch}.json" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo/nested/worktree"
+  expect_pass "subdirectory invocation accepts cwd-relative marker during migration" "gh pr create --title ready"
+)
+
+write_review_marker "$marker_path" "PASS" "head" "deadbeef"
+write_review_marker "$repo/nested/worktree/artifacts/pr-review-gate/${safe_branch}.json" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
+
+(
+  cd "$repo/nested/worktree"
+  expect_pass "subdirectory invocation falls back to fresh cwd marker when repo marker is stale" "gh pr create --title ready"
+)
+
+rm -f "$repo/nested/worktree/artifacts/pr-review-gate/${safe_branch}.json"
 write_review_marker "$marker_path" "CONDITIONAL_PASS" "head_commit" "$(git -C "$repo" rev-parse --short HEAD)"
 
 (
   cd "$repo"
   expect_pass "env-wrapped gh pr create still triggers gate" "env GH_TOKEN=test gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_pass "env -C wrapped gh pr create still triggers gate" "env -C . GH_TOKEN=test gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_pass "env --chdir wrapped gh pr create still triggers gate" "env --chdir=. GH_TOKEN=test gh pr create --title ready"
 )
 
 (
@@ -134,6 +208,61 @@ rm -f "$marker_path"
 (
   cd "$repo"
   expect_block "plain gh pr create blocks without marker" "No review-stack result" "gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_pass "gh help pr create is not gated" "gh help pr create"
+)
+
+(
+  cd "$repo"
+  expect_pass "gh --help pr create is not gated" "gh --help pr create"
+)
+
+(
+  cd "$repo"
+  expect_pass "gh pr create --help is not gated" "gh pr create --help"
+)
+
+(
+  cd "$repo"
+  expect_block "gh pr create with title containing help still blocks when marker missing" "No review-stack result" "gh pr create --title help"
+)
+
+(
+  cd "$repo"
+  expect_block "gh pr create with quoted ampersand still blocks when marker missing" "No review-stack result" "gh pr create --title 'a & b'"
+)
+
+(
+  cd "$repo"
+  expect_block "gh pr create with quoted pipe still blocks when marker missing" "No review-stack result" "gh pr create --body 'a | b'"
+)
+
+(
+  cd "$repo"
+  expect_block "gh pr create with quoted semicolon still blocks when marker missing" "No review-stack result" "gh pr create --body 'a ; b'"
+)
+
+(
+  cd "$repo"
+  expect_block "gh pr create with body containing version still blocks when marker missing" "No review-stack result" "gh pr create --body version"
+)
+
+(
+  cd "$repo"
+  expect_block "env -C wrapped gh pr create still blocks without marker" "No review-stack result" "env -C . GH_TOKEN=test gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_block "env --chdir wrapped gh pr create still blocks without marker" "No review-stack result" "env --chdir=. GH_TOKEN=test gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_block "env -S wrapped gh pr create still blocks without marker" "No review-stack result" "env -S 'GH_TOKEN=test gh pr create --title ready'"
 )
 
 (
@@ -163,5 +292,30 @@ write_external_marker "$external_marker_path" "head" "$old_head"
   cd "$repo"
   expect_pass_with_output "stale external marker warns without blocking" "targets HEAD '$old_head' but current HEAD is '$new_head_full'" "gh pr create --title ready"
 )
+
+very_short_head="${new_head_short:0:6}"
+write_review_marker "$marker_path" "PASS" "head" "$very_short_head"
+
+(
+  cd "$repo"
+  expect_pass "legacy marker heads shorter than 7 chars still match current HEAD prefix" "gh pr create --title ready"
+)
+
+real_git="$(command -v git)"
+mock_git_dir="$tmp_dir/mock_git"
+mkdir -p "$mock_git_dir"
+write_git_wrapper "$mock_git_dir/git" "$real_git" "$new_head_short"
+
+(
+  cd "$repo"
+  set +e
+  ambiguous_output="$(PATH="$mock_git_dir:$PATH" python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" "gh pr create --title ready" | bash "$HOOK" 2>&1)"
+  ambiguous_rc=$?
+  set -e
+  [[ $ambiguous_rc -eq 0 ]] || fail "ambiguous short marker that still matches current HEAD should pass, got rc=$ambiguous_rc output=$ambiguous_output"
+)
+
+grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/review-stack.md" || fail "review-stack marker writer should use full HEAD SHA"
+grep -Fq 'git rev-parse HEAD' "$ROOT/.claude/commands/external-review.md" || fail "external-review marker writer should use full HEAD SHA"
 
 echo "test_pr_review_gate_hook.sh: ok"

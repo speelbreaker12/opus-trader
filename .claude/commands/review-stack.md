@@ -57,7 +57,7 @@ Each skill has a full definition file in `SKILLS/`. Read the relevant file befor
 
 1. Resolve inputs:
    ```bash
-   HEAD=$(git rev-parse --short HEAD)
+   HEAD=$(git rev-parse HEAD)
    DIFF=$(git diff ${BASE_BRANCH}...HEAD --stat)
    ```
 2. Create artifact directory:
@@ -220,14 +220,16 @@ If Phase 4 ran, also write `contract_review.json`:
 After the aggregate decision is determined, write the gate marker **only if DECISION is PASS or CONDITIONAL_PASS**. If FAIL or BLOCKED, do not write it — the gate must stay blocked.
 
 ```bash
-mkdir -p artifacts/pr-review-gate
+REPO_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$REPO_ROOT/artifacts/pr-review-gate"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 SAFE_BRANCH="${BRANCH//\//_}"
-HEAD=$(git rev-parse --short HEAD)
+HEAD=$(git rev-parse HEAD)
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-cat > "artifacts/pr-review-gate/${SAFE_BRANCH}.json" <<EOF
+cat > "$REPO_ROOT/artifacts/pr-review-gate/${SAFE_BRANCH}.json" <<EOF
 {
   "branch": "${BRANCH}",
+  "head_commit": "${HEAD}",
   "head": "${HEAD}",
   "verdict": "${DECISION}",
   "timestamp_utc": "${TS}"
