@@ -54,10 +54,8 @@ git fetch origin
 git merge-base --is-ancestor origin/<branch-a> origin/<branch-b> && echo "stacked"
 
 # Check if PR A's commits are absorbed into PR B (superseded)
-git log origin/main..origin/<branch-a> --format='%s' | \
-  while read subject; do
-    git log origin/<branch-b> --format='%s' | grep -qF "$subject" && echo "absorbed: $subject"
-  done
+git log origin/<branch-b> --format='%s' > /tmp/pr_b_subjects
+git log origin/main..origin/<branch-a> --format='%s' | grep -Ff /tmp/pr_b_subjects
 
 # List commits unique to each PR vs main
 git log origin/main..origin/<branch> --oneline
