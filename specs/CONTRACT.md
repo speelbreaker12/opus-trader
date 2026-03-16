@@ -6306,12 +6306,7 @@ AT-326
 - **Purpose**: Maximum allowed delay between continuous satisfaction of legal foundation-exit preconditions and evaluation/transition attempt.
 - **Rationale**: Keeps foundation-exit authority handoff bounded and observable while preserving fail-closed foundation status-lite behavior.
 Profile: CSP
-AT-1240
-- Given: foundation-exit preconditions remain satisfied continuously beyond `foundation_exit_eval_max_delay_s` without legal transition completion.
-- When: foundation-exit evaluation runs.
-- Then: delay-exceeded diagnostics are emitted and authority remains fail-closed on foundation status-lite until legal transition completes.
-- Pass criteria: see AT-1240 in P0-E section.
-- Fail criteria: see AT-1240 in P0-E section.
+Acceptance test: AT-1240 (see P0-E section).
 
 ---
 
