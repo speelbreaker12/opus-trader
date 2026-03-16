@@ -4,7 +4,7 @@
 
 **Goal:** Expose `/review-stack` and `/premortem` as Claude Code Skills 2.0 skills (SKILL.md wrappers with `context: fork`) and add a 25-assertion autoresearch eval for `/review-stack`.
 
-> **All commands assume cwd = repo root** (`/Users/admin/Desktop/opus-trader`). Run `pwd` to verify before starting.
+> **All commands assume you are somewhere inside the repo checkout.** Examples resolve the repo root with `git rev-parse --show-toplevel` when they need a filesystem path.
 
 **Architecture:** Thin `.claude/skills/*/SKILL.md` wrappers use `!cat` dynamic injection — the `SKILLS/` source files remain untouched and the autoresearch loop keeps targeting them. The `/review-stack` eval follows the exact same schema as the 11 existing skill evals (eval.json + fixtures/ + results.tsv).
 
@@ -37,7 +37,7 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash"]
 ---
 
-!`cat /Users/admin/Desktop/opus-trader/SKILLS/premortem.md`
+!`cat "$(git rev-parse --show-toplevel)/SKILLS/premortem.md"`
 ```
 
 - [ ] **Step 2: Verify the wrapper was written correctly and the `!cat` source exists**
@@ -53,13 +53,13 @@ grep -c "context: fork\|allowed-tools\|!.cat" .claude/skills/premortem/SKILL.md
 Expected: `ls` prints the file path; `grep -c` prints `3`.
 
 ```bash
-# Confirm the !cat source path resolves (absolute path, works from any cwd)
-cat /Users/admin/Desktop/opus-trader/SKILLS/premortem.md | head -5
+# Confirm the !cat source path resolves (portable from any repo subdirectory)
+cat "$(git rev-parse --show-toplevel)/SKILLS/premortem.md" | head -5
 ```
 
 Expected: First 5 lines of the premortem skill content (not an error).
 
-Note: The `!cat` path in the wrapper is intentionally absolute. Claude Code evaluates `!cmd` at invocation time regardless of cwd — a relative path would silently inject empty content.
+Note: The wrapper resolves the repo root with `git rev-parse --show-toplevel`. This keeps the command portable from repo subdirectories and fails closed if git root or the source file cannot be resolved.
 
 - [ ] **Step 3: Commit**
 
@@ -91,7 +91,7 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat /Users/admin/Desktop/opus-trader/SKILLS/review-stack.md`
+!`cat "$(git rev-parse --show-toplevel)/SKILLS/review-stack.md"`
 ```
 
 - [ ] **Step 2: Verify the wrapper was written correctly and the `!cat` source exists**
@@ -108,7 +108,7 @@ Expected: `ls` prints the file path; `grep -c` prints `4`.
 
 ```bash
 # Confirm the !cat source path resolves
-cat /Users/admin/Desktop/opus-trader/SKILLS/review-stack.md | head -5
+cat "$(git rev-parse --show-toplevel)/SKILLS/review-stack.md" | head -5
 ```
 
 Expected: First 5 lines of the review-stack skill content.
@@ -693,7 +693,7 @@ Expected: `fail_open_dispatch.diff  multi_issue_cross_skill.diff  safe_refactor.
 - [ ] **Step 2: Verify skill path in eval.json resolves**
 
 ```bash
-python3 -c "import json, os; d = json.load(open('autoresearch/skills/review-stack/eval.json')); skill = d['skill']; root = '/Users/admin/Desktop/opus-trader'; print('EXISTS' if os.path.exists(os.path.join(root, skill)) else f'MISSING: {skill}')"
+python3 -c "import json, os, subprocess; d = json.load(open('autoresearch/skills/review-stack/eval.json')); skill = d['skill']; root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip(); print('EXISTS' if os.path.exists(os.path.join(root, skill)) else f'MISSING: {skill}')"
 ```
 
 Expected: `EXISTS`

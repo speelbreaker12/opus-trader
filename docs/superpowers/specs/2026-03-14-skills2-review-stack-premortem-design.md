@@ -16,7 +16,7 @@
 
 ## 2. Approach: Wrapper-Only
 
-The `SKILLS/*.md` files remain the authoritative source of truth and the autoresearch loop continues targeting them. Thin `.claude/skills/*/SKILL.md` wrappers use `!cat` dynamic injection to pull the content at invocation time — any edit to `SKILLS/review-stack.md` is automatically reflected on the next invocation.
+The `SKILLS/*.md` files remain the authoritative source of truth and the autoresearch loop continues targeting them. Thin `.claude/skills/*/SKILL.md` wrappers use `!cat` dynamic injection to pull the content at invocation time — any edit to `SKILLS/review-stack.md` is automatically reflected on the next invocation. The wrapper command resolves the repo root with `git rev-parse --show-toplevel`, so it works from any repo subdirectory and fails closed if the source file cannot be loaded.
 
 **Why not replace/mirror/parallel?**
 - Autoresearch loop hardcodes `SKILLS/` paths in `eval.json` and `program.md`
@@ -76,7 +76,7 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash"]
 ---
 
-!`cat /Users/admin/Desktop/opus-trader/SKILLS/premortem.md`
+!`cat "$(git rev-parse --show-toplevel)/SKILLS/premortem.md"`
 ```
 
 ### `.claude/skills/review-stack/SKILL.md`
@@ -89,12 +89,13 @@ context: fork
 allowed-tools: ["Read", "Glob", "Grep", "Bash", "Agent"]
 ---
 
-!`cat /Users/admin/Desktop/opus-trader/SKILLS/review-stack.md`
+!`cat "$(git rev-parse --show-toplevel)/SKILLS/review-stack.md"`
 ```
 
 **Key decisions:**
 - `context: fork` on both — isolated subagent context per invocation, no bleed between sequential skill runs
 - `Agent` in allowed-tools for review-stack only — orchestrator needs to spawn sub-reviewers; premortem does not
+- Wrapper command resolves from the git toplevel — portable across repo subdirectories and fail-closed on missing source
 - `allowed-tools` uses JSON array format — consistent with all existing `.claude/skills/` modules
 
 ---
