@@ -37,6 +37,7 @@ def normalize_ws(text: str) -> str:
 
 
 def load_applyable_proposals(path: Path) -> list[dict[str, Any]]:
+    import sys  # noqa: PLC0415 — import inside function to avoid top-level dep
     payload = load_json(path)
     proposals = payload.get("proposals")
     if not isinstance(proposals, list):
@@ -45,8 +46,17 @@ def load_applyable_proposals(path: Path) -> list[dict[str, Any]]:
     for proposal in proposals:
         if not isinstance(proposal, dict):
             fail(f"{path} contains a non-object proposal")
-        if proposal.get("status") in APPLYABLE_STATUSES:
+        status = proposal.get("status")
+        if status in APPLYABLE_STATUSES:
             applyable.append(proposal)
+        elif status not in {"rejected"}:
+            # Non-applyable, non-rejected proposals (e.g. stale, pending_scope_review)
+            # are silently skipped; warn so operators notice unintentionally forgotten entries.
+            print(
+                f"WARNING: skipping proposal {proposal.get('proposal_id', '<unknown>')!r} "
+                f"with non-applyable status {status!r}",
+                file=sys.stderr,
+            )
     return applyable
 
 

@@ -500,6 +500,9 @@ for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
     _guard_is_warn_only=0
     if [[ "$PREFLIGHT_FIXTURE_MODE" != "full" ]]; then
       for _wo_guard in "${PREFLIGHT_WARN_ONLY_QUICK_GUARDS[@]}"; do
+        # Exact string equality: both sides use the same bare script path
+        # (no leading ./ or absolute prefix). If the PREFLIGHT_WARN_ONLY_QUICK_GUARDS
+        # list uses a different path format than _guard_script, this check will not match.
         if [[ "$_guard_script" == "$_wo_guard" ]]; then
           _guard_is_warn_only=1
           break

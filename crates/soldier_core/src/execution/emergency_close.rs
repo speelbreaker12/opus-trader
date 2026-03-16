@@ -83,16 +83,26 @@ pub fn select_emergency_close_best_price(
         });
     }
 
-    let best_price = best_price_from_venue_band(
+    if let Some(best_price) = best_price_from_venue_band(
         input.side,
         input.venue_band,
         input.instrument_cache_age_s,
         input.instrument_cache_ttl_s,
-    )?;
-    Some(EmergencyClosePriceSelection {
-        source: EmergencyClosePriceSource::VenueBand,
-        best_price,
-    })
+    ) {
+        return Some(EmergencyClosePriceSelection {
+            source: EmergencyClosePriceSource::VenueBand,
+            best_price,
+        });
+    }
+
+    tracing::warn!(
+        side = ?input.side,
+        l2_present = input.l2.is_some(),
+        l1_present = input.l1.is_some(),
+        venue_band_present = input.venue_band.is_some(),
+        "emergency-close: no valid price source — failing closed (AT-1217)"
+    );
+    None
 }
 
 fn best_price_from_snapshot(
