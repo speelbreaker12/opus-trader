@@ -201,6 +201,16 @@ write_review_marker "$marker_path" "CONDITIONAL_PASS" "head_commit" "$(git -C "$
 
 (
   cd "$repo"
+  expect_block "env --chdir escaping repo is blocked" "chdir escaped repository root" "env --chdir=.. GH_TOKEN=test gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_pass "non-gh command with chdir escape is not gated" "env --chdir=.. pwd"
+)
+
+(
+  cd "$repo"
   expect_pass "command-wrapped gh pr create still triggers gate" "command gh pr create --title ready"
 )
 

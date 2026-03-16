@@ -1,5 +1,16 @@
 //! Internal execution routing between engine-facing inputs and the legacy
 //! open/pipeline runtime modules.
+//!
+//! WAL gate dependency chain (debug search order):
+//! 1. `wal_gate.rs`           — `RecordedBeforeDispatchGate` trait
+//! 2. `build_order_intent.rs` — core chokepoint + deprecated `PrecomputedWalGate`
+//! 3. `routing.rs`            — adapter dispatch (this file)
+//! 4. `open_runtime.rs`       — `wal_recorded` compat field (ignored on adapter path)
+//! 5. `pipeline.rs`           — shared pipeline evaluator wrapper
+//!
+//! Invariant: OPEN without a WAL gate adapter is always rejected (fail-closed).
+//! Close/Hedge without a WAL gate adapter are allowed per CSP.3.2 and emit
+//! `wal_nonblocking_allowed_total` with `source=no_gate_configured`.
 
 use super::base_gates::BaseGatesInput;
 use super::build_order_intent::{

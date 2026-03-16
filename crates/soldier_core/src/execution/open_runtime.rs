@@ -53,6 +53,11 @@ pub(crate) struct OpenRuntimeInput<'a> {
     /// preflight_passed, quantize_passed, dispatch_consistency,
     /// fee_cache_passed, and expiry_guard_passed from these inputs.
     pub base_gates: BaseGatesInput<'a>,
+    /// Compatibility-only. Ignored when a WAL gate adapter is present; used
+    /// only by the deprecated `PrecomputedWalGate` path. The adapter-backed
+    /// live path sets this via `runtime.wal_gate.is_some()` in `route_open`,
+    /// but the adapter result is authoritative — do not read this field when
+    /// a live gate is wired.
     pub wal_recorded: bool,
     pub current_delta: f64,
     pub delta_impact_est: f64,

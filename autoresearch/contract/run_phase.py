@@ -18,9 +18,12 @@ from uuid import uuid4
 
 from jsonschema import Draft202012Validator
 
+# Ensure sibling modules resolve regardless of invocation CWD.
+sys.path.insert(0, str(Path(__file__).parent))
+
 from apply_proposals import apply_fixture_proposals, validate_mechanical_proposals
 from check_contradictions import evaluate_proposals as evaluate_contradictions
-from check_enforcement import validate_weak_normative
+from check_enforcement import validate_weak_normative, validate_missing_fail_closed
 
 
 RESULTS_HEADER = "commit\tscore\tpassed\ttotal\tstatus\tdescription"
@@ -751,6 +754,7 @@ def phase2_run(root: Path, tag: str, model: str, eval_path: Path, workdir: str |
             contradiction_results = evaluate_contradictions(contract_text, proposals_payload.get("proposals", []))
             passed_checks += 1
             enforcement_results = validate_weak_normative(proposals_payload)
+            enforcement_results += validate_missing_fail_closed(proposals_payload)
             passed_checks += 1
             validated_payload = apply_status_results(
                 proposals_payload,
