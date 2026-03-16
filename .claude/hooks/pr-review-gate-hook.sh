@@ -161,7 +161,7 @@ done < <(printf '%s\n' "$COMMAND" | tr ';&|' '\n')
 [ "$TRIGGERED" -eq 1 ] || exit 0
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-HEAD_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
 
 # Can't determine branch — don't block
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then
@@ -211,7 +211,10 @@ EOF
     exit 2
 fi
 
-if [ "$MARKER_HEAD" != "$HEAD_SHA" ]; then
+# Normalize marker SHA to full 40-char SHA (handles short SHAs, any abbrev length).
+MARKER_HEAD_FULL=$(git rev-parse "${MARKER_HEAD}^{commit}" 2>/dev/null || echo "$MARKER_HEAD")
+
+if [ "$MARKER_HEAD_FULL" != "$HEAD_SHA" ]; then
     cat >&2 <<EOF
 GATE BLOCKED: review-stack marker for '${BRANCH}' targets HEAD '${MARKER_HEAD}' but current HEAD is '${HEAD_SHA}'.
 Re-run /review-stack for the current branch head before creating the PR.
@@ -232,7 +235,7 @@ else
 WARNING: /external-review marker for branch '${BRANCH}' is missing head/head_commit.
 Re-run /external-review for the current branch head ${HEAD_SHA} if review coverage matters for this PR.
 EOF
-    elif [ "$EXT_MARKER_HEAD" != "$HEAD_SHA" ]; then
+    elif [ "$(git rev-parse "${EXT_MARKER_HEAD}^{commit}" 2>/dev/null || echo "$EXT_MARKER_HEAD")" != "$HEAD_SHA" ]; then
         cat >&2 <<EOF
 WARNING: /external-review marker for branch '${BRANCH}' targets HEAD '${EXT_MARKER_HEAD}' but current HEAD is '${HEAD_SHA}'.
 Re-run /external-review for the current branch head if review coverage matters for this PR.

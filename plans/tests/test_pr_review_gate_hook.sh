@@ -145,21 +145,23 @@ old_head="$(git -C "$repo" rev-parse --short HEAD)"
 echo "next" >> "$repo/sample.txt"
 git -C "$repo" add sample.txt
 git -C "$repo" commit -qm "advance head"
-new_head="$(git -C "$repo" rev-parse --short HEAD)"
+new_head_short="$(git -C "$repo" rev-parse --short HEAD)"
+new_head_full="$(git -C "$repo" rev-parse HEAD)"
 
 write_review_marker "$marker_path" "PASS" "head" "$old_head"
 
 (
   cd "$repo"
-  expect_block "stale marker blocks current head" "targets HEAD '$old_head' but current HEAD is '$new_head'" "gh pr create --title ready"
+  # MARKER_HEAD ($old_head) appears as-is; HEAD_SHA is full SHA ($new_head_full)
+  expect_block "stale marker blocks current head" "targets HEAD '$old_head' but current HEAD is '$new_head_full'" "gh pr create --title ready"
 )
 
-write_review_marker "$marker_path" "PASS" "head_commit" "$new_head"
+write_review_marker "$marker_path" "PASS" "head_commit" "$new_head_short"
 write_external_marker "$external_marker_path" "head" "$old_head"
 
 (
   cd "$repo"
-  expect_pass_with_output "stale external marker warns without blocking" "targets HEAD '$old_head' but current HEAD is '$new_head'" "gh pr create --title ready"
+  expect_pass_with_output "stale external marker warns without blocking" "targets HEAD '$old_head' but current HEAD is '$new_head_full'" "gh pr create --title ready"
 )
 
 echo "test_pr_review_gate_hook.sh: ok"
