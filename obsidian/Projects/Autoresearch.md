@@ -8,7 +8,7 @@ started: 2026-03-16
 
 ## Current State
 
-Refreshing PR 207 calibration blockers in the autoresearch workflow.
+PR 207 rebased onto main. Duplicate AT-1239 fixed. Autoresearch tests next, then PR-gate evidence path.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -25,3 +25,6 @@ Refreshing PR 207 calibration blockers in the autoresearch workflow.
 - Fixed baseline scoring so valid JSON from `evaluate.py --json` is recorded even when the evaluator exits non-zero for an imperfect score.
 - Added regression coverage for both failure modes in the autoresearch contract and harness tests.
 - Folded PR #208 render_review.py IndexError guard into #207 branch (cherry-pick, harness.sh conflict resolved — HEAD's tmpfile pattern already had the set-e fix).
+- Rebased PR #207 onto main (10 commits, 17 conflicts resolved, 0 markers remaining).
+- Reviewed CONTRACT.md/prd.json/contract_kernel.json as contract set. Found and fixed duplicate AT-1239 in S7-002.
+- contract_kernel.json line numbers are stale — needs regeneration post-merge.
