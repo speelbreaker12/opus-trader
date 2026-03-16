@@ -41,9 +41,7 @@ Optional: `STORY_ID=<id>` for artifact routing. Defaults to a timestamp-based ru
 
 1. Resolve diff target from args (same resolution logic as `external-review-generic`)
 2. Set `RUN_ID` = `STORY_ID` if provided, else `calibrate-<timestamp>`
-3. Create artifact directories:
-   - `artifacts/calibrate/<RUN_ID>/skills/`
-   - `artifacts/calibrate/<RUN_ID>/external/`
+3. Create artifact directory: `artifacts/calibrate/<RUN_ID>/skills/`
 4. Record `HEAD` sha and timestamp
 
 ### Phase 1 — Parallel Execution
@@ -105,7 +103,11 @@ Note on `stack_only` findings: These are surfaced in the gap report for informat
 
 Claude presents all `external_only` findings in a numbered list with Claude's proposed labels. The user responds with a **single consolidated response** using this format:
 - `accept all` — accept all of Claude's labels as-is
-- Individual overrides: `<N>: NOISE`, `<N>: STRUCTURAL`, `<N>: dismiss` (one per line, for any findings to reclassify)
+- Individual overrides (one per line, for any findings to reclassify):
+  - `<N>: NOISE`
+  - `<N>: STRUCTURAL`
+  - `<N>: dismiss`
+  - `<N>: SKILL_GAP <skill-name>` — promote to skill gap and assign responsible skill (e.g., `3: SKILL_GAP pr-review`)
 
 Claude waits for the user's response before proceeding to write the gap report.
 
@@ -162,6 +164,8 @@ For each confirmed `SKILL_GAP`, Claude rates:
 | `HIGH` | Broadly applicable across codebases and PRs | Propose skill patch |
 | `MEDIUM` | Probably generalizable but has project-specific flavor | Propose skill patch with caution note |
 | `LOW` | Too specific to this PR or this codebase | Suggest adding to `CLAUDE.md` instead — no skill patch |
+
+**Generalizability heuristic:** If a finding references project-specific types or domain vocabulary (e.g., `TradingMode`, `PolicyGuard`, `ReduceOnly`, contract clause IDs), default to `MEDIUM` unless the underlying pattern is language- or framework-level (e.g., "missing error check on a `Result` return" is HIGH even if it appeared in trading code).
 
 ### Phase 7 — Patch Proposals
 
