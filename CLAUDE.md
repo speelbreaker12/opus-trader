@@ -214,6 +214,11 @@ Canonical catalog (single source of truth): `docs/skills/index.md`.
 
 | Task | Required Skill | Why |
 |------|----------------|-----|
+| Architecture friction audit | `/codebase-health` | Surfaces shallow modules, coupling drift, facade gaps — files refactor RFCs |
+| Design a new interface/API | `/design-interface` | First idea is rarely best; parallel sub-agents find better designs |
+| Stress-test a plan or design | `/grill` | Conversational probing catches reasoning gaps checklists miss |
+| Investigate a bug (non-urgent) | `/triage` | File structured GH issue with TDD fix plan instead of losing context |
+| Check domain terminology | `/glossary` | Prevents field-name drift and naming confusion |
 | Review a plan | `/plan-review` | Ad-hoc reviews miss failure modes |
 | Full PR/change review (all 6 skills) | `/review-stack` (or `/6`) | Runs pr-review → failure-mode → strategic → contract → validator-audit → devils-advocate in one pass |
 | Review a PR | `/pr-review` | Systematic checklist prevents omissions |
