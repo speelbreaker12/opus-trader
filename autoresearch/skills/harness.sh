@@ -717,7 +717,7 @@ for t in data['tests']:
     warn "Evaluator exited non-zero (rc=$evaluator_rc); recording imperfect baseline score"
   fi
 
-  # Append mechanical score row to results.tsv
+  # Append mechanical score row to results.tsv (always, even on partial failure)
   ensure_tsv_header "$results_file"
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$short_head" "$score" "$passed" "$total" "baseline" "baseline - no changes" \
@@ -725,6 +725,9 @@ for t in data['tests']:
 
   log "Baseline recorded"
   info "Score: $score ($passed/$total)"
+  if [[ "$eval_exit" -ne 0 ]]; then
+    warn "evaluate.py exited $eval_exit (imperfect baseline score recorded)"
+  fi
 }
 
 # ── Helper: generate outputs via Claude ──────────────────────────────

@@ -129,6 +129,23 @@ fn test_boundary_cache_age_equals_ttl_allows_venue_band() {
 }
 
 #[test]
+fn test_inverted_venue_band_fails_closed() {
+    // Mutation-A7 guard: a wrong impl that omits the `max_price < min_price` guard
+    // in `best_price_from_venue_band` would compute and return a valid-looking price
+    // (e.g. 99.0) for an inverted band. This test proves the guard is present.
+    let mut input = base_input(Side::Buy);
+    input.venue_band = Some(EmergencyVenueBand {
+        min_price: 101.0,
+        max_price: 99.0, // inverted: max < min
+        tick_size: 0.5,
+    });
+    assert!(
+        select_emergency_close_best_price(&input).is_none(),
+        "inverted venue-band (max_price < min_price) must fail closed with no price"
+    );
+}
+
+#[test]
 fn test_fix01_neighbor_fresh_l2_wins_even_if_metadata_stale() {
     let mut input = base_input(Side::Sell);
     input.instrument_cache_age_s = 7_200.0; // stale metadata
