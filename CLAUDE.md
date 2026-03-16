@@ -220,7 +220,7 @@ Canonical catalog (single source of truth): `docs/skills/index.md`.
 | Investigate a bug (non-urgent) | `/triage` | File structured GH issue with TDD fix plan instead of losing context |
 | Check domain terminology | `/glossary` | Prevents field-name drift and naming confusion |
 | Review a plan | `/plan-review` | Ad-hoc reviews miss failure modes |
-| Full PR/change review (all 6 skills) | `/review-stack` (or `/6`) | Runs pr-review → failure-mode → strategic → contract → validator-audit → devils-advocate in one pass |
+| Full PR/change review (all 7 skills) | `/review-stack` (or `/6`) | Runs pr-review → failure-mode → strategic → contract → validator-audit → devils-advocate → loss-risk-gate in one pass |
 | Review a PR | `/pr-review` | Systematic checklist prevents omissions |
 | Review risky code | `/failure-mode-review` | Traces implementation failure paths, not just happy paths |
 | Review architecture/ops | `/strategic-failure-review` | Systemic risks, hidden assumptions, operational/human factors |
@@ -235,7 +235,7 @@ Canonical catalog (single source of truth): `docs/skills/index.md`.
 | Check contracts (fast) | `/contract-review` | Fail-open hazard filter + workflow alignment (subsumes `/audit`) |
 | Check contracts (full) | `/contract-audit-full` | Exhaustive Contract-vs-PRD coverage audit |
 | Git workflow (branches, merges, worktrees) | `/git` | Never commit on main, per-file diff before --theirs, worktree isolation, safety-biased conflict resolution |
-| After completing any task | `/code-review-expert` | SOLID violations, security risks, code quality — run automatically after each implementation task |
+| After completing any task | `code-review-expert` (superpowers plugin) | SOLID violations, security risks, code quality — run automatically after each implementation task |
 | Commit + debrief any unit of work | `/toc` | Theory of Constraints commit: §0 what shipped · §1 one constraint (exploit/subordinate/elevate) · §2 next story · §3 enforceable rules |
 
 **Process:**
