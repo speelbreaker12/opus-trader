@@ -27,22 +27,22 @@ Validation command:
 |---|---|---|
 | `/6` | `SKILLS/6.md` | Alias for `/review-stack`. |
 | `/acceptance-test` | `SKILLS/acceptance-test.md` | Generate acceptance tests from contract requirements. |
+| `/codebase-health` | `SKILLS/codebase-health.md` | Architecture friction audit — explore for shallow modules, coupling, facade drift, then propose deepening refactors as GH issue RFCs. |
 | `/commit-push-pr` | `SKILLS/commit-push-pr.md` | Stage, commit, push, and open PR with repo conventions. |
 | `/contract-audit-full` | `SKILLS/contract-audit-full.md` | Exhaustive contract coverage and conflict audit. |
 | `/contract-review` | `SKILLS/contract-review.md` | Fast fail-open safety filter for changes. |
-| `/codebase-health` | `SKILLS/codebase-health.md` | Architecture friction audit — explore for shallow modules, coupling, facade drift, then propose deepening refactors as GH issue RFCs. |
 | `copilot-aftercare` | `SKILLS/copilot-aftercare.md` | Copilot review response loop workflow. |
 | `/design-interface` | `SKILLS/design-interface.md` | "Design It Twice" — parallel sub-agents generate radically different interface designs for comparison. |
 | `/devils-advocate` | `SKILLS/devils-advocate.md` | Mutation-style test-the-tests review. |
-| `/external-review-generic` | `SKILLS/external-review-generic.md` | Run four generic external reviewers in parallel for a PR, commit, file set, or tracked local diff. |
 | `diff-first-review` | `SKILLS/diff-first-review.md` | Diff-first review discipline. |
+| `/external-review-generic` | `SKILLS/external-review-generic.md` | Run four generic external reviewers in parallel for a PR, commit, file set, or tracked local diff. |
 | `/failure-mode-review` | `SKILLS/failure-mode-review.md` | Implementation-level failure path analysis. |
 | `flow-audit-loop` | `SKILLS/flow-audit-loop/SKILL.md` | ACF flow audit loop for contract flow bundles. |
 | `/git` | `SKILLS/git.md` | Branch, merge, and worktree discipline. |
 | `/glossary` | `SKILLS/glossary.md` | Extract and maintain domain terminology glossary from codebase. |
 | `/grill` | `SKILLS/grill.md` | Adversarial plan interview — stress-test decisions until every branch is resolved. |
-| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
 | `interview` | `SKILLS/interview.md` | Spec-building interview workflow. |
+| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
 | `patch-only-edits` | `SKILLS/patch-only-edits.md` | Patch-only editing style and constraints. |
 | `/plan` | `SKILLS/plan.md` | Elevation to implementation plan workflow. |
 | `/plan-review` | `SKILLS/plan-review.md` | Implementation plan review checklist. |

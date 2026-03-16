@@ -76,7 +76,7 @@ Rules:
 Create using `gh issue create`. Do NOT ask the user to review before creating — just create it and share the URL.
 
 ```bash
-gh issue create --title "<concise bug title>" --body "$(cat <<'EOF'
+gh issue create --title "<concise bug title>" --body "$(cat <<'ISSUE_BODY'
 ## Problem
 
 **Actual behavior**: [what happens]
@@ -117,7 +117,7 @@ the issue should remain useful after refactors.
 - **Severity**: [LOW/MED/HIGH]
 - **Blast radius**: [what else could break]
 - **Safety-critical**: [yes/no — does it touch trading/risk paths?]
-EOF
+ISSUE_BODY
 )"
 ```
 
