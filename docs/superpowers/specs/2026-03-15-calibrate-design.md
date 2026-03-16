@@ -1,4 +1,4 @@
-# `/calibrate` Skill — Design Spec
+# `/calibrate` Skill — V0 Design Spec
 
 **Date:** 2026-03-15
 **Status:** Draft
@@ -7,254 +7,204 @@
 
 ## Purpose
 
-Run each of the 7 review-stack skills independently as parallel subagents AND `external-review-generic` (4 LLM models) simultaneously, then analyze the gap between what each found. Identifies skill blind spots, categorizes missed findings, and optionally patches the relevant skills with generalizability-gated proposals.
+`/calibrate` V0 is a manual agent skill that runs the existing internal and external review systems against the same story and collects their outputs in one predictable place for manual inspection.
 
-**Important:** This skill does NOT invoke `/review-stack` as a unit. It runs each of the 7 skills as independent subagents to maximize parallelism. The sequencing constraints defined in `review-stack.md` (e.g., Phase 3 waits on Phase 2) do not apply here — each skill runs independently because we are collecting findings, not executing a chained review pipeline.
+It is intentionally small. V0 does not compare findings, normalize review content, or patch skills. It only proves that both review systems can be run together from one skill invocation and that their logs and artifact paths can be collected reliably.
 
 ---
 
 ## Problem Statement
 
-External LLM reviewers consistently catch issues that the internal 7-skill review-stack misses. Without a systematic comparison, these gaps go unnoticed and recur. `/calibrate` makes the gap visible, categorizes it (skill gap vs. noise vs. structural limitation), and provides a controlled patching loop that prevents overfitting.
+The immediate constraint is not structured finding comparison. The immediate constraint is operational:
+
+- Can the agent run the existing internal review stack and the existing external review wrapper against the same story from one entrypoint?
+- Can the outputs be gathered into one session folder without extra manual glue?
+- Can failures be preserved clearly enough for a human to inspect what happened?
+
+Until that is proven in real runs, any normalization or comparison layer is premature.
 
 ---
 
-## Invocation
+## Scope
 
-```
-/calibrate PR190
-/calibrate '#190'
-/calibrate 190
-/calibrate --commit HEAD
-/calibrate --base origin/main
-/calibrate --files "path1 path2"
-/calibrate              ← working tree diff
-```
+V0 is a skill, not a launcher script and not a workflow gate.
 
-Optional: `STORY_ID=<id>` for artifact routing. Defaults to a timestamp-based run ID (`calibrate-<YYYYMMDDHHMMSS>`).
+The skill does only this:
 
----
-
-## Architecture
-
-### Phase 0 — Setup
-
-1. Resolve diff target from args (same resolution logic as `external-review-generic`)
-2. Set `RUN_ID` = `STORY_ID` if provided, else `calibrate-<timestamp>`
-3. Create artifact directory: `artifacts/calibrate/<RUN_ID>/skills/`
-4. Record `HEAD` sha and timestamp
-
-### Phase 1 — Parallel Execution
-
-Main agent starts `plans/external_review_generic.sh <target>` as a **background process** (non-blocking), capturing its stdout to a temp file. The script generates its own timestamped `RUN_ID` (e.g., `external_review_generic_20260315T...`) and on success echoes `summary artifact: <relative-path>`. Phase 2 extracts the actual artifact path from that output — do **not** hardcode `artifacts/story/<calibrate-RUN_ID>/external_review_generic/`.
-
-Immediately, while that script is running, main agent spins **7 subagents in parallel** — one per skill — each running at **full skill depth** (reads actual source files, not just diffs). The sequencing constraint from `review-stack.md` is waived; all 7 run simultaneously:
-
-| Subagent | Skill | Output file |
-|----------|-------|-------------|
-| A | `/pr-review` | `artifacts/calibrate/<RUN_ID>/skills/pr-review.md` |
-| B | `/failure-mode-review` | `artifacts/calibrate/<RUN_ID>/skills/failure-mode-review.md` |
-| C | `/strategic-failure-review` | `artifacts/calibrate/<RUN_ID>/skills/strategic-failure-review.md` |
-| D | `/contract-review` | `artifacts/calibrate/<RUN_ID>/skills/contract-review.md` |
-| E | `/validator-audit` | `artifacts/calibrate/<RUN_ID>/skills/validator-audit.md` |
-| F | `/devils-advocate` | `artifacts/calibrate/<RUN_ID>/skills/devils-advocate.md` |
-| G | `/loss-risk-gate` | `artifacts/calibrate/<RUN_ID>/skills/loss-risk-gate.md` |
-
-Each subagent has a **max wall-clock time of 10 minutes**. If a subagent times out, its output file is left empty and its skill is marked `TIMEOUT` in the gap report.
-
-Main agent waits for all 8 (7 subagents + background script) to complete before Phase 2.
-
-**External review script failure handling:** After the script completes, read `dispatch_status.json` (path found via captured stdout) to identify which of the 4 reviewers (codex, opus, kimi, gemini) succeeded vs. failed:
-- **Proceed** if at least 2 reviewers succeeded (note which ones failed in the gap report)
-- **Abort** if fewer than 2 reviewers succeeded — preserve all subagent outputs already written, then surface an error message listing failed tools and exit
-
-### Phase 2 — Gap Extraction
-
-Read findings from:
-- Skill subagent outputs: `artifacts/calibrate/<RUN_ID>/skills/<skill>.md` (7 files)
-- External review output: path extracted from the script's captured stdout (`summary artifact: <path>`)
-
-Partition findings into three buckets:
-
-| Bucket | Definition |
-|--------|-----------|
-| `in_both` | Found by both review-stack skills AND external review |
-| `stack_only` | Found by review-stack skills, missed by external review |
-| `external_only` | Found by external review, missed by all 7 skills — **the gap set** |
-
-**Finding matching rule:** Two findings are considered the same if they reference the same `file:line` range AND identify the same defect class (e.g., both flag a missing error check at the same callsite). When uncertain whether two findings match, assign conservatively to `external_only` (do not collapse a gap unless clearly identical).
-
-### Phase 3 — Auto-Labeling
-
-For each finding in `external_only`, Claude assigns one label:
-
-| Label | Meaning |
-|-------|---------|
-| `SKILL_GAP` | Within the declared scope of one of the 7 skills — it should have caught this. Tag which skill and section is responsible. |
-| `NOISE` | Opinion, style preference, debatable, or likely false positive |
-| `STRUCTURAL` | Requires running code, CI output, runtime state, or external context that skills cannot access by design |
-
-For each `SKILL_GAP`, also record: **which skill** should have caught it (e.g., "pr-review §3", "failure-mode-review §6").
-
-Note on `stack_only` findings: These are surfaced in the gap report for informational purposes only. No action is taken on them in this loop. They represent potential false positives from the skills but are not analyzed further.
-
-### Phase 4 — Confirmation (Human-in-the-Loop)
-
-Claude presents all `external_only` findings in a numbered list with Claude's proposed labels. The user responds with a **single consolidated response** using this format:
-- `accept all` — accept all of Claude's labels as-is
-- Individual overrides (one per line, for any findings to reclassify):
-  - `<N>: NOISE`
-  - `<N>: STRUCTURAL`
-  - `<N>: dismiss`
-  - `<N>: SKILL_GAP <skill-name>` — promote to skill gap and assign responsible skill (e.g., `3: SKILL_GAP pr-review`)
-
-Claude waits for the user's response before proceeding to write the gap report.
-
-### Phase 5 — Gap Report
-
-Write `artifacts/calibrate/<RUN_ID>/gap_report.md`:
-
-```markdown
-# Calibration Gap Report — <RUN_ID>
-
-HEAD: <sha>
-Timestamp: <utc>
-Diff target: <target>
-External reviewers succeeded: <list>
-External reviewers failed/timed out: <list or "none">
-
-## Summary
-
-| Source | Total findings | Unique to source |
-|--------|---------------|-----------------|
-| review-stack | N | N (stack_only) |
-| external-review | N | N (external_only) |
-| both | N | — |
-
-## Gap Breakdown (external_only)
-
-| # | Finding | Label | Responsible Skill |
-|---|---------|-------|------------------|
-| 1 | ... | SKILL_GAP | pr-review §3 |
-| 2 | ... | NOISE | — |
-| 3 | ... | STRUCTURAL | — |
-
-## Skill-Confirmed Findings (in_both)
-<list>
-
-## Stack-Only Findings (informational — potential skill false positives)
-<list>
-```
-
-Then prompt: **"Enter patch loop? [y/n]"**
-
-If there are no confirmed `SKILL_GAP` findings (all `external_only` labeled NOISE or STRUCTURAL), skip phases 6–8, write an empty patch summary noting "No SKILL_GAP findings confirmed — no patches proposed," and exit.
+1. Require a story-scoped invocation
+2. Create a calibration session folder
+3. Start `review-stack` and `plans/external_review_generic.sh`
+4. Wait for both to finish
+5. Record logs, exit codes, artifact paths, and overall status
+6. Exit non-zero if either child run fails
 
 ---
 
-## Patch Loop (opt-in)
+## Inputs
 
-### Phase 6 — Generalizability Rating
+Required:
 
-For each confirmed `SKILL_GAP`, Claude rates:
+- `STORY_ID`
+- PR number
+- A story-scoped review target that both child review systems can use consistently
 
-| Rating | Meaning | Example | Action |
-|--------|---------|---------|--------|
-| `HIGH` | Broadly applicable across codebases and PRs | "bare `except Exception` silently swallows parse errors in any Python validator" | Propose skill patch |
-| `MEDIUM` | Probably generalizable but has project-specific flavor | "CWD-relative `!cat` paths in skill wrapper files fail outside repo root" (specific to Claude Code skill layout) | Propose skill patch with caution note |
-| `LOW` | Too specific to this PR or this codebase | "this trading-domain state machine should reset the latch on reconcile" | Suggest adding to `CLAUDE.md` instead — no skill patch |
+V0 does not support free-form commit/files/no-arg calibration mode. Those modes may be considered later if they prove necessary, but they are out of scope for the first slice.
 
-**Generalizability heuristic:** If a finding references project-specific types or domain vocabulary (e.g., `TradingMode`, `PolicyGuard`, `ReduceOnly`, contract clause IDs), default to `MEDIUM` unless the underlying pattern is language- or framework-level (e.g., "missing error check on a `Result` return" is HIGH even if it appeared in trading code).
+---
 
-### Phase 7 — Patch Proposals
+## Operator Flow
 
-For each HIGH/MEDIUM gap, Claude drafts:
-- Which skill file to edit and which section
-- The exact rule/check to add (concrete wording, not vague)
-- The generalizability argument (why HIGH or MEDIUM)
-- For MEDIUM: prepend a caution comment to the proposed rule text: `<!-- NOTE: Validated on opus-trader (trading risk domain); verify applicability before applying to other codebases. -->`
+1. Invoke `/calibrate` with:
+   - `STORY_ID`
+   - PR number
+   - story-scoped review target
+2. `/calibrate` creates:
+   - `artifacts/story/<STORY_ID>/calibration/<SESSION_ID>/`
+3. `/calibrate` records:
+   - `started_at`
+   - `head_commit`
+   - `review_target`
+4. `/calibrate` starts both child review runs in parallel:
+   - `review-stack`
+   - `plans/external_review_generic.sh`
+5. `/calibrate` waits for both child runs to finish
+6. After both finish, `/calibrate` records for each child:
+   - exit code
+   - artifact path if produced
+   - log path
+7. `/calibrate` writes session metadata and exits
 
-Proposals are presented one at a time. User approves or rejects each individually.
-
-### Phase 8 — Apply & Verify
-
-For each approved patch:
-1. Apply the edit to the skill file directly (edit the `.md` file in `SKILLS/`)
-2. Re-run **only the patched skill** as a subagent on the same diff
-3. Record verdict: **CAUGHT** (patch works) or **MISSED** (needs refinement)
-
-**Verification limitation:** Re-running on the same diff nearly guarantees CAUGHT after a targeted patch. This step confirms the patch is syntactically correct and the rule fires — it does not prove generalizability. Generalizability is controlled upstream by the Phase 6 rating and user approval.
-
-If MISSED: Claude revises the patch and re-runs. **Max 3 attempts.** If still MISSED after 3, surface to user with explanation and mark as `UNVERIFIED` in the patch summary.
-
-For LOW-rated gaps: propose exact `CLAUDE.md` addition text. User approves or rejects.
-
-### Phase 9 — Patch Summary
-
-Write `artifacts/calibrate/<RUN_ID>/patch_summary.md`:
-
-```markdown
-# Patch Summary — <RUN_ID>
-
-## Applied Patches
-| Skill file | Section | Generalizability | Verified CAUGHT? |
-|------------|---------|-----------------|-----------------|
-| SKILLS/pr-review.md | §3 | HIGH | Yes |
-
-## Deferred to CLAUDE.md
-| Finding | Suggested addition |
-|---------|-------------------|
-| ...     | ...               |
-
-## Rejected
-| Finding | Reason |
-|---------|--------|
-
-## Unverified (MISSED after 3 attempts)
-| Finding | Last patch attempt |
-|---------|-------------------|
-```
+Parallel start is part of the V0 behavior. This is not a runtime optimization feature; it is the behavior being proven.
 
 ---
 
 ## Artifact Layout
 
+V0 uses exactly one session folder:
+
+```text
+artifacts/story/<STORY_ID>/calibration/<SESSION_ID>/
+  review_stack.agent.log
+  external.stdout.log
+  external.stderr.log
+  session.json
 ```
-artifacts/calibrate/<RUN_ID>/
-  skills/
-    pr-review.md
-    failure-mode-review.md
-    strategic-failure-review.md
-    contract-review.md
-    validator-audit.md
-    devils-advocate.md
-    loss-risk-gate.md
-  gap_report.md
-  patch_summary.md          ← only if patch loop entered
-artifacts/story/<RUN_ID>/
-  external_review_generic/
-    dispatch_status.json    ← written by external_review_generic.sh
-    summary.md              ← written by external_review_generic.sh
-```
+
+### Log Semantics
+
+- `review_stack.agent.log`
+  - the subagent transcript or equivalent single log for the `review-stack` run
+- `external.stdout.log`
+  - stdout captured from `plans/external_review_generic.sh`
+- `external.stderr.log`
+  - stderr captured from `plans/external_review_generic.sh`
+
+The internal `review-stack` run does not pretend to have process-style stdout/stderr separation. V0 records it as one agent log because that is the most truthful representation of how the skill executes.
 
 ---
 
-## Anti-Overfitting Guardrails
+## Session Metadata
 
-1. **Generalizability gate** — LOW-rated gaps never become skill rules
-2. **Explicit user approval** — every patch requires human sign-off before applying
-3. **MEDIUM caution note** — project-specific flavor is flagged inline in the skill rule
-4. **Verify step** — each patch is re-run on the same diff; confirms rule fires (not generalizability)
-5. **Max 3 attempts** — no infinite loops on a single patch
-6. **User label override** — user can demote any `SKILL_GAP` to `NOISE` during Phase 4
-7. **Conservative matching** — ambiguous finding pairs default to `external_only` (not collapsed)
+`session.json` contains only:
+
+- `story_id`
+- `session_id`
+- `review_target`
+- `head_commit`
+- `started_at`
+- `finished_at`
+- `review_stack.exit_code`
+- `review_stack.log_path`
+- `review_stack.artifact_path`
+- `external.exit_code`
+- `external.stdout_log_path`
+- `external.stderr_log_path`
+- `external.artifact_path`
+- `overall_status`
+
+### Required Semantics
+
+- `overall_status = "success"` only if both child exit codes are `0`
+- otherwise `overall_status = "failed"`
+- `artifact_path` may be `null` if a child run failed before producing artifacts
+
+The session record is an index, not a review product. It binds the run together and points the operator to the underlying evidence.
 
 ---
 
-## What This Skill Does NOT Do
+## Child Responsibilities
 
-- Does not modify `plans/prd.json` or any workflow state
-- Does not run `verify.sh` or `prd_set_pass.sh`
-- Is not a workflow gate — it is a calibration and improvement tool
-- Does not auto-apply patches without user approval
-- Does not invoke `/review-stack` as a unit — runs 7 skills as independent subagents
+`/calibrate` does not change child workflow semantics.
+
+### Internal Child
+
+The internal child is the existing `review-stack` skill. It remains responsible for:
+
+- its own sequencing
+- its own artifact generation
+- its own failure behavior
+- its own review conclusions
+
+### External Child
+
+The external child is the existing `plans/external_review_generic.sh` wrapper. It remains responsible for:
+
+- dispatching its four external reviewers
+- its own stdout/stderr behavior
+- its own artifact generation
+- its own failure behavior
+
+`/calibrate` only orchestrates and records.
+
+---
+
+## Failure Handling
+
+V0 is fail-closed at the orchestration level.
+
+- If required inputs are missing, `/calibrate` stops before starting child runs
+- If one child run fails and the other succeeds, the session is still written and `overall_status` is `failed`
+- If a child produces logs but no artifact path, the session records `artifact_path = null`
+- If session metadata cannot be written, the skill must surface that as a failure rather than silently succeeding
+
+The operator must always be able to inspect what happened from the session folder even when the run fails.
+
+---
+
+## Success Criteria
+
+V0 is successful if:
+
+- both review systems can be run against the same story from one manual skill entrypoint
+- logs and artifact paths are collected in one predictable folder
+- failures are explicit and preserved for inspection
+- a human can manually compare outputs after the run
+
+---
+
+## Non-Goals
+
+V0 does not do any of the following:
+
+- decide whether findings are the same
+- produce a merged report
+- normalize findings into a shared schema
+- parse markdown review content
+- map severities across systems
+- dedupe findings
+- patch skills
+- become a workflow gate
+- replace either existing review system
+- optimize runtime beyond the basic concurrent execution of both existing systems
+
+---
+
+## Follow-On Phasing
+
+The intended progression after V0 is evidence-driven:
+
+- V0: run both systems together and collect logs plus artifact paths
+- V1: add optional wrapper-produced sidecars only if manual comparison proves painful
+- V2: add comparison or dedupe only after stable sidecars and recurring comparison needs are demonstrated by real runs
+
+This ordering is deliberate. Standardization should be forced by observed pain, not predicted in advance.
