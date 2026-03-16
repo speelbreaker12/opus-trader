@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# PreToolUse hook (Bash matcher): Before git commit, remind agent to update Obsidian progress
+# PreToolUse hook (Bash matcher): BLOCK git commit unless Obsidian project file was updated
+# Exit 2 = block the tool call
 
 INPUT=$(cat)
 
@@ -13,15 +14,42 @@ except Exception:
 " <<< "$INPUT" 2>/dev/null || echo "")
 
 if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
-    echo "OBSIDIAN PROGRESS REMINDER: You are about to commit."
-    echo "Before proceeding:"
-    echo "  1. Update the relevant obsidian/Projects/*.md file:"
-    echo "     - Add a dated entry under ## Log with what changed"
-    echo "     - Update ## Current State if the project status shifted"
-    echo "     - Update frontmatter (status, branch, pr) if needed"
-    echo "  2. If this is the last commit of a work session, write a debrief:"
-    echo "     - Create obsidian/Debriefs/<Project> <date>.md using the Debrief template"
-    echo "     - Fill: what shipped, constraint, follow-up, enforceable rules"
-    echo "     - Link it from the project's ## Debriefs section"
-    echo "If you already updated the project file in this session, proceed with the commit."
+    # Check if any obsidian/Projects/*.md file has been modified in this worktree
+    CHANGED=$(git diff --name-only HEAD 2>/dev/null | grep '^obsidian/Projects/.*\.md$')
+    STAGED=$(git diff --cached --name-only 2>/dev/null | grep '^obsidian/Projects/.*\.md$')
+    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep '^obsidian/Projects/.*\.md$')
+
+    if [ -n "$CHANGED" ] || [ -n "$STAGED" ] || [ -n "$UNTRACKED" ]; then
+        # Project file was touched — allow commit
+        exit 0
+    fi
+
+    # List existing projects so the agent can pick one or decide to create new
+    EXISTING=$(ls obsidian/Projects/*.md 2>/dev/null | xargs -I{} basename {} .md | sed 's/^/  - /')
+
+    cat >&2 <<EOF
+BLOCKED: No Obsidian project file updated.
+
+Existing projects:
+${EXISTING:-  (none)}
+
+If one of these matches your work, update it:
+  1. Add a dated entry under ## Log with what changed
+  2. Update ## Current State if the project status shifted
+  3. Update frontmatter (status, branch, pr) if needed
+
+If NONE match, create a new project file:
+  1. Write obsidian/Projects/<Project Name>.md with this frontmatter:
+     ---
+     status: in-progress
+     priority: P1
+     branch: $(git branch --show-current 2>/dev/null || echo "")
+     pr:
+     started: "$(date +%Y-%m-%d)"
+     ---
+  2. Fill in ## Current State, ## Key Files, and ## Log
+
+Do NOT retry the commit until you have created or updated a project file.
+EOF
+    exit 2
 fi
