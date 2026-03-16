@@ -51,6 +51,121 @@
           }
         }
       ]
+    },
+    {
+      "id": "live-trading-mode-computation",
+      "fixture": "fixtures/trading_mode_computation.md",
+      "output_file": "trading_mode_computation/findings.json",
+      "assertions": [
+        {
+          "id": "tmc-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "tmc-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-open-permission-latch",
+      "fixture": "fixtures/open_permission_latch.md",
+      "output_file": "open_permission_latch/findings.json",
+      "assertions": [
+        {
+          "id": "opl-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "opl-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-emergency-close",
+      "fixture": "fixtures/emergency_close.md",
+      "output_file": "emergency_close/findings.json",
+      "assertions": [
+        {
+          "id": "ec-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "ec-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-evidence-guard",
+      "fixture": "fixtures/evidence_guard.md",
+      "output_file": "evidence_guard/findings.json",
+      "assertions": [
+        {
+          "id": "eg-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "eg-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-liquidity-gate",
+      "fixture": "fixtures/liquidity_gate.md",
+      "output_file": "liquidity_gate/findings.json",
+      "assertions": [
+        {
+          "id": "lg-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "lg-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        }
+      ]
     }
   ]
 }

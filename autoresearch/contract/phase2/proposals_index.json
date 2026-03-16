@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "run_id": "phase2-mar16-20260316_211404-d28ee76b",
+    "timestamp": "2026-03-16T21:17:17.882897Z",
+    "contract_file_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d",
+    "status": "pending",
+    "proposal_count": 3,
+    "accepted_count": 0,
+    "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-mar16-20260316_211404-d28ee76b.md",
+    "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar16-20260316_211404-d28ee76b.md"
+  }
+]

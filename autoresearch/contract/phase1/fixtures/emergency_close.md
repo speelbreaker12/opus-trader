@@ -1,0 +1,102 @@
+### **3.1 Deterministic Emergency Close**
+
+**Requirement**: When an atomic group fails, we must exit the position *immediately* and *safely*.
+
+**Where:** `crates/soldier_core/src/execution/emergency_close.rs`
+
+**Price Source (Deterministic, fail-closed):**
+- Primary: `L2BookSnapshot` best bid/ask when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
+- Fallback: `L1TickerSnapshot` best bid/ask (REST/WS ticker) when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
+- Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available:
+  - reduce-only BUY close uses quantized venue `max_price`,
+  - reduce-only SELL close uses quantized venue `min_price`.
+  - This fallback MUST use bounded IOC attempts only and MUST remain monotonic risk-reducing.
+- The `best` price in step 1 uses the selected source (asks for buy, bids for sell).
+- If no valid source is available from L2/L1 and no valid venue band is available (missing/unparseable/unquantizable metadata), emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.
+
+**Algorithm (Deterministic, 3 tries):**
+1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`).
+2. If partial fill: repeat for remaining qty (max 3 loops, exponential buffer: multiply by 2 each retry → 10 ticks, 20 ticks).
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size).
+4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
+
+**AtomicNakedEvent schema (minimum):**
+- `group_id` (UUIDv4)
+- `strategy_id` (string)
+- `incident_ts_ms` (epoch ms)
+- `exposure_usd_before` (float)
+- `exposure_usd_after` (float)
+- `time_to_delta_neutral_ms` (integer)
+- `close_attempts` (integer; 1-3)
+- `hedge_used` (bool)
+- `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
+- `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
+- `evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
+
+AT-1102
+- Given: an AtomicNakedEvent is emitted by the emergency close path.
+- When: the event's `cause` field is inspected.
+- Then: `cause` MUST be a non-empty string; empty string, null, or missing `cause` field is non-compliant.
+- Pass criteria: every emitted AtomicNakedEvent has a non-empty `cause` value (e.g., `atomic_legging_failure`, `emergency_close_exhausted`, `hedge_fallback`).
+- Fail criteria: any AtomicNakedEvent has an empty, null, or missing `cause` field.
+
+AT-211
+- Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs.
+- When: emergency close completes (including optional hedge fallback).
+- Then: exactly one AtomicNakedEvent is emitted with required schema fields present and `time_to_delta_neutral_ms` computed.
+- Pass criteria: event exists with required fields, is joinable to `group_id`, and if `enforced_profile != CSP`, `evidence_chain_state_at_event` is present.
+- Fail criteria: missing event or missing required fields.
+
+Profile: GOP
+AT-213
+- Given: an atomic group enters mixed state (one leg filled, another rejected or none), `enforced_profile != CSP`, and emergency close runs.
+- When: AtomicNakedEvent is recorded.
+- Then: the event includes `strategy_id`, `cause`, `trading_mode_at_event`, and `evidence_chain_state_at_event` with valid values.
+- Pass criteria: each field is present; `cause` is non-empty; `trading_mode_at_event` is one of `Active|ReduceOnly|Kill`; `evidence_chain_state_at_event` matches EvidenceChainState enum values.
+- Fail criteria: any required field missing or invalid.
+
+Profile: CSP
+**Acceptance Tests (REQUIRED):**
+AT-235
+- Given: one leg filled and the book thins.
+- When: emergency close runs.
+- Then: close attempts run and fallback hedge executes if still exposed; exposure goes to ~0.
+- Pass criteria: bounded close attempts then hedge fallback if needed; exposure neutralized.
+- Fail criteria: no close attempts or exposure remains.
+
+AT-236
+- Given: Liquidity Gate reject conditions are present.
+- When: emergency close runs.
+- Then: emergency close still submits IOC close attempts (Liquidity Gate does NOT block it).
+- Pass criteria: IOC close attempts are submitted.
+- Fail criteria: emergency close blocked by Liquidity Gate.
+
+AT-937
+- Given: `L2BookSnapshot` is missing/unparseable/stale and a fresh `L1TickerSnapshot` is available.
+- When: emergency close runs.
+- Then: IOC close attempts are submitted using the L1 best bid/ask as the `best` price.
+- Pass criteria: dispatch occurs and uses the L1 ticker as the price source.
+- Fail criteria: dispatch is blocked despite a valid L1 ticker or uses a stale/invalid source.
+
+AT-938
+- Given: `L2BookSnapshot` is missing/unparseable/stale and no fresh `L1TickerSnapshot` is available.
+- When: emergency close runs.
+- Then: IOC close attempts are submitted using emergency venue-band fallback pricing (`max_price` for reduce-only BUY, `min_price` for reduce-only SELL), quantized to tick.
+- Pass criteria: at least one bounded IOC attempt is dispatched using venue-band fallback pricing.
+- Fail criteria: dispatch is blocked despite valid venue-band metadata, or fallback violates reduce-only/monotonic rules.
+
+AT-1217
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and venue band metadata is missing/unparseable/unquantizable.
+- When: emergency close runs.
+- Then: no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
+- Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
+- Fail criteria: any dispatch occurs without a valid fallback price source, or rejection reason is missing/mismatched.
+
+AT-1239
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and `instrument_cache_age_s > instrument_cache_ttl_s`.
+- When: emergency close evaluates venue-band fallback pricing.
+- Then: venue-band fallback is treated as unavailable; no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
+- Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
+- Fail criteria: venue-band dispatch occurs while metadata is stale, or rejection reason is missing/mismatched.
+
+

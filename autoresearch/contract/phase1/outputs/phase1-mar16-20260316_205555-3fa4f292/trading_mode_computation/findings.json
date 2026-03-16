@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-03-16T00:00:00Z",
+  "validator_version": "1.0.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.3.3 State Count Summary",
+      "category": "cross_ref_broken",
+      "severity": "P1",
+      "description": "State Count Summary claims ReduceOnly=17 and Kill=9, but enumerating the canonical 27-state table (authoritative for AT-1048) yields ReduceOnly=11 (rows 2,4,5,7,8,10,11,13,14,16,17) and Kill=15 (rows 3,6,9,12,15,18-27). AT authors relying on the summary will write wrong cardinality assertions against an authoritative source.",
+      "evidence": {
+        "line": 148,
+        "quote": "- ReduceOnly: 17 states (rows 2, 4-5, 7-8, 10-11, 13-14, 16-17)",
+        "context": "The listed row set enumerates 11 rows, not 17. Kill summary on line 149 lists rows 3,6,9,12,15,18-27 which is 15 rows, not 9. Total 1+11+15=27 is consistent with the table but contradicts the stated counts."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Replace 'ReduceOnly: 17 states' with 'ReduceOnly: 11 states' and 'Kill: 9 states' with 'Kill: 15 states'."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.3.1 / 2.2.3.2",
+      "category": "gate_interaction_gap",
+      "severity": "P1",
+      "description": "The dual-impact allowlist declares WAL write failure and Ledger corruption have CapitalRiskAxis as a secondary axis, but \u00a72.2.3.2 CapitalRiskAxis computation specifies only mm_util/risk_state/cortex_override. No predicate or severity level (CRITICAL vs WARNING) for the secondary effect is defined anywhere. Implementers have no contract to follow for the secondary capital-axis influence of these signals.",
+      "evidence": {
+        "line": 26,
+        "quote": "| WAL write failure | SystemIntegrityAxis | CapitalRiskAxis | Restart/idempotency correctness compromised |",
+        "context": "\u00a72.2.3.2 CapitalRiskAxis CRITICAL/WARNING trigger list (line 66-72) contains no entry for WAL write failure or Ledger corruption, and no threshold is defined elsewhere for these secondary signals."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add explicit CRITICAL or WARNING trigger predicates for WAL write failure and Ledger corruption in the \u00a72.2.3.2 CapitalRiskAxis computation block, specifying which axis level each secondary signal drives."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.3.4 Dispatch Authorization",
+      "category": "cross_ref_broken",
+      "severity": "P1",
+      "description": "Kill-mode dispatch authorization delegates to \u00a72.2.3.6 for the definition of which risk-reducing intents MAY dispatch, but \u00a72.2.3.6 is absent from this fixture. The permissible dispatch set under Kill mode is partially undefined, leaving a fail-closed gap in the dispatch contract.",
+      "evidence": {
+        "line": 170,
+        "quote": "If `TradingMode == Kill`: OPEN intents MUST NOT dispatch; ONLY risk-reducing intents MAY dispatch per \u00a72.2.3.6.",
+        "context": "No \u00a72.2.3.6 section appears anywhere in this fixture."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Include \u00a72.2.3.6 defining the Kill-mode risk-reducing intent dispatch criteria, or inline the criteria directly under \u00a72.2.3.4 with a forward-reference note if \u00a72.2.3.6 lives in the full CONTRACT document."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "2.2.3.5 ModeReasonCode Registry",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "`REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` is listed unconditionally in the reason code registry, but \u00a72.2.3.2 gates this DEGRADED trigger on `enforced_profile != CSP`. Under CSP profile (declared at fixture header line 2), this reason code must never be emitted. The missing CSP exemption in \u00a72.2.3.5 risks implementations erroneously emitting the code under CSP.",
+      "evidence": {
+        "line": 211,
+        "quote": "7. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`",
+        "context": "\u00a72.2.3.2 line 90 conditions this on enforced_profile != CSP; \u00a72.2.3.5 has no matching note, creating an inconsistency between the axis computation and the reason code registry."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Append '(CSP-exempt: MUST NOT be emitted when enforced_profile == CSP, per \u00a72.2.3.2)' to the REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN entry in \u00a72.2.3.5."
+    },
+    {
+      "finding_id": "F-005",
+      "section": "2.2.3.5 ModeReasonCode Registry",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "\u00a72.2.3.5 mandates deterministic reason ordering and tier purity (KILL_*/REDUCEONLY_* must not mix) but cites no acceptance test for either invariant. AT-1048 covers 27-state mapping enumeration; no AT covers reason code completeness, ordering, or tier purity per tick.",
+      "evidence": {
+        "line": 192,
+        "quote": "Reasons MUST be deterministically ordered.",
+        "context": "No AT-XXXX anchor appears in \u00a72.2.3.5 for ordering, completeness, or tier-purity assertions."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT references in \u00a72.2.3.5 for: (a) all active reasons from the winning tier are present each tick, (b) deterministic canonical order matches the registry, (c) no cross-tier mixing occurs."
+    },
+    {
+      "finding_id": "F-006",
+      "section": "2.2.3.1.2 Kill Trigger Corroboration",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "Section is numbered \u00a72.2.3.1.2 with no \u00a72.2.3.1.1 defined. The 'Non-Capital' qualifier implies \u00a72.2.3.1.1 would cover capital Kill trigger corroboration, but it is absent. The scope guard (line 56) states corroboration does NOT apply to capital triggers, but provides no affirmative normative statement for how capital Kill triggers behave as a standalone rule.",
+      "evidence": {
+        "line": 32,
+        "quote": "##### **2.2.3.1.2 Kill Trigger Corroboration (Non\u2011Capital)**",
+        "context": "No \u00a72.2.3.1.1 section exists. Capital Kill trigger single-signal authority is only implied by the scope-guard exclusion, not stated as a positive requirement."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add \u00a72.2.3.1.1 stating capital Kill triggers (mm_util >= mm_util_kill, risk_state == Kill) are single-signal authoritative and require no corroboration, or renumber \u00a72.2.3.1.2 to \u00a72.2.3.1.1 and fold the scope guard into a normative note."
+    }
+  ]
+}
