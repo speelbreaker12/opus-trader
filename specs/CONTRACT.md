@@ -1476,20 +1476,22 @@ AT-957
 If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents with `Rejected(LiquidityGateNoL2)`. CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2; they MUST use the deterministic §3.1 fallback price ladder and may dispatch only a strictly positive, monotonic risk-reducing quantity. If no valid §3.1 fallback price source exists, the intent MUST fail closed with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded`. CANCEL-only intents remain allowed.
 OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateNoL2)`.
 
-**Output:** `Allowed | Rejected(reason=ExpectedSlippageTooHigh)`
+**Output:** `Allowed | Rejected(ExpectedSlippageTooHigh) | Rejected(LiquidityGateNoL2) | Rejected(EmergencyCloseNoPrice)`
 
 **Algorithm (Deterministic):**
 
-1. Walk the L2 book on the correct side (asks for buy, bids for sell).  
-2. Compute the Weighted Avg Price (WAP) for `OrderQty`.  
-3. Compute expected slippage: `slippage_bps = (WAP - BestPrice) / BestPrice * 10_000` (sign adjusted)  
-4. Reject if `slippage_bps` > `max_slippage_bps` (default 10bps; `max_slippage_bps` from Appendix A).  
+0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE → §3.1 fallback). Do not proceed to book walk.
+1. Walk the L2 book on the correct side (asks for buy, bids for sell).
+2. Compute the Weighted Avg Price (WAP) for `OrderQty`.
+3. Compute expected slippage: `slippage_bps = abs(WAP - BestPrice) / BestPrice * 10_000`
+4. Reject if `slippage_bps` > `max_slippage_bps` (default 10bps; `max_slippage_bps` from Appendix A).
 5. If rejected, log `LiquidityGateReject` with computed WAP \+ slippage.
 
 **Scope (explicit):**
 - Applies to normal dispatch and containment rescue IOC orders (see §1.1 containment Step A).
 - Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.
 - Emergency close still requires a valid price source; missing/stale L2 MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
+- When no valid fallback source exists, `RiskState::Degraded` is set (see §2.2.3.2 SystemIntegrityAxis), producing `TradingMode::ReduceOnly` via the axis resolver.
 
 **Acceptance Test (REQUIRED):**
 AT-222
@@ -1503,9 +1505,9 @@ AT-222
 AT-344
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`.
 - When: Liquidity Gate evaluates an OPEN intent.
-- Then: the intent is rejected (no dispatch) and a LiquidityGate rejection is logged.
-- Pass criteria: no OPEN dispatch occurs; rejection reason recorded.
-- Fail criteria: OPEN dispatch proceeds without a valid L2 snapshot.
+- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` (no dispatch) and a LiquidityGate rejection is logged.
+- Pass criteria: no OPEN dispatch occurs; rejection reason is `LiquidityGateNoL2`.
+- Fail criteria: OPEN dispatch proceeds without a valid L2 snapshot, or rejection reason is missing/mismatched.
 
 AT-909
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` for an OPEN.
@@ -1520,6 +1522,13 @@ AT-421
 - Then: CANCEL is allowed; CLOSE/HEDGE order placement uses the §3.1 fallback price ladder, remains strictly monotonic risk-reducing, and OPEN remains rejected.
 - Pass criteria: cancel proceeds; close/hedge dispatch count is >= 1 when a valid §3.1 fallback source exists; dispatched close/hedge size is > 0 and <= current position / exposure cap; OPEN is rejected.
 - Fail criteria: close/hedge is blocked despite a valid §3.1 fallback source, dispatched size is 0 or risk-increasing, or OPEN proceeds.
+
+AT-1241
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and no valid venue-band fallback exists (missing/unparseable/unquantizable metadata).
+- When: Liquidity Gate evaluates a CLOSE/HEDGE order placement intent.
+- Then: the intent MUST be rejected with `Rejected(EmergencyCloseNoPrice)` and `RiskState` MUST transition to `Degraded`.
+- Pass criteria: dispatch count remains 0; rejection reason is `EmergencyCloseNoPrice`; `RiskState == Degraded`.
+- Fail criteria: dispatch occurs without a valid price source, rejection reason is missing/mismatched, or `RiskState` does not transition to `Degraded`.
 
 AT-1216
 - Given: `L2BookSnapshot` is present, parseable, and fresh; expected slippage is <= `max_slippage_bps`; all non-liquidity gates are forced pass.
@@ -2322,13 +2331,14 @@ The following MUST be writable + joinable for every dispatched open-intent:
 EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidenceguard_window_s = 60` seconds, safety-critical; configurable in Appendix A):
 - **All required EvidenceGuard counters MUST be defined and parseable** (fail-closed).
   - Missing/unparseable required counter(s) => EvidenceChainState MUST be not GREEN.
-  - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`.
+  - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`, `attribution_write_errors`.
 - Required counters MUST be fresh: if `now_ms - evidenceguard_counters_last_update_ts_ms` > `evidenceguard_counters_max_age_ms` (default 60000; see Appendix A for `evidenceguard_counters_max_age_ms`), EvidenceChainState MUST be not GREEN and OPEN intents MUST be blocked.
 - `wal_write_errors` MUST increment on any failure to satisfy RecordedBeforeDispatch for an OPEN intent, including WAL enqueue failure (bounded queue full) and any persistence/write failure.
 - `truth_capsule_write_errors` has not increased within the last `evidenceguard_window_s`
 - `decision_snapshot_write_errors` has not increased within the last `evidenceguard_window_s`
-- `parquet_queue_overflow_count` not increasing
+- `parquet_queue_overflow_count` has not increased within the last `evidenceguard_window_s`
 - `wal_write_errors` has not increased within the last `evidenceguard_window_s`
+- `attribution_write_errors` has not increased within the last `evidenceguard_window_s`
 
 - `parquet_queue_depth_pct` is defined AND below thresholds (fail-closed if metrics unavailable):
   - Metrics MUST exist: `parquet_queue_depth` (gauge, count), `parquet_queue_capacity` (gauge, count).
@@ -2458,7 +2468,13 @@ PolicyGuard SHALL compute TradingMode from three independent health axes:
 | Ledger corruption | SystemIntegrityAxis | CapitalRiskAxis | Reconciliation correctness compromised |
 | Exchange session termination (`session_termination_active`) | SystemIntegrityAxis | CapitalRiskAxis | Containment reliability uncertain |
 
+**Secondary influence mechanism:** Dual-impact signals influence their secondary axis indirectly through `risk_state` transitions. WAL write failure and ledger corruption trigger `RiskState::Degraded` (SystemIntegrityAxis), which may escalate to `RiskState::Kill` → `CapitalRiskAxis == CRITICAL` if the underlying condition persists or worsens. Session termination is authoritative Kill (SystemIntegrityAxis == FAILING). The secondary CapitalRiskAxis influence does NOT add new predicates to §2.2.3.2 CapitalRiskAxis computation; it is captured by the existing `risk_state` input.
+
 ---
+
+##### **2.2.3.1.1 Capital-Critical Kill Triggers (No Corroboration Required)**
+
+Capital-critical Kill triggers (`mm_util >= mm_util_kill`, `risk_state == Kill`, `cortex_override == ForceKill`) are authoritative and do NOT require corroboration. These triggers directly set `CapitalRiskAxis == CRITICAL` → `TradingMode = Kill` without a secondary confirmation signal. Rationale: capital protection is the highest-priority safety invariant and MUST NOT be delayed by corroboration checks.
 
 ##### **2.2.3.1.2 Kill Trigger Corroboration (Non‑Capital)**
 
@@ -2576,8 +2592,8 @@ This table is the authoritative reference for AT-1048 (enumerability test). Impl
 
 **State Count Summary:**
 - Active: 1 state (row 1 only)
-- ReduceOnly: 17 states (rows 2, 4-5, 7-8, 10-11, 13-14, 16-17)
-- Kill: 9 states (rows 3, 6, 9, 12, 15, 18-27)
+- ReduceOnly: 11 states (rows 2, 4-5, 7-8, 10-11, 13-14, 16-17)
+- Kill: 15 states (rows 3, 6, 9, 12, 15, 18-27)
 
 **Implementation Note:** The resolver function MUST be a pure function with no hidden state. Given the same axis triple, it MUST always produce the same TradingMode.
 
@@ -2648,7 +2664,7 @@ ReduceOnly-tier:
 4. `REDUCEONLY_BUNKER_MODE_ACTIVE`
 5. `REDUCEONLY_RUNTIME_BINDING_INVALID`
 6. `REDUCEONLY_F1_CERT_INVALID` (deprecated alias for runtime-binding invalidity; if emitted, semantics MUST match item 5)
-7. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`
+7. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` (only when `enforced_profile != CSP`; see §2.2.3.2 SystemIntegrityAxis)
 8. `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`
 9. `REDUCEONLY_FEE_MODEL_HARD_STALE`
 10. `REDUCEONLY_RISKSTATE_DEGRADED`
@@ -2662,6 +2678,8 @@ ReduceOnly-tier:
 - PolicyGuard MUST evaluate all relevant predicates every tick.
 - `mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick.
 - Reasons from non-winning tiers MUST NOT be included (tier purity).
+
+**Acceptance Tests:** AT-1048 (§2.2.3.3 enumerability) covers the 27-state mapping. Ordering and tier purity enforcement is validated by AT-1048's deterministic output matching requirement — the implementation test MUST verify that `mode_reasons` contains only reasons from the winning tier and follows the canonical order defined above.
 
 ---
 
@@ -2930,6 +2948,7 @@ Profile: CSP
 - If `open_permission_blocked_latch == true`:
   - OPEN intents MUST be blocked.
   - CLOSE / HEDGE / CANCEL intents MUST remain allowed, except risk-increasing cancels/replaces MUST be rejected per §2.2.5.
+- When `open_permission_blocked_latch == true`, the latch feeds into PolicyGuard's `SystemIntegrityAxis` as a `DEGRADED` input (§2.2.3.2), producing `TradingMode::ReduceOnly`. OPEN blocking is enforced both directly (latch gate) and indirectly (via PolicyGuard TradingMode dispatch authorization).
 
 **State fields:**
 - `open_permission_blocked_latch` (bool; `true` means OPEN blocked)
@@ -2939,14 +2958,14 @@ Profile: CSP
 **Acceptance Tests (References):**
 - AT-027 in §7.0 validates `/status` latch field invariants.
 
-**Deterministic reconstruction (preferred; no persistence):**
+**Deterministic reconstruction (required; no persistence):**
 - On startup, set `open_permission_blocked_latch = true` with reason `RESTART_RECONCILE_REQUIRED`.
 - The latch MUST clear only after reconciliation succeeds.
 
 **Reconciliation success criteria (required):**
 - Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per §1.1.2).
 - Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).
-- No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query.
+- No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query. If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed — the latch MUST remain set and OPEN intents MUST remain blocked.
 - All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).
 
 **Reconciliation stall observability (deterministic, no override-clear):**
@@ -2996,6 +3015,13 @@ AT-430
 - Pass criteria: latch fields match expected startup values and OPEN remains blocked.
 - Fail criteria: latch not set, reason missing, or OPEN allowed before reconciliation.
 
+AT-1242
+- Given: the system is running with `open_permission_blocked_latch==false` (latch clear, normal operation).
+- When: one of the following trigger events occurs: (a) WS book gap detected, (b) WS trades gap detected, (c) WS data becomes stale beyond threshold, (d) inventory mismatch detected between ledger and exchange, (e) exchange session termination received.
+- Then: `open_permission_blocked_latch` MUST be set to `true` and `open_permission_reason_codes` MUST contain the corresponding reason code (`WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, or `SESSION_TERMINATION_RECONCILE_REQUIRED` respectively); OPEN intents MUST be blocked.
+- Pass criteria: latch transitions to `true` with the correct reason code; OPEN dispatch count remains 0 while latch is set.
+- Fail criteria: latch remains `false` after trigger event, reason code is missing/incorrect, or OPEN dispatches while latch is set.
+
 AT-011
 - Given: `open_permission_blocked_latch==true` for a WS gap reason (e.g., `WS_TRADES_GAP_RECONCILE_REQUIRED`).
 - When: reconciliation succeeds (all criteria in this section are satisfied).
@@ -3023,6 +3049,14 @@ AT-411
 - Then: `open_permission_reason_codes` does not include runtime-binding or EvidenceChain failures, and `open_permission_blocked_latch` is unchanged.
 - Pass criteria: no F1/Evidence codes in reason list; latch not set without a reconcile trigger.
 - Fail criteria: any F1/Evidence code appears or latch is set without a reconcile trigger.
+- Note: This AT tests the Hard rule (runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes`) in isolation. The Hard rule is unconditional — it applies regardless of whether reconcile-class triggers are concurrently active. The "no reconcile-class triggers" precondition isolates the test from latch interactions but does not limit the Hard rule's scope.
+
+AT-1243
+- Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).
+- When: `open_permission_reason_codes` are computed.
+- Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.
+- Pass criteria: only reconcile-class codes in reason list; no F1/Evidence codes despite concurrent cert failure.
+- Fail criteria: F1/Evidence codes appear in `open_permission_reason_codes`.
 
 
 #### **2.2.5 Cancel/Replace Permission Rules (Canonical)**
@@ -3532,7 +3566,7 @@ Profile: CSP
 **Price Source (Deterministic, fail-closed):**
 - Primary: `L2BookSnapshot` best bid/ask when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
 - Fallback: `L1TickerSnapshot` best bid/ask (REST/WS ticker) when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
-- Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available:
+- Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available AND `instrument_cache_age_s <= instrument_cache_ttl_s` (Appendix A):
   - reduce-only BUY close uses quantized venue `max_price`,
   - reduce-only SELL close uses quantized venue `min_price`.
   - This fallback MUST use bounded IOC attempts only and MUST remain monotonic risk-reducing.
@@ -3541,9 +3575,9 @@ Profile: CSP
 - If no valid source is available from L2/L1 and no valid venue band is available (missing/unparseable/unquantizable metadata), emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.
 
 **Algorithm (Deterministic, 3 tries):**
-1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`).
-2. If partial fill: repeat for remaining qty (max 3 loops, exponential buffer: multiply by 2 each retry → 10 ticks, 20 ticks).
-3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size).
+1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`). This is attempt 1.
+2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks).
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
 
 **AtomicNakedEvent schema (minimum):**
@@ -3557,7 +3591,7 @@ Profile: CSP
 - `hedge_used` (bool)
 - `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
-- `evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
+- `evidence_chain_state_at_event` (EvidenceChainState per §2.2.2; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
 AT-1102
 - Given: an AtomicNakedEvent is emitted by the emergency close path.
@@ -3614,9 +3648,9 @@ AT-938
 AT-1217
 - Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and venue band metadata is missing/unparseable/unquantizable.
 - When: emergency close runs.
-- Then: no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
-- Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
-- Fail criteria: any dispatch occurs without a valid fallback price source, or rejection reason is missing/mismatched.
+- Then: no dispatch occurs, the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`, and no `AtomicNakedEvent` is emitted (no dispatch means no naked exposure to record).
+- Pass criteria: dispatch count remains 0; rejection reason is recorded; no `AtomicNakedEvent` is emitted.
+- Fail criteria: any dispatch occurs without a valid fallback price source, rejection reason is missing/mismatched, or an `AtomicNakedEvent` is emitted despite zero dispatch.
 
 AT-1239
 - Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and `instrument_cache_age_s > instrument_cache_ttl_s`.
