@@ -392,7 +392,7 @@ run_logged_nonblocking_gate() {
 run_contract_at_plan_parity_gate() {
   if [[ "$MODE" == "full" ]]; then
     run_logged_or_exit "contract_at_plan_parity" "$CONTRACT_KERNEL_TIMEOUT" \
-      bash "$ROOT/plans/prd_ref_check.sh" plans/prd.json
+      bash "$ROOT/plans/prd_ref_check.sh" "$ROOT/plans/prd.json"
     return 0
   fi
 

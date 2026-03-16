@@ -16,7 +16,7 @@ expect_block() {
 
   local output=""
   set +e
-  output="$(printf '{"tool_input":{"command":"%s"}}' "$command_text" | bash "$HOOK" 2>&1)"
+  output="$(python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" "$command_text" | bash "$HOOK" 2>&1)"
   local rc=$?
   set -e
 
@@ -34,13 +34,53 @@ expect_pass() {
 
   local output=""
   set +e
-  output="$(printf '{"tool_input":{"command":"%s"}}' "$command_text" | bash "$HOOK" 2>&1)"
+  output="$(python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" "$command_text" | bash "$HOOK" 2>&1)"
   local rc=$?
   set -e
 
   if [[ $rc -ne 0 ]]; then
     fail "$label expected exit 0, got $rc with output: $output"
   fi
+}
+
+expect_pass_with_output() {
+  local label="$1"
+  local pattern="$2"
+  local command_text="$3"
+
+  local output=""
+  set +e
+  output="$(python3 -c "import json,sys; print(json.dumps({'tool_input':{'command':sys.argv[1]}}))" "$command_text" | bash "$HOOK" 2>&1)"
+  local rc=$?
+  set -e
+
+  if [[ $rc -ne 0 ]]; then
+    fail "$label expected exit 0, got $rc with output: $output"
+  fi
+  if ! printf '%s\n' "$output" | grep -Fq "$pattern"; then
+    fail "$label missing expected text '$pattern' in output: $output"
+  fi
+}
+
+write_review_marker() {
+  local path="$1"
+  local verdict="$2"
+  local field_name="$3"
+  local field_value="$4"
+
+  cat > "$path" <<EOF
+{"verdict":"$verdict","$field_name":"$field_value"}
+EOF
+}
+
+write_external_marker() {
+  local path="$1"
+  local field_name="$2"
+  local field_value="$3"
+
+  cat > "$path" <<EOF
+{"$field_name":"$field_value"}
+EOF
 }
 
 [[ -x "$HOOK" ]] || fail "missing executable hook: $HOOK"
@@ -64,15 +104,26 @@ branch_name="$(git -C "$repo" rev-parse --abbrev-ref HEAD)"
 safe_branch="${branch_name//\//_}"
 marker_dir="$repo/artifacts/pr-review-gate"
 marker_path="$marker_dir/${safe_branch}.json"
+external_marker_path="$marker_dir/${safe_branch}.external.json"
 mkdir -p "$marker_dir"
 
-cat > "$marker_path" <<EOF
-{"verdict":"PASS","head_commit":"$(git -C "$repo" rev-parse HEAD)"}
-EOF
+write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse HEAD)"
 
 (
   cd "$repo"
   expect_pass "fresh marker permits gh pr create with --repo" "gh --repo owner/repo pr create --title ready"
+)
+
+write_review_marker "$marker_path" "CONDITIONAL_PASS" "head_commit" "$(git -C "$repo" rev-parse HEAD)"
+
+(
+  cd "$repo"
+  expect_pass "env-wrapped gh pr create still triggers gate" "env GH_TOKEN=test gh pr create --title ready"
+)
+
+(
+  cd "$repo"
+  expect_pass "command-wrapped gh pr create still triggers gate" "command gh pr create --title ready"
 )
 
 rm -f "$marker_path"
@@ -92,13 +143,19 @@ git -C "$repo" add sample.txt
 git -C "$repo" commit -qm "advance head"
 new_head="$(git -C "$repo" rev-parse HEAD)"
 
-cat > "$marker_path" <<EOF
-{"verdict":"PASS","head_commit":"$old_head"}
-EOF
+write_review_marker "$marker_path" "PASS" "head" "$old_head"
 
 (
   cd "$repo"
   expect_block "stale marker blocks current head" "targets HEAD '$old_head' but current HEAD is '$new_head'" "gh pr create --title ready"
+)
+
+write_review_marker "$marker_path" "PASS" "head_commit" "$new_head"
+write_external_marker "$external_marker_path" "head" "$old_head"
+
+(
+  cd "$repo"
+  expect_pass_with_output "stale external marker warns without blocking" "targets HEAD '$old_head' but current HEAD is '$new_head'" "gh pr create --title ready"
 )
 
 echo "test_pr_review_gate_hook.sh: ok"

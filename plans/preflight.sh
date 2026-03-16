@@ -814,6 +814,59 @@ else
     PREFLIGHT_DIAG_CACHE_STATE="miss"
   fi
 
+  # Run a single fixture test serially, record pass/fail/timeout into
+  # _fixture_all_passed (set in caller's scope; no local declaration needed).
+  _run_serial_fixture_test() {
+    local fixture_test="$1"
+    local start_ns end_ns duration_ns duration_s rc used_timeout status
+    if [[ ! -f "$fixture_test" ]]; then
+      setup_fail "Missing fixture test: $fixture_test"
+      _fixture_all_passed=0
+      return
+    fi
+    start_ns="$(now_monotonic_ns)"
+    used_timeout=0
+    if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
+      used_timeout=1
+      if "$_TIMEOUT_BIN" "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" bash "$fixture_test" >/dev/null 2>&1; then
+        rc=0
+      else
+        rc=$?
+      fi
+    else
+      if bash "$fixture_test" >/dev/null 2>&1; then
+        rc=0
+      else
+        rc=$?
+      fi
+    fi
+    end_ns="$(now_monotonic_ns)"
+    if [[ "$start_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" -ge "$start_ns" ]]; then
+      duration_ns=$((end_ns - start_ns))
+    else
+      duration_ns=0
+    fi
+    duration_s=$((duration_ns / 1000000000))
+    status="FAIL"
+    if [[ "$rc" -eq 0 ]]; then
+      status="PASS"
+    elif [[ "$used_timeout" -eq 1 ]] && [[ "$rc" -eq 124 || "$rc" -eq 137 ]] \
+      && [[ "$duration_ns" -ge "$timeout_ns" ]]; then
+      status="TIMEOUT"
+    fi
+    case "$status" in
+      PASS) pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)" ;;
+      FAIL)
+        fail "Fixture test failed: $fixture_test (rc=$rc, ${duration_s}s; run 'bash $fixture_test' for details)"
+        _fixture_all_passed=0
+        ;;
+      TIMEOUT)
+        fail "Fixture test timed out: $fixture_test (${duration_s}s, limit=${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s, rc=$rc)"
+        _fixture_all_passed=0
+        ;;
+    esac
+  }
+
   if [[ "$_cache_hit" == "0" ]]; then
     # Run fixture tests in parallel (up to PREFLIGHT_PARALLEL_JOBS workers).
     # Each test is isolated (own tmpdir) so parallel execution is safe.
@@ -917,54 +970,7 @@ else
 
     if [[ "${#SERIAL_REVIEW_FIXTURE_TESTS[@]}" -gt 0 ]]; then
       for fixture_test in "${SERIAL_REVIEW_FIXTURE_TESTS[@]}"; do
-        if [[ ! -f "$fixture_test" ]]; then
-          setup_fail "Missing fixture test: $fixture_test"
-          _fixture_all_passed=0
-          continue
-        fi
-
-        start_ns="$(now_monotonic_ns)"
-        used_timeout=0
-        if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
-          used_timeout=1
-          if "$_TIMEOUT_BIN" "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" bash "$fixture_test" >/dev/null 2>&1; then
-            rc=0
-          else
-            rc=$?
-          fi
-        else
-          if bash "$fixture_test" >/dev/null 2>&1; then
-            rc=0
-          else
-            rc=$?
-          fi
-        fi
-        end_ns="$(now_monotonic_ns)"
-        if [[ "$start_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" -ge "$start_ns" ]]; then
-          duration_ns=$((end_ns - start_ns))
-        else
-          duration_ns=0
-        fi
-        duration_s=$((duration_ns / 1000000000))
-        status="FAIL"
-        if [[ "$rc" -eq 0 ]]; then
-          status="PASS"
-        elif [[ "$used_timeout" -eq 1 ]] && [[ "$rc" -eq 124 || "$rc" -eq 137 ]] \
-          && [[ "$duration_ns" -ge "$timeout_ns" ]]; then
-          status="TIMEOUT"
-        fi
-
-        case "$status" in
-          PASS) pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)" ;;
-          FAIL)
-            fail "Fixture test failed: $fixture_test (rc=$rc, ${duration_s}s; run 'bash $fixture_test' for details)"
-            _fixture_all_passed=0
-            ;;
-          TIMEOUT)
-            fail "Fixture test timed out: $fixture_test (${duration_s}s, limit=${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s, rc=$rc)"
-            _fixture_all_passed=0
-            ;;
-        esac
+        _run_serial_fixture_test "$fixture_test"
       done
     fi
 

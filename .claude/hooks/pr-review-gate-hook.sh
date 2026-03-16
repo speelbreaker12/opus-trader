@@ -19,17 +19,51 @@ try:
     lexer.whitespace_split = True
     lexer.commenters = ''
     tokens = list(lexer)
-except Exception:
-    print('0')
+except Exception as exc:
+    print(f"WARNING: shlex parse failed, falling back to simple match: {exc}", file=sys.stderr)
+    stripped = segment.lstrip()
+    if re.match(r'gh\s+pr\s+create(?:\s|$)', stripped):
+        print('1')
+    else:
+        print('0')
     raise SystemExit(0)
 
 if not tokens:
     print('0')
     raise SystemExit(0)
 
+assign_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=.*$')
+
 index = 0
-while index < len(tokens) and re.match(r'^[A-Za-z_][A-Za-z0-9_]*=.*$', tokens[index]):
-    index += 1
+while index < len(tokens):
+    token = tokens[index]
+    if assign_re.match(token):
+        index += 1
+        continue
+    if token == 'env':
+        index += 1
+        while index < len(tokens):
+            env_token = tokens[index]
+            if env_token == '--':
+                index += 1
+                break
+            if assign_re.match(env_token):
+                index += 1
+                continue
+            if env_token in {'-u', '--unset'}:
+                index += 2
+                continue
+            if env_token.startswith('-'):
+                index += 1
+                continue
+            break
+        continue
+    if token == 'command':
+        index += 1
+        while index < len(tokens) and tokens[index].startswith('-'):
+            index += 1
+        continue
+    break
 
 if index >= len(tokens) or tokens[index] != 'gh':
     print('0')
@@ -74,7 +108,8 @@ import sys
 path, field = sys.argv[1:3]
 
 try:
-    data = json.load(open(path))
+    with open(path) as f:
+        data = json.load(f)
 except Exception:
     print('')
     raise SystemExit(0)
@@ -84,6 +119,18 @@ if value is None:
     value = ''
 print(str(value))
 PY
+}
+
+read_marker_head() {
+    local marker_path="$1"
+    local marker_head=""
+
+    marker_head="$(read_marker_field "$marker_path" head_commit)"
+    if [ -z "$marker_head" ]; then
+        marker_head="$(read_marker_field "$marker_path" head)"
+    fi
+
+    printf '%s\n' "$marker_head"
 }
 
 COMMAND=$(python3 -c "
@@ -139,7 +186,7 @@ EOF
 fi
 
 VERDICT="$(read_marker_field "$MARKER" verdict)"
-MARKER_HEAD="$(read_marker_field "$MARKER" head_commit)"
+MARKER_HEAD="$(read_marker_head "$MARKER")"
 
 [ -n "$VERDICT" ] || VERDICT="UNKNOWN"
 
@@ -153,7 +200,7 @@ fi
 
 if [ -z "$MARKER_HEAD" ]; then
     cat >&2 <<EOF
-GATE BLOCKED: review-stack marker for '${BRANCH}' is missing head_commit.
+GATE BLOCKED: review-stack marker for '${BRANCH}' is missing head/head_commit.
 Re-run /review-stack for the current branch head ${HEAD_SHA}.
 EOF
     exit 2
@@ -173,6 +220,19 @@ if [ ! -f "$EXT_MARKER" ]; then
 WARNING: /external-review has not been run for branch '${BRANCH}'.
 Recommended for PRs touching crates/. Proceeding anyway.
 EOF
+else
+    EXT_MARKER_HEAD="$(read_marker_head "$EXT_MARKER")"
+    if [ -z "$EXT_MARKER_HEAD" ]; then
+        cat >&2 <<EOF
+WARNING: /external-review marker for branch '${BRANCH}' is missing head/head_commit.
+Re-run /external-review for the current branch head ${HEAD_SHA} if review coverage matters for this PR.
+EOF
+    elif [ "$EXT_MARKER_HEAD" != "$HEAD_SHA" ]; then
+        cat >&2 <<EOF
+WARNING: /external-review marker for branch '${BRANCH}' targets HEAD '${EXT_MARKER_HEAD}' but current HEAD is '${HEAD_SHA}'.
+Re-run /external-review for the current branch head if review coverage matters for this PR.
+EOF
+    fi
 fi
 
 exit 0
