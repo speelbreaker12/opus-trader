@@ -69,6 +69,11 @@ pub struct QuantizeExecutionInput {
 #[derive(Debug, Clone)]
 pub struct OpenExecutionInput<'a> {
     pub base: ExecutionBaseInput<'a>,
+    /// Fallback reject codes for gates the caller pre-evaluated outside the
+    /// runtime (e.g. dispatch consistency). The runtime merges these with
+    /// adapter-produced codes using `.or()`, so adapter results take priority.
+    /// Callers MUST NOT set `recorded_before_dispatch` when a live WAL gate
+    /// adapter is provided — the adapter result is authoritative.
     pub gate_reject_codes: GateRejectCodes,
     pub current_delta: f64,
     pub delta_impact_est: f64,

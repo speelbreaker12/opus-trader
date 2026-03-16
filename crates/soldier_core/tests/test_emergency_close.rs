@@ -85,6 +85,50 @@ fn test_at1239_stale_instrument_metadata_blocks_venue_band_fallback() {
 }
 
 #[test]
+fn test_l2_priority_over_l1_when_both_fresh() {
+    // Mutation-6 guard: a wrong impl that checks L1 first would still pass AT-937
+    // (L2=None there). This test proves L2 takes priority over L1 when BOTH are fresh.
+    let mut input = base_input(Side::Sell);
+    input.l2 = Some(EmergencyTopOfBookSnapshot {
+        best_bid: 99.80,
+        best_ask: 100.20,
+        timestamp_ms: 9_800, // fresh (age=200ms)
+    });
+    input.l1 = Some(EmergencyTopOfBookSnapshot {
+        best_bid: 99.70,
+        best_ask: 100.30,
+        timestamp_ms: 9_500, // also fresh (age=500ms)
+    });
+
+    let selected =
+        select_emergency_close_best_price(&input).expect("both L2 and L1 fresh → L2 must win");
+    assert_eq!(
+        selected.source,
+        EmergencyClosePriceSource::L2,
+        "L2 must take priority over L1 even when both snapshots are fresh"
+    );
+    assert!((selected.best_price - 99.80).abs() < 1e-9); // Sell → best_bid
+}
+
+#[test]
+fn test_boundary_cache_age_equals_ttl_allows_venue_band() {
+    // Off-by-one guard: instrument_metadata_fresh uses `age <= ttl` (inclusive).
+    // age == ttl must be treated as fresh (venue-band allowed).
+    let mut input = base_input(Side::Buy);
+    input.instrument_cache_age_s = 3_600.0;
+    input.instrument_cache_ttl_s = 3_600.0;
+    input.venue_band = Some(EmergencyVenueBand {
+        min_price: 99.0,
+        max_price: 101.0,
+        tick_size: 0.5,
+    });
+
+    let selected = select_emergency_close_best_price(&input)
+        .expect("age == ttl is fresh (<=), venue-band must be allowed");
+    assert_eq!(selected.source, EmergencyClosePriceSource::VenueBand);
+}
+
+#[test]
 fn test_fix01_neighbor_fresh_l2_wins_even_if_metadata_stale() {
     let mut input = base_input(Side::Sell);
     input.instrument_cache_age_s = 7_200.0; // stale metadata

@@ -56,6 +56,30 @@ def validate_weak_normative(payload: dict[str, Any]) -> list[dict[str, str]]:
     return results
 
 
+def validate_missing_fail_closed(payload: dict[str, Any]) -> list[dict[str, str]]:
+    """Require enforcement_point + callsite_evidence for missing_fail_closed proposals."""
+    proposals = payload.get("proposals")
+    if not isinstance(proposals, list):
+        fail("proposals payload must contain a proposals array")
+    results: list[dict[str, str]] = []
+    for proposal in proposals:
+        if not isinstance(proposal, dict):
+            fail("proposals payload contains a non-object proposal")
+        if proposal.get("source_finding_category") != "missing_fail_closed":
+            continue
+        proposal_id = str(proposal.get("proposal_id", "<unknown>"))
+        enforcement_point = str(proposal.get("enforcement_point", "")).strip()
+        callsite_evidence = str(proposal.get("callsite_evidence", "")).strip()
+        if not enforcement_point or not callsite_evidence:
+            results.append({"proposal_id": proposal_id, "status": "rejected", "reason_code": "FAIL_CLOSED_ENFORCEMENT_EVIDENCE_MISSING"})
+            continue
+        if enforcement_point not in callsite_evidence:
+            results.append({"proposal_id": proposal_id, "status": "pending_scope_review", "reason_code": "FAIL_CLOSED_ENFORCEMENT_EVIDENCE_WEAK"})
+            continue
+        results.append({"proposal_id": proposal_id, "status": "proposed", "reason_code": ""})
+    return results
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate weak-normative enforcement evidence")
     parser.add_argument("--proposals", required=True, type=Path)
