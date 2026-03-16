@@ -441,6 +441,13 @@ PREFLIGHT_GUARD_SCRIPTS=(
   "plans/toggle_policy_check.sh:Toggle policy wiring guard"
 )
 
+# Guards that are warn-only in quick/smoke mode (still hard-fail in full mode).
+# These catch documentation/layout drift that shouldn't block fast iteration.
+PREFLIGHT_WARN_ONLY_QUICK_GUARDS=(
+  "plans/legacy_layout_guard.sh"
+  "plans/readme_ci_parity_check.sh"
+)
+
 # Pre-check: all scripts must exist and be executable (fail-closed)
 for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
   _guard_script="${_guard_entry%%:*}"
@@ -484,14 +491,30 @@ wait "${_guard_pids[@]}" 2>/dev/null || true
 _guard_idx=0
 for _guard_entry in "${PREFLIGHT_GUARD_SCRIPTS[@]}"; do
   _guard_desc="${_guard_entry#*:}"
+  _guard_script="${_guard_entry%%:*}"
   _guard_result="$(cat "$_guard_results_dir/$_guard_idx" 2>/dev/null || echo "FAIL")"
   if [[ "$_guard_result" == "PASS" ]]; then
     pass "$_guard_desc"
   else
-    fail "$_guard_desc failed"
+    # Check if this guard is warn-only in quick/smoke mode
+    _guard_is_warn_only=0
+    if [[ "$PREFLIGHT_FIXTURE_MODE" != "full" ]]; then
+      for _wo_guard in "${PREFLIGHT_WARN_ONLY_QUICK_GUARDS[@]}"; do
+        if [[ "$_guard_script" == "$_wo_guard" ]]; then
+          _guard_is_warn_only=1
+          break
+        fi
+      done
+    fi
+
+    if [[ "$_guard_is_warn_only" == "1" ]]; then
+      warn "$_guard_desc failed (warn-only in quick mode; hard-fail in verify full)"
+    else
+      fail "$_guard_desc failed"
+    fi
     # Emit captured output so the developer can see why the guard failed
     if [[ -s "$_guard_results_dir/${_guard_idx}.log" ]]; then
-      echo "--- guard output (${_guard_entry%%:*}) ---" >&2
+      echo "--- guard output (${_guard_script}) ---" >&2
       cat "$_guard_results_dir/${_guard_idx}.log" >&2
       echo "--- end guard output ---" >&2
     fi
