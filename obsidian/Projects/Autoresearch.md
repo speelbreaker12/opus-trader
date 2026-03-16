@@ -38,3 +38,4 @@ PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTR
 - Added autoresearch test coverage for phase runs and refresh
 - Phase 1 verification: fixed 21 REAL CONTRACT.md spec gaps (1 P0, 13 P1, 7 P2), 2 false positives skipped
 - New ATs: AT-1241 (LG no-fallback CLOSE/HEDGE), AT-1242 (OPL trigger events), AT-1243 (OPL concurrent cert+reconcile)
+- Review fix: attribution_write_errors increment-trigger rule + AT-1244 (mode_reasons ordering/tier purity)

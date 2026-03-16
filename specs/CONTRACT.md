@@ -2334,6 +2334,7 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`, `attribution_write_errors`.
 - Required counters MUST be fresh: if `now_ms - evidenceguard_counters_last_update_ts_ms` > `evidenceguard_counters_max_age_ms` (default 60000; see Appendix A for `evidenceguard_counters_max_age_ms`), EvidenceChainState MUST be not GREEN and OPEN intents MUST be blocked.
 - `wal_write_errors` MUST increment on any failure to satisfy RecordedBeforeDispatch for an OPEN intent, including WAL enqueue failure (bounded queue full) and any persistence/write failure.
+- `attribution_write_errors` MUST increment on any failure to write an attribution row for a filled OPEN intent, including persistence errors and missing/unparseable fill data.
 - `truth_capsule_write_errors` has not increased within the last `evidenceguard_window_s`
 - `decision_snapshot_write_errors` has not increased within the last `evidenceguard_window_s`
 - `parquet_queue_overflow_count` has not increased within the last `evidenceguard_window_s`
@@ -2679,7 +2680,14 @@ ReduceOnly-tier:
 - `mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick.
 - Reasons from non-winning tiers MUST NOT be included (tier purity).
 
-**Acceptance Tests:** AT-1048 (§2.2.3.3 enumerability) covers the 27-state mapping. Ordering and tier purity enforcement is validated by AT-1048's deterministic output matching requirement — the implementation test MUST verify that `mode_reasons` contains only reasons from the winning tier and follows the canonical order defined above.
+**Acceptance Tests:**
+
+AT-1244
+- Given: PolicyGuard computes `TradingMode == ReduceOnly` with multiple active reduce-only predicates (e.g., `risk_state == Degraded` AND `bunker_mode_active == true` AND `open_permission_blocked_latch == true`).
+- When: `mode_reasons` is computed for that tick.
+- Then: `mode_reasons` MUST contain all applicable `REDUCEONLY_*` reason codes, in the canonical order defined above, and MUST NOT contain any `KILL_*` codes.
+- Pass criteria: reasons are tier-pure (only `REDUCEONLY_*`), complete (all active predicates represented), and deterministically ordered per the registry above.
+- Fail criteria: missing active reason, `KILL_*` code present, or order deviates from canonical registry.
 
 ---
 
