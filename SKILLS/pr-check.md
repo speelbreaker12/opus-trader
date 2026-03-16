@@ -44,13 +44,20 @@ Flag pairs that show any of these signals:
 |--------|---------------|
 | **Shared files** | Same path appears in both diffs |
 | **Stacked branches** | One branch is based on another (`git merge-base --is-ancestor`) |
-| **Duplicate title** | Fuzzy title match (same keywords, same fix area) |
-| **Commits absorbed** | Commits from PR A appear in PR B's log |
+| **Commits absorbed** | Commit subjects from PR A appear verbatim in PR B's log |
 
 ```bash
-# Check if branch A is an ancestor of branch B (stacked)
+# Fetch once before all comparisons (not per-pair)
 git fetch origin
+
+# Check if branch A is an ancestor of branch B (stacked)
 git merge-base --is-ancestor origin/<branch-a> origin/<branch-b> && echo "stacked"
+
+# Check if PR A's commits are absorbed into PR B (superseded)
+git log origin/main..origin/<branch-a> --format='%s' | \
+  while read subject; do
+    git log origin/<branch-b> --format='%s' | grep -qF "$subject" && echo "absorbed: $subject"
+  done
 
 # List commits unique to each PR vs main
 git log origin/main..origin/<branch> --oneline
@@ -63,7 +70,7 @@ Present findings **before** doing any other work:
 |------|------|-------------------|-------------------------------|
 | #38  | #42  | Shared files      | src/auth.rs, config.toml      |
 | #35  | #38  | #35 is base of #38| stacked — merge #35 first     |
-| #40  | #42  | Similar titles    | "fix cache bug" / "cache fix" |
+| #35  | #42  | Commits absorbed  | "fix: validate input" in both |
 ```
 
 **Ask the user:** "Should any of these be closed before proceeding?"
