@@ -116,6 +116,8 @@ For each external input (file read, env var, JSON field, CLI arg):
 
 Ask each question explicitly. Don't assume inputs are valid.
 
+**Parsing utility descent (mandatory for new parsers/validators):** For any new function that parses or normalizes structured text (patch fragments, JSON fields, diff hunks, URLs), trace the function body with at least one malformed input that passes the top-level guard but reaches a later access point. The most common pattern: an `if not A and not B: fail()` guard passes when A is true but B is empty — subsequent `B[0]` access raises IndexError. Read the function body, list every index access and every list access, and confirm a guard covers each one.
+
 **Exhaustive Type Coverage**: For type-checking code, enumerate ALL types the source can produce:
 
 ```python
@@ -454,7 +456,7 @@ For shell scripts, check these common silent failures:
 | Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
 | Single-variant walkthrough | Only trace Open through new dispatch function; miss CancelOnly/Close/Hedge | Walk at least one scenario per enum variant of primary input |
 | Early-return metric gap | Error path returns before incrementing rejection counter | For each counter, enumerate all paths; check early-returns bypass |
-| `set -e` subprocess crash | Script runs with `set -e`; subprocess exits non-zero; script terminates before it can write crash status to log — crash is silently dropped | Wrap subprocess calls with `|| { echo "crash"; }` or `set +e` around the call; write status explicitly before re-raising |
+| `set -e` subprocess crash | Script runs with `set -e`; subprocess exits non-zero; script terminates before it can write crash status to log — crash is silently dropped | Detection: `grep -n 'set -e' script.sh` then `grep -n 'claude\|curl\|python\|exec\b\|eval\b' script.sh` — every external call after `set -e` is a candidate; wrap with `|| { status=crash; }` or bracket with `set +e` / `set -e` |
 | `IFS=$'\t' read` newline | `while IFS=$'\t' read -r a b c` consumes one line per iteration; if field `c` contains a literal newline, the next line spills into the next iteration — `a` and `b` of the next row get garbage values silently | Strip or replace newlines before printing to the tab-separated stream; or use a NUL-delimited format |
 | `git_hash` field naming | Field name implies git SHA; implementation uses file content hash — incompatible; staleness check never fires | Audit field names that imply one hash type when another is used |
 | Single-file vs per-instance artifacts | Artifact file has a `fixture_id` field but is reused across multiple fixtures in one run — field is structurally ambiguous | Ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" |

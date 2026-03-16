@@ -60,7 +60,7 @@ gh pr diff <number>
 - [ ] For new/changed Python lines: no bare `except:` — catch specific exception types
 - [ ] Input validation where new system boundaries are introduced
 - [ ] No SQL/command injection risks in new code
-- [ ] **CWD-relative paths in skill/hook/config files**: any `!cat path/to/file` or `source path/to/file` in `.claude/skills/`, `.claude/hooks/`, or wrapper configs — does it resolve correctly when invoked from a directory other than the repo root? Fix: use `$(git rev-parse --show-toplevel)/path` or verify the runner always sets CWD.
+- [ ] **CWD-relative paths in skill/hook/config files**: any `!cat path/to/file` or `source path/to/file` in `.claude/skills/`, `.claude/hooks/`, or wrapper configs — does it resolve correctly when invoked from a directory other than the repo root? Fix: use `$(git rev-parse --show-toplevel)/path` or verify the runner always sets CWD. **Note:** a "low risk" or "pointer file" label in the coverage table does NOT exempt a file from this check — apply it regardless of triage label.
 - [ ] (For safety-critical code: use `/contract-review` instead)
 
 #### Documentation
@@ -71,6 +71,7 @@ gh pr diff <number>
 
 ### Review Coverage (Required)
 - Use `reviews/REVIEW_CHECKLIST.md` to confirm evidence/compounding gates and required workflow checks are covered.
+- **"Comment-only" label discipline**: If you label a file "comment-only" or "docs-only" in the coverage table, you MUST cite the diff to confirm there are zero non-comment changed lines (e.g., no code moved, no logic reordered, no byte-manipulation patterns). Do not assign this label from the diff summary alone — read the actual changed lines.
 
 ### 3. Scope Check
 - [ ] Changes match PR title/description
