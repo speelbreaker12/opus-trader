@@ -8,7 +8,7 @@ INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
 if echo "$COMMAND" | grep -qE '(plans/)?verify\.sh'; then
-  cd /Users/admin/Desktop/opus-trader
+  cd "$(git rev-parse --show-toplevel)"
   cargo fmt --all 2>&1 | head -20
   echo "cargo fmt completed before verify.sh"
 fi
