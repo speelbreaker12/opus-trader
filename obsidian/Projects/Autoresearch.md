@@ -1,20 +1,21 @@
 ---
 status: in-progress
 priority: P1
-branch: story/remediation-order-v4/r01-r05-contract-fixes
+branch: main
 pr: 207
 started: 2026-03-16
 ---
 
 ## Current State
 
-PR 207 rebased onto main. Duplicate AT-1239 fixed. Autoresearch tests next, then PR-gate evidence path.
+PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTRACT.md, 3 new ATs added (AT-1241, AT-1242, AT-1243). Implementation plan pending.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
 - `autoresearch/skills/harness.sh`
 - `autoresearch/tests/test_contract_render_review.py`
 - `autoresearch/tests/test_contract_harness_cli.py`
+- `autoresearch/contract/phase1/`
 
 ## Debriefs
 - None yet.
@@ -28,4 +29,6 @@ PR 207 rebased onto main. Duplicate AT-1239 fixed. Autoresearch tests next, then
 - Rebased PR #207 onto main (10 commits, 17 conflicts resolved, 0 markers remaining).
 - Reviewed CONTRACT.md/prd.json/contract_kernel.json as contract set. Found and fixed duplicate AT-1239 in S7-002.
 - contract_kernel.json line numbers are stale — needs regeneration post-merge.
-
+- Phase 1 fixtures and eval written
+- Context manifest updated
+- Results TSV updated
