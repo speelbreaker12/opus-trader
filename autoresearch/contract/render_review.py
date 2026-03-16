@@ -48,7 +48,9 @@ def load_schema(path: Path) -> dict[str, Any]:
 
 def validate_json(instance: Any, schema: dict[str, Any], label: str) -> None:
     validator = Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(instance), key=lambda e: list(e.absolute_path))
+    errors = sorted(
+        validator.iter_errors(instance), key=lambda e: list(e.absolute_path)
+    )
     if errors:
         first = errors[0]
         location = ".".join(str(part) for part in first.absolute_path) or "<root>"
@@ -88,7 +90,9 @@ def index_entries(index_data: Any) -> list[dict[str, Any]]:
         elif isinstance(index_data.get("runs"), list):
             entries = index_data["runs"]
         else:
-            fail("phase2/proposals_index.json must be a list or contain an entries/runs array")
+            fail(
+                "phase2/proposals_index.json must be a list or contain an entries/runs array"
+            )
     else:
         fail("phase2/proposals_index.json must be a JSON array or object")
     for entry in entries:
@@ -118,7 +122,9 @@ def discover_run_id(phase2_dir: Path) -> str:
     return run_dirs[-1]
 
 
-def load_proposals(phase2_dir: Path, run_id: str) -> tuple[list[Path], list[dict[str, Any]], str]:
+def load_proposals(
+    phase2_dir: Path, run_id: str
+) -> tuple[list[Path], list[dict[str, Any]], str]:
     outputs_dir = phase2_dir / "outputs" / run_id
     if not outputs_dir.exists():
         fail(f"missing run output directory: {outputs_dir}")
@@ -135,15 +141,19 @@ def load_proposals(phase2_dir: Path, run_id: str) -> tuple[list[Path], list[dict
         payload = load_json(path)
         validate_json(payload, schema, str(path))
         fixture_id = path.parent.name
-        combined_for_hash.append({
-            "fixture_id": fixture_id,
-            "path": str(path.relative_to(phase2_dir.parent.parent)),
-            "payload": payload,
-        })
+        combined_for_hash.append(
+            {
+                "fixture_id": fixture_id,
+                "path": str(path.relative_to(phase2_dir.parent.parent)),
+                "payload": payload,
+            }
+        )
         for proposal in payload.get("proposals", []):
             proposal_copy = dict(proposal)
             proposal_copy["_fixture_id"] = fixture_id
-            proposal_copy["_source_path"] = str(path.relative_to(phase2_dir.parent.parent))
+            proposal_copy["_source_path"] = str(
+                path.relative_to(phase2_dir.parent.parent)
+            )
             proposals.append(proposal_copy)
 
     if not proposals:
@@ -156,7 +166,9 @@ def load_proposals(phase2_dir: Path, run_id: str) -> tuple[list[Path], list[dict
     return proposal_paths, proposals, canonical_json_hash(combined_for_hash)
 
 
-def render_proposals_markdown(run_id: str, proposals_hash: str, proposals: list[dict[str, Any]]) -> str:
+def render_proposals_markdown(
+    run_id: str, proposals_hash: str, proposals: list[dict[str, Any]]
+) -> str:
     lines = [
         "# Contract Proposals",
         "",
@@ -166,41 +178,47 @@ def render_proposals_markdown(run_id: str, proposals_hash: str, proposals: list[
         "",
     ]
     for proposal in proposals:
-        lines.extend([
-            f"## {proposal['proposal_id']}",
-            "",
-            f"- fixture: `{proposal['_fixture_id']}`",
-            f"- source_path: `{proposal['_source_path']}`",
-            f"- section: `{proposal['section']}`",
-            f"- source_finding: `{proposal['source_finding']}`",
-            f"- source_finding_category: `{proposal['source_finding_category']}`",
-            f"- change_type: `{proposal['change_type']}`",
-            f"- status: `{proposal['status']}`",
-            f"- dedupe_key: `{proposal['dedupe_key']}`",
-            "",
-            "### Rationale",
-            "",
-            proposal["rationale"].strip() or "_none_",
-            "",
-        ])
+        lines.extend(
+            [
+                f"## {proposal['proposal_id']}",
+                "",
+                f"- fixture: `{proposal['_fixture_id']}`",
+                f"- source_path: `{proposal['_source_path']}`",
+                f"- section: `{proposal['section']}`",
+                f"- source_finding: `{proposal['source_finding']}`",
+                f"- source_finding_category: `{proposal['source_finding_category']}`",
+                f"- change_type: `{proposal['change_type']}`",
+                f"- status: `{proposal['status']}`",
+                f"- dedupe_key: `{proposal['dedupe_key']}`",
+                "",
+                "### Rationale",
+                "",
+                proposal["rationale"].strip() or "_none_",
+                "",
+            ]
+        )
         if proposal.get("proposed_text"):
-            lines.extend([
-                "### Proposed Text",
-                "",
-                "```text",
-                proposal["proposed_text"].rstrip(),
-                "```",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Proposed Text",
+                    "",
+                    "```text",
+                    proposal["proposed_text"].rstrip(),
+                    "```",
+                    "",
+                ]
+            )
         if proposal.get("diff_preview"):
-            lines.extend([
-                "### Diff Preview",
-                "",
-                "```diff",
-                proposal["diff_preview"].rstrip(),
-                "```",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Diff Preview",
+                    "",
+                    "```diff",
+                    proposal["diff_preview"].rstrip(),
+                    "```",
+                    "",
+                ]
+            )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -228,39 +246,45 @@ def render_review_markdown(
         "",
     ]
     for proposal in proposals:
-        lines.extend([
-            f"## {proposal['proposal_id']} — {proposal['source_finding_category']}",
-            "",
-            f"- fixture: `{proposal['_fixture_id']}`",
-            f"- source_path: `{proposal['_source_path']}`",
-            f"- section: `{proposal['section']}`",
-            f"- change_type: `{proposal['change_type']}`",
-            f"- source_finding: `{proposal['source_finding']}`",
-            f"- current_status: `{proposal['status']}`",
-            "",
-            "### Rationale",
-            "",
-            proposal["rationale"].strip() or "_none_",
-            "",
-        ])
+        lines.extend(
+            [
+                f"## {proposal['proposal_id']} — {proposal['source_finding_category']}",
+                "",
+                f"- fixture: `{proposal['_fixture_id']}`",
+                f"- source_path: `{proposal['_source_path']}`",
+                f"- section: `{proposal['section']}`",
+                f"- change_type: `{proposal['change_type']}`",
+                f"- source_finding: `{proposal['source_finding']}`",
+                f"- current_status: `{proposal['status']}`",
+                "",
+                "### Rationale",
+                "",
+                proposal["rationale"].strip() or "_none_",
+                "",
+            ]
+        )
         if proposal.get("proposed_text"):
-            lines.extend([
-                "### Proposed Text",
-                "",
-                "```text",
-                proposal["proposed_text"].rstrip(),
-                "```",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Proposed Text",
+                    "",
+                    "```text",
+                    proposal["proposed_text"].rstrip(),
+                    "```",
+                    "",
+                ]
+            )
         if proposal.get("diff_preview"):
-            lines.extend([
-                "### Diff Preview",
-                "",
-                "```diff",
-                proposal["diff_preview"].rstrip(),
-                "```",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Diff Preview",
+                    "",
+                    "```diff",
+                    proposal["diff_preview"].rstrip(),
+                    "```",
+                    "",
+                ]
+            )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -293,7 +317,9 @@ def normalize_patch_fragment(fragment: str, proposal_id: str) -> str:
     )
     for line in lines:
         if line.startswith(forbidden_headers):
-            fail(f"accepted proposal {proposal_id} uses unsupported patch header '{line}'")
+            fail(
+                f"accepted proposal {proposal_id} uses unsupported patch header '{line}'"
+            )
 
     expected_git_header = f"diff --git a/{CONTRACT_PATCH_PATH} b/{CONTRACT_PATCH_PATH}"
     expected_minus = f"--- a/{CONTRACT_PATCH_PATH}"
@@ -303,8 +329,10 @@ def normalize_patch_fragment(fragment: str, proposal_id: str) -> str:
         fail(
             f"accepted proposal {proposal_id} diff_preview must target only {CONTRACT_PATCH_PATH}"
         )
-    if has_git_header and not has_unified_headers:
-        fail(f"accepted proposal {proposal_id} diff_preview is missing unified patch headers")
+    if not has_unified_headers:
+        fail(
+            f"accepted proposal {proposal_id} diff_preview is missing unified patch headers"
+        )
     if minus_headers[0] != expected_minus or plus_headers[0] != expected_plus:
         fail(
             f"accepted proposal {proposal_id} diff_preview must target only {CONTRACT_PATCH_PATH}"
@@ -321,7 +349,11 @@ def load_review_decisions(
     proposals_hash: str,
     proposal_ids: list[str],
 ) -> dict[str, dict[str, Any]]:
-    path = review_override if review_override is not None else review_path_for_run(phase2_dir, run_id)
+    path = (
+        review_override
+        if review_override is not None
+        else review_path_for_run(phase2_dir, run_id)
+    )
     payload = load_json(path)
     schema = load_schema(phase2_dir / "review.schema.json")
     validate_json(payload, schema, str(path))
@@ -358,8 +390,12 @@ def write_text(path: Path, content: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Render contract autoresearch review artifacts")
-    parser.add_argument("--root", type=Path, default=default_repo_root(), help="Repository root")
+    parser = argparse.ArgumentParser(
+        description="Render contract autoresearch review artifacts"
+    )
+    parser.add_argument(
+        "--root", type=Path, default=default_repo_root(), help="Repository root"
+    )
     parser.add_argument("--run-id", help="Phase 2 run id")
     parser.add_argument(
         "--accepted-only",
@@ -381,11 +417,17 @@ def main() -> int:
     if index_entry is None:
         fail(f"missing proposals_index entry for run_id={run_id}")
     contract_file_hash = index_entry.get("contract_file_hash")
-    if not isinstance(contract_file_hash, str) or not re.fullmatch(HASH_PATTERN, contract_file_hash):
-        fail(f"run_id={run_id} is missing a valid contract_file_hash in proposals_index.json")
+    if not isinstance(contract_file_hash, str) or not re.fullmatch(
+        HASH_PATTERN, contract_file_hash
+    ):
+        fail(
+            f"run_id={run_id} is missing a valid contract_file_hash in proposals_index.json"
+        )
 
     proposals_md = render_proposals_markdown(run_id, proposals_hash, proposals)
-    review_md = render_review_markdown(run_id, contract_file_hash, proposals_hash, proposals)
+    review_md = render_review_markdown(
+        run_id, contract_file_hash, proposals_hash, proposals
+    )
     write_text(proposals_markdown_path(p2, run_id), proposals_md)
     write_text(review_markdown_path(p2, run_id), review_md)
 

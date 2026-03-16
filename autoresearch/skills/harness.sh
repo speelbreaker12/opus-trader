@@ -547,12 +547,19 @@ cmd_baseline() {
     fail "Evaluator not found: $EVALUATE_PY"
   fi
 
-  local score_json score passed total
+  local score_json score passed total eval_rc
+  eval_rc=0
   score_json="$(python3 "$EVALUATE_PY" \
     --eval "$eval_json" \
     --output-dir "$output_dir" \
     --skill-dir "$SKILLS_DIR/$skill" \
-    --json)"
+    --json)" || eval_rc=$?
+  # evaluate.py exits 1 when score < 1.0 or outputs are missing — tolerate for
+  # baseline recording.  Exit 2 means a hard error (missing eval.json / output
+  # dir) and produces no JSON, so fail closed in that case.
+  if [[ -z "$score_json" ]]; then
+    fail "evaluate.py produced no JSON output (exit $eval_rc; exit 1 = partial score with JSON, exit 2 = hard error)"
+  fi
 
   score="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['score'])")"
   passed="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['passed'])")"
