@@ -590,12 +590,26 @@ else
   exit 2
 fi
 
-# 6. Fixture checks for review tooling scripts (fail-closed)
+# 6. Skills index consistency: scripts/check_skills_index.py
+SKILLS_INDEX_CHECK="scripts/check_skills_index.py"
+if [[ -f "$SKILLS_INDEX_CHECK" ]]; then
+  if python3 "$SKILLS_INDEX_CHECK" >/dev/null 2>&1; then
+    pass "Skills index validation"
+  else
+    fail "Skills index validation failed (run python3 $SKILLS_INDEX_CHECK for details)"
+  fi
+else
+  echo "[FAIL] Missing skills index check: $SKILLS_INDEX_CHECK (setup error)" >&2
+  exit 2
+fi
+
+# 7. Fixture checks for review tooling scripts (fail-closed)
 # Split into fast smoke checks (default) vs full matrix checks (full verify).
 # Keep smoke limited to cheap early-failure fixtures; slower workflow regressions
 # run later in verify_fork.sh gate 14g so quick-mode preflight stays inside the
 # outer verify timeout budget even on dirty workflow worktrees.
 SMOKE_REVIEW_FIXTURE_TESTS=(
+  "plans/tests/test_check_skills_index.sh"
   "plans/tests/test_run_prd_auditor_invocation.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
   "plans/tests/test_verify_timeout_policy.sh"

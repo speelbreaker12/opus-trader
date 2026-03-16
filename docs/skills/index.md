@@ -8,7 +8,7 @@ Validation command:
 | Name | Path | Description |
 |---|---|---|
 | Reconciliation | `plans/prompts/reconcil.md` | Premortem + R1-R7 reconciliation workflow |
-| 6-Skill Review Stack | `plans/prompts/review-stack.md` | All 6 review skills in sequence |
+| 7-Skill Review Stack | `plans/prompts/review-stack.md` | All 7 review skills in sequence |
 | Cutter | `plans/prompts/cutter.md` | Story slicing/cutting prompt used by `plans/cut_prd.sh` |
 
 ## Skill wrappers

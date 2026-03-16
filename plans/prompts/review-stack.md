@@ -1,19 +1,20 @@
-# 6-Skill Review Stack Prompt
+# 7-Skill Review Stack Prompt
 
 > **Tool-agnostic.** This prompt works with any LLM agent (Claude, Codex, Kimi, Opus, etc.).
 > For Claude Code users: this is also available as `/review-stack` or `/6`.
 
 ## Purpose
 
-Run all 6 review skills in sequence on a PR or story diff, collecting findings into a single aggregate report. This is the most thorough single-pass review available.
+Run all 7 review skills in sequence on a PR or story diff, collecting findings into a single aggregate report. This is the most thorough single-pass review available.
 
-The 6 skills, in order:
+The 7 skills, in order:
 1. **PR Review** — correctness, conventions, performance, testing
 2. **Failure-Mode Review** — implementation-level failure analysis (caching, state, integrations, error paths)
 3. **Strategic Failure Review** — architectural, systemic, operational risks
 4. **Contract Review** — fail-open hazards, CONTRACT.md alignment
 5. **Validator Audit** — missing validations in rule-based validators
 6. **Devils Advocate** — mutation testing: write wrong impls that pass the test suite
+7. **Loss-Risk Gate** — trading loss / profit-block economic safety review
 
 ## When to use
 
@@ -160,7 +161,7 @@ After fixes, update the artifact with the final verdicts.
 Write to `artifacts/story/${STORY_ID}/self_review/`:
 
 ```markdown
-# 6-Skill Review Stack — ${STORY_ID}
+# 7-Skill Review Stack — ${STORY_ID}
 
 Story: ${STORY_ID}
 HEAD: ${HEAD}
@@ -223,7 +224,7 @@ If Phase 4 ran, also write `contract_review.json`:
 ## Exit Criteria
 
 The skill is complete when:
-1. All 6 phases have run (or been legitimately skipped with documented reason)
+1. All 7 phases have run (or been legitimately skipped with documented reason)
 2. The aggregate decision is PASS or CONDITIONAL_PASS
 3. The review artifact is written with all findings documented
 4. Any fixes applied during review are committed

@@ -118,6 +118,7 @@ required=(
   plans/tests/test_adversarial_gate.sh
   plans/tests/test_artifact_lint.sh
   plans/tests/test_bidi_control_guard.sh
+  plans/tests/test_check_skills_index.sh
   plans/tests/test_code_review_expert_guard.sh
   plans/tests/test_external_review_generic.sh
   plans/tests/test_fail_closed_gate_map_paths.sh
@@ -209,6 +210,7 @@ required=(
   tools/tests/test_status_reason_string_leaks.py
   scripts/build_contract_kernel.py
   scripts/check_arch_flows.py
+  scripts/check_skills_index.py
   scripts/check_contract_crossrefs.py
   scripts/check_contract_kernel.py
   scripts/check_crash_matrix.py
@@ -223,6 +225,7 @@ required=(
   scripts/extract_contract_excerpts.py
   scripts/generate_impact_report.py
   scripts/test_contract_kernel.py
+  scripts/test_check_skills_index.py
   specs/CONTRACT.md
   specs/IMPLEMENTATION_PLAN.md
   specs/POLICY.md

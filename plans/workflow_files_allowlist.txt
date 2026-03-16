@@ -113,6 +113,7 @@ plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
 plans/tests/test_bidi_control_guard.sh
+plans/tests/test_check_skills_index.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
@@ -195,6 +196,7 @@ plans/workflow_quick_step.sh
 plans/workflow_verify.sh
 scripts/build_contract_kernel.py
 scripts/check_arch_flows.py
+scripts/check_skills_index.py
 scripts/check_contract_crossrefs.py
 scripts/check_contract_kernel.py
 scripts/check_crash_matrix.py
@@ -209,6 +211,7 @@ scripts/contract_kernel_lib.py
 scripts/extract_contract_excerpts.py
 scripts/generate_impact_report.py
 scripts/test_contract_kernel.py
+scripts/test_check_skills_index.py
 specs/CONTRACT.md
 specs/IMPLEMENTATION_PLAN.md
 specs/POLICY.md

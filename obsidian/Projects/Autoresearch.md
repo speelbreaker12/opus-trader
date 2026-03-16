@@ -32,3 +32,7 @@ PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTR
 - Phase 1 fixtures and eval written
 - Context manifest updated
 - Results TSV updated
+- Added skills-index consistency checker (preflight gate 6, smoke test)
+- Extended Phase 1 eval.json with TradingMode + OpenPermissionLatch scoring rules
+- Updated refresh_context.py to include live phase1 fixtures in manifest
+- Added autoresearch test coverage for phase runs and refresh
