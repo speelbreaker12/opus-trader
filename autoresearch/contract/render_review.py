@@ -303,6 +303,8 @@ def normalize_patch_fragment(fragment: str, proposal_id: str) -> str:
         fail(
             f"accepted proposal {proposal_id} diff_preview must target only {CONTRACT_PATCH_PATH}"
         )
+    if has_git_header and not has_unified_headers:
+        fail(f"accepted proposal {proposal_id} diff_preview is missing unified patch headers")
     if minus_headers[0] != expected_minus or plus_headers[0] != expected_plus:
         fail(
             f"accepted proposal {proposal_id} diff_preview must target only {CONTRACT_PATCH_PATH}"

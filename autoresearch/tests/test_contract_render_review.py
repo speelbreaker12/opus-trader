@@ -283,6 +283,46 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("must target only specs/CONTRACT.md", accepted.stderr)
 
+    def test_render_review_fails_closed_on_missing_unified_headers(self) -> None:
+        malformed_patch = "\n".join([
+            "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
+            "@@ -20,0 +21,1 @@",
+            "+PolicyGuard MUST reject when evidence_chain_score is missing.",
+        ])
+        self._seed_run(diff_preview_two=malformed_patch)
+
+        initial = self._render("--run-id", "run-1")
+        self.assertEqual(initial.returncode, 0, msg=initial.stderr)
+
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        proposals_hash = _extract_hash(review_md, "proposals_file_hash")
+        decisions = {
+            "run_id": "run-1",
+            "reviewed_at": "2026-03-14T21:00:00Z",
+            "contract_file_hash": "a" * 64,
+            "proposals_file_hash": proposals_hash,
+            "decisions": [
+                {
+                    "proposal_id": "P-001",
+                    "decision": "rejected",
+                    "reviewer": "tester",
+                    "reason_code": "OUT_OF_SCOPE",
+                },
+                {
+                    "proposal_id": "P-002",
+                    "decision": "accepted",
+                    "reviewer": "tester",
+                    "reason_code": "APPROVED",
+                },
+            ],
+        }
+        review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
+        _write_json(review_json, decisions)
+
+        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        self.assertNotEqual(accepted.returncode, 0)
+        self.assertIn("is missing unified patch headers", accepted.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
