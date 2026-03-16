@@ -589,26 +589,17 @@ fi
 
 # 6. Fixture checks for review tooling scripts (fail-closed)
 # Split into fast smoke checks (default) vs full matrix checks (full verify).
+# Keep smoke limited to cheap early-failure fixtures; slower workflow regressions
+# run later in verify_fork.sh gate 14g so quick-mode preflight stays inside the
+# outer verify timeout budget even on dirty workflow worktrees.
 SMOKE_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_run_prd_auditor_invocation.sh"
-  "plans/tests/test_slice_review_gate.sh"
   "plans/tests/test_guard_no_command_substitution.sh"
-  "plans/tests/test_story_review_findings_guard.sh"
-  "plans/tests/test_fork_attestation_remediation_verify.sh"
-  "plans/tests/test_fork_attestation_mirror.sh"
-  "plans/tests/test_workflow_quick_step.sh"
-  "plans/tests/test_toggle_policy_check.sh"
-  "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_verify_timeout_policy.sh"
-  "plans/tests/test_live_enable_preflight.sh"
   "plans/tests/test_fail_closed_gate_map_paths.sh"
   "plans/tests/test_rust_gates_smoke_targets.sh"
   "plans/tests/test_rust_gates_quick_clippy.sh"
   "plans/tests/test_contract_kernel_drift_message.sh"
-  "plans/tests/test_recon_handoff_sources.sh"
-  "plans/tests/test_roadmap_evidence_audit.sh"
-  "plans/tests/test_crossref_invariants.sh"
-  "plans/tests/test_premortem_path_guard.sh"
 )
 
 FULL_ONLY_REVIEW_FIXTURE_TESTS=(
