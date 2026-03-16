@@ -147,6 +147,7 @@ required=(
   plans/tests/test_recon_operator_trace.sh
   plans/tests/test_recon_precheck.sh
   plans/tests/test_recon_prompt_guard.sh
+  plans/tests/test_pr_review_gate_hook.sh
   plans/tests/test_review_logged_prompt_literalization.sh
   plans/tests/test_slice_execute_guard.sh
   plans/tests/test_review_logged_timeout_binary_unavailable.sh

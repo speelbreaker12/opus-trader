@@ -595,7 +595,6 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_audit_parallel_empty_cache_arrays.sh"
   "plans/tests/test_slice_completion_review_guard.sh"
   "plans/tests/test_slice_completion_enforce.sh"
-  "plans/tests/test_prd_set_pass.sh"
   "plans/tests/test_pre_pr_review_gate.sh"
   # Heavy recon integration fixtures stay in verify coverage, but not in quick smoke.
   "plans/tests/test_preflight_fixture_timeout_controls.sh"
@@ -603,15 +602,23 @@ FULL_ONLY_REVIEW_FIXTURE_TESTS=(
   "plans/tests/test_recon_operator_runner.sh"
   "plans/tests/test_recon_scoreboard.sh"
 )
+FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS=(
+  # This pass-gate fixture still flakes when it shares the parallel preflight
+  # batch with other review-gate tests. Keep it in full coverage, but drain it
+  # serially after the parallel batch.
+  "plans/tests/test_prd_set_pass.sh"
+)
 # NOTE: heavy workflow integration fixtures run in verify_fork.sh gate 14g
 # (parallel with rust compilation) instead of preflight smoke so the cheap
 # preflight loop stays within the quick-mode timeout budget.
 
 REVIEW_FIXTURE_TESTS=("${SMOKE_REVIEW_FIXTURE_TESTS[@]}")
+SERIAL_REVIEW_FIXTURE_TESTS=()
 if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then
   REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_REVIEW_FIXTURE_TESTS[@]}")
+  SERIAL_REVIEW_FIXTURE_TESTS+=("${FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS[@]}")
 fi
-PREFLIGHT_DIAG_FIXTURE_TEST_COUNT="${#REVIEW_FIXTURE_TESTS[@]}"
+PREFLIGHT_DIAG_FIXTURE_TEST_COUNT=$(( ${#REVIEW_FIXTURE_TESTS[@]} + ${#SERIAL_REVIEW_FIXTURE_TESTS[@]} ))
 PREFLIGHT_PARALLEL_JOBS_RAW="${PREFLIGHT_PARALLEL_JOBS-}"
 if [[ -z "$PREFLIGHT_PARALLEL_JOBS_RAW" ]]; then
   PREFLIGHT_DIAG_PARALLEL_JOBS="$(detect_parallel_jobs)"
@@ -907,6 +914,59 @@ else
       esac
       ((fixture_idx++)) || true
     done
+
+    if [[ "${#SERIAL_REVIEW_FIXTURE_TESTS[@]}" -gt 0 ]]; then
+      for fixture_test in "${SERIAL_REVIEW_FIXTURE_TESTS[@]}"; do
+        if [[ ! -f "$fixture_test" ]]; then
+          setup_fail "Missing fixture test: $fixture_test"
+          _fixture_all_passed=0
+          continue
+        fi
+
+        start_ns="$(now_monotonic_ns)"
+        used_timeout=0
+        if [[ -n "$_TIMEOUT_BIN" ]] && [[ "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" -gt 0 ]]; then
+          used_timeout=1
+          if "$_TIMEOUT_BIN" "$PREFLIGHT_FIXTURE_TEST_TIMEOUT" bash "$fixture_test" >/dev/null 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
+        else
+          if bash "$fixture_test" >/dev/null 2>&1; then
+            rc=0
+          else
+            rc=$?
+          fi
+        fi
+        end_ns="$(now_monotonic_ns)"
+        if [[ "$start_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" =~ ^[0-9]+$ ]] && [[ "$end_ns" -ge "$start_ns" ]]; then
+          duration_ns=$((end_ns - start_ns))
+        else
+          duration_ns=0
+        fi
+        duration_s=$((duration_ns / 1000000000))
+        status="FAIL"
+        if [[ "$rc" -eq 0 ]]; then
+          status="PASS"
+        elif [[ "$used_timeout" -eq 1 ]] && [[ "$rc" -eq 124 || "$rc" -eq 137 ]] \
+          && [[ "$duration_ns" -ge "$timeout_ns" ]]; then
+          status="TIMEOUT"
+        fi
+
+        case "$status" in
+          PASS) pass "Fixture test: $(basename "$fixture_test") (${duration_s}s)" ;;
+          FAIL)
+            fail "Fixture test failed: $fixture_test (rc=$rc, ${duration_s}s; run 'bash $fixture_test' for details)"
+            _fixture_all_passed=0
+            ;;
+          TIMEOUT)
+            fail "Fixture test timed out: $fixture_test (${duration_s}s, limit=${PREFLIGHT_FIXTURE_TEST_TIMEOUT}s, rc=$rc)"
+            _fixture_all_passed=0
+            ;;
+        esac
+      done
+    fi
 
     # Update cache: write on success, invalidate on failure.
     # Cache write is best-effort — failure must not kill a passing preflight run.

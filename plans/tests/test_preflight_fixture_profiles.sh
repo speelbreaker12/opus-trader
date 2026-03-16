@@ -90,9 +90,11 @@ assert_list_absent() {
 
 smoke_list="$(extract_array "SMOKE_REVIEW_FIXTURE_TESTS")"
 full_only_list="$(extract_array "FULL_ONLY_REVIEW_FIXTURE_TESTS")"
+full_only_serial_list="$(extract_array "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS")"
 
 [[ -n "$smoke_list" ]] || fail "SMOKE_REVIEW_FIXTURE_TESTS is empty"
 [[ -n "$full_only_list" ]] || fail "FULL_ONLY_REVIEW_FIXTURE_TESTS is empty"
+[[ -n "$full_only_serial_list" ]] || fail "FULL_ONLY_SERIAL_REVIEW_FIXTURE_TESTS is empty"
 
 assert_contains_line 'quick) PREFLIGHT_FIXTURE_MODE="smoke" ;;'
 assert_contains_line 'if [[ "$PREFLIGHT_FIXTURE_MODE" == "full" ]]; then'
@@ -168,11 +170,11 @@ assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_remediatio
 assert_list_contains "$smoke_list" "plans/tests/test_fork_attestation_mirror.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_workflow_quick_step.sh"
 assert_list_contains "$smoke_list" "plans/tests/test_toggle_policy_check.sh"
-assert_list_contains "$full_only_list" "plans/tests/test_prd_set_pass.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_bundle.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_operator_runner.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_recon_scoreboard.sh"
 assert_list_contains "$full_only_list" "plans/tests/test_preflight_fixture_timeout_controls.sh"
+assert_list_contains "$full_only_serial_list" "plans/tests/test_prd_set_pass.sh"
 
 # Verify moved tests are actually present in verify_fork.sh gate 14g
 VERIFY_FORK="$ROOT/plans/verify_fork.sh"
@@ -209,6 +211,7 @@ parallel_gate_tests=(
   "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
   "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
   "plans/tests/test_review_logged_prompt_literalization.sh"
+  "plans/tests/test_pr_review_gate_hook.sh"
   "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_preflight_diagnostics.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"
@@ -264,10 +267,19 @@ overlap="$(
 )"
 [[ -z "$overlap" ]] || fail "smoke/full fixture lists overlap: $overlap"
 
+serial_overlap="$(
+  comm -12 \
+    <(printf '%s\n' "$full_only_list" | sort -u) \
+    <(printf '%s\n' "$full_only_serial_list" | sort -u)
+)"
+[[ -z "$serial_overlap" ]] || fail "parallel/serial full-only fixture lists overlap: $serial_overlap"
+
 smoke_count="$(printf '%s\n' "$smoke_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 full_only_count="$(printf '%s\n' "$full_only_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+full_only_serial_count="$(printf '%s\n' "$full_only_serial_list" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
 [[ "$smoke_count" == "19" ]] || fail "unexpected smoke fixture count: $smoke_count (expected 19)"
-[[ "$full_only_count" == "12" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 12)"
+[[ "$full_only_count" == "11" ]] || fail "unexpected full-only fixture count: $full_only_count (expected 11)"
+[[ "$full_only_serial_count" == "1" ]] || fail "unexpected full-only serial fixture count: $full_only_serial_count (expected 1)"
 
 # Verify 14g dispatch loop pattern exists in verify_fork.sh
 grep -Eq 'for workflow_test in "\$\{WORKFLOW_INTEGRATION_TESTS\[@\]\}"' "$VERIFY_FORK" \
