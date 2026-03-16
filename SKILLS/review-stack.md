@@ -127,7 +127,9 @@ This produces the `contract_review.json` needed by `prd_set_pass.sh`.
 
 Read `SKILLS/validator-audit.md`.
 
-**Skip condition:** If the change does not touch validators, rule sets, schema validation, or proof graph code → skip. Record `SKIPPED (no validator code changed)`.
+**Skip condition:** If the change does not touch validators, rule sets, schema validation, proof graph code, OR any new Python/shell code that validates inputs and produces a gating verdict (harness evaluators, proposal validators, autoresearch pipelines, CI quality gates) → skip. Record `SKIPPED (no validator code changed)`.
+
+**Do not skip when:** a new Python script or module reads structured input, applies correctness checks, and gates or scores downstream output — even if it is "tooling" rather than a trading-domain safety gate.
 
 **Mandatory sections when run:** Always apply §1 (Enum Exhaustiveness), §2 (Field Coverage), §3 (Dead Import Detection), §6 (Paper Compliance).
 

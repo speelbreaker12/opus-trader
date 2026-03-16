@@ -60,6 +60,7 @@ gh pr diff <number>
 - [ ] For new/changed Python lines: no bare `except:` — catch specific exception types
 - [ ] Input validation where new system boundaries are introduced
 - [ ] No SQL/command injection risks in new code
+- [ ] **CWD-relative paths in skill/hook/config files**: any `!cat path/to/file` or `source path/to/file` in `.claude/skills/`, `.claude/hooks/`, or wrapper configs — does it resolve correctly when invoked from a directory other than the repo root? Fix: use `$(git rev-parse --show-toplevel)/path` or verify the runner always sets CWD.
 - [ ] (For safety-critical code: use `/contract-review` instead)
 
 #### Documentation
@@ -179,7 +180,9 @@ This skill focuses on "how will this code fail" rather than "does this code look
 | `crates/soldier_*` | Deep + `/contract-review` | Safety, correctness |
 | `python/` | Medium | Correctness, types |
 | `scripts/` | Medium | Correctness, error handling |
+| `autoresearch/` | Deep + `/validator-audit` | Pipeline correctness, hash provenance, fail-closed behavior; has its own design spec in `docs/superpowers/specs/` — check against it |
 | `plans/` | Light | Logic, no regressions |
 | `specs/` | Deep | Accuracy, cross-refs |
 | `docs/` | Light | Clarity, accuracy |
 | `.github/` | Medium | CI correctness |
+| `.claude/skills/`, `.claude/hooks/` | Medium | Path resolution, injection safety |

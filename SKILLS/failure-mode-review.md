@@ -340,6 +340,8 @@ Issues that don't break correctness but cause problems over time:
 
 **Skip condition:** Only apply if the diff touches `.sh`, `.bash`, or inline shell in `Makefile`/`justfile`. Skip for pure Rust, Python, or documentation changes.
 
+**Scope mandate:** When §12 applies, it MUST cover **every** `.sh` file in the diff — not just the ones you notice first or the ones with obvious changes. List each .sh file touched and confirm the checklist was applied to each. Do not limit §12 to "lint scripts" or "small scripts" and silently skip a 700-line harness.
+
 For shell scripts, check these common silent failures:
 
 - [ ] **Exit code masking**: `result=$(failing_command)` — `$?` reflects the assignment, not the command. Use `set -o pipefail` or check explicitly.
@@ -452,6 +454,8 @@ For shell scripts, check these common silent failures:
 | Vacuous acceptance test | Test passes without the change | Run test BEFORE implementing; if it passes, test is broken |
 | Single-variant walkthrough | Only trace Open through new dispatch function; miss CancelOnly/Close/Hedge | Walk at least one scenario per enum variant of primary input |
 | Early-return metric gap | Error path returns before incrementing rejection counter | For each counter, enumerate all paths; check early-returns bypass |
+| `set -e` subprocess crash | Script runs with `set -e`; subprocess exits non-zero; script terminates before it can write crash status to log — crash is silently dropped | Wrap subprocess calls with `|| { echo "crash"; }` or `set +e` around the call; write status explicitly before re-raising |
+| `IFS=$'\t' read` newline | `while IFS=$'\t' read -r a b c` consumes one line per iteration; if field `c` contains a literal newline, the next line spills into the next iteration — `a` and `b` of the next row get garbage values silently | Strip or replace newlines before printing to the tab-separated stream; or use a NUL-delimited format |
 | `git_hash` field naming | Field name implies git SHA; implementation uses file content hash — incompatible; staleness check never fires | Audit field names that imply one hash type when another is used |
 | Single-file vs per-instance artifacts | Artifact file has a `fixture_id` field but is reused across multiple fixtures in one run — field is structurally ambiguous | Ask: "Does one file represent one run or one fixture? If one run spans N fixtures, do N files exist, or does one file aggregate all N?" |
 

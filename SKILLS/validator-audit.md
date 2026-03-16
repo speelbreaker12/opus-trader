@@ -11,7 +11,10 @@ When to use
 - Reviewing merge/aggregate functions that combine multiple sources
 - After adding new fields/enums to a data model — are they validated?
 - When a validator is the quality gate for a pipeline (CI, workflow, deploy)
+- **Any new Python module or shell script that reads structured input and produces a gating verdict** — e.g., proposal evaluators, harness scoring scripts, autoresearch render tools, contract patch renderers. "Tooling" is not a reason to skip.
 - When an external reviewer finds gaps your skills missed (retrospective)
+
+**The domain-agnostic test:** Does this code (1) accept structured input, (2) apply correctness checks, and (3) gate or score downstream output? If yes → apply this skill, regardless of whether it touches the trading engine.
 
 When NOT to use
 - Simple single-rule fixes (use `/pr-review`)
