@@ -39,6 +39,14 @@ def canonical_json_hash(payload: Any) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def file_sha256(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        fail(f"missing file required for hash provenance: {path}")
+    return ""
+
+
 def load_schema(path: Path) -> dict[str, Any]:
     schema = load_json(path)
     if not isinstance(schema, dict):
@@ -400,6 +408,12 @@ def main() -> int:
     write_text(review_markdown_path(p2, run_id), review_md)
 
     if args.accepted_only:
+        live_contract_hash = file_sha256(repo_root / CONTRACT_PATCH_PATH)
+        if live_contract_hash != contract_file_hash:
+            fail(
+                "live specs/CONTRACT.md hash differs from recorded contract_file_hash; "
+                "re-run contract autoresearch before rendering accepted-only patches"
+            )
         proposal_ids = [proposal["proposal_id"] for proposal in proposals]
         decisions = load_review_decisions(
             p2,

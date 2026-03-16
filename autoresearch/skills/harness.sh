@@ -689,16 +689,33 @@ for t in data['tests']:
     fail "Evaluator not found: $EVALUATE_PY"
   fi
 
-  local score_json score passed total
-  score_json="$(python3 "$EVALUATE_PY" \
+  local score_json score_fields score passed total evaluator_rc score_json_path
+  score_json_path="$(mktemp "${TMPDIR:-/tmp}/autoresearch-eval.XXXXXX")"
+  if python3 "$EVALUATE_PY" \
     --eval "$eval_json" \
     --output-dir "$output_dir" \
     --skill-dir "$SKILLS_DIR/$skill" \
-    --json)"
+    --json >"$score_json_path"; then
+    evaluator_rc=0
+  else
+    evaluator_rc=$?
+  fi
 
-  score="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['score'])")"
-  passed="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['passed'])")"
-  total="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['total'])")"
+  score_json="$(cat "$score_json_path")"
+  rm -f "$score_json_path"
+
+  if [[ -z "$score_json" ]]; then
+    fail "Evaluator produced no JSON output"
+  fi
+
+  if ! score_fields="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"{d['score']}\\t{d['passed']}\\t{d['total']}\")")"; then
+    fail "Evaluator returned invalid JSON output"
+  fi
+  IFS=$'\t' read -r score passed total <<< "$score_fields"
+
+  if [[ "$evaluator_rc" -ne 0 ]]; then
+    warn "Evaluator exited non-zero (rc=$evaluator_rc); recording imperfect baseline score"
+  fi
 
   # Append mechanical score row to results.tsv
   ensure_tsv_header "$results_file"

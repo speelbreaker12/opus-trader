@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -34,9 +35,10 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
         shutil.copytree(CONTRACT_TEMPLATE, self.root / "autoresearch" / "contract")
         self.phase2 = self.root / "autoresearch" / "contract" / "phase2"
-        contract_path = self.root / "specs" / "CONTRACT.md"
-        contract_path.parent.mkdir(parents=True, exist_ok=True)
-        contract_path.write_text("AT-999 is referenced here\n", encoding="utf-8")
+        self.contract_path = self.root / "specs" / "CONTRACT.md"
+        self.contract_path.parent.mkdir(parents=True, exist_ok=True)
+        self.contract_path.write_text("AT-101 is referenced here\n", encoding="utf-8")
+        self.contract_hash = hashlib.sha256(self.contract_path.read_bytes()).hexdigest()
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -122,7 +124,7 @@ class ContractRenderReviewTests(unittest.TestCase):
                 {
                     "run_id": run_id,
                     "timestamp": "2026-03-14T20:00:02Z",
-                    "contract_file_hash": "a" * 64,
+                    "contract_file_hash": self.contract_hash,
                     "status": "pending",
                     "proposal_count": 2,
                     "accepted_count": 0,
@@ -145,7 +147,7 @@ class ContractRenderReviewTests(unittest.TestCase):
         decisions = {
             "run_id": "run-1",
             "reviewed_at": "2026-03-14T21:00:00Z",
-            "contract_file_hash": "a" * 64,
+            "contract_file_hash": self.contract_hash,
             "proposals_file_hash": proposals_hash,
             "decisions": [
                 {
@@ -183,7 +185,7 @@ class ContractRenderReviewTests(unittest.TestCase):
         decisions = {
             "run_id": "run-1",
             "reviewed_at": "2026-03-14T21:00:00Z",
-            "contract_file_hash": "a" * 64,
+            "contract_file_hash": self.contract_hash,
             "proposals_file_hash": proposals_hash,
             "decisions": [
                 {
@@ -212,7 +214,7 @@ class ContractRenderReviewTests(unittest.TestCase):
         decisions = {
             "run_id": "run-1",
             "reviewed_at": "2026-03-14T21:00:00Z",
-            "contract_file_hash": "a" * 64,
+            "contract_file_hash": self.contract_hash,
             "proposals_file_hash": proposals_hash,
             "decisions": [
                 {
@@ -263,7 +265,7 @@ class ContractRenderReviewTests(unittest.TestCase):
         decisions = {
             "run_id": "run-1",
             "reviewed_at": "2026-03-14T21:00:00Z",
-            "contract_file_hash": "a" * 64,
+            "contract_file_hash": self.contract_hash,
             "proposals_file_hash": proposals_hash,
             "decisions": [
                 {
@@ -315,7 +317,7 @@ class ContractRenderReviewTests(unittest.TestCase):
         decisions = {
             "run_id": "run-1",
             "reviewed_at": "2026-03-14T21:00:00Z",
-            "contract_file_hash": "a" * 64,
+            "contract_file_hash": self.contract_hash,
             "proposals_file_hash": proposals_hash,
             "decisions": [
                 {
@@ -338,6 +340,43 @@ class ContractRenderReviewTests(unittest.TestCase):
         accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("is missing unified patch headers", accepted.stderr)
+
+    def test_render_review_fails_closed_on_stale_live_contract_hash(self) -> None:
+        self._seed_run()
+
+        initial = self._render("--run-id", "run-1")
+        self.assertEqual(initial.returncode, 0, msg=initial.stderr)
+
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        proposals_hash = _extract_hash(review_md, "proposals_file_hash")
+        decisions = {
+            "run_id": "run-1",
+            "reviewed_at": "2026-03-14T21:00:00Z",
+            "contract_file_hash": self.contract_hash,
+            "proposals_file_hash": proposals_hash,
+            "decisions": [
+                {
+                    "proposal_id": "P-001",
+                    "decision": "accepted",
+                    "reviewer": "tester",
+                    "reason_code": "SAFE_MECHANICAL",
+                },
+                {
+                    "proposal_id": "P-002",
+                    "decision": "rejected",
+                    "reviewer": "tester",
+                    "reason_code": "OUT_OF_SCOPE",
+                },
+            ],
+        }
+        review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
+        _write_json(review_json, decisions)
+
+        self.contract_path.write_text("AT-101 is referenced here\nAND NOW DIFFERENT\n", encoding="utf-8")
+
+        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        self.assertNotEqual(accepted.returncode, 0)
+        self.assertIn("live specs/CONTRACT.md hash differs from recorded contract_file_hash", accepted.stderr)
 
 
 if __name__ == "__main__":
