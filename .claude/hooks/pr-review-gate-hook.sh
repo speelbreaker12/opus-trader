@@ -161,7 +161,7 @@ done < <(printf '%s\n' "$COMMAND" | tr ';&|' '\n')
 [ "$TRIGGERED" -eq 1 ] || exit 0
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-HEAD_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+HEAD_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "")
 
 # Can't determine branch — don't block
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then

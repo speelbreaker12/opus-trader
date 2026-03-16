@@ -111,14 +111,14 @@ marker_path="$marker_dir/${safe_branch}.json"
 external_marker_path="$marker_dir/${safe_branch}.external.json"
 mkdir -p "$marker_dir"
 
-write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse HEAD)"
+write_review_marker "$marker_path" "PASS" "head" "$(git -C "$repo" rev-parse --short HEAD)"
 
 (
   cd "$repo"
   expect_pass "fresh marker permits gh pr create with --repo" "gh --repo owner/repo pr create --title ready"
 )
 
-write_review_marker "$marker_path" "CONDITIONAL_PASS" "head_commit" "$(git -C "$repo" rev-parse HEAD)"
+write_review_marker "$marker_path" "CONDITIONAL_PASS" "head_commit" "$(git -C "$repo" rev-parse --short HEAD)"
 
 (
   cd "$repo"
@@ -141,11 +141,11 @@ rm -f "$marker_path"
   expect_block "gh global flags still trigger gate" "No review-stack result" "gh -R owner/repo pr create --title ready"
 )
 
-old_head="$(git -C "$repo" rev-parse HEAD)"
+old_head="$(git -C "$repo" rev-parse --short HEAD)"
 echo "next" >> "$repo/sample.txt"
 git -C "$repo" add sample.txt
 git -C "$repo" commit -qm "advance head"
-new_head="$(git -C "$repo" rev-parse HEAD)"
+new_head="$(git -C "$repo" rev-parse --short HEAD)"
 
 write_review_marker "$marker_path" "PASS" "head" "$old_head"
 
