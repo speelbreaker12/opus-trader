@@ -12,27 +12,66 @@ inspect_pr_create_command() {
 import os
 import re
 import shlex
+import subprocess
 import sys
 
 command_text = sys.argv[1]
 workdir = sys.argv[2]
 
 
-def emit(matched: bool) -> None:
-    print('1' if matched else '0')
-    print(workdir)
+def emit(status: str, derived_workdir: str, error: str = '') -> None:
+    print(status)
+    print(derived_workdir)
+    print(error)
     raise SystemExit(0)
 
-def apply_chdir(path: str, current_workdir: str) -> str:
+
+def git_repo_root(path: str) -> str | None:
+    try:
+        output = subprocess.check_output(
+            ['git', '-C', path, 'rev-parse', '--show-toplevel'],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        return None
+    return os.path.abspath(output) if output else None
+
+
+def path_is_within(root: str, candidate: str) -> bool:
+    try:
+        root_real = os.path.realpath(root)
+        candidate_real = os.path.realpath(candidate)
+        return os.path.commonpath([root_real, candidate_real]) == root_real
+    except Exception:
+        return False
+
+
+def apply_chdir(
+    path: str,
+    current_workdir: str,
+    current_repo_root: str | None,
+) -> tuple[str, str | None, str | None]:
     if os.path.isabs(path):
-        return os.path.abspath(path)
-    return os.path.abspath(os.path.join(current_workdir, path))
+        new_workdir = os.path.abspath(path)
+        return new_workdir, git_repo_root(new_workdir), None
+
+    new_workdir = os.path.abspath(os.path.join(current_workdir, path))
+    if current_repo_root and not path_is_within(current_repo_root, new_workdir):
+        return (
+            current_workdir,
+            current_repo_root,
+            f'chdir escaped repository root: {current_repo_root}',
+        )
+    return new_workdir, current_repo_root, None
 
 
-def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[bool, str]:
+def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[str, str, str]:
     assign_re = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*=.*$')
     index = 0
     current_workdir = default_workdir
+    current_repo_root = git_repo_root(default_workdir)
+    escaped_chdir_error = ''
 
     while index < len(tokens):
         token = tokens[index]
@@ -54,31 +93,43 @@ def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[bool, str]:
                     continue
                 if env_token in {'-C', '--chdir'}:
                     if index + 1 >= len(tokens):
-                        return False, default_workdir
-                    current_workdir = apply_chdir(tokens[index + 1], current_workdir)
+                        return '0', default_workdir, ''
+                    current_workdir, current_repo_root, chdir_error = apply_chdir(
+                        tokens[index + 1],
+                        current_workdir,
+                        current_repo_root,
+                    )
+                    if chdir_error and not escaped_chdir_error:
+                        escaped_chdir_error = chdir_error
                     index += 2
                     continue
                 if env_token in {'-S', '--split-string'}:
                     if index + 1 >= len(tokens):
-                        return False, default_workdir
+                        return '0', default_workdir, ''
                     try:
                         split_tokens = shlex.split(tokens[index + 1], posix=True)
                     except Exception:
-                        return False, default_workdir
+                        return '0', default_workdir, ''
                     tokens[index:index + 2] = split_tokens
                     continue
                 if env_token.startswith('--unset='):
                     index += 1
                     continue
                 if env_token.startswith('--chdir='):
-                    current_workdir = apply_chdir(env_token.split('=', 1)[1], current_workdir)
+                    current_workdir, current_repo_root, chdir_error = apply_chdir(
+                        env_token.split('=', 1)[1],
+                        current_workdir,
+                        current_repo_root,
+                    )
+                    if chdir_error and not escaped_chdir_error:
+                        escaped_chdir_error = chdir_error
                     index += 1
                     continue
                 if env_token.startswith('--split-string='):
                     try:
                         split_tokens = shlex.split(env_token.split('=', 1)[1], posix=True)
                     except Exception:
-                        return False, default_workdir
+                        return '0', default_workdir, ''
                     tokens[index:index + 1] = split_tokens
                     continue
                 if env_token.startswith('-'):
@@ -94,7 +145,7 @@ def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[bool, str]:
         break
 
     if index >= len(tokens) or tokens[index] != 'gh':
-        return False, default_workdir
+        return '0', default_workdir, ''
 
     index += 1
     flags_with_values = {'-R', '--repo', '-h', '--hostname'}
@@ -103,11 +154,11 @@ def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[bool, str]:
     while index < len(tokens):
         token = tokens[index]
         if token in help_like:
-            return False, default_workdir
+            return '0', default_workdir, ''
         if token == 'pr':
             break
         if not token.startswith('-'):
-            return False, default_workdir
+            return '0', default_workdir, ''
         if token in flags_with_values:
             index += 2
             continue
@@ -120,13 +171,15 @@ def matches_tokens(tokens: list[str], default_workdir: str) -> tuple[bool, str]:
         index += 1
 
     if index + 1 >= len(tokens) or tokens[index] != 'pr' or tokens[index + 1] != 'create':
-        return False, default_workdir
+        return '0', default_workdir, ''
 
     remaining = tokens[index + 2 :]
     if remaining and remaining[0] in {'help', 'version', '--help', '--version', '-h'}:
-        return False, default_workdir
+        return '0', default_workdir, ''
 
-    return True, current_workdir
+    if escaped_chdir_error:
+        return '2', default_workdir, escaped_chdir_error
+    return '1', current_workdir, ''
 
 
 try:
@@ -135,28 +188,26 @@ try:
     lexer.commenters = ''
     tokens = list(lexer)
 except Exception:
-    emit(False)
+    emit('0', workdir)
 
 if not tokens:
-    emit(False)
+    emit('0', workdir)
 
 segment = []
 for token in tokens:
     if token and set(token) <= {';', '&', '|'}:
-        matched, derived_workdir = matches_tokens(segment[:], workdir)
-        if matched:
-            workdir = derived_workdir
-            emit(True)
+        status, derived_workdir, error = matches_tokens(segment[:], workdir)
+        if status in {'1', '2'}:
+            emit(status, derived_workdir, error)
         segment = []
         continue
     segment.append(token)
 
-matched, derived_workdir = matches_tokens(segment[:], workdir)
-if matched:
-    workdir = derived_workdir
-    emit(True)
+status, derived_workdir, error = matches_tokens(segment[:], workdir)
+if status in {'1', '2'}:
+    emit(status, derived_workdir, error)
 
-emit(False)
+emit('0', workdir)
 PY
 }
 
@@ -295,9 +346,21 @@ except Exception:
 TRIGGERED=0
 COMMAND_CWD="$PWD"
 segment_inspection="$(inspect_pr_create_command "$COMMAND" "$PWD")"
-if [ "$(printf '%s\n' "$segment_inspection" | sed -n '1p')" = "1" ]; then
+INSPECT_STATUS="$(printf '%s\n' "$segment_inspection" | sed -n '1p')"
+INSPECT_CWD="$(printf '%s\n' "$segment_inspection" | sed -n '2p')"
+INSPECT_ERROR="$(printf '%s\n' "$segment_inspection" | sed -n '3p')"
+
+if [ "$INSPECT_STATUS" = "2" ]; then
+    cat >&2 <<EOF
+GATE BLOCKED: ${INSPECT_ERROR}
+Refusing to run gh pr create with a relative --chdir/-C that escapes the repository root.
+EOF
+    exit 2
+fi
+
+if [ "$INSPECT_STATUS" = "1" ]; then
     TRIGGERED=1
-    COMMAND_CWD="$(printf '%s\n' "$segment_inspection" | sed -n '2p')"
+    COMMAND_CWD="$INSPECT_CWD"
 fi
 [ "$TRIGGERED" -eq 1 ] || exit 0
 
