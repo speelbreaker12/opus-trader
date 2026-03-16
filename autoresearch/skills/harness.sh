@@ -652,8 +652,8 @@ cmd_baseline() {
   rm -rf "$output_dir"
   mkdir -p "$output_dir"
 
-  # Generate one output file per test using Claude (same as eval --generate)
-  generate_skill_outputs "$skill" "$output_dir" "$model"
+  # Baselines must reflect the current skill behavior, not cached prior outputs.
+  generate_skill_outputs "$skill" "$output_dir" "$model" 1
 
   # Detect crash: any expected output file missing means Claude failed for that test.
   local missing_outputs=0
@@ -719,6 +719,7 @@ generate_skill_outputs() {
   local skill="$1"
   local output_dir="$2"
   local model="${3:-sonnet}"
+  local force_regenerate="${4:-0}"
   local eval_json="$SKILLS_DIR/$skill/eval.json"
   local skill_file
   skill_file="$(require_skill_file "$skill")"
@@ -746,7 +747,7 @@ for t in data['tests']:
     local fixture_path="$SKILLS_DIR/$skill/$fixture"
     local output_file="$output_dir/${test_id}.md"
 
-    if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
+    if [[ "$force_regenerate" -ne 1 ]] && [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
       info "  [$test_id] Output exists, skipping (delete to regenerate)"
       continue
     fi
@@ -943,8 +944,24 @@ cmd_check_monotonic() {
     ((line_num++)) || true
     [[ "$status" != "keep" ]] && continue
     if [[ -n "$prev_score" ]]; then
-      # awk comparison: fail if new score < prev score
-      if awk "BEGIN{exit !($score < $prev_score)}"; then
+      local compare_rc=0
+      set +e
+      awk -v current="$score" -v previous="$prev_score" '
+        BEGIN {
+          numeric = "^-?[0-9]+([.][0-9]+)?$"
+          if (current !~ numeric || previous !~ numeric) {
+            exit 2
+          }
+          exit !(current < previous)
+        }
+      '
+      compare_rc=$?
+      set -e
+      if [[ "$compare_rc" -eq 2 ]]; then
+        fail "invalid numeric score in keep rows near line $line_num: current='$score' previous='$prev_score'"
+      elif [[ "$compare_rc" -ne 0 && "$compare_rc" -ne 1 ]]; then
+        fail "monotonicity comparison failed near line $line_num"
+      elif [[ "$compare_rc" -eq 0 ]]; then
         warn "  Line $line_num: score $score < prior keep $prev_score (commit $commit)"
         ((violations++)) || true
       fi

@@ -300,12 +300,12 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.assertFalse((self.phase2 / "review" / "CONTRACT_REVIEW_run-9.md").exists())
 
     def test_render_review_fails_closed_on_git_patch_without_unified_headers(self) -> None:
-        partial_patch = "\n".join([
+        malformed_patch = "\n".join([
             "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
             "@@ -20,0 +21,1 @@",
             "+PolicyGuard MUST reject when evidence_chain_score is missing.",
         ])
-        self._seed_run(diff_preview_two=partial_patch)
+        self._seed_run(diff_preview_two=malformed_patch)
 
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
@@ -337,7 +337,7 @@ class ContractRenderReviewTests(unittest.TestCase):
 
         accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
         self.assertNotEqual(accepted.returncode, 0)
-        self.assertIn("must include both ---/+++ unified diff headers", accepted.stderr)
+        self.assertIn("is missing unified patch headers", accepted.stderr)
 
 
 if __name__ == "__main__":
