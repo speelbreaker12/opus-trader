@@ -714,7 +714,7 @@ case "$tool" in
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
 
-    cmd=("claude" "--model" "claude-opus-4-6" "--print" "--verbose")
+    cmd=("claude" "--model" "claude-sonnet-4-6" "--print" "--verbose")
     if [[ ${#extra[@]} -gt 0 ]]; then
       cmd+=("${extra[@]}")
     fi

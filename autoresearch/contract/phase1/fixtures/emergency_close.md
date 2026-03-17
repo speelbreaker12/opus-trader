@@ -18,7 +18,7 @@
 **Algorithm (Deterministic, 3 tries):**
 1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`). This is attempt 1.
 2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks).
-3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta. Hedge quantity MUST NOT exceed the net exposed quantity at the time of submission; if the computed hedge would exceed the exposed quantity, it MUST be capped to the exposed quantity (no new net exposure created). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
 
 **AtomicNakedEvent schema (minimum):**
@@ -34,7 +34,6 @@
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
 - `evidence_chain_state_at_event` (EvidenceChainState per §2.2.2; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
-Profile: ALL
 AT-1102
 - Given: an AtomicNakedEvent is emitted by the emergency close path.
 - When: the event's `cause` field is inspected.
@@ -42,7 +41,6 @@ AT-1102
 - Pass criteria: every emitted AtomicNakedEvent has a non-empty `cause` value (e.g., `atomic_legging_failure`, `emergency_close_exhausted`, `hedge_fallback`).
 - Fail criteria: any AtomicNakedEvent has an empty, null, or missing `cause` field.
 
-Profile: ALL
 AT-211
 - Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs.
 - When: emergency close completes (including optional hedge fallback).

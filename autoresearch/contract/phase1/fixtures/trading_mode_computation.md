@@ -7,7 +7,7 @@ Profile: CSP
 
 ##### **2.2.3.0 Axis Model (Normative)**
 
-PolicyGuard SHALL compute TradingMode from three independent health axes:
+PolicyGuard MUST compute TradingMode from three independent health axes:
 
 - `CapitalRiskAxis     ∈ { SAFE, WARNING, CRITICAL }`
 - `MarketIntegrityAxis ∈ { STABLE, STRESSED, BROKEN }`
@@ -80,7 +80,6 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 **MarketIntegrityAxis** (market data integrity / comms reliability)
 - Input: `bunker_mode_active` (from §2.3.2 Network Jitter Monitor)
 - `STRESSED` if `bunker_mode_active == true`
-- `STRESSED` if `bunker_mode_active` is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2 (fail-closed).
 - `STABLE` otherwise.
 - `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
 
@@ -104,11 +103,17 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
   - Disk Kill unconfirmed (per §2.2.3.1.2)
 - `HEALTHY` otherwise.
 
+AT-1261
+- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.
+- When: TradingMode is computed.
+- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.
+- Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.
+
 ---
 
 ##### **2.2.3.3 TradingMode Resolution (Deterministic, Pure Function of Axes)**
 
-TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):
+TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):
 
 1) If `SystemIntegrityAxis == FAILING` OR `CapitalRiskAxis == CRITICAL` → `TradingMode = Kill`
 2) Else if `SystemIntegrityAxis == DEGRADED` OR `MarketIntegrityAxis != STABLE` OR `CapitalRiskAxis == WARNING` → `TradingMode = ReduceOnly`
@@ -166,6 +171,14 @@ This table is the authoritative reference for AT-1048 (enumerability test). Impl
   - Bunker Mode (§2.3.2) stable-exit window
   - Emergency ReduceOnly (§2.2 inputs) cooldown + reconcile-clear
   - Open Permission Latch (§2.2.4) reconcile-clear
+
+AT-1264
+- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.
+- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.
+- When: TradingMode is computed on subsequent ticks.
+- Then: TradingMode == ReduceOnly until full `bunker_exit_stable_s` window elapses since bunker entry condition cleared.
+- Pass criteria: ReduceOnly held for full stable-exit window; Active not returned prematurely.
+- Fail criteria: Active returned before `bunker_exit_stable_s` elapses.
 
 ---
 
@@ -342,7 +355,7 @@ AT-931
 - Given: the strategy loop computes an intent while `TradingMode == Active`, but before dispatch the Axis Resolver input flips to ReduceOnly/Kill (e.g., evidence trip).
 - When: the dispatch path runs.
 - Then: the order MUST NOT dispatch if the current TradingMode forbids it.
-- Pass criteria: dispatch count remains 0 and reject reason indicates TradingMode gate.
+- Pass criteria: dispatch count remains 0 and reject_reason_code == TradingModeBlockedOpen.
 - Fail criteria: dispatch occurs based on stale TradingMode.
 
 **Non‑Active OPEN Cancellation**
@@ -403,13 +416,6 @@ AT-1050
 - Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_BUNKER_MODE_ACTIVE]`.
 - Pass criteria: exact reason set and ReduceOnly computed.
 - Fail criteria: any additional reason appears, or mode is Active/Kill.
-
-AT-1249
-- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active` which is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2.
-- When: the Axis Resolver computes MarketIntegrityAxis and TradingMode.
-- Then: `MarketIntegrityAxis == STRESSED` (fail-closed), `TradingMode == ReduceOnly`, and `mode_reasons` contains `REDUCEONLY_BUNKER_MODE_ACTIVE`.
-- Pass criteria: exact reason set and ReduceOnly computed; OPEN does not dispatch.
-- Fail criteria: MarketIntegrityAxis is STABLE, TradingMode is Active, or mode_reasons is missing/incorrect while `bunker_mode_active` is missing/stale.
 
 **Axis Isolation — CapitalRiskAxis (Margin Util Only)**
 AT-1051

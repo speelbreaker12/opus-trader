@@ -477,6 +477,17 @@ clauses:
       - "test_drain_all_post_drain_settle_returns_false"
     prd: []
 
+  CSP-063:
+    status: PARTIAL
+    name: "Recovery / Matching Rule (Normative)"
+    contract_ref: "§1.1"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-2"
+    code: []
+    tests: []
+    prd:
+      - "plans/prd.json#S2-002"
+
 # GOP Clause Traceability
 # Tracks mapping from GOP (General Operating Profile) clauses to implementation artifacts
 

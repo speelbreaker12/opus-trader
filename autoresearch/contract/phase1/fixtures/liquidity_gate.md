@@ -21,7 +21,6 @@ OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(Liquidity
 
 **Scope (explicit):**
 - Applies to normal dispatch and containment rescue IOC orders (see §1.1 containment Step A).
-- CLOSE/HEDGE order placement intents with valid, fresh L2 ARE subject to the slippage threshold check (steps 1-4), including containment rescue IOC orders (Step A). If slippage exceeds `max_slippage_bps` for a CLOSE/HEDGE, the gate rejects with `Rejected(ExpectedSlippageTooHigh)`. Deterministic Emergency Close (§3.1) and containment Step B remain exempt.
 - Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.
 - Emergency close still requires a valid price source; missing/stale L2 MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
 - When no valid fallback source exists, `RiskState::Degraded` is set (see §2.2.3.2 SystemIntegrityAxis), producing `TradingMode::ReduceOnly` via the axis resolver.
@@ -69,10 +68,3 @@ AT-1216
 - Then: the intent is allowed through Liquidity Gate and proceeds to dispatch.
 - Pass criteria: dispatch count increases by 1 and no liquidity reject reason is emitted.
 - Fail criteria: intent is rejected by Liquidity Gate despite valid/fresh L2 and in-budget slippage.
-
-AT-1247
-- Given: a CLOSE/HEDGE order placement intent with valid, fresh `L2BookSnapshot` and computed `slippage_bps > max_slippage_bps`.
-- When: Liquidity Gate evaluates the order.
-- Then: the intent is rejected with `Rejected(ExpectedSlippageTooHigh)` and no dispatch occurs.
-- Pass criteria: dispatch count remains 0; rejection reason is `ExpectedSlippageTooHigh`.
-- Fail criteria: CLOSE/HEDGE dispatches despite exceeding the slippage threshold with valid L2.

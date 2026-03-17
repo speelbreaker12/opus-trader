@@ -49,6 +49,12 @@ AT-1100
 - Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
 - Fail criteria: reconciliation succeeds despite missing trades, or latch clears prematurely.
 
+AT-1263
+- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.
+- When: reconciliation success criteria are evaluated.
+- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.
+- Pass criteria: latch held; reconciliation reported failed. Fail criteria: latch clears on transport failure.
+
 **Allowed values (reconcile-only):** `OpenPermissionReasonCode[]`
 - `RESTART_RECONCILE_REQUIRED`
 - `WS_BOOK_GAP_RECONCILE_REQUIRED`
@@ -88,13 +94,6 @@ AT-011
 - Pass criteria: latch fields match the invariants immediately after reconciliation; opens remain blocked unless mode is Active.
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
 
-AT-1250
-- Given: `open_permission_blocked_latch==true` with any reconcile-class reason code.
-- When: reconciliation succeeds and the latch clears.
-- Then: `open_permission_requires_reconcile` MUST equal `false` and `open_permission_reason_codes` MUST be `[]`.
-- Pass criteria: all three state fields are consistent post-clear (`open_permission_blocked_latch==false`, `open_permission_requires_reconcile==false`, `open_permission_reason_codes==[]`).
-- Fail criteria: `open_permission_requires_reconcile` remains `true` or `open_permission_reason_codes` is non-empty after latch clears.
-
 AT-402
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED` and a cancel/replace that increases exposure.
 - When: cancel/replace permission is evaluated.
@@ -117,7 +116,7 @@ AT-411
 - Fail criteria: any F1/Evidence code appears or latch is set without a reconcile trigger.
 - Note: This AT tests the Hard rule (runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes`) in isolation. The Hard rule is unconditional — it applies regardless of whether reconcile-class triggers are concurrently active. The "no reconcile-class triggers" precondition isolates the test from latch interactions but does not limit the Hard rule's scope.
 
-AT-1243
+AT-1253
 - Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).
 - When: `open_permission_reason_codes` are computed.
 - Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.

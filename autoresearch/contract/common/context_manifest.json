@@ -1,19 +1,19 @@
 {
   "schema_version": 2,
   "tracked_files": {
-    "common/at_registry.json": "d63cb3e1ef82604a7d8bfa02f26e90874f33d9f33c548953b82d21e62007796a",
+    "phase1/fixtures/trading_mode_computation.md": "e98e7d964272108dae5d24aa7181b1161d1d5f87b3ecee77943dc07d7cb51fef",
+    "phase1/fixtures/open_permission_latch.md": "cfd1d95cc02b033ae6ea98092f91b25956bc9e136292acd5fa355c44f089f67f",
+    "phase1/fixtures/emergency_close.md": "e842def548ac9175f31c92504e86941126a5489c854c8bccab6e78a1fb196acf",
+    "phase1/fixtures/evidence_guard.md": "af59f875fabedc64c94bc3f8650518f1821615269e90fb7589c326348e93510a",
+    "phase1/fixtures/liquidity_gate.md": "727a4653dfa6619a55dc2b51940b1077e89b29e184dcc65d431fa878019fd7e1",
+    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "9b04e36716c248fa95ec6b4cb5edc568e553193fbc0a0c04008387231318acf7",
+    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "42eff0a3805aab152b35e8947b70a57be23c65a82e5b7bd1aad2bef9231b6fbe",
+    "common/at_registry.json": "9d3ff140c5734f2d465f83c49b98c9d46bb0070a3fd27d732659fc2d88c0fa44",
     "common/contract_header.md": "ead65bdf2b0e3adef5024ca438d92a59de05598e8d2ec2c30967c2064a755670",
     "common/gate_input_registry.json": "9c2c818f1e2d580c26d2e2ca15861d0297fa2076d54ff08ce32d4973ca003a38",
-    "common/section_index.md": "28d3fc45cfbbf2f29beac9305d78623a19f79dc503e39bd55a812525722d7d33",
-    "phase1/fixtures/trading_mode_computation.md": "1758a32bbb0d18f162c0e691b199184e2ac3e3f5d20aa6a7852640622746c889",
-    "phase1/fixtures/open_permission_latch.md": "68a02195124298f82e73a33c9abe68c3c26ed6e3ffb52299117f382c26fa9ddc",
-    "phase1/fixtures/emergency_close.md": "c77d4f4c873ce75cbfe1df8fb2d43692420cfd12bf964125541e47dbd66e5dd5",
-    "phase1/fixtures/evidence_guard.md": "bd6bfd4df4159980ed4fa20b6dbfaec75a8b9c527368ab2a964856cedb1654fb",
-    "phase1/fixtures/liquidity_gate.md": "e1b6462cdf1e180fb9f90fad43b291aecf2bfb3110d4cd17a5c2566c78175327",
-    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "9b04e36716c248fa95ec6b4cb5edc568e553193fbc0a0c04008387231318acf7",
-    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "42eff0a3805aab152b35e8947b70a57be23c65a82e5b7bd1aad2bef9231b6fbe"
+    "common/section_index.md": "bf03c20a3e4d44e14cdc5e443bd626f957067f491853b594e8d6e7a77760b07a"
   },
-  "contract_content_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
-  "common_contract_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
+  "contract_content_hash": "5305f46bb335a7d41ac16aa4a249302de523172fec4392ecadf0655aedd9e72c",
+  "common_contract_hash": "5305f46bb335a7d41ac16aa4a249302de523172fec4392ecadf0655aedd9e72c",
   "snapshot_contract_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c"
 }
