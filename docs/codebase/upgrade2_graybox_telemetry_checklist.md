@@ -59,7 +59,7 @@ This is the active rollout scope for Upgrade 2.
 | fee staleness | PASS | `crates/soldier_core/src/risk/fees.rs:89`, `crates/soldier_core/src/risk/fees.rs:177` | `ProductionFeeEvents` adapts the sink path back into metrics. |
 | expected slippage | PASS | `crates/soldier_core/src/execution/gate.rs:147`, `crates/soldier_core/src/execution/gate.rs:352`, `crates/soldier_core/src/execution/gate.rs:666` | Covered inside `execution/gate.rs`, not as a separate module. |
 | quantize | PASS | `crates/soldier_core/src/execution/quantize.rs:315`, `crates/soldier_core/src/execution/quantize.rs:385`, `crates/soldier_core/src/execution/quantize_tests.rs:763`, `crates/soldier_core/src/execution/quantize_tests.rs:833` | `ProductionQuantizeEvents` adapts the sink path back into metrics. |
-| pricer | FAIL | `crates/soldier_core/src/execution/pricer.rs:150` | Emits metrics directly and has no sink seam. |
+| pricer | PASS | `crates/soldier_core/src/execution/pricer.rs:85`, `crates/soldier_core/src/execution/pricer.rs:199`, `crates/soldier_core/src/execution/pricer_tests.rs:540`, `crates/soldier_core/src/execution/pricer_tests.rs:629` | `ProductionPricerEvents` adapts the sink path back into metrics. |
 | inventory skew | FAIL | `crates/soldier_core/src/execution/inventory_skew.rs:134` | Emits metrics directly and has no sink seam. |
 | post-only | FAIL | `crates/soldier_core/src/execution/post_only_guard.rs:85` | Emits metrics directly and has no sink seam. |
 | margin | FAIL | `crates/soldier_core/src/risk/margin_gate.rs:22` | Emits metrics directly and has no sink seam. |
