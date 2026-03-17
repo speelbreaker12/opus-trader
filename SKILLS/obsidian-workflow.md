@@ -16,6 +16,7 @@ When to use
 
 ## Project Page Checklist
 - Update `## Current State` if the project status changed.
+- Keep optional frontmatter `aliases` / `keywords` current when they would help the first-prompt router find this note again.
 - Keep `## Commits` near the top with `date + hash or pending + short summary`.
 - Keep `## Key Files` focused on the active files for the project.
 - Link every relevant debrief under `## Debriefs`.

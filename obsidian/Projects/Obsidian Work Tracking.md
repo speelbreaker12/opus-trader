@@ -4,13 +4,21 @@ priority: P1
 branch: main
 pr:
 started: "2026-03-16"
+aliases:
+- obsidian workflow
+- project tracking
+keywords:
+- debrief guard
+- context router
+- workflow skill
 ---
 
 ## Current State
-Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, a companion `/obsidian-workflow` skill for what to read/update/include, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
+Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, alias/keyword-aware project-note scoring, a companion `/obsidian-workflow` skill for what to read/update/include, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
 
 ## Commits
-- `pending` — 2026-03-17 — add the `/obsidian-workflow` skill companion, register it in the skills index, and teach the first-prompt router to point agents at it explicitly.
+- `pending` — 2026-03-17 — add alias/keyword-aware project-note scoring to the router, seed the project template for those fields, and backfill the prior skill-companion hash.
+- `633c39d7` — 2026-03-17 — add the `/obsidian-workflow` skill companion, register it in the skills index, and teach the first-prompt router to point agents at it explicitly.
 - `172f6386` — 2026-03-17 — fail closed when staged Obsidian project/debrief files from another project are present in the same commit.
 - `86ab792f` — 2026-03-17 — route first-session prompts to the best matching Obsidian project note, inject the matched note into hook context, wire router coverage into workflow verification, and add a shared guard reminder to include only the changes you made in the commit.
 - `b1393d87` — 2026-03-17 — enforce linked debriefs in repo and Claude commit hooks.
@@ -26,6 +34,7 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - .claude/skills/obsidian-workflow/SKILL.md
 - SKILLS/obsidian-workflow.md
 - docs/skills/index.md
+- obsidian/Templates/Project.md
 - .claude/hooks/obsidian-precommit-hook.sh
 - plans/obsidian_commit_guard.sh
 - plans/tests/test_obsidian_context_hook.sh
@@ -38,6 +47,7 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - [[Obsidian Work Tracking 2026-03-17 Context Router]]
 - [[Obsidian Work Tracking 2026-03-17 Single Project Guard]]
 - [[Obsidian Work Tracking 2026-03-17 Obsidian Workflow Skill]]
+- [[Obsidian Work Tracking 2026-03-17 Router Aliases]]
 
 ## Log
 ### 2026-03-16
@@ -65,3 +75,4 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - Tightened the shared Obsidian commit guard to block commits when staged Obsidian debriefs belong to a different project than the staged project note, or when more than one project note is staged at once.
 - Added regression coverage for mismatched staged debriefs and multi-project staging so the stricter scope rule is enforced through both the repo hook and the Claude-side hook.
 - Added a companion `/obsidian-workflow` skill and taught the first-prompt router to point agents at it explicitly so the checklist for project pages and debriefs is available at session start without replacing the hooks.
+- Added optional frontmatter `aliases` / `keywords` to the project template and taught the router to score them so future sessions can rediscover the right project note with less prompt wording friction.
