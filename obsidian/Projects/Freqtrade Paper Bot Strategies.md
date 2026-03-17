@@ -62,3 +62,6 @@ Regime filter bug fixed (object dtype coercion); all strategies improved signifi
 
 ## Debriefs
 - [[Freqtrade Paper Bot Strategies 2026-03-17 Restore]]
+
+### 2026-03-17 (Post-recovery)
+- Reviewed and checkpointed `plans/review_logged.sh` during WIP restore and reconstitution on `main`.

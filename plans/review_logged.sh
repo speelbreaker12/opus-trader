@@ -734,7 +734,7 @@ case "$tool" in
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
 
-    gemini_model="${GEMINI_MODEL:-gemini-3-pro-preview}"
+    gemini_model="${GEMINI_MODEL:-gemini-3.1-pro-preview}"
     # -p <content> activates headless mode with the prompt inline.
     # Gemini CLI requires a PTY for stdin piping, so we pass the prompt
     # via the -p flag instead (reads file into shell arg).
@@ -832,7 +832,7 @@ if [[ "$last_run_used_timeout" == "true" && ( "$rc" -eq 124 || "$rc" -eq 137 ) \
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
   fi
-  codex_exec_model="$(resolve_codex_cli_model "${CODEX_MODEL:-GPT-5.3-Codex}")"
+  codex_exec_model="$(resolve_codex_cli_model "${CODEX_MODEL:-gpt-5.3-codex-spark}")"
   cmd=("codex" "exec" "--model" "$codex_exec_model")
   if [[ ${#extra[@]} -gt 0 ]]; then
     cmd+=("${extra[@]}")
@@ -869,9 +869,9 @@ case "$tool" in
       model_name="${CODEX_MODEL:-GPT-5.3-Codex}"
     fi
     ;;
-  opus)   model_name="claude-opus-4-6" ;;
+  opus)   model_name="claude-sonnet-4-6" ;;
   kimi)   model_name="kimi-k2.5" ;;
-  gemini) model_name="${GEMINI_MODEL:-gemini-3-pro-preview}" ;;
+  gemini) model_name="${GEMINI_MODEL:-gemini-3.1-pro-preview}" ;;
 esac
 
 # ── Determine cycle and phase equivalent from context ─────────────
