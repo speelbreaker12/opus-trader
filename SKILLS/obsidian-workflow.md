@@ -13,7 +13,9 @@ When to use
 - Read the matched project note under `obsidian/Projects/`.
 - If the matched project note already records a `worktree`, use that worktree for commands and edits in the session.
 - Keep `branch` aligned with the branch checked out in that project worktree.
+- If `worktree_obsidian` is present, that path is the project-local Obsidian folder to jump into for context notes.
 - If the matched project note has no `worktree`, create a dedicated one at `.worktrees/<project-slug>` and update the project note before substantive work.
+- If `worktree_obsidian` does not exist, create `<worktree>/obsidian` for per-project notes so root-view links always have a target.
 - If the first-prompt hook reported multiple likely matches, ask the user to choose before doing substantive work.
 - If no project matches, create a new project note and dedicated worktree from the first-prompt router output, then confirm both in the first response.
 
@@ -22,10 +24,24 @@ When to use
 - Keep optional frontmatter `aliases` / `keywords` current when they would help the first-prompt router find this note again.
 - Keep `branch` aligned with the dedicated project worktree branch.
 - Keep `worktree` current and point it at the dedicated project worktree path.
+- Keep `worktree_obsidian` current so root dashboard links can jump directly to project-local notes without manual setup.
+- Keep `worktree_obsidian` in sync with actual directory creation; if absent or missing, create `<worktree>/obsidian` and update this field before edits.
+- For no-mirror usage, `worktree_obsidian` is the only source of truth for click-through project local notes.
 - Keep `## Commits` near the top with `date + hash or pending + short summary`.
 - Keep `## Key Files` focused on the active files for the project.
 - Link every relevant debrief under `## Debriefs`.
 - Append a dated entry under `## Log` for each meaningful batch.
+
+## Dashboard layout for click-through (no mirroring)
+- Use project notes as the routing source of truth.
+- A project note should include:
+  - `worktree` (branch-local checkout path, e.g. `.worktrees/project-slug`)
+  - `worktree_obsidian` (path to notes for that worktree, e.g. `.worktrees/project-slug/obsidian`)
+- Build a single dashboard note in the root vault (for example `obsidian/Active Projects.md`) with one list item per project using:
+  - project note link (`[[Project Name]]`)
+  - worktree obsidian folder from `worktree_obsidian` rendered as a markdown link
+- Refresh this dashboard deterministically by rerunning first-prompt routing for the session (or a small script tied to that hook) whenever worktree paths change.
+- Never mirror branch-local notes into main; this keeps branch-local work-in-progress out of shared Obsidian context.
 
 ## Debrief Checklist
 - Use `obsidian/Templates/Debrief.md`.

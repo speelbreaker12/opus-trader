@@ -7,6 +7,7 @@ started: "{{date}}"
 aliases: []
 keywords: []
 worktree:
+worktree_obsidian:
 ---
 
 ## Current State

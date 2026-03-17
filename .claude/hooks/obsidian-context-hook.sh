@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 
 def read_payload(path: Path) -> dict:
@@ -224,6 +225,7 @@ def write_project_note(path: Path, frontmatter: dict, body: str) -> None:
         "aliases",
         "keywords",
         "worktree",
+        "worktree_obsidian",
     ]
     lines = ["---"]
     emitted: set[str] = set()
@@ -272,6 +274,15 @@ def run_git(root: Path, *args: str, cwd: Path | None = None) -> subprocess.Compl
         text=True,
         capture_output=True,
     )
+
+
+def file_uri(path: Path) -> str:
+    """Create a simple deterministic file URI for a path.
+
+    This gives a clickable link target from markdown notes without requiring
+    per-worktree vault naming.
+    """
+    return f"file://{quote(str(path.resolve()), safe=':/')}"
 
 
 def branch_exists(root: Path, branch: str) -> bool:
@@ -332,6 +343,16 @@ def ensure_project_worktree(root: Path, project_path: Path, project_name: str, f
     if frontmatter_scalar(frontmatter, "worktree") != worktree_rel:
         frontmatter["worktree"] = worktree_rel
         updated = True
+
+    obsidian_path = worktree_path / "obsidian"
+    obsidian_path.mkdir(parents=True, exist_ok=True)
+    try:
+        obsidian_rel = str(obsidian_path.resolve().relative_to(root))
+    except ValueError:
+        obsidian_rel = str(obsidian_path.resolve())
+    if frontmatter_scalar(frontmatter, "worktree_obsidian") != obsidian_rel:
+        frontmatter["worktree_obsidian"] = obsidian_rel
+        updated = True
     if updated:
         write_project_note(project_path, frontmatter, body)
 
@@ -339,6 +360,9 @@ def ensure_project_worktree(root: Path, project_path: Path, project_name: str, f
         "branch": branch,
         "rel_path": worktree_rel,
         "abs_path": str(worktree_path.resolve()),
+        "obsidian_rel_path": obsidian_rel,
+        "obsidian_abs_path": str(obsidian_path.resolve()),
+        "obsidian_uri": file_uri(obsidian_path),
         "created": created,
     }
 
@@ -549,6 +573,8 @@ if top is None or top["score"] < confidence_threshold:
                 f"Project worktree: {created_worktree['rel_path']}",
                 f"Project worktree absolute path: {created_worktree['abs_path']}",
                 f"Project branch: {created_worktree['branch']}",
+                f"Project obsidian folder: {created_worktree['obsidian_rel_path']}",
+                f"Project obsidian link: {created_worktree['obsidian_uri']}",
                 "MANDATORY FIRST RESPONSE:",
                 "- Consult /obsidian-workflow for the project-note and debrief checklist.",
                 f"- Tell the user you created {created_project['rel_path']} because no related project note existed yet.",
@@ -616,6 +642,8 @@ else:
                 f"Project worktree: {worktree['rel_path']}",
                 f"Project worktree absolute path: {worktree['abs_path']}",
                 f"Project branch: {worktree['branch']}",
+                f"Project obsidian folder: {worktree['obsidian_rel_path']}",
+                f"Project obsidian link: {worktree['obsidian_uri']}",
                 f"Project worktree status: {'created' if worktree['created'] else 'existing'}",
                 "MANDATORY FIRST RESPONSE:",
                 "- Consult /obsidian-workflow for the project-note and debrief checklist.",

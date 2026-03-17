@@ -158,6 +158,8 @@ expect_contains "single match skill hint" "$single_output" "Companion skill: /ob
 expect_contains "single match path" "$single_output" "Matched Obsidian project: obsidian/Projects/Execution Facade Refactor.md"
 expect_contains "single match worktree" "$single_output" "Project worktree: .worktrees/execution-facade-refactor"
 expect_contains "single match branch" "$single_output" "Project branch: project/execution-facade-refactor"
+expect_contains "single match obsidian" "$single_output" "Project obsidian folder:"
+expect_contains "single match obsidian link" "$single_output" "Project obsidian link:"
 expect_contains "single match consult skill" "$single_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
 expect_contains "single match instruction" "$single_output" "Confirm you found and read obsidian/Projects/Execution Facade Refactor.md before proceeding."
 expect_contains "single match worktree instruction" "$single_output" "will use the project worktree"
@@ -194,6 +196,8 @@ expect_contains "no match banner" "$no_match_output" "No related Obsidian projec
 expect_contains "no match consult skill" "$no_match_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
 expect_contains "no match created note" "$no_match_output" "Created Obsidian project:"
 expect_contains "no match created worktree" "$no_match_output" "Project worktree: .worktrees/"
+expect_contains "no match created obsidian" "$no_match_output" "Project obsidian folder:"
+expect_contains "no match created obsidian link" "$no_match_output" "Project obsidian link:"
 expect_contains "no match instruction" "$no_match_output" "Tell the user you created"
 created_project_rel="$(printf '%s\n' "$no_match_output" | sed -n 's/^Created Obsidian project: //p' | head -n 1)"
 [[ -n "$created_project_rel" ]] || fail "no-match output missing created project path"
@@ -201,6 +205,9 @@ created_project_rel="$(printf '%s\n' "$no_match_output" | sed -n 's/^Created Obs
 created_worktree_rel="$(printf '%s\n' "$no_match_output" | sed -n 's/^Project worktree: //p' | head -n 1)"
 [[ -n "$created_worktree_rel" ]] || fail "no-match output missing created worktree path"
 [[ -d "$repo/$created_worktree_rel" ]] || fail "auto-created worktree missing at $created_worktree_rel"
+created_obsidian_rel="$(printf '%s\n' "$no_match_output" | sed -n 's/^Project obsidian folder: //p' | head -n 1)"
+[[ -n "$created_obsidian_rel" ]] || fail "no-match output missing created obsidian folder path"
+[[ -d "$repo/$created_obsidian_rel" ]] || fail "auto-created obsidian folder missing at $created_obsidian_rel"
 
 no_match_follow_up="$(run_hook "$repo" "session-no-match" "This belongs in Execution Facade Refactor.")"
 if [[ -n "$no_match_follow_up" ]]; then

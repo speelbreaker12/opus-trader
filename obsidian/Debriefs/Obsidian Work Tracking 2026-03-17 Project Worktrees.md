@@ -4,10 +4,11 @@ date: "2026-03-17"
 ---
 
 ## Commits
+- pending — 2026-03-17 — add `worktree_obsidian` and first-prompt click-through path metadata (no mirror model).
 - 75abb925 — project-scoped worktree routing batch
 
 ## 0) What shipped
-- Feature/behavior: Added `worktree` tracking to project notes and taught the first-prompt router to create or reuse dedicated project worktrees automatically.
+- Feature/behavior: Added `worktree` and `worktree_obsidian` tracking to project notes and taught the first-prompt router to create/reuse dedicated project worktrees plus project-local Obsidian folders automatically.
 - Value (what problem it solves): Keeps projects isolated from each other, reduces dirty-tree interference, and gives the agent one canonical workspace path to use after the first message.
 
 ## 1) Constraint (ONE)
