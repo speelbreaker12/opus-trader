@@ -5,7 +5,7 @@
 +
 +**Fail-closed rule (Non-Negotiable):** If any of `maintenance_margin`, `equity`, or `initial_margin` returned by `/private/get_account_summary` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. Rejections for missing/unparseable/NaN inputs MUST use `Rejected(MarginHeadroomInputMissing)`. No OPEN dispatch MAY occur while `RiskState::Degraded` is set due to this condition.
 +
-+AT-PROP-100
++AT-1254
 +- Given: `/private/get_account_summary` returns a response where `equity` is NaN or `maintenance_margin` is missing.
 +- When: the Margin Headroom Gate evaluates any OPEN intent.
 +- Then: `RiskState::Degraded` is set, the OPEN is rejected with `Rejected(MarginHeadroomInputMissing)`, and dispatch count remains 0.
@@ -19,14 +19,14 @@
  ...
  - Fail criteria: dispatch occurs or reason missing/mismatched.
 +
-+AT-PROP-101
++AT-1255
 +- Given: `RiskState::Healthy` is active (not Kill).
 +- When: `drain_all()` is called on PendingExposure.
 +- Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.
 +- Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.
 +- Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.
 +
-+AT-PROP-102
++AT-1256
 +- Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.
 +- When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.
 +- Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.
@@ -40,7 +40,7 @@
  ...
  - Fail criteria: fill worse than `limit_price` or realized edge below minimum.
 +
-+AT-PROP-103
++AT-1257
 +- Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.
 +- When: the pricer evaluates the intent.
 +- Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.
@@ -53,7 +53,7 @@
 +- Allow lower edge: `min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor)` where `inventory_skew_sell_floor >= 0` (see Appendix A; default: `0.5`)
 +- May be more aggressive on price: shift `limit_price` **toward** the touch by `bias_ticks(inventory_bias)` (risk-reducing direction)
 +
-+AT-PROP-104
++AT-1258
 +- Given: `inventory_bias = 1.0`, `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` initially fails Net Edge Gate.
 +- When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.
 +- Then: adjusted `min_edge_usd = base_min_edge_usd * 0.5`; if adjusted value allows SELL, it proceeds.
@@ -82,7 +82,7 @@
 +  - `account_summary_age_s` (gauge): seconds since last successful account_summary fetch
 +  - `account_summary_stale_total` (counter): incremented each evaluation cycle where age > threshold
 +
-+AT-PROP-105
++AT-1259
 +- Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).
 +- When: an OPEN intent is evaluated by the Margin Headroom Gate.
 +- Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.
@@ -97,7 +97,7 @@
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ §2.2 Field rename transition (contract version 5.2) after line 42
-+AT-PROP-201
++AT-1260
 +- Given: contract_version=5.2 and policy payload contains `rate_limit_session_kill_active=true` with `session_termination_active` absent.
 +- When: PolicyGuard computes TradingMode.
 +- Then: TradingMode == Kill (alias is honoured).
@@ -125,7 +125,7 @@
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after SystemIntegrityAxis fee-model staleness predicate
-+AT-PROP-202
++AT-1261
 +- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.
 +- When: TradingMode is computed.
 +- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.
@@ -135,7 +135,7 @@
 @@ §2.2.1.2 Critical inputs list
 +- `cortex_override` (from §2.3 producers) — if missing or unparseable MUST be treated as ForceReduceOnly; set REDUCEONLY_INPUT_MISSING_OR_STALE
 +
-+AT-PROP-203
++AT-1262
 +- Given: `cortex_override` is absent from the input snapshot or its value is unparseable/corrupted; all other axis inputs are nominal.
 +- When: PolicyGuard computes TradingMode.
 +- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_INPUT_MISSING_OR_STALE.
@@ -144,7 +144,7 @@
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after AT-1100 (line 967)
-+AT-PROP-204
++AT-1263
 +- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.
 +- When: reconciliation success criteria are evaluated.
 +- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.
@@ -152,7 +152,7 @@
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after Recovery Rule (line 570)
-+AT-PROP-205
++AT-1264
 +- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.
 +- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.
 +- When: TradingMode is computed on subsequent ticks.
