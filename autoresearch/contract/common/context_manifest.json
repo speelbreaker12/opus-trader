@@ -13,7 +13,7 @@
     "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "9b04e36716c248fa95ec6b4cb5edc568e553193fbc0a0c04008387231318acf7",
     "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "42eff0a3805aab152b35e8947b70a57be23c65a82e5b7bd1aad2bef9231b6fbe"
   },
-  "contract_content_hash": "5305f46bb335a7d41ac16aa4a249302de523172fec4392ecadf0655aedd9e72c",
-  "common_contract_hash": "5305f46bb335a7d41ac16aa4a249302de523172fec4392ecadf0655aedd9e72c",
-  "snapshot_contract_hash": "5305f46bb335a7d41ac16aa4a249302de523172fec4392ecadf0655aedd9e72c"
+  "contract_content_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
+  "common_contract_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
+  "snapshot_contract_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c"
 }

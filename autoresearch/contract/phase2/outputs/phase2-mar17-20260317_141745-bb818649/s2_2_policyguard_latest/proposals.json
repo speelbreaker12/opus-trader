@@ -29,14 +29,14 @@
       "rationale": "Lines 37-42 define a MUST-level dual-name acceptance rule for contract version 5.2, but no AT validates that the old field name `rate_limit_session_kill_active` is correctly aliased to `session_termination_active`. Without this AT, the normative aliasing rule is untested and can silently fail.",
       "status": "proposed",
       "dedupe_key": "f201-rate-limit-session-kill-alias-at",
-      "proposed_text": "Add an acceptance test after line 42: AT-1260 \u2014 Given contract_version=5.2 and a policy payload that uses only the old field name `rate_limit_session_kill_active=true` (new name absent), When PolicyGuard computes TradingMode, Then PolicyGuard MUST treat it identically to `session_termination_active=true` and compute Kill per the session-termination axis predicate. Pass: Kill computed. Fail: field ignored and Active or ReduceOnly returned.",
+      "proposed_text": "Add an acceptance test after line 42: AT-PROP-201 \u2014 Given contract_version=5.2 and a policy payload that uses only the old field name `rate_limit_session_kill_active=true` (new name absent), When PolicyGuard computes TradingMode, Then PolicyGuard MUST treat it identically to `session_termination_active=true` and compute Kill per the session-termination axis predicate. Pass: Kill computed. Fail: field ignored and Active or ReduceOnly returned.",
       "new_ats": [
         {
-          "at_id": "AT-1260",
+          "at_id": "AT-PROP-201",
           "description": "Given contract_version=5.2 and a payload using only the old field name `rate_limit_session_kill_active=true` (no `session_termination_active` key present), When PolicyGuard computes TradingMode, Then TradingMode == Kill (same result as if `session_termination_active=true`). Pass: Kill computed. Fail: old field ignored, Active or ReduceOnly returned."
         }
       ],
-      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2 Field rename transition (contract version 5.2) after line 42\n+AT-1260\n+- Given: contract_version=5.2 and policy payload contains `rate_limit_session_kill_active=true` with `session_termination_active` absent.\n+- When: PolicyGuard computes TradingMode.\n+- Then: TradingMode == Kill (alias is honoured).\n+- Pass criteria: Kill computed via alias. Fail criteria: old field ignored.\n"
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2 Field rename transition (contract version 5.2) after line 42\n+AT-PROP-201\n+- Given: contract_version=5.2 and policy payload contains `rate_limit_session_kill_active=true` with `session_termination_active` absent.\n+- When: PolicyGuard computes TradingMode.\n+- Then: TradingMode == Kill (alias is honoured).\n+- Pass criteria: Kill computed via alias. Fail criteria: old field ignored.\n"
     },
     {
       "proposal_id": "P-202",
@@ -120,14 +120,14 @@
       "rationale": "The SystemIntegrityAxis DEGRADED predicate `fee_model_cache_age_s > fee_model_hard_stale_s` (line 502) produces REDUCEONLY_FEE_MODEL_HARD_STALE but has no acceptance test. No AT proves this predicate actually forces ReduceOnly with the correct reason code.",
       "status": "proposed",
       "dedupe_key": "f205-fee-model-hard-stale-at",
-      "proposed_text": "Add after the fee-model staleness predicate (line 502): AT-1261 \u2014 Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis inputs are nominal (no other DEGRADED/FAILING predicates active), When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason. Fail: Active returned or reason code absent.",
+      "proposed_text": "Add after the fee-model staleness predicate (line 502): AT-PROP-202 \u2014 Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis inputs are nominal (no other DEGRADED/FAILING predicates active), When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason. Fail: Active returned or reason code absent.",
       "new_ats": [
         {
-          "at_id": "AT-1261",
+          "at_id": "AT-PROP-202",
           "description": "Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis predicates nominal, When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason code. Fail: Active returned or REDUCEONLY_FEE_MODEL_HARD_STALE absent."
         }
       ],
-      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after SystemIntegrityAxis fee-model staleness predicate\n+AT-1261\n+- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.\n+- When: TradingMode is computed.\n+- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.\n+- Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.\n"
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after SystemIntegrityAxis fee-model staleness predicate\n+AT-PROP-202\n+- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.\n+- When: TradingMode is computed.\n+- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.\n+- Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.\n"
     },
     {
       "proposal_id": "P-206",
@@ -138,10 +138,10 @@
       "rationale": "`cortex_override` drives CapitalRiskAxis CRITICAL (ForceKill) and SystemIntegrityAxis DEGRADED (ForceReduceOnly) but is not listed as a critical input in \u00a72.2.1.2, has no companion timestamp, and has no explicit missing/unparseable handling rule. A corrupted ForceKill signal could be silently dropped \u2014 a direct fail-open risk on a capital-loss path.",
       "status": "proposed",
       "dedupe_key": "f206-cortex-override-missing-unparseable-rule",
-      "proposed_text": "Add `cortex_override` to the \u00a72.2.1.2 critical inputs list. Add an explicit rule: 'If `cortex_override` is missing or unparseable, PolicyGuard MUST treat it as `ForceReduceOnly` (fail-closed) and include REDUCEONLY_INPUT_MISSING_OR_STALE in mode_reasons.' Add AT-1262: Given `cortex_override` payload is absent or cannot be deserialized, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and REDUCEONLY_INPUT_MISSING_OR_STALE is present. Pass: ReduceOnly with reason. Fail: Active returned or reason absent.",
+      "proposed_text": "Add `cortex_override` to the \u00a72.2.1.2 critical inputs list. Add an explicit rule: 'If `cortex_override` is missing or unparseable, PolicyGuard MUST treat it as `ForceReduceOnly` (fail-closed) and include REDUCEONLY_INPUT_MISSING_OR_STALE in mode_reasons.' Add AT-PROP-203: Given `cortex_override` payload is absent or cannot be deserialized, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and REDUCEONLY_INPUT_MISSING_OR_STALE is present. Pass: ReduceOnly with reason. Fail: Active returned or reason absent.",
       "new_ats": [
         {
-          "at_id": "AT-1262",
+          "at_id": "AT-PROP-203",
           "description": "Given `cortex_override` is absent from the input snapshot or its value is unparseable/corrupted, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_INPUT_MISSING_OR_STALE (fail-closed). Pass: ReduceOnly with correct reason. Fail: Active returned, ForceKill silently dropped, or reason code absent."
         }
       ],
@@ -156,14 +156,14 @@
       "rationale": "Line 944 defines a MUST-level fail-closed rule: if the REST `/get_user_trades` query fails (network/timeout/HTTP/parse error), latch MUST remain set. AT-1100 covers missing trades, not REST failure. This separate fail-closed code path has no AT coverage.",
       "status": "proposed",
       "dedupe_key": "f207-reconcile-rest-failure-at",
-      "proposed_text": "Add AT-1263 after AT-1100: Given `open_permission_blocked_latch == true` and the REST `/get_user_trades` call returns a network error, timeout, HTTP error, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and `open_permission_blocked_latch` MUST remain true; OPEN intents MUST remain blocked. Pass: latch stays set, reconciliation reported as failed. Fail: reconciliation succeeds on transport error, or latch clears.",
+      "proposed_text": "Add AT-PROP-204 after AT-1100: Given `open_permission_blocked_latch == true` and the REST `/get_user_trades` call returns a network error, timeout, HTTP error, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and `open_permission_blocked_latch` MUST remain true; OPEN intents MUST remain blocked. Pass: latch stays set, reconciliation reported as failed. Fail: reconciliation succeeds on transport error, or latch clears.",
       "new_ats": [
         {
-          "at_id": "AT-1263",
+          "at_id": "AT-PROP-204",
           "description": "Given `open_permission_blocked_latch == true` and REST `/get_user_trades` returns a network error, timeout, HTTP 4xx/5xx, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and latch MUST remain true; OPEN intents remain blocked. Pass: latch held, reconciliation failed. Fail: latch cleared on transport error or reconciliation succeeds."
         }
       ],
-      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after AT-1100 (line 967)\n+AT-1263\n+- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.\n+- When: reconciliation success criteria are evaluated.\n+- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.\n+- Pass criteria: latch held; reconciliation reported failed. Fail criteria: latch clears on transport failure.\n"
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after AT-1100 (line 967)\n+AT-PROP-204\n+- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.\n+- When: reconciliation success criteria are evaluated.\n+- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.\n+- Pass criteria: latch held; reconciliation reported failed. Fail criteria: latch clears on transport failure.\n"
     },
     {
       "proposal_id": "P-208",
@@ -174,14 +174,14 @@
       "rationale": "The Recovery Rule (lines 565-570) is a MUST-level cross-cutting invariant with no dedicated AT. AT-1053 tests monotonicity (worse axes never produce less-restrictive mode) but does not test the recovery direction \u2014 that a recovering axis cannot return to Active faster than the applicable hysteresis window allows.",
       "status": "proposed",
       "dedupe_key": "f208-recovery-slower-than-degradation-at",
-      "proposed_text": "Add AT-1264 after the Recovery Rule: Given `bunker_mode_active` becomes true (entering Bunker Mode via §2.3.2) and all other axis inputs are nominal (no other STRESSED/DEGRADED/FAILING predicates active), and then `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed since the bunker entry condition cleared. Pass: ReduceOnly held for full `bunker_exit_stable_s` duration; Active not returned prematurely. Fail: Active returned before `bunker_exit_stable_s` elapses.",
+      "proposed_text": "Add AT-PROP-205 after the Recovery Rule: Given a ReduceOnly trigger activates (e.g., bunker_mode_active becomes true) and then immediately clears within the same tick or sub-cooldown interval, When TradingMode is computed on the subsequent tick(s), Then TradingMode MUST NOT return to Active until the applicable hysteresis/cooldown window has elapsed. Pass: ReduceOnly held for at least the minimum hysteresis duration. Fail: Active returned before hysteresis expires.",
       "new_ats": [
         {
-          "at_id": "AT-1264",
-          "description": "Given `bunker_mode_active` becomes true (Bunker Mode entry) with all other axis inputs nominal, and then clears before `bunker_exit_stable_s` elapses, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed. Pass: ReduceOnly held for full stable-exit window. Fail: Active returned before `bunker_exit_stable_s` elapses."
+          "at_id": "AT-PROP-205",
+          "description": "Given a ReduceOnly trigger activates then clears within a sub-cooldown interval, When TradingMode is computed on the next tick, Then TradingMode MUST remain ReduceOnly until the applicable hysteresis window has elapsed. Pass: ReduceOnly held for minimum hysteresis duration. Fail: Active returned before hysteresis expires."
         }
       ],
-      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after Recovery Rule (line 570)\n+AT-1264\n+- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.\n+- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.\n+- When: TradingMode is computed on subsequent ticks.\n+- Then: TradingMode == ReduceOnly until full `bunker_exit_stable_s` window elapses since bunker entry condition cleared.\n+- Pass criteria: ReduceOnly held for full stable-exit window; Active not returned prematurely.\n+- Fail criteria: Active returned before `bunker_exit_stable_s` elapses.\n"
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after Recovery Rule (line 570)\n+AT-PROP-205\n+- Given: a ReduceOnly trigger activates and clears within a sub-cooldown interval.\n+- When: TradingMode computed on subsequent tick.\n+- Then: TradingMode == ReduceOnly until hysteresis window expires.\n+- Pass criteria: ReduceOnly held; Active not returned prematurely. Fail criteria: Active returned before hysteresis elapses.\n"
     },
     {
       "proposal_id": "P-209",

@@ -2,13 +2,13 @@
 status: in-progress
 priority: P1
 branch: main
-pr: 214
+pr: 207
 started: 2026-03-16
 ---
 
 ## Current State
 
-Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from run phase2-mar17-20260317_141745-bb818649. 11 new ATs (AT-1254..AT-1264), 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, 3 new RejectReasonCode entries, bunker_mode_last_update_ts_ms, cortex_override critical input, account_summary staleness, inventory_skew_sell_floor formula. proposals_index.json status set to "applied".
+Phase 3 run complete (phase2-mar17-20260317_141745-bb818649). 18 findings across 3 fixtures, 19 proposals generated (16 proposed, 1 rejected, 2 pending_scope_review). P0 gaps: Margin Headroom Gate missing fail-closed for NaN/missing inputs; bunker_mode_active staleness threshold unimplementable. Review package ready for manual decisions.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -20,8 +20,6 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 
 ## Debriefs
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
-- [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
-- [[Autoresearch 2026-03-17 Phase3 Patch Applied]]
 
 ## Log
 ### 2026-03-16
@@ -50,22 +48,9 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Phase 2 review: accepted 8, rejected 2 (CSP bypass redundant with AT-991, AT-1100 structural move)
 - CONTRACT.md patched: AT-1247 (LG CLOSE/HEDGE slippage), AT-1248 (EG attribution missing), AT-1249 (TMC bunker_mode stale), AT-1250 (OPL clear transition), AT-1251 (EC hedge bound), AT-1252 (EC monotonic retry), cooldown scope, Profile:ALL tags
 ### 2026-03-17
-- Backfilled the Phase 3 gap-detection debrief with split commit `da5b38cf` after the mixed commit was separated.
 - Phase 3 contract gap detection run (phase2-mar17-20260317_141745-bb818649), score 1.000 (20/20 checks)
 - 18 findings across 3 fixtures (s1_execution_pipeline, s2_2_policyguard, sample_contract_patch)
 - 19 proposals: 16 proposed, 1 rejected (enforcement evidence missing), 2 pending_scope_review
 - P0: Margin Headroom Gate NaN/missing fail-closed gap; bunker_mode_active staleness unimplementable
 - P1: drain_all() 0 ATs, Pricer fail-closed 0 ATs, Inventory Skew SELL formula vague, AT-1243 duplicate ID, fee_model hard-stale 0 ATs, cortex_override fail-open risk, reconciliation REST failure 0 ATs, field rename alias 0 ATs, TradingModeBlockedOpen missing from registry
-- Review complete: 16 accepted, 3 rejected (P-209 pre-rejected, P-400/P-401 fixture-only). P-208 rewritten to bind bunker_mode_active + bunker_exit_stable_s.
-- Accepted-only patch rendered at `autoresearch/contract/phase2/review/CONTRACT_PATCH_phase2-mar17-20260317_141745-bb818649.patch`
-- Patch audit caught 3 gaps: missing AT-1262, missing Appendix A entry for inventory_skew_sell_floor, duplicate line-513 hunk. All fixed.
-- Next: apply corrected patch to CONTRACT.md (new context recommended — 16 semantic edits on 6400+ line file)
-- Applied phase3 accepted patch to CONTRACT.md: 16 proposals, 11 new ATs, 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, MarginHeadroomInputMissing + TradingModeBlockedOpen in registry, bunker_mode/cortex_override/account_summary staleness rules, inventory_skew_sell_floor formula
-- Reverted phase2 proposals (AT-1247..AT-1252) superseded by phase3 findings + CCL-2026-03-16-01 ledger entry
-- Re-added AT-1251 (hedge qty bound) and AT-1252 (retry monotonic) — restored after phase2 revert
-- Renumbered 11 AT-PROP-xxx provisional IDs to permanent AT-1254..AT-1264
-- Refreshed contract_kernel.json and context_manifest.json hashes
-- Added TF-917 (bunker_mode) and TF-918 (account_summary) to TIME_FRESHNESS.yaml
-- Added CSP-063 (Recovery/Matching Rule dedup) to TRACE.yaml
-- Creating separate autoresearch PR branch for all phase3 changes
-- PR #214 rebased onto main, added S6.13 to IMPLEMENTATION_PLAN.md to fix doc_sync_check
+- Next: review 19 proposals in review package, write REVIEW_DECISIONS JSON, apply accepted patches

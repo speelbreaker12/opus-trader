@@ -10,15 +10,6 @@ type: progress
 - 18 findings detected, 19 proposals generated, score 1.000 (20/20 checks)
 - Review package rendered for manual proposal decisions
 
-## Artifacts
-- Run ID: `phase2-mar17-20260317_141745-bb818649`
-- Review: `autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar17-20260317_141745-bb818649.md`
-- Proposals: `autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-mar17-20260317_141745-bb818649.md`
-- Outputs: `autoresearch/contract/phase2/outputs/phase2-mar17-20260317_141745-bb818649/`
-- Results: `autoresearch/contract/phase2/results.tsv`
-- Index: `autoresearch/contract/phase2/proposals_index.json`
-- Commit: `da5b38cf`
-
 ## How it manifested (2-3 concrete symptoms)
 - harness.sh contract phase2 run cannot execute inside a Claude session (nested session error); had to run the pipeline manually via Python imports and parallel subagents
 - Section field mismatches between findings and proposals required programmatic fixup (agents used slightly different section titles)
