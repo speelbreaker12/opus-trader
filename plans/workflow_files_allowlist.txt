@@ -1,3 +1,4 @@
+.claude/hooks/obsidian-context-hook.sh
 .githooks/pre-commit
 .githooks/pre-push
 .github/pull_request_template.md
@@ -135,6 +136,7 @@ plans/tests/test_lint_risk_facade.sh
 plans/tests/test_lint_soldier_infra_facade.sh
 plans/tests/test_lint_venue_facade.sh
 plans/tests/test_obsidian_commit_guard.sh
+plans/tests/test_obsidian_context_hook.sh
 plans/tests/test_obsidian_precommit_hook.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_pr_review_gate_hook.sh

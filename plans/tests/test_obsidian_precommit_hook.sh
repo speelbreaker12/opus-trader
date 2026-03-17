@@ -141,6 +141,11 @@ expect_block \
   "No staged Obsidian debrief" \
   "$repo" \
   "git commit -m test"
+expect_block \
+  "project-only staging includes scope reminder" \
+  "Only include the changes you made in this commit." \
+  "$repo" \
+  "git commit -m test"
 
 write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
 git -C "$repo" add "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"

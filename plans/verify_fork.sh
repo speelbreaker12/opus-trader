@@ -955,6 +955,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_review_logged_timeout_retry_noncodex.sh"
   "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
   "plans/tests/test_review_logged_prompt_literalization.sh"
+  "plans/tests/test_obsidian_context_hook.sh"
   "plans/tests/test_pr_review_gate_hook.sh"
   "plans/tests/test_obsidian_commit_guard.sh"
   "plans/tests/test_obsidian_precommit_hook.sh"
