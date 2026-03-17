@@ -112,11 +112,6 @@
 +TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
-@@ -513,1 +513,1 @@
--TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):
-+TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):
---- a/specs/CONTRACT.md
-+++ b/specs/CONTRACT.md
 @@ §2.2.6 Allowed values list
 +- `TradingModeBlockedOpen`
 @@ AT-931 pass criteria line 747
@@ -139,6 +134,13 @@
 +++ b/specs/CONTRACT.md
 @@ §2.2.1.2 Critical inputs list
 +- `cortex_override` (from §2.3 producers) — if missing or unparseable MUST be treated as ForceReduceOnly; set REDUCEONLY_INPUT_MISSING_OR_STALE
++
++AT-PROP-203
++- Given: `cortex_override` is absent from the input snapshot or its value is unparseable/corrupted; all other axis inputs are nominal.
++- When: PolicyGuard computes TradingMode.
++- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_INPUT_MISSING_OR_STALE.
++- Pass criteria: ReduceOnly with correct reason code; no OPEN dispatched.
++- Fail criteria: Active returned, ForceKill silently dropped, or reason code absent.
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after AT-1100 (line 967)
@@ -157,3 +159,7 @@
 +- Then: TradingMode == ReduceOnly until full `bunker_exit_stable_s` window elapses since bunker entry condition cleared.
 +- Pass criteria: ReduceOnly held for full stable-exit window; Active not returned prematurely.
 +- Fail criteria: Active returned before `bunker_exit_stable_s` elapses.
+--- a/specs/CONTRACT.md
++++ b/specs/CONTRACT.md
+@@ Appendix A defaults table, after inventory_skew_k
++| `inventory_skew_sell_floor` | `0.5` | dimensionless | §1.4.2 |
