@@ -1489,6 +1489,7 @@ OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(Liquidity
 
 **Scope (explicit):**
 - Applies to normal dispatch and containment rescue IOC orders (see §1.1 containment Step A).
+- CLOSE/HEDGE order placement intents with valid, fresh L2 ARE subject to the slippage threshold check (steps 1-4), including containment rescue IOC orders (Step A). If slippage exceeds `max_slippage_bps` for a CLOSE/HEDGE, the gate rejects with `Rejected(ExpectedSlippageTooHigh)`. Deterministic Emergency Close (§3.1) and containment Step B remain exempt.
 - Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.
 - Emergency close still requires a valid price source; missing/stale L2 MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
 - When no valid fallback source exists, `RiskState::Degraded` is set (see §2.2.3.2 SystemIntegrityAxis), producing `TradingMode::ReduceOnly` via the axis resolver.
@@ -1537,6 +1538,12 @@ AT-1216
 - Pass criteria: dispatch count increases by 1 and no liquidity reject reason is emitted.
 - Fail criteria: intent is rejected by Liquidity Gate despite valid/fresh L2 and in-budget slippage.
 
+AT-1247
+- Given: a CLOSE/HEDGE order placement intent with valid, fresh `L2BookSnapshot` and computed `slippage_bps > max_slippage_bps`.
+- When: Liquidity Gate evaluates the order.
+- Then: the intent is rejected with `Rejected(ExpectedSlippageTooHigh)` and no dispatch occurs.
+- Pass criteria: dispatch count remains 0; rejection reason is `ExpectedSlippageTooHigh`.
+- Fail criteria: CLOSE/HEDGE dispatches despite exceeding the slippage threshold with valid L2.
 
 
 ### **1.4 Fee-Aware IOC Limit Pricer (No Market Orders)**
@@ -2347,6 +2354,9 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Trip (breach window): if `parquet_queue_depth_pct > parquet_queue_trip_pct` for >= `parquet_queue_trip_window_s` seconds → EvidenceChainState != GREEN
   - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
 
+**Global cooldown scope (Normative):**
+The `evidenceguard_global_cooldown` (Appendix A) governs recovery timing for ALL error-counter recovery paths (not only parquet queue depth). EvidenceChainState MUST NOT return to GREEN until all GREEN criteria remain satisfied for at least `evidenceguard_global_cooldown` seconds after the last trip condition clears.
+
 **Where enforced (must be explicit):**
 - When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
 - When `enforced_profile != CSP`, the hot-path execution gate MUST check EvidenceChainState before dispatching OPEN orders.
@@ -2429,6 +2439,13 @@ AT-415
 - Then: EvidenceChainState MUST be not GREEN (fail-closed) and OPEN intents MUST be blocked.
 - Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while required counters are missing/unparseable.
+
+AT-1248
+- Given: `attribution_write_errors` is missing or unparseable while EvidenceGuard evaluates EvidenceChainState.
+- When: EvidenceGuard computes EvidenceChainState for this tick/window.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed) and OPEN intents MUST be blocked.
+- Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
+- Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while `attribution_write_errors` is missing/unparseable.
 
 AT-923
 - Given: `evidenceguard_counters_last_update_ts_ms` is older than `evidenceguard_counters_max_age_ms`.
@@ -2522,6 +2539,7 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 **MarketIntegrityAxis** (market data integrity / comms reliability)
 - Input: `bunker_mode_active` (from §2.3.2 Network Jitter Monitor)
 - `STRESSED` if `bunker_mode_active == true`
+- `STRESSED` if `bunker_mode_active` is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2 (fail-closed).
 - `STABLE` otherwise.
 - `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
 
@@ -2845,6 +2863,13 @@ AT-1050
 - Pass criteria: exact reason set and ReduceOnly computed.
 - Fail criteria: any additional reason appears, or mode is Active/Kill.
 
+AT-1249
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active` which is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2.
+- When: the Axis Resolver computes MarketIntegrityAxis and TradingMode.
+- Then: `MarketIntegrityAxis == STRESSED` (fail-closed), `TradingMode == ReduceOnly`, and `mode_reasons` contains `REDUCEONLY_BUNKER_MODE_ACTIVE`.
+- Pass criteria: exact reason set and ReduceOnly computed; OPEN does not dispatch.
+- Fail criteria: MarketIntegrityAxis is STABLE, TradingMode is Active, or mode_reasons is missing/incorrect while `bunker_mode_active` is missing/stale.
+
 **Axis Isolation — CapitalRiskAxis (Margin Util Only)**
 AT-1051
 - Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `mm_util >= mm_util_reduceonly`.
@@ -3036,6 +3061,13 @@ AT-011
 - Then: the latch clears (`open_permission_blocked_latch==false` and `open_permission_reason_codes==[]`), and opens may proceed only if PolicyGuard computes `TradingMode::Active`.
 - Pass criteria: latch fields match the invariants immediately after reconciliation; opens remain blocked unless mode is Active.
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
+
+AT-1250
+- Given: `open_permission_blocked_latch==true` with any reconcile-class reason code.
+- When: reconciliation succeeds and the latch clears.
+- Then: `open_permission_requires_reconcile` MUST equal `false` and `open_permission_reason_codes` MUST be `[]`.
+- Pass criteria: all three state fields are consistent post-clear (`open_permission_blocked_latch==false`, `open_permission_requires_reconcile==false`, `open_permission_reason_codes==[]`).
+- Fail criteria: `open_permission_requires_reconcile` remains `true` or `open_permission_reason_codes` is non-empty after latch clears.
 
 AT-402
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED` and a cancel/replace that increases exposure.
@@ -3585,7 +3617,7 @@ Profile: CSP
 **Algorithm (Deterministic, 3 tries):**
 1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`). This is attempt 1.
 2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks).
-3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta. Hedge quantity MUST NOT exceed the net exposed quantity at the time of submission; if the computed hedge would exceed the exposed quantity, it MUST be capped to the exposed quantity (no new net exposure created). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
 
 **AtomicNakedEvent schema (minimum):**
@@ -3601,6 +3633,7 @@ Profile: CSP
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
 - `evidence_chain_state_at_event` (EvidenceChainState per §2.2.2; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
+Profile: ALL
 AT-1102
 - Given: an AtomicNakedEvent is emitted by the emergency close path.
 - When: the event's `cause` field is inspected.
@@ -3608,6 +3641,7 @@ AT-1102
 - Pass criteria: every emitted AtomicNakedEvent has a non-empty `cause` value (e.g., `atomic_legging_failure`, `emergency_close_exhausted`, `hedge_fallback`).
 - Fail criteria: any AtomicNakedEvent has an empty, null, or missing `cause` field.
 
+Profile: ALL
 AT-211
 - Given: an atomic group enters mixed state (one leg filled, another rejected or none) and emergency close runs.
 - When: emergency close completes (including optional hedge fallback).
@@ -3666,6 +3700,20 @@ AT-1239
 - Then: venue-band fallback is treated as unavailable; no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
 - Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
 - Fail criteria: venue-band dispatch occurs while metadata is stale, or rejection reason is missing/mismatched.
+
+AT-1251
+- Given: an atomic group enters mixed state and emergency close runs through to the hedge fallback (step 3).
+- When: the hedge quantity is computed.
+- Then: `hedge_qty` MUST NOT exceed the net exposed quantity at the time of submission. The hedge MUST NOT create new net exposure.
+- Pass criteria: hedge_qty <= exposed_qty; net exposure after hedge is <= net exposure before hedge.
+- Fail criteria: hedge_qty > exposed_qty, or the hedge creates new net exposure in the opposite direction.
+
+AT-1252
+- Given: venue-band fallback pricing is used and emergency close executes multiple IOC retry attempts.
+- When: retry attempts 1-3 are evaluated.
+- Then: each successive attempt MUST be reduce-only (qty <= remaining exposure after prior fills) and MUST NOT increase net position. Retry quantities MUST be monotonically non-increasing (bounded by remaining exposure).
+- Pass criteria: all retry quantities are <= remaining exposure at that point; no attempt increases delta exposure.
+- Fail criteria: any attempt uses qty > remaining exposure, or any attempt increases net position.
 
 
 ### **3.2 Smart Watchdog**
@@ -6703,7 +6751,7 @@ definition points in the main contract and to the most directly relevant accepta
 | **CSP.5.2 Enforcement rules (OPEN gating, ReduceOnly, Kill)** | §2.2.3.4 (dispatch authorization rules)<br>§2.2.4 (OPEN blocked under reconcile latch)<br>§2.2.5 (cancel/replace permission rules) | AT-010 (OPEN blocked; CLOSE/HEDGE allowed under latch)<br>AT-1055 (reduce_only=true is not an OPEN intent)<br>AT-338 (Kill containment is mandatory when exposed) |
 | **CSP.5.3 Runtime Binding Gate** | §2.2.1 (runtime-binding semantics, binding, freshness)<br>§7.0 (`/status` runtime binding fields) | AT-003 / AT-412 (`/status` runtime_binding_state/expires invariants)<br>AT-423 (runtime binding file changes reflected next tick)<br>AT-012 (contract_version string binding)<br>AT-113 (runtime_config_hash canonicalization) |
 | **CSP.6 Capital Supremacy Invariant** | §0.Z.2.2, item F (capital supremacy invariant)<br>§2.2.3.6 (Kill semantics: containment must remain legal under exposure)<br>§3.1 (emergency close) | AT-1049 (no-deadlock-under-exposure)<br>AT-338 / AT-339 / AT-340 (Kill containment required; not blocked by disk/evidence/WAL)<br>AT-346 / AT-347 / AT-013 (containment allowed under session/watchdog/bunker) |
-| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 / AT-1217 / AT-1239 (L2/L1/venue-band fallback ladder; fail-closed when all sources invalid, and venue-band disallowed when instrument metadata is stale)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
+| **CSP.7 Deterministic Emergency Containment** | §3.1 (Deterministic Emergency Close algorithm + hedge fallback)<br>§3.2 (watchdog reduce-only behavior preserves hedges)<br>§2.2.3.6 (Kill containment semantics) | AT-235 / AT-236 (bounded close attempts; LiquidityGate does not block emergency close)<br>AT-937 / AT-938 / AT-1217 / AT-1239 (L2/L1/venue-band fallback ladder; fail-closed when all sources invalid, and venue-band disallowed when instrument metadata is stale)<br>AT-1251 (hedge qty bounded by net exposed qty)<br>AT-1252 (retry quantities monotonically non-increasing)<br>AT-237 / AT-203 (watchdog keeps reduce-only hedges alive)<br>AT-338 (Kill containment attempts while exposed) |
 | **CSP.8 Timebase Authority** | §0.Z.2.2, item H (monotonic interval requirement; clock uncertainty semantics)<br>§2.2.1.2 (freshness checks for critical inputs)<br>§7.0 (policy_age_sec calculation + status invariants) | AT-001 / AT-112 / AT-349 / AT-350 / AT-413 (missing/stale inputs force ReduceOnly)<br>AT-406 (policy_age_sec arithmetic correctness)<br>*(No dedicated AT yet for “wall-clock MUST NOT trigger Kill”; add if desired.)* |
 | **CSP.9 Profile Isolation** | §0.Z.7 (runtime + compile-time isolation)<br>§0.Z.10 (numeric isolation under CSP)<br>§2.2.2 (EvidenceGuard "NOT_ENFORCED" when CSP)<br>§2.2.1.2 (critical inputs are profile-scoped)<br>§5.2 (Replay Gatekeeper CSP isolation)<br>§7.0 (status: omit/NOT_ENFORCED GOP keys when CSP) | AT-990 (CSP_ONLY build boots; GOP absent/NOT_ENFORCED)<br>AT-991 / AT-1218 (GOP unhealthy or absent must not affect CSP decisions)<br>AT-992 (GOP enforcement when enforced_profile != CSP)<br>AT-1070 / AT-1219 (CSP isolation from replay/snapshot and GOP-only numeric faults) |
 | **CSP.10 CSP_ONLY Build/Test Mode** | §0.Z.7.3 (CSP_ONLY build requirement)<br>§0.Z.9 (CSP-only CI gate)<br>§0.Z.9.1 (meta-ATs) | AT-1056 (CI build:csp_only succeeds)<br>AT-1057 (CI test:csp_only runs only CSP tests; all pass)<br>AT-990 (runtime sanity: CSP_ONLY build starts; GOP not enforced) |
@@ -6734,3 +6782,4 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-15 | CCL-2026-03-15-04 | §2.2.3.4.1 Non-Active OPEN Cancellation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit deterministic precedence ordering for non-Active cancel-sweep decisions across cancel-all baseline, proof-gated reconciliation exemptions, and last-risk-reducing capital guard. | Remove interpretation ambiguity so order-level cancel decisions are deterministic and non-contradictory under exposure. | AT-1241, AT-1242, AT-1049 | local/remediation-order-v4-task2-quality-fix |
 | 2026-03-15 | CCL-2026-03-15-05 | P0-D Break-Glass clarifications/AT-1237; §1.2.2 Churn Breaker; §2.2.4 Open Permission Latch; §7.0 /status; Appendix A defaults/summary; Appendix CONTRACT_CHANGE_LEDGER | hardening | Implement remediation-order-v4 Task 3 contract hardening: exposed-case drill proof, reconciliation-stall observability, informational `pending_reduceonly_reasons`, and churn-breaker early-clear semantics. | Close remaining fail-open/observability gaps while preserving fail-closed authorization boundaries and deterministic diagnostics. | AT-1237, AT-1243, AT-1244, AT-1245, AT-1246 | local/remediation-order-v4-task3 |
 | 2026-03-15 | CCL-2026-03-15-06 | §2.2.4 Open Permission Latch (AT-1243 cadence); Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify deterministic `RECONCILE_STALL` emission cadence: one emission per continuous stall episode at threshold exceedance, re-emission only on failing-criterion change or new post-clear episode. | Prevent alert/log spam ambiguity while preserving deterministic observability and fail-closed latch semantics. | AT-1243 | local/remediation-order-v4-task3-quality-fix |
+| 2026-03-16 | CCL-2026-03-16-01 | §1.3 Liquidity Gate (scope + AT-1247); §2.2.2 EvidenceGuard (cooldown scope + AT-1248); §2.2.3.2 MarketIntegrityAxis (fail-closed + AT-1249); §2.2.4 OPL (AT-1250); §3.1 Emergency Close (hedge bound AT-1251 + retry AT-1252 + Profile tags); Appendix CONTRACT_CHANGE_LEDGER | hardening | Autoresearch Phase 2: accept 8 of 10 machine-generated proposals — close CLOSE/HEDGE slippage scope gap, global cooldown scope ambiguity, attribution_write_errors AT coverage, bunker_mode stale fail-closed, latch clear-transition AT, hedge size bound, monotonic retry AT, and Profile:ALL tags for AT-1102/AT-211. Reject redundant CSP bypass AT (AT-991 covers) and AT-1100 structural move. | Close 6 genuine contract gaps and 2 AT coverage gaps identified by autoresearch phase 2 baseline analysis. | AT-1247, AT-1248, AT-1249, AT-1250, AT-1251, AT-1252 | local/autoresearch-phase2-proposals |
