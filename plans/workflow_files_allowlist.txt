@@ -1,3 +1,4 @@
+.claude/hooks/obsidian-context-hook.sh
 .githooks/pre-commit
 .githooks/pre-push
 .github/pull_request_template.md
@@ -57,6 +58,7 @@ plans/lint_risk_facade.sh
 plans/lint_soldier_infra_facade.sh
 plans/lint_venue_facade.sh
 plans/live_enable_preflight.sh
+plans/obsidian_commit_guard.sh
 plans/postmortem_template.md
 plans/pr_gate.sh
 plans/prd_audit_check.sh
@@ -133,6 +135,9 @@ plans/tests/test_lint_execution_facade.sh
 plans/tests/test_lint_risk_facade.sh
 plans/tests/test_lint_soldier_infra_facade.sh
 plans/tests/test_lint_venue_facade.sh
+plans/tests/test_obsidian_commit_guard.sh
+plans/tests/test_obsidian_context_hook.sh
+plans/tests/test_obsidian_precommit_hook.sh
 plans/tests/test_pr_gate.sh
 plans/tests/test_pr_review_gate_hook.sh
 plans/tests/test_prd_cache.sh
@@ -168,6 +173,7 @@ plans/tests/test_slice_completion_enforce.sh
 plans/tests/test_slice_completion_review_guard.sh
 plans/tests/test_slice_execute_guard.sh
 plans/tests/test_slice_review_gate.sh
+plans/tests/test_ssot_lint.sh
 plans/tests/test_stoic_cli_invariant_check.sh
 plans/tests/test_story_review_findings_guard.sh
 plans/tests/test_story_review_gate.sh

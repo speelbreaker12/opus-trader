@@ -30,17 +30,23 @@ Key fintech rules:
 Every agent session must track work in `obsidian/Projects/`.
 
 **On session start:** Read all `obsidian/Projects/*.md` files to understand active work, priorities, and current state.
+If the Obsidian router hook points to `/obsidian-workflow`, use it as the project-page/debrief checklist companion.
+Project notes may include optional frontmatter `aliases` and `keywords` to improve first-prompt router matching; keep them current when they materially help rediscovery.
+Project notes should record a dedicated `worktree` path and keep `branch` aligned with that worktree. When a project is matched, use that worktree for commands/edits in the session; if it is missing, create one at `.worktrees/<project-slug>` and update the project note before substantive work.
+If work is paused mid-stream, blocked, or the user explicitly asks for a handoff, write it to `obsidian/Handoffs/<Project> <date> <Short Title>.md` from `obsidian/Templates/Handoff.md` and link it from the project note. This does not replace `plans/pause.md` or any workflow-specific required handoff artifact.
 
 **Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:
 1. Add a dated entry under `## Log` describing what changed
 2. Update `## Current State` if the project status shifted
-3. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
+4. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+5. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
 
 **If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
 
-**The git pre-commit hook will block commits** that don't include a staged change to `obsidian/Projects/*.md`.
+**The git pre-commit hook will block commits** that don't include staged changes to both `obsidian/Projects/*.md` and `obsidian/Debriefs/*.md`, it requires the staged project note to link at least one staged debrief, and all staged Obsidian project/debrief files in that commit must belong to exactly one project.
 
-**At end of session (optional but encouraged):** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Link it from the project's `## Debriefs` section.
+**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before committing.
 
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.
