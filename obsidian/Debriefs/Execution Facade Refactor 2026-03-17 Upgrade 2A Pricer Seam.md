@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending
+- bdb1cec1
 
 ## 0) What shipped
 - Feature/behavior: `execution/pricer.rs` now exposes a crate-private `compute_limit_price_with_events(...)` seam with `PricerEvent`, while the legacy `compute_limit_price(...)` wrapper still routes through the production adapter and preserves the existing reject metric/counter behavior.
@@ -24,7 +24,7 @@ date: "2026-03-17"
 - 1-3 upgrades worth considering:
 - What: Convert `execution/inventory_skew.rs`. | Increment: add a crate-private event seam plus graybox/wrapper parity tests. | Validation: its row flips from `FAIL` to `PASS` in the 2A checklist.
 - What: Convert `execution/preflight.rs`. | Increment: isolate reject telemetry behind an event sink while keeping the wrapper’s legacy metric line contract. | Validation: graybox tests emit no global metric lines and the wrapper parity test still does.
-- What: Batch a commit for pricer plus project/debrief tracking. | Increment: update this debrief’s pending hash and commit the slice. | Validation: pre-commit passes and the project note no longer carries a pending row for this batch.
+- What: Convert `execution/post_only_guard.rs`. | Increment: add the same crate-private event seam and graybox/wrapper parity coverage used in pricer. | Validation: its row flips from `FAIL` to `PASS` in the 2A checklist.
 
 ## 3) Enforceable rules
 - rule: Leaf Upgrade 2A conversions must keep the public function as the production telemetry adapter and move side effects into a crate-private event seam.
