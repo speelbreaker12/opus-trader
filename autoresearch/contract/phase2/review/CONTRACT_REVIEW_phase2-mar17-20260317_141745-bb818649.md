@@ -42,7 +42,7 @@ The Margin Headroom Gate specifies threshold rules for mm_util but has no fail-c
 +
 +**Fail-closed rule (Non-Negotiable):** If any of `maintenance_margin`, `equity`, or `initial_margin` returned by `/private/get_account_summary` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. Rejections for missing/unparseable/NaN inputs MUST use `Rejected(MarginHeadroomInputMissing)`. No OPEN dispatch MAY occur while `RiskState::Degraded` is set due to this condition.
 +
-+AT-PROP-100
++AT-1254
 +- Given: `/private/get_account_summary` returns a response where `equity` is NaN or `maintenance_margin` is missing.
 +- When: the Margin Headroom Gate evaluates any OPEN intent.
 +- Then: `RiskState::Degraded` is set, the OPEN is rejected with `Rejected(MarginHeadroomInputMissing)`, and dispatch count remains 0.
@@ -68,14 +68,14 @@ Three normative MUST rules for drain_all() exist (Kill-only guard, post-drain se
 ```text
 Add the following acceptance tests after AT-910 in §1.4.2.1:
 
-AT-PROP-101
+AT-1255
 - Given: `RiskState::Healthy` is active (not Kill).
 - When: `drain_all()` is called on PendingExposure.
 - Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.
 - Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.
 - Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.
 
-AT-PROP-102
+AT-1256
 - Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.
 - When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.
 - Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.
@@ -94,14 +94,14 @@ AT-PROP-102
  ...
  - Fail criteria: dispatch occurs or reason missing/mismatched.
 +
-+AT-PROP-101
++AT-1255
 +- Given: `RiskState::Healthy` is active (not Kill).
 +- When: `drain_all()` is called on PendingExposure.
 +- Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.
 +- Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.
 +- Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.
 +
-+AT-PROP-102
++AT-1256
 +- Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.
 +- When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.
 +- Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.
@@ -127,7 +127,7 @@ The Pricer has a normative MUST for fail-closed behavior on missing/NaN/invalid 
 ```text
 Add the following acceptance test after AT-223 in §1.4:
 
-AT-PROP-103
+AT-1257
 - Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.
 - When: the pricer evaluates the intent.
 - Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.
@@ -146,7 +146,7 @@ AT-PROP-103
  ...
  - Fail criteria: fill worse than `limit_price` or realized edge below minimum.
 +
-+AT-PROP-103
++AT-1257
 +- Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.
 +- When: the pricer evaluates the intent.
 +- Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.
@@ -180,7 +180,7 @@ Add `inventory_skew_sell_floor` to Appendix A with default value `0.5`.
 
 Add the following acceptance test after AT-224:
 
-AT-PROP-104
+AT-1258
 - Given: `inventory_bias = 1.0` (fully long, at delta_limit), `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` would initially fail the Net Edge Gate.
 - When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.
 - Then: the adjusted `min_edge_usd = base_min_edge_usd * max(1 - 0.5 * 1.0, 0.5) = base_min_edge_usd * 0.5`; if the adjusted value allows the SELL, it proceeds.
@@ -198,7 +198,7 @@ AT-PROP-104
 +- Allow lower edge: `min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor)` where `inventory_skew_sell_floor >= 0` (see Appendix A; default: `0.5`)
 +- May be more aggressive on price: shift `limit_price` **toward** the touch by `bias_ticks(inventory_bias)` (risk-reducing direction)
 +
-+AT-PROP-104
++AT-1258
 +- Given: `inventory_bias = 1.0`, `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` initially fails Net Edge Gate.
 +- When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.
 +- Then: adjusted `min_edge_usd = base_min_edge_usd * 0.5`; if adjusted value allows SELL, it proceeds.
@@ -265,7 +265,7 @@ The Margin Headroom Gate specifies no staleness TTL for account_summary data, no
 
 Add the following acceptance test after AT-208 in §1.4.3:
 
-AT-PROP-105
+AT-1259
 - Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).
 - When: an OPEN intent is evaluated by the Margin Headroom Gate.
 - Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.
@@ -289,7 +289,7 @@ AT-PROP-105
 +  - `account_summary_age_s` (gauge): seconds since last successful account_summary fetch
 +  - `account_summary_stale_total` (counter): incremented each evaluation cycle where age > threshold
 +
-+AT-PROP-105
++AT-1259
 +- Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).
 +- When: an OPEN intent is evaluated by the Margin Headroom Gate.
 +- Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.
@@ -343,7 +343,7 @@ Lines 37-42 define a MUST-level dual-name acceptance rule for contract version 5
 ### Proposed Text
 
 ```text
-Add an acceptance test after line 42: AT-PROP-201 — Given contract_version=5.2 and a policy payload that uses only the old field name `rate_limit_session_kill_active=true` (new name absent), When PolicyGuard computes TradingMode, Then PolicyGuard MUST treat it identically to `session_termination_active=true` and compute Kill per the session-termination axis predicate. Pass: Kill computed. Fail: field ignored and Active or ReduceOnly returned.
+Add an acceptance test after line 42: AT-1260 — Given contract_version=5.2 and a policy payload that uses only the old field name `rate_limit_session_kill_active=true` (new name absent), When PolicyGuard computes TradingMode, Then PolicyGuard MUST treat it identically to `session_termination_active=true` and compute Kill per the session-termination axis predicate. Pass: Kill computed. Fail: field ignored and Active or ReduceOnly returned.
 ```
 
 ### Diff Preview
@@ -352,7 +352,7 @@ Add an acceptance test after line 42: AT-PROP-201 — Given contract_version=5.2
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ §2.2 Field rename transition (contract version 5.2) after line 42
-+AT-PROP-201
++AT-1260
 +- Given: contract_version=5.2 and policy payload contains `rate_limit_session_kill_active=true` with `session_termination_active` absent.
 +- When: PolicyGuard computes TradingMode.
 +- Then: TradingMode == Kill (alias is honoured).
@@ -478,7 +478,7 @@ The SystemIntegrityAxis DEGRADED predicate `fee_model_cache_age_s > fee_model_ha
 ### Proposed Text
 
 ```text
-Add after the fee-model staleness predicate (line 502): AT-PROP-202 — Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis inputs are nominal (no other DEGRADED/FAILING predicates active), When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason. Fail: Active returned or reason code absent.
+Add after the fee-model staleness predicate (line 502): AT-1261 — Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis inputs are nominal (no other DEGRADED/FAILING predicates active), When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason. Fail: Active returned or reason code absent.
 ```
 
 ### Diff Preview
@@ -487,7 +487,7 @@ Add after the fee-model staleness predicate (line 502): AT-PROP-202 — Given `f
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after SystemIntegrityAxis fee-model staleness predicate
-+AT-PROP-202
++AT-1261
 +- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.
 +- When: TradingMode is computed.
 +- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.
@@ -510,7 +510,7 @@ Add after the fee-model staleness predicate (line 502): AT-PROP-202 — Given `f
 ### Proposed Text
 
 ```text
-Add `cortex_override` to the §2.2.1.2 critical inputs list. Add an explicit rule: 'If `cortex_override` is missing or unparseable, PolicyGuard MUST treat it as `ForceReduceOnly` (fail-closed) and include REDUCEONLY_INPUT_MISSING_OR_STALE in mode_reasons.' Add AT-PROP-203: Given `cortex_override` payload is absent or cannot be deserialized, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and REDUCEONLY_INPUT_MISSING_OR_STALE is present. Pass: ReduceOnly with reason. Fail: Active returned or reason absent.
+Add `cortex_override` to the §2.2.1.2 critical inputs list. Add an explicit rule: 'If `cortex_override` is missing or unparseable, PolicyGuard MUST treat it as `ForceReduceOnly` (fail-closed) and include REDUCEONLY_INPUT_MISSING_OR_STALE in mode_reasons.' Add AT-1262: Given `cortex_override` payload is absent or cannot be deserialized, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and REDUCEONLY_INPUT_MISSING_OR_STALE is present. Pass: ReduceOnly with reason. Fail: Active returned or reason absent.
 ```
 
 ### Diff Preview
@@ -538,7 +538,7 @@ Line 944 defines a MUST-level fail-closed rule: if the REST `/get_user_trades` q
 ### Proposed Text
 
 ```text
-Add AT-PROP-204 after AT-1100: Given `open_permission_blocked_latch == true` and the REST `/get_user_trades` call returns a network error, timeout, HTTP error, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and `open_permission_blocked_latch` MUST remain true; OPEN intents MUST remain blocked. Pass: latch stays set, reconciliation reported as failed. Fail: reconciliation succeeds on transport error, or latch clears.
+Add AT-1263 after AT-1100: Given `open_permission_blocked_latch == true` and the REST `/get_user_trades` call returns a network error, timeout, HTTP error, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and `open_permission_blocked_latch` MUST remain true; OPEN intents MUST remain blocked. Pass: latch stays set, reconciliation reported as failed. Fail: reconciliation succeeds on transport error, or latch clears.
 ```
 
 ### Diff Preview
@@ -547,7 +547,7 @@ Add AT-PROP-204 after AT-1100: Given `open_permission_blocked_latch == true` and
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after AT-1100 (line 967)
-+AT-PROP-204
++AT-1263
 +- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.
 +- When: reconciliation success criteria are evaluated.
 +- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.
@@ -570,7 +570,7 @@ The Recovery Rule (lines 565-570) is a MUST-level cross-cutting invariant with n
 ### Proposed Text
 
 ```text
-Add AT-PROP-205 after the Recovery Rule: Given `bunker_mode_active` becomes true (entering Bunker Mode via §2.3.2) and all other axis inputs are nominal (no other STRESSED/DEGRADED/FAILING predicates active), and then `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed since the bunker entry condition cleared. Pass: ReduceOnly held for full `bunker_exit_stable_s` duration; Active not returned prematurely. Fail: Active returned before `bunker_exit_stable_s` elapses.
+Add AT-1264 after the Recovery Rule: Given `bunker_mode_active` becomes true (entering Bunker Mode via §2.3.2) and all other axis inputs are nominal (no other STRESSED/DEGRADED/FAILING predicates active), and then `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed since the bunker entry condition cleared. Pass: ReduceOnly held for full `bunker_exit_stable_s` duration; Active not returned prematurely. Fail: Active returned before `bunker_exit_stable_s` elapses.
 ```
 
 ### Diff Preview
@@ -579,7 +579,7 @@ Add AT-PROP-205 after the Recovery Rule: Given `bunker_mode_active` becomes true
 --- a/specs/CONTRACT.md
 +++ b/specs/CONTRACT.md
 @@ after Recovery Rule (line 570)
-+AT-PROP-205
++AT-1264
 +- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.
 +- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.
 +- When: TradingMode is computed on subsequent ticks.

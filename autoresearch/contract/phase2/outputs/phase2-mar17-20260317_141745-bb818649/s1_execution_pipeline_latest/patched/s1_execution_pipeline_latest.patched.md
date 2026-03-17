@@ -1205,14 +1205,14 @@ AT-229
 
 Add the following acceptance tests after AT-910 in §1.4.2.1:
 
-AT-PROP-101
+AT-1255
 - Given: `RiskState::Healthy` is active (not Kill).
 - When: `drain_all()` is called on PendingExposure.
 - Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.
 - Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.
 - Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.
 
-AT-PROP-102
+AT-1256
 - Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.
 - When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.
 - Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.
@@ -1221,7 +1221,7 @@ AT-PROP-102
 
 Add the following acceptance test after AT-223 in §1.4:
 
-AT-PROP-103
+AT-1257
 - Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.
 - When: the pricer evaluates the intent.
 - Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.
@@ -1238,7 +1238,7 @@ Add `inventory_skew_sell_floor` to Appendix A with default value `0.5`.
 
 Add the following acceptance test after AT-224:
 
-AT-PROP-104
+AT-1258
 - Given: `inventory_bias = 1.0` (fully long, at delta_limit), `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` would initially fail the Net Edge Gate.
 - When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.
 - Then: the adjusted `min_edge_usd = base_min_edge_usd * max(1 - 0.5 * 1.0, 0.5) = base_min_edge_usd * 0.5`; if the adjusted value allows the SELL, it proceeds.
@@ -1256,7 +1256,7 @@ Assign CSP-063 anchor to the canonical Recovery / Matching Rule block at §1.1 (
 
 Add the following acceptance test after AT-208 in §1.4.3:
 
-AT-PROP-105
+AT-1259
 - Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).
 - When: an OPEN intent is evaluated by the Margin Headroom Gate.
 - Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.
