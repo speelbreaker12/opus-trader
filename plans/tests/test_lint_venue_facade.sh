@@ -78,16 +78,19 @@ pub use super::foo::{Alpha, Beta};
 pub use super::bar::Gamma;
 EOF
 
+# Nested brace groups must be rejected
 cat > "$api_file" <<'EOF'
 pub use super::foo::{nested::{Alpha, Beta}, Gamma};
 EOF
 
-LINT_VENUE_FACADE_MOD="$mod_file" \
-LINT_VENUE_FACADE_API="$api_file" \
-LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" \
-LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" \
-bash "$SCRIPT" >/dev/null
+set +e
+nested_brace_out="$(LINT_VENUE_FACADE_MOD="$mod_file" LINT_VENUE_FACADE_API="$api_file" LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
+nested_brace_rc=$?
+set -e
+[[ $nested_brace_rc -ne 0 ]] || fail "nested brace group should fail venue facade lint"
+echo "$nested_brace_out" | grep -Fq "nested brace groups are not allowed" || fail "missing nested-brace diagnostic"
 
+# Nested-module pub use must be rejected
 cat > "$api_file" <<'EOF'
 pub use super::foo::Alpha;
 mod hidden {
@@ -97,11 +100,11 @@ pub use super::bar::Gamma;
 EOF
 
 set +e
-nested_out="$(LINT_VENUE_FACADE_MOD="$mod_file" LINT_VENUE_FACADE_API="$api_file" LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
-nested_rc=$?
+nested_mod_out="$(LINT_VENUE_FACADE_MOD="$mod_file" LINT_VENUE_FACADE_API="$api_file" LINT_VENUE_FACADE_ALLOWLIST="$allowlist_file" LINT_VENUE_FACADE_SCAN_ROOT="$scan_root" bash "$SCRIPT" 2>&1)"
+nested_mod_rc=$?
 set -e
-[[ $nested_rc -ne 0 ]] || fail "nested-module pub use should fail venue facade lint"
-echo "$nested_out" | grep -Fq "non-top-level pub use" || fail "missing nested-module diagnostic"
+[[ $nested_mod_rc -ne 0 ]] || fail "nested-module pub use should fail venue facade lint"
+echo "$nested_mod_out" | grep -Fq "non-top-level pub use" || fail "missing nested-module diagnostic"
 
 cat > "$api_file" <<'EOF'
 pub use super::foo::{Alpha, Beta};

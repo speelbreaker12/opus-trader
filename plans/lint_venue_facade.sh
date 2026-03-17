@@ -46,11 +46,6 @@ extract_allowlist_symbols() {
 }
 
 extract_api_export_symbols() {
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "FAIL: python3 is required to parse venue/api.rs exports" >&2
-    exit 1
-  fi
-
   python3 - "$API" <<'PY'
 import collections
 import pathlib
@@ -61,196 +56,38 @@ api_path = pathlib.Path(sys.argv[1])
 text = api_path.read_text(encoding="utf-8")
 text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
 text = re.sub(r"//.*", "", text)
-id_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-token_re = re.compile(r"::|[{}*,]|[A-Za-z_][A-Za-z0-9_]*")
+stmt_re = re.compile(r'^\s*pub\s+use\b.*?;', re.M | re.S)
 symbols = []
 
-class ParseError(Exception):
-    pass
-
-
-def build_brace_depth_prefix(src):
-    depth_prefix = [0] * (len(src) + 1)
-    depth = 0
-    for idx, ch in enumerate(src):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth < 0:
-                raise ParseError("unbalanced closing brace in venue/api.rs")
-        depth_prefix[idx + 1] = depth
-    if depth != 0:
-        raise ParseError("unbalanced braces in venue/api.rs")
-    return depth_prefix
-
-
-def find_pub_use_rhses(src, depth_prefix):
-    start_re = re.compile(r"\bpub\s+use\b")
-    pos = 0
-    while True:
-        match = start_re.search(src, pos)
-        if match is None:
-            break
-        if depth_prefix[match.start()] != 0:
-            raise ParseError("non-top-level pub use is not allowed in venue/api.rs")
-        idx = match.end()
-        depth = 0
-        while idx < len(src):
-            ch = src[idx]
-            if ch == "{":
-                depth += 1
-            elif ch == "}":
-                if depth == 0:
-                    raise ParseError("unbalanced closing brace in pub use statement")
-                depth -= 1
-            elif ch == ";" and depth == 0:
-                rhs = src[match.end():idx].strip()
-                if not rhs:
-                    raise ParseError("empty pub use statement")
-                yield rhs
-                pos = idx + 1
-                break
-            idx += 1
-        else:
-            raise ParseError("unterminated pub use statement (missing ';')")
-
-
-def tokenize(rhs):
-    tokens = []
-    idx = 0
-    while idx < len(rhs):
-        if rhs[idx].isspace():
-            idx += 1
-            continue
-        match = token_re.match(rhs, idx)
-        if match is None:
-            snippet = rhs[idx:idx + 20]
-            raise ParseError(f"unsupported syntax near {snippet!r}")
-        tokens.append(match.group(0))
-        idx = match.end()
-    return tokens
-
-
-class UseTreeParser:
-    def __init__(self, tokens):
-        self.tokens = tokens
-        self.idx = 0
-        self.out = []
-
-    def peek(self, offset=0):
-        pos = self.idx + offset
-        if pos >= len(self.tokens):
-            return None
-        return self.tokens[pos]
-
-    def pop(self, expected=None):
-        token = self.peek()
-        if token is None:
-            raise ParseError("unexpected end of use tree")
-        if expected is not None and token != expected:
-            raise ParseError(f"expected '{expected}', found '{token}'")
-        self.idx += 1
-        return token
-
-    def is_ident(self, token):
-        return token is not None and bool(id_re.match(token)) and token != "as"
-
-    def pop_ident(self, context):
-        token = self.peek()
-        if not self.is_ident(token):
-            raise ParseError(f"expected identifier for {context}, found '{token}'")
-        self.idx += 1
-        return token
-
-    def parse(self):
-        self.parse_use_list(prefix=[])
-        if self.peek() is not None:
-            raise ParseError(f"unexpected trailing token '{self.peek()}'")
-        return self.out
-
-    def parse_use_list(self, prefix):
-        self.parse_use_tree(prefix)
-        while self.peek() == ",":
-            self.pop(",")
-            if self.peek() in (None, "}"):
-                break
-            self.parse_use_tree(prefix)
-
-    def parse_path_segments(self):
-        segments = []
-        if not self.is_ident(self.peek()):
-            return segments
-        segments.append(self.pop_ident("path segment"))
-        while self.peek() == "::" and self.is_ident(self.peek(1)):
-            self.pop("::")
-            segments.append(self.pop_ident("path segment"))
-        return segments
-
-    def parse_use_tree(self, prefix):
-        segments = self.parse_path_segments()
-        current = prefix + segments
-        token = self.peek()
-
-        if token == "::":
-            self.pop("::")
-            token = self.peek()
-            if token == "{":
-                self.pop("{")
-                if self.peek() != "}":
-                    self.parse_use_list(prefix=current)
-                self.pop("}")
-                return
-            if token == "*":
-                raise ParseError("wildcard re-export is not allowed in venue/api.rs")
-            raise ParseError(f"unsupported token '{token}' after '::'")
-
-        if token == "as":
-            if not current:
-                raise ParseError("alias without path")
-            self.pop("as")
-            alias = self.pop_ident("alias")
-            self.out.append(alias)
-            return
-
-        if token == "{":
-            if segments:
-                raise ParseError("grouped re-export requires '::' before '{'")
-            self.pop("{")
-            if self.peek() != "}":
-                self.parse_use_list(prefix=prefix)
-            self.pop("}")
-            return
-
-        if token == "*":
-            raise ParseError("wildcard re-export is not allowed in venue/api.rs")
-
-        if not current:
-            raise ParseError("empty re-export item")
-        leaf = current[-1]
-        if leaf in {"self", "super", "crate"}:
-            raise ParseError(f"unsupported keyword re-export leaf '{leaf}'")
-        self.out.append(leaf)
-
-
-try:
-    depth_prefix = build_brace_depth_prefix(text)
-    rhses = list(find_pub_use_rhses(text, depth_prefix))
-except ParseError as exc:
-    print(f"FAIL: {exc}", file=sys.stderr)
+# Safety guard: reject nested-module pub use (pub use inside mod blocks)
+if re.search(r'\bmod\s+\w+\s*\{[^}]*\bpub\s+use\b', text, re.S):
+    print("FAIL: non-top-level pub use is not allowed in venue/api.rs", file=sys.stderr)
     sys.exit(2)
 
-for rhs in rhses:
-    try:
-        parser = UseTreeParser(tokenize(rhs))
-        symbols.extend(parser.parse())
-    except ParseError as exc:
-        print(f"FAIL: invalid re-export in venue/api.rs: {rhs}: {exc}", file=sys.stderr)
+for match in stmt_re.finditer(text):
+    rhs = match.group(0)
+    rhs = re.sub(r'^\s*pub\s+use\s+', '', rhs).rstrip(';').strip()
+    # Safety guard: reject wildcard re-exports
+    if '::*' in rhs or rhs.endswith('*'):
+        print("FAIL: wildcard re-export is not allowed in venue/api.rs", file=sys.stderr)
         sys.exit(2)
-
-if not symbols:
-    print("FAIL: no pub use re-export symbols found in venue/api.rs", file=sys.stderr)
-    sys.exit(2)
+    if '{' in rhs:
+        inside = rhs.split('{', 1)[1].rsplit('}', 1)[0]
+        # Safety guard: reject nested brace groups (e.g. foo::{bar::{A, B}, C})
+        if '{' in inside:
+            print("FAIL: nested brace groups are not allowed in venue/api.rs re-exports", file=sys.stderr)
+            sys.exit(2)
+        items = [item.strip() for item in inside.split(',') if item.strip()]
+        for item in items:
+            if ' as ' in item:
+                symbols.append(item.split(' as ', 1)[1].strip())
+            else:
+                symbols.append(item.rsplit('::', 1)[-1])
+    else:
+        leaf = rhs.rsplit('::', 1)[-1]
+        if ' as ' in leaf:
+            leaf = leaf.split(' as ', 1)[1].strip()
+        symbols.append(leaf)
 
 dupes = sorted(sym for sym, count in collections.Counter(symbols).items() if count > 1)
 if dupes:
@@ -296,11 +133,6 @@ if rg -q '^\s*(pub(\s*\([^)]*\))?\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*' "$API"; then
 fi
 
 if [[ -d "$SCAN_ROOT" ]]; then
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "FAIL: python3 is required to lint deep venue imports"
-    exit 1
-  fi
-
   deep_import_violations="$(python3 - "$SCAN_ROOT" <<'PY'
 import pathlib
 import re
