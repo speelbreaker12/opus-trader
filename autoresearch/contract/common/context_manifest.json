@@ -1,14 +1,19 @@
 {
   "schema_version": 2,
   "tracked_files": {
-    "common/at_registry.json": "8b0775e55f260681b40c42e7bfe0eeb670344e4d93e3d5f7e4cf5306975c0b46",
+    "common/at_registry.json": "d63cb3e1ef82604a7d8bfa02f26e90874f33d9f33c548953b82d21e62007796a",
     "common/contract_header.md": "ead65bdf2b0e3adef5024ca438d92a59de05598e8d2ec2c30967c2064a755670",
     "common/gate_input_registry.json": "9c2c818f1e2d580c26d2e2ca15861d0297fa2076d54ff08ce32d4973ca003a38",
-    "common/section_index.md": "a86d385e4d5ee50f6423856e9056a6543077f71c70489dbf17cf6d9dbc403f70",
-    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "46b2a2057412ca6488b9a0d94453a81469f9fe80168fff9d5e5707e1cf8da9d9",
-    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "c7610fa0766db86a21963ebbece09fd421c1b856b4fd52bfb9b89aec6979e7a5"
+    "common/section_index.md": "28d3fc45cfbbf2f29beac9305d78623a19f79dc503e39bd55a812525722d7d33",
+    "phase1/fixtures/trading_mode_computation.md": "1758a32bbb0d18f162c0e691b199184e2ac3e3f5d20aa6a7852640622746c889",
+    "phase1/fixtures/open_permission_latch.md": "68a02195124298f82e73a33c9abe68c3c26ed6e3ffb52299117f382c26fa9ddc",
+    "phase1/fixtures/emergency_close.md": "c77d4f4c873ce75cbfe1df8fb2d43692420cfd12bf964125541e47dbd66e5dd5",
+    "phase1/fixtures/evidence_guard.md": "bd6bfd4df4159980ed4fa20b6dbfaec75a8b9c527368ab2a964856cedb1654fb",
+    "phase1/fixtures/liquidity_gate.md": "e1b6462cdf1e180fb9f90fad43b291aecf2bfb3110d4cd17a5c2566c78175327",
+    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "9b04e36716c248fa95ec6b4cb5edc568e553193fbc0a0c04008387231318acf7",
+    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "42eff0a3805aab152b35e8947b70a57be23c65a82e5b7bd1aad2bef9231b6fbe"
   },
-  "contract_content_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d",
-  "common_contract_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d",
-  "snapshot_contract_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d"
+  "contract_content_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
+  "common_contract_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
+  "snapshot_contract_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c"
 }

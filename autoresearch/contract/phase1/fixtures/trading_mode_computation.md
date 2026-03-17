@@ -27,7 +27,13 @@ PolicyGuard SHALL compute TradingMode from three independent health axes:
 | Ledger corruption | SystemIntegrityAxis | CapitalRiskAxis | Reconciliation correctness compromised |
 | Exchange session termination (`session_termination_active`) | SystemIntegrityAxis | CapitalRiskAxis | Containment reliability uncertain |
 
+**Secondary influence mechanism:** Dual-impact signals influence their secondary axis indirectly through `risk_state` transitions. WAL write failure and ledger corruption trigger `RiskState::Degraded` (SystemIntegrityAxis), which may escalate to `RiskState::Kill` → `CapitalRiskAxis == CRITICAL` if the underlying condition persists or worsens. Session termination is authoritative Kill (SystemIntegrityAxis == FAILING). The secondary CapitalRiskAxis influence does NOT add new predicates to §2.2.3.2 CapitalRiskAxis computation; it is captured by the existing `risk_state` input.
+
 ---
+
+##### **2.2.3.1.1 Capital-Critical Kill Triggers (No Corroboration Required)**
+
+Capital-critical Kill triggers (`mm_util >= mm_util_kill`, `risk_state == Kill`, `cortex_override == ForceKill`) are authoritative and do NOT require corroboration. These triggers directly set `CapitalRiskAxis == CRITICAL` → `TradingMode = Kill` without a secondary confirmation signal. Rationale: capital protection is the highest-priority safety invariant and MUST NOT be delayed by corroboration checks.
 
 ##### **2.2.3.1.2 Kill Trigger Corroboration (Non‑Capital)**
 
@@ -74,6 +80,7 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 **MarketIntegrityAxis** (market data integrity / comms reliability)
 - Input: `bunker_mode_active` (from §2.3.2 Network Jitter Monitor)
 - `STRESSED` if `bunker_mode_active == true`
+- `STRESSED` if `bunker_mode_active` is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2 (fail-closed).
 - `STABLE` otherwise.
 - `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
 
@@ -145,8 +152,8 @@ This table is the authoritative reference for AT-1048 (enumerability test). Impl
 
 **State Count Summary:**
 - Active: 1 state (row 1 only)
-- ReduceOnly: 17 states (rows 2, 4-5, 7-8, 10-11, 13-14, 16-17)
-- Kill: 9 states (rows 3, 6, 9, 12, 15, 18-27)
+- ReduceOnly: 11 states (rows 2, 4-5, 7-8, 10-11, 13-14, 16-17)
+- Kill: 15 states (rows 3, 6, 9, 12, 15, 18-27)
 
 **Implementation Note:** The resolver function MUST be a pure function with no hidden state. Given the same axis triple, it MUST always produce the same TradingMode.
 
@@ -173,9 +180,18 @@ This table is the authoritative reference for AT-1048 (enumerability test). Impl
 
 ##### **2.2.3.4.1 Non‑Active OPEN Cancellation (CSP, Non‑Negotiable)**
 
-Whenever `TradingMode != Active`, the engine MUST attempt to cancel all outstanding OPEN orders with `reduce_only != true`.
+Whenever `TradingMode != Active`, the engine MUST attempt to cancel all outstanding OPEN orders with `reduce_only != true`, subject to the deterministic precedence block below.
 - This cancel loop MUST be **bounded and non‑blocking** per tick (see `cancel_open_batch_max`, `cancel_open_budget_ms` in Appendix A).
 - If any risk‑increasing OPENs remain, the system MUST retry on subsequent ticks until cleared.
+- Legacy WAL records that omit `reduce_only` MUST be treated as OPEN-equivalent (`reduce_only=false`) for non-Active cancel-sweep eligibility.
+- Reconciliation MAY exempt an in-flight order from cancel sweep only with positive proof that keeping the order in-flight is risk-reducing against current net exposure.
+- If risk direction cannot be positively proven risk-reducing, the order MUST remain cancel-eligible, explicit diagnostics MUST be emitted, and reconciliation MUST be prioritized on subsequent ticks.
+- Cancel sweep MUST NOT cancel an in-flight order when that cancellation would leave zero risk-reducing in-flight orders while net exposure is non-zero or unknown.
+
+**Deterministic precedence (normative):** for each in-flight order evaluated by non-Active cancel sweep, decisions MUST be applied in this order:
+1. **Capital guard first:** if canceling the order would leave zero risk-reducing in-flight orders while net exposure is non-zero or unknown, the order MUST NOT be canceled.
+2. **Proof-gated exemption second:** otherwise, reconciliation MAY exempt the order only with positive proof that keeping it in-flight is risk-reducing.
+3. **Default cancel-all third:** otherwise, the order is cancel-eligible and MUST be canceled within the bounded sweep budget; legacy missing `reduce_only` is treated as `false`.
 - CLOSE/HEDGE/CANCEL intents remain permitted subject to §2.2.5.
 
 ---
@@ -208,7 +224,7 @@ ReduceOnly-tier:
 4. `REDUCEONLY_BUNKER_MODE_ACTIVE`
 5. `REDUCEONLY_RUNTIME_BINDING_INVALID`
 6. `REDUCEONLY_F1_CERT_INVALID` (deprecated alias for runtime-binding invalidity; if emitted, semantics MUST match item 5)
-7. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN`
+7. `REDUCEONLY_EVIDENCE_CHAIN_NOT_GREEN` (only when `enforced_profile != CSP`; see §2.2.3.2 SystemIntegrityAxis)
 8. `REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY`
 9. `REDUCEONLY_FEE_MODEL_HARD_STALE`
 10. `REDUCEONLY_RISKSTATE_DEGRADED`
@@ -223,5 +239,276 @@ ReduceOnly-tier:
 - `mode_reasons` MUST include **all** active reasons from the **computed TradingMode tier** for that tick.
 - Reasons from non-winning tiers MUST NOT be included (tier purity).
 
+**Acceptance Tests:**
+
+AT-1244
+- Given: PolicyGuard computes `TradingMode == ReduceOnly` with multiple active reduce-only predicates (e.g., `risk_state == Degraded` AND `bunker_mode_active == true` AND `open_permission_blocked_latch == true`).
+- When: `mode_reasons` is computed for that tick.
+- Then: `mode_reasons` MUST contain all applicable `REDUCEONLY_*` reason codes, in the canonical order defined above, and MUST NOT contain any `KILL_*` codes.
+- Pass criteria: reasons are tier-pure (only `REDUCEONLY_*`), complete (all active predicates represented), and deterministically ordered per the registry above.
+- Fail criteria: missing active reason, `KILL_*` code present, or order deviates from canonical registry.
+
 ---
 
+##### **2.2.3.6 Kill Semantics (Capital Supremacy Safe, CSP)**
+
+**Kill SHALL mean:**
+- No creation of new exposure.
+- Only risk-reducing actions are permitted until exposure is neutral.
+
+**Kill MUST NOT mean:**
+- “No dispatch of any kind” while exposure exists.
+
+**Capital Supremacy Invariant (Non-Negotiable):**
+If net exposure ≠ 0, the system MUST define at least one legal risk-reducing action, regardless of TradingMode.
+No state is permitted where:
+- exposure ≠ 0, AND
+- no CLOSE / HEDGE / emergency flatten action is permitted.
+
+**Kill containment requirement:**
+When `TradingMode == Kill` AND net exposure ≠ 0, the system MUST permit and attempt a bounded, deterministic containment sequence:
+
+1) Cancel any risk-increasing OPEN orders (including any non-reduce-only orders).
+2) Execute §3.1 Deterministic Emergency Close (reduce-only; bounded attempts).
+3) If residual exposure remains above limits after bounded close attempts, place a reduce-only hedge fallback.
+
+Containment actions MUST be:
+- **Bounded** (no infinite retries),
+- **Deterministic** (same inputs → same actions),
+- **Monotonic with respect to exposure** (never increase net exposure; use `reduce_only` / close-only primitives where supported).
+
+Containment MUST be attempted even if:
+- `EvidenceChainState != GREEN`,
+- WAL is degraded,
+- `session_termination_active == true`,
+- `disk_used_pct >= disk_kill_pct`,
+- `bunker_mode_active == true`,
+- or watchdog staleness is the trigger cause.
+
+(If dispatch fails due to transport or venue rejection, that is a runtime outcome; the authorization MUST still allow the attempt.)
+
+**Post-containment hard stop (allowed):**
+If `TradingMode == Kill` AND net exposure == 0, the system MAY cease further dispatch and remain halted until the underlying kill trigger clears (or manual intervention), but it MUST continue to publish `/status`.
+
+---
+
+##### **2.2.3.7 Acceptance Tests (REQUIRED)**
+
+**Policy Staleness Rule**
+AT-336
+- Given: `policy_age_sec > max_policy_age_sec`.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_POLICY_STALE`.
+- Pass criteria: mode is ReduceOnly exactly when `policy_age_sec > max_policy_age_sec`.
+- Fail criteria: mode remains Active when policy is stale, or ReduceOnly occurs below threshold.
+
+**Watchdog Kill Rule**
+AT-337
+- Given: `now_ms - watchdog_last_heartbeat_ts_ms > watchdog_kill_s * 1000` **AND** `now_ms - loop_tick_last_ts_ms > watchdog_kill_s * 1000`.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == Kill` and `mode_reasons` includes `KILL_WATCHDOG_HEARTBEAT_STALE`.
+- Pass criteria: Kill occurs exactly above the thresholds when both corroboration signals are stale.
+- Fail criteria: Kill fails to trigger when both are stale or triggers with only one stale.
+
+**RiskState Kill Is Authoritative**
+AT-918
+- Given: `risk_state == Kill`.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == Kill`.
+- Pass criteria: Kill is computed regardless of other non-kill gates.
+- Fail criteria: ReduceOnly/Active is computed while `risk_state == Kill`.
+
+**EvidenceGuard Forces ReduceOnly**
+AT-416
+- Given: `EvidenceChainState != GREEN` for >60s (window + cooldown per §2.2.2), `enforced_profile != CSP`, and no Kill-tier triggers are active.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly`.
+- Pass criteria: ReduceOnly holds while evidence is not GREEN and clears only after EvidenceGuard recovery rules are satisfied.
+- Fail criteria: Active is computed while evidence is not GREEN.
+
+**Mode Reasons Are Tier-Pure and Deterministically Ordered**
+AT-417
+- Given: a sequence of ticks where multiple Axis Resolver predicates toggle (including both kill-tier and reduceonly-tier predicates).
+- When: `mode_reasons` are emitted on each tick.
+- Then:
+  - `mode_reasons` are tier-pure (no mixing kill + reduceonly),
+  - deterministically ordered,
+  - and update immediately as the computed TradingMode changes.
+- Pass criteria: ordering and tier purity invariants hold across the tick sequence.
+- Fail criteria: mixed tiers, nondeterministic ordering, or stale reasons after mode change.
+
+**Hot Path Must Consult PolicyGuard Immediately Before Dispatch**
+AT-931
+- Given: the strategy loop computes an intent while `TradingMode == Active`, but before dispatch the Axis Resolver input flips to ReduceOnly/Kill (e.g., evidence trip).
+- When: the dispatch path runs.
+- Then: the order MUST NOT dispatch if the current TradingMode forbids it.
+- Pass criteria: dispatch count remains 0 and reject reason indicates TradingMode gate.
+- Fail criteria: dispatch occurs based on stale TradingMode.
+
+**Non‑Active OPEN Cancellation**
+AT-1065
+- Given: `TradingMode == ReduceOnly` and there exist outstanding OPEN orders with `reduce_only != true`.
+- When: the loop ticks.
+- Then: cancel requests for those OPEN orders are issued within the bounded cancel budget, and OPEN dispatch remains blocked.
+- Pass criteria: cancels are attempted (bounded by `cancel_open_batch_max` / `cancel_open_budget_ms`), outstanding risk‑increasing OPENs trend to zero over subsequent ticks.
+- Fail criteria: no cancel attempts, or risk‑increasing OPENs remain indefinitely while ReduceOnly.
+
+**Proof-Gated Reconciliation Exemption for Non-Active Cancel Sweep**
+AT-1241
+- Given: `TradingMode != Active`, cancel sweep evaluates an in-flight order, and risk direction/classification is ambiguous (including legacy WAL records with missing `reduce_only`).
+- When: reconciliation evaluates whether that order may be exempted from cancellation.
+- Then: exemption is allowed only with positive proof that keeping the order in-flight is risk-reducing; otherwise the order remains cancel-eligible, explicit diagnostics are emitted, and reconciliation is prioritized.
+- Pass criteria: only positively proven risk-reducing in-flight orders are exempted; ambiguous orders remain cancel-eligible with diagnostics and reconciliation priority asserted.
+- Fail criteria: exemption occurs without positive proof, or diagnostics/reconciliation-priority signaling is missing when proof is absent.
+
+**Capital-Supremacy Guard for Last Risk-Reducing In-Flight Order**
+AT-1242
+- Given: `TradingMode != Active`, net exposure is non-zero or unknown, and canceling a candidate in-flight order would leave zero risk-reducing in-flight orders.
+- When: cancel sweep applies cancellation decisions.
+- Then: that order MUST NOT be canceled, while other cancel-eligible risk-increasing OPEN orders remain cancelable.
+- Pass criteria: cancel sweep never creates a state where exposure is non-zero/unknown and no risk-reducing in-flight orders remain.
+- Fail criteria: the last risk-reducing in-flight order is canceled while exposure is non-zero or unknown.
+
+**Emergency ReduceOnly Cooldown Is Enforced**
+AT-132
+- Given: `emergency_reduceonly_active == true` and the cooldown timer has not expired.
+- When: TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE`.
+- Pass criteria: ReduceOnly holds for the full cooldown window and clears only after cooldown expiry AND reconciliation confirms exposure is safe (if required).
+- Fail criteria: Active occurs before cooldown expiry.
+
+**Axis Resolver Enumerability (27-State Mapping)**
+AT-1048
+- Given: a unit-test harness that can inject axis values into the pure resolver function.
+- When: all 27 combinations of `(CapitalRiskAxis, MarketIntegrityAxis, SystemIntegrityAxis)` are evaluated.
+- Then: every combination maps deterministically to exactly one TradingMode per §2.2.3.3.
+- Pass criteria: no undefined combination; outputs match the resolver rules.
+- Fail criteria: any undefined/fallthrough behavior or mismatched mapping.
+
+
+**Axis Resolver Monotonicity (No Less-Restrictive on Worse Axes)**
+AT-1053
+- Given: a pure resolver function `resolve_trading_mode(capital, market, system)` and a restrictiveness ordering `Active < ReduceOnly < Kill`.
+- When: all ordered pairs of axis tuples `(A, B)` are evaluated where:
+  - for each axis, `B` is equal or worse than `A`, and
+  - at least one axis in `B` is strictly worse than `A`.
+- Then: `resolve_trading_mode(B)` MUST NOT be less restrictive than `resolve_trading_mode(A)`.
+- Pass criteria: the monotonicity property holds for all such pairs.
+- Fail criteria: any pair produces a less restrictive TradingMode under worse axes.
+
+**Axis Isolation — MarketIntegrityAxis (Bunker Mode Only)**
+AT-1050
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active`.
+- When: `bunker_mode_active == true` and TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_BUNKER_MODE_ACTIVE]`.
+- Pass criteria: exact reason set and ReduceOnly computed.
+- Fail criteria: any additional reason appears, or mode is Active/Kill.
+
+AT-1249
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active` which is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2.
+- When: the Axis Resolver computes MarketIntegrityAxis and TradingMode.
+- Then: `MarketIntegrityAxis == STRESSED` (fail-closed), `TradingMode == ReduceOnly`, and `mode_reasons` contains `REDUCEONLY_BUNKER_MODE_ACTIVE`.
+- Pass criteria: exact reason set and ReduceOnly computed; OPEN does not dispatch.
+- Fail criteria: MarketIntegrityAxis is STABLE, TradingMode is Active, or mode_reasons is missing/incorrect while `bunker_mode_active` is missing/stale.
+
+**Axis Isolation — CapitalRiskAxis (Margin Util Only)**
+AT-1051
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `mm_util >= mm_util_reduceonly`.
+- When: `mm_util >= mm_util_reduceonly` AND `mm_util < mm_util_kill` and TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_MARGIN_MM_UTIL_HIGH]`.
+- Pass criteria: exact reason set and ReduceOnly computed.
+- Fail criteria: any additional reason appears, or mode is Active/Kill.
+
+**Axis Isolation — SystemIntegrityAxis (Open Permission Latch Only)**
+AT-1052
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `open_permission_blocked_latch == true`.
+- When: `open_permission_blocked_latch == true` and TradingMode is computed by the Axis Resolver.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_OPEN_PERMISSION_LATCHED]`.
+- Pass criteria: exact reason set and ReduceOnly computed.
+- Fail criteria: any additional reason appears, or mode is Active/Kill.
+
+
+**No-Deadlock-Under-Exposure (Capital Supremacy)**
+AT-1049
+- Given: `TradingMode in {ReduceOnly, Kill}` and net exposure ≠ 0.
+- When: the system proposes a risk-reducing intent (`CLOSE`, reduce-only hedge, or emergency flatten).
+- Then: at least one such intent is permitted to dispatch (subject to venue reachability), and OPEN remains blocked.
+- Pass criteria: a risk-reducing dispatch attempt is authorized and OPEN dispatch count remains 0.
+- Fail criteria: exposure ≠ 0 but all risk-reducing dispatch is forbidden.
+
+**Kill Containment Is Mandatory When Exposed**
+AT-338
+- Given: `TradingMode == Kill` (e.g., `mm_util >= mm_util_kill`) and open exposure exists.
+- When: the execution loop ticks under Kill.
+- Then: containment actions (cancel risk-increasing orders; §3.1 emergency close; hedge fallback) are attempted and no OPENs are dispatched.
+- Pass criteria: at least one risk-reducing dispatch attempt occurs while exposed; OPEN dispatch count remains 0.
+- Fail criteria: no containment dispatch attempt while exposed or any OPEN dispatch.
+
+**Disk Kill Still Permits Containment (No Stranded Exposure)**
+AT-339
+- Given: `disk_used_pct >= disk_kill_pct` **and** `disk_used_pct_secondary >= disk_kill_pct`, and open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: at least one risk-reducing dispatch attempt occurs while exposed; OPEN dispatch count remains 0.
+- Fail criteria: the system “hard-stops” with exposure by forbidding all dispatch.
+
+**Evidence/WAL Degradation Does Not Forbid Containment**
+AT-340
+- Given: `TradingMode == Kill` due to a kill-tier trigger AND (`EvidenceChainState != GREEN` OR WAL is degraded), with open exposure.
+- When: Kill containment runs.
+- Then: containment actions are still permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is blocked solely due to evidence/WAL degradation.
+
+**Session Termination Does Not Forbid Containment**
+AT-346
+- Given: `session_termination_active == true` and open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is forbidden solely due to session termination.
+
+**Watchdog Kill Does Not Forbid Containment**
+AT-347
+- Given: watchdog heartbeat **and** loop tick are stale beyond `watchdog_kill_s` AND open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is forbidden solely due to watchdog kill.
+
+**Bunker Mode Does Not Forbid Containment Under Kill**
+AT-013
+- Given: `bunker_mode_active == true`, a Kill-tier trigger is active (e.g., `mm_util >= mm_util_kill`), and open exposure exists.
+- When: TradingMode is computed and Kill containment runs.
+- Then: containment actions are permitted/attempted; OPEN remains blocked.
+- Pass criteria: risk-reducing dispatch attempts occur while exposed; OPEN dispatch count remains 0.
+- Fail criteria: containment is forbidden solely due to `bunker_mode_active == true`.
+
+**Unconfirmed Kill Signals Force ReduceOnly**
+AT-1066
+- Given: watchdog heartbeat is stale beyond `watchdog_kill_s`, but `loop_tick_last_ts_ms` is fresh.
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_WATCHDOG_UNCONFIRMED`.
+- Pass criteria: ReduceOnly enforced; no Kill.
+- Fail criteria: Kill computed with only one corroboration signal.
+
+AT-1067
+- Given: `disk_used_pct >= disk_kill_pct` but `disk_used_pct_secondary < disk_kill_pct` (or missing/stale).
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_DISK_KILL_UNCONFIRMED`.
+- Pass criteria: ReduceOnly enforced; no Kill.
+- Fail criteria: Kill computed without corroboration.
+
+AT-1068
+- Given: `session_termination_active` is missing or unparseable.
+- When: TradingMode is computed.
+- Then: `TradingMode == ReduceOnly` and `mode_reasons` includes `REDUCEONLY_INPUT_MISSING_OR_STALE`.
+- Pass criteria: ReduceOnly enforced; no Kill.
+- Fail criteria: TradingMode Active (or OPEN dispatch) when the session-termination signal is missing/unparseable.
+
+AT-1069
+- Given: confirmed kill predicates per §2.2.3.1.2 (watchdog, disk, or session termination).
+- When: TradingMode is computed.
+- Then: `TradingMode == Kill` with the appropriate `KILL_*` reason codes.
+- Pass criteria: Kill computed only when corroboration holds.
+- Fail criteria: Kill not computed despite confirmed predicates.

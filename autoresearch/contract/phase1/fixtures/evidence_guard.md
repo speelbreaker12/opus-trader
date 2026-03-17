@@ -29,19 +29,24 @@ The following MUST be writable + joinable for every dispatched open-intent:
 EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidenceguard_window_s = 60` seconds, safety-critical; configurable in Appendix A):
 - **All required EvidenceGuard counters MUST be defined and parseable** (fail-closed).
   - Missing/unparseable required counter(s) => EvidenceChainState MUST be not GREEN.
-  - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`.
+  - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`, `attribution_write_errors`.
 - Required counters MUST be fresh: if `now_ms - evidenceguard_counters_last_update_ts_ms` > `evidenceguard_counters_max_age_ms` (default 60000; see Appendix A for `evidenceguard_counters_max_age_ms`), EvidenceChainState MUST be not GREEN and OPEN intents MUST be blocked.
 - `wal_write_errors` MUST increment on any failure to satisfy RecordedBeforeDispatch for an OPEN intent, including WAL enqueue failure (bounded queue full) and any persistence/write failure.
+- `attribution_write_errors` MUST increment on any failure to write an attribution row for a filled OPEN intent, including persistence errors and missing/unparseable fill data.
 - `truth_capsule_write_errors` has not increased within the last `evidenceguard_window_s`
 - `decision_snapshot_write_errors` has not increased within the last `evidenceguard_window_s`
-- `parquet_queue_overflow_count` not increasing
+- `parquet_queue_overflow_count` has not increased within the last `evidenceguard_window_s`
 - `wal_write_errors` has not increased within the last `evidenceguard_window_s`
+- `attribution_write_errors` has not increased within the last `evidenceguard_window_s`
 
 - `parquet_queue_depth_pct` is defined AND below thresholds (fail-closed if metrics unavailable):
   - Metrics MUST exist: `parquet_queue_depth` (gauge, count), `parquet_queue_capacity` (gauge, count).
   - Derived: `parquet_queue_depth_pct = parquet_queue_depth / max(parquet_queue_capacity, 1)`
   - Trip (breach window): if `parquet_queue_depth_pct > parquet_queue_trip_pct` for >= `parquet_queue_trip_window_s` seconds → EvidenceChainState != GREEN
   - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
+
+**Global cooldown scope (Normative):**
+The `evidenceguard_global_cooldown` (Appendix A) governs recovery timing for ALL error-counter recovery paths (not only parquet queue depth). EvidenceChainState MUST NOT return to GREEN until all GREEN criteria remain satisfied for at least `evidenceguard_global_cooldown` seconds after the last trip condition clears.
 
 **Where enforced (must be explicit):**
 - When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
@@ -126,6 +131,13 @@ AT-415
 - Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while required counters are missing/unparseable.
 
+AT-1248
+- Given: `attribution_write_errors` is missing or unparseable while EvidenceGuard evaluates EvidenceChainState.
+- When: EvidenceGuard computes EvidenceChainState for this tick/window.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed) and OPEN intents MUST be blocked.
+- Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
+- Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while `attribution_write_errors` is missing/unparseable.
+
 AT-923
 - Given: `evidenceguard_counters_last_update_ts_ms` is older than `evidenceguard_counters_max_age_ms`.
 - When: EvidenceGuard computes EvidenceChainState for this tick/window.
@@ -135,4 +147,3 @@ AT-923
 
 
 **Canonical TradingMode computation (axis resolver + staleness + watchdog semantics + reason codes) is defined in §2.2.3 (PolicyGuard-owned).**
-
