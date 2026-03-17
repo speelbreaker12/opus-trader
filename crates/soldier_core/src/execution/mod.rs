@@ -116,6 +116,48 @@ thread_local! {
 #[cfg(test)]
 pub(crate) static METRICS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+#[cfg(test)]
+thread_local! {
+    static METRICS_TEST_ACTIVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) struct MetricsTestGuard {
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+#[cfg(test)]
+impl Drop for MetricsTestGuard {
+    fn drop(&mut self) {
+        METRICS_TEST_ACTIVE.with(|active| active.set(false));
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn begin_metrics_test() -> MetricsTestGuard {
+    let guard = METRICS_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+    METRICS_TEST_ACTIVE.with(|active| active.set(true));
+    let _ = take_execution_metric_lines();
+    MetricsTestGuard { _guard: guard }
+}
+
+#[cfg(test)]
+pub(crate) fn with_metrics_update_lock<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if METRICS_TEST_ACTIVE.with(|active| active.get()) {
+        f()
+    } else {
+        let _guard = METRICS_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        f()
+    }
+}
+
 #[allow(dead_code)] // Phase-1 facade lockdown: currently consumed by unit/integration tests.
 pub(crate) fn with_intent_trace_ids<F, R>(intent_id: &str, run_id: &str, f: F) -> R
 where
