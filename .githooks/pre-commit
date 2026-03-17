@@ -9,6 +9,9 @@ cd "$(git rev-parse --show-toplevel)"
 
 echo "Running pre-commit checks..."
 
+# 0. Obsidian tracking guard (all commits)
+plans/obsidian_commit_guard.sh
+
 # 1. SSOT lint (existing)
 plans/ssot_lint.sh
 
