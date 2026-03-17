@@ -1,3 +1,116 @@
+# AGENTS.md
+
+This file provides guidance to WARP (warp.dev) when working with code in this repository.
+
+## Commands
+
+### Rust
+
+```bash
+# Build
+cargo build --workspace
+
+# Format check (CI gate) / fix
+cargo fmt --all -- --check
+cargo fmt --all
+
+# Clippy — quick (lib targets only, used in quick verify)
+cargo clippy --workspace --lib -- -D warnings
+
+# Clippy — full (all targets, used in CI/full verify)
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# All tests (full verify)
+cargo test --workspace --all-features --locked
+
+# Tests — quick (lib only)
+cargo test --workspace --lib --locked
+
+# Single test by name
+cargo test -p soldier_core --lib <test_name>
+cargo test -p soldier_core --lib <test_name> -- --nocapture
+
+# Facade contract tests (integration layer)
+cargo test -p soldier_core --locked \
+  --test test_execution_facade_public \
+  --test test_risk_facade_public \
+  --test test_venue_facade_public \
+  --test test_tlsm
+```
+
+### Verification gates
+
+```bash
+./plans/verify.sh quick   # Fast iteration: fmt + lib clippy + lib tests + fast schema checks
+./plans/verify.sh full    # CI completion gate: all targets, all tests, crossref, coverage, proof graph
+./plans/workflow_verify.sh  # Workflow-file-only changes; run before full verify
+```
+
+### Python
+
+```bash
+# Python gates are invoked by verify.sh via plans/lib/python_gates.sh
+# To run manually:
+python3 -m pytest tests/         # repo integration tests
+python3 python/proof_graph/validate.py <path>  # proof graph validation
+```
+
+## Architecture
+
+### Crate layout
+
+The Rust workspace has two crates (`Cargo.toml`):
+
+- **`soldier_core`** — pure domain logic; no network I/O, no async runtime. Dependencies: `serde`, `tracing`, `xxhash-rust` only. `#![forbid(unsafe_code)]`.
+- **`soldier_infra`** — exchange adapters and infra. Depends on `soldier_core`. Houses Deribit types, WAL, config/store bootstrap. All modules are private; only `pub use api::*` is exported.
+
+### soldier_core module breakdown
+
+| Module | Responsibility |
+|--------|----------------|
+| `execution` | Full order execution pipeline: intent assembly → gate chain → WAL gate → dispatch chokepoint → `build_order_intent` |
+| `risk` | Risk gates: exposure budget, fee staleness, margin headroom, pending exposure tracking, `RiskState` |
+| `venue` | `InstrumentKind` derivation, instrument cache with TTL (staleness → `RiskState::Degraded`) |
+| `idempotency` | Intent idempotency hashing |
+| `recovery` | Label matching for intent recovery/reconciliation |
+| `status_codes` | Generated and hand-authored status/reject reason codes |
+
+**Phase-1 facade lockdown:** every sub-module is `pub(crate)` / `#[cfg_attr(not(test), allow(dead_code))]`; external consumers MUST use the `api.rs` facade only. Test files `facade_completeness_contract_tests.rs` enforce this boundary.
+
+### Execution pipeline (soldier_core::execution)
+
+An `ExecutionInput` flows through a sequential gate chain inside `engine.rs`:
+
+```
+preflight → liquidity gate → net-edge gate → pricer → quantize →
+inventory-skew → post-only guard → fee staleness → margin gate →
+pending exposure → exposure budget → WAL gate (RecordedBeforeDispatchGate) →
+dispatch chokepoint (build_order_intent) → dispatch
+```
+
+Any gate can return an `ExecutionRejection` with a `RejectReasonCode`. All reject reason codes are registered in `reject_reason_registry()` and referenced in `specs/CONTRACT.md` ATs. The pipeline is synchronous (no async).
+
+Atomic group execution (`group.rs`, `GroupLock`) ensures multi-leg orders are dispatched atomically or rolled back — all legs succeed or none are dispatched.
+
+### Safety model
+
+Two independent layers:
+
+1. **RiskState** (`Healthy | Degraded | Maintenance | Kill`) — health/cause layer, set by instrument cache TTL misses, fee staleness, etc.
+2. **TradingMode** (`Active | ReduceOnly | Kill`) — enforcement layer, resolved by `PolicyGuard` each tick from RiskState + policy staleness + watchdog + exchange health + Cortex overrides.
+
+Fail-closed rule: any uncertain or missing input → `TradingMode::ReduceOnly`, never `Active`.
+
+The **Open Permission Latch** (`CP-001`) independently blocks OPEN intents after restart, WS gaps, or session kill until explicit reconciliation clears it.
+
+### Contract traceability
+
+`specs/CONTRACT.md` (v5.2) is the behavioral source of truth. Every gate has paired AT (acceptance test) IDs. PRD stories in `plans/prd.json` reference these ATs. The `plans/crossref_gate.sh` enforces that contract clauses have matching implementation traces in `specs/TRACE.yaml`.
+
+Two contracts, do not mix:
+- `specs/CONTRACT.md` — trading engine runtime behavior
+- `specs/WORKFLOW_CONTRACT.md` — coding workflow rules (story loop, verify gates)
+
 <!-- AGENTS_STUB_V2 -->
 <!-- INPUT_GUARD_V1 -->
 <!-- FOLLOWUP_NO_PREFLIGHT_V1 -->
