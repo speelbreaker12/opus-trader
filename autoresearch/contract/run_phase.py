@@ -264,6 +264,11 @@ def validate_context_manifest(root: Path, contract_dir: Path, *, require_snapsho
                     f"Stale context: {Path(rel_path).name} changed. Run 'harness.sh contract refresh-common' first",
                     exit_code=2,
                 )
+            if rel_path.startswith("phase1/fixtures/"):
+                fail(
+                    f"Stale context: phase1/{Path(rel_path).name} changed. Run 'harness.sh contract refresh-common' first",
+                    exit_code=2,
+                )
             if rel_path.startswith("phase2/fixtures/snapshot/"):
                 fail(
                     f"Stale context: snapshot/{Path(rel_path).name} changed. Run 'harness.sh contract refresh-fixtures' first",

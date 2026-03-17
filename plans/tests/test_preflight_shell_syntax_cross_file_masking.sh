@@ -14,7 +14,7 @@ fail() {
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
-mkdir -p "$repo/plans" "$repo/specs"
+mkdir -p "$repo/plans" "$repo/scripts" "$repo/specs"
 
 cp "$SOURCE_PREFLIGHT" "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
@@ -37,6 +37,12 @@ write_pass_script "$repo/plans/story_review_findings_guard.sh"
 write_pass_script "$repo/plans/stoic_cli_invariant_check.sh"
 write_pass_script "$repo/plans/toggle_policy_check.sh"
 write_pass_script "$repo/plans/prd_schema_check.sh"
+
+cat > "$repo/scripts/check_skills_index.py" <<'EOF'
+#!/usr/bin/env python3
+raise SystemExit(0)
+EOF
+chmod +x "$repo/scripts/check_skills_index.py"
 
 cat > "$repo/plans/prd.json" <<'EOF'
 {}

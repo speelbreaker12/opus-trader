@@ -196,7 +196,6 @@ plans/workflow_quick_step.sh
 plans/workflow_verify.sh
 scripts/build_contract_kernel.py
 scripts/check_arch_flows.py
-scripts/check_skills_index.py
 scripts/check_contract_crossrefs.py
 scripts/check_contract_kernel.py
 scripts/check_crash_matrix.py
@@ -204,14 +203,15 @@ scripts/check_crash_replay_idempotency.py
 scripts/check_csp_trace.py
 scripts/check_global_invariants.py
 scripts/check_reconciliation_matrix.py
+scripts/check_skills_index.py
 scripts/check_state_machines.py
 scripts/check_time_freshness.py
 scripts/check_vq_evidence.py
 scripts/contract_kernel_lib.py
 scripts/extract_contract_excerpts.py
 scripts/generate_impact_report.py
-scripts/test_contract_kernel.py
 scripts/test_check_skills_index.py
+scripts/test_contract_kernel.py
 specs/CONTRACT.md
 specs/IMPLEMENTATION_PLAN.md
 specs/POLICY.md

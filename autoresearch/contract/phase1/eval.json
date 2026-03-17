@@ -20,7 +20,8 @@
           "rule": {
             "type": "json_field_match",
             "path": "$.findings[*].category",
-            "value": "cross_ref_broken"
+            "value": "cross_ref_broken",
+            "match_mode": "any"
           }
         },
         {
@@ -47,7 +48,8 @@
           "rule": {
             "type": "json_field_match",
             "path": "$.findings[*].evidence.quote",
-            "pattern": "AT-999"
+            "pattern": "AT-999",
+            "match_mode": "any"
           }
         }
       ]
@@ -72,6 +74,36 @@
             "type": "json_unique_field",
             "path": "$.findings[*].finding_id"
           }
+        },
+        {
+          "id": "tmc-count",
+          "check": "detector emits a non-trivial finding set for TradingMode",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "id": "tmc-category",
+          "check": "detector still finds a gate interaction gap in TradingMode",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "gate_interaction_gap",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "tmc-section",
+          "check": "detector still anchors a finding to dispatch authorization semantics",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "Dispatch Authorization",
+            "match_mode": "any"
+          }
         }
       ]
     },
@@ -94,6 +126,36 @@
           "rule": {
             "type": "json_unique_field",
             "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "opl-count",
+          "check": "detector emits a stable finding count for Open Permission Latch",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 4,
+            "max": 6
+          }
+        },
+        {
+          "id": "opl-category",
+          "check": "detector still finds the fail-closed latch gap",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "missing_fail_closed",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "opl-section",
+          "check": "detector still anchors one finding to the AT-411 hard rule",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "AT-411",
+            "match_mode": "any"
           }
         }
       ]
@@ -118,6 +180,36 @@
             "type": "json_unique_field",
             "path": "$.findings[*].finding_id"
           }
+        },
+        {
+          "id": "ec-count",
+          "check": "detector emits a non-trivial finding count for Emergency Close",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "id": "ec-category",
+          "check": "detector still finds stale-input handling gaps in Emergency Close",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "stale_input_unspecified",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "ec-section",
+          "check": "detector still anchors one finding to the AtomicNakedEvent schema",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "AtomicNakedEvent schema",
+            "match_mode": "any"
+          }
         }
       ]
     },
@@ -141,6 +233,36 @@
             "type": "json_unique_field",
             "path": "$.findings[*].finding_id"
           }
+        },
+        {
+          "id": "eg-count",
+          "check": "detector emits a compact finding set for EvidenceGuard",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 3,
+            "max": 4
+          }
+        },
+        {
+          "id": "eg-category",
+          "check": "detector still finds a fail-closed EvidenceGuard gap",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "missing_fail_closed",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "eg-section",
+          "check": "detector still anchors a finding to GREEN/RED criteria wording",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "GREEN/RED criteria",
+            "match_mode": "any"
+          }
         }
       ]
     },
@@ -163,6 +285,36 @@
           "rule": {
             "type": "json_unique_field",
             "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "lg-count",
+          "check": "detector emits a non-trivial finding count for Liquidity Gate",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "id": "lg-severity",
+          "check": "detector still catches the P0 liquidity-gate finding",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].severity",
+            "value": "P0",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "lg-section",
+          "check": "detector still anchors one finding to stale-L2 gate interaction wording",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "Stale-L2",
+            "match_mode": "any"
           }
         }
       ]

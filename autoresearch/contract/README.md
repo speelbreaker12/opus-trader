@@ -15,7 +15,7 @@ The initial executable slice in this repository provides:
 - tracked phase directories and results headers
 - contract harness commands for `scaffold`, `status`, `phase1 run|baseline|eval`, `phase2 run|baseline|eval`, `refresh-common|refresh-fixtures|refresh-all`, and `render-review`
 - fail-closed Phase 2 validation for cross-file integrity, weak-normative evidence presence, mechanical span resolution, contradiction heuristics, and review-package rendering
-- deterministic refresh of shared context, snapshot fixtures, and manifest hashes
+- deterministic refresh of shared context, live Phase 1 fixtures, snapshot fixtures, and manifest hashes
 - `results.tsv` records execution-check rows for `run` and scored rows for `baseline`; `eval` scores existing output directories without mutating results history
 
 Deferred automation remains deferred:
