@@ -2,7 +2,7 @@
 
 - run_id: `phase2-mar17-20260317_141745-bb818649`
 - contract_file_hash: `d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c`
-- proposals_file_hash: `ed134c0187b391937989759f06a1211d43fe6625c0a10eed1dd425027d19af3f`
+- proposals_file_hash: `ba9d219a96e093411939e86944555dfea8a96610bd60e8bdc04fb7a10c1ed5a0`
 - proposal_count: `19`
 
 ## Manual Review Checklist
@@ -570,7 +570,7 @@ The Recovery Rule (lines 565-570) is a MUST-level cross-cutting invariant with n
 ### Proposed Text
 
 ```text
-Add AT-PROP-205 after the Recovery Rule: Given a ReduceOnly trigger activates (e.g., bunker_mode_active becomes true) and then immediately clears within the same tick or sub-cooldown interval, When TradingMode is computed on the subsequent tick(s), Then TradingMode MUST NOT return to Active until the applicable hysteresis/cooldown window has elapsed. Pass: ReduceOnly held for at least the minimum hysteresis duration. Fail: Active returned before hysteresis expires.
+Add AT-PROP-205 after the Recovery Rule: Given `bunker_mode_active` becomes true (entering Bunker Mode via §2.3.2) and all other axis inputs are nominal (no other STRESSED/DEGRADED/FAILING predicates active), and then `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed since the bunker entry condition cleared. Pass: ReduceOnly held for full `bunker_exit_stable_s` duration; Active not returned prematurely. Fail: Active returned before `bunker_exit_stable_s` elapses.
 ```
 
 ### Diff Preview
@@ -580,10 +580,12 @@ Add AT-PROP-205 after the Recovery Rule: Given a ReduceOnly trigger activates (e
 +++ b/specs/CONTRACT.md
 @@ after Recovery Rule (line 570)
 +AT-PROP-205
-+- Given: a ReduceOnly trigger activates and clears within a sub-cooldown interval.
-+- When: TradingMode computed on subsequent tick.
-+- Then: TradingMode == ReduceOnly until hysteresis window expires.
-+- Pass criteria: ReduceOnly held; Active not returned prematurely. Fail criteria: Active returned before hysteresis elapses.
++- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.
++- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.
++- When: TradingMode is computed on subsequent ticks.
++- Then: TradingMode == ReduceOnly until full `bunker_exit_stable_s` window elapses since bunker entry condition cleared.
++- Pass criteria: ReduceOnly held for full stable-exit window; Active not returned prematurely.
++- Fail criteria: Active returned before `bunker_exit_stable_s` elapses.
 ```
 
 ## P-209 — missing_fail_closed

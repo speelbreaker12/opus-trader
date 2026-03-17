@@ -8,7 +8,7 @@ started: 2026-03-16
 
 ## Current State
 
-Phase 3 run complete (phase2-mar17-20260317_141745-bb818649). 18 findings across 3 fixtures, 19 proposals generated (16 proposed, 1 rejected, 2 pending_scope_review). P0 gaps: Margin Headroom Gate missing fail-closed for NaN/missing inputs; bunker_mode_active staleness threshold unimplementable. Review package ready for manual decisions.
+Phase 3 review complete (phase2-mar17-20260317_141745-bb818649). 19 proposals reviewed: 16 accepted, 3 rejected (1 pre-rejected by harness, 2 fixture-only). P-208 Recovery Rule AT rewritten to bind bunker_mode_active + bunker_exit_stable_s. Accepted-only patch rendered. Next: apply patch to CONTRACT.md.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -20,6 +20,7 @@ Phase 3 run complete (phase2-mar17-20260317_141745-bb818649). 18 findings across
 
 ## Debriefs
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
+- [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
 
 ## Log
 ### 2026-03-16
@@ -54,4 +55,6 @@ Phase 3 run complete (phase2-mar17-20260317_141745-bb818649). 18 findings across
 - 19 proposals: 16 proposed, 1 rejected (enforcement evidence missing), 2 pending_scope_review
 - P0: Margin Headroom Gate NaN/missing fail-closed gap; bunker_mode_active staleness unimplementable
 - P1: drain_all() 0 ATs, Pricer fail-closed 0 ATs, Inventory Skew SELL formula vague, AT-1243 duplicate ID, fee_model hard-stale 0 ATs, cortex_override fail-open risk, reconciliation REST failure 0 ATs, field rename alias 0 ATs, TradingModeBlockedOpen missing from registry
-- Next: review 19 proposals in review package, write REVIEW_DECISIONS JSON, apply accepted patches
+- Review complete: 16 accepted, 3 rejected (P-209 pre-rejected, P-400/P-401 fixture-only). P-208 rewritten to bind bunker_mode_active + bunker_exit_stable_s.
+- Accepted-only patch rendered at `autoresearch/contract/phase2/review/CONTRACT_PATCH_phase2-mar17-20260317_141745-bb818649.patch`
+- Next: apply accepted patch to CONTRACT.md

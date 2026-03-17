@@ -22,10 +22,13 @@
     "run_id": "phase2-mar17-20260317_141745-bb818649",
     "timestamp": "2026-03-17T14:17:45.952362Z",
     "contract_file_hash": "d7ab68a84baee5fbe0224b1b7f341c4de4ee3aaad0f350ec90471e0fb8cd4f7c",
-    "status": "pending",
+    "status": "reviewed",
     "proposal_count": 19,
-    "accepted_count": 0,
+    "accepted_count": 16,
+    "rejected_count": 3,
     "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-mar17-20260317_141745-bb818649.md",
-    "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar17-20260317_141745-bb818649.md"
+    "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar17-20260317_141745-bb818649.md",
+    "review_decisions_path": "autoresearch/contract/phase2/review/REVIEW_DECISIONS_phase2-mar17-20260317_141745-bb818649.json",
+    "patch_path": "autoresearch/contract/phase2/review/CONTRACT_PATCH_phase2-mar17-20260317_141745-bb818649.patch"
   }
 ]
