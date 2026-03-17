@@ -207,6 +207,7 @@ ambiguity_gap = 2
 output_lines = [
     "OBSIDIAN PROJECT ROUTER",
     f"Obsidian folder: {projects_dir.relative_to(projects_dir.parent.parent)}",
+    "Companion skill: /obsidian-workflow",
 ]
 should_mark_seen = False
 
@@ -215,6 +216,7 @@ if top["score"] < confidence_threshold:
         [
             "No related Obsidian project note matched the first prompt.",
             "MANDATORY FIRST RESPONSE:",
+            "- Consult /obsidian-workflow for the project-note and debrief checklist.",
             "- Tell the user no related project note was found in obsidian/Projects and propose a new one.",
             f"- Suggested new project note: {suggest_project_name(message)}",
             "- Mention that you checked obsidian/Projects before responding.",
@@ -227,6 +229,7 @@ elif second is not None and second["score"] >= confidence_threshold and (top["sc
             f"- Candidate 1: {top['rel_path']} (score={top['score']}, matched={', '.join(top['matched_terms']) or 'none'})",
             f"- Candidate 2: {second['rel_path']} (score={second['score']}, matched={', '.join(second['matched_terms']) or 'none'})",
             "MANDATORY FIRST RESPONSE:",
+            "- Consult /obsidian-workflow for the project-note and debrief checklist.",
             "- Tell the user you found multiple likely Obsidian project notes and ask them to choose one before proceeding.",
             "- Do not claim a single project was selected yet.",
             "- Mention that you checked obsidian/Projects before responding.",
@@ -241,6 +244,7 @@ else:
             f"Matched Obsidian project: {top['rel_path']}",
             f"Matched terms: {', '.join(top['matched_terms']) or 'none'}",
             "MANDATORY FIRST RESPONSE:",
+            "- Consult /obsidian-workflow for the project-note and debrief checklist.",
             f"- Confirm you found and read {top['rel_path']} before proceeding.",
             f"- Name the matched Obsidian project note explicitly: {top['name']}.",
             "- Mention that you checked obsidian/Projects before responding.",
