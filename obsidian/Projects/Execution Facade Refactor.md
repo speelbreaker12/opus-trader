@@ -9,6 +9,12 @@ started: "2026-03-05"
 ## Current State
 PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, and `execution/gates.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. Orchestration consolidation and 1C (risk/venue/infra) remain open.
 
+## Commits
+- `1e0eccc6` — 2026-03-17 — add execution gate event seams for liquidity and net-edge, plus graybox/parity test coverage and shared metrics-test isolation helpers.
+- `429fe236` — 2026-03-17 — record the fee pilot commit hash in the Execution Facade Refactor project tracking notes.
+- `0c5abc78` — 2026-03-17 — add the fee staleness event seam with typed events and parity-preserving production adapter coverage.
+- `523a6434` — 2026-03-17 — add the crate-private telemetry sink seam used by graybox gate tests.
+
 ## Key Files
 - crates/soldier_core/src/execution/
 - crates/soldier_core/src/risk/fees.rs
@@ -21,6 +27,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 
 ## Log
 ### 2026-03-17
+- Added a top-level `## Commits` history section to this project note and backfilled the execution gate pilot debrief with commit `1e0eccc6`.
 - Converted `crates/soldier_core/src/execution/gate.rs` to a crate-private `evaluate_liquidity_gate_with_events(...)` seam with `LiquidityGateEvent` and a parity-preserving production adapter.
 - Converted `crates/soldier_core/src/execution/gates.rs` to a crate-private `evaluate_net_edge_with_events(...)` seam with `NetEdgeEvent` and a parity-preserving production adapter.
 - Added graybox tests for the liquidity gate and net-edge gate proving the event paths do not mutate global counters or traced metric lines, while the wrapper parity tests still prove the production metrics contract.

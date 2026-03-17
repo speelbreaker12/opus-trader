@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending
+- `1e0eccc6`
 
 ## 0) What shipped
 - Feature/behavior: Added crate-private event-sink seams for the execution liquidity gate and net-edge gate, plus graybox tests that exercise the event paths without production metric side effects.
