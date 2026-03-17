@@ -36,6 +36,14 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 ## PRs
 - `#213` — branch `pr/obsidian-hooks` — open — split hook/Obsidian routing, guardrails, workflow skill, and worktree tracking into a dedicated review branch.
 
+## Roadmap
+- Add first-prompt triage so no-match prompts can resolve to `general question`, `Repo Maintenance`, or `new project` instead of always creating a new project/worktree.
+- Add `scope_paths` to project notes and use them for staged-file validation.
+- Add a pre-push / PR-scope guard so a branch cannot accumulate unrelated commits or push onto an unrelated existing PR.
+- Add a `gh pr create` wrapper or guard that records the PR number back to the project note automatically.
+- Add WIP-safety guardrails for sync operations: refuse rebase/merge/cherry-pick in dirty worktrees and never auto-delete project worktrees after PR creation/merge.
+- Define the default worktree lifecycle explicitly: keep project worktrees through active PRs, reuse them for the next slice of the same project, and only remove them after merge + clean state + approval.
+
 ## Key Files
 - obsidian/Templates/Project.md
 - obsidian/Templates/Debrief.md
@@ -64,6 +72,7 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - [[Obsidian Work Tracking 2026-03-17 Project Worktrees]]
 - [[Obsidian Work Tracking 2026-03-17 PRs Section]]
 - [[Obsidian Work Tracking 2026-03-17 Repo Maintenance Fallback]]
+- [[Obsidian Work Tracking 2026-03-17 Roadmap And Wip Safety]]
 
 ## Handoffs
 - None active. Save future handoffs under `obsidian/Handoffs/` only when work is paused, blocked, or explicitly handed off.
@@ -102,3 +111,4 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - Added a `## PRs` section to the project template and workflow guidance, and recorded the dedicated review branch PR for this work.
 - Added a dedicated Obsidian debrief/project-note update for the new `## PRs` section so future project pages track active and historical PRs explicitly.
 - Added a shared `Repo Maintenance` fallback project for small fixes and housekeeping work so future minor changes do not need a brand-new project page every time.
+- Added a `## Roadmap` section to the project template/workflow, and documented WIP-safety rules so future sync/rebase/merge work does not delete user-owned work in active project worktrees.

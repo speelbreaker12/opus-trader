@@ -41,14 +41,17 @@ If the task is only a small, cross-cutting fix or housekeeping batch and no dedi
 2. Update `## Current State` if the project status shifted
 3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
 4. Update the `## PRs` section near the top of the note with PR number (or `pending`), branch, and short status whenever PR state changes
-5. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
-6. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
+5. Update the `## Roadmap` section when the next intended slices or guardrails change
+6. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+7. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
 
 **If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
 
 **The git pre-commit hook will block commits** that don't include staged changes to both `obsidian/Projects/*.md` and `obsidian/Debriefs/*.md`, it requires the staged project note to link at least one staged debrief, and all staged Obsidian project/debrief files in that commit must belong to exactly one project.
 
 **At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` and `## PRs` sections near the top in the same readable history format, and link the debrief from the project's `## Debriefs` section before committing.
+
+**WIP safety:** Never rebase, merge, cherry-pick, or remove a project worktree while it contains uncommitted user WIP. Keep project worktrees until their branch is merged and clean, and only remove them with explicit user approval or when the project is clearly complete.
 
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.

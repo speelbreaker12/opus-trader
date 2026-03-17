@@ -17,6 +17,9 @@ worktree:
 ## PRs
 - `pending` — branch `<branch-name>` — PR not opened yet.
 
+## Roadmap
+- Capture the next intended slices, enforcement work, or milestones here.
+
 ## Key Files
 -
 

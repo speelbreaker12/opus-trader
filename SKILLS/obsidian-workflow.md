@@ -26,10 +26,18 @@ When to use
 - Keep frontmatter `pr` current for the active PR, if one exists.
 - Keep `## Commits` near the top with `date + hash or pending + short summary`.
 - Keep `## PRs` near the top with `PR number or pending + branch + short status`.
+- Keep `## Roadmap` current with the next intended slices, guardrails, or milestones for the project.
 - Keep `## Key Files` focused on the active files for the project.
 - Link every relevant debrief under `## Debriefs`.
 - Append a dated entry under `## Log` for each meaningful batch.
 - Move work out of `Repo Maintenance` into a dedicated project once it becomes multi-day, domain-specific, or large enough to deserve its own PR/review trail.
+
+## Worktree Safety
+- Never rebase, merge, or cherry-pick in a dirty project worktree.
+- Never use destructive git cleanup commands (`reset --hard`, `checkout --`, `clean -fd`) on user-owned WIP without explicit approval.
+- Do not delete a project worktree automatically after opening or merging a PR.
+- Keep the project worktree until the branch is merged and clean, then remove it only with explicit user approval or when the project is clearly complete.
+- Prefer merging PRs normally over cherry-picking commits back to `main`; use cherry-pick only for exceptional recovery or backport cases.
 
 ## Debrief Checklist
 - Use `obsidian/Templates/Debrief.md`.
