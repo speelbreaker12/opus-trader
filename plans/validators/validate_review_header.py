@@ -46,7 +46,7 @@ from lib_review_artifacts import (  # noqa: E402
 VERSION = "v1"
 VALIDATOR_NAME = "validate_review_header"
 
-VALID_TOOLS = {"codex", "opus", "kimi", "gemini", "script"}
+VALID_TOOLS = {"codex", "sonnet", "opus", "kimi", "gemini", "script"}
 VALID_PROMPT_STYLES = {"generic", "enriched", "none"}
 VALID_CYCLES = {"C1", "C2", "SELF", "NONE"}
 VALID_PHASES = {
@@ -60,7 +60,7 @@ REQUIRED_PROVENANCE_FIELDS_JSON = [
 ]
 # Markdown artifacts (review_logged.sh output) carry a smaller set.
 # cycle / phase_equivalent / review_basis / slice_id are manifest-level.
-# model is only emitted for opus/kimi (codex omits it).
+# model is emitted for sonnet/opus/kimi (codex omits it).
 REQUIRED_PROVENANCE_FIELDS_MD = [
     "story_id", "head_commit", "prompt_style", "artifact_provenance",
 ]

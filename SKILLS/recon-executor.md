@@ -10,7 +10,7 @@ This skill is command execution only. The operator owns gate decisions and exter
 
 - Do not reorder `wf_step` phases.
 - Do not mark steps complete without receipts.
-- Do not run external reviewers (`codex`, `opus`, `kimi`, `gemini`) unless operator explicitly asks.
+- Do not run external reviewers (`codex`, `sonnet`, `kimi`, `gemini`) unless operator explicitly asks.
 - If blocked or uncertain, stop and report exactly what is missing.
 
 ## Step command pattern

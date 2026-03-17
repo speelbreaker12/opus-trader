@@ -196,7 +196,7 @@ test_single_reviewer() {
   local story_dir
   story_dir="$(setup_story "$sid")"
   copy_base "$story_dir"
-  create_reviewer_graph "$story_dir" "opus" "PROVEN_UNIT"
+  create_reviewer_graph "$story_dir" "sonnet" "PROVEN_UNIT"
 
   set +e
   output="$(run_aggregate "$sid" 2>&1)"
@@ -234,7 +234,7 @@ test_two_reviewers_strictest() {
   copy_base "$story_dir"
   # Use PROVEN_INTEGRATED (rank 0) and PROVEN_UNIT (rank 1) —
   # both pass validate.py --strict, but PROVEN_UNIT is stricter.
-  create_reviewer_graph "$story_dir" "opus" "PROVEN_INTEGRATED"
+  create_reviewer_graph "$story_dir" "sonnet" "PROVEN_INTEGRATED"
   create_reviewer_graph "$story_dir" "codex" "PROVEN_UNIT"
 
   set +e
@@ -261,8 +261,8 @@ test_two_reviewers_strictest() {
 s = g.get('meta', {}).get('review_sources', [])
 print(','.join(sorted(s)))
 ")"
-  [[ "$sources" == "codex,opus" ]] \
-    || fail "two reviewers: expected review_sources=[codex,opus], got $sources"
+  [[ "$sources" == "codex,sonnet" ]] \
+    || fail "two reviewers: expected review_sources=[codex,sonnet], got $sources"
 
   # Verify review_count
   local review_count
@@ -306,7 +306,7 @@ test_non_reviewer_dirs_ignored() {
   copy_base "$story_dir"
 
   # Create a valid reviewer graph with a known tool
-  create_reviewer_graph "$story_dir" "opus" "PROVEN_UNIT"
+  create_reviewer_graph "$story_dir" "sonnet" "PROVEN_UNIT"
 
   # Create a stray proof_graph.json in a non-reviewer directory
   # This graph has a DIFFERENT verdict — if included, strictest would differ
@@ -317,19 +317,19 @@ test_non_reviewer_dirs_ignored() {
   rc=$?
   set -e
 
-  # Aggregation should succeed (only opus counted, self_review ignored)
+  # Aggregation should succeed (only sonnet counted, self_review ignored)
   [[ $rc -eq 0 ]] || fail "stray dir: expected exit 0 (self_review ignored), got $rc. Output: $output"
 
-  # Should aggregate exactly 1 reviewer (opus), not 2
+  # Should aggregate exactly 1 reviewer (sonnet), not 2
   echo "$output" | grep -q "Aggregated 1 reviewer" \
     || fail "stray dir: expected 'Aggregated 1 reviewer' (self_review should be ignored)"
 
-  # Verify verdict is from opus (PROVEN_UNIT), not from self_review (FAIL_OPEN_RISK)
+  # Verify verdict is from sonnet (PROVEN_UNIT), not from self_review (FAIL_OPEN_RISK)
   local merged="$story_dir/proof_graph.json"
   local merged_verdict
   merged_verdict="$(read_merged_field "$merged" "print(g['ats'][0]['at_verdict']['verdict'])")"
   [[ "$merged_verdict" == "PROVEN_UNIT" ]] \
-    || fail "stray dir: expected PROVEN_UNIT (opus only), got $merged_verdict"
+    || fail "stray dir: expected PROVEN_UNIT (sonnet only), got $merged_verdict"
 
   pass "non-reviewer dir (self_review) correctly ignored"
 }
@@ -418,7 +418,7 @@ test_known_tools_sync() {
   # Extract tool names from the case-statement in review_logged.sh
   local review_script="$ROOT/plans/review_logged.sh"
   [[ -f "$review_script" ]] || fail "known_tools_sync: review_logged.sh not found"
-  review_tools="$(grep -E '^\s+codex\|opus\|kimi\|gemini\)' "$review_script" | sed 's/[);[:space:]]//g' | tr '|' '\n' | sort | tr '\n' ' ' | xargs)"
+  review_tools="$(grep -E '^\s+codex\|sonnet\|opus\|kimi\|gemini\)' "$review_script" | sed 's/[);[:space:]]//g' | tr '|' '\n' | sort | tr '\n' ' ' | xargs)"
 
   [[ "$aggregate_tools" == "$review_tools" ]] \
     || fail "known_tools_sync: KNOWN_TOOLS='$aggregate_tools' != review_logged.sh tools='$review_tools'"

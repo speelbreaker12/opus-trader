@@ -4,7 +4,7 @@ You are the Builder. Fix findings from cycle 1. No new scope.
 STORY: ${STORY_ID}
 
 TASK
-1) Read cycle 1 review artifacts in artifacts/story/${STORY_ID}/codex/ (and opus/ if present).
+1) Read cycle 1 review artifacts in artifacts/story/${STORY_ID}/codex/ and artifacts/story/${STORY_ID}/sonnet/ (legacy opus/ if present).
 2) Fix all BLOCKING and MAJOR findings that are in-scope.
 3) Address MEDIUM findings where practical.
 4) Keep fixes minimal — no unrelated refactors.

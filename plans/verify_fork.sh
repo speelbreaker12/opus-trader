@@ -918,7 +918,7 @@ fi
 #
 # Single-level glob: artifacts/story/*/proof_graph.json matches only
 # base/merged graphs (e.g. artifacts/story/S1-007/proof_graph.json).
-# Reviewer sub-directories (codex/, opus/, kimi/) are two levels deep
+# Reviewer sub-directories (codex/, sonnet/, opus/, kimi/) are two levels deep
 # and are intentionally excluded by the glob pattern.
 PROOF_GRAPH_TIMEOUT="${PROOF_GRAPH_TIMEOUT:-30s}"
 if [[ "$MODE" == "full" ]]; then

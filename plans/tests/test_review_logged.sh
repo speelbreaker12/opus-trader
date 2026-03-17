@@ -47,7 +47,27 @@ echo "crates/soldier_core/src/execution/quantize.rs:13"
 exit 0
 MOCK_CLAUDE
 
-chmod +x "$mock_bin/codex" "$mock_bin/kimi" "$mock_bin/claude"
+cat > "$mock_bin/timeout" <<'MOCK_TIMEOUT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+_seconds="${1:?missing timeout seconds}"
+shift
+
+if [[ "${1:-}" == "bash" && "${2:-}" == "-c" ]]; then
+  "$@"
+  exit $?
+fi
+
+if [[ "${1:-}" == *"/claude" || "${1:-}" == "claude" ]]; then
+  exit 124
+fi
+
+"$@"
+exit $?
+MOCK_TIMEOUT
+
+chmod +x "$mock_bin/codex" "$mock_bin/kimi" "$mock_bin/claude" "$mock_bin/timeout"
 
 out_root="$tmp_dir/out"
 
@@ -79,21 +99,21 @@ grep -Fq 'path/to/file.ext:line' "$SCRIPT" \
   || fail "citation hard-requirement text missing from prompt contract"
 pass "prompt contract requires explicit file:line citations"
 
-# 5) Opus timeout should fail-closed with deterministic exit, clear stale sidecar, and mark timeout
-opus_sidecar="$out_root/S2-002/opus/opus.enriched.sidecar.json"
-mkdir -p "$(dirname "$opus_sidecar")"
-printf '{"stale":true}\n' > "$opus_sidecar"
+# 5) Sonnet timeout should fail-closed with deterministic exit, clear stale sidecar, and mark timeout
+sonnet_sidecar="$out_root/S2-002/sonnet/sonnet.enriched.sidecar.json"
+mkdir -p "$(dirname "$sonnet_sidecar")"
+printf '{"stale":true}\n' > "$sonnet_sidecar"
 
 set +e
-PATH="$mock_bin:$PATH" "$SCRIPT" S2-002 --tool opus --uncommitted --prompt enriched --timeout-seconds 1 --out-root "$out_root" >/dev/null 2>&1
+REVIEW_LOG_TIMEOUT_RETRY_SECONDS=1 PATH="$mock_bin:$PATH" "$SCRIPT" S2-002 --tool sonnet --uncommitted --prompt enriched --timeout-seconds 1 --out-root "$out_root" >/dev/null 2>&1
 rc=$?
 set -e
-[[ $rc -eq 7 ]] || fail "opus timeout expected exit 7, got $rc"
-opus_md="$out_root/S2-002/opus/opus.enriched.md"
-[[ -f "$opus_md" ]] || fail "opus artifact missing after timeout"
-grep -Fxq -- "- Timed Out: true" "$opus_md" || fail "timeout marker missing in artifact"
-grep -Fxq -- "HARD_GATE: REVIEW_COMMAND_TIMEOUT (exit 7)" "$opus_md" || fail "timeout hard-gate marker missing"
-[[ ! -f "$opus_sidecar" ]] || fail "stale sidecar should be removed on failed run"
-pass "opus timeout fails closed with deterministic exit 7 and clears stale sidecar"
+[[ $rc -eq 7 ]] || fail "sonnet timeout expected exit 7, got $rc"
+sonnet_md="$out_root/S2-002/sonnet/sonnet.enriched.md"
+[[ -f "$sonnet_md" ]] || fail "sonnet artifact missing after timeout"
+grep -Fxq -- "- Timed Out: true" "$sonnet_md" || fail "timeout marker missing in artifact"
+grep -Fxq -- "HARD_GATE: REVIEW_COMMAND_TIMEOUT (exit 7)" "$sonnet_md" || fail "timeout hard-gate marker missing"
+[[ ! -f "$sonnet_sidecar" ]] || fail "stale sidecar should be removed on failed run"
+pass "sonnet timeout fails closed with deterministic exit 7 and clears stale sidecar"
 
 echo "PASS: review_logged regression fixtures"

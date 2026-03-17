@@ -3,8 +3,8 @@
 #
 # Tests:
 #   1. --proof-graph + --prompt generic → exit 2 with "requires --prompt enriched"
-#   2. --proof-graph + --tool codex (no --files) → exit 2 with "requires --tool opus|kimi"
-#   3. --proof-graph + --prompt enriched + --tool opus → guard passes (no guard error)
+#   2. --proof-graph + --tool codex (no --files) → exit 2 with "requires --tool sonnet|opus|kimi"
+#   3. --proof-graph + --prompt enriched + --tool sonnet → guard passes (no guard error)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -25,7 +25,7 @@ pass() {
 
 test_proof_graph_generic_rejected() {
   set +e
-  output="$(bash "$SCRIPT" FAKE-001 --tool opus --prompt generic --uncommitted --proof-graph 2>&1)"
+  output="$(bash "$SCRIPT" FAKE-001 --tool sonnet --prompt generic --uncommitted --proof-graph 2>&1)"
   rc=$?
   set -e
 
@@ -44,7 +44,7 @@ test_proof_graph_codex_diff_rejected() {
   set -e
 
   [[ $rc -eq 2 ]] || fail "proof-graph+codex should exit 2, got $rc"
-  echo "$output" | grep -q "requires --tool opus|kimi|gemini or --tool codex --files" \
+  echo "$output" | grep -q "requires --tool sonnet|opus|kimi|gemini or --tool codex --files" \
     || fail "proof-graph+codex: expected tool guard message. Output: $output"
   pass "--proof-graph + --tool codex (no --files) → exit 2"
 }
@@ -71,7 +71,7 @@ MOCK_CLAUDE
   chmod +x "$mock_bin/claude"
 
   set +e
-  output="$(PATH="$mock_bin:$PATH" bash "$SCRIPT" FAKE-001 --tool opus --prompt enriched --uncommitted --proof-graph 2>&1)"
+  output="$(PATH="$mock_bin:$PATH" bash "$SCRIPT" FAKE-001 --tool sonnet --prompt enriched --uncommitted --proof-graph 2>&1)"
   rc=$?
   set -e
   rm -rf "$tmp_dir"
@@ -80,8 +80,8 @@ MOCK_CLAUDE
   if echo "$output" | grep -q "requires --prompt enriched"; then
     fail "valid combo: guard incorrectly rejected with 'requires --prompt enriched'"
   fi
-  if echo "$output" | grep -q "requires --tool opus|kimi"; then
-    fail "valid combo: guard incorrectly rejected with 'requires --tool opus|kimi'"
+  if echo "$output" | grep -q "requires --tool sonnet|opus|kimi"; then
+    fail "valid combo: guard incorrectly rejected with 'requires --tool sonnet|opus|kimi'"
   fi
 
   # Guard exit code is 2; any other exit (0 or other) means guard did not fire
@@ -90,7 +90,7 @@ MOCK_CLAUDE
 
   # Script may fail for other reasons (missing claude CLI, missing story)
   # but it should NOT have failed at the --proof-graph guard
-  pass "--proof-graph + --prompt enriched + --tool opus → guard passes (exit $rc)"
+  pass "--proof-graph + --prompt enriched + --tool sonnet → guard passes (exit $rc)"
 }
 
 # ── Run all tests ─────────────────────────────────────────────────

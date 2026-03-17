@@ -31,11 +31,11 @@ HEXSHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 ISO8601Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
-REQUIRED_COMBOS = [
-    ("codex", "enriched"),
-    ("codex", "generic"),
-    ("opus", "enriched"),
-    ("opus", "generic"),
+REQUIRED_COMBO_GROUPS = [
+    (("codex",), "enriched"),
+    (("codex",), "generic"),
+    (("sonnet", "opus"), "enriched"),
+    (("sonnet", "opus"), "generic"),
 ]
 
 R3_TOP_REQUIRED = [
@@ -198,7 +198,7 @@ def validate_review_provenance_r3(prov: Any, ctx: str) -> list[str]:
         "generated_at", "artifact_provenance",
     ]
     errors += _check_required(prov, req, ctx)
-    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
+    errors += _check_enum(prov, "tool", ["codex", "sonnet", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(prov, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(prov, "cycle", "C1", ctx)
     errors += _check_enum(prov, "phase_equivalent", ["R1", "R3"], ctx)
@@ -222,7 +222,7 @@ def validate_review_provenance_r7(prov: Any, ctx: str) -> list[str]:
         "base_commit", "generated_at", "artifact_provenance",
     ]
     errors += _check_required(prov, req, ctx)
-    errors += _check_enum(prov, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
+    errors += _check_enum(prov, "tool", ["codex", "sonnet", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(prov, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(prov, "cycle", "C2", ctx)
     errors += _check_const(prov, "phase_equivalent", "R7d", ctx)
@@ -247,7 +247,7 @@ def validate_review_entry_r3(entry: Any, idx: int, check_files: bool, manifest_d
     if not isinstance(entry, dict):
         return [f"{ctx}: must be an object"]
     errors += _check_required(entry, R3_REVIEW_ENTRY_REQUIRED, ctx)
-    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
+    errors += _check_enum(entry, "tool", ["codex", "sonnet", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(entry, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(entry, "cycle", "C1", ctx)
     errors += _check_enum(entry, "phase_equivalent", ["R1", "R3"], ctx)
@@ -284,7 +284,7 @@ def validate_review_entry_r7(entry: Any, idx: int, check_files: bool, manifest_d
     if not isinstance(entry, dict):
         return [f"{ctx}: must be an object"]
     errors += _check_required(entry, R7_REVIEW_ENTRY_REQUIRED, ctx)
-    errors += _check_enum(entry, "tool", ["codex", "opus", "kimi", "gemini"], ctx)
+    errors += _check_enum(entry, "tool", ["codex", "sonnet", "opus", "kimi", "gemini"], ctx)
     errors += _check_enum(entry, "prompt_style", ["generic", "enriched"], ctx)
     errors += _check_const(entry, "cycle", "C2", ctx)
     errors += _check_const(entry, "phase_equivalent", "R7d", ctx)
@@ -483,7 +483,7 @@ def _verify_review_meta(
 # ---------------------------------------------------------------------------
 
 def check_required_combos(reviews: list[dict[str, Any]]) -> list[str]:
-    """Verify reviews[] contains all 4 mandatory tool x prompt combos."""
+    """Verify reviews[] contains codex plus one Claude reviewer for each prompt."""
     errors: list[str] = []
     found = set()
     for r in reviews:
@@ -492,16 +492,17 @@ def check_required_combos(reviews: list[dict[str, Any]]) -> list[str]:
             ps = r.get("prompt_style")
             if tool and ps:
                 found.add((tool, ps))
-    for combo in REQUIRED_COMBOS:
-        if combo not in found:
+    for tools, prompt_style in REQUIRED_COMBO_GROUPS:
+        if not any((tool, prompt_style) in found for tool in tools):
+            expected_tools = "|".join(tools)
             errors.append(
-                f"required_combinations: missing review for tool={combo[0]}, "
-                f"prompt_style={combo[1]}"
+                f"required_combinations: missing review for tool={expected_tools}, "
+                f"prompt_style={prompt_style}"
             )
     return errors
 
 
-VALID_TOOLS = {"codex", "opus", "kimi", "gemini"}
+VALID_TOOLS = {"codex", "sonnet", "opus", "kimi", "gemini"}
 VALID_PROMPT_STYLES = {"generic", "enriched"}
 
 

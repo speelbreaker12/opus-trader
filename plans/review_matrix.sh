@@ -4,7 +4,7 @@ set -euo pipefail
 # review_matrix.sh — Run the full 4-combo review matrix for a story cycle.
 #
 # Ensures all 4 mandatory tool x prompt combinations are executed:
-#   codex + enriched, codex + generic, opus + enriched, opus + generic
+#   codex + enriched, codex + generic, sonnet + enriched, sonnet + generic
 #
 # Usage:
 #   plans/review_matrix.sh <STORY_ID> --cycle <c1|c2> --base <BASE_REF> [--dry-run]
@@ -24,10 +24,10 @@ Options:
   --continue      Continue on individual review failure (default: stop on first)
 
 Matrix (always all 4):
-  codex + enriched
-  codex + generic
-  opus  + enriched
-  opus  + generic
+  codex  + enriched
+  codex  + generic
+  sonnet + enriched
+  sonnet + generic
 
 Canonical outputs (per review_logged.sh normalization):
   artifacts/story/<ID>/<tool>/<tool>.<prompt_style>.md
@@ -88,7 +88,7 @@ review_script="$repo_root/plans/review_logged.sh"
 
 # ── Matrix definition ────────────────────────────────────────────────
 
-TOOLS=("codex" "opus")
+TOOLS=("codex" "sonnet")
 PROMPTS=("enriched" "generic")
 
 echo "=== Review Matrix: $story — $cycle_label ==="

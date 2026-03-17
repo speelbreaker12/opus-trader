@@ -183,7 +183,7 @@ Run external reviewers independently for C1/C2 artifacts. Example:
 
 ```bash
 timeout 540 bash plans/review_logged.sh "$STORY_ID" --tool codex --commit HEAD --timeout-seconds 180
-REVIEW_LOG_TIMEOUT_RETRY_SECONDS=240 timeout 540 bash plans/review_logged.sh "$STORY_ID" --tool opus --commit HEAD --timeout-seconds 180
+REVIEW_LOG_TIMEOUT_RETRY_SECONDS=240 timeout 540 bash plans/review_logged.sh "$STORY_ID" --tool sonnet --commit HEAD --timeout-seconds 180
 REVIEW_LOG_TIMEOUT_RETRY_SECONDS=240 timeout 540 bash plans/review_logged.sh "$STORY_ID" --tool kimi --commit HEAD --timeout-seconds 180
 REVIEW_LOG_TIMEOUT_RETRY_SECONDS=240 timeout 540 bash plans/review_logged.sh "$STORY_ID" --tool gemini --commit HEAD --timeout-seconds 180
 ```

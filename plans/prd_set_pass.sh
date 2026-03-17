@@ -16,7 +16,7 @@ Rules for passes=true:
   - preflight.rc must exist and be 0 in artifacts dir
   - fail_closed_coverage.rc must exist and be 0 in artifacts dir
   - contract review file must exist and contain decision=PASS
-  - at least one review artifact must exist for current HEAD (codex/ or opus/)
+  - at least one review artifact must exist for current HEAD (codex/, sonnet/, or opus/)
   - wf_step.sh receipt chain must have all 8 receipts
   - enforcing_contract_ats must be non-empty (exit 6) — exempt: policy/certification categories
   - enforcement_point must be non-empty (exit 6) — exempt: policy/certification categories
@@ -245,7 +245,7 @@ if [[ "$STATUS" == "true" ]]; then
   # At least one review artifact must exist for current HEAD
   review_found=0
   art_root="${STORY_ARTIFACTS_ROOT:-$ROOT/artifacts/story}"
-  for dir in "$art_root/$ID/codex" "$art_root/$ID/opus"; do
+  for dir in "$art_root/$ID/codex" "$art_root/$ID/sonnet" "$art_root/$ID/opus"; do
     [[ -d "$dir" ]] || continue
     if grep -rlF "$HEAD_SHA" "$dir"/ 2>/dev/null | head -1 | grep -q .; then
       review_found=1; break
@@ -254,7 +254,7 @@ if [[ "$STATUS" == "true" ]]; then
   if [[ "$review_found" -eq 1 ]]; then
     echo "OK: review gate passed for $ID @ $HEAD_SHA"
   else
-    echo "ERROR: no review artifact for HEAD=$HEAD_SHA in $art_root/$ID/{codex,opus}" >&2
+    echo "ERROR: no review artifact for HEAD=$HEAD_SHA in $art_root/$ID/{codex,sonnet,opus}" >&2
     exit 4
   fi
 

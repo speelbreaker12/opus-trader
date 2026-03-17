@@ -69,7 +69,7 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
-mkdir -p "$repo/plans" "$repo/plans/lib" "$repo/.wf/receipts/S9-000" "$repo/artifacts/story/S9-000/codex" "$repo/artifacts/story/S9-000/opus"
+mkdir -p "$repo/plans" "$repo/plans/lib" "$repo/.wf/receipts/S9-000" "$repo/artifacts/story/S9-000/codex" "$repo/artifacts/story/S9-000/sonnet"
 
 (
   cd "$tmp_dir"
@@ -165,7 +165,7 @@ cat > "$repo/.wf/receipts/$story/04_fix.json" <<JSON
 {"story_id":"$story","step_name":"fix","step_index":4,"head_sha":"$head_sha","timestamp_utc":"2026-03-01T00:00:03Z","code_changed":true}
 JSON
 
-cycle2_artifact="$repo/artifacts/story/$story/opus/20260301_c2_review.md"
+cycle2_artifact="$repo/artifacts/story/$story/sonnet/20260301_c2_review.md"
 cat > "$cycle2_artifact" <<'C2'
 Review basis: FIX_DIFF + AT_REGRESSION (Cycle 2)
 Phase equivalent: R7d
@@ -180,7 +180,7 @@ set -e
 [[ "$cycle2_fail_rc" -eq 3 ]] || fail "cycle2 should fail when only one provenance-valid artifact exists"
 printf '%s\n' "$cycle2_fail_out" | grep -Fq "provenance-valid review artifacts" || fail "cycle2 missing provenance-count failure message"
 
-write_sidecar "$cycle2_artifact" "R7d" "FIX_DIFF_AT_REGRESSION" "opus" "$story" "$head_sha"
+write_sidecar "$cycle2_artifact" "R7d" "FIX_DIFF_AT_REGRESSION" "sonnet" "$story" "$head_sha"
 (
   cd "$repo"
   bash plans/wf_step.sh "$story" cycle2 >/dev/null

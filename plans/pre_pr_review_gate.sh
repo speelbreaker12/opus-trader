@@ -8,7 +8,7 @@ Usage:
 
 Purpose:
   Pre-PR review evidence gate aligned to split policy:
-    - Enforce at least one review artifact exists for the given HEAD (codex/ or opus/).
+    - Enforce at least one review artifact exists for the given HEAD (codex/, sonnet/, or opus/).
     - Enforce one-story-per-branch with slash-free Story IDs (`[A-Za-z0-9][A-Za-z0-9._-]*`) and branch format:
         story/<STORY_ID>
         story/<STORY_ID>/<slug>
@@ -16,7 +16,7 @@ Purpose:
     - Optionally require thinking-review evidence for a slice close when --slice-id is provided.
 
 Required story review evidence:
-  - At least one review artifact in artifacts/story/<ID>/codex/ or opus/ containing HEAD SHA.
+  - At least one review artifact in artifacts/story/<ID>/codex/, sonnet/, or opus/ containing HEAD SHA.
 
 Optional thinking-review evidence:
   - When --slice-id is set, this script delegates to:
@@ -142,14 +142,14 @@ fi
 
 # Inline review check: at least one review artifact must contain HEAD SHA
 review_found=0
-for dir in "$artifacts_root/$story/codex" "$artifacts_root/$story/opus"; do
+for dir in "$artifacts_root/$story/codex" "$artifacts_root/$story/sonnet" "$artifacts_root/$story/opus"; do
   [[ -d "$dir" ]] || continue
   if grep -rlF "$head_sha" "$dir"/ 2>/dev/null | head -1 | grep -q .; then
     review_found=1; break
   fi
 done
 if [[ "$review_found" -ne 1 ]]; then
-  die "no review artifact for HEAD=$head_sha in $artifacts_root/$story/{codex,opus}"
+  die "no review artifact for HEAD=$head_sha in $artifacts_root/$story/{codex,sonnet,opus}"
 fi
 
 if [[ -n "$slice_id" ]]; then
