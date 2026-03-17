@@ -100,7 +100,9 @@ write_project \
   "Project hook routing notes are pending."
 
 single_output="$(run_hook "$repo" "session-single" "Please continue the execution telemetry refactor for the fee gate.")"
+expect_contains "single match skill hint" "$single_output" "Companion skill: /obsidian-workflow"
 expect_contains "single match path" "$single_output" "Matched Obsidian project: obsidian/Projects/Execution Facade Refactor.md"
+expect_contains "single match consult skill" "$single_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
 expect_contains "single match instruction" "$single_output" "Confirm you found and read obsidian/Projects/Execution Facade Refactor.md before proceeding."
 expect_contains "single match content" "$single_output" "Telemetry event seams are landing in execution and fee gate refactors."
 
@@ -111,6 +113,7 @@ fi
 
 ambiguous_output="$(run_hook "$repo" "session-ambiguous" "I want to improve first prompt obsidian project hook routing.")"
 expect_contains "ambiguous prompt" "$ambiguous_output" "Ambiguous Obsidian project match for first prompt."
+expect_contains "ambiguous consult skill" "$ambiguous_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
 expect_contains "ambiguous alpha" "$ambiguous_output" "obsidian/Projects/Hook Routing Alpha.md"
 expect_contains "ambiguous beta" "$ambiguous_output" "obsidian/Projects/Hook Routing Beta.md"
 expect_contains "ambiguous instruction" "$ambiguous_output" "Tell the user you found multiple likely Obsidian project notes and ask them to choose one before proceeding."
@@ -120,6 +123,7 @@ expect_contains "ambiguous follow-up resolves" "$ambiguous_follow_up" "Matched O
 
 no_match_output="$(run_hook "$repo" "session-no-match" "Please help me tune a freqtrade paper bot strategy for BTC.")"
 expect_contains "no match banner" "$no_match_output" "No related Obsidian project note matched the first prompt."
+expect_contains "no match consult skill" "$no_match_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
 expect_contains "no match instruction" "$no_match_output" "Tell the user no related project note was found in obsidian/Projects and propose a new one."
 expect_contains "no match suggestion" "$no_match_output" "Suggested new project note:"
 
