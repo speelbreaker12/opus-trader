@@ -48,6 +48,7 @@ Phase 3 run complete (phase2-mar17-20260317_141745-bb818649). 18 findings across
 - Phase 2 review: accepted 8, rejected 2 (CSP bypass redundant with AT-991, AT-1100 structural move)
 - CONTRACT.md patched: AT-1247 (LG CLOSE/HEDGE slippage), AT-1248 (EG attribution missing), AT-1249 (TMC bunker_mode stale), AT-1250 (OPL clear transition), AT-1251 (EC hedge bound), AT-1252 (EC monotonic retry), cooldown scope, Profile:ALL tags
 ### 2026-03-17
+- Backfilled the Phase 3 gap-detection debrief with split commit `da5b38cf` after the mixed commit was separated.
 - Phase 3 contract gap detection run (phase2-mar17-20260317_141745-bb818649), score 1.000 (20/20 checks)
 - 18 findings across 3 fixtures (s1_execution_pipeline, s2_2_policyguard, sample_contract_patch)
 - 19 proposals: 16 proposed, 1 rejected (enforcement evidence missing), 2 pending_scope_review

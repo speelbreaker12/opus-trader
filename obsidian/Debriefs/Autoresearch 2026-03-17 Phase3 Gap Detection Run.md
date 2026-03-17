@@ -17,7 +17,7 @@ type: progress
 - Outputs: `autoresearch/contract/phase2/outputs/phase2-mar17-20260317_141745-bb818649/`
 - Results: `autoresearch/contract/phase2/results.tsv`
 - Index: `autoresearch/contract/phase2/proposals_index.json`
-- Commit: `12feb917`
+- Commit: `da5b38cf`
 
 ## How it manifested (2-3 concrete symptoms)
 - harness.sh contract phase2 run cannot execute inside a Claude session (nested session error); had to run the pipeline manually via Python imports and parallel subagents
