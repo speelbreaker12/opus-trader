@@ -141,9 +141,27 @@ pub fn fee_staleness_hard_stale_total() -> u64 {
 }
 
 fn bump_fee_staleness_hard_stale() {
-    FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
-    crate::execution::emit_execution_metric_line(crate::execution::METRIC_FEE_STALENESS_REJECT, "");
-    tracing::debug!("FeeStalenessHardStale");
+    #[cfg(test)]
+    {
+        return crate::execution::with_metrics_update_lock(|| {
+            FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
+            crate::execution::emit_execution_metric_line(
+                crate::execution::METRIC_FEE_STALENESS_REJECT,
+                "",
+            );
+            tracing::debug!("FeeStalenessHardStale");
+        });
+    }
+
+    #[cfg(not(test))]
+    {
+        FEE_STALENESS_HARD_STALE_TOTAL.fetch_add(1, Ordering::Relaxed);
+        crate::execution::emit_execution_metric_line(
+            crate::execution::METRIC_FEE_STALENESS_REJECT,
+            "",
+        );
+        tracing::debug!("FeeStalenessHardStale");
+    }
 }
 
 // ─── Evaluator ──────────────────────────────────────────────────────────
@@ -251,18 +269,13 @@ pub fn evaluate_fee_staleness(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::execution::{METRICS_TEST_LOCK, take_execution_metric_lines, with_intent_trace_ids};
-
-    fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
-        METRICS_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|err| err.into_inner())
-    }
+    use crate::execution::{
+        begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids,
+    };
 
     #[test]
     fn fee_graybox_hard_stale_emits_event_without_global_side_effects() {
-        let _lock = metrics_lock();
-        let _ = take_execution_metric_lines();
+        let _guard = begin_metrics_test();
         let before = fee_staleness_hard_stale_total();
 
         let snapshot = FeeCacheSnapshot {
@@ -288,8 +301,7 @@ mod tests {
 
     #[test]
     fn fee_wrapper_preserves_hard_stale_metric_contract() {
-        let _lock = metrics_lock();
-        let _ = take_execution_metric_lines();
+        let _guard = begin_metrics_test();
         let before = fee_staleness_hard_stale_total();
 
         let snapshot = FeeCacheSnapshot {

@@ -1,13 +1,13 @@
 ---
 status: in-progress
 priority: P3
-branch:
+branch: main
 pr:
 started: "2026-03-05"
 ---
 
 ## Current State
-PR1-PR4 done. Internal telemetry sink seam landed in `soldier_core`; the first typed leaf-event pilot is now live in `risk/fees.rs`. Orchestration consolidation and 1C (risk/venue/infra) remain open.
+PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, and `execution/gates.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. Orchestration consolidation and 1C (risk/venue/infra) remain open.
 
 ## Key Files
 - crates/soldier_core/src/execution/
@@ -17,9 +17,15 @@ PR1-PR4 done. Internal telemetry sink seam landed in `soldier_core`; the first t
 ## Debriefs
 - [[Execution Facade Refactor 2026-03-17 Telemetry Sink Seam]]
 - [[Execution Facade Refactor 2026-03-17 Fee Staleness Event Pilot]]
+- [[Execution Facade Refactor 2026-03-17 Execution Gate Event Pilots]]
 
 ## Log
 ### 2026-03-17
+- Converted `crates/soldier_core/src/execution/gate.rs` to a crate-private `evaluate_liquidity_gate_with_events(...)` seam with `LiquidityGateEvent` and a parity-preserving production adapter.
+- Converted `crates/soldier_core/src/execution/gates.rs` to a crate-private `evaluate_net_edge_with_events(...)` seam with `NetEdgeEvent` and a parity-preserving production adapter.
+- Added graybox tests for the liquidity gate and net-edge gate proving the event paths do not mutate global counters or traced metric lines, while the wrapper parity tests still prove the production metrics contract.
+- Added a shared `execution::begin_metrics_test()` / `with_metrics_update_lock(...)` test helper so global execution metric updates serialize correctly under graybox assertions instead of racing other tests.
+- Verified the execution gate pilots with targeted red-green tests for liquidity, net-edge, and fee paths; `./plans/verify.sh quick` remains blocked by unrelated `docs/contract_kernel.json` drift.
 - Added a crate-private `soldier_core::telemetry` module with `EventSink`, `NoopEvents`, and `Vec<E>` support to create a minimal sink seam for graybox gate tests.
 - Wired the telemetry module into `crates/soldier_core/src/lib.rs` without any public re-export or public API churn.
 - Added a focused unit test proving the internal sink contract and verified it with a red-green loop before commit.

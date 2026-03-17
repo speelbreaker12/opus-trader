@@ -7,6 +7,7 @@ pub(crate) trait EventSink<E> {
     fn emit(&mut self, event: E);
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct NoopEvents;
 
