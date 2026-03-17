@@ -206,6 +206,8 @@ parallel_gate_tests=(
   "plans/tests/test_review_logged_timeout_binary_unavailable.sh"
   "plans/tests/test_review_logged_prompt_literalization.sh"
   "plans/tests/test_pr_review_gate_hook.sh"
+  "plans/tests/test_obsidian_commit_guard.sh"
+  "plans/tests/test_obsidian_precommit_hook.sh"
   "plans/tests/test_external_review_generic.sh"
   "plans/tests/test_preflight_diagnostics.sh"
   "plans/tests/test_preflight_fixture_profiles.sh"

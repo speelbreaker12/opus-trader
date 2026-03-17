@@ -7,7 +7,7 @@ started: "2026-03-16"
 ---
 
 ## Current State
-Complete. Obsidian-based project tracking with Templates, Bases-compatible frontmatter, Claude Code hooks, git pre-commit hook, and AGENTS.md instructions for Codex/all agents.
+Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, and a commit-aware debrief template, alongside the existing Templates and AGENTS instructions.
 
 ## Key Files
 - obsidian/Templates/Project.md
@@ -19,7 +19,7 @@ Complete. Obsidian-based project tracking with Templates, Bases-compatible front
 - AGENTS.md (Obsidian Project Tracking section)
 
 ## Debriefs
--
+- [[Obsidian Work Tracking 2026-03-17 Debrief Guard]]
 
 ## Log
 ### 2026-03-16
@@ -36,3 +36,7 @@ Complete. Obsidian-based project tracking with Templates, Bases-compatible front
 ### 2026-03-17
 - Enabled context7 plugin in .claude/settings.json
 - Expanded AGENTS.md with Warp/Codex build/test/architecture instructions
+- Added a repo-owned Obsidian commit guard that requires both a staged project note and a staged debrief, plus a project-note link to the staged debrief.
+- Added regression coverage for the debrief guard and wired it into `.githooks/pre-commit`.
+- Repointed `.claude/hooks/obsidian-precommit-hook.sh` to the shared guard so tool-time blocking matches repo pre-commit behavior.
+- Updated the debrief template and AGENTS instructions so debriefs record commit hashes, using `pending` until the current commit exists.
