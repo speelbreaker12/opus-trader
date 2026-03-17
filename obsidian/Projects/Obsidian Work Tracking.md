@@ -36,3 +36,6 @@ Complete. Obsidian-based project tracking with Templates, Bases-compatible front
 - Registered both hooks in .claude/settings.json
 - Added git pre-commit hook (.git/hooks/pre-commit) — blocks commit for ALL agents (Codex, Gemini, manual)
 - Added Obsidian Project Tracking section to AGENTS.md — read on start, update before commit, create if missing
+### 2026-03-17
+- Enabled context7 plugin in .claude/settings.json
+- Expanded AGENTS.md with Warp/Codex build/test/architecture instructions
