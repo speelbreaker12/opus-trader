@@ -27,6 +27,7 @@ dupes="$(sort "$allowlist" | uniq -d || true)"
 [[ -z "$dupes" ]] || fail "duplicate entries: $dupes"
 
 required=(
+  .claude/hooks/obsidian-context-hook.sh
   .githooks/pre-commit
   .githooks/pre-push
   .github/pull_request_template.md
@@ -131,6 +132,7 @@ required=(
   plans/tests/test_lint_venue_facade.sh
   plans/tests/test_lint_soldier_infra_facade.sh
   plans/tests/test_obsidian_commit_guard.sh
+  plans/tests/test_obsidian_context_hook.sh
   plans/tests/test_obsidian_precommit_hook.sh
   plans/tests/test_pr_gate.sh
   plans/tests/test_prd_cache.sh

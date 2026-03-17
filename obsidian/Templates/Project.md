@@ -8,6 +8,8 @@ started: "{{date}}"
 
 ## Current State
 
+## Commits
+- `pending` — {{date}} — In-flight batch summary.
 
 ## Key Files
 -

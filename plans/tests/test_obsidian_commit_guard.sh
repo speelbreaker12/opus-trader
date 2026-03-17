@@ -121,11 +121,13 @@ git -C "$repo" commit -qm "seed"
 echo "changed" >"$repo/sample.txt"
 git -C "$repo" add sample.txt
 expect_block "missing project note blocks" "No staged Obsidian project note" "$repo"
+expect_block "missing project note includes scope reminder" "Only include the changes you made in this commit." "$repo"
 
 mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
 write_project "$repo/obsidian/Projects/Test Project.md" "-"
 git -C "$repo" add "obsidian/Projects/Test Project.md"
 expect_block "missing debrief blocks" "No staged Obsidian debrief" "$repo"
+expect_block "missing debrief includes scope reminder" "Only include the changes you made in this commit." "$repo"
 
 write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
 git -C "$repo" add "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"

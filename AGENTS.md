@@ -147,14 +147,15 @@ Every agent session must track work in `obsidian/Projects/`.
 **Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:
 1. Add a dated entry under `## Log` describing what changed
 2. Update `## Current State` if the project status shifted
-3. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
-4. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
+3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
+4. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+5. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
 
 **If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
 
 **The git pre-commit hook will block commits** that don't include staged changes to both `obsidian/Projects/*.md` and `obsidian/Debriefs/*.md`, and it requires the staged project note to link at least one staged debrief.
 
-**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Link it from the project's `## Debriefs` section before committing.
+**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before committing.
 
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.
