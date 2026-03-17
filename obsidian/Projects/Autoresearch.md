@@ -8,7 +8,7 @@ started: 2026-03-16
 
 ## Current State
 
-Phase 3 review complete (phase2-mar17-20260317_141745-bb818649). 19 proposals reviewed: 16 accepted, 3 rejected (1 pre-rejected by harness, 2 fixture-only). P-208 Recovery Rule AT rewritten to bind bunker_mode_active + bunker_exit_stable_s. Accepted-only patch rendered. Next: apply patch to CONTRACT.md.
+Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from run phase2-mar17-20260317_141745-bb818649. 11 new AT-PROP-xxx ATs, 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, 3 new RejectReasonCode entries, bunker_mode_last_update_ts_ms, cortex_override critical input, account_summary staleness, inventory_skew_sell_floor formula. proposals_index.json status set to "applied".
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -21,6 +21,7 @@ Phase 3 review complete (phase2-mar17-20260317_141745-bb818649). 19 proposals re
 ## Debriefs
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
 - [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
+- [[Autoresearch 2026-03-17 Phase3 Patch Applied]]
 
 ## Log
 ### 2026-03-16
@@ -59,3 +60,4 @@ Phase 3 review complete (phase2-mar17-20260317_141745-bb818649). 19 proposals re
 - Accepted-only patch rendered at `autoresearch/contract/phase2/review/CONTRACT_PATCH_phase2-mar17-20260317_141745-bb818649.patch`
 - Patch audit caught 3 gaps: missing AT-PROP-203, missing Appendix A entry for inventory_skew_sell_floor, duplicate line-513 hunk. All fixed.
 - Next: apply corrected patch to CONTRACT.md (new context recommended — 16 semantic edits on 6400+ line file)
+- Applied phase3 accepted patch to CONTRACT.md: 16 proposals, 11 new ATs, 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, MarginHeadroomInputMissing + TradingModeBlockedOpen + MarginHeadroomInputMissing in registry, bunker_mode/cortex_override/account_summary staleness rules, inventory_skew_sell_floor formula
