@@ -28,3 +28,4 @@ PR 207 rebased onto main. Duplicate AT-1239 fixed. Autoresearch tests next, then
 - Rebased PR #207 onto main (10 commits, 17 conflicts resolved, 0 markers remaining).
 - Reviewed CONTRACT.md/prd.json/contract_kernel.json as contract set. Found and fixed duplicate AT-1239 in S7-002.
 - contract_kernel.json line numbers are stale — needs regeneration post-merge.
+

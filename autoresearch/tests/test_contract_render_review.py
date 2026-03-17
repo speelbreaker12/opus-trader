@@ -339,7 +339,7 @@ class ContractRenderReviewTests(unittest.TestCase):
 
         accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
         self.assertNotEqual(accepted.returncode, 0)
-        self.assertIn("is missing unified patch headers", accepted.stderr)
+        self.assertIn("must include both ---/+++ unified diff headers", accepted.stderr)
 
     def test_render_review_fails_closed_on_stale_live_contract_hash(self) -> None:
         self._seed_run()
