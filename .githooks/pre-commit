@@ -64,4 +64,19 @@ fi
 # 5. Enforce code-review-expert attestation for significant implementation changes
 plans/code_review_expert_guard.sh
 
+# 6. Auto-sync the local dashboard so project workspace links stay current.
+ACTIVE_PROJECTS_FILE="obsidian/Active Projects.md"
+ACTIVE_INDEX_SCRIPT=".claude/scripts/refresh_active_projects_index.py"
+if [[ -x "$ACTIVE_INDEX_SCRIPT" ]]; then
+  if python3 "$ACTIVE_INDEX_SCRIPT" --repo-root . >/dev/null 2>&1; then
+    if [[ -f "$ACTIVE_PROJECTS_FILE" ]] && ! git diff --quiet -- "$ACTIVE_PROJECTS_FILE"; then
+      git add "$ACTIVE_PROJECTS_FILE"
+      echo "Auto-synced and staged: $ACTIVE_PROJECTS_FILE"
+    fi
+  else
+    echo "WARN: failed to refresh $ACTIVE_PROJECTS_FILE. Run manually with:"
+    echo "WARN: python3 $ACTIVE_INDEX_SCRIPT --repo-root ."
+  fi
+fi
+
 echo "Pre-commit checks passed."

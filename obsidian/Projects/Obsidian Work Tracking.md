@@ -20,6 +20,7 @@ worktree_obsidian: .worktrees/obsidian-work-tracking/obsidian
 Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, alias/keyword-aware project-note scoring, per-project worktree tracking and auto-bootstrap, a companion `/obsidian-workflow` skill for what to read/update/include, a conditional Obsidian handoff policy with a dedicated `obsidian/Handoffs/` path and template, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
 
 ## Commits
+- `pending` — 2026-03-17 — auto-sync `obsidian/Active Projects.md` during pre-commit.
 - `pending` — 2026-03-17 — auto-refresh `obsidian/Active Projects.md` from first-prompt worktree creation/update hooks.
 - `pending` — 2026-03-17 — add deterministic `obsidian/Active Projects.md` generator and refresh command.
 - `pending` — 2026-03-17 — add `worktree_obsidian` and no-mirror click-through workspace link support from first-prompt routing.

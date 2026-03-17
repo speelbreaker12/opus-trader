@@ -150,6 +150,7 @@ For no-mirror viewing, treat `worktree_obsidian` as authoritative and avoid copy
 When a project is matched, use that worktree for commands/edits in the session; if it is missing, create one at `.worktrees/<project-slug>` and update the project note before substantive work.
 Keep the local project dashboard current by either:
 - Allowing the router to refresh it automatically when a session creates/updates a project worktree.
+- Letting pre-commit auto-sync the dashboard when project metadata changes.
 - Manually re-running `python3 .claude/scripts/refresh_active_projects_index.py --repo-root .`
 - Committing updates to `obsidian/Active Projects.md` as part of the same Obsidian-scoped commit if it changes.
 If work is paused mid-stream, blocked, or the user explicitly asks for a handoff, write it to `obsidian/Handoffs/<Project> <date> <Short Title>.md` from `obsidian/Templates/Handoff.md` and link it from the project note. This does not replace `plans/pause.md` or any workflow-specific required handoff artifact.

@@ -4,6 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
+- pending — 2026-03-17 — pre-commit now auto-syncs the local Active Projects index when metadata changes are detected.
 - pending — 2026-03-17 — auto-refresh `obsidian/Active Projects.md` after session worktree creation/metadata updates via router hook.
 - pending — 2026-03-17 — add deterministic `obsidian/Active Projects.md` generator and refresh command.
 - pending — 2026-03-17 — add `worktree_obsidian` and first-prompt click-through path metadata (no mirror model).

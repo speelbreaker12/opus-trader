@@ -1,7 +1,6 @@
 # Active Projects
 
 Generated from `obsidian/Projects/*.md` frontmatter so each project links directly to its local worktree notes.
-Last generated: 2026-03-17T14:24:54
 
 No branch-local note mirroring is performed into main.
 

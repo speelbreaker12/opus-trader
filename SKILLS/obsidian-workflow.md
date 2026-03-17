@@ -41,6 +41,9 @@ When to use
   - project note link (`[[Project Name]]`)
   - worktree obsidian folder from `worktree_obsidian` rendered as a markdown link
 - The router now refreshes this dashboard automatically after successful creation/refresh of a project worktree.
+- Pre-commit also auto-syncs the dashboard by running:
+  - `python3 .claude/scripts/refresh_active_projects_index.py --repo-root .`
+  - and staging `obsidian/Active Projects.md` when it changed.
 - If you changed project worktree metadata out of the router path, refresh deterministically by running:
   - `python3 .claude/scripts/refresh_active_projects_index.py --repo-root .`
   whenever `worktree` or `worktree_obsidian` changes.
