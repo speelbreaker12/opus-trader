@@ -260,6 +260,8 @@ def collect_common_tracked_files(contract_dir: Path) -> dict[str, str]:
         tracked_files[str(path.relative_to(contract_dir))] = sha256_text(path.read_text(encoding="utf-8"))
     fixture_metadata_path = contract_dir / "phase1" / "internal" / "fixture_metadata.json"
     fixture_metadata = load_json(fixture_metadata_path)
+    if not isinstance(fixture_metadata, dict):
+        fail(f"{fixture_metadata_path} must be a JSON object")
     fixtures = fixture_metadata.get("fixtures", {}) if isinstance(fixture_metadata, dict) else {}
     if not isinstance(fixtures, dict):
         fail(f"{fixture_metadata_path} fixtures must be an object")
@@ -341,7 +343,10 @@ def refresh_common(root: Path) -> int:
     contract_header_md = build_contract_header(contract_lines, sections)
     at_registry = build_at_registry(contract_lines, sections)
 
-    fixture_metadata = load_json(contract_dir / "phase1" / "internal" / "fixture_metadata.json")
+    fixture_metadata_path = contract_dir / "phase1" / "internal" / "fixture_metadata.json"
+    fixture_metadata = load_json(fixture_metadata_path)
+    if not isinstance(fixture_metadata, dict):
+        fail(f"{fixture_metadata_path} must be a JSON object")
     fixture_entries = fixture_metadata.get("fixtures", {}) if isinstance(fixture_metadata, dict) else {}
     if not isinstance(fixture_entries, dict):
         fail("phase1/internal/fixture_metadata.json fixtures must be an object")

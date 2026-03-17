@@ -245,6 +245,16 @@ class ContractRefreshTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("reference missing sections", result.stderr)
 
+    def test_refresh_common_fails_closed_when_fixture_metadata_top_level_is_not_object(self) -> None:
+        _write_text(
+            self.repo.root / "autoresearch" / "contract" / "phase1" / "internal" / "fixture_metadata.json",
+            "[]\n",
+        )
+
+        result = self.repo.run("common")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fixture_metadata.json must be a JSON object", result.stderr)
+
     def test_refresh_fixtures_fails_closed_on_missing_governed_input_reference(self) -> None:
         _write_json(
             self.repo.root / "autoresearch" / "contract" / "common" / "gate_input_registry.json",

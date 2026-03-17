@@ -309,11 +309,11 @@
         },
         {
           "id": "lg-section",
-          "check": "detector still anchors one finding to stale-L2 gate interaction wording",
+          "check": "detector still anchors the P0 finding to Liquidity Gate acceptance-test wording",
           "rule": {
             "type": "json_field_match",
-            "path": "$.findings[*].section",
-            "pattern": "Stale-L2",
+            "path": "$.findings[?(@.severity==\"P0\")].section",
+            "pattern": "Acceptance Tests",
             "match_mode": "any"
           }
         }

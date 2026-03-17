@@ -29,6 +29,7 @@ PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTR
 - Rebased PR #207 onto main (10 commits, 17 conflicts resolved, 0 markers remaining).
 - Reviewed CONTRACT.md/prd.json/contract_kernel.json as contract set. Found and fixed duplicate AT-1239 in S7-002.
 - contract_kernel.json line numbers are stale — needs regeneration post-merge.
+- Follow-up review fixes: made malformed fixture_metadata top-level payloads fail closed and correlated the Liquidity Gate P0 semantic assertion to the same finding in eval.json
 - Hardened contract autoresearch live-fixture flow: refresh-common now regenerates tracked live Phase 1 fixtures and phase1 run fails closed on stale live fixture drift
 - Tightened Phase 1 live eval assertions and added regression coverage for stale-fixture refresh + workflow preflight fixtures
 - Verified workflow changes in a clean detached worktree after syncing updated preflight fixture tests; kept dirty CONTRACT-derived generated artifacts out of commit scope

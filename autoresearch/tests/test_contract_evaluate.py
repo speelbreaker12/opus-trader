@@ -205,6 +205,56 @@ class ContractEvaluateTests(unittest.TestCase):
             self.assertEqual(results["score"], 0.0)
             self.assertIn("1/2", results["tests"][0]["assertions"][0]["reason"])
 
+    def test_json_field_match_filtered_path_keeps_severity_and_section_correlated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            findings_path = root / "outputs" / "fixture-1" / "findings.json"
+            _write_json(
+                findings_path,
+                {
+                    "findings": [
+                        {
+                            "finding_id": "F-001",
+                            "severity": "P0",
+                            "section": "Acceptance Tests",
+                        },
+                        {
+                            "finding_id": "F-002",
+                            "severity": "P1",
+                            "section": "Stale-L2 body / gate interaction",
+                        },
+                    ]
+                },
+            )
+            eval_config = {
+                "tests": [
+                    {
+                        "id": "fixture-1",
+                        "output_file": "fixture-1/findings.json",
+                        "assertions": [
+                            {
+                                "id": "A1",
+                                "rule": {
+                                    "type": "json_field_match",
+                                    "path": '$.findings[?(@.severity=="P0")].section',
+                                    "pattern": "Stale-L2",
+                                    "match_mode": "any",
+                                },
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            results = evaluate.run_evaluation(
+                eval_config,
+                root / "outputs",
+                eval_path=root / "eval.json",
+                skill_dir=root,
+            )
+            self.assertEqual(results["score"], 0.0)
+            self.assertIn("no selected values matched", results["tests"][0]["assertions"][0]["reason"])
+
     def test_cross_ref_and_resolved_span_rules_pass(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
