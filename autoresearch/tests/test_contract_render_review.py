@@ -25,7 +25,7 @@ def _extract_hash(markdown: str, field: str) -> str:
     prefix = f"- {field}: `"
     for line in markdown.splitlines():
         if line.startswith(prefix) and line.endswith("`"):
-            return line[len(prefix):-1]
+            return line[len(prefix) : -1]
     raise AssertionError(f"missing {field} in markdown")
 
 
@@ -37,7 +37,7 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.phase2 = self.root / "autoresearch" / "contract" / "phase2"
         self.contract_path = self.root / "specs" / "CONTRACT.md"
         self.contract_path.parent.mkdir(parents=True, exist_ok=True)
-        self.contract_path.write_text("AT-101 is referenced here\n", encoding="utf-8")
+        self.contract_path.write_text("AT-999 is referenced here\n", encoding="utf-8")
         self.contract_hash = hashlib.sha256(self.contract_path.read_bytes()).hexdigest()
 
     def tearDown(self) -> None:
@@ -52,7 +52,9 @@ class ContractRenderReviewTests(unittest.TestCase):
             check=False,
         )
 
-    def _seed_run(self, diff_preview_two: str | None = None, run_id: str = "run-1") -> None:
+    def _seed_run(
+        self, diff_preview_two: str | None = None, run_id: str = "run-1"
+    ) -> None:
         proposals = {
             "generated_at": "2026-03-14T20:00:00Z",
             "validator_version": "test",
@@ -72,16 +74,18 @@ class ContractRenderReviewTests(unittest.TestCase):
                         "start_line": 10,
                         "end_line": 10,
                         "old_text": "AT-999 is referenced here",
-                        "new_text": "AT-101 is referenced here"
+                        "new_text": "AT-101 is referenced here",
                     },
-                    "diff_preview": "\n".join([
-                        "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
-                        "--- a/specs/CONTRACT.md",
-                        "+++ b/specs/CONTRACT.md",
-                        "@@ -10,1 +10,1 @@",
-                        "-AT-999 is referenced here",
-                        "+AT-101 is referenced here",
-                    ]),
+                    "diff_preview": "\n".join(
+                        [
+                            "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
+                            "--- a/specs/CONTRACT.md",
+                            "+++ b/specs/CONTRACT.md",
+                            "@@ -10,1 +10,1 @@",
+                            "-AT-999 is referenced here",
+                            "+AT-101 is referenced here",
+                        ]
+                    ),
                 }
             ],
         }
@@ -100,13 +104,15 @@ class ContractRenderReviewTests(unittest.TestCase):
                     "dedupe_key": "fixture-2/p-002",
                     "proposed_text": "PolicyGuard MUST reject when evidence_chain_score is missing.",
                     "diff_preview": diff_preview_two
-                    or "\n".join([
-                        "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
-                        "--- a/specs/CONTRACT.md",
-                        "+++ b/specs/CONTRACT.md",
-                        "@@ -20,0 +21,1 @@",
-                        "+PolicyGuard MUST reject when evidence_chain_score is missing.",
-                    ]),
+                    or "\n".join(
+                        [
+                            "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
+                            "--- a/specs/CONTRACT.md",
+                            "+++ b/specs/CONTRACT.md",
+                            "@@ -20,0 +21,1 @@",
+                            "+PolicyGuard MUST reject when evidence_chain_score is missing.",
+                        ]
+                    ),
                 }
             ],
         }
@@ -139,7 +145,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
 
-        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("P-001", review_md)
         self.assertIn("P-002", review_md)
 
@@ -167,10 +175,14 @@ class ContractRenderReviewTests(unittest.TestCase):
         review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
         _write_json(review_json, decisions)
 
-        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        accepted = self._render(
+            "--run-id", "run-1", "--accepted-only", "--review", str(review_json)
+        )
         self.assertEqual(accepted.returncode, 0, msg=accepted.stderr)
 
-        patch_text = (self.phase2 / "review" / "CONTRACT_PATCH_run-1.patch").read_text(encoding="utf-8")
+        patch_text = (self.phase2 / "review" / "CONTRACT_PATCH_run-1.patch").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("AT-101 is referenced here", patch_text)
         self.assertNotIn("evidence_chain_score is missing", patch_text)
 
@@ -180,7 +192,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
 
-        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(
+            encoding="utf-8"
+        )
         proposals_hash = _extract_hash(review_md, "proposals_file_hash")
         decisions = {
             "run_id": "run-1",
@@ -199,7 +213,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
         _write_json(review_json, decisions)
 
-        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        accepted = self._render(
+            "--run-id", "run-1", "--accepted-only", "--review", str(review_json)
+        )
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("omitted proposal ids: P-002", accepted.stderr)
 
@@ -209,7 +225,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
 
-        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(
+            encoding="utf-8"
+        )
         proposals_hash = _extract_hash(review_md, "proposals_file_hash")
         decisions = {
             "run_id": "run-1",
@@ -234,7 +252,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
         _write_json(review_json, decisions)
 
-        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        accepted = self._render(
+            "--run-id", "run-1", "--accepted-only", "--review", str(review_json)
+        )
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("not a git-applicable patch fragment", accepted.stderr)
 
@@ -247,20 +267,24 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.assertIn("missing proposals_index entry for run_id=run-1", result.stderr)
 
     def test_render_review_rejects_non_contract_patch_target(self) -> None:
-        other_patch = "\n".join([
-            "diff --git a/plans/progress.txt b/plans/progress.txt",
-            "--- a/plans/progress.txt",
-            "+++ b/plans/progress.txt",
-            "@@ -1,1 +1,1 @@",
-            "-old",
-            "+new",
-        ])
+        other_patch = "\n".join(
+            [
+                "diff --git a/plans/progress.txt b/plans/progress.txt",
+                "--- a/plans/progress.txt",
+                "+++ b/plans/progress.txt",
+                "@@ -1,1 +1,1 @@",
+                "-old",
+                "+new",
+            ]
+        )
         self._seed_run(diff_preview_two=other_patch)
 
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
 
-        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(
+            encoding="utf-8"
+        )
         proposals_hash = _extract_hash(review_md, "proposals_file_hash")
         decisions = {
             "run_id": "run-1",
@@ -285,7 +309,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
         _write_json(review_json, decisions)
 
-        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        accepted = self._render(
+            "--run-id", "run-1", "--accepted-only", "--review", str(review_json)
+        )
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("must target only specs/CONTRACT.md", accepted.stderr)
 
@@ -301,18 +327,24 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.assertTrue((self.phase2 / "review" / "CONTRACT_REVIEW_run-10.md").exists())
         self.assertFalse((self.phase2 / "review" / "CONTRACT_REVIEW_run-9.md").exists())
 
-    def test_render_review_fails_closed_on_git_patch_without_unified_headers(self) -> None:
-        malformed_patch = "\n".join([
-            "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
-            "@@ -20,0 +21,1 @@",
-            "+PolicyGuard MUST reject when evidence_chain_score is missing.",
-        ])
+    def test_render_review_fails_closed_on_git_patch_without_unified_headers(
+        self,
+    ) -> None:
+        malformed_patch = "\n".join(
+            [
+                "diff --git a/specs/CONTRACT.md b/specs/CONTRACT.md",
+                "@@ -20,0 +21,1 @@",
+                "+PolicyGuard MUST reject when evidence_chain_score is missing.",
+            ]
+        )
         self._seed_run(diff_preview_two=malformed_patch)
 
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
 
-        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(
+            encoding="utf-8"
+        )
         proposals_hash = _extract_hash(review_md, "proposals_file_hash")
         decisions = {
             "run_id": "run-1",
@@ -337,7 +369,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
         _write_json(review_json, decisions)
 
-        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        accepted = self._render(
+            "--run-id", "run-1", "--accepted-only", "--review", str(review_json)
+        )
         self.assertNotEqual(accepted.returncode, 0)
         self.assertIn("must include both ---/+++ unified diff headers", accepted.stderr)
 
@@ -347,7 +381,9 @@ class ContractRenderReviewTests(unittest.TestCase):
         initial = self._render("--run-id", "run-1")
         self.assertEqual(initial.returncode, 0, msg=initial.stderr)
 
-        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(
+            encoding="utf-8"
+        )
         proposals_hash = _extract_hash(review_md, "proposals_file_hash")
         decisions = {
             "run_id": "run-1",
@@ -372,11 +408,18 @@ class ContractRenderReviewTests(unittest.TestCase):
         review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
         _write_json(review_json, decisions)
 
-        self.contract_path.write_text("AT-101 is referenced here\nAND NOW DIFFERENT\n", encoding="utf-8")
+        self.contract_path.write_text(
+            "AT-101 is referenced here\nAND NOW DIFFERENT\n", encoding="utf-8"
+        )
 
-        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        accepted = self._render(
+            "--run-id", "run-1", "--accepted-only", "--review", str(review_json)
+        )
         self.assertNotEqual(accepted.returncode, 0)
-        self.assertIn("live specs/CONTRACT.md hash differs from recorded contract_file_hash", accepted.stderr)
+        self.assertIn(
+            "live specs/CONTRACT.md hash differs from recorded contract_file_hash",
+            accepted.stderr,
+        )
 
 
 if __name__ == "__main__":
