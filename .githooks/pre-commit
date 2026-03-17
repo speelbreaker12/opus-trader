@@ -12,10 +12,13 @@ echo "Running pre-commit checks..."
 # 0. Obsidian tracking guard (all commits)
 plans/obsidian_commit_guard.sh
 
-# 1. SSOT lint (existing)
+# 1. Project scope guard (all commits)
+plans/project_scope_guard.sh commit
+
+# 2. SSOT lint (existing)
 plans/ssot_lint.sh
 
-# 2. Contract cross-reference check (if CONTRACT.md is staged)
+# 3. Contract cross-reference check (if CONTRACT.md is staged)
 if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
   echo "CONTRACT.md staged - running cross-reference check..."
   if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
@@ -26,7 +29,7 @@ if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
   fi
 fi
 
-# 3. PRD schema check (if prd.json is staged)
+# 4. PRD schema check (if prd.json is staged)
 if git diff --cached --name-only | grep -q "plans/prd.json"; then
   echo "prd.json staged - running schema check..."
   if ! plans/prd_schema_check.sh plans/prd.json; then
@@ -37,7 +40,7 @@ if git diff --cached --name-only | grep -q "plans/prd.json"; then
   fi
 fi
 
-# 4. Check for unwrap() in staged Rust files (safety-critical paths only)
+# 5. Check for unwrap() in staged Rust files (safety-critical paths only)
 STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
 if [[ -n "$STAGED_RS" ]]; then
   echo "Checking staged soldier_core files for unwrap()..."
@@ -61,7 +64,7 @@ if [[ -n "$STAGED_RS" ]]; then
   fi
 fi
 
-# 5. Enforce code-review-expert attestation for significant implementation changes
+# 6. Enforce code-review-expert attestation for significant implementation changes
 plans/code_review_expert_guard.sh
 
 echo "Pre-commit checks passed."

@@ -69,6 +69,7 @@ required=(
   plans/lint_soldier_infra_facade.sh
   plans/live_enable_preflight.sh
   plans/obsidian_commit_guard.sh
+  plans/open_project_pr.sh
   plans/lib/adversarial_gate.sh
   plans/lib/hash_utils.sh
   plans/pr_gate.sh
@@ -85,6 +86,7 @@ required=(
   plans/pre_pr_review_gate.sh
   plans/preflight.sh
   plans/premortem_path_guard.sh
+  plans/project_scope_guard.sh
   plans/readme_ci_parity_check.sh
   plans/recon_bundle.sh
   plans/recon_doc_budget.sh
@@ -133,8 +135,11 @@ required=(
   plans/tests/test_lint_soldier_infra_facade.sh
   plans/tests/test_obsidian_commit_guard.sh
   plans/tests/test_obsidian_context_hook.sh
+  plans/tests/test_obsidian_context_hook_branch_guard.sh
   plans/tests/test_obsidian_precommit_hook.sh
+  plans/tests/test_open_project_pr.sh
   plans/tests/test_pr_gate.sh
+  plans/tests/test_pr_review_gate_hook_scope.sh
   plans/tests/test_prd_cache.sh
   plans/tests/test_prd_set_pass.sh
   plans/tests/test_preflight_fixture_profiles.sh
@@ -142,6 +147,7 @@ required=(
   plans/tests/test_preflight_shell_syntax_cross_file_masking.sh
   plans/tests/test_preflight_shell_syntax_setup_failure.sh
   plans/tests/test_pre_pr_review_gate.sh
+  plans/tests/test_project_scope_guard.sh
   plans/tests/test_recon_bundle.sh
   plans/tests/test_recon_doc_budget.sh
   plans/tests/test_recon_evidence_ledger.sh

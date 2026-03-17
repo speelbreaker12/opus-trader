@@ -432,6 +432,13 @@ EOF
     exit 2
 fi
 
+if [ -x "$REPO_ROOT/plans/project_scope_guard.sh" ] && [ -d "$REPO_ROOT/obsidian/Projects" ]; then
+    if ! SCOPE_OUTPUT="$("$REPO_ROOT/plans/project_scope_guard.sh" pr-create --branch "$BRANCH" --head "$HEAD_SHA" 2>&1)"; then
+        printf '%s\n' "$SCOPE_OUTPUT" >&2
+        exit 2
+    fi
+fi
+
 # ── external-review gate (WARNING only) ───────────────────────────────────
 if [ ! -f "$EXT_MARKER" ]; then
     cat >&2 <<EOF
