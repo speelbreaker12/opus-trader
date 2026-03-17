@@ -19,6 +19,7 @@ Validation command:
 | `/review-stack` | `SKILLS/review-stack.md` |
 | `/6` | `SKILLS/6.md` |
 | `/external-review-generic` | `SKILLS/external-review-generic.md` |
+| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` |
 | `/toc` | `SKILLS/toc.md` |
 
 ## Full skill inventory
@@ -45,6 +46,7 @@ Validation command:
 | `/grill` | `SKILLS/grill.md` | Adversarial plan interview — stress-test decisions until every branch is resolved. |
 | `interview` | `SKILLS/interview.md` | Spec-building interview workflow. |
 | `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
+| `/obsidian-workflow` | `SKILLS/obsidian-workflow.md` | Session-start and pre-commit Obsidian project/debrief tracking companion. |
 | `patch-only-edits` | `SKILLS/patch-only-edits.md` | Patch-only editing style and constraints. |
 | `/plan` | `SKILLS/plan.md` | Elevation to implementation plan workflow. |
 | `/plan-review` | `SKILLS/plan-review.md` | Implementation plan review checklist. |
