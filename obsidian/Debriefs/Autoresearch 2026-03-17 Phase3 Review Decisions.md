@@ -29,3 +29,4 @@ date: "2026-03-17"
 1-3 rules so the next agent doesn't repeat the constraint:
 - Always read `autoresearch/contract/phase2/review.schema.json` before writing REVIEW_DECISIONS JSON.
 - Fixture-only proposals (sample_contract_patch) must be rejected in review decisions — their replace_span targets fixture text, not CONTRACT.md.
+- Audit rendered patches against accepted proposal text — diff_preview can omit ATs and Appendix A entries that were in the proposed_text.

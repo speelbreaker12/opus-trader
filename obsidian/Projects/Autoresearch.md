@@ -57,4 +57,5 @@ Phase 3 review complete (phase2-mar17-20260317_141745-bb818649). 19 proposals re
 - P1: drain_all() 0 ATs, Pricer fail-closed 0 ATs, Inventory Skew SELL formula vague, AT-1243 duplicate ID, fee_model hard-stale 0 ATs, cortex_override fail-open risk, reconciliation REST failure 0 ATs, field rename alias 0 ATs, TradingModeBlockedOpen missing from registry
 - Review complete: 16 accepted, 3 rejected (P-209 pre-rejected, P-400/P-401 fixture-only). P-208 rewritten to bind bunker_mode_active + bunker_exit_stable_s.
 - Accepted-only patch rendered at `autoresearch/contract/phase2/review/CONTRACT_PATCH_phase2-mar17-20260317_141745-bb818649.patch`
-- Next: apply accepted patch to CONTRACT.md
+- Patch audit caught 3 gaps: missing AT-PROP-203, missing Appendix A entry for inventory_skew_sell_floor, duplicate line-513 hunk. All fixed.
+- Next: apply corrected patch to CONTRACT.md (new context recommended — 16 semantic edits on 6400+ line file)
