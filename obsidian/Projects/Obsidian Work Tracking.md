@@ -9,6 +9,9 @@ started: "2026-03-16"
 ## Current State
 Complete. Obsidian-based project tracking with Templates, Bases-compatible frontmatter, Claude Code hooks, git pre-commit hook, and AGENTS.md instructions for Codex/all agents.
 
+## Commits
+- `pending` — 2026-03-17 — post-commit prints dashboard auto-sync status when `obsidian/Active Projects.md` changed.
+
 ## Key Files
 - obsidian/Templates/Project.md
 - obsidian/Templates/Debrief.md
@@ -19,7 +22,7 @@ Complete. Obsidian-based project tracking with Templates, Bases-compatible front
 - AGENTS.md (Obsidian Project Tracking section)
 
 ## Debriefs
--
+- [[Obsidian Work Tracking 2026-03-17 Post-Commit Dashboard Sync Notice]]
 
 ## Log
 ### 2026-03-16

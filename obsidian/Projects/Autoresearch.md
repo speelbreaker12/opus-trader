@@ -62,3 +62,9 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Next: apply corrected patch to CONTRACT.md (new context recommended — 16 semantic edits on 6400+ line file)
 - Applied phase3 accepted patch to CONTRACT.md: 16 proposals, 11 new ATs, 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, MarginHeadroomInputMissing + TradingModeBlockedOpen in registry, bunker_mode/cortex_override/account_summary staleness rules, inventory_skew_sell_floor formula
 - Reverted phase2 proposals (AT-1247..AT-1252) superseded by phase3 findings + CCL-2026-03-16-01 ledger entry
+- Re-added AT-1251 (hedge qty bound) and AT-1252 (retry monotonic) — restored after phase2 revert
+- Renumbered 11 AT-PROP-xxx provisional IDs to permanent AT-1254..AT-1264
+- Refreshed contract_kernel.json and context_manifest.json hashes
+- Added TF-917 (bunker_mode) and TF-918 (account_summary) to TIME_FRESHNESS.yaml
+- Added CSP-063 (Recovery/Matching Rule dedup) to TRACE.yaml
+- Creating separate autoresearch PR branch for all phase3 changes
