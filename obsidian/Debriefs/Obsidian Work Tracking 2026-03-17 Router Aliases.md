@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending — router alias and keyword scoring batch
+- `55adc330` — router alias and keyword scoring batch
 
 ## 0) What shipped
 - Feature/behavior: Added optional frontmatter `aliases` and `keywords` for project notes, taught the first-prompt router to score them, and seeded the project template plus the Obsidian Work Tracking note with those fields.

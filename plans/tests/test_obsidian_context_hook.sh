@@ -40,6 +40,7 @@ write_project() {
   local log_line="$5"
   local aliases="${6:-}"
   local keywords="${7:-}"
+  local worktree="${8:-}"
 
   {
     cat <<EOF
@@ -64,6 +65,9 @@ EOF
         printf -- "- %s\n" "$keyword"
       done <<< "$keywords"
     fi
+    if [[ -n "$worktree" ]]; then
+      printf 'worktree: %s\n' "$worktree"
+    fi
     cat <<EOF
 ---
 
@@ -75,6 +79,9 @@ $state
 
 ## Debriefs
 - None yet.
+
+## Handoffs
+- None active.
 
 ## Log
 ### 2026-03-17
@@ -90,6 +97,16 @@ trap 'rm -rf "$tmp_dir"' EXIT
 
 repo="$tmp_dir/repo"
 mkdir -p "$repo/obsidian/Projects" "$repo/.tmp"
+(
+  cd "$repo"
+  git init -q
+  git config user.name "Test User"
+  git config user.email "test@example.com"
+  printf '.worktrees/\n' > .gitignore
+  printf 'root\n' > README.md
+  git add .gitignore README.md
+  git commit -q -m "init"
+)
 
 write_project \
   "$repo/obsidian/Projects/Execution Facade Refactor.md" \
@@ -139,9 +156,17 @@ write_project \
 single_output="$(run_hook "$repo" "session-single" "Please continue the execution telemetry refactor for the fee gate.")"
 expect_contains "single match skill hint" "$single_output" "Companion skill: /obsidian-workflow"
 expect_contains "single match path" "$single_output" "Matched Obsidian project: obsidian/Projects/Execution Facade Refactor.md"
+expect_contains "single match worktree" "$single_output" "Project worktree: .worktrees/execution-facade-refactor"
+expect_contains "single match branch" "$single_output" "Project branch: project/execution-facade-refactor"
 expect_contains "single match consult skill" "$single_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
 expect_contains "single match instruction" "$single_output" "Confirm you found and read obsidian/Projects/Execution Facade Refactor.md before proceeding."
+expect_contains "single match worktree instruction" "$single_output" "will use the project worktree"
 expect_contains "single match content" "$single_output" "Telemetry event seams are landing in execution and fee gate refactors."
+[[ -d "$repo/.worktrees/execution-facade-refactor" ]] || fail "matched project worktree was not created"
+grep -Fq 'worktree: .worktrees/execution-facade-refactor' "$repo/obsidian/Projects/Execution Facade Refactor.md" \
+  || fail "matched project note missing worktree field"
+grep -Fq 'branch: project/execution-facade-refactor' "$repo/obsidian/Projects/Execution Facade Refactor.md" \
+  || fail "matched project note missing project branch"
 
 repeat_output="$(run_hook "$repo" "session-single" "Second prompt in the same session should not re-route.")"
 if [[ -n "$repeat_output" ]]; then
@@ -165,12 +190,37 @@ ambiguous_follow_up="$(run_hook "$repo" "session-ambiguous" "Use Hook Routing Al
 expect_contains "ambiguous follow-up resolves" "$ambiguous_follow_up" "Matched Obsidian project: obsidian/Projects/Hook Routing Alpha.md"
 
 no_match_output="$(run_hook "$repo" "session-no-match" "Please help me tune a freqtrade paper bot strategy for BTC.")"
-expect_contains "no match banner" "$no_match_output" "No related Obsidian project note matched the first prompt."
+expect_contains "no match banner" "$no_match_output" "No related Obsidian project note matched the first prompt. Created a new project note and dedicated worktree."
 expect_contains "no match consult skill" "$no_match_output" "Consult /obsidian-workflow for the project-note and debrief checklist."
-expect_contains "no match instruction" "$no_match_output" "Tell the user no related project note was found in obsidian/Projects and propose a new one."
-expect_contains "no match suggestion" "$no_match_output" "Suggested new project note:"
+expect_contains "no match created note" "$no_match_output" "Created Obsidian project:"
+expect_contains "no match created worktree" "$no_match_output" "Project worktree: .worktrees/"
+expect_contains "no match instruction" "$no_match_output" "Tell the user you created"
+created_project_rel="$(printf '%s\n' "$no_match_output" | sed -n 's/^Created Obsidian project: //p' | head -n 1)"
+[[ -n "$created_project_rel" ]] || fail "no-match output missing created project path"
+[[ -f "$repo/$created_project_rel" ]] || fail "auto-created project note missing at $created_project_rel"
+created_worktree_rel="$(printf '%s\n' "$no_match_output" | sed -n 's/^Project worktree: //p' | head -n 1)"
+[[ -n "$created_worktree_rel" ]] || fail "no-match output missing created worktree path"
+[[ -d "$repo/$created_worktree_rel" ]] || fail "auto-created worktree missing at $created_worktree_rel"
 
 no_match_follow_up="$(run_hook "$repo" "session-no-match" "This belongs in Execution Facade Refactor.")"
-expect_contains "no match follow-up resolves" "$no_match_follow_up" "Matched Obsidian project: obsidian/Projects/Execution Facade Refactor.md"
+if [[ -n "$no_match_follow_up" ]]; then
+  fail "no-match session should not re-route after auto-creation, got: $no_match_follow_up"
+fi
+
+empty_repo="$tmp_dir/empty-repo"
+mkdir -p "$empty_repo/obsidian/Projects" "$empty_repo/.tmp"
+(
+  cd "$empty_repo"
+  git init -q
+  git config user.name "Test User"
+  git config user.email "test@example.com"
+  printf '.worktrees/\n' > .gitignore
+  printf 'root\n' > README.md
+  git add .gitignore README.md
+  git commit -q -m "init"
+)
+empty_output="$(run_hook "$empty_repo" "session-empty" "Set up a fresh execution telemetry workstream.")"
+expect_contains "empty repo create note" "$empty_output" "Created Obsidian project:"
+expect_contains "empty repo create worktree" "$empty_output" "Project worktree: .worktrees/"
 
 echo "test_obsidian_context_hook.sh: ok"

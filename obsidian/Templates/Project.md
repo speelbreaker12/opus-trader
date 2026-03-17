@@ -6,6 +6,7 @@ pr:
 started: "{{date}}"
 aliases: []
 keywords: []
+worktree:
 ---
 
 ## Current State
@@ -18,6 +19,9 @@ keywords: []
 
 ## Debriefs
 -
+
+## Handoffs
+- None active.
 
 ## Log
 ### {{date}}
