@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending — conditional Obsidian handoff policy batch
+- 75abb925 — conditional Obsidian handoff policy batch
 
 ## 0) What shipped
 - Feature/behavior: Added a conditional Obsidian handoff policy, a dedicated `obsidian/Handoffs/` location, and a reusable handoff template tied into the project-page workflow guidance.

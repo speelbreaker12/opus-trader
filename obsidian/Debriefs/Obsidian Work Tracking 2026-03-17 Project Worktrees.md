@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending — project-scoped worktree routing batch
+- 75abb925 — project-scoped worktree routing batch
 
 ## 0) What shipped
 - Feature/behavior: Added `worktree` tracking to project notes and taught the first-prompt router to create or reuse dedicated project worktrees automatically.

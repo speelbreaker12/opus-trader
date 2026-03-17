@@ -19,7 +19,8 @@ worktree: .worktrees/obsidian-work-tracking
 Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, alias/keyword-aware project-note scoring, per-project worktree tracking and auto-bootstrap, a companion `/obsidian-workflow` skill for what to read/update/include, a conditional Obsidian handoff policy with a dedicated `obsidian/Handoffs/` path and template, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
 
 ## Commits
-- `pending` — 2026-03-17 — add the conditional handoff policy plus project-scoped worktree tracking and first-prompt bootstrap/routing to the Obsidian workflow.
+- `pending` — 2026-03-17 — backfill the landed hash for the worktree-routing and handoff-policy batch in the project note and debriefs.
+- `75abb925` — 2026-03-17 — add the conditional handoff policy plus project-scoped worktree tracking and first-prompt bootstrap/routing to the Obsidian workflow.
 - `55adc330` — 2026-03-17 — add alias/keyword-aware project-note scoring to the router, seed the project template for those fields, and backfill the prior skill-companion hash.
 - `633c39d7` — 2026-03-17 — add the `/obsidian-workflow` skill companion, register it in the skills index, and teach the first-prompt router to point agents at it explicitly.
 - `172f6386` — 2026-03-17 — fail closed when staged Obsidian project/debrief files from another project are present in the same commit.
@@ -90,3 +91,4 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - Added a conditional handoff policy for Obsidian tracking: handoffs now live in `obsidian/Handoffs/` from a dedicated template, are linked from the project page only when active, and do not replace existing workflow-required handoff artifacts elsewhere in the repo.
 - Added project-scoped worktree tracking to project-note frontmatter and taught the first-prompt router to create or reuse dedicated `.worktrees/<project-slug>` paths so matched sessions have an isolated workspace immediately.
 - Created the dedicated `.worktrees/obsidian-work-tracking` workspace on branch `project/obsidian-work-tracking` so this project note now points at a real isolated checkout instead of a planned one.
+- Backfilled commit `75abb925` into this project note and the matching debriefs after the worktree-routing and handoff-policy batch landed.
