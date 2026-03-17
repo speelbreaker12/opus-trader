@@ -59,11 +59,24 @@ text = re.sub(r"//.*", "", text)
 stmt_re = re.compile(r'^\s*pub\s+use\b.*?;', re.M | re.S)
 symbols = []
 
+# Safety guard: reject nested-module pub use (pub use inside mod blocks)
+if re.search(r'\bmod\s+\w+\s*\{[^}]*\bpub\s+use\b', text, re.S):
+    print("FAIL: non-top-level pub use is not allowed in soldier_infra/api.rs", file=sys.stderr)
+    sys.exit(2)
+
 for match in stmt_re.finditer(text):
     rhs = match.group(0)
     rhs = re.sub(r'^\s*pub\s+use\s+', '', rhs).rstrip(';').strip()
+    # Safety guard: reject wildcard re-exports
+    if '::*' in rhs or rhs.endswith('*'):
+        print("FAIL: wildcard re-export is not allowed in soldier_infra/api.rs", file=sys.stderr)
+        sys.exit(2)
     if '{' in rhs:
         inside = rhs.split('{', 1)[1].rsplit('}', 1)[0]
+        # Safety guard: reject nested brace groups (e.g. foo::{bar::{A, B}, C})
+        if '{' in inside:
+            print("FAIL: nested brace groups are not allowed in soldier_infra/api.rs re-exports", file=sys.stderr)
+            sys.exit(2)
         items = [item.strip() for item in inside.split(',') if item.strip()]
         for item in items:
             if ' as ' in item:
