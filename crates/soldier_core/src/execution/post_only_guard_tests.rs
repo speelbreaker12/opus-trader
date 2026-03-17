@@ -3,6 +3,7 @@
 //! AT-916: post_only == true and limit price would cross → reject.
 
 use super::*;
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
 fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
     crate::execution::METRICS_TEST_LOCK
@@ -312,5 +313,78 @@ fn test_static_counter_monotonic() {
     assert!(
         after > mid,
         "second call should increment further (monotonic)"
+    );
+}
+
+#[test]
+fn test_post_only_graybox_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let mut events = Vec::new();
+    let input = post_only_buy(100.0, Some(100.0));
+
+    let result = check_post_only_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PostOnlyResult::Rejected);
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(events, vec![PostOnlyEvent::Reject]);
+    assert_eq!(post_only_reject_total(), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_post_only_graybox_allowed_emits_no_events_or_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let mut events = Vec::new();
+    let input = post_only_buy(99.0, Some(100.0));
+
+    let result = check_post_only_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PostOnlyResult::Allowed);
+    assert_eq!(metrics.reject_total(), 0);
+    assert!(
+        events.is_empty(),
+        "success path should not emit reject events"
+    );
+    assert_eq!(post_only_reject_total(), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_post_only_wrapper_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
+    let before = post_only_reject_total();
+    let mut metrics = PostOnlyMetrics::new();
+    let input = post_only_buy(100.0, Some(100.0));
+
+    let result = with_intent_trace_ids("intent-post-only-001", "run-post-only-001", || {
+        check_post_only(&input, &mut metrics)
+    });
+
+    assert_eq!(result, PostOnlyResult::Rejected);
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(post_only_reject_total(), before + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("post_only_reject_total")
+                && line.contains("intent_id=intent-post-only-001")
+                && line.contains("run_id=run-post-only-001")
+        }),
+        "expected structured post-only metric line, got {lines:?}"
     );
 }

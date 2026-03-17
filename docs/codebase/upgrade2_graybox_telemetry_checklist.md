@@ -61,7 +61,7 @@ This is the active rollout scope for Upgrade 2.
 | quantize | PASS | `crates/soldier_core/src/execution/quantize.rs:315`, `crates/soldier_core/src/execution/quantize.rs:385`, `crates/soldier_core/src/execution/quantize_tests.rs:763`, `crates/soldier_core/src/execution/quantize_tests.rs:833` | `ProductionQuantizeEvents` adapts the sink path back into metrics. |
 | pricer | FAIL | `crates/soldier_core/src/execution/pricer.rs:150` | Emits metrics directly and has no sink seam. |
 | inventory skew | FAIL | `crates/soldier_core/src/execution/inventory_skew.rs:134` | Emits metrics directly and has no sink seam. |
-| post-only | FAIL | `crates/soldier_core/src/execution/post_only_guard.rs:85` | Emits metrics directly and has no sink seam. |
+| post-only | PASS | `crates/soldier_core/src/execution/post_only_guard.rs:45`, `crates/soldier_core/src/execution/post_only_guard.rs:130`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:320`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:367` | `ProductionPostOnlyEvents` adapts the sink path back into metrics. |
 | margin | FAIL | `crates/soldier_core/src/risk/margin_gate.rs:22` | Emits metrics directly and has no sink seam. |
 | pending exposure | FAIL | `crates/soldier_core/src/risk/pending_exposure.rs:28` | Emits metrics directly and has no sink seam. |
 | exposure budget | FAIL | `crates/soldier_core/src/risk/exposure_budget.rs:48` | Emits metrics directly and has no sink seam. |
@@ -93,4 +93,4 @@ This repo-wide search should find every `with_events` seam and its sink adapter:
 rg -n "fn .*with_events|_with_events\\(|EventSink<" crates/soldier_core/src crates/soldier_infra/src
 ```
 
-At the time this checklist was last updated, that search found liquidity, net-edge, fee staleness, and quantize in the in-scope set above.
+At the time this checklist was last updated, that search found liquidity, net-edge, fee staleness, quantize, pricer, and post-only in the in-scope set above.
