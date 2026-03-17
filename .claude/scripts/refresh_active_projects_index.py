@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime
 import re
 from pathlib import Path
 from urllib.parse import quote
@@ -161,7 +160,6 @@ def main() -> None:
     lines.append(
         "Generated from `obsidian/Projects/*.md` frontmatter so each project links directly to its local worktree notes."
     )
-    lines.append(f"Last generated: {datetime.datetime.now().isoformat(timespec='seconds')}")
     lines.append("")
     lines.append("No branch-local note mirroring is performed into main.")
     lines.append("")

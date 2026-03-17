@@ -285,6 +285,24 @@ def file_uri(path: Path) -> str:
     return f"file://{quote(str(path.resolve()), safe=':/')}"
 
 
+def refresh_active_projects_index(root: Path) -> None:
+    script = root / ".claude" / "scripts" / "refresh_active_projects_index.py"
+    if not script.exists():
+        return
+    result = subprocess.run(
+        ["python3", str(script), "--repo-root", str(root)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # Keep routing functional even if dashboard refresh fails.
+        print(
+            "\nWARNING: failed to refresh obsidian/Active Projects.md: "
+            + (result.stderr.strip() or result.stdout.strip() or "unknown error"),
+            file=sys.stderr,
+        )
+
+
 def branch_exists(root: Path, branch: str) -> bool:
     return run_git(root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0
 
@@ -363,6 +381,7 @@ def ensure_project_worktree(root: Path, project_path: Path, project_name: str, f
         "obsidian_rel_path": obsidian_rel,
         "obsidian_abs_path": str(obsidian_path.resolve()),
         "obsidian_uri": file_uri(obsidian_path),
+        "updated": updated,
         "created": created,
     }
 
@@ -565,6 +584,8 @@ if top is None or top["score"] < confidence_threshold:
             ]
         )
     else:
+        if created_worktree["created"] or created_worktree["updated"]:
+            refresh_active_projects_index(root)
         should_mark_seen = True
         output_lines.extend(
             [
@@ -659,6 +680,8 @@ else:
                 ),
             ]
         )
+        if worktree["created"] or worktree["updated"]:
+            refresh_active_projects_index(root)
 
 print("\n".join(output_lines))
 

@@ -40,7 +40,8 @@ When to use
 - Build a single dashboard note in the root vault (for example `obsidian/Active Projects.md`) with one list item per project using:
   - project note link (`[[Project Name]]`)
   - worktree obsidian folder from `worktree_obsidian` rendered as a markdown link
-- Refresh this dashboard deterministically by running:
+- The router now refreshes this dashboard automatically after successful creation/refresh of a project worktree.
+- If you changed project worktree metadata out of the router path, refresh deterministically by running:
   - `python3 .claude/scripts/refresh_active_projects_index.py --repo-root .`
   whenever `worktree` or `worktree_obsidian` changes.
 - Never mirror branch-local notes into main; this keeps branch-local work-in-progress out of shared Obsidian context.

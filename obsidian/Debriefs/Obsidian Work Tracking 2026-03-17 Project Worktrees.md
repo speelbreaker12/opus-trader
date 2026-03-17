@@ -4,12 +4,13 @@ date: "2026-03-17"
 ---
 
 ## Commits
+- pending — 2026-03-17 — auto-refresh `obsidian/Active Projects.md` after session worktree creation/metadata updates via router hook.
 - pending — 2026-03-17 — add deterministic `obsidian/Active Projects.md` generator and refresh command.
 - pending — 2026-03-17 — add `worktree_obsidian` and first-prompt click-through path metadata (no mirror model).
 - 75abb925 — project-scoped worktree routing batch
 
 ## 0) What shipped
-- Feature/behavior: Added a generated root `obsidian/Active Projects.md` index so each project entry points to `worktree_obsidian` in place, plus a deterministic refresh command to rerun after worktree metadata changes.
+- Feature/behavior: Added automatic refresh of the root `obsidian/Active Projects.md` index from first-prompt routing when it creates or updates a project worktree, plus a deterministic manual refresh command.
 - Value (what problem it solves): Keeps projects isolated from each other, reduces dirty-tree interference, and gives the agent one canonical workspace path to use after the first message.
 
 ## 1) Constraint (ONE)
