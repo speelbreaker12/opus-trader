@@ -39,14 +39,15 @@ If work is paused mid-stream, blocked, or the user explicitly asks for a handoff
 1. Add a dated entry under `## Log` describing what changed
 2. Update `## Current State` if the project status shifted
 3. Update the `## Commits` section near the top of the note with date + hash (or `pending`) + short description for each project batch
-4. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
-5. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
+4. Update the `## PRs` section near the top of the note with PR number (or `pending`), branch, and short status whenever PR state changes
+5. Update frontmatter (`status`, `priority`, `branch`, `pr`) if needed
+6. Write or update a matching debrief in `obsidian/Debriefs/` and link it from the project's `## Debriefs` section
 
 **If no existing project matches your work:** Create a new one by copying `obsidian/Templates/Project.md` to `obsidian/Projects/<Project Name>.md` and filling in the fields.
 
 **The git pre-commit hook will block commits** that don't include staged changes to both `obsidian/Projects/*.md` and `obsidian/Debriefs/*.md`, it requires the staged project note to link at least one staged debrief, and all staged Obsidian project/debrief files in that commit must belong to exactly one project.
 
-**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` section near the top in the same date/hash/summary format, and link the debrief from the project's `## Debriefs` section before committing.
+**At end of session:** Write a debrief in `obsidian/Debriefs/<Project> <date>.md` using the template in `obsidian/Templates/Debrief.md`. Include a `## Commits` section with the relevant commit hash(es); if the debrief is written before the commit exists, record `pending` and replace it once the commit is known. Keep the project note's `## Commits` and `## PRs` sections near the top in the same readable history format, and link the debrief from the project's `## Debriefs` section before committing.
 
 ## Non-negotiables
 - Contract alignment is mandatory; if conflict, STOP and output `<promise>BLOCKED_CONTRACT_CONFLICT</promise>` with the violated section.

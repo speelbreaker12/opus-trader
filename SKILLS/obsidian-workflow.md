@@ -22,7 +22,9 @@ When to use
 - Keep optional frontmatter `aliases` / `keywords` current when they would help the first-prompt router find this note again.
 - Keep `branch` aligned with the dedicated project worktree branch.
 - Keep `worktree` current and point it at the dedicated project worktree path.
+- Keep frontmatter `pr` current for the active PR, if one exists.
 - Keep `## Commits` near the top with `date + hash or pending + short summary`.
+- Keep `## PRs` near the top with `PR number or pending + branch + short status`.
 - Keep `## Key Files` focused on the active files for the project.
 - Link every relevant debrief under `## Debriefs`.
 - Append a dated entry under `## Log` for each meaningful batch.
