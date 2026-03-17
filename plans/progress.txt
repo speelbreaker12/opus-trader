@@ -1,3 +1,11 @@
+- 2026-03-17 — execution-facade-refactor preflight seam
+- Summary: converted `execution/preflight.rs` to a crate-private `preflight_intent_with_events(...)` pattern, added graybox + wrapper parity coverage in `preflight_tests.rs`, and flipped the Upgrade 2A checklist `preflight` row from `FAIL` to `PASS`.
+- Commands: `cargo test -p soldier_core --lib preflight`; `cargo fmt --all -- --check`; `git diff --check -- crates/soldier_core/src/execution/preflight.rs crates/soldier_core/src/execution/preflight_tests.rs docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
+- Evidence: docs/codebase/upgrade2_graybox_telemetry_checklist.md
+- 2026-03-17 — quick verify attempted
+- Commands: `./plans/verify.sh quick`
+- Evidence: `artifacts/verify/20260317_134320/verify.meta.json` (failed at contract kernel hash mismatch: sources.contract_sha256 expected vs generated)
+- Next: convert `risk/margin_gate.rs` after this leaf seam.
 - Evidence: plans/prd.json.
 - Next: rerun ./ralph 5 for S2-000.
 - 2026-01-14 01:35:18 UTC S2-000: implemented quantization helpers with directional rounding, too-small rejection, and metrics; added quantize tests.

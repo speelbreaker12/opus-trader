@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::execution::Side;
-use crate::execution::{take_execution_metric_lines, with_intent_trace_ids};
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 use crate::venue::InstrumentKind;
 
 /// Helper: build a PreflightInput with defaults (limit order, no triggers, no linked).
@@ -483,6 +483,7 @@ fn test_deterministic_same_input_same_result() {
 
 #[test]
 fn test_preflight_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
     let intent_id = "intent-preflight-001";
     let run_id = "run-preflight-001";
     let _ = take_execution_metric_lines();
@@ -522,6 +523,76 @@ fn test_preflight_emits_structured_reject_metric_line() {
             .iter()
             .any(|line| line.starts_with("preflight_reject_total")),
         "expected structured preflight metric line, got {lines:?}"
+    );
+}
+
+#[test]
+fn test_preflight_graybox_market_reject_emits_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = preflight_reject_total(PreflightReject::OrderTypeMarketForbidden);
+    let mut metrics = PreflightMetrics::new();
+    let mut events = Vec::new();
+    let input = PreflightInput {
+        order_type: OrderType::Market,
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+
+    let result = preflight_intent_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(
+        result,
+        PreflightResult::Rejected(PreflightReject::OrderTypeMarketForbidden)
+    );
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(metrics.market_forbidden_total(), 1);
+    assert_eq!(
+        events,
+        vec![PreflightEvent::Reject {
+            reason: PreflightReject::OrderTypeMarketForbidden
+        }]
+    );
+    assert_eq!(preflight_reject_total(PreflightReject::OrderTypeMarketForbidden), before);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_preflight_graybox_post_only_non_crossing_emits_no_events_or_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = preflight_reject_total(PreflightReject::PostOnlyWouldCross);
+    let mut metrics = PreflightMetrics::new();
+    let mut events = Vec::new();
+    let input = PreflightInput {
+        instrument_kind: InstrumentKind::Perpetual,
+        post_only_input: Some(PostOnlyInput {
+            post_only: true,
+            side: Side::Buy,
+            limit_price: 99.0,
+            best_ask: Some(100.0),
+            best_bid: None,
+        }),
+        ..limit_input(InstrumentKind::Perpetual)
+    };
+
+    let result = preflight_intent_with_events(&input, &mut metrics, &mut events);
+
+    assert_eq!(result, PreflightResult::Allowed);
+    assert_eq!(metrics.reject_total(), 0);
+    assert!(events.is_empty(), "success path should emit no events");
+    assert_eq!(
+        preflight_reject_total(PreflightReject::PostOnlyWouldCross),
+        before,
+        "post-only non-crossing should not emit preflight metrics"
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
     );
 }
 

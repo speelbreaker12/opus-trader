@@ -7,7 +7,10 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::post_only_guard::{PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only};
+use crate::telemetry::EventSink;
+use super::post_only_guard::{
+    check_post_only_with_events, PostOnlyEvent, PostOnlyInput, PostOnlyMetrics, PostOnlyResult,
+};
 use crate::venue::InstrumentKind;
 
 // ─── Rejection reasons ──────────────────────────────────────────────────
@@ -147,6 +150,22 @@ impl Default for PreflightMetrics {
     }
 }
 
+/// Internal preflight events used for graybox testing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PreflightEvent {
+    Reject { reason: PreflightReject },
+}
+
+struct ProductionPreflightEvents;
+
+impl EventSink<PreflightEvent> for ProductionPreflightEvents {
+    fn emit(&mut self, event: PreflightEvent) {
+        match event {
+            PreflightEvent::Reject { reason } => bump_preflight_reject(reason),
+        }
+    }
+}
+
 static PREFLIGHT_MARKET_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
 static PREFLIGHT_STOP_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
 static PREFLIGHT_LINKED_FORBIDDEN_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -174,6 +193,20 @@ pub fn preflight_reject_total(reason: PreflightReject) -> u64 {
 }
 
 fn bump_preflight_reject(reason: PreflightReject) {
+    #[cfg(test)]
+    {
+        return crate::execution::with_metrics_update_lock(|| {
+            bump_preflight_reject_inner(reason);
+        });
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_preflight_reject_inner(reason);
+    }
+}
+
+fn bump_preflight_reject_inner(reason: PreflightReject) {
     match reason {
         PreflightReject::OrderTypeMarketForbidden => {
             PREFLIGHT_MARKET_FORBIDDEN_TOTAL.fetch_add(1, Ordering::Relaxed);
@@ -192,6 +225,16 @@ fn bump_preflight_reject(reason: PreflightReject) {
     super::emit_execution_metric_line(super::METRIC_PREFLIGHT_REJECT, &tail);
 }
 
+fn reject_with_events<E: EventSink<PreflightEvent>>(
+    reason: PreflightReject,
+    metrics: &mut PreflightMetrics,
+    events: &mut E,
+) -> PreflightResult {
+    metrics.record_reject(&reason);
+    events.emit(PreflightEvent::Reject { reason });
+    PreflightResult::Rejected(reason)
+}
+
 // ─── Core preflight function ────────────────────────────────────────────
 
 /// Run the order-type preflight guard per CONTRACT.md §1.4.4.
@@ -205,14 +248,21 @@ pub fn preflight_intent(
     input: &PreflightInput<'_>,
     metrics: &mut PreflightMetrics,
 ) -> PreflightResult {
+    let mut events = ProductionPreflightEvents;
+    preflight_intent_with_events(input, metrics, &mut events)
+}
+
+pub(crate) fn preflight_intent_with_events<E: EventSink<PreflightEvent>>(
+    input: &PreflightInput<'_>,
+    metrics: &mut PreflightMetrics,
+    events: &mut E,
+) -> PreflightResult {
     // Rule 1: Market orders forbidden for ALL instrument kinds.
     // CONTRACT.md §1.4.4 A: "If type == market → REJECT"
     // CONTRACT.md §1.4.4 B: "If type == market → REJECT"
     if input.order_type == OrderType::Market {
         let reason = PreflightReject::OrderTypeMarketForbidden;
-        metrics.record_reject(&reason);
-        bump_preflight_reject(reason);
-        return PreflightResult::Rejected(reason);
+        return reject_with_events(reason, metrics, events);
     }
 
     // Rule 2: Stop orders forbidden for ALL instrument kinds.
@@ -225,9 +275,7 @@ pub fn preflight_intent(
     ) || input.has_trigger
     {
         let reason = PreflightReject::OrderTypeStopForbidden;
-        metrics.record_reject(&reason);
-        bump_preflight_reject(reason);
-        return PreflightResult::Rejected(reason);
+        return reject_with_events(reason, metrics, events);
     }
 
     // Rule 3: Linked/OCO orders forbidden unless capability matrix allows them.
@@ -245,23 +293,20 @@ pub fn preflight_intent(
         };
         if !allowed {
             let reason = PreflightReject::LinkedOrderTypeForbidden;
-            metrics.record_reject(&reason);
-            bump_preflight_reject(reason);
-            return PreflightResult::Rejected(reason);
+            return reject_with_events(reason, metrics, events);
         }
     }
 
     // Rule 4: post_only orders must not cross the touch (AT-916).
     if let Some(post_only_input) = input.post_only_input.as_ref() {
         let mut post_only_metrics = PostOnlyMetrics::new();
+        let mut post_only_events = Vec::<PostOnlyEvent>::new();
         if matches!(
-            check_post_only(post_only_input, &mut post_only_metrics),
+            check_post_only_with_events(post_only_input, &mut post_only_metrics, &mut post_only_events),
             PostOnlyResult::Rejected
         ) {
             let reason = PreflightReject::PostOnlyWouldCross;
-            metrics.record_reject(&reason);
-            bump_preflight_reject(reason);
-            return PreflightResult::Rejected(reason);
+            return reject_with_events(reason, metrics, events);
         }
     }
 
