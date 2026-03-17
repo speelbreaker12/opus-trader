@@ -26,6 +26,12 @@ Use this project for small, cross-cutting fixes and housekeeping work that do no
 ## PRs
 - None active. Open a dedicated PR only when a maintenance batch is worth review on its own.
 
+## Roadmap
+- Keep `Repo Maintenance` limited to small, cross-cutting fixes and housekeeping work.
+- Split work into a dedicated project once it becomes multi-day, domain-specific, or large enough for its own PR/review trail.
+- Add router heuristics later so generic cleanup prompts can prefer this project without accidentally swallowing real new projects.
+- Add future scope guards so oversized diffs cannot quietly accumulate under the maintenance branch.
+
 ## Key Files
 - obsidian/Projects/Repo Maintenance.md
 - SKILLS/obsidian-workflow.md
@@ -33,6 +39,7 @@ Use this project for small, cross-cutting fixes and housekeeping work that do no
 
 ## Debriefs
 - [[Repo Maintenance 2026-03-17 Project Seed]]
+- [[Repo Maintenance 2026-03-17 Roadmap]]
 
 ## Handoffs
 - None active.
@@ -40,3 +47,4 @@ Use this project for small, cross-cutting fixes and housekeeping work that do no
 ## Log
 ### 2026-03-17
 - Created the shared Repo Maintenance project note so future small fixes and housekeeping batches have a reusable home instead of creating a brand-new project note every time.
+- Added a `## Roadmap` section so the maintenance project explicitly records when work should stay there versus split into a dedicated project.
