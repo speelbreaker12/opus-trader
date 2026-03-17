@@ -19,10 +19,11 @@ fi
 STATE_DIR="${OBSIDIAN_CONTEXT_STATE_DIR:-${TMPDIR:-/tmp}/obsidian-context-router}"
 mkdir -p "$STATE_DIR"
 
-python3 - "$input_file" "$PROJECTS_DIR" "$STATE_DIR" <<'PY'
+python3 - "$input_file" "$PROJECTS_DIR" "$STATE_DIR" "$ROOT" <<'PY'
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -241,6 +242,7 @@ STOPWORDS = {
 payload_path = Path(sys.argv[1])
 projects_dir = Path(sys.argv[2])
 state_dir = Path(sys.argv[3])
+repo_root = Path(sys.argv[4])
 
 payload = read_payload(payload_path)
 message = normalize_text(str(payload.get("message", "")))
@@ -281,6 +283,7 @@ for path in project_paths:
         "key_files": section_text(body, "## Key Files"),
         "log": section_text(body, "## Log"),
         "message_text": message.lower(),
+        "branch": clean_scalar(frontmatter.get("branch", "")),
         "aliases": frontmatter_list(frontmatter, "aliases"),
         "keywords": frontmatter_list(frontmatter, "keywords"),
     }
@@ -296,6 +299,18 @@ for path in project_paths:
 projects.sort(key=lambda item: (-item["score"], item["name"].lower()))
 top = projects[0]
 second = projects[1] if len(projects) > 1 else None
+
+try:
+    current_branch = subprocess.check_output(
+        ["git", "-C", str(repo_root), "rev-parse", "--abbrev-ref", "HEAD"],
+        stderr=subprocess.DEVNULL,
+        text=True,
+    ).strip()
+except Exception:
+    current_branch = ""
+
+branch_owners = [project for project in projects if project["branch"] == current_branch]
+current_branch_owner = branch_owners[0] if len(branch_owners) == 1 else None
 
 confidence_threshold = 10
 ambiguity_gap = 2
@@ -347,6 +362,17 @@ else:
             render_project_block(top),
         ]
     )
+    if current_branch_owner is not None and top["branch"] and top["branch"] != current_branch:
+        should_mark_seen = False
+        output_lines.extend(
+            [
+                "BRANCH/WORKTREE MISMATCH",
+                f"Current branch: {current_branch}",
+                f"Matched project branch: {top['branch']}",
+                f"Current branch owner: {current_branch_owner['rel_path']}",
+                "Switch or create the matched project's worktree before editing.",
+            ]
+        )
 
 print("\n".join(output_lines))
 
