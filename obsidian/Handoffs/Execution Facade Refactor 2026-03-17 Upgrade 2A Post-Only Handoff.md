@@ -9,7 +9,7 @@ status: active
 
 ## Current Pointer
 - Branch: `project/execution-facade-refactor`
-- Commit: `pending`
+- Commit: `5c6f972c`
 - Scope: `execution/post_only_guard.rs` is now on the leaf event-sink pattern, the Upgrade 2A checklist marks `post-only` as `PASS`, and the next likely 2A targets are `execution/inventory_skew.rs` or `execution/preflight.rs`.
 
 ## Must Read
@@ -21,7 +21,7 @@ status: active
 ## Next Steps
 1. Convert `crates/soldier_core/src/execution/inventory_skew.rs` using the same crate-private event seam plus graybox/wrapper parity pattern.
 2. Convert `crates/soldier_core/src/execution/preflight.rs` after that, keeping the same leaf-only 2A boundary and not pulling 2B orchestration telemetry forward.
-3. Replace the `pending` commit reference in the project/debrief/handoff notes after the post-only batch is committed.
+3. Keep the next Obsidian note touch focused on the next 2A leaf instead of reopening already-anchored commit history.
 
 ## Resume Command
 ```bash

@@ -1272,3 +1272,10 @@ Commands: cargo test -p soldier_core --lib test_liquidity_gate_graybox_emits_rej
 Evidence: crates/soldier_core/src/execution/gate.rs; crates/soldier_core/src/execution/gates.rs; crates/soldier_core/src/execution/mod.rs; crates/soldier_core/src/risk/fees.rs; artifacts/verify/20260317_082213.
 Notes: `./plans/verify.sh quick` still fails outside this slice in `02) contract kernel` because `docs/contract_kernel.json` is stale relative to `specs/CONTRACT.md`.
 Next: Regenerate `docs/contract_kernel.json` when that unrelated drift is in scope, then rerun quick/full verify from a clean checkout.
+Story: execution-facade-refactor
+Date: 2026-03-17
+Summary: Converted `execution/inventory_skew.rs` to the crate-private event-sink seam pattern, added graybox/wrapper parity tests, flipped the Upgrade 2A inventory-skew checklist row to `PASS`, and wrote the matching project debrief/handoff before pausing.
+Commands: cargo test -p soldier_core --lib inventory_skew; cargo fmt --all; cargo fmt --all -- --check; git diff --check -- crates/soldier_core/src/execution/inventory_skew.rs crates/soldier_core/src/execution/inventory_skew_tests.rs docs/codebase/upgrade2_graybox_telemetry_checklist.md.
+Evidence: crates/soldier_core/src/execution/inventory_skew.rs; crates/soldier_core/src/execution/inventory_skew_tests.rs; docs/codebase/upgrade2_graybox_telemetry_checklist.md.
+Notes: Focused verification is green for this slice. I did not rerun `./plans/verify.sh quick` because the branch still has the previously noted unrelated contract-kernel drift outside the inventory-skew seam.
+Next: Convert `crates/soldier_core/src/execution/preflight.rs` next, then move to the remaining red Upgrade 2A leaves in `risk/margin_gate.rs`, `risk/pending_exposure.rs`, and `risk/exposure_budget.rs`.

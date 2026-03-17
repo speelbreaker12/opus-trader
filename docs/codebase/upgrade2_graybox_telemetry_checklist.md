@@ -65,7 +65,7 @@ This is the active rollout scope for Upgrade 2.
 | margin | FAIL | `crates/soldier_core/src/risk/margin_gate.rs:22` | Emits metrics directly and has no sink seam. |
 | pending exposure | FAIL | `crates/soldier_core/src/risk/pending_exposure.rs:28` | Emits metrics directly and has no sink seam. |
 | exposure budget | FAIL | `crates/soldier_core/src/risk/exposure_budget.rs:48` | Emits metrics directly and has no sink seam. |
-| preflight | FAIL | `crates/soldier_core/src/execution/preflight.rs:192` | Emits metrics directly and has no sink seam. |
+| preflight | PASS | `crates/soldier_core/src/execution/preflight.rs:218`, `crates/soldier_core/src/execution/preflight.rs:249`, `crates/soldier_core/src/execution/preflight_tests.rs:531`, `crates/soldier_core/src/execution/preflight_tests.rs:567` | `ProductionPreflightEvents` adapts the sink path back into metrics. |
 
 ## Upgrade 2B — Orchestration Telemetry Decoupling
 

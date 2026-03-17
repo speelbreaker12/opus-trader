@@ -1,5 +1,26 @@
 # Pause Note (optional)
 
+## 2026-03-17 - execution-facade-refactor inventory-skew handoff
+
+- Date: 2026-03-17
+- Branch/worktree: `project/execution-facade-refactor` at `/Users/admin/Desktop/opus-trader/.worktrees/execution-facade-refactor`
+- Scope completed in this session:
+  - Converted `crates/soldier_core/src/execution/inventory_skew.rs` to expose the crate-private `evaluate_inventory_skew_with_events(...)` seam with `InventorySkewEvent`.
+  - Added graybox reject/success tests plus wrapper parity coverage in `crates/soldier_core/src/execution/inventory_skew_tests.rs`.
+  - Flipped the `inventory skew` row in `docs/codebase/upgrade2_graybox_telemetry_checklist.md` from `FAIL` to `PASS`.
+- Verification evidence:
+  - `cargo test -p soldier_core --lib inventory_skew` PASS
+  - `cargo fmt --all` PASS
+  - `cargo fmt --all -- --check` PASS
+  - `git diff --check -- crates/soldier_core/src/execution/inventory_skew.rs crates/soldier_core/src/execution/inventory_skew_tests.rs docs/codebase/upgrade2_graybox_telemetry_checklist.md` PASS
+- Next agent default actions:
+  1. Convert `crates/soldier_core/src/execution/preflight.rs` using the same event-sink plus graybox/parity pattern.
+  2. Continue down the remaining Upgrade 2A red rows: `risk/margin_gate.rs`, `risk/pending_exposure.rs`, `risk/exposure_budget.rs`.
+  3. When the unrelated contract-kernel drift is in scope, rerun `./plans/verify.sh quick` from a clean checkout.
+- Constraints/preferences to preserve:
+  - Stay within Upgrade 2A leaf scope; do not pull 2B orchestration telemetry into the next slice.
+  - Keep the public wrapper as the production telemetry adapter and keep graybox paths free of global metric side effects.
+
 ## 2026-03-04 - PR #161 drift-closure handoff
 
 - Date: 2026-03-04 22:11:46 UTC

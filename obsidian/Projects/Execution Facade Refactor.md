@@ -8,10 +8,11 @@ worktree: .worktrees/execution-facade-refactor
 ---
 
 ## Current State
-PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, `execution/gates.rs`, `execution/quantize.rs`, `execution/pricer.rs`, and `execution/post_only_guard.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is now split into Upgrade 2A (leaf event-sink rollout) and Upgrade 2B (orchestration/chokepoint event-sink rollout). 2A is the active execution target and remains red in inventory skew, preflight, margin, pending exposure, and exposure budget; 2B is tracked separately so orchestration telemetry is not dropped from Upgrade 2. Orchestration consolidation and 1C (risk/venue/infra) remain open.
+PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, `execution/gates.rs`, `execution/quantize.rs`, `execution/pricer.rs`, `execution/inventory_skew.rs`, and `execution/post_only_guard.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is now split into Upgrade 2A (leaf event-sink rollout) and Upgrade 2B (orchestration/chokepoint event-sink rollout). 2A is the active execution target and remains red in preflight, margin, pending exposure, and exposure budget; 2B is tracked separately so orchestration telemetry is not dropped from Upgrade 2. Orchestration consolidation and 1C (risk/venue/infra) remain open.
 
 ## Commits
-- `pending` — 2026-03-17 — add the post-only event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
+- `pending` — 2026-03-17 — add the inventory skew event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
+- `5c6f972c` — 2026-03-17 — add the post-only event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
 - `bdb1cec1` — 2026-03-17 — add the pricer event seam, graybox/wrapper parity coverage, and flip the Upgrade 2A checklist row to `PASS`.
 - `5ebf6b2d` — 2026-03-17 — split Upgrade 2 into 2A/2B, add the quantize event seam, and unblock commits by excluding test fixtures from `ssot_lint`.
 - `1e0eccc6` — 2026-03-17 — add execution gate event seams for liquidity and net-edge, plus graybox/parity test coverage and shared metrics-test isolation helpers.
@@ -26,6 +27,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - obsidian/Upgrades for AI/1/Status 2026-03-05.md
 
 ## Debriefs
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Inventory Skew Seam]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Post-Only Seam]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Pricer Seam]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Quantize Seam]]
@@ -35,10 +37,15 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - [[Execution Facade Refactor 2026-03-17 Execution Gate Event Pilots]]
 
 ## Handoffs
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Inventory Skew Handoff]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Post-Only Handoff]]
 
 ## Log
 ### 2026-03-17
+- Verified the inventory-skew seam with `cargo test -p soldier_core --lib inventory_skew`, `cargo fmt --all`, and `cargo fmt --all -- --check`; `./plans/verify.sh quick` was not rerun in this session because the branch still carries the previously noted unrelated contract-kernel drift.
+- Converted `crates/soldier_core/src/execution/inventory_skew.rs` to a crate-private `evaluate_inventory_skew_with_events(...)` seam with `InventorySkewEvent` and a parity-preserving production adapter.
+- Added graybox and wrapper parity tests for inventory skew proving the sink path stays free of global counter/metric side effects while the public wrapper still emits the legacy reject metric line.
+- Flipped the inventory-skew row in [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) from `FAIL` to `PASS`.
 - Verified the post-only seam with `cargo fmt --all -- --check` plus `cargo test -p soldier_core --lib post_only_guard`; `./plans/verify.sh quick` remains blocked by the unrelated `docs/contract_kernel.json` drift (`artifacts/verify/20260317_121242`).
 - Converted `crates/soldier_core/src/execution/post_only_guard.rs` to a crate-private `check_post_only_with_events(...)` seam with `PostOnlyEvent` and a parity-preserving production adapter.
 - Added graybox and wrapper parity tests for post-only guard proving the sink path stays free of global counter/metric side effects while the public wrapper still emits the legacy reject metric line.

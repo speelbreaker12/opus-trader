@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending
+- 5c6f972c
 
 ## 0) What shipped
 - Feature/behavior: `execution/post_only_guard.rs` now exposes a crate-private `check_post_only_with_events(...)` seam with `PostOnlyEvent`, while the legacy `check_post_only(...)` wrapper still routes through the production adapter and preserves the existing reject metric/counter behavior.
@@ -24,7 +24,7 @@ date: "2026-03-17"
 - 1-3 upgrades worth considering:
 - What: Convert `execution/preflight.rs`. | Increment: isolate preflight reject telemetry behind an event sink while keeping the wrapper’s legacy metric line contract. | Validation: graybox tests emit no global metric lines and the wrapper parity test still does.
 - What: Convert `risk/margin_gate.rs`. | Increment: add a crate-private event seam and parity-preserving adapter for its fail-closed reject telemetry. | Validation: the margin row flips from `FAIL` to `PASS` in the 2A checklist.
-- What: Batch a commit for post-only plus project/debrief tracking. | Increment: replace this debrief’s pending hash with the commit ID. | Validation: pre-commit passes and the project note no longer carries a pending row for this batch.
+- What: Convert `risk/pending_exposure.rs`. | Increment: add a crate-private event seam and parity-preserving adapter for its reject telemetry. | Validation: the pending exposure row flips from `FAIL` to `PASS` in the 2A checklist.
 
 ## 3) Enforceable rules
 - rule: Leaf Upgrade 2A conversions must keep the public function as the production telemetry adapter and move side effects into a crate-private event seam.
