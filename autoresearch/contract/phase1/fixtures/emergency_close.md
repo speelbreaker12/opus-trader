@@ -7,17 +7,18 @@
 **Price Source (Deterministic, fail-closed):**
 - Primary: `L2BookSnapshot` best bid/ask when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
 - Fallback: `L1TickerSnapshot` best bid/ask (REST/WS ticker) when present and fresh (age <= `l2_book_snapshot_max_age_ms`; Appendix A).
-- Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available:
+- Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available AND `instrument_cache_age_s <= instrument_cache_ttl_s` (Appendix A):
   - reduce-only BUY close uses quantized venue `max_price`,
   - reduce-only SELL close uses quantized venue `min_price`.
   - This fallback MUST use bounded IOC attempts only and MUST remain monotonic risk-reducing.
+  - This fallback is valid only when instrument metadata freshness holds (`instrument_cache_age_s <= instrument_cache_ttl_s`); stale instrument metadata MUST make venue-band fallback unavailable.
 - The `best` price in step 1 uses the selected source (asks for buy, bids for sell).
 - If no valid source is available from L2/L1 and no valid venue band is available (missing/unparseable/unquantizable metadata), emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.
 
 **Algorithm (Deterministic, 3 tries):**
-1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`).
-2. If partial fill: repeat for remaining qty (max 3 loops, exponential buffer: multiply by 2 each retry → 10 ticks, 20 ticks).
-3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size).
+1. Attempt **IOC limit close** at best ± `close_buffer_ticks` (default 5 ticks; see Appendix A for `close_buffer_ticks`). This is attempt 1.
+2. If partial fill: repeat for remaining qty (max 3 total attempts including the initial; buffer doubles each retry: attempt 2 = 10 ticks, attempt 3 = 20 ticks).
+3. If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size). If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged; the system MUST NOT retry the hedge indefinitely.
 4. Log `AtomicNakedEvent` with group_id + exposure + time-to-delta-neutral.
 
 **AtomicNakedEvent schema (minimum):**
@@ -31,7 +32,7 @@
 - `hedge_used` (bool)
 - `cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)
 - `trading_mode_at_event` (`Active|ReduceOnly|Kill`)
-- `evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
+- `evidence_chain_state_at_event` (EvidenceChainState per §2.2.2; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)
 
 AT-1102
 - Given: an AtomicNakedEvent is emitted by the emergency close path.
@@ -79,7 +80,7 @@ AT-937
 - Fail criteria: dispatch is blocked despite a valid L1 ticker or uses a stale/invalid source.
 
 AT-938
-- Given: `L2BookSnapshot` is missing/unparseable/stale and no fresh `L1TickerSnapshot` is available.
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and instrument metadata freshness holds (`instrument_cache_age_s <= instrument_cache_ttl_s`).
 - When: emergency close runs.
 - Then: IOC close attempts are submitted using emergency venue-band fallback pricing (`max_price` for reduce-only BUY, `min_price` for reduce-only SELL), quantized to tick.
 - Pass criteria: at least one bounded IOC attempt is dispatched using venue-band fallback pricing.
@@ -88,9 +89,9 @@ AT-938
 AT-1217
 - Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and venue band metadata is missing/unparseable/unquantizable.
 - When: emergency close runs.
-- Then: no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
-- Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
-- Fail criteria: any dispatch occurs without a valid fallback price source, or rejection reason is missing/mismatched.
+- Then: no dispatch occurs, the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`, and no `AtomicNakedEvent` is emitted (no dispatch means no naked exposure to record).
+- Pass criteria: dispatch count remains 0; rejection reason is recorded; no `AtomicNakedEvent` is emitted.
+- Fail criteria: any dispatch occurs without a valid fallback price source, rejection reason is missing/mismatched, or an `AtomicNakedEvent` is emitted despite zero dispatch.
 
 AT-1239
 - Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and `instrument_cache_age_s > instrument_cache_ttl_s`.
@@ -98,5 +99,3 @@ AT-1239
 - Then: venue-band fallback is treated as unavailable; no dispatch occurs and the attempt is rejected with `Rejected(EmergencyCloseNoPrice)`.
 - Pass criteria: dispatch count remains 0 and the rejection reason is recorded.
 - Fail criteria: venue-band dispatch occurs while metadata is stale, or rejection reason is missing/mismatched.
-
-

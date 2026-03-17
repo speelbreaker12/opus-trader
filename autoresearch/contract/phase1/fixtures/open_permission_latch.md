@@ -7,6 +7,7 @@ Profile: CSP
 - If `open_permission_blocked_latch == true`:
   - OPEN intents MUST be blocked.
   - CLOSE / HEDGE / CANCEL intents MUST remain allowed, except risk-increasing cancels/replaces MUST be rejected per §2.2.5.
+- When `open_permission_blocked_latch == true`, the latch feeds into PolicyGuard's `SystemIntegrityAxis` as a `DEGRADED` input (§2.2.3.2), producing `TradingMode::ReduceOnly`. OPEN blocking is enforced both directly (latch gate) and indirectly (via PolicyGuard TradingMode dispatch authorization).
 
 **State fields:**
 - `open_permission_blocked_latch` (bool; `true` means OPEN blocked)
@@ -16,15 +17,30 @@ Profile: CSP
 **Acceptance Tests (References):**
 - AT-027 in §7.0 validates `/status` latch field invariants.
 
-**Deterministic reconstruction (preferred; no persistence):**
+**Deterministic reconstruction (required; no persistence):**
 - On startup, set `open_permission_blocked_latch = true` with reason `RESTART_RECONCILE_REQUIRED`.
 - The latch MUST clear only after reconciliation succeeds.
 
 **Reconciliation success criteria (required):**
 - Ledger inflight intents (non-terminal) match exchange open orders by label (all matched within label disambiguation rules per §1.1.2).
 - Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).
-- No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query.
+- No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query. If the REST query fails (network error, timeout, HTTP error, or unparseable response), reconciliation MUST fail closed — the latch MUST remain set and OPEN intents MUST remain blocked.
 - All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).
+
+**Reconciliation stall observability (deterministic, no override-clear):**
+- If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s`, runtime MUST emit structured log `RECONCILE_STALL` and increment counter metric `reconcile_stall_total`.
+- `RECONCILE_STALL` payload MUST include the failing criterion that is preventing reconciliation success.
+- Emission cadence MUST be deterministic: for a continuous stall episode, emit once when the threshold is first exceeded; re-emit only if the failing criterion changes during that same episode.
+- A new emission episode starts only after reconciliation success clears the stall condition/latch, and a later stall exceeds the threshold again.
+- This observability rule MUST NOT clear or override the latch; latch clears only after reconciliation success criteria are satisfied.
+
+AT-1243
+- Given: `open_permission_blocked_latch == true` and reconciliation remains blocked beyond `reconcile_stall_max_delay_s`.
+- When: reconciliation stall observability evaluates.
+- Then: runtime emits structured `RECONCILE_STALL` log with the failing criterion, increments `reconcile_stall_total`, and keeps latch set with no override-clear.
+- And: for one continuous stall episode, emission occurs once at first threshold exceedance, with re-emission only on failing-criterion change; a new episode can emit again only after clear and re-stall.
+- Pass criteria: log + counter emitted with deterministic cadence and failing criterion; latch remains set.
+- Fail criteria: missing log/counter, missing failing criterion payload, repeated spam emission without criterion change/new episode, or latch cleared without reconciliation success.
 
 AT-1100
 - Given: reconciliation runs and REST `/get_user_trades` over the last `reconcile_trade_lookback_sec` returns trades that are not present in the local ledger (missing trades).
@@ -58,6 +74,13 @@ AT-430
 - Pass criteria: latch fields match expected startup values and OPEN remains blocked.
 - Fail criteria: latch not set, reason missing, or OPEN allowed before reconciliation.
 
+AT-1242
+- Given: the system is running with `open_permission_blocked_latch==false` (latch clear, normal operation).
+- When: one of the following trigger events occurs: (a) WS book gap detected, (b) WS trades gap detected, (c) WS data becomes stale beyond threshold, (d) inventory mismatch detected between ledger and exchange, (e) exchange session termination received.
+- Then: `open_permission_blocked_latch` MUST be set to `true` and `open_permission_reason_codes` MUST contain the corresponding reason code (`WS_BOOK_GAP_RECONCILE_REQUIRED`, `WS_TRADES_GAP_RECONCILE_REQUIRED`, `WS_DATA_STALE_RECONCILE_REQUIRED`, `INVENTORY_MISMATCH_RECONCILE_REQUIRED`, or `SESSION_TERMINATION_RECONCILE_REQUIRED` respectively); OPEN intents MUST be blocked.
+- Pass criteria: latch transitions to `true` with the correct reason code; OPEN dispatch count remains 0 while latch is set.
+- Fail criteria: latch remains `false` after trigger event, reason code is missing/incorrect, or OPEN dispatches while latch is set.
+
 AT-011
 - Given: `open_permission_blocked_latch==true` for a WS gap reason (e.g., `WS_TRADES_GAP_RECONCILE_REQUIRED`).
 - When: reconciliation succeeds (all criteria in this section are satisfied).
@@ -85,5 +108,11 @@ AT-411
 - Then: `open_permission_reason_codes` does not include runtime-binding or EvidenceChain failures, and `open_permission_blocked_latch` is unchanged.
 - Pass criteria: no F1/Evidence codes in reason list; latch not set without a reconcile trigger.
 - Fail criteria: any F1/Evidence code appears or latch is set without a reconcile trigger.
+- Note: This AT tests the Hard rule (runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes`) in isolation. The Hard rule is unconditional — it applies regardless of whether reconcile-class triggers are concurrently active. The "no reconcile-class triggers" precondition isolates the test from latch interactions but does not limit the Hard rule's scope.
 
-
+AT-1243
+- Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).
+- When: `open_permission_reason_codes` are computed.
+- Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.
+- Pass criteria: only reconcile-class codes in reason list; no F1/Evidence codes despite concurrent cert failure.
+- Fail criteria: F1/Evidence codes appear in `open_permission_reason_codes`.
