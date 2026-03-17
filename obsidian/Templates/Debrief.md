@@ -3,6 +3,9 @@ project: "[[]]"
 date: "{{date}}"
 ---
 
+## Commits
+- pending
+
 ## 0) What shipped
 - Feature/behavior:
 - Value (what problem it solves):
