@@ -8,7 +8,7 @@ started: 2026-03-16
 
 ## Current State
 
-PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTRACT.md, 3 new ATs added (AT-1241, AT-1242, AT-1243). Implementation plan pending.
+Phase 2 complete — 8 of 10 machine-generated proposals accepted, 6 new ATs added (AT-1247 through AT-1252). CONTRACT.md patched across §1.3, §2.2.2, §2.2.3, §2.2.4, §3.1. 2 proposals rejected (redundant CSP bypass AT, AT-1100 structural move).
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -16,6 +16,7 @@ PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTR
 - `autoresearch/tests/test_contract_render_review.py`
 - `autoresearch/tests/test_contract_harness_cli.py`
 - `autoresearch/contract/phase1/`
+- `autoresearch/contract/phase2/`
 
 ## Debriefs
 - None yet.
@@ -43,3 +44,6 @@ PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTR
 - Phase 1 verification: fixed 21 REAL CONTRACT.md spec gaps (1 P0, 13 P1, 7 P2), 2 false positives skipped
 - New ATs: AT-1241 (LG no-fallback CLOSE/HEDGE), AT-1242 (OPL trigger events), AT-1243 (OPL concurrent cert+reconcile)
 - Review fix: attribution_write_errors increment-trigger rule + AT-1244 (mode_reasons ordering/tier purity)
+- Phase 2 proposal run: 10 proposals from 5 sections, deep_end_line extraction fix, 5 new snapshot targets
+- Phase 2 review: accepted 8, rejected 2 (CSP bypass redundant with AT-991, AT-1100 structural move)
+- CONTRACT.md patched: AT-1247 (LG CLOSE/HEDGE slippage), AT-1248 (EG attribution missing), AT-1249 (TMC bunker_mode stale), AT-1250 (OPL clear transition), AT-1251 (EC hedge bound), AT-1252 (EC monotonic retry), cooldown scope, Profile:ALL tags
