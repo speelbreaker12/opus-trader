@@ -7,10 +7,10 @@ started: "2026-03-05"
 ---
 
 ## Current State
-PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, and `execution/gates.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is still red: only liquidity, net-edge, fee staleness, and expected slippage-via-liquidity currently pass. Orchestration consolidation and 1C (risk/venue/infra) remain open.
+PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, `execution/gates.rs`, and `execution/quantize.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is now split into Upgrade 2A (leaf event-sink rollout) and Upgrade 2B (orchestration/chokepoint event-sink rollout). 2A is the active execution target and remains red outside liquidity, net-edge, fee staleness, expected slippage-via-liquidity, and quantize; 2B is tracked separately so orchestration telemetry is not dropped from Upgrade 2. Orchestration consolidation and 1C (risk/venue/infra) remain open.
 
 ## Commits
-- `pending` — 2026-03-17 — make the Upgrade 2 telemetry checklist the canonical acceptance gate in upgrade tracking notes.
+- `pending` — 2026-03-17 — split Upgrade 2 into 2A/2B, add the quantize event seam, and unblock commits by excluding test fixtures from `ssot_lint`.
 - `1e0eccc6` — 2026-03-17 — add execution gate event seams for liquidity and net-edge, plus graybox/parity test coverage and shared metrics-test isolation helpers.
 - `429fe236` — 2026-03-17 — record the fee pilot commit hash in the Execution Facade Refactor project tracking notes.
 - `0c5abc78` — 2026-03-17 — add the fee staleness event seam with typed events and parity-preserving production adapter coverage.
@@ -23,6 +23,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - obsidian/Upgrades for AI/1/Status 2026-03-05.md
 
 ## Debriefs
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Quantize Seam]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2 Acceptance Gate]]
 - [[Execution Facade Refactor 2026-03-17 Telemetry Sink Seam]]
 - [[Execution Facade Refactor 2026-03-17 Fee Staleness Event Pilot]]
@@ -30,6 +31,10 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 
 ## Log
 ### 2026-03-17
+- Fixed `plans/ssot_lint.sh` to ignore `plans/tests/fixtures/` and added workflow regression coverage so the repo guard stops treating doc-sync fixtures as canonical duplicates.
+- Converted `crates/soldier_core/src/execution/quantize.rs` to a crate-private `quantize_with_events(...)` seam with `QuantizeEvent` and a parity-preserving production adapter.
+- Added graybox and wrapper parity tests for quantize proving the sink path stays free of global counter/metric side effects while the public wrapper still emits the legacy reject metric line.
+- Clarified the canonical Upgrade 2 checklist boundary: 2A is leaf-only, 2B covers `execution/group.rs` plus chokepoint `gate_sequence_total` / `wal_nonblocking_allowed_total`, and Upgrade 2 cannot close until both sections pass.
 - Pointed the Upgrade status note at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and tightened the checklist so Upgrade 2 scope and closure stay row-driven instead of narrative.
 - Added [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) as the mechanical pass/fail gate for Upgrade 2 graybox telemetry coverage and recorded that the checklist is still red outside liquidity, net-edge, fee staleness, and expected slippage-via-liquidity.
 - Added a top-level `## Commits` history section to this project note and backfilled the execution gate pilot debrief with commit `1e0eccc6`.
