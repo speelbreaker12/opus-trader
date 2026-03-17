@@ -10,7 +10,7 @@ Applied 16 accepted proposals from autoresearch phase3 run `phase2-mar17-2026031
 
 ## Changes
 
-- 11 new acceptance tests (AT-1254 through AT-1264)
+- 11 new acceptance tests (AT-PROP-100 through AT-PROP-205)
 - 2 SHALL→MUST mechanical fixes (lines 412, 513)
 - CSP-063 cross-reference dedup for Recovery/Matching Rule
 - AT-1243→AT-1253 renumber (duplicate ID fix)
