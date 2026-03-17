@@ -38,6 +38,83 @@ def normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip())
 
 
+def clean_scalar(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1].strip()
+    return value
+
+
+def parse_frontmatter(content: str) -> tuple[dict, str]:
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, content
+
+    frontmatter: dict = {}
+    i = 1
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if stripped == "---":
+            return frontmatter, "\n".join(lines[i + 1 :])
+        if not stripped:
+            i += 1
+            continue
+
+        match = re.match(r"^([A-Za-z0-9_-]+):(?:\s*(.*))?$", line)
+        if not match:
+            i += 1
+            continue
+
+        key = match.group(1)
+        raw_value = (match.group(2) or "").strip()
+        if raw_value.startswith("[") and raw_value.endswith("]"):
+            items = [
+                clean_scalar(part)
+                for part in raw_value[1:-1].split(",")
+                if clean_scalar(part)
+            ]
+            frontmatter[key] = items
+            i += 1
+            continue
+
+        if raw_value:
+            frontmatter[key] = clean_scalar(raw_value)
+            i += 1
+            continue
+
+        items: list[str] = []
+        j = i + 1
+        while j < len(lines):
+            next_line = lines[j]
+            next_stripped = next_line.strip()
+            if next_stripped == "---":
+                break
+            if re.match(r"^[A-Za-z0-9_-]+:\s*", next_line):
+                break
+            if next_stripped.startswith("- "):
+                items.append(clean_scalar(next_stripped[2:]))
+                j += 1
+                continue
+            if next_stripped:
+                break
+            j += 1
+
+        frontmatter[key] = items
+        i = j
+
+    return frontmatter, content
+
+
+def frontmatter_list(frontmatter: dict, key: str) -> list[str]:
+    value = frontmatter.get(key, [])
+    if isinstance(value, list):
+        return [normalize_text(str(item)) for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [normalize_text(value)]
+    return []
+
+
 def tokenize(value: str) -> set[str]:
     return {
         token
@@ -74,13 +151,27 @@ def score_project(message_tokens: set[str], project: dict) -> tuple[int, list[st
         score += len(hits) * weight
 
     add_weight(project["name_tokens"], 8)
+    add_weight(project["alias_tokens"], 7)
     add_weight(project["state_tokens"], 6)
+    add_weight(project["keyword_tokens"], 6)
     add_weight(project["key_tokens"], 5)
     add_weight(project["log_tokens"], 3)
 
     name_phrase = project["name"].lower()
     if name_phrase and name_phrase in project["message_text"]:
         score += 12
+
+    for alias in project["aliases"]:
+        alias_phrase = alias.lower()
+        if alias_phrase and alias_phrase in project["message_text"]:
+            score += 10
+            matched.update(tokenize(alias_phrase))
+
+    for keyword in project["keywords"]:
+        keyword_phrase = keyword.lower()
+        if keyword_phrase and keyword_phrase in project["message_text"]:
+            score += 8
+            matched.update(tokenize(keyword_phrase))
 
     return score, sorted(matched)
 
@@ -180,18 +271,23 @@ message_tokens = tokenize(message)
 projects: list[dict] = []
 for path in project_paths:
     content = path.read_text(encoding="utf-8")
+    frontmatter, body = parse_frontmatter(content)
     project = {
         "path": path,
         "rel_path": str(path.relative_to(projects_dir.parent.parent)),
         "name": path.stem,
         "content": content,
-        "current_state": section_text(content, "## Current State"),
-        "key_files": section_text(content, "## Key Files"),
-        "log": section_text(content, "## Log"),
+        "current_state": section_text(body, "## Current State"),
+        "key_files": section_text(body, "## Key Files"),
+        "log": section_text(body, "## Log"),
         "message_text": message.lower(),
+        "aliases": frontmatter_list(frontmatter, "aliases"),
+        "keywords": frontmatter_list(frontmatter, "keywords"),
     }
     project["name_tokens"] = tokenize(project["name"])
+    project["alias_tokens"] = tokenize(" ".join(project["aliases"]))
     project["state_tokens"] = tokenize(project["current_state"])
+    project["keyword_tokens"] = tokenize(" ".join(project["keywords"]))
     project["key_tokens"] = tokenize(project["key_files"])
     project["log_tokens"] = tokenize(project["log"])
     project["score"], project["matched_terms"] = score_project(message_tokens, project)

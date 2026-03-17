@@ -38,14 +38,33 @@ write_project() {
   local state="$3"
   local key_file="$4"
   local log_line="$5"
+  local aliases="${6:-}"
+  local keywords="${7:-}"
 
-  cat >"$path" <<EOF
+  {
+    cat <<EOF
 ---
 status: $status
 priority: P1
 branch: main
 pr:
 started: "2026-03-17"
+EOF
+    if [[ -n "$aliases" ]]; then
+      echo "aliases:"
+      while IFS= read -r alias; do
+        [[ -n "$alias" ]] || continue
+        printf -- "- %s\n" "$alias"
+      done <<< "$aliases"
+    fi
+    if [[ -n "$keywords" ]]; then
+      echo "keywords:"
+      while IFS= read -r keyword; do
+        [[ -n "$keyword" ]] || continue
+        printf -- "- %s\n" "$keyword"
+      done <<< "$keywords"
+    fi
+    cat <<EOF
 ---
 
 ## Current State
@@ -61,6 +80,7 @@ $state
 ### 2026-03-17
 - $log_line
 EOF
+  } >"$path"
 }
 
 [[ -x "$HOOK" ]] || fail "missing executable hook: $HOOK"
@@ -99,6 +119,23 @@ write_project \
   ".claude/hooks/obsidian-context-hook.sh" \
   "Project hook routing notes are pending."
 
+write_project \
+  "$repo/obsidian/Projects/Session Matching.md" \
+  "in-progress" \
+  "General routing backlog." \
+  ".claude/hooks/obsidian-context-hook.sh" \
+  "Alias scoring needs verification." \
+  "vault router"
+
+write_project \
+  "$repo/obsidian/Projects/Tracker Heuristics.md" \
+  "in-progress" \
+  "General scoring maintenance." \
+  ".claude/hooks/obsidian-context-hook.sh" \
+  "Keyword scoring needs verification." \
+  "" \
+  "strategy garden"
+
 single_output="$(run_hook "$repo" "session-single" "Please continue the execution telemetry refactor for the fee gate.")"
 expect_contains "single match skill hint" "$single_output" "Companion skill: /obsidian-workflow"
 expect_contains "single match path" "$single_output" "Matched Obsidian project: obsidian/Projects/Execution Facade Refactor.md"
@@ -110,6 +147,12 @@ repeat_output="$(run_hook "$repo" "session-single" "Second prompt in the same se
 if [[ -n "$repeat_output" ]]; then
   fail "repeat prompt should not emit router output, got: $repeat_output"
 fi
+
+alias_output="$(run_hook "$repo" "session-alias" "Need help with the vault router follow-up.")"
+expect_contains "alias match path" "$alias_output" "Matched Obsidian project: obsidian/Projects/Session Matching.md"
+
+keyword_output="$(run_hook "$repo" "session-keyword" "Need help with the strategy garden follow-up.")"
+expect_contains "keyword match path" "$keyword_output" "Matched Obsidian project: obsidian/Projects/Tracker Heuristics.md"
 
 ambiguous_output="$(run_hook "$repo" "session-ambiguous" "I want to improve first prompt obsidian project hook routing.")"
 expect_contains "ambiguous prompt" "$ambiguous_output" "Ambiguous Obsidian project match for first prompt."

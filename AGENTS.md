@@ -144,6 +144,7 @@ Every agent session must track work in `obsidian/Projects/`.
 
 **On session start:** Read all `obsidian/Projects/*.md` files to understand active work, priorities, and current state.
 If the Obsidian router hook points to `/obsidian-workflow`, use it as the project-page/debrief checklist companion.
+Project notes may include optional frontmatter `aliases` and `keywords` to improve first-prompt router matching; keep them current when they materially help rediscovery.
 
 **Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:
 1. Add a dated entry under `## Log` describing what changed
