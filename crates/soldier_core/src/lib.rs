@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod telemetry;
+
 pub mod execution;
 pub mod idempotency;
 pub mod recovery;
