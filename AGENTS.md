@@ -34,6 +34,7 @@ If the Obsidian router hook points to `/obsidian-workflow`, use it as the projec
 Project notes may include optional frontmatter `aliases` and `keywords` to improve first-prompt router matching; keep them current when they materially help rediscovery.
 Project notes should record a dedicated `worktree` path and keep `branch` aligned with that worktree. When a project is matched, use that worktree for commands/edits in the session; if it is missing, create one at `.worktrees/<project-slug>` and update the project note before substantive work.
 If work is paused mid-stream, blocked, or the user explicitly asks for a handoff, write it to `obsidian/Handoffs/<Project> <date> <Short Title>.md` from `obsidian/Templates/Handoff.md` and link it from the project note. This does not replace `plans/pause.md` or any workflow-specific required handoff artifact.
+If the task is only a small, cross-cutting fix or housekeeping batch and no dedicated project matches, prefer `obsidian/Projects/Repo Maintenance.md` over creating a brand-new long-lived project note. Split it back out into a dedicated project once the work becomes project-sized.
 
 **Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:
 1. Add a dated entry under `## Log` describing what changed

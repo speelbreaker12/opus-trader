@@ -19,6 +19,7 @@ worktree: .worktrees/obsidian-work-tracking
 Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, alias/keyword-aware project-note scoring, per-project worktree tracking and auto-bootstrap, a companion `/obsidian-workflow` skill for what to read/update/include, a conditional Obsidian handoff policy with a dedicated `obsidian/Handoffs/` path and template, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
 
 ## Commits
+- `pending` — 2026-03-17 — add a shared Repo Maintenance project fallback for small fixes and housekeeping work.
 - `pending` — 2026-03-17 — add a dedicated `## PRs` section to project pages and document how to keep it current.
 - `pending` — 2026-03-17 — backfill the landed hash for the worktree-routing and handoff-policy batch in the project note and debriefs.
 - `75abb925` — 2026-03-17 — add the conditional handoff policy plus project-scoped worktree tracking and first-prompt bootstrap/routing to the Obsidian workflow.
@@ -62,6 +63,7 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - [[Obsidian Work Tracking 2026-03-17 Obsidian Handoff Policy]]
 - [[Obsidian Work Tracking 2026-03-17 Project Worktrees]]
 - [[Obsidian Work Tracking 2026-03-17 PRs Section]]
+- [[Obsidian Work Tracking 2026-03-17 Repo Maintenance Fallback]]
 
 ## Handoffs
 - None active. Save future handoffs under `obsidian/Handoffs/` only when work is paused, blocked, or explicitly handed off.
@@ -99,3 +101,4 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - Backfilled commit `75abb925` into this project note and the matching debriefs after the worktree-routing and handoff-policy batch landed.
 - Added a `## PRs` section to the project template and workflow guidance, and recorded the dedicated review branch PR for this work.
 - Added a dedicated Obsidian debrief/project-note update for the new `## PRs` section so future project pages track active and historical PRs explicitly.
+- Added a shared `Repo Maintenance` fallback project for small fixes and housekeeping work so future minor changes do not need a brand-new project page every time.

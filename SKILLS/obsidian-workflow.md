@@ -15,6 +15,7 @@ When to use
 - Keep `branch` aligned with the branch checked out in that project worktree.
 - If the matched project note has no `worktree`, create a dedicated one at `.worktrees/<project-slug>` and update the project note before substantive work.
 - If the first-prompt hook reported multiple likely matches, ask the user to choose before doing substantive work.
+- If no project matches and the work is only a small, cross-cutting fix or housekeeping batch, use `obsidian/Projects/Repo Maintenance.md` instead of creating a brand-new long-lived project note.
 - If no project matches, create a new project note and dedicated worktree from the first-prompt router output, then confirm both in the first response.
 
 ## Project Page Checklist
@@ -28,6 +29,7 @@ When to use
 - Keep `## Key Files` focused on the active files for the project.
 - Link every relevant debrief under `## Debriefs`.
 - Append a dated entry under `## Log` for each meaningful batch.
+- Move work out of `Repo Maintenance` into a dedicated project once it becomes multi-day, domain-specific, or large enough to deserve its own PR/review trail.
 
 ## Debrief Checklist
 - Use `obsidian/Templates/Debrief.md`.
