@@ -148,6 +148,9 @@ Project notes may include optional frontmatter `aliases` and `keywords` to impro
 Project notes should record a dedicated `worktree` path and keep `branch` aligned with that worktree. Keep `worktree_obsidian` aligned to the project-local Obsidian folder path so dashboard links can open that workspace directly.
 For no-mirror viewing, treat `worktree_obsidian` as authoritative and avoid copying worktree notes into main.
 When a project is matched, use that worktree for commands/edits in the session; if it is missing, create one at `.worktrees/<project-slug>` and update the project note before substantive work.
+Refresh the local project dashboard when worktree references change:
+- Run `python3 .claude/scripts/refresh_active_projects_index.py --repo-root .`
+- Commit updates to `obsidian/Active Projects.md` as part of the same Obsidian-scoped commit.
 If work is paused mid-stream, blocked, or the user explicitly asks for a handoff, write it to `obsidian/Handoffs/<Project> <date> <Short Title>.md` from `obsidian/Templates/Handoff.md` and link it from the project note. This does not replace `plans/pause.md` or any workflow-specific required handoff artifact.
 
 **Before every commit:** Update or create the relevant project file in `obsidian/Projects/`:

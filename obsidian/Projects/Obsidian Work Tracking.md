@@ -20,6 +20,7 @@ worktree_obsidian: .worktrees/obsidian-work-tracking/obsidian
 Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, alias/keyword-aware project-note scoring, per-project worktree tracking and auto-bootstrap, a companion `/obsidian-workflow` skill for what to read/update/include, a conditional Obsidian handoff policy with a dedicated `obsidian/Handoffs/` path and template, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
 
 ## Commits
+- `pending` — 2026-03-17 — add deterministic `obsidian/Active Projects.md` generator and refresh command.
 - `pending` — 2026-03-17 — add `worktree_obsidian` and no-mirror click-through workspace link support from first-prompt routing.
 - `pending` — 2026-03-17 — backfill the landed hash for the worktree-routing and handoff-policy batch in the project note and debriefs.
 - `75abb925` — 2026-03-17 — add the conditional handoff policy plus project-scoped worktree tracking and first-prompt bootstrap/routing to the Obsidian workflow.
@@ -37,9 +38,10 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - obsidian/Templates/Project.md
 - obsidian/Templates/Debrief.md
 - .claude/hooks/obsidian-context-hook.sh
-- .claude/skills/obsidian-workflow/SKILL.md
 - SKILLS/obsidian-workflow.md
+- .claude/scripts/refresh_active_projects_index.py
 - docs/skills/index.md
+- obsidian/Active Projects.md
 - obsidian/Templates/Project.md
 - .worktrees/obsidian-work-tracking
 - obsidian/Templates/Handoff.md
@@ -76,6 +78,7 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - Added git pre-commit hook (.git/hooks/pre-commit) — blocks commit for ALL agents (Codex, Gemini, manual)
 - Added Obsidian Project Tracking section to AGENTS.md — read on start, update before commit, create if missing
 ### 2026-03-17
+- Added a deterministic local dashboard at `obsidian/Active Projects.md` generated from `obsidian/Projects/*.md` frontmatter with `worktree_obsidian` links.
 - Enabled context7 plugin in .claude/settings.json
 - Expanded AGENTS.md with Warp/Codex build/test/architecture instructions
 - Added a repo-owned Obsidian commit guard that requires both a staged project note and a staged debrief, plus a project-note link to the staged debrief.

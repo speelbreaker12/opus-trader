@@ -4,11 +4,12 @@ date: "2026-03-17"
 ---
 
 ## Commits
+- pending — 2026-03-17 — add deterministic `obsidian/Active Projects.md` generator and refresh command.
 - pending — 2026-03-17 — add `worktree_obsidian` and first-prompt click-through path metadata (no mirror model).
 - 75abb925 — project-scoped worktree routing batch
 
 ## 0) What shipped
-- Feature/behavior: Added `worktree` and `worktree_obsidian` tracking to project notes and taught the first-prompt router to create/reuse dedicated project worktrees plus project-local Obsidian folders automatically.
+- Feature/behavior: Added a generated root `obsidian/Active Projects.md` index so each project entry points to `worktree_obsidian` in place, plus a deterministic refresh command to rerun after worktree metadata changes.
 - Value (what problem it solves): Keeps projects isolated from each other, reduces dirty-tree interference, and gives the agent one canonical workspace path to use after the first message.
 
 ## 1) Constraint (ONE)
@@ -18,7 +19,7 @@ date: "2026-03-17"
 - Next-agent default behavior (subordinate): When the router reports a project worktree, use it for commands and edits in that session instead of the root checkout.
 - Permanent fix proposal (elevate): Treat worktree ownership as part of the project record itself so project routing and workspace isolation stay synchronized.
 - Smallest increment: Add `worktree` to the template, update the workflow skill/AGENTS guidance, and extend the router test to prove matched and newly created projects receive dedicated worktrees.
-- Validation (proof it got better): The router test now runs in a real git repo and proves both matched-project worktree creation and no-match project/worktree auto-bootstrap.
+- Validation (proof it got better): The router test runs in a real git repo and proves both matched-project worktree creation and no-match project/worktree auto-bootstrap.
 
 ## 2) Best follow-up
 - Single best next step: Teach the router to surface the most recent active handoff for the matched project from within that worktree-aware session context.
