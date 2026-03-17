@@ -38,6 +38,68 @@ EOF
   exit 1
 fi
 
+if [[ ${#project_files[@]} -ne 1 ]]; then
+  cat >&2 <<EOF
+ERROR: Stage Obsidian files for exactly one project note per commit.
+
+Staged project notes:
+$(printf '  - %s\n' "${project_files[@]}")
+Only include the changes you made in this commit.
+EOF
+  exit 1
+fi
+
+expected_project_name="$(basename "${project_files[0]}" .md)"
+unrelated_debriefs=()
+missing_project_refs=()
+
+for debrief_file in "${debrief_files[@]}"; do
+  debrief_content="$(git show ":$debrief_file")"
+  debrief_project_ref="$(printf '%s\n' "$debrief_content" | sed -n 's/^project:[[:space:]]*//p' | head -1)"
+  debrief_project_ref="${debrief_project_ref#\"}"
+  debrief_project_ref="${debrief_project_ref%\"}"
+  debrief_project_name=""
+
+  case "$debrief_project_ref" in
+    \[\[*\]\])
+      debrief_project_name="${debrief_project_ref#\[\[}"
+      debrief_project_name="${debrief_project_name%\]\]}"
+      ;;
+  esac
+
+  if [[ -z "$debrief_project_name" ]]; then
+    missing_project_refs+=("$debrief_file")
+    continue
+  fi
+
+  if [[ "$debrief_project_name" != "$expected_project_name" ]]; then
+    unrelated_debriefs+=("$debrief_file -> $debrief_project_name")
+  fi
+done
+
+if [[ ${#missing_project_refs[@]} -gt 0 ]]; then
+  cat >&2 <<EOF
+ERROR: Each staged Obsidian debrief must declare its project in frontmatter.
+
+Missing or invalid project frontmatter:
+$(printf '  - %s\n' "${missing_project_refs[@]}")
+Only include the changes you made in this commit.
+EOF
+  exit 1
+fi
+
+if [[ ${#unrelated_debriefs[@]} -gt 0 ]]; then
+  cat >&2 <<EOF
+ERROR: A staged Obsidian debrief belongs to a different project than ${project_files[0]}.
+
+Expected project: $expected_project_name
+Mismatched staged debriefs:
+$(printf '  - %s\n' "${unrelated_debriefs[@]}")
+Only include the changes you made in this commit.
+EOF
+  exit 1
+fi
+
 for project_file in "${project_files[@]}"; do
   project_content="$(git show ":$project_file")"
   debrief_section="$(printf '%s\n' "$project_content" | awk '
