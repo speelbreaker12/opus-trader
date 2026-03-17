@@ -23,6 +23,7 @@ if [[ ${#project_files[@]} -eq 0 ]]; then
 ERROR: No staged Obsidian project note.
 
 Before committing, stage an update to the relevant file under `obsidian/Projects/`.
+Only include the changes you made in this commit.
 EOF
   exit 1
 fi
@@ -32,6 +33,7 @@ if [[ ${#debrief_files[@]} -eq 0 ]]; then
 ERROR: No staged Obsidian debrief.
 
 Before committing, stage a debrief under `obsidian/Debriefs/` and link it from the project's `## Debriefs` section.
+Only include the changes you made in this commit.
 EOF
   exit 1
 fi
@@ -59,6 +61,7 @@ ERROR: $project_file must link at least one staged debrief.
 
 Add a reference under \`## Debriefs\` to one of:
 $(printf '  - %s\n' "${debrief_files[@]}")
+Only include the changes you made in this commit.
 EOF
     exit 1
   fi

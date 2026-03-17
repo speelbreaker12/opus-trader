@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending (this hook/debrief batch is not committed yet)
+- `b1393d87` — `obsidian: enforce linked debriefs in commit hooks`
 
 ## 0) What shipped
 - Feature/behavior: Added a repo-owned Obsidian commit guard that blocks commits unless a staged project note, a staged debrief, and a project-note link to the staged debrief are all present, then repointed the Claude-side pre-commit hook to delegate to that same shared guard.
