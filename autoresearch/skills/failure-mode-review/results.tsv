@@ -1,5 +1,0 @@
-commit	score	passed	total	status	description
-2f19407a	1.000	25	25	baseline	initial baseline run — all 25 assertions pass
-ba1b5e51	1.000	25	25	discard	stability-1: add omit-empty-sections note; equal score, reverted
-1a15f806	1.000	25	25	discard	stability-2: add trivial-change output example; equal score, reverted
-e506b03e	1.000	25	25	keep	stability-3: remove §13 Dead Code Detection (-11 lines); equal score, kept per simplicity criterion

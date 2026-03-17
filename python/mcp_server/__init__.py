@@ -1,1 +1,0 @@
-# Ralph Contract MCP Server

@@ -1,6 +1,0 @@
-[workspace]
-members = [
-  "crates/soldier_core",
-  "crates/soldier_infra",
-]
-resolver = "2"
