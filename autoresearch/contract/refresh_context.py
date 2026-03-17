@@ -81,6 +81,28 @@ def extract_range(contract_lines: list[str], start_line: int, end_line: int) -> 
     return "\n".join(contract_lines[start_line - 1:end_line]).rstrip() + "\n"
 
 
+def deep_end_line(section_anchor: str, sections: list[dict[str, Any]]) -> int:
+    """Return the end_line of the last child section under *section_anchor*.
+
+    If the anchor has no children (e.g. "1.3"), returns its own end_line.
+    If it has children (e.g. "2.2.3" → "2.2.3.0" … "2.2.3.7"), returns the
+    end_line of the last child.
+    """
+    prefix = section_anchor + "."
+    last = None
+    own = None
+    for s in sections:
+        if s["section_anchor"] == section_anchor:
+            own = s
+        if s["section_anchor"].startswith(prefix):
+            last = s
+    if last is not None:
+        return last["end_line"]
+    if own is not None:
+        return own["end_line"]
+    raise ValueError(f"section_anchor {section_anchor!r} not found")
+
+
 def build_section_index_md(sections: list[dict[str, Any]]) -> str:
     lines = [
         "| section_anchor | title | start_line | end_line |",
@@ -236,6 +258,25 @@ def collect_common_tracked_files(contract_dir: Path) -> dict[str, str]:
         if not path.is_file():
             continue
         tracked_files[str(path.relative_to(contract_dir))] = sha256_text(path.read_text(encoding="utf-8"))
+    fixture_metadata_path = contract_dir / "phase1" / "internal" / "fixture_metadata.json"
+    fixture_metadata = load_json(fixture_metadata_path)
+    if not isinstance(fixture_metadata, dict):
+        fail(f"{fixture_metadata_path} must be a JSON object")
+    fixtures = fixture_metadata.get("fixtures", {}) if isinstance(fixture_metadata, dict) else {}
+    if not isinstance(fixtures, dict):
+        fail(f"{fixture_metadata_path} fixtures must be an object")
+    for fixture_name, metadata in fixtures.items():
+        if not isinstance(metadata, dict):
+            fail(f"{fixture_metadata_path} fixture '{fixture_name}' must be an object")
+        injected_tokens = metadata.get("injected_tokens", [])
+        if not isinstance(injected_tokens, list):
+            fail(f"{fixture_metadata_path} fixture '{fixture_name}' injected_tokens must be an array")
+        if injected_tokens:
+            continue
+        path = contract_dir / "phase1" / "fixtures" / f"{fixture_name}.md"
+        if not path.exists() or not path.is_file():
+            fail(f"missing live Phase 1 fixture: {path}")
+        tracked_files[str(path.relative_to(contract_dir))] = sha256_text(path.read_text(encoding="utf-8"))
     return tracked_files
 
 
@@ -302,15 +343,22 @@ def refresh_common(root: Path) -> int:
     contract_header_md = build_contract_header(contract_lines, sections)
     at_registry = build_at_registry(contract_lines, sections)
 
-    fixture_metadata = load_json(contract_dir / "phase1" / "internal" / "fixture_metadata.json")
+    fixture_metadata_path = contract_dir / "phase1" / "internal" / "fixture_metadata.json"
+    fixture_metadata = load_json(fixture_metadata_path)
+    if not isinstance(fixture_metadata, dict):
+        fail(f"{fixture_metadata_path} must be a JSON object")
     fixture_entries = fixture_metadata.get("fixtures", {}) if isinstance(fixture_metadata, dict) else {}
     if not isinstance(fixture_entries, dict):
         fail("phase1/internal/fixture_metadata.json fixtures must be an object")
     known_sections = {section["section_anchor"] for section in sections}
+    section_map = {section["section_anchor"]: section for section in sections}
     stale_fixtures: list[str] = []
     for fixture_name, metadata in fixture_entries.items():
         if not isinstance(metadata, dict):
-            continue
+            fail(
+                "phase1/internal/fixture_metadata.json fixture entries must be objects: "
+                f"{fixture_name}"
+            )
         section_anchor = metadata.get("section_anchor")
         if isinstance(section_anchor, str) and section_anchor and section_anchor not in known_sections:
             stale_fixtures.append(f"{fixture_name}:{section_anchor}")
@@ -319,6 +367,29 @@ def refresh_common(root: Path) -> int:
             "Phase 1 planted-gap fixtures reference missing sections: "
             + ", ".join(stale_fixtures)
         )
+
+    for fixture_name, metadata in fixture_entries.items():
+        section_anchor = metadata.get("section_anchor")
+        if not isinstance(section_anchor, str) or not section_anchor:
+            fail(
+                "phase1/internal/fixture_metadata.json fixture entries require a non-empty section_anchor: "
+                f"{fixture_name}"
+            )
+        injected_tokens = metadata.get("injected_tokens", [])
+        if not isinstance(injected_tokens, list) or not all(
+            isinstance(token, str) for token in injected_tokens
+        ):
+            fail(
+                "phase1/internal/fixture_metadata.json injected_tokens must be a string array: "
+                f"{fixture_name}"
+            )
+        if injected_tokens:
+            continue
+        section = section_map[section_anchor]
+        end = deep_end_line(section_anchor, sections)
+        fixture_text = extract_range(contract_lines, section["start_line"], end)
+        fixture_path = contract_dir / "phase1" / "fixtures" / f"{fixture_name}.md"
+        write_text_atomic(fixture_path, fixture_text)
 
     write_text_atomic(common_dir / "section_index.md", section_index_md)
     write_text_atomic(common_dir / "contract_header.md", contract_header_md)
@@ -349,7 +420,8 @@ def refresh_fixtures(root: Path) -> int:
             fail(f"section_index stale for {section_anchor}; run 'harness.sh contract refresh-common' first")
         section = section_map[section_anchor]
         fixture_path = contract_dir / target["fixture_path"]
-        fixture_text = extract_range(contract_lines, section["start_line"], section["end_line"])
+        end = deep_end_line(section_anchor, sections)
+        fixture_text = extract_range(contract_lines, section["start_line"], end)
         write_text_atomic(fixture_path, fixture_text)
 
         fixture_name = fixture_path.name

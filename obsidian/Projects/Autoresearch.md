@@ -1,20 +1,21 @@
 ---
 status: in-progress
 priority: P1
-branch: story/remediation-order-v4/r01-r05-contract-fixes
+branch: main
 pr: 207
 started: 2026-03-16
 ---
 
 ## Current State
 
-PR 207 rebased onto main. Duplicate AT-1239 fixed. Autoresearch tests next, then PR-gate evidence path.
+PR 207 merged. Phase 1 verification complete — 21 REAL findings fixed in CONTRACT.md, 3 new ATs added (AT-1241, AT-1242, AT-1243). Implementation plan pending.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
 - `autoresearch/skills/harness.sh`
 - `autoresearch/tests/test_contract_render_review.py`
 - `autoresearch/tests/test_contract_harness_cli.py`
+- `autoresearch/contract/phase1/`
 
 ## Debriefs
 - None yet.
@@ -28,4 +29,17 @@ PR 207 rebased onto main. Duplicate AT-1239 fixed. Autoresearch tests next, then
 - Rebased PR #207 onto main (10 commits, 17 conflicts resolved, 0 markers remaining).
 - Reviewed CONTRACT.md/prd.json/contract_kernel.json as contract set. Found and fixed duplicate AT-1239 in S7-002.
 - contract_kernel.json line numbers are stale — needs regeneration post-merge.
-
+- Follow-up review fixes: made malformed fixture_metadata top-level payloads fail closed and correlated the Liquidity Gate P0 semantic assertion to the same finding in eval.json
+- Hardened contract autoresearch live-fixture flow: refresh-common now regenerates tracked live Phase 1 fixtures and phase1 run fails closed on stale live fixture drift
+- Tightened Phase 1 live eval assertions and added regression coverage for stale-fixture refresh + workflow preflight fixtures
+- Verified workflow changes in a clean detached worktree after syncing updated preflight fixture tests; kept dirty CONTRACT-derived generated artifacts out of commit scope
+- Phase 1 fixtures and eval written
+- Context manifest updated
+- Results TSV updated
+- Added skills-index consistency checker (preflight gate 6, smoke test)
+- Extended Phase 1 eval.json with TradingMode + OpenPermissionLatch scoring rules
+- Updated refresh_context.py to include live phase1 fixtures in manifest
+- Added autoresearch test coverage for phase runs and refresh
+- Phase 1 verification: fixed 21 REAL CONTRACT.md spec gaps (1 P0, 13 P1, 7 P2), 2 false positives skipped
+- New ATs: AT-1241 (LG no-fallback CLOSE/HEDGE), AT-1242 (OPL trigger events), AT-1243 (OPL concurrent cert+reconcile)
+- Review fix: attribution_write_errors increment-trigger rule + AT-1244 (mode_reasons ordering/tier purity)

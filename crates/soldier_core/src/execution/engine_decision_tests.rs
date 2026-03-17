@@ -495,6 +495,35 @@ fn engine_close_without_wal_gate_emits_no_gate_configured_metric() {
 }
 
 #[test]
+fn engine_hedge_without_wal_gate_emits_no_gate_configured_metric() {
+    // CSP.3.2 coverage: Hedge shares the no-gate branch with Close.
+    // A Hedge with no WAL gate must be approved AND emit the no_gate_configured counter.
+    let _metrics_guard = match crate::execution::METRICS_TEST_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let _ = crate::execution::take_execution_metric_lines();
+
+    let base = base_execution_input_with_risk_state(RiskState::Degraded);
+    let engine = ExecutionEngine::new();
+    let engine_input = ExecutionInput::Hedge(HedgeExecutionInput { base });
+    let mut runtime = ExecutionRuntime::default(); // no WAL gate
+
+    let delegated = engine.decide(&engine_input, &mut runtime);
+    assert!(matches!(delegated, ExecutionDecision::Approved(_)));
+
+    let lines = crate::execution::take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with(crate::execution::METRIC_WAL_NONBLOCKING_ALLOWED_TOTAL)
+                && line.contains("intent_class=Hedge")
+                && line.contains("source=no_gate_configured")
+        }),
+        "expected CSP.3.2 no-gate visibility metric line for Hedge, got {lines:?}"
+    );
+}
+
+#[test]
 fn engine_hedge_rejected_quantize() {
     let mut base = base_execution_input_with_risk_state(RiskState::Degraded);
     base.quantize.raw_qty = 0.01;

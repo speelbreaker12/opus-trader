@@ -37,6 +37,21 @@ fn test_at501_open_all_gates_pass_trace_order() {
 }
 
 #[test]
+fn test_assert_unit_test_present_rejects_fn_without_test_attr() {
+    // Mutation-B5 guard: a wrong impl that reverts to the old `contains(fn_needle)`
+    // check (without verifying `#[test]` attribute presence) would pass for
+    // `gate_results_all_passing`, which exists in the source WITHOUT `#[test]`.
+    // This test proves the attribute check is present and active.
+    let result = std::panic::catch_unwind(|| {
+        assert_unit_test_present("gate_results_all_passing");
+    });
+    assert!(
+        result.is_err(),
+        "assert_unit_test_present must panic for a fn that exists without #[test]"
+    );
+}
+
+#[test]
 fn test_gate_ordering_constraints() {
     for constraint_test in [
         "test_constraint_reject_gates_before_persist",

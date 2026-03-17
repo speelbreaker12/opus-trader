@@ -59,6 +59,36 @@ class _TempRefreshRepo:
             )
             + "\n",
         )
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase1" / "internal" / "fixture_metadata.json",
+            {
+                "fixtures": {
+                    "sample_contract_gap": {
+                        "section_anchor": "1",
+                        "injected_tokens": ["AT-999"],
+                    },
+                    "live_policyguard": {
+                        "section_anchor": "2.2",
+                        "injected_tokens": [],
+                    },
+                }
+            },
+        )
+        _write_text(
+            self.root / "autoresearch" / "contract" / "phase1" / "fixtures" / "live_policyguard.md",
+            "# stale fixture\n",
+        )
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase2" / "internal" / "snapshot_targets.json",
+            {
+                "targets": [
+                    {
+                        "fixture_path": "phase2/fixtures/snapshot/s2_2_policyguard_latest.md",
+                        "section_anchor": "2.2",
+                    }
+                ]
+            },
+        )
 
     def close(self) -> None:
         self.temp_dir.cleanup()
@@ -181,6 +211,24 @@ class ContractRefreshTests(unittest.TestCase):
         self.assertEqual(after["common_contract_hash"], after["contract_content_hash"])
         self.assertEqual(after["snapshot_contract_hash"], original_snapshot_hash)
 
+    def test_refresh_all_regenerates_live_phase1_fixtures(self) -> None:
+        fixture_path = (
+            self.repo.root
+            / "autoresearch"
+            / "contract"
+            / "phase1"
+            / "fixtures"
+            / "live_policyguard.md"
+        )
+        fixture_path.write_text("# stale fixture\n", encoding="utf-8")
+
+        result = self.repo.run("all")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+        refreshed = fixture_path.read_text(encoding="utf-8")
+        self.assertIn("## 2.2 PolicyGuard", refreshed)
+        self.assertIn("evidence_chain_score must fail closed when stale.", refreshed)
+
     def test_refresh_common_fails_closed_on_stale_phase1_fixture_mapping(self) -> None:
         _write_json(
             self.repo.root / "autoresearch" / "contract" / "phase1" / "internal" / "fixture_metadata.json",
@@ -196,6 +244,16 @@ class ContractRefreshTests(unittest.TestCase):
         result = self.repo.run("common")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("reference missing sections", result.stderr)
+
+    def test_refresh_common_fails_closed_when_fixture_metadata_top_level_is_not_object(self) -> None:
+        _write_text(
+            self.repo.root / "autoresearch" / "contract" / "phase1" / "internal" / "fixture_metadata.json",
+            "[]\n",
+        )
+
+        result = self.repo.run("common")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("fixture_metadata.json must be a JSON object", result.stderr)
 
     def test_refresh_fixtures_fails_closed_on_missing_governed_input_reference(self) -> None:
         _write_json(

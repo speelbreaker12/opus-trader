@@ -20,7 +20,8 @@
           "rule": {
             "type": "json_field_match",
             "path": "$.findings[*].category",
-            "value": "cross_ref_broken"
+            "value": "cross_ref_broken",
+            "match_mode": "any"
           }
         },
         {
@@ -47,7 +48,273 @@
           "rule": {
             "type": "json_field_match",
             "path": "$.findings[*].evidence.quote",
-            "pattern": "AT-999"
+            "pattern": "AT-999",
+            "match_mode": "any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-trading-mode-computation",
+      "fixture": "fixtures/trading_mode_computation.md",
+      "output_file": "trading_mode_computation/findings.json",
+      "assertions": [
+        {
+          "id": "tmc-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "tmc-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "tmc-count",
+          "check": "detector emits a non-trivial finding set for TradingMode",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "id": "tmc-category",
+          "check": "detector still finds a gate interaction gap in TradingMode",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "gate_interaction_gap",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "tmc-section",
+          "check": "detector still anchors a finding to dispatch authorization semantics",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "Dispatch Authorization",
+            "match_mode": "any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-open-permission-latch",
+      "fixture": "fixtures/open_permission_latch.md",
+      "output_file": "open_permission_latch/findings.json",
+      "assertions": [
+        {
+          "id": "opl-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "opl-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "opl-count",
+          "check": "detector emits a stable finding count for Open Permission Latch",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 4,
+            "max": 6
+          }
+        },
+        {
+          "id": "opl-category",
+          "check": "detector still finds the fail-closed latch gap",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "missing_fail_closed",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "opl-section",
+          "check": "detector still anchors one finding to the AT-411 hard rule",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "AT-411",
+            "match_mode": "any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-emergency-close",
+      "fixture": "fixtures/emergency_close.md",
+      "output_file": "emergency_close/findings.json",
+      "assertions": [
+        {
+          "id": "ec-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "ec-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "ec-count",
+          "check": "detector emits a non-trivial finding count for Emergency Close",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "id": "ec-category",
+          "check": "detector still finds stale-input handling gaps in Emergency Close",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "stale_input_unspecified",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "ec-section",
+          "check": "detector still anchors one finding to the AtomicNakedEvent schema",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "AtomicNakedEvent schema",
+            "match_mode": "any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-evidence-guard",
+      "fixture": "fixtures/evidence_guard.md",
+      "output_file": "evidence_guard/findings.json",
+      "assertions": [
+        {
+          "id": "eg-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "eg-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "eg-count",
+          "check": "detector emits a compact finding set for EvidenceGuard",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 3,
+            "max": 4
+          }
+        },
+        {
+          "id": "eg-category",
+          "check": "detector still finds a fail-closed EvidenceGuard gap",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].category",
+            "value": "missing_fail_closed",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "eg-section",
+          "check": "detector still anchors a finding to GREEN/RED criteria wording",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].section",
+            "pattern": "GREEN/RED criteria",
+            "match_mode": "any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "live-liquidity-gate",
+      "fixture": "fixtures/liquidity_gate.md",
+      "output_file": "liquidity_gate/findings.json",
+      "assertions": [
+        {
+          "id": "lg-schema",
+          "check": "findings payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase1/findings.schema.json"
+          }
+        },
+        {
+          "id": "lg-unique-ids",
+          "check": "finding ids stay unique",
+          "rule": {
+            "type": "json_unique_field",
+            "path": "$.findings[*].finding_id"
+          }
+        },
+        {
+          "id": "lg-count",
+          "check": "detector emits a non-trivial finding count for Liquidity Gate",
+          "rule": {
+            "type": "json_array_count_bounds",
+            "path": "$.findings",
+            "min": 5,
+            "max": 7
+          }
+        },
+        {
+          "id": "lg-severity",
+          "check": "detector still catches the P0 liquidity-gate finding",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[*].severity",
+            "value": "P0",
+            "match_mode": "any"
+          }
+        },
+        {
+          "id": "lg-section",
+          "check": "detector still anchors the P0 finding to Liquidity Gate acceptance-test wording",
+          "rule": {
+            "type": "json_field_match",
+            "path": "$.findings[?(@.severity==\"P0\")].section",
+            "pattern": "Acceptance Tests",
+            "match_mode": "any"
           }
         }
       ]

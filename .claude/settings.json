@@ -17,6 +17,10 @@
           {
             "type": "command",
             "command": "python3 .claude/hooks/rust-skills-prompt-hook.py 2>&1"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/obsidian-context-hook.sh"
           }
         ]
       }
@@ -40,6 +44,10 @@
           {
             "type": "command",
             "command": "bash .claude/hooks/pre-verify-fmt.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/obsidian-precommit-hook.sh"
           }
         ]
       },

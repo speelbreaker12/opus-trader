@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-03-16T21:00:00Z",
+  "validator_version": "1.0.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "2.2.2 GREEN/RED criteria",
+      "category": "weak_normative",
+      "severity": "P1",
+      "description": "The GREEN criterion for `parquet_queue_overflow_count` omits the evaluation window, unlike the other three required counters which each explicitly state 'within the last `evidenceguard_window_s`'. An implementation could interpret 'not increasing' as 'not incrementing at this exact instant' (effectively fail-open on burst overflow) or 'never incremented in system lifetime' (overly strict). The omission creates an exploitable ambiguity in the GREEN predicate.",
+      "evidence": {
+        "line": 37,
+        "quote": "- `parquet_queue_overflow_count` not increasing",
+        "context": "Contrast with lines 35\u201336 and 38 which each say 'has not increased within the last `evidenceguard_window_s`'"
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Replace with: '`parquet_queue_overflow_count` has not increased within the last `evidenceguard_window_s`' to match the window-bounded formulation of the other three required counters."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "2.2.2 Definition / GREEN/RED criteria / AT-414",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "AT-414 asserts that an attribution row write failure must force EvidenceChainState to not-GREEN, but the required counter list (line 32) does not include an `attribution_write_errors` counter. No existing required counter (`truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`) maps to attribution failures. The fail-closed mechanism is undefined: implementations have no specified counter to increment, making AT-414 unenforceable against the counter-based GREEN predicate.",
+      "evidence": {
+        "line": 32,
+        "quote": "Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add `attribution_write_errors` to the required counters list and specify that it MUST increment on any failure to write an attribution row for a filled OPEN intent; update the GREEN criterion to require it has not increased within `evidenceguard_window_s`."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "2.2.2 GREEN/RED criteria (parquet queue clear hysteresis)",
+      "category": "stale_input_unspecified",
+      "severity": "P2",
+      "description": "`evidenceguard_global_cooldown` appears in the clear hysteresis formula (line 44: 'cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown)') and is overridden to 0 in AT-422, implying a non-zero default exists. However, the fixture never states the default value, and line 26 also relies on this cooldown ('until GREEN recovers and remains stable for the cooldown window'). Without a specified default, the exit criterion from ReduceOnly is underspecified and implementations will diverge.",
+      "evidence": {
+        "line": 44,
+        "quote": "cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied",
+        "context": "AT-422 line 95 overrides evidenceguard_global_cooldown=0, implying a non-zero default that is never defined in this fixture."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a normative default for `evidenceguard_global_cooldown` (e.g., 60s) to Appendix A and reference it in the clear hysteresis rule alongside the existing `evidenceguard_counters_max_age_ms` entry."
+    }
+  ]
+}

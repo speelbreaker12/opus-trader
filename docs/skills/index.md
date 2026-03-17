@@ -8,7 +8,7 @@ Validation command:
 | Name | Path | Description |
 |---|---|---|
 | Reconciliation | `plans/prompts/reconcil.md` | Premortem + R1-R7 reconciliation workflow |
-| 6-Skill Review Stack | `plans/prompts/review-stack.md` | All 6 review skills in sequence |
+| 7-Skill Review Stack | `plans/prompts/review-stack.md` | All 7 review skills in sequence |
 | Cutter | `plans/prompts/cutter.md` | Story slicing/cutting prompt used by `plans/cut_prd.sh` |
 
 ## Skill wrappers
@@ -27,34 +27,45 @@ Validation command:
 |---|---|---|
 | `/6` | `SKILLS/6.md` | Alias for `/review-stack`. |
 | `/acceptance-test` | `SKILLS/acceptance-test.md` | Generate acceptance tests from contract requirements. |
+| `/codebase-health` | `SKILLS/codebase-health.md` | Architecture friction audit — explore for shallow modules, coupling, facade drift, then propose deepening refactors as GH issue RFCs. |
 | `/commit-push-pr` | `SKILLS/commit-push-pr.md` | Stage, commit, push, and open PR with repo conventions. |
 | `/contract-audit-full` | `SKILLS/contract-audit-full.md` | Exhaustive contract coverage and conflict audit. |
+| `contract-gap-detector` | `SKILLS/contract-gap-detector.md` | Automated contract gap finder — JSON output for autoresearch pipeline phase 1. |
+| `contract-patch` | `SKILLS/contract-patch.md` | Automated contract patch proposer — JSON output for autoresearch pipeline phase 2. |
 | `/contract-review` | `SKILLS/contract-review.md` | Fast fail-open safety filter for changes. |
 | `copilot-aftercare` | `SKILLS/copilot-aftercare.md` | Copilot review response loop workflow. |
+| `/design-interface` | `SKILLS/design-interface.md` | "Design It Twice" — parallel sub-agents generate radically different interface designs for comparison. |
 | `/devils-advocate` | `SKILLS/devils-advocate.md` | Mutation-style test-the-tests review. |
-| `/external-review-generic` | `SKILLS/external-review-generic.md` | Run four generic external reviewers in parallel for a PR, commit, file set, or tracked local diff. |
 | `diff-first-review` | `SKILLS/diff-first-review.md` | Diff-first review discipline. |
+| `/external-review-generic` | `SKILLS/external-review-generic.md` | Run four generic external reviewers in parallel for a PR, commit, file set, or tracked local diff. |
 | `/failure-mode-review` | `SKILLS/failure-mode-review.md` | Implementation-level failure path analysis. |
 | `flow-audit-loop` | `SKILLS/flow-audit-loop/SKILL.md` | ACF flow audit loop for contract flow bundles. |
 | `/git` | `SKILLS/git.md` | Branch, merge, and worktree discipline. |
-| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
+| `/glossary` | `SKILLS/glossary.md` | Extract and maintain domain terminology glossary from codebase. |
+| `/grill` | `SKILLS/grill.md` | Adversarial plan interview — stress-test decisions until every branch is resolved. |
 | `interview` | `SKILLS/interview.md` | Spec-building interview workflow. |
+| `/loss-risk-gate` | `SKILLS/loss-risk-gate.md` | Trading loss / profit-block economic safety review. |
 | `patch-only-edits` | `SKILLS/patch-only-edits.md` | Patch-only editing style and constraints. |
 | `/plan` | `SKILLS/plan.md` | Elevation to implementation plan workflow. |
 | `/plan-review` | `SKILLS/plan-review.md` | Implementation plan review checklist. |
+| `/premortem` | `SKILLS/premortem.md` | Pre-implementation safety analysis — 25 binary assertions, STOPLIGHT gate. |
 | `/post-impl-audit` | `SKILLS/post-impl-audit.md` | Post-implementation breaker audit. |
 | `post-pr-postmortem` | `SKILLS/post_pr_postmortem.md` | Human-readable post-PR postmortem workflow. |
 | `/pr-check` | `SKILLS/pr-check.md` | Review comments to merge-ready branch flow. |
 | `/pr-review` | `SKILLS/pr-review.md` | General PR review checklist. |
 | `/pre-commit` | `SKILLS/pre-commit.md` | Pre-commit safety gate checks. |
 | `/ralph-loop` | `SKILLS/ralph-loop.md` | Run Ralph harness iterations. |
+| `/recon-executor` | `SKILLS/recon-executor.md` | Reconciliation step executor — runs under operator supervision. |
+| `/recon-operator` | `SKILLS/recon_operator.md` | Reconciliation operator — supervises recon ceremony with relay pattern. |
 | `/reconcil` | `SKILLS/reconcil.md` | Premortem + reconciliation orchestration. |
-| `/review-stack` | `SKILLS/review-stack.md` | Run 6 review skills in sequence. |
-| `/self-review` | `SKILLS/self-review.md` | 5-skill self-review stack. |
+| `/review-stack` | `SKILLS/review-stack.md` | Run 7 review skills in sequence (subsumes archived `/self-review`). |
 | `/slice-execute` | `SKILLS/slice-execute.md` | Per-story implementation protocol. |
 | `spec-lint-checklist` | `SKILLS/spec_lint_checklist/SKILL.md` | Checklist for `specs/CONTRACT.md` patches. |
 | `spec-lint-implementation-plan` | `SKILLS/spec-lint-implementation-plan/SKILL.md` | Validate `IMPLEMENTATION_PLAN.md` against safety contracts. |
 | `/strategic-failure-review` | `SKILLS/strategic-failure-review.md` | Systemic/architectural risk review. |
+| `/super-pr-review` | `SKILLS/super-pr-review.md` | Maximum coverage review — 7 internal skills + 4 external tools in parallel with cross-validation. |
+| `tdd-reference` | `SKILLS/tdd/SKILL.md` | TDD companion docs — tests, mocking, deep modules, interface design, refactoring. |
+| `/toc` | `SKILLS/toc.md` | Theory of Constraints commit — commit + §0 what shipped, §1 constraint, §2 next story, §3 enforceable rules. |
+| `/triage` | `SKILLS/triage.md` | Investigate bug → root cause → file GH issue with TDD fix plan. |
 | `/validator-audit` | `SKILLS/validator-audit.md` | Validator completeness and gap audit. |
 | `/verify` | `SKILLS/verify.md` | Verification run and failure explanation workflow. |
-| `/toc` | `SKILLS/toc.md` | Theory of Constraints commit — commit + §0 what shipped, §1 constraint, §2 next story, §3 enforceable rules. |

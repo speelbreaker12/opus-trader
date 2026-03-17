@@ -113,6 +113,7 @@ plans/tests/test_adversarial_gate.sh
 plans/tests/test_aggregate_proofs.sh
 plans/tests/test_artifact_lint.sh
 plans/tests/test_bidi_control_guard.sh
+plans/tests/test_check_skills_index.sh
 plans/tests/test_code_review_expert_guard.sh
 plans/tests/test_codex_review_digest.sh
 plans/tests/test_codex_review_logged.sh
@@ -202,12 +203,14 @@ scripts/check_crash_replay_idempotency.py
 scripts/check_csp_trace.py
 scripts/check_global_invariants.py
 scripts/check_reconciliation_matrix.py
+scripts/check_skills_index.py
 scripts/check_state_machines.py
 scripts/check_time_freshness.py
 scripts/check_vq_evidence.py
 scripts/contract_kernel_lib.py
 scripts/extract_contract_excerpts.py
 scripts/generate_impact_report.py
+scripts/test_check_skills_index.py
 scripts/test_contract_kernel.py
 specs/CONTRACT.md
 specs/IMPLEMENTATION_PLAN.md

@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "run_id": "phase2-mar16-20260316_211404-d28ee76b",
+    "timestamp": "2026-03-16T21:17:17.882897Z",
+    "contract_file_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d",
+    "status": "pending",
+    "proposal_count": 3,
+    "accepted_count": 0,
+    "file_path": "autoresearch/contract/phase2/proposals/CONTRACT_PROPOSALS_phase2-mar16-20260316_211404-d28ee76b.md",
+    "review_package_path": "autoresearch/contract/phase2/review/CONTRACT_REVIEW_phase2-mar16-20260316_211404-d28ee76b.md"
+  },
+  {
+    "run_id": "phase2-mar16-live-20260317_005707-0665cbb6",
+    "timestamp": "2026-03-17T00:57:07Z",
+    "contract_file_hash": "92b4eee99c36987f2029a5d62887938a7ed982a27aea9db955364d89affca75f",
+    "status": "pending",
+    "proposal_count": 10,
+    "accepted_count": 0,
+    "file_path": "autoresearch/contract/phase2/outputs/phase2-mar16-live-20260317_005707-0665cbb6/"
+  }
+]

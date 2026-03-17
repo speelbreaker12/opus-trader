@@ -71,6 +71,42 @@ class _TempContractRepo:
             )
             + "\n",
         )
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase1" / "internal" / "fixture_metadata.json",
+            {
+                "fixtures": {
+                    "sample_contract_gap": {
+                        "section_anchor": "1",
+                        "injected_tokens": ["AT-999"],
+                    },
+                    "live_policyguard": {
+                        "section_anchor": "2.2",
+                        "injected_tokens": [],
+                    },
+                }
+            },
+        )
+        _write_text(
+            self.root / "autoresearch" / "contract" / "phase1" / "fixtures" / "live_policyguard.md",
+            "# stale fixture\n",
+        )
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase2" / "internal" / "snapshot_targets.json",
+            {
+                "targets": [
+                    {
+                        "fixture_path": "phase2/fixtures/snapshot/s2_2_policyguard_latest.md",
+                        "section_anchor": "2.2",
+                    },
+                    {
+                        "fixture_path": "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md",
+                        "section_anchor": "1",
+                    },
+                ]
+            },
+        )
+        self._reset_runtime_artifacts()
+        self._set_default_eval_fixtures()
         self.refresh_context("all")
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir(parents=True, exist_ok=True)
@@ -158,6 +194,208 @@ class _TempContractRepo:
             + "\n",
         )
         os.chmod(self.bin_dir / "claude", 0o755)
+
+    def _reset_runtime_artifacts(self) -> None:
+        for phase in ("phase1", "phase2"):
+            outputs_dir = self.root / "autoresearch" / "contract" / phase / "outputs"
+            for path in outputs_dir.iterdir():
+                if path.name.startswith("."):
+                    continue
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+            _write_text(
+                self.root / "autoresearch" / "contract" / phase / "results.tsv",
+                "commit\tscore\tpassed\ttotal\tstatus\tdescription\n",
+            )
+
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase2" / "proposals_index.json",
+            [],
+        )
+        review_dir = self.root / "autoresearch" / "contract" / "phase2" / "review"
+        for path in review_dir.iterdir():
+            if path.name.startswith("."):
+                continue
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+
+    def _set_default_eval_fixtures(self) -> None:
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase1" / "eval.json",
+            {
+                "description": "phase1 test",
+                "tests": [
+                    {
+                        "id": "sample-phase1-gap",
+                        "fixture": "fixtures/sample_contract_gap.md",
+                        "output_file": "sample_contract_gap/findings.json",
+                        "assertions": [
+                            {
+                                "id": "phase1-schema",
+                                "check": "findings payload matches schema",
+                                "rule": {
+                                    "type": "json_schema_valid",
+                                    "schema_path": "autoresearch/contract/phase1/findings.schema.json",
+                                },
+                            },
+                            {
+                                "id": "phase1-category",
+                                "check": "detector identifies the planted cross_ref_broken gap",
+                                "rule": {
+                                    "type": "json_field_match",
+                                    "path": "$.findings[*].category",
+                                    "value": "cross_ref_broken",
+                                    "match_mode": "any",
+                                },
+                            },
+                            {
+                                "id": "phase1-count",
+                                "check": "detector emits a tight finding count",
+                                "rule": {
+                                    "type": "json_array_count_bounds",
+                                    "path": "$.findings",
+                                    "min": 1,
+                                    "max": 3,
+                                },
+                            },
+                            {
+                                "id": "phase1-unique-ids",
+                                "check": "finding ids stay unique",
+                                "rule": {
+                                    "type": "json_unique_field",
+                                    "path": "$.findings[*].finding_id",
+                                },
+                            },
+                            {
+                                "id": "phase1-evidence",
+                                "check": "evidence points at the planted broken AT token",
+                                "rule": {
+                                    "type": "json_field_match",
+                                    "path": "$.findings[*].evidence.quote",
+                                    "pattern": "AT-999",
+                                    "match_mode": "any",
+                                },
+                            },
+                        ],
+                    }
+                ],
+            },
+        )
+        _write_json(
+            self.root / "autoresearch" / "contract" / "phase2" / "eval.json",
+            {
+                "description": "phase2 test",
+                "tests": [
+                    {
+                        "id": "sample-phase2-patch",
+                        "fixture": "fixtures/static/sample_contract_patch.md",
+                        "output_file": "sample_contract_patch/proposals.json",
+                        "assertions": [
+                            {
+                                "id": "phase2-schema",
+                                "check": "proposal payload matches schema",
+                                "rule": {
+                                    "type": "json_schema_valid",
+                                    "schema_path": "autoresearch/contract/phase2/proposals.schema.json",
+                                },
+                            },
+                            {
+                                "id": "phase2-source-finding-exists",
+                                "check": "proposal source_finding resolves in sibling findings.json",
+                                "rule": {
+                                    "type": "json_cross_ref_exists",
+                                    "target_path": "findings.json",
+                                    "source_json_path": "$.proposals[*].source_finding",
+                                    "target_json_path": "$.findings[*].finding_id",
+                                },
+                            },
+                            {
+                                "id": "phase2-source-fields-match",
+                                "check": "proposal category and section match sibling finding fields",
+                                "rule": {
+                                    "type": "json_cross_ref_match",
+                                    "target_path": "findings.json",
+                                    "source_records_path": "$.proposals[*]",
+                                    "target_records_path": "$.findings[*]",
+                                    "source_lookup_field": "source_finding",
+                                    "target_lookup_field": "finding_id",
+                                    "field_map": {
+                                        "source_finding_category": "category",
+                                        "section": "section",
+                                    },
+                                },
+                            },
+                            {
+                                "id": "phase2-unique-ids",
+                                "check": "proposal ids stay unique",
+                                "rule": {
+                                    "type": "json_unique_field",
+                                    "path": "$.proposals[*].proposal_id",
+                                },
+                            },
+                            {
+                                "id": "phase2-unique-dedupe",
+                                "check": "dedupe keys stay unique",
+                                "rule": {
+                                    "type": "json_unique_field",
+                                    "path": "$.proposals[*].dedupe_key",
+                                },
+                            },
+                            {
+                                "id": "phase2-span-resolves",
+                                "check": "mechanical replace spans resolve to one exact fixture slice",
+                                "rule": {
+                                    "type": "resolved_span_exists",
+                                    "path": "$.proposals[?(@.mechanical_ok==true)].replace_span",
+                                    "fixture_path": "autoresearch/contract/phase2/fixtures/static/sample_contract_patch.md",
+                                    "require_unique": True,
+                                },
+                            },
+                            {
+                                "id": "phase2-no-noop",
+                                "check": "mechanical replace spans are not normalized no-ops",
+                                "rule": {
+                                    "type": "json_field_not_match",
+                                    "path": "$.proposals[?(@.mechanical_ok==true)].replace_span",
+                                    "compare_fields": {
+                                        "left": "new_text",
+                                        "right": "old_text",
+                                    },
+                                    "normalize_whitespace": True,
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "id": "sample-phase2-patched",
+                        "fixture": "fixtures/static/sample_contract_patch.md",
+                        "output_file": "sample_contract_patch/patched/sample_contract_patch.patched.md",
+                        "assertions": [
+                            {
+                                "id": "phase2-patched-contains-fix",
+                                "check": "patched fixture contains the replacement AT reference",
+                                "rule": {
+                                    "type": "contains",
+                                    "value": "AT-101 is referenced here",
+                                },
+                            },
+                            {
+                                "id": "phase2-patched-removes-old",
+                                "check": "patched fixture no longer contains the broken AT reference",
+                                "rule": {
+                                    "type": "not_contains",
+                                    "value": "AT-999 is referenced here",
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
 
     def close(self) -> None:
         self.temp_dir.cleanup()
@@ -280,6 +518,28 @@ class ContractPhaseRunTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.repo.close()
+
+    def test_phase1_live_eval_requires_semantic_assertions(self) -> None:
+        payload = json.loads(
+            (REPO_ROOT / "autoresearch" / "contract" / "phase1" / "eval.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        live_tests = [test for test in payload["tests"] if test["id"].startswith("live-")]
+        self.assertEqual(len(live_tests), 5)
+
+        for test in live_tests:
+            rule_types = [assertion["rule"]["type"] for assertion in test["assertions"]]
+            self.assertIn("json_array_count_bounds", rule_types, msg=test["id"])
+            self.assertTrue(
+                any(
+                    assertion["rule"]["type"] == "json_field_match"
+                    and assertion["rule"]["path"]
+                    in {"$.findings[*].category", "$.findings[*].severity", "$.findings[*].section"}
+                    for assertion in test["assertions"]
+                ),
+                msg=test["id"],
+            )
 
     def test_contract_phase1_run_generates_findings_and_results(self) -> None:
         self.repo.write_phase1_fixture(
@@ -431,6 +691,29 @@ class ContractPhaseRunTests(unittest.TestCase):
         result = self.repo.run("contract", "phase1", "run")
         self.assertEqual(result.returncode, 2)
         self.assertIn("Stale context", result.stderr)
+
+    def test_contract_phase1_run_fails_closed_on_stale_live_fixture_until_refresh_common(self) -> None:
+        self.repo.set_phase1_eval(["fixtures/live_policyguard.md"])
+
+        live_fixture = (
+            self.repo.root
+            / "autoresearch"
+            / "contract"
+            / "phase1"
+            / "fixtures"
+            / "live_policyguard.md"
+        )
+        live_fixture.write_text("# drifted live fixture\n", encoding="utf-8")
+
+        stale_result = self.repo.run("contract", "phase1", "run")
+        self.assertEqual(stale_result.returncode, 2)
+        self.assertIn("Run 'harness.sh contract refresh-common' first", stale_result.stderr)
+
+        self.repo.refresh_context("common")
+
+        refreshed_result = self.repo.run("contract", "phase1", "run")
+        self.assertEqual(refreshed_result.returncode, 0, msg=refreshed_result.stderr)
+        self.assertIn("phase1 run complete", refreshed_result.stdout)
 
     def test_contract_phase1_run_fails_closed_on_missing_eval_fixture(self) -> None:
         _write_json(

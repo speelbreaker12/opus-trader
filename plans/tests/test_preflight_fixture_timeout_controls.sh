@@ -14,7 +14,7 @@ fail() {
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
-mkdir -p "$repo/plans/tests" "$repo/specs"
+mkdir -p "$repo/plans/tests" "$repo/scripts" "$repo/specs"
 PINNED_FIXTURE_MODE="smoke"
 
 cp "$SOURCE_PREFLIGHT" "$repo/plans/preflight.sh"
@@ -154,6 +154,12 @@ extract_fn() {
 
 rewrite_fixture_arrays "$repo/plans/preflight.sh"
 chmod +x "$repo/plans/preflight.sh"
+
+cat > "$repo/scripts/check_skills_index.py" <<'EOF'
+#!/usr/bin/env python3
+raise SystemExit(0)
+EOF
+chmod +x "$repo/scripts/check_skills_index.py"
 
 cat > "$repo/plans/tests/test_dummy_sleep.sh" <<'EOF'
 #!/usr/bin/env bash

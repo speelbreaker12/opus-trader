@@ -264,6 +264,11 @@ def validate_context_manifest(root: Path, contract_dir: Path, *, require_snapsho
                     f"Stale context: {Path(rel_path).name} changed. Run 'harness.sh contract refresh-common' first",
                     exit_code=2,
                 )
+            if rel_path.startswith("phase1/fixtures/"):
+                fail(
+                    f"Stale context: phase1/{Path(rel_path).name} changed. Run 'harness.sh contract refresh-common' first",
+                    exit_code=2,
+                )
             if rel_path.startswith("phase2/fixtures/snapshot/"):
                 fail(
                     f"Stale context: snapshot/{Path(rel_path).name} changed. Run 'harness.sh contract refresh-fixtures' first",
@@ -400,11 +405,30 @@ def validate_initial_proposals(
     label: str,
     fixture_text: str,
     findings_payload: dict[str, Any],
+    registry_path: Path | None = None,
 ) -> None:
     validate_json(payload, schema, label)
     proposals = payload.get("proposals", [])
     ensure_unique("proposal_id", [proposal["proposal_id"] for proposal in proposals], label)
     ensure_unique("dedupe_key", [proposal["dedupe_key"] for proposal in proposals], label)
+
+    # Cross-reference new_ats.at_id values against at_registry.json to detect
+    # collisions with existing acceptance tests.
+    known_at_ids: set[str] = set()
+    if registry_path is not None and registry_path.exists():
+        registry = load_json(registry_path)
+        known_at_ids = {entry["at_id"] for entry in registry if isinstance(entry, dict) and "at_id" in entry}
+    proposed_at_ids: list[str] = []
+    for proposal in proposals:
+        for at_entry in proposal.get("new_ats") or []:
+            at_id = at_entry.get("at_id", "")
+            if at_id in known_at_ids:
+                fail(
+                    f"{label} proposal {proposal['proposal_id']!r} proposes "
+                    f"at_id {at_id!r} that already exists in at_registry.json"
+                )
+            proposed_at_ids.append(at_id)
+    ensure_unique("at_id in new_ats", proposed_at_ids, label)
 
     findings = {finding["finding_id"]: finding for finding in findings_payload.get("findings", [])}
     for proposal in proposals:
@@ -508,7 +532,13 @@ def write_index_container(
 
 @contextmanager
 def _index_lock(index_path: Path):  # type: ignore[return]
-    """Exclusive flock on a companion .lock file to serialise concurrent writers."""
+    """Exclusive flock on a companion .lock file to serialise concurrent writers.
+
+    Caveat: fcntl.flock is advisory on Linux and macOS local filesystems.
+    On NFS and some macOS network mounts it may silently succeed without
+    providing mutual exclusion — do not rely on this lock for correctness
+    across NFS-mounted paths.  For local CI/dev use this is safe.
+    """
     lock_path = index_path.with_suffix(".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a") as lf:
@@ -748,6 +778,7 @@ def phase2_run(root: Path, tag: str, model: str, eval_path: Path, workdir: str |
                 f"{fixture_id}/proposals.json",
                 fixture_text,
                 findings_payload,
+                registry_path=paths["common"] / "at_registry.json",
             )
             passed_checks += 1
 
