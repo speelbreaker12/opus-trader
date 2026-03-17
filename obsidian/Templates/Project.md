@@ -4,6 +4,8 @@ priority: P1
 branch:
 pr:
 started: "{{date}}"
+aliases: []
+keywords: []
 ---
 
 ## Current State

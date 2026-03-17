@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending — obsidian workflow skill companion batch
+- `633c39d7` — obsidian workflow skill companion batch
 
 ## 0) What shipped
 - Feature/behavior: Added a companion `/obsidian-workflow` skill, registered it in the skills index, and updated the first-prompt Obsidian router to point agents at it explicitly.
