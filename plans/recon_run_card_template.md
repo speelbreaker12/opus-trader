@@ -20,7 +20,7 @@
 
 - Operator:
   - orchestration, gates, validation, logs, GO/NO-GO
-  - external reviews (`codex`, `opus`, `kimi`, `gemini`)
+  - external reviews (`codex`, `sonnet`, `kimi`, `gemini`)
 - Executor:
   - step execution + artifacts
   - mandatory step closeout report
@@ -39,11 +39,11 @@
 | Cycle | Tool | Command | Artifact Path | Exit |
 |---|---|---|---|---:|
 | C1 | codex | pending | pending | |
-| C1 | opus | pending | pending | |
+| C1 | sonnet | pending | pending | |
 | C1 | kimi | pending | pending | |
 | C1 | gemini | pending | pending | |
 | C2 | codex | pending | pending | |
-| C2 | opus | pending | pending | |
+| C2 | sonnet | pending | pending | |
 | C2 | kimi | pending | pending | |
 | C2 | gemini | pending | pending | |
 

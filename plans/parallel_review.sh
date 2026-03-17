@@ -10,8 +10,8 @@ set -euo pipefail
 #   plans/parallel_review.sh <STORY_ID> --base <REF> [options]
 #
 # Options:
-#   --tools <list>     Comma-separated tools (default: codex,opus)
-#                      Available: codex, opus, kimi, gemini
+#   --tools <list>     Comma-separated tools (default: codex,sonnet)
+#                      Available: codex, sonnet, opus, kimi, gemini
 #   --review-script <PATH>
 #                      review_logged.sh path override
 #   --base <REF>       Base ref for diff (passed through to review_logged.sh)
@@ -30,8 +30,8 @@ set -euo pipefail
 #
 # Examples:
 #   plans/parallel_review.sh S1-004 --base main
-#   plans/parallel_review.sh S1-004 --base main --tools codex,opus,kimi --proof-graph
-#   plans/parallel_review.sh S1-004 --files "src/gate.rs" --tools opus,kimi --prompt generic
+#   plans/parallel_review.sh S1-004 --base main --tools codex,sonnet,kimi --proof-graph
+#   plans/parallel_review.sh S1-004 --files "src/gate.rs" --tools sonnet,kimi --prompt generic
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "ERROR: not in a git repo" >&2; exit 2; }
 AGGREGATE_SCRIPT="$ROOT/plans/aggregate_proofs.sh"
@@ -61,7 +61,7 @@ display_artifact_path() {
 
 # ── Defaults ──────────────────────────────────────────────────────────
 STORY=""
-TOOLS="codex,opus"
+TOOLS="codex,sonnet"
 REVIEW_SCRIPT_OVERRIDE=""
 MODE_ARGS=()
 PROMPT_STYLE="enriched"
@@ -109,8 +109,8 @@ REVIEW_SCRIPT="${REVIEW_SCRIPT_OVERRIDE:-${PARALLEL_REVIEW_REVIEW_SCRIPT:-$ROOT/
 IFS=',' read -ra TOOL_LIST <<< "$TOOLS"
 for t in "${TOOL_LIST[@]}"; do
   case "$t" in
-    codex|opus|kimi|gemini) ;;
-    *) die "unknown tool: $t (expected: codex, opus, kimi, gemini)" ;;
+    codex|sonnet|opus|kimi|gemini) ;;
+    *) die "unknown tool: $t (expected: codex, sonnet, opus, kimi, gemini)" ;;
   esac
 done
 

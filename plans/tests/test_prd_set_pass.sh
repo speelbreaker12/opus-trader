@@ -40,12 +40,12 @@ setup_story_review_artifacts() {
   local review_head="$2"
   local story_root="$case_dir/story_artifacts/$story_id"
 
-  local opus_dir="$story_root/opus"
   local supervisor_dir="$story_root/supervisor"
 
   mkdir -p \
     "$story_root/self_review" \
     "$story_root/codex" \
+    "$story_root/sonnet" \
     "$story_root/opus"
 
   cat > "$story_root/self_review/20260214T000000Z_self_review.md" <<EOF
@@ -77,6 +77,18 @@ EOF
 
 <<<REVIEW_TRANSCRIPT_BEGIN>>>
 Second pass complete. No regressions found.
+<<<REVIEW_TRANSCRIPT_END>>>
+EOF
+
+  cat > "$story_root/sonnet/20260214T000003Z_review.md" <<EOF
+- Story: $story_id
+- HEAD: $review_head
+- Generator Script: plans/review_logged.sh
+- Command Exit Code: 0
+- Duration Seconds: 75
+
+<<<REVIEW_TRANSCRIPT_BEGIN>>>
+Sonnet pass complete. No regressions found.
 <<<REVIEW_TRANSCRIPT_END>>>
 EOF
 
@@ -169,6 +181,24 @@ success_output="$(
 echo "$success_output" | grep -Fq "Updated task $story_id: passes=true" || fail "missing success output"
 echo "$success_output" | grep -Fq "OK: review gate passed for $story_id @ $head_sha" || fail "inline review check did not pass for current HEAD"
 jq -e --arg id "$story_id" 'any(.items[]; .id==$id and .passes==true)' "$success_case/prd.json" >/dev/null || fail "passes was not updated to true"
+
+# ── Test 1b: Sonnet-only review evidence satisfies pass gate ─────────
+sonnet_only_case="$tmp_dir/sonnet_only"
+mkdir -p "$sonnet_only_case"
+setup_case "$sonnet_only_case" "$head_sha"
+rm -rf "$sonnet_only_case/story_artifacts/$story_id/codex" "$sonnet_only_case/story_artifacts/$story_id/opus"
+
+sonnet_only_output="$(
+  cd "$ROOT" && \
+  WF_STEP=/bin/true \
+  PRD_FILE="$sonnet_only_case/prd.json" \
+  VERIFY_ARTIFACTS_DIR="$sonnet_only_case/artifacts" \
+  STORY_ARTIFACTS_ROOT="$sonnet_only_case/story_artifacts" \
+  "$SCRIPT" "$story_id" true \
+  --contract-review "$sonnet_only_case/artifacts/contract_review.json"
+)"
+
+grep -Fq "OK: review gate passed for $story_id @ $head_sha" <<<"$sonnet_only_output" || fail "sonnet-only review gate did not pass for current HEAD"
 
 missing_manifest_gate="$tmp_dir/missing-manifest-gate.sh"
 cat > "$missing_manifest_gate" <<'EOF'
@@ -456,6 +486,7 @@ mkdir -p "$no_review_case"
 setup_case "$no_review_case" "$head_sha"
 # Remove all review artifacts
 rm -rf "$no_review_case/story_artifacts/$story_id/codex"
+rm -rf "$no_review_case/story_artifacts/$story_id/sonnet"
 rm -rf "$no_review_case/story_artifacts/$story_id/opus"
 
 set +e

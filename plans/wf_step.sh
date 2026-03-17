@@ -541,7 +541,7 @@ cycle1_had_zero_findings() {
   # Fail-closed: if no review artifacts exist, returns 1 (findings assumed).
   local art_dir="$1"
   local review_found=0
-  for d in "$art_dir/codex" "$art_dir/opus" "$art_dir/kimi"; do
+  for d in "$art_dir/codex" "$art_dir/sonnet" "$art_dir/opus" "$art_dir/kimi"; do
     [[ -d "$d" ]] || continue
     while IFS= read -r rf; do
       [[ -f "$rf" ]] || continue
@@ -711,7 +711,7 @@ verify_cycle1_citations() {
     return 1
   fi
 
-  for d in "$art_dir/codex" "$art_dir/opus" "$art_dir/kimi"; do
+  for d in "$art_dir/codex" "$art_dir/sonnet" "$art_dir/opus" "$art_dir/kimi"; do
     [[ -d "$d" ]] || continue
     newest=""
     best_c1=""
@@ -902,7 +902,7 @@ case "$STEP" in
     fi
 
     review_count=0
-    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
+    for d in "$story_art/codex" "$story_art/sonnet" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         # Count both canonical (<tool>.<style>.md) and legacy (<stamp>_review.md) artifacts
         c="$(find "$d" -maxdepth 1 -type f \( -name '*_review.md' -o -name '*.enriched.md' -o -name '*.generic.md' \) ! -type l 2>/dev/null | wc -l | tr -d '[:space:]')"
@@ -910,7 +910,7 @@ case "$STEP" in
       fi
     done
     if [[ "$review_count" -lt 1 ]]; then
-      echo "WF_STEP: no cycle 1 review artifact found in $story_art/{codex,opus,kimi}/" >&2
+      echo "WF_STEP: no cycle 1 review artifact found in $story_art/{codex,sonnet,opus,kimi}/" >&2
       exit 3
     fi
     ;;
@@ -986,7 +986,7 @@ case "$STEP" in
     review_count=0
     r7_review_count=0
     c2_basis_count=0
-    for d in "$story_art/codex" "$story_art/opus" "$story_art/kimi"; do
+    for d in "$story_art/codex" "$story_art/sonnet" "$story_art/opus" "$story_art/kimi"; do
       if [[ -d "$d" ]]; then
         while IFS= read -r f; do
           if ! verify_review_artifact_provenance "$f" "R3|R7d|R7" "any"; then
@@ -1007,19 +1007,19 @@ case "$STEP" in
     done
     if [[ "$require_r7_reviews" -eq 1 ]]; then
       if [[ "$r7_review_count" -lt "$min_reviews" ]]; then
-        echo "WF_STEP: need at least $min_reviews provenance-valid R7d (legacy R7 tolerated) review artifacts in $story_art/{codex,opus,kimi}/" >&2
+        echo "WF_STEP: need at least $min_reviews provenance-valid R7d (legacy R7 tolerated) review artifacts in $story_art/{codex,sonnet,opus,kimi}/" >&2
         echo "  C1 artifacts (R3 / STORY_SCOPE) do not satisfy dual_combo cycle2 coverage." >&2
         exit 3
       fi
     elif [[ "$review_count" -lt "$min_reviews" ]]; then
-      echo "WF_STEP: need at least $min_reviews provenance-valid review artifacts in $story_art/{codex,opus,kimi}/" >&2
+      echo "WF_STEP: need at least $min_reviews provenance-valid review artifacts in $story_art/{codex,sonnet,opus,kimi}/" >&2
       echo "  Artifacts must come from review_logged.sh (logger-v2 + sidecar)." >&2
       exit 3
     fi
     # Basis-label check: verify >=1 provenance-valid R7d (legacy R7 tolerated) artifact has FIX_DIFF review basis.
     if [[ "$c2_basis_count" -lt 1 ]]; then
       echo "WF_STEP: cycle2 gate requires >=1 provenance-valid R7d (legacy R7 tolerated) artifact with 'FIX_DIFF' review basis — none found" >&2
-      echo "  in $story_art/{codex,opus,kimi}/" >&2
+      echo "  in $story_art/{codex,sonnet,opus,kimi}/" >&2
       echo "  C1 artifacts (R3 / STORY_SCOPE) do not satisfy this gate." >&2
       echo "  Run cycle2 reviews via review_logged.sh --cycle C2 before recording this receipt." >&2
       exit 3

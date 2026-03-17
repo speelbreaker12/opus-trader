@@ -49,7 +49,7 @@ check_duplicates() {
   local expected_root="$repo_root/$name"
   local expected_specs="$repo_root/specs/$name"
   local hits count
-  hits=$(list_repo_files | grep -E "(^|/)$name$" || true)
+  hits=$(list_repo_files | grep -E "(^|/)$name$" | grep -v "^plans/tests/fixtures/" || true)
   count=$(printf "%s\n" "$hits" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')
   [[ "$count" -eq 2 ]] || fail "Duplicate $name copies found: $hits"
   while IFS= read -r hit; do

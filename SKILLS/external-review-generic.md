@@ -1,7 +1,7 @@
 # SKILL: /external-review-generic
 
 Purpose
-- Run `codex`, `opus`, `kimi`, and `gemini` generic reviews in parallel through one thin wrapper
+- Run `codex`, `sonnet`, `kimi`, and `gemini` generic reviews in parallel through one thin wrapper
 - Support PR review, single-commit review, explicit file review, or the current tracked working-tree diff
 - Produce one consolidated operator summary with authoritative per-tool exit status
 

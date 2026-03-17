@@ -3,27 +3,28 @@ set -euo pipefail
 
 # Unified review artifact logger.
 #
-# Dispatches to codex or opus review tools, captures transcript with
+# Dispatches to codex, sonnet, opus, kimi, or gemini review tools, captures transcript with
 # provenance header and SHA256, writes to standard artifact path.
 #
 # Usage:
 #   plans/review_logged.sh STORY_ID --tool codex [--commit REF | --base REF | --uncommitted] [--title TITLE]
-#   plans/review_logged.sh STORY_ID --tool opus  [--base REF] [--title TITLE]
+#   plans/review_logged.sh STORY_ID --tool sonnet [--base REF] [--title TITLE]
 
 usage() {
   cat <<'EOF'
 Usage:
-  plans/review_logged.sh STORY_ID --tool <codex|opus|kimi|gemini> [options] [-- <extra tool args>]
+  plans/review_logged.sh STORY_ID --tool <codex|sonnet|opus|kimi|gemini> [options] [-- <extra tool args>]
 
 Options:
-  --tool TOOL        Required: codex, opus, kimi, or gemini
+  --tool TOOL        Required: codex, sonnet, opus, kimi, or gemini
   --prompt STYLE     Prompt style: generic or enriched (default: enriched)
                      generic  = code-quality focus (SOLID, naming, doc, types)
                      enriched = contract-proof focus (ATs, premortem, fail-closed)
                      Run both for maximum coverage.
   --timeout-seconds N
                      Max seconds for external review command. Defaults:
-                     opus=600 (900 for --files), kimi=600, gemini=600,
+                     sonnet=600 (900 for --files), opus=600 (900 for --files),
+                     kimi=600, gemini=600,
                      codex=0 (600 for --files).
                      Use 0 to disable timeout.
   --proof-graph      Generate per-reviewer proof_graph.json skeleton (requires --prompt enriched)
@@ -37,8 +38,10 @@ Options:
 Modes:
   codex --commit/--base/--uncommitted: uses built-in `codex review` (diff-only)
   codex --files:                       uses `codex exec` with review prompt (stdin)
-  opus  --commit/--base/--uncommitted: uses `claude --print` with review prompt (stdin)
-  opus  --files:                       uses `claude --print` with file contents (stdin)
+  sonnet --commit/--base/--uncommitted: uses `claude --print` with review prompt (stdin)
+  sonnet --files:                       uses `claude --print` with file contents (stdin)
+  opus   --commit/--base/--uncommitted: uses `claude --print` with review prompt (stdin)
+  opus   --files:                       uses `claude --print` with file contents (stdin)
   kimi  (all modes):                   uses `kimi --print` with review prompt (stdin)
   gemini (all modes):                  uses `gemini -o text -p <prompt>` (prompt via -p flag, not stdin)
 
@@ -49,9 +52,9 @@ Artifacts:
 Examples:
   plans/review_logged.sh S1-004 --tool codex --base run/slice1-clean
   plans/review_logged.sh S1-004 --tool codex --files "src/gate.rs src/risk.rs"
-  plans/review_logged.sh S1-004 --tool opus --prompt enriched --files "src/gate.rs src/risk.rs"
-  plans/review_logged.sh S1-004 --tool opus --prompt generic --files "src/gate.rs src/risk.rs"
-  plans/review_logged.sh S1-004 --tool opus --proof-graph --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool sonnet --prompt enriched --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool sonnet --prompt generic --files "src/gate.rs src/risk.rs"
+  plans/review_logged.sh S1-004 --tool sonnet --proof-graph --files "src/gate.rs src/risk.rs"
   plans/review_logged.sh S1-004 --tool kimi --base main
   plans/review_logged.sh S1-004 --tool gemini --base main
   plans/review_logged.sh S1-004 --tool codex --commit HEAD -- --c model="o3"
@@ -369,10 +372,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$tool" ]] || { echo "ERROR: --tool is required (codex, opus, kimi, or gemini)" >&2; exit 2; }
+[[ -n "$tool" ]] || { echo "ERROR: --tool is required (codex, sonnet, opus, kimi, or gemini)" >&2; exit 2; }
 case "$tool" in
-  codex|opus|kimi|gemini) ;;
-  *) echo "ERROR: unknown tool '$tool' (expected: codex, opus, kimi, or gemini)" >&2; exit 2 ;;
+  codex|sonnet|opus|kimi|gemini) ;;
+  *) echo "ERROR: unknown tool '$tool' (expected: codex, sonnet, opus, kimi, or gemini)" >&2; exit 2 ;;
 esac
 case "$prompt_style" in
   generic|enriched) ;;
@@ -386,7 +389,7 @@ if [[ "$proof_graph" == "true" ]]; then
     exit 2
   fi
   if [[ "$tool" == "codex" && "$mode" != "files" ]]; then
-    echo "ERROR: --proof-graph requires --tool opus|kimi|gemini or --tool codex --files (codex diff mode bypasses prompt injection)" >&2
+    echo "ERROR: --proof-graph requires --tool sonnet|opus|kimi|gemini or --tool codex --files (codex diff mode bypasses prompt injection)" >&2
     exit 2
   fi
 fi
@@ -417,7 +420,7 @@ case "$tool" in
   codex)
     command -v codex >/dev/null 2>&1 || { echo "ERROR: codex CLI not found in PATH" >&2; exit 2; }
     ;;
-  opus)
+  sonnet|opus)
     command -v claude >/dev/null 2>&1 || { echo "ERROR: claude CLI not found in PATH" >&2; exit 2; }
     ;;
   kimi)
@@ -437,6 +440,13 @@ else
         timeout_seconds="${REVIEW_LOGGED_CODEX_FILES_TIMEOUT_SECONDS:-600}"
       else
         timeout_seconds="${REVIEW_LOGGED_TIMEOUT_SECONDS:-0}"
+      fi
+      ;;
+    sonnet)
+      if [[ "$mode" == "files" ]]; then
+        timeout_seconds="${REVIEW_LOGGED_SONNET_FILES_TIMEOUT_SECONDS:-${REVIEW_LOGGED_OPUS_FILES_TIMEOUT_SECONDS:-900}}"
+      else
+        timeout_seconds="${REVIEW_LOGGED_SONNET_TIMEOUT_SECONDS:-${REVIEW_LOGGED_OPUS_TIMEOUT_SECONDS:-600}}"
       fi
       ;;
     opus)
@@ -518,11 +528,11 @@ $(cat "$f")
   done
 fi
 
-# ── Build diff/files context (shared by opus, kimi, and codex --files) ──
+# ── Build diff/files context (shared by sonnet/opus, kimi, and codex --files) ──
 diff_context=""
 review_context_label="Diff"
 codex_exec_mode=false
-if [[ "$tool" == "opus" || "$tool" == "kimi" || "$tool" == "gemini" || ("$tool" == "codex" && "$mode" == "files") ]]; then
+if [[ "$tool" == "sonnet" || "$tool" == "opus" || "$tool" == "kimi" || "$tool" == "gemini" || ("$tool" == "codex" && "$mode" == "files") ]]; then
   case "$mode" in
     commit)
       resolved="$(git rev-parse "${commit}^{commit}" 2>/dev/null || true)"
@@ -547,7 +557,7 @@ if [[ "$tool" == "opus" || "$tool" == "kimi" || "$tool" == "gemini" || ("$tool" 
   [[ "$mode" == "files" ]] && review_context_label="Files to review"
 fi
 
-# ── Build review prompt (shared by opus, kimi, and gemini) ─────────────────
+# ── Build review prompt (shared by sonnet/opus, kimi, and gemini) ──────────
 build_review_prompt() {
   local style="$1"
   local ctx_label="$2"
@@ -710,6 +720,16 @@ case "$tool" in
     fi
     ;;
 
+  sonnet)
+    prompt_tmp="$(mktemp)"
+    build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
+
+    cmd=("claude" "--model" "claude-sonnet-4-6" "--print" "--verbose")
+    if [[ ${#extra[@]} -gt 0 ]]; then
+      cmd+=("${extra[@]}")
+    fi
+    ;;
+
   opus)
     prompt_tmp="$(mktemp)"
     build_review_prompt "$prompt_style" "$review_context_label" "$diff_context" > "$prompt_tmp"
@@ -779,7 +799,7 @@ run_review_once() {
   fi
 
   if [[ -n "$prompt_tmp" ]]; then
-    # opus/kimi always, codex exec (--files mode or timeout fallback): pipe prompt via stdin
+    # sonnet/opus/kimi always, codex exec (--files mode or timeout fallback): pipe prompt via stdin
     if [[ "$per_attempt_timeout" -gt 0 && -n "$tb" ]]; then
       last_run_used_timeout=true
       timeout_wrapper="$tb $per_attempt_timeout"
@@ -869,6 +889,7 @@ case "$tool" in
       model_name="${CODEX_MODEL:-GPT-5.3-Codex}"
     fi
     ;;
+  sonnet) model_name="claude-sonnet-4-6" ;;
   opus)   model_name="claude-opus-4-6" ;;
   kimi)   model_name="kimi-k2.5" ;;
   gemini) model_name="${GEMINI_MODEL:-gemini-3-pro-preview}" ;;
@@ -1148,7 +1169,7 @@ if [[ "$tool" == "codex" ]]; then
 fi
 
 # ── Normalize: copy to canonical path for deterministic pipeline lookup ──
-# Canonical name: <tool>.<prompt_style>.md  (e.g., codex.enriched.md, opus.generic.md)
+# Canonical name: <tool>.<prompt_style>.md  (e.g., codex.enriched.md, sonnet.generic.md)
 # This keeps review_logged.sh's timestamped filenames while providing a stable
 # path that reconciliation validators and external manifest builders can rely on.
 canonical_name="${tool}.${prompt_style}.md"

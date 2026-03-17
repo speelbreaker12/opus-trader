@@ -1,14 +1,19 @@
 {
   "schema_version": 2,
   "tracked_files": {
-    "common/at_registry.json": "8b0775e55f260681b40c42e7bfe0eeb670344e4d93e3d5f7e4cf5306975c0b46",
+    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "46b2a2057412ca6488b9a0d94453a81469f9fe80168fff9d5e5707e1cf8da9d9",
+    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "c7610fa0766db86a21963ebbece09fd421c1b856b4fd52bfb9b89aec6979e7a5",
+    "common/at_registry.json": "105e314f4fd24fb5d423dce786eacda629baba3f4942cd69eaa9f41e61e287e3",
     "common/contract_header.md": "ead65bdf2b0e3adef5024ca438d92a59de05598e8d2ec2c30967c2064a755670",
     "common/gate_input_registry.json": "9c2c818f1e2d580c26d2e2ca15861d0297fa2076d54ff08ce32d4973ca003a38",
-    "common/section_index.md": "a86d385e4d5ee50f6423856e9056a6543077f71c70489dbf17cf6d9dbc403f70",
-    "phase2/fixtures/snapshot/s1_execution_pipeline_latest.md": "46b2a2057412ca6488b9a0d94453a81469f9fe80168fff9d5e5707e1cf8da9d9",
-    "phase2/fixtures/snapshot/s2_2_policyguard_latest.md": "c7610fa0766db86a21963ebbece09fd421c1b856b4fd52bfb9b89aec6979e7a5"
+    "common/section_index.md": "51d43044cb619548461d805f227f7a8b5030c340bec3d8bcf81fbcea6e834982",
+    "phase1/fixtures/trading_mode_computation.md": "904e05821be3e54175b67a58c05f110840caebc06c05b89eb91f50c7bdfb5547",
+    "phase1/fixtures/open_permission_latch.md": "720e6894e379529597c52d04567221248ef3ee899bcba9e85ac4d813280133bd",
+    "phase1/fixtures/emergency_close.md": "35f14bb7f6f1e4087e9808f4aa2e1e92cd246959bf16c8ca78ece80ba83525e2",
+    "phase1/fixtures/evidence_guard.md": "af59f875fabedc64c94bc3f8650518f1821615269e90fb7589c326348e93510a",
+    "phase1/fixtures/liquidity_gate.md": "727a4653dfa6619a55dc2b51940b1077e89b29e184dcc65d431fa878019fd7e1"
   },
-  "contract_content_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d",
-  "common_contract_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d",
+  "contract_content_hash": "a5268dfc5af5e5a01f4053a522149ba48feed976f68dea2209329d2cb58ab1dc",
+  "common_contract_hash": "a5268dfc5af5e5a01f4053a522149ba48feed976f68dea2209329d2cb58ab1dc",
   "snapshot_contract_hash": "681c36d47ef1ef22fb12adeeb7aa1cb2f6277c320539dda967722162575cae7d"
 }

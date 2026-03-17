@@ -8,20 +8,22 @@
 If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` (Appendix A), LiquidityGate MUST reject OPEN intents with `Rejected(LiquidityGateNoL2)`. CLOSE/HEDGE/replace order placement MUST NOT be rejected solely for missing or stale L2; they MUST use the deterministic §3.1 fallback price ladder and may dispatch only a strictly positive, monotonic risk-reducing quantity. If no valid §3.1 fallback price source exists, the intent MUST fail closed with `Rejected(EmergencyCloseNoPrice)` and `RiskState::Degraded`. CANCEL-only intents remain allowed.
 OPEN rejections due to missing/unparseable/stale L2 MUST use `Rejected(LiquidityGateNoL2)`.
 
-**Output:** `Allowed | Rejected(reason=ExpectedSlippageTooHigh)`
+**Output:** `Allowed | Rejected(ExpectedSlippageTooHigh) | Rejected(LiquidityGateNoL2) | Rejected(EmergencyCloseNoPrice)`
 
 **Algorithm (Deterministic):**
 
-1. Walk the L2 book on the correct side (asks for buy, bids for sell).  
-2. Compute the Weighted Avg Price (WAP) for `OrderQty`.  
-3. Compute expected slippage: `slippage_bps = (WAP - BestPrice) / BestPrice * 10_000` (sign adjusted)  
-4. Reject if `slippage_bps` > `max_slippage_bps` (default 10bps; `max_slippage_bps` from Appendix A).  
+0. **Staleness pre-check:** If `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`, reject per the rules above (OPEN → `Rejected(LiquidityGateNoL2)`; CLOSE/HEDGE → §3.1 fallback). Do not proceed to book walk.
+1. Walk the L2 book on the correct side (asks for buy, bids for sell).
+2. Compute the Weighted Avg Price (WAP) for `OrderQty`.
+3. Compute expected slippage: `slippage_bps = abs(WAP - BestPrice) / BestPrice * 10_000`
+4. Reject if `slippage_bps` > `max_slippage_bps` (default 10bps; `max_slippage_bps` from Appendix A).
 5. If rejected, log `LiquidityGateReject` with computed WAP \+ slippage.
 
 **Scope (explicit):**
 - Applies to normal dispatch and containment rescue IOC orders (see §1.1 containment Step A).
 - Does NOT apply to Deterministic Emergency Close (§3.1) or containment Step B; emergency close MUST NOT be blocked by profitability gates.
 - Emergency close still requires a valid price source; missing/stale L2 MUST use the §3.1 fallback price source and MUST block only if no fallback source is valid.
+- When no valid fallback source exists, `RiskState::Degraded` is set (see §2.2.3.2 SystemIntegrityAxis), producing `TradingMode::ReduceOnly` via the axis resolver.
 
 **Acceptance Test (REQUIRED):**
 AT-222
@@ -35,9 +37,9 @@ AT-222
 AT-344
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms`.
 - When: Liquidity Gate evaluates an OPEN intent.
-- Then: the intent is rejected (no dispatch) and a LiquidityGate rejection is logged.
-- Pass criteria: no OPEN dispatch occurs; rejection reason recorded.
-- Fail criteria: OPEN dispatch proceeds without a valid L2 snapshot.
+- Then: the intent is rejected with `Rejected(LiquidityGateNoL2)` (no dispatch) and a LiquidityGate rejection is logged.
+- Pass criteria: no OPEN dispatch occurs; rejection reason is `LiquidityGateNoL2`.
+- Fail criteria: OPEN dispatch proceeds without a valid L2 snapshot, or rejection reason is missing/mismatched.
 
 AT-909
 - Given: `L2BookSnapshot` is missing, unparseable, or older than `l2_book_snapshot_max_age_ms` for an OPEN.
@@ -53,12 +55,16 @@ AT-421
 - Pass criteria: cancel proceeds; close/hedge dispatch count is >= 1 when a valid §3.1 fallback source exists; dispatched close/hedge size is > 0 and <= current position / exposure cap; OPEN is rejected.
 - Fail criteria: close/hedge is blocked despite a valid §3.1 fallback source, dispatched size is 0 or risk-increasing, or OPEN proceeds.
 
+AT-1241
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, and no valid venue-band fallback exists (missing/unparseable/unquantizable metadata).
+- When: Liquidity Gate evaluates a CLOSE/HEDGE order placement intent.
+- Then: the intent MUST be rejected with `Rejected(EmergencyCloseNoPrice)` and `RiskState` MUST transition to `Degraded`.
+- Pass criteria: dispatch count remains 0; rejection reason is `EmergencyCloseNoPrice`; `RiskState == Degraded`.
+- Fail criteria: dispatch occurs without a valid price source, rejection reason is missing/mismatched, or `RiskState` does not transition to `Degraded`.
+
 AT-1216
 - Given: `L2BookSnapshot` is present, parseable, and fresh; expected slippage is <= `max_slippage_bps`; all non-liquidity gates are forced pass.
 - When: Liquidity Gate evaluates an OPEN intent.
 - Then: the intent is allowed through Liquidity Gate and proceeds to dispatch.
 - Pass criteria: dispatch count increases by 1 and no liquidity reject reason is emitted.
 - Fail criteria: intent is rejected by Liquidity Gate despite valid/fresh L2 and in-budget slippage.
-
-
-

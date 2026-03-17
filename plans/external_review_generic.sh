@@ -19,7 +19,7 @@ Behavior:
                   Untracked files are NOT auto-discovered in this mode.
 
 Notes:
-  - Runs codex, opus, kimi, and gemini generic reviews in parallel.
+  - Runs codex, sonnet, kimi, and gemini generic reviews in parallel.
   - Writes dispatch_status.json and summary.md under:
       artifacts/story/<RUN_ID>/external_review_generic/
   - Exits 0 only when all four reviewers succeed and summary generation succeeds.
@@ -258,7 +258,7 @@ dispatch_status_json="$review_dir/dispatch_status.json"
 summary_md="$review_dir/summary.md"
 parallel_review_log="$review_dir/parallel_review.log"
 
-parallel_cmd=("$PARALLEL_SCRIPT" "$RUN_ID" --tools codex,opus,kimi,gemini --prompt generic)
+parallel_cmd=("$PARALLEL_SCRIPT" "$RUN_ID" --tools codex,sonnet,kimi,gemini --prompt generic)
 if [[ "$PARALLEL_SCRIPT" == "$ROOT/plans/parallel_review.sh" ]]; then
   parallel_cmd+=(--review-script "$ROOT/plans/review_logged.sh")
 fi
@@ -277,7 +277,7 @@ set -e
 cp "$dispatch_log" "$parallel_review_log"
 
 capture_error=0
-for tool in codex opus kimi gemini; do
+for tool in codex sonnet kimi gemini; do
   line="$(grep -E "^\[(done|FAIL)\][[:space:]]+$tool[[:space:]]+exit=[0-9]+" "$dispatch_log" | tail -1 || true)"
   if [[ -z "$line" ]]; then
     printf '%s\tFAIL\t98\tmissing authoritative dispatch line\n' "$tool" >> "$status_tsv"
@@ -531,7 +531,7 @@ set -e
 
 tool_status_pairs=()
 blocking_total=0
-for tool in codex opus kimi gemini; do
+for tool in codex sonnet kimi gemini; do
   line="$(grep -F -- "- $tool | " "$summary_md" | head -1 || true)"
   if [[ -n "$line" ]]; then
     tool_status_pairs+=("${line#- }")

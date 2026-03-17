@@ -69,33 +69,33 @@ EOF
 case "$scenario" in
   all_ok)
     write_artifact codex 0 1 0 crates/soldier_core/src/execution/dispatch_map.rs:10
-    write_artifact opus 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
+    write_artifact sonnet 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
     write_artifact kimi 0 2 0 crates/soldier_core/src/execution/dispatch_map.rs:30
     write_artifact gemini 1 0 0 crates/soldier_core/src/execution/dispatch_map.rs:40
     echo "[done] codex  exit=0  (1s)"
-    echo "[done] opus  exit=0  (1s)"
+    echo "[done] sonnet  exit=0  (1s)"
     echo "[done] kimi  exit=0  (1s)"
     echo "[done] gemini  exit=0  (1s)"
     ;;
   one_fail)
     write_artifact codex 0 1 0 crates/soldier_core/src/execution/dispatch_map.rs:10
-    write_artifact opus 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
+    write_artifact sonnet 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
     write_artifact gemini 1 0 0 crates/soldier_core/src/execution/dispatch_map.rs:40
     mkdir -p "$story_dir/review_logs"
     printf 'kimi transport failure\n' > "$story_dir/review_logs/kimi.log"
     echo "[done] codex  exit=0  (1s)"
-    echo "[done] opus  exit=0  (1s)"
+    echo "[done] sonnet  exit=0  (1s)"
     echo "[FAIL] kimi  exit=7  (1s)"
     echo "[done] gemini  exit=0  (1s)"
     exit 1
     ;;
   missing_artifact)
     write_artifact codex 0 1 0 crates/soldier_core/src/execution/dispatch_map.rs:10
-    write_artifact opus 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
+    write_artifact sonnet 0 0 1 crates/soldier_core/src/execution/dispatch_map.rs:20
     write_artifact kimi 0 2 0 crates/soldier_core/src/execution/dispatch_map.rs:30
     mkdir -p "$story_dir/gemini"
     echo "[done] codex  exit=0  (1s)"
-    echo "[done] opus  exit=0  (1s)"
+    echo "[done] sonnet  exit=0  (1s)"
     echo "[done] kimi  exit=0  (1s)"
     echo "[done] gemini  exit=0  (1s)"
     ;;
@@ -385,6 +385,7 @@ test_commit_mode_success() {
 
   assert_file_contains "$mock_root/parallel_args.log" "--commit"
   assert_file_contains "$mock_root/parallel_args.log" "HEAD"
+  assert_file_contains "$mock_root/parallel_args.log" "codex,sonnet,kimi,gemini"
   assert_json_field "$status_json" 'data["parallel_review_exit"] == 0'
   assert_json_field "$status_json" 'len(data["tools"]) == 4'
   assert_json_field "$status_json" 'all(item["exit_code"] == 0 for item in data["tools"])'
@@ -518,8 +519,8 @@ done
 
 printf '%s\n' "${PARALLEL_REVIEW_REVIEW_SCRIPT:-}" > "${EXTERNAL_REVIEW_ROOT:?}/override_review_script.log"
 story_dir="${STORY_ARTIFACTS_ROOT:?}/$run_id"
-mkdir -p "$story_dir/codex" "$story_dir/opus" "$story_dir/kimi" "$story_dir/gemini"
-for tool in codex opus kimi gemini; do
+mkdir -p "$story_dir/codex" "$story_dir/sonnet" "$story_dir/kimi" "$story_dir/gemini"
+for tool in codex sonnet kimi gemini; do
   cat > "$story_dir/$tool/$tool.generic.md" <<EOF
 # $tool generic review
 FINDINGS_SUMMARY: P0=0 P1=0 P2=0
@@ -658,7 +659,7 @@ test_parallel_review_proof_graph_honors_story_artifacts_root() {
       PARALLEL_REVIEW_REVIEW_SCRIPT="$repo/plans/review_logged.sh" \
       STORY_ARTIFACTS_ROOT="$custom_root" \
       MOCK_AGG_LOG="$agg_log" \
-      bash plans/parallel_review.sh S9-201 --tools opus --files "plans/review_logged.sh" --prompt enriched --proof-graph 2>&1
+      bash plans/parallel_review.sh S9-201 --tools sonnet --files "plans/review_logged.sh" --prompt enriched --proof-graph 2>&1
   )"
   rc=$?
   set -e
@@ -740,16 +741,16 @@ MOCK_REVIEW
     # Unset git hook env vars so fixture-repo git commands resolve correctly.
     unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
     STORY_ARTIFACTS_ROOT="$repo/canonical/story" \
-      bash "$repo/plans/parallel_review.sh" S9-ART --base main --tools codex,opus --prompt generic --review-script "$repo/plans/review_logged.sh"
+      bash "$repo/plans/parallel_review.sh" S9-ART --base main --tools codex,sonnet --prompt generic --review-script "$repo/plans/review_logged.sh"
   ) >"$output_file" 2>&1
   rc=$?
   set -e
 
   [[ $rc -eq 0 ]] || fail "parallel_review should succeed with canonical artifact root override"
   [[ -f "$repo/canonical/story/S9-ART/codex/codex.generic.md" ]] || fail "missing codex artifact in canonical root"
-  [[ -f "$repo/canonical/story/S9-ART/opus/opus.generic.md" ]] || fail "missing opus artifact in canonical root"
+  [[ -f "$repo/canonical/story/S9-ART/sonnet/sonnet.generic.md" ]] || fail "missing sonnet artifact in canonical root"
   assert_file_contains "$output_file" "canonical/story/S9-ART/codex/codex.generic.md"
-  assert_file_contains "$output_file" "canonical/story/S9-ART/opus/opus.generic.md"
+  assert_file_contains "$output_file" "canonical/story/S9-ART/sonnet/sonnet.generic.md"
   if grep -Fq "not found — review may have failed" "$output_file"; then
     fail "artifact summary should not report canonical artifacts as missing"
   fi

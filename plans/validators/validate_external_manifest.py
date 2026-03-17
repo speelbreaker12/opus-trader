@@ -64,7 +64,7 @@ HEXSHA_RE = _LIB_HEXSHA_RE
 SHA256_RE = _LIB_SHA256_RE
 ISO8601Z_RE = _LIB_ISO8601Z_RE
 
-VALID_TOOLS = {"codex", "opus", "kimi", "gemini"}
+VALID_TOOLS = {"codex", "sonnet", "opus", "kimi", "gemini"}
 VALID_PROMPT_STYLES = {"generic", "enriched"}
 
 REQUIRED_COMBOS_DEFAULT = [

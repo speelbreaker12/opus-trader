@@ -29,13 +29,15 @@ The following MUST be writable + joinable for every dispatched open-intent:
 EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidenceguard_window_s = 60` seconds, safety-critical; configurable in Appendix A):
 - **All required EvidenceGuard counters MUST be defined and parseable** (fail-closed).
   - Missing/unparseable required counter(s) => EvidenceChainState MUST be not GREEN.
-  - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`.
+  - Required counters (minimum): `truth_capsule_write_errors`, `decision_snapshot_write_errors`, `wal_write_errors`, `parquet_queue_overflow_count`, `attribution_write_errors`.
 - Required counters MUST be fresh: if `now_ms - evidenceguard_counters_last_update_ts_ms` > `evidenceguard_counters_max_age_ms` (default 60000; see Appendix A for `evidenceguard_counters_max_age_ms`), EvidenceChainState MUST be not GREEN and OPEN intents MUST be blocked.
 - `wal_write_errors` MUST increment on any failure to satisfy RecordedBeforeDispatch for an OPEN intent, including WAL enqueue failure (bounded queue full) and any persistence/write failure.
+- `attribution_write_errors` MUST increment on any failure to write an attribution row for a filled OPEN intent, including persistence errors and missing/unparseable fill data.
 - `truth_capsule_write_errors` has not increased within the last `evidenceguard_window_s`
 - `decision_snapshot_write_errors` has not increased within the last `evidenceguard_window_s`
-- `parquet_queue_overflow_count` not increasing
+- `parquet_queue_overflow_count` has not increased within the last `evidenceguard_window_s`
 - `wal_write_errors` has not increased within the last `evidenceguard_window_s`
+- `attribution_write_errors` has not increased within the last `evidenceguard_window_s`
 
 - `parquet_queue_depth_pct` is defined AND below thresholds (fail-closed if metrics unavailable):
   - Metrics MUST exist: `parquet_queue_depth` (gauge, count), `parquet_queue_capacity` (gauge, count).
@@ -135,4 +137,3 @@ AT-923
 
 
 **Canonical TradingMode computation (axis resolver + staleness + watchdog semantics + reason codes) is defined in §2.2.3 (PolicyGuard-owned).**
-

@@ -8,12 +8,13 @@ TASK
 Run the logged review scripts (do NOT hand-write review files):
 1) `./plans/review_logged.sh ${STORY_ID} --tool codex --base ${BASE_BRANCH}`
    (or: `./plans/codex_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH}`)
-2) Optionally also: `./plans/review_logged.sh ${STORY_ID} --tool opus --base ${BASE_BRANCH}`
-   (or: `./plans/opus_review_logged.sh ${STORY_ID} --base ${BASE_BRANCH}`)
+2) Optionally also: `./plans/review_logged.sh ${STORY_ID} --tool sonnet --base ${BASE_BRANCH}`
+   (legacy fallback: `./plans/review_logged.sh ${STORY_ID} --tool opus --base ${BASE_BRANCH}`)
 
 Wait for scripts to generate artifacts under:
 - artifacts/story/${STORY_ID}/codex/  (canonical: codex.enriched.md, codex.generic.md)
-- artifacts/story/${STORY_ID}/opus/   (if run: opus.enriched.md, opus.generic.md)
+- artifacts/story/${STORY_ID}/sonnet/ (if run: sonnet.enriched.md, sonnet.generic.md)
+- artifacts/story/${STORY_ID}/opus/   (legacy if run: opus.enriched.md, opus.generic.md)
 - artifacts/story/${STORY_ID}/kimi/   (if run: kimi.enriched.md, kimi.generic.md)
 
 review_logged.sh now emits YAML front matter provenance + Review basis + Phase equivalent lines automatically.
