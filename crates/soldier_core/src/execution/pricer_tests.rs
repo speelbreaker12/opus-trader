@@ -3,6 +3,7 @@
 //! AT-223: IOC limit guarantees min edge at limit price.
 
 use super::*;
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
 fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
     crate::execution::METRICS_TEST_LOCK
@@ -532,5 +533,138 @@ fn test_static_counter_net_edge_too_low_reject_increments() {
     assert!(
         after > before,
         "counter should increment: before={before}, after={after}"
+    );
+}
+
+#[test]
+fn test_pricer_graybox_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = pricer_reject_total(PricerRejectReason::NetEdgeTooLow);
+    let mut metrics = PricerMetrics::new();
+    let mut events = Vec::new();
+    let input = PricerInput {
+        fair_price: 100.0,
+        gross_edge_usd: 0.5,
+        min_edge_usd: 1.0,
+        fee_estimate_usd: 0.1,
+        expected_slippage_usd: 0.0,
+        qty: 1.0,
+        side: Side::Buy,
+    };
+
+    let result = compute_limit_price_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::NetEdgeTooLow,
+            net_edge_usd: Some(net_edge_usd),
+        } if (net_edge_usd - 0.4).abs() < 1e-9
+    ));
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(
+        events,
+        vec![PricerEvent::Reject {
+            reason: PricerRejectReason::NetEdgeTooLow
+        }]
+    );
+    assert_eq!(
+        pricer_reject_total(PricerRejectReason::NetEdgeTooLow),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_pricer_graybox_success_emits_no_events_or_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = pricer_reject_total(PricerRejectReason::NetEdgeTooLow);
+    let mut metrics = PricerMetrics::new();
+    let mut events = Vec::new();
+    let input = PricerInput {
+        fair_price: 100.0,
+        gross_edge_usd: 10.0,
+        min_edge_usd: 2.0,
+        fee_estimate_usd: 3.0,
+        expected_slippage_usd: 0.0,
+        qty: 1.0,
+        side: Side::Buy,
+    };
+
+    let result = compute_limit_price_with_events(&input, &mut metrics, &mut events);
+
+    assert!(matches!(
+        result,
+        PricerResult::LimitPrice {
+            limit_price,
+            max_price_for_min_edge,
+            net_edge_usd,
+        } if (limit_price - 95.0).abs() < 1e-9
+            && (max_price_for_min_edge - 95.0).abs() < 1e-9
+            && (net_edge_usd - 7.0).abs() < 1e-9
+    ));
+    assert_eq!(metrics.priced_total(), 1);
+    assert!(
+        events.is_empty(),
+        "success path should not emit reject events"
+    );
+    assert_eq!(
+        pricer_reject_total(PricerRejectReason::NetEdgeTooLow),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_pricer_wrapper_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
+    let before = pricer_reject_total(PricerRejectReason::NetEdgeTooLow);
+    let mut metrics = PricerMetrics::new();
+    let input = PricerInput {
+        fair_price: 100.0,
+        gross_edge_usd: 0.5,
+        min_edge_usd: 1.0,
+        fee_estimate_usd: 0.1,
+        expected_slippage_usd: 0.0,
+        qty: 1.0,
+        side: Side::Buy,
+    };
+
+    let result = with_intent_trace_ids("intent-pricer-001", "run-pricer-001", || {
+        compute_limit_price(&input, &mut metrics)
+    });
+
+    assert!(matches!(
+        result,
+        PricerResult::Rejected {
+            reason: PricerRejectReason::NetEdgeTooLow,
+            net_edge_usd: Some(net_edge_usd),
+        } if (net_edge_usd - 0.4).abs() < 1e-9
+    ));
+    assert_eq!(metrics.reject_total(), 1);
+    assert_eq!(
+        pricer_reject_total(PricerRejectReason::NetEdgeTooLow),
+        before + 1
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("pricer_reject_total")
+                && line.contains("intent_id=intent-pricer-001")
+                && line.contains("run_id=run-pricer-001")
+                && line.contains("reason=NetEdgeTooLow")
+        }),
+        "expected structured pricer metric line, got {lines:?}"
     );
 }

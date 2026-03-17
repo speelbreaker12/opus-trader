@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending
+- 5ebf6b2d
 
 ## 0) What shipped
 - Feature/behavior: Upgrade 2 now has an explicit 2A leaf / 2B orchestration boundary in the canonical checklist, `execution/quantize.rs` now exposes a crate-private `quantize_with_events(...)` seam with graybox/parity coverage, and `plans/ssot_lint.sh` now ignores test fixtures under `plans/tests/fixtures/`.
