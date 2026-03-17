@@ -8,7 +8,7 @@ worktree: .worktrees/execution-facade-refactor
 ---
 
 ## Current State
-PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, `execution/gates.rs`, `execution/quantize.rs`, `execution/pricer.rs`, `execution/inventory_skew.rs`, `execution/post_only_guard.rs`, and `execution/preflight.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is now split into Upgrade 2A (leaf event-sink rollout) and Upgrade 2B (orchestration/chokepoint event-sink rollout). 2A is the active execution target and remains red in margin, pending exposure, and exposure budget; 2B is tracked separately so orchestration telemetry is not dropped from Upgrade 2. Orchestration consolidation and 1C (risk/venue/infra) remain open.
+PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, `execution/gates.rs`, `execution/quantize.rs`, `execution/pricer.rs`, `execution/inventory_skew.rs`, `execution/post_only_guard.rs`, `execution/preflight.rs`, `risk/margin_gate.rs`, `risk/pending_exposure.rs`, and `risk/exposure_budget.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is now split into Upgrade 2A (leaf event-sink rollout) and Upgrade 2B (orchestration/chokepoint event-sink rollout). Upgrade 2A is now PASS by checklist; 2B and remaining 1C (risk/venue/infra) remain open.
 
 ## Commits
 - `pending` — 2026-03-17 — add preflight event-sink seam with `PreflightEvent` and graybox/wrapper parity coverage.
@@ -20,12 +20,18 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - `429fe236` — 2026-03-17 — record the fee pilot commit hash in the Execution Facade Refactor project tracking notes.
 - `0c5abc78` — 2026-03-17 — add the fee staleness event seam with typed events and parity-preserving production adapter coverage.
 - `523a6434` — 2026-03-17 — add the crate-private telemetry sink seam used by graybox gate tests.
+- `pending` — 2026-03-17 — add margin event seam with graybox + wrapper parity coverage in `risk/margin_gate.rs`.
+- `pending` — 2026-03-17 — add risk leaf event seams in `risk/pending_exposure.rs` and `risk/exposure_budget.rs` with graybox + wrapper parity coverage.
 
 ## Key Files
 - crates/soldier_core/src/execution/
 - crates/soldier_core/src/execution/preflight.rs
 - crates/soldier_core/src/execution/preflight_tests.rs
 - crates/soldier_core/src/risk/fees.rs
+- crates/soldier_core/src/risk/margin_gate.rs
+- crates/soldier_core/src/risk/margin_gate_tests.rs
+- crates/soldier_core/src/risk/pending_exposure.rs
+- crates/soldier_core/src/risk/exposure_budget.rs
 - [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md)
 - obsidian/Upgrades for AI/1/Status 2026-03-05.md
 
@@ -39,13 +45,20 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - [[Execution Facade Refactor 2026-03-17 Telemetry Sink Seam]]
 - [[Execution Facade Refactor 2026-03-17 Fee Staleness Event Pilot]]
 - [[Execution Facade Refactor 2026-03-17 Execution Gate Event Pilots]]
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Margin Gate Seam]]
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Risk Exposure Seams]]
 
 ## Handoffs
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Inventory Skew Handoff]]
 - [[Execution Facade Refactor 2026-03-17 Upgrade 2A Post-Only Handoff]]
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Margin Gate Handoff]]
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2A Risk Exposure Seams Handoff]]
 
 ## Log
 ### 2026-03-17
+- Converted `crates/soldier_core/src/risk/pending_exposure.rs` to a crate-private `bump_pending_exposure_with_events(...)` seam with `PendingExposureEvent` and `ProductionPendingExposureEvents`, plus graybox and wrapper parity coverage.
+- Converted `crates/soldier_core/src/risk/exposure_budget.rs` to a crate-private `evaluate_global_exposure_budget_with_events(...)` seam with `ExposureBudgetEvent` and `ProductionExposureBudgetEvents`, plus graybox and wrapper parity coverage.
+- Flipped both `pending exposure` and `exposure budget` rows in [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) from `FAIL` to `PASS`.
 - Verified the inventory-skew seam with `cargo test -p soldier_core --lib inventory_skew`, `cargo fmt --all`, and `cargo fmt --all -- --check`; `./plans/verify.sh quick` was not rerun in this session because the branch still carries the previously noted unrelated contract-kernel drift.
 - Converted `crates/soldier_core/src/execution/inventory_skew.rs` to a crate-private `evaluate_inventory_skew_with_events(...)` seam with `InventorySkewEvent` and a parity-preserving production adapter.
 - Added graybox and wrapper parity tests for inventory skew proving the sink path stays free of global counter/metric side effects while the public wrapper still emits the legacy reject metric line.
@@ -80,6 +93,9 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 - Added inline graybox coverage proving the fee event path stays free of global counter/metric side effects while the public wrapper still emits the traced hard-stale metric line.
 - Verified the fee pilot with targeted red-green tests plus the existing fee staleness and rejection-counter suites; repo quick verify remained blocked by unrelated `docs/contract_kernel.json` drift.
 - Committed the fee pilot as `0c5abc78` (`soldier_core: add fee staleness event seam`).
+- Converted `crates/soldier_core/src/risk/margin_gate.rs` to a crate-private `evaluate_margin_headroom_gate_with_events(...)` seam with `MarginGateEvent` and a parity-preserving `ProductionMarginGateEvents` adapter.
+- Added graybox and wrapper parity tests in `crates/soldier_core/src/risk/margin_gate.rs` and `crates/soldier_core/src/risk/margin_gate_tests.rs` proving the graybox path has no global metric side effects and wrapper calls still emit a legacy reject metric line.
+- Flipped the margin row in [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) from `FAIL` to `PASS`.
 
 ### 2026-03-05
 - PR1-PR4 status documented

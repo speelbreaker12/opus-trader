@@ -7,6 +7,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::telemetry::EventSink;
+
 static MARGIN_GATE_REJECT_TOTAL: AtomicU64 = AtomicU64::new(0);
 
 /// Process-lifetime rejection counter for margin headroom gate.
@@ -17,10 +19,42 @@ pub fn margin_gate_reject_total() -> u64 {
     MARGIN_GATE_REJECT_TOTAL.load(Ordering::Relaxed)
 }
 
-fn bump_margin_gate_reject() {
+fn bump_margin_gate_reject(reason: MarginGateRejectReason) {
+    #[cfg(test)]
+    {
+        return crate::execution::with_metrics_update_lock(|| {
+            bump_margin_gate_reject_inner(reason);
+        });
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_margin_gate_reject_inner(reason);
+    }
+}
+
+fn bump_margin_gate_reject_inner(_reason: MarginGateRejectReason) {
     MARGIN_GATE_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
     crate::execution::emit_execution_metric_line(crate::execution::METRIC_MARGIN_GATE_REJECT, "");
     tracing::debug!("MarginGateReject");
+}
+
+/// Internal margin gate events for graybox testing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MarginGateEvent {
+    Reject {
+        reason: MarginGateRejectReason,
+    },
+}
+
+struct ProductionMarginGateEvents;
+
+impl EventSink<MarginGateEvent> for ProductionMarginGateEvents {
+    fn emit(&mut self, event: MarginGateEvent) {
+        match event {
+            MarginGateEvent::Reject { reason } => bump_margin_gate_reject(reason),
+        }
+    }
 }
 
 /// Margin gate mode hint for PolicyGuard integration.
@@ -104,13 +138,22 @@ pub fn evaluate_margin_headroom_gate(
     input: &MarginGateInput,
     metrics: &mut MarginGateMetrics,
 ) -> MarginGateDecision {
+    let mut events = ProductionMarginGateEvents;
+    evaluate_margin_headroom_gate_with_events(input, metrics, &mut events)
+}
+
+pub(crate) fn evaluate_margin_headroom_gate_with_events<E: EventSink<MarginGateEvent>>(
+    input: &MarginGateInput,
+    metrics: &mut MarginGateMetrics,
+    events: &mut E,
+) -> MarginGateDecision {
     if !freshness_is_current(input) {
-        metrics.record_reject();
-        bump_margin_gate_reject();
-        return MarginGateDecision::Rejected {
-            reason: MarginGateRejectReason::MarginHeadroomInputStale,
-            mm_util: None,
-        };
+        return reject_with_events(
+            MarginGateRejectReason::MarginHeadroomInputStale,
+            None,
+            metrics,
+            events,
+        );
     }
 
     if !thresholds_valid(
@@ -122,27 +165,38 @@ pub fn evaluate_margin_headroom_gate(
         || input.maintenance_margin_usd < 0.0
         || input.equity_usd <= 0.0
     {
-        metrics.record_reject();
-        bump_margin_gate_reject();
-        return MarginGateDecision::Rejected {
-            reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
-            mm_util: None,
-        };
+        return reject_with_events(
+            MarginGateRejectReason::MarginHeadroomRejectOpens,
+            None,
+            metrics,
+            events,
+        );
     }
 
     let mm_util = input.maintenance_margin_usd / input.equity_usd;
 
     if mm_util >= input.mm_util_reject_opens {
-        metrics.record_reject();
-        bump_margin_gate_reject();
-        return MarginGateDecision::Rejected {
-            reason: MarginGateRejectReason::MarginHeadroomRejectOpens,
-            mm_util: Some(mm_util),
-        };
+        return reject_with_events(
+            MarginGateRejectReason::MarginHeadroomRejectOpens,
+            Some(mm_util),
+            metrics,
+            events,
+        );
     }
 
     metrics.record_allowed();
     MarginGateDecision::Allowed { mm_util }
+}
+
+fn reject_with_events<E: EventSink<MarginGateEvent>>(
+    reason: MarginGateRejectReason,
+    mm_util: Option<f64>,
+    metrics: &mut MarginGateMetrics,
+    events: &mut E,
+) -> MarginGateDecision {
+    metrics.record_reject();
+    events.emit(MarginGateEvent::Reject { reason });
+    MarginGateDecision::Rejected { reason, mm_util }
 }
 
 /// Compute margin mode hint independently of the allow/reject decision.
@@ -200,3 +254,7 @@ fn freshness_is_current(input: &MarginGateInput) -> bool {
                 && input.now_ms - last_update_ts_ms <= input.mm_util_max_age_ms
     )
 }
+
+#[cfg(test)]
+#[path = "margin_gate_tests.rs"]
+mod margin_gate_tests;

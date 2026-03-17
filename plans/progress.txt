@@ -2,6 +2,17 @@
 - Summary: converted `execution/preflight.rs` to a crate-private `preflight_intent_with_events(...)` pattern, added graybox + wrapper parity coverage in `preflight_tests.rs`, and flipped the Upgrade 2A checklist `preflight` row from `FAIL` to `PASS`.
 - Commands: `cargo test -p soldier_core --lib preflight`; `cargo fmt --all -- --check`; `git diff --check -- crates/soldier_core/src/execution/preflight.rs crates/soldier_core/src/execution/preflight_tests.rs docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
 - Evidence: docs/codebase/upgrade2_graybox_telemetry_checklist.md
+- 2026-03-17 — execution-facade-refactor margin-gate seam
+- Summary: converted `risk/margin_gate.rs` to a crate-private `evaluate_margin_headroom_gate_with_events(...)` pattern with `MarginGateEvent`, added graybox isolation tests in `risk/margin_gate_tests.rs`, and flipped the Upgrade 2A checklist `margin` row from `FAIL` to `PASS`.
+- Commands: no verification commands rerun in this checkpoint; source edits are in the active worktree.
+- Evidence: `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs`, `docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
+- Next: convert `risk/pending_exposure.rs` with the same event seam shape.
+- 2026-03-17 — execution-facade-refactor risk-seam completion checkpoint
+- Summary: converted `risk/pending_exposure.rs` to `bump_pending_exposure_with_events(...)` + `PendingExposureEvent` and `risk/exposure_budget.rs` to `evaluate_global_exposure_budget_with_events(...)` + `ExposureBudgetEvent`, added graybox isolation tests and wrapper parity coverage in both modules, and flipped the Upgrade 2A checklist `pending exposure` and `exposure budget` rows from `FAIL` to `PASS`.
+- Commands: `cargo test -p soldier_core --lib`
+- Evidence: `crates/soldier_core/src/risk/pending_exposure.rs`, `crates/soldier_core/src/risk/exposure_budget.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs`, `docs/codebase/upgrade2_graybox_telemetry_checklist.md`.
+- Next: continue with Upgrade 2B orchestration seams (`execution/group.rs`, `execution/build_order_intent.rs`) once 2A is complete and rerun full verify on clean checkout.
+
 - 2026-03-17 — quick verify attempted
 - Commands: `./plans/verify.sh quick`
 - Evidence: `artifacts/verify/20260317_134320/verify.meta.json` (failed at contract kernel hash mismatch: sources.contract_sha256 expected vs generated)

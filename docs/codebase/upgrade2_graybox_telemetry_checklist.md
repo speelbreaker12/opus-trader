@@ -62,7 +62,7 @@ This is the active rollout scope for Upgrade 2.
 | pricer | FAIL | `crates/soldier_core/src/execution/pricer.rs:150` | Emits metrics directly and has no sink seam. |
 | inventory skew | FAIL | `crates/soldier_core/src/execution/inventory_skew.rs:134` | Emits metrics directly and has no sink seam. |
 | post-only | PASS | `crates/soldier_core/src/execution/post_only_guard.rs:45`, `crates/soldier_core/src/execution/post_only_guard.rs:130`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:320`, `crates/soldier_core/src/execution/post_only_guard_tests.rs:367` | `ProductionPostOnlyEvents` adapts the sink path back into metrics. |
-| margin | FAIL | `crates/soldier_core/src/risk/margin_gate.rs:22` | Emits metrics directly and has no sink seam. |
+| margin | PASS | `crates/soldier_core/src/risk/margin_gate.rs`, `crates/soldier_core/src/risk/margin_gate_tests.rs` | `evaluate_margin_headroom_gate_with_events` funnels reject paths through `ProductionMarginGateEvents`, with graybox tests proving `evaluate_margin_headroom_gate_with_events` stays side-effect free and wrapper tests preserving metric line behavior. |
 | pending exposure | FAIL | `crates/soldier_core/src/risk/pending_exposure.rs:28` | Emits metrics directly and has no sink seam. |
 | exposure budget | FAIL | `crates/soldier_core/src/risk/exposure_budget.rs:48` | Emits metrics directly and has no sink seam. |
 | preflight | PASS | `crates/soldier_core/src/execution/preflight.rs:218`, `crates/soldier_core/src/execution/preflight.rs:249`, `crates/soldier_core/src/execution/preflight_tests.rs:531`, `crates/soldier_core/src/execution/preflight_tests.rs:567` | `ProductionPreflightEvents` adapts the sink path back into metrics. |
@@ -93,4 +93,4 @@ This repo-wide search should find every `with_events` seam and its sink adapter:
 rg -n "fn .*with_events|_with_events\\(|EventSink<" crates/soldier_core/src crates/soldier_infra/src
 ```
 
-At the time this checklist was last updated, that search found liquidity, net-edge, fee staleness, quantize, pricer, and post-only in the in-scope set above.
+At the time this checklist was last updated, that search found liquidity, net-edge, fee staleness, quantize, pricer, post-only, preflight, margin, pending exposure, and exposure budget in the in-scope set above.

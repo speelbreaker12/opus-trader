@@ -1,5 +1,25 @@
 # Pause Note (optional)
 
+## 2026-03-17 - execution-facade-refactor risk-seam handoff
+
+- Date: 2026-03-17
+- Branch/worktree: `project/execution-facade-refactor` at `/Users/admin/Desktop/opus-trader/.worktrees/execution-facade-refactor`
+- Scope completed in this session:
+  - Converted `crates/soldier_core/src/risk/pending_exposure.rs` to a crate-private `bump_pending_exposure_with_events(...)` seam with `PendingExposureEvent` and `ProductionPendingExposureEvents`.
+  - Converted `crates/soldier_core/src/risk/exposure_budget.rs` to a crate-private `evaluate_global_exposure_budget_with_events(...)` seam with `ExposureBudgetEvent` and `ProductionExposureBudgetEvents`.
+  - Added graybox no-global-side-effect tests and wrapper parity tests for both leaves.
+  - Flipped the `pending exposure` and `exposure budget` rows in `docs/codebase/upgrade2_graybox_telemetry_checklist.md` to `PASS`.
+- Verification evidence:
+  - `cargo test -p soldier_core --lib` PASS (`688 passed`)
+  - `plans/progress.txt` and `docs/codebase/upgrade2_graybox_telemetry_checklist.md` updated to reflect the new leaves.
+- Next agent default actions:
+  - With 2A now showing all PASS rows, continue to Upgrade 2B risk/orchestration telemetry seam targets.
+  - Re-run `./plans/verify.sh full` on a clean checkout when contract-kernel drift is in scope.
+  - Keep 2A wrap-to-legacy metrics adapter behavior unchanged while finishing orchestration seams.
+- Constraints/preferences to preserve:
+  - Keep public wrappers as production telemetry adapters, and keep leaf graybox paths sink-only.
+  - Do not change `Upgrade 2B` scope in this checkpoint.
+
 ## 2026-03-17 - execution-facade-refactor preflight handoff
 
 - Date: 2026-03-17
@@ -16,6 +36,24 @@
   1. Convert `crates/soldier_core/src/risk/margin_gate.rs` using the same event-seam plus graybox/parity pattern.
   2. Continue down the remaining Upgrade 2A red rows: `risk/pending_exposure.rs`, `risk/exposure_budget.rs`.
   3. When the unrelated contract-kernel drift is in scope, rerun `./plans/verify.sh quick` from a clean checkout.
+- Constraints/preferences to preserve:
+  - Stay within Upgrade 2A leaf scope; do not pull 2B orchestration telemetry into the next slice.
+  - Keep the public wrapper as the production telemetry adapter and keep graybox paths free of global metric side effects.
+
+## 2026-03-17 - execution-facade-refactor margin-gate handoff
+
+- Date: 2026-03-17
+- Branch/worktree: `project/execution-facade-refactor` at `/Users/admin/Desktop/opus-trader/.worktrees/execution-facade-refactor`
+- Scope completed in this session:
+  - Converted `crates/soldier_core/src/risk/margin_gate.rs` to a crate-private `evaluate_margin_headroom_gate_with_events(...)` seam with `MarginGateEvent`.
+  - Added graybox no-global-side-effect tests plus wrapper parity coverage in `crates/soldier_core/src/risk/margin_gate_tests.rs`.
+  - Flipped the `margin` row in `docs/codebase/upgrade2_graybox_telemetry_checklist.md` from `FAIL` to `PASS`.
+- Verification evidence:
+  - No checkpoint verification rerun; source changes captured for the margin seam and checklist flip.
+- Next agent default actions:
+  1. Convert `crates/soldier_core/src/risk/pending_exposure.rs` using the same event-seam plus graybox/wrapper parity pattern.
+  2. Convert `crates/soldier_core/src/risk/exposure_budget.rs` after pending exposure.
+  3. Keep `./plans/verify.sh quick` off until unrelated contract-kernel drift is resolved or clean-checkout CI evidence is available.
 - Constraints/preferences to preserve:
   - Stay within Upgrade 2A leaf scope; do not pull 2B orchestration telemetry into the next slice.
   - Keep the public wrapper as the production telemetry adapter and keep graybox paths free of global metric side effects.

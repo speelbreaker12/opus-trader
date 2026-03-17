@@ -8,6 +8,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::telemetry::EventSink;
+
 /// Reason for the static counter to discriminate rejection causes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExposureBudgetStaticRejectReason {
@@ -36,6 +38,20 @@ pub fn exposure_budget_reject_total(reason: ExposureBudgetStaticRejectReason) ->
 }
 
 fn bump_exposure_budget_reject(reason: ExposureBudgetStaticRejectReason) {
+    #[cfg(test)]
+    {
+        return crate::execution::with_metrics_update_lock(|| {
+            bump_exposure_budget_reject_inner(reason);
+        });
+    }
+
+    #[cfg(not(test))]
+    {
+        bump_exposure_budget_reject_inner(reason);
+    }
+}
+
+fn bump_exposure_budget_reject_inner(reason: ExposureBudgetStaticRejectReason) {
     match reason {
         ExposureBudgetStaticRejectReason::Reject => {
             EXPOSURE_BUDGET_REJECT_TOTAL.fetch_add(1, Ordering::Relaxed);
@@ -50,6 +66,28 @@ fn bump_exposure_budget_reject(reason: ExposureBudgetStaticRejectReason) {
         &tail,
     );
     tracing::debug!("ExposureBudgetReject reason={:?}", reason);
+}
+
+/// Internal exposure budget events for graybox testing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExposureBudgetEvent {
+    RejectLimitMissing,
+    RejectBudgetExceeded,
+}
+
+struct ProductionExposureBudgetEvents;
+
+impl EventSink<ExposureBudgetEvent> for ProductionExposureBudgetEvents {
+    fn emit(&mut self, event: ExposureBudgetEvent) {
+        match event {
+            ExposureBudgetEvent::RejectLimitMissing => {
+                bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::LimitMissing)
+            }
+            ExposureBudgetEvent::RejectBudgetExceeded => {
+                bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::Reject)
+            }
+        }
+    }
 }
 
 /// Correlation bucket for candidate exposure.
@@ -142,11 +180,20 @@ pub fn evaluate_global_exposure_budget(
     input: &ExposureBudgetInput,
     metrics: &mut ExposureBudgetMetrics,
 ) -> ExposureBudgetResult {
+    let mut events = ProductionExposureBudgetEvents;
+    evaluate_global_exposure_budget_with_events(input, metrics, &mut events)
+}
+
+pub(crate) fn evaluate_global_exposure_budget_with_events<E: EventSink<ExposureBudgetEvent>>(
+    input: &ExposureBudgetInput,
+    metrics: &mut ExposureBudgetMetrics,
+    events: &mut E,
+) -> ExposureBudgetResult {
     let limit = match input.global_delta_limit_usd {
         Some(v) if v.is_finite() && v > 0.0 => v,
         _ => {
             metrics.record_reject_limit_missing();
-            bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::LimitMissing);
+            events.emit(ExposureBudgetEvent::RejectLimitMissing);
             return ExposureBudgetResult::Rejected {
                 reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
                 portfolio_delta_usd: None,
@@ -166,7 +213,7 @@ pub fn evaluate_global_exposure_budget(
         || !input.candidate_delta_usd.is_finite()
     {
         metrics.record_reject();
-        bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::Reject);
+        events.emit(ExposureBudgetEvent::RejectBudgetExceeded);
         return ExposureBudgetResult::Rejected {
             reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
             portfolio_delta_usd: None,
@@ -188,7 +235,7 @@ pub fn evaluate_global_exposure_budget(
     let portfolio = conservative_corr_magnitude(combined_btc, combined_eth, combined_alts);
     if !portfolio.is_finite() || portfolio > limit {
         metrics.record_reject();
-        bump_exposure_budget_reject(ExposureBudgetStaticRejectReason::Reject);
+        events.emit(ExposureBudgetEvent::RejectBudgetExceeded);
         return ExposureBudgetResult::Rejected {
             reason: ExposureBudgetRejectReason::GlobalExposureBudgetExceeded,
             portfolio_delta_usd: Some(portfolio),
@@ -204,6 +251,87 @@ pub fn evaluate_global_exposure_budget(
         combined_btc_delta_usd: combined_btc,
         combined_eth_delta_usd: combined_eth,
         combined_alts_delta_usd: combined_alts,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::execution::{
+        begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids,
+    };
+
+    fn base_input() -> ExposureBudgetInput {
+        ExposureBudgetInput {
+            current_btc_delta_usd: 1.0,
+            pending_btc_delta_usd: 0.0,
+            current_eth_delta_usd: 2.0,
+            pending_eth_delta_usd: 0.0,
+            current_alts_delta_usd: 3.0,
+            pending_alts_delta_usd: 0.0,
+            candidate_bucket: ExposureBucket::Btc,
+            candidate_delta_usd: 0.5,
+            global_delta_limit_usd: Some(100.0),
+        }
+    }
+
+    #[test]
+    fn test_exposure_budget_graybox_reject_emits_event_without_global_side_effects() {
+        let _guard = begin_metrics_test();
+        let before = exposure_budget_reject_total(ExposureBudgetStaticRejectReason::Reject);
+        let before_missing =
+            exposure_budget_reject_total(ExposureBudgetStaticRejectReason::LimitMissing);
+        let mut metrics = ExposureBudgetMetrics::new();
+        let mut events = Vec::new();
+        let mut input = base_input();
+        input.candidate_delta_usd = 10_000.0;
+
+        let result = evaluate_global_exposure_budget_with_events(&input, &mut metrics, &mut events);
+
+        assert!(matches!(result, ExposureBudgetResult::Rejected { reason, .. } if reason == ExposureBudgetRejectReason::GlobalExposureBudgetExceeded));
+        assert_eq!(metrics.reject_total(), 1);
+        assert_eq!(events, vec![ExposureBudgetEvent::RejectBudgetExceeded]);
+        assert_eq!(exposure_budget_reject_total(ExposureBudgetStaticRejectReason::Reject), before);
+        assert_eq!(
+            exposure_budget_reject_total(ExposureBudgetStaticRejectReason::LimitMissing),
+            before_missing
+        );
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn test_exposure_budget_wrapper_emits_structured_reject_metric_line() {
+        let _guard = begin_metrics_test();
+        let before = exposure_budget_reject_total(ExposureBudgetStaticRejectReason::LimitMissing);
+        let mut metrics = ExposureBudgetMetrics::new();
+        let mut input = base_input();
+        input.global_delta_limit_usd = None;
+
+        let _ = with_intent_trace_ids(
+            "intent-exposure-budget-001",
+            "run-exposure-budget-001",
+            || evaluate_global_exposure_budget(&input, &mut metrics),
+        );
+
+        let lines = take_execution_metric_lines();
+        assert_eq!(metrics.reject_limit_missing_total(), 1);
+        assert_eq!(
+            exposure_budget_reject_total(ExposureBudgetStaticRejectReason::LimitMissing),
+            before + 1
+        );
+        assert!(
+            lines.iter().any(|line| {
+                line.starts_with("exposure_budget_reject_total")
+                    && line.contains("intent_id=intent-exposure-budget-001")
+                    && line.contains("run_id=run-exposure-budget-001")
+            }),
+            "expected structured reject metric line, got {lines:?}"
+        );
     }
 }
 
