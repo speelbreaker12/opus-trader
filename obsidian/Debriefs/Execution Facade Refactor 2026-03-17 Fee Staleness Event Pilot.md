@@ -6,6 +6,7 @@ date: "2026-03-17"
 ## 0) What shipped
 - Feature/behavior: Converted `risk/fees.rs` to a crate-private `evaluate_fee_staleness_with_events(...)` path with `FeeEvent` and a parity-preserving production wrapper.
 - Value (what problem it solves): Gives the refactor a first true graybox leaf seam so tests can prove fee logic separately from global counters and traced metric lines.
+- Commit: `0c5abc78` (`soldier_core: add fee staleness event seam`).
 
 ## 1) Constraint (ONE)
 - How it manifested (2-3 concrete symptoms): The existing fee evaluator mixed decision logic with global observability writes; the only way to assert hard-stale behavior was through process-lifetime counters and shared metric buffers; repo quick verify was unavailable as final proof because `docs/contract_kernel.json` drifted outside this slice.
