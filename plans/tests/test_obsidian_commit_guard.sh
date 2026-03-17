@@ -105,6 +105,12 @@ date: "2026-03-17"
 EOF
 }
 
+write_linked_project() {
+  local path="$1"
+  local debrief_name="$2"
+  write_project "$path" "- [[${debrief_name}]]"
+}
+
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
@@ -145,5 +151,34 @@ write_project \
   "- [[Test Project 2026-03-17 Hook]]"
 git -C "$repo" add "obsidian/Projects/Test Project.md"
 expect_pass "project note linked to staged debrief passes" "$repo"
+
+git -C "$repo" reset --hard -q HEAD
+mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
+write_linked_project \
+  "$repo/obsidian/Projects/Test Project.md" \
+  "Test Project 2026-03-17 Hook"
+write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
+write_debrief "$repo/obsidian/Debriefs/Other Project 2026-03-17 Hook.md" "Other Project"
+git -C "$repo" add \
+  "obsidian/Projects/Test Project.md" \
+  "obsidian/Debriefs/Test Project 2026-03-17 Hook.md" \
+  "obsidian/Debriefs/Other Project 2026-03-17 Hook.md"
+expect_block "unrelated debrief blocks" "belongs to a different project" "$repo"
+expect_block "unrelated debrief reminds scope" "Only include the changes you made in this commit." "$repo"
+
+git -C "$repo" reset --hard -q HEAD
+mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
+write_linked_project \
+  "$repo/obsidian/Projects/Test Project.md" \
+  "Test Project 2026-03-17 Hook"
+write_linked_project \
+  "$repo/obsidian/Projects/Other Project.md" \
+  "Other Project 2026-03-17 Hook"
+write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
+git -C "$repo" add \
+  "obsidian/Projects/Test Project.md" \
+  "obsidian/Projects/Other Project.md" \
+  "obsidian/Debriefs/Test Project 2026-03-17 Hook.md"
+expect_block "multiple project notes block" "Stage Obsidian files for exactly one project note per commit." "$repo"
 
 echo "test_obsidian_commit_guard.sh: ok"
