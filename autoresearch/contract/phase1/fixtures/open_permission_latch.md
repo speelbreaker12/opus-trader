@@ -88,6 +88,13 @@ AT-011
 - Pass criteria: latch fields match the invariants immediately after reconciliation; opens remain blocked unless mode is Active.
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
 
+AT-1250
+- Given: `open_permission_blocked_latch==true` with any reconcile-class reason code.
+- When: reconciliation succeeds and the latch clears.
+- Then: `open_permission_requires_reconcile` MUST equal `false` and `open_permission_reason_codes` MUST be `[]`.
+- Pass criteria: all three state fields are consistent post-clear (`open_permission_blocked_latch==false`, `open_permission_requires_reconcile==false`, `open_permission_reason_codes==[]`).
+- Fail criteria: `open_permission_requires_reconcile` remains `true` or `open_permission_reason_codes` is non-empty after latch clears.
+
 AT-402
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED` and a cancel/replace that increases exposure.
 - When: cancel/replace permission is evaluated.

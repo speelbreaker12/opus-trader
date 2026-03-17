@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-03-17T00:00:00Z",
+  "validator_version": "phase2-mar17-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "\u00a71.4.3 Margin Headroom Gate",
+      "category": "missing_fail_closed",
+      "severity": "P0",
+      "description": "The Margin Headroom Gate specifies three threshold rules (reject_opens, reduceonly, kill) but never specifies the fail-closed behavior when `maintenance_margin`, `initial_margin`, or `equity` is missing, unparseable, or NaN. A NaN or missing equity causes `mm_util` to be undefined; no contract text mandates treating undefined `mm_util` as the most restrictive state. An implementation could silently default to 0.0 (Active) rather than ReduceOnly or Kill.",
+      "evidence": {
+        "line": 1005,
+        "quote": "**Computed:** `mm_util = maintenance_margin / max(equity, epsilon)`",
+        "context": "Immediately follows the Inputs line; no missing/NaN/stale handling clause appears anywhere in \u00a71.4.3."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add: 'If any of `maintenance_margin`, `equity`, or `initial_margin` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as >= `mm_util_reduceonly` (fail-closed: force ReduceOnly) and set `RiskState::Degraded`. Rejections MUST use `Rejected(MarginHeadroomInputMissing)`.' Add a corresponding AT: stale/missing account_summary \u2192 ReduceOnly enforced, OPEN blocked."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "\u00a71.4.2.1 PendingExposure \u2014 Emergency Drain (PX-4)",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Three normative MUST rules for `drain_all()` are stated (Kill-only guard, post-drain settle returns false, no Healthy resume until pre-drain TLSMs are terminal), but there is no acceptance test covering any of them. AT-225 and AT-910 only cover the normal concurrent-reservation and budget-breach paths. The fail-closed 'drain_all() MUST refuse unless RiskState::Kill' and 'Healthy MUST NOT resume until TLSMs terminal' invariants are unproven by contract-level tests.",
+      "evidence": {
+        "line": 940,
+        "quote": "- `drain_all()` MUST refuse to execute unless `RiskState::Kill` is active (fail-closed).",
+        "context": "PX-4 block lines 937-942; the 'Acceptance Test (REQUIRED)' label at line 944 is followed by AT-225 which tests budget reservation, not drain_all."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT for drain_all(): (1) Given RiskState::Healthy, when drain_all() is called, it MUST be refused and no reservations cleared; dispatch count remains unchanged. (2) Given RiskState::Kill and pre-drain in-flight TLSMs, when drain_all() is called and TLSMs have not reached terminal, then normal trading MUST NOT resume (TradingMode stays Kill/ReduceOnly); normal trading resumes only after all pre-drain TLSMs are terminal."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "\u00a71.4 Fee-Aware IOC Limit Pricer",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "The Pricer rule states 'If any required pricer numeric input is missing, unparseable, NaN, or qty <= 0, the pricer MUST fail closed with Rejected(PricerInputMissing) or Rejected(PricerInputInvalid) and no dispatch occurs.' No acceptance test covers this fail-closed path. AT-223 only tests the happy-path (widened spread, IOC limit, realized edge >= min_edge). The specific reject reason codes and dispatch-count-0 proof are unverified.",
+      "evidence": {
+        "line": 782,
+        "quote": "If any required pricer numeric input is missing, unparseable, NaN, or `qty <= 0`, the pricer MUST fail closed with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)`",
+        "context": "Only AT-223 follows (lines 798-803); it does not exercise the missing/NaN/invalid input path."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT: Given a pricer input where `fair_price` is NaN or `qty <= 0`, when the pricer evaluates the intent, then the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0. Pass criteria: specific reject reason present; dispatch count == 0. Fail criteria: dispatch occurs or reject reason is missing."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "\u00a71.4.2 Inventory Skew Gate",
+      "category": "weak_normative",
+      "severity": "P1",
+      "description": "The SELL-when-long (risk-reducing) edge-loosening behavior is described only as 'Allow slightly lower edge (within bounds) and/or be more aggressive to flatten inventory'. No formula, no parameter, and no bound is given. The symmetrical BUY-when-long path has an exact formula: `min_edge_usd * (1 + inventory_skew_k * inventory_bias)` with `inventory_skew_k=0.5`. The SELL loosening path is underspecified \u2014 an implementer cannot derive the correct adjustment from the contract text alone, and AT-224 does not directly prove the SELL edge-adjustment formula.",
+      "evidence": {
+        "line": 873,
+        "quote": "- Allow slightly lower edge (within bounds) and/or be more aggressive to **flatten** inventory",
+        "context": "Compare with the BUY-when-long rule at line 870 which gives a complete formula. No equivalent formula exists for the SELL side."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Replace the vague description with a precise formula mirroring the BUY side, for example: 'SELL intents when inventory_bias > 0: min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor) where inventory_skew_sell_floor >= 0'. Add Appendix A entries for the floor parameter and add an AT that proves the computed min_edge_usd for a SELL near-limit intent uses the exact adjusted value."
+    },
+    {
+      "finding_id": "F-005",
+      "section": "\u00a71.1 Labeling & Idempotency Contract \u2014 Recovery / Matching Rule",
+      "category": "cross_ref_broken",
+      "severity": "P2",
+      "description": "The 'Recovery / Matching Rule (Normative)' block appears verbatim at two separate locations: once at lines 250-254 (in \u00a71.1 after the label format) and again at lines 329-333 (in \u00a71.1.1 after AT-1098). Neither copy carries a CSP-### anchor or a canonical cross-reference. This creates an authoritative ambiguity: if one copy is amended and the other is not, implementations built against either copy may diverge silently.",
+      "evidence": {
+        "line": 329,
+        "quote": "**Recovery / Matching Rule (Normative):**\n- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity",
+        "context": "Identical block also at line 250. No CSP-### ID on either; no 'see \u00a7X.Y' cross-reference."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Assign a CSP-### ID to the canonical copy at \u00a71.1 (lines 250-254). Replace the duplicate copy at lines 329-333 with a single line: 'See CSP-### Recovery / Matching Rule (\u00a71.1).' This makes the canonical copy unambiguous and prevents divergence."
+    },
+    {
+      "finding_id": "F-006",
+      "section": "\u00a71.4.3 Margin Headroom Gate",
+      "category": "stale_input_unspecified",
+      "severity": "P1",
+      "description": "The Margin Headroom Gate fetches inputs from `/private/get_account_summary` but specifies no staleness TTL (maximum age) for the cached result, no metric for tracking data age, and no fail-closed behavior if the account summary has not been refreshed within a required window. Other staleness-sensitive subsystems (\u00a71.0.X instrument cache, \u00a71.3 L2 snapshot, \u00a71.2.3 public trades feed) all define an explicit `*_max_age_ms` parameter and a fail-closed rule. The margin gate is the only gate that can silently use arbitrarily stale data.",
+      "evidence": {
+        "line": 1004,
+        "quote": "**Inputs:** `/private/get_account_summary` \u2192 `maintenance_margin`, `initial_margin`, `equity`",
+        "context": "No `account_summary_max_age_ms` parameter, no gauge metric, and no stale-input handling clause appear anywhere in \u00a71.4.3."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add: 'account_summary_max_age_ms (Appendix A): if the last successful fetch of /private/get_account_summary is older than this threshold, the gate MUST treat mm_util as >= mm_util_reduceonly (fail-closed) and set RiskState::Degraded. Required observability: account_summary_age_s (gauge), account_summary_stale_total (counter).' Add an AT: Given account_summary_age_s > account_summary_max_age_ms, when an OPEN is evaluated, then RiskState==Degraded and OPEN is blocked."
+    }
+  ]
+}

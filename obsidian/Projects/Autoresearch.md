@@ -8,7 +8,7 @@ started: 2026-03-16
 
 ## Current State
 
-Phase 2 complete — 8 of 10 machine-generated proposals accepted, 6 new ATs added (AT-1247 through AT-1252). CONTRACT.md patched across §1.3, §2.2.2, §2.2.3, §2.2.4, §3.1. 2 proposals rejected (redundant CSP bypass AT, AT-1100 structural move).
+Phase 3 run complete (phase2-mar17-20260317_141745-bb818649). 18 findings across 3 fixtures, 19 proposals generated (16 proposed, 1 rejected, 2 pending_scope_review). P0 gaps: Margin Headroom Gate missing fail-closed for NaN/missing inputs; bunker_mode_active staleness threshold unimplementable. Review package ready for manual decisions.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -19,7 +19,7 @@ Phase 2 complete — 8 of 10 machine-generated proposals accepted, 6 new ATs add
 - `autoresearch/contract/phase2/`
 
 ## Debriefs
-- None yet.
+- [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
 
 ## Log
 ### 2026-03-16
@@ -47,3 +47,10 @@ Phase 2 complete — 8 of 10 machine-generated proposals accepted, 6 new ATs add
 - Phase 2 proposal run: 10 proposals from 5 sections, deep_end_line extraction fix, 5 new snapshot targets
 - Phase 2 review: accepted 8, rejected 2 (CSP bypass redundant with AT-991, AT-1100 structural move)
 - CONTRACT.md patched: AT-1247 (LG CLOSE/HEDGE slippage), AT-1248 (EG attribution missing), AT-1249 (TMC bunker_mode stale), AT-1250 (OPL clear transition), AT-1251 (EC hedge bound), AT-1252 (EC monotonic retry), cooldown scope, Profile:ALL tags
+### 2026-03-17
+- Phase 3 contract gap detection run (phase2-mar17-20260317_141745-bb818649), score 1.000 (20/20 checks)
+- 18 findings across 3 fixtures (s1_execution_pipeline, s2_2_policyguard, sample_contract_patch)
+- 19 proposals: 16 proposed, 1 rejected (enforcement evidence missing), 2 pending_scope_review
+- P0: Margin Headroom Gate NaN/missing fail-closed gap; bunker_mode_active staleness unimplementable
+- P1: drain_all() 0 ATs, Pricer fail-closed 0 ATs, Inventory Skew SELL formula vague, AT-1243 duplicate ID, fee_model hard-stale 0 ATs, cortex_override fail-open risk, reconciliation REST failure 0 ATs, field rename alias 0 ATs, TradingModeBlockedOpen missing from registry
+- Next: review 19 proposals in review package, write REVIEW_DECISIONS JSON, apply accepted patches
