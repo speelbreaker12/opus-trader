@@ -7,9 +7,10 @@ started: "2026-03-05"
 ---
 
 ## Current State
-PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, and `execution/gates.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. Orchestration consolidation and 1C (risk/venue/infra) remain open.
+PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `execution/gate.rs`, and `execution/gates.rs`, with a shared metrics-test isolation helper guarding graybox parity tests. The Upgrade 2 graybox telemetry coverage checklist now lives at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and is still red: only liquidity, net-edge, fee staleness, and expected slippage-via-liquidity currently pass. Orchestration consolidation and 1C (risk/venue/infra) remain open.
 
 ## Commits
+- `pending` — 2026-03-17 — make the Upgrade 2 telemetry checklist the canonical acceptance gate in upgrade tracking notes.
 - `1e0eccc6` — 2026-03-17 — add execution gate event seams for liquidity and net-edge, plus graybox/parity test coverage and shared metrics-test isolation helpers.
 - `429fe236` — 2026-03-17 — record the fee pilot commit hash in the Execution Facade Refactor project tracking notes.
 - `0c5abc78` — 2026-03-17 — add the fee staleness event seam with typed events and parity-preserving production adapter coverage.
@@ -18,15 +19,19 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 ## Key Files
 - crates/soldier_core/src/execution/
 - crates/soldier_core/src/risk/fees.rs
+- [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md)
 - obsidian/Upgrades for AI/1/Status 2026-03-05.md
 
 ## Debriefs
+- [[Execution Facade Refactor 2026-03-17 Upgrade 2 Acceptance Gate]]
 - [[Execution Facade Refactor 2026-03-17 Telemetry Sink Seam]]
 - [[Execution Facade Refactor 2026-03-17 Fee Staleness Event Pilot]]
 - [[Execution Facade Refactor 2026-03-17 Execution Gate Event Pilots]]
 
 ## Log
 ### 2026-03-17
+- Pointed the Upgrade status note at [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) and tightened the checklist so Upgrade 2 scope and closure stay row-driven instead of narrative.
+- Added [docs/codebase/upgrade2_graybox_telemetry_checklist.md](../../docs/codebase/upgrade2_graybox_telemetry_checklist.md) as the mechanical pass/fail gate for Upgrade 2 graybox telemetry coverage and recorded that the checklist is still red outside liquidity, net-edge, fee staleness, and expected slippage-via-liquidity.
 - Added a top-level `## Commits` history section to this project note and backfilled the execution gate pilot debrief with commit `1e0eccc6`.
 - Converted `crates/soldier_core/src/execution/gate.rs` to a crate-private `evaluate_liquidity_gate_with_events(...)` seam with `LiquidityGateEvent` and a parity-preserving production adapter.
 - Converted `crates/soldier_core/src/execution/gates.rs` to a crate-private `evaluate_net_edge_with_events(...)` seam with `NetEdgeEvent` and a parity-preserving production adapter.
