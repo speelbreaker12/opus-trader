@@ -10,7 +10,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::risk::RiskState;
+use crate::{risk::RiskState, telemetry::EventSink};
 
 // ─── Configuration ──────────────────────────────────────────────────────
 
@@ -77,6 +77,23 @@ pub struct FeeEvaluation {
     pub risk_state: RiskState,
 }
 
+/// Internal fee staleness events used for graybox testing.
+/// Not part of the public risk façade.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FeeEvent {
+    HardStale,
+}
+
+struct ProductionFeeEvents;
+
+impl EventSink<FeeEvent> for ProductionFeeEvents {
+    fn emit(&mut self, event: FeeEvent) {
+        match event {
+            FeeEvent::HardStale => bump_fee_staleness_hard_stale(),
+        }
+    }
+}
+
 // ─── Metrics ─────────────────────────────────────────────────────────────
 
 /// Observability metrics for fee staleness.
@@ -139,14 +156,15 @@ fn bump_fee_staleness_hard_stale() {
 ///
 /// CONTRACT.md: "If fee_model_cached_at_ts is missing or unparseable,
 /// treat the fee cache as hard-stale (RiskState::Degraded)."
-pub fn evaluate_fee_staleness(
+pub(crate) fn evaluate_fee_staleness_with_events<E: EventSink<FeeEvent>>(
     snapshot: &FeeCacheSnapshot,
     config: &FeeStalenessConfig,
+    events: &mut E,
 ) -> FeeEvaluation {
     // Guard: non-finite or negative fee_rate → HardStale + Degraded (fail-closed)
     // Do NOT propagate bad rate via multiplication — use 0.0 as safe default.
     if !snapshot.fee_rate.is_finite() || snapshot.fee_rate < 0.0 {
-        bump_fee_staleness_hard_stale();
+        events.emit(FeeEvent::HardStale);
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: 0.0,
@@ -170,7 +188,7 @@ pub fn evaluate_fee_staleness(
     let cached_at_ms = match snapshot.fee_model_cached_at_ts_ms {
         Some(ts) => ts,
         None => {
-            bump_fee_staleness_hard_stale();
+            events.emit(FeeEvent::HardStale);
             return FeeEvaluation {
                 staleness: FeeStaleness::HardStale,
                 fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -185,7 +203,7 @@ pub fn evaluate_fee_staleness(
         (snapshot.now_ms - cached_at_ms) / 1000
     } else {
         // Clock skew — fail-closed: treat as hard-stale
-        bump_fee_staleness_hard_stale();
+        events.emit(FeeEvent::HardStale);
         return FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -196,7 +214,7 @@ pub fn evaluate_fee_staleness(
 
     if age_s > config.fee_cache_hard_s {
         // Hard-stale (AT-033)
-        bump_fee_staleness_hard_stale();
+        events.emit(FeeEvent::HardStale);
         FeeEvaluation {
             staleness: FeeStaleness::HardStale,
             fee_rate_effective: snapshot.fee_rate * (1.0 + safe_buffer),
@@ -219,5 +237,83 @@ pub fn evaluate_fee_staleness(
             cache_age_s: Some(age_s),
             risk_state: RiskState::Healthy,
         }
+    }
+}
+
+pub fn evaluate_fee_staleness(
+    snapshot: &FeeCacheSnapshot,
+    config: &FeeStalenessConfig,
+) -> FeeEvaluation {
+    let mut events = ProductionFeeEvents;
+    evaluate_fee_staleness_with_events(snapshot, config, &mut events)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::execution::{METRICS_TEST_LOCK, take_execution_metric_lines, with_intent_trace_ids};
+
+    fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
+        METRICS_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+    }
+
+    #[test]
+    fn fee_graybox_hard_stale_emits_event_without_global_side_effects() {
+        let _lock = metrics_lock();
+        let _ = take_execution_metric_lines();
+        let before = fee_staleness_hard_stale_total();
+
+        let snapshot = FeeCacheSnapshot {
+            fee_rate: 0.001,
+            fee_model_cached_at_ts_ms: None,
+            now_ms: 1_000,
+        };
+        let config = FeeStalenessConfig::default();
+        let mut events = Vec::new();
+
+        let result = evaluate_fee_staleness_with_events(&snapshot, &config, &mut events);
+
+        assert_eq!(result.staleness, FeeStaleness::HardStale);
+        assert_eq!(events, vec![FeeEvent::HardStale]);
+        assert_eq!(fee_staleness_hard_stale_total(), before);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.is_empty(),
+            "graybox path must not emit global metric lines: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn fee_wrapper_preserves_hard_stale_metric_contract() {
+        let _lock = metrics_lock();
+        let _ = take_execution_metric_lines();
+        let before = fee_staleness_hard_stale_total();
+
+        let snapshot = FeeCacheSnapshot {
+            fee_rate: 0.001,
+            fee_model_cached_at_ts_ms: None,
+            now_ms: 1_000,
+        };
+        let config = FeeStalenessConfig::default();
+
+        let result = with_intent_trace_ids("intent-fee-001", "run-fee-001", || {
+            evaluate_fee_staleness(&snapshot, &config)
+        });
+
+        assert_eq!(result.staleness, FeeStaleness::HardStale);
+        assert_eq!(fee_staleness_hard_stale_total(), before + 1);
+
+        let lines = take_execution_metric_lines();
+        assert!(
+            lines.iter().any(|line| {
+                line.starts_with("fee_staleness_hard_stale_total")
+                    && line.contains("intent_id=intent-fee-001")
+                    && line.contains("run_id=run-fee-001")
+            }),
+            "expected fee staleness metric line, got {lines:?}"
+        );
     }
 }
