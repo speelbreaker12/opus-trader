@@ -60,4 +60,5 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Accepted-only patch rendered at `autoresearch/contract/phase2/review/CONTRACT_PATCH_phase2-mar17-20260317_141745-bb818649.patch`
 - Patch audit caught 3 gaps: missing AT-PROP-203, missing Appendix A entry for inventory_skew_sell_floor, duplicate line-513 hunk. All fixed.
 - Next: apply corrected patch to CONTRACT.md (new context recommended — 16 semantic edits on 6400+ line file)
-- Applied phase3 accepted patch to CONTRACT.md: 16 proposals, 11 new ATs, 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, MarginHeadroomInputMissing + TradingModeBlockedOpen + MarginHeadroomInputMissing in registry, bunker_mode/cortex_override/account_summary staleness rules, inventory_skew_sell_floor formula
+- Applied phase3 accepted patch to CONTRACT.md: 16 proposals, 11 new ATs, 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, MarginHeadroomInputMissing + TradingModeBlockedOpen in registry, bunker_mode/cortex_override/account_summary staleness rules, inventory_skew_sell_floor formula
+- Reverted phase2 proposals (AT-1247..AT-1252) superseded by phase3 findings + CCL-2026-03-16-01 ledger entry

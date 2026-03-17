@@ -25,6 +25,10 @@ Applied 16 accepted proposals from autoresearch phase3 run `phase2-mar17-2026031
 - P-209: Already covered by parenthetical qualifier + cooldown pattern
 - P-400/P-401: Fixture-only proposals, not CONTRACT.md
 
+## Phase 2 Reversions (pre-existing working tree)
+
+Reverted AT-1247..AT-1252 and CCL-2026-03-16-01 ledger entry. Removed global cooldown scope paragraph, Profile:ALL tags, simplified hedge fallback text in 3.1.
+
 ## Constraint
 
 Contract hash verified before apply (`d7ab68a8...` matched proposals_index). All edits applied by semantic section lookup, not line numbers.
