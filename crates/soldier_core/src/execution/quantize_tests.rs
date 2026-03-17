@@ -5,12 +5,7 @@
 //! AT-926: missing/invalid instrument metadata → reject.
 
 use super::*;
-
-fn metrics_lock() -> std::sync::MutexGuard<'static, ()> {
-    crate::execution::METRICS_TEST_LOCK
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-}
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
 
 trait TestValueExt<T> {
     fn must(self) -> T;
@@ -697,7 +692,7 @@ fn test_nan_limit_price_rejected() {
 
 #[test]
 fn test_static_counter_too_small_reject_increments() {
-    let _guard = metrics_lock();
+    let _guard = begin_metrics_test();
     let constraints = QuantizeConstraints {
         tick_size: 0.01,
         amount_step: 1.0,
@@ -719,7 +714,7 @@ fn test_static_counter_too_small_reject_increments() {
 
 #[test]
 fn test_static_counter_invalid_input_reject_increments() {
-    let _guard = metrics_lock();
+    let _guard = begin_metrics_test();
     let constraints = QuantizeConstraints {
         tick_size: 0.01,
         amount_step: 1.0,
@@ -738,7 +733,7 @@ fn test_static_counter_invalid_input_reject_increments() {
 
 #[test]
 fn test_static_counter_missing_metadata_reject_increments() {
-    let _guard = metrics_lock();
+    let _guard = begin_metrics_test();
     let constraints = QuantizeConstraints {
         tick_size: 0.0,
         amount_step: 1.0,
@@ -755,5 +750,118 @@ fn test_static_counter_missing_metadata_reject_increments() {
     assert!(
         after > before,
         "counter should increment: before={before}, after={after}"
+    );
+}
+
+#[test]
+fn test_quantize_graybox_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = quantize_reject_total(QuantizeStaticRejectReason::TooSmall);
+    let mut metrics = QuantizeMetrics::new();
+    let mut events = Vec::new();
+
+    let result = quantize_with_events(
+        0.05,
+        50_000.0,
+        Side::Buy,
+        &btc_constraints(),
+        &mut metrics,
+        &mut events,
+    );
+
+    assert!(matches!(
+        result,
+        Err(QuantizeError::TooSmallAfterQuantization { qty_q, min_amount })
+            if (qty_q - 0.0).abs() < 1e-9 && (min_amount - 0.1).abs() < 1e-9
+    ));
+    assert_eq!(metrics.reject_too_small_total(), 1);
+    assert!(
+        matches!(
+            events.as_slice(),
+            [QuantizeEvent::Reject {
+                error: QuantizeError::TooSmallAfterQuantization { qty_q, min_amount },
+            }] if (*qty_q - 0.0).abs() < 1e-9 && (*min_amount - 0.1).abs() < 1e-9
+        ),
+        "expected too-small reject event, got {events:?}"
+    );
+    assert_eq!(
+        quantize_reject_total(QuantizeStaticRejectReason::TooSmall),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_quantize_graybox_success_emits_no_events_or_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = quantize_reject_total(QuantizeStaticRejectReason::TooSmall);
+    let mut metrics = QuantizeMetrics::new();
+    let mut events = Vec::new();
+
+    let result = quantize_with_events(
+        0.35,
+        50_000.7,
+        Side::Buy,
+        &btc_constraints(),
+        &mut metrics,
+        &mut events,
+    )
+    .must();
+
+    assert_eq!(result.qty_steps, 3);
+    assert_eq!(result.price_ticks, 100_001);
+    assert_eq!(metrics.reject_too_small_total(), 0);
+    assert!(
+        events.is_empty(),
+        "success path should not emit reject events"
+    );
+    assert_eq!(
+        quantize_reject_total(QuantizeStaticRejectReason::TooSmall),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_quantize_wrapper_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
+    let intent_id = "intent-quantize-001";
+    let run_id = "run-quantize-001";
+    let before = quantize_reject_total(QuantizeStaticRejectReason::TooSmall);
+    let mut metrics = QuantizeMetrics::new();
+
+    let result = with_intent_trace_ids(intent_id, run_id, || {
+        quantize(0.05, 50_000.0, Side::Buy, &btc_constraints(), &mut metrics)
+    });
+
+    assert!(matches!(
+        result,
+        Err(QuantizeError::TooSmallAfterQuantization { .. })
+    ));
+    assert_eq!(metrics.reject_too_small_total(), 1);
+    assert_eq!(
+        quantize_reject_total(QuantizeStaticRejectReason::TooSmall),
+        before + 1
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("quantize_reject_total")
+                && line.contains("error=TooSmallAfterQuantization")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected quantize reject metric line, got {lines:?}"
     );
 }
