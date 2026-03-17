@@ -418,7 +418,7 @@ test_known_tools_sync() {
   # Extract tool names from the case-statement in review_logged.sh
   local review_script="$ROOT/plans/review_logged.sh"
   [[ -f "$review_script" ]] || fail "known_tools_sync: review_logged.sh not found"
-  review_tools="$(grep -E '^\s+codex\|sonnet\|opus\|kimi\|gemini\)' "$review_script" | sed 's/[);[:space:]]//g' | tr '|' '\n' | sort | tr '\n' ' ' | xargs)"
+  review_tools="$(grep -E '^[[:space:]]+codex\|sonnet\|opus\|kimi\|gemini\)' "$review_script" | sed 's/[);[:space:]]//g' | tr '|' '\n' | sort | tr '\n' ' ' | xargs)"
 
   [[ "$aggregate_tools" == "$review_tools" ]] \
     || fail "known_tools_sync: KNOWN_TOOLS='$aggregate_tools' != review_logged.sh tools='$review_tools'"

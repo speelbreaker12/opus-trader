@@ -60,7 +60,7 @@ REQUIRED_PROVENANCE_FIELDS_JSON = [
 ]
 # Markdown artifacts (review_logged.sh output) carry a smaller set.
 # cycle / phase_equivalent / review_basis / slice_id are manifest-level.
-# model is emitted for sonnet/opus/kimi (codex omits it).
+# model is not required because older artifacts may omit it.
 REQUIRED_PROVENANCE_FIELDS_MD = [
     "story_id", "head_commit", "prompt_style", "artifact_provenance",
 ]
