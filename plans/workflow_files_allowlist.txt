@@ -153,6 +153,8 @@ plans/tests/test_recon_operator_runner.sh
 plans/tests/test_recon_operator_trace.sh
 plans/tests/test_recon_precheck.sh
 plans/tests/test_recon_prompt_guard.sh
+plans/tests/test_recon_scoreboard.sh
+plans/tests/test_review_command_wrappers.sh
 plans/tests/test_review_logged_prompt_literalization.sh
 plans/tests/test_review_logged_proof_graph.sh
 plans/tests/test_review_logged_timeout_binary_unavailable.sh

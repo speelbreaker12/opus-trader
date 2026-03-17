@@ -652,8 +652,8 @@ cmd_baseline() {
   rm -rf "$output_dir"
   mkdir -p "$output_dir"
 
-  # Generate one output file per test using Claude (same as eval --generate)
-  generate_skill_outputs "$skill" "$output_dir" "$model"
+  # Baselines must reflect the current skill behavior, not cached prior outputs.
+  generate_skill_outputs "$skill" "$output_dir" "$model" 1
 
   # Detect crash: any expected output file missing means Claude failed for that test.
   local missing_outputs=0
@@ -689,16 +689,33 @@ for t in data['tests']:
     fail "Evaluator not found: $EVALUATE_PY"
   fi
 
-  local score_json score passed total
-  score_json="$(python3 "$EVALUATE_PY" \
+  local score_json score_fields score passed total evaluator_rc score_json_path
+  score_json_path="$(mktemp "${TMPDIR:-/tmp}/autoresearch-eval.XXXXXX")"
+  if python3 "$EVALUATE_PY" \
     --eval "$eval_json" \
     --output-dir "$output_dir" \
     --skill-dir "$SKILLS_DIR/$skill" \
-    --json)"
+    --json >"$score_json_path"; then
+    evaluator_rc=0
+  else
+    evaluator_rc=$?
+  fi
 
-  score="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['score'])")"
-  passed="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['passed'])")"
-  total="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['total'])")"
+  score_json="$(cat "$score_json_path")"
+  rm -f "$score_json_path"
+
+  if [[ -z "$score_json" ]]; then
+    fail "Evaluator produced no JSON output"
+  fi
+
+  if ! score_fields="$(printf '%s' "$score_json" | python3 -c "import json,sys; d=json.load(sys.stdin); print(f\"{d['score']}\\t{d['passed']}\\t{d['total']}\")")"; then
+    fail "Evaluator returned invalid JSON output"
+  fi
+  IFS=$'\t' read -r score passed total <<< "$score_fields"
+
+  if [[ "$evaluator_rc" -ne 0 ]]; then
+    warn "Evaluator exited non-zero (rc=$evaluator_rc); recording imperfect baseline score"
+  fi
 
   # Append mechanical score row to results.tsv
   ensure_tsv_header "$results_file"
@@ -719,6 +736,7 @@ generate_skill_outputs() {
   local skill="$1"
   local output_dir="$2"
   local model="${3:-sonnet}"
+  local force_regenerate="${4:-0}"
   local eval_json="$SKILLS_DIR/$skill/eval.json"
   local skill_file
   skill_file="$(require_skill_file "$skill")"
@@ -746,7 +764,7 @@ for t in data['tests']:
     local fixture_path="$SKILLS_DIR/$skill/$fixture"
     local output_file="$output_dir/${test_id}.md"
 
-    if [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
+    if [[ "$force_regenerate" -ne 1 ]] && [[ -f "$output_file" ]] && [[ -s "$output_file" ]]; then
       info "  [$test_id] Output exists, skipping (delete to regenerate)"
       continue
     fi
@@ -943,8 +961,24 @@ cmd_check_monotonic() {
     ((line_num++)) || true
     [[ "$status" != "keep" ]] && continue
     if [[ -n "$prev_score" ]]; then
-      # awk comparison: fail if new score < prev score
-      if awk "BEGIN{exit !($score < $prev_score)}"; then
+      local compare_rc=0
+      set +e
+      awk -v current="$score" -v previous="$prev_score" '
+        BEGIN {
+          numeric = "^-?[0-9]+([.][0-9]+)?$"
+          if (current !~ numeric || previous !~ numeric) {
+            exit 2
+          }
+          exit !(current < previous)
+        }
+      '
+      compare_rc=$?
+      set -e
+      if [[ "$compare_rc" -eq 2 ]]; then
+        fail "invalid numeric score in keep rows near line $line_num: current='$score' previous='$prev_score'"
+      elif [[ "$compare_rc" -ne 0 && "$compare_rc" -ne 1 ]]; then
+        fail "monotonicity comparison failed near line $line_num"
+      elif [[ "$compare_rc" -eq 0 ]]; then
         warn "  Line $line_num: score $score < prior keep $prev_score (commit $commit)"
         ((violations++)) || true
       fi

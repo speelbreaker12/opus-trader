@@ -173,6 +173,7 @@ AT-1234
 - The primary action MUST be the currently operator-facing runtime control path for "stop new risk" (CLI, HTTP, or another contract-named surface). An improvised operator step that only kills the process or bypasses the runtime state machine MUST NOT be the primary action.
 - The runbook MUST name the expected runtime safety state reached by the primary action (`trading_mode == Kill`, `trading_mode == ReduceOnly`, `emergency_reduceonly_active == true`, or `dispatch_enabled == false` in foundation mode, as applicable).
 - If exposure can remain after the primary action, the runbook MUST document the follow-on risk-reducing action that remains permitted and the bounded fallback action to use when the primary action is unavailable.
+- Drill evidence MUST include at least one non-zero exposure case at primary-action invocation time, or a deterministic simulated equivalent that proves the same exposed-state transition path.
 
 AT-1237
 `Profile: CSP`
@@ -181,8 +182,9 @@ When: the recorded break-glass drill invokes the documented primary action.
 Then: the documented primary action MUST exist at runtime, match the exercised control path, and transition the system to the documented safety state within one control-plane tick.
 And: once that transition occurs, OPEN dispatch MUST be blocked.
 And: if exposure exists, at least one documented risk-reducing action MUST remain available per §2.2.3.6.
-Pass criteria: drill evidence and runtime tests show the exact documented primary action was invoked, the documented runtime state was reached, OPEN dispatch stopped, and the risk-reducing path remained available.
-Fail criteria: the documented primary action is missing or differs from the exercised runtime path, no documented safety-state transition occurs, OPEN can still dispatch, no risk-reducing path remains when exposure exists, or the runbook omits the bounded fallback action.
+And: drill evidence MUST include at least one non-zero exposure case (or deterministic simulated equivalent) with explicit pre-action exposure proof and post-action risk-reducing-path proof.
+Pass criteria: drill evidence and runtime tests show the exact documented primary action was invoked, the documented runtime state was reached, OPEN dispatch stopped, the risk-reducing path remained available, and the required exposed-case (or deterministic simulated equivalent) proof is present.
+Fail criteria: the documented primary action is missing or differs from the exercised runtime path, no documented safety-state transition occurs, OPEN can still dispatch, no risk-reducing path remains when exposure exists, the required exposed-case proof is missing, or the runbook omits the bounded fallback action.
 
 **P0-E clarifications (Normative):**
 - For `/api/v1/status`, `foundation_exit_condition` is satisfied when `phase != foundation`. `phase` MUST NOT change away from `foundation` except through the legal foundation-exit transition defined in the status-authority precedence block below.
@@ -1355,6 +1357,10 @@ AT-936
 - If `EmergencyFlattenGroup` triggers **> 2 times in 5 minutes** for the same key → **Blacklist** that key for **15 minutes**:
   - block new opens for that key (return `Rejected(ChurnBreakerActive)`),
   - allow closes/hedges (ReduceOnly) as normal.
+- Optional early-clear behavior (deterministic, fail-closed):
+  - A blacklisted key MAY clear before the 15-minute TTL only if churn-counter inputs are fresh and the key has remained below the trip threshold continuously for `churn_breaker_early_clear_stability_s`.
+  - Early-clear MUST emit structured log `ChurnBreakerEarlyClear` with `{strategy_id, structure_fingerprint}`, prior trigger count, stability window, and evidence timestamps used for the decision.
+  - If required churn-counter inputs are missing/stale/unparseable, early-clear MUST NOT occur; blacklist TTL remains in force.
 
 **Where:** `crates/soldier_core/src/risk/churn_breaker.rs`
 
@@ -1365,6 +1371,22 @@ AT-221
 - Then: the 4th attempt is rejected and logged (`ChurnBreakerTrip`), with blacklist TTL enforced.
 - Pass criteria: rejection + log + TTL enforcement.
 - Fail criteria: 4th attempt proceeds or TTL not enforced.
+
+AT-1245
+- Given: a key is currently blacklisted by churn breaker and churn-counter inputs are fresh.
+- And: the key stays below the trip threshold continuously for at least `churn_breaker_early_clear_stability_s`.
+- When: churn-breaker early-clear evaluation runs.
+- Then: the blacklist is cleared before TTL expiry and structured log `ChurnBreakerEarlyClear` is emitted.
+- Pass criteria: early-clear occurs only after the full stability window and the required log payload is present.
+- Fail criteria: early-clear occurs before stability window, occurs without log, or does not clear despite satisfied conditions.
+
+AT-1246
+- Given: a key is currently blacklisted by churn breaker.
+- And: churn-counter freshness/evidence inputs required for early-clear are missing, stale, or unparseable.
+- When: churn-breaker early-clear evaluation runs.
+- Then: blacklist MUST remain active (fail-closed) until normal TTL expiry; no early-clear is allowed.
+- Pass criteria: key remains blocked for OPEN until TTL expiry or fresh evidence later satisfies AT-1245.
+- Fail criteria: early-clear occurs while required inputs are stale/missing/unparseable.
 
 ### **1.2.3 Self-Impact Feedback Loop Guard (Echo Chamber Breaker)**
 
@@ -2582,9 +2604,18 @@ This table is the authoritative reference for AT-1048 (enumerability test). Impl
 
 ##### **2.2.3.4.1 Non‑Active OPEN Cancellation (CSP, Non‑Negotiable)**
 
-Whenever `TradingMode != Active`, the engine MUST attempt to cancel all outstanding OPEN orders with `reduce_only != true`.
+Whenever `TradingMode != Active`, the engine MUST attempt to cancel all outstanding OPEN orders with `reduce_only != true`, subject to the deterministic precedence block below.
 - This cancel loop MUST be **bounded and non‑blocking** per tick (see `cancel_open_batch_max`, `cancel_open_budget_ms` in Appendix A).
 - If any risk‑increasing OPENs remain, the system MUST retry on subsequent ticks until cleared.
+- Legacy WAL records that omit `reduce_only` MUST be treated as OPEN-equivalent (`reduce_only=false`) for non-Active cancel-sweep eligibility.
+- Reconciliation MAY exempt an in-flight order from cancel sweep only with positive proof that keeping the order in-flight is risk-reducing against current net exposure.
+- If risk direction cannot be positively proven risk-reducing, the order MUST remain cancel-eligible, explicit diagnostics MUST be emitted, and reconciliation MUST be prioritized on subsequent ticks.
+- Cancel sweep MUST NOT cancel an in-flight order when that cancellation would leave zero risk-reducing in-flight orders while net exposure is non-zero or unknown.
+
+**Deterministic precedence (normative):** for each in-flight order evaluated by non-Active cancel sweep, decisions MUST be applied in this order:
+1. **Capital guard first:** if canceling the order would leave zero risk-reducing in-flight orders while net exposure is non-zero or unknown, the order MUST NOT be canceled.
+2. **Proof-gated exemption second:** otherwise, reconciliation MAY exempt the order only with positive proof that keeping it in-flight is risk-reducing.
+3. **Default cancel-all third:** otherwise, the order is cancel-eligible and MUST be canceled within the bounded sweep budget; legacy missing `reduce_only` is treated as `false`.
 - CLOSE/HEDGE/CANCEL intents remain permitted subject to §2.2.5.
 
 ---
@@ -2736,6 +2767,22 @@ AT-1065
 - Then: cancel requests for those OPEN orders are issued within the bounded cancel budget, and OPEN dispatch remains blocked.
 - Pass criteria: cancels are attempted (bounded by `cancel_open_batch_max` / `cancel_open_budget_ms`), outstanding risk‑increasing OPENs trend to zero over subsequent ticks.
 - Fail criteria: no cancel attempts, or risk‑increasing OPENs remain indefinitely while ReduceOnly.
+
+**Proof-Gated Reconciliation Exemption for Non-Active Cancel Sweep**
+AT-1241
+- Given: `TradingMode != Active`, cancel sweep evaluates an in-flight order, and risk direction/classification is ambiguous (including legacy WAL records with missing `reduce_only`).
+- When: reconciliation evaluates whether that order may be exempted from cancellation.
+- Then: exemption is allowed only with positive proof that keeping the order in-flight is risk-reducing; otherwise the order remains cancel-eligible, explicit diagnostics are emitted, and reconciliation is prioritized.
+- Pass criteria: only positively proven risk-reducing in-flight orders are exempted; ambiguous orders remain cancel-eligible with diagnostics and reconciliation priority asserted.
+- Fail criteria: exemption occurs without positive proof, or diagnostics/reconciliation-priority signaling is missing when proof is absent.
+
+**Capital-Supremacy Guard for Last Risk-Reducing In-Flight Order**
+AT-1242
+- Given: `TradingMode != Active`, net exposure is non-zero or unknown, and canceling a candidate in-flight order would leave zero risk-reducing in-flight orders.
+- When: cancel sweep applies cancellation decisions.
+- Then: that order MUST NOT be canceled, while other cancel-eligible risk-increasing OPEN orders remain cancelable.
+- Pass criteria: cancel sweep never creates a state where exposure is non-zero/unknown and no risk-reducing in-flight orders remain.
+- Fail criteria: the last risk-reducing in-flight order is canceled while exposure is non-zero or unknown.
 
 **Emergency ReduceOnly Cooldown Is Enforced**
 AT-132
@@ -2901,6 +2948,21 @@ Profile: CSP
 - Exchange positions match ledger cumulative fills within `position_reconcile_epsilon` (default: instrument's `min_amount` or `1e-6` if undefined).
 - No missing trades over the last `reconcile_trade_lookback_sec` (default: 300s) as determined by REST `/get_user_trades` query.
 - All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).
+
+**Reconciliation stall observability (deterministic, no override-clear):**
+- If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s`, runtime MUST emit structured log `RECONCILE_STALL` and increment counter metric `reconcile_stall_total`.
+- `RECONCILE_STALL` payload MUST include the failing criterion that is preventing reconciliation success.
+- Emission cadence MUST be deterministic: for a continuous stall episode, emit once when the threshold is first exceeded; re-emit only if the failing criterion changes during that same episode.
+- A new emission episode starts only after reconciliation success clears the stall condition/latch, and a later stall exceeds the threshold again.
+- This observability rule MUST NOT clear or override the latch; latch clears only after reconciliation success criteria are satisfied.
+
+AT-1243
+- Given: `open_permission_blocked_latch == true` and reconciliation remains blocked beyond `reconcile_stall_max_delay_s`.
+- When: reconciliation stall observability evaluates.
+- Then: runtime emits structured `RECONCILE_STALL` log with the failing criterion, increments `reconcile_stall_total`, and keeps latch set with no override-clear.
+- And: for one continuous stall episode, emission occurs once at first threshold exceedance, with re-emission only on failing-criterion change; a new episode can emit again only after clear and re-stall.
+- Pass criteria: log + counter emitted with deterministic cadence and failing criterion; latch remains set.
+- Fail criteria: missing log/counter, missing failing criterion payload, repeated spam emission without criterion change/new episode, or latch cleared without reconciliation success.
 
 AT-1100
 - Given: reconciliation runs and REST `/get_user_trades` over the last `reconcile_trade_lookback_sec` returns trades that are not present in the local ledger (missing trades).
@@ -3474,6 +3536,7 @@ Profile: CSP
   - reduce-only BUY close uses quantized venue `max_price`,
   - reduce-only SELL close uses quantized venue `min_price`.
   - This fallback MUST use bounded IOC attempts only and MUST remain monotonic risk-reducing.
+  - This fallback is valid only when instrument metadata freshness holds (`instrument_cache_age_s <= instrument_cache_ttl_s`); stale instrument metadata MUST make venue-band fallback unavailable.
 - The `best` price in step 1 uses the selected source (asks for buy, bids for sell).
 - If no valid source is available from L2/L1 and no valid venue band is available (missing/unparseable/unquantizable metadata), emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.
 
@@ -3542,7 +3605,7 @@ AT-937
 - Fail criteria: dispatch is blocked despite a valid L1 ticker or uses a stale/invalid source.
 
 AT-938
-- Given: `L2BookSnapshot` is missing/unparseable/stale and no fresh `L1TickerSnapshot` is available.
+- Given: `L2BookSnapshot` is missing/unparseable/stale, no fresh `L1TickerSnapshot` is available, venue band metadata is present/parseable, and instrument metadata freshness holds (`instrument_cache_age_s <= instrument_cache_ttl_s`).
 - When: emergency close runs.
 - Then: IOC close attempts are submitted using emergency venue-band fallback pricing (`max_price` for reduce-only BUY, `min_price` for reduce-only SELL), quantized to tick.
 - Pass criteria: at least one bounded IOC attempt is dispatched using venue-band fallback pricing.
@@ -4766,7 +4829,8 @@ These acceptance tests MAY run in an isolated harness and MUST NOT by themselves
 * Margin headroom, order-type preflight, exchange health, and **§1.3 Pre-Trade Liquidity Gate**, including all acceptance tests required for deployable stale-L2 OPEN rejection and risk-reducing fallback behavior.
 
 **Phase-2 rule:** Phase 2 is the first roadmap phase eligible for a deployable CSP claim, subject to passing all `Profile: CSP` requirements and tests. A runtime MUST NOT change `phase` from `foundation` to a non-foundation value until this rule is satisfied and the §7.0 legal foundation-exit transition completes.
-A Phase 2 deployable claim MUST FAIL unless §1.3 Liquidity Gate acceptance tests **AT-222, AT-344, AT-909, AT-421, and AT-1216** pass.
+A Phase 2 deployable claim MUST FAIL unless §1.3 Liquidity Gate acceptance tests **AT-222, AT-344, AT-909, AT-421, and AT-1216** pass, and idempotency/reconciliation safeguards **AT-217** and **AT-933** pass.
+If a shared NON-TRIP remediation evidence bundle is used for this Phase 2 deployable claim, it MUST enumerate each blocker forced-pass claim and include per-blocker proof for **AT-222, AT-344, AT-909, AT-421, AT-1216, AT-217, and AT-933** in `artifacts/verify/<run_id>/phase2_nontrip_forced_pass_bundle.json`.
 
 ### **Phase 3: GOP Data Loop**
 
@@ -4863,9 +4927,14 @@ AT-1230
 - `wal_queue_depth`, `wal_queue_capacity`, `wal_queue_enqueue_failures` (see §2.4.1)
 - `deribit_http_p95_ms`, `ws_event_lag_ms`
 - `mode_reasons` (ModeReasonCode[]; authoritative explanation of `trading_mode` for this tick; MUST be `[]` iff `trading_mode == Active`)
+- `pending_reduceonly_reasons` (ModeReasonCode[]; informational diagnostics only; deterministic ordered subset of currently observed reduce-only/kill predicates that are not authoritative for dispatch this tick; MUST be `[]` iff no pending reasons exist)
 - `open_permission_blocked_latch` (bool; true means OPEN blocked; CLOSE/HEDGE/CANCEL allowed only as permitted by §2.2.5)
 - `open_permission_reason_codes` (OpenPermissionReasonCode[]; MUST be [] iff `open_permission_blocked_latch == false`)
 - `open_permission_requires_reconcile` (bool; MUST equal `open_permission_blocked_latch` for v5.2 - all reason codes are reconcile-class)
+
+**Non-authoritative status extension rule:**
+- `pending_reduceonly_reasons` is informational-only and MUST NOT be used as an authorization input for dispatch or TradingMode transitions.
+- `trading_mode`, `mode_reasons`, and open-permission latch fields remain the authoritative dispatch/readiness source of truth.
 
 **/status response MUST include (GOP extension keys; required when GOP/FULL is enforced):**
 - `evidence_chain_state`
@@ -5038,6 +5107,13 @@ AT-025
 - Then: `mode_reasons` MUST be "tier-pure" (all reasons from the highest triggered tier only).
 - Pass criteria: no mixed-tier reasons appear in one response.
 - Fail criteria: any response contains mixed-tier reasons.
+
+AT-1244
+- Given: `/status` is fetched and one or more reduce-only/kill predicates are observed but not authoritative for dispatch this tick.
+- When: `pending_reduceonly_reasons` is emitted.
+- Then: `pending_reduceonly_reasons` contains only those non-authoritative predicates in deterministic order, and `trading_mode` / `mode_reasons` / open-permission authority remain unchanged by this informational field.
+- Pass criteria: field is present with deterministic ordering and no authority drift from canonical fields.
+- Fail criteria: field influences dispatch authorization, contains non-deterministic or out-of-scope tokens, or diverges from canonical authority fields.
 
 AT-351
 - Given: `policy_age_sec > max_policy_age_sec`, `evidence_chain_state == GREEN`, and no Kill reasons are active.
@@ -5955,6 +6031,18 @@ AT-306
 - Pass criteria: correct lookback query and matching.
 - Fail criteria: missing query or mismatch handling.
 
+**`reconcile_stall_max_delay_s`** (§2.2.4 Open Permission Latch)
+- **Default**: `30` seconds
+- **Purpose**: Maximum bounded delay before a still-blocked reconciliation path must emit deterministic stall diagnostics.
+- **Rationale**: Preserves fail-closed latch behavior while guaranteeing operator-visible progress diagnostics.
+See AT-1243.
+
+**`churn_breaker_early_clear_stability_s`** (§1.2.2 Atomic Churn Circuit Breaker)
+- **Default**: `120` seconds
+- **Purpose**: Required continuous stability window below churn-trip threshold before optional blacklist early-clear is allowed.
+- **Rationale**: Allows cautious recovery from transient churn while preventing rapid oscillation/reopen loops.
+See AT-1245 and AT-1246.
+
 Profile: GOP
 **`parquet_queue_trip_pct`** (§2.2.2 EvidenceGuard)
 - **Default**: `0.90` (90%)
@@ -6217,7 +6305,8 @@ AT-326
 - **Default**: `5` sec
 - **Purpose**: Maximum allowed delay between continuous satisfaction of legal foundation-exit preconditions and evaluation/transition attempt.
 - **Rationale**: Keeps foundation-exit authority handoff bounded and observable while preserving fail-closed foundation status-lite behavior.
-- Reference acceptance test: AT-1240 (see P0-E section).
+Profile: CSP
+Acceptance test: AT-1240 (see P0-E section).
 
 ---
 
@@ -6249,6 +6338,8 @@ AT-326
 | `evidenceguard_global_cooldown` | `120` | sec | §2.2.2 |
 | `position_reconcile_epsilon` | `1e-6` | qty units | §2.2.4 |
 | `reconcile_trade_lookback_sec` | `300` | sec | §2.2.4 |
+| `reconcile_stall_max_delay_s` | `30` | sec | §2.2.4 |
+| `churn_breaker_early_clear_stability_s` | `120` | sec | §1.2.2 |
 | `parquet_queue_trip_pct` | `0.90` | pct | §2.2.2 |
 | `parquet_queue_trip_window_s` | `5` | sec | §2.2.2 |
 | `parquet_queue_clear_pct` | `0.70` | pct | §2.2.2 |
@@ -6596,3 +6687,8 @@ definition points in the main contract and to the most directly relevant accepta
 | 2026-03-14 | CCL-2026-03-14-01 | §1.3 Pre-Trade Liquidity Gate; §6 Implementation Roadmap v4.0 (Phase 1/Phase 2 notes); Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit §1.3 phase applicability so Liquidity Gate is not a Phase 1 completion requirement and is mandatory for Phase 2 deployable claims, then align Phase 1/Phase 2 roadmap wording to match. | Remove the live Phase 1/Phase 2 Liquidity Gate scope contradiction so milestone closure and deployable-claim criteria are deterministic and fail-closed. | AT-222, AT-344, AT-909, AT-421, AT-1216 | local/blocking-6-phase-scope-alignment |
 | 2026-03-14 | CCL-2026-03-14-02 | §3.1 Deterministic Emergency Close; Appendix CSP-MAP; Appendix CONTRACT_CHANGE_LEDGER | clarify | Require venue-band fallback pricing to enforce instrument metadata freshness (`instrument_cache_age_s <= instrument_cache_ttl_s`) and add an explicit stale-metadata negative AT for this path. | Close the stale-but-parseable venue-band fallback hole so emergency-close pricing remains fail-closed when metadata freshness cannot be trusted. | AT-937, AT-938, AT-1217, AT-1239 | local/fix01-venue-band-freshness |
 | 2026-03-15 | CCL-2026-03-15-01 | P0-E status authority precedence; AT-1238; Appendix A defaults/summary; Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit foundation-exit evaluation cadence with bounded delay (`foundation_exit_eval_max_delay_s`), mandatory delay-exceeded diagnostics, and explicit §6 Phase-2 rule wording in AT-1238. | Prevent silent indefinite foundation-exit stalls and make delay diagnostics deterministic without weakening fail-closed status authority boundaries. | AT-1238, AT-1240 | local/foundation-exit-eval-delay-bound |
+| 2026-03-15 | CCL-2026-03-15-02 | §3.1 Deterministic Emergency Close; §6 Implementation Roadmap v4.0 (Phase 2 rule); Appendix CONTRACT_CHANGE_LEDGER | clarify | Tighten venue-band fallback norm text, expand the Phase 2 deployable gate to include AT-217/AT-933, and require shared NON-TRIP remediation bundles to enumerate each blocker forced-pass proof. | Close residual deployable-evidence ambiguity so fallback-ladder safety and Phase 2 deployable claims remain deterministic, auditable, and fail-closed. | AT-1239, AT-217, AT-933, AT-222, AT-344, AT-909, AT-421, AT-1216 | local/remediation-order-v4-task1 |
+| 2026-03-15 | CCL-2026-03-15-03 | §2.2.3.4.1 Non-Active OPEN Cancellation; §2.2.3.7 Acceptance Tests; Appendix CONTRACT_CHANGE_LEDGER | hardening | Add fail-closed non-Active cancel-sweep rules for legacy `reduce_only` gaps, proof-gated reconciliation exemptions, and last risk-reducing in-flight-order protection; add AT-1241/AT-1242. | Implement FIX-02/FIX-03 hardening so ambiguous direction never receives silent exemption and cancel sweep preserves capital-supremacy containment paths. | AT-1065, AT-1049, AT-1241, AT-1242 | local/remediation-order-v4-task2 |
+| 2026-03-15 | CCL-2026-03-15-04 | §2.2.3.4.1 Non-Active OPEN Cancellation; Appendix CONTRACT_CHANGE_LEDGER | clarify | Add explicit deterministic precedence ordering for non-Active cancel-sweep decisions across cancel-all baseline, proof-gated reconciliation exemptions, and last-risk-reducing capital guard. | Remove interpretation ambiguity so order-level cancel decisions are deterministic and non-contradictory under exposure. | AT-1241, AT-1242, AT-1049 | local/remediation-order-v4-task2-quality-fix |
+| 2026-03-15 | CCL-2026-03-15-05 | P0-D Break-Glass clarifications/AT-1237; §1.2.2 Churn Breaker; §2.2.4 Open Permission Latch; §7.0 /status; Appendix A defaults/summary; Appendix CONTRACT_CHANGE_LEDGER | hardening | Implement remediation-order-v4 Task 3 contract hardening: exposed-case drill proof, reconciliation-stall observability, informational `pending_reduceonly_reasons`, and churn-breaker early-clear semantics. | Close remaining fail-open/observability gaps while preserving fail-closed authorization boundaries and deterministic diagnostics. | AT-1237, AT-1243, AT-1244, AT-1245, AT-1246 | local/remediation-order-v4-task3 |
+| 2026-03-15 | CCL-2026-03-15-06 | §2.2.4 Open Permission Latch (AT-1243 cadence); Appendix CONTRACT_CHANGE_LEDGER | clarify | Clarify deterministic `RECONCILE_STALL` emission cadence: one emission per continuous stall episode at threshold exceedance, re-emission only on failing-criterion change or new post-clear episode. | Prevent alert/log spam ambiguity while preserving deterministic observability and fail-closed latch semantics. | AT-1243 | local/remediation-order-v4-task3-quality-fix |

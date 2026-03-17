@@ -988,6 +988,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_recon_evidence_ledger.sh"
   "plans/tests/test_premortem_ready_ownership_conflict.sh"
   "plans/tests/test_premortem_gate_trading_hard_gate.sh"
+  "plans/tests/test_review_command_wrappers.sh"
   "plans/tests/test_wf_step_stop_on_blocker.sh"
   "plans/tests/test_wf_step_path_signal_scan.sh"
   "plans/tests/test_wf_step_review_provenance.sh"
@@ -995,6 +996,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_crossref_gate.sh"
   "plans/tests/test_artifact_lint.sh"
   "plans/tests/test_bidi_control_guard.sh"
+  "plans/tests/test_contract_at_wording_drift.sh"
 )
 FULL_MODE_WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_story_review_gate.sh"
