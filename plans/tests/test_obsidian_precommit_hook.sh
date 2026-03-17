@@ -117,6 +117,13 @@ date: "2026-03-17"
 EOF
 }
 
+write_linked_project() {
+  local path="$1"
+  local debrief_name="$2"
+
+  write_project "$path" "- [[${debrief_name}]]"
+}
+
 [[ -x "$HOOK" ]] || fail "missing executable hook: $HOOK"
 
 tmp_dir="$(mktemp -d)"
@@ -163,5 +170,23 @@ expect_pass \
   "non-commit commands are ignored" \
   "$repo" \
   "git status"
+
+git -C "$repo" reset --hard -q HEAD
+mkdir -p "$repo/obsidian/Projects" "$repo/obsidian/Debriefs"
+write_linked_project \
+  "$repo/obsidian/Projects/Test Project.md" \
+  "Test Project 2026-03-17 Hook"
+write_debrief "$repo/obsidian/Debriefs/Test Project 2026-03-17 Hook.md" "Test Project"
+write_debrief "$repo/obsidian/Debriefs/Other Project 2026-03-17 Hook.md" "Other Project"
+git -C "$repo" add \
+  "obsidian/Projects/Test Project.md" \
+  "obsidian/Debriefs/Test Project 2026-03-17 Hook.md" \
+  "obsidian/Debriefs/Other Project 2026-03-17 Hook.md"
+
+expect_block \
+  "unrelated staged debrief blocks commit" \
+  "belongs to a different project" \
+  "$repo" \
+  "git commit -m test"
 
 echo "test_obsidian_precommit_hook.sh: ok"

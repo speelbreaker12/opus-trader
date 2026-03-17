@@ -7,10 +7,11 @@ started: "2026-03-16"
 ---
 
 ## Current State
-Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, and a commit-aware debrief/template workflow with explicit commit history on the project page.
+Complete. Obsidian-based project tracking now includes repo-level debrief enforcement in pre-commit, Claude-side hook delegation to the same shared guard, first-prompt project routing into the best matching Obsidian note, single-project staged Obsidian scope enforcement per commit, and a commit-aware debrief/template workflow with explicit commit history on the project page.
 
 ## Commits
-- `pending` — 2026-03-17 — route first-session prompts to the best matching Obsidian project note, inject the matched note into hook context, wire router coverage into workflow verification, and add a shared guard reminder to include only the changes you made in the commit.
+- `pending` — 2026-03-17 — fail closed when staged Obsidian project/debrief files from another project are present in the same commit.
+- `86ab792f` — 2026-03-17 — route first-session prompts to the best matching Obsidian project note, inject the matched note into hook context, wire router coverage into workflow verification, and add a shared guard reminder to include only the changes you made in the commit.
 - `b1393d87` — 2026-03-17 — enforce linked debriefs in repo and Claude commit hooks.
 - `788133f8` — 2026-03-17 — enable Context7 and expand AGENTS instructions for Warp/Codex workflows.
 - `2a2f0fd1` — 2026-03-16 — enforce project tracking for all agents via git hook and AGENTS rules.
@@ -31,6 +32,7 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 ## Debriefs
 - [[Obsidian Work Tracking 2026-03-17 Debrief Guard]]
 - [[Obsidian Work Tracking 2026-03-17 Context Router]]
+- [[Obsidian Work Tracking 2026-03-17 Single Project Guard]]
 
 ## Log
 ### 2026-03-16
@@ -55,3 +57,5 @@ Complete. Obsidian-based project tracking now includes repo-level debrief enforc
 - Added `plans/tests/test_obsidian_context_hook.sh` and wired it into workflow verification and allowlist coverage.
 - Updated the shared Obsidian commit guard to remind blocked commits to include only the changes made in the commit.
 - Added a `## Commits` section near the top of this project note and updated the project template/AGENTS guidance so future project pages keep a date/hash/summary history.
+- Tightened the shared Obsidian commit guard to block commits when staged Obsidian debriefs belong to a different project than the staged project note, or when more than one project note is staged at once.
+- Added regression coverage for mismatched staged debriefs and multi-project staging so the stricter scope rule is enforced through both the repo hook and the Claude-side hook.

@@ -4,7 +4,7 @@ date: "2026-03-17"
 ---
 
 ## Commits
-- pending — first-prompt Obsidian router + commit-scope reminder batch
+- `86ab792f` — `obsidian: route first prompts to project notes`
 
 ## 0) What shipped
 - Feature/behavior: Replaced the passive Obsidian context dump with a first-prompt router that matches the user message to the best `obsidian/Projects/*.md` note, injects the matched note into hook context, forces an explicit first-response acknowledgement, and falls back to ambiguity handling or new-project proposals when no confident match exists.
