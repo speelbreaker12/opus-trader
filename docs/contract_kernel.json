@@ -31,7 +31,7 @@
       "contract_ref": "\u00a74.3.2",
       "id": "Anchor-004",
       "proof": {
-        "line": 4291,
+        "line": 4333,
         "section": "\u00a74.3.2"
       },
       "title": "TruthCapsule Timing (RecordedBeforeDispatch)"
@@ -76,7 +76,7 @@
       "contract_ref": "\u00a77.1.3",
       "id": "Anchor-009",
       "proof": {
-        "line": 5226,
+        "line": 5268,
         "section": "\u00a77.1.3"
       },
       "title": "AGGRESSIVE Patches Require Human Approval"
@@ -103,7 +103,7 @@
       "contract_ref": "\u00a75.3",
       "id": "Anchor-012",
       "proof": {
-        "line": 4565,
+        "line": 4607,
         "section": "\u00a75.3"
       },
       "title": "Canary Rollout Abort Triggers Rollback"
@@ -139,7 +139,7 @@
       "contract_ref": "\u00a72.3.1",
       "id": "Anchor-016",
       "proof": {
-        "line": 2067,
+        "line": 2076,
         "section": "\u00a72.3.1"
       },
       "title": "Exchange Health Monitor Blocks Opens Before Maintenance"
@@ -157,7 +157,7 @@
       "contract_ref": "\u00a71.4.2.1",
       "id": "Anchor-018",
       "proof": {
-        "line": 1639,
+        "line": 1648,
         "section": "\u00a71.4.2.1"
       },
       "title": "Pending Exposure Reservation Prevents Double-Spend"
@@ -209,15 +209,15 @@
     }
   ],
   "contract_version": "5.2",
-  "generated_at_utc": "2026-03-16T21:29:06Z",
+  "generated_at_utc": "2026-03-17T16:09:26Z",
   "kernel_version": 3,
   "sources": {
     "anchors_path": "docs/architecture/contract_anchors.md",
     "anchors_sha256": "f219e66f69b1a04d5e47677e2a668bbdfb78a5180a5ea0579fccdb85cfeee86f",
     "contract_path": "specs/CONTRACT.md",
-    "contract_sha256": "a5d14a181b8cc7e4224a173d39b3ab86a41b1e9778e548f4de46048007be7720",
+    "contract_sha256": "a5268dfc5af5e5a01f4053a522149ba48feed976f68dea2209329d2cb58ab1dc",
     "plan_path": "specs/IMPLEMENTATION_PLAN.md",
-    "plan_sha256": "bf4a2af48903945231d396d69d12a7c5a84c0ae152e4a05e6fbdb9cc021e47c4",
+    "plan_sha256": "bb0e198e76f0ca36e27f3d154e6962151e016aa197161d54e2f6393217f3d4e2",
     "rules_path": "docs/architecture/validation_rules.md",
     "rules_sha256": "f7c0a50e04363421984554d3e3943409c04e50ac5dd1745fa6f7f214454b2c4a"
   },
