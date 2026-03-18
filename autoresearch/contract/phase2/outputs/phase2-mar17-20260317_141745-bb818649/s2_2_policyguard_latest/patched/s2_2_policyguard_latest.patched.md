@@ -409,7 +409,7 @@ Profile: CSP
 
 ##### **2.2.3.0 Axis Model (Normative)**
 
-PolicyGuard SHALL compute TradingMode from three independent health axes:
+PolicyGuard MUST compute TradingMode from three independent health axes:
 
 - `CapitalRiskAxis     ∈ { SAFE, WARNING, CRITICAL }`
 - `MarketIntegrityAxis ∈ { STABLE, STRESSED, BROKEN }`
@@ -510,7 +510,7 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 
 ##### **2.2.3.3 TradingMode Resolution (Deterministic, Pure Function of Axes)**
 
-TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):
+TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):
 
 1) If `SystemIntegrityAxis == FAILING` OR `CapitalRiskAxis == CRITICAL` → `TradingMode = Kill`
 2) Else if `SystemIntegrityAxis == DEGRADED` OR `MarketIntegrityAxis != STABLE` OR `CapitalRiskAxis == WARNING` → `TradingMode = ReduceOnly`
@@ -1034,7 +1034,7 @@ AT-411
 - Fail criteria: any F1/Evidence code appears or latch is set without a reconcile trigger.
 - Note: This AT tests the Hard rule (runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes`) in isolation. The Hard rule is unconditional — it applies regardless of whether reconcile-class triggers are concurrently active. The "no reconcile-class triggers" precondition isolates the test from latch interactions but does not limit the Hard rule's scope.
 
-AT-1243
+AT-1253
 - Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).
 - When: `open_permission_reason_codes` are computed.
 - Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.
@@ -1124,3 +1124,17 @@ AT-1101
 - Then: every rejection token referenced in the contract MUST have a corresponding variant in the `RejectReasonCode` enum; no contract-referenced token is missing from the registry.
 - Pass criteria: 1:1 correspondence between contract rejection tokens and code enum variants.
 - Fail criteria: any contract-referenced rejection token is absent from the `RejectReasonCode` enum.
+
+Add `bunker_mode_last_update_ts_ms` (monotonic-epoch ms) to the §2.2 inputs list alongside `bunker_mode_active`. Add `bunker_mode_max_age_ms = 10_000` to the §2.2.1.2 freshness defaults table. The MarketIntegrityAxis STRESSED predicate at line 485 is then implementable: treat `bunker_mode_active` as missing/stale when `now_ms - bunker_mode_last_update_ts_ms > bunker_mode_max_age_ms`.
+
+Add an acceptance test after line 42: AT-1260 — Given contract_version=5.2 and a policy payload that uses only the old field name `rate_limit_session_kill_active=true` (new name absent), When PolicyGuard computes TradingMode, Then PolicyGuard MUST treat it identically to `session_termination_active=true` and compute Kill per the session-termination axis predicate. Pass: Kill computed. Fail: field ignored and Active or ReduceOnly returned.
+
+Add `TradingModeBlockedOpen` to the §2.2.6 RejectReasonCode registry allowed-values list. Update AT-931 pass criteria to read: 'dispatch count remains 0 and reject_reason_code == TradingModeBlockedOpen'. This satisfies AT-1101 completeness and makes AT-931 unambiguously testable.
+
+Add after the fee-model staleness predicate (line 502): AT-1261 — Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis inputs are nominal (no other DEGRADED/FAILING predicates active), When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason. Fail: Active returned or reason code absent.
+
+Add `cortex_override` to the §2.2.1.2 critical inputs list. Add an explicit rule: 'If `cortex_override` is missing or unparseable, PolicyGuard MUST treat it as `ForceReduceOnly` (fail-closed) and include REDUCEONLY_INPUT_MISSING_OR_STALE in mode_reasons.' Add AT-1262: Given `cortex_override` payload is absent or cannot be deserialized, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and REDUCEONLY_INPUT_MISSING_OR_STALE is present. Pass: ReduceOnly with reason. Fail: Active returned or reason absent.
+
+Add AT-1263 after AT-1100: Given `open_permission_blocked_latch == true` and the REST `/get_user_trades` call returns a network error, timeout, HTTP error, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and `open_permission_blocked_latch` MUST remain true; OPEN intents MUST remain blocked. Pass: latch stays set, reconciliation reported as failed. Fail: reconciliation succeeds on transport error, or latch clears.
+
+Add AT-1264 after the Recovery Rule: Given a ReduceOnly trigger activates (e.g., bunker_mode_active becomes true) and then immediately clears within the same tick or sub-cooldown interval, When TradingMode is computed on the subsequent tick(s), Then TradingMode MUST NOT return to Active until the applicable hysteresis/cooldown window has elapsed. Pass: ReduceOnly held for at least the minimum hysteresis duration. Fail: Active returned before hysteresis expires.

@@ -1,0 +1,116 @@
+{
+  "generated_at": "2026-03-17T00:00:00Z",
+  "validator_version": "phase2-mar17-v1",
+  "proposals": [
+    {
+      "proposal_id": "P-100",
+      "source_finding": "F-001",
+      "source_finding_category": "missing_fail_closed",
+      "section": "\u00a71.4.3 Margin Headroom Gate",
+      "change_type": "new_requirement",
+      "rationale": "The Margin Headroom Gate specifies threshold rules for mm_util but has no fail-closed clause for missing, unparseable, or NaN inputs. An implementation could silently default mm_util to 0.0 (Active) when equity is missing or NaN. This is a P0 gap because a silent Active default under bad inputs is an avoidable loss path.",
+      "status": "proposed",
+      "dedupe_key": "margin-headroom-nan-missing-fail-closed",
+      "proposed_text": "**Fail-closed rule (Non-Negotiable):** If any of `maintenance_margin`, `equity`, or `initial_margin` returned by `/private/get_account_summary` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. Rejections for missing/unparseable/NaN inputs MUST use `Rejected(MarginHeadroomInputMissing)`. No OPEN dispatch MAY occur while `RiskState::Degraded` is set due to this condition.",
+      "new_ats": [
+        {
+          "at_id": "AT-1254",
+          "description": "Given: `/private/get_account_summary` returns a response where `equity` is NaN or `maintenance_margin` is missing. When: the Margin Headroom Gate evaluates any OPEN intent. Then: `RiskState::Degraded` is set, the OPEN is rejected with `Rejected(MarginHeadroomInputMissing)`, and dispatch count remains 0. Pass criteria: rejection reason matches; dispatch count == 0; RiskState == Degraded. Fail criteria: dispatch occurs, or gate defaults mm_util to 0.0 and allows OPEN, or rejection reason is absent."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.4.3 Margin Headroom Gate @@\n **Computed:** `mm_util = maintenance_margin / max(equity, epsilon)`\n+\n+**Fail-closed rule (Non-Negotiable):** If any of `maintenance_margin`, `equity`, or `initial_margin` returned by `/private/get_account_summary` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. Rejections for missing/unparseable/NaN inputs MUST use `Rejected(MarginHeadroomInputMissing)`. No OPEN dispatch MAY occur while `RiskState::Degraded` is set due to this condition.\n+\n+AT-1254\n+- Given: `/private/get_account_summary` returns a response where `equity` is NaN or `maintenance_margin` is missing.\n+- When: the Margin Headroom Gate evaluates any OPEN intent.\n+- Then: `RiskState::Degraded` is set, the OPEN is rejected with `Rejected(MarginHeadroomInputMissing)`, and dispatch count remains 0.\n+- Pass criteria: rejection reason matches; dispatch count == 0; RiskState == Degraded.\n+- Fail criteria: dispatch occurs, or gate defaults mm_util to 0.0 and allows OPEN, or rejection reason is absent.",
+      "enforcement_point": "MarginHeadroomGate",
+      "callsite_evidence": "crates/soldier_core/src/execution/gates.rs \u2014 MarginHeadroomGate evaluates mm_util; missing/NaN equity or margin inputs must trigger fail-closed ReduceOnly path."
+    },
+    {
+      "proposal_id": "P-101",
+      "source_finding": "F-002",
+      "source_finding_category": "missing_at_pair",
+      "section": "\u00a71.4.2.1 PendingExposure \u2014 Emergency Drain (PX-4)",
+      "change_type": "new_requirement",
+      "rationale": "Three normative MUST rules for drain_all() exist (Kill-only guard, post-drain settle returns false, no Healthy resume until pre-drain TLSMs are terminal) but no acceptance test covers any of them. AT-225 and AT-910 only cover normal paths. This is a P1 gap because the fail-closed drain_all() guard is contract-level invariant with no coverage proof.",
+      "status": "proposed",
+      "dedupe_key": "pending-exposure-drain-all-at-pair",
+      "proposed_text": "Add the following acceptance tests after AT-910 in \u00a71.4.2.1:\n\nAT-1255\n- Given: `RiskState::Healthy` is active (not Kill).\n- When: `drain_all()` is called on PendingExposure.\n- Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.\n- Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.\n- Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.\n\nAT-1256\n- Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.\n- When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.\n- Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.\n- Pass criteria: TradingMode remains Kill or ReduceOnly; no OPEN is dispatched while pre-drain TLSMs are non-terminal.\n- Fail criteria: TradingMode transitions to Active or RiskState returns to Healthy before all pre-drain TLSMs are terminal.",
+      "new_ats": [
+        {
+          "at_id": "AT-1255",
+          "description": "Given: RiskState::Healthy is active (not Kill). When: drain_all() is called on PendingExposure. Then: drain_all() MUST be refused; no reservations are cleared; dispatch count is unaffected. Pass criteria: drain_all() returns error/no-op; reservation state unchanged. Fail criteria: drain_all() executes while RiskState != Kill."
+        },
+        {
+          "at_id": "AT-1256",
+          "description": "Given: RiskState::Kill and in-flight TLSMs exist from before drain_all(); drain_all() has cleared all reservations. When: system evaluates whether normal trading may resume. Then: normal trading MUST NOT resume until all pre-drain TLSMs reach terminal state. Pass criteria: TradingMode stays Kill/ReduceOnly; no OPEN dispatched while pre-drain TLSMs non-terminal. Fail criteria: TradingMode transitions to Active before all pre-drain TLSMs are terminal."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.4.2.1 PendingExposure \u2014 Emergency Drain (PX-4) @@\n AT-910\n - Given: a reservation would breach the exposure budget.\n ...\n - Fail criteria: dispatch occurs or reason missing/mismatched.\n+\n+AT-1255\n+- Given: `RiskState::Healthy` is active (not Kill).\n+- When: `drain_all()` is called on PendingExposure.\n+- Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.\n+- Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.\n+- Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.\n+\n+AT-1256\n+- Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.\n+- When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.\n+- Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.\n+- Pass criteria: TradingMode remains Kill or ReduceOnly; no OPEN is dispatched while pre-drain TLSMs are non-terminal.\n+- Fail criteria: TradingMode transitions to Active or RiskState returns to Healthy before all pre-drain TLSMs are terminal."
+    },
+    {
+      "proposal_id": "P-102",
+      "source_finding": "F-003",
+      "source_finding_category": "missing_at_pair",
+      "section": "\u00a71.4 Fee-Aware IOC Limit Pricer",
+      "change_type": "new_requirement",
+      "rationale": "The Pricer has a normative MUST for fail-closed behavior on missing/NaN/invalid inputs but no acceptance test proves it. AT-223 only covers the happy path. This is a P1 gap because the dispatch-count-0 proof and specific reject reason codes are unverified by contract-level tests.",
+      "status": "proposed",
+      "dedupe_key": "pricer-input-missing-nan-at-pair",
+      "proposed_text": "Add the following acceptance test after AT-223 in \u00a71.4:\n\nAT-1257\n- Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.\n- When: the pricer evaluates the intent.\n- Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.\n- Pass criteria: specific reject reason is one of `PricerInputMissing` or `PricerInputInvalid`; dispatch count == 0.\n- Fail criteria: dispatch occurs, or reject reason is absent or is a different reason code.",
+      "new_ats": [
+        {
+          "at_id": "AT-1257",
+          "description": "Given: a pricer input where fair_price is NaN, or qty <= 0, or fee_estimate_usd is missing/unparseable. When: the pricer evaluates the intent. Then: the intent is rejected with Rejected(PricerInputMissing) or Rejected(PricerInputInvalid) and dispatch count remains 0. Pass criteria: specific reject reason is PricerInputMissing or PricerInputInvalid; dispatch count == 0. Fail criteria: dispatch occurs or reject reason is absent or wrong."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.4 Fee-Aware IOC Limit Pricer @@\n AT-223\n - Given: a widened spread and an IOC limit order.\n ...\n - Fail criteria: fill worse than `limit_price` or realized edge below minimum.\n+\n+AT-1257\n+- Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.\n+- When: the pricer evaluates the intent.\n+- Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.\n+- Pass criteria: specific reject reason is one of `PricerInputMissing` or `PricerInputInvalid`; dispatch count == 0.\n+- Fail criteria: dispatch occurs, or reject reason is absent or is a different reason code."
+    },
+    {
+      "proposal_id": "P-103",
+      "source_finding": "F-004",
+      "source_finding_category": "weak_normative",
+      "section": "\u00a71.4.2 Inventory Skew Gate",
+      "change_type": "new_requirement",
+      "rationale": "The SELL-when-long edge-loosening rule is vague ('Allow slightly lower edge within bounds') with no formula, parameter, or bound, while the BUY-when-long path has an exact formula. An implementer cannot derive the correct adjustment from the contract text alone, and AT-224 does not prove the SELL edge-adjustment formula.",
+      "status": "proposed",
+      "dedupe_key": "inventory-skew-sell-formula-weak-normative",
+      "enforcement_point": "Inventory Skew Gate",
+      "callsite_evidence": "crates/soldier_core/src/execution/gates.rs \u2014 Inventory Skew Gate evaluates min_edge_usd adjustment per side; the SELL loosening path must use the formula.",
+      "proposed_text": "Replace the vague SELL loosening description in \u00a71.4.2 with a precise formula:\n\n**SELL intents when `inventory_bias > 0` (already long; risk-reducing trade):**\n- Allow lower edge: `min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor)` where `inventory_skew_sell_floor >= 0` (see Appendix A; default: `0.5` meaning edge floor is 50% of base `min_edge_usd`)\n- May be more aggressive on price: shift `limit_price` **toward** the touch by `bias_ticks(inventory_bias)` (same `bias_ticks()` function as BUY side, applied in the risk-reducing direction)\n\nAdd `inventory_skew_sell_floor` to Appendix A with default value `0.5`.\n\nAdd the following acceptance test after AT-224:\n\nAT-1258\n- Given: `inventory_bias = 1.0` (fully long, at delta_limit), `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` would initially fail the Net Edge Gate.\n- When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.\n- Then: the adjusted `min_edge_usd = base_min_edge_usd * max(1 - 0.5 * 1.0, 0.5) = base_min_edge_usd * 0.5`; if the adjusted value allows the SELL, it proceeds.\n- Pass criteria: adjusted min_edge_usd equals exactly `base_min_edge_usd * 0.5`; re-evaluation uses this adjusted value.\n- Fail criteria: adjusted value differs from formula, or re-evaluation does not use the adjusted value.",
+      "new_ats": [
+        {
+          "at_id": "AT-1258",
+          "description": "Given: inventory_bias=1.0, inventory_skew_k=0.5, inventory_skew_sell_floor=0.5, and a SELL intent whose base min_edge_usd initially fails Net Edge Gate. When: Inventory Skew applies SELL edge-loosening formula and Net Edge Gate is re-evaluated. Then: adjusted min_edge_usd = base_min_edge_usd * max(1 - 0.5 * 1.0, 0.5) = base_min_edge_usd * 0.5; if adjusted value allows SELL, it proceeds. Pass criteria: adjusted min_edge_usd equals exactly base_min_edge_usd * 0.5; re-evaluation uses adjusted value. Fail criteria: adjusted value differs from formula or re-evaluation skips it."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.4.2 Inventory Skew Gate @@\n-- Allow slightly lower edge (within bounds) and/or be more aggressive to **flatten** inventory\n+- Allow lower edge: `min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor)` where `inventory_skew_sell_floor >= 0` (see Appendix A; default: `0.5`)\n+- May be more aggressive on price: shift `limit_price` **toward** the touch by `bias_ticks(inventory_bias)` (risk-reducing direction)\n+\n+AT-1258\n+- Given: `inventory_bias = 1.0`, `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` initially fails Net Edge Gate.\n+- When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.\n+- Then: adjusted `min_edge_usd = base_min_edge_usd * 0.5`; if adjusted value allows SELL, it proceeds.\n+- Pass criteria: adjusted min_edge_usd equals exactly base_min_edge_usd * 0.5; re-evaluation uses this value.\n+- Fail criteria: adjusted value differs from formula or re-evaluation does not use adjusted value."
+    },
+    {
+      "proposal_id": "P-104",
+      "source_finding": "F-005",
+      "source_finding_category": "cross_ref_broken",
+      "section": "\u00a71.1 Labeling & Idempotency Contract \u2014 Recovery / Matching Rule",
+      "change_type": "new_requirement",
+      "rationale": "The Recovery / Matching Rule block appears verbatim at two locations (lines 250-254 and lines 329-333) with no CSP-### anchor and no cross-reference between them. If one copy diverges on amendment, implementations built against either copy may diverge silently. The fix assigns a canonical CSP anchor to the \u00a71.1 copy and replaces the duplicate with a cross-reference redirect.",
+      "status": "proposed",
+      "dedupe_key": "recovery-matching-rule-cross-ref-dedup",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.1.1 after AT-1098 @@\n-**Recovery / Matching Rule (Normative):**\n-- For canonical `s4` labels, recovery and reconciliation MUST require exact full parsed identity `{sid8, gid12, leg_idx, ih16}`.\n-- Canonical `s4` labels MUST NOT use heuristic or tie-breaker fallback once parsed.\n-- Legacy fallback tie-breakers MAY be used only for explicitly non-canonical legacy labels recovered from pre-v5.2 history.\n-- If the applicable matcher yields none or more than one candidate, the system MUST fail closed with `RiskState::Degraded` and OPENs blocked until ambiguity is resolved.\n+**Recovery / Matching Rule (Normative):** <!-- CSP-063: canonical copy is in \u00a71.1; see anchor below -->\n+See **CSP-063** Recovery / Matching Rule (\u00a71.1). The normative rule is defined once at the \u00a71.1 block tagged `<!-- CSP-063 -->` and reproduced here only as a cross-reference to prevent divergence.",
+      "proposed_text": "Assign CSP-063 anchor to the canonical Recovery / Matching Rule block at \u00a71.1 (lines 250-254). Replace the duplicate copy at \u00a71.1.1 (lines 329-333) with: \"See CSP-063 Recovery / Matching Rule (\u00a71.1). The normative rule is defined once; reproduced here only as a cross-reference to prevent divergence.\""
+    },
+    {
+      "proposal_id": "P-105",
+      "source_finding": "F-006",
+      "source_finding_category": "stale_input_unspecified",
+      "section": "\u00a71.4.3 Margin Headroom Gate",
+      "change_type": "new_requirement",
+      "rationale": "The Margin Headroom Gate specifies no staleness TTL for account_summary data, no gauge metric, and no fail-closed behavior for stale inputs. All other staleness-sensitive subsystems (\u00a71.0.X, \u00a71.3, \u00a71.2.3) define an explicit *_max_age_ms parameter and fail-closed rule. The margin gate is the only gate that can silently use arbitrarily stale data, creating an avoidable loss path under connectivity issues.",
+      "status": "proposed",
+      "dedupe_key": "margin-headroom-stale-input-ttl",
+      "proposed_text": "**Account Summary Staleness (Non-Negotiable):**\n- `account_summary_max_age_ms` (Appendix A): maximum age in milliseconds of the last successful response from `/private/get_account_summary`. Default: `5000` ms.\n- If the last successful fetch of `/private/get_account_summary` is older than `account_summary_max_age_ms`, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. No OPEN dispatch MAY occur while this stale condition holds.\n- **Required observability (contract-bound names):**\n  - `account_summary_age_s` (gauge): seconds since last successful account_summary fetch\n  - `account_summary_stale_total` (counter): incremented each evaluation cycle where age > threshold\n\nAdd the following acceptance test after AT-208 in \u00a71.4.3:\n\nAT-1259\n- Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).\n- When: an OPEN intent is evaluated by the Margin Headroom Gate.\n- Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.\n- Pass criteria: OPEN dispatch count remains 0; RiskState == Degraded; account_summary_stale_total counter incremented.\n- Fail criteria: OPEN dispatches while account_summary is stale, or RiskState remains Healthy.",
+      "new_ats": [
+        {
+          "at_id": "AT-1259",
+          "description": "Given: account_summary_age_s > account_summary_max_age_ms / 1000 (last successful fetch is stale). When: an OPEN intent is evaluated by the Margin Headroom Gate. Then: RiskState::Degraded is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch. Pass criteria: OPEN dispatch count remains 0; RiskState == Degraded; account_summary_stale_total counter incremented. Fail criteria: OPEN dispatches while account_summary is stale, or RiskState remains Healthy."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a71.4.3 Margin Headroom Gate @@\n **Inputs:** `/private/get_account_summary` \u2192 `maintenance_margin`, `initial_margin`, `equity`\n **Computed:** `mm_util = maintenance_margin / max(equity, epsilon)`\n+\n+**Account Summary Staleness (Non-Negotiable):**\n+- `account_summary_max_age_ms` (Appendix A): maximum age in milliseconds of the last successful response from `/private/get_account_summary`. Default: `5000` ms.\n+- If the last successful fetch of `/private/get_account_summary` is older than `account_summary_max_age_ms`, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. No OPEN dispatch MAY occur while this stale condition holds.\n+- **Required observability (contract-bound names):**\n+  - `account_summary_age_s` (gauge): seconds since last successful account_summary fetch\n+  - `account_summary_stale_total` (counter): incremented each evaluation cycle where age > threshold\n+\n+AT-1259\n+- Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).\n+- When: an OPEN intent is evaluated by the Margin Headroom Gate.\n+- Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.\n+- Pass criteria: OPEN dispatch count remains 0; RiskState == Degraded; account_summary_stale_total counter incremented.\n+- Fail criteria: OPEN dispatches while account_summary is stale, or RiskState remains Healthy."
+    }
+  ]
+}

@@ -80,6 +80,7 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 **MarketIntegrityAxis** (market data integrity / comms reliability)
 - Input: `bunker_mode_active` (from §2.3.2 Network Jitter Monitor)
 - `STRESSED` if `bunker_mode_active == true`
+- `STRESSED` if `bunker_mode_active` is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2 (fail-closed).
 - `STABLE` otherwise.
 - `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
 
@@ -402,6 +403,13 @@ AT-1050
 - Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_BUNKER_MODE_ACTIVE]`.
 - Pass criteria: exact reason set and ReduceOnly computed.
 - Fail criteria: any additional reason appears, or mode is Active/Kill.
+
+AT-1249
+- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active` which is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2.
+- When: the Axis Resolver computes MarketIntegrityAxis and TradingMode.
+- Then: `MarketIntegrityAxis == STRESSED` (fail-closed), `TradingMode == ReduceOnly`, and `mode_reasons` contains `REDUCEONLY_BUNKER_MODE_ACTIVE`.
+- Pass criteria: exact reason set and ReduceOnly computed; OPEN does not dispatch.
+- Fail criteria: MarketIntegrityAxis is STABLE, TradingMode is Active, or mode_reasons is missing/incorrect while `bunker_mode_active` is missing/stale.
 
 **Axis Isolation — CapitalRiskAxis (Margin Util Only)**
 AT-1051

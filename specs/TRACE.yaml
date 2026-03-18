@@ -477,6 +477,18 @@ clauses:
       - "test_drain_all_post_drain_settle_returns_false"
     prd: []
 
+  CSP-063:
+    status: PARTIAL
+    name: "Recovery / Matching Rule (label dedup)"
+    anchors: [recovery, matching, canonical, s4, label, dedup]
+    contract_ref: "§1.1"
+    plan:
+      - "specs/IMPLEMENTATION_PLAN.md#Slice-2"
+    code: []
+    tests: []
+    prd: []
+    notes: "Added by autoresearch phase3 — canonical copy at §1.1, cross-ref at §1.2. Dedup normalization: single definition point."
+
 # GOP Clause Traceability
 # Tracks mapping from GOP (General Operating Profile) clauses to implementation artifacts
 

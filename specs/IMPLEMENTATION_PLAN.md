@@ -678,6 +678,11 @@ Allowed paths: crates/soldier_core/src/execution/gate.rs, crates/soldier_core/sr
 Acceptance criteria: LiquidityGateResult is struct { decision: LiquidityGateDecision, metadata: LiquidityGateMetadata }. All existing AT-421/AT-222/AT-344/AT-909 tests pass.
 Tests: crates/soldier_core/tests/test_liquidity_gate.rs, crates/soldier_core/tests/test_gate_outcome.rs
 
+S6.13 — UPGRADE-1B-PR4 share execution tail + runtime reject-code ownership
+Allowed paths: crates/soldier_core/src/execution/engine.rs, crates/soldier_core/src/execution/open_runtime.rs, crates/soldier_core/src/execution/orchestration_tail.rs, crates/soldier_core/src/execution/pipeline.rs
+Acceptance criteria: OPEN runtime reject-code authority is runtime-output owned. Shared chokepoint tail extracted to neutral helper. AT-909/AT-910/AT-911 tests pass with exact reject codes.
+Tests: crates/soldier_core/src/execution/engine_decision_tests.rs, crates/soldier_core/src/execution/open_runtime_wiring_tests.rs
+
 Slice 7 — Atomic Group Executor \+ Emergency Close \+ Sequencer \+ Churn Breaker
 Slice intent: runtime atomicity: bounded rescue then deterministic flatten/hedge fallback.
 Contract AT coverage (traceability assignment): AT-227, AT-228, AT-912.

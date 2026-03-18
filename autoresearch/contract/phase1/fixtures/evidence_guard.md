@@ -45,6 +45,9 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Trip (breach window): if `parquet_queue_depth_pct > parquet_queue_trip_pct` for >= `parquet_queue_trip_window_s` seconds → EvidenceChainState != GREEN
   - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
 
+**Global cooldown scope (Normative):**
+The `evidenceguard_global_cooldown` (Appendix A) governs recovery timing for ALL error-counter recovery paths (not only parquet queue depth). EvidenceChainState MUST NOT return to GREEN until all GREEN criteria remain satisfied for at least `evidenceguard_global_cooldown` seconds after the last trip condition clears.
+
 **Where enforced (must be explicit):**
 - When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
 - When `enforced_profile != CSP`, the hot-path execution gate MUST check EvidenceChainState before dispatching OPEN orders.
@@ -127,6 +130,13 @@ AT-415
 - Then: EvidenceChainState MUST be not GREEN (fail-closed) and OPEN intents MUST be blocked.
 - Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while required counters are missing/unparseable.
+
+AT-1248
+- Given: `attribution_write_errors` is missing or unparseable while EvidenceGuard evaluates EvidenceChainState.
+- When: EvidenceGuard computes EvidenceChainState for this tick/window.
+- Then: EvidenceChainState MUST be not GREEN (fail-closed) and OPEN intents MUST be blocked.
+- Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
+- Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while `attribution_write_errors` is missing/unparseable.
 
 AT-923
 - Given: `evidenceguard_counters_last_update_ts_ms` is older than `evidenceguard_counters_max_age_ms`.

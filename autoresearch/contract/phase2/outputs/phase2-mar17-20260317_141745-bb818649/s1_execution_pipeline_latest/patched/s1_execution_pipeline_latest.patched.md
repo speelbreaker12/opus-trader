@@ -1200,3 +1200,65 @@ AT-229
 
 
 ---
+
+**Fail-closed rule (Non-Negotiable):** If any of `maintenance_margin`, `equity`, or `initial_margin` returned by `/private/get_account_summary` is missing, unparseable, or NaN, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. Rejections for missing/unparseable/NaN inputs MUST use `Rejected(MarginHeadroomInputMissing)`. No OPEN dispatch MAY occur while `RiskState::Degraded` is set due to this condition.
+
+Add the following acceptance tests after AT-910 in §1.4.2.1:
+
+AT-1255
+- Given: `RiskState::Healthy` is active (not Kill).
+- When: `drain_all()` is called on PendingExposure.
+- Then: `drain_all()` MUST be refused; no reservations are cleared; pending_delta is unchanged; dispatch count is unaffected.
+- Pass criteria: drain_all() returns an error or no-op result; no reservation state is modified.
+- Fail criteria: drain_all() executes and clears reservations while RiskState != Kill.
+
+AT-1256
+- Given: `RiskState::Kill` is active and one or more in-flight TLSMs exist from before drain_all() was called; drain_all() has executed and cleared all reservations.
+- When: the system evaluates whether normal trading (TradingMode::Active / RiskState::Healthy) may resume.
+- Then: normal trading MUST NOT resume until all pre-drain TLSMs have reached a terminal state.
+- Pass criteria: TradingMode remains Kill or ReduceOnly; no OPEN is dispatched while pre-drain TLSMs are non-terminal.
+- Fail criteria: TradingMode transitions to Active or RiskState returns to Healthy before all pre-drain TLSMs are terminal.
+
+Add the following acceptance test after AT-223 in §1.4:
+
+AT-1257
+- Given: a pricer input where `fair_price` is NaN, or `qty <= 0`, or `fee_estimate_usd` is missing/unparseable.
+- When: the pricer evaluates the intent.
+- Then: the intent is rejected with `Rejected(PricerInputMissing)` or `Rejected(PricerInputInvalid)` and dispatch count remains 0.
+- Pass criteria: specific reject reason is one of `PricerInputMissing` or `PricerInputInvalid`; dispatch count == 0.
+- Fail criteria: dispatch occurs, or reject reason is absent or is a different reason code.
+
+Replace the vague SELL loosening description in §1.4.2 with a precise formula:
+
+**SELL intents when `inventory_bias > 0` (already long; risk-reducing trade):**
+- Allow lower edge: `min_edge_usd := min_edge_usd * max(1 - inventory_skew_k * inventory_bias, inventory_skew_sell_floor)` where `inventory_skew_sell_floor >= 0` (see Appendix A; default: `0.5` meaning edge floor is 50% of base `min_edge_usd`)
+- May be more aggressive on price: shift `limit_price` **toward** the touch by `bias_ticks(inventory_bias)` (same `bias_ticks()` function as BUY side, applied in the risk-reducing direction)
+
+Add `inventory_skew_sell_floor` to Appendix A with default value `0.5`.
+
+Add the following acceptance test after AT-224:
+
+AT-1258
+- Given: `inventory_bias = 1.0` (fully long, at delta_limit), `inventory_skew_k = 0.5`, `inventory_skew_sell_floor = 0.5`, and a SELL intent whose base `min_edge_usd` would initially fail the Net Edge Gate.
+- When: Inventory Skew applies the SELL edge-loosening formula and the Net Edge Gate is re-evaluated.
+- Then: the adjusted `min_edge_usd = base_min_edge_usd * max(1 - 0.5 * 1.0, 0.5) = base_min_edge_usd * 0.5`; if the adjusted value allows the SELL, it proceeds.
+- Pass criteria: adjusted min_edge_usd equals exactly `base_min_edge_usd * 0.5`; re-evaluation uses this adjusted value.
+- Fail criteria: adjusted value differs from formula, or re-evaluation does not use the adjusted value.
+
+Assign CSP-063 anchor to the canonical Recovery / Matching Rule block at §1.1 (lines 250-254). Replace the duplicate copy at §1.1.1 (lines 329-333) with: "See CSP-063 Recovery / Matching Rule (§1.1). The normative rule is defined once; reproduced here only as a cross-reference to prevent divergence."
+
+**Account Summary Staleness (Non-Negotiable):**
+- `account_summary_max_age_ms` (Appendix A): maximum age in milliseconds of the last successful response from `/private/get_account_summary`. Default: `5000` ms.
+- If the last successful fetch of `/private/get_account_summary` is older than `account_summary_max_age_ms`, the gate MUST treat `mm_util` as `>= mm_util_reduceonly` (fail-closed: force ReduceOnly at minimum) and set `RiskState::Degraded`. No OPEN dispatch MAY occur while this stale condition holds.
+- **Required observability (contract-bound names):**
+  - `account_summary_age_s` (gauge): seconds since last successful account_summary fetch
+  - `account_summary_stale_total` (counter): incremented each evaluation cycle where age > threshold
+
+Add the following acceptance test after AT-208 in §1.4.3:
+
+AT-1259
+- Given: `account_summary_age_s > account_summary_max_age_ms / 1000` (last successful fetch is stale).
+- When: an OPEN intent is evaluated by the Margin Headroom Gate.
+- Then: `RiskState::Degraded` is set, TradingMode is at minimum ReduceOnly, and the OPEN is blocked before dispatch.
+- Pass criteria: OPEN dispatch count remains 0; RiskState == Degraded; account_summary_stale_total counter incremented.
+- Fail criteria: OPEN dispatches while account_summary is stale, or RiskState remains Healthy.

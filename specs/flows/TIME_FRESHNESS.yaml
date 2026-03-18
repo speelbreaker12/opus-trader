@@ -1041,6 +1041,70 @@ entries:
     - AT-946
     - AT-947
     - AT-948
+- id: TF-917
+  signal: Bunker mode update freshness
+  value_field: bunker_mode_active
+  timestamp_field: bunker_mode_last_update_ts_ms
+  units:
+    value: bool
+    timestamp: ms_epoch
+  freshness_param: bunker_mode_max_age_ms
+  default:
+    value: 10000
+    unit: ms
+    source: Appendix A
+  critical: true
+  missing_behavior: If bunker_mode_last_update_ts_ms missing/unparseable, treat bunker_mode_active
+    as stale; force ReduceOnly (fail-closed).
+  stale_behavior: If now_ms - bunker_mode_last_update_ts_ms > bunker_mode_max_age_ms =>
+    ReduceOnly (fail-closed, stale network jitter state).
+  mode_reason_code: REDUCEONLY_INPUT_MISSING_OR_STALE
+  risk_state_effect: null
+  status_fields:
+  - bunker_mode_active
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 2.2.1.2
+    - 2.3.2
+    - Appendix A
+    acceptance_tests:
+    - AT-1256
+    runtime_acceptance_tests:
+    - AT-1256
+- id: TF-918
+  signal: Account summary fetch freshness
+  value_field: account_summary_age_s
+  timestamp_field: null
+  units:
+    value: sec
+    timestamp: null
+  freshness_param: account_summary_max_age_ms
+  default:
+    value: 5000
+    unit: ms
+    source: Appendix A
+  critical: true
+  missing_behavior: If account_summary fetch timestamp missing/unparseable, treat mm_util
+    as >= mm_util_reduceonly (fail-closed); force ReduceOnly and set RiskState=Degraded.
+  stale_behavior: If account_summary_age_s > account_summary_max_age_ms/1000 => mm_util
+    treated as stale; ReduceOnly + Degraded.
+  mode_reason_code: REDUCEONLY_INPUT_MISSING_OR_STALE
+  risk_state_effect: Degraded
+  status_fields:
+  - account_summary_age_s
+  - risk_state
+  - trading_mode
+  - mode_reasons
+  refs:
+    sections:
+    - 1.4.3
+    - Appendix A
+    acceptance_tests:
+    - AT-1259
+    runtime_acceptance_tests:
+    - AT-1259
 coverage:
   require_appendix_keys_matching:
   - max_age
