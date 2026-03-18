@@ -2,7 +2,7 @@
 status: in-progress
 priority: P1
 branch: main
-pr: 207
+pr: 214
 started: 2026-03-16
 ---
 
@@ -68,3 +68,4 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Added TF-917 (bunker_mode) and TF-918 (account_summary) to TIME_FRESHNESS.yaml
 - Added CSP-063 (Recovery/Matching Rule dedup) to TRACE.yaml
 - Creating separate autoresearch PR branch for all phase3 changes
+- PR #214 rebased onto main, added S6.13 to IMPLEMENTATION_PLAN.md to fix doc_sync_check
