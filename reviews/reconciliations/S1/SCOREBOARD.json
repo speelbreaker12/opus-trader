@@ -1,0 +1,272 @@
+{
+  "generated_at": "2026-03-01T00:30:49Z",
+  "head_commit": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+  "repo_head_commit": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+  "slice": 1,
+  "stories": [
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-001_reconciliation.md",
+      "step_receipt_head_sha": {
+        "preflight": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae"
+      },
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "DONE",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-001"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-002_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-002"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-003_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-003"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-004_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-004"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/artifacts/story/S1-005/S1-005_reconciliation.md",
+      "step_receipt_head_sha": {
+        "cycle1": "03b3ebcb4a51c2cfca372094d55057bc59de5937",
+        "implement": "f653516a57427f52dbeabed6779053896562c472",
+        "preflight": "f653516a57427f52dbeabed6779053896562c472",
+        "self_review": "1f984641871ee9994b80f75f608a9f336d0c24d2"
+      },
+      "steps": {
+        "cycle1": "STALE",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "STALE",
+        "pass": "MISSING",
+        "preflight": "STALE",
+        "resolution": "MISSING",
+        "self_review": "STALE",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-005"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-006_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-006"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/artifacts/story/S1-007/S1-007_reconciliation.md",
+      "step_receipt_head_sha": {
+        "cycle1": "03b3ebcb4a51c2cfca372094d55057bc59de5937",
+        "implement": "f653516a57427f52dbeabed6779053896562c472",
+        "preflight": "f653516a57427f52dbeabed6779053896562c472",
+        "self_review": "1f984641871ee9994b80f75f608a9f336d0c24d2"
+      },
+      "steps": {
+        "cycle1": "STALE",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "STALE",
+        "pass": "MISSING",
+        "preflight": "STALE",
+        "resolution": "MISSING",
+        "self_review": "STALE",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-007"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-008_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-008"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-009_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-009"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/artifacts/story/S1-010/S1-010_reconciliation.md",
+      "step_receipt_head_sha": {
+        "cycle1": "03b3ebcb4a51c2cfca372094d55057bc59de5937",
+        "implement": "f653516a57427f52dbeabed6779053896562c472",
+        "preflight": "f653516a57427f52dbeabed6779053896562c472",
+        "self_review": "1f984641871ee9994b80f75f608a9f336d0c24d2"
+      },
+      "steps": {
+        "cycle1": "STALE",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "STALE",
+        "pass": "MISSING",
+        "preflight": "STALE",
+        "resolution": "MISSING",
+        "self_review": "STALE",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-010"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-011_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-011"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-012_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-012"
+    },
+    {
+      "head": "6257696f0d6bb6e6ee8392eb7d4dacb8a80fc3ae",
+      "passes": true,
+      "path": "UNKNOWN",
+      "path_source": "/Users/admin/Desktop/opus-trader/reviews/reconciliations/S1/S1-013_reconciliation.md",
+      "step_receipt_head_sha": {},
+      "steps": {
+        "cycle1": "MISSING",
+        "cycle2": "MISSING",
+        "fix": "MISSING",
+        "implement": "MISSING",
+        "pass": "MISSING",
+        "preflight": "MISSING",
+        "resolution": "MISSING",
+        "self_review": "MISSING",
+        "verify_full": "MISSING"
+      },
+      "story_id": "S1-013"
+    }
+  ]
+}

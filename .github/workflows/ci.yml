@@ -1,0 +1,238 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited]
+  issue_comment:
+    types: [created, edited]
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: "0 1 * * *"
+
+jobs:
+  phase1-snapshot-isolation-smoke:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Snapshot isolation smoke check for phase1 compare
+        run: |
+          chmod +x ./scripts/check_phase1_compare_snapshot_isolation_ci.sh
+          ./scripts/check_phase1_compare_snapshot_isolation_ci.sh
+
+      - name: Upload phase1 snapshot smoke artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase1-snapshot-isolation-smoke
+          path: artifacts/phase1_compare/ci_snapshot_isolation/
+          if-no-files-found: ignore
+
+  prd-story-gate:
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review' ||
+      github.event_name == 'pull_request_review_comment' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce PRD story gate (full review evidence)
+        run: |
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          head_ref="$(jq -r '.head.ref // empty' <<<"$pr_json")"
+          if [[ -z "$head_ref" ]]; then
+            echo "ERROR: unable to resolve PR head ref for PR #${PR_NUMBER}" >&2
+            exit 1
+          fi
+
+          # Skip pr-gate for deployment branches
+          if [[ "$head_ref" =~ ^deploy/ ]]; then
+            echo "ℹ️  Skipping pr-gate for deployment branch: $head_ref"
+            exit 0
+          fi
+
+          if [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)/([A-Za-z0-9._-]+)$ ]]; then
+            story_id="${BASH_REMATCH[1]}"
+          elif [[ "$head_ref" =~ ^story/([A-Za-z0-9][A-Za-z0-9._-]*)$ ]]; then
+            ref_token="${BASH_REMATCH[1]}"
+            story_id=""
+
+            if [[ -f plans/prd.json ]]; then
+              story_id="$(jq -r --arg id "$ref_token" '[.items[]?.id | select(. == $id)] | first // ""' plans/prd.json)"
+            fi
+
+            if [[ -z "$story_id" && -f plans/prd.json ]]; then
+              story_id="$(jq -r --arg ref "$ref_token" '
+                [
+                  .items[]?.id as $id
+                  | select(($ref | startswith($id + "-")))
+                  | ($ref | ltrimstr($id + "-")) as $slug
+                  | select($slug != "" and ($slug | test("-") | not))
+                  | $id
+                ] | sort_by(length) | last // ""
+              ' plans/prd.json)"
+            fi
+
+            if [[ -z "$story_id" ]]; then
+              story_id="$ref_token"
+            fi
+          else
+            echo "INFO: non-story branch ($head_ref) — skipping PRD story gate"
+            exit 0
+          fi
+
+          pre_pr_review_mode="required"
+          aftercare_ack_mode="required"
+          story_in_prd="unknown"
+          if [[ -f plans/prd.json ]]; then
+            if jq -e --arg id "$story_id" 'any(.items[]?; .id == $id)' plans/prd.json >/dev/null; then
+              story_in_prd="yes"
+            else
+              story_in_prd="no"
+              pre_pr_review_mode="skip"
+              aftercare_ack_mode="off"
+            fi
+          fi
+          echo "PRD story gate: story_id=${story_id}, story_in_prd=${story_in_prd}, pre_pr_review_mode=${pre_pr_review_mode}, aftercare_ack_mode=${aftercare_ack_mode}"
+
+          chmod +x ./plans/pr_gate.sh
+          ./plans/pr_gate.sh \
+            --pr "${PR_NUMBER}" \
+            --story "${story_id}" \
+            --pre-pr-review-mode "${pre_pr_review_mode}" \
+            --aftercare-ack-mode "${aftercare_ack_mode}" \
+            --wait \
+            --timeout-secs 1800 \
+            --poll-secs 20 \
+            --bot-comments-mode block \
+            --require-aftercare-ack \
+            --require-copilot-review \
+            --ignore-check-run-regex '^(prd-story-gate)$'
+
+  crossref-gate:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: plans/ci/requirements-crossref.txt
+
+      - name: Install Python deps for crossref
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r plans/ci/requirements-crossref.txt
+
+      - name: Run crossref gate (report-mode burn-in, strict via sentinel)
+        env:
+          CROSSREF_ARTIFACTS_DIR: artifacts/verify/crossref_ci_${{ github.run_id }}
+        run: |
+          chmod +x ./plans/crossref_gate.sh
+          strict_args=()
+          if [[ -f plans/crossref_ci_strict ]]; then
+            strict_args+=(--strict)
+          fi
+          ./plans/crossref_gate.sh --ci --artifacts-dir "$CROSSREF_ARTIFACTS_DIR" "${strict_args[@]}" 2>&1 | tee crossref_gate.log
+
+      - name: Upload crossref gate log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crossref-gate-log
+          path: crossref_gate.log
+          if-no-files-found: ignore
+
+  verify:
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: verify
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: plans/ci/requirements-verify.txt
+
+      - name: Install Python tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r plans/ci/requirements-verify.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Node deps (if present)
+        shell: bash
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f yarn.lock ]; then
+            corepack enable
+            yarn install --frozen-lockfile
+          else
+            echo "No JS lockfile; skipping node install"
+          fi
+
+      - name: Verify (single source of truth)
+        env:
+          BASE_REF: origin/main
+          VERIFY_CONSOLE: verbose
+        run: |
+          chmod +x ./plans/verify.sh ./plans/verify_fork.sh
+          ./plans/verify.sh full 2>&1 | tee verify_output.log
+
+      - name: Upload verify log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-log
+          path: verify_output.log
+          if-no-files-found: ignore

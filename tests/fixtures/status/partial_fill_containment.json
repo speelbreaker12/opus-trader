@@ -1,0 +1,62 @@
+{
+  "status_schema_version": 1,
+  "contract_version": "5.2",
+  "build_id": "test-fixture-partial-fill",
+  "runtime_config_hash": "abc123",
+  "supported_profiles": ["CSP"],
+  "enforced_profile": "CSP",
+
+  "trading_mode": "ReduceOnly",
+  "risk_state": "Degraded",
+  "bunker_mode_active": false,
+  "connectivity_degraded": false,
+
+  "policy_age_sec": 12,
+  "last_policy_update_ts": 1769440312000,
+
+  "f1_cert_state": "PASS",
+  "f1_cert_expires_at": 1769526712000,
+
+  "disk_used_pct": 0.42,
+  "disk_used_last_update_ts_ms": 1769440310000,
+  "disk_used_pct_secondary": 0.41,
+  "disk_used_secondary_last_update_ts_ms": 1769440310000,
+
+  "mm_util": 0.18,
+  "mm_util_last_update_ts_ms": 1769440310000,
+
+  "loop_tick_last_ts_ms": 1769440312500,
+
+  "atomic_naked_events_24h": 0,
+  "429_count_5m": 0,
+  "10028_count_5m": 0,
+
+  "wal_queue_depth": 4,
+  "wal_queue_capacity": 1024,
+  "wal_queue_enqueue_failures": 0,
+
+  "deribit_http_p95_ms": 140,
+  "ws_event_lag_ms": 35,
+
+  "mode_reasons": [
+    "REDUCEONLY_EMERGENCY_REDUCEONLY_ACTIVE",
+    "REDUCEONLY_RISKSTATE_DEGRADED"
+  ],
+
+  "open_permission_blocked_latch": false,
+  "open_permission_reason_codes": [],
+  "open_permission_requires_reconcile": false,
+
+  "owner_view": {
+    "primary_owner_reason_code": "RISK_PARTIAL_FILL_CONTAINMENT",
+    "owner_message": "Partial/mixed fill detected; system is flattening/hedging and blocking new OPEN risk.",
+    "unblock": [
+      {
+        "type": "AUTO",
+        "condition": "net_exposure == 0 AND containment_state == CLEAN for >= 60s",
+        "current": "net_exposure=+0.42 (delta)",
+        "target": "net_exposure=0"
+      }
+    ]
+  }
+}

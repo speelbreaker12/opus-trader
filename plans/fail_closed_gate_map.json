@@ -1,0 +1,12 @@
+{
+  "dispatch_auth": ["test_intent_pipeline.rs"],
+  "preflight": ["test_preflight.rs"],
+  "quantize": ["test_quantize.rs", "test_missing_config.rs"],
+  "dispatch_consistency": ["test_dispatch_map.rs"],
+  "fee_staleness": ["test_fee_staleness.rs"],
+  "expiry_guard": ["test_expiry_guard.rs"],
+  "liquidity_gate": ["test_liquidity_gate.rs", "test_missing_config.rs"],
+  "net_edge": ["test_net_edge_gate.rs", "test_missing_config.rs"],
+  "pricer": ["test_pricer.rs", "test_missing_config.rs"],
+  "recorded_before_dispatch": ["src/execution/recorded_before_dispatch_gate_tests.rs"]
+}

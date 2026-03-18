@@ -1,0 +1,65 @@
+{
+  "selected_story_id": "S5-000",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.3 Pre-Trade Liquidity Gate (Do Not Sweep the Book)",
+    "AT-222",
+    "AT-344",
+    "AT-909",
+    "AT-421"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/gate.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_liquidity_gate.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to execution module within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_221107",
+      "306 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S5-000",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Slippage > max_slippage_bps → Rejected(ExpectedSlippageTooHigh) (AT-222)",
+      "Missing/stale L2 → Rejected(LiquidityGateNoL2) (AT-344, AT-909)",
+      "Cancel-only allowed without L2; Close rejected (AT-421)",
+      "Reject log includes WAP and slippage_bps"
+    ],
+    "evidence_found": [
+      "Slippage rejection with WAP and slippage_bps (test_at222_slippage_exceeds_max_rejected)",
+      "No OrderIntent on rejection (test_at222_no_order_intent_on_rejection)",
+      "WAP and slippage_bps present in rejection for logging (test_at222_reject_log_includes_wap_and_slippage)",
+      "Missing L2 rejects OPEN (test_at344_missing_l2_rejects_open)",
+      "Stale L2 rejects OPEN (test_at344_stale_l2_rejects_open)",
+      "Rejection reason is LiquidityGateNoL2 (test_at909_missing_l2_reason_is_no_l2)",
+      "Cancel-only allowed without L2 (test_at421_cancel_only_allowed_without_l2)",
+      "Close rejected without L2 (test_at421_close_rejected_without_l2)",
+      "Cancel allowed with stale L2 (test_at421_cancel_allowed_with_stale_l2)",
+      "19 tests covering all acceptance criteria and edge cases"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Liquidity Gate matches CONTRACT.md §1.3 specification",
+    "Book-walk WAP computation is deterministic",
+    "Slippage rejection with ExpectedSlippageTooHigh per AT-222",
+    "L2 staleness check with LiquidityGateNoL2 per AT-344/AT-909",
+    "Cancel-only exemption per AT-421"
+  ]
+}

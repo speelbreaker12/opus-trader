@@ -1,0 +1,209 @@
+# Story Premortem: <STORY-ID>
+
+> Reference: `specs/DESIGN_PATTERNS.md` (§0 Principles apply to every section below)
+> Premortem Schema: v2
+> This document replaces both the old premortem and `/slice-preflight`. No production code in this step.
+
+## 0) What we're building
+- Story:
+- Contract clause(s): `specs/CONTRACT.md` §
+- Acceptance tests: AT-XXX
+- Touch scope: (files/crates)
+- **Risk rating**: LOW / MED / HIGH
+  - HIGH if touching: persistence/replay/idempotency, order placement/funds movement,
+    risk limits, auth/keys, or anything that can silently weaken gates.
+
+## Trading Risk Hard Gate
+
+Before implementation, prove this change cannot create avoidable loss, cannot silently block
+valid profit, and is the simplest fail-closed design satisfying the contract.
+
+Hard-gate questions — must be answered before implementation starts.
+If any answer is NO, UNKNOWN, or NOT PROVEN, implementation is blocked until the gap is resolved or explicitly escalated.
+
+- Loss prevention:
+  Have I proven that this change cannot directly or indirectly create avoidable loss through incorrect orders, widened risk, blocked reductions, stale decisions, reconciliation drift, duplicate actions, or fail-open behavior?
+- Profit preservation:
+  Have I proven that this change will not silently block valid profit by rejecting good trades, delaying valid actions, degrading signal quality, misclassifying intent, or creating unnecessary operational friction?
+- Best design choice:
+  Is this the safest and simplest design currently available for this feature, given the contract, expected edge, and operational constraints?
+- Better alternative check:
+  Did I actively test whether there is a simpler or safer implementation that achieves the same goal with fewer moving parts, less hidden coupling, and lower error surface?
+- Failure-path correctness:
+  Does the design remain correct under bad inputs, stale state, retries, partial failures, exchange/API errors, replay, restart, and reconciliation?
+- Fail-closed enforcement:
+  When uncertain, missing data, or inconsistent state occurs, does the system fail closed in a way that protects capital and preserves the ability to reduce risk?
+- Proof, not belief:
+  Can each critical claim above be tied to a specific contract clause, enforcement point, and verification artifact rather than intuition or prose?
+
+Required answer format:
+- Answer: YES / NO / UNKNOWN
+- Why: one sentence
+- Proof: contract clause(s), enforcement file(s), test/vector/artifact
+- Gap ID: required when answer is NO or UNKNOWN
+
+| Question | Answer (YES/NO/UNKNOWN) | Why (one sentence) | Proof (contract clause(s); enforcement file(s); test/vector/artifact) | Gap ID (required when NO/UNKNOWN) |
+|----------|--------------------------|--------------------|------------------------------------------------------------------------|-----------------------------------|
+| Loss prevention | | | | |
+| Profit preservation | | | | |
+| Best design choice | | | | |
+| Better alternative check | | | | |
+| Failure-path correctness | | | | |
+| Fail-closed enforcement | | | | |
+| Proof, not belief | | | | |
+
+Hard Gate Decision Rule:
+
+- GO only if all 7 answers are YES with concrete proof.
+- YELLOW if the change is still design-reviewable but one or more answers are UNKNOWN with explicit Gap IDs and containment.
+- NO-GO if any answer is NO, or if proof is missing for any loss-prevention or fail-closed claim.
+
+## 1) Clause audit (contract → AT traceability)
+
+For each `enforcing_contract_ats` claimed by this story, find the AT in `specs/CONTRACT.md`,
+extract the normative clause, and classify. Skip informational clauses.
+
+| AT | Contract § | Clause text (abbreviated) | Type (MUST/SHOULD/MAY) | Testable? |
+|----|-----------|---------------------------|------------------------|-----------|
+|    |           |                           |                        |           |
+|    |           |                           |                        |           |
+
+- [ ] Every claimed AT traced to a normative clause
+- [ ] No informational-only ATs counted as enforcement
+
+## 2) Assumptions (each must become a test or get killed)
+| # | Assumption | How it breaks | Test that proves it | Validated? |
+|---|-----------|---------------|---------------------|------------|
+| 1 |           |               |                     |            |
+| 2 |           |               |                     |            |
+| 3 |           |               |                     |            |
+
+## 3) Top 5 failure modes
+For each enforcement-point input/intermediate, run the fail-closed 6-category sweep:
+`Missing/None`, `NaN/Inf`, `Negative`, `Out-of-domain`, `Corrupt/garbage`, `Narrowing casts`.
+
+| # | What goes wrong | Detection | Fail-closed mitigation | AT that catches it |
+|---|----------------|-----------|----------------------|-------------------|
+| 1 |                |           |                      |                   |
+| 2 |                |           |                      |                   |
+| 3 |                |           |                      |                   |
+| 4 |                |           |                      |                   |
+| 5 |                |           |                      |                   |
+
+- [ ] 6-category fail-closed sweep completed for each enforcement input/intermediate
+- [ ] Each category has explicit detection + mitigation, or is marked N/A with rationale
+
+## 4) Open decisions (resolve before coding)
+For each ambiguity, design choice, or spec gap:
+
+### Decision: <short title>
+- **What is ambiguous / missing**:
+- **Evidence** (file + anchor or snippet):
+- **Options**:
+  1. Option A — Why it works; blast radius; verification
+  2. Option B — Why it works; blast radius; verification
+- **Chosen**: (A/B) — deciding factor:
+- **Why not others**: (the key failure mode)
+- **Scope control**:
+  - What we're NOT doing yet (subordinate):
+  - What unblocks us if this choice is wrong (elevate):
+
+- [ ] No unresolved decisions remain
+- [ ] Each decision grounded in evidence (file + line, not memory)
+- [ ] If ambiguity remains, mark blocked (`needs_human_decision=true` in `plans/prd.json`) and STOP
+
+## 5) Wrong implementation gate
+For EACH AT claimed by this story:
+
+| AT | Wrong impl that passes | Easier than correct? (Y/N) | Why it's wrong | Tightening (new AT / golden vector / property test) |
+|----|----------------------|-----------------------------|----------------|---------------------------------------------------|
+|    |                      |                             |                |                                                   |
+|    |                      |                             |                |                                                   |
+
+- [ ] Every AT has at least one wrong impl identified
+- [ ] Any wrong impl marked "Y" (easier) is the highest-priority tightening test
+- [ ] Every wrong impl is blocked by a tightened AT or new test
+- [ ] No AT remains where a wrong impl is easier than the correct one
+
+## 6) Proof plan (AT → enforcement → tests)
+
+> **Proof graph (v2)**: This section's data feeds `proof_graph.json`. After implementation, run
+> `python3 python/proof_graph/init.py <STORY_ID> --premortem-path reviews/premortems/<STORY_ID>_premortem.md` to generate the skeleton, then fill in
+> verdicts, test names, and wiring status. The validator (`validate.py --strict`) enforces
+> consistency at pass-flip time. See `python/proof_graph/` for schema details.
+
+For each AT, map the full proof chain. Safety-critical ATs MUST have both TRIP and NON-TRIP.
+
+| AT | Enforcement point | Proving test(s) | TRIP? | NON-TRIP? | Causality proof | Isolated? |
+|----|-------------------|-----------------|-------|-----------|-----------------|-----------|
+|    |                   |                 |       |           |                 |           |
+|    |                   |                 |       |           |                 |           |
+
+Causality proof must be one of: `dispatch_count`, `reject_reason`, `latch_reason`, `mode_transition`, `cortex_override`.
+
+If a test exists in `implementation_tests[]` but doesn't prove the AT → mark **CLAIMED-NOT-PROVEN**.
+If 2+ ATs interact (e.g., reservation + exposure limit) → require a combined AT or note its absence.
+
+**Isolation check**: Each AT should isolate exactly one clause. Ask: "If I remove or break this enforcement point, does exactly this AT fail — and no other AT covers it?" If the answer is no, the AT is either too broad (testing multiple clauses) or redundant (another AT already covers this clause).
+
+- [ ] Every safety-critical AT has TRIP + NON-TRIP
+- [ ] Every test proves causality (not just existence)
+- [ ] Each AT isolates one clause (removing enforcement fails exactly this AT)
+- [ ] No CLAIMED-NOT-PROVEN entries without a plan to fix
+
+## 7) Economic risk (loss_mode)
+- **If this fails in prod, worst financial outcome**:
+- **Fail-closed cap on loss** (what restricts exposure):
+- **Drift metric** (exact metric/counter name, or `NONE` — justify):
+- **Loss boundary** (ReduceOnly? Kill? Position limit? Time bound?):
+- **Rollback plan** (how to revert if it fails):
+
+## 8) Conflict scan & hot zones
+- **Invariants/gates impacted**:
+- **If conflict with `specs/CONTRACT.md`**: STOP — do not proceed until resolved
+- **If touching `specs/CONTRACT.md`**: run `plans/check_contract_change_ledger.sh`; missing ledger row = BLOCKED
+- **If touching workflow/harness paths** (`plans/*`, `specs/WORKFLOW_CONTRACT.md`, `plans/workflow_contract_map.json`): verify workflow-rule alignment; run `./plans/workflow_contract_gate.sh` when applicable
+- Files with recent churn or shared ownership:
+- Struct fields I'm assuming exist (verify before coding):
+- State machine transitions affected:
+
+## 9) Constraint I expect to hit
+
+> The supervisor injects the prior postmortem path. Read section 8 (Next-Story Startup Note).
+
+Prior Postmortem: <path or NONE>
+Reused Guardrail: <one concrete rule carried forward, or NONE if no prior postmortem>
+
+- Carry-forward from prior postmortem (paste startup note):
+- What will slow me down:
+- Exploit (workaround for this story):
+- Smallest fix that prevents it next time:
+
+## 10) STOPLIGHT + Exit criteria
+
+**STOPLIGHT**: GREEN / YELLOW / RED
+
+- **GREEN**: All gates pass, proof plan complete, no unresolved ambiguities
+- **YELLOW**: All non-ambiguity gaps explicitly deferred in Debt Register below
+- **RED**: Unresolved gates or unresolved ambiguity — do not implement
+
+**Debt Register** (required if YELLOW):
+
+| gap_id | Item | Severity | Why deferred | Owner | Target slice | AT/proof to add |
+|--------|------|----------|-------------|-------|-------------|-----------------|
+|        |      |          |             |       |             |                 |
+
+`gap_id` format: `GAP-<STORY-ID>-<SEQ>` (or `GAP-SYSTEMIC-<SEQ>` for cross-story debt).
+YELLOW with untracked debt (missing `gap_id` or target slice) = RED.
+Unresolved ambiguity/design choice = RED (set `needs_human_decision=true` and stop).
+
+**Exit criteria (definition of done, before I start):**
+- [ ] §1 clause audit: every AT traced to normative clause
+- [ ] §2 all assumptions validated or killed
+- [ ] §3 all failure modes have detection + mitigation
+- [ ] §4 all decisions resolved, grounded in evidence
+- [ ] §5 wrong impl gate: every AT tightened, no easy wrong impl survives
+- [ ] §6 proof plan: TRIP + NON-TRIP for all safety-critical ATs, no CLAIMED-NOT-PROVEN
+- [ ] §7 loss_mode documented with fail-closed boundary + rollback plan
+- [ ] §8 conflict scan clean (no `specs/CONTRACT.md` conflicts)
+- [ ] No new debt without `gap_id` + owner + target slice

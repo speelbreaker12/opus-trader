@@ -1,0 +1,11 @@
+# pattern_guard allowlist — one file:pattern_number per line.
+# Lines starting with # are comments.
+# Example: crates/soldier_core/src/execution/pipeline.rs:1
+
+# PX-2: pending_exposure.rs — Pattern 1 (unwrap/expect): all .unwrap() calls
+# are safe-by-construction, preceded by contains_key / reverse-lookup check.
+crates/soldier_core/src/risk/pending_exposure.rs:1
+# PX-2: pending_exposure.rs — Pattern 4 (fail-open default): unwrap_or(0.0) for
+# old_global_delta is correct — None = no prior reservation, 0.0 is the identity
+# element for subtraction (not fail-open).
+crates/soldier_core/src/risk/pending_exposure.rs:4

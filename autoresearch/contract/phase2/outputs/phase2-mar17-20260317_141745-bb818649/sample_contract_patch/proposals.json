@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-03-17T00:00:00Z",
+  "validator_version": "phase2-v1",
+  "proposals": [
+    {
+      "proposal_id": "P-400",
+      "source_finding": "F-400",
+      "source_finding_category": "cross_ref_broken",
+      "section": "Sample Contract Fixture",
+      "change_type": "mechanical",
+      "rationale": "AT-999 does not exist in the AT registry; AT-101 is the correct target reference.",
+      "status": "proposed",
+      "dedupe_key": "cross_ref_broken:sample_contract_patch:line3:AT-999->AT-101",
+      "mechanical_ok": true,
+      "mechanical_details": "Simple identifier substitution: replace broken AT-999 reference with existing AT-101.",
+      "replace_span": {
+        "start_line": 3,
+        "end_line": 3,
+        "old_text": "AT-999 is referenced here",
+        "new_text": "AT-101 is referenced here"
+      },
+      "diff_preview": "-AT-999 is referenced here\n+AT-101 is referenced here"
+    },
+    {
+      "proposal_id": "P-401",
+      "source_finding": "F-401",
+      "source_finding_category": "weak_normative",
+      "section": "Sample Contract Fixture",
+      "change_type": "mechanical",
+      "rationale": "PolicyGuard rejection on missing data is a safety-critical fail-closed path; SHOULD permits omission and must be strengthened to MUST.",
+      "status": "proposed",
+      "dedupe_key": "weak_normative:sample_contract_patch:line4:SHOULD->MUST:PolicyGuard",
+      "mechanical_ok": true,
+      "mechanical_details": "Replace modal verb SHOULD with MUST on PolicyGuard rejection clause for missing data.",
+      "replace_span": {
+        "start_line": 4,
+        "end_line": 4,
+        "old_text": "PolicyGuard SHOULD reject when data is missing.",
+        "new_text": "PolicyGuard MUST reject when data is missing."
+      },
+      "enforcement_point": "PolicyGuard",
+      "callsite_evidence": "PolicyGuard resolve_trading_mode reject path",
+      "diff_preview": "-PolicyGuard SHOULD reject when data is missing.\n+PolicyGuard MUST reject when data is missing."
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "skill": "SKILLS/post-impl-audit.md",
+  "description": "Binary assertion tests for /post-impl-audit skill output quality",
+  "total_assertions": 25,
+  "tests": [
+    {
+      "id": "T1",
+      "name": "clean_implementation",
+      "description": "Diff adds a new VolatilityGate with TRIP+NON-TRIP tests, enforcement point wired in engine.rs, ATs registered in CONTRACT.md, fail-closed handling for missing data. Audit should produce GREEN stoplight with all ATs PROVEN.",
+      "fixture": "fixtures/clean_implementation.diff",
+      "prompt": "Run /post-impl-audit on this diff. Story S4-003 (VolatilityGate enforcement). The diff adds a new gate with full TRIP/NON-TRIP acceptance tests, fail-closed handling, enforcement point in the dispatch pipeline, and ATs registered in CONTRACT.md. Scope touch: crates/soldier_core/src/execution/gates/volatility_gate.rs, crates/soldier_core/src/execution/engine.rs, crates/soldier_core/tests/test_volatility_gate.rs.",
+      "assertions": [
+        {
+          "id": "T1-A1",
+          "check": "Output contains a STOPLIGHT verdict of GREEN",
+          "rule": {"type": "regex", "pattern": "(?i)STOPLIGHT.*GREEN|GREEN.*STOPLIGHT|Verdict.*GREEN"},
+          "expected": true
+        },
+        {
+          "id": "T1-A2",
+          "check": "All ATs are classified as PROVEN (no CLAIMED-NOT-PROVEN)",
+          "rule": {"type": "not_contains", "value": "CLAIMED-NOT-PROVEN"},
+          "expected": true
+        },
+        {
+          "id": "T1-A3",
+          "check": "Output contains an AT Status Table with AT-060 entries",
+          "rule": {"type": "regex", "pattern": "AT-06[0-3].*PROVEN"},
+          "expected": true
+        },
+        {
+          "id": "T1-A4",
+          "check": "No Blockers section with items (clean implementation has no blockers)",
+          "rule": {"type": "count_max", "pattern": "(?i)blocker.*:.*AT-|blocker.*:.*fail", "max": 0},
+          "expected": true
+        },
+        {
+          "id": "T1-A5",
+          "check": "Output contains a Next Actions section",
+          "rule": {"type": "regex", "pattern": "(?i)## .*(Next Actions|Next Steps|Recommendations)"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "missing_trip_test",
+      "description": "Diff adds LatencyGate enforcement but only has a NON-TRIP test. Three TRIP tests are missing (TODOs in the test file). Audit must flag CLAIMED-NOT-PROVEN and YELLOW or RED stoplight.",
+      "fixture": "fixtures/missing_trip_test.diff",
+      "prompt": "Run /post-impl-audit on this diff. Story S4-004 (LatencyGate enforcement). The diff adds a new gate with only a NON-TRIP acceptance test. The TRIP tests for high latency, missing data, and CLOSE passthrough are marked as TODO comments. ATs AT-070 through AT-073 are registered in CONTRACT.md.",
+      "assertions": [
+        {
+          "id": "T2-A1",
+          "check": "Output contains STOPLIGHT verdict of YELLOW or RED (not GREEN)",
+          "rule": {"type": "regex", "pattern": "(?i)STOPLIGHT.*(YELLOW|RED)|Verdict.*(YELLOW|RED)|(YELLOW|RED).*STOPLIGHT"},
+          "expected": true
+        },
+        {
+          "id": "T2-A2",
+          "check": "At least one AT is classified as CLAIMED-NOT-PROVEN due to missing TRIP test",
+          "rule": {"type": "count_min", "pattern": "CLAIMED-NOT-PROVEN", "min": 1},
+          "expected": true
+        },
+        {
+          "id": "T2-A3",
+          "check": "Output contains an AT Status Table header row",
+          "rule": {"type": "regex", "pattern": "\\| AT.ID.*Status.*Enforcement|\\| AT-07[0-3]"},
+          "expected": true
+        },
+        {
+          "id": "T2-A4",
+          "check": "Blockers section lists the missing TRIP tests as blockers",
+          "rule": {"type": "regex", "pattern": "(?i)(blocker|block).*TRIP|TRIP.*(blocker|block|missing)"},
+          "expected": true
+        },
+        {
+          "id": "T2-A5",
+          "check": "Next Actions section recommends adding TRIP tests",
+          "rule": {"type": "regex", "pattern": "(?i)(add|write|implement|create).*(TRIP|acceptance).*test"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "paper_compliance",
+      "description": "Diff claims passes=true for CorrelationGate in prd.json but tests only check string existence (result.is_some(), output.contains('Correlation')) — no causal assertions on dispatch_count or reject_reason. Classic paper compliance.",
+      "fixture": "fixtures/paper_compliance.diff",
+      "prompt": "Run /post-impl-audit on this diff. Story S5-001 (CorrelationGate enforcement). The diff sets passes=true in prd.json but the acceptance tests only assert result.is_some() and use string contains checks — they never assert dispatch_count==0 or reject_reason. This is paper compliance: tests exist but do not prove the gate works.",
+      "assertions": [
+        {
+          "id": "T3-A1",
+          "check": "Output contains a STOPLIGHT verdict (any color)",
+          "rule": {"type": "regex", "pattern": "(?i)STOPLIGHT.*(GREEN|YELLOW|RED)|Verdict.*(GREEN|YELLOW|RED)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A2",
+          "check": "Output flags paper compliance — PASS-WITHOUT-PROOF or CLAIMED-NOT-PROVEN for missing causal assertions",
+          "rule": {"type": "regex", "pattern": "PASS-WITHOUT-PROOF|CLAIMED-NOT-PROVEN|paper.compliance|no.*causal|not.*prov(e|en|ing).*causal"},
+          "expected": true
+        },
+        {
+          "id": "T3-A3",
+          "check": "Output contains AT Status Table with AT-080 entries",
+          "rule": {"type": "regex", "pattern": "AT-08[01]"},
+          "expected": true
+        },
+        {
+          "id": "T3-A4",
+          "check": "Blockers section present identifying the causal proof gap",
+          "rule": {"type": "regex", "pattern": "(?i)(blocker|block).*(dispatch_count|reject_reason|causal|proof)|(dispatch_count|reject_reason|causal|proof).*(blocker|block)"},
+          "expected": true
+        },
+        {
+          "id": "T3-A5",
+          "check": "Next Actions recommend adding dispatch_count and reject_reason assertions",
+          "rule": {"type": "regex", "pattern": "(?i)(dispatch_count|reject_reason|causal.*assert|assert.*dispatch|assert.*reject)"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "fail_open_default",
+      "description": "Diff adds DrawdownGate with unwrap_or(TradingMode::Active) as a default and unwrap_or(0.0) for missing drawdown data. Both are fail-open anti-patterns that must be flagged as blockers.",
+      "fixture": "fixtures/fail_open_default.diff",
+      "prompt": "Run /post-impl-audit on this diff. Story S5-002 (DrawdownGate enforcement). The diff has multiple fail-open patterns: (1) unwrap_or(0.0) for missing drawdown data treats missing as zero drawdown — allows trading when data is absent, (2) unwrap_or(TradingMode::Active) defaults to Active when no cached mode exists, (3) effective_mode() helper also defaults to Active. These violate the fail-closed contract requirement.",
+      "assertions": [
+        {
+          "id": "T4-A1",
+          "check": "Output contains STOPLIGHT verdict of YELLOW or RED (fail-open is at minimum YELLOW)",
+          "rule": {"type": "regex", "pattern": "(?i)STOPLIGHT.*(YELLOW|RED)|Verdict.*(YELLOW|RED)|(YELLOW|RED).*STOPLIGHT"},
+          "expected": true
+        },
+        {
+          "id": "T4-A2",
+          "check": "Output identifies the fail-open pattern — mentions unwrap_or(TradingMode::Active) or fail-open or optimistic default",
+          "rule": {"type": "regex", "pattern": "(?i)fail.open|unwrap_or.*Active|optimistic.*default|TradingMode::Active.*default|default.*Active"},
+          "expected": true
+        },
+        {
+          "id": "T4-A3",
+          "check": "Output contains AT Status Table",
+          "rule": {"type": "regex", "pattern": "\\| AT.ID|\\| AT-09[0-2]"},
+          "expected": true
+        },
+        {
+          "id": "T4-A4",
+          "check": "Blockers section flags the fail-open behavior",
+          "rule": {"type": "regex", "pattern": "(?i)(blocker|block).*(fail.open|Active|unwrap_or)|(fail.open|unwrap_or).*(blocker|block)"},
+          "expected": true
+        },
+        {
+          "id": "T4-A5",
+          "check": "Next Actions recommend using ReduceOnly or rejecting when data is missing",
+          "rule": {"type": "regex", "pattern": "(?i)(ReduceOnly|reject|fail.closed|return.*Err|GateResult::Reject)"},
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "scope_creep",
+      "description": "Diff adds MomentumGate (in-scope) but also modifies PolicyGuard (guard.rs) and WAL ledger (ledger.rs) which are outside scope.touch. The out-of-scope changes are unrelated refactors. Audit must flag scope violation.",
+      "fixture": "fixtures/scope_creep.diff",
+      "prompt": "Run /post-impl-audit on this diff. Story S5-003 (MomentumGate enforcement). scope.touch is limited to: crates/soldier_core/src/execution/gates/momentum_gate.rs, crates/soldier_core/src/execution/engine.rs, crates/soldier_core/tests/test_momentum_gate.rs. The diff also modifies crates/soldier_core/src/policy/guard.rs (adds is_any_input_stale method) and crates/soldier_infra/src/wal/ledger.rs (adds write_batch method) — both are outside scope.touch and are unrelated opportunistic refactors.",
+      "assertions": [
+        {
+          "id": "T5-A1",
+          "check": "Output contains a STOPLIGHT verdict (any color)",
+          "rule": {"type": "regex", "pattern": "(?i)STOPLIGHT.*(GREEN|YELLOW|RED)|Verdict.*(GREEN|YELLOW|RED)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A2",
+          "check": "Output flags scope violation — mentions files outside scope.touch",
+          "rule": {"type": "regex", "pattern": "(?i)scope.*(violat|creep|outside|beyond|breach)|out.of.scope|guard\\.rs.*scope|ledger\\.rs.*scope|scope.*guard\\.rs|scope.*ledger\\.rs"},
+          "expected": true
+        },
+        {
+          "id": "T5-A3",
+          "check": "Output contains AT Status Table",
+          "rule": {"type": "regex", "pattern": "\\| AT.ID|\\| AT-10[0-2]"},
+          "expected": true
+        },
+        {
+          "id": "T5-A4",
+          "check": "Output identifies the specific out-of-scope files (guard.rs or ledger.rs)",
+          "rule": {"type": "regex", "pattern": "(guard\\.rs|ledger\\.rs|policy/guard|wal/ledger)"},
+          "expected": true
+        },
+        {
+          "id": "T5-A5",
+          "check": "Next Actions recommend removing or deferring the out-of-scope changes",
+          "rule": {"type": "regex", "pattern": "(?i)(remove|revert|extract|separate|defer|split).*(out.of.scope|unrelated|guard|ledger|scope)"},
+          "expected": true
+        }
+      ]
+    }
+  ]
+}

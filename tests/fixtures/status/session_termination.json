@@ -1,0 +1,63 @@
+{
+  "status_schema_version": 1,
+  "contract_version": "5.2",
+  "build_id": "test-fixture-session-term",
+  "runtime_config_hash": "abc123",
+  "supported_profiles": ["CSP"],
+  "enforced_profile": "CSP",
+
+  "trading_mode": "ReduceOnly",
+  "risk_state": "Degraded",
+  "bunker_mode_active": false,
+  "connectivity_degraded": true,
+
+  "policy_age_sec": 4,
+  "last_policy_update_ts": 1769440610000,
+
+  "f1_cert_state": "PASS",
+  "f1_cert_expires_at": 1769527010000,
+
+  "disk_used_pct": 0.40,
+  "disk_used_last_update_ts_ms": 1769440610000,
+  "disk_used_pct_secondary": 0.40,
+  "disk_used_secondary_last_update_ts_ms": 1769440610000,
+
+  "mm_util": 0.20,
+  "mm_util_last_update_ts_ms": 1769440610000,
+
+  "loop_tick_last_ts_ms": 1769440610400,
+
+  "atomic_naked_events_24h": 0,
+  "429_count_5m": 0,
+  "10028_count_5m": 3,
+
+  "wal_queue_depth": 1,
+  "wal_queue_capacity": 1024,
+  "wal_queue_enqueue_failures": 0,
+
+  "deribit_http_p95_ms": 180,
+  "ws_event_lag_ms": 70,
+
+  "mode_reasons": [
+    "REDUCEONLY_OPEN_PERMISSION_LATCHED",
+    "REDUCEONLY_RISKSTATE_DEGRADED",
+    "REDUCEONLY_SESSION_KILL_UNCONFIRMED"
+  ],
+
+  "open_permission_blocked_latch": true,
+  "open_permission_reason_codes": ["SESSION_TERMINATION_RECONCILE_REQUIRED"],
+  "open_permission_requires_reconcile": true,
+
+  "owner_view": {
+    "primary_owner_reason_code": "EXT_SESSION_TERMINATED",
+    "owner_message": "Exchange session terminated; system is blocked from new OPENs until re-auth + reconciliation succeeds.",
+    "unblock": [
+      {
+        "type": "MANUAL",
+        "condition": "re-authenticate + reconciliation_success == true (artifact recorded)",
+        "current": "session=terminated",
+        "target": "session=active + reconcile=clean"
+      }
+    ]
+  }
+}

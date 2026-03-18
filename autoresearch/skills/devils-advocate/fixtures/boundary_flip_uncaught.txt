@@ -1,0 +1,65 @@
+## Scenario: Gate uses `>` threshold with no boundary test (off-by-one mutation should pass)
+
+### Gate Code (position_limit_gate.rs)
+
+```rust
+pub struct PositionLimitInput {
+    pub current_position_usd: f64,
+    pub max_position_usd: f64,
+    pub proposed_order_usd: f64,
+}
+
+pub fn evaluate_position_limit(input: &PositionLimitInput) -> GateResult {
+    let new_position = input.current_position_usd + input.proposed_order_usd;
+    if new_position > input.max_position_usd {
+        return GateResult::Reject(RejectReason::PositionLimitExceeded {
+            projected: new_position,
+            limit: input.max_position_usd,
+        });
+    }
+    GateResult::Pass
+}
+```
+
+### Test Suite (test_position_limit.rs)
+
+```rust
+#[test]
+fn test_position_limit_trip_exceeds_limit() {
+    // TRIP: new position clearly exceeds limit → must reject
+    let input = PositionLimitInput {
+        current_position_usd: 80_000.0,
+        max_position_usd: 100_000.0,
+        proposed_order_usd: 30_000.0,  // 80k + 30k = 110k > 100k
+    };
+    let result = evaluate_position_limit(&input);
+    assert!(matches!(result, GateResult::Reject(RejectReason::PositionLimitExceeded { .. })));
+}
+
+#[test]
+fn test_position_limit_non_trip_well_under_limit() {
+    // NON-TRIP: new position well under limit → must pass
+    let input = PositionLimitInput {
+        current_position_usd: 20_000.0,
+        max_position_usd: 100_000.0,
+        proposed_order_usd: 10_000.0,  // 20k + 10k = 30k << 100k
+    };
+    let result = evaluate_position_limit(&input);
+    assert_eq!(result, GateResult::Pass);
+}
+
+#[test]
+fn test_position_limit_trip_large_excess() {
+    // TRIP: massively over limit → must reject
+    let input = PositionLimitInput {
+        current_position_usd: 200_000.0,
+        max_position_usd: 100_000.0,
+        proposed_order_usd: 50_000.0,  // 250k >> 100k
+    };
+    let result = evaluate_position_limit(&input);
+    assert!(matches!(result, GateResult::Reject(RejectReason::PositionLimitExceeded { .. })));
+}
+```
+
+### Task
+Run /devils-advocate on the position limit gate and its test suite above. The suite has both TRIP and NON-TRIP tests, but no test hits the exact boundary (new_position == max_position). Attempt a boundary flip mutation: change `>` to `>=` (i.e., reject when exactly equal). Determine if the tests catch this off-by-one mutation.

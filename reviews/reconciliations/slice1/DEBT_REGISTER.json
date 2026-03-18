@@ -1,0 +1,233 @@
+{
+  "$schema": "debt_register_v1",
+  "slice": "S1",
+  "cycle": "recon-v3.1-upgrade",
+  "generated_date": "2026-02-23",
+  "source_files": [
+    "GAP_LIST.md",
+    "SUMMARY.md",
+    "fresh-eyes-audit (source code direct read)"
+  ],
+  "summary": {
+    "total_items": 16,
+    "deferred": 9,
+    "escalation": 2,
+    "fresh_eyes": 5,
+    "by_target": {
+      "slice_2": 12,
+      "slice_3_plus": 3,
+      "accepted": 1
+    }
+  },
+  "items": [
+    {
+      "id": "GAP-003-2",
+      "story_id": "S1-003",
+      "type": "DEFERRED",
+      "priority": "DEFERRED",
+      "description": "PolicyGuard integration test (RiskState \u2192 TradingMode pipeline)",
+      "target_slice": "Slice 2",
+      "owner": "reconcile-instrument agent",
+      "related_ats": ["AT-104", "AT-279"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-003-3",
+      "story_id": "S1-003",
+      "type": "DEFERRED",
+      "priority": "DEFERRED",
+      "description": "Per-instrument TTL configuration",
+      "target_slice": "Slice 3+",
+      "owner": "TBD",
+      "related_ats": ["AT-104"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-007-1",
+      "story_id": "S1-007",
+      "type": "DEFERRED",
+      "priority": "P1\u2192DEFERRED",
+      "description": "Wire validate_and_dispatch into production dispatch pipeline (zero callsites)",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-009-1",
+      "story_id": "S1-009",
+      "type": "DEFERRED",
+      "priority": "P2\u2192DEFERRED",
+      "description": "Per-instrument-kind edge case table in discovery doc",
+      "target_slice": "Slice 2 (low priority)",
+      "owner": "reconcile-infra agent",
+      "related_ats": ["AT-277", "AT-920"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-010-4",
+      "story_id": "S1-010",
+      "type": "DEFERRED",
+      "priority": "DEFERRED",
+      "description": "Config loader wired into PolicyGuard/EvidenceGuard runtime",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-341", "AT-040"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-010-5",
+      "story_id": "S1-010",
+      "type": "DEFERRED",
+      "priority": "DEFERRED",
+      "description": "CI check: count of test params == count of Appendix A params",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-424"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-012-5",
+      "story_id": "S1-012",
+      "type": "DEFERRED",
+      "priority": "DEFERRED",
+      "description": "Reconcile loop integration test (unit tests prove signals, not loop)",
+      "target_slice": "Slice 2+",
+      "owner": "TBD",
+      "related_ats": ["AT-961"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-012-6",
+      "story_id": "S1-012",
+      "type": "DEFERRED",
+      "priority": "DEFERRED",
+      "description": "DelistingSoon intermediate state",
+      "target_slice": "Slice 2+",
+      "owner": "TBD",
+      "related_ats": ["AT-949", "AT-950"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-012-7",
+      "story_id": "S1-012",
+      "type": "DEFERRED",
+      "priority": "P2\u2192ACCEPTED",
+      "description": "\u00a74.2 decision divergence: Other errors \u2192 Retryable regardless of expiry (accepted as safe)",
+      "target_slice": "Slice 2+",
+      "owner": "TBD",
+      "related_ats": ["AT-949", "AT-966"],
+      "source_phase": "R1",
+      "status": "OPEN"
+    },
+    {
+      "id": "GAP-FE-001",
+      "story_id": "cross-cutting",
+      "type": "FRESH_EYES",
+      "priority": "P1",
+      "description": "NetEdgeInputMissing used as catch-all reject code for 3 different gates (net edge, pricer, cascading). pipeline.rs:208,221,227 + gate_outcome.rs:200. Monitoring cannot distinguish failure modes.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "fresh-eyes-v3.1",
+      "status": "FIXED",
+      "resolution": "Added PricerInputMissing, PricerInputInvalid, GateCascadeSkip reject codes. Updated pipeline.rs, gate_outcome.rs, CONTRACT.md §2.2.6, manifest, tests."
+    },
+    {
+      "id": "GAP-FE-002",
+      "story_id": "cross-cutting",
+      "type": "FRESH_EYES",
+      "priority": "P2",
+      "description": "7 unwrap() calls in pending_exposure.rs (5 production, 2 debug_assertions). Guarded by prior checks but violates CLAUDE.md non-negotiable no-unwrap policy.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": [],
+      "source_phase": "fresh-eyes-v3.1",
+      "status": "FIXED",
+      "resolution": "Replaced all 7 unwrap() calls with descriptive expect() messages including function name."
+    },
+    {
+      "id": "GAP-FE-003",
+      "story_id": "S1-007",
+      "type": "FRESH_EYES",
+      "priority": "P2",
+      "description": "GateResults::all_passed() const fn (build_order_intent.rs:527) + deprecated build_order_intent() = full 9-gate bypass. Extends DEBT-S1-007-01 scope.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "fresh-eyes-v3.1",
+      "extends_escalation": "DEBT-S1-007-01",
+      "status": "FIXED",
+      "resolution": "Gated all_passed() behind cfg(any(test, feature = \"test-helpers\")). Restricted new(pass) to pub(crate)."
+    },
+    {
+      "id": "GAP-FE-004",
+      "story_id": "S1-007",
+      "type": "FRESH_EYES",
+      "priority": "P2",
+      "description": "Pipeline uses deprecated WAL bypass path (pipeline.rs:261-264). Secure alternative build_order_intent_with_wal_gate() exists but is not used.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "fresh-eyes-v3.1",
+      "extends_escalation": "DEBT-S1-007-01",
+      "status": "MITIGATED",
+      "resolution": "Migrated pipeline.rs and open_runtime.rs to use build_order_intent_with_wal_gate() via PrecomputedWalGate shim. Shim wraps precomputed bool — real WAL gate injection tracked as DEBT-FE-004-WAL."
+    },
+    {
+      "id": "GAP-FE-005",
+      "story_id": "S1-007",
+      "type": "FRESH_EYES",
+      "priority": "P2",
+      "description": "ValidatedDispatch pub fields (dispatch_map.rs:78-84) make proof token forgeable. DEBT-S1-007-01 fix must also make token unforgeable.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "fresh-eyes-v3.1",
+      "extends_escalation": "DEBT-S1-007-01",
+      "status": "FIXED",
+      "resolution": "Made ValidatedDispatch fields private, added getter methods. Private fields prevent external construction (no #[non_exhaustive] needed)."
+    },
+    {
+      "id": "DEBT-FE-004-WAL",
+      "story_id": "S1-007",
+      "type": "DEBT",
+      "priority": "P2",
+      "description": "Replace PrecomputedWalGate migration shim with real WAL gate injection. PrecomputedWalGate wraps a precomputed bool — the exact pattern the WAL gate API was designed to eliminate.",
+      "target_slice": "Slice 2",
+      "owner": "TBD",
+      "related_ats": ["AT-920"],
+      "source_phase": "fresh-eyes-fix",
+      "extends_escalation": "DEBT-S1-007-01",
+      "status": "OPEN"
+    }
+  ],
+  "escalations": [
+    {
+      "id": "DEBT-S1-007-01",
+      "story_id": "S1-007",
+      "severity": "P0-ESCALATION",
+      "finding": "dispatch_consistency_passed bare bool bypass \u2014 AT-920 bypassable by any caller passing true without running validate_and_dispatch",
+      "resolution_required": "Replace dispatch_consistency_passed: bool with ValidatedDispatch proof token (type exists at dispatch_map.rs:74)",
+      "target_slice": "Slice 2",
+      "status": "OPEN"
+    },
+    {
+      "id": "DEBT-S1-007-02",
+      "story_id": "S1-007",
+      "severity": "P0-ESCALATION",
+      "finding": "Independent reviewer escalated same root cause to Critical",
+      "resolution_required": "Same as DEBT-S1-007-01",
+      "target_slice": "Slice 2",
+      "status": "OPEN"
+    }
+  ]
+}

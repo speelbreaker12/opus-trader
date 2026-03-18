@@ -1,0 +1,199 @@
+{
+  "generated_at": "2026-03-17T14:10:00Z",
+  "validator_version": "phase2-v1.0",
+  "proposals": [
+    {
+      "proposal_id": "P-200",
+      "source_finding": "F-200",
+      "source_finding_category": "stale_input_unspecified",
+      "section": "2.2.3.2 Axis Computation / MarketIntegrityAxis",
+      "change_type": "new_requirement",
+      "rationale": "bunker_mode_active has no companion timestamp field and no freshness threshold in \u00a72.2.1.2. Line 485 references a staleness threshold that does not exist, making the fail-closed check unimplementable. AT-1249 tests the stale case but cannot pass without the field and threshold being defined.",
+      "status": "proposed",
+      "dedupe_key": "f200-bunker-mode-staleness-threshold",
+      "proposed_text": "Add `bunker_mode_last_update_ts_ms` (monotonic-epoch ms) to the \u00a72.2 inputs list alongside `bunker_mode_active`. Add `bunker_mode_max_age_ms = 10_000` to the \u00a72.2.1.2 freshness defaults table. The MarketIntegrityAxis STRESSED predicate at line 485 is then implementable: treat `bunker_mode_active` as missing/stale when `now_ms - bunker_mode_last_update_ts_ms > bunker_mode_max_age_ms`.",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-200",
+          "description": "Given `bunker_mode_last_update_ts_ms` is older than `bunker_mode_max_age_ms` (stale), When MarketIntegrityAxis is computed, Then MarketIntegrityAxis == STRESSED and TradingMode == ReduceOnly (fail-closed). Pass: OPEN blocked. Fail: Active returned or STRESSED not produced."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2 inputs\n+- `bunker_mode_last_update_ts_ms` (monotonic-epoch ms; timestamp when bunker_mode_active was last updated by \u00a72.3.2)\n @@ \u00a72.2.1.2 Freshness defaults\n+- `bunker_mode_max_age_ms = 10_000`\n"
+    },
+    {
+      "proposal_id": "P-201",
+      "source_finding": "F-201",
+      "source_finding_category": "missing_at_pair",
+      "section": "2.2 PolicyGuard \u2014 field rename transition",
+      "change_type": "new_requirement",
+      "rationale": "Lines 37-42 define a MUST-level dual-name acceptance rule for contract version 5.2, but no AT validates that the old field name `rate_limit_session_kill_active` is correctly aliased to `session_termination_active`. Without this AT, the normative aliasing rule is untested and can silently fail.",
+      "status": "proposed",
+      "dedupe_key": "f201-rate-limit-session-kill-alias-at",
+      "proposed_text": "Add an acceptance test after line 42: AT-PROP-201 \u2014 Given contract_version=5.2 and a policy payload that uses only the old field name `rate_limit_session_kill_active=true` (new name absent), When PolicyGuard computes TradingMode, Then PolicyGuard MUST treat it identically to `session_termination_active=true` and compute Kill per the session-termination axis predicate. Pass: Kill computed. Fail: field ignored and Active or ReduceOnly returned.",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-201",
+          "description": "Given contract_version=5.2 and a payload using only the old field name `rate_limit_session_kill_active=true` (no `session_termination_active` key present), When PolicyGuard computes TradingMode, Then TradingMode == Kill (same result as if `session_termination_active=true`). Pass: Kill computed. Fail: old field ignored, Active or ReduceOnly returned."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2 Field rename transition (contract version 5.2) after line 42\n+AT-PROP-201\n+- Given: contract_version=5.2 and policy payload contains `rate_limit_session_kill_active=true` with `session_termination_active` absent.\n+- When: PolicyGuard computes TradingMode.\n+- Then: TradingMode == Kill (alias is honoured).\n+- Pass criteria: Kill computed via alias. Fail criteria: old field ignored.\n"
+    },
+    {
+      "proposal_id": "P-202",
+      "source_finding": "F-202",
+      "source_finding_category": "weak_normative",
+      "section": "2.2.3.3 TradingMode Resolution",
+      "change_type": "mechanical",
+      "rationale": "Two safety-critical resolution rules use SHALL where all other normative rules in this section use MUST. The parenthetical '(no other rules are permitted)' at line 513 already signals non-negotiable intent; SHALL is weaker than MUST under RFC 2119 and creates an inconsistency that could be cited to justify deviation.",
+      "status": "pending_scope_review",
+      "dedupe_key": "f202-shall-to-must-lines-412-513",
+      "mechanical_ok": true,
+      "mechanical_details": "Two single-line substitutions: (1) line 412: replace 'PolicyGuard SHALL compute' with 'PolicyGuard MUST compute'. (2) line 513: replace 'SHALL be computed from axes' with 'MUST be computed from axes'. Both are exact word substitutions with no surrounding context change.",
+      "enforcement_point": "PolicyGuard",
+      "callsite_evidence": "crates/soldier_core/src/policy/guard.rs \u2014 `get_effective_mode()` implements the three-axis TradingMode computation; `resolve_trading_mode()` implements the 27-state mapping. These are the callsites enforcing both normative rules.",
+      "replace_span": {
+        "start_line": 412,
+        "end_line": 412,
+        "old_text": "PolicyGuard SHALL compute TradingMode from three independent health axes:",
+        "new_text": "PolicyGuard MUST compute TradingMode from three independent health axes:"
+      },
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -412,1 +412,1 @@\n-PolicyGuard SHALL compute TradingMode from three independent health axes:\n+PolicyGuard MUST compute TradingMode from three independent health axes:\n@@ -513,1 +513,1 @@\n-TradingMode \u2208 { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):\n+TradingMode \u2208 { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):\n"
+    },
+    {
+      "proposal_id": "P-210",
+      "source_finding": "F-202",
+      "source_finding_category": "weak_normative",
+      "section": "2.2.3.3 TradingMode Resolution",
+      "change_type": "mechanical",
+      "rationale": "Second mechanical substitution for F-202: line 513 uses SHALL where MUST is required for this non-negotiable computation rule.",
+      "status": "pending_scope_review",
+      "dedupe_key": "f202-shall-to-must-line-513",
+      "mechanical_ok": true,
+      "mechanical_details": "Single-line substitution at line 513: replace 'SHALL be computed from axes' with 'MUST be computed from axes'.",
+      "enforcement_point": "PolicyGuard",
+      "callsite_evidence": "crates/soldier_core/src/policy/guard.rs \u2014 `resolve_trading_mode()` implements the 27-state deterministic mapping enforced by this rule.",
+      "replace_span": {
+        "start_line": 513,
+        "end_line": 513,
+        "old_text": "TradingMode \u2208 { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):",
+        "new_text": "TradingMode \u2208 { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):"
+      },
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -513,1 +513,1 @@\n-TradingMode \u2208 { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):\n+TradingMode \u2208 { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):\n"
+    },
+    {
+      "proposal_id": "P-203",
+      "source_finding": "F-203",
+      "source_finding_category": "cross_ref_broken",
+      "section": "2.2.6 RejectReasonCode Registry",
+      "change_type": "new_requirement",
+      "rationale": "AT-931 (line 747) requires a reject reason that 'indicates TradingMode gate', but no such token exists in the \u00a72.2.6 registry. AT-1101 mandates 1:1 completeness between contract tokens and enum variants, so AT-931 creates an untestable and internally inconsistent requirement. Adding the token resolves both the cross-reference gap and the AT-1101 completeness constraint.",
+      "status": "proposed",
+      "dedupe_key": "f203-tradingmode-blocked-open-reject-code",
+      "proposed_text": "Add `TradingModeBlockedOpen` to the \u00a72.2.6 RejectReasonCode registry allowed-values list. Update AT-931 pass criteria to read: 'dispatch count remains 0 and reject_reason_code == TradingModeBlockedOpen'. This satisfies AT-1101 completeness and makes AT-931 unambiguously testable.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2.6 Allowed values list\n+- `TradingModeBlockedOpen`\n@@ AT-931 pass criteria line 747\n-- Pass criteria: dispatch count remains 0 and reject reason indicates TradingMode gate.\n+- Pass criteria: dispatch count remains 0 and reject_reason_code == TradingModeBlockedOpen.\n"
+    },
+    {
+      "proposal_id": "P-204",
+      "source_finding": "F-204",
+      "source_finding_category": "cross_ref_broken",
+      "section": "2.2.4 Open Permission Latch \u2014 AT-1243 duplicate ID",
+      "change_type": "mechanical",
+      "rationale": "AT-1243 is used for two entirely different test scenarios (line 954: reconcile-stall observability; line 1037: runtime-binding cert concurrent with reconcile-class reason code). Duplicate AT IDs break automated traceability tools and PRD linkage. The second occurrence (line 1037) must be assigned a new unique ID.",
+      "status": "proposed",
+      "dedupe_key": "f204-duplicate-at-1243-renumber-line-1037",
+      "mechanical_ok": true,
+      "mechanical_details": "Replace the AT-1243 label at line 1037 with AT-1251 (next available after AT-1252 is the highest existing, so using AT-1253 to avoid any risk of collision \u2014 but per findings the proposed ID is AT-1251, which is below AT-1252; using AT-1253 instead). Update any TRACE.yaml or PRD references to AT-1243 that target the concurrent-cert scenario to reference the new ID.",
+      "replace_span": {
+        "start_line": 1037,
+        "end_line": 1042,
+        "old_text": "AT-1243\n- Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).\n- When: `open_permission_reason_codes` are computed.\n- Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.\n- Pass criteria: only reconcile-class codes in reason list; no F1/Evidence codes despite concurrent cert failure.\n- Fail criteria: F1/Evidence codes appear in `open_permission_reason_codes`.",
+        "new_text": "AT-1253\n- Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).\n- When: `open_permission_reason_codes` are computed.\n- Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.\n- Pass criteria: only reconcile-class codes in reason list; no F1/Evidence codes despite concurrent cert failure.\n- Fail criteria: F1/Evidence codes appear in `open_permission_reason_codes`."
+      },
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ -1037,1 +1037,1 @@\n-AT-1243\n+AT-1253\n"
+    },
+    {
+      "proposal_id": "P-205",
+      "source_finding": "F-205",
+      "source_finding_category": "missing_at_pair",
+      "section": "2.2.3.2 SystemIntegrityAxis / 2.2 inputs \u2014 fee model staleness",
+      "change_type": "new_requirement",
+      "rationale": "The SystemIntegrityAxis DEGRADED predicate `fee_model_cache_age_s > fee_model_hard_stale_s` (line 502) produces REDUCEONLY_FEE_MODEL_HARD_STALE but has no acceptance test. No AT proves this predicate actually forces ReduceOnly with the correct reason code.",
+      "status": "proposed",
+      "dedupe_key": "f205-fee-model-hard-stale-at",
+      "proposed_text": "Add after the fee-model staleness predicate (line 502): AT-PROP-202 \u2014 Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis inputs are nominal (no other DEGRADED/FAILING predicates active), When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason. Fail: Active returned or reason code absent.",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-202",
+          "description": "Given `fee_model_cache_age_s > fee_model_hard_stale_s` and all other axis predicates nominal, When TradingMode is computed, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE. Pass: OPEN blocked with correct reason code. Fail: Active returned or REDUCEONLY_FEE_MODEL_HARD_STALE absent."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after SystemIntegrityAxis fee-model staleness predicate\n+AT-PROP-202\n+- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.\n+- When: TradingMode is computed.\n+- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.\n+- Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.\n"
+    },
+    {
+      "proposal_id": "P-206",
+      "source_finding": "F-206",
+      "source_finding_category": "stale_input_unspecified",
+      "section": "2.2 inputs / 2.2.1.2 \u2014 cortex_override missing/unparseable behavior unspecified",
+      "change_type": "new_requirement",
+      "rationale": "`cortex_override` drives CapitalRiskAxis CRITICAL (ForceKill) and SystemIntegrityAxis DEGRADED (ForceReduceOnly) but is not listed as a critical input in \u00a72.2.1.2, has no companion timestamp, and has no explicit missing/unparseable handling rule. A corrupted ForceKill signal could be silently dropped \u2014 a direct fail-open risk on a capital-loss path.",
+      "status": "proposed",
+      "dedupe_key": "f206-cortex-override-missing-unparseable-rule",
+      "proposed_text": "Add `cortex_override` to the \u00a72.2.1.2 critical inputs list. Add an explicit rule: 'If `cortex_override` is missing or unparseable, PolicyGuard MUST treat it as `ForceReduceOnly` (fail-closed) and include REDUCEONLY_INPUT_MISSING_OR_STALE in mode_reasons.' Add AT-PROP-203: Given `cortex_override` payload is absent or cannot be deserialized, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and REDUCEONLY_INPUT_MISSING_OR_STALE is present. Pass: ReduceOnly with reason. Fail: Active returned or reason absent.",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-203",
+          "description": "Given `cortex_override` is absent from the input snapshot or its value is unparseable/corrupted, When PolicyGuard computes TradingMode, Then TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_INPUT_MISSING_OR_STALE (fail-closed). Pass: ReduceOnly with correct reason. Fail: Active returned, ForceKill silently dropped, or reason code absent."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2.1.2 Critical inputs list\n+- `cortex_override` (from \u00a72.3 producers) \u2014 if missing or unparseable MUST be treated as ForceReduceOnly; set REDUCEONLY_INPUT_MISSING_OR_STALE\n"
+    },
+    {
+      "proposal_id": "P-207",
+      "source_finding": "F-207",
+      "source_finding_category": "missing_at_pair",
+      "section": "2.2.4 Open Permission Latch \u2014 reconciliation REST failure",
+      "change_type": "new_requirement",
+      "rationale": "Line 944 defines a MUST-level fail-closed rule: if the REST `/get_user_trades` query fails (network/timeout/HTTP/parse error), latch MUST remain set. AT-1100 covers missing trades, not REST failure. This separate fail-closed code path has no AT coverage.",
+      "status": "proposed",
+      "dedupe_key": "f207-reconcile-rest-failure-at",
+      "proposed_text": "Add AT-PROP-204 after AT-1100: Given `open_permission_blocked_latch == true` and the REST `/get_user_trades` call returns a network error, timeout, HTTP error, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and `open_permission_blocked_latch` MUST remain true; OPEN intents MUST remain blocked. Pass: latch stays set, reconciliation reported as failed. Fail: reconciliation succeeds on transport error, or latch clears.",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-204",
+          "description": "Given `open_permission_blocked_latch == true` and REST `/get_user_trades` returns a network error, timeout, HTTP 4xx/5xx, or unparseable response, When reconciliation success criteria are evaluated, Then reconciliation MUST fail and latch MUST remain true; OPEN intents remain blocked. Pass: latch held, reconciliation failed. Fail: latch cleared on transport error or reconciliation succeeds."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after AT-1100 (line 967)\n+AT-PROP-204\n+- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.\n+- When: reconciliation success criteria are evaluated.\n+- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.\n+- Pass criteria: latch held; reconciliation reported failed. Fail criteria: latch clears on transport failure.\n"
+    },
+    {
+      "proposal_id": "P-208",
+      "source_finding": "F-208",
+      "source_finding_category": "missing_at_pair",
+      "section": "2.2.3.3 Recovery Rule",
+      "change_type": "new_requirement",
+      "rationale": "The Recovery Rule (lines 565-570) is a MUST-level cross-cutting invariant with no dedicated AT. AT-1053 tests monotonicity (worse axes never produce less-restrictive mode) but does not test the recovery direction \u2014 that a recovering axis cannot return to Active faster than the applicable hysteresis window allows.",
+      "status": "proposed",
+      "dedupe_key": "f208-recovery-slower-than-degradation-at",
+      "proposed_text": "Add AT-PROP-205 after the Recovery Rule: Given `bunker_mode_active` becomes true (entering Bunker Mode via §2.3.2) and all other axis inputs are nominal (no other STRESSED/DEGRADED/FAILING predicates active), and then `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed since the bunker entry condition cleared. Pass: ReduceOnly held for full `bunker_exit_stable_s` duration; Active not returned prematurely. Fail: Active returned before `bunker_exit_stable_s` elapses.",
+      "new_ats": [
+        {
+          "at_id": "AT-PROP-205",
+          "description": "Given `bunker_mode_active` becomes true (Bunker Mode entry) with all other axis inputs nominal, and then clears before `bunker_exit_stable_s` elapses, When TradingMode is computed on subsequent ticks, Then TradingMode MUST remain ReduceOnly until the full `bunker_exit_stable_s` window has elapsed. Pass: ReduceOnly held for full stable-exit window. Fail: Active returned before `bunker_exit_stable_s` elapses."
+        }
+      ],
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ after Recovery Rule (line 570)\n+AT-PROP-205\n+- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.\n+- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.\n+- When: TradingMode is computed on subsequent ticks.\n+- Then: TradingMode == ReduceOnly until full `bunker_exit_stable_s` window elapses since bunker entry condition cleared.\n+- Pass criteria: ReduceOnly held for full stable-exit window; Active not returned prematurely.\n+- Fail criteria: Active returned before `bunker_exit_stable_s` elapses.\n"
+    },
+    {
+      "proposal_id": "P-209",
+      "source_finding": "F-209",
+      "source_finding_category": "missing_fail_closed",
+      "section": "2.2 inputs \u2014 emergency_reduceonly_active clear condition",
+      "change_type": "new_requirement",
+      "rationale": "Line 30 qualifies the clear condition with '(if reconciliation is required by trigger source)' but never defines which trigger sources require reconciliation. An implementer could choose to never require reconciliation, allowing the flag to clear on cooldown alone in all cases \u2014 a fail-open risk. AT-132 repeats the same ambiguous qualifier without resolving it.",
+      "status": "rejected",
+      "dedupe_key": "f209-emergency-reduceonly-trigger-reconcile-table",
+      "proposed_text": "Add a normative table in \u00a72.2 inputs under the `emergency_reduceonly_active` entry enumerating trigger sources and their reconciliation requirement. Example: POST /api/v1/emergency/reduce_only \u2192 reconciliation required before clear; automated policy-derived triggers \u2192 reconciliation required before clear. If all sources require reconciliation, replace the parenthetical with the unconditional rule: 'clears only after cooldown expires AND reconciliation confirms exposure is safe.' This eliminates the per-source ambiguity while preserving or tightening the fail-closed invariant.",
+      "diff_preview": "--- a/specs/CONTRACT.md\n+++ b/specs/CONTRACT.md\n@@ \u00a72.2 inputs \u2014 emergency_reduceonly_active state transition\n-  - State transition: automatically clears to false after cooldown duration expires AND reconciliation confirms exposure is safe (if reconciliation is required by trigger source).\n+  - State transition: automatically clears to false after cooldown duration expires AND reconciliation confirms exposure is safe.\n+  - **Trigger source reconciliation table (normative):** all trigger sources require reconciliation before clearing (unconditional). If a future trigger source is added that does not require reconciliation, it MUST be explicitly listed here as an exception.\n"
+    }
+  ]
+}

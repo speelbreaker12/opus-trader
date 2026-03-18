@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: run safety checks before committing
+# Skip with: git commit --no-verify
+
+# Ensure we're at repo root (hooks run from caller's working directory)
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Running pre-commit checks..."
+
+# 0. Obsidian tracking guard (all commits)
+plans/obsidian_commit_guard.sh
+
+# 1. SSOT lint (existing)
+plans/ssot_lint.sh
+
+# 2. Contract cross-reference check (if CONTRACT.md is staged)
+if git diff --cached --name-only | grep -q "specs/CONTRACT.md"; then
+  echo "CONTRACT.md staged - running cross-reference check..."
+  if ! python3 scripts/check_contract_crossrefs.py --contract specs/CONTRACT.md --strict --check-at; then
+    echo ""
+    echo "ERROR: Contract cross-reference check failed"
+    echo "Fix the issues above before committing"
+    exit 1
+  fi
+fi
+
+# 3. PRD schema check (if prd.json is staged)
+if git diff --cached --name-only | grep -q "plans/prd.json"; then
+  echo "prd.json staged - running schema check..."
+  if ! plans/prd_schema_check.sh plans/prd.json; then
+    echo ""
+    echo "ERROR: PRD schema validation failed"
+    echo "Run 'plans/prd_gate.sh' for full diagnostics"
+    exit 1
+  fi
+fi
+
+# 4. Check for unwrap() in staged Rust files (safety-critical paths only)
+STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^crates/soldier_core/.*\.rs$" || true)
+if [[ -n "$STAGED_RS" ]]; then
+  echo "Checking staged soldier_core files for unwrap()..."
+  UNWRAP_FOUND=0
+  for file in $STAGED_RS; do
+    # Skip test files
+    if [[ "$file" == *"test"* ]]; then
+      continue
+    fi
+    if git diff --cached "$file" | grep -q "\.unwrap()"; then
+      echo "WARN: unwrap() added in $file"
+      UNWRAP_FOUND=1
+    fi
+  done
+  if [[ $UNWRAP_FOUND -eq 1 ]]; then
+    echo ""
+    echo "WARNING: unwrap() found in staged changes"
+    echo "Consider using ? or .ok_or() instead"
+    echo "(Proceeding anyway - this is a warning only)"
+    echo ""
+  fi
+fi
+
+# 5. Enforce code-review-expert attestation for significant implementation changes
+plans/code_review_expert_guard.sh
+
+# 6. Auto-sync the local dashboard so project workspace links stay current.
+ACTIVE_PROJECTS_FILE="obsidian/Active Projects.md"
+ACTIVE_INDEX_SCRIPT=".claude/scripts/refresh_active_projects_index.py"
+if [[ -x "$ACTIVE_INDEX_SCRIPT" ]]; then
+  if python3 "$ACTIVE_INDEX_SCRIPT" --repo-root . >/dev/null 2>&1; then
+    if [[ -f "$ACTIVE_PROJECTS_FILE" ]] && ! git diff --quiet -- "$ACTIVE_PROJECTS_FILE"; then
+      git add "$ACTIVE_PROJECTS_FILE"
+      echo "Auto-synced and staged: $ACTIVE_PROJECTS_FILE"
+    fi
+  else
+    echo "WARN: failed to refresh $ACTIVE_PROJECTS_FILE. Run manually with:"
+    echo "WARN: python3 $ACTIVE_INDEX_SCRIPT --repo-root ."
+  fi
+fi
+
+echo "Pre-commit checks passed."

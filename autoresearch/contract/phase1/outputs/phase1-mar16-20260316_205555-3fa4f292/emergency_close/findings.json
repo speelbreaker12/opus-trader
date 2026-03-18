@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-03-16T20:55:00Z",
+  "validator_version": "1.0.0",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "Price Source (Deterministic, fail-closed)",
+      "category": "stale_input_unspecified",
+      "severity": "P1",
+      "description": "The normative Price Source section defines L2/L1 staleness via `l2_book_snapshot_max_age_ms` but never states a staleness threshold for venue-band metadata. The criterion `instrument_cache_age_s > instrument_cache_ttl_s` appears only inside AT-1239, not in the normative spec, so an implementation has no normative rule to enforce and could treat stale venue-band data as fresh.",
+      "evidence": {
+        "line": 10,
+        "quote": "Emergency fallback: instrument metadata venue price bands when no fresh L2/L1 is available:",
+        "context": "Normative Price Source section \u2014 venue-band staleness criterion absent; only appears in AT-1239 line 96"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a normative bullet to the Price Source section: 'Venue-band metadata is considered stale when `instrument_cache_age_s > instrument_cache_ttl_s`; stale metadata MUST be treated as unavailable.'"
+    },
+    {
+      "finding_id": "F-002",
+      "section": "Algorithm (Deterministic, 3 tries)",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "The normative spec requires `Rejected(EmergencyCloseNoPrice)` and logging when no valid price source exists (line 15). No AT verifies that `AtomicNakedEvent` is NOT emitted on this pre-dispatch rejection path, nor that the rejection reason code is correctly recorded. AT-211 only covers the success/completion path.",
+      "evidence": {
+        "line": 15,
+        "quote": "emergency close MUST NOT dispatch and MUST return `Rejected(EmergencyCloseNoPrice)` and log `EmergencyCloseNoPrice`.",
+        "context": "Normative requirement \u2014 no AT covers AtomicNakedEvent suppression or rejection code on the no-price path"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add an AT: Given all price sources unavailable, When emergency close runs, Then no AtomicNakedEvent is emitted and the rejection reason field equals `EmergencyCloseNoPrice`."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "Algorithm (Deterministic, 3 tries) \u2014 step 3",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "Step 3 specifies submitting a reduce-only perp hedge if still exposed after retries, but defines no fail-closed outcome when the hedge dispatch itself fails. A failed hedge leaves the position exposed with no specified error code, log event, or retry limit, creating a silent exposure gap.",
+      "evidence": {
+        "line": 20,
+        "quote": "If still exposed after retries: submit **reduce-only perp hedge** to neutralize delta (bounded size).",
+        "context": "No failure path specified for hedge dispatch failure"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add: 'If hedge dispatch fails or is rejected, MUST log `EmergencyHedgeFailure` with group_id and remaining exposure_usd, and emit AtomicNakedEvent with `hedge_used=false` and `cause=emergency_close_exhausted`.'"
+    },
+    {
+      "finding_id": "F-004",
+      "section": "Algorithm (Deterministic, 3 tries) \u2014 step 2",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "'max 3 loops' is ambiguous: it is unclear whether the initial attempt (step 1) counts as loop 1, leaving 2 retries, or whether 3 retries follow the initial attempt for 4 total dispatches. The exponential buffer sequence (5\u219210\u219220 ticks) implies 3 retry values but the loop count includes or excludes the first attempt without explicit statement.",
+      "evidence": {
+        "line": 19,
+        "quote": "If partial fill: repeat for remaining qty (max 3 loops, exponential buffer: multiply by 2 each retry \u2192 10 ticks, 20 ticks).",
+        "context": "'max 3 loops' could mean 3 total or 3 retries after initial attempt"
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Replace 'max 3 loops' with 'max 3 total IOC attempts (initial + 2 retries)' and list buffers as '5 ticks (attempt 1), 10 ticks (attempt 2), 20 ticks (attempt 3)'."
+    },
+    {
+      "finding_id": "F-005",
+      "section": "Acceptance Tests \u2014 AT-236",
+      "category": "gate_interaction_gap",
+      "severity": "P2",
+      "description": "AT-236 specifies that Liquidity Gate does NOT block emergency close IOC attempts, but no normative statement or AT covers the interaction of emergency close with other pipeline gates (e.g., RecordedBeforeDispatch, RiskState=Kill, NetEdge). It is unspecified whether emergency close bypasses or obeys the full 8-gate pipeline.",
+      "evidence": {
+        "line": 70,
+        "quote": "emergency close still submits IOC close attempts (Liquidity Gate does NOT block it).",
+        "context": "Only Liquidity Gate bypass is stated; other gates unaddressed"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add a normative statement listing which gates are bypassed by emergency close (e.g., Liquidity Gate) versus enforced (e.g., RecordedBeforeDispatch), and add an AT covering behavior under RiskState=Kill."
+    },
+    {
+      "finding_id": "F-006",
+      "section": "AtomicNakedEvent schema",
+      "category": "cross_ref_broken",
+      "severity": "P2",
+      "description": "`evidence_chain_state_at_event` is typed as `EvidenceChainState` with example values `GREEN|RED` but no cross-reference to the canonical enum definition is provided. Implementers cannot verify the complete set of valid values or whether the enum has changed.",
+      "evidence": {
+        "line": 34,
+        "quote": "evidence_chain_state_at_event` (EvidenceChainState; e.g., `GREEN|RED`; required only when `enforced_profile != CSP`)",
+        "context": "Enum referenced by name only; no section/file pointer to authoritative definition"
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Add cross-reference: append '(see \u00a7X.Y EvidenceChainState or specs/state_machines/evidence_chain.md)' after the enum name on line 34."
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-commit-review-hook.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/rust-skills-prompt-hook.py 2>&1"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/obsidian-context-hook.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/scripts/dangerous-command-blocker.py 2>&1"
+          },
+          {
+            "type": "command",
+            "command": "python3 .claude/scripts/secret-scanner.py 2>&1"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pr-review-gate-hook.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-verify-fmt.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/obsidian-precommit-hook.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/rust-skills-edit-hook.py 2>&1"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/rust-skills-edit-hook.py 2>&1"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true
+  }
+}

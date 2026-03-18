@@ -1,0 +1,46 @@
+diff --git a/crates/soldier_core/src/execution/liquidity_gate.rs b/crates/soldier_core/src/execution/liquidity_gate.rs
+index a1b2c3d..c4d5e6f 100644
+--- a/crates/soldier_core/src/execution/liquidity_gate.rs
++++ b/crates/soldier_core/src/execution/liquidity_gate.rs
+@@ -44,11 +44,7 @@ impl LiquidityGate {
+     pub fn check(&self, input: &LiquidityGateInput) -> Result<(), GateError> {
+-        let l2_snapshot_age_ms = input.l2_snapshot.age_ms();
+-        if l2_snapshot_age_ms > input.l2_book_snapshot_max_age_ms {
+-            return Err(GateError::StaleSnapshot { age_ms: l2_snapshot_age_ms });
+-        }
++        // staleness check removed — always use whatever snapshot is present
+         self.check_depth(input)
+     }
+ }
+
+diff --git a/crates/soldier_core/src/execution/policy_guard.rs b/crates/soldier_core/src/execution/policy_guard.rs
+index b2c3d4e..d5e6f7a 100644
+--- a/crates/soldier_core/src/execution/policy_guard.rs
++++ b/crates/soldier_core/src/execution/policy_guard.rs
+@@ -22,7 +22,7 @@ impl PolicyGuard {
+     pub fn resolve_trading_mode(&self) -> TradingMode {
+-        self.cached_mode.ok_or(PolicyError::NotInitialized)
+-            .map_err(|_| TradingMode::ReduceOnly)
+-            .unwrap_or(TradingMode::ReduceOnly)
++        self.cached_mode.unwrap_or(TradingMode::Active)
+     }
+ }
+
+diff --git a/crates/soldier_core/src/execution/spread_gate.rs b/crates/soldier_core/src/execution/spread_gate.rs
+index c3d4e5f..e6f7a8b 100644
+--- a/crates/soldier_core/src/execution/spread_gate.rs
++++ b/crates/soldier_core/src/execution/spread_gate.rs
+@@ -18,10 +18,6 @@ const SPREAD_GATE_THRESHOLD: f64 = 0.002;
+ impl SpreadGate {
+     pub fn check_spread_cross(&self, best_bid: f64, best_ask: f64) -> Result<(), GateError> {
+         let spread = (best_ask - best_bid) / best_bid;
+-        if spread > SPREAD_GATE_THRESHOLD {
+-            return Err(GateError::SpreadTooWide {
+-                spread,
+-                threshold: SPREAD_GATE_THRESHOLD,
+-            });
+-        }
++        // threshold check removed — allow any spread
+         Ok(())
+     }
+ }

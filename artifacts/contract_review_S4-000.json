@@ -1,0 +1,68 @@
+{
+  "selected_story_id": "S4-000",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §2.4 Durable Intent Ledger (WAL Truth Source)",
+    "CONTRACT.md §2.4.1 WAL Writer Isolation (Hot Loop Protection)",
+    "AT-935",
+    "AT-906",
+    "AT-233",
+    "AT-234"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_infra/src/store/ledger.rs",
+      "crates/soldier_infra/src/store/mod.rs",
+      "crates/soldier_infra/src/lib.rs",
+      "crates/soldier_infra/tests/test_ledger_replay.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to store/ledger within soldier_infra"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_214327",
+      "237 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S4-000",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Intent appended to ledger before dispatch (RecordedBeforeDispatch)",
+      "Replay reconstructs in-flight intents without resend (AT-233)",
+      "Filled intents detected on replay (AT-234)",
+      "Append failure returns error and increments wal_write_errors (AT-935, AT-906)",
+      "Queue full returns immediately, not blocking (§2.4.1)",
+      "Persisted record includes all minimum fields"
+    ],
+    "evidence_found": [
+      "WalLedger::append records intent before dispatch (test_append_and_lookup)",
+      "was_sent() prevents resend for Sent intents (test_at233_sent_intent_not_resent)",
+      "replay() identifies in-flight vs terminal intents (test_replay_mixed_states)",
+      "Filled intents are terminal, not in in-flight list (test_at234_filled_intent)",
+      "QueueFull error on capacity exceeded (test_at935_queue_full_returns_error)",
+      "wal_write_errors counter increments on failure (test_at906_write_error_counter)",
+      "Capacity 0 queue returns immediately (test_queue_full_returns_immediately)",
+      "IntentRecord has all §2.4 minimum fields (test_record_has_all_required_fields)",
+      "20 tests covering all ATs and edge cases"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "WAL ledger matches CONTRACT.md §2.4 specification",
+    "Bounded queue with fail-closed on overflow (§2.4.1)",
+    "RecordedBeforeDispatch pattern enforced",
+    "Replay identifies in-flight intents for reconciliation",
+    "All minimum persisted fields present in IntentRecord"
+  ]
+}

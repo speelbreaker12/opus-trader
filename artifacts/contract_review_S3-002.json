@@ -1,0 +1,59 @@
+{
+  "selected_story_id": "S3-002",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
+    "AT-028",
+    "AT-004",
+    "AT-915"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/venue/capabilities.rs",
+      "crates/soldier_core/src/venue/mod.rs",
+      "crates/soldier_core/tests/test_capabilities.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to venue capabilities within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_213528",
+      "217 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S3-002",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Default configuration → linked/OCO not supported",
+      "Both venue capability and feature flag enabled → linked/OCO allowed",
+      "test_oco_not_supported passes"
+    ],
+    "evidence_found": [
+      "VenueCapabilities::default() has linked_orders_supported=false",
+      "BotFeatureFlags::default() has enable_linked_orders=false",
+      "evaluate_capabilities requires BOTH flags true for linked_orders_allowed=true",
+      "test_default_config_oco_not_supported verifies default → not allowed",
+      "test_all_flag_combinations covers all 4 boolean combinations",
+      "13 tests cover defaults, all combinations, determinism, equality"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Capabilities matrix matches CONTRACT.md §1.4.4 linked orders gating exactly",
+    "linked_orders_supported defaults to false for v5.1 (F-08: NOT SUPPORTED)",
+    "ENABLE_LINKED_ORDERS_FOR_BOT defaults to false (fail-closed)",
+    "Both must be true for linked orders to be allowed — AND gate",
+    "Wired into venue module exports for consumption by preflight"
+  ]
+}

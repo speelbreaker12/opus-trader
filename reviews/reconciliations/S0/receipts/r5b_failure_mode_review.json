@@ -1,0 +1,32 @@
+{
+  "schema_version": "r5b_receipt.v1",
+  "story_id": "S0",
+  "tool": "failure-mode-review",
+  "step": "R5b",
+  "phase_equivalent": "R5b",
+  "head_commit": "e04a39f9150316caa2a97a5e371cbb5ab7284f5a",
+  "started_at": "2026-02-24T20:34:27Z",
+  "ended_at": "2026-02-24T20:34:27Z",
+  "exit_status": "completed",
+  "artifact_paths": [
+    "reviews/reconciliations/S0/receipts/r5b_failure_mode_review.json"
+  ],
+  "finding_counts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 1,
+    "INFO": 0
+  },
+  "summary": "Failure-mode risk remains where assembly failure can leave effective_risk_state healthy and observability semantics ambiguous.",
+  "findings": [
+    {
+      "severity": "P2",
+      "id": "FM-1",
+      "evidence": "crates/soldier_core/src/execution/open_runtime.rs:420",
+      "description": "Assembly failure sets dispatch consistency failure but may leave effective_risk_state == Healthy; mismatch with fail-closed intent and observability safety."
+    }
+  ],
+  "evidence_refs": [
+    "crates/soldier_core/src/execution/open_runtime.rs:420"
+  ]
+}

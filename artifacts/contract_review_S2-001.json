@@ -1,0 +1,65 @@
+{
+  "selected_story_id": "S2-001",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.1.1 Canonical Quantization",
+    "CONTRACT.md AT-218",
+    "CONTRACT.md AT-343"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/idempotency/hash.rs",
+      "crates/soldier_core/src/idempotency/mod.rs",
+      "crates/soldier_core/src/lib.rs",
+      "crates/soldier_core/tests/test_idempotency.rs",
+      "crates/soldier_core/Cargo.toml",
+      "Cargo.lock",
+      "specs/vendor_docs/rust/crates/serde/1.0.228/metadata.json",
+      "specs/vendor_docs/rust/crates/serde_json/1.0.149/metadata.json"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "Vendor docs hashes updated due to Cargo.lock change from xxhash-rust addition"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_210048",
+      "129 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S2-001",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "intent_hash = xxhash64(instrument + side + qty_steps + price_ticks + group_id + leg_idx)",
+      "No wall-clock timestamps in hash (AT-343)",
+      "Deterministic hash across codepaths (AT-218)",
+      "Uses integer qty_steps and price_ticks, not raw f64",
+      "Field boundary separation prevents hash collisions"
+    ],
+    "evidence_found": [
+      "compute_intent_hash uses xxh64 from xxhash-rust crate",
+      "IntentHashInput has no timestamp field (compile-time proof in test)",
+      "AT-218 tests verify identical inputs produce identical hashes",
+      "IntentHashInput uses i64 qty_steps and price_ticks",
+      "0xFF separator bytes prevent field boundary ambiguity, tested"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Intent hash correctly implements CONTRACT.md §1.1.1 formula",
+    "xxhash64 used as specified in contract",
+    "No timestamps in hash inputs (AT-343)",
+    "Integer tick/step values ensure determinism (AT-218)",
+    "Field separator prevents boundary collisions",
+    "14 tests cover determinism, field sensitivity, formatting"
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "status_schema_version": 1,
+  "contract_version": "5.2",
+  "build_id": "test-fixture-data-stale",
+  "runtime_config_hash": "abc123",
+  "supported_profiles": ["CSP"],
+  "enforced_profile": "CSP",
+
+  "trading_mode": "ReduceOnly",
+  "risk_state": "Healthy",
+  "bunker_mode_active": false,
+  "connectivity_degraded": true,
+
+  "policy_age_sec": 9,
+  "last_policy_update_ts": 1769440410000,
+
+  "f1_cert_state": "PASS",
+  "f1_cert_expires_at": 1769526810000,
+
+  "disk_used_pct": 0.43,
+  "disk_used_last_update_ts_ms": 1769440410000,
+  "disk_used_pct_secondary": 0.42,
+  "disk_used_secondary_last_update_ts_ms": 1769440410000,
+
+  "mm_util": 0.17,
+  "mm_util_last_update_ts_ms": 1769440410000,
+
+  "loop_tick_last_ts_ms": 1769440410900,
+
+  "atomic_naked_events_24h": 0,
+  "429_count_5m": 0,
+  "10028_count_5m": 0,
+
+  "wal_queue_depth": 2,
+  "wal_queue_capacity": 1024,
+  "wal_queue_enqueue_failures": 0,
+
+  "deribit_http_p95_ms": 160,
+  "ws_event_lag_ms": 3200,
+
+  "mode_reasons": ["REDUCEONLY_OPEN_PERMISSION_LATCHED"],
+
+  "open_permission_blocked_latch": true,
+  "open_permission_reason_codes": ["WS_DATA_STALE_RECONCILE_REQUIRED"],
+  "open_permission_requires_reconcile": true,
+
+  "owner_view": {
+    "primary_owner_reason_code": "DATA_MARKET_FEED_STALE",
+    "owner_message": "Market data is stale; new OPEN risk is blocked until reconciliation clears the latch.",
+    "unblock": [
+      {
+        "type": "AUTO",
+        "condition": "ws_event_lag_ms <= 500 for >= 60s AND reconciliation_success == true",
+        "current": "ws_event_lag_ms=3200",
+        "target": "ws_event_lag_ms<=500"
+      }
+    ]
+  }
+}

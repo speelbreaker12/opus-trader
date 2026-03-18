@@ -1,0 +1,478 @@
+//! Tests for Net Edge Gate per CONTRACT.md §1.4.1.
+//!
+//! AT-015: net_edge_usd < min_edge_usd → reject, zero dispatch.
+//! AT-932: Missing fee_usd or expected_slippage_usd → Rejected(NetEdgeInputMissing).
+
+use super::*;
+use crate::execution::{begin_metrics_test, take_execution_metric_lines, with_intent_trace_ids};
+
+trait TestOptionExt<T> {
+    fn must(self) -> T;
+}
+
+impl<T> TestOptionExt<T> for Option<T> {
+    fn must(self) -> T {
+        match self {
+            Some(value) => value,
+            None => panic!("unexpected None"),
+        }
+    }
+}
+
+/// Helper: build a complete net edge input.
+fn full_input(gross: f64, fee: f64, slippage: f64, min_edge: f64) -> NetEdgeInput {
+    NetEdgeInput {
+        gross_edge_usd: Some(gross),
+        fee_usd: Some(fee),
+        expected_slippage_usd: Some(slippage),
+        min_edge_usd: Some(min_edge),
+    }
+}
+
+// ─── AT-015: Net edge too low → reject ──────────────────────────────────
+
+#[test]
+fn test_at015_net_edge_below_min_rejected() {
+    let mut m = NetEdgeMetrics::new();
+
+    // gross=10, fee=5, slippage=4 → net=1, min=2 → reject
+    let input = full_input(10.0, 5.0, 4.0, 2.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    match result {
+        NetEdgeResult::Rejected {
+            reason,
+            net_edge_usd,
+        } => {
+            assert_eq!(reason, NetEdgeRejectReason::NetEdgeTooLow);
+            assert!((net_edge_usd.must() - 1.0).abs() < 1e-9);
+        }
+        other => panic!("expected Rejected(NetEdgeTooLow), got {other:?}"),
+    }
+    assert_eq!(m.reject_too_low(), 1);
+}
+
+#[test]
+fn test_at015_zero_dispatch_on_rejection() {
+    let mut m = NetEdgeMetrics::new();
+
+    // Negative net edge
+    let input = full_input(5.0, 3.0, 3.0, 1.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeTooLow,
+            ..
+        }
+    ));
+    // Caller must NOT dispatch — rejection is the signal
+}
+
+#[test]
+fn test_fees_exceed_gross_edge() {
+    let mut m = NetEdgeMetrics::new();
+
+    // gross=5, fee=3, slippage=3 → net=-1, min=0 → reject
+    let input = full_input(5.0, 3.0, 3.0, 0.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    match result {
+        NetEdgeResult::Rejected {
+            reason,
+            net_edge_usd,
+        } => {
+            assert_eq!(reason, NetEdgeRejectReason::NetEdgeTooLow);
+            assert!(net_edge_usd.must() < 0.0);
+        }
+        other => panic!("expected Rejected, got {other:?}"),
+    }
+}
+
+// ─── Net edge sufficient → allowed ──────────────────────────────────────
+
+#[test]
+fn test_net_edge_above_min_allowed() {
+    let mut m = NetEdgeMetrics::new();
+
+    // gross=10, fee=2, slippage=1 → net=7, min=5 → allowed
+    let input = full_input(10.0, 2.0, 1.0, 5.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    match result {
+        NetEdgeResult::Allowed { net_edge_usd } => {
+            assert!((net_edge_usd - 7.0).abs() < 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+    assert_eq!(m.allowed_total(), 1);
+}
+
+#[test]
+fn test_net_edge_exactly_at_min_allowed() {
+    let mut m = NetEdgeMetrics::new();
+
+    // gross=10, fee=3, slippage=2 → net=5, min=5 → allowed (not strictly less)
+    let input = full_input(10.0, 3.0, 2.0, 5.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(result, NetEdgeResult::Allowed { .. }));
+}
+
+#[test]
+fn test_zero_costs_full_edge() {
+    let mut m = NetEdgeMetrics::new();
+
+    // No fees or slippage
+    let input = full_input(10.0, 0.0, 0.0, 5.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    match result {
+        NetEdgeResult::Allowed { net_edge_usd } => {
+            assert!((net_edge_usd - 10.0).abs() < 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+// ─── AT-932: Missing inputs → NetEdgeInputMissing ───────────────────────
+
+#[test]
+fn test_at932_missing_gross_edge() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: None,
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+    assert_eq!(m.reject_input_missing(), 1);
+}
+
+#[test]
+fn test_at932_missing_fee_usd() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: None,
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_at932_missing_expected_slippage() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(2.0),
+        expected_slippage_usd: None,
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_at932_missing_min_edge() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: None,
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_at932_all_missing() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: None,
+        fee_usd: None,
+        expected_slippage_usd: None,
+        min_edge_usd: None,
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn test_non_finite_gross_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(f64::NAN),
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_non_finite_min_edge_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(f64::INFINITY),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_net_edge_graybox_emits_reject_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+    let before = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
+
+    let mut events = Vec::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: None,
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = evaluate_net_edge_with_events(&input, &mut events);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+    assert_eq!(
+        events,
+        vec![NetEdgeEvent::Reject {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }]
+    );
+    assert_eq!(
+        net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing),
+        before
+    );
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_net_edge_graybox_emits_allowed_event_without_global_side_effects() {
+    let _guard = begin_metrics_test();
+
+    let mut events = Vec::new();
+    let input = full_input(10.0, 2.0, 1.0, 5.0);
+    let result = evaluate_net_edge_with_events(&input, &mut events);
+
+    assert!(
+        matches!(result, NetEdgeResult::Allowed { net_edge_usd } if (net_edge_usd - 7.0).abs() < 1e-9)
+    );
+    assert_eq!(events, vec![NetEdgeEvent::Allowed]);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.is_empty(),
+        "graybox path must not emit global metric lines: {lines:?}"
+    );
+}
+
+#[test]
+fn test_net_edge_wrapper_emits_structured_reject_metric_line() {
+    let _guard = begin_metrics_test();
+    let intent_id = "intent-netedge-001";
+    let run_id = "run-netedge-001";
+    let before = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
+
+    let mut metrics = NetEdgeMetrics::new();
+    let input = NetEdgeInput {
+        gross_edge_usd: None,
+        fee_usd: Some(2.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(5.0),
+    };
+    let result = with_intent_trace_ids(intent_id, run_id, || {
+        evaluate_net_edge(&input, &mut metrics)
+    });
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            ..
+        }
+    ));
+
+    let after = net_edge_reject_total(NetEdgeRejectReason::NetEdgeInputMissing);
+    assert_eq!(after, before + 1);
+
+    let lines = take_execution_metric_lines();
+    assert!(
+        lines.iter().any(|line| {
+            line.starts_with("net_edge_reject_total")
+                && line.contains("reason=NetEdgeInputMissing")
+                && line.contains(&format!("intent_id={intent_id}"))
+                && line.contains(&format!("run_id={run_id}"))
+        }),
+        "expected net-edge reject metric line, got {lines:?}"
+    );
+}
+
+// ─── Net edge computation ───────────────────────────────────────────────
+
+#[test]
+fn test_net_edge_formula() {
+    let mut m = NetEdgeMetrics::new();
+
+    // net = gross - fee - slippage = 100 - 30 - 20 = 50
+    let input = full_input(100.0, 30.0, 20.0, 10.0);
+    let result = evaluate_net_edge(&input, &mut m);
+
+    match result {
+        NetEdgeResult::Allowed { net_edge_usd } => {
+            assert!((net_edge_usd - 50.0).abs() < 1e-9);
+        }
+        other => panic!("expected Allowed, got {other:?}"),
+    }
+}
+
+// ─── Metrics default ────────────────────────────────────────────────────
+
+#[test]
+fn test_metrics_default() {
+    let m = NetEdgeMetrics::default();
+    assert_eq!(m.reject_too_low(), 0);
+    assert_eq!(m.reject_input_missing(), 0);
+    assert_eq!(m.allowed_total(), 0);
+}
+
+#[test]
+fn test_negative_fee_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(-0.01),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_negative_slippage_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(-0.01),
+        min_edge_usd: Some(2.0),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}
+
+#[test]
+fn test_negative_min_edge_fails_closed() {
+    let mut m = NetEdgeMetrics::new();
+
+    let input = NetEdgeInput {
+        gross_edge_usd: Some(10.0),
+        fee_usd: Some(1.0),
+        expected_slippage_usd: Some(1.0),
+        min_edge_usd: Some(-0.5),
+    };
+    let result = evaluate_net_edge(&input, &mut m);
+
+    assert!(matches!(
+        result,
+        NetEdgeResult::Rejected {
+            reason: NetEdgeRejectReason::NetEdgeInputMissing,
+            net_edge_usd: None,
+        }
+    ));
+}

@@ -1,0 +1,125 @@
+{
+  "probe_metadata": {
+    "probe_version": "1.1",
+    "executed_by": "phase0_drill",
+    "timestamp_utc": "2026-02-09T23:42:00Z"
+  },
+  "probes": [
+    {
+      "env": "STAGING",
+      "exchange": "Deribit",
+      "key_id": "key_staging_trade_***",
+      "account": "testnet_acct_001",
+      "scopes": [
+        "read_account",
+        "trade"
+      ],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "identity_check": {
+          "attempted": true,
+          "result": "success",
+          "matched_expected_account": true
+        },
+        "read_account": {
+          "attempted": true,
+          "result": "success"
+        },
+        "place_order": {
+          "attempted": true,
+          "result": "success"
+        },
+        "trade_with_revoked_key": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "key revoked"
+        },
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "withdrawal not permitted for this key"
+        }
+      }
+    },
+    {
+      "env": "PAPER",
+      "exchange": "Deribit",
+      "key_id": "N/A",
+      "account": "N/A",
+      "scopes": [
+        "public_market_data_only"
+      ],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "read_market_data": {
+          "attempted": true,
+          "result": "success"
+        },
+        "read_account": {
+          "attempted": false,
+          "result": "not_applicable",
+          "reason": "PAPER has no private key"
+        },
+        "place_order": {
+          "attempted": false,
+          "result": "not_applicable",
+          "reason": "PAPER has no trade-capable key"
+        }
+      }
+    },
+    {
+      "env": "LIVE",
+      "exchange": "Deribit",
+      "key_id": "key_live_trade_***",
+      "account": "prod_acct_001",
+      "scopes": [
+        "read_account",
+        "trade"
+      ],
+      "withdraw_enabled": false,
+      "transfer_enabled": false,
+      "probe_results": {
+        "identity_check": {
+          "attempted": true,
+          "result": "success",
+          "matched_expected_account": true
+        },
+        "read_account": {
+          "attempted": true,
+          "result": "success"
+        },
+        "place_order": {
+          "attempted": false,
+          "result": "skipped",
+          "reason": "LIVE probe limited to read-only verification"
+        },
+        "trade_with_revoked_key": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "key revoked"
+        },
+        "withdraw": {
+          "attempted": true,
+          "result": "permission_denied",
+          "error": "withdrawal not permitted for this key"
+        }
+      }
+    }
+  ],
+  "summary": {
+    "total_envs_reviewed": 3,
+    "trade_capable_envs": [
+      "STAGING",
+      "LIVE"
+    ],
+    "paper_trade_capability": false,
+    "all_withdrawals_disabled": true,
+    "all_transfers_disabled": true,
+    "revoked_trade_rejected": true,
+    "least_privilege_verified": true
+  },
+  "operator": "drill_operator",
+  "witness": "safety_witness"
+}

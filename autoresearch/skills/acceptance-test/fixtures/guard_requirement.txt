@@ -1,0 +1,10 @@
+Contract Section: §2.3.5 - Liquidity Gate
+
+Requirement:
+"OPEN orders MUST be rejected when the L2 book snapshot is older than
+l2_book_snapshot_max_age_ms. The reject reason MUST be
+RejectReasonCode::BookSnapshotStale."
+
+Guard: LiquidityGate
+Trigger condition: L2 snapshot age > max_age_ms
+Expected behavior: OPEN blocked with BookSnapshotStale

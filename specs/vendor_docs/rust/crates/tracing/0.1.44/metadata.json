@@ -1,0 +1,14 @@
+{
+  "crate": "tracing",
+  "version": "0.1.44",
+  "retrieved_at_utc": "2026-02-14T15:34:00Z",
+  "cargo_lock_sha256": "a7c1b5319db4161ba189783182ef29b8cd2f52a5b0aa187400c1d918709c5f77",
+  "resolved_features_sha256": "ea2af1d481678b5cc78ccc89e497ef11e613d2ed4d7562cff59dfc4c6931245b",
+  "topics": [
+    "instrument",
+    "spans",
+    "events"
+  ],
+  "source": "local_doc",
+  "notes": "Added to satisfy Cargo.lock drift coverage for crate-of-interest lint in S5-004 follow-up branch."
+}

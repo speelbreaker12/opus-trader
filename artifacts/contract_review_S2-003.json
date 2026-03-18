@@ -1,0 +1,60 @@
+{
+  "selected_story_id": "S2-003",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.1.2 Label Match Disambiguation",
+    "CONTRACT.md AT-217"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/recovery/label_match.rs",
+      "crates/soldier_core/src/recovery/mod.rs",
+      "crates/soldier_core/src/lib.rs",
+      "crates/soldier_core/tests/test_label_match.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to recovery label matching within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_211805",
+      "165 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S2-003",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Filter candidates by gid12 + leg_idx",
+      "Single candidate → immediate match",
+      "Tie-breaker order: ih16 → instrument → side → qty_q",
+      "Ambiguous result → RiskState::Degraded",
+      "Ambiguity counter metric incremented"
+    ],
+    "evidence_found": [
+      "match_label filters by gid12 + leg_idx, single candidate returns Matched",
+      "Tie-breakers applied in order: ih16 (A), instrument (B), side (C), qty_q (D)",
+      "ih16 takes priority over instrument (test_tiebreaker_order_ih16_before_instrument)",
+      "Exhausted tie-breakers return Ambiguous { remaining, risk_state: Degraded }",
+      "LabelMatchMetrics.ambiguity_total incremented on each ambiguity event",
+      "13 tests cover all tie-breaker levels, ambiguity, edge cases, determinism"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Label match algorithm matches CONTRACT.md §1.1.2 specification exactly",
+    "Tie-breaker cascade: ih16 → instrument → side → qty_q (AT-217)",
+    "Ambiguity triggers RiskState::Degraded — fail-closed pattern",
+    "MatchQuery struct avoids clippy too-many-arguments warning",
+    "13 tests cover single match, no match, all 4 tie-breakers, ambiguity, determinism"
+  ]
+}

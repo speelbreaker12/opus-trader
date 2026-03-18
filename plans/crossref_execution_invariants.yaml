@@ -1,0 +1,136 @@
+version: 12.2
+scope: crossref_validator_execution
+authoritative: true
+
+global_invariants:
+  artifact_scope:
+    run_scoped_required: true
+    allowed_root: artifacts/verify/<run_id>/crossref/
+    forbid_shared_root_artifacts: true
+    deterministic_outputs_required: true
+    forbid_timestamps_in_gating_artifacts: true
+    stable_key_order_required: true
+
+  ci_gating_scope:
+    canonical_sources:
+      - docs/PHASE0_CHECKLIST_BLOCK.md
+      - docs/PHASE1_CHECKLIST_BLOCK.md
+    roadmap_blocking_allowed: false
+    roadmap_informational_only_in_ci: true
+
+  promotion_rules:
+    manual_override_allowed: false
+    burnin_checker_required: true
+    burnin_conditions:
+      clean_merge_count_min: 2
+      unexplained_drift_count_max: 0
+      unknown_gap_count_max: 0
+
+slice_1:
+  shared_parser_required: true
+  shared_parser_path: tools/at_parser.py
+  regex_contract:
+    at_regex: '^\s*(AT-\d+)\b'
+    profile_regex: '^Profile:\s+(CSP|GOP|FULL)\s*$'
+  profile_completeness:
+    required_profiles: [CSP, GOP]
+    full_resolution_required: true
+    multi_profile_per_at_forbidden: true
+    missing_profile_forbidden: true
+  parity_requirements:
+    parity_type: exact_map_equality
+    compare_keys: true
+    compare_values: true
+    totals_only_comparison_forbidden: true
+  artifact_rules:
+    emit_at_map_required: true
+    artifact_path_must_be_run_scoped: true
+
+slice_2:
+  tool_required: tools/roadmap_evidence_audit.py
+  exit_codes:
+    "0": pass
+    "2": tool_error
+    "3": ci_fail_unknown_gaps
+    "4": ci_fail_strict_gaps
+    "5": ci_fail_profile_incomplete
+    "6": ci_fail_parity_mismatch
+    "7": ci_fail_marker_schema
+  strict_mode:
+    blocking_categories: [STORY_OWNED, UNKNOWN]
+    allowlist_governed: [GLOBAL_MANUAL]
+  ordering:
+    primary_sort: normalized_path
+    secondary_sort: source_location
+
+slice_3:
+  marker_grammar:
+    supported:
+      - REQUIRED_EVIDENCE
+      - REQUIRED_EVIDENCE_ANY_OF
+      - REQUIRED_EVIDENCE_NONE
+  none_constraints:
+    none_with_required_forbidden: true
+    none_with_any_of_forbidden: true
+    multiple_none_forbidden: true
+  any_of_rules:
+    normalize_each_option: true
+    duplicate_normalized_options_forbidden: true
+    cross_marker_duplicate_forbidden: true
+  path_rules:
+    absolute_paths_forbidden: true
+    root_escape_forbidden: true
+    case_sensitive: true
+    separator_normalization_required: true
+    whitespace_trim_required: true
+  global_manual:
+    allowlist_required: true
+    required_fields:
+      - evidence_path
+      - justification
+      - owning_story_id
+    stale_entries_forbidden: true
+    duplicates_forbidden: true
+  canonical_marker_rollout_required: true
+
+slice_4:
+  gate_wrapper_required: plans/crossref_gate.sh
+  burnin_checker_required: plans/crossref_burnin_check.sh
+  burnin_artifact_path_required: true
+  promotion_invariant:
+    eligible_required: true
+    manual_promotion_forbidden: true
+
+workflow_loop:
+  required_sequence:
+    - verify_quick
+    - self_review_pass
+    - codex_review_1
+    - kimi_review
+    - codex_review_2
+    - verify_quick
+    - rebase_sync
+    - clean_tree_check
+    - verify_full
+    - contract_review_generate
+    - contract_review_validate
+    - optional_prd_pass_flip
+    - pre_pr_gate
+    - pr_gate_wait
+    - merge
+  optional_prd_pass_flip_condition: >
+    required when PRD pass state changes for a PRD-governed story; otherwise
+    skip requires pass_flip_skip_reason.json artifact.
+  prd_set_pass_requires_validated_contract_review: true
+  contract_review_must_match_current_head: true
+
+definition_of_done:
+  shared_parser_live: true
+  parity_enforced: true
+  marker_schema_live: true
+  canonical_docs_updated: true
+  burnin_checker_live: true
+  roadmap_non_gating_confirmed: true
+  run_scoped_artifacts_only: true
+  workflow_self_proof_required: true
+  final_full_verify_green_required: true

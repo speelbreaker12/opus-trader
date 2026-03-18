@@ -1,0 +1,128 @@
+machine_id: RiskState
+kind: stored_state
+initial_state: Healthy
+states:
+- Healthy
+- Degraded
+- Maintenance
+- Kill
+events:
+- TR-MAINTENANCE_IMMINENT
+- TR-MAINTENANCE_CLEAR
+- TR-MONITOR_DEGRADED
+- TR-DEGRADED_CLEARED
+- TR-KILL_ASSERTED
+- TR-KILL_CLEARED
+- TR-ILLEGAL_TRANSITION
+event_definitions:
+  TR-MAINTENANCE_IMMINENT: Exchange maintenance window imminent per Exchange Health
+    Monitor.
+  TR-MAINTENANCE_CLEAR: Maintenance window no longer imminent and monitors healthy.
+  TR-MONITOR_DEGRADED: Any monitor or gate trips Degraded.
+  TR-DEGRADED_CLEARED: All Degraded causes cleared and reconciliation succeeded.
+  TR-KILL_ASSERTED: Kill asserted by system health or operator policy.
+  TR-KILL_CLEARED: Kill cause cleared but system not yet Healthy.
+  TR-ILLEGAL_TRANSITION: Any transition not listed in transitions.
+effects_catalog:
+- id: ACT-STATE_UPDATE_ONLY
+  description: Update RiskState value.
+- id: ACT-HARD_FAIL
+  description: Hard-fail the transition evaluation.
+entry_conditions:
+  Healthy: All system monitors healthy; no reconcile-required latch; no maintenance
+    window imminent.
+  Degraded: Any degraded condition active (Evidence not GREEN, staleness, WS gaps,
+    fee hard stale, time drift, etc.).
+  Maintenance: Exchange maintenance imminent or active per Exchange Health Monitor.
+  Kill: Kill asserted by system or operator; treated as input to TradingMode precedence.
+transitions:
+- id: RS-001
+  from: Healthy
+  to: Maintenance
+  guard: Exchange maintenance window imminent per Exchange Health Monitor.
+  refs:
+  - §2.3.1
+  event: TR-MAINTENANCE_IMMINENT
+  effects:
+  - ACT-STATE_UPDATE_ONLY
+  fail_closed: If maintenance signal missing or unparseable, enter Maintenance.
+- id: RS-002
+  from: Maintenance
+  to: Healthy
+  guard: Maintenance window no longer imminent and monitors healthy.
+  refs:
+  - §2.3.1
+  event: TR-MAINTENANCE_CLEAR
+  effects:
+  - ACT-STATE_UPDATE_ONLY
+  fail_closed: If clearance status missing or unparseable, remain Maintenance.
+- id: RS-003
+  from: '*'
+  to: Degraded
+  guard: Any monitor or gate trips Degraded (e.g., EvidenceGuard not GREEN; instrument
+    metadata stale; fee cache hard stale; WS gaps; time drift; repeated limits fetch
+    failures).
+  refs:
+  - §2.2.2
+  - §1.0.X
+  - §4.2
+  - §3.4
+  - §4.3
+  event: TR-MONITOR_DEGRADED
+  effects:
+  - ACT-STATE_UPDATE_ONLY
+  fail_closed: If monitor input missing or unparseable, enter Degraded.
+- id: RS-004
+  from: Degraded
+  to: Healthy
+  guard: All Degraded causes cleared and reconciliation (if required) succeeded.
+  refs:
+  - §3.4
+  - §2.2.4
+  event: TR-DEGRADED_CLEARED
+  effects:
+  - ACT-STATE_UPDATE_ONLY
+  fail_closed: If clearance status missing or unparseable, remain Degraded.
+- id: RS-005
+  from: '*'
+  to: Kill
+  guard: Kill may be asserted by system health or operator policy (contract may treat
+    this as input to PolicyGuard).
+  refs:
+  - Definitions
+  - §2.2.3
+  event: TR-KILL_ASSERTED
+  effects:
+  - ACT-STATE_UPDATE_ONLY
+  fail_closed: If kill signal missing or unparseable, enter Kill.
+- id: RS-006
+  from: Kill
+  to: Degraded
+  guard: Kill cause cleared but system not yet Healthy; used as intermediate before
+    Healthy.
+  refs:
+  - §2.2.3
+  event: TR-KILL_CLEARED
+  effects:
+  - ACT-STATE_UPDATE_ONLY
+  fail_closed: If clearance status missing or unparseable, remain Kill.
+illegal_transitions:
+- id: RS-IL-001
+  from: '*'
+  to: '*'
+  guard: Any transition not listed in RS-001..RS-006.
+  event: TR-ILLEGAL_TRANSITION
+  effects:
+  - ACT-HARD_FAIL
+  fail_closed: Hard-fail and hold RiskState at current value.
+terminal_states: []
+illegal_transition_policy: hard_fail
+acceptance_tests:
+- AT-106
+- AT-232
+- AT-271
+- AT-272
+- AT-273
+invariants:
+- RiskState must never silently clear without objective success criteria when reconciliation
+  is required.

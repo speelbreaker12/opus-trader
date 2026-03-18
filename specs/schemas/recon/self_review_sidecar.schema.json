@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "self_review_sidecar.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "head_commit",
+    "created_at",
+    "markdown_sha256",
+    "markdown_path",
+    "story_id",
+    "skills_run",
+    "total_blockers",
+    "premortem_crosscheck",
+    "at_proof_gaps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[a-z_]+\\.v[0-9]+$"
+    },
+    "head_commit": { "type": "string", "minLength": 7 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "markdown_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "markdown_path": { "type": "string", "minLength": 1 },
+    "story_id": { "type": "string", "minLength": 1 },
+    "skills_run": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "exit_status",
+          "finding_counts",
+          "receipt_path"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "exit_status": {
+            "type": "string",
+            "enum": ["completed", "skipped", "failed"]
+          },
+          "finding_counts": {
+            "type": "object",
+            "required": ["P0", "P1", "P2"],
+            "additionalProperties": false,
+            "properties": {
+              "P0": { "type": "integer", "minimum": 0 },
+              "P1": { "type": "integer", "minimum": 0 },
+              "P2": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "receipt_path": { "type": "string", "minLength": 1 }
+        }
+      },
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "total_blockers": { "type": "integer", "minimum": 0 },
+    "premortem_crosscheck": {
+      "type": "object",
+      "required": ["s2", "s4", "s5", "s6", "s10"],
+      "additionalProperties": false,
+      "properties": {
+        "s2": { "type": "string", "enum": ["CHECKED", "UNCHECKED"] },
+        "s4": { "type": "string", "enum": ["CHECKED", "UNCHECKED"] },
+        "s5": { "type": "string", "enum": ["CHECKED", "UNCHECKED"] },
+        "s6": { "type": "string", "enum": ["CHECKED", "UNCHECKED"] },
+        "s10": { "type": "string", "enum": ["CHECKED", "UNCHECKED"] }
+      }
+    },
+    "at_proof_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at_id", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "at_id": { "type": "string", "pattern": "^AT-" },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

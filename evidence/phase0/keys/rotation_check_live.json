@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "checked_entries": 1,
+  "env_filter": "LIVE",
+  "probe_path": "evidence/phase0/keys/key_scope_probe.json"
+}

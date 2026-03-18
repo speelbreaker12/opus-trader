@@ -1,0 +1,61 @@
+{
+  "schema_version": "r5b_receipt.v1",
+  "story_id": "S0",
+  "tool": "strategic-failure-review",
+  "step": "R5b",
+  "phase_equivalent": "R5b",
+  "head_commit": "e04a39f9150316caa2a97a5e371cbb5ab7284f5a",
+  "started_at": "2026-02-24T20:34:27Z",
+  "ended_at": "2026-02-24T20:34:27Z",
+  "exit_status": "completed",
+  "artifact_paths": [
+    "reviews/reconciliations/S0/receipts/r5b_strategic_review.json"
+  ],
+  "finding_counts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 4,
+    "INFO": 0
+  },
+  "summary": "Strategic scope/debt findings cluster around traceability drift, policy metadata ownership, and state-marker recovery durability assumptions.",
+  "findings": [
+    {
+      "severity": "P1",
+      "id": "SR-1",
+      "evidence": "plans/prd.json:1471-1474,1470s / S0-005",
+      "description": "enforcing_contract_ats includes ATs not actually enforced in slice scope."
+    },
+    {
+      "severity": "P2",
+      "id": "SR-2",
+      "evidence": "stoic-cli:205-216 / stoic-cli:323-325",
+      "description": "State marker durability concerns in fail-closed recovery path."
+    },
+    {
+      "severity": "P2",
+      "id": "SR-3",
+      "evidence": "plans/prd.json:424-435",
+      "description": "S0-004 contract metadata still implies AT-022 endpoint-style enforcement while CLI-only."
+    },
+    {
+      "severity": "P2",
+      "id": "SR-4",
+      "evidence": "docs/launch_policy.md:11-12",
+      "description": "Unfilled ownership placeholders."
+    },
+    {
+      "severity": "P2",
+      "id": "SR-5",
+      "evidence": "tools/policy_loader.py:146-161",
+      "description": "Missing upper bounds for critical policy values."
+    }
+  ],
+  "evidence_refs": [
+    "plans/prd.json:1471-1474",
+    "stoic-cli:205-216",
+    "stoic-cli:323-325",
+    "plans/prd.json:424-435",
+    "docs/launch_policy.md:11-12",
+    "tools/policy_loader.py:146-161"
+  ]
+}

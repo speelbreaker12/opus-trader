@@ -1,0 +1,1569 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 49.119092754,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 5.599899272,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:103:9: replace MismatchMetrics::record_mismatch_rejection with ()",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "MismatchMetrics::record_mismatch_rejection",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 101,
+                "column": 5
+              },
+              "end": {
+                "line": 104,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 103,
+              "column": 9
+            },
+            "end": {
+              "line": 103,
+              "column": 46
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_103_col_9.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_103_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.614216695,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.294807748,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:103:41: replace += with -= in MismatchMetrics::record_mismatch_rejection",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "MismatchMetrics::record_mismatch_rejection",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 101,
+                "column": 5
+              },
+              "end": {
+                "line": 104,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 103,
+              "column": 41
+            },
+            "end": {
+              "line": 103,
+              "column": 43
+            }
+          },
+          "replacement": "-=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_103_col_41.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_103_col_41.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 12.923479107,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.347326874,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:103:41: replace += with *= in MismatchMetrics::record_mismatch_rejection",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "MismatchMetrics::record_mismatch_rejection",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 101,
+                "column": 5
+              },
+              "end": {
+                "line": 104,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 103,
+              "column": 41
+            },
+            "end": {
+              "line": 103,
+              "column": 43
+            }
+          },
+          "replacement": "*=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_103_col_41_001.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_103_col_41_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.324262449,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.341820787,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:108:9: replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 0",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "MismatchMetrics::reject_unit_mismatch_total",
+            "return_type": "-> u64",
+            "span": {
+              "start": {
+                "line": 106,
+                "column": 5
+              },
+              "end": {
+                "line": 109,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 108,
+              "column": 9
+            },
+            "end": {
+              "line": 108,
+              "column": 40
+            }
+          },
+          "replacement": "0",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_108_col_9.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_108_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.224053654,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.488720936,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:108:9: replace MismatchMetrics::reject_unit_mismatch_total -> u64 with 1",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "MismatchMetrics::reject_unit_mismatch_total",
+            "return_type": "-> u64",
+            "span": {
+              "start": {
+                "line": 106,
+                "column": 5
+              },
+              "end": {
+                "line": 109,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 108,
+              "column": 9
+            },
+            "end": {
+              "line": 108,
+              "column": 40
+            }
+          },
+          "replacement": "1",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_108_col_9_001.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_108_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 14.986249076,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.529891552,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:133:5: replace map_to_dispatch -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "map_to_dispatch",
+            "return_type": "-> Result<DispatchRequest, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 118,
+                "column": 1
+              },
+              "end": {
+                "line": 138,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 133,
+              "column": 5
+            },
+            "end": {
+              "line": 137,
+              "column": 67
+            }
+          },
+          "replacement": "Ok(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_133_col_5.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_133_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.844272919,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:145:5: replace map_to_dispatch_unchecked -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "map_to_dispatch_unchecked",
+            "return_type": "-> Result<DispatchRequest, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 140,
+                "column": 1
+              },
+              "end": {
+                "line": 163,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 145,
+              "column": 5
+            },
+            "end": {
+              "line": 162,
+              "column": 7
+            }
+          },
+          "replacement": "Ok(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_145_col_5.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_145_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.917897343,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:187:5: replace validate_and_dispatch -> Result<ValidatedDispatch, DispatchMapError> with Ok(Default::default())",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 187,
+              "column": 5
+            },
+            "end": {
+              "line": 223,
+              "column": 7
+            }
+          },
+          "replacement": "Ok(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_187_col_5.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_187_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.848336549,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:199:42: replace || with && in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 199,
+              "column": 42
+            },
+            "end": {
+              "line": 199,
+              "column": 44
+            }
+          },
+          "replacement": "&&",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_199_col_42.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_199_col_42.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 13.902046533,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.700944298,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:199:12: delete ! in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 199,
+              "column": 12
+            },
+            "end": {
+              "line": 199,
+              "column": 13
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_199_col_12.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_199_col_12.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 15.560097586,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.376454183,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:199:45: delete ! in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 199,
+              "column": 45
+            },
+            "end": {
+              "line": 199,
+              "column": 46
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_199_col_45.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_199_col_45.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 17.165498748,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.009279692,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:206:50: replace * with + in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 206,
+              "column": 50
+            },
+            "end": {
+              "line": 206,
+              "column": 51
+            }
+          },
+          "replacement": "+",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_206_col_50.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_206_col_50.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 17.97501509,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.615152359,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:206:50: replace * with / in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 206,
+              "column": 50
+            },
+            "end": {
+              "line": 206,
+              "column": 51
+            }
+          },
+          "replacement": "/",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_206_col_50_001.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_206_col_50_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 18.665528078,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.519215902,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:66: replace / with % in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 208,
+              "column": 66
+            },
+            "end": {
+              "line": 208,
+              "column": 67
+            }
+          },
+          "replacement": "%",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_66.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_66.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 16.126445061,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.430406729,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:66: replace / with * in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 208,
+              "column": 66
+            },
+            "end": {
+              "line": 208,
+              "column": 67
+            }
+          },
+          "replacement": "*",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_66_001.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_66_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 16.242676704,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.38017703,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:40: replace - with + in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 208,
+              "column": 40
+            },
+            "end": {
+              "line": 208,
+              "column": 41
+            }
+          },
+          "replacement": "+",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_40.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_40.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 16.637591189,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.412632894,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:208:40: replace - with / in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 208,
+              "column": 40
+            },
+            "end": {
+              "line": 208,
+              "column": 41
+            }
+          },
+          "replacement": "/",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_40_001.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_208_col_40_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 14.46014598,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.250441372,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:13: replace || with && in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 212,
+              "column": 13
+            },
+            "end": {
+              "line": 212,
+              "column": 15
+            }
+          },
+          "replacement": "&&",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_13.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 14.463333242,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.350958202,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:211:13: replace || with && in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 211,
+              "column": 13
+            },
+            "end": {
+              "line": 211,
+              "column": 15
+            }
+          },
+          "replacement": "&&",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_211_col_13.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_211_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 15.040486034,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 11.245572533,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:210:12: delete ! in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 210,
+              "column": 12
+            },
+            "end": {
+              "line": 210,
+              "column": 13
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_210_col_12.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_210_col_12.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 17.191441718,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.048270213,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:211:16: delete ! in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 211,
+              "column": 16
+            },
+            "end": {
+              "line": 211,
+              "column": 17
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_211_col_16.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_211_col_16.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 20.026710452,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.16102724,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with == in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 212,
+              "column": 22
+            },
+            "end": {
+              "line": 212,
+              "column": 23
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_22.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_22.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 16.956678478,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.8604231430000002,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with < in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 212,
+              "column": 22
+            },
+            "end": {
+              "line": 212,
+              "column": 23
+            }
+          },
+          "replacement": "<",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_22_001.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_22_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 16.086616177,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.795611538,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "crates/soldier_core/src/execution/dispatch_map.rs:212:22: replace > with >= in validate_and_dispatch",
+          "package": "soldier_core",
+          "file": "crates/soldier_core/src/execution/dispatch_map.rs",
+          "function": {
+            "function_name": "validate_and_dispatch",
+            "return_type": "-> Result<ValidatedDispatch, DispatchMapError>",
+            "span": {
+              "start": {
+                "line": 165,
+                "column": 1
+              },
+              "end": {
+                "line": 224,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 212,
+              "column": 22
+            },
+            "end": {
+              "line": 212,
+              "column": 23
+            }
+          },
+          "replacement": ">=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_22_002.log",
+      "diff_path": "diff/crates__soldier_core__src__execution__dispatch_map.rs_line_212_col_22_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 16.001364311,
+          "process_status": "Success",
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 3.87914213,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=soldier_core@0.1.0"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 24,
+  "missed": 1,
+  "caught": 20,
+  "timeout": 0,
+  "unviable": 3,
+  "success": 0,
+  "start_time": "2026-02-21T21:15:09.851243Z",
+  "end_time": "2026-02-21T21:23:05.107017Z",
+  "cargo_mutants_version": "26.2.0"
+}

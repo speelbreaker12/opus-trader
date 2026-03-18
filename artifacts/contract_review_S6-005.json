@@ -1,0 +1,14 @@
+{
+  "story_id": "S6-005",
+  "title": "Fail-Closed Defaults for Missing Config",
+  "contract_sections": ["Appendix A"],
+  "implementation_summary": "14 CI tests prove missing/invalid critical config causes fail-closed rejection with enumerated reason codes. Covers quantize constraints (zero, NaN, Inf, negative), net-edge inputs, L2 book, pricer qty, RiskState. docs/critical_config_keys.md and evidence matrix created.",
+  "acceptance_tests": ["Appendix A"],
+  "test_count": 14,
+  "test_file": "crates/soldier_core/tests/test_missing_config.rs",
+  "verify_run_id": "20260208_231050",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2026-02-08T23:15:00Z"
+}

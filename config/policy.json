@@ -1,0 +1,41 @@
+{
+  "policy_id": "LP-001",
+  "policy_version": "1.2",
+  "contract_version_target": "5.2",
+  "environments": {
+    "DEV": {
+      "trade_capable": false,
+      "purpose": "local development and tests"
+    },
+    "STAGING": {
+      "trade_capable": true,
+      "purpose": "integration with testnet credentials"
+    },
+    "PAPER": {
+      "trade_capable": false,
+      "purpose": "public market data and simulated execution"
+    },
+    "LIVE": {
+      "trade_capable": true,
+      "purpose": "production trading with vault-managed credentials"
+    }
+  },
+  "allowed_order_types": [
+    "LIMIT",
+    "POST_ONLY",
+    "REDUCE_ONLY"
+  ],
+  "forbidden_order_types": [
+    "MARKET",
+    "STOP",
+    "TRIGGER",
+    "HIDDEN",
+    "ICEBERG"
+  ],
+  "risk_limits": {
+    "max_daily_loss_usd": 5000,
+    "max_gross_notional_usd": 500000,
+    "max_orders_per_minute": 100
+  },
+  "fail_closed": true
+}

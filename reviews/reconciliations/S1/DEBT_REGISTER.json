@@ -1,0 +1,162 @@
+{
+  "schema_version": "debt_register.v1",
+  "head_commit": "5bfc230b766850d6c315fbd741c9657996186b21",
+  "created_at": "2026-02-24T02:15:00Z",
+  "slice_id": "S1",
+  "entries": [
+    {
+      "debt_id": "DEBT-S1-003-001",
+      "story_id": "S1-003",
+      "severity": "DEFERRED",
+      "category": "integration_test",
+      "description": "PolicyGuard integration test — stale cache -> Degraded -> ReduceOnly pipeline proof. Currently only unit-level opens_blocked() is tested; need full pipeline dispatch_count=0 proof from InstrumentCache staleness through PolicyGuard to dispatch rejection.",
+      "contract_refs": ["AT-104", "AT-279"],
+      "target_slice": "S2+",
+      "mitigated_by": "Unit-level tests prove mechanism. Pipeline test (test_at104_degraded_blocks_open_at_chokepoint) proves Degraded->rejection. Missing link is InstrumentCache->Degraded in production path.",
+      "risk_if_unresolved": "LOW — mechanism proven at both ends, just not end-to-end in one test"
+    },
+    {
+      "debt_id": "DEBT-S1-003-002",
+      "story_id": "S1-003",
+      "severity": "DEFERRED",
+      "category": "feature_gap",
+      "description": "Per-instrument TTL support — currently all instruments share a single global instrument_cache_ttl_s. CONTRACT.md does not require per-instrument TTL but it is a natural extension.",
+      "contract_refs": ["AT-279"],
+      "target_slice": "S3+",
+      "mitigated_by": "Global TTL satisfies contract requirements. Per-instrument is an enhancement.",
+      "risk_if_unresolved": "NONE — contract-compliant as-is"
+    },
+    {
+      "debt_id": "DEBT-S1-002-001",
+      "story_id": "S1-002",
+      "severity": "DEFERRED",
+      "category": "integration_validation",
+      "description": "USDC API assumption remains unvalidated in live integration; current tests rely on static fixtures and parser behavior.",
+      "contract_refs": ["AT-333"],
+      "target_slice": "S2+",
+      "mitigated_by": "Strict deserialization and fixture-based tests cover expected schema shape.",
+      "risk_if_unresolved": "LOW — drift in live API payloads could bypass early detection until integration wiring is enabled"
+    },
+    {
+      "debt_id": "DEBT-S1-003-003",
+      "story_id": "S1-003",
+      "severity": "DEFERRED",
+      "category": "test_coverage",
+      "description": "Negative TTL input path lacks dedicated regression test; NaN/Inf coverage exists but explicit ttl_s < 0 proof is missing.",
+      "contract_refs": ["AT-279"],
+      "target_slice": "S2",
+      "mitigated_by": "Current guard logic rejects invalid cache inputs and existing tests cover adjacent invalid domains.",
+      "risk_if_unresolved": "LOW — specific negative-value mutation may evade current tests"
+    },
+    {
+      "debt_id": "DEBT-S1-004-001",
+      "story_id": "S1-004",
+      "severity": "DEFERRED",
+      "category": "test_coverage",
+      "description": "Four bad-input `build_order_size` variants and METRIC_ORDER_SIZE_REJECT observability wiring remain incomplete.",
+      "contract_refs": ["AT-277"],
+      "target_slice": "S2",
+      "mitigated_by": "Core sizing behavior and primary fail-closed paths are already covered by existing tests.",
+      "risk_if_unresolved": "MEDIUM — reduced mutation resistance and weaker runtime visibility on malformed inputs"
+    },
+    {
+      "debt_id": "DEBT-S1-005-003",
+      "story_id": "S1-005",
+      "severity": "DEFERRED",
+      "category": "metadata",
+      "description": "PRD `reason_codes` metadata for S1-005 does not match actual dispatcher rejection variants.",
+      "contract_refs": ["AT-277"],
+      "target_slice": "S2",
+      "mitigated_by": "Runtime rejection enums and tests remain correct; issue is traceability metadata only.",
+      "risk_if_unresolved": "LOW — audit and review tooling may reason from stale metadata"
+    },
+    {
+      "debt_id": "DEBT-S1-010-003",
+      "story_id": "S1-010",
+      "severity": "DEFERRED",
+      "category": "integration_wiring",
+      "description": "Config loader wiring — 7 of 74 ConfigParam variants are wired to production consumers. Remaining params are declared with defaults and validation but not yet consumed. CI param count parity gate (EXPECTED_PARAM_COUNT) catches regressions.",
+      "contract_refs": ["AT-040"],
+      "target_slice": "S2+",
+      "mitigated_by": "Exhaustive iteration guard (EXPECTED_PARAM_COUNT) ensures new params cannot be added without updating the match. All defaults are fail-closed. Validation rejects NaN/Inf/negative.",
+      "risk_if_unresolved": "LOW — params have correct defaults and validation, just not consumed yet"
+    },
+    {
+      "debt_id": "DEBT-S1-010-002",
+      "story_id": "S1-010",
+      "severity": "DEFERRED",
+      "category": "observability",
+      "description": "`config_defaults_applied_total` metric and Appendix A.7 summary-table completeness updates are not yet implemented.",
+      "contract_refs": ["AT-341", "AT-424", "AT-970", "AT-971"],
+      "target_slice": "S2+",
+      "mitigated_by": "Default-value enforcement tests remain comprehensive; this gap is telemetry/documentation completeness.",
+      "risk_if_unresolved": "LOW — safety behavior is preserved, but operator visibility and spec parity are weaker"
+    },
+    {
+      "debt_id": "DEBT-S1-010-001",
+      "story_id": "S1-010",
+      "severity": "DEFERRED",
+      "category": "test_coverage",
+      "description": "AT-040 Err path proof via SyntheticNoDefault — mechanism proven in unit test but structurally unreachable in production. All 74 ConfigParam variants have Appendix A defaults.",
+      "contract_refs": ["AT-040"],
+      "target_slice": "S2+",
+      "mitigated_by": "Exhaustive EXPECTED_PARAM_COUNT constant acts as compile-time-adjacent guard. SyntheticNoDefault test proves the mechanism.",
+      "risk_if_unresolved": "LOW — mechanism proven, EXPECTED_PARAM_COUNT parity gate prevents regression"
+    },
+    {
+      "debt_id": "DEBT-S1-007-001",
+      "story_id": "S1-007",
+      "severity": "DEFERRED",
+      "category": "integration_wiring",
+      "description": "build_open_intent_with_assembly() is the intended production entry point for AT-920 assembly chain but has zero production callers. Awaiting S2 order submission wiring.",
+      "contract_refs": ["AT-920"],
+      "target_slice": "S2",
+      "mitigated_by": "assemble_sizing() and validate_and_dispatch() are independently tested. AT-920 enforcement proven via test_at920_pipeline_dispatch_consistency_failure_rejected.",
+      "risk_if_unresolved": "LOW — AT-920 validation is proven at mechanism level, just not through this specific entry point"
+    },
+    {
+      "debt_id": "DEBT-S1-012-001",
+      "story_id": "S1-012",
+      "severity": "DEFERRED",
+      "category": "observability",
+      "description": "METRIC_EXPIRY_GUARD_REJECT is declared but not wired to runtime emission in expiry rejection paths.",
+      "contract_refs": ["AT-949", "AT-950", "AT-960", "AT-961", "AT-962", "AT-965", "AT-966"],
+      "target_slice": "S2+",
+      "mitigated_by": "Expiry rejection behavior is covered by functional tests and reason-code assertions.",
+      "risk_if_unresolved": "LOW — runtime rejection correctness remains, but observability signal is incomplete"
+    },
+    {
+      "debt_id": "DEBT-S1-011-001",
+      "story_id": "S1-011",
+      "severity": "DEFERRED",
+      "category": "api_validation",
+      "description": "Deribit API field validation against live responses — DeribitInstrument struct is tested against static fixtures but not validated against live /public/get_instruments responses. Field names, types, and optional/required status may drift.",
+      "contract_refs": ["AT-333"],
+      "target_slice": "S3+",
+      "mitigated_by": "Struct uses serde(deny_unknown_fields) for strict deserialization. Static fixtures match documented API at time of implementation. Live validation requires API access.",
+      "risk_if_unresolved": "MEDIUM — API schema changes could cause silent field drops if new required fields are added"
+    },
+    {
+      "debt_id": "DEBT-S1-012-002",
+      "story_id": "S1-012",
+      "severity": "DEFERRED",
+      "category": "integration_wiring",
+      "description": "Reconcile loop integration — classify_lifecycle_error() decision API is implemented and tested but not wired into production dispatch/reconcile path. DelistingSoon intermediate state not implemented. Buffer+reconcile interaction untested.",
+      "contract_refs": ["AT-949", "AT-960", "AT-961", "AT-962", "AT-966"],
+      "target_slice": "S2+",
+      "mitigated_by": "Decision logic is fully tested with table-driven tests covering all venue error categories. ExpiryGuard pre-dispatch blocking is functional. Post-dispatch lifecycle handling is the gap.",
+      "risk_if_unresolved": "MEDIUM — terminal venue errors are not handled in production; manual intervention required"
+    },
+    {
+      "debt_id": "DEBT-S1-013-002",
+      "story_id": "S1-007",
+      "severity": "DEFERRED",
+      "category": "workflow_contract",
+      "description": "R5B-08 completion is blocked by PRD schema gate failure (`S0-004: enforcement_point must be a known enforcement point when set`), preventing deterministic workflow-gate evidence capture.",
+      "contract_refs": ["WF-VERIFY-RULE"],
+      "target_slice": "S1",
+      "mitigated_by": "Fix PRD schema violation in `plans/prd.json` and rerun workflow gates.",
+      "risk_if_unresolved": "MEDIUM — R5B-08 cannot complete deterministically while PRD schema validation remains failing."
+    }
+  ]
+}

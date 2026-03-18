@@ -1,0 +1,14 @@
+{
+  "story_id": "S6-003",
+  "title": "intent_id/run_id Propagation Contract",
+  "contract_sections": ["0.Z.7.4"],
+  "implementation_summary": "6 CI tests prove intent_id and run_id propagate through approved/rejected pipelines. Metrics are isolated per-intent, gate traces provide audit trails, and deterministic ordering enables log correlation. Sample rejection log emitted to evidence.",
+  "acceptance_tests": ["0.Z.7.4"],
+  "test_count": 6,
+  "test_file": "crates/soldier_core/tests/test_intent_id_propagation.rs",
+  "verify_run_id": "20260208_230042",
+  "verify_result": "PASS",
+  "decision": "PASS",
+  "reviewer": "claude-opus-4-6",
+  "timestamp": "2026-02-08T23:05:00Z"
+}

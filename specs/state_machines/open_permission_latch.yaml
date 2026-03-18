@@ -1,0 +1,76 @@
+machine_id: OpenPermissionLatch
+kind: stored_state
+initial_state: OpenBlocked
+states:
+- OpenAllowed
+- OpenBlocked
+events:
+- TR-LATCH_BLOCK_TRIGGER
+- TR-RECONCILE_SUCCESS
+- TR-ILLEGAL_TRANSITION
+event_definitions:
+  TR-LATCH_BLOCK_TRIGGER: Startup or reconcile-class trigger observed.
+  TR-RECONCILE_SUCCESS: Reconciliation success and reason codes cleared.
+  TR-ILLEGAL_TRANSITION: Any transition not listed in transitions.
+effects_catalog:
+- id: ACT-SET_LATCH_BLOCKED
+  description: Set latch true with non-empty reason_codes and requires_reconcile true.
+- id: ACT-SET_LATCH_OPEN_ALLOWED
+  description: Set latch false, reason_codes=[], requires_reconcile false.
+- id: ACT-HARD_FAIL
+  description: Hard-fail the transition evaluation.
+entry_conditions:
+  OpenAllowed: open_permission_blocked_latch==false; reason_codes==[]; requires_reconcile==false.
+  OpenBlocked: open_permission_blocked_latch==true; reason_codes non-empty; requires_reconcile==true.
+transitions:
+- id: OPL-001
+  from: OpenAllowed
+  to: OpenBlocked
+  guard: Startup OR WS_BOOK_GAP OR WS_TRADES_GAP OR INVENTORY_MISMATCH OR SESSION_TERMINATION.
+  refs:
+  - §2.2.4
+  - §3.4
+  event: TR-LATCH_BLOCK_TRIGGER
+  effects:
+  - ACT-SET_LATCH_BLOCKED
+  fail_closed: If trigger evaluation missing or unparseable, enter OpenBlocked and
+    require reconcile.
+- id: OPL-002
+  from: OpenBlocked
+  to: OpenAllowed
+  guard: Reconciliation success criteria satisfied AND all reconcile-class reason
+    codes cleared.
+  refs:
+  - §2.2.4
+  event: TR-RECONCILE_SUCCESS
+  effects:
+  - ACT-SET_LATCH_OPEN_ALLOWED
+  fail_closed: If reconciliation status missing or unparseable, remain OpenBlocked.
+illegal_transitions:
+- id: OPL-IL-001
+  from: '*'
+  to: '*'
+  guard: Any transition not listed in OPL-001..OPL-002.
+  event: TR-ILLEGAL_TRANSITION
+  effects:
+  - ACT-HARD_FAIL
+  fail_closed: Hard-fail and keep latch state unchanged.
+terminal_states: []
+illegal_transition_policy: hard_fail
+acceptance_tests:
+- AT-010
+- AT-011
+- AT-027
+- AT-408
+- AT-409
+invariants:
+- open_permission_requires_reconcile MUST equal open_permission_blocked_latch (v5.1).
+- If latch is false, reason_codes must be [] and requires_reconcile=false.
+- If latch is true, reason_codes MUST be non-empty and requires_reconcile=true; OPEN
+  intents are blocked; CLOSE/HEDGE/CANCEL allowed except risk-increasing cancel/replace
+  forbidden.
+state_value_map:
+  OpenAllowed:
+    open_permission_blocked_latch: false
+  OpenBlocked:
+    open_permission_blocked_latch: true

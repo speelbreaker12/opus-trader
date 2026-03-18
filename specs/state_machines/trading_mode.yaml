@@ -1,0 +1,137 @@
+machine_id: TradingMode
+kind: derived_each_tick
+states:
+- Active
+- ReduceOnly
+- KillContainmentAllowed
+- KillHardStop
+events:
+- TR-POLICY_TICK
+- TR-ILLEGAL_TRANSITION
+event_definitions:
+  TR-POLICY_TICK: PolicyGuard tick evaluation.
+  TR-ILLEGAL_TRANSITION: Any transition not listed in transitions.
+effects_catalog:
+- id: ACT-STOP_POLICY_LOOP
+  description: Stop strategy/policy loop immediately.
+- id: ACT-DISPATCH_FORBIDDEN
+  description: Forbid all dispatch (hard-stop).
+- id: ACT-DISPATCH_CONTAINMENT_ONLY
+  description: Allow containment micro-loop actions only.
+- id: ACT-BLOCK_OPEN
+  description: Block OPEN intents.
+- id: ACT-ALLOW_OPEN
+  description: Allow OPEN intents subject to non-mode gates.
+- id: ACT-SET_MODE_REASONS
+  description: Set mode_reasons for current tick.
+- id: ACT-HARD_FAIL
+  description: Hard-fail the transition evaluation.
+entry_conditions:
+  Active: No Kill predicates true; no ReduceOnly predicates true; all critical inputs
+    fresh; EvidenceChainState==GREEN; CP-001 latch false; no Force* override.
+  ReduceOnly: Any ReduceOnly predicate true OR any critical input missing/stale/unparseable;
+    and no Kill predicate true.
+  KillContainmentAllowed: Kill predicate true AND NOT a hard-stop kill cause; containment
+    eligibility predicates may allow micro-loop actions.
+  KillHardStop: 'Hard-stop kill cause active: disk_used_pct>=disk_kill_pct OR rate_limit_session_kill_active
+    OR watchdog heartbeat stale.'
+transitions:
+- id: TM-001
+  from: '*'
+  to: KillHardStop
+  guard: Any Kill predicate true AND (disk_used_pct>=disk_kill_pct OR rate_limit_session_kill_active==true
+    OR KILL_WATCHDOG_HEARTBEAT_STALE OR containment eligibility predicates false).
+  refs:
+  - §2.2.3
+  event: TR-POLICY_TICK
+  effects:
+  - ACT-STOP_POLICY_LOOP
+  - ACT-DISPATCH_FORBIDDEN
+  - ACT-SET_MODE_REASONS
+  fail_closed: If any Kill predicate or eligibility input missing or unparseable,
+    enter KillHardStop.
+- id: TM-002
+  from: '*'
+  to: KillContainmentAllowed
+  guard: Any Kill predicate true AND containment eligibility predicates true AND NOT
+    (disk_used_pct>=disk_kill_pct OR rate_limit_session_kill_active==true OR KILL_WATCHDOG_HEARTBEAT_STALE).
+  refs:
+  - §2.2.3
+  - §3.1
+  event: TR-POLICY_TICK
+  effects:
+  - ACT-STOP_POLICY_LOOP
+  - ACT-DISPATCH_CONTAINMENT_ONLY
+  - ACT-SET_MODE_REASONS
+  fail_closed: If containment eligibility input missing or unparseable, enter KillHardStop.
+- id: TM-003
+  from: '*'
+  to: ReduceOnly
+  guard: Any ReduceOnly predicate true and no Kill predicate true.
+  refs:
+  - §2.2.3
+  - §2.2.5
+  - §2.2.4
+  event: TR-POLICY_TICK
+  effects:
+  - ACT-BLOCK_OPEN
+  - ACT-SET_MODE_REASONS
+  fail_closed: If ReduceOnly predicate inputs missing or unparseable, enter ReduceOnly.
+- id: TM-004
+  from: '*'
+  to: Active
+  guard: 'All allow conditions true: risk_state==Healthy AND policy not stale AND
+    Evidence GREEN AND latch false AND no override active AND critical inputs fresh.'
+  refs:
+  - §2.2.3
+  - §2.2.1.1
+  event: TR-POLICY_TICK
+  effects:
+  - ACT-ALLOW_OPEN
+  - ACT-SET_MODE_REASONS
+  fail_closed: If any allow input missing or unparseable, enter ReduceOnly.
+illegal_transitions:
+- id: TM-IL-001
+  from: '*'
+  to: '*'
+  guard: Any state resolution not listed in TM-001..TM-004.
+  event: TR-ILLEGAL_TRANSITION
+  effects:
+  - ACT-HARD_FAIL
+  - ACT-DISPATCH_FORBIDDEN
+  fail_closed: Hard-fail and enter KillHardStop.
+terminal_states: []
+illegal_transition_policy: hard_fail
+acceptance_tests:
+- AT-336
+- AT-337
+- AT-338
+- AT-339
+- AT-346
+- AT-347
+- AT-416
+- AT-417
+invariants:
+- TradingMode is not stored as authoritative; it is recomputed each tick.
+- Kill must distinguish containment-allowed vs hard-stop so dispatch eligibility is
+  machine-checkable.
+- Hot-path dispatch must consult PolicyGuard immediately before dispatch.
+external_mapping:
+  KillContainmentAllowed: Kill
+  KillHardStop: Kill
+  ReduceOnly: ReduceOnly
+  Active: Active
+inputs_summary:
+- risk_state
+- policy_age_sec
+- watchdog_last_heartbeat_ts_ms
+- cortex_override
+- bunker_mode_active
+- evidence_chain_state
+- fee_model_cache_age_s
+- mm_util(+freshness)
+- disk_used_pct(+freshness)
+- open_permission_blocked_latch
+- rate_limit_session_kill_active
+- f1_cert
+derived_by: PolicyGuard.get_effective_mode()

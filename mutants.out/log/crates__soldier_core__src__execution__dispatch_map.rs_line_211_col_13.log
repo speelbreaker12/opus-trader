@@ -1,0 +1,1199 @@
+
+*** crates/soldier_core/src/execution/dispatch_map.rs:211:13: replace || with && in validate_and_dispatch
+
+*** mutation diff:
+--- crates/soldier_core/src/execution/dispatch_map.rs
++++ replace || with && in validate_and_dispatch
+@@ -203,17 +203,17 @@
+             });
+         }
+ 
+         let contracts_implied = contracts as f64 * multiplier;
+         let denominator = canonical_amount.abs().max(CONTRACTS_AMOUNT_MATCH_EPSILON);
+         let delta = (contracts_implied - canonical_amount).abs() / denominator;
+ 
+         if !contracts_implied.is_finite()
+-            || !delta.is_finite()
++            && /* ~ changed by cargo-mutants ~ */ !delta.is_finite()
+             || delta > CONTRACTS_AMOUNT_MATCH_TOLERANCE
+         {
+             metrics.record_mismatch_rejection();
+             return Err(DispatchMapError::ContractsAmountMismatch { delta });
+         }
+     }
+ 
+     let request = map_to_dispatch_unchecked(order_size, instrument_kind, intent)?;
+
+
+*** /Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo test --no-run --verbose --package=soldier_core@0.1.0
+       Fresh cfg-if v1.0.4
+       Fresh unicode-ident v1.0.23
+       Fresh libc v0.2.182
+       Fresh once_cell v1.21.3
+       Fresh proc-macro2 v1.0.106
+       Fresh quote v1.0.44
+       Fresh getrandom v0.3.4
+       Fresh syn v2.0.116
+       Fresh rand_core v0.9.5
+       Fresh errno v0.3.14
+       Fresh bitflags v2.11.0
+       Fresh autocfg v1.5.0
+       Fresh getrandom v0.4.1
+       Fresh zerocopy v0.8.39
+       Fresh serde_core v1.0.228
+       Fresh rustix v1.1.3
+       Fresh fastrand v2.3.0
+       Fresh tempfile v3.25.0
+       Fresh ppv-lite86 v0.2.21
+       Fresh serde_derive v1.0.228
+       Fresh tracing-attributes v0.1.31
+       Fresh tracing-core v0.1.36
+       Fresh wait-timeout v0.2.1
+       Fresh quick-error v1.2.3
+       Fresh bit-vec v0.8.0
+       Fresh pin-project-lite v0.2.16
+       Fresh fnv v1.0.7
+       Fresh serde v1.0.228
+       Fresh tracing v0.1.44
+       Fresh rusty-fork v0.3.1
+       Fresh bit-set v0.8.0
+       Fresh zmij v1.0.21
+       Fresh num-traits v0.2.19
+       Fresh rand_chacha v0.9.0
+       Fresh rand v0.9.2
+       Fresh rand_xorshift v0.4.0
+       Fresh memchr v2.8.0
+       Fresh regex-syntax v0.8.9
+       Fresh unarray v0.1.4
+       Fresh xxhash-rust v0.8.15
+       Fresh itoa v1.0.17
+       Fresh serde_json v1.0.149
+       Fresh proptest v1.10.0
+       Dirty soldier_core v0.1.0 (/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/crates/soldier_core): the file `crates/soldier_core/src/execution/dispatch_map.rs` has changed (1771708841.850722379s, 17s after last build at 1771708824.170682347s)
+   Compiling soldier_core v0.1.0 (/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/crates/soldier_core)
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name soldier_core --edition=2024 crates/soldier_core/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=3d7ae7dada6b656c -C extra-filename=-4dc84a3ea9a16864 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name soldier_core --edition=2024 crates/soldier_core/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=6da6b34149b2c71c -C extra-filename=-d3fa692111d1e781 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rmeta --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rmeta --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rmeta`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_idempotency --edition=2024 crates/soldier_core/tests/test_idempotency.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=d4e845ae0a0199e0 -C extra-filename=-64cf20c19f676389 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_pending_exposure --edition=2024 crates/soldier_core/tests/test_pending_exposure.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=60b6640df2374f43 -C extra-filename=-6c759ff4588705f9 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_quantize --edition=2024 crates/soldier_core/tests/test_quantize.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=b0d7bc86272afd8a -C extra-filename=-a63854c97777d9fb --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_tlsm --edition=2024 crates/soldier_core/tests/test_tlsm.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=21e55eaca8846e0b -C extra-filename=-a8c97cc21af50d30 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_atomic_group --edition=2024 crates/soldier_core/tests/test_atomic_group.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=50000763cb4dc372 -C extra-filename=-b97d55bdb98d7498 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_gate_outcome --edition=2024 crates/soldier_core/tests/test_gate_outcome.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=32b3d438af652918 -C extra-filename=-d3cbfd70b62c2845 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_margin_gate --edition=2024 crates/soldier_core/tests/test_margin_gate.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=a52fac772573acc1 -C extra-filename=-6884839f409014a5 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_label_match --edition=2024 crates/soldier_core/tests/test_label_match.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=b04131aac3903a75 -C extra-filename=-1c3598b7a9aa0d3a --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_intent_id_propagation --edition=2024 crates/soldier_core/tests/test_intent_id_propagation.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=446d509bea022ae4 -C extra-filename=-166d7ce9ea785f31 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name prop_label --edition=2024 crates/soldier_core/tests/prop_label.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=b4f8b619fe82ca7e -C extra-filename=-eb3111bade28b779 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_expiry_guard --edition=2024 crates/soldier_core/tests/test_expiry_guard.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=4c463e0dccdd0619 -C extra-filename=-95eb17bbd996f521 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_net_edge_gate --edition=2024 crates/soldier_core/tests/test_net_edge_gate.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=d8ab7f682543bd8e -C extra-filename=-de87f7386ce9f6b5 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name prop_net_edge --edition=2024 crates/soldier_core/tests/prop_net_edge.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=8668d0dc98bf449b -C extra-filename=-8ca75cb8c806d167 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name adversarial_gi_enforcement --edition=2024 crates/soldier_core/tests/adversarial_gi_enforcement.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=ff1f670733443e41 -C extra-filename=-3892680f00876888 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name prop_tlsm --edition=2024 crates/soldier_core/tests/prop_tlsm.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=61e208e4b15a180e -C extra-filename=-e6d245d7ec24d1f4 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_instrument_cache_ttl --edition=2024 crates/soldier_core/tests/test_instrument_cache_ttl.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=40c96cc8a64dc8cb -C extra-filename=-068b3c7c847c8a05 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_open_runtime_wiring --edition=2024 crates/soldier_core/tests/test_open_runtime_wiring.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=f31908c1f941ea2c -C extra-filename=-741a9a12d74c5029 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_order_size --edition=2024 crates/soldier_core/tests/test_order_size.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=ae21fd551158cd8a -C extra-filename=-5734518ce78e6a3a --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_pricer --edition=2024 crates/soldier_core/tests/test_pricer.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=40ed355a2972fb1f -C extra-filename=-861e0c30fa0aaac9 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_recorded_before_dispatch_gate --edition=2024 crates/soldier_core/tests/test_recorded_before_dispatch_gate.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=4382b9a28b42d0cd -C extra-filename=-44735da1f0d4757b --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_inventory_skew --edition=2024 crates/soldier_core/tests/test_inventory_skew.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=0595df261e44137d -C extra-filename=-38588f09c7cf3019 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_reject_reason --edition=2024 crates/soldier_core/tests/test_reject_reason.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=006b18c01be819ae -C extra-filename=-94b2d35af2df2e91 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name prop_pipeline_gi001 --edition=2024 crates/soldier_core/tests/prop_pipeline_gi001.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=8c2e48ef2c41bc6c -C extra-filename=-f41c70f15dd50f8c --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_label --edition=2024 crates/soldier_core/tests/test_label.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=0a5f6cdd4cc02c95 -C extra-filename=-f7fb86f52495d331 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_preflight --edition=2024 crates/soldier_core/tests/test_preflight.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=e45d8c733252b196 -C extra-filename=-f1aab929e1aa93ee --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_missing_config --edition=2024 crates/soldier_core/tests/test_missing_config.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=bb6d139a245126b7 -C extra-filename=-ff70c72e66b29693 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_fee_staleness --edition=2024 crates/soldier_core/tests/test_fee_staleness.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=60c6f905e59ad156 -C extra-filename=-d5dcf6faf723fc6b --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_intent_determinism --edition=2024 crates/soldier_core/tests/test_intent_determinism.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=60ded6d8040428da -C extra-filename=-38d1522b02e031ba --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name prop_quantize --edition=2024 crates/soldier_core/tests/prop_quantize.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=7e00c8cc299bf6a4 -C extra-filename=-62d9b8da3d49381c --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_base_gates --edition=2024 crates/soldier_core/tests/test_base_gates.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=8956911c914d53f9 -C extra-filename=-364d3d3b91d2504e --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_exposure_budget --edition=2024 crates/soldier_core/tests/test_exposure_budget.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=a7782d64720e92f1 -C extra-filename=-ec48927b0c25a2a1 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_gate_ordering --edition=2024 crates/soldier_core/tests/test_gate_ordering.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=b5eca0cc76a04d16 -C extra-filename=-4f4139bdb7d33e7d --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_liquidity_gate --edition=2024 crates/soldier_core/tests/test_liquidity_gate.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=372dbaae870ebfed -C extra-filename=-730740279b0cd6ac --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_dispatch_map --edition=2024 crates/soldier_core/tests/test_dispatch_map.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=1ca4b2347ec597ec -C extra-filename=-9d27278091b28a94 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_instrument_kind_mapping --edition=2024 crates/soldier_core/tests/test_instrument_kind_mapping.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=8cbd3d59a9f2d8d2 -C extra-filename=-4e6465ac989a7004 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_intent_pipeline --edition=2024 crates/soldier_core/tests/test_intent_pipeline.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=906084cde0e17766 -C extra-filename=-16d58087aaf7146e --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name prop_liquidity_gate --edition=2024 crates/soldier_core/tests/prop_liquidity_gate.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=d7c8fb746e1efd40 -C extra-filename=-bd14c37e3a68d8d2 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_dispatch_chokepoint --edition=2024 crates/soldier_core/tests/test_dispatch_chokepoint.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=b3999d6edfc6d1e0 -C extra-filename=-670298ee2f683704 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_capabilities --edition=2024 crates/soldier_core/tests/test_capabilities.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=e3adb8f75fc1feeb -C extra-filename=-25246f5e48e1d259 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_rejection_side_effects --edition=2024 crates/soldier_core/tests/test_rejection_side_effects.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=3e4e75619498ae16 -C extra-filename=-8515b394d4857459 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustc --crate-name test_post_only_guard --edition=2024 crates/soldier_core/tests/test_post_only_guard.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 -C split-debuginfo=unpacked --test --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=081262c08142391f -C extra-filename=-e8e335d5c9e78a06 --out-dir /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -C incremental=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/incremental -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.90s
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/soldier_core-4dc84a3ea9a16864`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/adversarial_gi_enforcement-3892680f00876888`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_label-eb3111bade28b779`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_liquidity_gate-bd14c37e3a68d8d2`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_net_edge-8ca75cb8c806d167`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_pipeline_gi001-f41c70f15dd50f8c`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_quantize-62d9b8da3d49381c`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_tlsm-e6d245d7ec24d1f4`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_atomic_group-b97d55bdb98d7498`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_base_gates-364d3d3b91d2504e`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_capabilities-25246f5e48e1d259`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_dispatch_chokepoint-670298ee2f683704`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_dispatch_map-9d27278091b28a94`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_expiry_guard-95eb17bbd996f521`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_exposure_budget-ec48927b0c25a2a1`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_fee_staleness-d5dcf6faf723fc6b`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_gate_ordering-4f4139bdb7d33e7d`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_gate_outcome-d3cbfd70b62c2845`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_idempotency-64cf20c19f676389`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_instrument_cache_ttl-068b3c7c847c8a05`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_instrument_kind_mapping-4e6465ac989a7004`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_intent_determinism-38d1522b02e031ba`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_intent_id_propagation-166d7ce9ea785f31`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_intent_pipeline-16d58087aaf7146e`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_inventory_skew-38588f09c7cf3019`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_label-f7fb86f52495d331`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_label_match-1c3598b7a9aa0d3a`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_liquidity_gate-730740279b0cd6ac`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_margin_gate-6884839f409014a5`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_missing_config-ff70c72e66b29693`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_net_edge_gate-de87f7386ce9f6b5`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_open_runtime_wiring-741a9a12d74c5029`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_order_size-5734518ce78e6a3a`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_pending_exposure-6c759ff4588705f9`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_post_only_guard-e8e335d5c9e78a06`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_preflight-f1aab929e1aa93ee`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_pricer-861e0c30fa0aaac9`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_quantize-a63854c97777d9fb`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_recorded_before_dispatch_gate-44735da1f0d4757b`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_reject_reason-94b2d35af2df2e91`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_rejection_side_effects-8515b394d4857459`
+  Executable `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_tlsm-a8c97cc21af50d30`
+
+*** result: Success
+
+*** /Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/cargo test --verbose --package=soldier_core@0.1.0
+       Fresh cfg-if v1.0.4
+       Fresh unicode-ident v1.0.23
+       Fresh libc v0.2.182
+       Fresh once_cell v1.21.3
+       Fresh proc-macro2 v1.0.106
+       Fresh quote v1.0.44
+       Fresh getrandom v0.3.4
+       Fresh syn v2.0.116
+       Fresh rand_core v0.9.5
+       Fresh errno v0.3.14
+       Fresh bitflags v2.11.0
+       Fresh autocfg v1.5.0
+       Fresh getrandom v0.4.1
+       Fresh serde_core v1.0.228
+       Fresh zerocopy v0.8.39
+       Fresh rustix v1.1.3
+       Fresh fastrand v2.3.0
+       Fresh tempfile v3.25.0
+       Fresh ppv-lite86 v0.2.21
+       Fresh tracing-attributes v0.1.31
+       Fresh serde_derive v1.0.228
+       Fresh wait-timeout v0.2.1
+       Fresh tracing-core v0.1.36
+       Fresh pin-project-lite v0.2.16
+       Fresh bit-vec v0.8.0
+       Fresh fnv v1.0.7
+       Fresh quick-error v1.2.3
+       Fresh serde v1.0.228
+       Fresh rusty-fork v0.3.1
+       Fresh bit-set v0.8.0
+       Fresh tracing v0.1.44
+       Fresh zmij v1.0.21
+       Fresh num-traits v0.2.19
+       Fresh rand_chacha v0.9.0
+       Fresh rand_xorshift v0.4.0
+       Fresh rand v0.9.2
+       Fresh unarray v0.1.4
+       Fresh regex-syntax v0.8.9
+       Fresh xxhash-rust v0.8.15
+       Fresh memchr v2.8.0
+       Fresh itoa v1.0.17
+       Fresh proptest v1.10.0
+       Fresh serde_json v1.0.149
+       Fresh soldier_core v0.1.0 (/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/crates/soldier_core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/soldier_core-4dc84a3ea9a16864`
+
+running 19 tests
+test execution::group::tests::at_116_leg_a_filled_leg_b_rejected_enters_mixed_failed ... ok
+test execution::group::tests::at_116_mixed_failed_not_overwritten_by_later_updates ... ok
+test execution::group::tests::at_220_never_complete_before_all_legs_terminal ... ok
+test execution::group::tests::at_220_both_legs_fill_cleanly_then_complete ... ok
+test execution::group::tests::at_924_lock_held_beyond_timeout_returns_timed_out ... ok
+test execution::group::tests::at_924_lock_not_held_acquires_successfully ... ok
+test execution::group::tests::at_924_lock_released_then_reacquired ... ok
+test execution::group::tests::at_936_mixed_failed_rescue_rejected_no_rescue_dispatched ... ok
+test execution::group::tests::first_fail_invariant_table_driven ... ok
+test execution::group::tests::group_lock_acquire_release_acquire ... ok
+test execution::group::tests::group_lock_double_acquire_fails ... ok
+test execution::group::tests::group_state_terminal_classification ... ok
+test execution::group::tests::mark_dispatched_from_non_new_fails ... ok
+test execution::group::tests::mark_flattened_from_non_flattening_fails ... ok
+test execution::group::tests::mark_flattening_from_non_mixed_failed_fails ... ok
+test execution::group::tests::persist_before_dispatch_fails_aborts ... ok
+test execution::group::tests::persist_before_dispatch_succeeds ... ok
+test risk::pending_exposure::tests::test_settle_recomputes_total_after_component_snap ... ok
+test execution::tests::execution_metric_buffer_is_bounded ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/adversarial_gi_enforcement-3892680f00876888`
+
+running 19 tests
+test gi_001_blocks_open_when_risk_maintenance ... ok
+test gi_001_blocks_open_when_risk_degraded ... ok
+test gi_001_allows_open_when_risk_healthy ... ok
+test gi_001_blocks_open_when_risk_kill ... ok
+test gi_002_cancel_only_always_approved ... ok
+test gi_002_close_class_skips_risk_state_gate ... ok
+test gi_002_open_class_applies_risk_state_gate ... ok
+test gi_004_allows_open_with_wal_recorded ... ok
+test gi_004_blocks_open_without_wal_recorded ... ok
+test gi_009_allows_open_when_fee_cache_fresh ... ok
+test gi_009_blocks_open_when_fee_cache_hard_stale ... ok
+test gi_009_blocks_open_when_fee_cache_missing ... ok
+test gi_017_close_bypasses_liquidity_gate ... ok
+test gi_017_close_bypasses_net_edge_gate ... ok
+test gi_017_open_fails_without_liquidity ... ok
+test gi_020_different_fields_produce_different_hashes ... ok
+test gi_020_field_boundary_ambiguity_prevented ... ok
+test gi_020_intent_hash_independent_of_ordering ... ok
+test gi_020_intent_hash_is_deterministic ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_label-eb3111bade28b779`
+
+running 6 tests
+test encode_decode_roundtrip ... ok
+test decode_never_panics ... ok
+test wrong_segment_count_rejected ... ok
+test label_length_within_limit ... ok
+test encode_never_panics ... ok
+test invalid_prefix_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_liquidity_gate-bd14c37e3a68d8d2`
+
+running 5 tests
+test cancel_only_always_allowed ... ok
+test missing_l2_rejects_non_cancel ... ok
+test empty_book_side_rejects ... ok
+test never_panics ... ok
+test stale_snapshot_rejects ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_net_edge-8ca75cb8c806d167`
+
+running 6 tests
+test inf_inputs_rejected ... ok
+test nan_inputs_rejected ... ok
+test negative_cost_fields_rejected ... ok
+test net_edge_identity_when_allowed ... ok
+test missing_field_rejects ... ok
+test never_panics ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_pipeline_gi001-f41c70f15dd50f8c`
+
+running 3 tests
+test open_healthy_passes_dispatch_auth ... ok
+test gi001_open_non_healthy_rejected ... ok
+test non_open_non_healthy_not_margin_rejected ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_quantize-62d9b8da3d49381c`
+
+running 7 tests
+test buy_price_rounds_down ... ok
+test price_is_multiple_of_tick_size ... ok
+test qty_is_multiple_of_amount_step ... ok
+test qty_rounds_down ... ok
+test quantize_is_idempotent ... ok
+test never_panics_on_valid_input ... ok
+test sell_price_rounds_up ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/prop_tlsm-e6d245d7ec24d1f4`
+
+running 7 tests
+test initial_state_is_created ... ok
+test happy_path_is_all_transitioned ... ok
+test fill_before_ack_is_out_of_order ... ok
+test transition_count_matches_non_ignored ... ok
+test terminal_flag_is_sticky ... ok
+test terminal_states_absorb_all_events ... ok
+test never_panics_on_arbitrary_sequence ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_atomic_group-b97d55bdb98d7498`
+
+running 15 tests
+test at_220_never_complete_before_b_terminal ... ok
+test at_116_first_failure_reason_not_overwritten ... ok
+test at_220_clean_both_fill_completes ... ok
+test at_116_leg_a_filled_leg_b_rejected_mixed_failed_and_containment ... ok
+test at_924_lock_free_acquires_normally ... ok
+test at_924_lock_held_beyond_timeout_no_block_reduce_only ... ok
+test at_924_lock_release_allows_reacquire ... ok
+test at_936_rescue_rejected_no_rescue_dispatch_emergency_close ... ok
+test failure_leg_during_flattened_does_not_reenter_mixed_failed ... ok
+test failure_leg_during_flattening_does_not_reenter_mixed_failed ... ok
+test flattened_only_from_flattening ... ok
+test flattening_only_from_mixed_failed ... ok
+test partial_fill_triggers_mixed_failed ... ok
+test persist_before_dispatch_failure_must_abort ... ok
+test persist_before_dispatch_success_records_group ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_base_gates-364d3d3b91d2504e`
+
+running 21 tests
+test test_base_gates_close_degraded_evaluates_all_gates ... ok
+test test_base_gates_close_no_expiry_passes ... ok
+test test_base_gates_all_pass_returns_proof ... ok
+test test_base_gates_gate1_cancel_only_short_circuits ... ok
+test test_base_gates_gate1_dispatch_auth_open_degraded_short_circuits ... ok
+test test_base_gates_gate2_preflight_rejects_invalid_order ... ok
+test test_base_gates_gate2_failure_skips_gate3_evaluation ... ok
+test test_base_gates_gate3_quantize_rejects_too_small ... ok
+test test_base_gates_gate4_dispatch_consistency_rejects_mismatch ... ok
+test test_base_gates_gate5_fee_cache_rejects_hard_stale ... ok
+test test_base_gates_gate6_expiry_guard_rejects_expired ... ok
+test test_base_gates_gate6_missing_expiry_close_allowed ... ok
+test test_base_gates_gate6_missing_expiry_open_fail_closed ... ok
+test test_base_gates_gate_outcomes_stop_at_failure ... ok
+test test_base_gates_hedge_no_expiry_passes ... ok
+test test_base_gates_legacy_dispatch_consistency_rejection ... ok
+test test_base_gates_lifecycle_intent_derivation ... ok
+test test_base_gates_proof_fee_evaluation_present ... ok
+test test_base_gates_proof_quantized_values_present ... ok
+test test_base_gates_rejection_gate_step_matches_failure_point ... ok
+test test_base_gates_rejection_legacy_preserves_reason ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_capabilities-25246f5e48e1d259`
+
+running 13 tests
+test test_all_flag_combinations ... ok
+test test_both_flags_true_linked_orders_allowed ... ok
+test test_default_config_oco_not_supported ... ok
+test test_deribit_v51_default_linked_orders_not_supported ... ok
+test test_deterministic_evaluation ... ok
+test test_evaluated_capabilities_eq ... ok
+test test_evaluated_capabilities_ne ... ok
+test test_feature_flags_default_flags_linked_orders_disabled ... ok
+test test_feature_flags_default_linked_orders_disabled ... ok
+test test_neither_flag_not_allowed ... ok
+test test_only_feature_flag_not_allowed ... ok
+test test_only_venue_supported_not_allowed ... ok
+test test_venue_default_linked_orders_not_supported ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_dispatch_chokepoint-670298ee2f683704`
+
+running 9 tests
+test test_chokepoint_reexported_from_execution ... ok
+test test_chokepoint_module_exists ... ok
+test test_dispatch_chokepoint_approval_sentinel_present ... ok
+test test_chokepoint_metrics_mutators_not_public ... ok
+test test_dispatch_chokepoint_no_bypass_metrics ... ok
+test test_dispatch_chokepoint_no_bypass_approved ... ok
+test test_dispatch_visibility_is_restricted ... ok
+test test_no_direct_gate_results_construction_in_production ... ok
+test test_dispatch_chokepoint_no_direct_exchange_client_usage ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_dispatch_map-9d27278091b28a94`
+
+running 30 tests
+test test_at920_consistent_contracts_passes ... ok
+test test_at277_option_dispatch_roundtrip ... ok
+test test_at277_perpetual_dispatch_roundtrip ... ok
+test test_at920_delta_in_error ... ok
+test test_at920_epsilon_denominator_allows_small_amount_within_tolerance ... ok
+test test_at920_inf_canonical_amount_rejected_with_infinity_delta ... ok
+test test_at920_mismatch_caller_sets_degraded_and_blocks_open ... ok
+test test_at920_mismatch_increments_counter ... ok
+test test_at920_mismatch_rejected ... ok
+test test_at920_nan_canonical_amount_rejected_with_infinity_delta ... ok
+test test_at920_no_contracts_skips_check ... ok
+test test_at920_no_dispatch_on_mismatch ... ok
+test test_at920_no_multiplier_rejected_fail_closed ... ok
+test test_at920_non_finite_multiplier_rejected ... ok
+test test_at920_perpetual_mismatch_rejected ... ok
+test test_at920_tolerance_constant ... ok
+test test_at920_within_tolerance_passes ... ok
+test test_cancel_intent_is_reduce_only ... ok
+test test_close_intent_is_reduce_only ... ok
+test test_hedge_intent_is_reduce_only ... ok
+test test_intent_class_reduce_only_table ... ok
+test test_inverse_future_amount_is_qty_usd ... ok
+test test_linear_future_amount_is_qty_coin ... ok
+test test_map_to_dispatch_rejects_contracts_without_validation ... ok
+test test_missing_qty_coin_error ... ok
+test test_missing_qty_usd_error ... ok
+test test_open_intent_not_reduce_only ... ok
+test test_option_amount_is_qty_coin ... ok
+test test_option_only_one_amount_field ... ok
+test test_perpetual_amount_is_qty_usd ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_expiry_guard-95eb17bbd996f521`
+
+running 27 tests
+test test_cancel_outcome_varies_by_intent_for_expired ... ok
+test test_expiry_at_exact_boundary_rejects_open ... ok
+test test_at965_pipeline_allows_open_outside_expiry_buffer ... ok
+test test_at950_pipeline_rejects_open_within_expiry_buffer ... ok
+test test_expiry_cancel_idempotent_success ... ok
+test test_expiry_delist_buffer_rejects_open ... ok
+test test_expiry_guard_at_exact_sane_boundary_allowed ... ok
+test test_expiry_guard_far_future_but_sane_timestamp_allowed ... ok
+test test_expiry_guard_future_inside_buffer_rejected ... ok
+test test_expiry_guard_future_with_valid_timestamp_allowed ... ok
+test test_expiry_guard_just_above_sane_boundary_rejected ... ok
+test test_expiry_guard_missing_timestamp_inverse_future_rejected ... ok
+test test_expiry_guard_missing_timestamp_linear_future_rejected ... ok
+test test_expiry_guard_missing_timestamp_option_rejected ... ok
+test test_expiry_guard_missing_timestamp_perpetual_allowed ... ok
+test test_expiry_guard_missing_timestamp_unknown_rejected ... ok
+test test_expiry_guard_u64_max_timestamp_rejected ... ok
+test test_expiry_guard_unknown_kind_with_valid_timestamp_allowed ... ok
+test test_expiry_no_retry_loop_after_positions_clear ... ok
+test test_expiry_non_terminal_cancel_does_not_mark_expired ... ok
+test test_expiry_outside_buffer_allows_open ... ok
+test test_expiry_reconcile_does_not_halt_other_instruments ... ok
+test test_intent_drift_close_with_open_expiry_input_allowed ... ok
+test test_no_expiration_timestamp_allows_open ... ok
+test test_pipeline_close_allowed_when_expiry_input_none ... ok
+test test_pipeline_close_passes_through_expired_instrument ... ok
+test test_pipeline_open_rejected_when_expiry_input_none ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_exposure_budget-ec48927b0c25a2a1`
+
+running 8 tests
+test test_global_exposure_budget_allowed_returns_portfolio_delta ... ok
+test test_global_exposure_budget_at_exact_limit_allowed ... ok
+test test_global_exposure_budget_correlation_rejects ... ok
+test test_global_exposure_budget_correlation_non_trivial ... ok
+test test_global_exposure_budget_missing_limit_fails_closed ... ok
+test test_global_exposure_budget_nan_limit_fails_closed ... ok
+test test_global_exposure_budget_non_finite_portfolio_fails_closed ... ok
+test test_global_exposure_budget_uses_current_plus_pending ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_fee_staleness-d5dcf6faf723fc6b`
+
+running 20 tests
+test test_at032_buffer_not_applied_when_fresh ... ok
+test test_at032_soft_stale_applies_buffer ... ok
+test test_at032_soft_stale_at_hard_boundary ... ok
+test test_at033_hard_stale_open_blocked ... ok
+test test_at033_hard_stale_sets_degraded ... ok
+test test_at042_missing_timestamp_blocks_open ... ok
+test test_at042_missing_timestamp_is_hard_stale ... ok
+test test_at244_fresh_at_boundary ... ok
+test test_at244_fresh_cache_uses_actual_rate ... ok
+test test_config_defaults ... ok
+test test_custom_config_thresholds_respected ... ok
+test test_infinity_buffer_uses_zero_buffer ... ok
+test test_infinity_fee_rate_returns_hard_stale_degraded ... ok
+test test_nan_buffer_uses_zero_buffer ... ok
+test test_nan_fee_rate_returns_hard_stale_degraded ... ok
+test test_neg_infinity_fee_rate_returns_hard_stale_degraded ... ok
+test test_negative_buffer_uses_zero_buffer ... ok
+test test_negative_fee_rate_returns_hard_stale_degraded ... ok
+test test_zero_fee_rate_fresh_is_healthy ... ok
+test test_zero_fee_rate_soft_stale_stays_zero ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_gate_ordering-4f4139bdb7d33e7d`
+
+running 42 tests
+test test_at503_close_skips_liquidity_edge_pricer ... ok
+test test_at502_open_gate_count ... ok
+test test_at501_open_all_gates_pass_trace_order ... ok
+test test_at503_hedge_skips_liquidity_edge_pricer ... ok
+test test_at504_cancel_approved_even_degraded ... ok
+test test_at504_cancel_only_dispatch_auth_only ... ok
+test test_at505_close_degraded_allowed ... ok
+test test_at505_hedge_degraded_allowed ... ok
+test test_at505_open_degraded_rejected ... ok
+test test_at505_open_kill_rejected ... ok
+test test_at505_open_maintenance_rejected ... ok
+test test_at506_dispatch_consistency_reject_stops_at_gate4 ... ok
+test test_at506_expiry_guard_reject_stops_at_gate6 ... ok
+test test_at506_fee_cache_reject_stops_at_gate5 ... ok
+test test_at506_liquidity_reject_stops_at_gate7 ... ok
+test test_at506_net_edge_reject_stops_at_gate8 ... ok
+test test_at506_preflight_reject_stops_at_gate2 ... ok
+test test_at506_pricer_reject_stops_at_gate9 ... ok
+test test_at506_quantize_reject_stops_at_gate3 ... ok
+test test_at506_wal_reject_stops_at_gate10 ... ok
+test test_close_wal_failure_not_blocked ... ok
+test test_constraint_approval_requires_all_gates_pass ... ok
+test test_constraint_no_approval_with_any_gate_failed ... ok
+test test_constraint_reject_gates_before_persist ... ok
+test test_constraint_rejected_trace_stops_at_failure ... ok
+test test_constraint_wal_after_all_validation_gates ... ok
+test test_constraint_wal_is_last_gate_close ... ok
+test test_constraint_wal_is_last_gate_hedge ... ok
+test test_constraint_wal_is_last_gate_open ... ok
+test test_dispatch_consistency_allows_when_requested_qty_within_clamp ... ok
+test test_dispatch_consistency_clamp_above_epsilon_rejected ... ok
+test test_dispatch_consistency_clamp_at_exact_equality_allowed ... ok
+test test_dispatch_consistency_clamp_below_max_allowed ... ok
+test test_dispatch_consistency_clamp_within_epsilon_allowed ... ok
+test test_dispatch_consistency_rejects_when_clamp_max_dispatch_qty_missing ... ok
+test test_dispatch_consistency_rejects_when_clamp_requested_qty_missing ... ok
+test test_dispatch_consistency_rejects_when_requested_qty_exceeds_clamp ... ok
+test test_gate_sequence_emits_structured_reject_metric_line ... ok
+test test_metrics_approved_increments ... ok
+test test_metrics_default ... ok
+test test_metrics_rejected_increments ... ok
+test test_metrics_risk_state_rejection_counted ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_gate_outcome-d3cbfd70b62c2845`
+
+running 26 tests
+test allow_has_no_reason_reject_always_has_reason ... ok
+test expiry_guard_allowed ... ok
+test expiry_guard_rejected ... ok
+test fee_eval_fresh_allows ... ok
+test fee_eval_hard_stale_rejects ... ok
+test fee_eval_soft_stale_allows ... ok
+test gate_outcome_has_no_default ... ok
+test liquidity_allowed ... ok
+test liquidity_insufficient_depth ... ok
+test liquidity_no_l2 ... ok
+test liquidity_slippage_too_high ... ok
+test net_edge_allowed ... ok
+test net_edge_input_missing ... ok
+test net_edge_too_low ... ok
+test preflight_allowed ... ok
+test preflight_linked_forbidden ... ok
+test preflight_market_forbidden ... ok
+test preflight_post_only_cross ... ok
+test preflight_stop_forbidden ... ok
+test pricer_invalid_input ... ok
+test pricer_limit_price ... ok
+test pricer_net_edge_too_low ... ok
+test quantize_invalid_input ... ok
+test quantize_metadata_missing ... ok
+test quantize_ok ... ok
+test quantize_too_small ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_idempotency-64cf20c19f676389`
+
+running 14 tests
+test test_at343_no_timestamp_field ... ok
+test test_at218_deterministic_hash ... ok
+test test_at218_two_codepaths_same_hash ... ok
+test test_at343_no_timestamp_in_hash ... ok
+test test_different_group_id_different_hash ... ok
+test test_different_instrument_different_hash ... ok
+test test_different_leg_idx_different_hash ... ok
+test test_different_side_different_hash ... ok
+test test_field_boundary_separation ... ok
+test test_format_intent_hash_length ... ok
+test test_hash_nonzero ... ok
+test test_ih16_is_full_hash_hex ... ok
+test test_uses_integer_price_ticks ... ok
+test test_uses_integer_qty_steps ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_instrument_cache_ttl-068b3c7c847c8a05`
+
+running 29 tests
+test test_breach_struct_fields ... ok
+test test_breach_event_ttl_reflects_custom_config ... ok
+test test_cache_age_at_exact_ttl_is_healthy ... ok
+test test_cache_age_deterministic ... ok
+test test_cache_age_one_second_past_ttl_is_degraded ... ok
+test test_cache_hits_counter_increments ... ok
+test test_cache_refresh_resets_staleness ... ok
+test test_default_instrument_cache_ttl_is_3600 ... ok
+test test_different_ttl_config_respected ... ok
+test test_drain_breaches_clears_buffer ... ok
+test test_fresh_cache_allows_opens ... ok
+test test_fresh_instrument_cache_returns_healthy ... ok
+test test_infinite_ttl_fails_closed_to_degraded ... ok
+test test_last_age_s_gauge_updates ... ok
+test test_missing_instrument_returns_none ... ok
+test test_multi_instrument_independence ... ok
+test test_nan_ttl_fails_closed_to_degraded ... ok
+test test_opens_blocked_all_risk_states ... ok
+test test_opens_blocked_is_sole_gate_closes_ungated ... ok
+test test_refresh_errors_counter ... ok
+test test_risk_state_for_cache_miss_returns_degraded ... ok
+test test_risk_state_for_fresh_returns_healthy ... ok
+test test_risk_state_for_stale_returns_degraded ... ok
+test test_stale_access_produces_cache_ttl_breach_event ... ok
+test test_stale_cache_blocks_opens ... ok
+test test_stale_instrument_cache_sets_degraded ... ok
+test test_stale_total_counter_increments ... ok
+test test_ttl_breach_event_emitted_on_stale ... ok
+test test_pending_breaches_queue_is_capped ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_instrument_kind_mapping-4e6465ac989a7004`
+
+running 12 tests
+test test_all_instrument_kinds_derivable ... ok
+test test_btc_dated_future_maps_to_inverse_future ... ok
+test test_btc_perpetual_maps_to_perpetual ... ok
+test test_combo_instruments_return_none ... ok
+test test_get_instruments_realistic_payloads ... ok
+test test_linear_priority_over_perpetual ... ok
+test test_option_maps_to_option ... ok
+test test_option_priority_over_future_when_both_set ... ok
+test test_riskstate_derives ... ok
+test test_riskstate_has_all_variants ... ok
+test test_usdc_dated_future_maps_to_linear_future ... ok
+test test_usdc_margined_perpetual_maps_to_linear_future ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_intent_determinism-38d1522b02e031ba`
+
+running 13 tests
+test test_chokepoint_rejected_deterministic ... ok
+test test_chokepoint_same_inputs_same_trace ... ok
+test test_full_pipeline_determinism ... ok
+test test_gid12_deterministic ... ok
+test test_label_encode_deterministic ... ok
+test test_liquidity_gate_same_inputs_same_result ... ok
+test test_net_edge_same_inputs_same_result ... ok
+test test_pricer_same_inputs_same_price ... ok
+test test_pricer_sell_deterministic ... ok
+test test_quantize_same_inputs_same_output ... ok
+test test_quantize_sell_deterministic ... ok
+test test_sid8_deterministic ... ok
+test test_no_hashmap_ordering_dependency ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_intent_id_propagation-166d7ce9ea785f31`
+
+running 6 tests
+test test_gate_trace_ordering_enables_correlation ... ok
+test test_different_intents_have_distinct_ids ... ok
+test test_gate_trace_provides_audit_trail ... ok
+test test_intent_id_propagates_through_approved_pipeline ... ok
+test test_intent_id_propagates_through_rejected_pipeline ... ok
+test test_metrics_attributable_to_intent ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_intent_pipeline-16d58087aaf7146e`
+
+running 10 tests
+test test_at920_pipeline_dispatch_consistency_rejects_close ... ok
+test test_at920_pipeline_dispatch_consistency_failure_rejected ... ok
+test test_at104_degraded_blocks_open_at_chokepoint ... ok
+test test_pipeline_cancel_only_skips_preflight_and_quantize_side_effects ... ok
+test test_pipeline_capabilities_matrix_overrides_preflight_linked_flag ... ok
+test test_pipeline_open_degraded_skips_preflight_side_effects ... ok
+test test_pipeline_open_happy_path_approved ... ok
+test test_pipeline_open_market_order_maps_preflight_reject_reason ... ok
+test test_pipeline_open_missing_l2_rejected_at_liquidity_gate ... ok
+test test_pipeline_post_only_cross_rejected_at_preflight ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_inventory_skew-38588f09c7cf3019`
+
+running 9 tests
+test test_inventory_skew_missing_delta_limit_fails_closed ... ok
+test test_at281_risk_increasing_buy_tightens_min_edge_by_45_pct ... ok
+test test_inventory_skew_at_exact_adjusted_threshold_allowed ... ok
+test test_inventory_skew_nan_input_fails_closed ... ok
+test test_inventory_skew_pending_delta_contribution ... ok
+test test_inventory_skew_rejects_risk_increasing_near_limit ... ok
+test test_inventory_skew_sell_risk_reducing_can_pass_after_min_edge_adjustment ... ok
+test test_inventory_skew_tick_penalty_large_value_clamps_safely ... ok
+test test_inventory_skew_tick_penalty_max_is_exactly_3_ticks_at_bias_1_0 ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_label-f7fb86f52495d331`
+
+running 25 tests
+test test_at216_decode_components ... ok
+test test_at041_label_at_limit_passes_over_limit_fails ... ok
+test test_at041_label_too_long_caller_sets_degraded_blocks_open ... ok
+test test_at216_decode_leg_idx_1 ... ok
+test test_at216_label_format ... ok
+test test_at216_label_starts_with_s4 ... ok
+test test_at216_label_within_limit ... ok
+test test_at216_leg_idx_1 ... ok
+test test_at216_typical_label_length ... ok
+test test_decode_empty_string ... ok
+test test_decode_invalid_leg_idx ... ok
+test test_decode_invalid_prefix ... ok
+test test_decode_too_many_segments ... ok
+test test_decode_wrong_segment_count ... ok
+test test_derive_gid12 ... ok
+test test_derive_gid12_deterministic ... ok
+test test_derive_sid8_deterministic ... ok
+test test_derive_sid8_different_inputs ... ok
+test test_derive_sid8_length ... ok
+test test_encode_decode_roundtrip ... ok
+test test_encode_decode_roundtrip_leg1 ... ok
+test test_full_pipeline_roundtrip ... ok
+test test_label_max_len_constant ... ok
+test test_label_too_long_rejected ... ok
+test test_no_truncation ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_label_match-1c3598b7a9aa0d3a`
+
+running 13 tests
+test test_deterministic_matching ... ok
+test test_ambiguity_returns_degraded ... ok
+test test_ambiguity_increments_counter ... ok
+test test_empty_intents ... ok
+test test_no_candidates ... ok
+test test_single_candidate_matches ... ok
+test test_three_candidates_ih16_resolves ... ok
+test test_tiebreaker_ih16 ... ok
+test test_tiebreaker_instrument ... ok
+test test_tiebreaker_order_ih16_before_instrument ... ok
+test test_tiebreaker_qty_q ... ok
+test test_tiebreaker_side ... ok
+test test_wrong_leg_idx_no_match ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_liquidity_gate-730740279b0cd6ac`
+
+running 32 tests
+test test_at222_no_order_intent_on_rejection ... ok
+test test_at222_reject_log_includes_wap_and_slippage ... ok
+test test_at222_slippage_exceeds_max_rejected ... ok
+test test_at344_missing_l2_rejects_open ... ok
+test test_at344_stale_l2_rejects_open ... ok
+test test_at421_cancel_allowed_with_stale_l2 ... ok
+test test_at421_cancel_only_allowed_without_l2 ... ok
+test test_at421_close_rejected_without_l2 ... ok
+test test_at909_missing_l2_reason_is_no_l2 ... ok
+test test_close_allowed_with_valid_l2 ... ok
+test test_close_clamps_to_fillable_qty ... ok
+test test_empty_asks_for_buy_rejects ... ok
+test test_empty_bids_for_sell_rejects ... ok
+test test_future_dated_l2_rejected_fail_closed ... ok
+test test_hedge_clamps_to_fillable_qty ... ok
+test test_liquidity_gate_emits_structured_reject_and_slippage_metrics ... ok
+test test_metrics_default ... ok
+test test_multi_level_wap_computation ... ok
+test test_non_marketable_close_without_l2_still_rejected_fail_closed ... ok
+test test_non_marketable_hedge_with_stale_l2_still_rejected_fail_closed ... ok
+test test_non_marketable_open_still_enforces_depth_budget ... ok
+test test_non_marketable_open_with_stale_l2_still_rejected_fail_closed ... ok
+test test_non_marketable_open_without_l2_still_rejected_fail_closed ... ok
+test test_open_wap_budget_allows_small_tail_beyond_level_cap ... ok
+test test_overflowed_slippage_budget_fails_closed ... ok
+test test_partial_fill_from_thin_book_evaluates_available ... ok
+test test_sell_walks_bids ... ok
+test test_slippage_at_boundary_allowed ... ok
+test test_slippage_at_exact_max_allowed ... ok
+test test_slippage_within_limit_allowed ... ok
+test test_stale_l2_fresh_enough_passes ... ok
+test test_staleness_at_exact_max_age_allowed ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_margin_gate-6884839f409014a5`
+
+running 10 tests
+test test_margin_at_exact_reject_opens_threshold_rejected ... ok
+test test_compute_margin_mode_hint_invalid_inputs_fail_closed_to_kill ... ok
+test test_compute_margin_mode_hint_thresholds ... ok
+test test_margin_gate_allows_opens_below_threshold ... ok
+test test_margin_gate_invalid_inputs_fail_closed ... ok
+test test_margin_gate_non_positive_equity_fails_closed ... ok
+test test_margin_gate_thresholds_block_reduceonly_kill ... ok
+test test_margin_gate_tiny_positive_equity_uses_actual_ratio ... ok
+test test_margin_nan_equity_fails_closed ... ok
+test test_margin_one_tick_below_reject_opens_allowed ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_missing_config-ff70c72e66b29693`
+
+running 14 tests
+test test_infinity_amount_step_fails_closed ... ok
+test test_all_rejections_have_enumerated_reason_codes ... ok
+test test_missing_amount_step_fails_closed ... ok
+test test_config_missing_no_side_effects ... ok
+test test_missing_fee_usd_fails_closed ... ok
+test test_missing_gross_edge_fails_closed ... ok
+test test_missing_l2_book_fails_closed ... ok
+test test_missing_min_edge_fails_closed ... ok
+test test_missing_slippage_fails_closed ... ok
+test test_missing_tick_size_fails_closed ... ok
+test test_nan_tick_size_fails_closed ... ok
+test test_negative_tick_size_fails_closed ... ok
+test test_unhealthy_risk_state_fails_closed ... ok
+test test_zero_qty_pricer_fails_closed ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_net_edge_gate-de87f7386ce9f6b5`
+
+running 19 tests
+test test_at932_all_missing ... ok
+test test_at015_net_edge_below_min_rejected ... ok
+test test_at015_zero_dispatch_on_rejection ... ok
+test test_at932_missing_expected_slippage ... ok
+test test_at932_missing_fee_usd ... ok
+test test_at932_missing_gross_edge ... ok
+test test_at932_missing_min_edge ... ok
+test test_fees_exceed_gross_edge ... ok
+test test_metrics_default ... ok
+test test_negative_fee_fails_closed ... ok
+test test_negative_min_edge_fails_closed ... ok
+test test_negative_slippage_fails_closed ... ok
+test test_net_edge_above_min_allowed ... ok
+test test_net_edge_emits_structured_reject_metric_line ... ok
+test test_net_edge_exactly_at_min_allowed ... ok
+test test_net_edge_formula ... ok
+test test_non_finite_gross_fails_closed ... ok
+test test_non_finite_min_edge_fails_closed ... ok
+test test_zero_costs_full_edge ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_open_runtime_wiring-741a9a12d74c5029`
+
+running 13 tests
+test test_runtime_wiring_inventory_skew_can_recover_initial_net_edge_reject ... ok
+test test_runtime_wiring_delta_limit_missing_degrades_even_if_net_edge_fails_first ... ok
+test test_runtime_wiring_inventory_skew_forces_net_edge_recheck_before_pricer ... ok
+test test_runtime_wiring_margin_kill_rejects_before_open_dispatch ... ok
+test test_runtime_wiring_margin_reject_preserves_stricter_incoming_risk_state ... ok
+test test_runtime_wiring_pending_reject_takes_precedence_over_global_budget_reject ... ok
+test test_runtime_wiring_releases_pending_reservation_on_reject ... ok
+test test_tlsm_settlement_is_idempotent_on_duplicate_terminal_events ... ok
+test test_tlsm_settlement_noop_on_non_terminal_state ... ok
+test test_tlsm_settles_pending_exposure_on_cancelled ... ok
+test test_tlsm_settles_pending_exposure_on_failed ... ok
+test test_tlsm_settles_pending_exposure_on_filled ... ok
+test test_unregistered_instrument_rejected_through_runtime ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_order_size-5734518ce78e6a3a`
+
+running 15 tests
+test test_contracts_derived_for_option ... ok
+test test_at277_option_sizing ... ok
+test test_at277_perpetual_sizing ... ok
+test test_contracts_derived_for_perpetual ... ok
+test test_invalid_contract_multiplier_rejected ... ok
+test test_inverse_future_canonical_is_qty_usd ... ok
+test test_linear_future_canonical_is_qty_coin ... ok
+test test_nan_index_price_rejected ... ok
+test test_negative_index_price_rejected ... ok
+test test_no_multiplier_no_contracts ... ok
+test test_notional_usd_always_populated ... ok
+test test_option_canonical_is_qty_coin ... ok
+test test_perpetual_canonical_is_qty_usd ... ok
+test test_zero_canonical_qty_rejected ... ok
+test test_zero_index_price_rejected ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_pending_exposure-6c759ff4588705f9`
+
+running 34 tests
+test test_cross_instrument_reservation_id_collision_rejected ... ok
+test test_drain_all_clears_multi_instrument ... ok
+test test_drain_all_allows_fresh_reserves_after ... ok
+test test_drain_all_clears_single_instrument ... ok
+test test_drain_all_idempotent ... ok
+test test_drain_all_post_drain_settle_returns_false ... ok
+test test_drain_all_rejected_outside_kill_state ... ok
+test test_drain_all_with_global_delta_limit_reclaims_budget ... ok
+test test_global_budget_enforced_across_instruments ... ok
+test test_global_delta_limit_nan_normalized_to_none ... ok
+test test_global_delta_limit_none_allows_unlimited_cross_instrument ... ok
+test test_global_pending_total_tracks_across_instruments ... ok
+test test_idempotent_reserve_cross_bucket_replacement ... ok
+test test_idempotent_reserve_reject_preserves_old_reservation ... ok
+test test_idempotent_reserve_same_id_replaces_reservation ... ok
+test test_idempotent_reserve_same_id_same_delta_is_noop ... ok
+test test_negative_and_nan_budget_fails_closed ... ok
+test test_pending_exposure_at_exact_budget_allowed ... ok
+test test_pending_exposure_missing_budget_fails_closed ... ok
+test test_pending_exposure_opposite_side_does_not_reopen_capacity ... ok
+test test_pending_exposure_release_on_terminal_restores_budget ... ok
+test test_pending_exposure_reservation_blocks_overfill ... ok
+test test_per_instrument_isolation_independent_budgets ... ok
+test test_per_instrument_settle_clears_only_own_instrument ... ok
+test test_register_instrument_config_reload_updates_limit ... ok
+test test_register_instrument_count_and_delta_limit_accessor ... ok
+test test_register_instrument_nan_and_infinity_limits_are_fail_closed ... ok
+test test_reserve_after_settle_works_as_fresh ... ok
+test test_reserve_fails_closed_on_invalid_reservation_id ... ok
+test test_reserve_fails_closed_on_non_finite_inputs ... ok
+test test_settle_after_idempotent_rereserve_clears_to_zero ... ok
+test test_settle_authoritative_routing ... ok
+test test_settle_double_settle_returns_false ... ok
+test test_unregistered_instrument_rejected ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_post_only_guard-e8e335d5c9e78a06`
+
+running 22 tests
+test test_at916_sell_below_bid_rejected ... ok
+test test_at916_buy_above_ask_rejected ... ok
+test test_at916_buy_crosses_at_ask_rejected ... ok
+test test_at916_sell_crosses_at_bid_rejected ... ok
+test test_buy_below_ask_allowed ... ok
+test test_buy_just_below_ask_allowed ... ok
+test test_buy_no_ask_allowed ... ok
+test test_deterministic_result ... ok
+test test_metrics_no_increment_on_allowed ... ok
+test test_metrics_reject_counter_increments ... ok
+test test_not_post_only_always_allowed ... ok
+test test_post_only_inf_best_ask_rejected ... ok
+test test_post_only_inf_best_bid_rejected ... ok
+test test_post_only_inf_limit_price_empty_book_rejected ... ok
+test test_post_only_inf_limit_price_rejected ... ok
+test test_post_only_nan_best_ask_rejected ... ok
+test test_post_only_nan_best_bid_rejected ... ok
+test test_post_only_nan_limit_price_empty_book_rejected ... ok
+test test_post_only_nan_limit_price_rejected ... ok
+test test_sell_above_bid_allowed ... ok
+test test_sell_just_above_bid_allowed ... ok
+test test_sell_no_bid_allowed ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_preflight-f1aab929e1aa93ee`
+
+running 33 tests
+test test_at017_market_order_inverse_future_rejected ... ok
+test test_at004_linked_order_option_always_rejected ... ok
+test test_at016_market_order_option_rejected ... ok
+test test_at017_market_order_linear_future_rejected ... ok
+test test_at017_market_order_perpetual_rejected ... ok
+test test_at018_stop_market_option_rejected ... ok
+test test_at019_stop_market_perpetual_rejected ... ok
+test test_at913_market_order_reason_matches ... ok
+test test_at914_stop_limit_rejected ... ok
+test test_at914_stop_market_all_kinds ... ok
+test test_at914_trigger_field_presence_rejected ... ok
+test test_at915_linked_order_rejected_default ... ok
+test test_at916_post_only_buy_crossing_rejected ... ok
+test test_at916_post_only_non_crossing_allowed ... ok
+test test_at916_post_only_sell_crossing_rejected ... ok
+test test_deterministic_same_input_same_result ... ok
+test test_limit_order_inverse_future_allowed ... ok
+test test_limit_order_linear_future_allowed ... ok
+test test_limit_order_option_allowed ... ok
+test test_limit_order_perpetual_allowed ... ok
+test test_linked_order_inverse_future_both_flags_allowed ... ok
+test test_linked_order_linear_future_both_flags_allowed ... ok
+test test_linked_order_perp_both_flags_allowed ... ok
+test test_linked_order_perp_only_enabled_rejected ... ok
+test test_linked_order_perp_only_supported_rejected ... ok
+test test_market_checked_before_trigger ... ok
+test test_metrics_linked_forbidden_counter ... ok
+test test_metrics_market_forbidden_counter ... ok
+test test_metrics_no_reject_on_allowed ... ok
+test test_metrics_post_only_cross_counter ... ok
+test test_metrics_stop_forbidden_counter ... ok
+test test_no_linked_order_type_passes ... ok
+test test_preflight_emits_structured_reject_metric_line ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_pricer-861e0c30fa0aaac9`
+
+running 16 tests
+test test_at223_sell_limit_clamped_to_min_edge ... ok
+test test_at223_buy_limit_clamped_to_min_edge ... ok
+test test_at223_realized_edge_at_limit_ge_min_edge ... ok
+test test_at223_sell_realized_edge_at_limit_ge_min_edge ... ok
+test test_buy_proposed_within_bound_no_clamp ... ok
+test test_infinite_gross_edge_rejected ... ok
+test test_metrics_default ... ok
+test test_multi_unit_buy ... ok
+test test_nan_fair_price_rejected ... ok
+test test_negative_fee_rejected ... ok
+test test_negative_min_edge_rejected ... ok
+test test_negative_net_edge_rejected ... ok
+test test_negative_qty_rejected ... ok
+test test_net_edge_too_low_rejected ... ok
+test test_pricer_at_exact_min_edge_boundary ... ok
+test test_zero_qty_rejected ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_quantize-a63854c97777d9fb`
+
+running 45 tests
+test test_at219_buy_never_increases ... ok
+test test_at908_counter_increments ... ok
+test test_at219_sell_never_decreases ... ok
+test test_at908_exactly_min_amount_passes ... ok
+test test_at908_no_output_on_rejection ... ok
+test test_at908_too_small_rejected ... ok
+test test_at926_infinity_tick_size ... ok
+test test_at926_nan_amount_step ... ok
+test test_at926_negative_min_amount ... ok
+test test_at926_zero_tick_size ... ok
+test test_buy_price_decimal_boundary_is_stable ... ok
+test test_buy_price_exact_tick ... ok
+test test_buy_price_rounds_down ... ok
+test test_deterministic_quantization ... ok
+test test_extreme_ratio_buy_never_rounds_up_via_snap ... ok
+test test_extreme_ratio_sell_never_rounds_down_via_snap ... ok
+test test_integer_values_for_hashing ... ok
+test test_large_decimal_boundary_buy_price_stays_on_tick ... ok
+test test_large_decimal_boundary_qty_stays_on_step ... ok
+test test_large_decimal_boundary_sell_price_stays_on_tick ... ok
+test test_large_negative_buy_price_never_rounds_up ... ok
+test test_large_negative_sell_price_never_rounds_down ... ok
+test test_large_ratio_buy_price_still_floors ... ok
+test test_large_ratio_qty_still_floors ... ok
+test test_large_ratio_sell_price_still_ceils ... ok
+test test_nan_limit_price_rejected ... ok
+test test_negative_qty_rejected ... ok
+test test_non_finite_raw_limit_price_rejected ... ok
+test test_non_finite_raw_qty_rejected ... ok
+test test_overflow_ratio_rejected ... ok
+test test_qty_decimal_boundary_is_stable ... ok
+test test_qty_exact_multiple ... ok
+test test_qty_rounds_down ... ok
+test test_qty_steps_integer ... ok
+test test_ratio_infinity_rejected ... ok
+test test_ratio_nan_rejected ... ok
+test test_ratio_neg_infinity_rejected ... ok
+test test_sell_price_decimal_boundary_is_stable ... ok
+test test_sell_price_exact_tick ... ok
+test test_sell_price_rounds_up ... ok
+test test_very_large_decimal_boundary_buy_never_rounds_up ... ok
+test test_very_large_decimal_boundary_qty_never_rounds_up ... ok
+test test_very_large_decimal_boundary_sell_never_rounds_down ... ok
+test test_zero_min_amount_allows_zero_qty ... ok
+test test_zero_qty_with_zero_min_allowed ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_recorded_before_dispatch_gate-44735da1f0d4757b`
+
+running 8 tests
+test test_hedge_intent_approved_despite_wal_failure ... ok
+test test_close_intent_approved_despite_wal_failure ... ok
+test test_optional_wal_gate_missing_is_fail_closed ... ok
+test test_close_intent_approved_when_optional_wal_gate_missing ... ok
+test test_wal_gate_failure_rejects ... ok
+test test_wal_gate_not_called_when_preflight_rejects_early ... ok
+test test_wal_gate_not_called_when_risk_state_rejects_early ... ok
+test test_wal_gate_success_allows ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_reject_reason-94b2d35af2df2e91`
+
+running 10 tests
+test test_as_str_matches_serde_output_for_all_variants ... ok
+test test_at201_open_classified_intent_blocked_by_open_gates ... ok
+test test_fee_cache_check_maps_to_fee_cache_stale ... ok
+test test_recorded_before_dispatch_maps_to_recorded_before_dispatch_failed ... ok
+test test_registry_contains_all_enum_variants ... ok
+test test_reject_reason_in_registry ... ok
+test test_reject_reason_present_on_pre_dispatch_reject ... ok
+test test_registry_contains_contract_minimum_set ... ok
+test test_reject_reason_serde_round_trip ... ok
+test test_typed_preflight_code_wins_over_text_heuristics ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_rejection_side_effects-8515b394d4857459`
+
+running 11 tests
+test test_rejected_invalid_metadata_no_side_effects ... ok
+test test_rejected_intent_has_no_side_effects ... ok
+test test_multiple_rejections_no_state_accumulation ... ok
+test test_rejected_net_edge_missing_input_no_side_effects ... ok
+test test_rejected_net_edge_no_side_effects ... ok
+test test_rejected_preflight_no_side_effects ... ok
+test test_rejected_pricer_no_side_effects ... ok
+test test_rejected_quantize_no_side_effects ... ok
+test test_rejected_risk_state_no_side_effects ... ok
+test test_rejected_stop_order_no_side_effects ... ok
+test test_rejected_wal_gate_no_side_effects ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running `/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/test_tlsm-a8c97cc21af50d30`
+
+running 34 tests
+test test_at210_partial_fill_before_send ... ok
+test test_ack_before_send ... ok
+test test_at210_fill_before_send ... ok
+test test_apply_with_sink_emits_transition_records ... ok
+test test_at230_fill_before_ack ... ok
+test test_at230_partial_fill_before_ack ... ok
+test test_cancel_from_acked ... ok
+test test_cancel_from_created ... ok
+test test_cancel_from_partially_filled ... ok
+test test_cancel_from_sent ... ok
+test test_cancelled_is_terminal ... ok
+test test_default_creates_in_created_state ... ok
+test test_duplicate_sent_ignored ... ok
+test test_failed_from_acked ... ok
+test test_failed_from_created_transitions ... ok
+test test_failed_from_partially_filled_transitions ... ok
+test test_failed_is_terminal ... ok
+test test_ignored_event_does_not_emit_transition ... ok
+test test_late_ack_after_partial_fill_ignored ... ok
+test test_multiple_partial_fills ... ok
+test test_never_panic_random_events ... ok
+test test_non_terminal_states ... ok
+test test_normal_lifecycle_acked_to_filled_direct ... ok
+test test_normal_lifecycle_created_to_filled ... ok
+test test_ooo_counter_increments_on_fill_before_ack ... ok
+test test_ooo_per_category_counts ... ok
+test test_ooo_total_is_sum_of_categories ... ok
+test test_reject_from_acked_ignored ... ok
+test test_reject_from_created ... ok
+test test_reject_from_sent ... ok
+test test_sink_failure_is_atomic_no_state_change ... ok
+test test_take_pending_reservation_only_on_terminal ... ok
+test test_terminal_state_ignores_all_events ... ok
+test test_terminal_states ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests soldier_core
+     Running `/Users/admin/.rustup/toolchains/stable-x86_64-apple-darwin/bin/rustdoc --edition=2024 --crate-type lib --color auto --crate-name soldier_core --test crates/soldier_core/src/lib.rs --test-run-directory /private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/crates/soldier_core -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps -L dependency=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps --extern proptest=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libproptest-f50583a4908d26f1.rlib --extern serde=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde-3ed846e208f555c3.rlib --extern serde_json=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libserde_json-2fd93a69e3d22d4d.rlib --extern soldier_core=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libsoldier_core-d3fa692111d1e781.rlib --extern tracing=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libtracing-67485b29f0892d6c.rlib --extern xxhash_rust=/private/var/folders/2_/frcft4_x13z_4sv0sg9nfc4w0000gn/T/cargo-mutants-wt_S5-004-zASbub.tmp/target/debug/deps/libxxhash_rust-73bb6d3137184eaf.rlib -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' --error-format human`
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+*** result: Success

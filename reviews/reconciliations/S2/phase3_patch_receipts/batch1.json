@@ -1,0 +1,28 @@
+{
+  "slice_id": "S2",
+  "phase": "phase3",
+  "batch": 1,
+  "patches": [
+    {
+      "id": "S2-000-I1",
+      "story_id": "S2-000",
+      "status": "applied",
+      "description": "Add proof plan row for AT-280 with TRIP and NON-TRIP tests and concrete NON-TRIP names."
+    },
+    {
+      "id": "S2-004-I1",
+      "story_id": "S2-004",
+      "status": "applied",
+      "description": "Clarify dependency on S2-003 is PRD-ordering-only; classifier is independent of label matching."
+    },
+    {
+      "id": "S2-004-I2",
+      "story_id": "S2-004",
+      "status": "applied",
+      "description": "Verify exact contract count for RejectReasonCode against CONTRACT.md §2.2.6 and align assumptions/tests to the verified 30 values."
+    }
+  ],
+  "validation": {
+    "result": "pass"
+  }
+}

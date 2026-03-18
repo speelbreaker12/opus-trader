@@ -1,0 +1,77 @@
+{
+  "skill": "SKILLS/acceptance-test.md",
+  "description": "Binary assertion tests for /acceptance-test skill output quality",
+  "total_assertions": 25,
+  "tests": [
+    {
+      "id": "T1",
+      "name": "guard_generates_trip_non_trip_pair",
+      "description": "Given a guard requirement, must generate both TRIP and NON-TRIP test skeletons.",
+      "fixture": "fixtures/guard_requirement.txt",
+      "prompt": "Run /acceptance-test for this contract requirement. Generate test skeletons for §2.3.5 LiquidityGate book snapshot staleness check.",
+      "assertions": [
+        {"id": "T1-A1", "check": "Output contains a TRIP test function", "rule": {"type": "regex", "pattern": "fn test_.*trip"}, "expected": true},
+        {"id": "T1-A2", "check": "Output contains a NON-TRIP test function", "rule": {"type": "regex", "pattern": "fn test_.*non_trip"}, "expected": true},
+        {"id": "T1-A3", "check": "TRIP test asserts dispatch_count == 0", "rule": {"type": "regex", "pattern": "dispatch_count.*0|0.*dispatch_count"}, "expected": true},
+        {"id": "T1-A4", "check": "NON-TRIP test asserts dispatch_count == 1", "rule": {"type": "regex", "pattern": "dispatch_count.*1|1.*dispatch_count"}, "expected": true},
+        {"id": "T1-A5", "check": "Output mentions BookSnapshotStale reject reason", "rule": {"type": "contains", "value": "BookSnapshotStale"}, "expected": true}
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "latch_uses_latch_reason",
+      "description": "Latch requirement should use latch_reason for causality proof, not just dispatch_count.",
+      "fixture": "fixtures/latch_requirement.txt",
+      "prompt": "Run /acceptance-test for this contract requirement. Generate tests for §2.4.1 WebSocket book gap latch.",
+      "assertions": [
+        {"id": "T2-A1", "check": "Output asserts latch_reason in the TRIP test", "rule": {"type": "regex", "pattern": "(?i)(latch_reason|LatchReason)"}, "expected": true},
+        {"id": "T2-A2", "check": "Output mentions WsBookGap", "rule": {"type": "contains", "value": "WsBookGap"}, "expected": true},
+        {"id": "T2-A3", "check": "Output includes a reconcile/clear test (latch cleared after reconcile)", "rule": {"type": "regex", "pattern": "(?i)(reconcil|clear|reset|latch.*false)"}, "expected": true},
+        {"id": "T2-A4", "check": "Output has #[test] attribute", "rule": {"type": "contains", "value": "#[test]"}, "expected": true},
+        {"id": "T2-A5", "check": "Output references §2.4.1 in test docstring", "rule": {"type": "regex", "pattern": "§2\\.4\\.1|2\\.4\\.1"}, "expected": true}
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "intent_classification_covers_all_cases",
+      "description": "Intent classification has 4 cases. Tests should cover unknown/missing as OPEN.",
+      "fixture": "fixtures/intent_requirement.txt",
+      "prompt": "Run /acceptance-test for this contract requirement. Generate tests for §2.1.3 intent classification.",
+      "assertions": [
+        {"id": "T3-A1", "check": "Output tests unknown intent classified as OPEN", "rule": {"type": "regex", "pattern": "(?i)(unknown.*open|open.*unknown|fail.closed)"}, "expected": true},
+        {"id": "T3-A2", "check": "Output tests reduce_only=true classified as CLOSE", "rule": {"type": "regex", "pattern": "(?i)(reduce_only.*close|close.*reduce_only)"}, "expected": true},
+        {"id": "T3-A3", "check": "Output tests replace order treated as OPEN", "rule": {"type": "regex", "pattern": "(?i)(replace.*open|open.*replace)"}, "expected": true},
+        {"id": "T3-A4", "check": "Output contains assert_eq! or assert! macros", "rule": {"type": "regex", "pattern": "assert(_eq)?!"}, "expected": true},
+        {"id": "T3-A5", "check": "Output mentions IntentClass enum or classification", "rule": {"type": "regex", "pattern": "(?i)(IntentClass|classify|classification)"}, "expected": true}
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "staleness_guard_has_at_registration",
+      "description": "Must include AT registration text for CONTRACT.md, not just test code.",
+      "fixture": "fixtures/staleness_requirement.txt",
+      "prompt": "Run /acceptance-test for this contract requirement. Generate tests for §2.2.2 policy staleness.",
+      "assertions": [
+        {"id": "T4-A1", "check": "Output includes AT registration text for CONTRACT.md", "rule": {"type": "regex", "pattern": "AT-\\d+"}, "expected": true},
+        {"id": "T4-A2", "check": "Output mentions PolicyStale reject reason", "rule": {"type": "contains", "value": "PolicyStale"}, "expected": true},
+        {"id": "T4-A3", "check": "Output has force_other_gates_pass or equivalent isolation", "rule": {"type": "regex", "pattern": "(?i)(force.*gates.*pass|other.*gates|isolat|all.*other)"}, "expected": true},
+        {"id": "T4-A4", "check": "Output includes both TRIP and NON-TRIP", "rule": {"type": "count_min", "pattern": "(?i)(trip|non.trip)", "min": 2}, "expected": true},
+        {"id": "T4-A5", "check": "Output references §2.2.2 in docstring or comment", "rule": {"type": "regex", "pattern": "§2\\.2\\.2|2\\.2\\.2"}, "expected": true}
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "multi_condition_generates_separate_tests",
+      "description": "Guard with 3 conditions should generate at least 3 TRIP tests (one per condition) plus NON-TRIP.",
+      "fixture": "fixtures/multi_condition_guard.txt",
+      "prompt": "Run /acceptance-test for this contract requirement. Generate tests for §2.3.8 pre-trade risk check with 3 conditions.",
+      "assertions": [
+        {"id": "T5-A1", "check": "Output has at least 3 TRIP tests (one per condition)", "rule": {"type": "count_min", "pattern": "fn test_.*trip", "min": 3}, "expected": true},
+        {"id": "T5-A2", "check": "Output mentions all 3 reject reasons", "rule": {"type": "count_min", "pattern": "(PositionLimitBreached|DailyLossLimitBreached|TooManyOpenOrders)", "min": 3}, "expected": true},
+        {"id": "T5-A3", "check": "Output has at least 1 NON-TRIP test", "rule": {"type": "count_min", "pattern": "(?i)non.?trip", "min": 1}, "expected": true},
+        {"id": "T5-A4", "check": "Each test uses assert_eq on reject_reason (causality)", "rule": {"type": "count_min", "pattern": "assert_eq!.*reject_reason", "min": 2}, "expected": true},
+        {"id": "T5-A5", "check": "Output references §2.3.8", "rule": {"type": "regex", "pattern": "§2\\.3\\.8|2\\.3\\.8"}, "expected": true}
+      ]
+    }
+  ]
+}

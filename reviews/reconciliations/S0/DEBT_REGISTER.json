@@ -1,0 +1,89 @@
+{
+  "schema_version": "debt_register.v1",
+  "slice_id": "S0",
+  "created_at": "2026-02-24T20:30:00Z",
+  "status": "DRAFT",
+  "entries": [
+    {
+      "debt_id": "DEBT-S0-002-003",
+      "gap_id": "GAP-S0-002-003",
+      "story_id": "S0-002",
+      "description": "Probe provenance unverifiable by machine — key_scope_probe.json has no API call logs, signed timestamps, or CI-based execution evidence. Accepted as CONFIRMED BLIND in premortem Assumption 2.",
+      "target_slice": "Phase 2+ CI hardening",
+      "risk_if_deferred": "LOW — probe results are manually reviewed; no automated regression path exists but probes are run infrequently",
+      "premortem_ref": "S0-002 premortem §2 Assumption 2"
+    },
+    {
+      "debt_id": "DEBT-S0-003-005",
+      "gap_id": "GAP-S0-003-005",
+      "story_id": "S0-003",
+      "description": "Risk reduction verification uses drill-only simulate-close --dry-run, not the real close path. Real close procedure requires funded positions which are not available in Phase 0.",
+      "target_slice": "Phase 1+ (paper trading with funded positions)",
+      "risk_if_deferred": "MED — drill proves operator can navigate the UI/CLI but does not prove positions actually close. Mitigated by REDUCE_ONLY mode blocking new opens.",
+      "premortem_ref": "S0-003 premortem §4 Decision: drill-only scope"
+    },
+    {
+      "debt_id": "DEBT-S0-003-006",
+      "gap_id": "GAP-S0-003-006",
+      "story_id": "S0-003",
+      "description": "TOCTOU race in _load_runtime_state() between path.exists() and path.read_text(). File could be deleted or replaced between check and read.",
+      "target_slice": "Multi-process architecture phase",
+      "risk_if_deferred": "LOW — single-process architecture eliminates concurrent access. Exception handler falls to KILL (fail-closed).",
+      "premortem_ref": "S0-003 premortem §2 Assumption: single-process"
+    },
+    {
+      "debt_id": "DEBT-S0-004-001",
+      "gap_id": "GAP-S0-004-001",
+      "story_id": "S0-004",
+      "description": "AT-022 requires HTTP GET /api/v1/health returning HTTP 200. Implementation is CLI only (./stoic-cli health). No HTTP endpoint exists. Data model and fail-closed behavior are proven but transport layer is missing.",
+      "target_slice": "S8-008 (HTTP endpoint wiring)",
+      "risk_if_deferred": "LOW for Phase 0 — system is not serving HTTP in Phase 0. Blocks PROVEN verdict for AT-022.",
+      "premortem_ref": "S0-004 premortem §4 Decision A: scaffolding only, no HTTP"
+    },
+    {
+      "debt_id": "DEBT-S0-005-002",
+      "gap_id": "GAP-S0-005-002",
+      "story_id": "S0-005",
+      "description": "Value-range validation deferred — no upper bounds on risk limits in policy loader. Basic range checks present (non-positive rejected) but extreme values are not bounded.",
+      "target_slice": "S2.2 PolicyGuard (runtime validation)",
+      "risk_if_deferred": "MED — extreme values (e.g., max_position=999999999) would pass policy loading. PolicyGuard must enforce business-logic ranges at runtime.",
+      "premortem_ref": "S0-005 premortem §4 Decision: basic structural validation only"
+    },
+    {
+      "debt_id": "DEBT-S0-004-007",
+      "gap_id": "GAP-S0-004-007",
+      "story_id": "S0-004",
+      "description": "AT-023 transport/probe proof is slice-scope incomplete (CLI-only). Transport-path evidence needs ownership before this slice can claim PROVEN status.",
+      "target_slice": "Owner: Infra & Security team (slice owner: S0); fallback target: S8-008 if HTTP path is added there",
+      "risk_if_deferred": "MED — transport bypass risks are not observable without endpoint-level evidence in this slice.",
+      "premortem_ref": "S0 R5b strategic/devils-advocate: AT-023 transport-level proof gap"
+    },
+    {
+      "debt_id": "DEBT-S0-005-003",
+      "gap_id": "GAP-S0-005-003",
+      "story_id": "S0-005",
+      "description": "Contract metadata traceability in S0-005 exceeds slice-0 enforcement scope; enforcing and status AT lists need deterministic alignment.",
+      "target_slice": "Owner: Recon + PRD maintainer (S0), target: reconciled by PRD slice-0 edits",
+      "risk_if_deferred": "MED — PRD claims and runtime proof remain out of sync, weakening audit confidence.",
+      "premortem_ref": "S0 R5b strategic-failure: enforcing_contract_ats mismatch"
+    },
+    {
+      "debt_id": "DEBT-S0-004-009",
+      "gap_id": "GAP-S0-004-009",
+      "story_id": "S0-004",
+      "description": "Malformed probe metadata currently degrades privilege checks rather than hard-failing. This can allow permissive behavior in edge-paths before explicit key checks run.",
+      "target_slice": "Owner: CLI security maintainer (S0); follow-up target: S2.3 key hardening",
+      "risk_if_deferred": "MED — malformed or partial probe inputs could bypass intended privilege handling in certain branches.",
+      "premortem_ref": "S0 R5b devils-advocate: keys-check malformed metadata path"
+    },
+    {
+      "debt_id": "DEBT-SYSTEMIC-002",
+      "gap_id": "GAP-SYSTEMIC-002",
+      "story_id": "S0-ALL",
+      "description": "No formal AT-XXX anchors in CONTRACT.md for Phase 0 stories (except AT-022 for S0-004). The 5 remaining stories have zero formal ATs — safety argument rests on implementation tests and doc reviews.",
+      "target_slice": "Contract maintenance story (cross-cutting)",
+      "risk_if_deferred": "LOW — Phase 0 stories are operational prerequisites. Runtime enforcement AT anchors become critical in Phase 1+.",
+      "premortem_ref": "Multiple premortems §6 debt registers"
+    }
+  ]
+}

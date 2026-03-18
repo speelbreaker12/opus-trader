@@ -1,0 +1,72 @@
+{
+  "selected_story_id": "S3-000",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.4.4 Deribit Order-Type Preflight Guard (Artifact-Backed)",
+    "AT-013",
+    "AT-016",
+    "AT-017",
+    "AT-018",
+    "AT-019",
+    "AT-913",
+    "AT-914",
+    "AT-915"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/preflight.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_preflight.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to execution preflight within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_212554",
+      "190 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S3-000",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Market orders rejected for options (AT-016)",
+      "Market orders rejected for perpetuals (AT-017)",
+      "Stop-market rejected for options (AT-018)",
+      "Stop-market rejected for perpetuals (AT-019)",
+      "Market rejection reason matches OrderTypeMarketForbidden (AT-913)",
+      "Stop rejection reason matches OrderTypeStopForbidden (AT-914)",
+      "Linked order rejection reason matches LinkedOrderTypeForbidden (AT-915)",
+      "Linked orders gated by both capability and feature flag (AT-004/AT-013)",
+      "Single preflight entrypoint called before dispatch"
+    ],
+    "evidence_found": [
+      "preflight_intent rejects Market for all 4 instrument kinds (test_at913)",
+      "preflight_intent rejects StopMarket/StopLimit for all kinds (test_at914)",
+      "Trigger field presence also triggers stop rejection (test_at914_trigger_field)",
+      "Linked orders: options always rejected, futures/perps require both flags (test_at004)",
+      "PreflightReject enum has exact reason codes per CONTRACT.md",
+      "PreflightMetrics tracks per-reason counters",
+      "25 tests cover all AT scenarios, edge cases, determinism"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Preflight guard matches CONTRACT.md §1.4.4 specification exactly",
+    "All order types (market, stop_market, stop_limit) rejected with correct reasons",
+    "Trigger field presence triggers stop rejection per §1.4.4 A",
+    "Linked orders fail-closed: both capability + feature flag required",
+    "Options: linked orders always forbidden even with both flags",
+    "Single entrypoint preflight_intent centralizes all checks"
+  ]
+}

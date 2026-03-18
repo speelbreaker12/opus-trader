@@ -1,0 +1,67 @@
+## Scenario: Gate checks 3 fields but tests only vary 1 field (ignoring fields should pass)
+
+### Gate Code (preflight_gate.rs)
+
+```rust
+pub struct PreflightInput {
+    pub ws_connected: bool,
+    pub clock_synced: bool,
+    pub position_reconciled: bool,
+}
+
+pub fn evaluate_preflight(input: &PreflightInput) -> GateResult {
+    if !input.ws_connected {
+        return GateResult::Reject(RejectReason::WebsocketDisconnected);
+    }
+    if !input.clock_synced {
+        return GateResult::Reject(RejectReason::ClockNotSynced);
+    }
+    if !input.position_reconciled {
+        return GateResult::Reject(RejectReason::PositionNotReconciled);
+    }
+    GateResult::Pass
+}
+```
+
+### Test Suite (test_preflight_gate.rs)
+
+```rust
+#[test]
+fn test_preflight_trip_ws_disconnected_rejects() {
+    // TRIP: websocket disconnected → must reject
+    let input = PreflightInput {
+        ws_connected: false,
+        clock_synced: true,
+        position_reconciled: true,
+    };
+    let result = evaluate_preflight(&input);
+    assert_eq!(result, GateResult::Reject(RejectReason::WebsocketDisconnected));
+}
+
+#[test]
+fn test_preflight_non_trip_all_healthy_passes() {
+    // NON-TRIP: all fields healthy → must pass
+    let input = PreflightInput {
+        ws_connected: true,
+        clock_synced: true,
+        position_reconciled: true,
+    };
+    let result = evaluate_preflight(&input);
+    assert_eq!(result, GateResult::Pass);
+}
+
+#[test]
+fn test_preflight_trip_ws_disconnected_even_with_others_healthy() {
+    // TRIP: ws disconnected is sufficient cause for rejection
+    let input = PreflightInput {
+        ws_connected: false,
+        clock_synced: true,
+        position_reconciled: true,
+    };
+    let result = evaluate_preflight(&input);
+    assert!(matches!(result, GateResult::Reject(_)));
+}
+```
+
+### Task
+Run /devils-advocate on the preflight gate and its test suite above. Notice all TRIP tests only vary `ws_connected` — the `clock_synced` and `position_reconciled` fields are always `true` in rejection tests. Attempt mutations that ignore `clock_synced` or `position_reconciled` (i.e., remove those checks from the gate). Determine if the tests catch these ignore-field mutations.

@@ -1,0 +1,122 @@
+machine_id: GroupState
+kind: stored_state
+initial_state: New
+states:
+- New
+- Dispatched
+- Complete
+- MixedFailed
+- Flattening
+- Flattened
+events:
+- TR-GROUP_INTENT_PERSISTED
+- TR-GROUP_COMPLETE
+- TR-GROUP_FIRST_FAILURE
+- TR-CONTAINMENT_STEP_B
+- TR-EMERGENCY_CLOSE_COMPLETE
+- TR-ILLEGAL_TRANSITION
+event_definitions:
+  TR-GROUP_INTENT_PERSISTED: Group intent persisted and leg dispatch begins.
+  TR-GROUP_COMPLETE: All legs terminal with no mismatch and no containment pending.
+  TR-GROUP_FIRST_FAILURE: First observed failure or partial fill or fill mismatch.
+  TR-CONTAINMENT_STEP_B: Containment Step B triggers emergency close algorithm.
+  TR-EMERGENCY_CLOSE_COMPLETE: Emergency close completes and exposure neutralized.
+  TR-ILLEGAL_TRANSITION: Any transition not listed in transitions.
+effects_catalog:
+- id: ACT-SET_GROUP_STATE
+  description: Update GroupState value.
+- id: ACT-SEED_MIXED_FAILED
+  description: Seed MixedFailed with immutable first failure.
+- id: ACT-ENTER_REDUCEONLY
+  description: Enter ReduceOnly during repair.
+- id: ACT-START_CONTAINMENT
+  description: Start containment step B emergency close algorithm.
+- id: ACT-HARD_FAIL
+  description: Hard-fail the transition evaluation.
+entry_conditions:
+  New: Group created but not yet dispatched.
+  Dispatched: Leg dispatch has begun.
+  Complete: All legs terminal and group verified fully resolved with no mismatch.
+  MixedFailed: Any atomicity break detected (partial fill, mismatch, or first failure).
+  Flattening: Emergency close algorithm running to neutralize exposure.
+  Flattened: Exposure neutralized and group terminal.
+transitions:
+- id: GS-001
+  from: New
+  to: Dispatched
+  guard: Group intent persisted successfully and leg dispatch begins.
+  refs:
+  - §1.2.1
+  - §2.4
+  event: TR-GROUP_INTENT_PERSISTED
+  effects:
+  - ACT-SET_GROUP_STATE
+  fail_closed: If persistence status missing or unparseable, remain New and block
+    dispatch.
+- id: GS-002
+  from: Dispatched
+  to: Complete
+  guard: All legs terminal AND no partial fills AND no fill mismatch beyond epsilon
+    AND no containment pending.
+  refs:
+  - §1.2.1
+  event: TR-GROUP_COMPLETE
+  effects:
+  - ACT-SET_GROUP_STATE
+  fail_closed: If terminal status missing or unparseable, remain Dispatched.
+- id: GS-003
+  from: Dispatched
+  to: MixedFailed
+  guard: First observed failure OR partial fill OR fill mismatch > epsilon.
+  refs:
+  - §1.2.1
+  event: TR-GROUP_FIRST_FAILURE
+  effects:
+  - ACT-SEED_MIXED_FAILED
+  - ACT-ENTER_REDUCEONLY
+  fail_closed: If failure status missing or unparseable, enter MixedFailed.
+- id: GS-004
+  from: MixedFailed
+  to: Flattening
+  guard: Containment Step B triggers emergency_close_algorithm (§3.1).
+  refs:
+  - §1.2.1
+  - §3.1
+  event: TR-CONTAINMENT_STEP_B
+  effects:
+  - ACT-START_CONTAINMENT
+  fail_closed: If containment trigger missing or unparseable, remain MixedFailed.
+- id: GS-005
+  from: Flattening
+  to: Flattened
+  guard: Emergency close completes and exposure neutralized (or explicit terminal
+    failure recorded).
+  refs:
+  - §3.1
+  event: TR-EMERGENCY_CLOSE_COMPLETE
+  effects:
+  - ACT-SET_GROUP_STATE
+  fail_closed: If close status missing or unparseable, remain Flattening.
+illegal_transitions:
+- id: GS-IL-001
+  from: '*'
+  to: '*'
+  guard: Any transition not listed in GS-001..GS-005.
+  event: TR-ILLEGAL_TRANSITION
+  effects:
+  - ACT-HARD_FAIL
+  fail_closed: Hard-fail and hold GroupState at current value.
+terminal_states:
+- Complete
+- Flattened
+illegal_transition_policy: hard_fail
+acceptance_tests:
+- AT-220
+- AT-116
+- AT-117
+- AT-118
+- AT-211
+invariants:
+- First failure seeds MixedFailed and must not be overwritten.
+- Rescue attempts are bounded; no unbounded chase.
+- Emergency close path is the single canonical algorithm for flattening.

@@ -1,0 +1,24 @@
+serde v1.0.228
+├── serde_core feature "result"
+│   └── serde_core v1.0.228
+└── serde_derive feature "default"
+    └── serde_derive v1.0.228 (proc-macro)
+        ├── proc-macro2 feature "proc-macro"
+        │   └── proc-macro2 v1.0.106
+        │       └── unicode-ident feature "default"
+        │           └── unicode-ident v1.0.23
+        ├── quote feature "proc-macro"
+        │   ├── quote v1.0.44
+        │   │   └── proc-macro2 v1.0.106
+        │   └── proc-macro2 feature "proc-macro"
+        ├── syn feature "clone-impls"
+        │   └── syn v2.0.114
+        │       ├── proc-macro2 v1.0.106
+        │       ├── quote v1.0.44
+        │       └── unicode-ident feature "default"
+        ├── syn feature "derive"
+        │   └── syn v2.0.114
+        ├── syn feature "parsing"
+        │   └── syn v2.0.114
+        └── syn feature "printing"
+            └── syn v2.0.114

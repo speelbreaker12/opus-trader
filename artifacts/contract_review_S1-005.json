@@ -1,0 +1,60 @@
+{
+  "selected_story_id": "S1-005",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.0 Dispatcher Rules",
+    "CONTRACT.md AT-277"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/dispatch_map.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_dispatch_map.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to execution dispatch mapping within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_203359",
+      "85 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S1-005",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "map_to_dispatch function implemented",
+      "Coin instruments use qty_coin for amount",
+      "USD instruments use qty_usd for amount",
+      "reduce_only derived from IntentClass",
+      "Error on missing amount field",
+      "14 tests covering all paths"
+    ],
+    "evidence_found": [
+      "map_to_dispatch in dispatch_map.rs matches CONTRACT.md rules",
+      "Option|LinearFuture → qty_coin per CONTRACT.md",
+      "Perpetual|InverseFuture → qty_usd per CONTRACT.md",
+      "Open→false, Close|Hedge|Cancel→true",
+      "MissingQtyCoin and MissingQtyUsd errors",
+      "14 tests in test_dispatch_map.rs including AT-277 round-trips"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Dispatcher mapping correctly implements CONTRACT.md Dispatcher Rules",
+    "Exactly one canonical amount field selected per instrument_kind",
+    "reduce_only correctly derived from intent classification",
+    "Error paths are explicit and typed",
+    "AT-277 round-trip tests confirm end-to-end correctness"
+  ]
+}

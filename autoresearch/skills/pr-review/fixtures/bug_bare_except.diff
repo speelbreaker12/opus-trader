@@ -1,0 +1,30 @@
+diff --git a/python/tools/config_loader.py b/python/tools/config_loader.py
+index ccc3333..ddd4444 100644
+--- a/python/tools/config_loader.py
++++ b/python/tools/config_loader.py
+@@ -5,14 +5,22 @@ from pathlib import Path
+
+
+ def load_config(config_path: Path) -> dict:
+-    with open(config_path) as f:
+-        return json.load(f)
++    try:
++        with open(config_path) as f:
++            return json.load(f)
++    except:
++        return {}
+
+
+ def merge_configs(base: dict, override: dict) -> dict:
+     result = base.copy()
+-    for k, v in override.items():
+-        result[k] = v
++    for k, v in override.items():
++        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
++            result[k] = merge_configs(result[k], v)
++        else:
++            result[k] = v
+     return result
++
++
++SQL = f"SELECT * FROM users WHERE name = '{os.environ.get('USER_NAME', '')}'"

@@ -1,0 +1,59 @@
+{
+  "selected_story_id": "S2-002",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §1.1 Labeling & Idempotency Contract",
+    "CONTRACT.md AT-216",
+    "CONTRACT.md AT-217"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/label.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_label.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to execution label schema within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_210738",
+      "152 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S2-002",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "Label format s4:{sid8}:{gid12}:{li}:{ih16}",
+      "Label length <= 64 chars enforced",
+      "LabelTooLong rejection on overflow (no truncation)",
+      "Decode extracts sid8, gid12, leg_idx, ih16 correctly",
+      "Encode/decode round-trip"
+    ],
+    "evidence_found": [
+      "encode_label produces s4:{sid8}:{gid12}:{li}:{ih16} format",
+      "LABEL_MAX_LEN=64 enforced in encode_label",
+      "LabelError::LabelTooLong returned on overflow, tested",
+      "decode_label parses all 4 components, tested",
+      "Round-trip tests for both leg_idx=0 and leg_idx=1"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "Label schema matches CONTRACT.md §1.1 specification exactly",
+    "64-char Deribit limit enforced with no truncation (AT-216)",
+    "LabelTooLong error type for caller to set RiskState::Degraded",
+    "Decode parses all components for collision-safe matching (AT-217)",
+    "23 tests cover encoding, decoding, errors, round-trips, helpers"
+  ]
+}

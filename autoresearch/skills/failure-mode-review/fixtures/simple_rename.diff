@@ -1,0 +1,11 @@
+diff --git a/python/tools/format_report.py b/python/tools/format_report.py
+index jjj0000..kkk1111 100644
+--- a/python/tools/format_report.py
++++ b/python/tools/format_report.py
+@@ -5,8 +5,8 @@ from pathlib import Path
+
+ def format_report(data: dict, output_path: Path) -> None:
+-    formatted = json.dumps(data, indent=2)
+-    output_path.write_text(formatted)
++    report_json = json.dumps(data, indent=2, sort_keys=True)
++    output_path.write_text(report_json)

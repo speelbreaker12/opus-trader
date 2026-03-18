@@ -1,0 +1,40 @@
+{
+  "schema_version": "r5b_receipt.v1",
+  "story_id": "S0",
+  "tool": "devils-advocate",
+  "step": "R5b",
+  "phase_equivalent": "R5b",
+  "head_commit": "e04a39f9150316caa2a97a5e371cbb5ab7284f5a",
+  "started_at": "2026-02-24T20:34:27Z",
+  "ended_at": "2026-02-24T20:34:27Z",
+  "exit_status": "completed",
+  "artifact_paths": [
+    "reviews/reconciliations/S0/receipts/r5b_devils_advocate.json"
+  ],
+  "finding_counts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 2,
+    "INFO": 0
+  },
+  "summary": "Mutation/attack-surface review identifies remaining privilege proof isolation and transport-deferral proof gaps.",
+  "findings": [
+    {
+      "severity": "P2",
+      "id": "DA-2",
+      "evidence": "crates/soldier_infra/tests/test_phase0_runtime.rs:200-273",
+      "description": "Key privilege tests are not sufficiently isolated for precise causal proof."
+    },
+    {
+      "severity": "P2",
+      "id": "DA-3",
+      "evidence": "stoic-cli:362-385 + ...:632-696",
+      "description": "AT-022 still not covered at transport endpoint level."
+    }
+  ],
+  "evidence_refs": [
+    "crates/soldier_infra/tests/test_phase0_runtime.rs:200-273",
+    "stoic-cli:362-385",
+    "crates/soldier_infra/tests/test_phase0_runtime.rs:632-696"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "selected_story_id": "S4-001",
+  "decision": "PASS",
+  "confidence": "high",
+  "contract_refs_checked": [
+    "CONTRACT.md §2.1 Trade Lifecycle State Machine (TLSM)",
+    "AT-230",
+    "AT-210"
+  ],
+  "scope_check": {
+    "changed_files": [
+      "crates/soldier_core/src/execution/tlsm.rs",
+      "crates/soldier_core/src/execution/mod.rs",
+      "crates/soldier_core/tests/test_tlsm.rs"
+    ],
+    "out_of_scope_files": [],
+    "notes": [
+      "All changes scoped to execution module within soldier_core"
+    ]
+  },
+  "verify_check": {
+    "verify_post_present": true,
+    "verify_post_green": true,
+    "notes": [
+      "Full verify passed: run_id 20260208_215128",
+      "262 workspace tests pass, clippy clean, fmt clean"
+    ]
+  },
+  "pass_flip_check": {
+    "requested_mark_pass_id": "S4-001",
+    "prd_passes_before": false,
+    "prd_passes_after": true,
+    "evidence_required": [
+      "TLSM states: Created, Sent, Acked, PartiallyFilled, Filled, Cancelled, Failed",
+      "Normal transitions follow expected lifecycle",
+      "Fill-before-ack accepted as OutOfOrder with anomaly log (AT-230)",
+      "Orphan fill (fill-before-send) accepted as OutOfOrder (AT-210)",
+      "Terminal states ignore all further events",
+      "Never panics on any event sequence"
+    ],
+    "evidence_found": [
+      "TlsmState enum with 7 states, is_terminal() for Filled/Cancelled/Failed",
+      "Normal lifecycle: Created→Sent→Acked→PartiallyFilled→Filled (test_normal_lifecycle_created_to_filled)",
+      "Fill-before-ack returns OutOfOrder with anomaly (test_at230_fill_before_ack)",
+      "Partial-fill-before-ack returns OutOfOrder (test_at230_partial_fill_before_ack)",
+      "Orphan fill returns OutOfOrder with anomaly (test_at210_fill_before_send)",
+      "Terminal states ignore all 7 event types (test_terminal_state_ignores_all_events)",
+      "Never-panic test applies all events from all non-terminal states (test_never_panic_random_events)",
+      "Cancel from any non-terminal state (4 cancel tests)",
+      "Late ack after partial fill is ignored (test_late_ack_after_partial_fill_ignored)",
+      "25 tests covering all transitions and edge cases"
+    ],
+    "evidence_missing": [],
+    "decision_on_pass_flip": "ALLOW"
+  },
+  "violations": [],
+  "required_followups": [],
+  "rationale": [
+    "TLSM implements CONTRACT.md §2.1 state machine specification",
+    "Out-of-order events handled gracefully per AT-230 and AT-210",
+    "Never panics on any event sequence (tested exhaustively)",
+    "Transition history tracked for WAL append integration"
+  ]
+}

@@ -1,0 +1,107 @@
+## Scenario: Well-tested gate with comprehensive coverage (no simpler wrong impl passes)
+
+### Gate Code (risk_state_gate.rs)
+
+```rust
+pub struct RiskStateInput {
+    pub risk_state: RiskState,
+    pub intent_class: IntentClass,
+}
+
+pub fn evaluate_risk_state_gate(input: &RiskStateInput) -> GateResult {
+    match input.risk_state {
+        RiskState::Healthy => GateResult::Pass,
+        RiskState::Degraded => {
+            if input.intent_class == IntentClass::Close {
+                GateResult::Pass  // Allow risk-reducing trades in Degraded
+            } else {
+                GateResult::Reject(RejectReason::DegradedRiskState)
+            }
+        }
+        RiskState::Maintenance | RiskState::Kill => {
+            GateResult::Reject(RejectReason::RiskKill)
+        }
+    }
+}
+```
+
+### Test Suite (test_risk_state_gate.rs)
+
+```rust
+#[test]
+fn test_risk_state_trip_kill_rejects_open() {
+    // TRIP: Kill + Open intent → must reject
+    let input = RiskStateInput { risk_state: RiskState::Kill, intent_class: IntentClass::Open };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Reject(RejectReason::RiskKill));
+}
+
+#[test]
+fn test_risk_state_trip_kill_rejects_close() {
+    // TRIP: Kill rejects even Close intents
+    let input = RiskStateInput { risk_state: RiskState::Kill, intent_class: IntentClass::Close };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Reject(RejectReason::RiskKill));
+}
+
+#[test]
+fn test_risk_state_trip_maintenance_rejects_open() {
+    // TRIP: Maintenance + Open intent → must reject
+    let input = RiskStateInput { risk_state: RiskState::Maintenance, intent_class: IntentClass::Open };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Reject(RejectReason::RiskKill));
+}
+
+#[test]
+fn test_risk_state_trip_maintenance_rejects_close() {
+    // TRIP: Maintenance rejects even Close intents
+    let input = RiskStateInput { risk_state: RiskState::Maintenance, intent_class: IntentClass::Close };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Reject(RejectReason::RiskKill));
+}
+
+#[test]
+fn test_risk_state_trip_degraded_rejects_open() {
+    // TRIP: Degraded + Open intent → must reject
+    let input = RiskStateInput { risk_state: RiskState::Degraded, intent_class: IntentClass::Open };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Reject(RejectReason::DegradedRiskState));
+}
+
+#[test]
+fn test_risk_state_non_trip_degraded_allows_close() {
+    // NON-TRIP: Degraded + Close intent → must pass (risk-reducing)
+    let input = RiskStateInput { risk_state: RiskState::Degraded, intent_class: IntentClass::Close };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Pass);
+}
+
+#[test]
+fn test_risk_state_non_trip_healthy_allows_open() {
+    // NON-TRIP: Healthy + Open → must pass
+    let input = RiskStateInput { risk_state: RiskState::Healthy, intent_class: IntentClass::Open };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Pass);
+}
+
+#[test]
+fn test_risk_state_non_trip_healthy_allows_close() {
+    // NON-TRIP: Healthy + Close → must pass
+    let input = RiskStateInput { risk_state: RiskState::Healthy, intent_class: IntentClass::Close };
+    assert_eq!(evaluate_risk_state_gate(&input), GateResult::Pass);
+}
+
+#[test]
+fn test_risk_state_boundary_degraded_open_vs_close() {
+    // Boundary: same risk state, different intent class → different outcome
+    let open = RiskStateInput { risk_state: RiskState::Degraded, intent_class: IntentClass::Open };
+    let close = RiskStateInput { risk_state: RiskState::Degraded, intent_class: IntentClass::Close };
+    assert!(matches!(evaluate_risk_state_gate(&open), GateResult::Reject(_)));
+    assert_eq!(evaluate_risk_state_gate(&close), GateResult::Pass);
+}
+
+#[test]
+fn test_risk_state_reject_reason_distinguishes_degraded_from_kill() {
+    // Reason codes: Degraded gives DegradedRiskState, Kill gives RiskKill
+    let degraded = RiskStateInput { risk_state: RiskState::Degraded, intent_class: IntentClass::Open };
+    let kill = RiskStateInput { risk_state: RiskState::Kill, intent_class: IntentClass::Open };
+    assert_eq!(evaluate_risk_state_gate(&degraded), GateResult::Reject(RejectReason::DegradedRiskState));
+    assert_eq!(evaluate_risk_state_gate(&kill), GateResult::Reject(RejectReason::RiskKill));
+}
+```
+
+### Task
+Run /devils-advocate on the risk state gate and its test suite above. The suite has comprehensive TRIP tests (Kill, Maintenance, Degraded+Open), NON-TRIP tests (Healthy, Degraded+Close), boundary tests (same state different intent), and reason code checks. Attempt all standard mutations (always-reject, always-allow, ignore intent_class, hard-code, boundary flip, enum variant swap). Determine if any simpler wrong implementation passes all tests.

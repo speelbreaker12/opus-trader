@@ -1,0 +1,3 @@
+crates/soldier_core/src/execution/dispatch_map.rs:133:5: replace map_to_dispatch -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())
+crates/soldier_core/src/execution/dispatch_map.rs:145:5: replace map_to_dispatch_unchecked -> Result<DispatchRequest, DispatchMapError> with Ok(Default::default())
+crates/soldier_core/src/execution/dispatch_map.rs:187:5: replace validate_and_dispatch -> Result<ValidatedDispatch, DispatchMapError> with Ok(Default::default())

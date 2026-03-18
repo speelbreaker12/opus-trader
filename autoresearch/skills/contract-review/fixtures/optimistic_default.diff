@@ -1,0 +1,30 @@
+diff --git a/crates/soldier_core/src/policy/guard.rs b/crates/soldier_core/src/policy/guard.rs
+index ccc3333..ddd4444 100644
+--- a/crates/soldier_core/src/policy/guard.rs
++++ b/crates/soldier_core/src/policy/guard.rs
+@@ -55,12 +55,10 @@ impl PolicyGuard {
+     /// Resolve the current trading mode based on all policy inputs.
+     pub fn resolve_trading_mode(&self, ctx: &TickContext) -> TradingMode {
+-        if self.policy_stale() || self.watchdog_stale() || self.f1_cert_invalid() {
+-            return TradingMode::ReduceOnly;
+-        }
+-        if self.kill_switch_active() {
+-            return TradingMode::Kill;
++        match self.cached_mode {
++            Some(mode) => mode,
++            None => TradingMode::Active,  // default to active if no cached mode
+         }
+-        TradingMode::Active
+     }
+
+@@ -71,6 +69,9 @@ impl PolicyGuard {
+         self.last_policy_update.elapsed() > self.staleness_threshold
+     }
+
++    /// Cache the last resolved mode for fast lookup.
++    pub fn cache_mode(&mut self, mode: TradingMode) {
++        self.cached_mode = Some(mode);
++    }
++
+     fn watchdog_stale(&self) -> bool {
+         self.last_watchdog_ping.elapsed() > self.watchdog_threshold

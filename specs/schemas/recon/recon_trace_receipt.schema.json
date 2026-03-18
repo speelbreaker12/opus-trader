@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recon_trace_receipt.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "head_commit",
+    "created_at",
+    "run_id",
+    "story_id",
+    "slice_id",
+    "step_name",
+    "step_index",
+    "start_at",
+    "end_at",
+    "duration_seconds",
+    "retries",
+    "result",
+    "attempt",
+    "wf_receipt_path",
+    "wf_receipt_sha256",
+    "step_report_path",
+    "step_report_sha256"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "recon_trace_receipt.v1"
+    },
+    "head_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "story_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_name": {
+      "type": "string",
+      "enum": [
+        "preflight",
+        "implement",
+        "self_review",
+        "cycle1",
+        "fix",
+        "cycle2",
+        "resolution",
+        "verify_full",
+        "pass"
+      ]
+    },
+    "step_index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8
+    },
+    "start_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "end_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "retries": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "BLOCKED"
+      ]
+    },
+    "wf_receipt_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "wf_receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "step_report_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_report_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "log_path": {
+      "type": "string"
+    },
+    "log_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
