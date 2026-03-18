@@ -1,10 +1,13 @@
 ---
 status: in-progress
 priority: P1
-branch: main
+branch: project/contract-autoresearch
 pr: 214
 started: 2026-03-16
 ---
+
+## Commits
+- pending — 2026-03-18 — Hardened contract render-review for sample fixture guard and add regression.
 
 ## Current State
 
@@ -22,6 +25,7 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
 - [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
 - [[Autoresearch 2026-03-17 Phase3 Patch Applied]]
+- [[Autoresearch 2026-03-18 render_review sample fixture guard]]
 
 ## Log
 ### 2026-03-16
@@ -69,3 +73,7 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Added CSP-063 (Recovery/Matching Rule dedup) to TRACE.yaml
 - Creating separate autoresearch PR branch for all phase3 changes
 - PR #214 rebased onto main, added S6.13 to IMPLEMENTATION_PLAN.md to fix doc_sync_check
+### 2026-03-18
+- Added hard-fail guard in `autoresearch/contract/render_review.py` to prevent accidental acceptance of `sample_contract_patch` in `--accepted-only`.
+- Added regression in `autoresearch/tests/test_contract_render_review.py` to assert sample fixture proposals cannot be accepted.
+- Updated proposal seeding helper to support configurable fixture names and dedupe keys for targeted tests.

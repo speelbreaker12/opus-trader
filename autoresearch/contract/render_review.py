@@ -13,6 +13,7 @@ from jsonschema import Draft202012Validator
 
 HASH_PATTERN = r"^[0-9a-f]{64}$"
 CONTRACT_PATCH_PATH = "specs/CONTRACT.md"
+SAMPLE_CONTRACT_PATCH_FIXTURE = "sample_contract_patch"
 
 
 def fail(message: str) -> NoReturn:
@@ -256,6 +257,7 @@ def render_review_markdown(
         "3. Use `accepted`, `rejected`, or `pending_scope_review` only.",
         "4. Re-run `harness.sh contract render-review --accepted-only` after writing review decisions.",
         "5. Do not apply any accepted-only patch if the live `CONTRACT.md` hash differs from the recorded `contract_file_hash`.",
+        "6. Keep `sample_contract_patch` proposals rejected unless explicitly moved to a first-party fixture.",
         "",
     ]
     for proposal in proposals:
@@ -299,6 +301,10 @@ def render_review_markdown(
                 ]
             )
     return "\n".join(lines).rstrip() + "\n"
+
+
+def is_sample_contract_patch_proposal(proposal: dict[str, Any]) -> bool:
+    return proposal.get("_fixture_id") == SAMPLE_CONTRACT_PATCH_FIXTURE
 
 
 def normalize_patch_fragment(fragment: str, proposal_id: str) -> str:
@@ -471,6 +477,11 @@ def main() -> int:
             pid = proposal["proposal_id"]
             decision = decisions[pid]["decision"]
             if decision == "accepted":
+                if is_sample_contract_patch_proposal(proposal):
+                    fail(
+                        f"accepted proposal {pid} comes from sample fixture "
+                        "`sample_contract_patch`; keep it rejected."
+                    )
                 replace_span = proposal.get("replace_span")
                 if replace_span is not None:
                     old_text = replace_span.get("old_text", "")
