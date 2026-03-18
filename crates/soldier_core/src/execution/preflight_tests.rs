@@ -551,7 +551,10 @@ fn test_preflight_graybox_market_reject_emits_event_without_global_side_effects(
             reason: PreflightReject::OrderTypeMarketForbidden
         }]
     );
-    assert_eq!(preflight_reject_total(PreflightReject::OrderTypeMarketForbidden), before);
+    assert_eq!(
+        preflight_reject_total(PreflightReject::OrderTypeMarketForbidden),
+        before
+    );
 
     let lines = take_execution_metric_lines();
     assert!(

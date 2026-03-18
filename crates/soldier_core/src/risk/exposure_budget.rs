@@ -40,9 +40,9 @@ pub fn exposure_budget_reject_total(reason: ExposureBudgetStaticRejectReason) ->
 fn bump_exposure_budget_reject(reason: ExposureBudgetStaticRejectReason) {
     #[cfg(test)]
     {
-        return crate::execution::with_metrics_update_lock(|| {
+        crate::execution::with_metrics_update_lock(|| {
             bump_exposure_budget_reject_inner(reason);
-        });
+        })
     }
 
     #[cfg(not(test))]
@@ -254,6 +254,36 @@ pub(crate) fn evaluate_global_exposure_budget_with_events<E: EventSink<ExposureB
     }
 }
 
+fn conservative_corr_magnitude(btc: f64, eth: f64, alts: f64) -> f64 {
+    // Contract conservative corr buckets:
+    // corr(BTC,ETH)=0.8, corr(BTC,alts)=0.6, corr(ETH,alts)=0.6.
+    let b = btc.abs();
+    let e = eth.abs();
+    let a = alts.abs();
+    let variance = (b * b)
+        + (e * e)
+        + (a * a)
+        + (2.0 * 0.8 * b * e)
+        + (2.0 * 0.6 * b * a)
+        + (2.0 * 0.6 * e * a);
+
+    // Fail-closed on numerically unexpected materially negative variance.
+    //
+    // EPS = 1e-12 covers IEEE 754 f64 rounding errors for typical USD-denominated
+    // exposures (up to ~1e6 magnitude, where ε_mach ≈ 1e-10). Variance is
+    // mathematically non-negative for real inputs; a tiny negative value indicates
+    // harmless floating-point drift. Values below -EPS indicate a real bug
+    // (e.g., corrupted inputs), so we fail-closed with INFINITY.
+    const EPS: f64 = 1e-12;
+    if variance >= 0.0 {
+        variance.sqrt()
+    } else if variance >= -EPS {
+        0.0
+    } else {
+        f64::INFINITY
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,10 +318,15 @@ mod tests {
 
         let result = evaluate_global_exposure_budget_with_events(&input, &mut metrics, &mut events);
 
-        assert!(matches!(result, ExposureBudgetResult::Rejected { reason, .. } if reason == ExposureBudgetRejectReason::GlobalExposureBudgetExceeded));
+        assert!(
+            matches!(result, ExposureBudgetResult::Rejected { reason, .. } if reason == ExposureBudgetRejectReason::GlobalExposureBudgetExceeded)
+        );
         assert_eq!(metrics.reject_total(), 1);
         assert_eq!(events, vec![ExposureBudgetEvent::RejectBudgetExceeded]);
-        assert_eq!(exposure_budget_reject_total(ExposureBudgetStaticRejectReason::Reject), before);
+        assert_eq!(
+            exposure_budget_reject_total(ExposureBudgetStaticRejectReason::Reject),
+            before
+        );
         assert_eq!(
             exposure_budget_reject_total(ExposureBudgetStaticRejectReason::LimitMissing),
             before_missing
@@ -332,35 +367,5 @@ mod tests {
             }),
             "expected structured reject metric line, got {lines:?}"
         );
-    }
-}
-
-fn conservative_corr_magnitude(btc: f64, eth: f64, alts: f64) -> f64 {
-    // Contract conservative corr buckets:
-    // corr(BTC,ETH)=0.8, corr(BTC,alts)=0.6, corr(ETH,alts)=0.6.
-    let b = btc.abs();
-    let e = eth.abs();
-    let a = alts.abs();
-    let variance = (b * b)
-        + (e * e)
-        + (a * a)
-        + (2.0 * 0.8 * b * e)
-        + (2.0 * 0.6 * b * a)
-        + (2.0 * 0.6 * e * a);
-
-    // Fail-closed on numerically unexpected materially negative variance.
-    //
-    // EPS = 1e-12 covers IEEE 754 f64 rounding errors for typical USD-denominated
-    // exposures (up to ~1e6 magnitude, where ε_mach ≈ 1e-10). Variance is
-    // mathematically non-negative for real inputs; a tiny negative value indicates
-    // harmless floating-point drift. Values below -EPS indicate a real bug
-    // (e.g., corrupted inputs), so we fail-closed with INFINITY.
-    const EPS: f64 = 1e-12;
-    if variance >= 0.0 {
-        variance.sqrt()
-    } else if variance >= -EPS {
-        0.0
-    } else {
-        f64::INFINITY
     }
 }

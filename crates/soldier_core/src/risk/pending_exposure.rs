@@ -26,9 +26,9 @@ pub fn pending_exposure_reject_total() -> u64 {
 fn bump_pending_exposure_reject(reason: PendingExposureRejectReason) {
     #[cfg(test)]
     {
-        return crate::execution::with_metrics_update_lock(|| {
+        crate::execution::with_metrics_update_lock(|| {
             bump_pending_exposure_reject_inner(reason);
-        });
+        })
     }
 
     #[cfg(not(test))]
@@ -50,9 +50,7 @@ fn bump_pending_exposure_reject_inner(reason: PendingExposureRejectReason) {
 /// Internal pending exposure events for graybox testing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PendingExposureEvent {
-    ReserveRejected {
-        reason: PendingExposureRejectReason,
-    },
+    ReserveRejected { reason: PendingExposureRejectReason },
 }
 
 struct ProductionPendingExposureEvents;
@@ -633,33 +631,33 @@ impl PendingExposureBook {
         }
     }
 
-fn reject_reserve_budget_exceeded_with_events<E: EventSink<PendingExposureEvent>>(
-    reason: PendingExposureRejectReason,
-    pending_total: f64,
-    metrics: &mut PendingExposureMetrics,
-    events: &mut E,
-) -> PendingExposureResult {
-    metrics.record_reserve_reject();
-    events.emit(PendingExposureEvent::ReserveRejected { reason });
-    PendingExposureResult::Rejected {
-        reason,
-        pending_total,
+    fn reject_reserve_budget_exceeded_with_events<E: EventSink<PendingExposureEvent>>(
+        reason: PendingExposureRejectReason,
+        pending_total: f64,
+        metrics: &mut PendingExposureMetrics,
+        events: &mut E,
+    ) -> PendingExposureResult {
+        metrics.record_reserve_reject();
+        events.emit(PendingExposureEvent::ReserveRejected { reason });
+        PendingExposureResult::Rejected {
+            reason,
+            pending_total,
+        }
     }
-}
 
-fn reject_reserve_instrument_not_registered_with_events<E: EventSink<PendingExposureEvent>>(
-    metrics: &mut PendingExposureMetrics,
-    events: &mut E,
-) -> PendingExposureResult {
-    metrics.record_reserve_instrument_not_registered();
-    events.emit(PendingExposureEvent::ReserveRejected {
-        reason: PendingExposureRejectReason::InstrumentNotRegistered,
-    });
-    PendingExposureResult::Rejected {
-        reason: PendingExposureRejectReason::InstrumentNotRegistered,
-        pending_total: f64::NAN,
+    fn reject_reserve_instrument_not_registered_with_events<E: EventSink<PendingExposureEvent>>(
+        metrics: &mut PendingExposureMetrics,
+        events: &mut E,
+    ) -> PendingExposureResult {
+        metrics.record_reserve_instrument_not_registered();
+        events.emit(PendingExposureEvent::ReserveRejected {
+            reason: PendingExposureRejectReason::InstrumentNotRegistered,
+        });
+        PendingExposureResult::Rejected {
+            reason: PendingExposureRejectReason::InstrumentNotRegistered,
+            pending_total: f64::NAN,
+        }
     }
-}
 
     /// Release reservation on TLSM terminal transition.
     ///
@@ -997,15 +995,19 @@ mod tests {
         let mut metrics = PendingExposureMetrics::new();
         let book = make_book("TEST", 10.0);
 
-        let _ = with_intent_trace_ids("intent-pending-exposure-001", "run-pending-exposure-001", || {
-            book.reserve(
-                &ReservationId::new("too-big").unwrap(),
-                "TEST",
-                0.0,
-                11.0,
-                &mut metrics,
-            )
-        });
+        let _ = with_intent_trace_ids(
+            "intent-pending-exposure-001",
+            "run-pending-exposure-001",
+            || {
+                book.reserve(
+                    &ReservationId::new("too-big").unwrap(),
+                    "TEST",
+                    0.0,
+                    11.0,
+                    &mut metrics,
+                )
+            },
+        );
 
         let lines = take_execution_metric_lines();
         assert_eq!(metrics.reserve_reject_total(), 1);

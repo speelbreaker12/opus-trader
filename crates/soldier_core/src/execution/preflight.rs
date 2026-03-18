@@ -7,10 +7,10 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::telemetry::EventSink;
 use super::post_only_guard::{
-    check_post_only_with_events, PostOnlyEvent, PostOnlyInput, PostOnlyMetrics, PostOnlyResult,
+    PostOnlyEvent, PostOnlyInput, PostOnlyMetrics, PostOnlyResult, check_post_only_with_events,
 };
+use crate::telemetry::EventSink;
 use crate::venue::InstrumentKind;
 
 // ─── Rejection reasons ──────────────────────────────────────────────────
@@ -195,7 +195,7 @@ pub fn preflight_reject_total(reason: PreflightReject) -> u64 {
 fn bump_preflight_reject(reason: PreflightReject) {
     #[cfg(test)]
     {
-        return crate::execution::with_metrics_update_lock(|| {
+        crate::execution::with_metrics_update_lock(|| {
             bump_preflight_reject_inner(reason);
         });
     }
@@ -302,7 +302,11 @@ pub(crate) fn preflight_intent_with_events<E: EventSink<PreflightEvent>>(
         let mut post_only_metrics = PostOnlyMetrics::new();
         let mut post_only_events = Vec::<PostOnlyEvent>::new();
         if matches!(
-            check_post_only_with_events(post_only_input, &mut post_only_metrics, &mut post_only_events),
+            check_post_only_with_events(
+                post_only_input,
+                &mut post_only_metrics,
+                &mut post_only_events
+            ),
             PostOnlyResult::Rejected
         ) {
             let reason = PreflightReject::PostOnlyWouldCross;

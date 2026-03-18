@@ -29,8 +29,7 @@ fn test_margin_gate_graybox_reject_emits_event_without_global_side_effects() {
         ..margin_input()
     };
 
-    let result =
-        evaluate_margin_headroom_gate_with_events(&input, &mut metrics, &mut events);
+    let result = evaluate_margin_headroom_gate_with_events(&input, &mut metrics, &mut events);
 
     assert!(matches!(
         result,
@@ -63,15 +62,17 @@ fn test_margin_gate_graybox_allow_emits_no_events_or_global_side_effects() {
     let mut events = Vec::new();
     let input = margin_input();
 
-    let result =
-        evaluate_margin_headroom_gate_with_events(&input, &mut metrics, &mut events);
+    let result = evaluate_margin_headroom_gate_with_events(&input, &mut metrics, &mut events);
 
     assert_eq!(metrics.allowed_total(), 1);
     assert!(matches!(
         result,
         MarginGateDecision::Allowed { mm_util } if (mm_util - 0.1).abs() < f64::EPSILON
     ));
-    assert!(events.is_empty(), "success path should emit no reject events");
+    assert!(
+        events.is_empty(),
+        "success path should emit no reject events"
+    );
     assert_eq!(margin_gate_reject_total(), before);
 
     let lines = take_execution_metric_lines();
@@ -91,11 +92,9 @@ fn test_margin_gate_wrapper_emits_structured_reject_metric_line() {
         ..margin_input()
     };
 
-    let result = with_intent_trace_ids(
-        "intent-margin-gate-001",
-        "run-margin-gate-001",
-        || evaluate_margin_headroom_gate(&input, &mut metrics),
-    );
+    let result = with_intent_trace_ids("intent-margin-gate-001", "run-margin-gate-001", || {
+        evaluate_margin_headroom_gate(&input, &mut metrics)
+    });
 
     assert!(matches!(
         result,
@@ -109,13 +108,11 @@ fn test_margin_gate_wrapper_emits_structured_reject_metric_line() {
 
     let lines = take_execution_metric_lines();
     assert!(
-        lines
-            .iter()
-            .any(|line| {
-                line.starts_with("margin_gate_reject_total")
-                    && line.contains("intent_id=intent-margin-gate-001")
-                    && line.contains("run_id=run-margin-gate-001")
-            }),
+        lines.iter().any(|line| {
+            line.starts_with("margin_gate_reject_total")
+                && line.contains("intent_id=intent-margin-gate-001")
+                && line.contains("run_id=run-margin-gate-001")
+        }),
         "expected structured reject metric line, got {lines:?}"
     );
 }

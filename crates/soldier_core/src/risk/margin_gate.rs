@@ -22,9 +22,9 @@ pub fn margin_gate_reject_total() -> u64 {
 fn bump_margin_gate_reject(reason: MarginGateRejectReason) {
     #[cfg(test)]
     {
-        return crate::execution::with_metrics_update_lock(|| {
+        crate::execution::with_metrics_update_lock(|| {
             bump_margin_gate_reject_inner(reason);
-        });
+        })
     }
 
     #[cfg(not(test))]
@@ -42,9 +42,7 @@ fn bump_margin_gate_reject_inner(_reason: MarginGateRejectReason) {
 /// Internal margin gate events for graybox testing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MarginGateEvent {
-    Reject {
-        reason: MarginGateRejectReason,
-    },
+    Reject { reason: MarginGateRejectReason },
 }
 
 struct ProductionMarginGateEvents;

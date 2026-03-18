@@ -1,6 +1,6 @@
 # Upgrade 2 Graybox Telemetry Coverage Checklist
 
-Status: FAIL
+Status: PASS
 
 This checklist is the Upgrade 2 acceptance gate.
 Upgrade 2 is not complete until both Upgrade 2A and Upgrade 2B are complete.
