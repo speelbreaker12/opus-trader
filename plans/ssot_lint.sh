@@ -7,17 +7,22 @@ cd "$repo_root"
 fail() { echo "SSOT_LINT_FAIL: $*" >&2; exit 1; }
 
 list_repo_files() {
+  filter_fixture_paths() {
+    grep -Ev '^plans/tests/fixtures/'
+  }
+
   if command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     {
       git -C "$repo_root" ls-files
       git -C "$repo_root" ls-files --others --exclude-standard
-    } | sort -u
+    } | filter_fixture_paths | sort -u
     return
   fi
 
   (cd "$repo_root" && find . -type f \
     -not -path "./.git/*" \
     -not -path "./.ralph/*" \
+    -not -path "./plans/tests/fixtures/*" \
     -print | sed 's|^\./||')
 }
 

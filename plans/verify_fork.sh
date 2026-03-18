@@ -970,6 +970,7 @@ WORKFLOW_INTEGRATION_TESTS=(
   "plans/tests/test_fork_attestation_mirror.sh"
   "plans/tests/test_workflow_quick_step.sh"
   "plans/tests/test_toggle_policy_check.sh"
+  "plans/tests/test_ssot_lint.sh"
   "plans/tests/test_stoic_cli_invariant_check.sh"
   "plans/tests/test_live_enable_preflight.sh"
   "plans/tests/test_recon_handoff_sources.sh"
