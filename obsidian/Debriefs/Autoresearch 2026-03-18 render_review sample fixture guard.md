@@ -4,7 +4,7 @@ date: "2026-03-18"
 ---
 
 ## Commits
-- pending
+- `1c48e654` — 2026-03-18 — Hardened contract render-review sample fixture guard
 
 ## 0) What shipped
 - Feature/behavior: Added contract review rendering guardrails so proposals from `sample_contract_patch` cannot be marked accepted in `--accepted-only` output.
