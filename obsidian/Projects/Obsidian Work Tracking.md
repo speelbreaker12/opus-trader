@@ -37,7 +37,7 @@ scope_paths:
 In progress. Obsidian debrief now acts as the default session handoff for normal project work, and the repo is adding Codex mirrors for `/commit` and `/push-pr` so the same workflow skills are available outside Claude-specific wrappers.
 
 ## Commits
-- `pending` — 2026-03-19 — fix skills index validation (review-stack entries, command format)
+- `pending` — 2026-03-19 — add codex commit and push-pr wrappers
 - `e56b088e` — 2026-03-19 — update commit refs and runtime state
 - `6d235f31` — 2026-03-19 — add /merge-cleanup skill, restructure skills index, add workflow index
 - `b007c317` — 2026-03-19 — debrief template upgrade, workspace policy expansion, test fixture alignment
