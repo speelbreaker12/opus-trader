@@ -25,23 +25,10 @@ catastrophic_patterns = [
     (r"\bchmod\s+(-R\s+)?777\s+/", "chmod 777 on root"),
     (r"\bchown\s+(-R\s+)?.*\s+/(\s|$)", "chown on root directory"),
     (r"\bgit\s+push\s+.*--force(?!-with-lease)(\s|$)", "git force push (use --force-with-lease)"),
+    (r"\bgit\s+push\s+.*--force-with-lease", "git force push --force-with-lease (rewrites history, can invalidate review artifacts)"),
     (r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", "git push to main/master (use a feature branch)"),
     (r"\bgit\s+reset\s+--hard(\s|$)", "git reset --hard (use /main-recovery skill instead)"),
 ]
-
-# === LEVEL 1b: CONDITIONAL ALLOW for --force-with-lease on feature branches ===
-# Allow --force-with-lease on non-main/master branches (normal after rebase).
-# Still blocked by Level 1 for bare --force (without -with-lease).
-force_with_lease_match = re.search(
-    r"\bgit\s+push\s+.*--force-with-lease", cmd, re.IGNORECASE
-)
-if force_with_lease_match:
-    # Block if targeting main/master
-    if re.search(r"\bgit\s+push\s+(\S+\s+)?(main|master)\b", cmd, re.IGNORECASE):
-        print("BLOCKED: --force-with-lease to main/master is never allowed", file=sys.stderr)
-        sys.exit(2)
-    # Allow on feature branches — this is normal post-rebase workflow
-    sys.exit(0)
 
 for pattern, desc in catastrophic_patterns:
     if re.search(pattern, cmd, re.IGNORECASE):

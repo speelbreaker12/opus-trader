@@ -91,86 +91,12 @@ esac
 metadata_json="$(
   python3 - "$branch_name" "$ROOT" <<'PY'
 import json
-import re
 import sys
 from pathlib import Path
 
-
-def clean_scalar(value):
-    if isinstance(value, list):
-        return [clean_scalar(item) for item in value]
-    value = str(value).strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1].strip()
-    return value
-
-
-def parse_frontmatter(content: str):
-    lines = content.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}
-
-    frontmatter = {}
-    i = 1
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-        if stripped == "---":
-            break
-        if not stripped:
-            i += 1
-            continue
-
-        match = re.match(r"^([A-Za-z0-9_-]+):(?:\s*(.*))?$", line)
-        if not match:
-            i += 1
-            continue
-
-        key = match.group(1)
-        raw_value = (match.group(2) or "").strip()
-        if raw_value.startswith("[") and raw_value.endswith("]"):
-            items = [
-                clean_scalar(part)
-                for part in raw_value[1:-1].split(",")
-                if clean_scalar(part)
-            ]
-            frontmatter[key] = items
-            i += 1
-            continue
-
-        if raw_value:
-            frontmatter[key] = clean_scalar(raw_value)
-            i += 1
-            continue
-
-        items = []
-        j = i + 1
-        while j < len(lines):
-            next_line = lines[j]
-            next_stripped = next_line.strip()
-            if next_stripped == "---":
-                break
-            if re.match(r"^[A-Za-z0-9_-]+:\s*", next_line):
-                break
-            if next_stripped.startswith("- "):
-                items.append(clean_scalar(next_stripped[2:]))
-                j += 1
-                continue
-            if next_stripped:
-                break
-            j += 1
-
-        frontmatter[key] = items
-        i = j
-
-    return frontmatter
-
-
-def frontmatter_scalar(frontmatter, key: str) -> str:
-    value = frontmatter.get(key, "")
-    if isinstance(value, list):
-        return clean_scalar(value[0]) if value else ""
-    return clean_scalar(value)
+# Use shared frontmatter parser
+sys.path.insert(0, str(Path(sys.argv[2]) / "plans" / "lib"))
+from obsidian_frontmatter import parse_frontmatter, clean_scalar, frontmatter_scalar
 
 
 branch_name = sys.argv[1]
@@ -260,7 +186,19 @@ resolve_base_ref() {
 
 base_ref=""
 if [[ "$mode" == "push" || "$mode" == "pr-create" ]]; then
-  [[ -n "$PROJECT_BASE" ]] || die "$PROJECT_REL_PATH declares no base."
+  if [[ -z "$PROJECT_BASE" ]]; then
+    cat >&2 <<EOF
+ERROR: $PROJECT_REL_PATH declares no base: field.
+
+The scope guard needs a base branch to compute the diff for push/pr-create.
+Add a base: field to the project note frontmatter, e.g.:
+
+  base: main
+
+Then re-run your push or PR command.
+EOF
+    exit 1
+  fi
   base_ref="$(resolve_base_ref "$PROJECT_BASE" || true)"
   [[ -n "$base_ref" ]] || die "unable to resolve base ref '$PROJECT_BASE' for $PROJECT_REL_PATH"
 fi
@@ -292,60 +230,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-def parse_frontmatter(content: str):
-    lines = content.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}
-
-    frontmatter = {}
-    i = 1
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-        if stripped == "---":
-            break
-        if not stripped:
-            i += 1
-            continue
-
-        if ":" not in line:
-            i += 1
-            continue
-
-        key, value = line.split(":", 1)
-        key = key.strip()
-        value = value.strip()
-        if value:
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-                value = value[1:-1].strip()
-            frontmatter[key] = value
-            i += 1
-            continue
-
-        items = []
-        j = i + 1
-        while j < len(lines):
-            next_line = lines[j]
-            next_stripped = next_line.strip()
-            if next_stripped == "---":
-                break
-            if ":" in next_line and not next_stripped.startswith("- "):
-                break
-            if next_stripped.startswith("- "):
-                item = next_stripped[2:].strip()
-                if len(item) >= 2 and item[0] == item[-1] and item[0] in {"'", '"'}:
-                    item = item[1:-1].strip()
-                items.append(item)
-                j += 1
-                continue
-            if next_stripped:
-                break
-            j += 1
-        frontmatter[key] = items
-        i = j
-
-    return frontmatter
+# Use shared frontmatter parser
+sys.path.insert(0, str(Path(sys.argv[2]) / "plans" / "lib"))
+from obsidian_frontmatter import parse_frontmatter
 
 
 def path_in_scope(path: str, patterns):

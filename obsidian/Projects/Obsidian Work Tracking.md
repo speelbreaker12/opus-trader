@@ -17,6 +17,7 @@ scope_paths:
   - docs/skills/index.md
   - obsidian/**
   - plans/code_review_expert_guard.sh
+  - plans/lib/obsidian_frontmatter.py
   - plans/obsidian_commit_guard.sh
   - plans/post_rebase_frontmatter_check.sh
   - plans/project_scope_guard.sh
@@ -31,10 +32,10 @@ scope_paths:
 ---
 
 ## Current State
-In progress. Hardening workflow guards: slim context hook (branch-deterministic routing), tiered commit gates (trivial/light/full), review-fix and amend-aware obsidian guard, verify cache in pre-push, scope guard dry-run and hotfix exemptions, force-with-lease allowance on feature branches, and new helper scripts (worktree_commit_push, post_rebase_frontmatter_check, write_review_gate_marker).
+In progress. Replacing size-based commit tiers (trivial/light/full) with risk-class classification (docs_only/obsidian_only/non_critical/critical). Extracting shared frontmatter parser to `plans/lib/obsidian_frontmatter.py` to eliminate 3 duplicate implementations. Adding worktree-mismatch and merged-PR warnings to context hook. Hardening force-push blocker and scope guard error messages.
 
 ## Commits
-- `pending` — 2026-03-19 — workflow guard hardening: tiered commits, slim context hook, review-fix mode, helper scripts
+- `pending` — 2026-03-19 — risk-class commit gates, shared frontmatter parser, context hook warnings
 
 ## Key Files
 - obsidian/Templates/Project.md

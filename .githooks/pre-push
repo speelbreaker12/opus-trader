@@ -45,6 +45,12 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
 
   ./plans/project_scope_guard.sh push --branch "$local_branch" --head "$_local_sha"
 
+  # Post-rebase frontmatter integrity check — hard gate.
+  # Catches silent clobber of branch/base/scope_paths after rebase.
+  if [[ -x ./plans/post_rebase_frontmatter_check.sh ]]; then
+    ./plans/post_rebase_frontmatter_check.sh --branch "$local_branch"
+  fi
+
   if [[ "${SKIP_PRE_PUSH_VERIFY:-0}" == "1" ]]; then
     echo "WARN: SKIP_PRE_PUSH_VERIFY=1, skipping verification"
     continue

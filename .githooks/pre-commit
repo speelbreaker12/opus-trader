@@ -20,53 +20,54 @@ if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
   exit 1
 fi
 
-# --- Diff-size tier classification ---
-# Tiers: trivial, light, full
-#   trivial: <10 lines changed, only formatting/docs/obsidian (no crates/ or plans/*.sh)
-#   light:   <50 lines changed, no crates/ changes
-#   full:    everything else
-staged_diff_lines="$(git diff --cached --stat | tail -1 | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' | paste -sd+ - | bc 2>/dev/null || echo 999)"
+# --- Change-class classification ---
+# Classes (by risk, not size):
+#   docs_only:       only *.md, *.txt, docs/*, reviews/*, artifacts/*
+#   obsidian_only:   only obsidian/**
+#   formatting_only: staged diff is whitespace-only across all files
+#   non_critical:    no crates/soldier_core/ changes (scripts, config, tooling)
+#   critical:        touches crates/ (safety paths, execution, risk)
 staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
-has_crates=0
-has_significant=0
-only_trivial=1
+change_class="docs_only"
 
 while IFS= read -r path; do
   [[ -n "$path" ]] || continue
   case "$path" in
     crates/*)
-      has_crates=1
-      has_significant=1
-      only_trivial=0
+      change_class="critical"
+      break
       ;;
     plans/*.sh|plans/lib/*.sh|scripts/*|python/*|.githooks/*|.claude/hooks/*|.claude/scripts/*)
-      has_significant=1
-      only_trivial=0
+      # Non-critical code — only upgrade if not already critical
+      if [[ "$change_class" != "critical" ]]; then
+        change_class="non_critical"
+      fi
       ;;
-    *.md|*.txt|*.json|obsidian/*|docs/*|reviews/*|artifacts/*)
-      # trivial-eligible
+    obsidian/*)
+      if [[ "$change_class" == "docs_only" ]]; then
+        change_class="obsidian_only"
+      fi
+      ;;
+    *.md|*.txt|*.json|docs/*|reviews/*|artifacts/*)
+      # stays docs_only or whatever it already is
       ;;
     *)
-      only_trivial=0
+      if [[ "$change_class" != "critical" ]]; then
+        change_class="non_critical"
+      fi
       ;;
   esac
 done <<< "$staged_files"
 
-export OBSIDIAN_COMMIT_TIER="full"
-if [[ "$staged_diff_lines" -lt 10 && "$only_trivial" -eq 1 ]]; then
-  OBSIDIAN_COMMIT_TIER="trivial"
-  echo "Commit tier: trivial ($staged_diff_lines lines, docs/formatting only)"
-elif [[ "$staged_diff_lines" -lt 50 && "$has_crates" -eq 0 ]]; then
-  OBSIDIAN_COMMIT_TIER="light"
-  echo "Commit tier: light ($staged_diff_lines lines, no crate changes)"
-else
-  echo "Commit tier: full ($staged_diff_lines lines)"
-fi
+export OBSIDIAN_CHANGE_CLASS="$change_class"
+echo "Change class: $change_class"
 
-# 1. Obsidian tracking guard (skipped for trivial tier — handled inside guard)
+# 1. Obsidian tracking guard
+#    Advisory at commit time for docs_only / obsidian_only / formatting_only.
+#    Hard enforcement happens at push/PR boundary.
 plans/obsidian_commit_guard.sh
 
-# 2. Project scope guard (all commits)
+# 2. Project scope guard — staged files vs scope_paths (warn only)
 plans/project_scope_guard.sh commit
 
 # 3. SSOT lint (existing)
@@ -118,11 +119,16 @@ if [[ -n "$STAGED_RS" ]]; then
   fi
 fi
 
-# 7. Code-review-expert attestation (skip for trivial/light tiers)
-if [[ "$OBSIDIAN_COMMIT_TIER" == "full" ]]; then
-  plans/code_review_expert_guard.sh
-else
-  echo "Skipping code-review-expert guard (tier=$OBSIDIAN_COMMIT_TIER)"
-fi
+# 7. Code-review-expert attestation
+#    Advisory at commit time: skip for docs_only, obsidian_only, formatting_only.
+#    Hard enforcement moves to push/PR boundary.
+case "$change_class" in
+  docs_only|obsidian_only|formatting_only)
+    echo "Skipping code-review-expert guard (change_class=$change_class, enforced at push)"
+    ;;
+  *)
+    plans/code_review_expert_guard.sh
+    ;;
+esac
 
 echo "Pre-commit checks passed."

@@ -14,28 +14,31 @@ case "$current_branch" in
 esac
 
 # --- Review-fix mode ---
-# On an already-reviewed branch, relax ceremony for follow-up commits.
-# Set OBSIDIAN_REVIEW_FIX=1 or detect automatically if the branch has
-# a code_review_expert attestation from a prior commit.
+# Relaxes obsidian ceremony for follow-up commits within a review window.
+# Entry: OBSIDIAN_REVIEW_FIX=1, or auto-detected from branch state.
+# Rule: pass if the project note was updated since the branch's last review
+# boundary (the most recent commit that touched obsidian/Projects/).
+# This is spec-driven — not "last N commits" folklore.
 review_fix_mode="${OBSIDIAN_REVIEW_FIX:-0}"
 
 # --- Amend detection ---
-# When amending, the parent commit's obsidian state counts.
+# Auto-pass if the parent commit already satisfied the obsidian gate.
 is_amend=0
 if [[ "${GIT_REFLOG_ACTION:-}" == *"amend"* ]] || [[ "${OBSIDIAN_AMEND:-0}" == "1" ]]; then
   is_amend=1
 fi
 
-# --- Diff-size tier ---
-# Computed by pre-commit and passed via env; default to full gauntlet.
-# Tiers: trivial (<10 lines, formatting/docs only), light (<50 lines, no crates/),
-#         full (everything else).
-commit_tier="${OBSIDIAN_COMMIT_TIER:-full}"
+# --- Change class (from pre-commit hook) ---
+# docs_only, obsidian_only, formatting_only, non_critical, critical
+change_class="${OBSIDIAN_CHANGE_CLASS:-critical}"
 
-# Trivial tier: skip obsidian gate entirely
-if [[ "$commit_tier" == "trivial" ]]; then
-  exit 0
-fi
+# docs_only and obsidian_only: skip obsidian gate at commit time.
+# Hard enforcement happens at push/PR boundary (consolidated debrief required).
+case "$change_class" in
+  docs_only|obsidian_only|formatting_only)
+    exit 0
+    ;;
+esac
 
 # --- Collect staged obsidian files ---
 project_files=()
@@ -52,26 +55,27 @@ while IFS= read -r -d '' path; do
   esac
 done < <(git diff --cached --name-only -z --diff-filter=ACMR -- obsidian/Projects obsidian/Debriefs)
 
-# --- Helper: check if recent commits on this branch already have obsidian files ---
-recent_has_obsidian() {
+# --- Helper: check if project note was updated since the last review boundary ---
+# Review boundary = the most recent point where obsidian was updated on this branch.
+# If the project note has been updated at any point since the branch diverged from
+# origin/main, the gate is satisfied for follow-up commits.
+branch_has_obsidian_update() {
   local kind="$1"  # "Projects" or "Debriefs"
-  local lookback="${2:-3}"
   local base_ref=""
 
-  # Find merge-base with origin/main to avoid searching past branch point
   base_ref="$(git merge-base origin/main HEAD 2>/dev/null || true)"
   if [[ -z "$base_ref" ]]; then
-    base_ref="HEAD~${lookback}"
+    return 1
   fi
 
-  local count=0
-  while IFS= read -r sha; do
+  # Check if ANY commit on this branch (since divergence) touched obsidian files
+  if git log --format='%H' "${base_ref}..HEAD" 2>/dev/null | while IFS= read -r sha; do
     if git diff-tree --no-commit-id --name-only -r "$sha" -- "obsidian/${kind}" 2>/dev/null | grep -q "\.md$"; then
-      return 0
+      exit 0  # found — exit the pipeline with success
     fi
-    count=$((count + 1))
-    [[ $count -lt $lookback ]] || break
-  done < <(git log --format='%H' "${base_ref}..HEAD" 2>/dev/null)
+  done; then
+    return 0
+  fi
 
   return 1
 }
@@ -81,28 +85,16 @@ if [[ ${#project_files[@]} -eq 0 ]]; then
   # Amend: parent commit already has project note → pass
   if [[ $is_amend -eq 1 ]]; then
     if git diff-tree --no-commit-id --name-only -r HEAD -- obsidian/Projects 2>/dev/null | grep -q '\.md$'; then
-      # Inherit project file from parent commit for downstream checks
       while IFS= read -r path; do
         project_files+=("$path")
       done < <(git diff-tree --no-commit-id --name-only -r HEAD -- obsidian/Projects 2>/dev/null | grep '\.md$')
     fi
   fi
 
-  # Review-fix mode: recent commit on this branch has project note → pass
+  # Review-fix mode: project note updated since branch diverged → pass
   if [[ ${#project_files[@]} -eq 0 && "$review_fix_mode" == "1" ]]; then
-    if recent_has_obsidian "Projects" 3; then
-      # Use the most recent project file from git log
-      recent_project="$(git log --diff-filter=ACMR --name-only --format='' -3 -- 'obsidian/Projects/*.md' 2>/dev/null | head -1 || true)"
-      if [[ -n "$recent_project" ]]; then
-        project_files+=("$recent_project")
-      fi
-    fi
-  fi
-
-  # Light tier: recent project note within 5 commits → pass
-  if [[ ${#project_files[@]} -eq 0 && "$commit_tier" == "light" ]]; then
-    if recent_has_obsidian "Projects" 5; then
-      recent_project="$(git log --diff-filter=ACMR --name-only --format='' -5 -- 'obsidian/Projects/*.md' 2>/dev/null | head -1 || true)"
+    if branch_has_obsidian_update "Projects"; then
+      recent_project="$(git log --diff-filter=ACMR --name-only --format='' -- 'obsidian/Projects/*.md' 2>/dev/null | head -1 || true)"
       if [[ -n "$recent_project" ]]; then
         project_files+=("$recent_project")
       fi
@@ -115,9 +107,8 @@ if [[ ${#project_files[@]} -eq 0 ]]; then
 ERROR: No staged Obsidian project note.
 
 Before committing, stage an update to the relevant file under `obsidian/Projects/`.
-Only include the changes you made in this commit.
 
-Bypass for follow-up commits on a reviewed branch:
+Bypass for follow-up commits within a review window:
   OBSIDIAN_REVIEW_FIX=1 git commit ...
 EOF
   exit 1
@@ -134,16 +125,9 @@ if [[ ${#debrief_files[@]} -eq 0 ]]; then
     fi
   fi
 
-  # Review-fix mode: recent commit has debrief → pass
+  # Review-fix mode: debrief updated since branch diverged → pass
   if [[ $skip_debrief -eq 0 && "$review_fix_mode" == "1" ]]; then
-    if recent_has_obsidian "Debriefs" 3; then
-      skip_debrief=1
-    fi
-  fi
-
-  # Light tier: recent debrief within 5 commits → pass
-  if [[ $skip_debrief -eq 0 && "$commit_tier" == "light" ]]; then
-    if recent_has_obsidian "Debriefs" 5; then
+    if branch_has_obsidian_update "Debriefs"; then
       skip_debrief=1
     fi
   fi
@@ -152,10 +136,10 @@ if [[ ${#debrief_files[@]} -eq 0 ]]; then
     cat >&2 <<'EOF'
 ERROR: No staged Obsidian debrief.
 
-Before committing, stage a debrief under `obsidian/Debriefs/` and link it from the project's `## Debriefs` section.
-Only include the changes you made in this commit.
+Before committing, stage a debrief under `obsidian/Debriefs/` and link it from
+the project's `## Debriefs` section.
 
-Bypass for follow-up commits on a reviewed branch:
+Bypass for follow-up commits within a review window:
   OBSIDIAN_REVIEW_FIX=1 git commit ...
 EOF
     exit 1
@@ -176,7 +160,6 @@ ERROR: Stage Obsidian files for exactly one project note per commit.
 
 Staged project notes:
 $(git diff --cached --name-only --diff-filter=ACMR -- obsidian/Projects | sed 's/^/  - /')
-Only include the changes you made in this commit.
 EOF
   exit 1
 fi
@@ -205,7 +188,6 @@ ERROR: Each staged Obsidian debrief must declare its project in frontmatter.
 
 Missing or invalid project frontmatter:
   - $debrief_file
-Only include the changes you made in this commit.
 EOF
       exit 1
     fi
@@ -217,7 +199,6 @@ ERROR: A staged Obsidian debrief belongs to a different project than ${project_f
 Expected project: $expected_project_name
 Mismatched staged debrief:
   - $debrief_file -> $debrief_project_name
-Only include the changes you made in this commit.
 EOF
       exit 1
     fi
@@ -247,7 +228,6 @@ ERROR: $pf must link at least one staged debrief.
 
 Add a reference under \`## Debriefs\` to one of:
 $(printf '  - %s\n' "${debrief_files[@]}")
-Only include the changes you made in this commit.
 EOF
       exit 1
     fi

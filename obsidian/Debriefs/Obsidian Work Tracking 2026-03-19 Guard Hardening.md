@@ -5,27 +5,25 @@ type: debrief
 ---
 
 ## What shipped
-- Slim context hook: replaced scoring/tokenizing router with deterministic branch-ownership lookup; skill handles ambiguity
-- Tiered commit gates: trivial (<10 lines, docs-only) and light (<50 lines, no crates/) tiers skip heavy ceremony
-- Review-fix mode: OBSIDIAN_REVIEW_FIX=1 relaxes obsidian gate for follow-up commits on reviewed branches
-- Amend-aware obsidian guard: inherits project/debrief from parent commit when amending
-- Hotfix branch exemption: hotfix/*, fix/* branches skip obsidian and scope guards
-- Verify cache in pre-push: skips redundant verify.sh if tree SHA already verified
-- Force-with-lease allowance: permits --force-with-lease on feature branches (still blocks main/master)
-- Scope guard dry-run: --dry-run flag for pr-create reports violations without blocking
-- Mixed-project branch warning: soft warning at commit time if prior commits touch out-of-scope files
-- Code-review-expert guard improvements: skip for formatting-only changes, SKIP_CODE_REVIEW_REASON env var
-- New helper scripts: worktree_commit_push.sh, post_rebase_frontmatter_check.sh, write_review_gate_marker.sh
-- New slash command: /obsidian-workflow
+- Risk-class commit classification: replaced size-based tiers (trivial/light/full) with semantic classes (docs_only, obsidian_only, non_critical, critical) driven by which paths are touched
+- Shared frontmatter parser: extracted `plans/lib/obsidian_frontmatter.py` to eliminate 3 duplicate `parse_frontmatter` implementations across context hook and scope guard
+- Context hook worktree-mismatch warning: compares CWD to project note's `worktree` field, warns if editing in wrong worktree
+- Context hook merged-PR detection: checks `gh pr view` for MERGED state, warns about stale branch
+- Force-push blocker fix: removed special-case bypass for `--force-with-lease` that could silently skip all Level 1 checks; now handled as a single pattern with descriptive message
+- Obsidian commit guard cleanup: replaced `recent_has_obsidian` (lookback-count based) with `branch_has_obsidian_update` (merge-base scoped), removed redundant "light tier" code paths
+- Scope guard improved error messages: `base:` field missing now gives actionable instructions instead of terse `die`
+- Pre-push frontmatter integrity hook: added conditional call to `post_rebase_frontmatter_check.sh` (guard for silent clobber after rebase)
+- Commit skill docs: updated SKILLS/commit.md with obsidian tracking soft-gate instructions and risk-class descriptions
 
 ## Constraint
-- Workflow guards were too rigid for iterative development: every commit required full obsidian ceremony even for trivial fixes, blocking flow
+- Three independent copies of the frontmatter parser had diverged (context hook used `re.match`, one scope guard block used `str.split`). Any frontmatter format fix had to be applied three times. Extraction to a shared module was overdue.
 
 ## Follow-up
-- Test the tiered commit gates end-to-end across several real commits
-- Verify hotfix branch exemption works with all guard layers
-- Consider adding worktree field auto-detection to context hook
+- Add unit tests for `obsidian_frontmatter.py` (parse edge cases: nested lists, multiline values, empty frontmatter)
+- Wire up `post_rebase_frontmatter_check.sh` script (referenced in pre-push but may not exist yet)
+- Test merged-PR detection behavior when `gh` CLI is unavailable
 
 ## Rules
-- Commit tier classification must be fail-closed: default to "full" when tier cannot be determined
-- Hotfix exemption applies only to obsidian and scope guards, not to main-branch protection or clippy
+- Change class must default to `critical` when classification fails (fail-closed)
+- Frontmatter parser is single-source: never duplicate parse logic in calling scripts
+- Context hook warnings (worktree mismatch, merged PR) are advisory only -- never block execution

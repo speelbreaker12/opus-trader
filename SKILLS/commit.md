@@ -33,8 +33,9 @@ If commit permission is unclear, stop.
 ### 1) Confirm workspace
 Run the preflight from `SKILLS/workspace-policy.md`. Review the `git status --short` output to identify in-scope and unexpected files. If any preflight check fails, stop.
 
-### 2) Stage only intended files
-Stage by explicit file path, not broad wildcards, unless the operator explicitly approves broader staging.
+### 2) Stage intended files + Obsidian tracking
+
+Stage implementation files by explicit path, not broad wildcards, unless the operator explicitly approves broader staging.
 
 ```bash
 git add path/to/file_a path/to/file_b
@@ -50,6 +51,22 @@ git diff --cached
 If staged content includes unrelated work, unstage and fix before continuing.
 
 **Scope guard note:** The pre-commit hook runs `project_scope_guard.sh`, which validates staged files against the project's `scope_paths` frontmatter. If the hook rejects the commit, check that all staged files are within the project's declared scope.
+
+**Obsidian tracking (soft gate):**
+The pre-commit hook classifies changes by risk class (`docs_only`, `obsidian_only`, `non_critical`, `critical`). For `non_critical` and `critical` changes:
+
+- Update the project note (`obsidian/Projects/`) with what changed.
+- If this is the **first commit in a review window**, create or update a debrief (`obsidian/Debriefs/`) and link it from the project note's `## Debriefs` section.
+- If this is a **follow-up commit** (debrief already on this branch), set `OBSIDIAN_REVIEW_FIX=1` to skip the debrief requirement.
+- If **amending**, the guard auto-detects and passes.
+
+Stage obsidian files alongside implementation files:
+
+```bash
+git add path/to/impl obsidian/Projects/MyProject.md obsidian/Debriefs/MyProject\ 2026-03-19\ Summary.md
+```
+
+For `docs_only` and `obsidian_only` changes, the gate is skipped at commit time (enforced at push/PR boundary).
 
 ### 3) Validation gate
 Before commit, record what was checked.

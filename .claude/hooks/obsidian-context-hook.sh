@@ -25,10 +25,13 @@ mkdir -p "$STATE_DIR"
 python3 - "$input_file" "$PROJECTS_DIR" "$STATE_DIR" "$ROOT" <<'PYEOF'
 import hashlib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Use shared frontmatter parser
+sys.path.insert(0, str(Path(sys.argv[4]) / "plans" / "lib"))
+from obsidian_frontmatter import parse_frontmatter, clean_scalar
 
 
 def read_payload(path: Path) -> dict:
@@ -36,39 +39,6 @@ def read_payload(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
-
-
-def clean_scalar(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
-        return value[1:-1].strip()
-    return value
-
-
-def parse_frontmatter(content: str) -> dict:
-    lines = content.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}
-    fm: dict = {}
-    i = 1
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-        if stripped == "---":
-            break
-        if not stripped:
-            i += 1
-            continue
-        match = re.match(r"^([A-Za-z0-9_-]+):(?:\s*(.*))?$", line)
-        if not match:
-            i += 1
-            continue
-        key = match.group(1)
-        raw = (match.group(2) or "").strip()
-        if raw:
-            fm[key] = clean_scalar(raw)
-        i += 1
-    return fm
 
 
 # --- Args ---
@@ -161,6 +131,43 @@ if matched:
     }, indent=2), encoding="utf-8")
     lines.append(f"- Project scope captured: {scope_file}")
     lines.append("- Continue in this project scope.")
+
+    # --- Worktree path check ---
+    # Verify CWD matches the project note's declared worktree.
+    expected_wt = matched.get("worktree", "")
+    if expected_wt:
+        try:
+            actual_toplevel = subprocess.check_output(
+                ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+                stderr=subprocess.DEVNULL, text=True,
+            ).strip()
+        except Exception:
+            actual_toplevel = ""
+        if actual_toplevel and not actual_toplevel.endswith(expected_wt.rstrip("/")):
+            lines.append("")
+            lines.append(f"WARNING: Worktree mismatch.")
+            lines.append(f"  Expected: {expected_wt}")
+            lines.append(f"  Actual:   {actual_toplevel}")
+            lines.append(f"  Switch to the project's worktree before editing.")
+
+    # --- Merged PR detection ---
+    # If project note records a PR, check if it's already merged.
+    pr_num = matched.get("pr", "")
+    if pr_num:
+        try:
+            pr_json = subprocess.check_output(
+                ["gh", "pr", "view", str(pr_num), "--json", "state"],
+                stderr=subprocess.DEVNULL, text=True,
+            ).strip()
+            pr_state = json.loads(pr_json).get("state", "")
+            if pr_state == "MERGED":
+                lines.append("")
+                lines.append(f"WARNING: PR #{pr_num} is MERGED.")
+                lines.append(f"  This branch/worktree may be stale.")
+                lines.append(f"  Consider post-merge cleanup per SKILLS/obsidian-workflow.md.")
+        except Exception:
+            pass  # gh not available or PR not found — skip silently
+
 else:
     lines.append("- No branch-owned project matched.")
     lines.append("- Read SKILLS/obsidian-workflow.md to route this task.")
