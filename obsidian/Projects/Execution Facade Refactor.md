@@ -73,6 +73,7 @@ PR1-PR4 done. Internal telemetry sink seams are now live in `risk/fees.rs`, `exe
 
 ### 2026-03-18
 - Sealed 6 implementation modules behind facade re-exports: `pub mod` → `mod` for `idempotency/hash`, `recovery/label_match`, `store/ledger`, `store/trade_id_registry`, `deribit/account_summary`, `deribit/public`. Migrated 5 deep-path callers in `bootstrap.rs` and updated doc comments in `tlsm.rs` and `wal.rs`.
+- Standardized doc blocks across all facade `api.rs` and `mod.rs` files with consistent Public/Private/Tests sections. Added facade completeness contract tests for `idempotency`, `recovery`, and `status_codes` modules. Added crate-level doc block to `soldier_infra/src/lib.rs`.
 - Removed duplicate `tracing::warn!` from WAL nonblocking bump (P0), dead `build_order_intent_internal` function, 15x `needless_return` clippy lints, and `items_after_test_module` in exposure_budget.rs.
 - Added 3 graybox tests for `build_order_intent_internal_with_events` (approval, rejection, WAL-nonblocking close).
 - Fixed pre-existing test deadlock: 4 engine decision tests used raw `METRICS_TEST_LOCK.lock()` instead of `begin_metrics_test()`, causing deadlock under parallel test execution.
