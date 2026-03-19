@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-03-18T03:30:00Z",
+  "validator_version": "phase1-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "3.1 Deterministic Emergency Close \u2014 Algorithm step 3",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Step 3 specifies that when hedge dispatch fails (rejected, timeout, or venue error), the system logs the failure and proceeds to step 4 with exposure unchanged, and MUST NOT retry indefinitely. No acceptance test covers this failure path. AT-235 only tests the happy path where the hedge executes and exposure is neutralized. The hedge failure path leaves non-zero exposure and needs an AT proving: (a) the system proceeds without hanging, (b) AtomicNakedEvent accurately reflects remaining exposure, (c) no indefinite retry occurs.",
+      "evidence": {
+        "line": 21,
+        "quote": "If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4 with exposure unchanged",
+        "context": "Algorithm step 3 \u2014 hedge fallback failure handling"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT covering: Given hedge dispatch is rejected/times out, When AtomicNakedEvent is logged, Then exposure_usd_after > 0, hedge_used reflects attempt, and no retry loop occurs."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "3.1 Deterministic Emergency Close \u2014 Algorithm step 3",
+      "category": "missing_fail_closed",
+      "severity": "P1",
+      "description": "Step 3 enumerates hedge failure modes as 'rejected, timeout, or venue error' but does not address partial fill of the hedge order. A partially filled hedge leaves exposure in an intermediate state \u2014 neither the full original exposure nor zero. The spec does not define whether to retry for the unfilled remainder, treat partial fill as success, or treat it as failure. This is an unspecified state in the last line of defense for emergency close.",
+      "evidence": {
+        "line": 21,
+        "quote": "If hedge dispatch fails (rejected, timeout, or venue error), log the failure and proceed to step 4",
+        "context": "Hedge failure modes enumerated \u2014 partial fill absent"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add explicit partial-fill handling for the hedge: define whether partial fill counts as success (log reduced exposure) or failure (no retry, log remaining exposure). Add corresponding AT."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "3.1 Deterministic Emergency Close \u2014 Price Source",
+      "category": "stale_input_unspecified",
+      "severity": "P2",
+      "description": "L1TickerSnapshot freshness is checked against l2_book_snapshot_max_age_ms, a parameter named for L2 book data. This means L1 ticker cannot have an independent staleness threshold and the parameter name is misleading when applied to L1. If L1 tickers have different update frequencies than L2 books, the shared threshold may be too lenient or too strict for one source.",
+      "evidence": {
+        "line": 9,
+        "quote": "Fallback: `L1TickerSnapshot` best bid/ask (REST/WS ticker) when present and fresh (age <= `l2_book_snapshot_max_age_ms`",
+        "context": "L1 fallback reuses L2-named staleness parameter"
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Either introduce a dedicated l1_ticker_max_age_ms parameter in Appendix A, or rename the shared parameter to market_data_max_age_ms and document the intentional reuse."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "3.1 Deterministic Emergency Close \u2014 AtomicNakedEvent schema",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "The cause field uses 'recommended values' language rather than a closed MUST enum. AT-1102 enforces non-empty but does not constrain to specific values. If cause is free-form, downstream consumers (dashboards, alerting, reconciliation) cannot reliably pattern-match. For a field important enough to warrant AT-1102, the allowed values should be normatively closed.",
+      "evidence": {
+        "line": 33,
+        "quote": "`cause` (string; non-empty; recommended values: `atomic_legging_failure|emergency_close_exhausted|hedge_fallback`)",
+        "context": "AtomicNakedEvent schema \u2014 cause field definition"
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Change 'recommended values' to 'MUST be one of' and list the closed enum. If extensibility is needed, add an 'other' variant with a required cause_detail free-text field."
+    }
+  ]
+}

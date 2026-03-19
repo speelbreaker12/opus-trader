@@ -1,14 +1,21 @@
 ---
 status: in-progress
 priority: P1
-branch: main
-pr: 214
+branch: project/contract-autoresearch
+pr: 218
 started: 2026-03-16
 ---
 
+## Commits
+- `54b97205` — 2026-03-19 — Phase 4 remaining sections: 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes
+- `049b85dd` — 2026-03-19 — Phase 4 LG+OPL patch: 7 new ATs (AT-1265..AT-1271)
+- `120759bc` — 2026-03-18 — Phase 4 section-compatibility fix + gitignore lock
+- `5ec15230` — 2026-03-18 — Phase 4 gap detection: 23 findings, 10 proposals (2/5 sections), pipeline infra improvements.
+- `1c48e654` — 2026-03-18 — Hardened contract render-review for sample fixture guard and add regression.
+
 ## Current State
 
-Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from run phase2-mar17-20260317_141745-bb818649. 11 new ATs (AT-1254..AT-1264), 2 SHALL->MUST, CSP-063 dedup, AT-1243->AT-1253 renumber, 3 new RejectReasonCode entries, bunker_mode_last_update_ts_ms, cortex_override critical input, account_summary staleness, inventory_skew_sell_floor formula. proposals_index.json status set to "applied".
+Phase 4 COMPLETE (2026-03-19). All 5 sections patched. 17 new ATs total (AT-1265..AT-1281), plus mechanical fixes (AT-222 criteria, AT-918 reason code, SHALL→MUST, cause enum, EG cooldown default, EC partial fill, §2.2.4 cross-ref, reconcile_stall default). 23 findings triaged: 19 accepted, 4 rejected.
 
 ## Key Files
 - `autoresearch/contract/render_review.py`
@@ -22,6 +29,7 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - [[Autoresearch 2026-03-17 Phase3 Gap Detection Run]]
 - [[Autoresearch 2026-03-17 Phase3 Review Decisions]]
 - [[Autoresearch 2026-03-17 Phase3 Patch Applied]]
+- [[Autoresearch 2026-03-18 render_review sample fixture guard]]
 
 ## Log
 ### 2026-03-16
@@ -69,3 +77,20 @@ Phase 3 patch APPLIED to CONTRACT.md (2026-03-17). 16 accepted proposals from ru
 - Added CSP-063 (Recovery/Matching Rule dedup) to TRACE.yaml
 - Creating separate autoresearch PR branch for all phase3 changes
 - PR #214 rebased onto main, added S6.13 to IMPLEMENTATION_PLAN.md to fix doc_sync_check
+### 2026-03-18
+- Added hard-fail guard in `autoresearch/contract/render_review.py` to prevent accidental acceptance of `sample_contract_patch` in `--accepted-only`.
+- Added regression in `autoresearch/tests/test_contract_render_review.py` to assert sample fixture proposals cannot be accepted.
+- Updated proposal seeding helper to support configurable fixture names and dedupe keys for targeted tests.
+- Phase 4 gap detection: Phase 1 run on refreshed CONTRACT.md — 23 live findings across 5 sections (score 1.000)
+- Phase 4 proposals: 2/5 sections succeeded (LG: 4 proposed, OPL: 5 proposed). 3/5 fail pipeline (EC/EG/TMC: section mismatch + empty output)
+- Infrastructure: added 5 per-section snapshot targets (§1.3, §2.2.2, §2.2.3, §2.2.4, §3.1), eval_live.json, per-fixture eval configs
+- Pipeline fix: relaxed section-match validation to use section-number prefix matching instead of exact string equality (fixes known ~100% failure on TMC/EC)
+- Review fix: tightened section-compatibility to require 2-level prefix overlap (prevents false positives like §1.3 matching §1.4). Gitignored proposals_index.lock.
+### 2026-03-19
+- Reviewed 10 Phase 4 LG+OPL proposals manually against CONTRACT.md source text: 7 accepted, 2 rejected (P-001 impl detail, P-003 AT-909 rewrite), 1 pre-rejected
+- Applied 7 accepted LG+OPL proposals to CONTRACT.md: 7 new ATs (AT-1265..AT-1271); tightened AT-222 bypass criteria; added §2.2.4 cross-ref plus reconcile_stall_max_delay_s default + fail-closed text
+- Fix: reverted spurious AT-909 rewrite (rejected P-003 was applied by hook; restored original stale-L2 reject semantics)
+- Manual proposals for EC/EG/TMC: triaged 15 findings, accepted 12, rejected 3. 10 new ATs (AT-1272..AT-1281) + 3 mechanical fixes (cause enum closed, SHALL→MUST, AT-918 reason code, EG cooldown default, EC partial fill text)
+- Refreshed context (at_registry, context_manifest, section_index, fixtures, contract_kernel) after CONTRACT.md edits
+- Rebuilt contract_kernel.json (hash mismatch blocked push)
+- Fix: section-compatibility now uses longest common prefix (>= 3 levels for siblings, or exact match). §2.2.3.7 vs §2.2.3.1.1 → True; §1.3 vs §1.4 → False.

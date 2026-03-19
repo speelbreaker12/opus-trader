@@ -8,7 +8,6 @@ Profile: CSP
   - OPEN intents MUST be blocked.
   - CLOSE / HEDGE / CANCEL intents MUST remain allowed, except risk-increasing cancels/replaces MUST be rejected per §2.2.5.
 - When `open_permission_blocked_latch == true`, the latch feeds into PolicyGuard's `SystemIntegrityAxis` as a `DEGRADED` input (§2.2.3.2), producing `TradingMode::ReduceOnly`. OPEN blocking is enforced both directly (latch gate) and indirectly (via PolicyGuard TradingMode dispatch authorization).
-  - _Indirect path acceptance test:_ See §2.2.3.2 SystemIntegrityAxis ATs which MUST verify that `open_permission_blocked_latch == true` feeds `DEGRADED` into SystemIntegrityAxis, producing `TradingMode::ReduceOnly`.
 
 **State fields:**
 - `open_permission_blocked_latch` (bool; `true` means OPEN blocked)
@@ -29,8 +28,7 @@ Profile: CSP
 - All reconcile-class reason codes cleared (no unresolved WS gaps, inventory mismatches, or session termination flags).
 
 **Reconciliation stall observability (deterministic, no override-clear):**
-- If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s` (default: 30s), runtime MUST emit structured log `RECONCILE_STALL` and increment counter metric `reconcile_stall_total`.
-- If `reconcile_stall_max_delay_s` is missing or ≤ 0 at startup, runtime MUST treat it as the default (30s) and emit a startup warning log.
+- If reconciliation remains blocked and `open_permission_blocked_latch` stays true for longer than `reconcile_stall_max_delay_s`, runtime MUST emit structured log `RECONCILE_STALL` and increment counter metric `reconcile_stall_total`.
 - `RECONCILE_STALL` payload MUST include the failing criterion that is preventing reconciliation success.
 - Emission cadence MUST be deterministic: for a continuous stall episode, emit once when the threshold is first exceeded; re-emit only if the failing criterion changes during that same episode.
 - A new emission episode starts only after reconciliation success clears the stall condition/latch, and a later stall exceeds the threshold again.
@@ -56,20 +54,6 @@ AT-1263
 - When: reconciliation success criteria are evaluated.
 - Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.
 - Pass criteria: latch held; reconciliation reported failed. Fail criteria: latch clears on transport failure.
-
-AT-1268
-- Given: reconciliation runs; ledger inflight intents (non-terminal) do NOT match exchange open orders by label (e.g., ledger has an inflight BUY that exchange does not list, or exchange lists an order not in ledger).
-- When: reconciliation success criteria are evaluated.
-- Then: reconciliation MUST fail; `open_permission_blocked_latch` MUST remain `true`; OPEN intents MUST remain blocked.
-- Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
-- Fail criteria: reconciliation succeeds despite inflight intent mismatch, or latch clears prematurely.
-
-AT-1269
-- Given: reconciliation runs; exchange position differs from ledger cumulative fills by more than `position_reconcile_epsilon`.
-- When: reconciliation success criteria are evaluated.
-- Then: reconciliation MUST fail; `open_permission_blocked_latch` MUST remain `true`; OPEN intents MUST remain blocked.
-- Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
-- Fail criteria: reconciliation succeeds despite position exceeding epsilon, or latch clears prematurely.
 
 **Allowed values (reconcile-only):** `OpenPermissionReasonCode[]`
 - `RESTART_RECONCILE_REQUIRED`
@@ -103,28 +87,12 @@ AT-1242
 - Pass criteria: latch transitions to `true` with the correct reason code; OPEN dispatch count remains 0 while latch is set.
 - Fail criteria: latch remains `false` after trigger event, reason code is missing/incorrect, or OPEN dispatches while latch is set.
 
-AT-1270
-- Given: `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing both `WS_BOOK_GAP_RECONCILE_REQUIRED` and `INVENTORY_MISMATCH_RECONCILE_REQUIRED`.
-- When: the WS book gap trigger resolves (reconciliation for that criterion succeeds) but inventory mismatch remains unresolved.
-- Then: `open_permission_blocked_latch` MUST remain `true`; `open_permission_reason_codes` MUST contain `INVENTORY_MISMATCH_RECONCILE_REQUIRED` and MUST NOT contain `WS_BOOK_GAP_RECONCILE_REQUIRED`; OPEN intents MUST remain blocked.
-- And: latch clears only when ALL reason codes are resolved and full reconciliation succeeds.
-- Pass criteria: latch stays true with only the remaining reason code; OPEN dispatch count remains 0.
-- Fail criteria: latch clears while any reason code remains, or reason_codes list is incorrect after partial resolution.
-
 AT-011
 - Given: `open_permission_blocked_latch==true` for a WS gap reason (e.g., `WS_TRADES_GAP_RECONCILE_REQUIRED`).
 - When: reconciliation succeeds (all criteria in this section are satisfied).
 - Then: the latch clears (`open_permission_blocked_latch==false` and `open_permission_reason_codes==[]`), and opens may proceed only if PolicyGuard computes `TradingMode::Active`.
 - Pass criteria: latch fields match the invariants immediately after reconciliation; opens remain blocked unless mode is Active.
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
-
-AT-1271
-- Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination).
-- When: the latch transitions to `true`.
-- Then: `open_permission_reason_codes` MUST be non-empty and MUST contain at least one valid `OpenPermissionReasonCode` corresponding to the trigger.
-- And: conversely, any state where `open_permission_reason_codes == []` MUST have `open_permission_blocked_latch == false`.
-- Pass criteria: biconditional invariant holds at every latch mutation point; no state where latch=true with empty codes or latch=false with non-empty codes.
-- Fail criteria: latch set to true with empty reason_codes, or reason_codes non-empty with latch false.
 
 AT-402
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED` and a cancel/replace that increases exposure.
@@ -154,3 +122,37 @@ AT-1253
 - Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.
 - Pass criteria: only reconcile-class codes in reason list; no F1/Evidence codes despite concurrent cert failure.
 - Fail criteria: F1/Evidence codes appear in `open_permission_reason_codes`.
+
+AT-PROP-400
+- Given: reconciliation runs; ledger inflight intents (non-terminal) do NOT match exchange open orders by label (e.g., ledger has an inflight BUY that exchange does not list, or exchange lists an order not in ledger).
+- When: reconciliation success criteria are evaluated.
+- Then: reconciliation MUST fail; `open_permission_blocked_latch` MUST remain `true`; OPEN intents MUST remain blocked.
+- Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
+- Fail criteria: reconciliation succeeds despite inflight intent mismatch, or latch clears prematurely.
+
+AT-PROP-401
+- Given: reconciliation runs; exchange position differs from ledger cumulative fills by more than `position_reconcile_epsilon`.
+- When: reconciliation success criteria are evaluated.
+- Then: reconciliation MUST fail; `open_permission_blocked_latch` MUST remain `true`; OPEN intents MUST remain blocked.
+- Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
+- Fail criteria: reconciliation succeeds despite position exceeding epsilon, or latch clears prematurely.
+
+AT-PROP-402
+- Given: `open_permission_blocked_latch == true` with `open_permission_reason_codes` containing both `WS_BOOK_GAP_RECONCILE_REQUIRED` and `INVENTORY_MISMATCH_RECONCILE_REQUIRED`.
+- When: the WS book gap trigger resolves (reconciliation for that criterion succeeds) but inventory mismatch remains unresolved.
+- Then: `open_permission_blocked_latch` MUST remain `true`; `open_permission_reason_codes` MUST contain `INVENTORY_MISMATCH_RECONCILE_REQUIRED` and MUST NOT contain `WS_BOOK_GAP_RECONCILE_REQUIRED`; OPEN intents MUST remain blocked.
+- And: latch clears only when ALL reason codes are resolved and full reconciliation succeeds.
+- Pass criteria: latch stays true with only the remaining reason code; OPEN dispatch count remains 0.
+- Fail criteria: latch clears while any reason code remains, or reason_codes list is incorrect after partial resolution.
+
+Add cross-reference after the Semantics dual-enforcement statement (line 2959): "Acceptance test for the indirect PolicyGuard path: see §2.2.3.2 SystemIntegrityAxis ATs which MUST verify that `open_permission_blocked_latch == true` feeds DEGRADED into SystemIntegrityAxis, producing `TradingMode::ReduceOnly`."
+
+Amend the stall observability paragraph (line 2980) to add inline default matching the config appendix: change `reconcile_stall_max_delay_s` to `reconcile_stall_max_delay_s` (default: 30s). Additionally, add fail-closed clause: "If `reconcile_stall_max_delay_s` is missing or ≤ 0 at startup, runtime MUST treat it as the default (30s) and emit a startup warning log."
+
+AT-PROP-403
+- Given: any state transition that sets `open_permission_blocked_latch` to `true` (startup, WS gap, WS trades gap, WS data stale, inventory mismatch, session termination).
+- When: the latch transitions to `true`.
+- Then: `open_permission_reason_codes` MUST be non-empty and MUST contain at least one valid `OpenPermissionReasonCode` corresponding to the trigger.
+- And: conversely, any state where `open_permission_reason_codes == []` MUST have `open_permission_blocked_latch == false`.
+- Pass criteria: biconditional invariant holds at every latch mutation point; no state where latch=true with empty codes or latch=false with non-empty codes.
+- Fail criteria: latch set to true with empty reason_codes, or reason_codes non-empty with latch false.

@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-03-18T03:30:00Z",
+  "validator_version": "phase1-gap-detector-v1",
+  "findings": [
+    {
+      "finding_id": "F-001",
+      "section": "\u00a72.2.3.2 CapitalRiskAxis / \u00a72.2.3.1.1",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "cortex_override == ForceKill is declared as a capital-critical kill trigger (\u00a72.2.3.1.1) and listed as a CapitalRiskAxis CRITICAL predicate (\u00a72.2.3.2), with reason code KILL_CORTEX_FORCE_KILL in the registry (\u00a72.2.3.5). No acceptance test verifies that this input produces TradingMode == Kill with the correct reason code. AT-918 covers risk_state == Kill; AT-337 covers watchdog kill; the cortex force-kill path is untested.",
+      "evidence": {
+        "line": 75,
+        "quote": "  - `cortex_override == ForceKill`",
+        "context": "CapitalRiskAxis CRITICAL predicate list in \u00a72.2.3.2. KILL_CORTEX_FORCE_KILL registered at line 231 but no AT targets it."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT testing: given cortex_override == ForceKill and all other inputs nominal, then TradingMode == Kill and mode_reasons == [KILL_CORTEX_FORCE_KILL]. Mirror isolation pattern of AT-1050/1051/1052."
+    },
+    {
+      "finding_id": "F-002",
+      "section": "\u00a72.2.3.2 SystemIntegrityAxis",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "cortex_override == ForceReduceOnly is listed as a SystemIntegrityAxis DEGRADED predicate (\u00a72.2.3.2 line 98) with reason code REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY in the registry (\u00a72.2.3.5 line 241). No acceptance test verifies that this input produces TradingMode == ReduceOnly with the correct reason code. The axis isolation ATs (AT-1050/1051/1052) cover bunker_mode, mm_util, and open_permission_latch respectively, but cortex_override == ForceReduceOnly has no isolation AT.",
+      "evidence": {
+        "line": 98,
+        "quote": "  - `cortex_override == ForceReduceOnly`",
+        "context": "SystemIntegrityAxis DEGRADED predicate list. REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY at line 241 has no AT."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add axis isolation AT: given all kill triggers inactive, all ReduceOnly predicates pass EXCEPT cortex_override == ForceReduceOnly, then TradingMode == ReduceOnly and mode_reasons == [REDUCEONLY_CORTEX_FORCE_REDUCE_ONLY]."
+    },
+    {
+      "finding_id": "F-003",
+      "section": "\u00a72.2.3.2 CapitalRiskAxis",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "mm_util >= mm_util_kill is the primary capital-critical kill trigger (\u00a72.2.3.1.1) and CapitalRiskAxis CRITICAL predicate (\u00a72.2.3.2), with reason code KILL_MARGIN_MM_UTIL_CRITICAL. No AT tests the mode computation for this input. AT-338 uses it only as a Given for containment testing ('TradingMode == Kill (e.g., mm_util >= mm_util_kill)') \u2014 it assumes Kill is already computed and tests containment behavior. AT-1051 tests mm_util at WARNING level only. AT-1048 tests axis-to-mode resolution but not input-to-axis mapping.",
+      "evidence": {
+        "line": 73,
+        "quote": "  - `mm_util >= mm_util_kill` (margin headroom exhausted; \u00a71.4.3)",
+        "context": "CapitalRiskAxis CRITICAL predicate. AT-338 (line 447) tests containment not mode computation; AT-1051 tests WARNING only."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add AT: given mm_util >= mm_util_kill (all other kill triggers inactive), then TradingMode == Kill and mode_reasons includes KILL_MARGIN_MM_UTIL_CRITICAL. Tests input-to-axis-to-mode path, not just containment."
+    },
+    {
+      "finding_id": "F-004",
+      "section": "\u00a72.2.3.2 SystemIntegrityAxis",
+      "category": "missing_at_pair",
+      "severity": "P1",
+      "description": "Runtime binding cert invalid/missing/stale/FAIL is listed as a SystemIntegrityAxis DEGRADED predicate (\u00a72.2.3.2) with reason code REDUCEONLY_RUNTIME_BINDING_INVALID in the registry (\u00a72.2.3.5). No acceptance test in this fixture verifies that this predicate produces TradingMode == ReduceOnly with the correct reason code. The axis isolation AT pattern (AT-1050/1051/1052) does not cover runtime binding invalidity.",
+      "evidence": {
+        "line": 97,
+        "quote": "  - Runtime binding cert invalid/missing/stale/FAIL (\u00a72.2.1)",
+        "context": "SystemIntegrityAxis DEGRADED predicate. REDUCEONLY_RUNTIME_BINDING_INVALID at line 238 has no AT in \u00a72.2.3.7."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add axis isolation AT: given all kill triggers inactive, all ReduceOnly predicates pass EXCEPT runtime binding cert invalid, then TradingMode == ReduceOnly and mode_reasons == [REDUCEONLY_RUNTIME_BINDING_INVALID]."
+    },
+    {
+      "finding_id": "F-005",
+      "section": "\u00a72.2.3.6 Kill Semantics",
+      "category": "weak_normative",
+      "severity": "P2",
+      "description": "'Kill SHALL mean:' uses SHALL while the immediately following clause uses MUST NOT and the rest of the fixture uses MUST exclusively. While RFC 2119 treats SHALL and MUST as equivalent, this fixture's consistent use of MUST makes the lone SHALL an anomaly that could be misread as weaker normative force. Prior contract review (phase 3, 2026-03-17) already converted 2 SHALL\u2192MUST elsewhere, establishing MUST as the canonical normative keyword.",
+      "evidence": {
+        "line": 268,
+        "quote": "**Kill SHALL mean:**",
+        "context": "Line 272 uses 'Kill MUST NOT mean:' in the same section. All other normative clauses in fixture use MUST."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Change 'Kill SHALL mean:' to 'Kill MUST mean:' for consistency with the rest of the contract."
+    },
+    {
+      "finding_id": "F-006",
+      "section": "\u00a72.2.3.2 SystemIntegrityAxis / \u00a72.2.3.5",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "risk_state in {Degraded, Maintenance} is a single DEGRADED predicate in \u00a72.2.3.2, but the reason code registry (\u00a72.2.3.5) defines two distinct codes: REDUCEONLY_RISKSTATE_MAINTENANCE (position 1) and REDUCEONLY_RISKSTATE_DEGRADED (position 10). No AT verifies that risk_state == Degraded emits REDUCEONLY_RISKSTATE_DEGRADED and risk_state == Maintenance emits REDUCEONLY_RISKSTATE_MAINTENANCE. Without this, an implementation could emit the wrong code or conflate them.",
+      "evidence": {
+        "line": 93,
+        "quote": "  - `risk_state in {Degraded, Maintenance}`",
+        "context": "Single predicate maps to two distinct reason codes (lines 234, 243). No AT distinguishes which code is emitted for which state."
+      },
+      "proposed_fix_type": "new_requirement",
+      "proposed_fix": "Add two ATs: (1) given risk_state == Maintenance, then mode_reasons includes REDUCEONLY_RISKSTATE_MAINTENANCE; (2) given risk_state == Degraded, then mode_reasons includes REDUCEONLY_RISKSTATE_DEGRADED. Each should verify the other code is absent."
+    },
+    {
+      "finding_id": "F-007",
+      "section": "\u00a72.2.3.7 AT-918",
+      "category": "missing_at_pair",
+      "severity": "P2",
+      "description": "AT-918 verifies that risk_state == Kill produces TradingMode == Kill, but does not verify that mode_reasons includes KILL_RISKSTATE_KILL. The reason code exists in the registry (\u00a72.2.3.5 position 2). Other ATs in this fixture (AT-336, AT-337, AT-132, AT-1066, AT-1067, AT-1261) all verify both the mode AND the specific reason code. AT-918's omission of reason code verification breaks the established AT pattern and leaves the reason code derivation untested.",
+      "evidence": {
+        "line": 330,
+        "quote": "- Then: `TradingMode == Kill`.",
+        "context": "AT-918 checks mode only. Compare AT-337 (line 322) which checks both 'TradingMode == Kill and mode_reasons includes KILL_WATCHDOG_HEARTBEAT_STALE'."
+      },
+      "proposed_fix_type": "mechanical",
+      "proposed_fix": "Amend AT-918 Then clause to: 'TradingMode == Kill and mode_reasons includes KILL_RISKSTATE_KILL.' Add pass criteria for reason code presence."
+    }
+  ]
+}

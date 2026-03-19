@@ -1,0 +1,20 @@
+{
+  "description": "Phase 2 single-fixture run: s2_2_2_evidence_guard",
+  "tests": [
+    {
+      "id": "live-s2_2_2_evidence_guard",
+      "fixture": "fixtures/snapshot/s2_2_2_evidence_guard_latest.md",
+      "output_file": "s2_2_2_evidence_guard_latest/proposals.json",
+      "assertions": [
+        {
+          "id": "s2_2_2_evidence_guard-p2-schema",
+          "check": "proposal payload matches schema",
+          "rule": {
+            "type": "json_schema_valid",
+            "schema_path": "autoresearch/contract/phase2/proposals.schema.json"
+          }
+        }
+      ]
+    }
+  ]
+}

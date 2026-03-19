@@ -17,6 +17,7 @@
 - `risk_state` (Healthy | Degraded | Maintenance | Kill)
 - `enforced_profile` (enum: CSP | GOP | FULL; from runtime config; GOP-only gates apply when `enforced_profile != CSP`)
 - `bunker_mode_active` (bool; from §2.3.2 Network Jitter Monitor)
+- `bunker_mode_last_update_ts_ms` (monotonic-epoch ms; timestamp when bunker_mode_active was last updated by §2.3.2)
 - `evidence_chain_state` (EvidenceChainState; from §2.2.2 EvidenceGuard; required only when `enforced_profile != CSP`)
 - `policy_age_sec` (derived: `(now_ms - python_policy_generated_ts_ms) / 1000`)
 - `mm_util` (float; maintenance margin utilization; from §1.4.3 Margin Headroom Gate)
@@ -40,6 +41,12 @@
 - `/status` MUST emit the new name (`session_termination_active`) in contract version `5.2`.
 - `/status` MAY additionally emit the old name as a deprecated alias only during contract version `5.2`.
 - The old name MUST be removed (MUST NOT appear in requests or responses) in the first contract version strictly greater than `5.2`.
+
+AT-1260
+- Given: contract_version=5.2 and policy payload contains `rate_limit_session_kill_active=true` with `session_termination_active` absent.
+- When: PolicyGuard computes TradingMode.
+- Then: TradingMode == Kill (alias is honoured).
+- Pass criteria: Kill computed via alias. Fail criteria: old field ignored.
 
 #### **2.2.0 PolicyGuard Input Snapshot Coherency (Atomic Snapshot + Memory Order)**
 Profile: CSP
@@ -193,10 +200,19 @@ PolicyGuard MUST NOT return `TradingMode::Active` if any critical safety input r
 - `mm_util` (from account summary) must have `mm_util_last_update_ts_ms`
 - `disk_used_pct` must have `disk_used_last_update_ts_ms`
 - session termination / rate-limit kill flag must be explicit (no "unknown treated as false")
+- `cortex_override` (from §2.3 producers) — if missing or unparseable MUST be treated as ForceReduceOnly; set REDUCEONLY_INPUT_MISSING_OR_STALE
+
+AT-1262
+- Given: `cortex_override` is absent from the input snapshot or its value is unparseable/corrupted; all other axis inputs are nominal.
+- When: PolicyGuard computes TradingMode.
+- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_INPUT_MISSING_OR_STALE.
+- Pass criteria: ReduceOnly with correct reason code; no OPEN dispatched.
+- Fail criteria: Active returned, ForceKill silently dropped, or reason code absent.
 
 **Freshness defaults (configurable):**
 - `mm_util_max_age_ms = 30_000`
 - `disk_used_max_age_ms = 30_000`
+- `bunker_mode_max_age_ms = 10_000`
 
 **Enforcement:**
 - If any critical input is missing OR `now_ms - last_update_ts_ms > max_age_ms`:
@@ -297,9 +313,6 @@ EvidenceChainState = GREEN iff ALL are true (rolling window; default `evidencegu
   - Trip (breach window): if `parquet_queue_depth_pct > parquet_queue_trip_pct` for >= `parquet_queue_trip_window_s` seconds → EvidenceChainState != GREEN
   - Clear (hysteresis): require `parquet_queue_depth_pct < parquet_queue_clear_pct` for >= `queue_clear_window_s` seconds before GREEN (cleared only after max(queue_clear_window_s, evidenceguard_global_cooldown) with all criteria satisfied)
 
-**Global cooldown scope (Normative):**
-The `evidenceguard_global_cooldown` (Appendix A) governs recovery timing for ALL error-counter recovery paths (not only parquet queue depth). EvidenceChainState MUST NOT return to GREEN until all GREEN criteria remain satisfied for at least `evidenceguard_global_cooldown` seconds after the last trip condition clears.
-
 **Where enforced (must be explicit):**
 - When `enforced_profile != CSP`, PolicyGuard `get_effective_mode()` MUST include EvidenceGuard in the axis resolver.
 - When `enforced_profile != CSP`, the hot-path execution gate MUST check EvidenceChainState before dispatching OPEN orders.
@@ -383,13 +396,6 @@ AT-415
 - Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
 - Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while required counters are missing/unparseable.
 
-AT-1248
-- Given: `attribution_write_errors` is missing or unparseable while EvidenceGuard evaluates EvidenceChainState.
-- When: EvidenceGuard computes EvidenceChainState for this tick/window.
-- Then: EvidenceChainState MUST be not GREEN (fail-closed) and OPEN intents MUST be blocked.
-- Pass criteria: OPEN does not dispatch because a required counter is missing/unparseable.
-- Fail criteria: EvidenceChainState becomes GREEN or any OPEN dispatch occurs while `attribution_write_errors` is missing/unparseable.
-
 AT-923
 - Given: `evidenceguard_counters_last_update_ts_ms` is older than `evidenceguard_counters_max_age_ms`.
 - When: EvidenceGuard computes EvidenceChainState for this tick/window.
@@ -409,7 +415,7 @@ Profile: CSP
 
 ##### **2.2.3.0 Axis Model (Normative)**
 
-PolicyGuard SHALL compute TradingMode from three independent health axes:
+PolicyGuard MUST compute TradingMode from three independent health axes:
 
 - `CapitalRiskAxis     ∈ { SAFE, WARNING, CRITICAL }`
 - `MarketIntegrityAxis ∈ { STABLE, STRESSED, BROKEN }`
@@ -482,7 +488,6 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
 **MarketIntegrityAxis** (market data integrity / comms reliability)
 - Input: `bunker_mode_active` (from §2.3.2 Network Jitter Monitor)
 - `STRESSED` if `bunker_mode_active == true`
-- `STRESSED` if `bunker_mode_active` is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2 (fail-closed).
 - `STABLE` otherwise.
 - `BROKEN` is reserved for future explicit monitors. In v5.2 it MUST NOT be produced by any required subsystem.
 
@@ -506,11 +511,17 @@ PolicyGuard MUST compute the axes as follows, using only the coherent input snap
   - Disk Kill unconfirmed (per §2.2.3.1.2)
 - `HEALTHY` otherwise.
 
+AT-1261
+- Given: `fee_model_cache_age_s > fee_model_hard_stale_s`; all other SystemIntegrityAxis inputs nominal.
+- When: TradingMode is computed.
+- Then: TradingMode == ReduceOnly and mode_reasons includes REDUCEONLY_FEE_MODEL_HARD_STALE.
+- Pass criteria: OPEN blocked; correct reason code emitted. Fail criteria: Active returned or reason missing.
+
 ---
 
 ##### **2.2.3.3 TradingMode Resolution (Deterministic, Pure Function of Axes)**
 
-TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } SHALL be computed from axes by the following rules (no other rules are permitted):
+TradingMode ∈ { `Active`, `ReduceOnly`, `Kill` } MUST be computed from axes by the following rules (no other rules are permitted):
 
 1) If `SystemIntegrityAxis == FAILING` OR `CapitalRiskAxis == CRITICAL` → `TradingMode = Kill`
 2) Else if `SystemIntegrityAxis == DEGRADED` OR `MarketIntegrityAxis != STABLE` OR `CapitalRiskAxis == WARNING` → `TradingMode = ReduceOnly`
@@ -568,6 +579,14 @@ This table is the authoritative reference for AT-1048 (enumerability test). Impl
   - Bunker Mode (§2.3.2) stable-exit window
   - Emergency ReduceOnly (§2.2 inputs) cooldown + reconcile-clear
   - Open Permission Latch (§2.2.4) reconcile-clear
+
+AT-1264
+- Given: `bunker_mode_active` becomes true (Bunker Mode entry via §2.3.2); all other axis inputs nominal.
+- And then: `bunker_mode_active` clears to false before `bunker_exit_stable_s` has elapsed.
+- When: TradingMode is computed on subsequent ticks.
+- Then: TradingMode == ReduceOnly until full `bunker_exit_stable_s` window elapses since bunker entry condition cleared.
+- Pass criteria: ReduceOnly held for full stable-exit window; Active not returned prematurely.
+- Fail criteria: Active returned before `bunker_exit_stable_s` elapses.
 
 ---
 
@@ -744,7 +763,7 @@ AT-931
 - Given: the strategy loop computes an intent while `TradingMode == Active`, but before dispatch the Axis Resolver input flips to ReduceOnly/Kill (e.g., evidence trip).
 - When: the dispatch path runs.
 - Then: the order MUST NOT dispatch if the current TradingMode forbids it.
-- Pass criteria: dispatch count remains 0 and reject reason indicates TradingMode gate.
+- Pass criteria: dispatch count remains 0 and reject_reason_code == TradingModeBlockedOpen.
 - Fail criteria: dispatch occurs based on stale TradingMode.
 
 **Non‑Active OPEN Cancellation**
@@ -805,13 +824,6 @@ AT-1050
 - Then: `TradingMode == ReduceOnly` and `mode_reasons == [REDUCEONLY_BUNKER_MODE_ACTIVE]`.
 - Pass criteria: exact reason set and ReduceOnly computed.
 - Fail criteria: any additional reason appears, or mode is Active/Kill.
-
-AT-1249
-- Given: all Kill-tier triggers are forced inactive, and all ReduceOnly predicates are forced pass EXCEPT `bunker_mode_active` which is missing, unparseable, or exceeds its staleness threshold per §2.2.1.2.
-- When: the Axis Resolver computes MarketIntegrityAxis and TradingMode.
-- Then: `MarketIntegrityAxis == STRESSED` (fail-closed), `TradingMode == ReduceOnly`, and `mode_reasons` contains `REDUCEONLY_BUNKER_MODE_ACTIVE`.
-- Pass criteria: exact reason set and ReduceOnly computed; OPEN does not dispatch.
-- Fail criteria: MarketIntegrityAxis is STABLE, TradingMode is Active, or mode_reasons is missing/incorrect while `bunker_mode_active` is missing/stale.
 
 **Axis Isolation — CapitalRiskAxis (Margin Util Only)**
 AT-1051
@@ -966,6 +978,12 @@ AT-1100
 - Pass criteria: reconciliation fails; latch remains set; OPEN blocked.
 - Fail criteria: reconciliation succeeds despite missing trades, or latch clears prematurely.
 
+AT-1263
+- Given: `open_permission_blocked_latch == true`; REST `/get_user_trades` returns network error, timeout, HTTP error, or unparseable response.
+- When: reconciliation success criteria are evaluated.
+- Then: reconciliation fails; `open_permission_blocked_latch` remains true; OPEN blocked.
+- Pass criteria: latch held; reconciliation reported failed. Fail criteria: latch clears on transport failure.
+
 **Allowed values (reconcile-only):** `OpenPermissionReasonCode[]`
 - `RESTART_RECONCILE_REQUIRED`
 - `WS_BOOK_GAP_RECONCILE_REQUIRED`
@@ -1005,13 +1023,6 @@ AT-011
 - Pass criteria: latch fields match the invariants immediately after reconciliation; opens remain blocked unless mode is Active.
 - Fail criteria: latch clears without reconciliation success, or opens proceed while latch remains true.
 
-AT-1250
-- Given: `open_permission_blocked_latch==true` with any reconcile-class reason code.
-- When: reconciliation succeeds and the latch clears.
-- Then: `open_permission_requires_reconcile` MUST equal `false` and `open_permission_reason_codes` MUST be `[]`.
-- Pass criteria: all three state fields are consistent post-clear (`open_permission_blocked_latch==false`, `open_permission_requires_reconcile==false`, `open_permission_reason_codes==[]`).
-- Fail criteria: `open_permission_requires_reconcile` remains `true` or `open_permission_reason_codes` is non-empty after latch clears.
-
 AT-402
 - Given: `open_permission_blocked_latch==true` with `open_permission_reason_codes` containing `RESTART_RECONCILE_REQUIRED` and a cancel/replace that increases exposure.
 - When: cancel/replace permission is evaluated.
@@ -1034,7 +1045,7 @@ AT-411
 - Fail criteria: any F1/Evidence code appears or latch is set without a reconcile trigger.
 - Note: This AT tests the Hard rule (runtime-binding and EvidenceChain failures MUST NOT appear in `open_permission_reason_codes`) in isolation. The Hard rule is unconditional — it applies regardless of whether reconcile-class triggers are concurrently active. The "no reconcile-class triggers" precondition isolates the test from latch interactions but does not limit the Hard rule's scope.
 
-AT-1243
+AT-1253
 - Given: runtime binding cert is missing/stale/FAIL AND a reconcile-class trigger is concurrently active (e.g., `WS_BOOK_GAP_RECONCILE_REQUIRED`).
 - When: `open_permission_reason_codes` are computed.
 - Then: `open_permission_reason_codes` contains the reconcile-class reason code but MUST NOT contain runtime-binding or EvidenceChain failure codes.
@@ -1100,6 +1111,7 @@ Profile: CSP
 - `GlobalExposureBudgetExceeded`
 - `ContractsAmountMismatch`
 - `MarginHeadroomRejectOpens`
+- `MarginHeadroomInputMissing`
 - `OrderTypeMarketForbidden`
 - `OrderTypeStopForbidden`
 - `LinkedOrderTypeForbidden`
@@ -1109,6 +1121,7 @@ Profile: CSP
 - `InstrumentExpiredOrDelisted`
 - `FeedbackLoopGuardActive`
 - `LabelTooLong`
+- `TradingModeBlockedOpen`
 
 **Acceptance Test (REQUIRED):**
 AT-930

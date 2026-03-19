@@ -37,7 +37,10 @@ class ContractRenderReviewTests(unittest.TestCase):
         self.phase2 = self.root / "autoresearch" / "contract" / "phase2"
         self.contract_path = self.root / "specs" / "CONTRACT.md"
         self.contract_path.parent.mkdir(parents=True, exist_ok=True)
-        self.contract_path.write_text("AT-101 is referenced here\n", encoding="utf-8")
+        self.contract_path.write_text(
+            "AT-999 is referenced here\nAT-101 is referenced here\n",
+            encoding="utf-8",
+        )
         self.contract_hash = hashlib.sha256(self.contract_path.read_bytes()).hexdigest()
 
     def tearDown(self) -> None:
@@ -52,7 +55,13 @@ class ContractRenderReviewTests(unittest.TestCase):
             check=False,
         )
 
-    def _seed_run(self, diff_preview_two: str | None = None, run_id: str = "run-1") -> None:
+    def _seed_run(
+        self,
+        diff_preview_two: str | None = None,
+        run_id: str = "run-1",
+        fixture_ids: tuple[str, str] = ("fixture-1", "fixture-2"),
+        dedupe_keys: tuple[str, str] = ("fixture-1/p-001", "fixture-2/p-002"),
+    ) -> None:
         proposals = {
             "generated_at": "2026-03-14T20:00:00Z",
             "validator_version": "test",
@@ -65,7 +74,7 @@ class ContractRenderReviewTests(unittest.TestCase):
                     "change_type": "mechanical",
                     "rationale": "Repair broken AT reference.",
                     "status": "proposed",
-                    "dedupe_key": "fixture-1/p-001",
+                    "dedupe_key": dedupe_keys[0],
                     "mechanical_ok": True,
                     "mechanical_details": "Exact AT token replacement.",
                     "replace_span": {
@@ -97,7 +106,7 @@ class ContractRenderReviewTests(unittest.TestCase):
                     "change_type": "new_requirement",
                     "rationale": "Add explicit fail-closed clause.",
                     "status": "proposed",
-                    "dedupe_key": "fixture-2/p-002",
+                    "dedupe_key": dedupe_keys[1],
                     "proposed_text": "PolicyGuard MUST reject when evidence_chain_score is missing.",
                     "diff_preview": diff_preview_two
                     or "\n".join([
@@ -111,11 +120,11 @@ class ContractRenderReviewTests(unittest.TestCase):
             ],
         }
         _write_json(
-            self.phase2 / "outputs" / run_id / "fixture-1" / "proposals.json",
+            self.phase2 / "outputs" / run_id / fixture_ids[0] / "proposals.json",
             proposals,
         )
         _write_json(
-            self.phase2 / "outputs" / run_id / "fixture-2" / "proposals.json",
+            self.phase2 / "outputs" / run_id / fixture_ids[1] / "proposals.json",
             proposals_two,
         )
         _write_json(
@@ -132,6 +141,49 @@ class ContractRenderReviewTests(unittest.TestCase):
                 }
             ],
         )
+
+    def _seed_sample_contract_patch_proposal(self, run_id: str = "run-1") -> None:
+        fixture_ids = ("sample_contract_patch", "fixture-2")
+        dedupe_keys = ("sample_contract_patch/p-001", "fixture-2/p-002")
+        self._seed_run(run_id=run_id, fixture_ids=fixture_ids, dedupe_keys=dedupe_keys)
+
+    def test_render_review_rejects_accepted_sample_contract_patch(self) -> None:
+        self._seed_sample_contract_patch_proposal()
+
+        initial = self._render("--run-id", "run-1")
+        self.assertEqual(initial.returncode, 0, msg=initial.stderr)
+
+        review_md = (self.phase2 / "review" / "CONTRACT_REVIEW_run-1.md").read_text(encoding="utf-8")
+        self.assertIn("P-001", review_md)
+        self.assertIn("P-002", review_md)
+
+        proposals_hash = _extract_hash(review_md, "proposals_file_hash")
+        decisions = {
+            "run_id": "run-1",
+            "reviewed_at": "2026-03-14T21:00:00Z",
+            "contract_file_hash": self.contract_hash,
+            "proposals_file_hash": proposals_hash,
+            "decisions": [
+                {
+                    "proposal_id": "P-001",
+                    "decision": "accepted",
+                    "reviewer": "tester",
+                    "reason_code": "SAFE_MECHANICAL",
+                },
+                {
+                    "proposal_id": "P-002",
+                    "decision": "rejected",
+                    "reviewer": "tester",
+                    "reason_code": "OUT_OF_SCOPE",
+                },
+            ],
+        }
+        review_json = self.phase2 / "review" / "REVIEW_DECISIONS_run-1.json"
+        _write_json(review_json, decisions)
+
+        accepted = self._render("--run-id", "run-1", "--accepted-only", "--review", str(review_json))
+        self.assertNotEqual(accepted.returncode, 0)
+        self.assertIn("sample fixture `sample_contract_patch`", accepted.stderr)
 
     def test_render_review_and_accepted_only_patch(self) -> None:
         self._seed_run()
