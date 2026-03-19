@@ -46,6 +46,16 @@ cargo test -p soldier_core --locked \
 ./plans/workflow_verify.sh  # Workflow-file-only changes; run before full verify
 ```
 
+### Hook bootstrap
+
+After cloning or moving this repository, run:
+
+```bash
+bash scripts/setup_hooks.sh
+```
+
+This sets the repo and all current linked worktrees to use the shared hook set from this checkout's root `.githooks`.
+
 ### Python
 
 ```bash

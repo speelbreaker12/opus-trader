@@ -5,7 +5,6 @@
 set -euo pipefail
 
 INPUT=$(cat)
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 COMMAND=$(python3 -c "
 import sys, json
@@ -16,19 +15,24 @@ except Exception:
     print('')
 " <<< "$INPUT" 2>/dev/null || echo "")
 
-if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
-    if [[ ! -x "$ROOT/plans/obsidian_commit_guard.sh" ]]; then
-        cat >&2 <<EOF
+# Exit early for non-commit commands — this hook only guards git commit
+if ! echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git commit( |$)'; then
+    exit 0
+fi
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+if [[ ! -x "$ROOT/plans/obsidian_commit_guard.sh" ]]; then
+    cat >&2 <<EOF
 BLOCKED: Missing shared Obsidian commit guard.
 
 Expected executable:
   $ROOT/plans/obsidian_commit_guard.sh
 EOF
-        exit 2
-    fi
+    exit 2
+fi
 
-    if ! output="$(bash "$ROOT/plans/obsidian_commit_guard.sh" 2>&1)"; then
-        printf '%s\n' "$output" >&2
-        exit 2
-    fi
+if ! output="$(bash "$ROOT/plans/obsidian_commit_guard.sh" 2>&1)"; then
+    printf '%s\n' "$output" >&2
+    exit 2
 fi
